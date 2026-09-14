@@ -674,3 +674,23 @@ def test_rational_aggregate_counts_both_coefficient_components() -> None:
     )
     with pytest.raises(OperationResourceAdmissionError, match="coefficient"):
         rational_laurent_multiply(left, right)
+
+
+def test_aggregate_cap_is_enforced_while_collecting() -> None:
+    """An oversized multi-group convolution is refused during collection."""
+    coefficient = 10**32767
+    left = RationalLaurentPolynomial(
+        variables=("x",),
+        terms=(
+            _rational_term(coefficient, 1, 32768),
+            _rational_term(coefficient, 1, 0),
+        ),
+    )
+    right = RationalLaurentPolynomial(
+        variables=("x",),
+        terms=tuple(
+            _rational_term(1, 1, exponent) for exponent in range(-30721, -32769, -1)
+        ),
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="coefficient"):
+        rational_laurent_multiply(left, right)

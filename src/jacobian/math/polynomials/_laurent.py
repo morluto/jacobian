@@ -104,6 +104,8 @@ def _maximum_coefficient_digits(
     """
 
     groups: dict[tuple[int, ...], Fraction] = {}
+    group_widths: dict[tuple[int, ...], int] = {}
+    running_aggregate_digits = 0
     pairs = 0
     for left_term in left.terms:
         left_coefficient = left_term.coefficient
@@ -131,6 +133,15 @@ def _maximum_coefficient_digits(
                 or _integer_digits(result.numerator) > 2 * MAX_CANONICAL_RATIONAL_DIGITS
             ):
                 return MAX_CANONICAL_RATIONAL_DIGITS + 1, groups
+            # Track the aggregate output width while collecting, so output
+            # growth is refused before the whole convolution is materialized.
+            width = _integer_digits(result.numerator) + _integer_digits(
+                result.denominator
+            )
+            running_aggregate_digits += width - group_widths.get(exponent, 0)
+            if running_aggregate_digits > MAX_LAURENT_RESULT_DIGITS:
+                return MAX_CANONICAL_RATIONAL_DIGITS + 1, groups
+            group_widths[exponent] = width
             groups[exponent] = result
             pairs += 1
     height = 1

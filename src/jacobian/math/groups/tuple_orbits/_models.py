@@ -50,11 +50,11 @@ def _materialize_bounded_sequence(value: object, limit: int) -> object:
     if isinstance(value, (str, bytes, bytearray, Mapping)) or value is None:
         return value
     length = _collection_length(value)
-    if length is not None:
-        if length > limit:
-            return _SEQUENCE_OVERFLOW
-        return tuple(cast(Iterable[Any], value))
+    if length is not None and length > limit:
+        return _SEQUENCE_OVERFLOW
     if isinstance(value, Iterable):
+        # ``__len__`` may under-report the iterator, so still enforce the cap
+        # while materializing instead of trusting the reported size.
         items: list[Any] = []
         for item in value:
             items.append(item)

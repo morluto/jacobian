@@ -766,3 +766,21 @@ def test_first_indexed_source_seeds_each_orbit() -> None:
     assert tuple(row.least_transporter[value] for value in first_source) == (
         row.representative
     )
+
+
+def test_sized_iterable_length_is_not_trusted() -> None:
+    """A Sized iterable that under-reports its length is still bounded."""
+    from jacobian.math.groups.tuple_orbits._models import (
+        _SEQUENCE_OVERFLOW,
+        _materialize_bounded_sequence,
+    )
+
+    class LyingSized:
+        def __len__(self) -> int:
+            return 1
+
+        def __iter__(self):
+            while True:
+                yield 0
+
+    assert _materialize_bounded_sequence(LyingSized(), 5) is _SEQUENCE_OVERFLOW

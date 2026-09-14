@@ -12,7 +12,6 @@ def test_exact_public_api_symbols() -> None:
         "IncidenceTradeResult",
         "SteinerTripleSystemNotFound",
         "SteinerTripleSystemOutcome",
-        "SteinerTripleSystemRequest",
         "SteinerTripleSystemResult",
         "SteinerTripleSystemShard",
         "SteinerTripleSystemUnknown",

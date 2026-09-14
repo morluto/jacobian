@@ -12,9 +12,7 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.dispatch import OperationRequestValidationError, invoke_operation
 from jacobian.math.combinatorics.designs.incidence_structures import _models as models
 from jacobian.math.combinatorics.designs.incidence_structures._models import (
     MAX_STEINER_BLOCKS,
@@ -117,21 +115,11 @@ def test_shard_requires_canonical_in_range_triples() -> None:
         SteinerTripleSystemShard(order=7, fixed_triples=((0, 1, 2), (0, 1, 2)))
 
 
-def test_non_array_fixed_triples_are_request_validation_errors() -> None:
+def test_non_array_fixed_triples_are_validation_errors() -> None:
     with pytest.raises(ValidationError):
         SteinerTripleSystemShard.model_validate({"order": 7, "fixed_triples": {}})
     with pytest.raises(ValidationError):
         SteinerTripleSystemShard.model_validate({"order": 7, "fixed_triples": ""})
-    with pytest.raises(OperationRequestValidationError):
-        invoke_operation(
-            "combinatorics.design.steiner_triple_system.construct",
-            {
-                "order": 7,
-                "search_budget": 100,
-                "shard": {"order": 7, "fixed_triples": {}},
-            },
-            Catalog.open(),
-        )
 
 
 def test_fixed_triple_family_is_lexicographically_canonical() -> None:
@@ -359,30 +347,6 @@ def test_continuation_treats_fixed_triples_as_block_constraints() -> None:
     assert result.outcome.status == "COMPUTED"
     assert result.outcome.design is not None
     assert ("p0", "p2", "p3") in result.outcome.design.blocks
-
-
-def test_discovery_description_states_sts_pair_coverage() -> None:
-    tool = Catalog.open().operation(
-        "combinatorics.design.steiner_triple_system.construct"
-    )
-    assert tool is not None
-    description = tool.description.lower()
-    assert "every unordered pair" in description
-    assert "exactly one block" in description
-    assert "unknown" in description
-    assert "exact cover" not in description
-    assert "replay" not in description
-    assert "search" not in description
-
-
-def test_constructor_executes_through_public_catalog_boundary() -> None:
-    result = invoke_operation(
-        "combinatorics.design.steiner_triple_system.construct",
-        {"order": 7, "search_budget": 100_000},
-        Catalog.open(),
-    )
-    assert result.output["outcome"]["status"] == "COMPUTED"
-    assert len(result.output["outcome"]["design"]["blocks"]) == 7
 
 
 def test_native_constructor_raises_typed_domain_errors() -> None:

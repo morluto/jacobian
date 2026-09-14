@@ -14,7 +14,7 @@ from pydantic import (
 )
 from pydantic_core import PydanticCustomError
 
-from jacobian._models import StrictModel
+from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     MAX_EDGES as MAX_HYPERGRAPH_EDGES,
 )
@@ -230,28 +230,26 @@ class SteinerTripleSystemShard(StrictModel):
             # whole family first would make a guaranteed rejection spend work
             # proportional to an arbitrarily large input.
             return data
-        normalized: list[tuple[int, ...]] = []
+        # Bound every inner container before the shared projection copies it:
+        # an oversized array must be rejected without materializing its tuple
+        # form. Exact-type checks avoid invoking subclass-overridden methods.
         for triple in triples:
-            if type(triple) is list:
-                # Bound the inner container before copying it: an oversized
-                # array must be rejected without materializing its tuple form.
-                if len(triple) != 3:
-                    raise _validation_error(
-                        "steiner_shard_triple",
-                        "continuation triples must contain exactly three points",
-                    )
-                normalized.append(tuple(triple))
-            elif type(triple) is tuple:
-                normalized.append(triple)
-            else:
+            if type(triple) not in (list, tuple):
                 raise _validation_error(
                     "steiner_shard_shape",
                     "each fixed triple must be a list or tuple of three integers",
                 )
+            if len(triple) != 3:
+                raise _validation_error(
+                    "steiner_shard_triple",
+                    "continuation triples must contain exactly three points",
+                )
+        # Project strict-JSON arrays to canonical tuples. The bounds above
+        # make this copy admitted work.
+        data = canonicalize_json_containers(data)
+        normalized = tuple(sorted(data["fixed_triples"]))
         payload = dict(data)
-        payload["fixed_triples"] = tuple(normalized)
-        if all(len(triple) == 3 for triple in payload["fixed_triples"]):
-            payload["fixed_triples"] = tuple(sorted(payload["fixed_triples"]))
+        payload["fixed_triples"] = normalized
         return payload
 
     @model_validator(mode="after")
@@ -416,7 +414,10 @@ class SteinerTripleSystemUnknown(StrictModel):
         payload["unresolved_frontier"] = tuple(
             canonical[key] for key in sorted(canonical)
         )
-        return payload
+        # Project strict-JSON arrays to canonical tuples. The shard keys above
+        # already traversed these bounded families, so this copy is admitted
+        # work; nested shard dicts reach field validation in canonical form.
+        return canonicalize_json_containers(payload)
 
 
 SteinerTripleSystemOutcome = Annotated[

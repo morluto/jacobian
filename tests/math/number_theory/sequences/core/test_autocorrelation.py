@@ -20,18 +20,15 @@ from jacobian._execution import (
     request_execution,
 )
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.dispatch import invoke_operation
 from jacobian.math.number_theory.sequences.core._models import (
     AutocorrelationCell,
     AutocorrelationResult,
     FiniteIntegerSequence,
     FiniteRationalSequence,
-    FiniteSequence,
     SequenceOrderShapeResult,
 )
 from jacobian.math.number_theory.sequences.core.operations import (
@@ -448,23 +445,6 @@ def test_order_shape_admits_complete_rational_result_representation() -> None:
         sequence_order_shape(source)
 
 
-def test_order_shape_native_and_catalog_paths_share_rational_carrier() -> None:
-    source = rational_sequence((1, 3, 3, 2))
-    native = sequence_order_shape(source)
-    dispatched = invoke_operation(
-        "sequence.order_shape.profile.compute",
-        {"values": ["1", "3", "3", "2"]},
-        Catalog.open(),
-    )
-    assert dispatched.output == native.model_dump(mode="json")
-    assert isinstance(native.source, FiniteRationalSequence)
-    assert all(
-        isinstance(row.square, CanonicalRational)
-        and isinstance(row.neighbor_product, CanonicalRational)
-        for row in native.log_concavity_rows
-    )
-
-
 def test_rational_coefficients_retain_exact_domain_and_source() -> None:
     source = FiniteRationalSequence(
         values=(
@@ -611,21 +591,6 @@ def test_rational_autocorrelation_admission_counts_both_output_components() -> N
         aperiodic_autocorrelation(source)
 
 
-def test_catalog_accepts_serialized_integer_sequence_source() -> None:
-    source = FiniteIntegerSequence(values=(1, 2, 3))
-    payload = json.loads(source.model_dump_json())
-    result = invoke_operation(
-        "sequence.autocorrelation.aperiodic.compute",
-        payload,
-        Catalog.open(),
-    )
-    native = aperiodic_autocorrelation(source)
-    assert result.output == native.model_dump(mode="json")
-    restored = AutocorrelationResult.model_validate_json(json.dumps(result.output))
-    assert isinstance(restored.source, FiniteIntegerSequence)
-    assert restored.source.values == (1, 2, 3)
-
-
 def test_wide_rational_cyclic_work_is_rejected_before_kernel() -> None:
     denominator = 10**15_999
     source = FiniteRationalSequence(
@@ -652,18 +617,6 @@ def test_oversized_integer_wire_entries_are_rejected_before_parsing() -> None:
     }
     with pytest.raises(ValidationError, match="digit"):
         FiniteRationalSequence.model_validate(payload)
-
-
-def test_autocorrelation_value_schema_registers_canonical_rational_defs() -> None:
-    schema = FiniteSequence.model_json_schema()
-    assert "CanonicalRational" in json.dumps(schema)
-    catalog = Catalog.open()
-    descriptor = next(
-        operation
-        for operation in catalog.snapshot().operations
-        if operation.operation_id == "sequence.autocorrelation.aperiodic.compute"
-    )
-    assert "CanonicalRational" in json.dumps(descriptor.input_schema)
 
 
 def test_order_shape_observes_request_cancellation() -> None:

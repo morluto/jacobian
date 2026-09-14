@@ -165,6 +165,31 @@ class TestFactorValuesAndOperations:
         assert diagnostic["type"] == "graphical_model.factor_multiply_rational_bound"
         assert diagnostic["loc"] == ("left", "right")
 
+    def test_kernel_result_table_is_not_rescanned_after_admission(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Admission happens before expansion; the result is then trusted."""
+
+        from jacobian.math.probability.graphical_models import operations as module
+
+        rescans = 0
+        original = module.require_bounded_rational
+
+        def counted(value: CanonicalRational, *, max_digits: int, label: str) -> None:
+            nonlocal rescans
+            rescans += 1
+            original(value, max_digits=max_digits, label=label)
+
+        monkeypatch.setattr(module, "require_bounded_rational", counted)
+        factor = _factor((0,), ("1", "2"))
+        factor_multiply(factor, factor)
+        after_multiply = rescans
+        factor_marginalize(factor, 0)
+        # Source admission inspects the operands; the result table is bound
+        # through model_construct and must not be rescanned.
+        assert after_multiply == 4
+        assert rescans == after_multiply + 2
+
     def test_marginal_rational_growth_is_a_typed_admission_failure(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:

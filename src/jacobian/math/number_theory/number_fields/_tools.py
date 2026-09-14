@@ -20,9 +20,16 @@ from jacobian.math.number_theory.number_fields._models import (
     NumberFieldEmbeddingsRequest,
     NumberFieldRealEmbeddingOrderRequest,
     NumberFieldRequest,
+    NumberFieldRingOfIntegersRequest,
 )
 from jacobian.math.number_theory.number_fields._real_embedding_order import (
     NumberFieldRealEmbeddingOrderError,
+)
+from jacobian.math.number_theory.number_fields._ring_of_integers import (
+    NumberFieldRingOfIntegersResult,
+)
+from jacobian.math.number_theory.number_fields._ring_of_integers_process import (
+    compute_nf_ring_of_integers,
 )
 from jacobian.math.number_theory.number_fields.operations import (
     NumberFieldEmbeddingAdmissionError,
@@ -31,9 +38,17 @@ from jacobian.math.number_theory.number_fields.operations import (
     embeddings,
 )
 from jacobian.math.number_theory.number_fields.values import (
+    MAX_NUMBER_FIELD_DISCRIMINANT_DIGITS,
+    MAX_SIMPLE_NUMBER_FIELD_ELEMENT_DIGITS,
     NumberFieldEmbeddingProfile,
     SimpleNumberFieldRealEmbeddingOrder,
 )
+
+
+def compute_ring_of_integers(
+    request: NumberFieldRingOfIntegersRequest,
+) -> NumberFieldRingOfIntegersResult:
+    return compute_nf_ring_of_integers(request)
 
 
 def _compute_embeddings(
@@ -83,9 +98,59 @@ def _compute_binary_power_sum_gap_profile(
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
     MathTool(
+        operation_id="number_field.ring_of_integers.compute",
+        title="Compute the ring-of-integers basis of a number field",
+        description=(
+            "Return one deterministic integral-basis witness for the ring of "
+            "integers of a presented simple number field QQ(alpha), with every "
+            "basis member represented as a canonical field element on the "
+            "presentation's own ascending power basis, together with the field "
+            "discriminant. The defining polynomial must be irreducible over QQ "
+            "and have degree at most 31, and its monicized discriminant must "
+            f"not exceed {MAX_NUMBER_FIELD_DISCRIMINANT_DIGITS} digits. "
+            "Admission additionally proves the"
+            "defining-polynomial discriminant factors within a bounded trial "
+            "envelope (remaining cofactor at most 4096 digits and one, prime, "
+            "or a prime power) and that the proved Round 2 order-enlargement "
+            "work fits a fixed step envelope, so the exact backend completes "
+            "instead of timing out. A field whose integral-basis coordinates "
+            f"exceed the {MAX_SIMPLE_NUMBER_FIELD_ELEMENT_DIGITS}-digit element "
+            "envelope is refused with a typed coordinate-bound rejection."
+        ),
+        request_type=NumberFieldRingOfIntegersRequest,
+        result_type=NumberFieldRingOfIntegersResult,
+        run=compute_ring_of_integers,
+        tags=("number-field", "ring-of-integers", "exact"),
+        examples=(
+            OperationExample(
+                name="golden_field",
+                description=(
+                    "QQ(sqrt(5)) is irreducible and within the degree bound; "
+                    "its ring of integers has basis 1 and (1+sqrt(5))/2."
+                ),
+                input={
+                    "field": {
+                        "domain": "QQ",
+                        "coefficients_descending": ["1", "0", "-5"],
+                    }
+                },
+            ),
+        ),
+    ),
+    MathTool(
         operation_id="number_field.discriminant.compute",
         title="Compute the discriminant of a number field",
-        description="Compute the field discriminant of one canonical SimpleNumberFieldPresentation in an isolated SymPy worker. Worker non-completion raises an execution error without a discriminant claim.",
+        description=(
+            "Compute the field discriminant of one canonical "
+            "SimpleNumberFieldPresentation in an isolated SymPy worker. The "
+            "defining polynomial must be irreducible and within the degree "
+            f"bound, and its monicized discriminant must not exceed "
+            f"{MAX_NUMBER_FIELD_DISCRIMINANT_DIGITS} digits and must factor "
+            "with a cofactor of at most 4096 digits that is one, prime, or a "
+            "prime power, with proved Round 2 enlargement work inside a fixed "
+            "step envelope. Worker non-completion raises an execution error "
+            "without a discriminant claim."
+        ),
         request_type=NumberFieldRequest,
         result_type=NumberFieldDiscriminantResult,
         run=compute_nf_discriminant,

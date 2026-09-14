@@ -5,6 +5,10 @@ from __future__ import annotations
 from itertools import product
 from typing import Literal, cast
 
+from jacobian.math.combinatorics.matroids.oriented._bracket_kernel import (
+    bracket_syzygy_residual,
+    grassmann_pluecker_relation,
+)
 from jacobian.math.combinatorics.matroids.oriented._models import (
     B2Obstruction,
     ChirotopeCheckResult,
@@ -171,4 +175,9 @@ def verify_chirotope_check(claim: ChirotopeCheckResult) -> bool:
     )
 
 
-__all__ = ["check_chirotope", "verify_chirotope_check"]
+__all__ = [
+    "bracket_syzygy_residual",
+    "check_chirotope",
+    "grassmann_pluecker_relation",
+    "verify_chirotope_check",
+]

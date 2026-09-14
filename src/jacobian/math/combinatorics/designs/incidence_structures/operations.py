@@ -4,7 +4,11 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable
+from itertools import combinations
 from typing import Literal
+
+from pydantic import ValidationError
+from pydantic_core import PydanticCustomError
 
 from jacobian._execution import (
     bind_request_deadline,
@@ -18,7 +22,10 @@ from jacobian.math.combinatorics.designs.incidence_structures._kernel import (
     incidence_trade_data,
 )
 from jacobian.math.combinatorics.designs.incidence_structures._models import (
+    MAX_STEINER_BLOCKS,
+    MAX_STEINER_SEARCH_STATES,
     ComplementResult,
+    ComputedSteinerTripleSystem,
     ContainmentProfileResult,
     DegreeProfileResult,
     DerivedResidualResult,
@@ -32,8 +39,18 @@ from jacobian.math.combinatorics.designs.incidence_structures._models import (
     IntersectionsResult,
     LeviGraphResult,
     RestrictionResult,
+    SteinerTripleSystemNotFound,
+    SteinerTripleSystemResult,
+    SteinerTripleSystemShard,
+    SteinerTripleSystemUnknown,
     _require_containment_profile_admitted,
     _require_incidence_trade_admitted,
+    _require_steiner_triple_system_admitted,
+)
+from jacobian.math.combinatorics.exact_cover import (
+    ExactCoverRow,
+    GeneralizedExactCoverInstance,
+    find_generalized_exact_cover,
 )
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     FiniteHypergraph,
@@ -70,6 +87,271 @@ def containment_profile(
     request_checkpoint("after containment profile admission")
     return ContainmentProfileResult._from_kernel(
         incidence, order, containment_profile_data(incidence, order)
+    )
+
+
+def _covered_pairs_from_fixed_triples(
+    selected_triples: tuple[tuple[int, int, int], ...],
+) -> set[tuple[int, int]]:
+    covered_pairs: set[tuple[int, int]] = set()
+    for triple in selected_triples:
+        for pair in combinations(triple, 2):
+            if pair in covered_pairs:
+                raise OperationDomainValidationError(
+                    location=("shard", "fixed_triples"),
+                    code="incidence_structure.steiner_shard_overlap",
+                    message="fixed triples must cover distinct pairs",
+                )
+            covered_pairs.add(pair)
+    return covered_pairs
+
+
+def _complete_remaining_steiner_cover(
+    *,
+    order: int,
+    search_budget: int,
+    selected_triples: tuple[tuple[int, int, int], ...],
+    pairs: tuple[tuple[int, int], ...],
+    pair_labels: dict[tuple[int, int], str],
+    triple_by_row_id: dict[str, tuple[int, int, int]],
+    covered_pairs: set[tuple[int, int]],
+) -> tuple[
+    str,
+    tuple[str, ...],
+    int,
+    tuple[SteinerTripleSystemShard, ...],
+]:
+    remaining_pair_labels = tuple(
+        pair_labels[pair] for pair in pairs if pair not in covered_pairs
+    )
+    if not remaining_pair_labels:
+        selected_row_ids = tuple(
+            f"triple:{a:02d}:{b:02d}:{c:02d}" for a, b, c in selected_triples
+        )
+        return "FOUND", selected_row_ids, 0, ()
+    remaining_rows = tuple(
+        ExactCoverRow(
+            row_id=row_id,
+            items=tuple(sorted(pair_labels[pair] for pair in combinations(triple, 2))),
+        )
+        for row_id, triple in triple_by_row_id.items()
+        if triple not in selected_triples
+        and not any(pair in covered_pairs for pair in combinations(triple, 2))
+    )
+    exact_cover = GeneralizedExactCoverInstance(
+        primary_items=tuple(sorted(remaining_pair_labels)),
+        secondary_items=(),
+        rows=remaining_rows,
+    )
+    try:
+        cover = find_generalized_exact_cover(
+            exact_cover, search_node_limit=search_budget
+        )
+    except PydanticCustomError as exc:
+        raise OperationDomainValidationError(
+            location=("shard",),
+            code="incidence_structure.steiner_shard_prefix",
+            message=str(exc),
+        ) from exc
+    if cover.status == "FOUND":
+        selected_row_ids = tuple(
+            f"triple:{a:02d}:{b:02d}:{c:02d}" for a, b, c in selected_triples
+        ) + (cover.selected_row_ids or ())
+        return "FOUND", selected_row_ids, cover.searched_node_count, ()
+    if cover.status == "UNKNOWN":
+        frontier = tuple(
+            SteinerTripleSystemShard(
+                order=order,
+                fixed_triples=tuple(
+                    sorted(
+                        (
+                            *selected_triples,
+                            *(
+                                triple_by_row_id[row_id]
+                                for row_id in frontier_shard.fixed_row_prefix
+                            ),
+                        )
+                    )
+                ),
+            )
+            for frontier_shard in cover.unresolved_frontier
+        )
+        return "UNKNOWN", (), cover.searched_node_count, frontier
+    return cover.status, (), cover.searched_node_count, ()
+
+
+def _admit_native_shard(shard: object, order: int) -> SteinerTripleSystemShard:
+    """Canonicalize one native continuation shard under bounded inspection."""
+
+    if not isinstance(shard, SteinerTripleSystemShard):
+        raise OperationDomainValidationError(
+            location=("shard",),
+            code="incidence_structure.steiner_shard_type",
+            message="shard must be a SteinerTripleSystemShard or None",
+        )
+    raw_triples = getattr(shard, "fixed_triples", None)
+    # Bound the caller-authored field before dumping or canonicalizing it: a
+    # schema-bypassed replacement must not be traversed in full. The length must
+    # be rejected first, because ``len`` on a tuple is constant time while any
+    # element-wise scan walks the whole field - and this admission runs before
+    # the request deadline is bound, so there is no checkpoint to notice.
+    #
+    # The exact built-in type is required, not ``isinstance``: a tuple subclass
+    # can override ``__len__`` to report a value under the ceiling while
+    # iteration still yields the whole underlying family, which would let the
+    # element scan and Pydantic canonicalization run unbounded.
+    if type(raw_triples) is not tuple:
+        raise OperationDomainValidationError(
+            location=("shard", "fixed_triples"),
+            code="incidence_structure.steiner_shard_shape",
+            message="continuation triples must be immutable tuples",
+        )
+    if len(raw_triples) > MAX_STEINER_BLOCKS:
+        # Use the fixed structural ceiling, not `order * (order - 1) // 6`: the
+        # request order has not been range-admitted yet at this point, so a
+        # forged `order` would otherwise authorise a family of any size to reach
+        # Pydantic canonicalization and sorting. No design admits more than
+        # MAX_STEINER_BLOCKS triples regardless of the order claimed.
+        raise OperationDomainValidationError(
+            location=("shard", "fixed_triples"),
+            code="incidence_structure.steiner_shard_length",
+            message="a continuation prefix cannot contain more triples than the design",
+        )
+    if any(type(triple) is not tuple for triple in raw_triples):
+        raise OperationDomainValidationError(
+            location=("shard", "fixed_triples"),
+            code="incidence_structure.steiner_shard_shape",
+            message="continuation triples must be immutable tuples",
+        )
+    try:
+        validated = SteinerTripleSystemShard.model_validate(
+            {
+                "order": getattr(shard, "order", None),
+                "fixed_triples": raw_triples,
+            }
+        )
+    except (ValidationError, PydanticCustomError) as exc:
+        if isinstance(exc, ValidationError):
+            error = exc.errors()[0]
+            location = ("shard", *error["loc"])
+            code = str(error["type"])
+            message = str(error["msg"])
+        else:
+            location = ("shard", "fixed_triples")
+            code = exc.type
+            message = exc.message()
+        raise OperationDomainValidationError(
+            location=location,
+            code=code,
+            message=message,
+        ) from exc
+    if validated.order != order:
+        raise OperationDomainValidationError(
+            location=("order", "shard"),
+            code="incidence_structure.steiner_shard_order",
+            message="a continuation shard must have the same order as the request",
+        )
+    return validated
+
+
+def construct_steiner_triple_system(
+    order: int,
+    search_budget: int = MAX_STEINER_SEARCH_STATES,
+    shard: SteinerTripleSystemShard | None = None,
+) -> SteinerTripleSystemResult:
+    """Construct one STS(order) using bounded exact cover over point pairs.
+
+    Each candidate triple covers exactly three pair constraints. The canonical
+    instance is solved by the maintained generalized exact-cover backend. An
+    UNKNOWN result retains algorithm-independent fixed-triple constraints for
+    one unresolved subdomain within the admitted search budget. A COMPUTED
+    outcome is an exact cover of every point pair.
+    """
+    if type(order) is not int or type(search_budget) is not int:
+        raise OperationDomainValidationError(
+            location=("order", "search_budget"),
+            code="incidence_structure.steiner_argument_type",
+            message="order and search_budget must be integers",
+        )
+    if shard is not None:
+        shard = _admit_native_shard(shard, order)
+
+    execution = current_request_execution()
+    if execution is None:
+        with request_execution(time.monotonic()):
+            return construct_steiner_triple_system(order, search_budget, shard)
+    deadline = execution.started_at + 60
+    if execution.deadline is not None:
+        deadline = min(deadline, execution.deadline)
+    bind_request_deadline(deadline)
+    request_checkpoint("before Steiner construction admission")
+    try:
+        _require_steiner_triple_system_admitted(order, search_budget)
+    except IncidenceStructureAdmissionError as exc:
+        raise OperationDomainValidationError(
+            location=("order", "search_budget"),
+            code=f"incidence_structure.{exc.reason}",
+            message=str(exc),
+        ) from exc
+    request_checkpoint("after Steiner construction admission")
+
+    points = tuple(range(order))
+    pairs = tuple(combinations(points, 2))
+    triples = tuple(combinations(points, 3))
+    pair_labels = {pair: f"pair:{pair[0]:02d}:{pair[1]:02d}" for pair in pairs}
+    triple_by_row_id = {
+        f"triple:{triple[0]:02d}:{triple[1]:02d}:{triple[2]:02d}": triple
+        for triple in triples
+    }
+    selected_triples = () if shard is None else shard.fixed_triples
+    covered_pairs = _covered_pairs_from_fixed_triples(selected_triples)
+    cover_status, selected_row_ids, states, frontier = (
+        _complete_remaining_steiner_cover(
+            order=order,
+            search_budget=search_budget,
+            selected_triples=selected_triples,
+            pairs=pairs,
+            pair_labels=pair_labels,
+            triple_by_row_id=triple_by_row_id,
+            covered_pairs=covered_pairs,
+        )
+    )
+    if cover_status != "FOUND":
+        # An empty shard and an unsharded request execute the same root search,
+        # so normalize both to the single root encoding.
+        retained_shard = None if shard is None or not shard.fixed_triples else shard
+        unknown = cover_status == "UNKNOWN"
+        return SteinerTripleSystemResult(
+            order=order,
+            outcome=(
+                SteinerTripleSystemUnknown(
+                    states_explored=states,
+                    unresolved_frontier=frontier,
+                    source_shard=retained_shard,
+                )
+                if unknown
+                else SteinerTripleSystemNotFound(source_shard=retained_shard)
+            ),
+        )
+
+    # The cover search returns the selected rows only when it has reconstructed
+    # and checked exact coverage of every remaining pair constraint, and
+    # `_covered_pairs_from_fixed_triples` already established that the fixed
+    # prefix is pair-disjoint, so the defining incidence axiom holds for the
+    # union. Replaying it here would re-derive the kernel's own postcondition
+    # during result construction; the independent replay lives in the tests.
+    chosen = tuple(triple_by_row_id[row_id] for row_id in selected_row_ids)
+    canonical_chosen = tuple(sorted(chosen))
+    design = IncidenceStructure(
+        points=tuple(f"p{point}" for point in points),
+        block_ids=tuple(f"b{index}" for index in range(len(canonical_chosen))),
+        blocks=tuple(
+            tuple(f"p{point}" for point in triple) for triple in canonical_chosen
+        ),
+    )
+    return SteinerTripleSystemResult(
+        order=order,
+        outcome=ComputedSteinerTripleSystem(design=design),
     )
 
 
@@ -133,6 +415,7 @@ def verify_incidence_moment_comparison(
 __all__ = [
     "check_incidence_trade",
     "complement",
+    "construct_steiner_triple_system",
     "containment_profile",
     "degree_profile",
     "derived_residual",

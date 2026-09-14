@@ -5,7 +5,6 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 from math import factorial
-from typing import Any
 
 from jacobian._execution import (
     OperationExecutionCancelledError,
@@ -14,6 +13,10 @@ from jacobian._execution import (
     current_request_execution,
 )
 from jacobian.canonical import format_canonical_integer
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.number_theory.algebraic_numbers.complex import (
     ComplexAlgebraicValue,
     algebraic_root_separation_denominator_bound,
@@ -38,9 +41,6 @@ from jacobian.math.number_theory.number_fields._embeddings_process import (
     EMBEDDINGS_WORKER_WALL_SECONDS,
     embeddings_worker_cancelled,
     run_embeddings_worker,
-)
-from jacobian.math.number_theory.number_fields._integral_basis import (
-    recognized_integral_basis,
 )
 from jacobian.math.number_theory.number_fields._models import (
     NumberFieldDiscriminantResult,
@@ -331,25 +331,48 @@ def embeddings(
     return result
 
 
-def _integral_basis(
-    field: SimpleNumberFieldPresentation,
-) -> tuple[Any, Any, Any, int]:
-    if field.degree > _MAX_NATIVE_INTEGRAL_BASIS_DEGREE:
-        raise ValueError(
-            "native number-field integral-basis operations are limited to degree "
-            f"{_MAX_NATIVE_INTEGRAL_BASIS_DEGREE}"
-        )
-    integral_basis = recognized_integral_basis(field)
-    if integral_basis is None:
-        raise ValueError("simple number-field polynomial must be irreducible over QQ")
-    return integral_basis
-
-
 def discriminant(
     field: SimpleNumberFieldPresentation,
 ) -> NumberFieldDiscriminantInteger:
-    _ring_of_integers, field_discriminant, _alpha, _leading = _integral_basis(field)
-    return int(field_discriminant)
+    """Return the field discriminant through the shared admitted worker.
+
+    This is a package-exported native entry, so it is an admission boundary in
+    its own right: it must not take a cheaper route than ``math.run``. The
+    irreducibility, discriminant, and ``round_two`` work - including the
+    factorization-work admission that bounds ``round_two`` - belongs to the
+    request-owned killable worker, which this call now enters exactly like
+    ``number_field.discriminant.compute`` and ``verify_discriminant``. Previously
+    it called ``recognized_integral_basis`` synchronously with no
+    ``require_factorizable_discriminant``, so the same field was admitted on the
+    catalog path and refused - or run unbounded - on the native one.
+    """
+
+    from jacobian.math.number_theory.number_fields._discriminant_process import (
+        compute_nf_discriminant,
+    )
+    from jacobian.math.number_theory.number_fields._models import NumberFieldRequest
+
+    if not isinstance(field, SimpleNumberFieldPresentation):
+        raise OperationDomainValidationError(
+            location=("field",),
+            code="number_field.discriminant_field_type",
+            message=(
+                "discriminant requires a SimpleNumberFieldPresentation field argument"
+            ),
+        )
+    if field.degree > _MAX_NATIVE_INTEGRAL_BASIS_DEGREE:
+        # The published native entry keeps its own degree ceiling. That ceiling
+        # is part of this callable's contract and is independent of the worker
+        # admission, which is what the shared route now supplies.
+        raise OperationDomainValidationError(
+            location=("field",),
+            code="number_field.native_integral_basis_degree_bound",
+            message=(
+                "native number-field integral-basis operations are limited to "
+                f"degree {_MAX_NATIVE_INTEGRAL_BASIS_DEGREE}"
+            ),
+        )
+    return int(compute_nf_discriminant(NumberFieldRequest(field=field)).discriminant)
 
 
 def verify_discriminant(claim: NumberFieldDiscriminantResult) -> bool:
@@ -361,6 +384,11 @@ def verify_discriminant(claim: NumberFieldDiscriminantResult) -> bool:
 
     try:
         expected = compute_nf_discriminant(NumberFieldRequest(field=claim.field))
+    except OperationResourceAdmissionError:
+        # Resource non-completion is not a negative mathematical conclusion:
+        # a discriminant outside the factorization envelope is unknown here,
+        # not false.
+        raise
     except (ArithmeticError, TypeError, ValueError):
         return False
     return expected.discriminant == claim.discriminant
@@ -375,21 +403,11 @@ def verify_binary_power_sum_gap_profile(claim: BinaryPowerSumGapProfile) -> bool
     return expected == claim
 
 
-def ring_of_integers(field: SimpleNumberFieldPresentation) -> list[str]:
-    """Return the exact integral basis expressed in the defining power basis."""
-    ring, _field_discriminant, alpha, leading = _integral_basis(field)
-    return [
-        str(element.as_expr().subs(alpha, leading * alpha).expand())
-        for element in ring.basis_element_pullbacks()
-    ]
-
-
 __all__ = [
     "binary_power_sum_gap_profile",
     "compare_real_embedding_elements",
     "discriminant",
     "embeddings",
-    "ring_of_integers",
     "verify_binary_power_sum_gap_profile",
     "verify_discriminant",
 ]

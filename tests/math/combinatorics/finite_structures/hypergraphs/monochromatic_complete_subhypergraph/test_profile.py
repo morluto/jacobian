@@ -1,5 +1,6 @@
 """Behavioral tests for complete monochromatic uniform-subhypergraph profiles."""
 
+from collections.abc import Iterable
 from itertools import combinations
 from math import comb as ncr
 
@@ -265,9 +266,9 @@ def test_target_and_lookup_units_fit_the_admission_charge(
     vertices = ("0", "1", "2", "3")
     source = make_coloring(vertices, complete_edges(vertices, 2), [0] * 6)
     executed = {"targets": 0, "lookups": 0}
-    original = monochromatic_operations.combinations
+    original = combinations
 
-    def counted(seq: object, size: int):
+    def counted(seq: Iterable[str], size: int) -> list[tuple[str, ...]]:
         items = tuple(seq)
         rows = list(original(items, size))
         if size == 3:

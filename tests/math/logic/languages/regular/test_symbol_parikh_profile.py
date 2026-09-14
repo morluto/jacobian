@@ -135,6 +135,35 @@ def test_profile_result_rejects_forged_json_cells() -> None:
         SymbolParikhProfileResult.model_validate_json(json.dumps(payload))
 
 
+def test_profile_result_rebuilds_validation_bypassed_transition_fields() -> None:
+    """Constructed bool-valued transitions are retained as canonical integers."""
+
+    forged_transition = DFATransition.model_construct(
+        source=False, symbol=False, target=False
+    )
+    forged_dfa = DFA.model_construct(
+        state_count=1,
+        alphabet_size=1,
+        transitions=(forged_transition,),
+        initial_state=0,
+        accepting_states=(0,),
+    )
+
+    result = SymbolParikhProfileResult(
+        dfa=forged_dfa,
+        alphabet=(0,),
+        word_length=1,
+        cells=(SymbolParikhCell(symbol_counts=(1,), multiplicity=1),),
+        total_accepted_words=1,
+    )
+
+    transition = result.dfa.transitions[0]
+    assert type(transition.source) is int
+    assert type(transition.symbol) is int
+    assert type(transition.target) is int
+    assert (transition.source, transition.symbol, transition.target) == (0, 0, 0)
+
+
 def test_large_accepted_profile_uses_trusted_result_construction(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1021,13 +1050,68 @@ def test_profile_result_retains_the_canonical_dfa() -> None:
 
 
 def test_profile_cell_ordering_matches_sorted() -> None:
-    """The checkpointed heap ordering is the canonical lexicographic order."""
+    """The checkpointed counting order is the canonical lexicographic order."""
     profile = {(0, 1): 3, (1, 1): 1, (0, 0): 2, (1, 0): 4}
     ordered = profile_module._sorted_profile_items_with_checkpoints(profile)
     assert ordered == sorted(profile.items())
 
 
-def test_profile_work_bound_charges_heap_ordering() -> None:
+def test_profile_cell_ordering_observes_mid_materialization_cancellation() -> None:
+    """Cancellation raised while materializing items stops the ordering phase."""
+
+    class Signal:
+        def __init__(self) -> None:
+            self.set = False
+
+        def is_set(self) -> bool:
+            return self.set
+
+    signal = Signal()
+
+    class TrippingProfile(dict):  # type: ignore[type-arg]
+        def items(self):
+            for index, item in enumerate(super().items()):
+                if index == 1:
+                    signal.set = True
+                yield item
+
+    profile: dict[tuple[int, ...], int] = TrippingProfile(
+        {(0, 0): 2, (0, 1): 3, (1, 0): 4, (1, 1): 1}
+    )
+    with (
+        request_execution(0.0, cancellation_signal=signal),
+        pytest.raises(OperationExecutionCancelledError),
+    ):
+        profile_module._sorted_profile_items_with_checkpoints(profile)
+
+
+def test_wide_profile_ordering_work_is_charged_before_materialization() -> None:
+    """Multi-coordinate ordering work refuses a profile beyond the envelope.
+
+    The previous ``collected_cells * bit_length`` charge admitted this
+    one-state, all-accepting 23-symbol, length-4 profile (14,950 cells) with no
+    allowance for the coordinate work of ordering its wide keys.
+    """
+
+    alphabet_size = 23
+    dfa = DFA(
+        state_count=1,
+        alphabet_size=alphabet_size,
+        transitions=tuple(
+            DFATransition(source=0, symbol=symbol, target=0)
+            for symbol in range(alphabet_size)
+        ),
+        initial_state=0,
+        accepting_states=(0,),
+    )
+    with pytest.raises(
+        OperationResourceAdmissionError,
+        match="symbol-Parikh DP or output exceeds",
+    ):
+        symbol_parikh_profile(dfa, 4)
+
+
+def test_profile_work_bound_charges_ordering() -> None:
     """A profile whose ordering cost exceeds the envelope is refused."""
     dfa = DFA(
         state_count=1,

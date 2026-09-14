@@ -1,6 +1,5 @@
 """Exact symbol-level Parikh profiles for accepted DFA words."""
 
-import heapq
 from collections.abc import Iterable
 from itertools import islice
 from math import comb
@@ -114,17 +113,31 @@ class SymbolParikhProfileResult(StrictModel):
     def require_canonical_cells(self) -> Self:
         # A model_construct DFA is trusted when nested, so rerun the DFA's own
         # contract before checking profile invariants against its fields.
+        # Nested transition instances are forwarded as raw field maps so strict
+        # validation rebuilds them instead of trusting a validation-bypassed
+        # instance (for example one whose coordinates are booleans).
         try:
             source = DFA.model_validate(
                 {
                     "state_count": getattr(self.dfa, "state_count", None),
                     "alphabet_size": getattr(self.dfa, "alphabet_size", None),
-                    "transitions": getattr(self.dfa, "transitions", None),
+                    "transitions": _bounded_dfa_tuple(
+                        getattr(self.dfa, "transitions", None),
+                        MAX_DFA_TRANSITIONS,
+                        item_fields=("source", "symbol", "target"),
+                    ),
                     "initial_state": getattr(self.dfa, "initial_state", None),
-                    "accepting_states": getattr(self.dfa, "accepting_states", None),
+                    "accepting_states": _bounded_dfa_tuple(
+                        getattr(self.dfa, "accepting_states", None), MAX_DFA_STATES
+                    ),
                 }
             )
-        except (ValidationError, AttributeError, TypeError) as exc:
+        except (
+            ValidationError,
+            PydanticCustomError,
+            AttributeError,
+            TypeError,
+        ) as exc:
             raise ValueError(
                 "symbol-Parikh source must be a canonical total DFA"
             ) from exc
@@ -668,8 +681,15 @@ def _compute_symbol_parikh_profile(
             )
     cell_construction_work = collected_cells * max(1, alphabet_size)
     result_reduce_work = 2 * collected_cells
+    # Ordering uses stable counting passes over the count coordinates rather
+    # than a comparison heap, so the whole phase is bounded by one pass per
+    # coordinate over the item count plus the word-length bucket axis.  A
+    # comparison sort would instead pay up to ``alphabet_size`` coordinate
+    # comparisons per heap comparison and is not cheaply bounded.
     ordering_work = (
-        collected_cells * max(1, collected_cells.bit_length()) if collected_cells else 0
+        max(1, alphabet_size) * (2 * collected_cells + length + 1)
+        if collected_cells
+        else 0
     )
     transition_index_work = transition_count
     reachability_scan_work = len(reachable) * transition_count
@@ -784,19 +804,44 @@ def _sorted_profile_items_with_checkpoints(
 ) -> list[tuple[tuple[int, ...], int]]:
     """Return the profile items in canonical order without a long frozen sort.
 
-    ``sorted`` evaluates its whole argument before the caller can checkpoint,
-    so materialize through a heap and checkpoint throughout the pops.
+    A comparison heap is not cheaply bounded: each tuple comparison may scan up
+    to ``alphabet_size`` coordinates and every pop can perform several of them.
+    Ordering instead applies stable counting passes over the count coordinates,
+    from the last coordinate to the first.  Lexicographic order on dense
+    integer vectors is exactly the result of least-significant-coordinate-first
+    stable passes, every pass is linear in the item count, and each pass
+    observes a request checkpoint so cancellation and the deadline cover the
+    materialization as well as the extraction.
     """
 
     request_checkpoint("before symbol-Parikh cell ordering")
-    heap = list(profile.items())
-    heapq.heapify(heap)
-    ordered: list[tuple[tuple[int, ...], int]] = []
-    while heap:
-        ordered.append(heapq.heappop(heap))
-        if len(ordered) % _CHECKPOINT_STRIDE == 0:
+    items: list[tuple[tuple[int, ...], int]] = []
+    for index, item in enumerate(profile.items()):
+        if index % _CHECKPOINT_STRIDE == 0:
             request_checkpoint("during symbol-Parikh cell ordering")
-    return ordered
+        items.append(item)
+    if not items:
+        return items
+    vector_length = len(items[0][0])
+    if vector_length == 0:
+        return items
+    word_length = sum(items[0][0])
+    for coordinate in range(vector_length - 1, -1, -1):
+        request_checkpoint("during symbol-Parikh cell ordering")
+        buckets: list[list[tuple[tuple[int, ...], int]]] = [
+            [] for _ in range(word_length + 1)
+        ]
+        for index, item in enumerate(items):
+            if index % _CHECKPOINT_STRIDE == 0:
+                request_checkpoint("during symbol-Parikh cell ordering")
+            buckets[item[0][coordinate]].append(item)
+        ordered: list[tuple[tuple[int, ...], int]] = []
+        for index, bucket in enumerate(buckets):
+            if index % _CHECKPOINT_STRIDE == 0:
+                request_checkpoint("during symbol-Parikh cell ordering")
+            ordered.extend(bucket)
+        items = ordered
+    return items
 
 
 def symbol_parikh_profile(dfa: DFA, word_length: int) -> SymbolParikhProfileResult:

@@ -27,7 +27,11 @@ from jacobian.math.polynomials.rational_functions.maps import (
     jacobian_matrix,
 )
 from jacobian.math.polynomials.rational_functions.maps import operations as jacobian_ops
-from jacobian.math.polynomials.values import RationalFunction
+from jacobian.math.polynomials.rational_functions.values import (
+    MAX_RATIONAL_MAP_SOURCE_BITS,
+    MAX_RATIONAL_MAP_SOURCE_TERMS,
+)
+from jacobian.math.polynomials.values import MAX_POLYNOMIAL_TERMS, RationalFunction
 
 
 def test_issue_example_and_unchanged_serialized_components() -> None:
@@ -293,7 +297,7 @@ def test_linear_power_row_cancels_before_result_exponent_cap() -> None:
 
 def test_per_polynomial_source_terms_are_capped_before_coefficient_scan() -> None:
     term = {"coefficient": {"num": "1", "den": "1"}, "exponents": [0]}
-    with pytest.raises(ValidationError, match="4,096-term"):
+    with pytest.raises(ValidationError, match=f"{MAX_POLYNOMIAL_TERMS:,}-term"):
         RationalFunctionMap.model_validate(
             {
                 "source_variables": ["x"],
@@ -301,7 +305,7 @@ def test_per_polynomial_source_terms_are_capped_before_coefficient_scan() -> Non
                 "components": [
                     {
                         "variables": ["x"],
-                        "numerator": {"terms": [term] * 4_097},
+                        "numerator": {"terms": [term] * (MAX_POLYNOMIAL_TERMS + 1)},
                         "denominator": {
                             "terms": [
                                 {
@@ -320,7 +324,9 @@ def test_per_polynomial_source_terms_are_capped_before_coefficient_scan() -> Non
         "numerator": {"terms": [term] * 256},
         "denominator": {"terms": [term] * 256},
     }
-    with pytest.raises(ValidationError, match="65,536-term"):
+    with pytest.raises(
+        ValidationError, match=f"{MAX_RATIONAL_MAP_SOURCE_TERMS:,}-term"
+    ):
         RationalFunctionMap.model_validate(
             {
                 "source_variables": ["x"],
@@ -340,7 +346,7 @@ def test_aggregate_source_digits_are_capped_before_component_parse() -> None:
             "terms": [{"coefficient": {"num": "1", "den": "1"}, "exponents": [0]}]
         },
     }
-    with pytest.raises(ValidationError, match="8,388,608-bit"):
+    with pytest.raises(ValidationError, match=f"{MAX_RATIONAL_MAP_SOURCE_BITS:,}-bit"):
         RationalFunctionMap.model_validate(
             {
                 "source_variables": ["x"],

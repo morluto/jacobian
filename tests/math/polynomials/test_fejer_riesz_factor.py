@@ -24,6 +24,9 @@ from jacobian.math.polynomials.unit_circle import (
     real_symmetric_degree_one_fejer_riesz_factor,
     verify_real_symmetric_degree_one_fejer_riesz_factor,
 )
+from jacobian.math.polynomials.unit_circle._models import (
+    MAX_FEJER_RIESZ_COMPONENT_DIGITS,
+)
 
 
 def q(value: int | Fraction) -> CanonicalRational:
@@ -158,25 +161,31 @@ def test_verifier_recognizes_the_exact_embedding_record() -> None:
 
 
 def test_component_growth_is_rejected_before_algebraic_work() -> None:
-    huge = 10**32
+    huge = 10**MAX_FEJER_RIESZ_COMPONENT_DIGITS
     source = laurent(2 * huge, -huge)
-    with pytest.raises(OperationResourceAdmissionError, match="32-digit"):
+    with pytest.raises(
+        OperationResourceAdmissionError,
+        match=f"{MAX_FEJER_RIESZ_COMPONENT_DIGITS}-digit",
+    ):
         real_symmetric_degree_one_fejer_riesz_factor(source)
 
 
 def test_every_admitted_factor_remains_inside_the_verifier_envelope() -> None:
-    denominator_0 = 10**31 + 7
-    denominator_1 = 10**31 + 9
+    denominator_0 = 10 ** (MAX_FEJER_RIESZ_COMPONENT_DIGITS - 1) + 7
+    denominator_1 = 10 ** (MAX_FEJER_RIESZ_COMPONENT_DIGITS - 1) + 9
     source = laurent(Fraction(3, denominator_0), Fraction(1, denominator_1))
     result = real_symmetric_degree_one_fejer_riesz_factor(source)
     assert isinstance(result.conclusion, FejerRieszFactored)
     assert verify_real_symmetric_degree_one_fejer_riesz_factor(result)
 
     outside = laurent(
-        Fraction(3, 10**32 + 7),
-        Fraction(1, 10**32 + 9),
+        Fraction(3, 10**MAX_FEJER_RIESZ_COMPONENT_DIGITS + 7),
+        Fraction(1, 10**MAX_FEJER_RIESZ_COMPONENT_DIGITS + 9),
     )
-    with pytest.raises(OperationResourceAdmissionError, match="32-digit"):
+    with pytest.raises(
+        OperationResourceAdmissionError,
+        match=f"{MAX_FEJER_RIESZ_COMPONENT_DIGITS}-digit",
+    ):
         real_symmetric_degree_one_fejer_riesz_factor(outside)
 
 
@@ -199,8 +208,14 @@ def test_fejer_riesz_verifier_propagates_operational_failure(
 
 def test_fejer_riesz_verifier_propagates_source_resource_admission() -> None:
     result = real_symmetric_degree_one_fejer_riesz_factor(laurent(2, -1))
-    oversized_source = laurent(2 * 10**32, -(10**32))
+    oversized_source = laurent(
+        2 * 10**MAX_FEJER_RIESZ_COMPONENT_DIGITS,
+        -(10**MAX_FEJER_RIESZ_COMPONENT_DIGITS),
+    )
     claim = result.model_copy(update={"source": oversized_source})
 
-    with pytest.raises(OperationResourceAdmissionError, match="32-digit"):
+    with pytest.raises(
+        OperationResourceAdmissionError,
+        match=f"{MAX_FEJER_RIESZ_COMPONENT_DIGITS}-digit",
+    ):
         verify_real_symmetric_degree_one_fejer_riesz_factor(claim)

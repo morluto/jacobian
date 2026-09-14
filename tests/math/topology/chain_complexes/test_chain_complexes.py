@@ -16,6 +16,7 @@ from jacobian.math.matrices.certified_snf.operations import (
     matrix_multiply,
 )
 from jacobian.math.topology.chain_complexes._models import (
+    MAX_OPERATION_MATRIX_CELLS,
     ComputeHomologyRequest,
     ConstructChainComplexRequest,
     MappingConeRequest,
@@ -262,7 +263,10 @@ class TestComputeHomology:
             differential_matrices=(zero, zero),
         )
 
-        with pytest.raises(ValidationError, match="4096-cell operation budget"):
+        with pytest.raises(
+            ValidationError,
+            match=f"{MAX_OPERATION_MATRIX_CELLS}-cell operation budget",
+        ):
             VerifyDifferentialRequest(complex=complex_value)
 
     def test_point_homology(self) -> None:

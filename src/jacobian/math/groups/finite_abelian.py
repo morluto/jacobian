@@ -200,7 +200,8 @@ def _require_factorization_admission(
     if group.order > MAX_FINITE_GROUP_ORDER:
         raise _validation_error(
             "factorization_group_order",
-            "finite abelian group exceeds the 4,096-element bound",
+            "finite abelian group exceeds the "
+            f"{MAX_FINITE_GROUP_ORDER:,}-element bound",
         )
     if not left or not right:
         raise _validation_error(
@@ -212,12 +213,13 @@ def _require_factorization_admission(
     ):
         raise _validation_error(
             "factorization_factor_size",
-            "factor elements exceed the 256-element bound",
+            f"factor elements exceed the {MAX_FINITE_GROUP_FACTOR_SIZE}-element bound",
         )
     if len(left) * len(right) > MAX_FINITE_GROUP_ORDER:
         raise _validation_error(
             "factorization_pair_count",
-            "factor Cartesian product exceeds the 4,096-pair bound",
+            "factor Cartesian product exceeds the "
+            f"{MAX_FINITE_GROUP_ORDER:,}-pair bound",
         )
     if any(
         len(element) != len(group.moduli)

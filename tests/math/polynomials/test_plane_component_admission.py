@@ -379,7 +379,10 @@ def test_term_and_total_term_boundaries_reject_before_backend_execution() -> Non
             for leading_coefficient, term_count in enumerate((13, 12, 12, 12), start=1)
         )
     )
-    with pytest.raises(OperationDomainValidationError, match="48 terms"):
+    with pytest.raises(
+        OperationDomainValidationError,
+        match=f"{MAX_PLANE_COMPONENT_TOTAL_TERMS} terms",
+    ):
         _profile(above)
 
 

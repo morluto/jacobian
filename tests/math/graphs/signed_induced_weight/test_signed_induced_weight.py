@@ -7,7 +7,7 @@ from itertools import combinations
 import pytest
 from pydantic import ValidationError
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.optimization._models import (
     RationalWeightedEdge,
@@ -300,6 +300,9 @@ def test_rejects_unrepresentable_rational_height_before_search() -> None:
 
     with pytest.raises(
         OperationDomainValidationError,
-        match=r"common denominator.*32,768-digit rational bound",
+        match=(
+            "common denominator.*"
+            rf"{MAX_CANONICAL_RATIONAL_DIGITS:,}-digit rational bound"
+        ),
     ):
         signed_induced_weight_extrema(graph)

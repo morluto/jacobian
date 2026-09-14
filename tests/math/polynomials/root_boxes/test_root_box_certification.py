@@ -16,7 +16,9 @@ from jacobian.math.matrices.operations import determinant_result
 from jacobian.math.polynomials.maps.values import RationalPolynomialMap
 from jacobian.math.polynomials.root_boxes import certify_real_root_box
 from jacobian.math.polynomials.root_boxes._models import (
+    MAX_ROOT_BOX_COMPONENT_TERMS,
     MAX_ROOT_BOX_DIMENSION,
+    MAX_ROOT_BOX_ENDPOINT_DIGITS,
     PolynomialSystemRootBoxRequest,
     PolynomialSystemRootBoxResult,
     RootBoxCertifiedUniqueNonsingular,
@@ -446,15 +448,21 @@ def test_dimension_and_component_term_boundaries_are_rejected() -> None:
 
     overfull = _map(
         ("x",),
-        ({(degree,): 1 for degree in range(65)},),
+        ({(degree,): 1 for degree in range(MAX_ROOT_BOX_COMPONENT_TERMS + 1)},),
     )
-    with pytest.raises(OperationDomainValidationError, match="64-term budget"):
+    with pytest.raises(
+        OperationDomainValidationError,
+        match=f"{MAX_ROOT_BOX_COMPONENT_TERMS}-term budget",
+    ):
         certify_real_root_box(overfull, _box(("x",), ((-1, 1),)))
 
 
 def test_endpoint_digit_budget_is_owned_by_operation_admission() -> None:
-    endpoint = Fraction(10**128, 1)
-    with pytest.raises(OperationDomainValidationError, match="128-digit bound"):
+    endpoint = Fraction(10**MAX_ROOT_BOX_ENDPOINT_DIGITS, 1)
+    with pytest.raises(
+        OperationDomainValidationError,
+        match=f"{MAX_ROOT_BOX_ENDPOINT_DIGITS}-digit bound",
+    ):
         certify_real_root_box(
             _map(("x",), ({(1,): 1},)),
             _box(("x",), ((endpoint, endpoint + 1),)),

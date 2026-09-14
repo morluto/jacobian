@@ -15,6 +15,7 @@ from jacobian.canonical import encode_strict_json
 from jacobian.math.groups import finite_abelian as domain
 from jacobian.math.groups._tools import TOOLS as GROUP_TOOLS
 from jacobian.math.groups.finite_abelian import (
+    MAX_FINITE_GROUP_ORDER,
     FiniteAbelianGroupFactorizationRequest,
     FiniteAbelianProductGroup,
     FiniteAbelianSpectralPairRequest,
@@ -369,11 +370,11 @@ def test_group_rank_and_order_boundaries() -> None:
     # The order ceiling stays operation-specific on the exhaustive
     # factorization path, whose kernel materializes the ambient group.
     factorization_request = FiniteAbelianGroupFactorizationRequest(
-        moduli=(4_096, 2),
+        moduli=(MAX_FINITE_GROUP_ORDER, 2),
         left=((0, 0),),
         right=((0, 0),),
     )
-    with pytest.raises(ValueError, match="4,096-element"):
+    with pytest.raises(ValueError, match=f"{MAX_FINITE_GROUP_ORDER:,}-element"):
         finite_abelian_group_factorization(
             FiniteAbelianProductGroup(moduli=factorization_request.moduli),
             factorization_request.left,

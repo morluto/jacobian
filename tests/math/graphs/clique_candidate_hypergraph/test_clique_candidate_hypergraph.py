@@ -5,6 +5,9 @@ from __future__ import annotations
 import pytest
 
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
+    MAX_EDGES,
+)
 from jacobian.math.combinatorics.finite_structures.hypergraphs.operations import (
     maximum_edge_matching,
 )
@@ -17,7 +20,10 @@ from jacobian.math.graphs.clique_candidate_hypergraph.operations import (
     convert_candidate_cliques,
     verify_clique_candidate_hypergraph,
 )
-from jacobian.math.graphs.values import SimpleUndirectedGraph
+from jacobian.math.graphs.values import (
+    MAX_SIMPLE_GRAPH_VERTICES,
+    SimpleUndirectedGraph,
+)
 
 BOWTIE = {
     "vertices": ["a", "b", "c", "d", "e"],
@@ -100,12 +106,14 @@ class TestCompleteConstructor:
         result = construct_all_clique_candidate_hypergraph(_graph(BOWTIE))
         payload = result.model_dump(mode="json")
         payload["candidate_map"] = payload["candidate_map"] * 1501
-        with pytest.raises(ValueError, match="at most 12000 items"):
+        with pytest.raises(ValueError, match=f"at most {MAX_EDGES} items"):
             CliqueCandidateHypergraphResult.model_validate(payload)
 
         payload = result.model_dump(mode="json")
-        payload["candidate_map"][0]["members"] = ["a"] * 257
-        with pytest.raises(ValueError, match="at most 256 items"):
+        payload["candidate_map"][0]["members"] = ["a"] * (MAX_SIMPLE_GRAPH_VERTICES + 1)
+        with pytest.raises(
+            ValueError, match=f"at most {MAX_SIMPLE_GRAPH_VERTICES} items"
+        ):
             CliqueCandidateHypergraphResult.model_validate(payload)
 
     def test_request_path_matches_native(self) -> None:

@@ -465,3 +465,43 @@ def test_unexpected_top_level_field_is_bounded_before_copying() -> None:
     with pytest.raises(ValidationError):
         PolynomialExpressionNormalizeRequest.model_validate(payload)
     assert time.monotonic() - started < 1.0
+
+
+def test_container_shaped_literal_is_rejected_before_copying() -> None:
+    """A LITERAL value that is a sequence is rejected before the copy."""
+    payload = {
+        "coefficient_domain": "ZZ",
+        "variables": ["x"],
+        "expression": {"kind": "LITERAL", "value": [1] * 1_000_000},
+    }
+    started = time.monotonic()
+    with pytest.raises(ValidationError):
+        PolynomialExpressionNormalizeRequest.model_validate(payload)
+    assert time.monotonic() - started < 1.0
+
+
+def test_zero_power_returns_one_without_expanding_the_base() -> None:
+    """POWER(base, 0) is the constant one and never expands the base."""
+    variables = tuple(f"x{index}" for index in range(8))
+    literals = [
+        {
+            "kind": "MULTIPLY",
+            "operands": [
+                {"kind": "LITERAL", "value": {"num": 10**89, "den": 1}},
+                {"kind": "VARIABLE", "name": f"x{index}"},
+            ],
+        }
+        for index in range(8)
+    ]
+    base = {
+        "kind": "POWER",
+        "base": {"kind": "ADD", "operands": literals},
+        "exponent": 13,
+    }
+    request = _request("ZZ", {"kind": "POWER", "base": base, "exponent": 0}, variables)
+    started = time.monotonic()
+    result = _normalize(request)
+    assert time.monotonic() - started < 2.0
+    assert result.polynomial.polynomial.terms[0].coefficient == CanonicalRational(
+        num=1, den=1
+    )

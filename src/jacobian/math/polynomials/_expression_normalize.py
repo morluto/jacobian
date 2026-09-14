@@ -280,12 +280,17 @@ def _require_bounded_mapping_fields(node: Mapping[str, object]) -> None:
             + ", ".join(sorted(map(str, unexpected)))
         )
     value = node.get("value")
-    if (
-        value is not None
-        and isinstance(value, Mapping)
-        and (set(value).difference({"num", "den"}) or len(value) > 2)
-    ):
-        raise _MalformedExpressionError("LITERAL value must contain only num and den")
+    if "value" in node:
+        if isinstance(value, (list, tuple)):
+            raise _MalformedExpressionError(
+                "LITERAL value must be a num/den object, not a sequence"
+            )
+        if isinstance(value, Mapping) and (
+            set(value).difference({"num", "den"}) or len(value) > 2
+        ):
+            raise _MalformedExpressionError(
+                "LITERAL value must contain only num and den"
+            )
 
 
 def _bounded_sum(values: list[int] | tuple[int, ...], limit: int) -> int:
@@ -881,6 +886,10 @@ def normalize_polynomial_expression(  # noqa: C901
             for operand in expression.operands:
                 result = _multiply(result, evaluate(operand))
             return result
+        if expression.exponent == 0:
+            # A zero power is the constant one; do not expand the base, which
+            # admission cannot bound through this branch.
+            return {zero_exp: Fraction(1)}
         result = {zero_exp: Fraction(1)}
         base = evaluate(expression.base)
         power = expression.exponent

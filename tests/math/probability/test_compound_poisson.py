@@ -644,3 +644,52 @@ def test_cancellation_across_denominator_kernel_buckets_is_admitted() -> None:
     jumps = FiniteRationalDistribution(atoms=tuple(atoms))
     result = compound_poisson_cumulant_prefix(_q(Fraction(1)), jumps, 1)
     assert result.cumulants[0].jump_raw_moment.as_fraction() == 0
+
+
+def test_power_of_two_mass_ladder_uses_logarithmic_kernel_removal() -> None:
+    """A 256-atom 2**425 law admits the full cumulant ladder."""
+    power = 2**425
+    atom_count = 256
+    atoms = tuple(
+        FiniteDistributionAtom(
+            value=_q(Fraction(index)),
+            probability=_q(
+                Fraction(
+                    1 if index < atom_count - 1 else power - (atom_count - 1), power
+                )
+            ),
+        )
+        for index in range(atom_count)
+    )
+    jumps = FiniteRationalDistribution(atoms=atoms)
+    result = compound_poisson_cumulant_prefix(_q(Fraction(1)), jumps, 128)
+    assert len(result.cumulants) == 128
+
+
+def test_cumulant_ladder_checkpoints_while_it_runs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The mandatory cumulant ladder observes the request envelope."""
+    from jacobian.math.probability import _compound_poisson as compound_module
+
+    calls = 0
+    original = compound_module.request_checkpoint
+
+    def counted(label: str) -> None:
+        nonlocal calls
+        calls += 1
+        original(label)
+
+    monkeypatch.setattr(compound_module, "request_checkpoint", counted)
+    jumps = FiniteRationalDistribution(
+        atoms=(
+            FiniteDistributionAtom(
+                value=_q(Fraction(0)), probability=_q(Fraction(1, 2))
+            ),
+            FiniteDistributionAtom(
+                value=_q(Fraction(1)), probability=_q(Fraction(1, 2))
+            ),
+        )
+    )
+    compound_poisson_cumulant_prefix(_q(Fraction(1)), jumps, 128)
+    assert calls >= 16

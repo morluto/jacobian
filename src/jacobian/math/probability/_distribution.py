@@ -5,7 +5,7 @@ from __future__ import annotations
 from fractions import Fraction
 from itertools import pairwise
 from math import gcd
-from typing import Literal, Self
+from typing import Final, Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
 
@@ -43,12 +43,29 @@ def _remove_prime_power(value: int, prime: int) -> int:
     return value
 
 
-def _two_three_kernel(value: int) -> int:
+_SMALL_KERNEL_PRIMES: Final = tuple(
+    candidate
+    for candidate in range(2, 1_000)
+    if all(candidate % divisor for divisor in range(2, int(candidate**0.5) + 1))
+)
+
+
+def _large_denominator_kernel(value: int) -> int:
+    """Return the part of a denominator left after removing small prime factors.
+
+    Charges that share a large factor (for example ``2p``, ``3p``, and ``6p``)
+    collapse to one group so their exact sum can cancel before unrelated groups
+    are combined. Removing a general small-prime set (rather than only two and
+    three) also pairs masses whose reduction cancelled a shared middle prime,
+    such as ``1/(5p)`` and ``(p-1)/(5p)``.
+    """
+
     kernel = abs(value) or 1
-    trailing_twos = (kernel & -kernel).bit_length() - 1
-    if trailing_twos > 0:
-        kernel >>= trailing_twos
-    return _remove_prime_power(kernel, 3)
+    for prime in _SMALL_KERNEL_PRIMES:
+        if prime * prime > kernel:
+            break
+        kernel = _remove_prime_power(kernel, prime)
+    return kernel
 
 
 _SUM_VALUE_LIMIT = 10**MAX_FINITE_DISTRIBUTION_SUM_DIGITS
@@ -91,8 +108,8 @@ def _bounded_fraction_sum(
 ) -> Fraction:
     """Sum nonnegative rationals without paying source-order LCD growth.
 
-    Masses are bucketed by the 2-3-free kernel of each denominator so
-    complementary pairs such as ``1/(6p)`` and ``(p-1)/(6p)`` reduce before
+    Masses are bucketed by the small-prime-free kernel of each denominator so
+    complementary pairs such as ``1/(5p)`` and ``(p-1)/(5p)`` reduce before
     unrelated primes are combined. Unique reduced denominators are then
     digit-budgeted, and each addition bounds its cancelled scales before any
     common-denominator multiply, so a unit-sum law cannot force unbounded GCD
@@ -103,7 +120,7 @@ def _bounded_fraction_sum(
     for index, value in enumerate(values):
         if index % 128 == 0:
             request_checkpoint("during finite-distribution normalization")
-        kernel = _two_three_kernel(value.denominator)
+        kernel = _large_denominator_kernel(value.denominator)
         buckets[kernel] = _add_height_bounded(
             buckets.get(kernel, Fraction()),
             value,

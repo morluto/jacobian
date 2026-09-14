@@ -14,6 +14,7 @@ from typing import Final
 from pydantic import Field, StrictInt
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
+from jacobian._execution import request_checkpoint
 from jacobian._models import StrictModel
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -22,12 +23,14 @@ from jacobian.catalog.models import (
 from jacobian.math.probability._distribution import (
     FiniteDistributionAtom,
     FiniteRationalDistribution,
+    _large_denominator_kernel,
     require_input_distribution,
 )
 from jacobian.math.probability._models import MAX_RESULT_RATIONAL_DIGITS
 
 MAX_COMPOUND_POISSON_ATOMS: Final = 256
 MAX_COMPOUND_POISSON_ORDER: Final = 128
+_CHECKPOINT_STRIDE: Final = 8
 MAX_COMPOUND_POISSON_MOMENT_PRODUCTS: Final = (
     MAX_COMPOUND_POISSON_ATOMS * MAX_COMPOUND_POISSON_ORDER
 )
@@ -166,30 +169,6 @@ def _bounded_sum(
             ),
         )
     return result
-
-
-_SMALL_KERNEL_PRIMES: Final = tuple(
-    candidate
-    for candidate in range(2, 1_000)
-    if all(candidate % divisor for divisor in range(2, int(candidate**0.5) + 1))
-)
-
-
-def _large_denominator_kernel(denominator: int) -> int:
-    """Return the part of a denominator left after removing small prime factors.
-
-    Charges that share a large factor (for example ``2p``, ``3p``, and ``6p``)
-    collapse to one group so their exact sum can cancel before unrelated groups
-    are combined.
-    """
-
-    kernel = denominator
-    for prime in _SMALL_KERNEL_PRIMES:
-        if prime * prime > kernel:
-            break
-        while kernel % prime == 0:
-            kernel //= prime
-    return kernel
 
 
 def _reduced_signed_terms(terms: list[Fraction]) -> list[Fraction]:
@@ -429,6 +408,8 @@ def _admit_and_plan(
     weighted_powers = [atom.probability.as_fraction() for _, atom in active_atoms]
     rows: list[tuple[int, Fraction, Fraction]] = []
     for order in range(1, max_order + 1):
+        if order % _CHECKPOINT_STRIDE == 0:
+            request_checkpoint("during compound-Poisson cumulant ladder")
         for slot, (_source_index, value) in enumerate(values):
             weighted_powers[slot] *= value
         moment_location: tuple[str, ...] = ("jump_distribution", "atoms")

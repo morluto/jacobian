@@ -443,3 +443,28 @@ def test_result_deserialization_does_not_repeat_power_admission() -> None:
         )
     )
     assert restored.source == source
+
+
+def test_complementary_middle_prime_masses_group_before_lcd_growth() -> None:
+    """A shared reduction factor beyond 2 and 3 still cancels complementary pairs."""
+    primes = (
+        10**103 + 2_901,
+        10**103 + 4_521,
+        10**103 + 6_351,
+        10**103 + 9_261,
+        10**103 + 9_381,
+    )
+    atoms = tuple(
+        FiniteDistributionAtom(
+            value=CanonicalRational.from_fraction(Fraction(index)),
+            probability=CanonicalRational.from_fraction(
+                Fraction(
+                    1 if index % 2 == 0 else primes[index // 2] - 1,
+                    5 * primes[index // 2],
+                )
+            ),
+        )
+        for index in range(2 * len(primes))
+    )
+    distribution = FiniteRationalDistribution(atoms=atoms)
+    assert sum(atom.probability.as_fraction() for atom in distribution.atoms) == 1

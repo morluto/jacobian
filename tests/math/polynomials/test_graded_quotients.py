@@ -38,6 +38,7 @@ from jacobian.math.polynomials.graded.operations import (
     standard_monomials,
 )
 from jacobian.math.polynomials.values import (
+    MAX_POLYNOMIAL_EXPONENT,
     RationalPolynomial,
     RationalPolynomialIdeal,
     RationalPolynomialTerm,
@@ -594,6 +595,23 @@ def test_hilbert_series_denominator_exponent_is_bounded_before_expansion() -> No
     payload["denominator_exponent"] = 10_000_000
     with pytest.raises(ValidationError):
         HilbertSeriesResult.model_validate(payload)
+
+
+def test_hilbert_series_ambient_exponent_is_a_resource_rejection() -> None:
+    """An LCM past the shared exponent bound is a typed resource rejection.
+
+    ``(x^32768, y^32768)`` has representable generators, but the
+    inclusion-exclusion subset LCM reaches ``t^65536`` past the shared
+    polynomial exponent carrier, so the ambient numerator must be refused as a
+    resource admission rather than leaking a Pydantic shape failure.
+    """
+
+    ideal = _ideal((MAX_POLYNOMIAL_EXPONENT, 0), (0, MAX_POLYNOMIAL_EXPONENT))
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
+        hilbert_series(ideal, prefix_degree=2)
+    assert exc_info.value.errors()[0]["type"] == (
+        "graded_ideal.series_ambient_exponent_budget"
+    )
 
 
 def test_native_monomial_order_is_validated_before_ideal_inspection(

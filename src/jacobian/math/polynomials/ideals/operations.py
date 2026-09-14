@@ -20,6 +20,7 @@ from jacobian._execution import (
     current_request_execution,
     request_cancelled,
     request_checkpoint,
+    require_execution_deadline,
 )
 from jacobian.backends import BackendUnavailableError
 from jacobian.catalog.models import (
@@ -1521,6 +1522,11 @@ def groebner_basis(
 
     basis_generators = []
     request_checkpoint("after Groebner kernel worker")
+    # A native call has no request envelope, so request_checkpoint cannot see
+    # the absolute deadline. Enforce it explicitly before decoding and result
+    # assembly, which happen after the worker and could otherwise return
+    # success past the shared wall limit.
+    require_execution_deadline(deadline)
     for position, item in enumerate(result_payload["generators"]):
         if position % 256 == 0:
             request_checkpoint("during Groebner basis decoding")
@@ -1528,6 +1534,7 @@ def groebner_basis(
             RationalPolynomial.model_validate_json(json.dumps(item))
         )
     request_checkpoint("after Groebner basis decoding")
+    require_execution_deadline(deadline)
     if not basis_generators:
         from jacobian.math.polynomials.values import SparseRationalPolynomial
 

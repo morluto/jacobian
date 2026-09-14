@@ -47,6 +47,7 @@ from jacobian.math.polynomials.ideals._models import (
 )
 from jacobian.math.polynomials.ideals.operations import _admit_source, groebner_basis
 from jacobian.math.polynomials.values import (
+    MAX_POLYNOMIAL_EXPONENT,
     MAX_RATIONAL_FUNCTION_EXPONENT,
     MAX_RATIONAL_FUNCTION_TERMS,
     RationalFunction,
@@ -842,6 +843,20 @@ def _series_data(
     subset_coefficients = {
         degree: value for degree, value in subset_coefficients.items() if value
     }
+    # Admit the ambient numerator's exponent span before constructing its
+    # carrier: an inclusion-exclusion LCM can exceed the shared polynomial
+    # exponent bound, and a raw Pydantic shape failure there would mask the
+    # intended resource rejection.
+    ambient_degree = max(subset_coefficients, default=0)
+    if ambient_degree > MAX_POLYNOMIAL_EXPONENT:
+        raise OperationResourceAdmissionError(
+            location=("initial_ideal",),
+            code="graded_ideal.series_ambient_exponent_budget",
+            message=(
+                "Hilbert-series ambient numerator exceeds the shared "
+                f"{MAX_POLYNOMIAL_EXPONENT} exponent representation bound"
+            ),
+        )
     ambient_numerator = _polynomial_from_integer_coefficients(subset_coefficients)
     request_checkpoint("during Hilbert-series cancellation")
     require_execution_deadline(deadline)

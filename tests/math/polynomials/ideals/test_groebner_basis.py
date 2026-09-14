@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 from typing import Literal, NoReturn, TypedDict
 
 import pytest
@@ -354,6 +355,30 @@ class TestKernelFailures:
         g = _poly(("x", "y"), (1, 1, (2, 0)), (-1, 1, (0, 2)))
         with pytest.raises(RuntimeError, match="worker crashed"):
             _run_groebner(GroebnerBasisRequest(ideal=_ideal(("x", "y"), (g,))))
+
+    def test_native_decoding_respects_the_absolute_deadline(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A native call without an envelope still enforces the deadline.
+
+        The worker returns a response, but result decoding and assembly push
+        past the shared wall limit. With no request execution envelope the
+        checkpoints cannot see the absolute deadline, so the decode path must
+        enforce it explicitly rather than return a basis past the limit.
+        """
+
+        def late_kernel(*args: object, **kwargs: object) -> dict[str, object]:
+            return {"generators": []}
+
+        monkeypatch.setattr(
+            operations, "_run_relation_kernel_before_deadline", late_kernel
+        )
+        g = _poly(("x", "y"), (1, 1, (2, 0)), (-1, 1, (0, 2)))
+        with pytest.raises(OperationExecutionTimeoutError):
+            groebner_basis(
+                _ideal(("x", "y"), (g,)),
+                _outer_deadline=time.monotonic() - 1,
+            )
 
     @pytest.mark.parametrize(
         "failure",

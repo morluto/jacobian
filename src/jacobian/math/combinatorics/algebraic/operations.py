@@ -356,12 +356,15 @@ def _exact_count(
     bounded by the same factor count the caller already charges.
     """
 
-    numerator_product = 1
+    numerator_factors: list[int] = []
     for row, length in enumerate(partition.parts):
         if row % 64 == 0:
             request_checkpoint("during exact SSYT boundary resolution")
         for column in range(length):
-            numerator_product *= alphabet_size + column - row
+            numerator_factors.append(alphabet_size + column - row)
+    # Match the admitted balanced-product cost model instead of a sequential
+    # left-to-right accumulation, so the resolver does not outrun admission.
+    numerator_product = _balanced_product(tuple(numerator_factors))
     quotient, remainder = divmod(numerator_product, hook_product)
     if remainder:
         # The hook-content numerator is only guaranteed to divide for an

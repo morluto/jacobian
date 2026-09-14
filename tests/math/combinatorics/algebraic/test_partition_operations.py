@@ -773,3 +773,13 @@ def test_constructed_partition_without_parts_is_a_typed_domain_error() -> None:
     forged = IntegerPartition.model_construct()
     with pytest.raises(OperationDomainValidationError):
         native.partition_dominance(forged, IntegerPartition(parts=(1,)))
+
+
+def test_exact_boundary_resolver_uses_the_admitted_product_tree() -> None:
+    """A rejected exact boundary count does not run a sequential multiply."""
+    partition = IntegerPartition(parts=(500,))
+    alphabet_size = 155_000 * 2**208
+    started = time.monotonic()
+    with pytest.raises(OperationResourceAdmissionError):
+        native.semistandard_young_tableaux_count(partition, alphabet_size)
+    assert time.monotonic() - started < 1.0

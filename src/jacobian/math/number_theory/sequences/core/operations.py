@@ -238,38 +238,19 @@ def _product_component_digits(
     )
 
 
-def _weak_unimodal_peak_count(fractions: tuple[Fraction, ...]) -> int:
-    """Count positions that are both a weak-nondecreasing prefix and suffix end."""
-
-    size = len(fractions)
-    if size == 0:
-        return 0
-    nondecreasing_prefix = [True] * size
-    for index in range(1, size):
-        if index % 512 == 0:
-            request_checkpoint("during order-shape prefix scan")
-        nondecreasing_prefix[index] = (
-            nondecreasing_prefix[index - 1] and fractions[index - 1] <= fractions[index]
-        )
-    count = 0
-    nonincreasing = True
-    for index in range(size - 1, -1, -1):
-        if index % 512 == 0:
-            request_checkpoint("during order-shape suffix scan")
-        if index < size - 1:
-            nonincreasing = nonincreasing and fractions[index] >= fractions[index + 1]
-        if nondecreasing_prefix[index] and nonincreasing:
-            count += 1
-    return count
-
-
 def _admit_order_shape(
     request: FiniteRationalSequence,
-) -> tuple[CanonicalRational, ...]:
-    """Admit linear comparisons, exact products, and the complete profile."""
+) -> tuple[tuple[CanonicalRational, ...], tuple[int, ...]]:
+    """Admit linear comparisons, exact products, and the complete profile.
+
+    Returns the admitted rational values together with the exact weak-unimodal
+    peak positions, so construction reuses the peak scan instead of replaying
+    it after admission.
+    """
 
     rational_values = _order_shape_rationals(request)
-    size = len(rational_values)
+    fractions = tuple(value.as_fraction() for value in rational_values)
+    size = len(fractions)
     source_digits = sum(
         len(format_canonical_integer(abs(value.num)))
         + len(format_canonical_integer(value.den))
@@ -282,25 +263,10 @@ def _admit_order_shape(
         )
         for value in rational_values
     )
-    row_count = max(0, size - 2)
-    peak_count = _weak_unimodal_peak_count(
-        tuple(value.as_fraction() for value in rational_values)
-    )
-    # The result retains the source, one slot per actual peak position, and
-    # four slots (index, two exact products, decision) per interior row.
-    result_allocations = size + peak_count + 4 * row_count + 8
-    if result_allocations > MAX_ORDER_SHAPE_RESULT_ALLOCATIONS:
-        raise OperationResourceAdmissionError(
-            location=("values",),
-            code="sequences.order_shape.result_allocation_bound",
-            message=(
-                "the complete order-shape profile requires "
-                f"{result_allocations} result allocations; maximum is "
-                f"{MAX_ORDER_SHAPE_RESULT_ALLOCATIONS}"
-            ),
-        )
     # Charge the actual comparison operands: only adjacent and neighbouring
-    # widths are compared, not the widest component across every entry.
+    # widths are compared, not the widest component across every entry. The
+    # bound is computable from the widths, so it runs before the peak scan
+    # rather than after the work it is meant to prevent.
     comparison_work = 0
     for index in range(size):
         if index % 512 == 0:
@@ -317,11 +283,29 @@ def _admit_order_shape(
             code="sequences.order_shape.work_bound",
             message="order-shape comparisons exceed the admitted exact-work bound",
         )
-    # Integer axes are retained verbatim: every peak position and every interior
-    # row index contributes its own decimal width to the exact result.
-    index_digits = sum(len(str(index)) for index in range(size))
+    # The mandatory peak scan is admitted, so compute it once here; the caller
+    # retains this exact result instead of recomputing it.
+    peaks = _order_shape_peaks(fractions)
+    row_count = max(0, size - 2)
+    # The result retains the source, one slot per actual peak position, and
+    # four slots (index, two exact products, decision) per interior row.
+    result_allocations = size + len(peaks) + 4 * row_count + 8
+    if result_allocations > MAX_ORDER_SHAPE_RESULT_ALLOCATIONS:
+        raise OperationResourceAdmissionError(
+            location=("values",),
+            code="sequences.order_shape.result_allocation_bound",
+            message=(
+                "the complete order-shape profile requires "
+                f"{result_allocations} result allocations; maximum is "
+                f"{MAX_ORDER_SHAPE_RESULT_ALLOCATIONS}"
+            ),
+        )
+    # Integer axes are retained verbatim: every emitted peak position and every
+    # interior row index contributes its own decimal width to the exact result.
+    # Only the peak positions that are actually emitted are charged.
+    peak_index_digits = sum(len(str(index)) for index in peaks)
     interior_index_digits = sum(len(str(index)) for index in range(1, max(size - 1, 1)))
-    result_digits = source_digits + index_digits + interior_index_digits + 5
+    result_digits = source_digits + peak_index_digits + interior_index_digits + 5
     product_component_digits = 1
     for index in range(1, size - 1):
         if index % 128 == 0:
@@ -360,7 +344,7 @@ def _admit_order_shape(
                 f"bound of {MAX_SEQUENCE_TOTAL_DIGITS} digits"
             ),
         )
-    return rational_values
+    return rational_values, peaks
 
 
 def _autocorrelation_scalar(
@@ -515,11 +499,11 @@ def _order_shape_peaks(fractions: tuple[Fraction, ...]) -> tuple[int, ...]:
 def sequence_order_shape(
     request: FiniteRationalSequence,
 ) -> SequenceOrderShapeResult:
-    fractions = tuple(value.as_fraction() for value in _admit_order_shape(request))
+    admitted_values, peaks = _admit_order_shape(request)
+    fractions = tuple(value.as_fraction() for value in admitted_values)
     nondecreasing_violation, nonincreasing_violation = _order_shape_monotonicity(
         fractions
     )
-    peaks = _order_shape_peaks(fractions)
     log_row_list: list[SequenceLogConcavityRow] = []
     for index in range(1, len(fractions) - 1):
         if index % 512 == 0:

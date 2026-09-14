@@ -209,6 +209,47 @@ def test_order_shape_admits_cross_cancelled_neighbor_products() -> None:
     assert result.log_concavity_rows[0].square == zero
 
 
+def test_order_shape_charges_only_emitted_peak_position_digits() -> None:
+    """A peak-free profile must not be charged index widths for every entry.
+
+    The 100,000-term alternating sequence has no weak-unimodal peak, so no peak
+    index is emitted. Charging every position's width instead pushes the
+    estimate over the 5,000,000-digit representation bound and refuses a result
+    that actually fits.
+    """
+    value = 10_000_000
+    source = FiniteRationalSequence(
+        values=tuple(
+            CanonicalRational(num=value if index % 2 == 0 else -value, den=1)
+            for index in range(MAX_SEQUENCE_LENGTH)
+        )
+    )
+    result = sequence_order_shape(source)
+    assert result.weak_unimodal_peak_positions == ()
+    assert len(result.log_concavity_rows) == MAX_SEQUENCE_LENGTH - 2
+
+
+def test_order_shape_applies_the_work_bound_before_scanning_for_peaks(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The comparison bound must reject before the mandatory peak scan runs.
+
+    Otherwise the resource guard consumes the work it is meant to prevent. The
+    peak scan is instrumented to fail if it runs at all.
+    """
+    from jacobian.math.number_theory.sequences.core import operations as ops
+
+    wide = CanonicalRational(num=10 ** (MAX_CANONICAL_RATIONAL_DIGITS - 1), den=1)
+    source = FiniteRationalSequence(values=(wide,) * 100)
+
+    def forbidden(fractions: tuple[Fraction, ...]) -> tuple[int, ...]:
+        raise AssertionError("the peak scan must not run past the work bound")
+
+    monkeypatch.setattr(ops, "_order_shape_peaks", forbidden)
+    with pytest.raises(OperationResourceAdmissionError, match="work bound"):
+        sequence_order_shape(source)
+
+
 def test_rational_sequence_rejects_oversized_length_before_expansion() -> None:
     payload = {
         "domain": "rational",

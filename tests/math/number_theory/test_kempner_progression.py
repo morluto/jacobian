@@ -324,3 +324,24 @@ def test_zero_only_shortcut_rejects_oversized_arity() -> None:
     assert error.value.errors()[0]["type"] == (
         "number_theory.kempner_progression.arity_bound"
     )
+
+
+def test_forged_digit_entries_are_rejected_without_a_type_error() -> None:
+    """A constructed digit set with an unhashable entry is a typed error."""
+    from jacobian.catalog.models import OperationDomainValidationError
+
+    forged = KempnerDigitSet.model_construct(base=10, allowed_digits=([],))
+    with pytest.raises(OperationDomainValidationError) as error:
+        decide_kempner_arithmetic_progression(forged, 3)
+    assert error.value.errors()[0]["type"] == (
+        "number_theory.kempner_progression.canonical_digit_set"
+    )
+
+
+def test_digit_level_progression_is_presolved_before_graph_admission() -> None:
+    """Digits 1..6 at arity 6 are a one-digit progression, not a graph search."""
+    result = decide_kempner_arithmetic_progression(
+        KempnerDigitSet(base=7, allowed_digits=(1, 2, 3, 4, 5, 6)), 6
+    )
+    assert isinstance(result.conclusion, KempnerContainsProgression)
+    assert result.conclusion.values == (1, 2, 3, 4, 5, 6)

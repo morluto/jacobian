@@ -71,7 +71,6 @@ def _require_canonical_digit_set(digit_set: KempnerDigitSet) -> None:
         or not 2 <= digit_set.base <= MAX_KEMPNER_BASE
         or not isinstance(digit_set.allowed_digits, tuple)
         or not digit_set.allowed_digits
-        or digit_set.allowed_digits != tuple(sorted(set(digit_set.allowed_digits)))
         or any(
             not isinstance(digit, int)
             or isinstance(digit, bool)
@@ -79,6 +78,14 @@ def _require_canonical_digit_set(digit_set: KempnerDigitSet) -> None:
             or digit >= digit_set.base
             for digit in digit_set.allowed_digits
         )
+    ):
+        raise OperationDomainValidationError(
+            location=("digit_set",),
+            code="number_theory.kempner_progression.canonical_digit_set",
+            message="digit_set must be a canonical proper digit subset",
+        )
+    if (
+        digit_set.allowed_digits != tuple(sorted(set(digit_set.allowed_digits)))
         or len(digit_set.allowed_digits) >= digit_set.base
     ):
         raise OperationDomainValidationError(
@@ -86,6 +93,29 @@ def _require_canonical_digit_set(digit_set: KempnerDigitSet) -> None:
             code="number_theory.kempner_progression.canonical_digit_set",
             message="digit_set must be a canonical proper digit subset",
         )
+
+
+def _digit_level_progression(
+    allowed: tuple[int, ...], arity: int
+) -> tuple[int, ...] | None:
+    """Return a one-digit arithmetic progression of the requested arity, if any.
+
+    Every value is an allowed digit, so each is a positive member of the
+    family; detecting one avoids charging the carry graph for a trivial result.
+    """
+
+    allowed_set = set(allowed)
+    for first in allowed:
+        if first < 1:
+            continue
+        for second in allowed:
+            if second <= first:
+                continue
+            difference = second - first
+            values = tuple(first + index * difference for index in range(arity))
+            if all(value in allowed_set for value in values):
+                return values
+    return None
 
 
 def _require_admission(digit_set: KempnerDigitSet, arity: int) -> _Admission:
@@ -234,6 +264,21 @@ def decide_kempner_arithmetic_progression(
             digit_set=digit_set,
             arity=arity,
             conclusion=KempnerProgressionFree(status="PROGRESSION_FREE"),
+        )
+    digit_progression = _digit_level_progression(digit_set.allowed_digits, arity)
+    if digit_progression is not None:
+        first = digit_progression[0]
+        difference = digit_progression[1] - digit_progression[0]
+        return KempnerArithmeticProgressionResult(
+            digit_set=digit_set,
+            arity=arity,
+            conclusion=KempnerContainsProgression(
+                status="CONTAINS_PROGRESSION",
+                indices=tuple(range(arity)),
+                values=digit_progression,
+                first_term=first,
+                common_difference=difference,
+            ),
         )
     admission = _require_admission(digit_set, arity)
     base = digit_set.base

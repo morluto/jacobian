@@ -13,6 +13,7 @@ from jacobian.math.graphs.symmetry.operations import (
     full_graph_automorphism_group,
     graph_symmetry_orbits,
 )
+from jacobian.math.groups._models import MAX_GROUP_DEGREE
 
 
 def _compute_graph_symmetry_orbits(
@@ -82,17 +83,41 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
     ),
     MathTool(
-        operation_id="graph.automorphism_group.color_preserving.compute",
+        operation_id="graph.symmetry.automorphism_group.compute",
         title="Compute the full color-preserving graph automorphism group",
-        description="Exhaust the admitted color-class permutations and return deterministic generators whose Schreier-Sims order equals the full automorphism count.",
+        description=(
+            "Compute the complete color-preserving automorphism group of one "
+            f"vertex/edge-colored graph with at most {MAX_GROUP_DEGREE} vertices "
+            "and the admitted edge carrier. Return a deterministic compact "
+            "permutation-group presentation on the sorted vertex axis, exact "
+            "group order, and complete vertex and edge orbits. The source-bound "
+            "label generators compose unchanged with graph symmetry replay; the "
+            "permutation group composes unchanged with group order and orbit "
+            "operations. Common high-symmetry families use compact generators; "
+            "generic VF2 search is admitted only when its candidate and scan "
+            "work remain bounded."
+        ),
         request_type=FullGraphAutomorphismRequest,
         result_type=FullGraphAutomorphismResult,
         run=_compute_full_automorphisms,
-        tags=("graph", "automorphism", "permutation-group", "exact"),
+        tags=(
+            "graph",
+            "symmetry",
+            "automorphism",
+            "permutation-group",
+            "generator",
+            "orbit",
+            "exact",
+            "bounded",
+        ),
         examples=(
             OperationExample(
                 name="path_reflection",
-                description="Compute the order-two automorphism group of a path.",
+                description=(
+                    "Compute the order-two automorphism group of the supplied "
+                    "three-vertex path; the graph must be a finite simple "
+                    "vertex/edge-colored graph within the admitted bounds."
+                ),
                 input={
                     "graph": {
                         "graph": {

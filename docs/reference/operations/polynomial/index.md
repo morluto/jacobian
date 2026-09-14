@@ -72,3 +72,4 @@ for replay.
 - [Exact cyclotomic polynomials](cyclotomic.md)
 - [Elementary-symmetric polynomial families](elementary-symmetric.md)
 - [Monomial-ideal graded Betti profiles](monomial-ideal-graded-betti.md)
+- [Exact root--critical-point distance profiles](root-critical-distance-profile.md)

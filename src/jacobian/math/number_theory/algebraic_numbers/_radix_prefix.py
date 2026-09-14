@@ -28,7 +28,7 @@ from jacobian._execution import (
     BackendFailureReason,
     OperationBackendError,
     current_request_execution,
-    execution_deadline,
+    lease_operation_phases,
     request_execution,
 )
 from jacobian._models import StrictModel
@@ -308,7 +308,12 @@ def _scaled_integer_part(
         scale=scale,
         isolation_bits=isolation_bits,
         deadline=deadline,
-        scaled_floor_digit_bound=MAX_RADIX_SCALED_COEFFICIENT_DIGITS,
+        # The derived integer part is bounded by the 1,001-digit carrier; the
+        # scaled floor adds only ``scale``'s width, so a response past that is
+        # malformed rather than a legitimate but unmaterializable value.
+        scaled_floor_digit_bound=(
+            MAX_RADIX_INTEGER_PART_DIGITS + len(format_canonical_integer(scale)) + 2
+        ),
     )
 
 
@@ -370,17 +375,28 @@ def radix_prefix(
             code="algebraic_number.radix_value_type",
             message="value must be a RealAlgebraicValue",
         )
-    if type(base) is not int or type(fractional_places) is not int:
+    if type(base) is not int:
         raise OperationDomainValidationError(
-            location=("base", "fractional_places"),
+            location=("base",),
             code="algebraic_number.radix_argument_type",
-            message="base and fractional_places must be integers",
+            message="base must be an integer",
+        )
+    if type(fractional_places) is not int:
+        raise OperationDomainValidationError(
+            location=("fractional_places",),
+            code="algebraic_number.radix_argument_type",
+            message="fractional_places must be an integer",
         )
     execution = current_request_execution()
     if execution is None:
         with request_execution(time.monotonic()):
             return radix_prefix(value, base, fractional_places)
-    deadline = execution_deadline(RADIX_ISOLATION_OWNER_SECONDS)
+    lease = lease_operation_phases(
+        RADIX_ISOLATION_OWNER_SECONDS,
+        admitted_response_bytes=MAX_RADIX_RESULT_ALLOCATION_UNITS,
+        validation_work=MAX_RADIX_RESULT_ALLOCATION_UNITS,
+    )
+    deadline = lease.backend_deadline
 
     _require_request(base, fractional_places)
     request = RadixPrefixRequest(

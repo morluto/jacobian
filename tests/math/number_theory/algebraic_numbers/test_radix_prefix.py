@@ -226,6 +226,41 @@ def test_reducible_polynomial_is_rejected_inside_isolation_admission() -> None:
         radix_prefix(_value((1, 0, -1), 0), 10, 2)
 
 
+def _spy_lease(monkeypatch: pytest.MonkeyPatch) -> list:
+    original = radix_module.lease_operation_phases
+    calls: list = []
+
+    def capture(seconds: float, *, admitted_response_bytes: int, validation_work: int):
+        lease = original(
+            seconds,
+            admitted_response_bytes=admitted_response_bytes,
+            validation_work=validation_work,
+        )
+        calls.append((seconds, lease))
+        return lease
+
+    monkeypatch.setattr(radix_module, "lease_operation_phases", capture)
+    return calls
+
+
+def _fake_worker(
+    seen: list,
+    *,
+    polynomial,
+    real_root_index,
+    scale,
+    isolation_bits,
+    deadline,
+    scaled_floor_digit_bound,
+):
+    seen.append(deadline)
+    return radix_module._scaled_integer_part_in_process(
+        _value(polynomial, real_root_index),
+        scale=scale,
+        isolation_bits=isolation_bits,
+    )
+
+
 def test_owner_envelope_is_the_calibrated_isolation_budget(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -233,36 +268,20 @@ def test_owner_envelope_is_the_calibrated_isolation_budget(
         RADIX_ISOLATION_OWNER_SECONDS,
     )
 
-    bound: list[float] = []
+    calls = _spy_lease(monkeypatch)
     seen: list[float] = []
-    original = radix_module.execution_deadline
-
-    def capture(seconds: float) -> float:
-        bound.append(seconds)
-        return original(seconds)
-
-    def fake(
-        *,
-        polynomial: tuple[int, ...],
-        real_root_index: int,
-        scale: int,
-        isolation_bits: int,
-        deadline: float,
-        scaled_floor_digit_bound: int,
-    ) -> int:
-        seen.append(deadline)
-        return radix_module._scaled_integer_part_in_process(
-            _value(polynomial, real_root_index),
-            scale=scale,
-            isolation_bits=isolation_bits,
-        )
-
-    monkeypatch.setattr(radix_module, "execution_deadline", capture)
-    monkeypatch.setattr(radix_module, "run_scaled_integer_part_worker", fake)
+    monkeypatch.setattr(
+        radix_module,
+        "run_scaled_integer_part_worker",
+        lambda **kwargs: _fake_worker(seen, **kwargs),
+    )
     started = time.monotonic()
     radix_prefix(_value((1, 0, -2), 1), 10, 1)
-    assert bound == [RADIX_ISOLATION_OWNER_SECONDS]
+    assert [seconds for seconds, _ in calls] == [RADIX_ISOLATION_OWNER_SECONDS]
     assert seen
+    lease = calls[0][1]
+    assert seen[0] == lease.backend_deadline
+    assert lease.backend_deadline < lease.operation_deadline
     assert abs(seen[0] - (started + RADIX_ISOLATION_OWNER_SECONDS)) < 1.0
 
 
@@ -271,39 +290,21 @@ def test_shorter_caller_deadline_is_passed_to_the_killable_worker(
 ) -> None:
     from jacobian._execution import request_execution
 
+    calls = _spy_lease(monkeypatch)
     seen: list[float] = []
-    envelopes: list[float] = []
-    original = radix_module.execution_deadline
-
-    def capture(seconds: float) -> float:
-        deadline = original(seconds)
-        envelopes.append(deadline)
-        return deadline
-
-    def fake(
-        *,
-        polynomial: tuple[int, ...],
-        real_root_index: int,
-        scale: int,
-        isolation_bits: int,
-        deadline: float,
-        scaled_floor_digit_bound: int,
-    ) -> int:
-        seen.append(deadline)
-        return radix_module._scaled_integer_part_in_process(
-            _value(polynomial, real_root_index),
-            scale=scale,
-            isolation_bits=isolation_bits,
-        )
-
-    monkeypatch.setattr(radix_module, "execution_deadline", capture)
-    monkeypatch.setattr(radix_module, "run_scaled_integer_part_worker", fake)
+    monkeypatch.setattr(
+        radix_module,
+        "run_scaled_integer_part_worker",
+        lambda **kwargs: _fake_worker(seen, **kwargs),
+    )
     started = time.monotonic()
     caller_deadline = started + 12
     with request_execution(started, outer_deadline=caller_deadline):
         radix_prefix(_value((1, 0, -2), 1), 10, 1)
-    assert envelopes
-    assert seen == envelopes
+    assert calls
+    lease = calls[0][1]
+    assert seen == [lease.backend_deadline]
+    assert lease.operation_deadline <= caller_deadline + 1e-3
     assert seen[0] <= caller_deadline + 1e-3
 
 
@@ -315,40 +316,21 @@ def test_later_enclosing_deadline_does_not_replace_the_owner_envelope(
         RADIX_ISOLATION_OWNER_SECONDS,
     )
 
+    calls = _spy_lease(monkeypatch)
     seen: list[float] = []
-    envelopes: list[float] = []
-    original = radix_module.execution_deadline
-
-    def capture(seconds: float) -> float:
-        deadline = original(seconds)
-        envelopes.append(deadline)
-        return deadline
-
-    def fake(
-        *,
-        polynomial: tuple[int, ...],
-        real_root_index: int,
-        scale: int,
-        isolation_bits: int,
-        deadline: float,
-        scaled_floor_digit_bound: int,
-    ) -> int:
-        seen.append(deadline)
-        return radix_module._scaled_integer_part_in_process(
-            _value(polynomial, real_root_index),
-            scale=scale,
-            isolation_bits=isolation_bits,
-        )
-
-    monkeypatch.setattr(radix_module, "execution_deadline", capture)
-    monkeypatch.setattr(radix_module, "run_scaled_integer_part_worker", fake)
+    monkeypatch.setattr(
+        radix_module,
+        "run_scaled_integer_part_worker",
+        lambda **kwargs: _fake_worker(seen, **kwargs),
+    )
     started = time.monotonic()
     enclosing_later = started + RADIX_ISOLATION_OWNER_SECONDS + 30
     with request_execution(started, outer_deadline=enclosing_later):
         radix_prefix(_value((1, 0, -2), 1), 10, 1)
-    assert envelopes
-    assert seen == envelopes
-    assert seen[0] < enclosing_later
+    assert calls
+    lease = calls[0][1]
+    assert seen == [lease.backend_deadline]
+    assert lease.operation_deadline < enclosing_later
     assert abs(seen[0] - (started + RADIX_ISOLATION_OWNER_SECONDS)) < 1.0
 
 
@@ -540,3 +522,47 @@ def test_oversized_worker_floor_is_a_malformed_response(
             scaled_floor_digit_bound=1_000,
         )
     assert error.value.reason is BackendFailureReason.MALFORMED_RESPONSE
+
+
+def test_production_floor_bound_is_derived_from_the_admitted_scale(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The worker floor bound is the integer-part carrier plus the scale width."""
+    from jacobian.canonical import format_canonical_integer
+    from jacobian.math.number_theory.algebraic_numbers._radix_prefix import (
+        MAX_RADIX_INTEGER_PART_DIGITS,
+    )
+
+    seen: list[int] = []
+
+    def fake(
+        *,
+        polynomial: tuple[int, ...],
+        real_root_index: int,
+        scale: int,
+        isolation_bits: int,
+        deadline: float,
+        scaled_floor_digit_bound: int,
+    ) -> int:
+        seen.append(scaled_floor_digit_bound)
+        return radix_module._scaled_integer_part_in_process(
+            _value(polynomial, real_root_index),
+            scale=scale,
+            isolation_bits=isolation_bits,
+        )
+
+    monkeypatch.setattr(radix_module, "run_scaled_integer_part_worker", fake)
+    radix_prefix(_value((1, 0, -2), 1), 10, 1)
+    assert seen == [
+        MAX_RADIX_INTEGER_PART_DIGITS + len(format_canonical_integer(10)) + 2
+    ]
+
+
+def test_native_argument_type_errors_point_at_the_offending_field() -> None:
+    """A bad base or places argument reports its own top-level location."""
+    with pytest.raises(OperationDomainValidationError) as base_error:
+        radix_prefix(_value((1, 0, -2), 1), True, 1)  # type: ignore[arg-type]
+    assert base_error.value.errors()[0]["loc"] == ("base",)
+    with pytest.raises(OperationDomainValidationError) as places_error:
+        radix_prefix(_value((1, 0, -2), 1), 10, 1.0)  # type: ignore[arg-type]
+    assert places_error.value.errors()[0]["loc"] == ("fractional_places",)

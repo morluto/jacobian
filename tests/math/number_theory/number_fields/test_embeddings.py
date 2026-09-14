@@ -55,6 +55,8 @@ from jacobian.math.number_theory.number_fields.operations import (
     _admit_number_field_embeddings,
 )
 from jacobian.math.number_theory.number_fields.values import (
+    MAX_NUMBER_FIELD_ISOLATOR_COMPONENT_DIGITS,
+    MAX_SIMPLE_NUMBER_FIELD_ELEMENT_DIGITS,
     ComplexNumberFieldEmbeddingRecord,
     RealNumberFieldEmbedding,
     RealNumberFieldEmbeddingRecord,
@@ -248,12 +250,22 @@ def test_malformed_overlapping_wrong_root_and_wrong_sign_evidence_are_rejected()
         require_rectangle_selects_root(negative.embedding.root, boundary_root)
 
     oversized = negative.model_dump(mode="json")
-    oversized["isolating_rectangle"]["real_lower"]["num"] = "1" * 4_097
-    with pytest.raises(ValidationError, match="4,096-digit bound"):
+    oversized["isolating_rectangle"]["real_lower"]["num"] = "1" * (
+        MAX_NUMBER_FIELD_ISOLATOR_COMPONENT_DIGITS + 1
+    )
+    with pytest.raises(
+        ValidationError,
+        match=f"{MAX_NUMBER_FIELD_ISOLATOR_COMPONENT_DIGITS:,}-digit bound",
+    ):
         ComplexNumberFieldEmbeddingRecord.model_validate_json(json.dumps(oversized))
 
-    oversized_component = CanonicalRational(num=-1, den=10**4_096)
-    with pytest.raises(ValidationError, match="4,096-digit bound"):
+    oversized_component = CanonicalRational(
+        num=-1, den=10**MAX_NUMBER_FIELD_ISOLATOR_COMPONENT_DIGITS
+    )
+    with pytest.raises(
+        ValidationError,
+        match=f"{MAX_NUMBER_FIELD_ISOLATOR_COMPONENT_DIGITS:,}-digit bound",
+    ):
         RationalComplexIsolatingRectangle(
             real_lower=oversized_component,
             real_upper=_rational(1),
@@ -274,12 +286,22 @@ def test_real_interval_is_bound_to_the_selected_real_root() -> None:
         )
 
     oversized = negative.model_dump(mode="json")
-    oversized["isolating_interval"]["lower"]["num"] = "1" * 4_097
-    with pytest.raises(ValidationError, match="4,096-digit bound"):
+    oversized["isolating_interval"]["lower"]["num"] = "1" * (
+        MAX_NUMBER_FIELD_ISOLATOR_COMPONENT_DIGITS + 1
+    )
+    with pytest.raises(
+        ValidationError,
+        match=f"{MAX_NUMBER_FIELD_ISOLATOR_COMPONENT_DIGITS:,}-digit bound",
+    ):
         RealNumberFieldEmbeddingRecord.model_validate_json(json.dumps(oversized))
 
-    oversized_component = CanonicalRational(num=-1, den=10**4_096)
-    with pytest.raises(ValidationError, match="4,096-digit bound"):
+    oversized_component = CanonicalRational(
+        num=-1, den=10**MAX_NUMBER_FIELD_ISOLATOR_COMPONENT_DIGITS
+    )
+    with pytest.raises(
+        ValidationError,
+        match=f"{MAX_NUMBER_FIELD_ISOLATOR_COMPONENT_DIGITS:,}-digit bound",
+    ):
         RealNumberFieldEmbeddingRecord(
             kind="REAL",
             embedding=negative.embedding,
@@ -420,8 +442,10 @@ def test_degree_coefficient_isolation_and_worker_bounds_are_preflighted() -> Non
     with pytest.raises(
         ValidationError, match="integer exceeds the decimal digit bound"
     ):
-        _field("1", "0", "1" + "0" * 256)
-    with pytest.raises(ValidationError, match="256 digits"):
+        _field("1", "0", "1" + "0" * MAX_SIMPLE_NUMBER_FIELD_ELEMENT_DIGITS)
+    with pytest.raises(
+        ValidationError, match=f"{MAX_SIMPLE_NUMBER_FIELD_ELEMENT_DIGITS} digits"
+    ):
         SimpleNumberFieldElement.model_validate(
             {
                 "presentation": _field("1", "0").model_dump(mode="json"),

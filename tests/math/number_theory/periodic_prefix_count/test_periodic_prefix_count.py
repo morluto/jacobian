@@ -10,6 +10,9 @@ from jacobian.math.number_theory._periodic_models import (
     PeriodicCongruenceSubset,
     PeriodicCongruenceUnionSource,
 )
+from jacobian.math.number_theory.periodic_prefix_count._models import (
+    MAX_PREFIX_CUTOFF_DIGITS,
+)
 from jacobian.math.number_theory.periodic_prefix_count.operations import (
     compute_periodic_union_prefix_count,
     verify_periodic_union_prefix_count,
@@ -120,8 +123,11 @@ def test_scalar_count_keeps_period_lift_plan() -> None:
 
 def test_cutoff_digit_bound_is_typed() -> None:
     source = _source([(2, [0])])
-    with pytest.raises(OperationDomainValidationError, match="at most 32768 digits"):
-        compute_periodic_union_prefix_count(source, 10**32768)
+    with pytest.raises(
+        OperationDomainValidationError,
+        match=f"at most {MAX_PREFIX_CUTOFF_DIGITS} digits",
+    ):
+        compute_periodic_union_prefix_count(source, 10**MAX_PREFIX_CUTOFF_DIGITS)
 
 
 def test_scalar_cutoff_can_exceed_period_digit_bound() -> None:

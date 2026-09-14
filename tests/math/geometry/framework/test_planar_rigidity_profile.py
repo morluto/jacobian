@@ -33,7 +33,10 @@ from jacobian.math.geometry.framework.operations import (
     verify_planar_rigidity_profile,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
-from jacobian.math.matrices._operation_models import MatrixRankRequest
+from jacobian.math.matrices._operation_models import (
+    MAX_INPUT_SCALAR_DIGITS,
+    MatrixRankRequest,
+)
 from jacobian.math.matrices.operations import rank_result
 from jacobian.math.matrices.values import SparseRationalMatrix
 
@@ -403,11 +406,11 @@ def test_coordinate_scalar_boundary_is_owned_before_rank_backend() -> None:
     result = planar_rigidity_profile(accepted, source_graph)
 
     assert result.matrix_rank.rank == 1
-    rejected_value = 10**256
+    rejected_value = 10**MAX_INPUT_SCALAR_DIGITS
     rejected = configuration((("a", 0, 0), ("b", rejected_value, 0)))
     with pytest.raises(
         OperationDomainValidationError,
-        match="256-digit input bound",
+        match=f"{MAX_INPUT_SCALAR_DIGITS}-digit input bound",
     ):
         planar_rigidity_profile(rejected, source_graph)
 

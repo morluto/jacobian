@@ -8,6 +8,7 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.math.geometry.differential.values import (
+    MAX_RATIONAL_TENSOR_COEFFICIENT_DIGITS,
     MAX_RATIONAL_TENSOR_COMPONENTS,
     MAX_RATIONAL_TENSOR_RANK,
     RationalCoordinateTensor,
@@ -204,5 +205,8 @@ def test_tensor_component_coefficient_height_closes_at_128_digits() -> None:
     at_boundary = _function(variables, (10**127, (0,)))
     assert _tensor(variables, (), (at_boundary,)).components == (at_boundary,)
 
-    with pytest.raises(ValidationError, match="128-digit bound"):
+    with pytest.raises(
+        ValidationError,
+        match=f"{MAX_RATIONAL_TENSOR_COEFFICIENT_DIGITS}-digit bound",
+    ):
         _function(variables, (10**128, (0,)))

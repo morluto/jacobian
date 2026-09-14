@@ -2,6 +2,7 @@
 
 from fractions import Fraction
 from math import gcd
+from time import monotonic
 
 import pytest
 
@@ -726,3 +727,25 @@ def test_three_bucket_cancellation_precedes_cross_lcm_bound() -> None:
     jumps = FiniteRationalDistribution(atoms=atoms)
     result = compound_poisson_cumulant_prefix(_q(Fraction(1)), jumps, 1)
     assert result.cumulants[0].jump_raw_moment.as_fraction() == 0
+
+
+def test_many_unrelated_normalization_buckets_are_bounded() -> None:
+    """A large unrelated-prime law is rejected without an exhaustive merge scan."""
+    import sympy
+
+    primes: list[int] = []
+    candidate = 1009
+    while len(primes) < 1_000:
+        candidate = int(sympy.nextprime(candidate))
+        primes.append(candidate)
+    atoms = tuple(
+        FiniteDistributionAtom(
+            value=_q(Fraction(index)),
+            probability=_q(Fraction(1, prime)),
+        )
+        for index, prime in enumerate(primes)
+    )
+    started = monotonic()
+    with pytest.raises(Exception, match="normalization"):
+        require_input_distribution(atoms, require_canonical=True)
+    assert monotonic() - started < 1.0

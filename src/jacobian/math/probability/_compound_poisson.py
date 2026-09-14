@@ -31,6 +31,9 @@ from jacobian.math.probability._models import MAX_RESULT_RATIONAL_DIGITS
 MAX_COMPOUND_POISSON_ATOMS: Final = 256
 MAX_COMPOUND_POISSON_ORDER: Final = 128
 _CHECKPOINT_STRIDE: Final = 8
+# Above this many buckets the all-pairs merge scan is replaced by bounded
+# linear accumulation.
+_MAX_GREEDY_MERGE_TERMS: Final = 64
 MAX_COMPOUND_POISSON_MOMENT_PRODUCTS: Final = (
     MAX_COMPOUND_POISSON_ATOMS * MAX_COMPOUND_POISSON_ORDER
 )
@@ -232,7 +235,8 @@ def _merge_terms_by_largest_gcd(
     """Combine signed terms by repeatedly merging the largest shared factor."""
 
     pool = [term for term in _reduced_signed_terms(terms) if term != 0]
-    while len(pool) > 1:
+    while len(pool) > 1 and len(pool) <= _MAX_GREEDY_MERGE_TERMS:
+        request_checkpoint("during compound-Poisson term cancellation")
         best_left = -1
         best_right = -1
         best_shared = 1

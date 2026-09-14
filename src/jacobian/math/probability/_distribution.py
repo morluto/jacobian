@@ -69,6 +69,10 @@ def _large_denominator_kernel(value: int) -> int:
 
 
 _SUM_VALUE_LIMIT = 10**MAX_FINITE_DISTRIBUTION_SUM_DIGITS
+# Above this many distinct buckets the all-pairs merge scan is replaced by a
+# bounded linear accumulation, so a permitted request cannot monopolize a
+# worker with an exhaustive GCD search.
+_MAX_GREEDY_MERGE_TERMS = 64
 
 
 def _raise_normalization_bound(label: str) -> None:
@@ -145,7 +149,8 @@ def _merge_terms_by_largest_gcd(
     """
 
     pool = [term for term in terms if term != 0]
-    while len(pool) > 1:
+    while len(pool) > 1 and len(pool) <= _MAX_GREEDY_MERGE_TERMS:
+        request_checkpoint("during finite-distribution cancellation")
         best_left = -1
         best_right = -1
         best_shared = 1

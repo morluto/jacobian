@@ -730,7 +730,7 @@ def test_three_bucket_cancellation_precedes_cross_lcm_bound() -> None:
 
 
 def test_many_unrelated_normalization_buckets_are_bounded() -> None:
-    """A large unrelated-prime law is rejected without an exhaustive merge scan."""
+    """A large unrelated-prime law is refused in one bounded cancellation scan."""
     import sympy
 
     primes: list[int] = []
@@ -749,3 +749,44 @@ def test_many_unrelated_normalization_buckets_are_bounded() -> None:
     with pytest.raises(Exception, match="normalization"):
         require_input_distribution(atoms, require_canonical=True)
     assert monotonic() - started < 1.0
+
+
+def test_moment_cancellation_survives_many_kernel_buckets() -> None:
+    """Cancelling charges above the former 64-bucket cutoff still reduce.
+
+    Each triple ``66/(1009 p_i) + 66/(1013 p_i) - 66*2022/(1009*1013 p_i)`` sums
+    to exactly zero, but its three terms land in three distinct kernels. A
+    term-count cutoff bypassed the shared-factor scan once the 66 terms exceeded
+    64 and refused an exact zero first moment.
+    """
+
+    import sympy
+
+    primes: list[int] = []
+    candidate = 10**99
+    while len(primes) < 22:
+        candidate = int(sympy.nextprime(candidate))
+        if len(str(candidate)) == 100:
+            primes.append(candidate)
+    values = sorted(
+        {
+            value
+            for prime in primes
+            for value in (
+                Fraction(66, 1009 * prime),
+                Fraction(66, 1013 * prime),
+                Fraction(-66 * 2022, 1009 * 1013 * prime),
+            )
+        }
+    )
+    assert len(values) == 66
+    atoms = tuple(
+        FiniteDistributionAtom(
+            value=_q(value),
+            probability=_q(Fraction(1, len(values))),
+        )
+        for value in values
+    )
+    jumps = FiniteRationalDistribution(atoms=atoms)
+    result = compound_poisson_cumulant_prefix(_q(Fraction(1)), jumps, 1)
+    assert result.cumulants[0].jump_raw_moment.as_fraction() == 0

@@ -20,6 +20,7 @@ from jacobian.math.probability._distribution import (
     FiniteConvolutionPowerResult,
     FiniteDistributionAtom,
     FiniteRationalDistribution,
+    require_input_distribution,
 )
 from jacobian.math.probability._models import MAX_RESULT_RATIONAL_DIGITS
 from jacobian.math.probability.operations import (
@@ -501,3 +502,39 @@ def test_complementary_large_middle_prime_masses_group_without_cutoff() -> None:
     )
     distribution = FiniteRationalDistribution(atoms=tuple(atoms))
     assert sum(atom.probability.as_fraction() for atom in distribution.atoms) == 1
+
+
+def test_complementary_cancellation_survives_many_kernel_buckets() -> None:
+    """Cancellation above the former 64-bucket cutoff still normalizes a law.
+
+    Sixty-five distinct 100-digit primes ``p_i == 1 (mod 1009)`` give masses
+    ``1/(1009 p_i)`` and ``(p_i - 1)/(1009 p_i)`` plus ``944/1009``. The 131
+    masses sum to exactly one and each complementary pair reduces through
+    ``p_i``, but the pair members land in distinct kernels. A term-count cutoff
+    bypassed the shared-factor scan once the buckets exceeded 64 and refused the
+    valid law.
+    """
+
+    import sympy
+
+    primes: list[int] = []
+    candidate = 1009 * ((10**99) // 1009 + 1) + 1
+    while len(primes) < 65:
+        if len(str(candidate)) == 100 and sympy.isprime(candidate):
+            primes.append(candidate)
+        candidate += 1009
+    assert all(prime % 1009 == 1 for prime in primes)
+    masses = [Fraction(1, 1009 * prime) for prime in primes]
+    masses += [Fraction(prime - 1, 1009 * prime) for prime in primes]
+    masses.append(Fraction(944, 1009))
+    assert sum(masses) == 1
+    atoms = tuple(
+        FiniteDistributionAtom(
+            value=CanonicalRational.from_fraction(Fraction(index)),
+            probability=CanonicalRational.from_fraction(mass),
+        )
+        for index, mass in enumerate(masses)
+    )
+    distribution = FiniteRationalDistribution(atoms=atoms)
+    assert sum(atom.probability.as_fraction() for atom in distribution.atoms) == 1
+    require_input_distribution(distribution.atoms, require_canonical=True)

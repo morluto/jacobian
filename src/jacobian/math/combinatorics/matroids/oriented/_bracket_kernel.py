@@ -252,8 +252,14 @@ def _relation_polynomial(
     return _combine(contributions, ground_size)
 
 
-def _admit_source_relation(relation: GrassmannPlueckerRelation) -> None:
-    """Admit the caller's source-bound relation claim once per request."""
+def _admit_source_relation(
+    relation: GrassmannPlueckerRelation,
+) -> GrassmannPlueckerRelation:
+    """Admit the caller's source-bound relation claim once per request.
+
+    Returns the freshly validated relation so callers retain the canonical
+    copy instead of the possibly forged authored instance.
+    """
 
     if not isinstance(relation, GrassmannPlueckerRelation):
         raise OperationDomainValidationError(
@@ -299,6 +305,7 @@ def _admit_source_relation(relation: GrassmannPlueckerRelation) -> None:
                 "source metadata"
             ),
         )
+    return relation
 
 
 def _integer_digit_upper_bound(value: int) -> int:
@@ -662,9 +669,12 @@ def _admit_residual_envelope(
         if scalar.num != 0
     )
     # Admit every authored relation before reading its polynomial, so a forged
-    # carrier cannot leak an AttributeError from the contribution count below.
-    for _, _, relation in active_terms:
-        _admit_source_relation(relation)
+    # carrier cannot leak an AttributeError from the contribution count below,
+    # and retain the validated copy for all later field access.
+    active_terms = tuple(
+        (scalar, multiplier, _admit_source_relation(relation))
+        for scalar, multiplier, relation in active_terms
+    )
     contribution_count = len(target.terms) + sum(
         len(relation.polynomial.terms) for _, _, relation in active_terms
     )

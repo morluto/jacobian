@@ -1148,3 +1148,33 @@ def test_equal_denominator_components_are_grouped_before_the_lcm_guard() -> None
     ]
     total, _bound = _bounded_component_sum(components)
     assert total == 0
+
+
+def test_syzygy_retains_the_admitted_relation_copy() -> None:
+    """A relation whose polynomial is a valid wire dict is retained validated."""
+    relation = grassmann_pluecker_relation(
+        5, (0, 1, 2, 3, 4), "SHARED_INDEX_THREE_TERM"
+    )
+    forged = GrassmannPlueckerRelation.model_construct(
+        ground_size=relation.ground_size,
+        indices=relation.indices,
+        family=relation.family,
+        polynomial=relation.polynomial.model_dump(),
+    )
+    result = bracket_syzygy_residual(
+        relation.polynomial,
+        ((CanonicalRational(num=1, den=1), BracketMonomial(factors=()), forged),),
+    )
+    assert isinstance(result, BracketPolynomial)
+
+
+def test_syzygy_revalidates_nested_bracket_atoms() -> None:
+    """A forged bracket atom nested in a monomial is a typed domain error."""
+    forged_bracket = CanonicalBracket.model_construct(indices=(5, 4, 3))
+    monomial = BracketMonomial.model_construct(factors=((forged_bracket, 1),))
+    term = BracketPolynomialTerm.model_construct(
+        coefficient=CanonicalRational(num=1, den=1), monomial=monomial
+    )
+    target = BracketPolynomial.model_construct(ground_size=5, terms=(term,))
+    with pytest.raises(OperationDomainValidationError):
+        bracket_syzygy_residual(target, ())

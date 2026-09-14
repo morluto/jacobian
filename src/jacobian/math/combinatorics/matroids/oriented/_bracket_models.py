@@ -44,6 +44,14 @@ def _validation_error(code: str, message: str) -> PydanticCustomError:
 class CanonicalBracket(StrictModel):
     """One canonical alternating bracket ``[i j k]`` on an increasing triple."""
 
+    model_config = ConfigDict(
+        extra="forbid",
+        frozen=True,
+        # Revalidate a nested bracket atom so a forged indices tuple cannot
+        # reach residual construction.
+        revalidate_instances="always",
+    )
+
     indices: tuple[StrictInt, StrictInt, StrictInt]
 
     @model_validator(mode="after")
@@ -92,6 +100,14 @@ class BracketMonomial(StrictModel):
     Factors are kept in canonical sorted order and repeats are combined by the
     declared multiplicity, so two presentations of the same monomial are equal.
     """
+
+    model_config = ConfigDict(
+        extra="forbid",
+        frozen=True,
+        # Revalidate nested bracket atoms so a forged factor cannot reach
+        # residual construction.
+        revalidate_instances="always",
+    )
 
     factors: tuple[tuple[CanonicalBracket, ExactInteger], ...] = Field(
         max_length=MAX_BRACKET_FACTORS

@@ -155,8 +155,11 @@ class SymbolParikhProfileResult(StrictModel):
                 "total_accepted_words must equal the sum of cell multiplicities"
             )
         # Retain the canonical revalidated DFA so a validation-bypassed nested
-        # carrier cannot survive into the public result.
-        return self.model_copy(update={"dfa": source})
+        # carrier cannot survive into the public result. ``__init__`` discards
+        # a replacement returned from an after-validator, so assign the frozen
+        # field directly and return ``self``.
+        object.__setattr__(self, "dfa", source)
+        return self
 
 
 def _build_transition_index(
@@ -665,6 +668,9 @@ def _compute_symbol_parikh_profile(
             )
     cell_construction_work = collected_cells * max(1, alphabet_size)
     result_reduce_work = 2 * collected_cells
+    ordering_work = (
+        collected_cells * max(1, collected_cells.bit_length()) if collected_cells else 0
+    )
     transition_index_work = transition_count
     reachability_scan_work = len(reachable) * transition_count
     work_bound = (
@@ -677,6 +683,7 @@ def _compute_symbol_parikh_profile(
         + output_materialization_work
         + cell_construction_work
         + result_reduce_work
+        + ordering_work
         + exact_depth_work
     )
     if work_bound > MAX_SYMBOL_PARIKH_DP_WORK:

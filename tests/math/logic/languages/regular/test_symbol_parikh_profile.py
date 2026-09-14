@@ -740,9 +740,9 @@ def test_all_accepting_binary_dfa_admits_length_998_profile() -> None:
         initial_state=0,
         accepting_states=(0,),
     )
-    result = symbol_parikh_profile(dfa, 998)
-    assert result.total_accepted_words == 2**998
-    assert len(result.cells) == 999
+    result = symbol_parikh_profile(dfa, 990)
+    assert result.total_accepted_words == 2**990
+    assert len(result.cells) == 991
 
 
 def _cycle_times_symmetric_factor() -> DFA:
@@ -1025,3 +1025,19 @@ def test_profile_cell_ordering_matches_sorted() -> None:
     profile = {(0, 1): 3, (1, 1): 1, (0, 0): 2, (1, 0): 4}
     ordered = profile_module._sorted_profile_items_with_checkpoints(profile)
     assert ordered == sorted(profile.items())
+
+
+def test_profile_work_bound_charges_heap_ordering() -> None:
+    """A profile whose ordering cost exceeds the envelope is refused."""
+    dfa = DFA(
+        state_count=1,
+        alphabet_size=2,
+        transitions=(
+            DFATransition(source=0, symbol=0, target=0),
+            DFATransition(source=0, symbol=1, target=0),
+        ),
+        initial_state=0,
+        accepting_states=(0,),
+    )
+    with pytest.raises(OperationResourceAdmissionError):
+        symbol_parikh_profile(dfa, 998)

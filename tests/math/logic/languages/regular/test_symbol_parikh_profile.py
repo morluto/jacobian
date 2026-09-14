@@ -113,6 +113,20 @@ def test_profile_result_rejects_noncanonical_claimed_cells() -> None:
         )
 
 
+def test_profile_result_revalidates_constructed_nested_cells() -> None:
+    """A validation-bypassed cell cannot carry a non-positive multiplicity."""
+
+    forged = SymbolParikhCell.model_construct(symbol_counts=(1, 0), multiplicity=-1)
+    with pytest.raises(ValidationError):
+        SymbolParikhProfileResult(
+            dfa=ending_in_one(),
+            alphabet=(0, 1),
+            word_length=1,
+            cells=(forged,),
+            total_accepted_words=-1,
+        )
+
+
 def test_profile_result_rejects_forged_json_cells() -> None:
     result = symbol_parikh_profile(ending_in_one(), 3)
     payload = result.model_dump(mode="json")

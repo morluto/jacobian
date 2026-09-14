@@ -5,7 +5,7 @@ from itertools import islice
 from math import comb
 from typing import Annotated, Self, cast
 
-from pydantic import Field, StrictInt, ValidationError, model_validator
+from pydantic import ConfigDict, Field, StrictInt, ValidationError, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import ExactInteger
@@ -47,6 +47,14 @@ class SymbolParikhProfileRequest(StrictModel):
 
 class SymbolParikhCell(StrictModel):
     """One canonical symbol-count vector and its positive exact multiplicity."""
+
+    model_config = ConfigDict(
+        extra="forbid",
+        frozen=True,
+        # A validation-bypassed cell must not be trusted when nested in a
+        # public result, so revalidate instances of this model as fields.
+        revalidate_instances="always",
+    )
 
     symbol_counts: tuple[Annotated[StrictInt, Field(ge=0)], ...] = Field(
         max_length=MAX_DFA_ALPHABET,
@@ -106,6 +114,12 @@ class SymbolParikhProfileResult(StrictModel):
         if self.alphabet != tuple(range(self.dfa.alphabet_size)):
             raise ValueError("symbol-Parikh alphabet must be the DFA's ordered axis")
         vectors = tuple(cell.symbol_counts for cell in self.cells)
+        for cell in self.cells:
+            # A validation-bypassed nested cell can carry a non-positive
+            # multiplicity because the direct constructor does not revalidate
+            # existing instances; enforce the documented bound explicitly.
+            if cell.multiplicity < 1:
+                raise ValueError("symbol-Parikh cell multiplicities must be positive")
         if vectors != tuple(sorted(set(vectors))):
             raise ValueError(
                 "symbol-Parikh cells must be lexicographically sorted and unique"
@@ -662,13 +676,17 @@ def _compute_symbol_parikh_profile(
     accepting = set(dfa.accepting_states)
     profile = _collect_profile(layer, accepting)
     total = sum(profile.values())
+    materialized_cells: list[SymbolParikhCell] = []
+    for index, (counts, multiplicity) in enumerate(sorted(profile.items())):
+        if index % _CHECKPOINT_STRIDE == 0:
+            request_checkpoint("during symbol-Parikh cell materialization")
+        materialized_cells.append(
+            SymbolParikhCell(symbol_counts=counts, multiplicity=multiplicity)
+        )
     return SymbolParikhProfileResult._from_kernel(
         dfa,
         length,
-        cells=tuple(
-            SymbolParikhCell(symbol_counts=counts, multiplicity=multiplicity)
-            for counts, multiplicity in sorted(profile.items())
-        ),
+        cells=tuple(materialized_cells),
         total_accepted_words=total,
     )
 

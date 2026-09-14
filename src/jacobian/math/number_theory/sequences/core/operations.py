@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 from collections import Counter
+from collections.abc import Iterable
 from fractions import Fraction
 from functools import reduce
 from itertools import pairwise
@@ -201,7 +202,13 @@ def _admit_autocorrelation(
             code="sequences.autocorrelation.result_representation_too_large",
             message="autocorrelation output exceeds the exact representation bound",
         )
-    operand_width = max(1, common_numerator_digits + denominator_digits)
+    if isinstance(request, FiniteIntegerSequence):
+        # Every integer operand has denominator one, so charge only its
+        # numerator width; adding the unit denominator would reject cheap
+        # small-integer sequences that the operation can execute exactly.
+        operand_width = max(1, common_numerator_digits)
+    else:
+        operand_width = max(1, common_numerator_digits + denominator_digits)
     return fractions, result_digits, operand_width
 
 
@@ -357,6 +364,21 @@ def _autocorrelation_scalar(
     return value.numerator
 
 
+def _autocorrelation_sum(
+    products: Iterable[Fraction],
+    *,
+    label: str,
+) -> Fraction:
+    """Accumulate one lag with a checkpoint on the actual product count."""
+
+    total = Fraction(0)
+    for index, product in enumerate(products):
+        if index % 512 == 0:
+            request_checkpoint(label)
+        total += product
+    return total
+
+
 def _require_autocorrelation_work(
     multiplications: int, additions: int, operand_width: int, *, convention: str
 ) -> None:
@@ -386,22 +408,24 @@ def aperiodic_autocorrelation(
         multiplications, additions, operand_width, convention="aperiodic"
     )
     rational_output = isinstance(request, FiniteRationalSequence)
-    cells = tuple(
-        AutocorrelationCell(
-            lag=lag,
-            value=_autocorrelation_scalar(
-                sum(
-                    (
-                        values[index] * values[index + lag]
-                        for index in range(size - lag)
+    cells_list: list[AutocorrelationCell] = []
+    for lag in range(size):
+        cells_list.append(
+            AutocorrelationCell(
+                lag=lag,
+                value=_autocorrelation_scalar(
+                    _autocorrelation_sum(
+                        (
+                            values[index] * values[index + lag]
+                            for index in range(size - lag)
+                        ),
+                        label="during aperiodic autocorrelation expansion",
                     ),
-                    Fraction(0),
+                    rational_output=rational_output,
                 ),
-                rational_output=rational_output,
-            ),
+            )
         )
-        for lag in range(size)
-    )
+    cells = tuple(cells_list)
     negative = tuple(
         AutocorrelationCell(lag=-cell.lag, value=cell.value)
         for cell in reversed(cells[1:])
@@ -422,25 +446,25 @@ def cyclic_autocorrelation(
         multiplications, additions, operand_width, convention="cyclic"
     )
     rational_output = isinstance(request, FiniteRationalSequence)
-    return AutocorrelationResult(
-        convention="cyclic",
-        source=request,
-        cells=tuple(
+    cyclic_cells: list[AutocorrelationCell] = []
+    for lag in range(size):
+        cyclic_cells.append(
             AutocorrelationCell(
                 lag=lag,
                 value=_autocorrelation_scalar(
-                    sum(
+                    _autocorrelation_sum(
                         (
                             values[index] * values[(index + lag) % size]
                             for index in range(size)
                         ),
-                        Fraction(0),
+                        label="during cyclic autocorrelation expansion",
                     ),
                     rational_output=rational_output,
                 ),
             )
-            for lag in range(size)
-        ),
+        )
+    return AutocorrelationResult(
+        convention="cyclic", source=request, cells=tuple(cyclic_cells)
     )
 
 

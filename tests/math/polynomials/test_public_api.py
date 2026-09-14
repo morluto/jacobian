@@ -103,6 +103,8 @@ def test_exact_public_api_symbols() -> None:
     expected = (
         "PolynomialExpressionSource",
         "RationalDiscreteAntiderivativeResult",
+        "RationalLaurentPolynomial",
+        "RationalLaurentPolynomialTerm",
         "cyclotomic",
         "derivative",
         "discriminant",
@@ -136,6 +138,7 @@ def test_exact_public_api_symbols() -> None:
         "polynomial_square_free_decomposition",
         "quadratic_root_profile",
         "rational_discrete_antiderivative",
+        "rational_laurent_multiply",
         "rational_partial_fraction_decomposition",
         "rational_polynomial_derivative",
         "rational_polynomial_division",
@@ -156,6 +159,38 @@ def test_exact_public_api_symbols() -> None:
     assert all(
         not name.startswith("_") and hasattr(polynomials, name) for name in expected
     )
+
+
+def test_native_laurent_api_preserves_signed_support_and_zero_parent() -> None:
+    from jacobian._exact import CanonicalRational
+
+    left = polynomials.RationalLaurentPolynomial(
+        variables=("x",),
+        terms=(
+            polynomials.RationalLaurentPolynomialTerm(
+                coefficient=CanonicalRational(num=1, den=1), exponents=(1,)
+            ),
+            polynomials.RationalLaurentPolynomialTerm(
+                coefficient=CanonicalRational(num=1, den=1), exponents=(-1,)
+            ),
+        ),
+    )
+    right = polynomials.RationalLaurentPolynomial(
+        variables=("x",),
+        terms=(
+            polynomials.RationalLaurentPolynomialTerm(
+                coefficient=CanonicalRational(num=1, den=1), exponents=(1,)
+            ),
+            polynomials.RationalLaurentPolynomialTerm(
+                coefficient=CanonicalRational(num=-1, den=1), exponents=(-1,)
+            ),
+        ),
+    )
+
+    result = polynomials.rational_laurent_multiply(left, right)
+
+    assert result.variables == ("x",)
+    assert tuple(term.exponents for term in result.terms) == ((2,), (-2,))
 
 
 def test_native_discrete_antiderivative_api_returns_typed_result() -> None:

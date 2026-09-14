@@ -25,6 +25,7 @@ from jacobian.math.polynomials._expression_normalize import (
     PolynomialExpressionSource,
     normalize_polynomial_expression,
 )
+from jacobian.math.polynomials._laurent import rational_laurent_multiply
 from jacobian.math.polynomials._mahler_kernel import (
     mahler_measure,
     quadratic_root_profile,
@@ -59,6 +60,10 @@ from jacobian.math.polynomials.operations import (
 from jacobian.math.polynomials.rational_functions.operations import (
     verify_hermite_reduction,
 )
+from jacobian.math.polynomials.values import (
+    RationalLaurentPolynomial,
+    RationalLaurentPolynomialTerm,
+)
 
 
 def __getattr__(name: str) -> object:
@@ -79,6 +84,8 @@ def __getattr__(name: str) -> object:
 __all__ = [
     "PolynomialExpressionSource",
     "RationalDiscreteAntiderivativeResult",
+    "RationalLaurentPolynomial",
+    "RationalLaurentPolynomialTerm",
     "cyclotomic",
     "derivative",
     "discriminant",
@@ -112,6 +119,7 @@ __all__ = [
     "polynomial_square_free_decomposition",
     "quadratic_root_profile",
     "rational_discrete_antiderivative",
+    "rational_laurent_multiply",
     "rational_partial_fraction_decomposition",
     "rational_polynomial_derivative",
     "rational_polynomial_division",

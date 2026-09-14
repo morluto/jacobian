@@ -93,4 +93,5 @@ to another polynomial operation.
   compute the unique zero-based inverse of a selected-variable forward
   difference over `QQ`.
 - [Monomial-ideal graded Betti profiles](monomial-ideal-graded-betti.md)
+- [Exact rational Laurent-polynomial multiplication](rational-laurent-polynomials.md)
 - [Exact root--critical-point distance profiles](root-critical-distance-profile.md)

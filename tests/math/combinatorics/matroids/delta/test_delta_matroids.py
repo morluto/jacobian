@@ -383,3 +383,30 @@ def test_width_ignores_recognition_label_envelope() -> None:
 
     source = FiniteDeltaMatroid(ground=("a" * 2049,), feasible=((),))
     assert width(source) == 0
+
+
+def test_width_rejects_a_forged_malformed_source() -> None:
+    """A constructed source with duplicate row indices is not a valid value."""
+
+    from jacobian.catalog.models import OperationDomainValidationError
+    from jacobian.math.combinatorics.matroids.delta import width
+
+    forged = FiniteDeltaMatroid.model_construct(
+        ground=("a", "b"), feasible=((), (0, 0))
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        width(forged)
+    assert error.value.errors()[0]["type"] == "delta_matroid.source_not_valid"
+
+
+def test_width_rejects_an_empty_forged_source() -> None:
+    """An empty feasible family is not a delta-matroid and has no width."""
+
+    from jacobian.catalog.models import OperationDomainValidationError
+    from jacobian.math.combinatorics.matroids.delta import width
+
+    forged = FiniteDeltaMatroid.model_construct(ground=(), feasible=())
+    with pytest.raises(OperationDomainValidationError) as error:
+        width(forged)
+    assert error.value.errors()[0]["type"] == "delta_matroid.source_not_valid"
+    assert "at least one feasible set" in str(error.value)

@@ -353,8 +353,10 @@ def _isolated_apex_bipartite_graph(isolate_count: int) -> SimpleUndirectedGraph:
     isolates = tuple(f"z{index:02d}" for index in range(isolate_count))
     left = tuple(f"a{index:03d}" for index in range(115))
     right = tuple(f"b{index:03d}" for index in range(115))
-    edges = {tuple(sorted(pair)) for pair in ((u, v) for u in left for v in right)}
-    edges.update(tuple(sorted(pair)) for pair in (("apex", u) for u in (*left, *right)))
+    edges: set[tuple[str, str]] = {
+        (u, v) if u < v else (v, u) for u in left for v in right
+    }
+    edges.update(("apex", u) if u > "apex" else (u, "apex") for u in (*left, *right))
     return graph((*isolates, "apex", *left, *right), tuple(sorted(edges)))
 
 
@@ -516,7 +518,7 @@ def test_unknown_status_cannot_bind_as_an_exact_result() -> None:
             graph=source,
             s=2,
             t=2,
-            status="UNKNOWN",
+            status="UNKNOWN",  # type: ignore[arg-type]
             checked_partitions=0,
         )
 

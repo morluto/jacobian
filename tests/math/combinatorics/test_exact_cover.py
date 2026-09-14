@@ -526,7 +526,10 @@ def test_dense_cyclic_instance_refuses_before_the_residual_scan() -> None:
     import time
 
     primary = 2048
-    label = lambda index: f"p{index:05d}"  # noqa: E731
+
+    def label(index: int) -> str:
+        return f"p{index:05d}"
+
     rows = tuple(
         ExactCoverRow(
             row_id=f"r{index:05d}",

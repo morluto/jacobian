@@ -143,7 +143,7 @@ def _result_with_fixed_colors(
     fixed_colors: tuple[tuple[int, int], ...],
 ) -> dict[str, object]:
     base = compute_precoloring_edge_repair(_request(((0, 1),), 2, 1))
-    payload = json.loads(base.model_dump_json())
+    payload: dict[str, object] = json.loads(base.model_dump_json())
     payload["fixed_colors"] = [list(pair) for pair in fixed_colors]
     return payload
 

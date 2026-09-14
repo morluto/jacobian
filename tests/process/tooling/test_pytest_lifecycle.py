@@ -5,7 +5,11 @@ from pathlib import Path
 
 import pytest
 from tools import pytest_lifecycle
-from tools.command_runner import ToolCommandResult, ToolCommandStatus
+from tools.command_runner import (
+    ToolCommandRequest,
+    ToolCommandResult,
+    ToolCommandStatus,
+)
 
 
 def _command_result(
@@ -24,7 +28,7 @@ def test_success_uses_unique_worktree_basetemp_and_cleans_it(
 ) -> None:
     observed: list[tuple[tuple[str, ...], Path]] = []
 
-    def run(request: pytest_lifecycle.ToolCommandRequest) -> ToolCommandResult:
+    def run(request: ToolCommandRequest) -> ToolCommandResult:
         assert request.executable == sys.executable
         observed.append((request.arguments, Path(request.cwd)))
         basetemp_argument = next(

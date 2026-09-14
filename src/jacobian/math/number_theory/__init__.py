@@ -4,6 +4,13 @@ from importlib import import_module
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from jacobian.math.number_theory._dickman_rho import (
+        DickmanRhoAffineAxis,
+        DickmanRhoAffinePiece,
+        DickmanRhoPiecewiseEnclosureResult,
+        DyadicCoefficientBall,
+        dickman_rho_piecewise_enclosure,
+    )
     from jacobian.math.number_theory._divisibility_poset import divisibility_poset
     from jacobian.math.number_theory._factorization_kernels import (
         verify_certified_factorization,
@@ -54,6 +61,10 @@ if TYPE_CHECKING:
 
 
 __all__ = [
+    "DickmanRhoAffineAxis",
+    "DickmanRhoAffinePiece",
+    "DickmanRhoPiecewiseEnclosureResult",
+    "DyadicCoefficientBall",
     "FriableCountResult",
     "KempnerArithmeticProgressionResult",
     "KempnerDigitSet",
@@ -63,6 +74,7 @@ __all__ = [
     "chinese_remainder",
     "contiguous_sum_profile",
     "count_friable",
+    "dickman_rho_piecewise_enclosure",
     "divisibility_poset",
     "enumerate_friable",
     "enumerate_r_full",
@@ -97,12 +109,17 @@ __all__ = [
 
 
 _OWNER_MODULES = {
+    "DickmanRhoAffineAxis": "_dickman_rho",
+    "DickmanRhoAffinePiece": "_dickman_rho",
+    "DickmanRhoPiecewiseEnclosureResult": "_dickman_rho",
+    "DyadicCoefficientBall": "_dickman_rho",
     "FriableCountResult": "_friable_models",
     "PrimeShiftProfileResult": "_prime_shift_models",
     "RFullEnumerateResult": "_r_full_enumerate_models",
     "KempnerArithmeticProgressionResult": "_kempner_models",
     "KempnerDigitSet": "_kempner_models",
     "count_friable": "_friable_kernel",
+    "dickman_rho_piecewise_enclosure": "_dickman_rho",
     "divisibility_poset": "_divisibility_poset",
     "enumerate_friable": "_friable_enumerate",
     "enumerate_r_full": "_r_full_enumerate",

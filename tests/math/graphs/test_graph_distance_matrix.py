@@ -23,7 +23,10 @@ from jacobian.math.graphs.optimization._distance_models import (
     GraphDistanceMatrixResult,
     GraphDistanceRow,
 )
-from jacobian.math.graphs.values import SimpleUndirectedGraph
+from jacobian.math.graphs.values import (
+    MAX_SIMPLE_GRAPH_VERTICES,
+    SimpleUndirectedGraph,
+)
 
 
 def _request(vertices: list[str], edges: list[list[str]]) -> GraphDistanceMatrixRequest:
@@ -133,10 +136,14 @@ def test_distance_matrix_admits_256_vertex_sources_and_rejects_larger_order() ->
     assert restored == result
 
     oversized = SimpleUndirectedGraph(
-        vertices=tuple(f"{index:03d}" for index in range(257)),
+        vertices=tuple(
+            f"{index:03d}" for index in range(MAX_SIMPLE_GRAPH_VERTICES + 1)
+        ),
         edges=(),
     )
-    with pytest.raises(ValidationError, match="at most 256 vertices"):
+    with pytest.raises(
+        ValidationError, match=f"at most {MAX_SIMPLE_GRAPH_VERTICES} vertices"
+    ):
         GraphDistanceMatrixRequest(graph=oversized)
 
 

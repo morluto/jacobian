@@ -7,6 +7,8 @@ from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
+    MAX_EDGES,
+    MAX_VERTICES,
     MinimumTransversalRequest,
 )
 from jacobian.math.graphs.maximal_clique_hypergraph._models import (
@@ -87,10 +89,12 @@ def test_admits_256_vertex_edgeless_source_and_rejects_larger_order() -> None:
     restored = MaximalCliqueHypergraphResult.model_validate(result.model_dump())
     assert restored == result
 
-    oversized = _graph([str(index) for index in range(257)], [])
-    with pytest.raises(ValidationError, match="at most 256 vertices"):
+    oversized = _graph([str(index) for index in range(MAX_VERTICES + 1)], [])
+    with pytest.raises(ValidationError, match=f"at most {MAX_VERTICES} vertices"):
         MaximalCliqueHypergraphRequest(graph=oversized)
-    with pytest.raises(OperationDomainValidationError, match="at most 256 vertices"):
+    with pytest.raises(
+        OperationDomainValidationError, match=f"at most {MAX_VERTICES} vertices"
+    ):
         construct_maximal_clique_hypergraph(oversized)
 
 
@@ -274,7 +278,7 @@ def test_rejects_complete_family_above_hypergraph_edge_bound() -> None:
     )
     with pytest.raises(
         OperationDomainValidationError,
-        match="12,000-edge hypergraph bound",
+        match=f"{MAX_EDGES:,}-edge hypergraph bound",
     ):
         construct_maximal_clique_hypergraph(graph)
 

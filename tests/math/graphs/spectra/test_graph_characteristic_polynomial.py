@@ -17,6 +17,7 @@ from jacobian.math.graphs.spectra import (
     laplacian_characteristic_polynomial,
 )
 from jacobian.math.graphs.spectra._models import (
+    _MAX_CHARPOLY_VERTICES,
     GraphCharacteristicPolynomialRequest,
     GraphCharacteristicPolynomialResult,
     GraphSpectrumRequest,
@@ -288,11 +289,14 @@ def test_characteristic_polynomial_request_rejects_above_graph_carrier() -> None
 
 def test_characteristic_polynomial_native_admission_stays_below_carrier() -> None:
     request = GraphCharacteristicPolynomialRequest.model_validate(
-        {"graph": {"vertex_count": 257, "edges": []}}
+        {"graph": {"vertex_count": _MAX_CHARPOLY_VERTICES + 1, "edges": []}}
     )
     with pytest.raises(
         OperationDomainValidationError,
-        match="characteristic-polynomial operations support at most 256 vertices",
+        match=(
+            "characteristic-polynomial operations support at most "
+            f"{_MAX_CHARPOLY_VERTICES} vertices"
+        ),
     ):
         adjacency_characteristic_polynomial(request.graph)
 

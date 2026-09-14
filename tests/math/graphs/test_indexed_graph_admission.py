@@ -5,7 +5,10 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from jacobian.math.graphs.coloring._models import _require_indexed_coloring_graph
+from jacobian.math.graphs.coloring._models import (
+    MAX_COLORING_VERTICES,
+    _require_indexed_coloring_graph,
+)
 from jacobian.math.graphs.values import (
     MAX_ENCODED_SIMPLE_GRAPH_VERTICES,
     IndexedSimpleUndirectedGraph,
@@ -42,7 +45,9 @@ def test_simple_graph_encoding_admits_incidence_graph_vertex_bound() -> None:
 
 
 def test_coloring_admission_retains_256_vertex_bound() -> None:
-    graph = IndexedSimpleUndirectedGraph(vertex_count=257, edges=())
+    graph = IndexedSimpleUndirectedGraph(
+        vertex_count=MAX_COLORING_VERTICES + 1, edges=()
+    )
 
-    with pytest.raises(ValueError, match="at most 256 vertices"):
+    with pytest.raises(ValueError, match=f"at most {MAX_COLORING_VERTICES} vertices"):
         _require_indexed_coloring_graph(graph)

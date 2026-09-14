@@ -58,11 +58,21 @@ def test_compose_graphs_preflights_encoded_edge_envelope() -> None:
     assert len(complement.edges) == expected_edges
     assert SimpleUndirectedGraph.model_validate(complement.model_dump()) == complement
 
+    # Minimal vertex count whose complete graph exceeds the encoded-edge
+    # envelope, so the edge preflight (not the vertex carrier) is exercised.
+    oversized_vertex_count = 1
+    while (
+        oversized_vertex_count * (oversized_vertex_count - 1) // 2
+        <= MAX_ENCODED_SIMPLE_GRAPH_EDGES
+    ):
+        oversized_vertex_count += 1
     oversized = SimpleUndirectedGraph(
-        vertices=tuple(f"{index:03d}" for index in range(269)),
+        vertices=tuple(f"{index:03d}" for index in range(oversized_vertex_count)),
         edges=(),
     )
-    with pytest.raises(ValueError, match="36000-edge graph encoding bound"):
+    with pytest.raises(
+        ValueError, match=f"{MAX_ENCODED_SIMPLE_GRAPH_EDGES}-edge graph encoding bound"
+    ):
         graphs.compose_graphs("COMPLEMENT", oversized)
 
 

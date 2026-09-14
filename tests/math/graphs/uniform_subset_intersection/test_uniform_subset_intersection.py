@@ -18,6 +18,7 @@ from jacobian.math.graphs.uniform_subset_intersection._tools import (
 from jacobian.math.graphs.uniform_subset_intersection.operations import (
     construct_uniform_subset_intersection_graph,
 )
+from jacobian.math.graphs.values import MAX_SIMPLE_GRAPH_VERTICES
 
 
 def _subset_label(subset: tuple[int, ...]) -> str:
@@ -203,7 +204,10 @@ def test_rejects_family_beyond_graph_vertex_bound_before_enumeration() -> None:
         threshold=1,
         relation="INTERSECTION_LT_THRESHOLD",
     )
-    with pytest.raises(OperationDomainValidationError, match="256-vertex graph bound"):
+    with pytest.raises(
+        OperationDomainValidationError,
+        match=f"{MAX_SIMPLE_GRAPH_VERTICES}-vertex graph bound",
+    ):
         _construct(request)
 
 
@@ -214,7 +218,10 @@ def test_rejects_huge_binomial_family_without_constructing_it() -> None:
         threshold=1,
         relation="INTERSECTION_LT_THRESHOLD",
     )
-    with pytest.raises(OperationDomainValidationError, match="256-vertex graph bound"):
+    with pytest.raises(
+        OperationDomainValidationError,
+        match=f"{MAX_SIMPLE_GRAPH_VERTICES}-vertex graph bound",
+    ):
         _construct(request)
 
 

@@ -8,7 +8,10 @@ from pydantic import ValidationError
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.transforms import path_profile
 from jacobian.math.graphs.transforms._path_profile_models import PathProfileRequest
-from jacobian.math.graphs.values import SimpleUndirectedGraph
+from jacobian.math.graphs.values import (
+    MAX_SIMPLE_GRAPH_VERTICES,
+    SimpleUndirectedGraph,
+)
 
 
 def test_path_length_0() -> None:
@@ -83,10 +86,15 @@ def test_path_profile_admits_256_vertices_and_rejects_orders_above_row_bound() -
         vertices=tuple(f"{index:03d}" for index in range(257)),
         edges=tuple(
             (f"{left:03d}", f"{right:03d}")
-            for left, right in combinations(range(257), 2)
+            for left, right in combinations(range(MAX_SIMPLE_GRAPH_VERTICES + 1), 2)
         ),
     )
-    with pytest.raises(ValidationError, match="at most 256 vertices"):
+    with pytest.raises(
+        ValidationError, match=f"at most {MAX_SIMPLE_GRAPH_VERTICES} vertices"
+    ):
         PathProfileRequest(graph=oversized, path_length=1)
-    with pytest.raises(OperationDomainValidationError, match="at most 256 vertices"):
+    with pytest.raises(
+        OperationDomainValidationError,
+        match=f"at most {MAX_SIMPLE_GRAPH_VERTICES} vertices",
+    ):
         path_profile(oversized, 1)

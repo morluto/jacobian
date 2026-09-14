@@ -45,7 +45,8 @@ def _require_characteristic_polynomial_graph(
     if order > _MAX_CHARPOLY_VERTICES:
         raise PydanticCustomError(
             "graph.characteristic_polynomial_vertex_count_exceeds_operation_bound",
-            "characteristic-polynomial operations support at most 256 vertices",
+            f"characteristic-polynomial operations support at most "
+            f"{_MAX_CHARPOLY_VERTICES} vertices",
         )
     if order**2 > _MAX_CHARPOLY_MATRIX_CELLS or order**4 > _MAX_CHARPOLY_WORK:
         raise PydanticCustomError(
@@ -58,7 +59,7 @@ def _require_spectral_graph(graph: IndexedSimpleUndirectedGraph) -> None:
     if graph.vertex_count > _MAX_SPECTRAL_VERTICES:
         raise PydanticCustomError(
             "graph.spectral_vertex_count_exceeds_operation_bound",
-            "spectral operations support at most 32 vertices",
+            f"spectral operations support at most {_MAX_SPECTRAL_VERTICES} vertices",
         )
 
 
@@ -68,7 +69,7 @@ def _spectral_graph_schema() -> JsonSchemaValue:
     schema = IndexedSimpleUndirectedGraph.model_json_schema()
     schema["description"] = (
         "An integer-indexed simple undirected graph accepted by the spectral "
-        "operations: at most 32 vertices and at most 512 edges."
+        f"operations: at most {_MAX_SPECTRAL_VERTICES} vertices and at most 512 edges."
     )
     schema["properties"]["vertex_count"].update(maximum=_MAX_SPECTRAL_VERTICES)
     schema["properties"]["edges"].update(maxItems=512)
@@ -85,8 +86,8 @@ def _characteristic_polynomial_graph_schema() -> JsonSchemaValue:
     schema = IndexedSimpleUndirectedGraph.model_json_schema()
     schema["description"] = (
         "An integer-indexed simple undirected graph accepted by exact "
-        "characteristic-polynomial operations: at most 256 vertices and "
-        "at most 32640 canonical edges."
+        f"characteristic-polynomial operations: at most {_MAX_CHARPOLY_VERTICES} "
+        f"vertices and at most {_MAX_CHARPOLY_EDGES} canonical edges."
     )
     schema["properties"]["vertex_count"].update(maximum=_MAX_CHARPOLY_VERTICES)
     schema["properties"]["edges"].update(maxItems=_MAX_CHARPOLY_EDGES)

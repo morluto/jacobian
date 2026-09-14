@@ -7,6 +7,7 @@ from jacobian.catalog.models import MathTool
 from jacobian.math.graphs.optimization._invariants import (
     EXACT_GRAPH_INVARIANT_OPERATIONS,
 )
+from jacobian.math.graphs.values import MAX_SIMPLE_GRAPH_VERTICES
 
 
 def _operation(operation_id: str) -> MathTool[Any, Any]:
@@ -81,7 +82,7 @@ def test_invariant_requests_retain_256_vertex_result_envelope() -> None:
     )
 
     oversized_cycle = {
-        "vertices": [f"{index:03d}" for index in range(257)],
+        "vertices": [f"{index:03d}" for index in range(MAX_SIMPLE_GRAPH_VERTICES + 1)],
         "edges": [
             [f"{index:03d}", f"{(index + 1) % 257:03d}"]
             if f"{index:03d}" < f"{(index + 1) % 257:03d}"
@@ -89,14 +90,18 @@ def test_invariant_requests_retain_256_vertex_result_envelope() -> None:
             for index in range(257)
         ],
     }
-    with pytest.raises(ValidationError, match="at most 256 vertices"):
+    with pytest.raises(
+        ValidationError, match=f"at most {MAX_SIMPLE_GRAPH_VERTICES} vertices"
+    ):
         girth.request_type.model_validate({"graph": oversized_cycle})
 
     oversized_matching = {
-        "vertices": [f"{index:03d}" for index in range(258)],
+        "vertices": [f"{index:03d}" for index in range(MAX_SIMPLE_GRAPH_VERTICES + 2)],
         "edges": [[f"{2 * index:03d}", f"{2 * index + 1:03d}"] for index in range(129)],
     }
-    with pytest.raises(ValidationError, match="at most 256 vertices"):
+    with pytest.raises(
+        ValidationError, match=f"at most {MAX_SIMPLE_GRAPH_VERTICES} vertices"
+    ):
         matching.request_type.model_validate({"graph": oversized_matching})
 
 

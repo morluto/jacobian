@@ -16,7 +16,10 @@ from jacobian.math.graphs.rooted_trees import (
 )
 from jacobian.math.graphs.rooted_trees._models import RootedTreeFinePartitionRequest
 from jacobian.math.graphs.rooted_trees._tools import TOOLS
-from jacobian.math.graphs.values import SimpleUndirectedGraph
+from jacobian.math.graphs.values import (
+    MAX_SIMPLE_GRAPH_VERTICES,
+    SimpleUndirectedGraph,
+)
 
 
 def _graph_value(graph: nx.Graph[int]) -> SimpleUndirectedGraph:
@@ -265,16 +268,23 @@ def test_edgeless_order_boundary_preserves_not_a_tree_envelope() -> None:
     )
 
     oversized = SimpleUndirectedGraph(
-        vertices=tuple(f"{index:03d}" for index in range(257)),
+        vertices=tuple(
+            f"{index:03d}" for index in range(MAX_SIMPLE_GRAPH_VERTICES + 1)
+        ),
         edges=(),
     )
-    with pytest.raises(ValidationError, match="at most 256 vertices"):
+    with pytest.raises(
+        ValidationError, match=f"at most {MAX_SIMPLE_GRAPH_VERTICES} vertices"
+    ):
         RootedTreeFinePartitionRequest(
             graph=oversized,
             root=oversized.vertices[0],
             component_size_limit=1,
         )
-    with pytest.raises(OperationDomainValidationError, match="at most 256 vertices"):
+    with pytest.raises(
+        OperationDomainValidationError,
+        match=f"at most {MAX_SIMPLE_GRAPH_VERTICES} vertices",
+    ):
         construct_fine_partition(oversized, oversized.vertices[0], 1)
 
 

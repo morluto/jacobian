@@ -25,7 +25,10 @@ from jacobian.math.graphs.isomorphism._models import ColoredGraphCanonicalizatio
 from jacobian.math.graphs.isomorphism._vf2_process import (
     compute_colored_graph_canonicalization,
 )
-from jacobian.math.graphs.values import SimpleUndirectedGraph
+from jacobian.math.graphs.values import (
+    MAX_SIMPLE_GRAPH_VERTICES,
+    SimpleUndirectedGraph,
+)
 
 
 def _graph(
@@ -323,12 +326,20 @@ def test_canonicalization_preserves_256_vertex_relabeling_envelope() -> None:
         colored_graph=_graph(vertices, (), vertex_colors=colors)
     )
 
-    oversized_vertices = tuple(f"w{index:03d}" for index in range(257))
-    oversized_colors = tuple(f"c{index:03d}" for index in range(257))
+    oversized_vertices = tuple(
+        f"w{index:03d}" for index in range(MAX_SIMPLE_GRAPH_VERTICES + 1)
+    )
+    oversized_colors = tuple(
+        f"c{index:03d}" for index in range(MAX_SIMPLE_GRAPH_VERTICES + 1)
+    )
     oversized = _graph(oversized_vertices, (), vertex_colors=oversized_colors)
-    with pytest.raises(ValidationError, match="at most 256 vertices"):
+    with pytest.raises(
+        ValidationError, match=f"at most {MAX_SIMPLE_GRAPH_VERTICES} vertices"
+    ):
         ColoredGraphCanonicalizationRequest(colored_graph=oversized)
-    with pytest.raises(ValidationError, match="at most 256 vertices"):
+    with pytest.raises(
+        ValidationError, match=f"at most {MAX_SIMPLE_GRAPH_VERTICES} vertices"
+    ):
         canonicalize_colored_graph(oversized)
 
 

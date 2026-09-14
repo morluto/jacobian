@@ -731,6 +731,7 @@ class TestSpannedCircleDeadline:
         expected = len(_axis_origin_candidates(xs)) + len(_axis_origin_candidates(ys))
         assert observed.count("during spanned-circle origin selection") == expected
 
+    @pytest.mark.scale
     def test_shifted_reciprocal_family_reaches_the_truncating_origin(self) -> None:
         """A shared integer part must not defeat the origin search.
 

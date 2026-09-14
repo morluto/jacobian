@@ -228,7 +228,7 @@ def _bounded_sum_terms(
     groups: dict[int, list[Fraction]] = {}
     for term in terms:
         groups.setdefault(_large_denominator_kernel(term.denominator), []).append(term)
-    total = Fraction()
+    totals: list[Fraction] = []
     for kernel in sorted(groups):
         group_total = Fraction()
         for term in _reduced_signed_terms(groups[kernel]):
@@ -236,7 +236,13 @@ def _bounded_sum_terms(
                 group_total, term, location=location, label=label
             )
         if group_total:
-            total = _bounded_sum(total, group_total, location=location, label=label)
+            totals.append(group_total)
+    # Cancellation can span kernel buckets (for example a factor left out of
+    # the kernel prime set); reduce exact opposites among the group totals
+    # before the cross-group denominator bound.
+    total = Fraction()
+    for term in _reduced_signed_terms(totals):
+        total = _bounded_sum(total, term, location=location, label=label)
     return total
 
 

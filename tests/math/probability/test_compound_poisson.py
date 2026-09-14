@@ -608,3 +608,39 @@ def test_unrelated_tall_denominators_still_hit_the_normalization_bound() -> None
     )
     with pytest.raises(OperationDomainValidationError, match="normalization exceeds"):
         compound_poisson_cumulant_prefix(_q(Fraction(1)), jumps, 0)
+
+
+def test_cancellation_across_denominator_kernel_buckets_is_admitted() -> None:
+    """A cancelling factor outside the kernel prime set still cancels."""
+    import sympy
+
+    primes: list[int] = []
+    candidate = 10**99 + 1
+    while len(primes) < 6:
+        candidate = int(sympy.nextprime(candidate))
+        if candidate % 6 in (1, 5):
+            primes.append(candidate)
+    atoms: list[FiniteDistributionAtom] = []
+    for index, prime in enumerate(primes, start=1):
+        atoms.append(
+            FiniteDistributionAtom(
+                value=_q(Fraction(-6 * index, 1009)),
+                probability=_q(Fraction(1, 6 * prime)),
+            )
+        )
+        atoms.append(
+            FiniteDistributionAtom(
+                value=_q(Fraction(index)),
+                probability=_q(Fraction(1, 6 * prime)),
+            )
+        )
+        atoms.append(
+            FiniteDistributionAtom(
+                value=_q(Fraction(-1003 * index, 1009 * (prime - 2))),
+                probability=_q(Fraction(prime - 2, 6 * prime)),
+            )
+        )
+    atoms.sort(key=lambda atom: atom.value.as_fraction())
+    jumps = FiniteRationalDistribution(atoms=tuple(atoms))
+    result = compound_poisson_cumulant_prefix(_q(Fraction(1)), jumps, 1)
+    assert result.cumulants[0].jump_raw_moment.as_fraction() == 0

@@ -694,3 +694,29 @@ def test_aggregate_cap_is_enforced_while_collecting() -> None:
     )
     with pytest.raises(OperationResourceAdmissionError, match="coefficient"):
         rational_laurent_multiply(left, right)
+
+
+def test_aggregate_envelope_counts_canonical_json_overhead(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The aggregate envelope is encoded size, not coefficient digits alone.
+
+    A unit-coefficient term needs only two coefficient digits, but its
+    canonical JSON also encodes key names, quotes, the exponent array, and
+    separators. Counting those makes the bound an encoded-size bound.
+    """
+    assert laurent_module._laurent_encoded_digits((32768,), Fraction(1)) >= 64
+    monkeypatch.setattr(laurent_module, "MAX_LAURENT_RESULT_DIGITS", 16)
+    left = RationalLaurentPolynomial(
+        variables=("x",),
+        terms=(
+            _rational_term(1, 1, 32768),
+            _rational_term(1, 1, 0),
+        ),
+    )
+    right = RationalLaurentPolynomial(
+        variables=("x",),
+        terms=(_rational_term(1, 1, 0),),
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="coefficient"):
+        rational_laurent_multiply(left, right)

@@ -76,7 +76,7 @@ def _monomial_coefficient_digits(
                 or denominator_digits > MAX_CANONICAL_RATIONAL_DIGITS
             ):
                 return overflow, monomial.terms[0], other, tuple(scaled)
-            aggregate_digits += numerator_digits + denominator_digits
+            aggregate_digits += _laurent_encoded_digits(term.exponents, product)
             if aggregate_digits > MAX_LAURENT_RESULT_DIGITS:
                 return overflow, monomial.terms[0], other, tuple(scaled)
             height = max(height, numerator_digits, denominator_digits)
@@ -86,6 +86,37 @@ def _monomial_coefficient_digits(
 
 def _integer_digits(value: int) -> int:
     return 1 if value == 0 else len(format_canonical_integer(abs(value)))
+
+
+# Fixed canonical-JSON overhead per term: the ``coefficient``/``num``/``den``/
+# ``exponents`` key names, quotes, braces, and separators. Every other counted
+# character is a digit, sign, or exponent separator, so this constant plus the
+# component digit counts upper-bounds the term's encoded size.
+_LAURENT_TERM_JSON_OVERHEAD = 64
+# Enclosing ``{"variables":[...],"terms":[...]}`` field overhead for the result.
+_LAURENT_RESULT_JSON_OVERHEAD = 64
+
+
+def _laurent_encoded_digits(exponents: tuple[int, ...], value: Fraction) -> int:
+    """Bound one term's canonical-JSON encoded size in ASCII characters.
+
+    The aggregate envelope is an encoded-size ceiling, not a coefficient-digit
+    count: the canonical JSON also encodes every term's keys, quotes, commas,
+    and exponent array. Counting those keeps the bound a true signed-byte
+    bound instead of admitting a result that cannot fit the claimed limit.
+    """
+
+    if not value:
+        return 0
+    return (
+        # Sign plus digits for the numerator; digits for the denominator.
+        1
+        + _integer_digits(value.numerator)
+        + _integer_digits(value.denominator)
+        # Sign plus digits plus a separating comma for each exponent.
+        + sum(2 + _integer_digits(exponent) for exponent in exponents)
+        + _LAURENT_TERM_JSON_OVERHEAD
+    )
 
 
 def _maximum_coefficient_digits(
@@ -133,11 +164,10 @@ def _maximum_coefficient_digits(
                 or _integer_digits(result.numerator) > 2 * MAX_CANONICAL_RATIONAL_DIGITS
             ):
                 return MAX_CANONICAL_RATIONAL_DIGITS + 1, groups
-            # Track the aggregate output width while collecting, so output
-            # growth is refused before the whole convolution is materialized.
-            width = _integer_digits(result.numerator) + _integer_digits(
-                result.denominator
-            )
+            # Track the aggregate encoded output width while collecting, so
+            # output growth is refused before the whole convolution is
+            # materialized.
+            width = _laurent_encoded_digits(exponent, result)
             running_aggregate_digits += width - group_widths.get(exponent, 0)
             if running_aggregate_digits > MAX_LAURENT_RESULT_DIGITS:
                 return MAX_CANONICAL_RATIONAL_DIGITS + 1, groups
@@ -146,7 +176,7 @@ def _maximum_coefficient_digits(
             pairs += 1
     height = 1
     aggregate_digits = 0
-    for index, total in enumerate(groups.values()):
+    for index, (exponents, total) in enumerate(groups.items()):
         if index % 128 == 0:
             request_checkpoint("during Laurent coefficient-height scan")
         if total == 0:
@@ -158,8 +188,9 @@ def _maximum_coefficient_digits(
             or denominator_digits > MAX_CANONICAL_RATIONAL_DIGITS
         ):
             return MAX_CANONICAL_RATIONAL_DIGITS + 1, groups
-        # Both retained components count toward the serialized output.
-        aggregate_digits += numerator_digits + denominator_digits
+        # The term's keys, quotes, commas, and exponent array count toward the
+        # serialized output alongside both retained coefficient components.
+        aggregate_digits += _laurent_encoded_digits(exponents, total)
         if aggregate_digits > MAX_LAURENT_RESULT_DIGITS:
             return MAX_CANONICAL_RATIONAL_DIGITS + 1, groups
         height = max(height, numerator_digits, denominator_digits)

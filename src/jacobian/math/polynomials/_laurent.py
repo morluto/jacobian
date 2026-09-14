@@ -22,6 +22,10 @@ from jacobian.math.polynomials.values import (
     RationalLaurentPolynomialTerm,
 )
 
+# Aggregate coefficient-digit envelope for one serialized Laurent product,
+# matching the canonical 10 MiB encoded-output limit.
+MAX_LAURENT_RESULT_DIGITS = 10 * 1024 * 1024
+
 
 class RationalLaurentMultiplyRequest(StrictModel):
     left: RationalLaurentPolynomial
@@ -111,20 +115,26 @@ def _maximum_coefficient_digits(
             current = groups.get(exponent)
             result = pair if current is None else current + pair
             if (
-                _integer_digits(result.denominator) > MAX_CANONICAL_RATIONAL_DIGITS
+                _integer_digits(result.denominator) > 2 * MAX_CANONICAL_RATIONAL_DIGITS
                 or _integer_digits(result.numerator) > 2 * MAX_CANONICAL_RATIONAL_DIGITS
             ):
                 return MAX_CANONICAL_RATIONAL_DIGITS + 1, groups
             groups[exponent] = result
             pairs += 1
     height = 1
-    for total in groups.values():
+    aggregate_digits = 0
+    for index, total in enumerate(groups.values()):
+        if index % 128 == 0:
+            request_checkpoint("during Laurent coefficient-height scan")
         if total == 0:
             continue
         digits = max(
             _integer_digits(total.numerator), _integer_digits(total.denominator)
         )
         if digits > MAX_CANONICAL_RATIONAL_DIGITS:
+            return MAX_CANONICAL_RATIONAL_DIGITS + 1, groups
+        aggregate_digits += digits
+        if aggregate_digits > MAX_LAURENT_RESULT_DIGITS:
             return MAX_CANONICAL_RATIONAL_DIGITS + 1, groups
         height = max(height, digits)
     return height, groups

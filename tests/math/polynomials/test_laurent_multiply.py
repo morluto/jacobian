@@ -591,3 +591,54 @@ def test_transient_collision_overflow_can_cancel_in_a_later_term() -> None:
         (1,),
         (0,),
     ]
+
+
+def test_transient_collision_denominator_can_cancel_in_a_later_term() -> None:
+    """A group's intermediate denominator overshoot is not a final bound."""
+    cap = MAX_CANONICAL_RATIONAL_DIGITS
+    scale = 2 * 10 ** (cap - 1)
+    left = RationalLaurentPolynomial(
+        variables=("x",),
+        terms=tuple(
+            RationalLaurentPolynomialTerm(
+                coefficient=CanonicalRational.from_fraction(Fraction(num, 3 * scale)),
+                exponents=(exponent,),
+            )
+            for num, exponent in ((-1, 2), (5, 1), (-2, 0))
+        ),
+    )
+    right = RationalLaurentPolynomial(
+        variables=("x",),
+        terms=(
+            _rational_term(-3, 4, 2),
+            _rational_term(-3, 2, 1),
+            _rational_term(-1, 1, 0),
+        ),
+    )
+    product = rational_laurent_multiply(left, right)
+    assert [item.exponents for item in product.terms] == [
+        (4,),
+        (3,),
+        (2,),
+        (1,),
+        (0,),
+    ]
+
+
+def test_aggregate_output_digit_envelope_is_enforced() -> None:
+    """A product whose total coefficient digits exceed the output bound fails."""
+    left = RationalLaurentPolynomial(
+        variables=("x",),
+        terms=tuple(
+            _rational_term(10**6999 + index, 1, 100 * index)
+            for index in range(39, -1, -1)
+        ),
+    )
+    right = RationalLaurentPolynomial(
+        variables=("x",),
+        terms=tuple(
+            _rational_term(10**6999 + index, 1, index) for index in range(39, -1, -1)
+        ),
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="coefficient"):
+        rational_laurent_multiply(left, right)

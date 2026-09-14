@@ -72,6 +72,7 @@ def test_native_discriminant_preserves_the_polynomial_domain() -> None:
 def test_exact_public_api_symbols() -> None:
     expected = (
         "RationalDiscreteAntiderivativeResult",
+        "cyclotomic",
         "derivative",
         "discriminant",
         "divide",

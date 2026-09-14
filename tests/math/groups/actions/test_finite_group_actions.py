@@ -11,10 +11,14 @@ from jacobian.math.groups.actions._models import (
     MAX_COLORS,
     MAX_POLYA_WORK,
     BurnsideCountRequest,
+    BurnsideCountResult,
     CycleIndexRequest,
+    CycleIndexResult,
     ElementCyclesRequest,
+    ElementCyclesResult,
     FinitePermutationAction,
     PolyaInventoryRequest,
+    PolyaInventoryResult,
 )
 from jacobian.math.groups.actions.operations import (
     _enumerate_group,
@@ -25,19 +29,19 @@ from jacobian.math.groups.actions.operations import (
 )
 
 
-def _run_burnside(request: BurnsideCountRequest):
+def _run_burnside(request: BurnsideCountRequest) -> BurnsideCountResult:
     return burnside_count(request.action)
 
 
-def _run_cycle_index(request: CycleIndexRequest):
+def _run_cycle_index(request: CycleIndexRequest) -> CycleIndexResult:
     return cycle_index(request.action)
 
 
-def _run_element_cycles(request: ElementCyclesRequest):
+def _run_element_cycles(request: ElementCyclesRequest) -> ElementCyclesResult:
     return element_cycles(request.action, request.element)
 
 
-def _run_polya(request: PolyaInventoryRequest):
+def _run_polya(request: PolyaInventoryRequest) -> PolyaInventoryResult:
     return polya_inventory(request.action, request.colors)
 
 
@@ -550,7 +554,7 @@ class TestBounds:
         assert len(result.terms) == 51
 
     def test_polya_weighted_preflight_rejects_order_5184_action(
-        self, monkeypatch
+        self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         action = _order_5184_action()
         group = _enumerate_group(action)
@@ -561,7 +565,7 @@ class TestBounds:
         calls = 0
         original = action_operations._permutation_cycle_type
 
-        def counting_cycle_type(permutation):
+        def counting_cycle_type(permutation: tuple[int, ...]) -> tuple[int, ...]:
             nonlocal calls
             calls += 1
             return original(permutation)

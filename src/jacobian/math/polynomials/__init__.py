@@ -1,5 +1,6 @@
 """Supported exact polynomial API."""
 
+from jacobian.math.polynomials._cyclotomic import cyclotomic
 from jacobian.math.polynomials._discrete_antiderivative import (
     RationalDiscreteAntiderivativeResult,
     rational_discrete_antiderivative,
@@ -73,6 +74,7 @@ def __getattr__(name: str) -> object:
 
 __all__ = [
     "RationalDiscreteAntiderivativeResult",
+    "cyclotomic",
     "derivative",
     "discriminant",
     "divide",

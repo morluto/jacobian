@@ -124,7 +124,7 @@ def test_inactive_off_diagonal_constraint_keeps_the_diagonal_regime() -> None:
         order=2,
         matrices=(
             _matrix([[1, 0], [0, 1]]),
-            rational_matrix_from_fractions(((0, huge), (huge, 0))),
+            rational_matrix_from_fractions(((Fraction(0), huge), (huge, Fraction(0)))),
         ),
         rhs=(_q(0), _q(0)),
     )
@@ -475,7 +475,7 @@ def test_inactive_rhs_heights_count_toward_output() -> None:
         _matrix([[1, 1], [1, 1]]),
         *(_matrix([[0, 0], [0, 0]]) for _ in range(200)),
     )
-    rhs = (0, *(huge for _ in range(200)))
+    rhs: tuple[int | Fraction, ...] = (0, *(huge for _ in range(200)))
     system = RationalSemidefiniteSystem(
         order=2, matrices=matrices, rhs=tuple(_q(value) for value in rhs)
     )

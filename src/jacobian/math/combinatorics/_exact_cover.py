@@ -110,7 +110,10 @@ MINIMUM_GENERALIZED_EXACT_COVER_OPERATION = MathTool(
     examples=(
         OperationExample(
             name="one_row_beats_two",
-            description="Cover two primary items with the single combined row.",
+            description=(
+                "Cover two primary items with the single combined row; primary "
+                "and secondary items and row IDs must be sorted canonical labels."
+            ),
             input={
                 "instance": {
                     "primary_items": ["p", "q"],

@@ -35,7 +35,7 @@ def _tuple_error(reason: str, message: str) -> PydanticCustomError:
 def _collection_length(value: object) -> int | None:
     if isinstance(value, (str, bytes, bytearray, Mapping)):
         return None
-    if isinstance(value, Sized):
+    if isinstance(value, Iterable) and isinstance(value, Sized):
         try:
             return len(value)
         except TypeError:
@@ -49,12 +49,9 @@ _SEQUENCE_OVERFLOW = object()
 def _materialize_bounded_sequence(value: object, limit: int) -> object:
     if isinstance(value, (str, bytes, bytearray, Mapping)) or value is None:
         return value
-    length = _collection_length(value)
-    if length is not None and length > limit:
-        return _SEQUENCE_OVERFLOW
     if isinstance(value, Iterable):
-        # ``__len__`` may under-report the iterator, so still enforce the cap
-        # while materializing instead of trusting the reported size.
+        # ``__len__`` may over- or under-report the iterator, so never trust
+        # the reported size: enforce the cap while materializing instead.
         items: list[Any] = []
         for item in value:
             items.append(item)
@@ -134,11 +131,42 @@ def _row_field(row: object, name: str) -> object:
     return _declared_attr(row, name)
 
 
+def _reject_unknown_fields(payload: Mapping[str, Any], allowed: frozenset[str]) -> None:
+    """Reject unexpected keys before any recursive container copy.
+
+    ``extra="forbid"`` still owns the final decision; raising the same error
+    type here prevents a malformed payload from forcing unbounded traversal of
+    a value that is about to be discarded.
+    """
+
+    for key in payload:
+        if key not in allowed:
+            raise PydanticCustomError(
+                "extra_forbidden",
+                f"Unexpected keyword argument: {key}",
+            )
+
+
+_SOURCE_FIELDS = frozenset({"action", "arity", "family"})
+_ACTION_FIELDS = frozenset({"domain", "generators"})
+_ROW_FIELDS = frozenset(
+    {
+        "representative",
+        "source_indices",
+        "orbit_size",
+        "stabilizer_size",
+        "least_transporter",
+    }
+)
+_RESULT_FIELDS = frozenset({"source", "rows", "is_union_of_complete_ambient_orbits"})
+
+
 def _action_mapping(action: object) -> dict[str, Any] | None:
     if action is None:
         return None
     if isinstance(action, Mapping):
         payload = dict(action)
+        _reject_unknown_fields(payload, _ACTION_FIELDS)
     else:
         payload = {
             "domain": _declared_attr(action, "domain"),
@@ -146,7 +174,15 @@ def _action_mapping(action: object) -> dict[str, Any] | None:
         }
     generators = payload.get("generators")
     domain = payload.get("domain")
-    degree = _collection_length(domain)
+    materialized_domain = _materialize_bounded_sequence(domain, MAX_DOMAIN_SIZE)
+    if materialized_domain is _SEQUENCE_OVERFLOW:
+        raise _tuple_error(
+            "action_domain_bound",
+            f"action domain admits at most {MAX_DOMAIN_SIZE} labels",
+        )
+    if materialized_domain is not domain:
+        payload["domain"] = materialized_domain
+    degree = _collection_length(materialized_domain)
     if degree is None:
         degree = MAX_DOMAIN_SIZE
     # A domain longer than the admitted carrier is rejected later by
@@ -176,19 +212,49 @@ def _action_mapping(action: object) -> dict[str, Any] | None:
 
 def _row_mapping(row: object) -> dict[str, Any]:
     if isinstance(row, Mapping):
-        return dict(row)
-    return {
-        "representative": _declared_attr(row, "representative"),
-        "source_indices": _declared_attr(row, "source_indices"),
-        "orbit_size": _declared_attr(row, "orbit_size"),
-        "stabilizer_size": _declared_attr(row, "stabilizer_size"),
-        "least_transporter": _declared_attr(row, "least_transporter"),
-    }
+        payload = dict(row)
+        _reject_unknown_fields(payload, _ROW_FIELDS)
+    else:
+        payload = {
+            "representative": _declared_attr(row, "representative"),
+            "source_indices": _declared_attr(row, "source_indices"),
+            "orbit_size": _declared_attr(row, "orbit_size"),
+            "stabilizer_size": _declared_attr(row, "stabilizer_size"),
+            "least_transporter": _declared_attr(row, "least_transporter"),
+        }
+    for name, limit, reason, message in (
+        (
+            "representative",
+            MAX_TUPLE_ARITY,
+            "arity_out_of_range",
+            "tuple arity must be a non-negative action-domain-sized integer",
+        ),
+        (
+            "source_indices",
+            MAX_FAMILY_MEMBERS,
+            "input_bound",
+            f"at most {MAX_FAMILY_MEMBERS} tuple rows are admitted",
+        ),
+        (
+            "least_transporter",
+            MAX_GROUP_DEGREE,
+            "transporter_axis",
+            "transporters must be permutations of the action axis",
+        ),
+    ):
+        value = payload.get(name)
+        materialized = _materialize_bounded_sequence(value, limit)
+        if materialized is _SEQUENCE_OVERFLOW:
+            raise _tuple_error(reason, message)
+        if materialized is not value:
+            payload[name] = materialized
+    return payload
 
 
 def _source_mapping(data: object) -> dict[str, Any]:
     if isinstance(data, Mapping):
         payload = dict(data)
+        _reject_unknown_fields(payload, _SOURCE_FIELDS)
     else:
         payload = {
             "action": _declared_attr(data, "action"),
@@ -453,6 +519,7 @@ class TupleFamilyOrbitResult(StrictModel):
                 "is_union_of_complete_ambient_orbits": complete,
             }
         payload = dict(data)
+        _reject_unknown_fields(payload, _RESULT_FIELDS)
         rows = payload.get("rows")
         if rows is not None:
             # Materialize any accepted rows iterable once, bounded by the row

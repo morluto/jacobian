@@ -518,6 +518,9 @@ def test_constructed_result_rows_are_revalidated() -> None:
         def __len__(self) -> int:
             return 2_000_000
 
+        def __iter__(self):
+            return iter(range(2_000_000))
+
     row = TupleOrbitRow.model_construct(
         representative=_HugeRepresentative(),
         source_indices=(0,),
@@ -784,3 +787,56 @@ def test_sized_iterable_length_is_not_trusted() -> None:
                 yield 0
 
     assert _materialize_bounded_sequence(LyingSized(), 5) is _SEQUENCE_OVERFLOW
+
+
+def test_action_domain_iteration_is_bounded_before_canonicalization() -> None:
+    """A domain that under-reports its iterator is still bounded by the cap."""
+
+    class _LyingDomain:
+        def __len__(self) -> int:
+            return 1
+
+        def __iter__(self):
+            return iter(range(51))
+
+    payload = {
+        "action": {"domain": _LyingDomain(), "generators": []},
+        "arity": 0,
+        "family": [],
+    }
+    with pytest.raises(ValidationError) as bound:
+        TupleFamilyOrbitSource.model_validate(payload)
+    assert "action_domain_bound" in bound.value.errors()[0]["type"]
+
+
+def test_unknown_action_field_value_is_not_recursively_copied() -> None:
+    """An extra field is rejected before its value is traversed."""
+
+    def _boom():
+        raise AssertionError("unknown field was traversed")
+        yield 0
+
+    payload = {
+        "action": {"domain": ["a"], "generators": [[0]], "generator": _boom()},
+        "arity": 0,
+        "family": [],
+    }
+    with pytest.raises(ValidationError) as extra:
+        TupleFamilyOrbitSource.model_validate(payload)
+    assert extra.value.errors()[0]["type"] == "extra_forbidden"
+
+
+def test_non_iterable_sized_generators_are_a_validation_error() -> None:
+    """A Sized but non-iterable generators value is not trusted as a row."""
+
+    class _SizedOnly:
+        def __len__(self) -> int:
+            return 1
+
+    payload = {
+        "action": {"domain": ["a"], "generators": _SizedOnly()},
+        "arity": 0,
+        "family": [],
+    }
+    with pytest.raises(ValidationError):
+        TupleFamilyOrbitSource.model_validate(payload)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 from typing import Literal, NoReturn, TypedDict
 
 import pytest
@@ -355,6 +356,30 @@ class TestKernelFailures:
         with pytest.raises(RuntimeError, match="worker crashed"):
             _run_groebner(GroebnerBasisRequest(ideal=_ideal(("x", "y"), (g,))))
 
+    def test_native_decoding_respects_the_absolute_deadline(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A native call without an envelope still enforces the deadline.
+
+        The worker returns a response, but result decoding and assembly push
+        past the shared wall limit. With no request execution envelope the
+        checkpoints cannot see the absolute deadline, so the decode path must
+        enforce it explicitly rather than return a basis past the limit.
+        """
+
+        def late_kernel(*args: object, **kwargs: object) -> dict[str, object]:
+            return {"generators": []}
+
+        monkeypatch.setattr(
+            operations, "_run_relation_kernel_before_deadline", late_kernel
+        )
+        g = _poly(("x", "y"), (1, 1, (2, 0)), (-1, 1, (0, 2)))
+        with pytest.raises(OperationExecutionTimeoutError):
+            groebner_basis(
+                _ideal(("x", "y"), (g,)),
+                _outer_deadline=time.monotonic() - 1,
+            )
+
     @pytest.mark.parametrize(
         "failure",
         (
@@ -403,13 +428,16 @@ class TestKillableWorkerContract:
             wall_seconds: float,
             stdout_limit: int,
             stderr_limit: int,
+            deadline: float | None = None,
         ) -> tuple[bool | str, str, bool]:
             observed["timeout"] = wall_seconds
+            observed["deadline"] = deadline
             observed["child_is_process"] = True
             return real_runner(
                 script,
                 payload_json,
                 wall_seconds=wall_seconds,
+                deadline=deadline,
                 stdout_limit=stdout_limit,
                 stderr_limit=stderr_limit,
             )
@@ -423,7 +451,9 @@ class TestKillableWorkerContract:
                 resource_budget=IdealComputationBudget(wall_seconds=10),
             )
         )
-        assert observed["timeout"] == 10
+        assert observed["timeout"] is not None
+        assert float(observed["timeout"]) <= 10
+        assert observed["deadline"] is not None
         assert result.basis is not None
 
     def test_timed_out_call_leaves_no_lingering_threads(

@@ -102,3 +102,68 @@ def test_number_field_worker_start_failure_is_operational(
 
     with pytest.raises(RuntimeError):
         compute_nf_discriminant(NumberFieldRequest(field=_number_field("1", "0", "-2")))
+
+
+def test_semiprime_discriminant_rejection_survives_the_stdout_envelope() -> None:
+    """A worker rejection is budgeted, not just a worker answer.
+
+    ``include_basis=False`` used to size stdout from the bare discriminant
+    alone, so the larger typed ``rejected`` response was truncated, reported as
+    ``stdout_exceeded``, and re-raised as a generic ``RuntimeError``. The
+    motivating field must therefore return the declared domain error.
+    """
+
+    from jacobian.catalog.models import OperationResourceAdmissionError
+
+    request = NumberFieldRequest(field=_number_field("1", "0", str(-100003 * 100019)))
+
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        compute_nf_discriminant(request)
+
+    assert error.value.errors()[0]["type"] == (
+        "number_field.ring_of_integers_discriminant_factorization_bound"
+    )
+
+
+def test_discriminant_stdout_envelope_bounds_every_worker_response() -> None:
+    """The advertised stdout ceiling covers both emitted response branches."""
+
+    from jacobian.canonical import encode_strict_json
+    from jacobian.catalog.models import (
+        OperationDomainValidationError,
+        OperationResourceAdmissionError,
+    )
+    from jacobian.math.number_theory.number_fields._integral_basis_process import (
+        _worker_stdout_limit,
+        worker_rejection,
+    )
+
+    field = _number_field("1", "0", str(-100003 * 100019))
+    limit = _worker_stdout_limit(field, include_basis=False)
+    rejections = (
+        OperationDomainValidationError(
+            location=("field",),
+            code="number_field.ring_of_integers_discriminant_factorization_bound",
+            message="x" * 4_096,
+        ),
+        OperationResourceAdmissionError(
+            location=("field",),
+            code="number_field.ring_of_integers_discriminant_output_bound",
+            message="y" * 4_096,
+        ),
+    )
+    for rejection in rejections:
+        emitted = encode_strict_json(
+            worker_rejection(rejection, request_digest="0" * 64)
+        )
+        assert len(emitted) <= limit
+    # A rejection is larger than the bare discriminant it replaces, which is
+    # precisely the envelope the discriminant-only route used to omit.
+    discriminant_only = encode_strict_json(
+        {
+            "kind": "complete",
+            "discriminant": "-9",
+            "request_digest": "0" * 64,
+        }
+    )
+    assert len(discriminant_only) < limit

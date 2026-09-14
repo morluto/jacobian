@@ -101,7 +101,7 @@ def _to_sympy_poly(terms: list[tuple[Fraction, int]]) -> Any:
 
 
 def sturm_chain(terms: list[tuple[Fraction, int]]) -> list[list[tuple[Fraction, int]]]:
-    """Compute the exact Sturm subresultant chain of a univariate polynomial."""
+    """Compute the ordinary exact Euclidean Sturm sequence of a univariate polynomial."""
 
     from sympy import sturm
 

@@ -30,25 +30,33 @@ def compute_binary_union_relation(
 TOOLS: MathTools = (
     MathTool(
         operation_id="set_system.sunflower_family.construct",
-        title="Construct the complete sunflower triple hypergraph family",
+        title="Construct the complete r-petal sunflower hypergraph family",
         description=(
             "Return every distinct-index subfamily of exactly r >= 2 members "
             "whose pairwise intersections are all equal to one common core, "
             "together with each row's exact core, the derived count, "
             "sunflower-free status, and a canonical r-uniform hypergraph "
-            "edge projection. The "
-            "complete accepted construction returns every row or fails before "
-            "expansion."
+            "edge projection. The complete accepted construction returns every "
+            "row or fails before expansion; r may be any value supported by "
+            "the finite-hypergraph vertex carrier when admission succeeds."
         ),
         request_type=SunflowerFamilyRequest,
         result_type=SunflowerFamilyResult,
         run=compute_sunflower_family,
         tags=("combinatorics", "set-system", "sunflower", "hypergraph", "complete"),
-        discovery_terms=("sunflower triple hypergraph construction",),
+        discovery_terms=(
+            "r-petal sunflower family construction",
+            "complete sunflower hypergraph for any petal count",
+            "equal pairwise intersection set family",
+        ),
         examples=(
             OperationExample(
                 name="four_petals",
-                description="Four petals sharing the core {0} form one sunflower.",
+                description=(
+                    "Construct the exact four-petal sunflower through core {0}; "
+                    "the source members must be canonical distinct subsets of "
+                    "the declared five-element ground set."
+                ),
                 input={
                     "source": {
                         "ground_set_size": 5,

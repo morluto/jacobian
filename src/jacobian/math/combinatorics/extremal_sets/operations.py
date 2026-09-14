@@ -9,6 +9,10 @@ from jacobian.math.combinatorics.extremal_sets._models import (
     BinaryUnionRelationResult,
     UnionRelationRow,
 )
+from jacobian.math.combinatorics.extremal_sets._sunflower_r import (
+    SunflowerFamilyResult,
+    construct_sunflower_family,
+)
 from jacobian.math.combinatorics.extremal_sets.values import (
     IndexedFiniteSetFamily,
 )
@@ -21,6 +25,7 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
 
 __all__ = [
     "construct_binary_union_relation",
+    "construct_sunflower_hypergraph",
 ]
 
 MAX_BINARY_UNION_MEMBERSHIP_WORK = 20_000_000
@@ -59,6 +64,18 @@ def construct_binary_union_relation(
         rows=rows,
         hypergraph=FiniteHypergraph(vertices=vertices, edges=edges),
     )
+
+
+def construct_sunflower_hypergraph(
+    source: IndexedFiniteSetFamily,
+) -> SunflowerFamilyResult:
+    """Return the r=3 sunflower family without a second catalog operation.
+
+    This native compatibility wrapper is the same mathematical postcondition as
+    ``construct_sunflower_family(source, 3)`` and does not rebuild rows.
+    """
+
+    return construct_sunflower_family(source, 3)
 
 
 def _admit_union_relation(source: IndexedFiniteSetFamily) -> _UnionRelationPlan:

@@ -2,7 +2,8 @@
 
 A sunflower of petal count ``r >= 2`` over the source family is an ``r``-member
 subfamily whose pairwise intersections are all equal to one common core.  This
-module is the atomic complete-construction owner for every admitted ``r``.
+module is the atomic complete-construction owner for every admitted ``r``,
+including the former specialized ``r = 3`` slice.
 """
 
 from __future__ import annotations
@@ -30,10 +31,13 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     FiniteHypergraph,
 )
 
-MAX_SUNFLOWER_PETALS = 8
+# Petal count is bounded by the shared finite-hypergraph vertex carrier, not
+# by an arbitrary small slice.  Candidate, intersection, output, and
+# allocation admission below still reject requests whose complete exact work
+# cannot fit the operation envelope before enumeration begins.
+MAX_SUNFLOWER_PETALS = MAX_VERTICES
 MAX_SUNFLOWER_INTERSECTION_WORK = 20_000_000
 MAX_SUNFLOWER_CANDIDATES = 1_000_000
-_SUNFLOWER_CHECKPOINT_UNITS = 65_536
 # The source value is retained unchanged in every result, including the
 # vacuous case. These operation-owned limits cover the ambient axis, aggregate
 # membership inspection, and retained result allocation. One allocation unit
@@ -41,6 +45,10 @@ _SUNFLOWER_CHECKPOINT_UNITS = 65_536
 # fixed record field; transports own encoded-byte limits separately.
 MAX_SUNFLOWER_MEMBERSHIPS = 1_000_000
 MAX_SUNFLOWER_RESULT_ALLOCATION_UNITS = 16 * 1024 * 1024
+# Pairwise frozenset intersection cost tracks admitted element work, not scan
+# count: one large pair can dominate, so a modulo-64 scan cadence can skip an
+# entire admitted candidate.
+SUNFLOWER_PAIRWISE_CHECKPOINT_WORK = 64
 
 
 def _result_error(reason: str, message: str) -> PydanticCustomError:
@@ -77,6 +85,19 @@ def _admit_source(
 ) -> tuple[IndexedFiniteSetFamily, int, int, int, int]:
     """Admit the retained source before any candidate or result expansion."""
 
+    if not isinstance(source, IndexedFiniteSetFamily):
+        raise OperationDomainValidationError(
+            location=("source",),
+            code="set_system.sunflower.source_type",
+            message="sunflower construction requires an IndexedFiniteSetFamily",
+        )
+    source = _revalidate_source(source)
+    if type(petal_count) is not int:
+        raise OperationDomainValidationError(
+            location=("petal_count",),
+            code="set_system.sunflower.petal_count_type",
+            message="petal_count must be an integer",
+        )
     if petal_count < 2:
         raise OperationDomainValidationError(
             location=("petal_count",),
@@ -123,9 +144,10 @@ def _admit_source(
                 f"{MAX_SUNFLOWER_INTERSECTION_WORK}-unit bound"
             ),
         )
-    # The ground axis is retained as a single scalar; charge each membership
-    # by the actual decimal width of its coordinates, not the ambient axis
-    # width applied to every coordinate.
+    # Charge the retained axis by the digits the source actually holds, not by
+    # the widest ground-set element it could hold, and keep the scan
+    # cancellable: a large ground-set axis is a scalar bound, not a materialized
+    # set, but walking its memberships still costs real time.
     membership_digits = 0
     processed = 0
     for member in source.members:
@@ -145,6 +167,33 @@ def _admit_source(
             ),
         )
     return source, petal_count, member_count, source_work, source_units
+
+
+def _disjoint_selection_lower_bound(
+    members: tuple[tuple[int, ...], ...], petal_count: int
+) -> int:
+    """Lower-bound qualifying sunflowers from pairwise-disjoint members.
+
+    Any ``petal_count`` pairwise-disjoint members form a sunflower with empty
+    common core, so a greedy disjoint selection of size ``d`` certifies at
+    least ``C(d, petal_count)`` retained rows. This is a sound lower bound: it
+    may reject an unrepresentable request early but never an admissible one.
+    """
+
+    used: set[int] = set()
+    selected = 0
+    work_since_checkpoint = 0
+    for member in sorted(members, key=len):
+        work_since_checkpoint += len(member)
+        if work_since_checkpoint >= SUNFLOWER_PAIRWISE_CHECKPOINT_WORK:
+            request_checkpoint("during sunflower disjoint-selection admission")
+            work_since_checkpoint = 0
+        if used.isdisjoint(member):
+            selected += 1
+            used.update(member)
+    if selected < petal_count:
+        return 0
+    return comb(selected, petal_count)
 
 
 def _intersection_search_work(sizes: tuple[int, ...], petal_count: int) -> int:
@@ -176,6 +225,7 @@ def _admit_candidates(
     petal_count: int,
     member_count: int,
     source_work: int,
+    source_units: int,
 ) -> int:
     """Admit candidate, intersection-work, and complete-output envelopes."""
 
@@ -192,6 +242,41 @@ def _admit_candidates(
             ),
         )
     sizes = tuple(len(member) for member in source.members)
+    # Every pair is a sunflower; bound stored cores by pairwise size mins
+    # without enumerating intersection tuples.
+    if petal_count == 2 and candidate_bound:
+        # Charge each stored core element by the coordinate width it actually
+        # holds; a bare element count underestimates multi-digit coordinates.
+        coordinate_digits = len(str(max(source.ground_set_size - 1, 0)))
+        core_bound = sum(
+            min(sizes[left], sizes[right])
+            for left, right in combinations(range(member_count), 2)
+        )
+        core_digits = core_bound * (coordinate_digits + 1)
+        _admit_qualifying_result(
+            source,
+            petal_count,
+            member_count,
+            source_units,
+            candidate_bound,
+            core_digits,
+        )
+    else:
+        # A greedy pairwise-disjoint selection certifies that at least this many
+        # candidates qualify, so an unrepresentable request is refused before
+        # any intersection is computed instead of mid-enumeration.
+        guaranteed_rows = _disjoint_selection_lower_bound(
+            tuple(tuple(member) for member in source.members), petal_count
+        )
+        if guaranteed_rows:
+            _admit_qualifying_result(
+                source,
+                petal_count,
+                member_count,
+                source_units,
+                guaranteed_rows,
+                0,
+            )
     search_work = _intersection_search_work(sizes, petal_count)
     total_work = source_work + search_work
     if total_work > MAX_SUNFLOWER_INTERSECTION_WORK:
@@ -256,7 +341,10 @@ def _result_allocation_units(
     core_digits: int,
 ) -> int:
     member_digits = len(str(max(member_count - 1, 0)))
-    edge_id_units = 10 + petal_count * (member_digits + 1)
+    # Row IDs are bounded ordinals (``sunflower_<position>``), so an ID never
+    # carries petal coordinates; the core is charged by the widths it actually
+    # holds rather than the widest ground-set element it could hold.
+    edge_id_units = 10 + len(str(max(row_count, 1)))
     fixed_row_units = 128 + edge_id_units + petal_count * (member_digits + 2)
     edge_projection_units = 64 + edge_id_units + petal_count * (member_digits + 2)
     base_result_units = source_units + 1024 + member_count * (member_digits + 3)
@@ -341,9 +429,7 @@ class SunflowerFamilyResult(StrictModel):
     sunflowers: tuple[SunflowerFamily, ...] = Field(max_length=MAX_EDGES)
     sunflower_count: StrictInt = Field(ge=0, le=MAX_EDGES)
     sunflower_free: StrictBool
-    # The domain-owned projection of the sunflower rows. Callers that need the
-    # edge sequence use ``hypergraph.edges``; a second parallel ledger would
-    # give one exact value multiple noncanonical encodings.
+    # The canonical composable edge value; callers read ``hypergraph.edges``.
     hypergraph: FiniteHypergraph
 
     @model_validator(mode="after")
@@ -364,13 +450,24 @@ class SunflowerFamilyResult(StrictModel):
         expected_edges: list[tuple[str, tuple[str, ...]]] = []
         seen_indices: set[tuple[int, ...]] = set()
         seen_edge_ids: set[str] = set()
-        for row in self.sunflowers:
+        previous_indices: tuple[int, ...] | None = None
+        # Row IDs are one-based ordinals over the found rows in enumeration
+        # order.  Index-list IDs would exceed the hypergraph label limit for
+        # large petal counts, while ordinals stay bounded by the candidate
+        # count and remain canonical because enumeration order is fixed.
+        for position, row in enumerate(self.sunflowers, start=1):
             indices = tuple(row.source_indices)
             if len(indices) != self.petal_count or indices != tuple(sorted(indices)):
                 raise _result_error(
                     "row_shape",
                     "sunflower rows must have sorted source indices of the declared petal count",
                 )
+            if previous_indices is not None and indices <= previous_indices:
+                raise _result_error(
+                    "row_order",
+                    "sunflower rows must appear in lexicographic source-index order",
+                )
+            previous_indices = indices
             if len(set(indices)) != len(indices) or any(
                 index < 0 or index >= member_count for index in indices
             ):
@@ -386,10 +483,10 @@ class SunflowerFamilyResult(StrictModel):
                 raise _result_error(
                     "core_source", "sunflower cores must lie on the source ground set"
                 )
-            expected_edge_id = "sunflower_" + "_".join(str(index) for index in indices)
+            expected_edge_id = f"sunflower_{position}"
             if row.edge_id != expected_edge_id:
                 raise _result_error(
-                    "row_identity", "sunflower row IDs must be canonical"
+                    "row_identity", "sunflower row IDs must be canonical ordinals"
                 )
             if indices in seen_indices or row.edge_id in seen_edge_ids:
                 raise _result_error(
@@ -421,7 +518,7 @@ class SunflowerFamilyResult(StrictModel):
         if self.hypergraph.edges != canonical_edges:
             raise _result_error(
                 "projection",
-                "hypergraph projections must equal the canonical sunflower rows",
+                "hypergraph edges must equal the canonical sunflower rows",
             )
         return self
 
@@ -452,23 +549,10 @@ def construct_sunflower_family(
 ) -> SunflowerFamilyResult:
     """Return every ``petal_count``-member sunflower with its exact common core."""
 
-    if not isinstance(source, IndexedFiniteSetFamily):
-        raise OperationDomainValidationError(
-            location=("source",),
-            code="set_system.sunflower.source_type",
-            message="source must be an IndexedFiniteSetFamily",
-        )
-    source = _revalidate_source(source)
-    if type(petal_count) is not int:
-        raise OperationDomainValidationError(
-            location=("petal_count",),
-            code="set_system.sunflower.petal_count_type",
-            message="petal_count must be an integer",
-        )
     source, petal_count, member_count, source_work, source_units = _admit_source(
         source, petal_count
     )
-    _admit_candidates(source, petal_count, member_count, source_work)
+    _admit_candidates(source, petal_count, member_count, source_work, source_units)
     vertices = tuple(str(index) for index in range(member_count))
     if member_count < petal_count:
         _admit_qualifying_result(source, petal_count, member_count, source_units, 0, 0)
@@ -480,16 +564,20 @@ def construct_sunflower_family(
         )
     request_checkpoint("before sunflower member expansion")
     sets_list: list[frozenset[int]] = []
-    for index, member in enumerate(source.members):
-        if index % 64 == 0:
-            request_checkpoint("during sunflower member materialization")
+    materialized = 0
+    for member in source.members:
         sets_list.append(frozenset(member))
+        materialized += len(member)
+        if materialized >= SUNFLOWER_PAIRWISE_CHECKPOINT_WORK:
+            request_checkpoint("during sunflower member expansion")
+            materialized = 0
+    request_checkpoint("after sunflower member expansion")
     sets = tuple(sets_list)
     sizes = tuple(len(member) for member in source.members)
     plan: list[tuple[tuple[int, ...], tuple[int, ...]]] = []
     core_digits = 0
     work_since_checkpoint = 0
-    checkpoint_units = _SUNFLOWER_CHECKPOINT_UNITS
+    checkpoint_units = SUNFLOWER_PAIRWISE_CHECKPOINT_WORK
     for indices in combinations(range(member_count), petal_count):
         core, work_since_checkpoint = _candidate_common_core(
             sets, sizes, indices, work_since_checkpoint, checkpoint_units
@@ -501,34 +589,14 @@ def construct_sunflower_family(
         next_core_digits = core_digits + sum(
             len(str(coordinate)) for coordinate in ordered_core
         )
-        if next_rows > MAX_EDGES or next_rows * petal_count > MAX_TOTAL_INCIDENCES:
-            raise OperationResourceAdmissionError(
-                location=("source", "members"),
-                code="set_system.sunflower.output_bound",
-                message=(
-                    f"the complete family requires at least {next_rows} edges "
-                    f"and {next_rows * petal_count} incidences, exceeding the "
-                    f"{MAX_EDGES}-edge/{MAX_TOTAL_INCIDENCES}-incidence output bound"
-                ),
-            )
-        allocation_units = _result_allocation_units(
-            source=source,
-            petal_count=petal_count,
-            member_count=member_count,
-            source_units=source_units,
-            row_count=next_rows,
-            core_digits=next_core_digits,
+        _admit_qualifying_result(
+            source,
+            petal_count,
+            member_count,
+            source_units,
+            next_rows,
+            next_core_digits,
         )
-        if allocation_units > MAX_SUNFLOWER_RESULT_ALLOCATION_UNITS:
-            raise OperationResourceAdmissionError(
-                location=("source", "members"),
-                code="set_system.sunflower.result_allocation_bound",
-                message=(
-                    "the complete sunflower result may require "
-                    f"{allocation_units} allocation units, exceeding the "
-                    f"{MAX_SUNFLOWER_RESULT_ALLOCATION_UNITS}-unit result bound"
-                ),
-            )
         plan.append((indices, ordered_core))
         core_digits = next_core_digits
     _admit_qualifying_result(
@@ -541,11 +609,11 @@ def construct_sunflower_family(
     )
     rows = tuple(
         SunflowerFamily.model_construct(
-            edge_id="sunflower_" + "_".join(str(i) for i in indices),
+            edge_id=f"sunflower_{position}",
             source_indices=indices,
             core=core,
         )
-        for indices, core in plan
+        for position, (indices, core) in enumerate(plan, start=1)
     )
     hypergraph = FiniteHypergraph(
         vertices=vertices,

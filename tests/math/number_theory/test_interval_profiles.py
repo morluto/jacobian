@@ -14,6 +14,7 @@ from jacobian.math.number_theory._interval_profile_models import (
     DivisorSumProfileRequest,
     EulerTotientProfileRequest,
     GreatestPrimeFactorProfileRequest,
+    IntervalAdmission,
     IntervalProfileRequest,
     IntervalProfileRowsRequest,
     LeastPrimeFactorProfileRequest,
@@ -32,7 +33,6 @@ from jacobian.math.number_theory._interval_profiles import (
     compute_squarefree_profile,
 )
 from jacobian.math.number_theory.interval_profiles.operations import (
-    IntervalAdmission,
     _admit_interval,
     greatest_prime_factor_profile,
 )
@@ -200,7 +200,7 @@ class TestSquarefreeProfile:
 
     def test_native_operations_reject_non_integer_bounds(self) -> None:
         with pytest.raises(TypeError, match="bounds must be integers"):
-            greatest_prime_factor_profile(True, 2)  # type: ignore[arg-type]
+            greatest_prime_factor_profile(True, 2)
 
     def test_work_budget_replaces_fixed_upper_bound(self) -> None:
         request = SquarefreeProfileRequest(lower_bound=10**13, upper_bound=10**13)

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import cast
+
 import pytest
 from pydantic import ValidationError
 
@@ -14,9 +16,9 @@ from jacobian.math.combinatorics.posets.core._models import (
     LinearExtensionRequest,
     MobiusFunctionRequest,
     OrderedPair,
+    finite_poset_digest,
 )
 from jacobian.math.combinatorics.posets.core.operations import (
-    finite_poset_digest,
     linear_extension_count,
     materialize_finite_poset,
     maximal_chains,
@@ -414,7 +416,7 @@ def test_consumers_reject_list_incomparable_pair_containers_as_domain_errors() -
         update={"incomparable_pairs": list(poset.incomparable_pairs)}
     )
 
-    assert type(forged.incomparable_pairs) is list
+    assert type(cast(object, forged.incomparable_pairs)) is list
     assert verify_finite_poset(forged) is False
     with pytest.raises(OperationDomainValidationError, match="canonical finite poset"):
         width(forged)

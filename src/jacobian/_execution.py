@@ -108,6 +108,9 @@ _OPERATION_DEADLINE: ContextVar[float | None] = ContextVar(
 _REQUEST_CANCELLATION: ContextVar[RequestCancellationSignal | None] = ContextVar(
     "jacobian_request_cancellation", default=None
 )
+_REQUEST_STAGE: ContextVar[OperationExecutionStage | None] = ContextVar(
+    "jacobian_request_stage", default=None
+)
 
 
 @contextmanager
@@ -188,14 +191,39 @@ class OperationExecutionStage(StrEnum):
     RESULT_PROJECTION = "result_projection"
 
 
+@contextmanager
+def request_stage(stage: OperationExecutionStage) -> Iterator[None]:
+    """Bind the public phase that owns checkpoints in this lexical region.
+
+    Request parsing runs model validators that call shared admission helpers;
+    without an explicit phase those checkpoints would be reported by message
+    text alone as operation execution. Owning the phase here keeps
+    cancellation and timeout diagnostics truthful for every helper reached
+    during parsing, including future ones.
+    """
+
+    token = _REQUEST_STAGE.set(stage)
+    try:
+        yield
+    finally:
+        _REQUEST_STAGE.reset(token)
+
+
+def current_request_stage() -> OperationExecutionStage | None:
+    """Return the phase bound by the caller, if any."""
+
+    return _REQUEST_STAGE.get()
+
+
 def request_checkpoint(
     stage: str, *, public_stage: OperationExecutionStage | None = None
 ) -> None:
     """Reject a cancelled or expired request at one documented execution stage."""
 
+    resolved_stage = public_stage or current_request_stage() or _public_stage(stage)
     if request_cancelled():
         raise OperationExecutionCancelledError(
-            f"request cancelled {stage}", stage=public_stage or _public_stage(stage)
+            f"request cancelled {stage}", stage=resolved_stage
         )
     execution = current_request_execution()
     deadline = execution.deadline if execution is not None else None
@@ -205,7 +233,7 @@ def request_checkpoint(
             return
         raise OperationExecutionTimeoutError(
             f"request deadline expired {stage}",
-            stage=public_stage or _public_stage(stage),
+            stage=resolved_stage,
             timeout_owner=(
                 execution.timeout_owner
                 if execution.outer_deadline is not None

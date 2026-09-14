@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from typing import Literal, Self, cast
 
-from pydantic import Field, StrictInt, model_validator
+from pydantic import ConfigDict, Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import (
@@ -125,6 +125,14 @@ class BracketMonomial(StrictModel):
 class BracketPolynomialTerm(StrictModel):
     coefficient: CanonicalRational
     monomial: BracketMonomial
+
+    model_config = ConfigDict(
+        extra="forbid",
+        frozen=True,
+        # A validation-bypassed term must be revalidated when nested in a
+        # polynomial, so a forged coefficient cannot reach arithmetic.
+        revalidate_instances="always",
+    )
 
     @model_validator(mode="after")
     def require_nonzero_coefficient(self) -> Self:

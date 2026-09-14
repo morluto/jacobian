@@ -266,10 +266,10 @@ def _admit_source_relation(relation: GrassmannPlueckerRelation) -> None:
     try:
         relation = GrassmannPlueckerRelation.model_validate(
             {
-                "ground_size": relation.ground_size,
-                "indices": tuple(relation.indices),
-                "family": relation.family,
-                "polynomial": relation.polynomial,
+                "ground_size": getattr(relation, "ground_size", None),
+                "indices": getattr(relation, "indices", None),
+                "family": getattr(relation, "family", None),
+                "polynomial": getattr(relation, "polynomial", None),
             }
         )
     except (ValidationError, PydanticCustomError) as exc:

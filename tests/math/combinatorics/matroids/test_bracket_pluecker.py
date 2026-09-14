@@ -1099,3 +1099,29 @@ def test_syzygy_revalidates_forged_native_value_carriers() -> None:
             target,
             ((scalar, BracketMonomial.model_construct(factors=None), relation),),
         )
+
+
+def test_syzygy_revalidates_forged_nested_polynomial_terms() -> None:
+    """A forged nested term's coefficient cannot reach exact arithmetic."""
+    term = BracketPolynomialTerm.model_construct(
+        coefficient=object(), monomial=BracketMonomial(factors=())
+    )
+    forged = BracketPolynomial.model_construct(ground_size=5, terms=(term,))
+    with pytest.raises(OperationDomainValidationError):
+        bracket_syzygy_residual(forged, ())
+
+
+def test_syzygy_forged_none_indices_is_a_typed_domain_error() -> None:
+    """A relation with ``indices=None`` is validated, not tuple-unpacked."""
+    from jacobian.math.combinatorics.matroids.oriented._bracket_kernel import (
+        _admit_source_relation,
+    )
+
+    forged = GrassmannPlueckerRelation.model_construct(
+        ground_size=5,
+        indices=None,
+        family="SHARED_INDEX_THREE_TERM",
+        polynomial=BracketPolynomial(ground_size=5, terms=()),
+    )
+    with pytest.raises(OperationDomainValidationError):
+        _admit_source_relation(forged)

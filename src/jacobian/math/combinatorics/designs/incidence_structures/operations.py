@@ -330,10 +330,7 @@ def construct_steiner_triple_system(
                     source_shard=retained_shard,
                 )
                 if unknown
-                else SteinerTripleSystemNotFound(
-                    states_explored=states,
-                    source_shard=retained_shard,
-                )
+                else SteinerTripleSystemNotFound(source_shard=retained_shard)
             ),
         )
 

@@ -233,6 +233,13 @@ class SteinerTripleSystemShard(StrictModel):
         normalized: list[tuple[int, ...]] = []
         for triple in triples:
             if type(triple) is list:
+                # Bound the inner container before copying it: an oversized
+                # array must be rejected without materializing its tuple form.
+                if len(triple) != 3:
+                    raise _validation_error(
+                        "steiner_shard_triple",
+                        "continuation triples must contain exactly three points",
+                    )
                 normalized.append(tuple(triple))
             elif type(triple) is tuple:
                 normalized.append(triple)
@@ -288,7 +295,6 @@ class SteinerTripleSystemNotFound(StrictModel):
     """No completion was found within the admitted search envelope."""
 
     status: Literal["NOT_FOUND"] = "NOT_FOUND"
-    states_explored: StrictInt = Field(ge=0, le=MAX_STEINER_SEARCH_STATES)
     source_shard: SteinerTripleSystemShard | None = Field(
         default=None,
         description=(
@@ -361,8 +367,16 @@ class SteinerTripleSystemUnknown(StrictModel):
         if not isinstance(data, dict):
             return data
         frontier = data.get("unresolved_frontier")
-        if frontier is None or not isinstance(frontier, (list, tuple)):
+        if frontier is None:
             return data
+        if type(frontier) not in (list, tuple):
+            # A sequence subclass can understate __len__ while iteration
+            # yields an arbitrarily large family; require the exact builtin
+            # container before inspection.
+            raise _validation_error(
+                "steiner_frontier_shape",
+                "the unresolved frontier must be a bounded list or tuple",
+            )
         if len(frontier) > MAX_STEINER_FRONTIER_SHARDS:
             # Let the field's own `max_length` decide; sorting a guaranteed
             # rejection would spend work proportional to its input.

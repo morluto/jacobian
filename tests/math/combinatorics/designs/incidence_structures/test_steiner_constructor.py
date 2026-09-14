@@ -739,3 +739,44 @@ def test_wire_frontier_shard_rejects_fixed_triple_subclasses() -> None:
     }
     with pytest.raises(ValidationError):
         SteinerTripleSystemResult.model_validate(payload)
+
+
+def test_wire_shard_bounds_each_triple_before_copying() -> None:
+    """An inner array of the wrong size is rejected without converting it."""
+    with pytest.raises(ValidationError) as error:
+        SteinerTripleSystemShard.model_validate(
+            {"order": 7, "fixed_triples": [[0] * 4]}
+        )
+    assert error.value.errors()[0]["type"] == "incidence_structure.steiner_shard_triple"
+
+
+def test_wire_frontier_rejects_sequence_subclasses() -> None:
+    """A frontier sequence subclass is rejected before it is traversed."""
+
+    class LyingFrontier(tuple):  # type: ignore[type-arg]
+        def __len__(self) -> int:
+            return 1
+
+        def __iter__(self) -> Iterator[Any]:
+            raise AssertionError("a rejected frontier must not be traversed")
+
+    payload = {
+        "order": 7,
+        "outcome": {
+            "status": "UNKNOWN",
+            "states_explored": 1,
+            "unresolved_frontier": LyingFrontier(
+                ({"order": 7, "fixed_triples": [[0, 1, 2]]},)
+            ),
+        },
+    }
+    with pytest.raises(ValidationError) as error:
+        SteinerTripleSystemResult.model_validate(payload)
+    assert error.value.errors()[0]["type"] == (
+        "incidence_structure.steiner_frontier_shape"
+    )
+
+
+def test_not_found_outcome_omits_execution_history() -> None:
+    """An exact NOT_FOUND outcome does not carry private search counts."""
+    assert "states_explored" not in SteinerTripleSystemNotFound.model_fields

@@ -20,6 +20,9 @@ from jacobian.math.polynomials._jacobian_syzygy import (
     JACOBIAN_SYZYGY_COEFFICIENT_LEDGER_OPERATION,
 )
 from jacobian.math.polynomials._laurent_tools import RATIONAL_LAURENT_MULTIPLY_OPERATION
+from jacobian.math.polynomials._mahler_tools import (
+    INTEGER_POLYNOMIAL_PROFILE_OPERATIONS,
+)
 from jacobian.math.polynomials._multiply_ops import POLYNOMIAL_MULTIPLY_OPERATION
 
 __all__ = ["TOOLS"]
@@ -33,6 +36,7 @@ TOOLS: MathTools = (
     GRADED_JACOBIAN_SYZYGY_OPERATION,
     JACOBIAN_SYZYGY_COEFFICIENT_LEDGER_OPERATION,
     *INTEGER_POLYNOMIAL_OPERATIONS,
+    *INTEGER_POLYNOMIAL_PROFILE_OPERATIONS,
     POLYNOMIAL_MULTIPLY_OPERATION,
     RATIONAL_LAURENT_MULTIPLY_OPERATION,
 )

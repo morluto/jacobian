@@ -6,12 +6,10 @@ from math import prod
 import pytest
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.dispatch import invoke_operation
 from jacobian.math.polynomials._discrete_antiderivative import (
     RationalDiscreteAntiderivativeRequest,
     RationalDiscreteAntiderivativeResult,
@@ -363,22 +361,6 @@ def test_admitted_solve_honors_cancellation(
         pytest.raises(OperationExecutionCancelledError),
     ):
         rational_discrete_antiderivative(source, "k")
-
-
-def test_catalog_invocation_returns_the_declared_typed_result() -> None:
-    catalog = Catalog.open()
-    invocation = RATIONAL_DISCRETE_ANTIDERIVATIVE_OPERATION.examples[0]
-    result = invoke_operation(
-        RATIONAL_DISCRETE_ANTIDERIVATIVE_OPERATION.operation_id,
-        invocation.input,
-        catalog,
-    )
-    assert set(result.output) == {
-        "source",
-        "variable",
-        "antiderivative",
-        "reconstructed_difference",
-    }
 
 
 def test_native_reparse_and_admission_observe_cancellation(

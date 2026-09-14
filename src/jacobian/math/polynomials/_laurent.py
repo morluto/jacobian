@@ -60,14 +60,26 @@ def _monomial_coefficient_digits(
         factor = monomial.terms[0].coefficient.as_fraction()
         scaled: list[Fraction] = []
         height = 1
+        aggregate_digits = 0
+        overflow = MAX_CANONICAL_RATIONAL_DIGITS + 1
         for index, term in enumerate(other.terms):
             if index % 128 == 0:
                 request_checkpoint("during Laurent monomial height admission")
             product = factor * term.coefficient.as_fraction()
             scaled.append(product)
-            digits = _fraction_component_digits(product)
-            if digits > height:
-                height = digits
+            if not product:
+                continue
+            numerator_digits = _integer_digits(product.numerator)
+            denominator_digits = _integer_digits(product.denominator)
+            if (
+                numerator_digits > MAX_CANONICAL_RATIONAL_DIGITS
+                or denominator_digits > MAX_CANONICAL_RATIONAL_DIGITS
+            ):
+                return overflow, monomial.terms[0], other, tuple(scaled)
+            aggregate_digits += numerator_digits + denominator_digits
+            if aggregate_digits > MAX_LAURENT_RESULT_DIGITS:
+                return overflow, monomial.terms[0], other, tuple(scaled)
+            height = max(height, numerator_digits, denominator_digits)
         return height, monomial.terms[0], other, tuple(scaled)
     return None
 
@@ -128,15 +140,18 @@ def _maximum_coefficient_digits(
             request_checkpoint("during Laurent coefficient-height scan")
         if total == 0:
             continue
-        digits = max(
-            _integer_digits(total.numerator), _integer_digits(total.denominator)
-        )
-        if digits > MAX_CANONICAL_RATIONAL_DIGITS:
+        numerator_digits = _integer_digits(total.numerator)
+        denominator_digits = _integer_digits(total.denominator)
+        if (
+            numerator_digits > MAX_CANONICAL_RATIONAL_DIGITS
+            or denominator_digits > MAX_CANONICAL_RATIONAL_DIGITS
+        ):
             return MAX_CANONICAL_RATIONAL_DIGITS + 1, groups
-        aggregate_digits += digits
+        # Both retained components count toward the serialized output.
+        aggregate_digits += numerator_digits + denominator_digits
         if aggregate_digits > MAX_LAURENT_RESULT_DIGITS:
             return MAX_CANONICAL_RATIONAL_DIGITS + 1, groups
-        height = max(height, digits)
+        height = max(height, numerator_digits, denominator_digits)
     return height, groups
 
 

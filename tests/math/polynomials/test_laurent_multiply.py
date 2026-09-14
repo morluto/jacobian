@@ -642,3 +642,35 @@ def test_aggregate_output_digit_envelope_is_enforced() -> None:
     )
     with pytest.raises(OperationResourceAdmissionError, match="coefficient"):
         rational_laurent_multiply(left, right)
+
+
+def test_monomial_scale_counts_the_full_output_aggregate() -> None:
+    """A tall monomial scaling many terms is bounded by total output digits."""
+    factor = _rational_term(10**32600, 1, 0)
+    others = tuple(
+        _rational_term(10**99 + exponent, 1, exponent)
+        for exponent in range(4095, -1, -1)
+    )
+    left = RationalLaurentPolynomial(variables=("x",), terms=(factor,))
+    right = RationalLaurentPolynomial(variables=("x",), terms=others)
+    with pytest.raises(OperationResourceAdmissionError, match="coefficient"):
+        rational_laurent_multiply(left, right)
+
+
+def test_rational_aggregate_counts_both_coefficient_components() -> None:
+    """Both numerator and denominator widths count toward the output envelope."""
+
+    def term(index: int, exponent: int) -> RationalLaurentPolynomialTerm:
+        numerator = 10**2999 + index
+        return _rational_term(numerator, numerator + 1, exponent)
+
+    left = RationalLaurentPolynomial(
+        variables=("x",),
+        terms=tuple(term(index, 100 * index) for index in range(39, -1, -1)),
+    )
+    right = RationalLaurentPolynomial(
+        variables=("x",),
+        terms=tuple(term(index + 100, index) for index in range(39, -1, -1)),
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="coefficient"):
+        rational_laurent_multiply(left, right)

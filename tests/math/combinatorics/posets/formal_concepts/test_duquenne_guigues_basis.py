@@ -23,6 +23,8 @@ from jacobian.math.combinatorics.posets.formal_concepts.basis import (
     MAX_DG_ATTRIBUTES,
     MAX_DG_CANDIDATE_STATES,
     MAX_DG_LOGICAL_WORK,
+    _admit_duquenne_guigues_basis,
+    _DGBasisAdmissionPlan,
     _require_dg_canonical_carrier_fit,
 )
 from jacobian.math.combinatorics.posets.formal_concepts.values import MAX_IMPLICATIONS
@@ -290,9 +292,9 @@ def test_public_invocation_computes_semantic_admission_once(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     calls = 0
-    admit = operations._admit_duquenne_guigues_basis
+    admit = _admit_duquenne_guigues_basis
 
-    def counted_admission(context: FormalContext):
+    def counted_admission(context: FormalContext) -> _DGBasisAdmissionPlan:
         nonlocal calls
         calls += 1
         return admit(context)

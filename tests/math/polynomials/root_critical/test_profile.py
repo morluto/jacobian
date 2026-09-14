@@ -296,8 +296,10 @@ def test_rectangle_component_rounds_negative_upper_endpoint_up() -> None:
     """A negative upper endpoint must round toward +infinity to stay an upper bound."""
     from fractions import Fraction
 
-    from jacobian.math.polynomials.root_critical.operations import (
+    from jacobian.math.polynomials.root_critical._models import (
         MAX_ROOT_CRITICAL_ROOT_COMPONENT_DIGITS,
+    )
+    from jacobian.math.polynomials.root_critical.operations import (
         _fit_rectangle_component,
     )
 
@@ -327,18 +329,23 @@ def test_evalf_containing_box_scales_with_component_magnitude() -> None:
 
 
 def test_complex_square_root_enclosure_contains_the_principal_root() -> None:
-    import mpmath
+    from fractions import Fraction
+
     import sympy
 
     from jacobian.math.polynomials.root_critical.operations import _enclose_sympy
 
-    for expression, value in (
-        (sympy.sqrt(1 + sympy.I), mpmath.sqrt(1 + 1j)),
-        (sympy.sqrt(3 - 2 * sympy.I), mpmath.sqrt(3 - 2j)),
-    ):
+    for expression in (sympy.sqrt(1 + sympy.I), sympy.sqrt(3 - 2 * sympy.I)):
         real_lo, real_hi, imag_lo, imag_hi = _enclose_sympy(expression)
-        assert float(real_lo) <= value.real <= float(real_hi)
-        assert float(imag_lo) <= value.imag <= float(imag_hi)
+        true_real, true_imag = expression.as_real_imag()
+        # Fifty-digit evaluation error (~1e-50) is far below the enclosure's
+        # measured ~1e-31 gap, so these exact comparisons are decisive. A
+        # 53-bit float reference is not: the platform libm behind it can round
+        # the final ulp either way and straddle a tight endpoint.
+        reference_real = Fraction(str(true_real.evalf(50)))
+        reference_imag = Fraction(str(true_imag.evalf(50)))
+        assert real_lo <= reference_real <= real_hi
+        assert imag_lo <= reference_imag <= imag_hi
 
 
 def test_short_deadline_kills_the_blocking_sympy_kernel() -> None:

@@ -217,10 +217,48 @@ def _bounded_sum_terms(
         if group_total:
             totals.append(group_total)
     # Cancellation can span kernel buckets (for example a factor left out of
-    # the kernel prime set); reduce exact opposites among the group totals
-    # before the cross-group denominator bound.
+    # the kernel prime set) and can involve several unequal bucket totals, not
+    # just an exact-opposite pair, so merge the pair with the largest shared
+    # denominator factor before imposing the cross-group LCM bound.
+    return _merge_terms_by_largest_gcd(totals, location=location, label=label)
+
+
+def _merge_terms_by_largest_gcd(
+    terms: list[Fraction],
+    *,
+    location: tuple[str, ...],
+    label: str,
+) -> Fraction:
+    """Combine signed terms by repeatedly merging the largest shared factor."""
+
+    pool = [term for term in _reduced_signed_terms(terms) if term != 0]
+    while len(pool) > 1:
+        best_left = -1
+        best_right = -1
+        best_shared = 1
+        for left in range(len(pool)):
+            for right in range(left + 1, len(pool)):
+                shared = gcd(pool[left].denominator, pool[right].denominator)
+                if shared > best_shared:
+                    best_shared = shared
+                    best_left, best_right = left, right
+        if best_left < 0:
+            break
+        merged = _bounded_sum(
+            pool[best_left],
+            pool[best_right],
+            location=location,
+            label=label,
+        )
+        pool = [
+            term
+            for index, term in enumerate(pool)
+            if index not in (best_left, best_right)
+        ]
+        if merged:
+            pool.append(merged)
     total = Fraction()
-    for term in _reduced_signed_terms(totals):
+    for term in pool:
         total = _bounded_sum(total, term, location=location, label=label)
     return total
 

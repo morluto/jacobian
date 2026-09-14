@@ -468,3 +468,36 @@ def test_complementary_middle_prime_masses_group_before_lcd_growth() -> None:
     )
     distribution = FiniteRationalDistribution(atoms=atoms)
     assert sum(atom.probability.as_fraction() for atom in distribution.atoms) == 1
+
+
+def test_complementary_large_middle_prime_masses_group_without_cutoff() -> None:
+    """Complementary pairs reducing through a prime above any sieve still cancel."""
+    primes = (
+        10**99 + 89_941,
+        10**99 + 122_229,
+        10**99 + 985_933,
+        10**99 + 1_324_957,
+        10**99 + 1_379_443,
+        10**99 + 1_561_063,
+    )
+    atoms = [
+        FiniteDistributionAtom(
+            value=CanonicalRational.from_fraction(Fraction(2 * index + offset)),
+            probability=CanonicalRational.from_fraction(
+                Fraction(
+                    (1 if offset == 0 else primes[index] - 1),
+                    1009 * primes[index],
+                )
+            ),
+        )
+        for index in range(len(primes))
+        for offset in (0, 1)
+    ]
+    atoms.append(
+        FiniteDistributionAtom(
+            value=CanonicalRational.from_fraction(Fraction(2 * len(primes))),
+            probability=CanonicalRational.from_fraction(Fraction(1003, 1009)),
+        )
+    )
+    distribution = FiniteRationalDistribution(atoms=tuple(atoms))
+    assert sum(atom.probability.as_fraction() for atom in distribution.atoms) == 1

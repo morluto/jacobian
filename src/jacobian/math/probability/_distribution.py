@@ -127,20 +127,46 @@ def _bounded_fraction_sum(
             label=label,
         )
     reduced = list(buckets.values())
-    running = 1
-    for term in reduced:
-        denominator = term.denominator
-        shared = gcd(running, denominator)
-        # Compute the exact merged denominator: a width estimate can overstate
-        # the product by one and reject an in-envelope normalized law.
-        merged = running // shared * denominator
-        # Exact boundary comparison: the bit-length estimate could overstate a
-        # 512-digit denominator as 513 and reject an in-envelope law.
-        if merged >= _SUM_VALUE_LIMIT:
-            _raise_normalization_bound(label)
-        running = merged
+    return _merge_terms_by_largest_gcd(reduced, label=label)
+
+
+def _merge_terms_by_largest_gcd(
+    terms: list[Fraction],
+    *,
+    label: str,
+) -> Fraction:
+    """Combine exact rationals by repeatedly merging the largest shared factor.
+
+    Complementary masses need not reduce through a fixed small-prime set: any
+    two denominators sharing a prime can cancel. Merging the pair with the
+    largest gcd first keeps intermediate denominators minimal, so a law whose
+    pairs reduce through a large shared factor is admitted without a hard-coded
+    cutoff, while genuinely unrelated denominators still hit the digit bound.
+    """
+
+    pool = [term for term in terms if term != 0]
+    while len(pool) > 1:
+        best_left = -1
+        best_right = -1
+        best_shared = 1
+        for left in range(len(pool)):
+            for right in range(left + 1, len(pool)):
+                shared = gcd(pool[left].denominator, pool[right].denominator)
+                if shared > best_shared:
+                    best_shared = shared
+                    best_left, best_right = left, right
+        if best_left < 0:
+            break
+        merged = _add_height_bounded(pool[best_left], pool[best_right], label=label)
+        pool = [
+            term
+            for index, term in enumerate(pool)
+            if index not in (best_left, best_right)
+        ]
+        if merged:
+            pool.append(merged)
     total = Fraction()
-    for term in reduced:
+    for term in pool:
         total = _add_height_bounded(total, term, label=label)
     return total
 

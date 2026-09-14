@@ -693,3 +693,36 @@ def test_cumulant_ladder_checkpoints_while_it_runs(
     )
     compound_poisson_cumulant_prefix(_q(Fraction(1)), jumps, 128)
     assert calls >= 16
+
+
+def test_three_bucket_cancellation_precedes_cross_lcm_bound() -> None:
+    """Unequal cancelling bucket totals reduce before the cross-group LCM bound."""
+    primes = (
+        10**99 + 89_941,
+        10**99 + 122_229,
+        10**99 + 985_933,
+        10**99 + 1_324_957,
+        10**99 + 1_379_443,
+        10**99 + 1_561_063,
+    )
+    values = sorted(
+        {
+            value
+            for prime in primes
+            for value in (
+                Fraction(18, 1009 * prime),
+                Fraction(18, 1013 * prime),
+                Fraction(-18 * 2022, 1009 * 1013 * prime),
+            )
+        }
+    )
+    atoms = tuple(
+        FiniteDistributionAtom(
+            value=_q(value),
+            probability=_q(Fraction(1, len(values))),
+        )
+        for value in values
+    )
+    jumps = FiniteRationalDistribution(atoms=atoms)
+    result = compound_poisson_cumulant_prefix(_q(Fraction(1)), jumps, 1)
+    assert result.cumulants[0].jump_raw_moment.as_fraction() == 0

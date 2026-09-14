@@ -159,10 +159,21 @@ def first_symmetric_exchange_obstruction(
                 probes += 1
                 if probes % _CHECKPOINT_STRIDE == 0:
                     request_checkpoint("during delta-matroid exchange replay")
-                if any(
-                    tuple(sorted(left ^ frozenset((element, candidate)))) in feasible
-                    for candidate in difference
-                ):
+                exchange_found = False
+                for candidate in difference:
+                    # Count every candidate iteration: each one rebuilds and
+                    # sorts a full row, so the checkpoint must not wait for the
+                    # outer element loop.
+                    probes += 1
+                    if probes % _CHECKPOINT_STRIDE == 0:
+                        request_checkpoint("during delta-matroid exchange replay")
+                    if (
+                        tuple(sorted(left ^ frozenset((element, candidate))))
+                        in feasible
+                    ):
+                        exchange_found = True
+                        break
+                if exchange_found:
                     continue
                 return DeltaMatroidObstruction(
                     kind="SYMMETRIC_EXCHANGE",

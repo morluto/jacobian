@@ -329,6 +329,19 @@ def integral_basis_coordinates(
     if recognized is None:
         return None
     ring, _field_discriminant, alpha, leading = recognized
+    # The coordinate denominators divide the index of Z[alpha] in the maximal
+    # order, which is the determinant of the recognized HNF basis relative to
+    # the power basis. Admit that growth before expanding any coordinate.
+    index = abs(int(ring.matrix.det()))
+    if _integer_digits(index) > MAX_SIMPLE_NUMBER_FIELD_ELEMENT_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("field",),
+            code="number_field.integral_basis_coordinate_bound",
+            message=(
+                "the index of the presented power order exceeds the admitted "
+                f"{MAX_SIMPLE_NUMBER_FIELD_ELEMENT_DIGITS}-digit element envelope"
+            ),
+        )
     basis: list[tuple[CanonicalRational, ...]] = []
     for element in ring.basis_element_pullbacks():
         expression = element.as_expr().subs(alpha, leading * alpha).expand()
@@ -343,11 +356,27 @@ def integral_basis_coordinates(
                 "an integral basis vector must span the complete power basis"
             )
         for coefficient in padded:
-            require_bounded_rational(
-                coefficient,
-                max_digits=MAX_SIMPLE_NUMBER_FIELD_ELEMENT_DIGITS,
-                label="integral basis",
-            )
+            try:
+                require_bounded_rational(
+                    coefficient,
+                    max_digits=MAX_SIMPLE_NUMBER_FIELD_ELEMENT_DIGITS,
+                    label="integral basis",
+                )
+            except ValueError as exc:
+                # The integral-basis coordinate denominators divide the index
+                # of Z[alpha], which can exceed the element carrier even when
+                # the defining discriminant fits its published envelope. Map
+                # that case to a typed admission error so the worker reports a
+                # rejection rather than crashing the parent.
+                raise OperationResourceAdmissionError(
+                    location=("field",),
+                    code="number_field.integral_basis_coordinate_bound",
+                    message=(
+                        "an integral-basis coordinate exceeds the admitted "
+                        f"{MAX_SIMPLE_NUMBER_FIELD_ELEMENT_DIGITS}-digit element "
+                        "envelope"
+                    ),
+                ) from exc
         basis.append(tuple(padded))
     return tuple(basis)
 

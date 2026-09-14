@@ -64,7 +64,18 @@ def main() -> int:
             "discriminant": format_canonical_integer(int(field_discriminant)),
         }
         if include_basis:
-            basis = integral_basis_coordinates(request.field, integral_basis)
+            try:
+                basis = integral_basis_coordinates(request.field, integral_basis)
+            except (
+                OperationResourceAdmissionError,
+                OperationDomainValidationError,
+            ) as exc:
+                rejected = worker_rejection(
+                    exc,
+                    request_digest=hashlib.sha256(input_bytes).hexdigest(),
+                )
+                sys.stdout.buffer.write(encode_strict_json(rejected))
+                return 0
             if basis is None:
                 raise RuntimeError(
                     "integral-basis recognition changed during conversion"

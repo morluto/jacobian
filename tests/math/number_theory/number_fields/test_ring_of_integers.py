@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from fractions import Fraction
-from typing import Any
+from typing import Any, cast
 
 import pytest
 import sympy
@@ -526,4 +526,28 @@ def test_native_fields_reject_non_presentation_arguments() -> None:
         discriminant(malformed)  # type: ignore[arg-type]
     assert discriminant_error.value.errors()[0]["type"] == (
         "number_field.discriminant_field_type"
+    )
+
+
+class _HugeIndexMatrix:
+    def det(self) -> int:
+        return 10**300
+
+
+class _HugeIndexRing:
+    matrix = _HugeIndexMatrix()
+
+    def basis_element_pullbacks(self) -> Any:
+        raise AssertionError("coordinates expanded despite an oversized index")
+
+
+def test_integral_basis_index_is_admitted_before_coordinate_expansion() -> None:
+    """An index beyond the element envelope is rejected before expansion."""
+    recognized = (_HugeIndexRing(), 1, None, 1)
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        integral_basis_kernel.integral_basis_coordinates(
+            cast(Any, None), cast(Any, recognized)
+        )
+    assert error.value.errors()[0]["type"] == (
+        "number_field.integral_basis_coordinate_bound"
     )

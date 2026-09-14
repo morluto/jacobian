@@ -98,14 +98,14 @@ def test_schur_result_rejects_non_integer_point_coordinates() -> None:
         SchurExpansionResult(
             partition=result.partition,
             variables=result.variables,
-            point=(1.0,),
+            point=(1.0,),  # type: ignore[arg-type]
             value=result.value,
         )
     with pytest.raises(ValidationError):
         SchurExpansionResult(
             partition=result.partition,
             variables=result.variables,
-            point=("1",),
+            point=("1",),  # type: ignore[arg-type]
             value=result.value,
         )
     for coordinate in (True, 1.0, "1"):

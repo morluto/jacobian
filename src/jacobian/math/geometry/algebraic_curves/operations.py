@@ -8,6 +8,7 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
+from jacobian.math.geometry.algebraic_curves._arclength import enclose_arclength
 from jacobian.math.geometry.algebraic_curves._conic import (
     ConicParametrizationData,
     derive_rational_conic_parametrization,
@@ -263,6 +264,7 @@ def verify_projective_plane_curve_singularity_profile(
 __all__ = [
     "affine_chart",
     "affine_curve_check",
+    "enclose_arclength",
     "projective_closure",
     "rational_conic_parametrization",
     "singularity_profile",

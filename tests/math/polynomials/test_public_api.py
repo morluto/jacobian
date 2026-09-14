@@ -71,6 +71,7 @@ def test_native_discriminant_preserves_the_polynomial_domain() -> None:
 
 def test_exact_public_api_symbols() -> None:
     expected = (
+        "cyclotomic",
         "derivative",
         "discriminant",
         "divide",
@@ -91,6 +92,7 @@ def test_exact_public_api_symbols() -> None:
         "integer_polynomial_primitive_part",
         "integer_polynomial_shift",
         "integral",
+        "mahler_measure",
         "multiply",
         "partial_fractions",
         "polynomial_discriminant",
@@ -99,11 +101,13 @@ def test_exact_public_api_symbols() -> None:
         "polynomial_groebner_basis",
         "polynomial_resultant",
         "polynomial_square_free_decomposition",
+        "quadratic_root_profile",
         "rational_partial_fraction_decomposition",
         "rational_polynomial_derivative",
         "rational_polynomial_division",
         "rational_polynomial_evaluate",
         "rational_polynomial_integral",
+        "reciprocal_profile",
         "resultant",
         "square_free_decomposition",
         "verify_hermite_reduction",

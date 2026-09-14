@@ -38,7 +38,10 @@ def _validation_error(
 class PermutationGroup(StrictModel):
     """A finite permutation group given by generator permutations on {0,...,n-1}."""
 
-    degree: int = Field(ge=1, le=MAX_GROUP_DEGREE)
+    # Degree zero is the canonical action on the empty set.  Keep one empty
+    # identity generator so the value remains consumable by the existing
+    # SymPy-backed group operations, which require a nonempty generator tuple.
+    degree: int = Field(ge=0, le=MAX_GROUP_DEGREE)
     generators: tuple[tuple[int, ...], ...] = Field(
         min_length=1, max_length=MAX_GROUP_DEGREE
     )

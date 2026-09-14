@@ -611,7 +611,9 @@ def _backend_cyclotomic_coefficients(
     return coefficients
 
 
-def _construct(index: int, factorization: dict[int, int]) -> tuple[int, IntegerPolynomial]:
+def _construct(
+    index: int, factorization: dict[int, int]
+) -> tuple[int, IntegerPolynomial]:
     """Build ``Phi_index`` from an already validated exact factor map.
 
     Factorization is the only backend-failure point, and the caller has
@@ -655,9 +657,7 @@ def _construct(index: int, factorization: dict[int, int]) -> tuple[int, IntegerP
     if lifted is not None:
         prime, other = lifted
         other_factorization = {
-            base: exponent
-            for base, exponent in factorization.items()
-            if base != prime
+            base: exponent for base, exponent in factorization.items() if base != prime
         }
         coefficients = _prime_lift_quotient_coefficients(
             index, prime, other, other_factorization, admission

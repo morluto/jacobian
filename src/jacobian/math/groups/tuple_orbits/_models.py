@@ -61,45 +61,49 @@ def _materialize_bounded_sequence(value: object, limit: int) -> object:
     return value
 
 
-def _preflight_action_dimensions(*, domain: object, generators: object) -> None:
-    domain_length = _collection_length(domain)
-    if domain_length is not None and domain_length > MAX_DOMAIN_SIZE:
+def _preflight_action_dimensions(
+    *, domain: object, generators: object
+) -> tuple[object, object]:
+    """Bound a native action's axes and return the materialized collections.
+
+    ``__len__`` may under-report an iterator, so every iterable axis is
+    materialized under its cap rather than trusted, and the bounded tuples are
+    returned so callers rebuild from them instead of re-consuming an exhausted
+    or over-reporting original.
+    """
+
+    materialized_domain = _materialize_bounded_sequence(domain, MAX_DOMAIN_SIZE)
+    if materialized_domain is _SEQUENCE_OVERFLOW:
         raise _tuple_error(
             "action_domain_bound",
             f"action domain admits at most {MAX_DOMAIN_SIZE} labels",
         )
+    domain_length = _collection_length(materialized_domain)
     degree = domain_length if domain_length is not None else MAX_DOMAIN_SIZE
-    generator_length = _collection_length(generators)
-    if generator_length is None:
-        if not isinstance(generators, Iterable) or isinstance(
-            generators, (str, bytes, bytearray, Mapping)
+    if generators is None or isinstance(generators, (str, bytes, bytearray, Mapping)):
+        return materialized_domain, generators
+    if not isinstance(generators, Iterable):
+        return materialized_domain, generators
+    rows: list[object] = []
+    for generator in generators:
+        if isinstance(generator, (str, bytes, bytearray, Mapping)) or not isinstance(
+            generator, Iterable
         ):
-            return
-        rows: list[object] = []
-        for generator in generators:
             rows.append(generator)
-            if len(rows) > MAX_GENERATORS:
+        else:
+            row = _materialize_bounded_sequence(generator, degree)
+            if row is _SEQUENCE_OVERFLOW:
                 raise _tuple_error(
-                    "action_generator_bound",
-                    f"actions admit at most {MAX_GENERATORS} generators",
+                    "generator_length_mismatch",
+                    "every generator must be a permutation of the domain",
                 )
-        generators = rows
-        generator_length = len(rows)
-    if generator_length > MAX_GENERATORS:
-        raise _tuple_error(
-            "action_generator_bound",
-            f"actions admit at most {MAX_GENERATORS} generators",
-        )
-    for generator in cast(Iterable[Any], generators):
-        if isinstance(generator, (str, bytes, bytearray, Mapping)):
-            continue
-        if not isinstance(generator, Iterable):
-            continue
-        if _materialize_bounded_sequence(generator, degree) is _SEQUENCE_OVERFLOW:
+            rows.append(row)
+        if len(rows) > MAX_GENERATORS:
             raise _tuple_error(
-                "generator_length_mismatch",
-                "every generator must be a permutation of the domain",
+                "action_generator_bound",
+                f"actions admit at most {MAX_GENERATORS} generators",
             )
+    return materialized_domain, tuple(rows)
 
 
 def _declared_attr(owner: object, name: str) -> object | None:
@@ -245,6 +249,13 @@ def _row_mapping(row: object) -> dict[str, Any]:
         value = payload.get(name)
         materialized = _materialize_bounded_sequence(value, limit)
         if materialized is _SEQUENCE_OVERFLOW:
+            raise _tuple_error(reason, message)
+        if isinstance(materialized, tuple) and any(
+            isinstance(item, (list, tuple, Mapping)) for item in materialized
+        ):
+            # Every row axis holds integer coordinates; a container entry would
+            # otherwise force recursive canonicalization to copy it before the
+            # scalar type check rejects it.
             raise _tuple_error(reason, message)
         if materialized is not value:
             payload[name] = materialized

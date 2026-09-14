@@ -922,3 +922,101 @@ def test_nested_tuple_coordinate_is_rejected_before_container_copy() -> None:
     }
     with pytest.raises(ValidationError):
         TupleFamilyOrbitSource.model_validate(payload)
+
+
+def test_one_shot_generator_row_is_rebuilt_from_materialized_rows() -> None:
+    """A native one-shot generator row is consumed once, not re-read empty."""
+    action = FinitePermutationAction.model_construct(
+        domain=("a", "b"), generators=(iter([1, 0]),)
+    )
+    source = TupleFamilyOrbitSource.model_construct(
+        action=action, arity=1, family=((0,), (1,))
+    )
+    result = tuple_family_orbit_profile(source)
+    assert len(result.rows) == 1
+    assert result.rows[0].representative == (0,)
+
+
+def test_over_reporting_sized_domain_is_bounded_before_rebuild() -> None:
+    """A domain whose ``__len__`` lies cannot drive an unbounded rebuild."""
+
+    class _LyingDomain:
+        def __len__(self) -> int:
+            return 1
+
+        def __iter__(self):
+            return iter(range(10_000_000))
+
+    action = FinitePermutationAction.model_construct(
+        domain=_LyingDomain(), generators=((0,),)
+    )
+    source = TupleFamilyOrbitSource.model_construct(
+        action=action, arity=1, family=((0,),)
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        tuple_family_orbit_profile(source)
+    assert error.value.errors()[0]["type"] == (
+        "finite_group_action.tuple_family_action_domain_bound"
+    )
+
+
+def test_over_reporting_sized_generators_collection_is_bounded() -> None:
+    """A sized generators collection is materialized under the row cap."""
+
+    class _LyingGenerators:
+        def __len__(self) -> int:
+            return 1
+
+        def __iter__(self):
+            while True:
+                yield [0]
+
+    action = FinitePermutationAction.model_construct(
+        domain=("a",), generators=_LyingGenerators()
+    )
+    source = TupleFamilyOrbitSource.model_construct(
+        action=action, arity=1, family=((0,),)
+    )
+    with pytest.raises(
+        (OperationDomainValidationError, OperationResourceAdmissionError)
+    ):
+        tuple_family_orbit_profile(source)
+
+
+def test_forged_family_member_is_materialized_before_coordinate_scan() -> None:
+    """A member that lies about its length is bounded before the coordinate scan."""
+
+    class _LyingMember(tuple):
+        def __len__(self) -> int:
+            return 1
+
+        def __iter__(self):
+            return iter(range(2_000_000))
+
+    action = FinitePermutationAction(domain=("a",), generators=((0,),))
+    source = TupleFamilyOrbitSource.model_construct(
+        action=action, arity=1, family=(_LyingMember(),)
+    )
+    with pytest.raises(
+        (OperationDomainValidationError, OperationResourceAdmissionError)
+    ):
+        tuple_family_orbit_profile(source)
+
+
+def test_standalone_row_rejects_nested_container_axis() -> None:
+    """A standalone row axis rejects container entries before recursive copy."""
+
+    class _BoomList(list):
+        def __iter__(self):
+            raise AssertionError("nested axis entry was traversed")
+
+    with pytest.raises(ValidationError):
+        TupleOrbitRow.model_validate(
+            {
+                "representative": [_BoomList([0])],
+                "source_indices": (0,),
+                "orbit_size": 1,
+                "stabilizer_size": 1,
+                "least_transporter": (0,),
+            }
+        )

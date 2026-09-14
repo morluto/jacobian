@@ -85,7 +85,12 @@ def _revalidate_action(request: TupleFamilyOrbitSource) -> FinitePermutationActi
     domain = _declared_attr(action, "domain")
     generators = _declared_attr(action, "generators")
     try:
-        _preflight_action_dimensions(domain=domain, generators=generators)
+        # Rebuild from the preflight's materialized rows: a native one-shot
+        # generator or an over-reporting ``Sized`` domain is consumed exactly
+        # once here, and the rebuild must not re-read the exhausted original.
+        domain, generators = _preflight_action_dimensions(
+            domain=domain, generators=generators
+        )
     except PydanticCustomError as error:
         raise OperationDomainValidationError(
             location=("action",),
@@ -142,6 +147,20 @@ def _admit_source(
             code="finite_group_action.tuple_family_shape",
             message="tuple families must use immutable tuple rows",
         )
+    # A tuple-subclass member may under-report ``__len__`` while iterating an
+    # unbounded sequence, so materialize each member under the declared arity
+    # before any structural scan or coordinate walk touches it.
+    bounded_members: list[tuple[Any, ...]] = []
+    for member in family:
+        bounded_member = _materialize_bounded_sequence(member, arity)
+        if bounded_member is _SEQUENCE_OVERFLOW or type(bounded_member) is not tuple:
+            raise OperationDomainValidationError(
+                location=("family",),
+                code="finite_group_action.tuple_family_shape",
+                message="tuple families must use immutable tuple rows",
+            )
+        bounded_members.append(bounded_member)
+    family = tuple(bounded_members)
     family_size = len(family)
     if family_size > MAX_FAMILY_MEMBERS:
         raise OperationResourceAdmissionError(

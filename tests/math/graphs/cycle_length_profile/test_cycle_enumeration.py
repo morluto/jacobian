@@ -751,3 +751,29 @@ def test_oversized_label_rejects_before_full_string_scans(
     with pytest.raises(OperationResourceAdmissionError, match="retained"):
         enumerate_fixed_length_cycles(forged, 3)
     assert all(length <= 100_000_000 // 2 for length in scanned)
+
+
+def test_complete_graph_four_cycle_admission_is_polynomial_time() -> None:
+    """K256 is refused without enumerating C(256, 4) four-part subsets."""
+    vertices = tuple(f"v{index:03d}" for index in range(256))
+    edges = tuple(
+        canonical_edge(left, right)
+        for index, left in enumerate(vertices)
+        for right in vertices[index + 1 :]
+    )
+    graph = SimpleUndirectedGraph(vertices=vertices, edges=edges)
+    started = time.monotonic()
+    with pytest.raises(OperationResourceAdmissionError):
+        enumerate_fixed_length_cycles(graph, 4)
+    assert time.monotonic() - started < 2.0
+
+
+def test_request_schema_publishes_the_vertex_envelope() -> None:
+    """The request schema states the 256-vertex operation envelope."""
+    from jacobian.math.graphs.cycle_length_profile._models import (
+        FixedLengthCycleEnumerationRequest,
+    )
+
+    schema = FixedLengthCycleEnumerationRequest.model_json_schema()
+    text = schema["properties"]["graph"].get("description", "")
+    assert "256" in text

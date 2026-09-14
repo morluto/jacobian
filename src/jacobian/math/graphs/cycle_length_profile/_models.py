@@ -123,7 +123,11 @@ class FixedLengthCycleEnumerationRequest(StrictModel):
     """
 
     graph: SimpleUndirectedGraph = Field(
-        description="Canonical finite simple undirected graph; directed and multigraph values are not in this operation's domain."
+        description=(
+            "Canonical finite simple undirected graph with at most "
+            f"{MAX_VERTICES} vertices; directed and multigraph values are not "
+            "in this operation's domain."
+        )
     )
     cycle_length: StrictInt = Field(
         ge=3,

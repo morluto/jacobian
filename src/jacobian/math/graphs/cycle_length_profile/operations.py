@@ -840,6 +840,21 @@ def _simple_triangle_count(part_sizes: tuple[int, ...]) -> int:
     return count
 
 
+def _elementary_symmetric_sum(values: tuple[int, ...], degree: int) -> int:
+    """Return the degree-``degree`` elementary symmetric sum of ``values``.
+
+    Computing e_4 directly is polynomial in the part count, unlike enumerating
+    every four-part subset.
+    """
+
+    coefficients = [0] * (degree + 1)
+    coefficients[0] = 1
+    for value in values:
+        for index in range(degree, 0, -1):
+            coefficients[index] += coefficients[index - 1] * value
+    return coefficients[degree]
+
+
 def _simple_four_cycle_count(part_sizes: tuple[int, ...]) -> int:
     """Count simple four-cycles in a complete multipartite graph.
 
@@ -860,12 +875,10 @@ def _simple_four_cycle_count(part_sizes: tuple[int, ...]) -> int:
         for left_index, left in enumerate(others):
             for right in others[left_index + 1 :]:
                 count += pairs * left * right
-    # Four distinct parts: the induced four vertices form K4 with three cycles.
-    for indices in combinations(range(len(part_sizes)), 4):
-        product = 1
-        for index in indices:
-            product *= part_sizes[index]
-        count += 3 * product
+    # Four distinct parts: the induced four vertices form K4 with three
+    # cycles.  Sum the fourth elementary symmetric polynomial in polynomial
+    # time instead of enumerating C(k, 4) subsets.
+    count += 3 * _elementary_symmetric_sum(part_sizes, 4)
     return count
 
 

@@ -10,6 +10,7 @@ from typing import Literal, Self
 from pydantic import Field, StrictInt, model_validator
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
+from jacobian._execution import request_checkpoint
 from jacobian._models import StrictModel
 from jacobian.math.probability._models import (
     MAX_INPUT_RATIONAL_DIGITS,
@@ -26,32 +27,88 @@ MAX_FINITE_CONVOLUTION_POWER = 10**15
 MAX_FINITE_DISTRIBUTION_SUM_DIGITS = MAX_RESULT_RATIONAL_DIGITS
 
 
+def _bounded_pair_sum(
+    left: Fraction,
+    right: Fraction,
+    *,
+    label: str,
+) -> Fraction:
+    """Add two nonnegative rationals or refuse the intermediate they form."""
+
+    common = gcd(left.denominator, right.denominator)
+    left_denominator = left.denominator // common
+    right_denominator = right.denominator // common
+    scaled_numerator = (
+        abs(left.numerator) * right_denominator
+        + abs(right.numerator) * left_denominator
+    )
+    common_denominator = left_denominator * right.denominator
+    if (
+        common_denominator >= 10**MAX_FINITE_DISTRIBUTION_SUM_DIGITS
+        or scaled_numerator >= 10**MAX_FINITE_DISTRIBUTION_SUM_DIGITS
+    ):
+        raise _validation_error(
+            f"{label} normalization exceeds the "
+            f"{MAX_FINITE_DISTRIBUTION_SUM_DIGITS}-digit intermediate bound"
+        )
+    return left + right
+
+
 def _bounded_fraction_sum(
     values: tuple[Fraction, ...],
     *,
     label: str,
 ) -> Fraction:
-    """Sum nonnegative rationals without materializing an over-height fraction."""
+    """Sum nonnegative rationals without materializing an over-height fraction.
 
-    total = Fraction()
+    Two orderings are avoided deliberately:
+
+    * **Source order.** Accumulating in support order makes the answer depend on
+      how the caller happened to list its atoms. Masses that cancel to a small
+      fraction - `1/(11p)` and `(11p-1... )`-shaped complements sharing a
+      denominator - are pushed past the intermediate bound by the partial sum
+      that precedes them, so a normalized law whose every moment fits the
+      envelope is refused for a reason unrelated to its mathematics.
+    * **Growing partial sums.** Combining mutually coprime denominators one at a
+      time accumulates their product monotonically.
+
+    So equal denominators are combined exactly first, where no denominator
+    growth can occur at all, and the reduced group totals are then merged as a
+    balanced pairwise tree rather than a running prefix.
+    """
+
+    if not values:
+        return Fraction()
+
+    grouped: dict[int, int] = {}
     for value in values:
-        common = gcd(total.denominator, value.denominator)
-        left_denominator = total.denominator // common
-        right_denominator = value.denominator // common
-        left_numerator = abs(total.numerator) * right_denominator
-        right_numerator = abs(value.numerator) * left_denominator
-        common_denominator = left_denominator * value.denominator
-        if (
-            common_denominator >= 10**MAX_FINITE_DISTRIBUTION_SUM_DIGITS
-            or left_numerator + right_numerator
-            >= 10**MAX_FINITE_DISTRIBUTION_SUM_DIGITS
-        ):
-            raise _validation_error(
-                f"{label} normalization exceeds the "
-                f"{MAX_FINITE_DISTRIBUTION_SUM_DIGITS}-digit intermediate bound"
+        denominator = value.denominator
+        grouped[denominator] = grouped.get(denominator, 0) + value.numerator
+
+    level = [
+        Fraction(numerator, denominator)
+        for denominator, numerator in sorted(grouped.items())
+        if numerator
+    ]
+    if not level:
+        return Fraction()
+
+    completed = 0
+    while len(level) > 1:
+        merged: list[Fraction] = []
+        for index in range(0, len(level) - 1, 2):
+            if completed % 256 == 0:
+                request_checkpoint(
+                    "during finite-distribution probability normalization"
+                )
+            completed += 1
+            merged.append(
+                _bounded_pair_sum(level[index], level[index + 1], label=label)
             )
-        total += value
-    return total
+        if len(level) % 2:
+            merged.append(level[-1])
+        level = merged
+    return level[0]
 
 
 class FiniteDistributionAtom(StrictModel):

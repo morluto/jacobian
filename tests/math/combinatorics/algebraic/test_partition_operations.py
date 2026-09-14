@@ -673,6 +673,35 @@ def test_ssyt_digit_bound_is_a_sound_upper_bound_at_far_overflow() -> None:
     assert bound >= _upper_decimal_digits(exact)
 
 
+def test_ssyt_admission_reuses_the_resolved_exact_count() -> None:
+    """A near-boundary admission returns the exact count for the kernel."""
+    from jacobian.math.combinatorics.algebraic.operations import _admit_hook_content
+
+    alphabet_size = 154850 * 2**208
+    partition = IntegerPartition(parts=(500,))
+    resolved = _admit_hook_content(partition, alphabet_size)
+    assert resolved == math.comb(alphabet_size + 499, 500)
+
+
+def test_ssyt_count_rejects_oversized_parts_before_scanning() -> None:
+    """An oversized part tuple is refused on len before any iteration."""
+    from jacobian.math.combinatorics.symmetric_functions.values import (
+        MAX_PARTITION_PARTS,
+    )
+
+    class LyingParts(tuple):  # type: ignore[type-arg]
+        def __len__(self) -> int:
+            return MAX_PARTITION_PARTS + 1
+
+        def __iter__(self):
+            raise AssertionError("an oversized carrier must not be scanned")
+
+    forged = IntegerPartition.model_construct(parts=LyingParts((1,)))
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        native.semistandard_young_tableaux_count(forged, 5)
+    assert error.value.errors()[0]["type"] == "algebraic_combinatorics.partition_size"
+
+
 def test_ssyt_digit_bound_resolves_the_boundary_exactly() -> None:
     """A 32,768-digit count must not be refused by one unit of log slack."""
     alphabet_size = 154850 * 2**208

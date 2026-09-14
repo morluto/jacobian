@@ -246,9 +246,18 @@ def _digits_upper_from_log10_units(units: int) -> int:
 
 
 def _ssyt_count_digit_bound(
-    partition: IntegerPartition, alphabet_size: int, alphabet_digits: int
+    partition: IntegerPartition,
+    alphabet_size: int,
+    alphabet_digits: int,
+    *,
+    exact_out: list[int] | None = None,
 ) -> int:
-    """Upper-bound the exact SSYT count's decimal width after hook cancellation."""
+    """Upper-bound the exact SSYT count's decimal width after hook cancellation.
+
+    When ``exact_out`` is supplied and the canonical boundary is resolved
+    exactly, the resolved quotient is appended so the kernel can reuse it
+    instead of repeating the product and division.
+    """
 
     cell_count = sum(partition.parts)
     if cell_count == 0:
@@ -324,16 +333,18 @@ def _ssyt_count_digit_bound(
         # A far-overflowing numerator must stay a refusal: materializing it to
         # resolve the boundary exactly would cost more than the result envelope.
         return max(1, alphabet_digits, bound)
-    exact = _exact_count_digits(partition, alphabet_size, hook_product)
+    exact = _exact_count(partition, alphabet_size, hook_product)
     if exact is None:
         return max(1, alphabet_digits, bound)
-    return max(1, alphabet_digits, exact)
+    if exact_out is not None:
+        exact_out.append(exact)
+    return max(1, alphabet_digits, _decimal_width(exact))
 
 
-def _exact_count_digits(
+def _exact_count(
     partition: IntegerPartition, alphabet_size: int, hook_product: int
 ) -> int | None:
-    """Return the exact decimal width of the hook-content count, or ``None``.
+    """Return the exact hook-content count, or ``None`` if it does not divide.
 
     Only reached at the canonical digit boundary, where the logarithmic
     estimate cannot decide.  The numerator product and the exact division are
@@ -351,7 +362,7 @@ def _exact_count_digits(
         # The hook-content numerator is only guaranteed to divide for an
         # admitted partition; anything else keeps the sound estimate.
         return None
-    return _decimal_width(quotient)
+    return quotient
 
 
 def _decimal_width(value: int) -> int:
@@ -374,8 +385,12 @@ def _decimal_width(value: int) -> int:
     return estimate
 
 
-def _admit_hook_content(partition: IntegerPartition, alphabet_size: int) -> None:
-    """Admit hook-content arithmetic before constructing any factors."""
+def _admit_hook_content(partition: IntegerPartition, alphabet_size: int) -> int | None:
+    """Admit hook-content arithmetic before constructing any factors.
+
+    Returns the exact count when admission resolved the digit boundary exactly,
+    so the kernel can reuse it rather than repeat the product and division.
+    """
     if type(alphabet_size) is not int or alphabet_size < 1:
         raise OperationDomainValidationError(
             location=("alphabet_size",),
@@ -412,9 +427,12 @@ def _admit_hook_content(partition: IntegerPartition, alphabet_size: int) -> None
     # The alphabet is retained in the result even for the empty shape, so its
     # own serialized size is part of the output bound.
     hook_digits = _upper_decimal_digits(max(1, cell_count))
+    resolved: list[int] = []
     output_digits = max(
         alphabet_digits,
-        _ssyt_count_digit_bound(partition, alphabet_size, alphabet_digits),
+        _ssyt_count_digit_bound(
+            partition, alphabet_size, alphabet_digits, exact_out=resolved
+        ),
     )
     if output_digits > _MAX_SSYT_COUNT_DIGITS:
         raise OperationResourceAdmissionError(
@@ -445,6 +463,7 @@ def _admit_hook_content(partition: IntegerPartition, alphabet_size: int) -> None
             code="algebraic_combinatorics.hook_content_work",
             message="hook-content arithmetic exceeds the admitted work bound",
         )
+    return resolved[0] if resolved else None
 
 
 def row_insertion_rsk(word: FiniteWord) -> RSKTableauPair:
@@ -499,6 +518,15 @@ def _require_canonical_partition(partition: object) -> IntegerPartition:
             location=("partition", "parts"),
             code="algebraic_combinatorics.partition_carrier",
             message="a canonical partition has a tuple of parts",
+        )
+    # The part-count envelope is checked first: ``len`` is constant time while
+    # every subsequent scan is linear in the tuple length, so an already
+    # oversized forged carrier must be refused before it is traversed.
+    if len(parts) > MAX_PARTITION_PARTS:
+        raise OperationResourceAdmissionError(
+            location=("partition", "parts"),
+            code="algebraic_combinatorics.partition_size",
+            message="partition size exceeds the admitted Ferrers envelope",
         )
     # Domain invariants are checked for every part before the resource
     # envelope, so a forged carrier is classified by what it actually violates
@@ -600,7 +628,13 @@ def semistandard_young_tableaux_count(
     result carries only the exact count and its source shape and alphabet.
     """
     partition = _require_canonical_partition(partition)
-    _admit_hook_content(partition, alphabet_size)
+    resolved = _admit_hook_content(partition, alphabet_size)
+    if resolved is not None:
+        return SemistandardYoungTableauCountResult(
+            partition=partition,
+            alphabet_size=alphabet_size,
+            count=resolved,
+        )
     hooks = hook_lengths(partition)
     numerators = tuple(
         alphabet_size + column - row

@@ -1,5 +1,7 @@
 """Diagonal tuple-family orbit profiles."""
 
+from typing import Any
+
 import pytest
 from pydantic import ValidationError
 
@@ -812,12 +814,15 @@ def test_action_domain_iteration_is_bounded_before_canonicalization() -> None:
 def test_unknown_action_field_value_is_not_recursively_copied() -> None:
     """An extra field is rejected before its value is traversed."""
 
-    def _boom():
-        raise AssertionError("unknown field was traversed")
-        yield 0
+    class _Boom:
+        def __iter__(self) -> Any:
+            raise AssertionError("unknown field was traversed")
+
+        def __len__(self) -> int:
+            raise AssertionError("unknown field was measured")
 
     payload = {
-        "action": {"domain": ["a"], "generators": [[0]], "generator": _boom()},
+        "action": {"domain": ["a"], "generators": [[0]], "generator": _Boom()},
         "arity": 0,
         "family": [],
     }

@@ -349,10 +349,10 @@ def test_core_bounds_are_summed_over_actual_candidates() -> None:
 
 
 def test_shared_core_allocation_is_rejected_while_enumerating() -> None:
-    core = tuple(range(4000))
-    members = tuple((*core, 4000 + index) for index in range(155))
+    core = tuple(range(315))
+    members = tuple((*core, 315 + index) for index in range(155))
     with pytest.raises(OperationResourceAdmissionError, match="allocation units"):
-        construct_sunflower_family(_family(members, ground=4155), 2)
+        construct_sunflower_family(_family(members, ground=470), 2)
 
 
 def test_result_allocation_is_admitted_before_row_construction(
@@ -370,40 +370,75 @@ def test_result_allocation_is_admitted_before_row_construction(
         construct_sunflower_family(source, 2)
 
 
-def test_r2_allocation_is_refused_before_enumerating_every_pair(
+def test_r2_allocation_is_refused_while_enumerating(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """155 members of a 350-core plus a unique petal exceed the 16M-unit result bound."""
-    labels: list[str] = []
-    monkeypatch.setattr(
-        sunflower_module,
-        "request_checkpoint",
-        lambda label: labels.append(label),
-    )
+    """An oversized shared core is refused during r=2 enumeration, not after it.
 
-    def fail_pair_scan(*_args: object) -> int:
-        raise AssertionError("r=2 allocation must refuse before pairwise enumeration")
+    The common cores are only known after the intersections are computed, so the
+    result-allocation bound is enforced incrementally as each qualifying row's
+    actual core units are accumulated. The refusal must precede the last pair.
+    """
+    row_counts: list[int] = []
+    original = sunflower_module._admit_qualifying_result
 
-    monkeypatch.setattr(sunflower_module, "_intersection_search_work", fail_pair_scan)
-    core = tuple(range(2000))
-    members = tuple((*core, 2000 + index) for index in range(155))
+    def record(
+        source: IndexedFiniteSetFamily,
+        petal_count: int,
+        member_count: int,
+        source_units: int,
+        row_count: int,
+        core_units: int,
+    ) -> None:
+        row_counts.append(row_count)
+        original(
+            source,
+            petal_count,
+            member_count,
+            source_units,
+            row_count,
+            core_units,
+        )
+
+    monkeypatch.setattr(sunflower_module, "_admit_qualifying_result", record)
+    core = tuple(range(315))
+    members = tuple((*core, 315 + index) for index in range(155))
     with pytest.raises(OperationResourceAdmissionError, match="allocation units"):
-        construct_sunflower_family(_family(members, ground=2155), 2)
-    assert "before sunflower member expansion" not in labels
+        construct_sunflower_family(_family(members, ground=470), 2)
+    assert row_counts
+    assert row_counts[-1] < 155 * 154 // 2
 
 
-def test_shared_core_allocation_uses_actual_coordinate_widths() -> None:
-    """A shared core is priced by its real coordinate widths at admission.
+def test_shared_core_allocation_is_admitted_at_the_real_bound() -> None:
+    """A representable shared core is admitted by its actual coordinate widths.
 
-    The 280-element core in every pair charges about 13.4 million core digit
-    units, so the request is refused before enumeration instead of raising
-    after the first qualifying intersection.
+    The 280-element core in every pair charges sum(len(str(c)) + 1) units per
+    row, and the 155-member source charges both its membership slots and digit
+    widths, so the complete 11,935-row result fits the 16 Mi-unit envelope. An
+    ambient three-digit width charged to every repeated core coordinate wrongly
+    refused it.
     """
 
     core = tuple(range(280))
     members = tuple((*core, 280 + index) for index in range(155))
-    with pytest.raises(OperationResourceAdmissionError, match="allocation units"):
-        construct_sunflower_family(_family(members, ground=435), 2)
+    result = construct_sunflower_family(_family(members, ground=435), 2)
+    assert result.sunflower_count == 155 * 154 // 2
+    assert {row.core for row in result.sunflowers} == {core}
+
+
+def test_sole_edge_projection_is_charged_once() -> None:
+    """A 300-element shared core fits once the removed duplicate ledger is not charged.
+
+    With the obsolete second projection charge this 11,935-row result is
+    estimated at about 17.1 million units and refused; the sole retained
+    ``hypergraph.edges`` projection keeps it below the 16 Mi-unit bound.
+    """
+
+    core = tuple(range(300))
+    members = tuple((*core, 300 + index) for index in range(155))
+    result = construct_sunflower_family(_family(members, ground=455), 2)
+    assert result.sunflower_count == 155 * 154 // 2
+    assert {row.core for row in result.sunflowers} == {core}
 
 
 def test_output_edge_bound_uses_qualifying_rows() -> None:
@@ -741,3 +776,78 @@ def test_disjoint_selection_scan_is_checkpointed(
     members = tuple(tuple(range(index * 4, index * 4 + 4)) for index in range(4))
     construct_sunflower_family(_family(members, ground=16), 3)
     assert "during sunflower disjoint-selection admission" in messages
+
+
+def test_vacuous_source_admission_is_checkpointed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A vacuous petal-count request still checkpoints its membership scan."""
+    messages: list[str] = []
+    monkeypatch.setattr(
+        sunflower_module, "request_checkpoint", lambda message: messages.append(message)
+    )
+    members = tuple(tuple(range(offset, offset + 4096)) for offset in range(7))
+    source = _family(members, ground=4102)
+    result = construct_sunflower_family(source, 8)
+    assert result.sunflower_free is True
+    assert "during sunflower membership-digit admission" in messages
+
+
+def test_forged_oversized_member_is_bounded_before_reconstruction(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A forged member beyond the membership bound is refused before scanning it."""
+    reconstructed: list[object] = []
+    original = IndexedFiniteSetFamily.model_validate
+
+    def record(payload: object) -> object:
+        reconstructed.append(payload)
+        return original(payload)
+
+    monkeypatch.setattr(IndexedFiniteSetFamily, "model_validate", record)
+    forged = IndexedFiniteSetFamily.model_construct(
+        ground_set_size=1_000_001, members=(tuple(range(1_000_001)),)
+    )
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        construct_sunflower_family(forged, 2)
+    assert error.value.errors()[0]["type"] == "set_system.sunflower.membership_bound"
+    assert reconstructed == []
+
+
+def test_constructed_source_missing_ground_field_is_a_typed_domain_error() -> None:
+    """A constructed source without ``ground_set_size`` is an operation-owned error."""
+    forged = IndexedFiniteSetFamily.model_construct(members=())
+    with pytest.raises(OperationDomainValidationError) as error:
+        construct_sunflower_family(forged, 2)
+    assert error.value.errors()[0]["type"] == "set_system.sunflower.source_contract"
+
+
+def test_member_materialization_checkpoints_within_a_large_member(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Each member is hashed incrementally, not converted in one unaudited pass."""
+    messages: list[str] = []
+    monkeypatch.setattr(
+        sunflower_module, "request_checkpoint", lambda message: messages.append(message)
+    )
+    monkeypatch.setattr(sunflower_module, "SUNFLOWER_PAIRWISE_CHECKPOINT_WORK", 4)
+    first = tuple(range(100))
+    second = tuple(range(50, 150))
+    construct_sunflower_family(_family((first, second), ground=150), 2)
+    expansions = messages.count("during sunflower member expansion")
+    assert expansions >= 10
+
+
+def test_core_materialization_checkpoints_during_a_large_core(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A large qualifying core is sorted, materialized, and scanned interruptibly."""
+    messages: list[str] = []
+    monkeypatch.setattr(
+        sunflower_module, "request_checkpoint", lambda message: messages.append(message)
+    )
+    monkeypatch.setattr(sunflower_module, "SUNFLOWER_PAIRWISE_CHECKPOINT_WORK", 4)
+    core = tuple(range(200))
+    members = (core, (*core, 200))
+    construct_sunflower_family(_family(members, ground=201), 2)
+    assert messages.count("during sunflower core materialization") >= 10

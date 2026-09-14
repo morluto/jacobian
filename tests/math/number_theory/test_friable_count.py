@@ -215,7 +215,6 @@ def test_number_theory_native_api_is_explicit() -> None:
 
     assert tuple(number_theory.__all__) == (
         "FriableCountResult",
-        "KempnerArithmeticProgressionRequest",
         "KempnerArithmeticProgressionResult",
         "KempnerDigitSet",
         "PrimeShiftProfileResult",

@@ -14,7 +14,6 @@ if TYPE_CHECKING:
     from jacobian.math.number_theory._friable_kernel import count_friable
     from jacobian.math.number_theory._friable_models import FriableCountResult
     from jacobian.math.number_theory._kempner_models import (
-        KempnerArithmeticProgressionRequest,
         KempnerArithmeticProgressionResult,
         KempnerDigitSet,
     )
@@ -56,7 +55,6 @@ if TYPE_CHECKING:
 
 __all__ = [
     "FriableCountResult",
-    "KempnerArithmeticProgressionRequest",
     "KempnerArithmeticProgressionResult",
     "KempnerDigitSet",
     "PrimeShiftProfileResult",
@@ -102,7 +100,6 @@ _OWNER_MODULES = {
     "FriableCountResult": "_friable_models",
     "PrimeShiftProfileResult": "_prime_shift_models",
     "RFullEnumerateResult": "_r_full_enumerate_models",
-    "KempnerArithmeticProgressionRequest": "_kempner_models",
     "KempnerArithmeticProgressionResult": "_kempner_models",
     "KempnerDigitSet": "_kempner_models",
     "count_friable": "_friable_kernel",

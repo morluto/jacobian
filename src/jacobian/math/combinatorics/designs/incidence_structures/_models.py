@@ -138,8 +138,9 @@ class SteinerTripleSystemRequest(StrictModel):
     model_config = ConfigDict(
         json_schema_extra={
             "description": (
-                "Construct one canonical Steiner triple system of order v. "
-                "The order must be congruent to 1 or 3 modulo 6; a bounded "
+                "Construct one canonical Steiner triple system of order v, "
+                "with v at least 3. The order must be congruent to 1 or 3 "
+                "modulo 6; a bounded "
                 "search may return UNKNOWN with resumable frontier shards "
                 "when its state budget is exhausted."
             )
@@ -150,7 +151,8 @@ class SteinerTripleSystemRequest(StrictModel):
         ge=3,
         le=MAX_STEINER_TRIPLE_ORDER,
         description=(
-            "Number of points; must be congruent to 1 or 3 modulo 6 and at "
+            "Number of points; must be congruent to 1 or 3 modulo 6, at "
+            "least 3 (a triple system needs triples), and at "
             f"most {MAX_STEINER_TRIPLE_ORDER}."
         ),
     )
@@ -579,11 +581,18 @@ def _require_computed_steiner_design(order: int, design: IncidenceStructure) -> 
             "steiner_design_undeclared_member",
             "every computed block member must be a declared point",
         )
+    if any(len(set(block)) != 3 for block in design.blocks):
+        raise _validation_error(
+            "steiner_block_distinct",
+            "every Steiner block must contain three distinct points",
+        )
     point_index = {point: index for index, point in enumerate(expected_points)}
     block_indices = tuple(
         tuple(point_index[point] for point in block) for block in design.blocks
     )
-    if block_indices != tuple(sorted(block_indices)):
+    if block_indices != tuple(sorted(block_indices)) or any(
+        tuple(sorted(block)) != block for block in block_indices
+    ):
         raise _validation_error(
             "steiner_block_order",
             "computed blocks must be in canonical lexicographic order",

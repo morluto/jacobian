@@ -180,9 +180,73 @@ def test_wire_result_rejects_sourceless_source_shard() -> None:
         )
 
 
+def _forged_computed_design(
+    blocks: tuple[tuple[str, ...], ...],
+) -> SteinerTripleSystemResult:
+    forged_design = IncidenceStructure.model_construct(
+        points=("p0", "p1", "p2", "p3", "p4", "p5", "p6"),
+        block_ids=tuple(f"b{index}" for index in range(7)),
+        blocks=blocks,
+    )
+    wrapped = ComputedSteinerTripleSystem.model_construct(design=forged_design)
+    return SteinerTripleSystemResult(order=7, outcome=wrapped)
+
+
+def test_computed_result_rejects_repeated_block_members() -> None:
+    with pytest.raises(ValidationError) as exc_info:
+        _forged_computed_design((("p0", "p0", "p1"),) * 7)
+    assert exc_info.value.errors()[0]["type"] == (
+        "incidence_structure.steiner_block_distinct"
+    )
+
+
+def test_computed_result_rejects_unsorted_block_members() -> None:
+    fano = (
+        ("p0", "p1", "p3"),
+        ("p1", "p2", "p4"),
+        ("p2", "p3", "p5"),
+        ("p3", "p4", "p6"),
+        ("p4", "p5", "p0"),
+        ("p5", "p6", "p1"),
+        ("p6", "p0", "p2"),
+    )
+    shuffled = tuple(
+        (block[1], block[0], block[2]) if index == 0 else block
+        for index, block in enumerate(fano)
+    )
+    with pytest.raises(ValidationError) as exc_info:
+        _forged_computed_design(shuffled)
+    assert exc_info.value.errors()[0]["type"] == (
+        "incidence_structure.steiner_block_order"
+    )
+
+
 def test_necessary_parameter_condition_rejects_order() -> None:
     with pytest.raises(ValidationError, match="congruent to 1 or 3"):
         SteinerTripleSystemRequest(order=5, search_budget=100)
+
+
+def test_orders_below_three_are_refused_at_every_layer() -> None:
+    """STS(1) is outside the advertised contract: a triple system needs triples.
+
+    The published description states v is at least 3, so the schema rejects
+    order 1 like any other unsupported order rather than advertising a
+    degenerate result shape with an empty block axis. Request, result, and
+    native admission all share the same floor.
+    """
+
+    with pytest.raises(ValidationError):
+        SteinerTripleSystemRequest(order=1, search_budget=100)
+    with pytest.raises(OperationDomainValidationError) as exc_info:
+        construct_steiner_triple_system(1, 100)
+    assert exc_info.value.errors()[0]["type"] == (
+        "incidence_structure.steiner_order_out_of_range"
+    )
+    design = IncidenceStructure(points=("p0",), block_ids=("b0",), blocks=(("p0",),))
+    with pytest.raises(ValidationError):
+        SteinerTripleSystemResult(
+            order=1, outcome=ComputedSteinerTripleSystem(design=design)
+        )
 
 
 def test_native_admission_rejects_invalid_order_before_materialization() -> None:

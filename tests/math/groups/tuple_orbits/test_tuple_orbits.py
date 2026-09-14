@@ -1,13 +1,48 @@
 """Diagonal tuple-family orbit profiles."""
 
-from jacobian.math.groups._models import PermutationGroup
-from jacobian.math.groups.tuple_orbits._models import TupleFamilyOrbitSource
+from typing import Any
+
+import pytest
+from pydantic import ValidationError
+
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
+from jacobian.math.groups.actions._models import (
+    MAX_FAMILY_MEMBERS,
+    FinitePermutationAction,
+)
+from jacobian.math.groups.tuple_orbits._models import (
+    MAX_TUPLE_ARITY,
+    TupleFamilyOrbitResult,
+    TupleFamilyOrbitSource,
+    TupleOrbitRow,
+)
 from jacobian.math.groups.tuple_orbits.operations import tuple_family_orbit_profile
+
+
+def _swap_action() -> FinitePermutationAction:
+    return FinitePermutationAction(domain=("a", "b"), generators=((1, 0),))
+
+
+def _cyclic_action() -> FinitePermutationAction:
+    return FinitePermutationAction(domain=("a", "b", "c"), generators=((1, 2, 0),))
+
+
+class _Boom:
+    """An iterable value that fails loudly if validation traverses it."""
+
+    def __iter__(self) -> Any:
+        raise AssertionError("unknown field was traversed")
+
+    def __len__(self) -> int:
+        raise AssertionError("unknown field was measured")
 
 
 def test_repeated_coordinates_and_duplicate_sources_are_retained() -> None:
     request = TupleFamilyOrbitSource(
-        group=PermutationGroup(degree=3, generators=((1, 2, 0),)),
+        action=_cyclic_action(),
         arity=2,
         family=((2, 2), (0, 0), (0, 1), (1, 2), (0, 1)),
     )
@@ -21,7 +56,7 @@ def test_repeated_coordinates_and_duplicate_sources_are_retained() -> None:
 
 def test_complete_ambient_orbits_are_reported() -> None:
     request = TupleFamilyOrbitSource(
-        group=PermutationGroup(degree=3, generators=((1, 2, 0),)),
+        action=_cyclic_action(),
         arity=2,
         family=((0, 0), (1, 1), (2, 2)),
     )
@@ -31,6 +66,957 @@ def test_complete_ambient_orbits_are_reported() -> None:
 
 def test_empty_family_has_empty_profile() -> None:
     request = TupleFamilyOrbitSource(
-        group=PermutationGroup(degree=1, generators=((0,),)), arity=0, family=()
+        action=FinitePermutationAction(domain=("a",), generators=((0,),)),
+        arity=0,
+        family=(),
     )
     assert tuple_family_orbit_profile(request).rows == ()
+
+
+def test_empty_family_skips_generated_group_admission() -> None:
+    request = TupleFamilyOrbitSource(
+        action=FinitePermutationAction(
+            domain=tuple(str(index) for index in range(8)),
+            generators=(
+                (1, 2, 3, 4, 5, 6, 7, 0),
+                (1, 0, 2, 3, 4, 5, 6, 7),
+            ),
+        ),
+        arity=0,
+        family=(),
+    )
+    result = tuple_family_orbit_profile(request)
+    assert result.rows == ()
+    assert result.is_union_of_complete_ambient_orbits is True
+
+
+def test_action_bound_order_and_repeated_coordinates_are_exact() -> None:
+    request = TupleFamilyOrbitSource(
+        action=_swap_action(),
+        arity=2,
+        family=((0, 1), (1, 0), (0, 0), (1, 1)),
+    )
+    result = tuple_family_orbit_profile(request)
+    assert [row.representative for row in result.rows] == [(0, 0), (0, 1)]
+    assert result.rows[0].source_indices == (2, 3)
+    assert result.rows[1].source_indices == (0, 1)
+    assert all(row.orbit_size == 2 and row.stabilizer_size == 1 for row in result.rows)
+    assert result.rows[0].least_transporter == (0, 1)
+    assert result.rows[1].least_transporter == (0, 1)
+    assert result.is_union_of_complete_ambient_orbits
+
+
+def test_tuple_coordinate_order_remains_distinct_for_the_trivial_action() -> None:
+    request = TupleFamilyOrbitSource(
+        action=FinitePermutationAction(domain=("a", "b"), generators=((0, 1),)),
+        arity=2,
+        family=((0, 1), (1, 0), (0, 0)),
+    )
+    result = tuple_family_orbit_profile(request)
+    assert [row.representative for row in result.rows] == [(0, 0), (0, 1), (1, 0)]
+    assert all(row.orbit_size == row.stabilizer_size == 1 for row in result.rows)
+
+
+def test_duplicate_source_rows_do_not_fake_complete_orbit_coverage() -> None:
+    request = TupleFamilyOrbitSource(
+        action=_swap_action(),
+        arity=2,
+        family=((0, 0), (1, 1), (0, 0)),
+    )
+    result = tuple_family_orbit_profile(request)
+    assert result.rows[0].source_indices == (0, 1, 2)
+    assert not result.is_union_of_complete_ambient_orbits
+
+
+def test_serialized_result_preserves_axes_and_transporter_replay() -> None:
+    result = tuple_family_orbit_profile(
+        TupleFamilyOrbitSource(action=_swap_action(), arity=2, family=((1, 0), (0, 1)))
+    )
+    restored = type(result).model_validate(result.model_dump())
+    assert restored == result
+    assert (
+        type(result).model_validate_json(result.model_dump_json(), strict=True)
+        == result
+    )
+    row = result.rows[0]
+    assert (
+        tuple(
+            row.least_transporter[position]
+            for position in result.source.family[row.source_indices[0]]
+        )
+        == row.representative
+    )
+
+    forged = result.model_dump()
+    forged["rows"][0]["least_transporter"] = [0, 1]
+    with pytest.raises(ValidationError):
+        type(result).model_validate(forged)
+
+
+def test_large_generated_group_is_rejected_before_element_materialization() -> None:
+    request = TupleFamilyOrbitSource(
+        action=FinitePermutationAction(
+            domain=tuple(str(index) for index in range(8)),
+            generators=(
+                (1, 2, 3, 4, 5, 6, 7, 0),
+                (1, 0, 2, 3, 4, 5, 6, 7),
+            ),
+        ),
+        arity=2,
+        family=((0, 0),),
+    )
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
+        tuple_family_orbit_profile(request)
+    assert exc_info.value.errors()[0]["type"] == (
+        "finite_group_action.tuple_family_group_order_bound"
+    )
+
+
+def test_forged_action_fields_are_revalidated_before_backend_conversion() -> None:
+    forged_action = FinitePermutationAction.model_construct(
+        domain=("a", "a"), generators=((0, 1),)
+    )
+    request = TupleFamilyOrbitSource.model_construct(
+        action=forged_action, arity=1, family=((0,),)
+    )
+    with pytest.raises(OperationDomainValidationError) as labels:
+        tuple_family_orbit_profile(request)
+    assert "domain_labels_not_distinct" in labels.value.errors()[0]["type"]
+
+    malformed = FinitePermutationAction.model_construct(
+        domain=("a", "b"), generators=((0,),)
+    )
+    malformed_request = TupleFamilyOrbitSource.model_construct(
+        action=malformed, arity=1, family=((0,),)
+    )
+    with pytest.raises(OperationDomainValidationError) as generators:
+        tuple_family_orbit_profile(malformed_request)
+    assert "generator" in generators.value.errors()[0]["type"]
+
+
+def test_result_source_retains_the_revalidated_action() -> None:
+    coerced_action = FinitePermutationAction.model_construct(
+        domain=("a", "b"), generators=(("1", "0"),)
+    )
+    request = TupleFamilyOrbitSource.model_construct(
+        action=coerced_action, arity=1, family=((0,), (1,))
+    )
+    result = tuple_family_orbit_profile(request)
+    assert result.source.action.generators == ((1, 0),)
+    assert result.source.action.domain == ("a", "b")
+
+
+def test_raw_family_dimensions_are_rejected_before_container_copy() -> None:
+    action = {"domain": ["a"], "generators": [[0]]}
+    oversized = {
+        "action": action,
+        "arity": 0,
+        "family": [[] for _ in range(MAX_FAMILY_MEMBERS + 1)],
+    }
+    with pytest.raises(ValidationError) as family_bound:
+        TupleFamilyOrbitSource.model_validate(oversized)
+    assert "input_bound" in family_bound.value.errors()[0]["type"]
+
+    class _HugeRow(tuple):
+        def __len__(self) -> int:
+            return MAX_TUPLE_ARITY + 1
+
+    oversized_row = {
+        "action": action,
+        "arity": 2,
+        "family": [_HugeRow()],
+    }
+    with pytest.raises(ValidationError) as arity_mismatch:
+        TupleFamilyOrbitSource.model_validate(oversized_row)
+    error_type = arity_mismatch.value.errors()[0]["type"]
+    assert "arity_mismatch" in error_type or "arity_out_of_range" in error_type
+
+
+def test_range_generator_rows_are_rejected_before_container_copy() -> None:
+    payload = {
+        "action": {"domain": ["a"], "generators": [range(2_000_000)]},
+        "arity": 0,
+        "family": [],
+    }
+    with pytest.raises(ValidationError) as generator_length:
+        TupleFamilyOrbitSource.model_validate(payload)
+    assert "generator_length_mismatch" in generator_length.value.errors()[0]["type"]
+
+
+def test_oversized_domain_clamps_generator_materialization() -> None:
+    """An invalid oversized domain cannot drive a matching row materialization."""
+
+    class _HugeDomain:
+        def __len__(self) -> int:
+            return 2_000_000
+
+        def __iter__(self):
+            return iter(())
+
+    payload = {
+        "action": {
+            "domain": _HugeDomain(),
+            "generators": [range(2_000_000)],
+        },
+        "arity": 0,
+        "family": [],
+    }
+    with pytest.raises(ValidationError) as domain_bound:
+        TupleFamilyOrbitSource.model_validate(payload)
+    # Clamping the materialization limit means the oversized row is refused by
+    # the bounded sequence check before the invalid domain is classified.
+    assert "generator_length_mismatch" in domain_bound.value.errors()[0]["type"]
+
+
+def test_constructed_orbit_row_is_revalidated_on_direct_validation() -> None:
+    """The exported row type rejects values it would never produce."""
+    constructed = TupleOrbitRow.model_construct(
+        representative=(0,),
+        source_indices=(0,),
+        orbit_size="bogus",
+        stabilizer_size=1,
+        least_transporter=(0,),
+    )
+    with pytest.raises(ValidationError):
+        TupleOrbitRow.model_validate(constructed)
+
+
+def test_constructed_nested_action_is_revalidated() -> None:
+    payload = {
+        "action": FinitePermutationAction.model_construct(
+            domain=("a", "a"), generators=((0, 1),)
+        ),
+        "arity": 0,
+        "family": [],
+    }
+    with pytest.raises(ValidationError) as labels:
+        TupleFamilyOrbitSource.model_validate(payload)
+    assert "domain_labels_not_distinct" in labels.value.errors()[0]["type"]
+
+
+def test_unknown_action_fields_are_preserved_for_strict_rejection() -> None:
+    payload = {
+        "action": {"domain": ["a"], "generators": [[0]], "generator": [[0]]},
+        "arity": 0,
+        "family": [],
+    }
+    with pytest.raises(ValidationError) as extra:
+        TupleFamilyOrbitSource.model_validate(payload)
+    assert extra.value.errors()[0]["type"] == "extra_forbidden"
+
+
+def test_unknown_action_fields_on_result_source_are_rejected() -> None:
+    payload = {
+        "source": {
+            "action": {"domain": ["a"], "generators": [[0]], "generator": [[0]]},
+            "arity": 0,
+            "family": [],
+        },
+        "rows": [],
+        "is_union_of_complete_ambient_orbits": True,
+    }
+    with pytest.raises(ValidationError) as extra:
+        TupleFamilyOrbitResult.model_validate(payload)
+    assert extra.value.errors()[0]["type"] == "extra_forbidden"
+
+
+def test_range_family_rows_are_rejected_before_container_copy() -> None:
+    payload = {
+        "action": {"domain": ["a"], "generators": [[0]]},
+        "arity": 0,
+        "family": [range(2_000_000)],
+    }
+    with pytest.raises(ValidationError) as arity:
+        TupleFamilyOrbitSource.model_validate(payload)
+    assert arity.value.errors()[0]["type"] in {
+        "finite_group_action.tuple_family_arity_out_of_range",
+        "finite_group_action.tuple_family_arity_mismatch",
+    }
+
+
+def test_oneshot_generator_rows_are_materialized_once() -> None:
+    def _row() -> object:
+        yield 0
+
+    payload = {
+        "action": {"domain": ["a"], "generators": [_row()]},
+        "arity": 0,
+        "family": [],
+    }
+    source = TupleFamilyOrbitSource.model_validate(payload)
+    assert source.action.generators == ((0,),)
+
+
+def test_range_source_indices_count_toward_the_aggregate_bound() -> None:
+    payload = {
+        "source": {
+            "action": {"domain": ["a"], "generators": [[0]]},
+            "arity": 0,
+            "family": [],
+        },
+        "rows": [
+            {
+                "representative": [0],
+                "source_indices": range(MAX_FAMILY_MEMBERS),
+                "orbit_size": 1,
+                "stabilizer_size": 1,
+                "least_transporter": [0],
+            },
+            {
+                "representative": [1],
+                "source_indices": range(MAX_FAMILY_MEMBERS),
+                "orbit_size": 1,
+                "stabilizer_size": 1,
+                "least_transporter": [0],
+            },
+        ],
+        "is_union_of_complete_ambient_orbits": True,
+    }
+    with pytest.raises(ValidationError) as indices_bound:
+        TupleFamilyOrbitResult.model_validate(payload)
+    assert "input_bound" in indices_bound.value.errors()[0]["type"]
+
+
+def test_raw_action_generator_dimensions_are_rejected_before_container_copy() -> None:
+    class _HugeGenerator(tuple):
+        def __len__(self) -> int:
+            return 2_000_000
+
+    payload = {
+        "action": {"domain": ["a"], "generators": [_HugeGenerator()]},
+        "arity": 0,
+        "family": [],
+    }
+    with pytest.raises(ValidationError) as generator_length:
+        TupleFamilyOrbitSource.model_validate(payload)
+    assert "generator_length_mismatch" in generator_length.value.errors()[0]["type"]
+
+
+def test_nested_constructed_action_is_preflighted_on_source_validate() -> None:
+    class _HugeGenerator(tuple):
+        def __len__(self) -> int:
+            return 2_000_000
+
+    payload = {
+        "action": FinitePermutationAction.model_construct(
+            domain=("a",), generators=(_HugeGenerator(),)
+        ),
+        "arity": 0,
+        "family": [],
+    }
+    with pytest.raises(ValidationError) as generator_length:
+        TupleFamilyOrbitSource.model_validate(payload)
+    assert "generator_length_mismatch" in generator_length.value.errors()[0]["type"]
+
+
+def test_forged_action_generators_are_preflighted_before_pydantic() -> None:
+    class _HugeGenerator(tuple):
+        def __len__(self) -> int:
+            return 2_000_000
+
+    forged_action = FinitePermutationAction.model_construct(
+        domain=("a",), generators=(_HugeGenerator(),)
+    )
+    request = TupleFamilyOrbitSource.model_construct(
+        action=forged_action, arity=0, family=()
+    )
+    with pytest.raises(OperationDomainValidationError) as exc_info:
+        tuple_family_orbit_profile(request)
+    assert "generator_length_mismatch" in exc_info.value.errors()[0]["type"]
+
+
+def test_missing_action_on_forged_source_is_a_typed_domain_error() -> None:
+    request = TupleFamilyOrbitSource.model_construct(arity=0, family=())
+    with pytest.raises(OperationDomainValidationError) as exc_info:
+        tuple_family_orbit_profile(request)
+    assert exc_info.value.errors()[0]["type"] == (
+        "finite_group_action.tuple_family_action_type"
+    )
+
+
+def test_incomplete_forged_action_is_a_typed_domain_error() -> None:
+    forged_action = FinitePermutationAction.model_construct(generators=((0,),))
+    request = TupleFamilyOrbitSource.model_construct(
+        action=forged_action, arity=0, family=()
+    )
+    with pytest.raises(OperationDomainValidationError) as exc_info:
+        tuple_family_orbit_profile(request)
+    assert exc_info.value.errors()[0]["type"] == (
+        "finite_group_action.tuple_family_action_type"
+    )
+
+
+def test_incomplete_forged_action_with_family_is_a_typed_domain_error() -> None:
+    forged_action = FinitePermutationAction.model_construct(generators=((0,),))
+    request = TupleFamilyOrbitSource.model_construct(
+        action=forged_action, arity=1, family=((0,),)
+    )
+    with pytest.raises(OperationDomainValidationError) as exc_info:
+        tuple_family_orbit_profile(request)
+    assert exc_info.value.errors()[0]["type"] == (
+        "finite_group_action.tuple_family_action_type"
+    )
+
+
+def test_orbit_row_payloads_are_preflighted_before_container_copy() -> None:
+    class _HugeRepresentative(tuple):
+        def __len__(self) -> int:
+            return 2_000_000
+
+        def __iter__(self):
+            return iter(range(2_000_000))
+
+    payload = {
+        "representative": _HugeRepresentative(),
+        "source_indices": [0],
+        "orbit_size": 1,
+        "stabilizer_size": 1,
+        "least_transporter": [0],
+    }
+    with pytest.raises(ValidationError) as arity:
+        TupleOrbitRow.model_validate(payload)
+    assert "arity_out_of_range" in arity.value.errors()[0]["type"]
+
+
+def test_result_payloads_are_preflighted_before_container_copy() -> None:
+    payload = {
+        "source": {
+            "action": {"domain": ["a"], "generators": [[0]]},
+            "arity": 0,
+            "family": [],
+        },
+        "rows": [{} for _ in range(MAX_FAMILY_MEMBERS + 1)],
+        "is_union_of_complete_ambient_orbits": True,
+    }
+    with pytest.raises(ValidationError) as rows_bound:
+        TupleFamilyOrbitResult.model_validate(payload)
+    assert "input_bound" in rows_bound.value.errors()[0]["type"]
+
+
+def test_result_rows_generator_is_materialized_under_the_row_bound() -> None:
+    """A rows generator is consumed once and bounded, not handed to Pydantic."""
+
+    yields = 0
+
+    def rows():
+        nonlocal yields
+        while True:
+            yields += 1
+            yield {}
+
+    payload = {
+        "source": {
+            "action": {"domain": ["a"], "generators": [[0]]},
+            "arity": 0,
+            "family": [],
+        },
+        "rows": rows(),
+        "is_union_of_complete_ambient_orbits": True,
+    }
+    with pytest.raises(ValidationError) as rows_bound:
+        TupleFamilyOrbitResult.model_validate(payload)
+    assert "input_bound" in rows_bound.value.errors()[0]["type"]
+    assert yields == MAX_FAMILY_MEMBERS + 1
+
+
+def test_missing_arity_on_forged_source_is_a_typed_domain_error() -> None:
+    request = TupleFamilyOrbitSource.model_construct(action=_swap_action(), family=())
+    with pytest.raises(OperationDomainValidationError) as exc_info:
+        tuple_family_orbit_profile(request)
+    assert exc_info.value.errors()[0]["type"] == (
+        "finite_group_action.tuple_family_arity_out_of_range"
+    )
+
+
+def test_constructed_result_rows_are_revalidated() -> None:
+    class _HugeRepresentative(tuple):
+        def __len__(self) -> int:
+            return 2_000_000
+
+        def __iter__(self):
+            return iter(range(2_000_000))
+
+    row = TupleOrbitRow.model_construct(
+        representative=_HugeRepresentative(),
+        source_indices=(0,),
+        orbit_size=1,
+        stabilizer_size=1,
+        least_transporter=(0,),
+    )
+    payload = {
+        "source": {
+            "action": {"domain": ["a"], "generators": [[0]]},
+            "arity": 0,
+            "family": [],
+        },
+        "rows": [row],
+        "is_union_of_complete_ambient_orbits": True,
+    }
+    with pytest.raises(ValidationError) as arity:
+        TupleFamilyOrbitResult.model_validate(payload)
+    assert "arity_out_of_range" in arity.value.errors()[0]["type"]
+
+
+def test_constructed_result_rows_reject_noncanonical_orbit_size() -> None:
+    row = TupleOrbitRow.model_construct(
+        representative=(),
+        source_indices=(0,),
+        orbit_size="bogus",
+        stabilizer_size=1,
+        least_transporter=(0,),
+    )
+    payload = {
+        "source": {
+            "action": {"domain": ["a"], "generators": [[0]]},
+            "arity": 0,
+            "family": [()],
+        },
+        "rows": [row],
+        "is_union_of_complete_ambient_orbits": True,
+    }
+    with pytest.raises(ValidationError):
+        TupleFamilyOrbitResult.model_validate(payload)
+
+
+def test_constructed_result_instance_is_revalidated() -> None:
+    row = TupleOrbitRow.model_construct(
+        representative=(),
+        source_indices=(0,),
+        orbit_size="bogus",
+        stabilizer_size=1,
+        least_transporter=(0,),
+    )
+    result = TupleFamilyOrbitResult.model_construct(
+        source=TupleFamilyOrbitSource(
+            action=FinitePermutationAction(domain=("a",), generators=((0,),)),
+            arity=0,
+            family=((),),
+        ),
+        rows=(row,),
+        is_union_of_complete_ambient_orbits=True,
+    )
+    with pytest.raises(ValidationError):
+        TupleFamilyOrbitResult.model_validate(result)
+
+
+def test_aggregate_source_indices_are_bounded_before_container_copy() -> None:
+    payload = {
+        "source": {
+            "action": {"domain": ["a"], "generators": [[0]]},
+            "arity": 0,
+            "family": [],
+        },
+        "rows": [
+            {
+                "representative": [0],
+                "source_indices": list(range(MAX_FAMILY_MEMBERS)),
+                "orbit_size": 1,
+                "stabilizer_size": 1,
+                "least_transporter": [0],
+            },
+            {
+                "representative": [1],
+                "source_indices": list(range(MAX_FAMILY_MEMBERS)),
+                "orbit_size": 1,
+                "stabilizer_size": 1,
+                "least_transporter": [0],
+            },
+        ],
+        "is_union_of_complete_ambient_orbits": True,
+    }
+    with pytest.raises(ValidationError) as indices_bound:
+        TupleFamilyOrbitResult.model_validate(payload)
+    assert "input_bound" in indices_bound.value.errors()[0]["type"]
+
+
+def test_complete_orbit_family_is_not_rejected_by_tuple_count_times_order() -> None:
+    degree = 22
+    generator = list(range(degree))
+    for start, length in ((0, 8), (8, 9), (17, 5)):
+        for offset in range(length):
+            generator[start + offset] = start + ((offset + 1) % length)
+    action = FinitePermutationAction(
+        domain=tuple(str(index) for index in range(degree)),
+        generators=(tuple(generator),),
+    )
+    seed = (0, 8, 17)
+    family = []
+    current = seed
+    for _ in range(360):
+        family.append(current)
+        current = tuple(generator[value] for value in current)
+    result = tuple_family_orbit_profile(
+        TupleFamilyOrbitSource(action=action, arity=3, family=tuple(family))
+    )
+    assert len(result.rows) == 1
+    assert result.rows[0].orbit_size == 360
+    assert result.is_union_of_complete_ambient_orbits is True
+
+
+def test_complete_prime_cycle_orbit_is_not_rejected_by_images_times_order() -> None:
+    degree = 46
+    generator = list(range(degree))
+    for start, length in ((0, 17), (17, 29)):
+        for offset in range(length):
+            generator[start + offset] = start + ((offset + 1) % length)
+    action = FinitePermutationAction(
+        domain=tuple(str(index) for index in range(degree)),
+        generators=(tuple(generator),),
+    )
+    seed = (0, 17)
+    family = []
+    current = seed
+    for _ in range(493):
+        family.append(current)
+        current = tuple(generator[value] for value in current)
+    result = tuple_family_orbit_profile(
+        TupleFamilyOrbitSource(action=action, arity=2, family=tuple(family))
+    )
+    assert len(result.rows) == 1
+    assert result.rows[0].orbit_size == 493
+    assert result.is_union_of_complete_ambient_orbits is True
+
+
+def test_negative_source_indices_are_rejected_before_family_lookup() -> None:
+    result = tuple_family_orbit_profile(
+        TupleFamilyOrbitSource(action=_swap_action(), arity=1, family=((0,), (1,)))
+    )
+    payload = result.model_dump()
+    payload["rows"][0]["source_indices"] = [-3]
+    with pytest.raises(ValidationError) as source_index:
+        TupleFamilyOrbitResult.model_validate(payload)
+    assert "source_index_out_of_range" in source_index.value.errors()[0]["type"]
+
+
+def test_duplicate_orbit_representatives_are_rejected() -> None:
+    result = tuple_family_orbit_profile(
+        TupleFamilyOrbitSource(
+            action=FinitePermutationAction(domain=("a", "b"), generators=((0, 1),)),
+            arity=1,
+            family=((0,), (1,)),
+        )
+    )
+    payload = result.model_dump()
+    payload["rows"][1]["representative"] = payload["rows"][0]["representative"]
+    with pytest.raises(ValidationError) as duplicate:
+        TupleFamilyOrbitResult.model_validate(payload)
+    assert "rows_not_canonical" in duplicate.value.errors()[0]["type"]
+
+
+def test_distinct_source_rows_are_indexed_once_before_orbit_partition() -> None:
+    action = FinitePermutationAction(
+        domain=tuple(str(index) for index in range(40)),
+        generators=(tuple(range(40)),),
+    )
+    family = tuple((index,) for index in range(40))
+    result = tuple_family_orbit_profile(
+        TupleFamilyOrbitSource(action=action, arity=1, family=family)
+    )
+    assert [row.representative for row in result.rows] == list(family)
+    assert [row.source_indices for row in result.rows] == [
+        (index,) for index in range(40)
+    ]
+    assert all(row.orbit_size == 1 for row in result.rows)
+
+
+def test_many_orbits_reuse_image_pass_transporters() -> None:
+    """Distinct orbit rows reuse the least transporter found while imaging."""
+    modulus = 40
+    generator = tuple((index + 1) % modulus for index in range(modulus))
+    action = FinitePermutationAction(
+        domain=tuple(str(index) for index in range(modulus)),
+        generators=(generator,),
+    )
+    rows: list[tuple[int, ...]] = []
+    seen: set[tuple[int, ...]] = set()
+    for second in range(modulus):
+        for third in range(modulus):
+            for fourth in range(modulus):
+                candidate = (0, second, third, fourth)
+                if candidate not in seen:
+                    seen.add(candidate)
+                    rows.append(candidate)
+                if len(rows) >= 2_501:
+                    break
+            if len(rows) >= 2_501:
+                break
+        if len(rows) >= 2_501:
+            break
+    result = tuple_family_orbit_profile(
+        TupleFamilyOrbitSource(action=action, arity=4, family=tuple(rows))
+    )
+    assert len(result.rows) == 2_501
+    for row in result.rows:
+        first = row.source_indices[0]
+        source = rows[first]
+        assert tuple(row.least_transporter[value] for value in source) == (
+            row.representative
+        )
+
+
+def test_first_indexed_source_seeds_each_orbit() -> None:
+    """The seed is the first indexed unclassified source, not the least tuple.
+
+    The ``(1,)`` member is the first indexed source of its orbit while ``(0,)``
+    is lexicographically smaller, so a lexicographic seed would force a second
+    transporter scan.
+    """
+
+    from jacobian.math.groups.tuple_orbits.operations import _next_unclassified_seed
+
+    order = ((1,), (0,), (2,))
+    unclassified = {(1,), (0,), (2,)}
+    seed, index = _next_unclassified_seed(order, 0, unclassified)
+    assert (seed, index) == ((1,), 0)
+    unclassified.discard((1,))
+    seed, index = _next_unclassified_seed(order, index, unclassified)
+    assert (seed, index) == ((0,), 1)
+
+    family = ((1,), (0,), (2,))
+    result = tuple_family_orbit_profile(
+        TupleFamilyOrbitSource(action=_cyclic_action(), arity=1, family=family)
+    )
+    assert len(result.rows) == 1
+    row = result.rows[0]
+    assert row.source_indices == (0, 1, 2)
+    assert row.representative == (0,)
+    first_source = family[row.source_indices[0]]
+    assert tuple(row.least_transporter[value] for value in first_source) == (
+        row.representative
+    )
+
+
+def test_sized_iterable_length_is_not_trusted() -> None:
+    """A Sized iterable that under-reports its length is still bounded."""
+    from jacobian.math.groups.tuple_orbits._models import (
+        _SEQUENCE_OVERFLOW,
+        _materialize_bounded_sequence,
+    )
+
+    class LyingSized:
+        def __len__(self) -> int:
+            return 1
+
+        def __iter__(self):
+            while True:
+                yield 0
+
+    assert _materialize_bounded_sequence(LyingSized(), 5) is _SEQUENCE_OVERFLOW
+
+
+def test_action_domain_iteration_is_bounded_before_canonicalization() -> None:
+    """A domain that under-reports its iterator is still bounded by the cap."""
+
+    class _LyingDomain:
+        def __len__(self) -> int:
+            return 1
+
+        def __iter__(self):
+            return iter(range(51))
+
+    payload = {
+        "action": {"domain": _LyingDomain(), "generators": []},
+        "arity": 0,
+        "family": [],
+    }
+    with pytest.raises(ValidationError) as bound:
+        TupleFamilyOrbitSource.model_validate(payload)
+    assert "action_domain_bound" in bound.value.errors()[0]["type"]
+
+
+def test_unknown_action_field_value_is_not_recursively_copied() -> None:
+    """An extra field is rejected before its value is traversed."""
+
+    payload = {
+        "action": {"domain": ["a"], "generators": [[0]], "generator": _Boom()},
+        "arity": 0,
+        "family": [],
+    }
+    with pytest.raises(ValidationError) as extra:
+        TupleFamilyOrbitSource.model_validate(payload)
+    assert extra.value.errors()[0]["type"] == "extra_forbidden"
+
+
+def test_non_iterable_sized_generators_are_a_validation_error() -> None:
+    """A Sized but non-iterable generators value is not trusted as a row."""
+
+    class _SizedOnly:
+        def __len__(self) -> int:
+            return 1
+
+    payload = {
+        "action": {"domain": ["a"], "generators": _SizedOnly()},
+        "arity": 0,
+        "family": [],
+    }
+    with pytest.raises(ValidationError):
+        TupleFamilyOrbitSource.model_validate(payload)
+
+
+def test_standalone_row_mapping_extra_field_is_not_copied() -> None:
+    """A standalone row mapping rejects extras before traversing their values."""
+
+    payload = {
+        "representative": (),
+        "source_indices": (0,),
+        "orbit_size": 1,
+        "stabilizer_size": 1,
+        "least_transporter": (0,),
+        "unexpected": _Boom(),
+    }
+    with pytest.raises(ValidationError) as extra:
+        TupleOrbitRow.model_validate(payload)
+    assert extra.value.errors()[0]["type"] == "extra_forbidden"
+
+
+def test_forged_family_iterator_is_bounded_before_structural_scans() -> None:
+    """A forged family whose iterator never ends is bounded by the row cap."""
+
+    class _LyingFamily(tuple):
+        def __len__(self) -> int:
+            return 1
+
+        def __iter__(self):
+            while True:
+                yield (0,)
+
+    action = FinitePermutationAction(domain=("a",), generators=((0,),))
+    source = TupleFamilyOrbitSource.model_construct(
+        action=action, arity=1, family=_LyingFamily()
+    )
+    with pytest.raises(OperationResourceAdmissionError):
+        tuple_family_orbit_profile(source)
+
+
+def test_forged_action_generator_row_is_bounded_despite_reported_length() -> None:
+    """A generator row that lies about its length is still bounded."""
+
+    class _LyingRow(tuple):
+        def __len__(self) -> int:
+            return 1
+
+        def __iter__(self):
+            return iter(range(2_000_000))
+
+    action = FinitePermutationAction.model_construct(
+        domain=("a",), generators=(_LyingRow(),)
+    )
+    source = TupleFamilyOrbitSource.model_construct(action=action, arity=0, family=())
+    with pytest.raises(
+        (OperationDomainValidationError, OperationResourceAdmissionError)
+    ):
+        tuple_family_orbit_profile(source)
+
+
+def test_nested_tuple_coordinate_is_rejected_before_container_copy() -> None:
+    """A nested container coordinate is rejected without traversing it."""
+
+    class _BoomList(list):
+        def __iter__(self):
+            raise AssertionError("nested coordinate was traversed")
+
+    payload = {
+        "action": {"domain": ["a"], "generators": [[0]]},
+        "arity": 1,
+        "family": [[_BoomList([0])]],
+    }
+    with pytest.raises(ValidationError):
+        TupleFamilyOrbitSource.model_validate(payload)
+
+
+def test_one_shot_generator_row_is_rebuilt_from_materialized_rows() -> None:
+    """A native one-shot generator row is consumed once, not re-read empty."""
+    action = FinitePermutationAction.model_construct(
+        domain=("a", "b"), generators=(iter([1, 0]),)
+    )
+    source = TupleFamilyOrbitSource.model_construct(
+        action=action, arity=1, family=((0,), (1,))
+    )
+    result = tuple_family_orbit_profile(source)
+    assert len(result.rows) == 1
+    assert result.rows[0].representative == (0,)
+
+
+def test_over_reporting_sized_domain_is_bounded_before_rebuild() -> None:
+    """A domain whose ``__len__`` lies cannot drive an unbounded rebuild."""
+
+    class _LyingDomain:
+        def __len__(self) -> int:
+            return 1
+
+        def __iter__(self):
+            return iter(range(10_000_000))
+
+    action = FinitePermutationAction.model_construct(
+        domain=_LyingDomain(), generators=((0,),)
+    )
+    source = TupleFamilyOrbitSource.model_construct(
+        action=action, arity=1, family=((0,),)
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        tuple_family_orbit_profile(source)
+    assert error.value.errors()[0]["type"] == (
+        "finite_group_action.tuple_family_action_domain_bound"
+    )
+
+
+def test_over_reporting_sized_generators_collection_is_bounded() -> None:
+    """A sized generators collection is materialized under the row cap."""
+
+    class _LyingGenerators:
+        def __len__(self) -> int:
+            return 1
+
+        def __iter__(self):
+            while True:
+                yield [0]
+
+    action = FinitePermutationAction.model_construct(
+        domain=("a",), generators=_LyingGenerators()
+    )
+    source = TupleFamilyOrbitSource.model_construct(
+        action=action, arity=1, family=((0,),)
+    )
+    with pytest.raises(
+        (OperationDomainValidationError, OperationResourceAdmissionError)
+    ):
+        tuple_family_orbit_profile(source)
+
+
+def test_forged_family_member_is_materialized_before_coordinate_scan() -> None:
+    """A member that lies about its length is bounded before the coordinate scan."""
+
+    class _LyingMember(tuple):
+        def __len__(self) -> int:
+            return 1
+
+        def __iter__(self):
+            return iter(range(2_000_000))
+
+    action = FinitePermutationAction(domain=("a",), generators=((0,),))
+    source = TupleFamilyOrbitSource.model_construct(
+        action=action, arity=1, family=(_LyingMember(),)
+    )
+    with pytest.raises(
+        (OperationDomainValidationError, OperationResourceAdmissionError)
+    ):
+        tuple_family_orbit_profile(source)
+
+
+def test_standalone_row_rejects_nested_container_axis() -> None:
+    """A standalone row axis rejects container entries before recursive copy."""
+
+    class _BoomList(list):
+        def __iter__(self):
+            raise AssertionError("nested axis entry was traversed")
+
+    with pytest.raises(ValidationError):
+        TupleOrbitRow.model_validate(
+            {
+                "representative": [_BoomList([0])],
+                "source_indices": (0,),
+                "orbit_size": 1,
+                "stabilizer_size": 1,
+                "least_transporter": (0,),
+            }
+        )

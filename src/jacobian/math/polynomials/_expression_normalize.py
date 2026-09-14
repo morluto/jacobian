@@ -1234,6 +1234,23 @@ def _nary_expression_metrics(  # noqa: C901
             tuple(row.work + row.expansion_terms for row in child_metrics),
             _MAX_EXPRESSION_WORK,
         )
+        # ``_add`` copies the whole accumulated coefficient dictionary before
+        # merging each operand, so an ADD must charge one running-support copy
+        # per operand rather than only each operand's own support.
+        accumulated_terms = 0
+        accumulated_degree = 0
+        accumulated_support = 0
+        clone_work = 0
+        for child in child_metrics:
+            clone_work += accumulated_support
+            accumulated_terms = min(
+                MAX_POLYNOMIAL_TERMS, accumulated_terms + child.support
+            )
+            accumulated_degree = max(accumulated_degree, child.degree)
+            accumulated_support = _support_bound(
+                accumulated_terms, accumulated_degree, variables
+            )
+        work = _bounded_sum((work, clone_work), _MAX_EXPRESSION_WORK)
         carry_digits = _decimal_digits_from_bits(_ceil_log2(max(1, len(child_metrics))))
         if zero:
             total_coefficient_digits = 1

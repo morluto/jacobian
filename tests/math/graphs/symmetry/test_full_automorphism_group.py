@@ -248,7 +248,7 @@ def test_periodic_colored_cycle_filters_dihedral_maps() -> None:
         graph=SimpleUndirectedGraph(
             vertices=vertices,
             edges=tuple(
-                sorted((vertices[index], vertices[(index + 1) % 6]))
+                canonical_edge(vertices[index], vertices[(index + 1) % 6])
                 for index in range(6)
             ),
         ),
@@ -557,7 +557,7 @@ def test_uniform_vertex_colored_cliques_keep_compact_presentation() -> None:
 def test_vf2_accepts_and_uses_refined_edge_signatures() -> None:
     vertices = tuple("v" + str(index) for index in range(10))
     edges = tuple(
-        sorted((vertices[index], vertices[(index + 1) % len(vertices)]))
+        canonical_edge(vertices[index], vertices[(index + 1) % len(vertices)])
         for index in range(len(vertices))
     )
     graph = ColoredUndirectedGraph(
@@ -951,7 +951,9 @@ def test_tripartite_pair_edge_colors_keep_complement_presentation() -> None:
     )
     pair_names = {(0, 1): "between01", (0, 2): "between02", (1, 2): "between12"}
     edge_colors = tuple(
-        pair_names[tuple(sorted((side_of[left], side_of[right])))]
+        pair_names[
+            (min(side_of[left], side_of[right]), max(side_of[left], side_of[right]))
+        ]
         for left, right in edges
     )
     graph = ColoredUndirectedGraph(
@@ -1005,7 +1007,9 @@ def test_distinct_pair_colors_block_quotient_side_swaps() -> None:
     )
     pair_names = {(0, 1): "between01", (0, 2): "between02", (1, 2): "between12"}
     edge_colors = tuple(
-        pair_names[tuple(sorted((side_of[left], side_of[right])))]
+        pair_names[
+            (min(side_of[left], side_of[right]), max(side_of[left], side_of[right]))
+        ]
         for left, right in edges
     )
     graph = ColoredUndirectedGraph(
@@ -1016,3 +1020,31 @@ def test_distinct_pair_colors_block_quotient_side_swaps() -> None:
     assert result.automorphism_count == 2**3
     assert result.generated_group_order == result.automorphism_count
     assert len(result.generators) == 3
+
+
+def test_distinguished_edge_k4_4_reports_the_edge_stabilizer() -> None:
+    """A distinguished K4,4 edge leaves the 72-element edge stabilizer.
+
+    ``Aut(K4,4)`` has order ``2 * (4!)**2 = 1152`` and acts transitively on the
+    16 edges, so the color-preserving subgroup fixing the one distinguished edge
+    setwise has order ``1152 / 16 = 72``. The complement shortcut must not report
+    the full group for the nonuniform edge coloring.
+    """
+    left = tuple(f"a{index}" for index in range(4))
+    right = tuple(f"b{index}" for index in range(4))
+    edges = tuple(canonical_edge(first, second) for first in left for second in right)
+    uncolored = ColoredUndirectedGraph(
+        graph=SimpleUndirectedGraph(vertices=left + right, edges=edges),
+    )
+    assert full_graph_automorphism_group(uncolored).automorphism_count == 1152
+    edge_colors = tuple(
+        "marked" if (first, second) == (left[0], right[0]) else "plain"
+        for first, second in edges
+    )
+    graph = ColoredUndirectedGraph(
+        graph=SimpleUndirectedGraph(vertices=left + right, edges=edges),
+        edge_colors=edge_colors,
+    )
+    result = full_graph_automorphism_group(graph)
+    assert result.automorphism_count == 72
+    assert result.generated_group_order == result.automorphism_count

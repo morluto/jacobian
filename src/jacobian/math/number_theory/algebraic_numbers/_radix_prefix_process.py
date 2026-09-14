@@ -116,7 +116,7 @@ def run_scaled_integer_part_worker(
     # A child that reports a canonical but oversized floor must not be
     # materialized: bound its decimal width by the admitted scaled-coefficient
     # envelope before parsing.
-    if len(scaled_floor) > scaled_floor_digit_bound + 2:
+    if len(scaled_floor) > scaled_floor_digit_bound:
         raise OperationBackendError(BackendFailureReason.MALFORMED_RESPONSE)
     try:
         return int(parse_canonical_integer(scaled_floor))

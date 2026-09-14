@@ -566,3 +566,34 @@ def test_native_argument_type_errors_point_at_the_offending_field() -> None:
     with pytest.raises(OperationDomainValidationError) as places_error:
         radix_prefix(_value((1, 0, -2), 1), 10, 1.0)  # type: ignore[arg-type]
     assert places_error.value.errors()[0]["loc"] == ("fractional_places",)
+
+
+def test_forged_value_carrier_is_revalidated_at_native_admission() -> None:
+    """A model_construct value with a negative root index is a domain error."""
+    value = RealAlgebraicValue.model_construct(
+        polynomial=(1, 0, -2), real_root_index=-1
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        radix_prefix(value, 10, 1)
+    assert error.value.errors()[0]["type"] == ("algebraic_number.radix_value_carrier")
+
+
+def test_worker_floor_bound_has_no_extra_slack(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A floor one digit past the admitted bound is malformed."""
+    bound = 5
+    oversized = "1" * (bound + 1)
+    _worker_result(
+        monkeypatch, f'{{"ok": true, "scaled_floor": "{oversized}"}}'.encode()
+    )
+    with pytest.raises(OperationBackendError) as error:
+        process.run_scaled_integer_part_worker(
+            polynomial=(1, 0, -2),
+            real_root_index=1,
+            scale=10,
+            isolation_bits=64,
+            deadline=time.monotonic() + 30,
+            scaled_floor_digit_bound=bound,
+        )
+    assert error.value.reason is BackendFailureReason.MALFORMED_RESPONSE

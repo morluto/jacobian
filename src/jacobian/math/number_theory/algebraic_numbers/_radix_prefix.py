@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from fractions import Fraction
 from typing import Annotated, Any, Literal, Self
 
-from pydantic import Field, StrictInt, model_validator
+from pydantic import Field, StrictInt, ValidationError, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import DecimalIntegerEncoding
@@ -375,6 +375,22 @@ def radix_prefix(
             code="algebraic_number.radix_value_type",
             message="value must be a RealAlgebraicValue",
         )
+    # A model_construct or model_copy value is not revalidated when nested in
+    # the request, so rerun the carrier's own structural contract before any
+    # field is used (for example a negative real_root_index).
+    try:
+        value = RealAlgebraicValue.model_validate(
+            {
+                "polynomial": getattr(value, "polynomial", None),
+                "real_root_index": getattr(value, "real_root_index", None),
+            }
+        )
+    except ValidationError as exc:
+        raise OperationDomainValidationError(
+            location=("value",),
+            code="algebraic_number.radix_value_carrier",
+            message="value must be a canonical real algebraic value",
+        ) from exc
     if type(base) is not int:
         raise OperationDomainValidationError(
             location=("base",),

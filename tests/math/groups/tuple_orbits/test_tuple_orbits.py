@@ -30,6 +30,16 @@ def _cyclic_action() -> FinitePermutationAction:
     return FinitePermutationAction(domain=("a", "b", "c"), generators=((1, 2, 0),))
 
 
+class _Boom:
+    """An iterable value that fails loudly if validation traverses it."""
+
+    def __iter__(self) -> Any:
+        raise AssertionError("unknown field was traversed")
+
+    def __len__(self) -> int:
+        raise AssertionError("unknown field was measured")
+
+
 def test_repeated_coordinates_and_duplicate_sources_are_retained() -> None:
     request = TupleFamilyOrbitSource(
         action=_cyclic_action(),
@@ -817,13 +827,6 @@ def test_action_domain_iteration_is_bounded_before_canonicalization() -> None:
 def test_unknown_action_field_value_is_not_recursively_copied() -> None:
     """An extra field is rejected before its value is traversed."""
 
-    class _Boom:
-        def __iter__(self) -> Any:
-            raise AssertionError("unknown field was traversed")
-
-        def __len__(self) -> int:
-            raise AssertionError("unknown field was measured")
-
     payload = {
         "action": {"domain": ["a"], "generators": [[0]], "generator": _Boom()},
         "arity": 0,
@@ -853,17 +856,13 @@ def test_non_iterable_sized_generators_are_a_validation_error() -> None:
 def test_standalone_row_mapping_extra_field_is_not_copied() -> None:
     """A standalone row mapping rejects extras before traversing their values."""
 
-    def _boom():
-        raise AssertionError("unknown row field was traversed")
-        yield 0
-
     payload = {
         "representative": (),
         "source_indices": (0,),
         "orbit_size": 1,
         "stabilizer_size": 1,
         "least_transporter": (0,),
-        "unexpected": _boom(),
+        "unexpected": _Boom(),
     }
     with pytest.raises(ValidationError) as extra:
         TupleOrbitRow.model_validate(payload)

@@ -635,6 +635,7 @@ def _require_syzygy_terms(
             location="terms",
             code="bracket.syzygy_multiplier_carrier",
         )
+        relation = _admit_source_relation(relation)
         if relation.ground_size != target.ground_size:
             raise OperationDomainValidationError(
                 location=("terms",),

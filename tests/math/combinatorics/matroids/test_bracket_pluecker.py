@@ -1178,3 +1178,38 @@ def test_syzygy_revalidates_nested_bracket_atoms() -> None:
     target = BracketPolynomial.model_construct(ground_size=5, terms=(term,))
     with pytest.raises(OperationDomainValidationError):
         bracket_syzygy_residual(target, ())
+
+
+def test_syzygy_revalidates_relation_before_ground_access() -> None:
+    """A forged relation missing ground_size is a typed domain error."""
+    relation = grassmann_pluecker_relation(
+        5, (0, 1, 2, 3, 4), "SHARED_INDEX_THREE_TERM"
+    )
+    forged = GrassmannPlueckerRelation.model_construct(
+        indices=relation.indices,
+        family=relation.family,
+        polynomial=relation.polynomial,
+    )
+    with pytest.raises(OperationDomainValidationError):
+        bracket_syzygy_residual(
+            relation.polynomial,
+            ((CanonicalRational(num=1, den=1), BracketMonomial(factors=()), forged),),
+        )
+
+
+def test_bracket_monomial_schema_requires_positive_multiplicity() -> None:
+    """The wire schema advertises the positive multiplicity constraint."""
+    schema = BracketMonomial.model_json_schema()
+    multiplicity = schema["properties"]["factors"]["items"]["prefixItems"][1]
+    assert multiplicity.get("ge") == 1
+    assert multiplicity.get("pattern") == "^[1-9][0-9]*$"
+
+
+def test_syzygy_request_schema_publishes_assembled_factor_limit() -> None:
+    """The terms description advertises the assembled-factor envelope."""
+    from jacobian.math.combinatorics.matroids.oriented._bracket_models import (
+        BracketSyzygyResidualRequest,
+    )
+
+    schema = BracketSyzygyResidualRequest.model_json_schema()
+    assert "4 distinct atoms" in schema["properties"]["terms"]["description"]

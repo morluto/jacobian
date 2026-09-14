@@ -13,7 +13,7 @@ and it is not a coordinate polynomial.
 
 from __future__ import annotations
 
-from typing import Literal, Self, cast
+from typing import Annotated, Literal, Self, cast
 
 from pydantic import ConfigDict, Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
@@ -27,6 +27,11 @@ from jacobian._models import StrictModel
 
 MAX_BRACKET_GROUND_SIZE = 12
 MAX_BRACKET_FACTORS = 4
+
+_PositiveExactInteger = Annotated[
+    ExactInteger,
+    Field(ge=1, json_schema_extra={"pattern": r"^[1-9][0-9]*$"}),
+]
 MAX_BRACKET_TERMS = 512
 MAX_BRACKET_CONTRIBUTIONS = 65_536
 MAX_BRACKET_COEFFICIENT_DIGITS = MAX_CANONICAL_RATIONAL_DIGITS
@@ -109,7 +114,7 @@ class BracketMonomial(StrictModel):
         revalidate_instances="always",
     )
 
-    factors: tuple[tuple[CanonicalBracket, ExactInteger], ...] = Field(
+    factors: tuple[tuple[CanonicalBracket, _PositiveExactInteger], ...] = Field(
         max_length=MAX_BRACKET_FACTORS
     )
 
@@ -276,7 +281,9 @@ class BracketSyzygyResidualRequest(StrictModel):
         max_length=128,
         description=(
             "Finite terms (scalar, multiplier monomial, source-bound formal relation); "
-            "all polynomials must use the target ground range."
+            "all polynomials must use the target ground range, and the multiplier "
+            "factors plus each relation's polynomial factors must total at most "
+            f"{MAX_BRACKET_FACTORS} distinct atoms."
         ),
     )
 

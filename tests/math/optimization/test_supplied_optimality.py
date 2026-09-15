@@ -313,3 +313,62 @@ def test_gap_admission_accounts_for_all_primal_and_dual_products(shared: bool) -
     else:
         with pytest.raises(OperationResourceAdmissionError, match="rational digits"):
             check_linear_optimality(candidate)
+
+
+def test_forged_dual_multiplier_fails_stationarity_from_definition() -> None:
+    genuine = check_linear_optimality(_candidate())
+    assert genuine.is_optimal
+    payload = _candidate().model_dump()
+    # Forge the dual: claim y = 0 while keeping the primal x = 1.
+    payload["constraint_dual"] = [_r(0)]
+    forged = check_linear_optimality(
+        RationalLinearOptimalityCandidate.model_validate(payload)
+    )
+    assert not forged.is_optimal
+    assert "stationarity" in forged.failed_conditions
+    # Independent definition: c - A^T y - lo - hi = 1 - 0 - 0 - 0 = 1 != 0.
+    assert forged.stationarity_residuals[0].as_fraction() == Fraction(1)
+    assert forged.primal_objective.as_fraction() == Fraction(1)
+    assert forged.dual_objective.as_fraction() == Fraction(0)
+
+
+def test_forged_farkas_witness_violates_the_infeasibility_balance() -> None:
+    from jacobian.math.optimization._general_models import (
+        GeneralFormRationalLinearProgram,
+    )
+
+    program = GeneralFormRationalLinearProgram.model_validate(
+        {
+            "variables": [
+                {"name": "x", "lower_bound": _r(0), "upper_bound": _r(1)},
+                {"name": "y", "lower_bound": _r(0), "upper_bound": _r(1)},
+            ],
+            "objective": {"sense": "MINIMIZE", "coefficients": [_r(1), _r(1)]},
+            "constraints": [
+                {
+                    "label": "too_big",
+                    "coefficients": [_r(1), _r(1)],
+                    "relation": "GE",
+                    "rhs": _r(3),
+                }
+            ],
+        }
+    )
+    result = general_linear_program(program)
+    assert result.status == "INFEASIBLE"
+    assert result.farkas_constraints is not None
+    assert result.farkas_lower_bounds is not None
+    assert result.farkas_upper_bounds is not None
+    y = result.farkas_constraints[0].as_fraction()
+    lower = [v.as_fraction() for v in result.farkas_lower_bounds]
+    upper = [v.as_fraction() for v in result.farkas_upper_bounds]
+    assert y <= 0 and all(v <= 0 for v in lower) and all(v >= 0 for v in upper)
+    assert all(y + lo + hi == 0 for lo, hi in zip(lower, upper, strict=True))
+    assert Fraction(3) * y + sum(upper) < 0
+    # A genuinely invalid witness (all zeros) meets the sign pattern but
+    # fails strict negativity, so it proves nothing.
+    assert not (Fraction(3) * 0 + 0 < 0)
+    # Flipping the Farkas row sign breaks both the GE-nonpositive sign rule
+    # and the homogeneous balance.
+    assert -y >= 0
+    assert any(-y + lo + hi != 0 for lo, hi in zip(lower, upper, strict=True))

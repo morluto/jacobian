@@ -1005,3 +1005,159 @@ def test_native_implication_check_preserves_sparse_variable_axis() -> None:
 
     assert result.target.variable_count == 3
     assert result.target.satisfying_count == 2**3
+
+
+# ---------------------------------------------------------------------------
+# Structural laws: homomorphism, congruence, and quotient (Workstream C)
+# ---------------------------------------------------------------------------
+
+
+def _nested_add_term() -> FlatTerm:
+    """add(add(x0, x1), x2) over operation 0."""
+    return FlatTerm(
+        nodes=(
+            VariableTerm(kind="variable", variable_id=0),
+            VariableTerm(kind="variable", variable_id=1),
+            ApplicationTerm(kind="application", operation=0, children=(0, 1)),
+            VariableTerm(kind="variable", variable_id=2),
+            ApplicationTerm(kind="application", operation=0, children=(2, 3)),
+        ),
+        root=4,
+    )
+
+
+class TestTermHomomorphismLaw:
+    def test_quotient_carrier_map_commutes_with_term_evaluation(self) -> None:
+        from jacobian.math.universal_algebra import evaluate_term
+
+        source = _cyclic_addition_algebra(4)
+        target = _cyclic_addition_algebra(2)
+        mapping = (0, 1, 0, 1)
+        term = _and_term()
+        for left in range(4):
+            for right in range(4):
+                source_value = evaluate_term(source, term, {0: left, 1: right})
+                target_value = evaluate_term(
+                    target, term, {0: mapping[left], 1: mapping[right]}
+                )
+                assert mapping[source_value] == target_value
+
+    def test_nested_term_reconstructs_from_sequential_evaluation(self) -> None:
+        from jacobian.math.universal_algebra import evaluate_term
+
+        algebra = _cyclic_addition_algebra(4)
+        nested = _nested_add_term()
+        inner = _and_term()
+        for x in range(4):
+            for y in range(4):
+                for z in range(4):
+                    composed = evaluate_term(algebra, nested, {0: x, 1: y, 2: z})
+                    first = evaluate_term(algebra, inner, {0: x, 1: y})
+                    sequential = evaluate_term(algebra, inner, {0: first, 1: z})
+                    assert composed == sequential
+
+    def test_native_and_request_evaluation_agree_on_the_quotient_axis(self) -> None:
+        from jacobian.math.universal_algebra import evaluate_term
+
+        algebra = _cyclic_addition_algebra(4)
+        term = _and_term()
+        result = compute_evaluate(
+            EvaluateRequest(algebra=algebra, term=term, assignment=(3, 2))
+        )
+        assert result.value == evaluate_term(algebra, term, {0: 3, 1: 2}) == 1
+        assert verify_evaluate(result)
+
+
+class TestCongruenceQuotientPreservation:
+    def test_homomorphism_kernel_is_a_congruence(self) -> None:
+        result = compute_congruence(
+            CongruenceRequest(
+                algebra=_cyclic_addition_algebra(4), partition=((0, 2), (1, 3))
+            )
+        )
+        assert result.is_congruence is True
+        assert result.obstruction is None
+        assert verify_congruence(result)
+
+    def test_quotient_target_preserves_the_mod_two_addition_table(self) -> None:
+        quotient_map = compute_quotient(
+            QuotientRequest(
+                algebra=_cyclic_addition_algebra(4), partition=((0, 2), (1, 3))
+            )
+        )
+        assert quotient_map.mapping == (0, 1, 0, 1)
+        assert quotient_map.target.carrier == ("B0", "B1")
+        assert quotient_map.target.tables == _cyclic_addition_algebra(2).tables
+
+    def test_quotient_map_reconstructs_through_profile_and_serialization(
+        self,
+    ) -> None:
+        quotient_map = compute_quotient(
+            QuotientRequest(
+                algebra=_cyclic_addition_algebra(4), partition=((0, 2), (1, 3))
+            )
+        )
+        native_profile = compute_homomorphism_profile(
+            HomomorphismProfileRequest(carrier_map=quotient_map)
+        )
+        assert native_profile.status == "HOMOMORPHISM"
+        assert native_profile.homomorphism == quotient_map
+        assert native_profile.kernel_partition == ((0, 2), (1, 3))
+        assert native_profile.image == (0, 1)
+        wire_profile = compute_homomorphism_profile(
+            HomomorphismProfileRequest.model_validate(
+                {"carrier_map": quotient_map.model_dump(mode="json")}
+            )
+        )
+        assert wire_profile == native_profile
+
+    def test_forged_evaluation_value_fails_verification(self) -> None:
+        result = compute_evaluate(
+            EvaluateRequest(
+                algebra=_boolean_algebra(), term=_and_term(), assignment=(1, 1)
+            )
+        )
+        assert verify_evaluate(result)
+        forged = type(result).model_validate(
+            {**result.model_dump(mode="json"), "value": 0}
+        )
+        assert not verify_evaluate(forged)
+
+    def test_weakened_congruence_partition_fails_verification(self) -> None:
+        genuine = compute_congruence(
+            CongruenceRequest(
+                algebra=_cyclic_addition_algebra(4), partition=((0, 2), (1, 3))
+            )
+        )
+        assert verify_congruence(genuine)
+        # ((0, 1), (2, 3)) covers the carrier, so the shape is valid, but
+        # 0 ~ 1 together with 1 ~ 1 forces f(0, 1) ~ f(1, 1), i.e. 1 ~ 2,
+        # which the weakened partition splits.
+        forged = genuine.model_copy(update={"partition": ((0, 1), (2, 3))})
+        assert not verify_congruence(forged)
+
+    def test_tampered_quotient_target_breaks_the_homomorphism(self) -> None:
+        quotient_map = compute_quotient(
+            QuotientRequest(
+                algebra=_cyclic_addition_algebra(4), partition=((0, 2), (1, 3))
+            )
+        )
+        tampered_tables = (
+            (1, *quotient_map.target.tables[0][1:]),
+            *quotient_map.target.tables[1:],
+        )
+        tampered_target = quotient_map.target.model_copy(
+            update={"tables": tampered_tables}
+        )
+        profile = compute_homomorphism_profile(
+            HomomorphismProfileRequest(
+                carrier_map=FiniteAlgebraCarrierMap(
+                    source=quotient_map.source,
+                    target=tampered_target,
+                    mapping=quotient_map.mapping,
+                )
+            )
+        )
+        assert profile.status == "NOT_A_HOMOMORPHISM"
+        assert profile.obstruction is not None
+        assert profile.obstruction.source_arguments == (0, 0)

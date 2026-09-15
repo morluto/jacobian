@@ -7,10 +7,12 @@ from collections.abc import Mapping
 from fractions import Fraction
 
 import pytest
+import sympy
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math._root_isolation import strict_root_count
 from jacobian.math.analysis.intervals import ClosedRationalInterval, RationalBox
 from jacobian.math.matrices.operations import determinant_result
 from jacobian.math.polynomials.maps.values import RationalPolynomialMap
@@ -542,3 +544,55 @@ def test_linear_system_krawczyk_image_is_the_exact_known_root() -> None:
         Fraction(2),
         Fraction(1),
     )
+
+
+def _sympy_univariate(coefficients: tuple[int, ...]) -> sympy.Poly:
+    variable = sympy.Symbol("x")
+    return sympy.Poly.from_list(list(coefficients), gens=variable, domain=sympy.ZZ)
+
+
+def test_opposite_sign_sibling_boxes_each_isolate_exactly_one_root() -> None:
+    polynomial_map = _map(("x",), ({(2,): 1, (0,): -2},))
+    positive_box = _box(("x",), ((1, 2),))
+    negative_box = _box(("x",), ((-2, -1),))
+
+    positive = _certify(polynomial_map, positive_box)
+    negative = _certify(polynomial_map, negative_box)
+
+    assert isinstance(positive.conclusion, RootBoxCertifiedUniqueNonsingular)
+    assert isinstance(negative.conclusion, RootBoxCertifiedUniqueNonsingular)
+    polynomial = _sympy_univariate((1, 0, -2))
+    assert strict_root_count(polynomial, sympy.Rational(1), sympy.Rational(2)) == 1
+    assert strict_root_count(polynomial, sympy.Rational(-2), sympy.Rational(-1)) == 1
+    assert (
+        negative_box.intervals[0].upper.as_fraction()
+        < positive_box.intervals[0].lower.as_fraction()
+    )
+
+
+def test_repeated_root_box_stays_unknown_despite_a_strict_unit_count() -> None:
+    result = _certify(
+        _map(("x",), ({(2,): 1},)),
+        _box(("x",), ((-1, 1),)),
+    )
+
+    assert isinstance(result.conclusion, RootBoxUnknown)
+    assert (
+        strict_root_count(
+            _sympy_univariate((1, 0, 0)), sympy.Rational(-1), sympy.Rational(1)
+        )
+        == 1
+    )
+
+
+def test_forged_certified_conclusion_with_a_foreign_axis_is_rejected() -> None:
+    result = _certify(
+        _map(("x",), ({(2,): 1, (0,): -2},)),
+        _box(("x",), ((1, 2),)),
+    )
+
+    assert isinstance(result.conclusion, RootBoxCertifiedUniqueNonsingular)
+    forged = result.model_dump(mode="json")
+    forged["conclusion"]["evidence"]["krawczyk_image"]["variables"] = ["y"]
+    with pytest.raises(ValidationError):
+        PolynomialSystemRootBoxResult.model_validate_json(json.dumps(forged))

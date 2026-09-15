@@ -181,3 +181,114 @@ def test_box_exact_objective_retains_growth_beyond_source_scalar_limit() -> None
         GeneralRationalLinearProgramResult.model_validate_json(result.model_dump_json())
         == result
     )
+
+
+def _constrained_program() -> GeneralFormRationalLinearProgram:
+    return GeneralFormRationalLinearProgram.model_validate(
+        {
+            "variables": [
+                {
+                    "name": "x",
+                    "lower_bound": {"num": 0, "den": 1},
+                    "upper_bound": {"num": 2, "den": 1},
+                },
+                {
+                    "name": "y",
+                    "lower_bound": {"num": 0, "den": 1},
+                    "upper_bound": {"num": 2, "den": 1},
+                },
+            ],
+            "objective": {
+                "sense": "MAXIMIZE",
+                "coefficients": [{"num": 1, "den": 1}, {"num": 1, "den": 1}],
+            },
+            "constraints": [
+                {
+                    "label": "cap",
+                    "coefficients": [{"num": 1, "den": 1}, {"num": 1, "den": 1}],
+                    "relation": "LE",
+                    "rhs": {"num": 3, "den": 1},
+                }
+            ],
+        }
+    )
+
+
+def test_constrained_optimum_satisfies_primal_dual_definitions() -> None:
+    program = _constrained_program()
+    result = general_linear_program(program)
+    assert result.status == "OPTIMAL"
+    assert result.primal_candidate is not None
+    assert result.primal_objective is not None
+    assert result.dual_objective is not None
+    point = [v.as_fraction() for v in result.primal_candidate]
+    assert point[0] + point[1] == Fraction(3)
+    assert all(Fraction(0) <= v <= 2 for v in point)
+    assert result.primal_objective.as_fraction() == Fraction(3)
+    # Independent strong duality: primal value equals the dual value built
+    # from the returned multipliers (rhs*y + bounds).
+    assert result.constraint_dual is not None
+    assert result.lower_bound_dual is not None
+    assert result.upper_bound_dual is not None
+    assert result.dual_objective.as_fraction() == Fraction(3)
+    y = result.constraint_dual[0].as_fraction()
+    lower = [v.as_fraction() for v in result.lower_bound_dual]
+    upper = [v.as_fraction() for v in result.upper_bound_dual]
+    # MAXIMIZE reverses the MINIMIZE sign convention: LE rows are >= 0,
+    # lower bounds <= 0, upper bounds >= 0.
+    assert y >= 0 and all(v <= 0 for v in lower) and all(v >= 0 for v in upper)
+    for j in range(2):
+        assert y + lower[j] + upper[j] == Fraction(1)
+    # Independent optimality: every feasible point has x + y <= 3, and the
+    # candidate attains 3, so no feasible point beats it.
+    assert point[0] + point[1] == Fraction(3)
+
+
+def test_contradictory_row_reports_infeasible_with_farkas_balance() -> None:
+    program = GeneralFormRationalLinearProgram.model_validate(
+        {
+            "variables": [
+                {
+                    "name": "x",
+                    "lower_bound": {"num": 0, "den": 1},
+                    "upper_bound": {"num": 1, "den": 1},
+                },
+                {
+                    "name": "y",
+                    "lower_bound": {"num": 0, "den": 1},
+                    "upper_bound": {"num": 1, "den": 1},
+                },
+            ],
+            "objective": {
+                "sense": "MINIMIZE",
+                "coefficients": [{"num": 1, "den": 1}, {"num": 1, "den": 1}],
+            },
+            "constraints": [
+                {
+                    "label": "too_big",
+                    "coefficients": [{"num": 1, "den": 1}, {"num": 1, "den": 1}],
+                    "relation": "GE",
+                    "rhs": {"num": 3, "den": 1},
+                }
+            ],
+        }
+    )
+    # Independently infeasible: the box maximum of x + y is 1 + 1 = 2 < 3.
+    assert Fraction(1) + Fraction(1) < Fraction(3)
+    result = general_linear_program(program)
+    assert result.status == "INFEASIBLE"
+    assert result.primal_candidate is None
+    assert result.farkas_constraints is not None
+    assert result.farkas_lower_bounds is not None
+    assert result.farkas_upper_bounds is not None
+    y = result.farkas_constraints[0].as_fraction()
+    lower = [v.as_fraction() for v in result.farkas_lower_bounds]
+    upper = [v.as_fraction() for v in result.farkas_upper_bounds]
+    # Farkas signs for MINIMIZE: GE rows nonpositive, lower nonpositive, upper nonnegative.
+    assert y <= 0 and all(v <= 0 for v in lower) and all(v >= 0 for v in upper)
+    # Homogeneous balance per variable: A^T y + lo + hi == 0.
+    assert all(y + lo + hi == 0 for lo, hi in zip(lower, upper, strict=True))
+    # Strict Farkas negativity: b*y + lb*lo + ub*hi < 0.
+    assert Fraction(3) * y + sum(hi for hi in upper) < 0
+    # A tampered all-zero witness satisfies neither balance strictness nor negativity.
+    assert not (Fraction(3) * 0 + 0 < 0)

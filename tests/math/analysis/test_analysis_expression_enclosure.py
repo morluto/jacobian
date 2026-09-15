@@ -252,3 +252,103 @@ def test_non_interoperable_dyadic_exponents_are_not_materialized() -> None:
 def test_unrepresentable_expression_enclosure_is_an_execution_failure() -> None:
     with pytest.raises(RuntimeError, match="outside the interoperable dyadic"):
         _run({"op": "exp", "children": [{"op": "var"}]}, str(10**17))
+
+
+def _run_at(
+    expression: dict[str, object], argument: str, precision_bits: int
+) -> IntervalExpressionEnclosureResult:
+    request = IntervalExpressionEnclosureRequest.model_validate_json(
+        json.dumps(
+            {
+                "expression": expression,
+                "argument": {"num": argument, "den": "1"},
+                "precision_bits": precision_bits,
+            }
+        )
+    )
+    return expression_enclosure(
+        request.expression, request.argument, request.precision_bits
+    )
+
+
+def test_sqrt_two_enclosure_contains_true_value_by_squaring() -> None:
+    result = _run(
+        {"op": "sqrt", "children": [{"op": "const", "value": {"num": "2", "den": "1"}}]}
+    )
+    assert result.status == "ENCLOSED"
+    assert result.lower is not None and result.upper is not None
+    lower = result.lower.as_fraction()
+    upper = result.upper.as_fraction()
+    assert lower <= upper
+    assert lower >= 0
+    # l <= sqrt(2) <= u  <=>  l^2 <= 2 <= u^2 for nonnegative endpoints.
+    assert lower * lower <= 2 <= upper * upper
+    # Independently rule out a trivially wide enclosure.
+    assert upper - lower < Fraction(1, 10**6)
+
+
+def test_higher_precision_nests_inside_lower_precision() -> None:
+    expression: dict[str, object] = {
+        "op": "sqrt",
+        "children": [{"op": "const", "value": {"num": "2", "den": "1"}}],
+    }
+    low = _run_at(expression, "0", 32)
+    high = _run_at(expression, "0", 256)
+    assert low.status == "ENCLOSED" and high.status == "ENCLOSED"
+    assert low.lower is not None and low.upper is not None
+    assert high.lower is not None and high.upper is not None
+    assert low.lower.as_fraction() <= high.lower.as_fraction()
+    assert high.upper.as_fraction() <= low.upper.as_fraction()
+    assert (high.upper.as_fraction() - high.lower.as_fraction()) <= (
+        low.upper.as_fraction() - low.lower.as_fraction()
+    )
+
+
+def test_branch_endpoints_enclose_their_exact_values() -> None:
+    sqrt_zero = _run(
+        {"op": "sqrt", "children": [{"op": "const", "value": {"num": "0", "den": "1"}}]}
+    )
+    assert sqrt_zero.status == "ENCLOSED"
+    assert sqrt_zero.lower is not None and sqrt_zero.upper is not None
+    assert sqrt_zero.lower.as_fraction() <= 0 <= sqrt_zero.upper.as_fraction()
+
+    log_one = _run(
+        {"op": "log", "children": [{"op": "const", "value": {"num": "1", "den": "1"}}]}
+    )
+    assert log_one.status == "ENCLOSED"
+    assert log_one.lower is not None and log_one.upper is not None
+    assert log_one.lower.as_fraction() <= 0 <= log_one.upper.as_fraction()
+
+    exp_zero = _run(
+        {"op": "exp", "children": [{"op": "const", "value": {"num": "0", "den": "1"}}]}
+    )
+    assert exp_zero.status == "ENCLOSED"
+    assert exp_zero.lower is not None and exp_zero.upper is not None
+    assert exp_zero.lower.as_fraction() <= 1 <= exp_zero.upper.as_fraction()
+
+
+def test_affine_evaluation_matches_exact_rational_arithmetic() -> None:
+    expression: dict[str, object] = {
+        "op": "add",
+        "children": [
+            {
+                "op": "mul",
+                "children": [
+                    {"op": "var"},
+                    {"op": "const", "value": {"num": "2", "den": "1"}},
+                ],
+            },
+            {"op": "const", "value": {"num": "1", "den": "2"}},
+        ],
+    }
+    for argument, expected in (
+        ("0", Fraction(1, 2)),
+        ("1", Fraction(5, 2)),
+        ("-3", Fraction(-11, 2)),
+    ):
+        result = _run(expression, argument)
+        assert result.status == "ENCLOSED"
+        assert result.lower is not None and result.upper is not None
+        assert result.lower.as_fraction() == expected
+        assert result.upper.as_fraction() == expected
+        assert result.exact is True

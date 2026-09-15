@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from fractions import Fraction
 
 import pytest
 from pydantic import ValidationError
@@ -27,7 +28,11 @@ from jacobian.math.lattices.operations import (
     compute_saturation,
     compute_sublattice_index,
 )
-from jacobian.math.matrices.values import MAX_MATRIX_DIMENSION, IntegerMatrix
+from jacobian.math.matrices.values import (
+    MAX_MATRIX_DIMENSION,
+    IntegerMatrix,
+    RationalMatrix,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -505,3 +510,86 @@ def test_lattice_transform_results_retain_their_source_through_serialization(
         for i in range(matrix.row_count)
     )
     assert left == transformed
+
+
+def _rational_entries(matrix: RationalMatrix) -> list[list[Fraction]]:
+    return [[entry.as_fraction() for entry in row] for row in matrix.entries]
+
+
+def test_dual_pairing_identity_on_a_skewed_lattice() -> None:
+    basis = [[3, 1], [1, 2]]
+
+    result = compute_dual(_lattice(2, basis))
+
+    dual = _rational_entries(result.dual_basis)
+    for left in range(2):
+        for right in range(2):
+            assert sum(dual[left][k] * basis[right][k] for k in range(2)) == Fraction(
+                left == right
+            )
+    gram = [
+        [sum(basis[i][k] * basis[j][k] for k in range(2)) for j in range(2)]
+        for i in range(2)
+    ]
+    determinant = gram[0][0] * gram[1][1] - gram[0][1] * gram[1][0]
+    assert _rational_entries(result.dual_gram) == [
+        [Fraction(gram[1][1], determinant), Fraction(-gram[0][1], determinant)],
+        [Fraction(-gram[1][0], determinant), Fraction(gram[0][0], determinant)],
+    ]
+
+
+def test_unimodular_dual_is_integral_and_involutive() -> None:
+    basis = [[2, 1], [1, 1]]
+
+    result = compute_dual(_lattice(2, basis))
+
+    dual = _rational_entries(result.dual_basis)
+    assert all(entry.denominator == 1 for row in dual for entry in row)
+    assert compute_discriminant_group(_lattice(2, basis)).discriminant_order == 1
+    involution = compute_dual(
+        _lattice(2, [[int(entry) for entry in row] for row in dual])
+    )
+    assert _rational_entries(involution.dual_basis) == [
+        [Fraction(value) for value in row] for row in basis
+    ]
+
+
+def test_canonical_transformation_is_unimodular_on_a_skewed_lattice() -> None:
+    result = compute_canonical_basis(_lattice(2, [[3, 1], [1, 2]]))
+
+    transform = result.transformation.entries
+    assert (
+        abs(
+            int(transform[0][0]) * int(transform[1][1])
+            - int(transform[0][1]) * int(transform[1][0])
+        )
+        == 1
+    )
+
+
+def test_discriminant_reconstructs_from_gram_on_a_skewed_lattice() -> None:
+    lattice = _lattice(2, [[3, 1], [1, 2]])
+
+    gram = compute_rank_gram(lattice)
+    discriminant = compute_discriminant_group(lattice)
+
+    entries = gram.gram_matrix.entries
+    determinant = int(entries[0][0]) * int(entries[1][1]) - int(entries[0][1]) * int(
+        entries[1][0]
+    )
+    assert int(gram.squared_covolume) == determinant
+    assert determinant == discriminant.discriminant_order == 25
+    assert discriminant.invariant_factors == (5, 5)
+    product = 1
+    for factor in discriminant.invariant_factors:
+        product *= int(factor)
+    assert product == discriminant.discriminant_order
+
+
+def test_dual_and_discriminant_reject_a_rank_deficient_basis() -> None:
+    deficient = _lattice(2, [[1, 0], [2, 0]])
+
+    with pytest.raises(OperationDomainValidationError, match="full row rank"):
+        compute_dual(deficient)
+    with pytest.raises(OperationDomainValidationError, match="full row rank"):
+        compute_discriminant_group(deficient)

@@ -4,7 +4,14 @@
 Cartesian relation between the distinct complex roots of a bounded nonconstant
 univariate polynomial `p` over `QQ` and the distinct roots of `p'`. Each axis
 retains its source multiplicity and a backend-independent indexed algebraic
-root identity with a certified rational isolating rectangle.
+root identity with a certified rational isolating rectangle. A published
+rectangle is pairwise disjoint from every other rectangle on its axis and
+contains exactly one root of the complete axis polynomial across all
+irreducible factors, including irrational and non-real siblings that are
+closer together than any single factor's naive enclosure. A separation the
+admitted component envelope cannot represent is a typed
+`polynomial.root_critical.sibling_separation` resource non-conclusion, never a
+non-isolating rectangle.
 
 Each row contains the exact nonnegative value
 

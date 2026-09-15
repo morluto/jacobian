@@ -256,6 +256,27 @@ and require the consuming operation to reject both forgeries. For
 ordinary computed results, test the defining invariant of the returned value;
 do not introduce a replay path solely for that test.
 
+### Isolation, refinement, and separation evidence
+
+For an operation that publishes an isolating interval, rectangle, or box, the
+defining invariant is separation: each object contains exactly one root of the
+relevant complete axis polynomial, and objects on one axis are pairwise
+disjoint. Check both with an independent oracle such as `strict_root_count` or
+`count_roots` over the returned box, not by re-reading the producer's own
+refinement. Do not narrow the obstacle set to the values that are convenient to
+compare: a guard that separates only rational, real, or same-factor siblings is
+a partial-obstacle-set bug even when every accepted bound passes.
+
+Generate near-degenerate structure deliberately instead of sampling uniformly,
+because a uniform draw will not hit a gap smaller than a naive enclosure. A
+property-based strategy should construct the degeneracy, for example a surd
+pair `sqrt(a)` and `sqrt(a + 1/q)` with a large `q`, a Pell rational
+approximation of a quadratic irrational, or a reflected root. Then assert the
+defining invariant on every generated case. Pair that property with one
+minimally reduced motivating regression through the final public operation, and
+cross-check any parallel refinement against an independent oracle the way a
+base, Karatsuba, and generic algorithm are compared.
+
 For every exact-success branch, assert the defining equation or preservation
 law and reject every representable status/diagnostic combination that would
 claim success while admitting that the invariant failed. Checking only that a
@@ -356,6 +377,8 @@ algebraic claim. Select evidence by the claim being made:
 | Exact-success state | Defining invariant holds, schema exposes discriminated branches, and contradictory combinations are rejected |
 | Parent identity | Incompatible-parent rejection and explicit-map success |
 | Algebraic operation | Defining identities or an independent oracle |
+| Isolating interval, rectangle, or box | Exactly one root by an independent count, pairwise disjointness, and a constructed near-degenerate sibling |
+| Enclosure or distance certificate | Independent containment oracle and the defining inequality at its boundary |
 | Public operation | Catalog mutation conformance |
 | Process backend | Codec, version, timeout/output, and typed failure tests |
 
@@ -370,6 +393,31 @@ For example, an ideal radical needs containment and radicality evidence or an
 independent bounded oracle. A factorization needs reconstruction, retained
 unit, and positive-multiplicity properties. Known answers remain useful
 regressions, but they do not replace these defining properties.
+
+### Domain evidence patterns
+
+The recording domain does not determine the evidence; the mathematical result
+family does. The recurring patterns below name the invariant, the independent
+oracle, and the degenerate structure a generator must construct. Start from the
+family and adapt the owner's carrier and admitted bounds.
+
+| Result family | Defining evidence | Independent oracle | Constructed degeneracy |
+| --- | --- | --- | --- |
+| Exact arithmetic and modular identity | Reconstruction or reduction identity | Independent formula, or exhaustive enumeration inside a small admitted bound | Zero, unit, negative, and maximum-height values |
+| Polynomial factorization and decomposition | Product reconstruction, retained unit, positive multiplicity | Maintained backend factorization | Repeated factors, near-equal irreducible factors |
+| Root identity and isolation | Exactly one root per object and pairwise disjointness on the axis | `strict_root_count`, `count_roots`, or `eval_rational` on the support | Surd or Pell sibling below the naive enclosure; purely real/imaginary and repeated roots |
+| Exact linear algebra | Defining identity (`A A^-1`, `L U`, characteristic polynomial) | Exact elimination or a maintained exact backend | Rank-deficient, singular, and identity-shaped matrices |
+| Finite algebra and group structure | Closure, associativity, inverse, and order axioms | Exhaustive finite model, independent order computation | Zero ring, singleton group, non-associative and non-abelian cases |
+| Combinatorial enumeration | Equality with brute force and a bijection or symmetry law | Exhaustive generation on small sizes | Empty, singleton, and complete families |
+| Order and lattice structure | Order axioms and a Galois or adjunction law | Exhaustive finite poset | Empty, antichain, chain, and repeated-element cases |
+| Exact probability and generating functions | Exact identity, sum-to-one, or coefficient reconstruction | Independent exact summation or coefficient extraction | Empty support, point mass, and maximum precision |
+| Analytic enclosure | Certified containment of the true value | High-precision independent evaluation | Endpoint, zero-width, and branch-cut cases |
+| Geometric or topological invariant | Incidence, orientation, or reconstruction equation | Independent coordinate or boundary computation | Degenerate simplex, repeated point, and boundary cycle |
+
+When a listed oracle is unavailable for a carrier, a weaker invariant does not
+replace it: either strengthen the oracle or report the narrower claim and the
+unresolved case rather than presenting the weaker check as the required
+evidence.
 
 ### Derived contract bounds in match strings
 

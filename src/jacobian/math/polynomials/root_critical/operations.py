@@ -26,6 +26,7 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
+from jacobian.math._root_isolation import strict_root_count
 from jacobian.math.number_theory.algebraic_numbers.complex import (
     ComplexAlgebraicValue,
 )
@@ -299,6 +300,18 @@ def _algebraic_root_value(
     )
 
 
+def _squarefree_support(
+    primitive_factors: list[tuple[sympy.Poly, int]],
+) -> sympy.Poly:
+    """The squarefree product of every distinct source or derivative factor."""
+
+    variable = primitive_factors[0][0].gens[0]
+    expression = sympy.Integer(1)
+    for factor, _multiplicity in primitive_factors:
+        expression *= factor.as_expr()
+    return sympy.Poly(expression, variable, domain=sympy.ZZ)
+
+
 def _family(
     poly: sympy.Poly,
 ) -> tuple[tuple[RootCriticalRoot, ...], tuple[Any, ...]]:
@@ -307,8 +320,9 @@ def _family(
     for factor, multiplicity in poly.factor_list()[1]:
         primitive_factors.append((_primitive_integer_poly(factor), int(multiplicity)))
     primitive_factors.sort(key=lambda item: _factor_key(item[0]))
-    # Collect every root first, so each rectangle can be refined to exclude the
-    # other roots it might otherwise contain across factors.
+    support = _squarefree_support(primitive_factors)
+    # Collect every root first, so each rectangle can be checked against the
+    # complete isolating family of the squarefree support.
     collected: list[tuple[sympy.Poly, int, int, Any]] = []
     for factor, multiplicity in primitive_factors:
         request_checkpoint("during root-critical all_roots")
@@ -317,11 +331,24 @@ def _family(
             collected.append(
                 (factor, multiplicity, root_index, _root_value(root_index, exact_roots))
             )
-    real_roots = tuple(root for _, _, _, root in collected if _root_is_real(root))
+    for _, _, _, root in collected:
+        if getattr(root, "is_real", None) is None:
+            raise OperationDomainValidationError(
+                location=("polynomial",),
+                code="polynomial.root_critical.root_reality_undecidable",
+                message=(
+                    "an admitted source or derivative root has no decidable "
+                    "real/complex classification"
+                ),
+            )
+    all_roots = tuple(root for _, _, _, root in collected)
+    real_roots = tuple(root for root in all_roots if _root_is_real(root))
     records: list[RootCriticalRoot] = []
     values: list[Any] = []
     for factor, multiplicity, root_index, root in collected:
-        rectangle = _isolating_rectangle(root, _root_rational_value(root), real_roots)
+        rectangle = _isolating_rectangle(
+            root, _root_rational_value(root), real_roots, all_roots, support
+        )
         records.append(
             RootCriticalRoot(
                 axis_index=len(records),
@@ -382,25 +409,100 @@ def _sibling_real_intervals(
     return tuple(intervals)
 
 
+def _boxes_meet(
+    left: tuple[Fraction, Fraction, Fraction, Fraction],
+    right: tuple[Fraction, Fraction, Fraction, Fraction],
+) -> bool:
+    """Whether two closed real/imaginary boxes intersect."""
+
+    return (
+        left[0] <= right[1]
+        and right[0] <= left[1]
+        and left[2] <= right[3]
+        and right[2] <= left[3]
+    )
+
+
+def _sibling_boxes(
+    all_roots: tuple[Any, ...], root: Any, digits: int
+) -> tuple[tuple[Fraction, Fraction, Fraction, Fraction], ...]:
+    """Certified boxes for every sibling root of ``root`` at ``digits``."""
+
+    boxes: list[tuple[Fraction, Fraction, Fraction, Fraction]] = []
+    for sibling in all_roots:
+        if sibling is root:
+            continue
+        value = _root_rational_value(sibling)
+        if value is not None:
+            rational = value.as_fraction()
+            boxes.append((rational, rational, Fraction(0), Fraction(0)))
+        elif _root_is_real(sibling):
+            lower, upper = _refined_real_interval(sibling, digits)
+            boxes.append((lower, upper, Fraction(0), Fraction(0)))
+        else:
+            boxes.append(_refined_complex_box(sibling, digits))
+    return tuple(boxes)
+
+
 def _isolating_rectangle(
     root: Any,
     own_value: CanonicalRational | None,
     real_roots: tuple[Any, ...],
+    all_roots: tuple[Any, ...],
+    support: sympy.Poly,
 ) -> RootCriticalRectangle:
-    """Return a rectangle refined to exclude every other real root.
+    """Return a rectangle certified to contain exactly one source-axis root.
 
-    A rational root can lie inside an irrational sibling's rectangle (for
-    example a good rational approximation of ``sqrt(2)``), and two irrational
-    siblings can be closer than either naive enclosure (``sqrt(2)`` and
-    ``sqrt(2 + 1/q)`` with ``q = 10**127`` are only about ``3.5e-128`` apart).
-    Refine this root and its real siblings at increasing precision until the
-    certified intervals are disjoint, then fit to the carrier grid.
+    A rational root is its own exact singleton.  An irrational real root is
+    refined against the complete real sibling family, and a non-real root is
+    refined against every sibling box.  The result is checked to establish
+    exactly one support root, so a non-isolating rectangle is refused rather
+    than published.
     """
 
     rectangle = _rectangle(root)
     if own_value is not None:
         # A rational root is its own singleton; nothing to refine.
         return rectangle
+    if not _root_is_real(root):
+        return _complex_isolating_rectangle(root, all_roots)
+    rectangle = _real_isolating_rectangle(root, real_roots)
+    if (
+        strict_root_count(
+            support,
+            rectangle.real_lower.as_fraction(),
+            rectangle.real_upper.as_fraction(),
+        )
+        != 1
+    ):
+        raise OperationResourceAdmissionError(
+            location=("polynomial",),
+            code="polynomial.root_critical.sibling_separation",
+            message=(
+                "the refined real rectangle does not isolate one support root "
+                "within the admitted root-component envelope"
+            ),
+        )
+    _require_box_separated_from_nonreal(
+        (
+            rectangle.real_lower.as_fraction(),
+            rectangle.real_upper.as_fraction(),
+            rectangle.imaginary_lower.as_fraction(),
+            rectangle.imaginary_upper.as_fraction(),
+        ),
+        root,
+        all_roots,
+    )
+    return rectangle
+
+
+def _real_isolating_rectangle(
+    root: Any,
+    real_roots: tuple[Any, ...],
+) -> RootCriticalRectangle:
+    """Refine a real root's interval against every real sibling's enclosure."""
+
+    rectangle = _rectangle(root)
     lower = rectangle.real_lower.as_fraction()
     upper = rectangle.real_upper.as_fraction()
     colliding = _sibling_real_intervals(real_roots, root, 60)
@@ -514,6 +616,115 @@ def _isolating_rectangle(
         real_upper=real_upper,
         imaginary_lower=rectangle.imaginary_lower,
         imaginary_upper=rectangle.imaginary_upper,
+    )
+
+
+def _box_within_envelope(box: tuple[Fraction, Fraction, Fraction, Fraction]) -> bool:
+    """Whether every published component stays inside the carrier digit bound."""
+
+    return all(
+        _component_digit_count(value.numerator)
+        <= MAX_ROOT_CRITICAL_ROOT_COMPONENT_DIGITS
+        and _component_digit_count(value.denominator)
+        <= MAX_ROOT_CRITICAL_ROOT_COMPONENT_DIGITS
+        for value in box
+    )
+
+
+def _rectangle_from_box(
+    box: tuple[Fraction, Fraction, Fraction, Fraction],
+) -> RootCriticalRectangle:
+    return RootCriticalRectangle(
+        real_lower=CanonicalRational.from_fraction(box[0]),
+        real_upper=CanonicalRational.from_fraction(box[1]),
+        imaginary_lower=CanonicalRational.from_fraction(box[2]),
+        imaginary_upper=CanonicalRational.from_fraction(box[3]),
+    )
+
+
+def _refined_complex_box(
+    root: Any, digits: int
+) -> tuple[Fraction, Fraction, Fraction, Fraction]:
+    """A narrow certified complex box for a non-real algebraic root."""
+
+    try:
+        real_lo, real_hi, imag_lo, imag_hi = _enclose_sympy(root)
+    except (ValueError, AttributeError, TypeError):
+        real_lo, real_hi, imag_lo, imag_hi = _evalf_containing_box(root)
+    value = root.evalf(digits)
+    real, imag = value.as_real_imag()
+    centre_real = Fraction(int(sympy.Rational(real).p), int(sympy.Rational(real).q))
+    centre_imag = Fraction(int(sympy.Rational(imag).p), int(sympy.Rational(imag).q))
+    magnitude = max(abs(centre_real), abs(centre_imag))
+    guard = magnitude / 10 ** (digits - 1) + Fraction(1, 10**digits)
+    return (
+        max(real_lo, centre_real - guard),
+        min(real_hi, centre_real + guard),
+        max(imag_lo, centre_imag - guard),
+        min(imag_hi, centre_imag + guard),
+    )
+
+
+def _require_box_separated_from_nonreal(
+    box: tuple[Fraction, Fraction, Fraction, Fraction],
+    root: Any,
+    all_roots: tuple[Any, ...],
+) -> None:
+    """Refuse a real rectangle that meets any non-real sibling enclosure."""
+
+    for sibling in all_roots:
+        if sibling is root or _root_is_real(sibling):
+            continue
+        separated = False
+        for digits in (60, 120, 240, 480, 960, 1920):
+            if not _boxes_meet(box, _refined_complex_box(sibling, digits)):
+                separated = True
+                break
+        if not separated:
+            raise OperationResourceAdmissionError(
+                location=("polynomial",),
+                code="polynomial.root_critical.sibling_separation",
+                message=(
+                    "a real rectangle could not be separated from a non-real "
+                    "sibling root within the admitted root-component envelope"
+                ),
+            )
+
+
+def _complex_isolating_rectangle(
+    root: Any,
+    all_roots: tuple[Any, ...],
+) -> RootCriticalRectangle:
+    """Refine a non-real root's box until it excludes every sibling root."""
+
+    for digits in (60, 120, 240, 480, 960, 1920):
+        box = _refined_complex_box(root, digits)
+        siblings = _sibling_boxes(all_roots, root, digits)
+        if any(_boxes_meet(box, sibling) for sibling in siblings):
+            continue
+        if _box_within_envelope(box):
+            return _rectangle_from_box(box)
+        fitted = (
+            _fit_rectangle_component(box[0], round_up=False),
+            _fit_rectangle_component(box[1], round_up=True),
+            _fit_rectangle_component(box[2], round_up=False),
+            _fit_rectangle_component(box[3], round_up=True),
+        )
+        fitted_box = (
+            fitted[0].as_fraction(),
+            fitted[1].as_fraction(),
+            fitted[2].as_fraction(),
+            fitted[3].as_fraction(),
+        )
+        if not any(_boxes_meet(fitted_box, sibling) for sibling in siblings):
+            return _rectangle_from_box(fitted_box)
+    raise OperationResourceAdmissionError(
+        location=("polynomial",),
+        code="polynomial.root_critical.sibling_separation",
+        message=(
+            "a non-real root separation needs more exact digits than the "
+            "admitted root-component envelope"
+        ),
     )
 
 

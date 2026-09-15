@@ -412,6 +412,7 @@ family and adapt the owner's carrier and admitted bounds.
 | Order and lattice structure | Order axioms and a Galois or adjunction law | Exhaustive finite poset | Empty, antichain, chain, and repeated-element cases |
 | Exact probability and generating functions | Exact identity, sum-to-one, or coefficient reconstruction | Independent exact summation or coefficient extraction | Empty support, point mass, and maximum precision |
 | Analytic enclosure | Certified containment of the true value | High-precision independent evaluation | Endpoint, zero-width, and branch-cut cases |
+| Sign, orientation, or branch convention | Metamorphic law in both directions (antisymmetry, parity, row or argument swap, product identity) | Independent definition such as a Sylvester determinant or evaluation off the branch cut | Odd and even degrees, equal-degree and reordered operands, branch-cut and negative-assumption inputs |
 | Geometric or topological invariant | Incidence, orientation, or reconstruction equation | Independent coordinate or boundary computation | Degenerate simplex, repeated point, and boundary cycle |
 
 When a listed oracle is unavailable for a carrier, a weaker invariant does not

@@ -2,7 +2,7 @@ from fractions import Fraction
 
 import pytest
 import sympy
-from hypothesis import given
+from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from jacobian.catalog.models import OperationDomainValidationError
@@ -228,6 +228,53 @@ def test_matrix_input_errors_are_stable() -> None:
     nested_float = sympy.Add(sympy.Float("0.1"), sympy.Rational(1, 3), evaluate=False)
     with pytest.raises(ValueError):
         matrices.trace(sympy.Matrix([[nested_float]]))
+
+
+@st.composite
+def _square_integer_matrices(draw, *, max_size: int = 4) -> list[list[int]]:
+    size = draw(st.integers(min_value=1, max_value=max_size))
+    return [
+        draw(
+            st.lists(
+                st.integers(min_value=-5, max_value=5),
+                min_size=size,
+                max_size=size,
+            )
+        )
+        for _ in range(size)
+    ]
+
+
+@settings(max_examples=40, deadline=None)
+@given(
+    entries=_square_integer_matrices(),
+    other_entries=_square_integer_matrices(),
+)
+def test_determinant_orientation_laws(
+    entries: list[list[int]], other_entries: list[list[int]]
+) -> None:
+    """A row swap negates the determinant and products multiply determinants.
+
+    The determinant is the defining orientation invariant: a sign error from
+    internal row reordering cannot survive both the swap law and the product
+    law, while the independent product check rules out a consistently flipped
+    convention.
+    """
+
+    size = len(entries)
+    source = sympy.Matrix(entries)
+    determinant = matrices.determinant(source)
+
+    if size > 1 and entries[0] != entries[1]:
+        swapped_entries = list(entries)
+        swapped_entries[0], swapped_entries[1] = swapped_entries[1], swapped_entries[0]
+        assert matrices.determinant(sympy.Matrix(swapped_entries)) == -determinant
+
+    if len(other_entries) == size:
+        other = sympy.Matrix(other_entries)
+        assert matrices.determinant(
+            source * other
+        ) == determinant * matrices.determinant(other)
 
 
 @given(

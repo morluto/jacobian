@@ -14,11 +14,9 @@ from typing import Any
 import sympy
 
 from jacobian.math._root_isolation import strict_root_count
-
-
-def _fraction(value: Any) -> Fraction:
-    rational = sympy.Rational(value)
-    return Fraction(int(rational.p), int(rational.q))
+from jacobian.math.number_theory.algebraic_numbers.complex import (
+    algebraic_root_separation_denominator_bound,
+)
 
 
 def _rectangle_box(rectangle: Any) -> tuple[Fraction, Fraction, Fraction, Fraction]:
@@ -42,29 +40,70 @@ def _boxes_meet(
     )
 
 
+def _separation_margin(support: sympy.Poly) -> Fraction:
+    """A certified rational strictly below half the support's root separation.
+
+    ``algebraic_root_separation_denominator_bound`` bounds the separation of a
+    squarefree integer polynomial by ``1/B``; a quarter of that separates
+    distinct roots even after a bounded outward expansion.
+    """
+
+    _denominator, integral = support.clear_denoms(convert=True)
+    _content, primitive = integral.primitive()
+    coefficients = tuple(int(coefficient) for coefficient in primitive.all_coeffs())
+    bound = algebraic_root_separation_denominator_bound(coefficients)
+    return Fraction(1, 4 * bound) if bound > 0 else Fraction(1, 4)
+
+
+def _complex_support_count(
+    support: sympy.Poly, box: tuple[Fraction, Fraction, Fraction, Fraction]
+) -> int:
+    """Exactly count support roots in a complex box, with a certified retry.
+
+    SymPy's complex staircase count refuses some axis-degenerate boxes such as
+    the vertical segment published for a purely imaginary root.  Growing the box
+    outward by less than half the separation bound cannot include a distinct
+    root, so the retry is exact for the tight boxes produced here.
+    """
+
+    def count(
+        box_lower: tuple[Fraction, Fraction], box_upper: tuple[Fraction, Fraction]
+    ) -> int:
+        return int(
+            support.count_roots(
+                sympy.Rational(box_lower[0]) + sympy.I * sympy.Rational(box_lower[1]),
+                sympy.Rational(box_upper[0]) + sympy.I * sympy.Rational(box_upper[1]),
+            )
+        )
+
+    real_lower, real_upper, imag_lower, imag_upper = box
+    try:
+        return count((real_lower, imag_lower), (real_upper, imag_upper))
+    except NotImplementedError:
+        margin = _separation_margin(support)
+        try:
+            return count(
+                (real_lower - margin, imag_lower - margin),
+                (real_upper + margin, imag_upper + margin),
+            )
+        except NotImplementedError as exc:
+            raise ValueError(
+                "a complex root rectangle has an undecidable support root count"
+            ) from exc
+
+
 def require_rectangle_isolates_one_root(support: sympy.Poly, rectangle: Any) -> None:
     """Assert the rectangle contains exactly one root of ``support``."""
 
-    real_lower, real_upper, imag_lower, imag_upper = _rectangle_box(rectangle)
+    box = _rectangle_box(rectangle)
+    real_lower, real_upper, imag_lower, imag_upper = box
     if imag_lower == 0 and imag_upper == 0:
         if strict_root_count(support, real_lower, real_upper) != 1:
             raise ValueError(
                 "a real root rectangle does not isolate exactly one support root"
             )
         return
-    try:
-        count = int(
-            support.count_roots(
-                sympy.Rational(real_lower) + sympy.I * sympy.Rational(imag_lower),
-                sympy.Rational(real_upper) + sympy.I * sympy.Rational(imag_upper),
-            )
-        )
-    except NotImplementedError:
-        # SymPy's complex staircase count cannot decide every axis-degenerate
-        # box; pairwise disjointness and the axis completeness count still
-        # certificate separation, so fall back to those.
-        return
-    if count != 1:
+    if _complex_support_count(support, box) != 1:
         raise ValueError(
             "a complex root rectangle does not isolate exactly one support root"
         )

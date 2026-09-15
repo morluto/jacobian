@@ -96,12 +96,168 @@ class Factor(StrictModel):
         return self
 
 
+class ConditionalProbabilityTable(StrictModel):
+    """An exact row-normalized CPT for one variable given its parents.
+
+    ``variables`` is ``(variable, *sorted_parents)`` and the table is
+    lexicographic in that order. Every parent-assignment row sums exactly to
+    one; serialization preserves exact variable/outcome semantics.
+    """
+
+    variable: Variable
+    parents: tuple[Variable, ...] = Field(max_length=MAX_MODEL_VARS)
+    domain_sizes: tuple[DomainSize, ...] = Field(
+        min_length=1, max_length=MAX_MODEL_VARS
+    )
+    table: tuple[CanonicalRational, ...] = Field(
+        min_length=1, max_length=MAX_FACTOR_TABLE_SIZE
+    )
+
+    @model_validator(mode="after")
+    def require_valid_cpt(self) -> Self:
+        if self.variable >= len(self.domain_sizes):
+            raise PydanticCustomError(
+                "graphical_model.cpt_variable_out_of_range",
+                "cpt variable is outside the model domain",
+            )
+        if len({self.variable, *self.parents}) != 1 + len(self.parents):
+            raise PydanticCustomError(
+                "graphical_model.cpt_scope_not_distinct",
+                "cpt variable and parents must be distinct",
+            )
+        if self.parents != tuple(sorted(self.parents)):
+            raise PydanticCustomError(
+                "graphical_model.cpt_parents_not_sorted",
+                "cpt parents must be sorted",
+            )
+        if any(parent >= len(self.domain_sizes) for parent in self.parents):
+            raise PydanticCustomError(
+                "graphical_model.cpt_parent_out_of_range",
+                "cpt parent is outside the model domain",
+            )
+        variables = (self.variable, *self.parents)
+        try:
+            expected = scope_size(variables, self.domain_sizes)
+        except ValueError as error:
+            raise PydanticCustomError(
+                "graphical_model.cpt_scope_invalid", str(error)
+            ) from error
+        if len(self.table) != expected:
+            raise PydanticCustomError(
+                "graphical_model.cpt_table_size",
+                "cpt table size does not match its scope",
+            )
+        for value in self.table:
+            try:
+                require_bounded_rational(
+                    value, max_digits=MAX_RATIONAL_DIGITS, label="cpt entry"
+                )
+            except ValueError as error:
+                raise PydanticCustomError(
+                    "graphical_model.cpt_entry_invalid", str(error)
+                ) from error
+            if value.num < 0:
+                raise PydanticCustomError(
+                    "graphical_model.cpt_entry_negative",
+                    "cpt entries must be nonnegative",
+                )
+        return self
+
+    @property
+    def variables(self) -> tuple[int, ...]:
+        return (self.variable, *self.parents)
+
+    def as_factor(self) -> Factor:
+        return Factor.model_construct(
+            variables=self.variables,
+            domain_sizes=self.domain_sizes,
+            table=self.table,
+        )
+
+
+class BayesianNetwork(StrictModel):
+    """A DAG with one CPT per variable bound exactly to its parent set."""
+
+    variable_count: int = Field(ge=1, le=MAX_MODEL_VARS)
+    edges: tuple[tuple[int, int], ...] = Field(
+        default=(), max_length=MAX_MODEL_VARS * (MAX_MODEL_VARS - 1) // 2
+    )
+    domain_sizes: tuple[DomainSize, ...] = Field(
+        min_length=1, max_length=MAX_MODEL_VARS
+    )
+    tables: tuple[ConditionalProbabilityTable, ...] = Field(
+        min_length=1, max_length=MAX_MODEL_VARS
+    )
+
+    @model_validator(mode="after")
+    def require_bound_network(self) -> Self:
+        if len(self.domain_sizes) != self.variable_count:
+            raise PydanticCustomError(
+                "graphical_model.network_domain_count",
+                "domain_sizes must describe every network variable",
+            )
+        if len(self.tables) != self.variable_count:
+            raise PydanticCustomError(
+                "graphical_model.network_table_count",
+                "network must carry exactly one table per variable",
+            )
+        if self.edges != tuple(sorted(set(self.edges))):
+            raise PydanticCustomError(
+                "graphical_model.network_edges_canonical",
+                "network edges must be distinct and sorted",
+            )
+        for parent, child in self.edges:
+            if (
+                not 0 <= parent < self.variable_count
+                or not 0 <= child < self.variable_count
+                or parent == child
+            ):
+                raise PydanticCustomError(
+                    "graphical_model.network_edge_endpoints",
+                    "network edges must join distinct model variables",
+                )
+        # Acyclicity is established by the constructing operation; structural
+        # decoding checks only the cheap parent-set binding below.
+        parents: dict[int, tuple[int, ...]] = {
+            variable: tuple(
+                sorted(parent for parent, child in self.edges if child == variable)
+            )
+            for variable in range(self.variable_count)
+        }
+        seen: set[int] = set()
+        for table in self.tables:
+            if table.variable in seen:
+                raise PydanticCustomError(
+                    "graphical_model.network_duplicate_table",
+                    "network must carry exactly one table per variable",
+                )
+            seen.add(table.variable)
+            if table.domain_sizes != self.domain_sizes:
+                raise PydanticCustomError(
+                    "graphical_model.network_domain_mismatch",
+                    "every table must share the network domain_sizes",
+                )
+            if table.parents != parents[table.variable]:
+                raise PydanticCustomError(
+                    "graphical_model.network_parent_binding",
+                    "every table must bind exactly its DAG parent set",
+                )
+        if seen != set(range(self.variable_count)):
+            raise PydanticCustomError(
+                "graphical_model.network_table_coverage",
+                "network tables must cover every variable once",
+            )
+        return self
+
+
 __all__ = [
     "MAX_FACTOR_COUNT",
     "MAX_FACTOR_TABLE_SIZE",
     "MAX_MODEL_VARS",
     "MAX_RATIONAL_DIGITS",
     "MAX_VAR_DOMAIN",
+    "BayesianNetwork",
+    "ConditionalProbabilityTable",
     "Factor",
     "scope_size",
 ]

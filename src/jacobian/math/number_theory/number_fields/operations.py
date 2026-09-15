@@ -17,6 +17,7 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
+from jacobian.math.matrices.values import IntegerMatrix
 from jacobian.math.number_theory.algebraic_numbers.complex import (
     ComplexAlgebraicValue,
     algebraic_root_separation_denominator_bound,
@@ -43,7 +44,9 @@ from jacobian.math.number_theory.number_fields._embeddings_process import (
     run_embeddings_worker,
 )
 from jacobian.math.number_theory.number_fields._models import (
+    NumberFieldClassGroupResult,
     NumberFieldDiscriminantResult,
+    NumberFieldUnitGroupResult,
 )
 from jacobian.math.number_theory.number_fields._real_embedding_order import (
     compare_real_embedding_elements,
@@ -65,6 +68,10 @@ from jacobian.math.number_theory.number_fields.values import (
 # This is intentionally independent of the smaller degree bound for the
 # isolated all-embedding worker and the widened shared field carrier.
 _MAX_NATIVE_INTEGRAL_BASIS_DEGREE = 31
+# The PARI class/unit-group worker retains its own, smaller degree ceiling; the
+# native entry keeps it as an explicit admission decision rather than letting a
+# pydantic request-model error escape.
+_MAX_NATIVE_CLASS_GROUP_DEGREE = 16
 
 
 class NumberFieldEmbeddingAdmissionError(ValueError):
@@ -403,11 +410,109 @@ def verify_binary_power_sum_gap_profile(claim: BinaryPowerSumGapProfile) -> bool
     return expected == claim
 
 
+def class_group(
+    field: SimpleNumberFieldPresentation,
+) -> NumberFieldClassGroupResult:
+    """Return the class group of one presented field through the PARI worker.
+
+    This native entry is an admission boundary in its own right: it validates
+    the field type and degree, then enters the shared request-owned killable
+    worker exactly like ``number_field.class_group.compute``.
+    """
+
+    from jacobian.math.number_theory.number_fields._bnf_process import run_bnf_worker
+    from jacobian.math.number_theory.number_fields._models import (
+        NumberFieldClassGroupRequest,
+        NumberFieldClassGroupResult,
+    )
+
+    if not isinstance(field, SimpleNumberFieldPresentation):
+        raise OperationDomainValidationError(
+            location=("field",),
+            code="number_field.class_group_field_type",
+            message="class_group requires a SimpleNumberFieldPresentation field",
+        )
+    if field.degree > _MAX_NATIVE_CLASS_GROUP_DEGREE:
+        raise OperationDomainValidationError(
+            location=("field",),
+            code="number_field.class_group_degree_bound",
+            message=(
+                "class-group computation admits degree at most "
+                f"{_MAX_NATIVE_CLASS_GROUP_DEGREE}"
+            ),
+        )
+    request = NumberFieldClassGroupRequest(field=field)
+    result = run_bnf_worker(request)
+    return NumberFieldClassGroupResult._from_kernel(
+        field=field,
+        class_number=result.class_number,
+        abelian_invariants=result.abelian_invariants,
+        field_discriminant=result.field_discriminant,
+        real_embedding_count=result.real_embedding_count,
+        complex_embedding_pair_count=result.complex_embedding_pair_count,
+        ideal_representatives=tuple(
+            IntegerMatrix(
+                row_count=len(matrix),
+                column_count=len(matrix[0]) if matrix else 0,
+                entries=matrix,
+            )
+            for matrix in result.ideal_representatives
+        ),
+    )
+
+
+def unit_group(
+    field: SimpleNumberFieldPresentation,
+) -> NumberFieldUnitGroupResult:
+    """Return the unit group of one presented field through the PARI worker."""
+
+    from jacobian.math.number_theory.number_fields._bnf_process import (
+        bind_element,
+        run_bnf_worker,
+    )
+    from jacobian.math.number_theory.number_fields._models import (
+        NumberFieldUnitGroupRequest,
+        NumberFieldUnitGroupResult,
+    )
+
+    if not isinstance(field, SimpleNumberFieldPresentation):
+        raise OperationDomainValidationError(
+            location=("field",),
+            code="number_field.unit_group_field_type",
+            message="unit_group requires a SimpleNumberFieldPresentation field",
+        )
+    if field.degree > _MAX_NATIVE_CLASS_GROUP_DEGREE:
+        raise OperationDomainValidationError(
+            location=("field",),
+            code="number_field.unit_group_degree_bound",
+            message=(
+                "unit-group computation admits degree at most "
+                f"{_MAX_NATIVE_CLASS_GROUP_DEGREE}"
+            ),
+        )
+    request = NumberFieldUnitGroupRequest(field=field)
+    result = run_bnf_worker(request)
+    return NumberFieldUnitGroupResult._from_kernel(
+        field=field,
+        rank=result.rank,
+        torsion_order=result.torsion_order,
+        torsion_generator=bind_element(field, result.torsion_generator),
+        fundamental_units=tuple(
+            bind_element(field, unit) for unit in result.fundamental_units
+        ),
+        field_discriminant=result.field_discriminant,
+        real_embedding_count=result.real_embedding_count,
+        complex_embedding_pair_count=result.complex_embedding_pair_count,
+    )
+
+
 __all__ = [
     "binary_power_sum_gap_profile",
+    "class_group",
     "compare_real_embedding_elements",
     "discriminant",
     "embeddings",
+    "unit_group",
     "verify_binary_power_sum_gap_profile",
     "verify_discriminant",
 ]

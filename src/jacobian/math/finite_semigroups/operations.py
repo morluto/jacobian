@@ -5,14 +5,22 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.finite_semigroups._models import (
+    AdjoinIdentityResult,
+    AdjoinZeroResult,
     ElementPowerResult,
     FiniteSemigroup,
     GeneratedSubsemigroupResult,
     GreenRelationsResult,
+    IdealEnumerationResult,
     IdempotentsResult,
+    KaroubiProjectionResult,
+    LocalStructureResult,
     NilpotentElementsResult,
+    OppositeResult,
     PowerProfileResult,
     PrincipalIdealsResult,
+    ProductResult,
+    ReesQuotientResult,
     RegularElementsResult,
 )
 
@@ -345,7 +353,6 @@ def _left_ideals(
 ) -> list[frozenset[str]]:
     """Compute the principal left ideal S^1 a of each element."""
 
-    {label: i for i, label in enumerate(elements)}
     n = len(elements)
     ideals: list[frozenset[str]] = []
     for i in range(n):
@@ -362,7 +369,6 @@ def _right_ideals(
 ) -> list[frozenset[str]]:
     """Compute the principal right ideal a S^1 of each element."""
 
-    {label: i for i, label in enumerate(elements)}
     n = len(elements)
     ideals: list[frozenset[str]] = []
     for i in range(n):
@@ -543,12 +549,382 @@ def green_relations(semigroup: FiniteSemigroup) -> GreenRelationsResult:
     return GreenRelationsResult._from_kernel(semigroup, L, R, H, D, J)
 
 
+def _find_identity(
+    elements: tuple[str, ...], multiplication: tuple[tuple[str, ...], ...]
+) -> str | None:
+    idx = {label: i for i, label in enumerate(elements)}
+    for candidate in elements:
+        ci = idx[candidate]
+        if all(
+            multiplication[ci][j] == elements[j]
+            and multiplication[j][ci] == elements[j]
+            for j in range(len(elements))
+        ):
+            return candidate
+    return None
+
+
+def local_structure(semigroup: FiniteSemigroup) -> LocalStructureResult:
+    """Return units, local monoids, maximal subgroups, and the minimal ideal."""
+
+    from jacobian.math.finite_semigroups._models import LocalMonoidValue
+
+    _require_associative(semigroup)
+    elements = semigroup.elements
+    multiplication = semigroup.multiplication
+    idx = {label: i for i, label in enumerate(elements)}
+    identity = _find_identity(elements, multiplication)
+    if identity is None:
+        units: tuple[str, ...] = ()
+    else:
+        ei = idx[identity]
+        units = tuple(
+            a
+            for a in elements
+            if any(
+                multiplication[idx[a]][idx[b]] == identity
+                and multiplication[idx[b]][idx[a]] == identity
+                for b in elements
+            )
+        )
+    idempotent_list = _idempotents(elements, multiplication)
+    monoids: list[LocalMonoidValue] = []
+    subgroups: list[tuple[str, ...]] = []
+    for e in idempotent_list:
+        ei = idx[e]
+        # eSe carrier: {e*s*e} in declared order.
+        seen_carrier: list[str] = []
+        for s in elements:
+            value = multiplication[ei][idx[multiplication[idx[s]][ei]]]
+            if value not in seen_carrier:
+                seen_carrier.append(value)
+        carrier = tuple(a for a in elements if a in set(seen_carrier))
+        # Units of the local monoid with identity e.
+        subgroup = tuple(
+            a
+            for a in carrier
+            if any(
+                multiplication[idx[a]][idx[b]] == e
+                and multiplication[idx[b]][idx[a]] == e
+                for b in carrier
+            )
+        )
+        monoids.append(
+            LocalMonoidValue(idempotent=e, carrier=carrier, maximal_subgroup=subgroup)
+        )
+        subgroups.append(subgroup)
+    # Minimal (kernel) ideal: smallest principal two-sided ideal.
+    principals = _principal_ideals(elements, multiplication, elements)
+    kernel = min(principals, key=len)
+    for ideal in principals:
+        if set(ideal) < set(kernel):
+            kernel = ideal
+    return LocalStructureResult._from_kernel(
+        semigroup, identity, units, tuple(monoids), tuple(subgroups), kernel
+    )
+
+
+def ideal_enumeration(semigroup: FiniteSemigroup) -> IdealEnumerationResult:
+    """Enumerate all two-sided ideals and subsemigroups under an honest bound."""
+
+    _require_associative(semigroup)
+    n = len(semigroup.elements)
+    if n > 12:
+        raise OperationResourceAdmissionError(
+            location=("semigroup",),
+            code="finite_semigroup.enumeration_bound",
+            message="ideal/subsemigroup enumeration requires at most 12 elements",
+        )
+    elements = semigroup.elements
+    multiplication = semigroup.multiplication
+    idx = {label: i for i, label in enumerate(elements)}
+    ideals: list[tuple[str, ...]] = []
+    subsemigroups: list[tuple[str, ...]] = []
+    for mask in range(1, 1 << n):
+        subset = tuple(elements[i] for i in range(n) if mask & (1 << i))
+        subset_set = set(subset)
+        # Subsemigroup: closed under multiplication.
+        if all(
+            multiplication[idx[a]][idx[b]] in subset_set for a in subset for b in subset
+        ):
+            subsemigroups.append(subset)
+        if not subset:
+            continue
+        # Two-sided ideal: S*I ⊆ I and I*S ⊆ I.
+        if all(
+            multiplication[idx[s]][idx[a]] in subset_set
+            and multiplication[idx[a]][idx[s]] in subset_set
+            for s in elements
+            for a in subset
+        ):
+            ideals.append(subset)
+    return IdealEnumerationResult._from_kernel(
+        semigroup, tuple(ideals), tuple(subsemigroups)
+    )
+
+
+def opposite_semigroup(semigroup: FiniteSemigroup) -> OppositeResult:
+    """Return the opposite semigroup with transposed multiplication."""
+
+    from jacobian.math.finite_semigroups._models import OppositeResult
+
+    _require_associative(semigroup)
+    n = len(semigroup.elements)
+    transposed = tuple(
+        tuple(semigroup.multiplication[j][i] for j in range(n)) for i in range(n)
+    )
+    opposite = FiniteSemigroup(elements=semigroup.elements, multiplication=transposed)
+    return OppositeResult._from_kernel(semigroup, opposite)
+
+
+def product_semigroup(left: FiniteSemigroup, right: FiniteSemigroup) -> ProductResult:
+    """Return the direct product with componentwise multiplication."""
+
+    from jacobian.math.finite_semigroups._models import ProductResult
+
+    _require_associative(left)
+    _require_associative(right)
+    if len(left.elements) * len(right.elements) > 50:
+        raise OperationResourceAdmissionError(
+            location=("left", "right"),
+            code="finite_semigroup.product_bound",
+            message="direct product exceeds the 50-element bound",
+        )
+    elements: list[str] = []
+    left_proj: list[tuple[str, str]] = []
+    right_proj: list[tuple[str, str]] = []
+    for a in left.elements:
+        for b in right.elements:
+            label = f"{a}\u00d7{b}"
+            elements.append(label)
+            left_proj.append((label, a))
+            right_proj.append((label, b))
+    left_idx = {label: i for i, label in enumerate(left.elements)}
+    right_idx = {label: i for i, label in enumerate(right.elements)}
+    # Build the table directly over the product axis.
+    pairs = [(a, b) for a in left.elements for b in right.elements]
+    table = tuple(
+        tuple(
+            (
+                f"{left.multiplication[left_idx[a1]][left_idx[a2]]}"
+                f"\u00d7{right.multiplication[right_idx[b1]][right_idx[b2]]}"
+            )
+            for (a2, b2) in pairs
+        )
+        for (a1, b1) in pairs
+    )
+    product = FiniteSemigroup(elements=tuple(elements), multiplication=table)
+    return ProductResult._from_kernel(
+        left, right, product, tuple(left_proj), tuple(right_proj)
+    )
+
+
+def _fresh_label(elements: tuple[str, ...], base: str) -> str:
+    if base not in elements:
+        return base
+    index = 1
+    while f"{base}#{index}" in elements:
+        index += 1
+    return f"{base}#{index}"
+
+
+def adjoin_identity(semigroup: FiniteSemigroup) -> AdjoinIdentityResult:
+    """Adjoin a fresh two-sided identity with the inclusion embedding."""
+
+    from jacobian.math.finite_semigroups._models import AdjoinIdentityResult
+
+    _require_associative(semigroup)
+    one = _fresh_label(semigroup.elements, "1")
+    elements = (*semigroup.elements, one)
+    idx = {label: i for i, label in enumerate(semigroup.elements)}
+    table = tuple(
+        tuple(
+            semigroup.multiplication[idx[a]][idx[b]]
+            if a in idx and b in idx
+            else (a if b == one else b)
+            for b in elements
+        )
+        for a in elements
+    )
+    result = FiniteSemigroup(elements=elements, multiplication=table)
+    return AdjoinIdentityResult._from_kernel(
+        semigroup, result, tuple((a, a) for a in semigroup.elements)
+    )
+
+
+def adjoin_zero(semigroup: FiniteSemigroup) -> AdjoinZeroResult:
+    """Adjoin a fresh absorbing zero with the inclusion embedding."""
+
+    from jacobian.math.finite_semigroups._models import AdjoinZeroResult
+
+    _require_associative(semigroup)
+    zero = _fresh_label(semigroup.elements, "0")
+    elements = (*semigroup.elements, zero)
+    idx = {label: i for i, label in enumerate(semigroup.elements)}
+    table = tuple(
+        tuple(
+            semigroup.multiplication[idx[a]][idx[b]] if a in idx and b in idx else zero
+            for b in elements
+        )
+        for a in elements
+    )
+    result = FiniteSemigroup(elements=elements, multiplication=table)
+    return AdjoinZeroResult._from_kernel(
+        semigroup, result, tuple((a, a) for a in semigroup.elements)
+    )
+
+
+def rees_quotient(
+    semigroup: FiniteSemigroup, ideal: tuple[str, ...]
+) -> ReesQuotientResult:
+    """Collapse a two-sided ideal to a single zero class."""
+
+    from jacobian.math.finite_semigroups._models import ReesQuotientResult
+
+    _require_associative(semigroup)
+    declared = set(semigroup.elements)
+    if any(element not in declared for element in ideal):
+        raise OperationDomainValidationError(
+            location=("ideal",),
+            code="finite_semigroup.ideal_not_declared",
+            message="ideal elements must belong to the semigroup",
+        )
+    if tuple(a for a in semigroup.elements if a in set(ideal)) != ideal:
+        raise OperationDomainValidationError(
+            location=("ideal",),
+            code="finite_semigroup.ideal_order",
+            message="ideal must use declared semigroup order without repeats",
+        )
+    ideal_set = set(ideal)
+    idx = {label: i for i, label in enumerate(semigroup.elements)}
+    for s in semigroup.elements:
+        for a in ideal:
+            if (
+                semigroup.multiplication[idx[s]][idx[a]] not in ideal_set
+                or semigroup.multiplication[idx[a]][idx[s]] not in ideal_set
+            ):
+                raise OperationDomainValidationError(
+                    location=("ideal",),
+                    code="finite_semigroup.not_two_sided_ideal",
+                    message="rees quotient requires a two-sided ideal",
+                )
+    if not ideal:
+        raise OperationDomainValidationError(
+            location=("ideal",),
+            code="finite_semigroup.empty_ideal",
+            message="rees quotient requires a nonempty ideal",
+        )
+    zero = (
+        "0"
+        if "0" not in [a for a in semigroup.elements if a not in ideal_set]
+        else "0#1"
+    )
+    survivors = tuple(a for a in semigroup.elements if a not in ideal_set)
+    elements = (*survivors, zero)
+
+    def _class(value: str) -> str:
+        return zero if value in ideal_set else value
+
+    # Rebuild over the quotient axis: survivors keep products, ideal maps to zero.
+    rows: list[tuple[str, ...]] = []
+    source_of = {a: a for a in survivors}
+    source_of[zero] = ideal[0]
+    for a in elements:
+        row: list[str] = []
+        for b in elements:
+            sa, sb = source_of[a], source_of[b]
+            row.append(_class(semigroup.multiplication[idx[sa]][idx[sb]]))
+        rows.append(tuple(row))
+    quotient = FiniteSemigroup(elements=elements, multiplication=tuple(rows))
+    projection = tuple((a, _class(a)) for a in semigroup.elements)
+    return ReesQuotientResult._from_kernel(semigroup, ideal, quotient, projection)
+
+
+def karoubi_projection(semigroup: FiniteSemigroup) -> KaroubiProjectionResult:
+    """Return the Karoubi envelope over the semigroup idempotents."""
+
+    from jacobian.math.finite_categories.values import (
+        CategoryIdentifier,
+        FiniteCategory,
+        MorphismSpec,
+    )
+    from jacobian.math.finite_semigroups._models import KaroubiProjectionResult
+
+    _require_associative(semigroup)
+    elements = semigroup.elements
+    multiplication = semigroup.multiplication
+    idx = {label: i for i, label in enumerate(elements)}
+    idempotents_list = _idempotents(elements, multiplication)
+    # One entry per Hom(e, f) generator: the spec plus its e, s, f data so the
+    # composition step never has to destructure a nested identifier.
+    generators: list[tuple[MorphismSpec, str, str, str]] = []
+    for e in idempotents_list:
+        for target in idempotents_list:
+            for s in elements:
+                # Hom(e, f) = {s | f*s*e == s}.
+                if (
+                    multiplication[idx[target]][idx[multiplication[idx[s]][idx[e]]]]
+                    == s
+                ):
+                    generators.append(
+                        (
+                            MorphismSpec(
+                                morphism_id=((e, s), target),
+                                source=e,
+                                target=target,
+                            ),
+                            e,
+                            s,
+                            target,
+                        )
+                    )
+    if len(generators) > 4_096:
+        raise OperationResourceAdmissionError(
+            location=("semigroup",),
+            code="finite_semigroup.karoubi_morphism_bound",
+            message="karoubi envelope exceeds the morphism bound",
+        )
+    by_id: dict[CategoryIdentifier, MorphismSpec] = {
+        spec.morphism_id: spec for spec, _e, _s, _t in generators
+    }
+    composition: list[
+        tuple[CategoryIdentifier, CategoryIdentifier, CategoryIdentifier]
+    ] = []
+    for g_spec, _g_e, g_s, g_target in generators:
+        for f_spec, f_source, _f_s, f_target in generators:
+            if f_target != g_spec.source:
+                continue
+            product_label = multiplication[idx[g_s]][idx[_f_s]]
+            result_id = ((f_source, product_label), g_target)
+            if result_id in by_id:
+                composition.append((g_spec.morphism_id, f_spec.morphism_id, result_id))
+    category = FiniteCategory(
+        objects=tuple(idempotents_list),
+        morphisms=tuple(spec for spec, _e, _s, _t in generators),
+        identities=tuple((e, ((e, e), e)) for e in idempotents_list),
+        composition=tuple(composition),
+    )
+    return KaroubiProjectionResult._from_kernel(
+        semigroup, tuple(idempotents_list), category
+    )
+
+
 __all__ = [
+    "adjoin_identity",
+    "adjoin_zero",
     "element_power",
     "generated_subsemigroup",
     "green_relations",
+    "ideal_enumeration",
     "idempotents",
+    "karoubi_projection",
+    "local_structure",
+    "nilpotent_elements",
+    "opposite_semigroup",
     "power_profile",
     "principal_ideals",
+    "product_semigroup",
+    "rees_quotient",
+    "regular_elements",
     "verify_generated_subsemigroup",
 ]

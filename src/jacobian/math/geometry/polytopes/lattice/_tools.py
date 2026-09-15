@@ -10,6 +10,8 @@ from jacobian.math.geometry.polytopes.lattice._models import (
     EnumerateLatticePointsRequest,
     EnumerateLatticePointsResult,
     LatticePolytopeRequest,
+    WeightedEhrhartRequest,
+    WeightedEhrhartResult,
 )
 from jacobian.math.geometry.polytopes.lattice.operations import (
     count_lattice_points as native_count_lattice_points,
@@ -19,6 +21,9 @@ from jacobian.math.geometry.polytopes.lattice.operations import (
 )
 from jacobian.math.geometry.polytopes.lattice.operations import (
     enumerate_lattice_points as native_enumerate_lattice_points,
+)
+from jacobian.math.geometry.polytopes.lattice.operations import (
+    weighted_ehrhart_polynomial as native_weighted_ehrhart_polynomial,
 )
 
 
@@ -46,6 +51,15 @@ def ehrhart_polynomial(request: EhrhartRequest) -> EhrhartResult:
     """Recover exact Ehrhart coefficients from complete dilation counts."""
     return native_ehrhart_polynomial(
         request.vertices, request.degree_bound, request.max_dilation
+    )
+
+
+def weighted_ehrhart_polynomial(
+    request: WeightedEhrhartRequest,
+) -> WeightedEhrhartResult:
+    """Recover exact weighted Ehrhart coefficients from complete counts."""
+    return native_weighted_ehrhart_polynomial(
+        request.vertices, request.weight, request.degree_bound, request.max_dilation
     )
 
 
@@ -181,6 +195,47 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                     ],
                     "degree_bound": 1,
                     "max_dilation": 2,
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="polytope.weighted_ehrhart.compute",
+        title="Recover a weighted Ehrhart polynomial from exact dilation sums",
+        description="Sum a declared exact polynomial weight over every lattice "
+        "point of each integral V-polytope dilation from 0 through "
+        "max_dilation and interpolate the exact rational weighted counting "
+        "polynomial. The weight uses the canonical positional axis and "
+        "ordinary counting is weight 1; the result retains the source "
+        "vertices, weight, complete dilation table, polynomial, and exact "
+        "ascending coefficient table. Every extra requested sum is replayed "
+        "against the recovered polynomial.",
+        request_type=WeightedEhrhartRequest,
+        result_type=WeightedEhrhartResult,
+        run=weighted_ehrhart_polynomial,
+        tags=("polytope", "lattice", "ehrhart", "weighted", "exact"),
+        examples=(
+            OperationExample(
+                name="weighted_unit_interval",
+                description="Weight x0 on [0,1] counts t(t+1)/2; the weight must use the canonical positional axis.",
+                input={
+                    "vertices": [
+                        {"coordinates": [{"num": "0", "den": "1"}]},
+                        {"coordinates": [{"num": "1", "den": "1"}]},
+                    ],
+                    "weight": {
+                        "variables": ["x0"],
+                        "polynomial": {
+                            "terms": [
+                                {
+                                    "coefficient": {"num": "1", "den": "1"},
+                                    "exponents": [1],
+                                }
+                            ]
+                        },
+                    },
+                    "degree_bound": 2,
+                    "max_dilation": 3,
                 },
             ),
         ),

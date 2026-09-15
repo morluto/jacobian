@@ -15,9 +15,11 @@ if TYPE_CHECKING:
     )
     from jacobian.math.number_theory.number_fields.operations import (
         binary_power_sum_gap_profile,
+        class_group,
         compare_real_embedding_elements,
         discriminant,
         embeddings,
+        unit_group,
         verify_binary_power_sum_gap_profile,
         verify_discriminant,
     )
@@ -47,10 +49,12 @@ __all__ = [
     "SimpleNumberFieldRealEmbeddingBinding",
     "SimpleNumberFieldRealEmbeddingOrder",
     "binary_power_sum_gap_profile",
+    "class_group",
     "compare_real_embedding_elements",
     "discriminant",
     "embeddings",
     "ring_of_integers",
+    "unit_group",
     "verify_binary_power_sum_gap_profile",
     "verify_discriminant",
 ]

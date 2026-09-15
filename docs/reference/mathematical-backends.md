@@ -315,6 +315,34 @@ boundaries, touching lemniscate lobes, degree-sixteen intersection coordinates,
 and invariance under reordered atoms and added samples. Do not remove QEPCAD
 until a replacement satisfies the same accepted mathematical contract.
 
+## PARI
+
+The number-field domain uses [PARI/GP](https://pari.math.u-bordeaux.fr/) through
+the self-contained [CyPari](https://github.com/3-manifolds/CyPari) Python wheel
+for exact class-group and unit-group computation. CyPari is a pip-installable
+build of Sage's `cypari2` interface that statically links PARI, embeds the
+signals handling it needs, and ships binary wheels for Linux, macOS, and
+Windows; the repository depends on it directly rather than on a system PARI
+installation. It does not define the public request or result types: the
+adapter supplies a canonical integer polynomial built from the validated field
+presentation, and the parent retains only a compact class/unit projection bound
+back to that presentation.
+
+Only `number_field.class_group.compute` and `number_field.unit_group.compute`
+use PARI. The class-group operation returns the class number, elementary
+divisors, field discriminant, signature, and Hermite-normal-form ideal-class
+representatives as integer matrices over the field's power basis. The unit-group
+operation returns the unit rank `r1 + r2 - 1`, the torsion order and its root of
+unity, and the exact fundamental units as power-basis field elements. The
+regulator is deliberately not returned: PARI reports it as a floating-point
+value, and an exact operation must not promote a float to an exact verdict.
+
+One request-owned killable worker owns irreducibility recognition, the
+`bnfinit` call, ideal normalization, and coefficient lifting under a fixed
+degree and coefficient envelope. Missing CyPari is a typed resource refusal,
+and worker timeout, malformed output, or execution failure remain operational
+non-completions that never become a class-number or unit conclusion.
+
 ## Runtime availability and installation
 
 System-runtime requirements belong to operation declarations as

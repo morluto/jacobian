@@ -16,11 +16,16 @@ from jacobian.math.number_theory.number_fields._discriminant_process import (
     compute_nf_discriminant,
 )
 from jacobian.math.number_theory.number_fields._models import (
+    MAX_CLASS_GROUP_DEGREE,
+    NumberFieldClassGroupRequest,
+    NumberFieldClassGroupResult,
     NumberFieldDiscriminantResult,
     NumberFieldEmbeddingsRequest,
     NumberFieldRealEmbeddingOrderRequest,
     NumberFieldRequest,
     NumberFieldRingOfIntegersRequest,
+    NumberFieldUnitGroupRequest,
+    NumberFieldUnitGroupResult,
 )
 from jacobian.math.number_theory.number_fields._real_embedding_order import (
     NumberFieldRealEmbeddingOrderError,
@@ -34,8 +39,10 @@ from jacobian.math.number_theory.number_fields._ring_of_integers_process import 
 from jacobian.math.number_theory.number_fields.operations import (
     NumberFieldEmbeddingAdmissionError,
     binary_power_sum_gap_profile,
+    class_group,
     compare_real_embedding_elements,
     embeddings,
+    unit_group,
 )
 from jacobian.math.number_theory.number_fields.values import (
     MAX_NUMBER_FIELD_DISCRIMINANT_DIGITS,
@@ -94,6 +101,18 @@ def _compute_binary_power_sum_gap_profile(
             code=f"number_field.binary_power_sum.{exc.reason}",
             message=str(exc),
         ) from exc
+
+
+def _compute_class_group(
+    request: NumberFieldClassGroupRequest,
+) -> NumberFieldClassGroupResult:
+    return class_group(request.field)
+
+
+def _compute_unit_group(
+    request: NumberFieldUnitGroupRequest,
+) -> NumberFieldUnitGroupResult:
+    return unit_group(request.field)
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
@@ -317,6 +336,70 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                         },
                     },
                     "exponent_count": 3,
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="number_field.class_group.compute",
+        title="Compute the exact class group of a number field",
+        description=(
+            "Return the class number, elementary divisors, field "
+            "discriminant, signature, and Hermite-normal-form ideal-class "
+            "representatives of one presented simple number field, computed "
+            "by the maintained PARI backend inside a request-owned killable "
+            f"worker. The degree is at most {MAX_CLASS_GROUP_DEGREE}, the "
+            "polynomial must be irreducible, and the PARI runtime must be "
+            "installed; a missing backend is a typed resource refusal, never "
+            "a mathematical negative."
+        ),
+        request_type=NumberFieldClassGroupRequest,
+        result_type=NumberFieldClassGroupResult,
+        run=_compute_class_group,
+        tags=("number-field", "class-group", "ideal", "exact"),
+        examples=(
+            OperationExample(
+                name="imaginary_quadratic_class_two",
+                description=(
+                    "QQ(sqrt(-5)) has class number 2, cyclic structure C2, and "
+                    "one nontrivial ideal class."
+                ),
+                input={
+                    "field": {
+                        "domain": "QQ",
+                        "coefficients_descending": ["1", "0", "5"],
+                    }
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="number_field.unit_group.compute",
+        title="Compute the exact unit group of a number field",
+        description=(
+            "Return the unit rank r1 + r2 - 1, the torsion order and its root "
+            "of unity, and the exact fundamental units of one presented "
+            "simple number field, computed by the maintained PARI backend "
+            "inside a request-owned killable worker. The degree is at most "
+            f"{MAX_CLASS_GROUP_DEGREE}, the polynomial must be irreducible, "
+            "and the PARI runtime must be installed."
+        ),
+        request_type=NumberFieldUnitGroupRequest,
+        result_type=NumberFieldUnitGroupResult,
+        run=_compute_unit_group,
+        tags=("number-field", "unit-group", "fundamental-unit", "exact"),
+        examples=(
+            OperationExample(
+                name="real_quadratic_fundamental_unit",
+                description=(
+                    "QQ(sqrt(2)) has rank 1 and fundamental unit 1 + sqrt(2) "
+                    "up to sign."
+                ),
+                input={
+                    "field": {
+                        "domain": "QQ",
+                        "coefficients_descending": ["1", "0", "-2"],
+                    }
                 },
             ),
         ),

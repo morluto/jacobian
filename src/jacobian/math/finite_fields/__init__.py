@@ -1,5 +1,17 @@
 """Exact finite-field values and explicit restriction-of-scalars operations."""
 
+from jacobian.math.finite_fields._algebraic_sets import (
+    AffinePoint,
+    AlgebraicMonomial,
+    AlgebraicPolynomial,
+    FieldEmbedding,
+    PolynomialSystem,
+    affine_zero_count,
+    affine_zero_set,
+    base_change_system,
+    projective_zero_count,
+    projective_zero_set,
+)
 from jacobian.math.finite_fields._matrix_rank import verify_matrix_rank
 from jacobian.math.finite_fields._matrix_rank_models import MatrixRankResult
 from jacobian.math.finite_fields.operations import (
@@ -52,11 +64,15 @@ from jacobian.math.finite_fields.values import (
 )
 
 __all__ = [
+    "AffinePoint",
+    "AlgebraicMonomial",
+    "AlgebraicPolynomial",
     "Axis",
     "AxisBoundMatrix",
     "CollisionResult",
     "DirectionRankLedger",
     "FiberPartition",
+    "FieldEmbedding",
     "FiniteDimensionalSubspace",
     "FiniteFieldElement",
     "FiniteFieldPresentation",
@@ -69,13 +85,17 @@ __all__ = [
     "OrbitDistribution",
     "PaleyTournamentResult",
     "PermutationResult",
+    "PolynomialSystem",
     "PrimeFieldActionAxis",
     "PrimeFieldLinearAction",
     "ProjectiveLine",
     "ProjectivePoint",
     "RankResult",
+    "affine_zero_count",
+    "affine_zero_set",
     "analyze_collisions",
     "analyze_permutation",
+    "base_change_system",
     "direction_rank_ledger",
     "element",
     "evaluate_finite_polynomial",
@@ -91,6 +111,8 @@ __all__ = [
     "paley_tournament",
     "projective_line",
     "projective_point",
+    "projective_zero_count",
+    "projective_zero_set",
     "restrict_scalars",
     "verify_collisions",
     "verify_fiber_partition",

@@ -1,4 +1,4 @@
-"""Exact sparse wedge products of polynomial differential forms."""
+"""Exact sparse exterior calculus of polynomial differential forms."""
 
 from __future__ import annotations
 
@@ -21,6 +21,9 @@ from jacobian.math.polynomials.differential_forms.values import (
     MAX_DIFFERENTIAL_FORM_TERMS,
     FormComponent,
     PolynomialDifferentialForm,
+    PolynomialMap,
+    PolynomialVectorField,
+    PrimitiveResult,
 )
 from jacobian.math.polynomials.values import (
     MAX_POLYNOMIAL_VARIABLES,
@@ -632,4 +635,485 @@ def wedge(
     )
 
 
-__all__ = ["wedge"]
+MAX_CALCULUS_TERM_PAIRS = 1_000_000
+
+
+def _calculus_budget(
+    location: tuple[str, ...], code: str, message: str
+) -> OperationResourceAdmissionError:
+    return OperationResourceAdmissionError(
+        location=location, code=code, message=message
+    )
+
+
+def _admit_vector_field(
+    value: object, variables: tuple[str, ...], *, location: tuple[str, ...]
+) -> PolynomialVectorField:
+    """Admit a native polynomial vector field on the caller's variable axis."""
+
+    if not isinstance(value, PolynomialVectorField):
+        raise OperationDomainValidationError(
+            location=location,
+            code="differential_form.field_type",
+            message="a vector field must be a polynomial vector field value",
+        )
+    if value.variables != variables:
+        raise OperationDomainValidationError(
+            location=location,
+            code="differential_form.field_axis",
+            message="a vector field must share the form's ordered variable axis",
+        )
+    return value
+
+
+def _admit_map(value: object, *, location: tuple[str, ...]) -> PolynomialMap:
+    """Admit a native polynomial map without expanding any composition."""
+
+    if not isinstance(value, PolynomialMap):
+        raise OperationDomainValidationError(
+            location=location,
+            code="differential_form.map_type",
+            message="a pullback map must be a polynomial map value",
+        )
+    return value
+
+
+def _partial_terms(
+    terms: tuple[RationalPolynomialTerm, ...], variable: int, dimension: int
+) -> dict[tuple[int, ...], Fraction]:
+    """Differentiate sparse polynomial terms with respect to one variable."""
+
+    derived: dict[tuple[int, ...], Fraction] = {}
+    for term in terms:
+        exponent = term.exponents[variable]
+        if not exponent:
+            continue
+        scaled = term.coefficient.as_fraction() * exponent
+        if not scaled:
+            continue
+        exponents = list(term.exponents)
+        exponents[variable] -= 1
+        key = tuple(exponents)
+        derived[key] = derived.get(key, Fraction()) + scaled
+    return {key: value for key, value in derived.items() if value}
+
+
+def _add_monomials(
+    aggregate: dict[tuple[int, ...], dict[tuple[int, ...], Fraction]],
+    indices: tuple[int, ...],
+    monomials: dict[tuple[int, ...], Fraction],
+    sign: int,
+    *,
+    location: tuple[str, ...],
+) -> None:
+    """Fold signed monomials into a form aggregate with a term-count preflight."""
+
+    if not monomials:
+        return
+    terms = aggregate.setdefault(indices, {})
+    if len(terms) + len(monomials) > MAX_CALCULUS_TERM_PAIRS:
+        raise _calculus_budget(
+            location,
+            "differential_form.calculus.term_budget",
+            "exterior-calculus monomial support exceeds the bounded work envelope",
+        )
+    for exponents, value in monomials.items():
+        if any(exponent > MAX_DIFFERENTIAL_FORM_EXPONENT for exponent in exponents):
+            raise _calculus_budget(
+                location,
+                "differential_form.calculus.exponent_budget",
+                "exterior-calculus exponents exceed the bounded output envelope",
+            )
+        combined = terms.get(exponents, Fraction()) + sign * value
+        if combined:
+            terms[exponents] = combined
+        elif exponents in terms:
+            del terms[exponents]
+
+
+def _poly_mul(
+    left: dict[tuple[int, ...], Fraction],
+    right: dict[tuple[int, ...], Fraction],
+    *,
+    location: tuple[str, ...],
+) -> dict[tuple[int, ...], Fraction]:
+    """Multiply sparse monomial dictionaries with a pair-count preflight."""
+
+    if not left or not right:
+        return {}
+    if len(left) * len(right) > MAX_CALCULUS_TERM_PAIRS:
+        raise _calculus_budget(
+            location,
+            "differential_form.calculus.term_budget",
+            "exterior-calculus polynomial convolution exceeds the bounded work envelope",
+        )
+    product: dict[tuple[int, ...], Fraction] = {}
+    completed = 0
+    for left_exponents, left_value in left.items():
+        for right_exponents, right_value in right.items():
+            completed += 1
+            if completed % _CONVOLUTION_CHECKPOINT_INTERVAL == 0:
+                request_checkpoint("during differential calculus convolution")
+            exponents = tuple(
+                a + b for a, b in zip(left_exponents, right_exponents, strict=True)
+            )
+            if any(exponent > MAX_DIFFERENTIAL_FORM_EXPONENT for exponent in exponents):
+                raise _calculus_budget(
+                    location,
+                    "differential_form.calculus.exponent_budget",
+                    "exterior-calculus exponents exceed the bounded output envelope",
+                )
+            product[exponents] = product.get(exponents, Fraction()) + (
+                left_value * right_value
+            )
+    return {key: value for key, value in product.items() if value}
+
+
+def _poly_pow(
+    base: dict[tuple[int, ...], Fraction],
+    exponent: int,
+    dimension: int,
+    *,
+    location: tuple[str, ...],
+) -> dict[tuple[int, ...], Fraction]:
+    """Raise a sparse polynomial to a nonnegative power by squaring."""
+
+    result = {tuple(0 for _ in range(dimension)): Fraction(1)}
+    factor = base
+    remaining = exponent
+    while remaining:
+        if remaining & 1:
+            result = _poly_mul(result, factor, location=location)
+        remaining >>= 1
+        if remaining:
+            factor = _poly_mul(factor, factor, location=location)
+    return result
+
+
+def _substitute_polynomial(
+    terms: tuple[RationalPolynomialTerm, ...],
+    images: tuple[dict[tuple[int, ...], Fraction], ...],
+    dimension: int,
+    *,
+    location: tuple[str, ...],
+) -> dict[tuple[int, ...], Fraction]:
+    """Compose a target polynomial with source-axis image polynomials."""
+
+    composed: dict[tuple[int, ...], Fraction] = {}
+    for term in terms:
+        contribution = _poly_pow(
+            {tuple(0 for _ in range(dimension)): term.coefficient.as_fraction()},
+            1,
+            dimension,
+            location=location,
+        )
+        for variable, exponent in enumerate(term.exponents):
+            if exponent:
+                contribution = _poly_mul(
+                    contribution,
+                    _poly_pow(images[variable], exponent, dimension, location=location),
+                    location=location,
+                )
+        for exponents, value in contribution.items():
+            composed[exponents] = composed.get(exponents, Fraction()) + value
+    return {key: value for key, value in composed.items() if value}
+
+
+def _partial_dict(
+    image: dict[tuple[int, ...], Fraction], variable: int
+) -> dict[tuple[int, ...], Fraction]:
+    """Differentiate a monomial dictionary with respect to one variable."""
+
+    derived: dict[tuple[int, ...], Fraction] = {}
+    for exponents, value in image.items():
+        exponent = exponents[variable]
+        if not exponent:
+            continue
+        scaled = value * exponent
+        if not scaled:
+            continue
+        shifted = list(exponents)
+        shifted[variable] -= 1
+        key = tuple(shifted)
+        derived[key] = derived.get(key, Fraction()) + scaled
+    return {key: value for key, value in derived.items() if value}
+
+
+def _differential_of_image(
+    image: dict[tuple[int, ...], Fraction],
+    dimension: int,
+) -> list[dict[tuple[int, ...], Fraction]]:
+    """Return the partial derivatives of one image polynomial per source variable."""
+
+    return [_partial_dict(image, variable) for variable in range(dimension)]
+
+
+def exterior_derivative(
+    form: PolynomialDifferentialForm,
+) -> PolynomialDifferentialForm:
+    """Return the exact exterior derivative ``d`` of a polynomial form."""
+
+    execution_deadline(WEDGE_WALL_SECONDS)
+    form = _admit_form(form, location=("form",))
+    dimension = len(form.variables)
+    degree = int(form.degree) + 1
+    _admit_degree(degree)
+    if degree > dimension:
+        return _zero_form(form.variables, degree)
+    aggregate: _RemainingTerms = {}
+    location = ("form",)
+    for component in form.components:
+        for variable in range(dimension):
+            if variable in component.indices:
+                continue
+            derived = _partial_terms(
+                component.coefficient.polynomial.terms, variable, dimension
+            )
+            if not derived:
+                continue
+            position = sum(1 for index in component.indices if index < variable)
+            merged = tuple(sorted((*component.indices, variable)))
+            _add_monomials(
+                aggregate,
+                merged,
+                derived,
+                -1 if position % 2 else 1,
+                location=location,
+            )
+    for terms in aggregate.values():
+        for value in terms.values():
+            if (
+                _fraction_component_digits(value)
+                > MAX_DIFFERENTIAL_FORM_COEFFICIENT_DIGITS
+            ):
+                raise _calculus_budget(
+                    location,
+                    "differential_form.calculus.coefficient_budget",
+                    "exterior-derivative coefficients exceed the bounded output envelope",
+                )
+    _admit_remaining_support(aggregate)
+    return _admitted_result(
+        variables=form.variables, degree=degree, aggregate=aggregate
+    )
+
+
+def interior_product(
+    field: PolynomialVectorField,
+    form: PolynomialDifferentialForm,
+) -> PolynomialDifferentialForm:
+    """Contract a polynomial form with a polynomial vector field."""
+
+    execution_deadline(WEDGE_WALL_SECONDS)
+    form = _admit_form(form, location=("form",))
+    field = _admit_vector_field(field, form.variables, location=("field",))
+    if not int(form.degree):
+        return _zero_form(form.variables, 0)
+    degree = int(form.degree) - 1
+    field_terms = tuple(
+        {
+            term.exponents: term.coefficient.as_fraction()
+            for term in component.polynomial.terms
+        }
+        for component in field.components
+    )
+    aggregate: _RemainingTerms = {}
+    location = ("field", "form")
+    for component in form.components:
+        for position, variable in enumerate(component.indices):
+            contracted = _poly_mul(
+                {
+                    term.exponents: term.coefficient.as_fraction()
+                    for term in component.coefficient.polynomial.terms
+                },
+                field_terms[variable],
+                location=location,
+            )
+            remaining = tuple(index for index in component.indices if index != variable)
+            _add_monomials(
+                aggregate,
+                remaining,
+                contracted,
+                -1 if position % 2 else 1,
+                location=location,
+            )
+    _admit_remaining_support(aggregate)
+    return _admitted_result(
+        variables=form.variables, degree=degree, aggregate=aggregate
+    )
+
+
+def pullback(
+    mapping: PolynomialMap,
+    form: PolynomialDifferentialForm,
+) -> PolynomialDifferentialForm:
+    """Pull a polynomial form back along a polynomial map."""
+
+    execution_deadline(WEDGE_WALL_SECONDS)
+    mapping = _admit_map(mapping, location=("map",))
+    form = _admit_form(form, location=("form",))
+    if form.variables != mapping.target_variables:
+        raise OperationDomainValidationError(
+            location=("form", "variables"),
+            code="differential_form.pullback_axis",
+            message="a pulled-back form must use the map target axis",
+        )
+    source_dimension = len(mapping.source_variables)
+    images = tuple(
+        {
+            term.exponents: term.coefficient.as_fraction()
+            for term in image.polynomial.terms
+        }
+        for image in mapping.images
+    )
+    differentials = [
+        _differential_of_image(image, source_dimension) for image in images
+    ]
+    aggregate: _RemainingTerms = {}
+    location = ("map", "form")
+    for component in form.components:
+        substituted = _substitute_polynomial(
+            component.coefficient.polynomial.terms,
+            images,
+            source_dimension,
+            location=location,
+        )
+        factors = [differentials[index] for index in component.indices]
+        expanded: dict[tuple[int, ...], dict[tuple[int, ...], Fraction]] = {
+            (): substituted
+        }
+        for partials in factors:
+            staged: dict[tuple[int, ...], dict[tuple[int, ...], Fraction]] = {}
+            for chosen, accumulated in expanded.items():
+                for variable in range(source_dimension):
+                    contribution = _poly_mul(
+                        accumulated, partials[variable], location=location
+                    )
+                    if contribution:
+                        staged[(*chosen, variable)] = contribution
+            expanded = staged
+            if len(expanded) > MAX_CALCULUS_TERM_PAIRS:
+                raise _calculus_budget(
+                    location,
+                    "differential_form.calculus.term_budget",
+                    "pullback differential expansion exceeds the bounded work envelope",
+                )
+        for chosen, contribution in expanded.items():
+            if len(set(chosen)) != len(chosen):
+                continue
+            inversions = sum(
+                1
+                for left in range(len(chosen))
+                for right in range(left + 1, len(chosen))
+                if chosen[left] > chosen[right]
+            )
+            merged = tuple(sorted(chosen))
+            _add_monomials(
+                aggregate,
+                merged,
+                contribution,
+                -1 if inversions % 2 else 1,
+                location=location,
+            )
+    _admit_remaining_support(aggregate)
+    return _admitted_result(
+        variables=mapping.source_variables,
+        degree=int(form.degree),
+        aggregate=aggregate,
+    )
+
+
+def lie_derivative(
+    field: PolynomialVectorField,
+    form: PolynomialDifferentialForm,
+) -> PolynomialDifferentialForm:
+    """Return the Lie derivative via Cartan's formula ``L = i d + d i``."""
+
+    execution_deadline(WEDGE_WALL_SECONDS)
+    form = _admit_form(form, location=("form",))
+    field = _admit_vector_field(field, form.variables, location=("field",))
+    first = interior_product(field, exterior_derivative(form))
+    second = exterior_derivative(interior_product(field, form))
+    return _add_forms(first, second)
+
+
+def _add_forms(
+    left: PolynomialDifferentialForm, right: PolynomialDifferentialForm
+) -> PolynomialDifferentialForm:
+    """Add two forms on one axis with exact rational combination."""
+
+    if left.variables != right.variables or left.degree != right.degree:
+        raise OperationDomainValidationError(
+            location=("left", "right"),
+            code="differential_form.calculus_axis",
+            message="combined forms must share one variable axis and degree",
+        )
+    aggregate: _RemainingTerms = {}
+    location = ("left", "right")
+    for form, sign in ((left, 1), (right, 1)):
+        for component in form.components:
+            _add_monomials(
+                aggregate,
+                component.indices,
+                {
+                    term.exponents: term.coefficient.as_fraction()
+                    for term in component.coefficient.polynomial.terms
+                },
+                sign,
+                location=location,
+            )
+    _admit_remaining_support(aggregate)
+    return _admitted_result(
+        variables=left.variables, degree=int(left.degree), aggregate=aggregate
+    )
+
+
+def affine_homotopy_primitive(
+    form: PolynomialDifferentialForm,
+) -> PrimitiveResult:
+    """Return the cone-homotopy primitive of a closed positive-degree form."""
+
+    execution_deadline(WEDGE_WALL_SECONDS)
+    form = _admit_form(form, location=("form",))
+    degree = int(form.degree)
+    if not degree:
+        return PrimitiveResult._from_kernel(source=form, outcome="NOT_APPLICABLE")
+    if exterior_derivative(form).components:
+        return PrimitiveResult._from_kernel(source=form, outcome="NOT_APPLICABLE")
+    aggregate: _RemainingTerms = {}
+    location = ("form",)
+    for component in form.components:
+        for position, variable in enumerate(component.indices):
+            remaining = tuple(index for index in component.indices if index != variable)
+            weighted: dict[tuple[int, ...], Fraction] = {}
+            for term in component.coefficient.polynomial.terms:
+                total = sum(term.exponents) + degree
+                value = term.coefficient.as_fraction() / total
+                shifted = list(term.exponents)
+                shifted[variable] += 1
+                key = tuple(shifted)
+                weighted[key] = weighted.get(key, Fraction()) + value
+            _add_monomials(
+                aggregate,
+                remaining,
+                weighted,
+                -1 if position % 2 else 1,
+                location=location,
+            )
+    _admit_remaining_support(aggregate)
+    return PrimitiveResult._from_kernel(
+        source=form,
+        outcome="CONSTRUCTED",
+        primitive=_admitted_result(
+            variables=form.variables, degree=degree - 1, aggregate=aggregate
+        ),
+    )
+
+
+__all__ = [
+    "affine_homotopy_primitive",
+    "exterior_derivative",
+    "interior_product",
+    "lie_derivative",
+    "pullback",
+    "wedge",
+]

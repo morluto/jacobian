@@ -26,11 +26,14 @@ from jacobian.math.matrices.canonical_forms._models import (
     MAX_MATRIX_POLYNOMIAL_DIGIT_WORK,
     MAX_MATRIX_POLYNOMIAL_REMAINDER_DIGIT_WORK,
     MAX_MATRIX_POLYNOMIAL_SCALAR_PRODUCTS,
+    CentralizerResult,
     InvariantFactorEntry,
+    InvariantFactorProfileResult,
     MinimalPolynomialResult,
     MonicPolynomial,
     PrimaryDecompositionResult,
     RationalCanonicalFormResult,
+    SimilarityResult,
     _capped_add,
     _capped_lcm,
     _capped_multiply,
@@ -991,3 +994,91 @@ def verify_primary_decomposition(claim: PrimaryDecompositionResult) -> bool:
         raise
     except OperationDomainValidationError:
         return False
+
+
+def invariant_factor_profile(matrix: RationalMatrix) -> InvariantFactorProfileResult:
+    """Return the complete invariant-factor profile with field-bound relations."""
+
+    factors, characteristic, minimal = _rational_canonical_components(matrix)
+    return InvariantFactorProfileResult._from_kernel(
+        matrix=matrix,
+        invariant_factors=factors,
+        characteristic_polynomial=characteristic,
+        minimal_polynomial=minimal,
+    )
+
+
+def decide_similarity(left: RationalMatrix, right: RationalMatrix) -> SimilarityResult:
+    """Decide similarity from complete invariant-factor data."""
+
+    _admit_square(left)
+    _admit_square(right)
+    if len(left.entries) != len(right.entries):
+        left_factors, _, _ = _rational_canonical_components(left)
+        right_factors, _, _ = _rational_canonical_components(right)
+        return SimilarityResult._from_kernel(
+            left=left,
+            right=right,
+            similar=False,
+            left_factors=left_factors,
+            right_factors=right_factors,
+        )
+    left_factors, _, _ = _rational_canonical_components(left)
+    right_factors, _, _ = _rational_canonical_components(right)
+    left_key = tuple(tuple(entry.factor.coefficients) for entry in left_factors)
+    right_key = tuple(tuple(entry.factor.coefficients) for entry in right_factors)
+    return SimilarityResult._from_kernel(
+        left=left,
+        right=right,
+        similar=left_key == right_key,
+        left_factors=left_factors,
+        right_factors=right_factors,
+    )
+
+
+def centralizer_basis(matrix: RationalMatrix) -> CentralizerResult:
+    """Return a complete exact basis of the centralizer {X : AX = XA}."""
+
+    from fractions import Fraction
+
+    from jacobian._exact import CanonicalRational
+    from jacobian.math.matrices.operations import nullspace_result
+
+    _admit_square(matrix)
+    n = len(matrix.entries)
+    entries = _matrix_entries(matrix)
+    # Kronecker system (I(x)A - A^T(x)I) vec(X) = 0, row-major vec.
+    rows: list[list[CanonicalRational]] = []
+    for i in range(n):
+        for j in range(n):
+            row: list[CanonicalRational] = []
+            for k in range(n):
+                for ell in range(n):
+                    value = Fraction(0)
+                    if j == ell:
+                        value += entries[i][k]
+                    if i == k:
+                        value -= entries[ell][j]
+                    row.append(CanonicalRational.from_fraction(value))
+            rows.append(row)
+    from jacobian.math.matrices.values import RationalMatrix as RationalMatrixValue
+
+    system = RationalMatrixValue(
+        domain="QQ",
+        row_count=n * n,
+        column_count=n * n,
+        entries=tuple(tuple(row) for row in rows),
+    )
+    null = nullspace_result(system)
+    basis: list[RationalMatrixValue] = []
+    for vector in null.basis_vectors:
+        cells = tuple(vector)
+        grid = tuple(tuple(cells[i * n + j] for j in range(n)) for i in range(n))
+        basis.append(
+            RationalMatrixValue(domain="QQ", row_count=n, column_count=n, entries=grid)
+        )
+    # The identity always commutes, so the centralizer is never empty.
+    assert basis, "centralizer must contain the identity"
+    return CentralizerResult._from_kernel(
+        matrix=matrix, dimension=len(basis), basis=tuple(basis)
+    )

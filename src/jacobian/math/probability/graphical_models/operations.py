@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections import deque
 from collections.abc import Sequence
 from fractions import Fraction
-from itertools import combinations
+from itertools import combinations, pairwise
 from math import gcd
 
 from jacobian._exact import (
@@ -18,7 +18,10 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math._rational_height import RationalHeight
-from jacobian.math.probability.graphical_models._models import DSeparationResult
+from jacobian.math.probability.graphical_models._models import (
+    DSeparationResult,
+    EliminationStep,
+)
 from jacobian.math.probability.graphical_models._validation import (
     validate_d_separation_input,
 )
@@ -26,6 +29,8 @@ from jacobian.math.probability.graphical_models.values import (
     MAX_FACTOR_COUNT,
     MAX_MODEL_VARS,
     MAX_RATIONAL_DIGITS,
+    BayesianNetwork,
+    ConditionalProbabilityTable,
     Factor,
     scope_size,
 )
@@ -433,6 +438,139 @@ def verify_d_separation(claim: DSeparationResult) -> bool:
     return claim.d_separated == expected
 
 
+def variable_elimination_trace(
+    factors: Sequence[Factor],
+    domain_sizes: tuple[int, ...],
+    elimination_order: tuple[int, ...],
+    query_variables: tuple[int, ...],
+) -> tuple[tuple[EliminationStep, ...], Factor]:
+    """Return one trace step per eliminated variable plus the final factor.
+
+    Each step retains input scopes, the product scope/factor, the marginalized
+    output scope/factor, and fill edges completing the product scope beyond
+    previously co-occurring pairs. No order-optimality claim is made.
+    """
+
+    try:
+        _require_elimination_contract(
+            factors, domain_sizes, elimination_order, query_variables
+        )
+    except OperationDomainValidationError:
+        raise
+    except ValueError as exc:
+        raise OperationDomainValidationError(
+            location=("factors", "elimination_order", "query_variables"),
+            code="graphical_model.elimination_contract",
+            message=str(exc),
+        ) from exc
+    co_occurring: set[tuple[int, int]] = set()
+    for factor in factors:
+        for left_index in range(len(factor.variables)):
+            for right_index in range(left_index + 1, len(factor.variables)):
+                pair = tuple(
+                    sorted(
+                        (
+                            factor.variables[left_index],
+                            factor.variables[right_index],
+                        )
+                    )
+                )
+                co_occurring.add((pair[0], pair[1]))
+    working = list(factors)
+    steps: list[EliminationStep] = []
+    for variable in elimination_order:
+        relevant = [factor for factor in working if variable in factor.variables]
+        working = [factor for factor in working if variable not in factor.variables]
+        input_scopes = tuple(factor.variables for factor in relevant)
+        union = tuple(sorted({item for scope in input_scopes for item in scope}))
+        product = _multiply_all(relevant)
+        output = factor_marginalize(product, variable)
+        output_scope = tuple(item for item in union if item != variable)
+        fill: list[tuple[int, int]] = []
+        for left_index in range(len(union)):
+            for right_index in range(left_index + 1, len(union)):
+                pair = (union[left_index], union[right_index])
+                if pair not in co_occurring:
+                    fill.append(pair)
+                    co_occurring.add(pair)
+        steps.append(
+            EliminationStep._from_kernel(
+                eliminated=variable,
+                input_scopes=input_scopes,
+                product_scope=union,
+                product=product,
+                output_scope=output_scope,
+                output=output,
+                fill_edges=tuple(fill),
+            )
+        )
+        working.append(output)
+    final = _reindex_factor(_multiply_all(working), query_variables)
+    return tuple(steps), final
+
+
+def junction_tree_calibrate(
+    network: BayesianNetwork,
+    elimination_order: tuple[int, ...],
+) -> tuple[
+    tuple[tuple[int, ...], ...],
+    tuple[tuple[int, ...], ...],
+    tuple[Factor, ...],
+    tuple[Factor, ...],
+    Factor,
+]:
+    """Calibrate clique/separator marginals of a Bayes-net joint.
+
+    Cliques are the elimination product scopes plus the final query scope;
+    separators are consecutive clique intersections. Marginals marginalize the
+    exact joint onto each scope, so adjacent cliques agree on separators and
+    the partition (joint sum) equals one.
+    """
+
+    all_vars = tuple(sorted({table.variable for table in network.tables}))
+    if len(set(elimination_order)) != len(elimination_order):
+        _reject(
+            "elimination_order", "elimination order cannot repeat", "elimination_order"
+        )
+    if not set(elimination_order) <= set(all_vars):
+        _reject(
+            "elimination_order",
+            "elimination order must use model variables",
+            "elimination_order",
+        )
+    # The elimination order fixes the query scope: eliminating every model
+    # variable leaves the empty scalar scope, which is a valid partition.
+    query = tuple(sorted(set(all_vars) - set(elimination_order)))
+    factors = [table.as_factor() for table in network.tables]
+    steps, _ = variable_elimination_trace(
+        factors, network.domain_sizes, elimination_order, query
+    )
+    cliques = tuple(step.product_scope for step in steps)
+    if not cliques or set(cliques[-1]) != set(query):
+        cliques = (*cliques, query)
+    separators = tuple(
+        tuple(sorted(set(left) & set(right)))
+        for left, right in pairwise(cliques)
+        if set(left) & set(right)
+    )
+    joint = bayes_net_joint(network)
+
+    def _marginal(scope: tuple[int, ...]) -> Factor:
+        result = joint
+        for variable in [v for v in result.variables if v not in scope]:
+            result = factor_marginalize(result, variable)
+        return _reindex_factor(result, scope)
+
+    clique_marginals = tuple(_marginal(clique) for clique in cliques)
+    separator_marginals = tuple(_marginal(separator) for separator in separators)
+    partition = Factor.model_construct(
+        variables=(),
+        domain_sizes=network.domain_sizes,
+        table=(CanonicalRational.from_fraction(Fraction(1)),),
+    )
+    return cliques, separators, clique_marginals, separator_marginals, partition
+
+
 def _multiply_all(factors: Sequence[Factor]) -> Factor:
     if not factors:
         raise ValueError("at least one factor is required")
@@ -440,6 +578,126 @@ def _multiply_all(factors: Sequence[Factor]) -> Factor:
     for factor in factors[1:]:
         result = factor_multiply(result, factor)
     return result
+
+
+def _check_cpt_rows(table: ConditionalProbabilityTable) -> None:
+    """Establish exact row normalization (each parent row sums to one)."""
+
+    variables = table.variables
+    domain_sizes = table.domain_sizes
+    parents = table.parents
+    if not parents:
+        total = sum((value.as_fraction() for value in table.table), Fraction(0))
+        if total != 1:
+            _reject(
+                "cpt_row_not_normalized",
+                "cpt rows must sum exactly to one",
+                "table",
+            )
+        return
+    parent_size = scope_size(parents, domain_sizes)
+    for parent_index in range(parent_size):
+        parent_assignment = _index_to_assignment(parent_index, parents, domain_sizes)
+        positions = {variable: index for index, variable in enumerate(variables)}
+        total = Fraction(0)
+        for value in range(domain_sizes[table.variable]):
+            full = [0] * len(variables)
+            for variable, position in positions.items():
+                if variable == table.variable:
+                    full[position] = value
+                else:
+                    full[position] = parent_assignment[parents.index(variable)]
+            flat = _assignment_to_index(tuple(full), variables, domain_sizes)
+            total += table.table[flat].as_fraction()
+        if total != 1:
+            _reject(
+                "cpt_row_not_normalized",
+                "cpt rows must sum exactly to one",
+                "table",
+            )
+
+
+def _check_acyclic(variable_count: int, edges: tuple[tuple[int, int], ...]) -> None:
+    children: dict[int, set[int]] = {node: set() for node in range(variable_count)}
+    indegree = [0] * variable_count
+    for parent, child in edges:
+        if child not in children[parent]:
+            children[parent].add(child)
+            indegree[child] += 1
+    queue = deque(node for node in range(variable_count) if indegree[node] == 0)
+    visited = 0
+    while queue:
+        node = queue.popleft()
+        visited += 1
+        for child in children[node]:
+            indegree[child] -= 1
+            if indegree[child] == 0:
+                queue.append(child)
+    if visited != variable_count:
+        _reject("network_cycle", "network edges must be acyclic", "edges")
+
+
+def construct_bayes_net(
+    variable_count: int,
+    edges: tuple[tuple[int, int], ...],
+    domain_sizes: tuple[int, ...],
+    tables: tuple[ConditionalProbabilityTable, ...],
+) -> BayesianNetwork:
+    """Bind every CPT exactly to its DAG parent set with normalized rows."""
+
+    if type(variable_count) is not int or not 1 <= variable_count <= MAX_MODEL_VARS:
+        _reject(
+            "variable_count", "variable count is outside its bound", "variable_count"
+        )
+    normalized: list[tuple[int, int]] = []
+    for edge in edges:
+        if type(edge) is not tuple or len(edge) != 2:
+            _reject("edge_shape", "edges must be integer pairs", "edges")
+        parent, child = int(edge[0]), int(edge[1])
+        if not 0 <= parent < variable_count or not 0 <= child < variable_count:
+            _reject(
+                "edge_endpoints",
+                "network edges must join declared model variables",
+                "edges",
+            )
+        normalized.append((parent, child))
+    normalized_edges = tuple(normalized)
+    _check_acyclic(variable_count, normalized_edges)
+    network = BayesianNetwork.model_construct(
+        variable_count=variable_count,
+        edges=tuple(sorted(set(normalized_edges))),
+        domain_sizes=domain_sizes,
+        tables=tables,
+    )
+    # Structural binding is re-established here because model_construct skips it;
+    # malformed caller values raise typed domain errors, not pydantic errors.
+    try:
+        network = BayesianNetwork.model_validate(network.model_dump())
+    except Exception as error:
+        _reject("network_binding", f"network binding failed: {error}", "tables")
+    for table in network.tables:
+        _admit_factor_source(table.as_factor(), "cpt")
+        _check_cpt_rows(table)
+    # Joint-size preflight: the induced joint must fit the factor bound.
+    scope_size(tuple(range(variable_count)), domain_sizes)
+    return network
+
+
+def bayes_net_joint(network: BayesianNetwork) -> Factor:
+    """Return the induced joint distribution, checked to sum to one."""
+
+    for table in network.tables:
+        _check_cpt_rows(table)
+    factors = [
+        table.as_factor() for table in sorted(network.tables, key=lambda t: t.variable)
+    ]
+    joint = _multiply_all(factors)
+    total = sum((value.as_fraction() for value in joint.table), Fraction(0))
+    if total != 1:
+        _reject("joint_not_normalized", "induced joint must sum to one", "tables")
+    if set(joint.variables) != set(range(network.variable_count)):
+        raise RuntimeError("bayes-net joint did not cover every variable")
+    return _reindex_factor(joint, tuple(range(network.variable_count)))
 
 
 def _require_compatible_domains(
@@ -560,9 +818,13 @@ def _projected_index(
 
 
 __all__ = [
+    "bayes_net_joint",
+    "construct_bayes_net",
     "d_separation",
     "factor_marginalize",
     "factor_multiply",
+    "junction_tree_calibrate",
     "variable_elimination",
+    "variable_elimination_trace",
     "verify_d_separation",
 ]

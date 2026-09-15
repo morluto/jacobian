@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from math import gcd
-from typing import Self
+from typing import Literal, Self
 
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
@@ -1604,6 +1604,112 @@ class PrimaryDecompositionResult(StrictModel):
         )
 
 
+class InvariantFactorProfileResult(StrictModel):
+    """Complete monic invariant-factor profile with field-bound relations.
+
+    The kernel establishes the divisibility chain, the product relation
+    against the characteristic polynomial, and the terminal minimal-polynomial
+    relation; structural decoding checks only monic shape and axis coverage.
+    """
+
+    matrix: RationalMatrix
+    invariant_factors: tuple[InvariantFactorEntry, ...] = Field(min_length=1)
+    characteristic_polynomial: MonicPolynomial
+    minimal_polynomial: MonicPolynomial
+    scope: Literal["COMPLETE_FIELD_BOUND_PROFILE"] = "COMPLETE_FIELD_BOUND_PROFILE"
+
+    @model_validator(mode="after")
+    def require_structural_profile(self) -> Self:
+        dimension = len(self.matrix.entries)
+        if sum(entry.block_size for entry in self.invariant_factors) != dimension:
+            raise _validation_error(
+                "shape_mismatch", "block sizes must total the matrix dimension"
+            )
+        for entry in self.invariant_factors:
+            if entry.block_size != len(entry.factor.coefficients) - 1:
+                raise _validation_error(
+                    "invariant_mismatch", "each block size must equal its factor degree"
+                )
+        if self.invariant_factors[-1].factor != self.minimal_polynomial:
+            raise _validation_error(
+                "invariant_mismatch",
+                "the final invariant factor is the minimal polynomial",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        matrix: RationalMatrix,
+        invariant_factors: tuple[InvariantFactorEntry, ...],
+        characteristic_polynomial: MonicPolynomial,
+        minimal_polynomial: MonicPolynomial,
+    ) -> Self:
+        return cls.model_construct(
+            matrix=matrix,
+            invariant_factors=invariant_factors,
+            characteristic_polynomial=characteristic_polynomial,
+            minimal_polynomial=minimal_polynomial,
+        )
+
+
+class SimilarityRequest(StrictModel):
+    left: RationalMatrix
+    right: RationalMatrix
+
+
+class SimilarityResult(StrictModel):
+    """Similarity decision from complete invariant-factor data.
+
+    Two matrices are similar exactly when their canonical representatives
+    agree over the same field and dimension. No constructive basis is returned;
+    the shared profile is the proof.
+    """
+
+    left: RationalMatrix
+    right: RationalMatrix
+    similar: bool
+    left_factors: tuple[InvariantFactorEntry, ...]
+    right_factors: tuple[InvariantFactorEntry, ...]
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        left: RationalMatrix,
+        right: RationalMatrix,
+        similar: bool,
+        left_factors: tuple[InvariantFactorEntry, ...],
+        right_factors: tuple[InvariantFactorEntry, ...],
+    ) -> Self:
+        return cls.model_construct(
+            left=left,
+            right=right,
+            similar=similar,
+            left_factors=left_factors,
+            right_factors=right_factors,
+        )
+
+
+class CentralizerResult(StrictModel):
+    """Complete exact centralizer as a nullspace basis of n-by-n matrices."""
+
+    matrix: RationalMatrix
+    dimension: int = Field(ge=1)
+    basis: tuple[RationalMatrix, ...]
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        matrix: RationalMatrix,
+        dimension: int,
+        basis: tuple[RationalMatrix, ...],
+    ) -> Self:
+        return cls.model_construct(matrix=matrix, dimension=dimension, basis=basis)
+
+
 __all__ = [
     "MATRIX_POLYNOMIAL_EVALUATION_PASSES",
     "MAX_CANONICAL_FORM_DIMENSION",
@@ -1611,7 +1717,9 @@ __all__ = [
     "MAX_MATRIX_POLYNOMIAL_DIGIT_WORK",
     "MAX_MATRIX_POLYNOMIAL_REMAINDER_DIGIT_WORK",
     "MAX_MATRIX_POLYNOMIAL_SCALAR_PRODUCTS",
+    "CentralizerResult",
     "InvariantFactorEntry",
+    "InvariantFactorProfileResult",
     "MatrixPolynomialEvaluationRequest",
     "MatrixPolynomialEvaluationResult",
     "MatrixPolynomialRemainderRequest",
@@ -1620,6 +1728,8 @@ __all__ = [
     "MonicPolynomial",
     "PrimaryDecompositionResult",
     "RationalCanonicalFormResult",
+    "SimilarityRequest",
+    "SimilarityResult",
     "SquareMatrixRequest",
 ]
 

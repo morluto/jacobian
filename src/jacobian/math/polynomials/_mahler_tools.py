@@ -1,6 +1,11 @@
 """Integer-polynomial profile and Mahler-measure operation declarations."""
 
 from jacobian.catalog.models import MathTool, OperationExample
+from jacobian.math.polynomials._cyclotomic_factor import (
+    CyclotomicFactorProfileRequest,
+    CyclotomicFactorProfileResult,
+    cyclotomic_factor_profile,
+)
 from jacobian.math.polynomials._elementary_kernel import (
     integer_polynomial_primitive_part,
 )
@@ -43,6 +48,12 @@ def _run_quadratic_root_profile(
 
 def _run_mahler_measure(request: MahlerMeasureRequest) -> MahlerMeasureResult:
     return mahler_measure(request.polynomial)
+
+
+def _run_cyclotomic_factor_profile(
+    request: CyclotomicFactorProfileRequest,
+) -> CyclotomicFactorProfileResult:
+    return cyclotomic_factor_profile(request.polynomial)
 
 
 INTEGER_POLYNOMIAL_PROFILE_OPERATIONS = (
@@ -118,6 +129,27 @@ INTEGER_POLYNOMIAL_PROFILE_OPERATIONS = (
                 name="golden_measure",
                 description="The Mahler measure of x^2-x-1 is the golden ratio.",
                 input={"polynomial": {"coefficients": ["1", "-1", "-1"]}},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="polynomial.cyclotomic_factor_profile.compute",
+        title="Match a factor against cyclotomic polynomials",
+        description=(
+            "Compare a primitive integer polynomial against every Phi_n with "
+            "phi(n) == degree up to index 500; return the matched index with exact "
+            "reconstruction or NOT_IDENTIFIED_IN_SUPPORTED_RANGE, which is not a "
+            "proof of noncyclotomicity outside the finite bound."
+        ),
+        request_type=CyclotomicFactorProfileRequest,
+        result_type=CyclotomicFactorProfileResult,
+        run=_run_cyclotomic_factor_profile,
+        tags=("polynomial", "cyclotomic", "factor", "exact"),
+        examples=(
+            OperationExample(
+                name="phi_three",
+                description="x^2+x+1 is the third cyclotomic polynomial; the factor must be monic.",
+                input={"polynomial": {"coefficients": ["1", "1", "1"]}},
             ),
         ),
     ),

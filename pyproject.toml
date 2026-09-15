@@ -17,6 +17,7 @@ classifiers = [
 ]
 dependencies = [
     "anyio>=4.5,<5",
+    "CyPari>=2.5,<3",
     "mcp==2.1.0",
     "networkx==3.6.1",
     "pydantic>=2.12,<3",
@@ -134,6 +135,10 @@ mypy_path = "typings"
 module = ["sympy", "sympy.*"]
 ignore_missing_imports = true
 
+[[tool.mypy.overrides]]
+module = ["cypari", "cypari.*"]
+ignore_missing_imports = true
+
 # Benchmark tooling: structural mypy boundary (see tools/check_benchmark_static.py).
 # The following overrides address known third-party stub gaps and platform-
 # specific attributes that surface when checking the complete benchmarks.tooling
@@ -238,6 +243,7 @@ ignore_imports = [
     "jacobian.math.combinatorics._counting_process -> jacobian.process",
     "jacobian.math.number_theory.galois._factor_process -> jacobian.process",
     "jacobian.math.number_theory.number_fields._integral_basis_process -> jacobian.process",
+    "jacobian.math.number_theory.number_fields._bnf_process -> jacobian.process",
     "jacobian.math.number_theory.number_fields._embeddings_process -> jacobian.process",
     "jacobian.math.number_theory.number_fields._real_embedding_order_process -> jacobian.process",
     "jacobian.math.number_theory.algebraic_numbers._radix_prefix_process -> jacobian.process",
@@ -276,6 +282,7 @@ ignore_imports = [
     "jacobian.math.polynomials.real_algebra._common_interlacing_process -> jacobian.process",
     # Root-critical profile factorization and isolation run in one bounded worker.
     "jacobian.math.polynomials.root_critical._profile_process -> jacobian.process",
+    "jacobian.math.polynomials.root_critical._splitting_process -> jacobian.process",
     "jacobian.math.polynomials.unit_circle._root_profile_process -> jacobian.process",
 ]
 

@@ -7,6 +7,10 @@ from typing import Literal
 
 from pydantic_core import PydanticCustomError
 
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.logic.languages.words._fixed_point_admission import (
     require_fixed_point_prefix_budget,
 )
@@ -20,6 +24,7 @@ from jacobian.math.logic.languages.words._models import (
     require_word_family_allocation,
 )
 from jacobian.math.logic.languages.words.values import (
+    MAX_MORPHISM_IMAGE_LENGTH,
     MAX_MORPHISM_OUTPUT_LENGTH,
     FiniteWord,
     ProlongableSubstitution,
@@ -177,26 +182,104 @@ def prefix_function(word: FiniteWord) -> tuple[int, ...]:
     return tuple(result)
 
 
-def apply_morphism(morphism: WordMorphism, word: FiniteWord) -> FiniteWord:
+def _require_morphism(value: object, *, location: tuple[str, ...]) -> WordMorphism:
+    if not isinstance(value, WordMorphism):
+        raise OperationDomainValidationError(
+            location=location,
+            code="word.morphism_type",
+            message="morphism must be a WordMorphism value",
+        )
+    return value
+
+
+def _require_word(value: object, *, location: tuple[str, ...]) -> FiniteWord:
+    if not isinstance(value, FiniteWord):
+        raise OperationDomainValidationError(
+            location=location,
+            code="word.word_type",
+            message="word must be a FiniteWord value",
+        )
+    return value
+
+
+def _require_apply_axis(morphism: WordMorphism, word: FiniteWord) -> None:
     if word.alphabet != morphism.source_alphabet:
-        raise ValueError("word alphabet must equal the morphism source alphabet")
+        raise OperationDomainValidationError(
+            location=("word", "morphism"),
+            code="word.morphism_source_axis_mismatch",
+            message="word alphabet must equal the morphism source alphabet",
+        )
+
+
+def _require_composable(first: WordMorphism, second: WordMorphism) -> None:
+    if first.target_alphabet != second.source_alphabet:
+        raise OperationDomainValidationError(
+            location=("first", "second"),
+            code="word.morphism_axis_mismatch",
+            message="first target alphabet must equal second source alphabet",
+        )
+
+
+def _require_endomorphism(morphism: WordMorphism, *, location: tuple[str, ...]) -> None:
+    if morphism.source_alphabet != morphism.target_alphabet:
+        raise OperationDomainValidationError(
+            location=location,
+            code="word.morphism_not_endomorphism",
+            message="morphism power/iteration requires identical source and target alphabets",
+        )
+
+
+def _require_exponent(exponent: int) -> None:
+    if type(exponent) is not int or not 0 <= exponent <= 16:
+        raise OperationDomainValidationError(
+            location=("exponent",),
+            code="word.morphism_exponent_out_of_range",
+            message="exponent must be an integer between 0 and 16",
+        )
+
+
+def _require_steps(steps: int) -> None:
+    if type(steps) is not int or not 0 <= steps <= 16:
+        raise OperationDomainValidationError(
+            location=("steps",),
+            code="word.morphism_steps_out_of_range",
+            message="steps must be an integer between 0 and 16",
+        )
+
+
+def apply_morphism(morphism: WordMorphism, word: FiniteWord) -> FiniteWord:
+    _require_morphism(morphism, location=("morphism",))
+    _require_word(word, location=("word",))
+    _require_apply_axis(morphism, word)
     image_map = dict(zip(morphism.source_alphabet, morphism.images, strict=True))
     output_length = sum(len(image_map[letter]) for letter in word.letters)
     if output_length > MAX_MORPHISM_OUTPUT_LENGTH:
-        raise ValueError("morphism output exceeds the length bound")
+        raise OperationResourceAdmissionError(
+            location=("word", "morphism"),
+            code="word.morphism_output_budget",
+            message=(
+                f"morphism output exceeds the length bound ({output_length} > "
+                f"{MAX_MORPHISM_OUTPUT_LENGTH})"
+            ),
+        )
     letters = tuple(output for letter in word.letters for output in image_map[letter])
     return FiniteWord(alphabet=morphism.target_alphabet, letters=letters)
 
 
 def compose_morphisms(first: WordMorphism, second: WordMorphism) -> WordMorphism:
-    if first.target_alphabet != second.source_alphabet:
-        raise ValueError("first target alphabet must equal second source alphabet")
+    _require_morphism(first, location=("first",))
+    _require_morphism(second, location=("second",))
+    _require_composable(first, second)
     second_map = dict(zip(second.source_alphabet, second.images, strict=True))
     if any(
         sum(len(second_map[letter]) for letter in image) > MAX_MORPHISM_OUTPUT_LENGTH
         for image in first.images
     ):
-        raise ValueError("composed morphism image exceeds the length bound")
+        raise OperationResourceAdmissionError(
+            location=("first", "second"),
+            code="word.composed_morphism_image_budget",
+            message="composed morphism image exceeds the length bound",
+        )
     images = tuple(
         tuple(output for letter in image for output in second_map[letter])
         for image in first.images
@@ -206,6 +289,174 @@ def compose_morphisms(first: WordMorphism, second: WordMorphism) -> WordMorphism
         target_alphabet=second.target_alphabet,
         images=images,
     )
+
+
+def morphism_image_lengths(morphism: WordMorphism) -> tuple[int, ...]:
+    """Return one image length per source symbol, in source order."""
+
+    _require_morphism(morphism, location=("morphism",))
+    return tuple(len(image) for image in morphism.images)
+
+
+@dataclass(frozen=True, slots=True)
+class FactorComplexityAnalysis:
+    max_order: int
+    complexity: tuple[int, ...]
+    families: tuple[tuple[tuple[str, ...], ...], ...]
+
+
+def factor_complexity_prefix(
+    word: FiniteWord, max_order: int
+) -> FactorComplexityAnalysis:
+    """Return distinct-factor counts p(0)..p(max) of the supplied prefix.
+
+    The scope is exactly the supplied finite word; no infinite-language limit
+    is asserted. p(0) == 1 (the empty factor) whenever the request is admitted.
+    """
+
+    if type(max_order) is not int or not 0 <= max_order <= len(word.letters):
+        raise OperationDomainValidationError(
+            location=("max_order",),
+            code="word.complexity_order_out_of_range",
+            message="max_order must lie between 0 and the word length",
+        )
+    total_cells = sum(
+        (len(word.letters) - order + 1) * max(1, order)
+        for order in range(max_order + 1)
+    )
+    if total_cells > 200_000:
+        raise OperationResourceAdmissionError(
+            location=("word", "max_order"),
+            code="word.complexity_family_budget",
+            message="factor-family materialization exceeds the allocation bound",
+        )
+    families: list[tuple[tuple[str, ...], ...]] = []
+    complexity: list[int] = []
+    for order in range(max_order + 1):
+        if order == 0:
+            families.append(((),))
+            complexity.append(1)
+            continue
+        analysis = factors_of_length(word, order)
+        families.append(analysis.factors)
+        complexity.append(len(analysis.factors))
+    return FactorComplexityAnalysis(
+        max_order=max_order,
+        complexity=tuple(complexity),
+        families=tuple(families),
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class RauzyGraphAnalysis:
+    order: int
+    vertices: tuple[tuple[str, ...], ...]
+    edges: tuple[tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]], ...]
+    occurrences: tuple[tuple[int, ...], ...]
+
+
+def rauzy_graph(word: FiniteWord, order: int) -> RauzyGraphAnalysis:
+    """Return the Rauzy graph of the supplied prefix at the declared order.
+
+    Vertices are distinct length-``order`` factors; edges are distinct
+    length-``order+1`` factors with (prefix, factor, suffix) labels and
+    occurrence positions. The scope is the supplied word only.
+    """
+
+    if type(order) is not int or not 0 <= order < len(word.letters):
+        raise OperationDomainValidationError(
+            location=("order",),
+            code="word.rauzy_order_out_of_range",
+            message="order must lie between 0 and word length minus one",
+        )
+    vertex_analysis = factors_of_length(word, order) if order else None
+    edge_analysis = factors_of_length(word, order + 1)
+    vertices = ((),) if order == 0 else vertex_analysis.factors  # type: ignore[union-attr]
+    vertex_index = {vertex: index for index, vertex in enumerate(vertices)}
+    edges: list[tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]]] = []
+    for factor in edge_analysis.factors:
+        prefix, suffix = factor[:-1], factor[1:]
+        if prefix not in vertex_index or suffix not in vertex_index:
+            raise RuntimeError("rauzy edge endpoints missing from vertex family")
+        edges.append((prefix, factor, suffix))
+    return RauzyGraphAnalysis(
+        order=order,
+        vertices=vertices,
+        edges=tuple(edges),
+        occurrences=edge_analysis.occurrences,
+    )
+
+
+def morphism_power(morphism: WordMorphism, exponent: int) -> WordMorphism:
+    """Return ``morphism ** exponent`` with explicit source/target axes."""
+
+    _require_morphism(morphism, location=("morphism",))
+    _require_exponent(exponent)
+    _require_endomorphism(morphism, location=("morphism",))
+    if exponent == 0:
+        return WordMorphism(
+            source_alphabet=morphism.source_alphabet,
+            target_alphabet=morphism.target_alphabet,
+            images=tuple((symbol,) for symbol in morphism.source_alphabet),
+        )
+    # Preflight exponential image growth before allocating any composition.
+    max_image = max((len(image) for image in morphism.images), default=0)
+    if max_image > 1:
+        bound = max_image**exponent
+        if bound > MAX_MORPHISM_IMAGE_LENGTH:
+            raise OperationResourceAdmissionError(
+                location=("morphism", "exponent"),
+                code="word.morphism_power_budget",
+                message=(
+                    f"morphism power image exceeds the length bound ({bound} > "
+                    f"{MAX_MORPHISM_IMAGE_LENGTH})"
+                ),
+            )
+    result = WordMorphism(
+        source_alphabet=morphism.source_alphabet,
+        target_alphabet=morphism.target_alphabet,
+        images=tuple((symbol,) for symbol in morphism.source_alphabet),
+    )
+    base = morphism
+    remaining = exponent
+    while remaining:
+        if remaining & 1:
+            result = compose_morphisms(result, base)
+        remaining >>= 1
+        if remaining:
+            base = compose_morphisms(base, base)
+    return result
+
+
+def iterate_morphism(
+    morphism: WordMorphism, word: FiniteWord, steps: int
+) -> FiniteWord:
+    """Return the ``steps``-fold iterate ``morphism**steps(word)``."""
+
+    _require_morphism(morphism, location=("morphism",))
+    _require_word(word, location=("word",))
+    _require_steps(steps)
+    _require_endomorphism(morphism, location=("morphism",))
+    _require_apply_axis(morphism, word)
+    if steps == 0:
+        return FiniteWord(alphabet=word.alphabet, letters=word.letters)
+    max_image = max((len(image) for image in morphism.images), default=0)
+    if max_image > 1 and word.letters:
+        # Conservative output preflight: |w| * m**steps.
+        bound = len(word.letters) * max_image**steps
+        if bound > MAX_MORPHISM_OUTPUT_LENGTH:
+            raise OperationResourceAdmissionError(
+                location=("word", "morphism", "steps"),
+                code="word.morphism_iterate_budget",
+                message=(
+                    f"morphism iterate output exceeds the length bound ({bound} > "
+                    f"{MAX_MORPHISM_OUTPUT_LENGTH})"
+                ),
+            )
+    current = word
+    for _ in range(steps):
+        current = apply_morphism(morphism, current)
+    return current
 
 
 def incidence_matrix(morphism: WordMorphism) -> IntegerMatrix:
@@ -368,21 +619,28 @@ def substitution_primitivity_profile(
 
 __all__ = [
     "FactorAnalysis",
+    "FactorComplexityAnalysis",
     "FixedPointPrefixAnalysis",
     "PeriodAnalysis",
     "PrimitivityAnalysis",
+    "RauzyGraphAnalysis",
     "apply_morphism",
     "compose_morphisms",
     "conjugates",
+    "factor_complexity_prefix",
     "factor_occurrences",
     "factors_of_length",
     "fixed_point_prefix",
     "incidence_matrix",
+    "iterate_morphism",
+    "morphism_image_lengths",
+    "morphism_power",
     "parikh_vector",
     "periods",
     "prefix_function",
     "prefixes",
     "primitive_root",
+    "rauzy_graph",
     "substitution_dependency_graph",
     "substitution_primitivity_profile",
     "suffixes",

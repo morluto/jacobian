@@ -864,9 +864,12 @@ def test_graded_binds_one_deadline_before_groebner(
 ) -> None:
     from jacobian._execution import current_request_execution, request_execution
     from jacobian.math.polynomials.ideals._models import IdealComputationBudget
+    from jacobian.math.polynomials.ideals.operations import (
+        groebner_basis as real_groebner_function,
+    )
 
     observed: dict[str, float | None] = {}
-    real_groebner: Callable[..., object] = graded_operations.groebner_basis
+    real_groebner: Callable[..., object] = real_groebner_function
 
     def wrapped(*args: object, **kwargs: object) -> object:
         execution = current_request_execution()

@@ -616,8 +616,16 @@ def test_cyclotomics_are_irreducible_over_qq() -> None:
 
 
 def test_forged_cyclotomic_breaks_the_divisor_product() -> None:
-    product = _convolve(_cyclotomic_coefficients(2), (1, 0, 2))
-    assert product != (1, 0, 0, 0, -1)
-    forged_total: int = sum((1, 0, 2))
-    assert forged_total == 3
-    assert forged_total != sum(_cyclotomic_coefficients(4))
+    """A forged factor of the same degree breaks x^n - 1 = prod_{d|n} Phi_d."""
+    n = 4
+    true_product: tuple[int, ...] = (1,)
+    for divisor in _divisors(n):
+        true_product = _convolve(true_product, _cyclotomic_coefficients(divisor))
+    assert true_product == (1, 0, 0, 0, -1)
+    # The genuine Phi_4 is x^2 + 1; forging it as x^2 + 2 leaves the product at
+    # the same degree but changes its constant/quadratic structure.
+    assert _cyclotomic_coefficients(4) == (1, 0, 1)
+    forged_product = _convolve(_cyclotomic_coefficients(1), _cyclotomic_coefficients(2))
+    forged_product = _convolve(forged_product, (1, 0, 2))
+    assert len(forged_product) == len(true_product)
+    assert forged_product != true_product

@@ -64,6 +64,14 @@ def _complex_support_count(
     the vertical segment published for a purely imaginary root.  Growing the box
     outward by less than half the separation bound cannot include a distinct
     root, so the retry is exact for the tight boxes produced here.
+
+    A CRootOf/``eval_rational`` enclosure oracle is not a stronger alternative
+    here: a closed rectangle for a root such as ``i`` has zero real width with
+    the root on its boundary, so every strictly-interior enclosure test is
+    undecidable and the oracle would need the same outward expansion.  Keep the
+    expansion; if a box is coarser than the separation bound the retry reports
+    more than one root, which is a genuine fail-closed result rather than a
+    reason to weaken the check.
     """
 
     def count(

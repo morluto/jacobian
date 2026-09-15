@@ -530,6 +530,48 @@ def test_rectangles_are_isolating_across_factors() -> None:
         assert real_lower == real_upper == rational
 
 
+def test_rectangles_separate_irrational_siblings() -> None:
+    """Refinement must exclude irrational siblings, not only rational values.
+
+    ``(z**2 - 2)(z**2 - (2 + 1/q))`` with ``q = 10**127`` puts the distinct
+    root ``sqrt(2 + 1/q)`` only about ``3.5e-128`` above ``sqrt(2)``, inside
+    ``sqrt(2)``'s naive roughly ``2**-97`` wide enclosure. A comprehension that
+    retained only rational sibling values would never detect this collision and
+    would publish a non-isolating rectangle.
+    """
+    import sympy
+
+    from jacobian.math.polynomials.root_critical.operations import _family
+
+    q = 10**127
+    z = sympy.Symbol("z")
+    polynomial = sympy.Poly(
+        (z**2 - 2) * (z**2 - (2 + sympy.Rational(1, q))), z, domain="QQ"
+    )
+    records, _values = _family(polynomial)
+    assert len(records) == 4
+    intervals = [
+        (
+            record.rectangle.real_lower.as_fraction(),
+            record.rectangle.real_upper.as_fraction(),
+        )
+        for record in records
+    ]
+    for lower, upper in intervals:
+        assert lower <= upper
+    for index, (lower, upper) in enumerate(intervals):
+        for other_index, (other_lower, other_upper) in enumerate(intervals):
+            if other_index <= index:
+                continue
+            assert upper < other_lower or other_upper < lower, (
+                f"rectangle {index} overlaps rectangle {other_index}"
+            )
+    # The two close roots are about 3.5e-128 apart, so a separating rectangle
+    # must be narrower than that gap.
+    gap = sympy.N(sympy.sqrt(2 + sympy.Rational(1, q)) - sympy.sqrt(2), 150)
+    assert 0 < gap < sympy.Float("1e-127")
+
+
 def test_simplest_rational_between_uses_minimal_denominators() -> None:
     """The sibling-separation helper returns the simplest interior rational."""
     from fractions import Fraction

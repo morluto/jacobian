@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import json
 from collections.abc import Sequence
+from itertools import combinations
 
 import pytest
+import sympy
 from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationDomainValidationError
@@ -85,6 +87,56 @@ def test_rectangular_rank_deficient() -> None:
     )
     result = compute_rank(MatrixRankRequest(matrix=m))
     assert result.rank == 2
+
+
+def _prime_field_rank(values: Sequence[Sequence[int]], prime: int) -> int:
+    """Find the largest square minor with a nonzero determinant modulo p."""
+
+    rows = range(len(values))
+    columns = range(len(values[0]))
+    for size in range(min(len(values), len(values[0])), 0, -1):
+        for selected_rows in combinations(rows, size):
+            for selected_columns in combinations(columns, size):
+                minor = sympy.Matrix(
+                    [
+                        [values[row][column] for column in selected_columns]
+                        for row in selected_rows
+                    ]
+                )
+                if int(minor.det()) % prime:
+                    return size
+    return 0
+
+
+def test_rectangular_rank_matches_brute_force_minors_and_transpose() -> None:
+    """Rank is the largest nonsingular minor and survives axis transposition."""
+
+    fp = _f2()
+    values = ((1, 0, 1), (0, 1, 1))
+    source = _matrix(
+        fp,
+        [[[value] for value in row] for row in values],
+        ["r0", "r1"],
+        ["c0", "c1", "c2"],
+    )
+    result = matrix_rank(source)
+    assert result.rank == 2
+    assert _prime_field_rank(values, fp.characteristic) == result.rank
+    assert verify_matrix_rank(
+        MatrixRankResult.model_validate_json(result.model_dump_json())
+    )
+
+    transposed = _matrix(
+        fp,
+        [[[value] for value in row] for row in zip(*values, strict=True)],
+        ["c0", "c1", "c2"],
+        ["r0", "r1"],
+    )
+    transposed_result = matrix_rank(transposed)
+    assert transposed_result.rank == result.rank
+    assert verify_matrix_rank(
+        MatrixRankResult.model_validate_json(transposed_result.model_dump_json())
+    )
 
 
 def test_extension_field_rank_one() -> None:

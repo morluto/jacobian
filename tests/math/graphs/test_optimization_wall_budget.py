@@ -44,6 +44,28 @@ def _graph() -> SimpleUndirectedGraph:
     )
 
 
+def _completed(
+    *,
+    returncode: int | None = 0,
+    stdout: bytes = b"",
+    stderr: bytes = b"",
+    stdout_exceeded: bool = False,
+    stderr_exceeded: bool = False,
+    timed_out: bool = False,
+    cancelled: bool = False,
+) -> BoundedProcessResult:
+    """Name the operational state instead of repeating result fields."""
+    return BoundedProcessResult(
+        returncode=returncode,
+        stdout=stdout,
+        stderr=stderr,
+        stdout_exceeded=stdout_exceeded,
+        stderr_exceeded=stderr_exceeded,
+        timed_out=timed_out,
+        cancelled=cancelled,
+    )
+
+
 def _expired(monkeypatch: pytest.MonkeyPatch, entry_module: Any) -> None:
     clock = iter((0.0, 2.0))
     monkeypatch.setattr(entry_module.time, "monotonic", lambda: next(clock, 2.0))
@@ -105,15 +127,10 @@ def test_chromatic_worker_projection_is_bound_to_the_submitted_vertices(
     monkeypatch.setattr(
         _chromatic_number,
         "run_bounded_process",
-        lambda *_args, **_kwargs: BoundedProcessResult(
-            returncode=0,
+        lambda *_args, **_kwargs: _completed(
             stdout=encode_worker_result_frame(
                 expected.model_dump(mode="json", exclude={"vertices"})
-            ),
-            stderr=b"",
-            stdout_exceeded=False,
-            stderr_exceeded=False,
-            timed_out=False,
+            )
         ),
     )
 
@@ -159,13 +176,8 @@ def test_graph_optimization_worker_binds_encoding_and_solving_to_one_envelope(
     def complete_worker(*args: object, **kwargs: object) -> BoundedProcessResult:
         recorded["args"] = args
         recorded.update(kwargs)
-        return BoundedProcessResult(
-            returncode=0,
-            stdout=encode_worker_result_frame(expected.model_dump(mode="json")),
-            stderr=b"",
-            stdout_exceeded=False,
-            stderr_exceeded=False,
-            timed_out=False,
+        return _completed(
+            stdout=encode_worker_result_frame(expected.model_dump(mode="json"))
         )
 
     monkeypatch.setattr(_finite_optimization, "run_bounded_process", complete_worker)
@@ -190,14 +202,7 @@ def test_graph_optimization_worker_failure_cannot_claim_an_optimum(
     monkeypatch.setattr(
         _finite_optimization,
         "run_bounded_process",
-        lambda *_args, **_kwargs: BoundedProcessResult(
-            returncode=None,
-            stdout=b"",
-            stderr=b"",
-            stdout_exceeded=False,
-            stderr_exceeded=False,
-            timed_out=True,
-        ),
+        lambda *_args, **_kwargs: _completed(returncode=None, timed_out=True),
     )
 
     with pytest.raises(OperationExecutionTimeoutError):

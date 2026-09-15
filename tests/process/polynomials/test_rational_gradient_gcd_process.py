@@ -28,6 +28,28 @@ from jacobian.math.polynomials.rational_functions.gradient.operations import gra
 from jacobian.process import BoundedProcessResult, ProcessResourceLimits
 
 
+def _completed(
+    *,
+    returncode: int | None = 0,
+    stdout: bytes = b"",
+    stderr: bytes = b"",
+    stdout_exceeded: bool = False,
+    stderr_exceeded: bool = False,
+    timed_out: bool = False,
+    cancelled: bool = False,
+) -> BoundedProcessResult:
+    """Name the operational state instead of repeating result fields."""
+    return BoundedProcessResult(
+        returncode=returncode,
+        stdout=stdout,
+        stderr=stderr,
+        stdout_exceeded=stdout_exceeded,
+        stderr_exceeded=stderr_exceeded,
+        timed_out=timed_out,
+        cancelled=cancelled,
+    )
+
+
 def test_linear_power_gcd_runs_in_the_killable_worker() -> None:
     x = symbols("x")
     source = rational_function_from_sympy(1 / (x + 1) ** 33, ("x",))
@@ -53,14 +75,7 @@ def test_gcd_worker_timeout_uses_the_remaining_request_deadline(
 
     def timed_out(*args: Any, **kwargs: Any) -> BoundedProcessResult:
         observed.update(kwargs)
-        return BoundedProcessResult(
-            returncode=None,
-            stdout=b"",
-            stderr=b"",
-            stdout_exceeded=False,
-            stderr_exceeded=False,
-            timed_out=True,
-        )
+        return _completed(returncode=None, timed_out=True)
 
     monkeypatch.setattr(process, "run_bounded_process", timed_out)
     x = symbols("x")
@@ -96,15 +111,7 @@ def test_gcd_worker_cancel_is_a_typed_non_completion(
     from jacobian import process
 
     def cancelled(*args: Any, **kwargs: Any) -> BoundedProcessResult:
-        return BoundedProcessResult(
-            returncode=None,
-            stdout=b"",
-            stderr=b"",
-            stdout_exceeded=False,
-            stderr_exceeded=False,
-            timed_out=False,
-            cancelled=True,
-        )
+        return _completed(returncode=None, cancelled=True)
 
     monkeypatch.setattr(process, "run_bounded_process", cancelled)
     x = symbols("x")
@@ -127,14 +134,7 @@ def test_source_coprimality_worker_timeout_is_killable(
     from jacobian import process
 
     def timed_out(*args: Any, **kwargs: Any) -> BoundedProcessResult:
-        return BoundedProcessResult(
-            returncode=None,
-            stdout=b"",
-            stderr=b"",
-            stdout_exceeded=False,
-            stderr_exceeded=False,
-            timed_out=True,
-        )
+        return _completed(returncode=None, timed_out=True)
 
     monkeypatch.setattr(process, "run_bounded_process", timed_out)
     x = symbols("x")
@@ -160,19 +160,14 @@ def test_normalization_reuses_the_admitted_derivative_factor(
 
     def fake(*args: Any, **kwargs: Any) -> BoundedProcessResult:
         captured["payload"] = json.loads(kwargs["input_bytes"])
-        return BoundedProcessResult(
-            returncode=0,
+        return _completed(
             stdout=json.dumps(
                 {
                     "numerator": [[0, "-33", "1"]],
                     "denominator": [[34, "1", "1"], [0, "1", "1"]],
                 },
                 separators=(",", ":"),
-            ).encode(),
-            stderr=b"",
-            stdout_exceeded=False,
-            stderr_exceeded=False,
-            timed_out=False,
+            ).encode()
         )
 
     monkeypatch.setattr(process, "run_bounded_process", fake)

@@ -259,7 +259,7 @@ precommit: ## Apply safe fixes, then run the broad ordinary gate (mutates the tr
 validation-status: ## Show whether this worktree holds a broad-validation lock.
 	$(VALIDATION_LOCK) status
 
-check-static: lint-full typecheck import-contracts architecture todo-check build ## CI-owned static checks plus a local package build.
+check-static: lint-full typecheck import-contracts architecture test-hygiene todo-check build ## CI-owned static checks plus a local package build.
 
 clean: ## Remove local caches, build outputs, and coverage artifacts.
 	rm -rf .pytest_cache .mypy_cache .ruff_cache dist build htmlcov

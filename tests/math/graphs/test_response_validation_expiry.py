@@ -21,6 +21,28 @@ from jacobian.math.graphs.values import SimpleUndirectedGraph
 from jacobian.process import BoundedProcessResult
 
 
+def _completed(
+    *,
+    returncode: int | None = 0,
+    stdout: bytes = b"",
+    stderr: bytes = b"",
+    stdout_exceeded: bool = False,
+    stderr_exceeded: bool = False,
+    timed_out: bool = False,
+    cancelled: bool = False,
+) -> BoundedProcessResult:
+    """Name the operational state instead of repeating result fields."""
+    return BoundedProcessResult(
+        returncode=returncode,
+        stdout=stdout,
+        stderr=stderr,
+        stdout_exceeded=stdout_exceeded,
+        stderr_exceeded=stderr_exceeded,
+        timed_out=timed_out,
+        cancelled=cancelled,
+    )
+
+
 @pytest.mark.parametrize("kind", ["chromatic", "clique"])
 @pytest.mark.parametrize("cancel", [False, True])
 def test_control_expiry_after_real_response_validation(
@@ -41,13 +63,8 @@ def test_control_expiry_after_real_response_validation(
         )
         expected = module._clique_execute_kernel(request)
         execute = module._clique_execute
-    response = BoundedProcessResult(
-        returncode=0,
-        stdout=encode_worker_result_frame(expected.model_dump(mode="json")),
-        stderr=b"",
-        stdout_exceeded=False,
-        stderr_exceeded=False,
-        timed_out=False,
+    response = _completed(
+        stdout=encode_worker_result_frame(expected.model_dump(mode="json"))
     )
     monkeypatch.setattr(module, "run_bounded_process", lambda *a, **_kwargs: response)
     now = [0.0]
@@ -163,14 +180,7 @@ def test_hypergraph_worker_timeout_is_not_solver_error(
     monkeypatch.setattr(
         module,
         "run_bounded_process",
-        lambda *a, **_kwargs: BoundedProcessResult(
-            returncode=None,
-            stdout=b"",
-            stderr=b"",
-            stdout_exceeded=False,
-            stderr_exceeded=False,
-            timed_out=True,
-        ),
+        lambda *a, **_kwargs: _completed(returncode=None, timed_out=True),
     )
     with pytest.raises(OperationExecutionTimeoutError):
         module.solve_independence_number(
@@ -193,13 +203,8 @@ def test_expiry_during_finite_graph_witness_check_precedes_invalid_witness(
     monkeypatch.setattr(
         module,
         "run_bounded_process",
-        lambda *a, **_kwargs: BoundedProcessResult(
-            returncode=0,
-            stdout=encode_worker_result_frame(expected.model_dump(mode="json")),
-            stderr=b"",
-            stdout_exceeded=False,
-            stderr_exceeded=False,
-            timed_out=False,
+        lambda *a, **_kwargs: _completed(
+            stdout=encode_worker_result_frame(expected.model_dump(mode="json"))
         ),
     )
     now = [0.0]

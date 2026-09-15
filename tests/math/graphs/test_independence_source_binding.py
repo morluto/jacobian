@@ -33,6 +33,28 @@ from jacobian.process import (
 )
 
 
+def _completed(
+    *,
+    returncode: int | None = 0,
+    stdout: bytes = b"",
+    stderr: bytes = b"",
+    stdout_exceeded: bool = False,
+    stderr_exceeded: bool = False,
+    timed_out: bool = False,
+    cancelled: bool = False,
+) -> BoundedProcessResult:
+    """Name the operational state instead of repeating result fields."""
+    return BoundedProcessResult(
+        returncode=returncode,
+        stdout=stdout,
+        stderr=stderr,
+        stdout_exceeded=stdout_exceeded,
+        stderr_exceeded=stderr_exceeded,
+        timed_out=timed_out,
+        cancelled=cancelled,
+    )
+
+
 def _graph(
     vertices: tuple[str, ...], edges: tuple[tuple[str, str], ...]
 ) -> SimpleUndirectedGraph:
@@ -417,15 +439,10 @@ def test_independence_worker_covers_encoding_and_solving(
     def complete_worker(*args: object, **kwargs: object) -> BoundedProcessResult:
         recorded["args"] = args
         recorded.update(kwargs)
-        return BoundedProcessResult(
-            returncode=0,
+        return _completed(
             stdout=encode_worker_result_frame(
                 expected.model_dump(mode="json", exclude={"graph"})
-            ),
-            stderr=b"",
-            stdout_exceeded=False,
-            stderr_exceeded=False,
-            timed_out=False,
+            )
         )
 
     monkeypatch.setattr(z3_backend, "run_bounded_process", complete_worker)
@@ -450,14 +467,7 @@ def test_independence_worker_failure_is_not_an_exact_claim(
     monkeypatch.setattr(
         z3_backend,
         "run_bounded_process",
-        lambda *_args, **_kwargs: BoundedProcessResult(
-            returncode=None,
-            stdout=b"",
-            stderr=b"",
-            stdout_exceeded=False,
-            stderr_exceeded=False,
-            timed_out=True,
-        ),
+        lambda *_args, **_kwargs: _completed(returncode=None, timed_out=True),
     )
 
     with pytest.raises(OperationExecutionTimeoutError):
@@ -475,16 +485,11 @@ def test_independence_worker_projection_cannot_replace_the_submitted_graph(
     monkeypatch.setattr(
         z3_backend,
         "run_bounded_process",
-        lambda *_args, **_kwargs: BoundedProcessResult(
-            returncode=0,
+        lambda *_args, **_kwargs: _completed(
             stdout=json.dumps(
                 wrong_result.model_dump(mode="json", exclude={"graph"}),
                 ensure_ascii=False,
-            ).encode("utf-8"),
-            stderr=b"",
-            stdout_exceeded=False,
-            stderr_exceeded=False,
-            timed_out=False,
+            ).encode("utf-8")
         ),
     )
 

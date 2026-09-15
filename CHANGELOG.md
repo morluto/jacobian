@@ -1,5 +1,35 @@
 # Changelog
 
+## [0.22.0](https://github.com/morluto/jacobian/compare/jacobian-v0.21.0...jacobian-v0.22.0) (2026-09-15)
+
+
+### Features
+
+* **math:** complete domain vocabulary slices ([#3712](https://github.com/morluto/jacobian/issues/3712)-[#3727](https://github.com/morluto/jacobian/issues/3727)) ([#3737](https://github.com/morluto/jacobian/issues/3737)) ([0cd678d](https://github.com/morluto/jacobian/commit/0cd678d204417851a547302dda186496adfc5913))
+
+
+### Bug Fixes
+
+* **polynomials:** fail closed on root-critical isolation across all siblings ([#3739](https://github.com/morluto/jacobian/issues/3739)) ([11c6ae2](https://github.com/morluto/jacobian/commit/11c6ae2e3c0271b6a930ef57336f00437440507b))
+* **polynomials:** separate root rectangles from irrational siblings ([#3738](https://github.com/morluto/jacobian/issues/3738)) ([65b3ec9](https://github.com/morluto/jacobian/commit/65b3ec9d6fa15ea26bf60ae9c02c4b16efbe5590))
+
+
+### Dependencies
+
+* **deps-dev:** bump pytest-randomly from 4.1.0 to 5.0.0 ([#3735](https://github.com/morluto/jacobian/issues/3735)) ([f300c72](https://github.com/morluto/jacobian/commit/f300c7250ba62fdf2e2098d5f92896fc98759f53))
+* **deps-dev:** bump ruff from 0.16.4 to 0.16.7 ([#3733](https://github.com/morluto/jacobian/issues/3733)) ([f30c1c7](https://github.com/morluto/jacobian/commit/f30c1c7e42fb0138fd920d20156bdcc6408b2c94))
+* **deps:** bump @inquirer/prompts from 8.7.1 to 8.7.2 in /npm ([#3730](https://github.com/morluto/jacobian/issues/3730)) ([d278791](https://github.com/morluto/jacobian/commit/d2787910c12ae035692af1bb26385e4404c2bf85))
+* **deps:** bump anyio from 4.14.2 to 4.15.1 ([#3734](https://github.com/morluto/jacobian/issues/3734)) ([3ecf032](https://github.com/morluto/jacobian/commit/3ecf032430758523259d847cff0e689488041ced))
+* **deps:** bump astral-sh/setup-uv from 10.0.1 to 10.1.0 ([#3731](https://github.com/morluto/jacobian/issues/3731)) ([d7c0c2c](https://github.com/morluto/jacobian/commit/d7c0c2c8b6e96edfad0fd3d95d96a5b684c92078))
+* **deps:** bump filelock from 3.32.0 to 3.32.6 ([#3732](https://github.com/morluto/jacobian/issues/3732)) ([7618136](https://github.com/morluto/jacobian/commit/7618136eee120387d2dcbcf5289a0923de70cdeb))
+* **deps:** bump https://github.com/astral-sh/ruff-pre-commit ([#3729](https://github.com/morluto/jacobian/issues/3729)) ([293777e](https://github.com/morluto/jacobian/commit/293777eb141715d801fe532a410cdb7db3f05abf))
+* **deps:** bump numpy from 2.5.1 to 2.5.3 ([#3736](https://github.com/morluto/jacobian/issues/3736)) ([234f106](https://github.com/morluto/jacobian/commit/234f10633146efb13c3266c895d0d61d1db29de5))
+
+
+### Documentation
+
+* clarify PARI unit identity and class/unit verifier status ([#3746](https://github.com/morluto/jacobian/issues/3746)) ([75561a6](https://github.com/morluto/jacobian/commit/75561a6949eda0f248a7ca67c385bb39ec5d32a3))
+
 ## [0.21.0](https://github.com/morluto/jacobian/compare/jacobian-v0.20.0...jacobian-v0.21.0) (2026-09-14)
 
 

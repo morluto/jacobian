@@ -16,7 +16,6 @@ from jacobian.math.matrices.certified_snf.operations import (
     matrix_multiply,
 )
 from jacobian.math.topology.chain_complexes._models import (
-    MAX_OPERATION_MATRIX_CELLS,
     ComputeHomologyRequest,
     ConstructChainComplexRequest,
     MappingConeRequest,
@@ -53,6 +52,7 @@ from jacobian.math.topology.chain_complexes.operations import (
     construct_chain_complex as construct_chain_complex_native,
 )
 from jacobian.math.topology.chain_complexes.values import (
+    MAX_OPERATION_MATRIX_CELLS,
     ChainComplexValue,
     CoefficientRing,
     HomologyGroupValue,
@@ -2478,3 +2478,105 @@ class TestNativeWrappersCallKernelsDirectly:
         identity = ((("1",),), (("1",),))
         verdict = chain_map_commutes(circle, circle, identity)
         assert verdict.is_valid is True
+
+
+class TestWorkstreamDEulerAndDegenerateInvariants:
+    def _euler(self, result: HomologyResult) -> int:
+        groups = _field_groups(result)
+        return sum(
+            group.betti_number if (group.degree % 2 == 0) else -group.betti_number
+            for group in groups
+        )
+
+    def _alternating_basis_sum(self, complex_value: ChainComplexValue) -> int:
+        return sum(
+            size if ((complex_value.degree_min + index) % 2 == 0) else -size
+            for index, size in enumerate(complex_value.basis_sizes)
+        )
+
+    def test_field_euler_matches_alternating_basis_sum(self) -> None:
+        for complex_value in (
+            _circle_complex(),
+            _point_complex(),
+            ChainComplexValue(
+                coefficient_ring=CoefficientRing.RATIONAL,
+                degree_min=0,
+                degree_max=2,
+                basis_sizes=(0, 1, 1),
+                differential_matrices=((), (("1",),)),
+            ),
+        ):
+            result = compute_homology(ComputeHomologyRequest(complex=complex_value))
+            assert self._euler(result) == self._alternating_basis_sum(complex_value)
+        assert (
+            self._euler(
+                compute_homology(ComputeHomologyRequest(complex=_circle_complex()))
+            )
+            == 0
+        )
+        assert (
+            self._euler(
+                compute_homology(ComputeHomologyRequest(complex=_point_complex()))
+            )
+            == 1
+        )
+
+    def test_integral_torsion_order_accounts_for_differential_image(self) -> None:
+        complex_value = ChainComplexValue(
+            coefficient_ring=CoefficientRing.INTEGER,
+            degree_min=0,
+            degree_max=1,
+            basis_sizes=(2, 2),
+            differential_matrices=((("2", "2"), ("2", "2")),),
+        )
+        groups = _integral_groups(homology_groups(complex_value))
+        assert (groups[0].free_rank, groups[0].torsion_invariant_factors) == (1, (2,))
+        assert (groups[1].free_rank, groups[1].torsion_invariant_factors) == (1, ())
+        # Torsion accounting: the retained bounding chain maps to order*cycle.
+        torsion = groups[0].torsion_generators[0]
+        assert int(torsion.order) == 2
+        matrix = complex_value.differential_matrices[0]
+        image = tuple(
+            sum(
+                int(value) * int(coefficient)
+                for value, coefficient in zip(
+                    row, torsion.bounding_chain.coefficients, strict=True
+                )
+            )
+            for row in matrix
+        )
+        assert image == tuple(2 * int(v) for v in torsion.cycle.coefficients)
+        # Free Euler characteristic still matches the alternating basis sum.
+        free_euler = groups[0].free_rank - groups[1].free_rank
+        assert free_euler == 2 - 2
+
+    def test_empty_and_degenerate_complexes(self) -> None:
+        empty = ChainComplexValue(
+            coefficient_ring=CoefficientRing.RATIONAL,
+            degree_min=0,
+            degree_max=0,
+            basis_sizes=(0,),
+            differential_matrices=(),
+        )
+        assert verify_differential(VerifyDifferentialRequest(complex=empty)).is_valid
+        assert (
+            _field_groups(compute_homology(ComputeHomologyRequest(complex=empty)))[
+                0
+            ].betti_number
+            == 0
+        )
+
+        discrete = ChainComplexValue(
+            coefficient_ring=CoefficientRing.RATIONAL,
+            degree_min=0,
+            degree_max=1,
+            basis_sizes=(1, 1),
+            differential_matrices=((("0",),),),
+        )
+        assert verify_differential(VerifyDifferentialRequest(complex=discrete)).is_valid
+        assert tuple(
+            group.betti_number
+            for group in _field_groups(
+                compute_homology(ComputeHomologyRequest(complex=discrete))
+            )
+        ) == (1, 1)

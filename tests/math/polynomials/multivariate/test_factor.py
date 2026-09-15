@@ -834,3 +834,226 @@ class TestExecutionInterruptionSeparation:
         response = json.loads(completed.stdout.decode())
         assert response["ok"] is True
         assert response["as_limit_applied"] is True
+
+
+def _to_sympy_poly(polynomial: RationalPolynomial) -> Any:
+    """Convert a canonical value to a SymPy ``Poly`` without touching results."""
+    from sympy import QQ, Poly, Rational, Symbol
+
+    symbols = tuple(Symbol(variable) for variable in polynomial.variables)
+    return Poly.from_dict(
+        {
+            term.exponents: Rational(*term.coefficient.as_integer_ratio())
+            for term in polynomial.polynomial.terms
+        },
+        *symbols,
+        domain=QQ,
+    )
+
+
+def _rebuild_multivariate_product(result: MultivariateFactorResult) -> Any:
+    """Rebuild coefficient * prod(factor**multiplicity) independently.
+
+    This never reads ``result.reconstructed``: it is the caller's own
+    multiplication of the returned content, factors, and multiplicities.
+    """
+    variables = result.polynomial.variables
+    rebuilt = _to_sympy_poly(
+        _poly(variables, ((result.coefficient.num, result.coefficient.den, (0, 0)),))
+        if len(variables) == 2
+        else _poly(
+            variables,
+            ((result.coefficient.num, result.coefficient.den, (0,) * len(variables)),),
+        )
+    )
+    for record in result.factors:
+        assert record.multiplicity >= 1
+        rebuilt *= _to_sympy_poly(record.factor) ** record.multiplicity
+    return rebuilt
+
+
+def _hand_claim(
+    poly: RationalPolynomial,
+    coefficient: Fraction,
+    factors: tuple[tuple[RationalPolynomial, int], ...],
+) -> MultivariateFactorResult:
+    """Build a factorization claim from hand-authored factors, no backend."""
+    return MultivariateFactorResult._from_kernel(
+        coefficient=CanonicalRational.from_fraction(coefficient),
+        polynomial=poly,
+        factors=tuple(
+            MultivariateIrreducibleFactor(factor=factor, multiplicity=multiplicity)
+            for factor, multiplicity in factors
+        ),
+        reconstructed=poly,
+    )
+
+
+class TestRebuildOracleWithoutBackend:
+    """The rebuild oracle itself is executable anywhere: hand-authored claims
+    with known mathematics exercise acceptance and forgery rejection without
+    the bounded worker."""
+
+    def test_hand_factored_claims_rebuild(self) -> None:
+        content = _poly(
+            ("x", "y"),
+            ((6, 1, (1, 1)), (6, 1, (1, 0)), (6, 1, (0, 1)), (6, 1, (0, 0))),
+        )
+        assert _rebuild_multivariate_product(
+            _hand_claim(
+                content,
+                Fraction(6),
+                (
+                    (_poly(("x", "y"), ((1, 1, (1, 0)), (1, 1, (0, 0)))), 1),
+                    (_poly(("x", "y"), ((1, 1, (0, 1)), (1, 1, (0, 0)))), 1),
+                ),
+            )
+        ) == _to_sympy_poly(content)
+
+        repeated = _poly(("x", "y"), ((1, 1, (2, 2)), (-2, 1, (1, 1)), (1, 1, (0, 0))))
+        assert _rebuild_multivariate_product(
+            _hand_claim(
+                repeated,
+                Fraction(1),
+                ((_poly(("x", "y"), ((1, 1, (1, 1)), (-1, 1, (0, 0)))), 2),),
+            )
+        ) == _to_sympy_poly(repeated)
+
+    def test_hand_claim_forgeries_fail_rebuild(self) -> None:
+        content = _poly(
+            ("x", "y"),
+            ((6, 1, (1, 1)), (6, 1, (1, 0)), (6, 1, (0, 1)), (6, 1, (0, 0))),
+        )
+        honest = _hand_claim(
+            content,
+            Fraction(6),
+            (
+                (_poly(("x", "y"), ((1, 1, (1, 0)), (1, 1, (0, 0)))), 1),
+                (_poly(("x", "y"), ((1, 1, (0, 1)), (1, 1, (0, 0)))), 1),
+            ),
+        )
+        assert _rebuild_multivariate_product(honest) == _to_sympy_poly(content)
+        # Wrong unit.
+        assert _rebuild_multivariate_product(
+            _hand_claim(
+                content,
+                Fraction(5),
+                (
+                    (_poly(("x", "y"), ((1, 1, (1, 0)), (1, 1, (0, 0)))), 1),
+                    (_poly(("x", "y"), ((1, 1, (0, 1)), (1, 1, (0, 0)))), 1),
+                ),
+            )
+        ) != _to_sympy_poly(content)
+        # Tampered factor (shifted constant term).
+        assert _rebuild_multivariate_product(
+            _hand_claim(
+                content,
+                Fraction(6),
+                (
+                    (_poly(("x", "y"), ((1, 1, (1, 0)), (2, 1, (0, 0)))), 1),
+                    (_poly(("x", "y"), ((1, 1, (0, 1)), (1, 1, (0, 0)))), 1),
+                ),
+            )
+        ) != _to_sympy_poly(content)
+        # Weakened multiplicity on a repeated claim.
+        repeated = _poly(("x", "y"), ((1, 1, (2, 2)), (-2, 1, (1, 1)), (1, 1, (0, 0))))
+        assert _rebuild_multivariate_product(
+            _hand_claim(
+                repeated,
+                Fraction(1),
+                ((_poly(("x", "y"), ((1, 1, (1, 1)), (-1, 1, (0, 0)))), 1),),
+            )
+        ) != _to_sympy_poly(repeated)
+
+
+class TestIndependentProductReconstruction:
+    """The caller re-multiplies the decomposition instead of trusting it."""
+
+    def test_content_repeated_and_distinct_cases_rebuild(self) -> None:
+        cases = (
+            # Non-monic content with two distinct factors: 6*(x+1)*(y+1).
+            _poly(
+                ("x", "y"),
+                ((6, 1, (1, 1)), (6, 1, (1, 0)), (6, 1, (0, 1)), (6, 1, (0, 0))),
+            ),
+            # Repeated factor: (x*y - 1)^2.
+            _poly(("x", "y"), ((1, 1, (2, 2)), (-2, 1, (1, 1)), (1, 1, (0, 0)))),
+            # Unequal multiplicities: x * (x*y - 1)^2.
+            _poly(
+                ("x", "y"),
+                ((1, 1, (3, 2)), (-2, 1, (2, 1)), (1, 1, (1, 0))),
+            ),
+        )
+        for poly in cases:
+            result = _compute_factor(MultivariateFactorRequest(polynomial=poly))
+            assert result.status == "FACTORIZED"
+            assert _rebuild_multivariate_product(result) == _to_sympy_poly(poly)
+
+    def test_content_case_reports_nontrivial_unit(self) -> None:
+        poly = _poly(
+            ("x", "y"),
+            ((6, 1, (1, 1)), (6, 1, (1, 0)), (6, 1, (0, 1)), (6, 1, (0, 0))),
+        )
+        result = _compute_factor(MultivariateFactorRequest(polynomial=poly))
+        assert result.coefficient.as_fraction() == Fraction(6)
+        assert {record.multiplicity for record in result.factors} == {1}
+        assert len(result.factors) == 2
+
+    def test_repeated_case_reports_multiplicity(self) -> None:
+        poly = _poly(("x", "y"), ((1, 1, (2, 2)), (-2, 1, (1, 1)), (1, 1, (0, 0))))
+        result = _compute_factor(MultivariateFactorRequest(polynomial=poly))
+        assert [record.multiplicity for record in result.factors] == [2]
+        assert _rebuild_multivariate_product(result) == _to_sympy_poly(poly)
+
+    def test_forged_factor_fails_independent_rebuild(self) -> None:
+        """A caller-tampered factor (shifted constant term) cannot rebuild."""
+        poly = _poly(
+            ("x", "y"),
+            ((6, 1, (1, 1)), (6, 1, (1, 0)), (6, 1, (0, 1)), (6, 1, (0, 0))),
+        )
+        result = _compute_factor(MultivariateFactorRequest(polynomial=poly))
+        assert _rebuild_multivariate_product(result) == _to_sympy_poly(poly)
+        forged_records = tuple(
+            MultivariateIrreducibleFactor(
+                factor=_poly(
+                    record.factor.variables,
+                    tuple(
+                        (
+                            term.coefficient.num
+                            + (1 if term.exponents == (0, 0) else 0),
+                            term.coefficient.den,
+                            term.exponents,
+                        )
+                        for term in record.factor.polynomial.terms
+                    )
+                    + (
+                        ()
+                        if any(
+                            term.exponents == (0, 0)
+                            for term in record.factor.polynomial.terms
+                        )
+                        else ((1, 1, (0, 0)),)
+                    ),
+                ),
+                multiplicity=record.multiplicity,
+            )
+            if index == 0
+            else record
+            for index, record in enumerate(result.factors)
+        )
+        forged = result.model_copy(update={"factors": forged_records})
+        assert _rebuild_multivariate_product(forged) != _to_sympy_poly(poly)
+
+    def test_weakened_multiplicity_fails_independent_rebuild(self) -> None:
+        """Dropping a repeated multiplicity weakens the product below the source."""
+        poly = _poly(("x", "y"), ((1, 1, (2, 2)), (-2, 1, (1, 1)), (1, 1, (0, 0))))
+        result = _compute_factor(MultivariateFactorRequest(polynomial=poly))
+        weakened = result.model_copy(
+            update={
+                "factors": tuple(
+                    MultivariateIrreducibleFactor(factor=record.factor, multiplicity=1)
+                    for record in result.factors
+                )
+            }
+        )
+        assert _rebuild_multivariate_product(weakened) != _to_sympy_poly(poly)

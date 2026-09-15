@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from collections.abc import Callable
 from fractions import Fraction
+from typing import Any
 
 import pytest
 from pydantic import ValidationError
@@ -897,3 +898,171 @@ def test_minimal_polynomial_reuses_krylov_reduction(
         Fraction(1),
     )
     assert calls == 0
+
+
+def _sympy_matrix_entries(matrix: RationalMatrix) -> Any:
+    """Convert a canonical matrix to an exact SymPy matrix independently."""
+    import sympy
+
+    return sympy.Matrix(
+        [
+            [sympy.Rational(entry.num, entry.den) for entry in row]
+            for row in matrix.entries
+        ]
+    )
+
+
+def _sympy_poly_from_monic(polynomial: MonicPolynomial) -> Any:
+    """Convert a monic claim to a SymPy ``Poly`` in one fresh indeterminate."""
+    import sympy
+
+    x = sympy.Symbol("x")
+    expression = sum(
+        sympy.Rational(term.coefficient.num, term.coefficient.den)
+        * x ** term.exponents[0]
+        for term in polynomial.polynomial.terms
+    )
+    return sympy.Poly(expression or 0, x, domain="QQ")
+
+
+def _evaluate_claim_at_matrix(
+    matrix: RationalMatrix, polynomial: MonicPolynomial
+) -> Any:
+    """Evaluate a claimed polynomial at a matrix by exact Horner evaluation."""
+    coefficients = _coeffs(polynomial)
+    current = _sympy_matrix_entries(matrix)
+    import sympy
+
+    result = sympy.zeros(current.rows)
+    for coefficient in reversed(coefficients):
+        result = result * current + sympy.Rational(
+            coefficient.numerator, coefficient.denominator
+        ) * sympy.eye(current.rows)
+    return result
+
+
+def _proper_monic_divisors(polynomial: MonicPolynomial) -> list[Any]:
+    """Enumerate every proper monic divisor of a small claimed polynomial."""
+    import sympy
+
+    sympy_poly = _sympy_poly_from_monic(polynomial)
+    _, factor_powers = sympy_poly.factor_list()
+    divisors = [sympy.Poly(1, sympy_poly.gen, domain="QQ")]
+    for factor, maximum in factor_powers:
+        extended = []
+        power = sympy.Poly(1, sympy_poly.gen, domain="QQ")
+        for _ in range(maximum + 1):
+            for known in divisors:
+                extended.append(known * power)
+            power *= factor
+        divisors = extended
+    whole = sympy_poly.monic()
+    return [divisor.monic() for divisor in divisors if divisor.monic() != whole]
+
+
+def _divides(left: MonicPolynomial, right: MonicPolynomial) -> bool:
+    """Check left | right by exact univariate remainder, independently."""
+    _, remainder = _sympy_poly_from_monic(right).div(_sympy_poly_from_monic(left))
+    return bool(remainder.is_zero)
+
+
+def test_invariant_factors_form_divisibility_chain_with_product_identities() -> None:
+    """f_1 | ... | f_s, prod(f_i) == charpoly, and f_s == minpoly, by hand."""
+    sources = (
+        _block_diagonal(
+            _mat(
+                (_pair(2, 1), _pair(1, 1)),
+                (_pair(0, 1), _pair(2, 1)),
+            ),
+            _mat((_pair(2, 1),)),
+        ),  # J2(2) + [2]: invariant factors (t-2) | (t-2)^2
+        _diagonal(2, 2, 3),  # invariant factors (t-2) | (t-2)(t-3)
+    )
+    for source in sources:
+        result = compute_rational_canonical_form(source)
+        assert len(result.invariant_factors) >= 2
+        for earlier, later in zip(
+            result.invariant_factors, result.invariant_factors[1:], strict=False
+        ):
+            assert _divides(earlier.factor, later.factor)
+            assert earlier.block_size <= later.block_size
+        product = _sympy_poly_from_monic(result.invariant_factors[0].factor)
+        for entry in result.invariant_factors[1:]:
+            product *= _sympy_poly_from_monic(entry.factor)
+        assert product == _sympy_poly_from_monic(result.characteristic_polynomial)
+        assert result.invariant_factors[-1].factor == result.minimal_polynomial
+        assert _divides(result.minimal_polynomial, result.characteristic_polynomial)
+        assert result.total_block_size == len(source.entries)
+
+
+def test_invariant_factor_forged_product_fails_characteristic_identity() -> None:
+    """A tampered characteristic polynomial contradicts the factor product."""
+    source = _diagonal(2, 2, 3)
+    result = compute_rational_canonical_form(source)
+    product = _sympy_poly_from_monic(result.invariant_factors[0].factor)
+    for entry in result.invariant_factors[1:]:
+        product *= _sympy_poly_from_monic(entry.factor)
+    assert product == _sympy_poly_from_monic(result.characteristic_polynomial)
+    tampered = _mono(
+        Fraction(_coeffs(result.characteristic_polynomial)[0] + 1),
+        *(_coeffs(result.characteristic_polynomial)[1:]),
+    )
+    assert product != _sympy_poly_from_monic(tampered)
+    assert not verify_rational_canonical_form(
+        result.model_copy(update={"characteristic_polynomial": tampered})
+    )
+
+
+def test_minimal_polynomial_annihilates_and_is_minimal() -> None:
+    """m(A) == 0, no proper monic divisor annihilates, and m | char."""
+    sources = (
+        _mat(
+            (_pair(2, 1), _pair(1, 1)),
+            (_pair(0, 1), _pair(2, 1)),
+        ),  # J2(2): minimal (t-2)^2
+        _diagonal(2, 3),  # minimal (t-2)(t-3)
+    )
+    for source in sources:
+        result = compute_minimal_polynomial(source)
+        assert verify_minimal_polynomial(result)
+        assert _evaluate_claim_at_matrix(
+            source, result.minimal_polynomial
+        ).is_zero_matrix
+        assert _divides(result.minimal_polynomial, result.characteristic_polynomial)
+        assert _evaluate_claim_at_matrix(
+            source, result.characteristic_polynomial
+        ).is_zero_matrix  # Cayley-Hamilton, independently
+        divisors = _proper_monic_divisors(result.minimal_polynomial)
+        assert divisors  # the minimality check below is not vacuous
+        import sympy
+
+        dimension = len(source.entries)
+        for divisor in divisors:
+            coefficients = tuple(
+                Fraction(int(value.p), int(value.q))
+                for value in reversed(divisor.all_coeffs())
+            )
+            evaluated = sympy.zeros(dimension)
+            matrix = _sympy_matrix_entries(source)
+            for coefficient in reversed(coefficients):
+                evaluated = evaluated * matrix + sympy.Rational(
+                    coefficient.numerator, coefficient.denominator
+                ) * sympy.eye(dimension)
+            assert not evaluated.is_zero_matrix
+
+
+def test_minimal_polynomial_forged_claim_annihilates_nothing() -> None:
+    """Perturbing the minimal polynomial's constant term breaks annihilation."""
+    source = _diagonal(2, 3)
+    result = compute_minimal_polynomial(source)
+    assert _coeffs(result.minimal_polynomial) == [
+        Fraction(6),
+        Fraction(-5),
+        Fraction(1),
+    ]
+    assert _evaluate_claim_at_matrix(source, result.minimal_polynomial).is_zero_matrix
+    forged_poly = _mono(Fraction(7), Fraction(-5), Fraction(1))
+    assert not _evaluate_claim_at_matrix(source, forged_poly).is_zero_matrix
+    assert not verify_minimal_polynomial(
+        result.model_copy(update={"minimal_polynomial": forged_poly})
+    )

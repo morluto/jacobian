@@ -6,6 +6,7 @@ import cProfile
 import json
 import time
 from fractions import Fraction
+from itertools import pairwise
 from threading import Event
 from types import CodeType
 from typing import Any, cast
@@ -627,3 +628,58 @@ def test_embedding_union_keeps_the_selected_parent_context() -> None:
 
     assert record.embedding.presentation == profile.field
     assert record.embedding.root.polynomial == profile.field.coefficients_descending
+
+
+def test_totally_real_octic_profile_is_strictly_ordered_and_indexed() -> None:
+    result = embeddings(_field("1", "1", "-7", "-5", "15", "6", "-10", "-1", "1"))
+
+    assert len(result.records) == 8
+    for position, record in enumerate(result.records):
+        assert isinstance(record, RealNumberFieldEmbeddingRecord)
+        assert record.embedding.root.real_root_index == position
+        require_real_interval_selects_root(record.embedding, record.isolating_interval)
+    ordered = [
+        record
+        for record in result.records
+        if isinstance(record, RealNumberFieldEmbeddingRecord)
+    ]
+    assert len(ordered) == 8
+    for left, right in pairwise(ordered):
+        assert (
+            left.isolating_interval.upper.as_fraction()
+            <= right.isolating_interval.lower.as_fraction()
+        )
+    for earlier in range(len(ordered)):
+        for later in range(earlier + 1, len(ordered)):
+            assert (
+                ordered[earlier].isolating_interval.upper.as_fraction()
+                <= ordered[later].isolating_interval.lower.as_fraction()
+            )
+
+
+def test_complex_pairs_are_conjugate_with_matching_half_planes() -> None:
+    result = embeddings(_field("1", "0", "5", "0", "5"))
+
+    assert result.signature.complex_conjugate_pair_count == 2
+    for pair in result.complex_conjugate_pairs:
+        negative = result.records[pair.negative_embedding_index]
+        positive = result.records[pair.positive_embedding_index]
+        assert isinstance(negative, ComplexNumberFieldEmbeddingRecord)
+        assert isinstance(positive, ComplexNumberFieldEmbeddingRecord)
+        assert negative.half_plane == "NEGATIVE_IMAGINARY"
+        assert positive.half_plane == "POSITIVE_IMAGINARY"
+        assert negative.isolating_rectangle.conjugate() == positive.isolating_rectangle
+        assert (
+            require_rectangle_selects_root(
+                negative.embedding.root, negative.isolating_rectangle
+            )
+            == "NEGATIVE_IMAGINARY"
+        )
+        assert (
+            require_rectangle_selects_root(
+                positive.embedding.root, positive.isolating_rectangle
+            )
+            == "POSITIVE_IMAGINARY"
+        )
+        assert negative.isolating_rectangle.imaginary_upper.as_fraction() < 0
+        assert positive.isolating_rectangle.imaginary_lower.as_fraction() > 0

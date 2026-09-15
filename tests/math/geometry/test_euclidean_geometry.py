@@ -721,3 +721,81 @@ def test_weighted_triangulation_rejects_positive_turn_self_intersection() -> Non
     )
     with pytest.raises(OperationDomainValidationError, match="strict CCW convexity"):
         minimum_weight_triangulation(request)
+
+
+def test_convex_hull_containment_order_and_area() -> None:
+    from jacobian.math.geometry.operations import (
+        convex_hull_points,
+        orientation,
+        signed_area,
+    )
+
+    square = (_pt(0, 0), _pt(2, 0), _pt(2, 2), _pt(0, 2))
+    interior = _pt(1, 1)
+    hull = convex_hull_points((*square, interior))
+    hull_set = {(p.x.as_fraction(), p.y.as_fraction()) for p in hull.points}
+    # Incidence: every hull vertex is a source point; the interior point is not.
+    assert hull_set == {
+        (Fraction(0), Fraction(0)),
+        (Fraction(2), Fraction(0)),
+        (Fraction(2), Fraction(2)),
+        (Fraction(0), Fraction(2)),
+    }
+    assert (Fraction(1), Fraction(1)) not in hull_set
+    # Order: hull is CCW starting at the lexicographic minimum, so its
+    # signed area is positive and equals the square's area 4.
+    assert hull.points[0] == _pt(0, 0)
+    assert signed_area(hull.points).value.as_fraction() == Fraction(4)
+    assert signed_area(square).value.as_fraction() == Fraction(4)
+    assert orientation(_pt(0, 0), _pt(2, 0), _pt(2, 2)).orientation == 1
+    # Euler consistency for polygon triangulation: a quadrilateral splits
+    # into exactly n - 2 = 2 triangles.
+    request = _triangulation_request(
+        polygon={
+            "points": tuple(
+                {
+                    "x": {"num": str(p.x.num), "den": "1"},
+                    "y": {"num": str(p.y.num), "den": "1"},
+                }
+                for p in square
+            )
+        },
+        diagonal_weights=(
+            {"first": 0, "second": 2, "weight": {"num": "1", "den": "1"}},
+            {"first": 1, "second": 3, "weight": {"num": "1", "den": "1"}},
+        ),
+    )
+    result = minimum_weight_triangulation(request)
+    assert len(result.triangles) == len(square) - 2
+    assert result.optimum.as_fraction() == 1
+
+
+def test_collinear_duplicate_and_empty_hull_degeneracies() -> None:
+    from jacobian.math.geometry.operations import (
+        collinear,
+        convex_hull_points,
+        orientation,
+        signed_area,
+    )
+
+    # Collinear triple: incidence holds, orientation vanishes, area vanishes.
+    assert collinear(_pt(0, 0), _pt(1, 1), _pt(2, 2)).collinear is True
+    assert collinear(_pt(0, 0), _pt(1, 0), _pt(0, 1)).collinear is False
+    assert orientation(_pt(0, 0), _pt(1, 1), _pt(2, 2)).orientation == 0
+    assert signed_area((_pt(0, 0), _pt(1, 1), _pt(2, 2))).value.as_fraction() == 0
+    # Collinear hull collapses to its two extreme endpoints.
+    flat = convex_hull_points((_pt(0, 0), _pt(1, 1), _pt(2, 2)))
+    assert {(p.x.as_fraction(), p.y.as_fraction()) for p in flat.points} == {
+        (Fraction(0), Fraction(0)),
+        (Fraction(2), Fraction(2)),
+    }
+    # Duplicate source points do not create duplicate hull vertices.
+    doubled = convex_hull_points((_pt(0, 0), _pt(0, 0), _pt(2, 0), _pt(0, 2)))
+    assert {(p.x.as_fraction(), p.y.as_fraction()) for p in doubled.points} == {
+        (Fraction(0), Fraction(0)),
+        (Fraction(2), Fraction(0)),
+        (Fraction(0), Fraction(2)),
+    }
+    assert signed_area(doubled.points).value.as_fraction() == Fraction(2)
+    # Empty input is admissible and yields the empty hull.
+    assert convex_hull_points(()).points == ()

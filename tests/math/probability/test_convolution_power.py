@@ -542,3 +542,72 @@ def test_complementary_cancellation_survives_many_kernel_buckets() -> None:
     distribution = FiniteRationalDistribution(atoms=atoms)
     assert sum(atom.probability.as_fraction() for atom in distribution.atoms) == 1
     require_input_distribution(distribution.atoms, require_canonical=True)
+
+
+def _convolution_dict(
+    left: FiniteRationalDistribution, right: FiniteRationalDistribution
+) -> dict[Fraction, Fraction]:
+    return _mass_map(convolution(left, right).distribution)
+
+
+def test_convolution_commutativity_associativity_and_support_law() -> None:
+    left = _distribution(((Fraction(0), Fraction(1, 2)), (Fraction(1), Fraction(1, 2))))
+    right = _distribution(
+        ((Fraction(0), Fraction(1, 4)), (Fraction(2), Fraction(3, 4)))
+    )
+    third = _distribution(
+        ((Fraction(-1), Fraction(1, 3)), (Fraction(1), Fraction(2, 3)))
+    )
+
+    assert _convolution_dict(left, right) == _convolution_dict(right, left)
+    once = convolution(convolution(left, right).distribution, third).distribution
+    twice = convolution(left, convolution(right, third).distribution).distribution
+    assert _mass_map(once) == _mass_map(twice)
+
+    # Support law: every output value is a pairwise sum, attaining both extremes.
+    combined = _mass_map(convolution(left, right).distribution)
+    left_support = [a.value.as_fraction() for a in left.atoms]
+    right_support = [a.value.as_fraction() for a in right.atoms]
+    expected_sums = {a + b for a in left_support for b in right_support}
+    assert set(combined) == expected_sums
+    assert min(combined) == min(left_support) + min(right_support)
+    assert max(combined) == max(left_support) + max(right_support)
+    # Total mass is exactly one.
+    assert sum(combined.values(), Fraction()) == 1
+    assert sum(_mass_map(twice).values(), Fraction()) == 1
+
+
+def test_point_mass_is_the_convolution_identity() -> None:
+    source = _distribution(
+        ((Fraction(0), Fraction(1, 4)), (Fraction(2), Fraction(3, 4)))
+    )
+    delta = _distribution(((Fraction(0), Fraction(1)),))
+    assert _convolution_dict(delta, source) == _mass_map(source)
+    assert _convolution_dict(source, delta) == _mass_map(source)
+    # Convolution power of a point mass stays a point mass at n * c.
+    shifted = _distribution(((Fraction(3, 2), Fraction(1)),))
+    powered = convolution_power(shifted, 5)
+    assert _mass_map(powered.distribution) == {Fraction(15, 2): Fraction(1)}
+    assert sum(_mass_map(powered.distribution).values(), Fraction()) == 1
+
+
+def test_unnormalized_forged_distribution_is_rejected() -> None:
+    forged = FiniteRationalDistribution(
+        atoms=(
+            FiniteDistributionAtom(
+                value=CanonicalRational.from_fraction(Fraction(0)),
+                probability=CanonicalRational.from_fraction(Fraction(1, 2)),
+            ),
+            FiniteDistributionAtom(
+                value=CanonicalRational.from_fraction(Fraction(1)),
+                probability=CanonicalRational.from_fraction(Fraction(1, 4)),
+            ),
+        )
+    )
+    # The carrier value itself does not enforce normalization, but every
+    # consuming operation must refuse the forged law (masses sum to 3/4).
+    assert sum(a.probability.as_fraction() for a in forged.atoms) == Fraction(3, 4)
+    with pytest.raises(OperationDomainValidationError):
+        convolution(forged, _fair_bit())
+    with pytest.raises(OperationDomainValidationError):
+        convolution_power(forged, 2)

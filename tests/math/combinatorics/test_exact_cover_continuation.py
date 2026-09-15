@@ -124,3 +124,123 @@ def test_exact_cover_search_observes_cancellation_inside_the_kernel() -> None:
         pytest.raises(OperationExecutionCancelledError, match="exact-cover search"),
     ):
         find_generalized_exact_cover(instance, search_node_limit=10_000)
+
+
+# ---------------------------------------------------------------------------
+# Enumeration laws: exact-cover partitions (Workstream C)
+# ---------------------------------------------------------------------------
+
+
+def _primary_blocks(
+    instance: GeneralizedExactCoverInstance, selected_row_ids: tuple[str, ...]
+) -> list[frozenset[str]]:
+    rows_by_id = {row.row_id: row for row in instance.rows}
+    primary = set(instance.primary_items)
+    return [
+        frozenset(item for item in rows_by_id[row_id].items if item in primary)
+        for row_id in selected_row_ids
+    ]
+
+
+def _assert_exact_partition(
+    blocks: list[frozenset[str]], universe: tuple[str, ...]
+) -> None:
+    for block in blocks:
+        assert block, "partition blocks must be nonempty"
+    seen: set[str] = set()
+    for block in blocks:
+        assert not seen.intersection(block), "partition blocks must be disjoint"
+        seen.update(block)
+    assert seen == set(universe), "partition blocks must cover the universe"
+
+
+def test_found_cover_partitions_the_primary_universe() -> None:
+    from jacobian.math.combinatorics.exact_cover import verify_generalized_exact_cover
+
+    instance = GeneralizedExactCoverInstance(
+        primary_items=("p", "q", "r"),
+        secondary_items=(),
+        rows=(
+            ExactCoverRow(row_id="a", items=("p",)),
+            ExactCoverRow(row_id="b", items=("q",)),
+            ExactCoverRow(row_id="c", items=("r",)),
+            ExactCoverRow(row_id="d", items=("p", "q")),
+        ),
+    )
+    result = find_generalized_exact_cover(instance)
+    assert result.status == "FOUND"
+    assert result.selected_row_ids is not None
+    assert verify_generalized_exact_cover(result)
+    _assert_exact_partition(
+        _primary_blocks(instance, result.selected_row_ids), instance.primary_items
+    )
+    assert result.item_multiplicities is not None
+    assert all(
+        entry.multiplicity == 1
+        for entry in result.item_multiplicities
+        if entry.kind == "PRIMARY"
+    )
+
+
+def test_empty_universe_empty_family_is_found_empty() -> None:
+    instance = GeneralizedExactCoverInstance(
+        primary_items=(), secondary_items=(), rows=()
+    )
+    result = find_generalized_exact_cover(instance)
+    assert result.status == "FOUND"
+    assert result.selected_row_ids == ()
+    assert result.selected_row_ids is not None
+    _assert_exact_partition(
+        _primary_blocks(instance, result.selected_row_ids), instance.primary_items
+    )
+
+
+def test_forged_subfamily_fails_partition_and_verification() -> None:
+    from jacobian.math.combinatorics.exact_cover import verify_generalized_exact_cover
+
+    instance = GeneralizedExactCoverInstance(
+        primary_items=("p", "q"),
+        secondary_items=("s",),
+        rows=(
+            ExactCoverRow(row_id="a", items=("p", "s")),
+            ExactCoverRow(row_id="b", items=("q", "s")),
+            ExactCoverRow(row_id="c", items=("p", "q")),
+        ),
+    )
+    genuine = find_generalized_exact_cover(instance)
+    assert genuine.status == "FOUND"
+    assert genuine.selected_row_ids is not None
+    assert verify_generalized_exact_cover(genuine)
+    # A proper subfamily with valid shape no longer covers the universe.
+    forged = genuine.model_copy(update={"selected_row_ids": ("a",)})
+    assert not verify_generalized_exact_cover(forged)
+    assert _primary_blocks(instance, ("a",)) == [frozenset({"p"})]
+    assert set(instance.primary_items) != frozenset({"p"})
+    # An overlapping secondary pair keeps valid primary blocks but covers s twice.
+    double = genuine.model_copy(update={"selected_row_ids": ("a", "b")})
+    assert not verify_generalized_exact_cover(double)
+
+
+def test_combine_rejects_partial_child_coverage() -> None:
+    instance = GeneralizedExactCoverInstance(
+        primary_items=("p", "q"),
+        secondary_items=("s",),
+        rows=(
+            ExactCoverRow(row_id="a", items=("p", "s")),
+            ExactCoverRow(row_id="b", items=("p", "s")),
+            ExactCoverRow(row_id="c", items=("q", "s")),
+            ExactCoverRow(row_id="d", items=("q", "s")),
+        ),
+    )
+    root = _root(instance)
+    children = split_generalized_exact_cover_shard(
+        GeneralizedExactCoverShardSplitRequest(instance=instance, shard=root)
+    ).children
+    assert len(children) == 2
+    partial = (find_generalized_exact_cover(instance, shard=children[0]),)
+    with pytest.raises(ValueError, match="disjoint"):
+        combine_generalized_exact_cover_shard_results(
+            GeneralizedExactCoverShardResultsCombineRequest(
+                instance=instance, parent_shard=root, child_results=partial
+            )
+        )

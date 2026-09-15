@@ -527,3 +527,97 @@ def test_mandatory_secondary_with_covering_row_keeps_the_full_ceiling() -> None:
     )
     with pytest.raises(OperationResourceAdmissionError, match="work"):
         minimum_generalized_exact_cover(instance)
+
+
+# ---------------------------------------------------------------------------
+# Enumeration laws: minimum-cover partitions (Workstream C)
+# ---------------------------------------------------------------------------
+
+
+def _minimum_primary_blocks(
+    instance: GeneralizedExactCoverInstance, selected_row_ids: tuple[str, ...]
+) -> list[frozenset[str]]:
+    rows_by_id = {row.row_id: row for row in instance.rows}
+    primary = set(instance.primary_items)
+    return [
+        frozenset(item for item in rows_by_id[row_id].items if item in primary)
+        for row_id in selected_row_ids
+    ]
+
+
+def _assert_exact_partition(
+    blocks: list[frozenset[str]], universe: tuple[str, ...]
+) -> None:
+    for block in blocks:
+        assert block, "partition blocks must be nonempty"
+    seen: set[str] = set()
+    for block in blocks:
+        assert not seen.intersection(block), "partition blocks must be disjoint"
+        seen.update(block)
+    assert seen == set(universe), "partition blocks must cover the universe"
+
+
+def test_exact_minimum_partitions_the_primary_universe() -> None:
+    result = minimum_generalized_exact_cover(
+        _instance(
+            (
+                ("a-p", ("p",)),
+                ("b-q", ("q",)),
+                ("z-both", ("p", "q")),
+            )
+        )
+    )
+    assert result.status == "EXACT"
+    assert result.selected_row_ids == ("z-both",)
+    assert result.lower_bound == result.upper_bound == 1
+    assert result.selected_row_ids is not None
+    _assert_exact_partition(
+        _minimum_primary_blocks(result.instance, result.selected_row_ids),
+        result.instance.primary_items,
+    )
+
+
+def test_empty_universe_empty_family_minimum_is_exact_empty() -> None:
+    result = minimum_generalized_exact_cover(
+        GeneralizedExactCoverInstance(primary_items=(), secondary_items=(), rows=())
+    )
+    assert result.status == "EXACT"
+    assert result.selected_row_ids is not None and result.selected_row_ids == ()
+    assert result.lower_bound == result.upper_bound == 0
+    _assert_exact_partition(
+        _minimum_primary_blocks(result.instance, result.selected_row_ids),
+        result.instance.primary_items,
+    )
+
+
+def test_nonminimum_cover_is_not_the_exact_minimum() -> None:
+    instance = _instance(
+        (
+            ("a-p", ("p",)),
+            ("b-q", ("q",)),
+            ("z-both", ("p", "q")),
+        )
+    )
+    genuine = minimum_generalized_exact_cover(instance)
+    assert genuine.status == "EXACT"
+    assert genuine.selected_row_ids == ("z-both",)
+    # A valid but non-optimal cover family passes shape validation, yet the
+    # minimum operation still distinguishes it by cardinality.
+    weakened = MinimumGeneralizedExactCoverResult.model_validate(
+        {
+            "instance": instance.model_dump(mode="json"),
+            "status": "EXACT",
+            "selected_row_ids": ["a-p", "b-q"],
+            "item_multiplicities": [
+                {"item_id": "p", "kind": "PRIMARY", "multiplicity": 1},
+                {"item_id": "q", "kind": "PRIMARY", "multiplicity": 1},
+            ],
+            "lower_bound": 2,
+            "upper_bound": 2,
+            "searched_node_count": 1,
+        }
+    )
+    assert weakened.selected_row_ids != genuine.selected_row_ids
+    assert weakened.upper_bound is not None and genuine.upper_bound is not None
+    assert weakened.upper_bound > genuine.upper_bound
+    assert minimum_generalized_exact_cover(instance) == genuine

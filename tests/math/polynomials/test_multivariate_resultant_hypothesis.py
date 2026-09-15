@@ -2,9 +2,9 @@
 
 The resultant is a signed invariant, so the defining evidence is relational:
 the argument-swap law ``Res(f, g) = (-1)**(deg f * deg g) Res(g, f)`` and an
-independent Sylvester-determinant oracle.  This mirrors the failure mode of
-upstream sympy/sympy#10666, where a degree-canonicalizing PRS dropped the swap
-sign only for odd-degree pairs.
+independent Sylvester-determinant oracle.  This mirrors a PRS failure mode in
+which degree canonicalization can drop the swap sign only for odd-degree
+pairs.
 """
 
 from __future__ import annotations

@@ -15,6 +15,8 @@ from jacobian.math.finite_fields import (
     paley_tournament,
     verify_paley_tournament,
 )
+from jacobian.math.finite_fields._models import PaleyTournamentRequest
+from jacobian.math.finite_fields._tools import TOOLS
 
 pytestmark = pytest.mark.requires_backend("flint")
 
@@ -156,3 +158,39 @@ def test_serialized_result_is_structural_and_publicly_verifiable() -> None:
     payload["vertex_axis"][0]["coordinates"] = ["1"]
     decoded = PaleyTournamentResult.model_validate_json(json.dumps(payload))
     assert not verify_paley_tournament(decoded)
+
+
+def test_f7_orientation_survives_tool_serialization_and_direction_forgery() -> None:
+    """The same F7 tournament must pass every mathematical surface."""
+
+    presentation = finite_field(7, (0, 1))
+    request = PaleyTournamentRequest(presentation=presentation)
+    expected = paley_tournament(presentation)
+    operation = next(
+        tool
+        for tool in TOOLS
+        if tool.operation_id == "finite_field.paley_tournament.construct"
+    )
+    actual = operation.run(
+        operation.request_type.model_validate_json(request.model_dump_json())
+    )
+    assert actual == expected
+    decoded = PaleyTournamentResult.model_validate_json(actual.model_dump_json())
+    assert verify_paley_tournament(decoded)
+    _assert_square_difference_invariant(decoded)
+
+    arcs = set(decoded.graph.edges)
+    assert len(arcs) == 7 * 6 // 2
+    assert dict.fromkeys(range(7), 3) == {
+        vertex: sum(left == vertex for left, _ in arcs) for vertex in range(7)
+    }
+    assert all((right, left) not in arcs for left, right in arcs)
+
+    payload = decoded.model_dump(mode="json")
+    payload["graph"]["edges"] = [
+        [right, left] if index == 0 else [left, right]
+        for index, (left, right) in enumerate(arcs)
+    ]
+    assert not verify_paley_tournament(
+        PaleyTournamentResult.model_validate_json(json.dumps(payload))
+    )

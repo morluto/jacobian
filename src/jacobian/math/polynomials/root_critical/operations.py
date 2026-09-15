@@ -317,15 +317,11 @@ def _family(
             collected.append(
                 (factor, multiplicity, root_index, _root_value(root_index, exact_roots))
             )
-    real_values = tuple(
-        value
-        for _, _, _, root in collected
-        if _root_is_real(root) and (value := _root_rational_value(root)) is not None
-    )
+    real_roots = tuple(root for _, _, _, root in collected if _root_is_real(root))
     records: list[RootCriticalRoot] = []
     values: list[Any] = []
     for factor, multiplicity, root_index, root in collected:
-        rectangle = _isolating_rectangle(root, _root_rational_value(root), real_values)
+        rectangle = _isolating_rectangle(root, _root_rational_value(root), real_roots)
         records.append(
             RootCriticalRoot(
                 axis_index=len(records),
@@ -352,30 +348,70 @@ def _root_rational_value(root: Any) -> CanonicalRational | None:
     return _rational(root)
 
 
+def _intervals_meet(
+    left_lower: Fraction,
+    left_upper: Fraction,
+    right_lower: Fraction,
+    right_upper: Fraction,
+) -> bool:
+    """Whether two closed rational intervals intersect."""
+
+    return left_lower <= right_upper and right_lower <= left_upper
+
+
+def _sibling_real_intervals(
+    real_roots: tuple[Any, ...], root: Any, digits: int
+) -> tuple[tuple[Fraction, Fraction], ...]:
+    """Certified real intervals for every real sibling of ``root``.
+
+    A rational sibling is its exact singleton; an irrational sibling is bounded
+    by a certified interval narrow enough to compare against ``root`` at the
+    requested precision.
+    """
+
+    intervals: list[tuple[Fraction, Fraction]] = []
+    for sibling in real_roots:
+        if sibling is root:
+            continue
+        value = _root_rational_value(sibling)
+        if value is not None:
+            rational = value.as_fraction()
+            intervals.append((rational, rational))
+        else:
+            intervals.append(_refined_real_interval(sibling, digits))
+    return tuple(intervals)
+
+
 def _isolating_rectangle(
     root: Any,
     own_value: CanonicalRational | None,
-    real_values: tuple[CanonicalRational, ...],
+    real_roots: tuple[Any, ...],
 ) -> RootCriticalRectangle:
-    """Return a rectangle refined to exclude every other real root value.
+    """Return a rectangle refined to exclude every other real root.
 
     A rational root can lie inside an irrational sibling's rectangle (for
-    example a good rational approximation of ``sqrt(2)``). Refine the interval
-    around this root until all colliding rational values fall outside it.
+    example a good rational approximation of ``sqrt(2)``), and two irrational
+    siblings can be closer than either naive enclosure (``sqrt(2)`` and
+    ``sqrt(2 + 1/q)`` with ``q = 10**127`` are only about ``3.5e-128`` apart).
+    Refine this root and its real siblings at increasing precision until the
+    certified intervals are disjoint, then fit to the carrier grid.
     """
 
     rectangle = _rectangle(root)
     if own_value is not None:
         # A rational root is its own singleton; nothing to refine.
         return rectangle
-    colliding = sorted(value.as_fraction() for value in real_values)
     lower = rectangle.real_lower.as_fraction()
     upper = rectangle.real_upper.as_fraction()
-    if not colliding or not any(lower <= value <= upper for value in colliding):
+    colliding = _sibling_real_intervals(real_roots, root, 60)
+    if not any(
+        _intervals_meet(sibling_lower, sibling_upper, lower, upper)
+        for sibling_lower, sibling_upper in colliding
+    ):
         return rectangle
-    # Refine toward the root at increasing precision until no colliding rational
-    # lies inside the interval; the isolating interval is eventually disjoint
-    # from each finite set of distinct rationals.
+    # Refine toward the root at increasing precision until no real sibling
+    # interval meets this interval; distinct real roots are eventually
+    # separated from each finite set of certified enclosures.
     for digits in (60, 120, 240, 480, 960, 1920):
         refined_lower, refined_upper = _refined_real_interval(root, digits)
         candidate_lower = max(lower, refined_lower)
@@ -383,13 +419,22 @@ def _isolating_rectangle(
         if candidate_lower > candidate_upper:
             break
         lower, upper = candidate_lower, candidate_upper
-        if not any(lower <= value <= upper for value in colliding):
+        colliding = _sibling_real_intervals(real_roots, root, digits)
+        if not any(
+            _intervals_meet(sibling_lower, sibling_upper, lower, upper)
+            for sibling_lower, sibling_upper in colliding
+        ):
             break
     fitted_lower = _fit_rectangle_component(lower, round_up=False)
     fitted_upper = _fit_rectangle_component(upper, round_up=True)
     if not any(
-        fitted_lower.as_fraction() <= value <= fitted_upper.as_fraction()
-        for value in colliding
+        _intervals_meet(
+            sibling_lower,
+            sibling_upper,
+            fitted_lower.as_fraction(),
+            fitted_upper.as_fraction(),
+        )
+        for sibling_lower, sibling_upper in colliding
     ):
         return RootCriticalRectangle(
             real_lower=fitted_lower,
@@ -402,7 +447,10 @@ def _isolating_rectangle(
     # reintroducing the grid bounds would publish a non-isolating rectangle.
     # Separate with carrier-representable bounds instead; each tightened side
     # only shrinks toward the excluding interval, so no sibling is re-included.
-    if any(lower <= value <= upper for value in colliding):
+    if any(
+        _intervals_meet(sibling_lower, sibling_upper, lower, upper)
+        for sibling_lower, sibling_upper in colliding
+    ):
         raise OperationResourceAdmissionError(
             location=("polynomial",),
             code="polynomial.root_critical.sibling_separation",
@@ -411,8 +459,29 @@ def _isolating_rectangle(
                 "admitted root-component envelope"
             ),
         )
-    below = [value for value in colliding if value < lower]
-    above = [value for value in colliding if value > upper]
+    # Only the siblings the fitted grid re-included need a separating bound;
+    # far-away siblings (such as the reflected root ``-sqrt(2)``) would pull the
+    # simplest rational bound far away from the root.
+    separating = [
+        (sibling_lower, sibling_upper)
+        for sibling_lower, sibling_upper in colliding
+        if _intervals_meet(
+            sibling_lower,
+            sibling_upper,
+            fitted_lower.as_fraction(),
+            fitted_upper.as_fraction(),
+        )
+    ]
+    below = [
+        sibling_upper
+        for sibling_lower, sibling_upper in separating
+        if sibling_upper < lower
+    ]
+    above = [
+        sibling_lower
+        for sibling_lower, sibling_upper in separating
+        if sibling_lower > upper
+    ]
     real_lower = (
         _representable_separating_bound(max(below), lower) if below else fitted_lower
     )
@@ -423,8 +492,13 @@ def _isolating_rectangle(
         real_lower.as_fraction() > lower
         or real_upper.as_fraction() < upper
         or any(
-            real_lower.as_fraction() <= value <= real_upper.as_fraction()
-            for value in colliding
+            _intervals_meet(
+                sibling_lower,
+                sibling_upper,
+                real_lower.as_fraction(),
+                real_upper.as_fraction(),
+            )
+            for sibling_lower, sibling_upper in colliding
         )
     ):
         raise OperationResourceAdmissionError(

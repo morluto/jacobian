@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from fractions import Fraction
+from typing import Any
 
 import pytest
 
@@ -17,14 +19,16 @@ from jacobian.math.polynomials.root_critical._models import (
 )
 from jacobian.math.polynomials.root_critical._splitting import (
     _polynomial_from_ascending,
+    conjugate_element,
 )
+from jacobian.math.polynomials.values import RationalPolynomial
 
 
-def _poly(*ascending: int):
+def _poly(*ascending: int) -> RationalPolynomial:
     return _polynomial_from_ascending([Fraction(value) for value in ascending], "x")
 
 
-def _fractions(coefficients) -> tuple[Fraction, ...]:
+def _fractions(coefficients: Iterable[Any]) -> tuple[Fraction, ...]:
     return tuple(value.as_fraction() for value in coefficients)
 
 
@@ -149,4 +153,140 @@ def test_field_degree_bound_rejected() -> None:
 
 def test_native_field_type_rejected() -> None:
     with pytest.raises(OperationDomainValidationError, match="rational polynomial"):
-        exact_splitting_field("not a polynomial")
+        exact_splitting_field("not a polynomial")  # type: ignore[arg-type]
+
+
+def _sympy_quotient_check(field: ExactSplittingField) -> None:
+    """Every retained root must annihilate the support in Q[t]/(defining)."""
+    from sympy import Poly, Rational, Symbol
+
+    t = Symbol("t")
+    modulus = Poly(
+        [
+            Rational(c.numerator, c.denominator)
+            for c in reversed(_ascending(field.defining_polynomial))
+        ],
+        t,
+        domain="QQ",
+    )
+    assert modulus.is_monic
+    assert modulus.is_irreducible
+    support = _ascending(field.squarefree_support)
+    for root in field.roots:
+        value = Poly(
+            [
+                Rational(c.numerator, c.denominator)
+                for c in reversed(_fractions(root.coefficients_ascending))
+            ],
+            t,
+            domain="QQ",
+        )
+        evaluated = Poly(
+            sum(coeff * value**power for power, coeff in enumerate(support)),
+            t,
+            domain="QQ",
+        )
+        assert evaluated.rem(modulus).is_zero
+
+
+def _ascending(polynomial: RationalPolynomial) -> list[Fraction]:
+    terms = {
+        term.exponents[0]: term.coefficient.as_fraction()
+        for term in polynomial.polynomial.terms
+    }
+    degree = max(terms) if terms else 0
+    return [terms.get(power, Fraction(0)) for power in range(degree + 1)]
+
+
+def test_roots_annihilate_support_in_quotient_field() -> None:
+    _sympy_quotient_check(exact_splitting_field(_poly(-2, 0, 1)))
+    _sympy_quotient_check(exact_splitting_field(_poly(-2, 0, 0, 1)))
+    _sympy_quotient_check(exact_splitting_field(_poly(0, 0, 1)))
+
+
+def test_forged_root_fails_quotient_reconstruction() -> None:
+    from sympy import Poly, Rational, Symbol
+
+    field = exact_splitting_field(_poly(-2, 0, 1))
+    t = Symbol("t")
+    modulus = Poly(
+        [
+            Rational(c.numerator, c.denominator)
+            for c in reversed(_ascending(field.defining_polynomial))
+        ],
+        t,
+        domain="QQ",
+    )
+    support = _ascending(field.squarefree_support)
+    first = _fractions(field.roots[0].coefficients_ascending)
+    forged = [first[0] + Fraction(1), *first[1:]]
+    value = Poly(
+        [Rational(c.numerator, c.denominator) for c in reversed(forged)],
+        t,
+        domain="QQ",
+    )
+    evaluated = Poly(
+        sum(coeff * value**power for power, coeff in enumerate(support)),
+        t,
+        domain="QQ",
+    )
+    assert not evaluated.rem(modulus).is_zero
+
+
+def test_conjugation_is_a_nontrivial_involution() -> None:
+    field = exact_splitting_field(_poly(-2, 0, 0, 1))
+    modulus = _ascending(field.defining_polynomial)
+    conjugation = list(_fractions(field.conjugation_coefficients))
+    degree = len(modulus) - 1
+    # Conjugation fixes every rational constant.
+    assert conjugate_element(
+        [Fraction(5)] + [Fraction(0)] * (degree - 1), conjugation, modulus
+    ) == [Fraction(5)] + [Fraction(0)] * (degree - 1)
+    # Applying it twice is the identity on the power basis.
+    for power in range(degree):
+        basis = [Fraction(0)] * degree
+        basis[power] = Fraction(1)
+        assert (
+            conjugate_element(
+                conjugate_element(basis, conjugation, modulus), conjugation, modulus
+            )
+            == basis
+        )
+    # It is nontrivial: some root moves under conjugation.
+    roots = [list(_fractions(root.coefficients_ascending)) for root in field.roots]
+    assert any(conjugate_element(root, conjugation, modulus) != root for root in roots)
+    # It permutes the retained root family.
+    assert {tuple(conjugate_element(root, conjugation, modulus)) for root in roots} == {
+        tuple(root) for root in roots
+    }
+
+
+def test_forged_identity_conjugation_misses_root_motion() -> None:
+    """The identity map is an automorphism but not complex conjugation here."""
+    field = exact_splitting_field(_poly(-2, 0, 0, 1))
+    modulus = _ascending(field.defining_polynomial)
+    degree = len(modulus) - 1
+    true_conjugation = list(_fractions(field.conjugation_coefficients))
+    identity_map = [Fraction(0), Fraction(1)] + [Fraction(0)] * (degree - 2)
+    roots = [list(_fractions(root.coefficients_ascending)) for root in field.roots]
+    assert any(
+        conjugate_element(root, true_conjugation, modulus) != root for root in roots
+    )
+    assert all(conjugate_element(root, identity_map, modulus) == root for root in roots)
+
+
+def test_root_rectangles_are_pairwise_distinct() -> None:
+    field = exact_splitting_field(_poly(-2, 0, 0, 1))
+    boxes = [
+        (
+            root.rectangle.real_lower.as_fraction(),
+            root.rectangle.real_upper.as_fraction(),
+            root.rectangle.imaginary_lower.as_fraction(),
+            root.rectangle.imaginary_upper.as_fraction(),
+        )
+        for root in field.roots
+    ]
+    assert len(set(boxes)) == len(boxes)
+    for real_lower, real_upper, imag_lower, imag_upper in boxes:
+        assert real_lower <= real_upper
+        assert imag_lower <= imag_upper

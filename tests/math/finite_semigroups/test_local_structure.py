@@ -7,6 +7,7 @@ import pytest
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.finite_semigroups._models import FiniteSemigroup
 from jacobian.math.finite_semigroups.operations import (
+    green_relations,
     ideal_enumeration,
     local_structure,
 )
@@ -61,3 +62,19 @@ def test_enumeration_bound() -> None:
     semigroup = FiniteSemigroup(elements=elements, multiplication=table)
     with pytest.raises(OperationResourceAdmissionError, match="at most 12"):
         ideal_enumeration(semigroup)
+
+
+def test_group_green_relations_are_universal() -> None:
+    result = green_relations(_z3())
+    assert (
+        result.L == result.R == result.H == result.D == result.J == (("0", "1", "2"),)
+    )
+
+
+def test_left_zero_band_green_relations_split_right_only() -> None:
+    result = green_relations(_left_zero_2())
+    assert result.L == (("a", "b"),)
+    assert result.R == (("a",), ("b",))
+    assert result.H == (("a",), ("b",))
+    assert result.D == (("a", "b"),)
+    assert result.J == (("a", "b"),)

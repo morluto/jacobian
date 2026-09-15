@@ -82,6 +82,18 @@ class TestSeedMutation:
         )
         assert result2.exchange_matrix.entries == b.entries
 
+    def test_mutation_matches_hand_fomin_zelevinsky_update(self) -> None:
+        """An off-axis entry gains exactly the positive product term."""
+        b = em(3, ((0, 2, -1), (-2, 0, 3), (1, -3, 0)), (1, 1, 1))
+        result = compute_seed_mutation(
+            SeedMutationRequest(exchange_matrix=b, mutation_index=1)
+        )
+        assert result.exchange_matrix.entries == (
+            (0, -2, 5),
+            (2, 0, -3),
+            (-5, 3, 0),
+        )
+
     def test_3x3_mutation(self) -> None:
         """Mutate a 3x3 skew-symmetric matrix."""
         b = em(

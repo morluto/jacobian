@@ -466,3 +466,14 @@ def test_profile_verifier_propagates_operational_failure(
     monkeypatch.setattr(operations, "_require_category_laws", fail)
     with pytest.raises(RuntimeError, match="injected operational failure"):
         verify_category_profile(claim)
+
+
+def test_opposite_is_involutive_and_transposes_hom_sets() -> None:
+    category = FiniteCategory.model_validate(CATEGORY)
+    once = compute_opposite_category(category)
+    assert compute_opposite_category(once) == category
+    profile = compute_category_profile(category)
+    opposite_profile = compute_category_profile(once)
+    assert {
+        (target, source, count) for source, target, count in opposite_profile.hom_sets
+    } == set(profile.hom_sets)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -27,11 +28,14 @@ from jacobian.math.finite_fields._algebraic_set_models import (
     BaseChangeRequest,
     ProjectiveZeroCountRequest,
     ProjectiveZeroSetRequest,
+    ProjectiveZeroSetResult,
 )
 from jacobian.math.finite_fields._algebraic_sets import (
+    AffinePoint,
     AlgebraicMonomial,
     AlgebraicPolynomial,
     PolynomialSystem,
+    verify_affine_zero_set,
 )
 from jacobian.math.finite_fields._tools import (
     _affine_zero_count,
@@ -40,6 +44,7 @@ from jacobian.math.finite_fields._tools import (
     _projective_zero_count,
     _projective_zero_set,
 )
+from jacobian.math.finite_fields.values import ProjectivePoint
 
 
 def _f2() -> FiniteFieldPresentation:
@@ -208,3 +213,99 @@ def test_serialized_affine_result_round_trip() -> None:
         encode_strict_json(result.model_dump(mode="json")), strict=True
     )
     assert restored == result
+
+
+def _gf4() -> FiniteFieldPresentation:
+    return finite_field(2, (1, 1, 1))
+
+
+def _vanishing_x_system(
+    presentation: FiniteFieldPresentation, labels: tuple[str, ...] = ("x", "y")
+) -> PolynomialSystem:
+    axis = Axis(name="vars", labels=labels)
+    one = _one(presentation)
+    poly = AlgebraicPolynomial._from_kernel(
+        presentation=presentation,
+        variable_axis=axis,
+        terms=(
+            AlgebraicMonomial._from_kernel(
+                coefficient=one, exponents=(1,) + (0,) * (len(labels) - 1)
+            ),
+        ),
+    )
+    return PolynomialSystem._from_kernel(
+        presentation=presentation, variable_axis=axis, equations=(poly,)
+    )
+
+
+def test_projective_classes_are_normalized_and_unique_over_gf4() -> None:
+    presentation = _gf4()
+    system = _vanishing_x_system(presentation)
+    points = projective_zero_set(system)
+    assert projective_zero_count(system) == 1
+    assert len(points) == 1
+    assert len({point.digest for point in points}) == 1
+    coordinates = points[0].coordinates
+    assert coordinates[0].is_zero
+    assert coordinates[1].is_one
+    assert points[0].axis == system.variable_axis
+
+
+def test_affine_cone_count_recovers_projective_count() -> None:
+    for presentation in (_f2(), _gf4()):
+        system = _vanishing_x_system(presentation)
+        order = presentation.order
+        affine = affine_zero_count(system)
+        assert affine > 1
+        assert projective_zero_count(system) == (affine - 1) // (order - 1)
+
+
+def test_projective_result_rejects_duplicate_scalar_classes() -> None:
+    system = _projective_system()
+    points = projective_zero_set(system)
+    assert len(points) == 1
+    with pytest.raises(ValidationError, match="distinct scalar classes"):
+        ProjectiveZeroSetResult(
+            system=system,
+            points=(*points, points[0]),
+            point_count=2,
+        )
+
+
+def test_projective_point_rejects_nonnormalized_coordinates() -> None:
+    presentation = _gf4()
+    axis = Axis(name="vars", labels=("x", "y"))
+    with pytest.raises(ValidationError, match="normalized"):
+        ProjectivePoint(
+            presentation=presentation,
+            axis=axis,
+            coordinates=(
+                element(presentation, (1, 1)),
+                element(presentation, (1, 0)),
+            ),
+        )
+
+
+def test_verify_affine_zero_set_accepts_exact_family_and_rejects_forgery() -> None:
+    system = _split_system()
+    points = affine_zero_set(system)
+    assert verify_affine_zero_set(system, points) is True
+    forged = (
+        AffinePoint(
+            presentation=points[0].presentation,
+            variable_axis=points[0].variable_axis,
+            coordinates=points[0].coordinates,
+        ),
+    )
+    assert verify_affine_zero_set(system, forged) is False
+
+
+def test_homogeneous_projective_count_survives_base_change() -> None:
+    system = _vanishing_x_system(_f2())
+    embedding = FieldEmbedding._from_kernel(
+        source=system.presentation,
+        target=_gf4(),
+        generator_image=element(_gf4(), (0, 0)),
+    )
+    transported = base_change_system(system, embedding)
+    assert projective_zero_count(transported) == projective_zero_count(system) == 1

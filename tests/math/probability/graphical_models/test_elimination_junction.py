@@ -56,7 +56,9 @@ def test_junction_calibration_eliminating_every_variable() -> None:
         variable=0, parents=(), domain_sizes=(2, 2), table=(_q(3, 5), _q(2, 5))
     )
     child = ConditionalProbabilityTable(
-        variable=1, parents=(0,), domain_sizes=(2, 2),
+        variable=1,
+        parents=(0,),
+        domain_sizes=(2, 2),
         table=(_q(1, 4), _q(1, 2), _q(3, 4), _q(1, 2)),
     )
     network = construct_bayes_net(2, ((0, 1),), (2, 2), (root, child))

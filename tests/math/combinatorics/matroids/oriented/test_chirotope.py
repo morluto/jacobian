@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from itertools import combinations
+from itertools import combinations, permutations, product
 from typing import Any, cast
 
 import pytest
@@ -53,6 +53,24 @@ def _alternating_table(ground_size: int) -> dict[str, Any]:
     return _table_from_signs(
         ground_size,
         dict.fromkeys(_increasing_triples(ground_size), 1),
+    )
+
+
+def _permutation_determinant(order: Triple, key: Triple) -> int:
+    """Independent orientation parity from a permutation-matrix determinant."""
+
+    positions = {value: rank for rank, value in enumerate(key)}
+    (first, second, third), (fourth, fifth, sixth), (seventh, eighth, ninth) = (
+        tuple(1 if column == positions[value] else 0 for column in range(3))
+        for value in order
+    )
+    return (
+        first * fifth * ninth
+        + second * sixth * seventh
+        + third * fourth * eighth
+        - third * fifth * seventh
+        - second * fourth * ninth
+        - first * sixth * eighth
     )
 
 
@@ -259,7 +277,62 @@ class TestChirotopeCheck:
         assert MAX_EXECUTION_B2_EXCHANGE_INSTANCES == 1_000_000
 
 
+class TestAlternatingOrientation:
+    def test_ordered_triples_match_permutation_determinants(self) -> None:
+        """Ordered chirotope signs must follow permutation parity.
+
+        The permutation-matrix determinant is independent of the kernel's
+        inversion-count helper. This pins antisymmetry explicitly instead of
+        relying only on relabelling, which could be wrong in the same way.
+        """
+
+        table = {
+            triple: entry["sign"]
+            for triple, entry in zip(
+                _increasing_triples(4),
+                _alternating_table(4)["entries"],
+                strict=True,
+            )
+        }
+        for increasing in _increasing_triples(4):
+            for unordered in permutations(increasing):
+                order = cast(Triple, unordered)
+                assert _alternating_value(table, order) == (
+                    table[increasing] * _permutation_determinant(order, increasing)
+                )
+        for maybe_repeated in product(range(4), repeat=3):
+            repeated = cast(Triple, maybe_repeated)
+            if len(set(repeated)) != 3:
+                assert _alternating_value(table, repeated) == 0
+
+
 class TestIndependentOracleAndCatalog:
+    def test_distinct_moment_curve_configurations_are_valid(self) -> None:
+        """Points in general position must pass B2 under any label order."""
+
+        for parameters in (
+            (0, 1, 2, 3),
+            (4, 1, 3, 0),
+            (4, 0, 2, 5, 1, 3),
+        ):
+            signs = {
+                (first, second, third): 1
+                if (parameters[second] - parameters[first])
+                * (parameters[third] - parameters[first])
+                * (parameters[third] - parameters[second])
+                > 0
+                else -1
+                for first, second, third in combinations(range(len(parameters)), 3)
+            }
+            result = check_chirotope(
+                ChirotopeCheckRequest.model_validate(
+                    {"chirotope": _table_from_signs(len(parameters), signs)}
+                )
+            )
+            assert result.status is ChirotopeCheckStatus.VALID
+            assert result.b2_exchange_instances_checked == len(parameters) ** 6
+            assert result.obstruction is None
+
     def test_exact_vandermonde_determinant_signs_are_valid(self) -> None:
         """A direct determinant formula independently supplies chi(i,j,k)."""
 
@@ -288,3 +361,22 @@ class TestIndependentOracleAndCatalog:
         )
         request = tool.request_type.model_validate(tool.examples[0].input)
         assert tool.run(request).status is ChirotopeCheckStatus.VALID
+
+    def test_native_tool_serialized_and_verifier_paths_agree(self) -> None:
+        """The same small fixture must survive every mathematical surface."""
+
+        request = ChirotopeCheckRequest.model_validate(
+            {"chirotope": _alternating_table(4)}
+        )
+        expected = check_chirotope(request)
+        tool = next(
+            tool
+            for tool in TOOLS
+            if tool.operation_id == "oriented_matroid.chirotope.check"
+        )
+        actual = tool.run(
+            tool.request_type.model_validate_json(request.model_dump_json())
+        )
+        assert actual == expected
+        decoded = ChirotopeCheckResult.model_validate_json(actual.model_dump_json())
+        assert verify_chirotope_check(decoded)

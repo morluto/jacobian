@@ -312,6 +312,23 @@ evidence when an internal algorithm or admission formula has its own defining
 invariant, but it must not replace the representative public test for the
 mathematical behavior.
 
+### Cross-surface and verifier independence
+
+For an operation owned in more than one calling surface, exercise the same
+canonical fixture through each surface: native calls, serialized
+tool/dispatch payloads, a changed MCP projection, and verifier or downstream
+consumer round trips. A success on one surface does not establish the others:
+transport and shaped validation establish projection and schema agreement, not
+mathematical truth.
+
+Treat a verifier as independent evidence only when it checks the claimed
+relation by a different route. If it recomputes the producer result with the
+producer's own helper or backend, pair it with an independently defined
+identity, relation, or oracle; a forged claim that genuinely traverses the
+check; and a valid claim produced independently of that producer. A same-code
+verifier checks transport, deserialization, and forgery handling; it is not
+the defining invariant.
+
 Keep process and transport evidence focused on their boundaries. Prove worker
 startup, isolation, cancellation, timeout, codec, and result projection with
 the smallest discriminating cases; do not make a broad mathematical sweep pay

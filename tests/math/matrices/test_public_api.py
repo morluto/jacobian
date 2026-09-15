@@ -231,7 +231,7 @@ def test_matrix_input_errors_are_stable() -> None:
 
 
 @st.composite
-def _square_integer_matrices(draw, *, max_size: int = 4) -> list[list[int]]:
+def _square_integer_matrices(draw: st.DrawFn, *, max_size: int = 4) -> list[list[int]]:
     size = draw(st.integers(min_value=1, max_value=max_size))
     return [
         draw(
@@ -275,6 +275,26 @@ def test_determinant_orientation_laws(
         assert matrices.determinant(
             source * other
         ) == determinant * matrices.determinant(other)
+
+
+@settings(max_examples=40, deadline=None)
+@given(entries=_square_integer_matrices())
+def test_characteristic_polynomial_matches_lambda_identity_oracle(
+    entries: list[list[int]],
+) -> None:
+    """``charpoly(A)`` equals the independent ``det(lambda*I - A)``.
+
+    The determinant of the shifted identity is computed by SymPy's matrix
+    determinant, a different definition than the kernel's characteristic
+    polynomial, so a sign error in the constant or leading coefficient cannot
+    pass both.
+    """
+
+    variable = sympy.Symbol("lambda")
+    source = sympy.Matrix(entries)
+    expected = (variable * sympy.eye(len(entries)) - source).det()
+    actual = matrices.characteristic_polynomial(source, "lambda")
+    assert sympy.expand(actual.as_expr() - expected) == 0
 
 
 @given(

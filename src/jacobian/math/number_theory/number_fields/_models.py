@@ -99,6 +99,22 @@ class NumberFieldRealEmbeddingOrderRequest(StrictModel):
     right: SimpleNumberFieldRealEmbeddingBinding
 
 
+class _BnfWorkerRequest(StrictModel):
+    """Shared PARI worker request: one field within the class-group envelope."""
+
+    field: _IntegralBasisField
+
+    @model_validator(mode="after")
+    def require_bnf_degree(self) -> _BnfWorkerRequest:
+        if self.field.degree > MAX_CLASS_GROUP_DEGREE:
+            raise _validation_error(
+                "bnf_degree_bound",
+                "class and unit group computation admits degree at most "
+                f"{MAX_CLASS_GROUP_DEGREE}",
+            )
+        return self
+
+
 class NumberFieldClassGroupRequest(StrictModel):
     """A simple number field within the PARI class-group envelope."""
 

@@ -353,7 +353,6 @@ def _left_ideals(
 ) -> list[frozenset[str]]:
     """Compute the principal left ideal S^1 a of each element."""
 
-    {label: i for i, label in enumerate(elements)}
     n = len(elements)
     ideals: list[frozenset[str]] = []
     for i in range(n):
@@ -370,7 +369,6 @@ def _right_ideals(
 ) -> list[frozenset[str]]:
     """Compute the principal right ideal a S^1 of each element."""
 
-    {label: i for i, label in enumerate(elements)}
     n = len(elements)
     ideals: list[frozenset[str]] = []
     for i in range(n):

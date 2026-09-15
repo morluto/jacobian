@@ -538,9 +538,9 @@ def junction_tree_calibrate(
             "elimination order must use model variables",
             "elimination_order",
         )
+    # The elimination order fixes the query scope: eliminating every model
+    # variable leaves the empty scalar scope, which is a valid partition.
     query = tuple(sorted(set(all_vars) - set(elimination_order)))
-    if not query:
-        query = all_vars[:1]
     factors = [table.as_factor() for table in network.tables]
     steps, _ = variable_elimination_trace(
         factors, network.domain_sizes, elimination_order, query

@@ -49,6 +49,25 @@ def test_trace_returns_scopes_factors_and_fill() -> None:
     assert final == variable_elimination(factors, domain, (0,), (1,))
 
 
+def test_junction_calibration_eliminating_every_variable() -> None:
+    """A complete elimination order leaves the empty scalar partition."""
+
+    root = ConditionalProbabilityTable(
+        variable=0, parents=(), domain_sizes=(2, 2), table=(_q(3, 5), _q(2, 5))
+    )
+    child = ConditionalProbabilityTable(
+        variable=1, parents=(0,), domain_sizes=(2, 2),
+        table=(_q(1, 4), _q(1, 2), _q(3, 4), _q(1, 2)),
+    )
+    network = construct_bayes_net(2, ((0, 1),), (2, 2), (root, child))
+    cliques, separators, _clique_marginals, _separator_marginals, partition = (
+        junction_tree_calibrate(network, (0, 1))
+    )
+    assert cliques == ((0, 1), (1,), ())
+    assert separators == ((1,),)
+    assert partition.table[0].as_fraction() == 1
+
+
 def test_junction_calibration_is_consistent() -> None:
     root = ConditionalProbabilityTable(
         variable=0, parents=(), domain_sizes=(2, 2), table=(_q(3, 5), _q(2, 5))

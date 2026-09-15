@@ -12,6 +12,10 @@ from typing import Any, Self
 from pydantic import Field
 from pydantic_core import PydanticCustomError
 
+from jacobian._execution import (
+    OperationExecutionCancelledError,
+    OperationExecutionTimeoutError,
+)
 from jacobian._models import StrictModel
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -518,7 +522,13 @@ def verify_affine_zero_set(
 ) -> bool:
     try:
         return tuple(affine_zero_set(system)) == tuple(points)
-    except (OperationDomainValidationError, OperationResourceAdmissionError):
+    except (
+        OperationDomainValidationError,
+        OperationResourceAdmissionError,
+        OperationExecutionTimeoutError,
+        OperationExecutionCancelledError,
+    ):
+        # Input and operational non-completion are not a negative verdict.
         raise
     except Exception:
         return False

@@ -19,7 +19,7 @@ from jacobian.math.number_theory.number_fields._bnf_process import (
     worker_rejection,
 )
 from jacobian.math.number_theory.number_fields._models import (
-    NumberFieldClassGroupRequest,
+    _BnfWorkerRequest,
 )
 
 _POLYNOMIAL_VARIABLE = "jacobian_poly"
@@ -37,7 +37,7 @@ def main() -> int:
         raise RuntimeError("bnf worker request must be an object")
     if "field" not in payload:
         raise RuntimeError("bnf worker request must carry a field")
-    request = NumberFieldClassGroupRequest.model_validate_json(
+    request = _BnfWorkerRequest.model_validate_json(
         encode_strict_json(payload), strict=True
     )
     digest = hashlib.sha256(input_bytes).hexdigest()

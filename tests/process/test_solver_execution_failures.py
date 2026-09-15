@@ -15,6 +15,29 @@ from jacobian._worker_protocol import encode_worker_result_frame
 from jacobian.catalog.catalog import Catalog
 from jacobian.process import BoundedProcessResult
 
+
+def _completed(
+    *,
+    returncode: int | None = 0,
+    stdout: bytes = b"",
+    stderr: bytes = b"",
+    stdout_exceeded: bool = False,
+    stderr_exceeded: bool = False,
+    timed_out: bool = False,
+    cancelled: bool = False,
+) -> BoundedProcessResult:
+    """Name the operational state instead of positional result booleans."""
+    return BoundedProcessResult(
+        returncode=returncode,
+        stdout=stdout,
+        stderr=stderr,
+        stdout_exceeded=stdout_exceeded,
+        stderr_exceeded=stderr_exceeded,
+        timed_out=timed_out,
+        cancelled=cancelled,
+    )
+
+
 OWNERS = [
     ("sat.solve", "jacobian.math.logic._sat"),
     ("smt.solve", "jacobian.math.logic._smt"),
@@ -136,7 +159,7 @@ def test_decode_cannot_finish_after_parent_deadline(
 
     def complete(*args: object, **kwargs: object) -> BoundedProcessResult:
         clock[0] += 1000
-        return BoundedProcessResult(0, b"{}", b"", False, False, False)
+        return _completed(stdout=b"{}")
 
     monkeypatch.setattr(owner, "run_bounded_process", complete)
     monkeypatch.setattr(time, "monotonic", lambda: clock[0])
@@ -222,9 +245,7 @@ def test_hypergraph_preserves_unspent_dispatch_allowance(
 
     def complete(*args: object, **kwargs: Any) -> BoundedProcessResult:
         recorded.update(kwargs)
-        return BoundedProcessResult(
-            0, encode_worker_result_frame(projection), b"", False, False, False
-        )
+        return _completed(stdout=encode_worker_result_frame(projection))
 
     monkeypatch.setattr(owner, "run_bounded_process", complete)
     monkeypatch.setattr(time, "monotonic", lambda: 106.0)
@@ -254,13 +275,10 @@ def test_hypergraph_error_decoding_preserves_parent_deadline(
         now[0] = 111.0
         return response
 
-    completed = BoundedProcessResult(
-        0,
-        b'{"kind":"execution_error","stage":"operation_execution","resource":"work"}',
-        b"",
-        False,
-        False,
-        False,
+    completed = _completed(
+        stdout=(
+            b'{"kind":"execution_error","stage":"operation_execution","resource":"work"}'
+        )
     )
     monkeypatch.setattr(owner, "run_bounded_process", lambda *args, **kwargs: completed)
     monkeypatch.setattr(json, "loads", delayed_loads)

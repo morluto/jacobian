@@ -27,6 +27,28 @@ from jacobian.math.number_theory.number_fields.values import (
 from jacobian.process import BoundedProcessResult, ProcessResourceLimits
 
 
+def _completed(
+    *,
+    returncode: int | None = 0,
+    stdout: bytes = b"",
+    stderr: bytes = b"",
+    stdout_exceeded: bool = False,
+    stderr_exceeded: bool = False,
+    timed_out: bool = False,
+    cancelled: bool = False,
+) -> BoundedProcessResult:
+    """Name the operational state instead of repeating result fields."""
+    return BoundedProcessResult(
+        returncode=returncode,
+        stdout=stdout,
+        stderr=stderr,
+        stdout_exceeded=stdout_exceeded,
+        stderr_exceeded=stderr_exceeded,
+        timed_out=timed_out,
+        cancelled=cancelled,
+    )
+
+
 def _request() -> NumberFieldRingOfIntegersRequest:
     return NumberFieldRingOfIntegersRequest(
         field=SimpleNumberFieldPresentation(coefficients_descending=(1, 0, -5))
@@ -50,15 +72,7 @@ def test_cancelled_ring_worker_is_an_operational_failure(
     monkeypatch.setattr(
         process_runtime,
         "run_bounded_process",
-        lambda *_args, **_kwargs: BoundedProcessResult(
-            returncode=None,
-            stdout=b"",
-            stderr=b"",
-            stdout_exceeded=False,
-            stderr_exceeded=False,
-            timed_out=False,
-            cancelled=True,
-        ),
+        lambda *_args, **_kwargs: _completed(returncode=None, cancelled=True),
     )
 
     with pytest.raises(OperationExecutionCancelledError):
@@ -71,14 +85,7 @@ def test_timed_out_ring_worker_is_an_operational_failure(
     monkeypatch.setattr(
         process_runtime,
         "run_bounded_process",
-        lambda *_args, **_kwargs: BoundedProcessResult(
-            returncode=None,
-            stdout=b"",
-            stderr=b"",
-            stdout_exceeded=False,
-            stderr_exceeded=False,
-            timed_out=True,
-        ),
+        lambda *_args, **_kwargs: _completed(returncode=None, timed_out=True),
     )
 
     with pytest.raises(OperationExecutionTimeoutError):
@@ -125,14 +132,7 @@ def test_ring_worker_uses_private_cwd_and_os_resource_limits(
             "kind": "complete",
             "request_digest": hashlib.sha256(input_bytes).hexdigest(),
         }
-        return BoundedProcessResult(
-            returncode=0,
-            stdout=encode_strict_json(response),
-            stderr=b"",
-            stdout_exceeded=False,
-            stderr_exceeded=False,
-            timed_out=False,
-        )
+        return _completed(stdout=encode_strict_json(response))
 
     monkeypatch.setattr(process_runtime, "run_bounded_process", complete_worker)
 

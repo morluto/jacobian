@@ -45,30 +45,37 @@ def _nontrivial_source() -> SimpleUndirectedGraph:
     )
 
 
+def _completed(
+    *,
+    returncode: int | None = 0,
+    stdout: bytes = b"",
+    stderr: bytes = b"",
+    stdout_exceeded: bool = False,
+    stderr_exceeded: bool = False,
+    timed_out: bool = False,
+    cancelled: bool = False,
+) -> BoundedProcessResult:
+    """Name the operational state instead of positional result booleans."""
+    return BoundedProcessResult(
+        returncode=returncode,
+        stdout=stdout,
+        stderr=stderr,
+        stdout_exceeded=stdout_exceeded,
+        stderr_exceeded=stderr_exceeded,
+        timed_out=timed_out,
+        cancelled=cancelled,
+    )
+
+
 @pytest.mark.parametrize(
     ("completed", "expected"),
     [
-        (
-            BoundedProcessResult(0, b"", b"", False, False, True),
-            OperationExecutionTimeoutError,
-        ),
-        (
-            BoundedProcessResult(0, b"", b"", False, False, False, True),
-            OperationExecutionCancelledError,
-        ),
-        (
-            BoundedProcessResult(0, b"", b"", True, False, False),
-            OperationResourceExhaustedError,
-        ),
-        (
-            BoundedProcessResult(0, b"", b"", False, True, False),
-            OperationResourceExhaustedError,
-        ),
-        (BoundedProcessResult(2, b"", b"", False, False, False), OperationBackendError),
-        (
-            BoundedProcessResult(0, b"not-json", b"", False, False, False),
-            OperationBackendError,
-        ),
+        (_completed(timed_out=True), OperationExecutionTimeoutError),
+        (_completed(cancelled=True), OperationExecutionCancelledError),
+        (_completed(stdout_exceeded=True), OperationResourceExhaustedError),
+        (_completed(stderr_exceeded=True), OperationResourceExhaustedError),
+        (_completed(returncode=2), OperationBackendError),
+        (_completed(stdout=b"not-json"), OperationBackendError),
     ],
 )
 def test_worker_noncompletion_is_an_execution_error(
@@ -105,7 +112,7 @@ def test_worker_output_exhaustion_identifies_resource(
     monkeypatch.setattr(
         owner,
         "run_bounded_process",
-        lambda *args, **kwargs: BoundedProcessResult(0, b"", b"", True, False, False),
+        lambda *args, **kwargs: _completed(stdout_exceeded=True),
     )
     with pytest.raises(OperationResourceExhaustedError) as raised:
         triangle_free_diameter_augmentation(_nontrivial_source(), 2)
@@ -135,13 +142,8 @@ def test_parent_rejects_forged_exact_worker_witness(
     monkeypatch.setattr(
         owner,
         "run_bounded_process",
-        lambda *args, **kwargs: BoundedProcessResult(
-            0,
-            encode_worker_result_frame(projection),
-            b"",
-            False,
-            False,
-            False,
+        lambda *args, **kwargs: _completed(
+            stdout=encode_worker_result_frame(projection)
         ),
     )
     with pytest.raises(OperationBackendError) as raised:

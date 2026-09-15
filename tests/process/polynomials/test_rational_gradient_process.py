@@ -26,6 +26,28 @@ from jacobian.math.polynomials.values import RationalFunction
 from jacobian.process import BoundedProcessResult, ProcessResourceLimits
 
 
+def _completed(
+    *,
+    returncode: int | None = 0,
+    stdout: bytes = b"",
+    stderr: bytes = b"",
+    stdout_exceeded: bool = False,
+    stderr_exceeded: bool = False,
+    timed_out: bool = False,
+    cancelled: bool = False,
+) -> BoundedProcessResult:
+    """Name the operational state instead of repeating result fields."""
+    return BoundedProcessResult(
+        returncode=returncode,
+        stdout=stdout,
+        stderr=stderr,
+        stdout_exceeded=stdout_exceeded,
+        stderr_exceeded=stderr_exceeded,
+        timed_out=timed_out,
+        cancelled=cancelled,
+    )
+
+
 def _general_source() -> RationalFunction:
     x, y = symbols("x y")
     return rational_function_from_sympy((x * x + y) / (x - y), ("x", "y"))
@@ -38,14 +60,7 @@ def test_recognition_worker_timeout_uses_remaining_request_deadline(
 
     def timed_out(*_args: Any, **kwargs: Any) -> BoundedProcessResult:
         observed.update(kwargs)
-        return BoundedProcessResult(
-            returncode=None,
-            stdout=b"",
-            stderr=b"",
-            stdout_exceeded=False,
-            stderr_exceeded=False,
-            timed_out=True,
-        )
+        return _completed(returncode=None, timed_out=True)
 
     monkeypatch.setattr(process, "run_bounded_process", timed_out)
     started = monotonic()
@@ -118,14 +133,7 @@ def test_cancellation_worker_timeout_uses_remaining_request_deadline(
         if payload.get("task") != "differentiate":
             return original(*args, **kwargs)
         observed.update(kwargs)
-        return BoundedProcessResult(
-            returncode=None,
-            stdout=b"",
-            stderr=b"",
-            stdout_exceeded=False,
-            stderr_exceeded=False,
-            timed_out=True,
-        )
+        return _completed(returncode=None, timed_out=True)
 
     monkeypatch.setattr(process, "run_bounded_process", timed_out)
     started = monotonic()
@@ -169,15 +177,7 @@ def test_gradient_kernel_cancellation_is_typed_non_completion(
         payload = json.loads(kwargs["input_bytes"])
         if payload.get("task") != "differentiate":
             return original(*args, **kwargs)
-        return BoundedProcessResult(
-            returncode=None,
-            stdout=b"",
-            stderr=b"",
-            stdout_exceeded=False,
-            stderr_exceeded=False,
-            timed_out=False,
-            cancelled=True,
-        )
+        return _completed(returncode=None, cancelled=True)
 
     monkeypatch.setattr(process, "run_bounded_process", cancelled)
     started = monotonic()

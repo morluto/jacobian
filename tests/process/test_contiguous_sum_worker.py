@@ -22,6 +22,28 @@ from jacobian.math.number_theory._factorization_kernels import (
 from jacobian.process import BoundedProcessResult, ProcessResourceLimits
 
 
+def _completed(
+    *,
+    returncode: int | None = 0,
+    stdout: bytes = b"",
+    stderr: bytes = b"",
+    stdout_exceeded: bool = False,
+    stderr_exceeded: bool = False,
+    timed_out: bool = False,
+    cancelled: bool = False,
+) -> BoundedProcessResult:
+    """Name the operational state instead of repeating result fields."""
+    return BoundedProcessResult(
+        returncode=returncode,
+        stdout=stdout,
+        stderr=stderr,
+        stdout_exceeded=stdout_exceeded,
+        stderr_exceeded=stderr_exceeded,
+        timed_out=timed_out,
+        cancelled=cancelled,
+    )
+
+
 def test_timed_out_high_magnitude_profile_is_an_operational_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -29,14 +51,7 @@ def test_timed_out_high_magnitude_profile_is_an_operational_error(
 
     def timed_out_worker(*_args: object, **kwargs: object) -> BoundedProcessResult:
         recorded.update(kwargs)
-        return BoundedProcessResult(
-            returncode=None,
-            stdout=b"",
-            stderr=b"",
-            stdout_exceeded=False,
-            stderr_exceeded=False,
-            timed_out=True,
-        )
+        return _completed(returncode=None, timed_out=True)
 
     monkeypatch.setattr(process_runtime, "run_bounded_process", timed_out_worker)
 
@@ -59,63 +74,27 @@ def test_timed_out_high_magnitude_profile_is_an_operational_error(
     ("completed", "error_type", "detail"),
     [
         (
-            BoundedProcessResult(
-                returncode=None,
-                stdout=b"",
-                stderr=b"",
-                stdout_exceeded=False,
-                stderr_exceeded=False,
-                timed_out=False,
-                cancelled=True,
-            ),
+            _completed(returncode=None, cancelled=True),
             OperationExecutionCancelledError,
             None,
         ),
         (
-            BoundedProcessResult(
-                returncode=None,
-                stdout=b"",
-                stderr=b"",
-                stdout_exceeded=True,
-                stderr_exceeded=False,
-                timed_out=False,
-            ),
+            _completed(returncode=None, stdout_exceeded=True),
             OperationResourceExhaustedError,
             ExecutionResource.OUTPUT,
         ),
         (
-            BoundedProcessResult(
-                returncode=-9,
-                stdout=b"",
-                stderr=b"",
-                stdout_exceeded=False,
-                stderr_exceeded=False,
-                timed_out=False,
-            ),
+            _completed(returncode=-9),
             OperationResourceExhaustedError,
             ExecutionResource.MEMORY,
         ),
         (
-            BoundedProcessResult(
-                returncode=0xC0000005,
-                stdout=b"",
-                stderr=b"",
-                stdout_exceeded=False,
-                stderr_exceeded=False,
-                timed_out=False,
-            ),
+            _completed(returncode=0xC0000005),
             OperationBackendError,
             BackendFailureReason.ABNORMAL_EXIT,
         ),
         (
-            BoundedProcessResult(
-                returncode=0,
-                stdout=b"not json",
-                stderr=b"",
-                stdout_exceeded=False,
-                stderr_exceeded=False,
-                timed_out=False,
-            ),
+            _completed(stdout=b"not json"),
             OperationBackendError,
             BackendFailureReason.MALFORMED_RESPONSE,
         ),

@@ -302,6 +302,16 @@ cases; they must not stand in for mathematical correctness. A timeout,
 cancellation, unavailable external executable, or solver `UNKNOWN` is never a
 positive mathematical conclusion.
 
+When a test does use `monkeypatch`, it must assert something about the patched
+behavior: an ordinary `assert`, a typed-error check (`pytest.raises` or an
+owner-local raises helper), an `assert_*`/`_assert_*` helper, or a sentinel
+replacement whose body raises (the "this must not run" pattern). A patch with
+none of these proves nothing about the behavior it replaces. `make test-hygiene`
+enforces this over `tests/`; a test may waive the rule with a
+`# monkeypatch-evidence: <reason>` comment when the replacement itself is the
+observable behavior. Prefer explicit dependency seams so most code can be tested
+without patching a global name.
+
 ### Mathematical and execution-boundary evidence
 
 Public typed operations own the authoritative mathematical evidence. Test

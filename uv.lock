@@ -295,6 +295,25 @@ wheels = [
 ]
 
 [[package]]
+name = "cypari"
+version = "2.5.6"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e7/a4/0604be1f741f8ad42004f58afdc3bead91d4a4d119d3542fe2e3e7e12f47/cypari-2.5.6-cp312-cp312-macosx_10_13_universal2.whl", hash = "sha256:f026d121c3471042688e5145fd63fb338b4a39aea17df9580b9899839273c4df", size = 12824151, upload-time = "2026-01-01T15:48:13.251Z" },
+    { url = "https://files.pythonhosted.org/packages/08/75/3e11dfa1762261fdedb70dc983d229383abecf9395e72835112e56ffc1c4/cypari-2.5.6-cp312-cp312-macosx_10_13_x86_64.whl", hash = "sha256:ef2bc86bdff5438abff2287cb44984a2ffb6a0c85520c3bfb553cf7c7d1f7141", size = 6955865, upload-time = "2026-01-01T15:43:21.693Z" },
+    { url = "https://files.pythonhosted.org/packages/b9/00/86f36906c66437c2b06ac59dbf7c870e97ce39ad1004121bdf46c0814e44/cypari-2.5.6-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:e779a077005f8697cdd6b5eed0ff08a2782d23761915f13ba9d679ae91cdd0cf", size = 5741652, upload-time = "2026-01-01T15:43:05.634Z" },
+    { url = "https://files.pythonhosted.org/packages/bc/e5/d0200ae00ce63e8ec7e0034049c64fdad70454c7797ff03d4bd76522a83a/cypari-2.5.6-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:31ffaf418c7da1d60cb36865a6f831d98a9f0283fe2f42f2bf0f417d04ff9ccd", size = 16053827, upload-time = "2026-01-01T15:43:45.714Z" },
+    { url = "https://files.pythonhosted.org/packages/7b/13/230345e19d47ba5b6e53a2ebb7c9effa002484027db879ac16b7c5ad4e59/cypari-2.5.6-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:62aefbb1d6231e4cfb0c910a448f89abedd12357df4de5b101fa67e06c2c202e", size = 15850171, upload-time = "2026-01-01T15:44:16.987Z" },
+    { url = "https://files.pythonhosted.org/packages/46/96/602684f60cce8218483f39df879884f09605def80470741a35387ad71fb0/cypari-2.5.6-cp312-cp312-win_amd64.whl", hash = "sha256:eac62be389defb25f5a4528cced6722f3047330afef4bd8f1d0787f33267ee40", size = 7829103, upload-time = "2026-01-01T15:57:00.349Z" },
+    { url = "https://files.pythonhosted.org/packages/56/d0/3894184ffdbdf990788d4bfe55e68edc7b15b8bfc592d9b986073cc2771c/cypari-2.5.6-cp313-cp313-macosx_10_13_universal2.whl", hash = "sha256:d2de078c88d54b184443dbebd5e5efe54f50aa0101d7711aa65c8a4addf3b815", size = 12824626, upload-time = "2026-01-01T15:48:17.258Z" },
+    { url = "https://files.pythonhosted.org/packages/69/26/f545dcc1e13f719ec0426ac22398a8db0a1cef2eaa21bd08d645c7bb682e/cypari-2.5.6-cp313-cp313-macosx_10_13_x86_64.whl", hash = "sha256:8d8563fdfabfa6b2b37f4f18b7d30297a0a913edeed237964c2a777323e91512", size = 6956120, upload-time = "2026-01-01T15:43:24.775Z" },
+    { url = "https://files.pythonhosted.org/packages/58/9b/e0ff1a32fc3471a4e13cc8f0d4c9a1f5d713a2d4ef730a9440fb92ae2a1b/cypari-2.5.6-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:1d5a72209c97aa24967a9fde4595b5da81a02f034ce1aeb19181a858cc6949be", size = 5741305, upload-time = "2026-01-01T15:43:08.074Z" },
+    { url = "https://files.pythonhosted.org/packages/f2/34/1b8d237b3c17a8bbd583620e347e0ffaa42d60f3d5b34052b3a71401ff9b/cypari-2.5.6-cp313-cp313-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:d70ef71c97d12286bcc1fc1e7f12da475c77a4bbaef6dc3dcc2fd4ec3c1f7111", size = 15973475, upload-time = "2026-01-01T15:43:50.549Z" },
+    { url = "https://files.pythonhosted.org/packages/e1/60/ae4738586062f11ef5f55113828cf7047cf302aab2a4582254b078accb2a/cypari-2.5.6-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:fa6e2b5e2beedadf2abbe7ebb156315abd68324835a96105e22f25a5abd8ee10", size = 15849284, upload-time = "2026-01-01T15:44:22.216Z" },
+    { url = "https://files.pythonhosted.org/packages/8d/f3/4776f8af5c5ad342c8aafe06c40ecb5b78a8a897fccae5bb800c4a7dd547/cypari-2.5.6-cp313-cp313-win_amd64.whl", hash = "sha256:8c960845ff8ca9a76ce0f2dedb488e4ab2123180cd8e34be63d37ec74d8ae94b", size = 7828102, upload-time = "2026-01-01T15:57:03.655Z" },
+]
+
+[[package]]
 name = "defusedxml"
 version = "0.7.1"
 source = { registry = "https://pypi.org/simple" }
@@ -532,6 +551,7 @@ version = "0.21.0"
 source = { editable = "." }
 dependencies = [
     { name = "anyio" },
+    { name = "cypari" },
     { name = "mcp" },
     { name = "networkx" },
     { name = "pydantic" },
@@ -594,6 +614,7 @@ dev-core = [
 [package.metadata]
 requires-dist = [
     { name = "anyio", specifier = ">=4.5,<5" },
+    { name = "cypari", specifier = ">=2.5,<3" },
     { name = "mcp", specifier = "==2.1.0" },
     { name = "networkx", specifier = "==3.6.1" },
     { name = "pydantic", specifier = ">=2.12,<3" },

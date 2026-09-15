@@ -18,6 +18,16 @@ sudo apt-get install -y --no-install-recommends singular qepcad
 Check the versions below; distribution package revisions can differ. The
 service image pins both packages and verifies their versions at build time.
 
+## PARI via CyPari
+
+`number_field.class_group.compute` and `number_field.unit_group.compute` use PARI
+through the [CyPari](https://github.com/3-manifolds/CyPari) wheel. CyPari is a
+normal Python dependency: it statically links PARI and embeds the signal
+handling it needs, so it requires no system PARI installation and no
+`gp` executable on PATH. `uv sync` installs it with the other package
+dependencies. Jacobian invokes it through the shared bounded process runner
+with a request-owned killable worker.
+
 ## Singular
 
 General multivariate ideal radical and quotient computations use the fixed
@@ -73,6 +83,10 @@ Optional system runtimes currently serve these operations:
 | --- | --- |
 | Singular 4.4.x | `polynomial.ideal.minimal_primes.compute`, `polynomial.ideal.radical.compute`, `polynomial.ideal.quotient.compute`, `polynomial.ideal.saturation.compute`, `polynomial.map.generic_degree.compute`, `algebraic_geometry.projective_plane_curve.singularity_profile.compute` |
 | QEPCAD B 1.74 | `real_algebraic.plane_semialgebraic.component_profile.compute` |
+
+The class- and unit-group operations require the managed CyPari Python
+dependency rather than a system runtime:
+`number_field.class_group.compute` and `number_field.unit_group.compute`.
 
 Declarations expose `runtime_requirements`. These are stable requirements, not
 live availability claims. An operation can handle a degenerate request without

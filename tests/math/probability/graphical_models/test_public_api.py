@@ -8,11 +8,17 @@ from jacobian.math.probability import graphical_models
 def test_exact_public_api_symbols() -> None:
     """Exact owner-local contract for the graphical_models public API."""
     expected = (
+        "BayesianNetwork",
+        "ConditionalProbabilityTable",
         "Factor",
+        "bayes_net_joint",
+        "construct_bayes_net",
         "d_separation",
         "factor_marginalize",
         "factor_multiply",
+        "junction_tree_calibrate",
         "variable_elimination",
+        "variable_elimination_trace",
         "verify_d_separation",
     )
     assert tuple(graphical_models.__all__) == expected

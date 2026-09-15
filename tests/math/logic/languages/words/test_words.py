@@ -96,6 +96,14 @@ def test_public_catalog_surface_is_the_audited_operations() -> None:
         "substitution.dependency_graph.compute",
         "substitution.primitivity_profile.compute",
         "substitution.fixed_point_prefix.compute",
+        "word_morphism.apply.compute",
+        "word_morphism.compose.compute",
+        "word_morphism.power.compute",
+        "word_morphism.iterate.compute",
+        "word_morphism.image_lengths.compute",
+        "word.factor_complexity_prefix.compute",
+        "word.rauzy_graph.compute",
+        "substitution.factor_complexity_prefix.compute",
     )
 
 

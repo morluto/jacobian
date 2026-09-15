@@ -9,6 +9,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math._labels import OpaqueLabel
+from jacobian.math.finite_categories.values import FiniteCategory
 
 MAX_ELEMENTS = 50
 
@@ -392,3 +393,196 @@ class GreenRelationsResult(StrictModel):
         J: tuple[tuple[str, ...], ...],  # noqa: N803
     ) -> Self:
         return cls.model_construct(semigroup=semigroup, L=L, R=R, H=H, D=D, J=J)
+
+
+class LocalStructureRequest(StrictModel):
+    """Request units, local monoids, maximal subgroups, and minimal ideals."""
+
+    semigroup: FiniteSemigroup
+
+
+class LocalMonoidValue(StrictModel):
+    idempotent: OpaqueLabel
+    carrier: tuple[OpaqueLabel, ...]
+    maximal_subgroup: tuple[OpaqueLabel, ...]
+
+
+class LocalStructureResult(StrictModel):
+    semigroup: FiniteSemigroup
+    identity: OpaqueLabel | None
+    units: tuple[OpaqueLabel, ...]
+    local_monoids: tuple[LocalMonoidValue, ...]
+    maximal_subgroups: tuple[tuple[OpaqueLabel, ...], ...]
+    minimal_ideal: tuple[OpaqueLabel, ...]
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        semigroup: FiniteSemigroup,
+        identity: OpaqueLabel | None,
+        units: tuple[OpaqueLabel, ...],
+        local_monoids: tuple[LocalMonoidValue, ...],
+        maximal_subgroups: tuple[tuple[OpaqueLabel, ...], ...],
+        minimal_ideal: tuple[OpaqueLabel, ...],
+    ) -> Self:
+        return cls.model_construct(
+            semigroup=semigroup,
+            identity=identity,
+            units=units,
+            local_monoids=local_monoids,
+            maximal_subgroups=maximal_subgroups,
+            minimal_ideal=minimal_ideal,
+        )
+
+
+class IdealEnumerationRequest(StrictModel):
+    semigroup: FiniteSemigroup
+
+
+class IdealEnumerationResult(StrictModel):
+    semigroup: FiniteSemigroup
+    ideals: tuple[tuple[OpaqueLabel, ...], ...]
+    subsemigroups: tuple[tuple[OpaqueLabel, ...], ...]
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        semigroup: FiniteSemigroup,
+        ideals: tuple[tuple[OpaqueLabel, ...], ...],
+        subsemigroups: tuple[tuple[OpaqueLabel, ...], ...],
+    ) -> Self:
+        return cls.model_construct(
+            semigroup=semigroup, ideals=ideals, subsemigroups=subsemigroups
+        )
+
+
+class OppositeRequest(StrictModel):
+    semigroup: FiniteSemigroup
+
+
+class OppositeResult(StrictModel):
+    source: FiniteSemigroup
+    opposite: FiniteSemigroup
+
+    @classmethod
+    def _from_kernel(
+        cls, source: FiniteSemigroup, opposite: FiniteSemigroup
+    ) -> Self:
+        return cls.model_construct(source=source, opposite=opposite)
+
+
+class ProductRequest(StrictModel):
+    left: FiniteSemigroup
+    right: FiniteSemigroup
+
+
+class ProductResult(StrictModel):
+    left: FiniteSemigroup
+    right: FiniteSemigroup
+    product: FiniteSemigroup
+    left_projection: tuple[tuple[OpaqueLabel, OpaqueLabel], ...]
+    right_projection: tuple[tuple[OpaqueLabel, OpaqueLabel], ...]
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        left: FiniteSemigroup,
+        right: FiniteSemigroup,
+        product: FiniteSemigroup,
+        left_projection: tuple[tuple[OpaqueLabel, OpaqueLabel], ...],
+        right_projection: tuple[tuple[OpaqueLabel, OpaqueLabel], ...],
+    ) -> Self:
+        return cls.model_construct(
+            left=left,
+            right=right,
+            product=product,
+            left_projection=left_projection,
+            right_projection=right_projection,
+        )
+
+
+class AdjoinIdentityRequest(StrictModel):
+    semigroup: FiniteSemigroup
+
+
+class AdjoinIdentityResult(StrictModel):
+    source: FiniteSemigroup
+    result: FiniteSemigroup
+    embedding: tuple[tuple[OpaqueLabel, OpaqueLabel], ...]
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        source: FiniteSemigroup,
+        result: FiniteSemigroup,
+        embedding: tuple[tuple[OpaqueLabel, OpaqueLabel], ...],
+    ) -> Self:
+        return cls.model_construct(
+            source=source, result=result, embedding=embedding
+        )
+
+
+class AdjoinZeroRequest(StrictModel):
+    semigroup: FiniteSemigroup
+
+
+class AdjoinZeroResult(StrictModel):
+    source: FiniteSemigroup
+    result: FiniteSemigroup
+    embedding: tuple[tuple[OpaqueLabel, OpaqueLabel], ...]
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        source: FiniteSemigroup,
+        result: FiniteSemigroup,
+        embedding: tuple[tuple[OpaqueLabel, OpaqueLabel], ...],
+    ) -> Self:
+        return cls.model_construct(
+            source=source, result=result, embedding=embedding
+        )
+
+
+class ReesQuotientRequest(StrictModel):
+    semigroup: FiniteSemigroup
+    ideal: tuple[OpaqueLabel, ...]
+
+
+class ReesQuotientResult(StrictModel):
+    source: FiniteSemigroup
+    ideal: tuple[OpaqueLabel, ...]
+    quotient: FiniteSemigroup
+    projection: tuple[tuple[OpaqueLabel, OpaqueLabel], ...]
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        source: FiniteSemigroup,
+        ideal: tuple[OpaqueLabel, ...],
+        quotient: FiniteSemigroup,
+        projection: tuple[tuple[OpaqueLabel, OpaqueLabel], ...],
+    ) -> Self:
+        return cls.model_construct(
+            source=source, ideal=ideal, quotient=quotient, projection=projection
+        )
+
+
+class KaroubiProjectionRequest(StrictModel):
+    semigroup: FiniteSemigroup
+
+
+class KaroubiProjectionResult(StrictModel):
+    source: FiniteSemigroup
+    objects: tuple[OpaqueLabel, ...]
+    category: FiniteCategory
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        source: FiniteSemigroup,
+        objects: tuple[OpaqueLabel, ...],
+        category: FiniteCategory,
+    ) -> Self:
+        return cls.model_construct(
+            source=source, objects=objects, category=category
+        )

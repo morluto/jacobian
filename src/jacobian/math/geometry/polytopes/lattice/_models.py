@@ -9,6 +9,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import (
     MAX_CANONICAL_INTEGER_DIGITS,
+    CanonicalRational,
     ExactInteger,
     require_bounded_rational,
 )
@@ -76,6 +77,18 @@ points than this; the count result is constrained to the same maximum.
 
 MAX_EHRHART_DILATIONS = 32
 """Maximum number of dilation values retained by Ehrhart interpolation."""
+
+MAX_WEIGHT_TERMS = 64
+"""Maximum monomials in a declared exact polynomial Ehrhart weight."""
+
+MAX_WEIGHT_DEGREE = 4
+"""Maximum total degree of a declared exact polynomial Ehrhart weight."""
+
+MAX_WEIGHTED_DEGREE = 8
+"""Maximum recovered degree of a weighted Ehrhart counting polynomial."""
+
+MAX_WEIGHTED_EVAL_WORK = 100_000_000
+"""Maximum weight-monomial evaluations across one weighted dilation range."""
 
 COORDINATE_DIGITS = 32_768
 """Per-component digit bound forwarded to the canonical rational validator."""
@@ -558,6 +571,214 @@ class EhrhartResult(StrictModel):
         )
 
 
+def weight_canonical_axis(dimension: int) -> tuple[str, ...]:
+    """Return the canonical positional variable axis for a weight in dimension d."""
+
+    return tuple(f"x{index}" for index in range(dimension))
+
+
+def weight_total_degree(weight: RationalPolynomial) -> int:
+    """Return the maximum total degree over the weight monomials."""
+
+    return max(
+        (sum(term.exponents) for term in weight.polynomial.terms),
+        default=0,
+    )
+
+
+def require_weighted_ehrhart_source(
+    vertices: tuple[RationalVertex, ...],
+    weight: RationalPolynomial,
+    degree_bound: int,
+    max_dilation: int,
+) -> int:
+    """Admit one weighted source and return its total-degree upper bound."""
+
+    from jacobian.math.polynomials.values import require_polynomial_budget
+
+    dimension = _require_ehrhart_vertex_structure(vertices)
+    if type(degree_bound) is not int or not 1 <= degree_bound <= MAX_WEIGHTED_DEGREE:
+        raise _validation_error(
+            "weighted_ehrhart_degree_range", "degree_bound exceeds the admitted range"
+        )
+    if type(max_dilation) is not int or not 1 <= max_dilation <= MAX_EHRHART_DILATIONS:
+        raise _validation_error(
+            "weighted_ehrhart_dilation_range", "max_dilation exceeds the admitted range"
+        )
+    if degree_bound < dimension:
+        raise _validation_error(
+            "weighted_ehrhart_degree_bound",
+            "degree_bound must cover the polytope dimension",
+        )
+    if max_dilation < degree_bound:
+        raise _validation_error(
+            "weighted_ehrhart_dilation_range",
+            "max_dilation must provide degree_bound + 1 evaluations",
+        )
+    _admit_ehrhart_scaled_coordinates(vertices, max_dilation)
+    _require_ehrhart_full_dimensional(vertices)
+    if weight.variables != weight_canonical_axis(dimension):
+        raise _validation_error(
+            "weighted_ehrhart_weight_axis",
+            "weight variables must be the canonical positional axis",
+        )
+    try:
+        require_polynomial_budget(
+            weight,
+            maximum_terms=MAX_WEIGHT_TERMS,
+            maximum_exponent=MAX_WEIGHT_DEGREE,
+            maximum_coefficient_digits=256,
+            label="ehrhart weight",
+        )
+    except ValueError as exc:
+        raise _validation_error("weighted_ehrhart_weight_budget", str(exc)) from exc
+    total_degree = weight_total_degree(weight)
+    if total_degree > MAX_WEIGHT_DEGREE:
+        raise _validation_error(
+            "weighted_ehrhart_weight_degree",
+            "weight total degree exceeds the admitted bound",
+        )
+    return dimension
+
+
+class WeightedEhrhartRequest(StrictModel):
+    """Recover a weighted Ehrhart polynomial for a bounded integral V-polytope."""
+
+    vertices: tuple[RationalVertex, ...] = Field(
+        min_length=1,
+        max_length=MAX_VERTICES,
+        description=(
+            "Integral vertices of a full-dimensional bounded V-polytope. "
+            "Weight 1 recovers ordinary lattice counting."
+        ),
+    )
+    weight: RationalPolynomial = Field(
+        description=(
+            "Declared exact polynomial weight on the canonical positional "
+            "axis (x0, .., x{d-1}); ordinary counting is weight 1."
+        ),
+    )
+    degree_bound: int = Field(ge=1, le=MAX_WEIGHTED_DEGREE)
+    max_dilation: int = Field(default=MAX_DIMENSION, ge=1, le=MAX_EHRHART_DILATIONS)
+
+    @model_validator(mode="after")
+    def require_weighted_source_shape(self) -> Self:
+        require_weighted_ehrhart_source(
+            self.vertices, self.weight, self.degree_bound, self.max_dilation
+        )
+        return self
+
+
+class WeightedEhrhartResult(StrictModel):
+    """A source-bound exact weighted Ehrhart polynomial and its count table."""
+
+    vertices: tuple[RationalVertex, ...] = Field(
+        min_length=1,
+        max_length=MAX_VERTICES,
+    )
+    weight: RationalPolynomial
+    dimension: int = Field(ge=1, le=MAX_DIMENSION)
+    degree_bound: int = Field(ge=1, le=MAX_WEIGHTED_DEGREE)
+    max_dilation: int = Field(ge=1, le=MAX_EHRHART_DILATIONS)
+    counts: tuple[tuple[int, CanonicalRational], ...] = Field(
+        min_length=2, max_length=MAX_EHRHART_DILATIONS + 1
+    )
+    polynomial: RationalPolynomial
+    coefficient_table: tuple[CanonicalRational, ...] = Field(
+        min_length=1,
+        max_length=MAX_WEIGHTED_DEGREE + 1,
+        description=(
+            "Exact ascending-power coefficients c_0..c_degree with exact signs; "
+            "zero coefficients are retained as 0/1."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_weighted_result_shapes(self) -> Self:
+        dimension = _require_ehrhart_vertex_structure(self.vertices)
+        if self.dimension != dimension:
+            raise _validation_error(
+                "ehrhart_dimension_shape",
+                "result dimension must match the source vertex dimension",
+            )
+        if self.max_dilation < self.degree_bound:
+            raise _validation_error(
+                "ehrhart_dilation_range",
+                "max_dilation must provide degree_bound + 1 evaluations",
+            )
+        if len(self.counts) != self.max_dilation + 1:
+            raise _validation_error(
+                "ehrhart_count_shape",
+                "counts must contain every dilation from zero through max_dilation",
+            )
+        if tuple(t for t, _count in self.counts) != tuple(range(self.max_dilation + 1)):
+            raise _validation_error(
+                "ehrhart_count_dilation",
+                "dilation values must be the complete range from zero",
+            )
+        if self.polynomial.variables != ("t",):
+            raise _validation_error(
+                "ehrhart_polynomial_axis",
+                "Ehrhart polynomials must use the canonical `t` axis",
+            )
+        if any(
+            term.exponents[0] > self.degree_bound
+            for term in self.polynomial.polynomial.terms
+        ):
+            raise _validation_error(
+                "ehrhart_polynomial_degree",
+                "polynomial degree must not exceed degree_bound",
+            )
+        if len(self.coefficient_table) != self.degree_bound + 1:
+            raise _validation_error(
+                "weighted_ehrhart_coefficient_shape",
+                "coefficient_table must carry degree_bound + 1 entries",
+            )
+        retained = {
+            term.exponents[0]: term.coefficient for term in self.polynomial.polynomial.terms
+        }
+        for power, coefficient in enumerate(self.coefficient_table):
+            expected = retained.get(power)
+            if expected is None:
+                if coefficient.num != 0:
+                    raise _validation_error(
+                        "weighted_ehrhart_coefficient_binding",
+                        "zero polynomial powers must table 0/1",
+                    )
+            elif coefficient != expected:
+                raise _validation_error(
+                    "weighted_ehrhart_coefficient_binding",
+                    "coefficient_table must match the retained polynomial",
+                )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        vertices: tuple[RationalVertex, ...],
+        weight: RationalPolynomial,
+        dimension: int,
+        degree_bound: int,
+        max_dilation: int,
+        counts: tuple[tuple[int, CanonicalRational], ...],
+        polynomial: RationalPolynomial,
+        coefficient_table: tuple[CanonicalRational, ...],
+    ) -> Self:
+        """Construct trusted output after native admission and counting."""
+
+        return cls.model_construct(
+            vertices=vertices,
+            weight=weight,
+            dimension=dimension,
+            degree_bound=degree_bound,
+            max_dilation=max_dilation,
+            counts=counts,
+            polynomial=polynomial,
+            coefficient_table=coefficient_table,
+        )
+
+
 __all__ = [
     "MAX_BOUND_SPAN",
     "MAX_DIMENSION",
@@ -568,6 +789,10 @@ __all__ = [
     "MAX_LATTICE_POINTS",
     "MAX_TOTAL_SCAN",
     "MAX_VERTICES",
+    "MAX_WEIGHTED_DEGREE",
+    "MAX_WEIGHTED_EVAL_WORK",
+    "MAX_WEIGHT_DEGREE",
+    "MAX_WEIGHT_TERMS",
     "CountLatticePointsResult",
     "EhrhartRequest",
     "EhrhartResult",
@@ -576,4 +801,6 @@ __all__ = [
     "LatticePoint",
     "LatticePolytopeRequest",
     "RepresentationName",
+    "WeightedEhrhartRequest",
+    "WeightedEhrhartResult",
 ]

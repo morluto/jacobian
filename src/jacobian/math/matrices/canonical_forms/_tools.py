@@ -2,6 +2,8 @@
 
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.matrices.canonical_forms._models import (
+    CentralizerResult,
+    InvariantFactorProfileResult,
     MatrixPolynomialEvaluationRequest,
     MatrixPolynomialEvaluationResult,
     MatrixPolynomialRemainderRequest,
@@ -9,13 +11,18 @@ from jacobian.math.matrices.canonical_forms._models import (
     MinimalPolynomialResult,
     PrimaryDecompositionResult,
     RationalCanonicalFormResult,
+    SimilarityRequest,
+    SimilarityResult,
     SquareMatrixRequest,
 )
 from jacobian.math.matrices.canonical_forms.operations import (
     _minimal_polynomial_components,
     _primary_decomposition_components,
     _rational_canonical_components,
+    centralizer_basis,
+    decide_similarity,
     evaluate_matrix_polynomial_value,
+    invariant_factor_profile,
     reduce_matrix_polynomial,
 )
 from jacobian.math.matrices.values import RationalMatrix
@@ -105,6 +112,20 @@ def _run_primary_decomposition(
     request: SquareMatrixRequest,
 ) -> PrimaryDecompositionResult:
     return compute_primary_decomposition(request.matrix)
+
+
+def _run_invariant_factor_profile(
+    request: SquareMatrixRequest,
+) -> InvariantFactorProfileResult:
+    return invariant_factor_profile(request.matrix)
+
+
+def _run_similarity(request: SimilarityRequest) -> SimilarityResult:
+    return decide_similarity(request.left, request.right)
+
+
+def _run_centralizer(request: SquareMatrixRequest) -> CentralizerResult:
+    return centralizer_basis(request.matrix)
 
 
 TOOLS: MathTools = (
@@ -273,6 +294,89 @@ TOOLS: MathTools = (
             OperationExample(
                 name="diagonal_distinct",
                 description="Primary decomposition of diag(2,3) gives (t-2) and (t-3).",
+                input={
+                    "matrix": {
+                        "domain": "QQ",
+                        "entries": [
+                            [{"num": "2", "den": "1"}, {"num": "0", "den": "1"}],
+                            [{"num": "0", "den": "1"}, {"num": "3", "den": "1"}],
+                        ],
+                    },
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="matrix.invariant_factors.compute",
+        title="Compute the invariant-factor profile of a square rational matrix",
+        description="Return the complete monic divisibility chain with the product "
+        "relation against the characteristic polynomial and the terminal "
+        "minimal-polynomial relation over QQ.",
+        request_type=SquareMatrixRequest,
+        result_type=InvariantFactorProfileResult,
+        run=_run_invariant_factor_profile,
+        tags=("matrix", "invariant-factors", "exact", "complete"),
+        examples=(
+            OperationExample(
+                name="diagonal_distinct_factors",
+                description="Invariant factors of diag(2,3) are a single (t-2)(t-3); the matrix must be square.",
+                input={
+                    "matrix": {
+                        "domain": "QQ",
+                        "entries": [
+                            [{"num": "2", "den": "1"}, {"num": "0", "den": "1"}],
+                            [{"num": "0", "den": "1"}, {"num": "3", "den": "1"}],
+                        ],
+                    },
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="matrix.similarity.decide",
+        title="Decide similarity of two rational matrices",
+        description="Decide similarity from complete invariant-factor data; matrices are "
+        "similar exactly when canonical representatives agree over QQ.",
+        request_type=SimilarityRequest,
+        result_type=SimilarityResult,
+        run=_run_similarity,
+        tags=("matrix", "similarity", "exact"),
+        examples=(
+            OperationExample(
+                name="similar_diagonal_permutation",
+                description="diag(2,3) is similar to diag(3,2); both matrices must be square of equal order.",
+                input={
+                    "left": {
+                        "domain": "QQ",
+                        "entries": [
+                            [{"num": "2", "den": "1"}, {"num": "0", "den": "1"}],
+                            [{"num": "0", "den": "1"}, {"num": "3", "den": "1"}],
+                        ],
+                    },
+                    "right": {
+                        "domain": "QQ",
+                        "entries": [
+                            [{"num": "3", "den": "1"}, {"num": "0", "den": "1"}],
+                            [{"num": "0", "den": "1"}, {"num": "2", "den": "1"}],
+                        ],
+                    },
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="matrix.centralizer.compute",
+        title="Compute an exact centralizer basis",
+        description="Return a complete basis of {X : AX = XA} as a nullspace of "
+        "I(x)A - A^T(x)I; the basis always contains the identity.",
+        request_type=SquareMatrixRequest,
+        result_type=CentralizerResult,
+        run=_run_centralizer,
+        tags=("matrix", "centralizer", "exact", "complete"),
+        examples=(
+            OperationExample(
+                name="scalar_centralizer",
+                description="Centralizer of diag(2,3) has dimension 2; the matrix must be square.",
                 input={
                     "matrix": {
                         "domain": "QQ",

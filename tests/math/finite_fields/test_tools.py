@@ -76,6 +76,11 @@ def test_bundle_declares_atomic_inline_typed_operations() -> None:
         "finite_field.polynomial_map.permutation.analyze",
         "finite_field.paley_tournament.construct",
         "finite_field.prime_linear_action.homogeneous_fixed_subspace.compute",
+        "finite_field.affine_zero_set.compute",
+        "finite_field.affine_zero_count.compute",
+        "finite_field.projective_zero_set.compute",
+        "finite_field.projective_zero_count.compute",
+        "finite_field.algebraic_set.base_change.compute",
     )
     (
         projective,
@@ -91,6 +96,11 @@ def test_bundle_declares_atomic_inline_typed_operations() -> None:
         _,
         paley,
         fixed,
+        _,
+        _,
+        _,
+        _,
+        _,
     ) = bundle
     for operation in bundle:
         assert isinstance(operation, MathTool)

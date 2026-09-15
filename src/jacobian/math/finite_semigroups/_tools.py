@@ -4,31 +4,55 @@ from typing import Any
 
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.finite_semigroups._models import (
+    AdjoinIdentityRequest,
+    AdjoinIdentityResult,
+    AdjoinZeroRequest,
+    AdjoinZeroResult,
     ElementPowerRequest,
     ElementPowerResult,
     GeneratedSubsemigroupRequest,
     GeneratedSubsemigroupResult,
     GreenRelationsRequest,
     GreenRelationsResult,
+    IdealEnumerationRequest,
+    IdealEnumerationResult,
     IdempotentsRequest,
     IdempotentsResult,
+    KaroubiProjectionRequest,
+    KaroubiProjectionResult,
+    LocalStructureRequest,
+    LocalStructureResult,
     NilpotentElementsRequest,
     NilpotentElementsResult,
+    OppositeRequest,
+    OppositeResult,
     PowerProfileRequest,
     PowerProfileResult,
     PrincipalIdealsRequest,
     PrincipalIdealsResult,
+    ProductRequest,
+    ProductResult,
+    ReesQuotientRequest,
+    ReesQuotientResult,
     RegularElementsRequest,
     RegularElementsResult,
 )
 from jacobian.math.finite_semigroups.operations import (
+    adjoin_identity,
+    adjoin_zero,
     element_power,
     generated_subsemigroup,
     green_relations,
+    ideal_enumeration,
     idempotents,
+    karoubi_projection,
+    local_structure,
     nilpotent_elements,
+    opposite_semigroup,
     power_profile,
     principal_ideals,
+    product_semigroup,
+    rees_quotient,
     regular_elements,
 )
 
@@ -67,6 +91,40 @@ def _run_principal_ideals(request: PrincipalIdealsRequest) -> PrincipalIdealsRes
 
 def _run_green_relations(request: GreenRelationsRequest) -> GreenRelationsResult:
     return green_relations(request.semigroup)
+
+
+def _run_local_structure(request: LocalStructureRequest) -> LocalStructureResult:
+    return local_structure(request.semigroup)
+
+
+def _run_ideal_enumeration(
+    request: IdealEnumerationRequest,
+) -> IdealEnumerationResult:
+    return ideal_enumeration(request.semigroup)
+
+
+def _run_opposite(request: OppositeRequest) -> OppositeResult:
+    return opposite_semigroup(request.semigroup)
+
+
+def _run_product(request: ProductRequest) -> ProductResult:
+    return product_semigroup(request.left, request.right)
+
+
+def _run_adjoin_identity(request: AdjoinIdentityRequest) -> AdjoinIdentityResult:
+    return adjoin_identity(request.semigroup)
+
+
+def _run_adjoin_zero(request: AdjoinZeroRequest) -> AdjoinZeroResult:
+    return adjoin_zero(request.semigroup)
+
+
+def _run_rees_quotient(request: ReesQuotientRequest) -> ReesQuotientResult:
+    return rees_quotient(request.semigroup, request.ideal)
+
+
+def _run_karoubi(request: KaroubiProjectionRequest) -> KaroubiProjectionResult:
+    return karoubi_projection(request.semigroup)
 
 
 # The cyclic group Z/3Z as a semigroup (which is also a group)
@@ -254,6 +312,143 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 input={
                     "semigroup": _SEMIGROUP,
                 },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="semigroup.local_structure.compute",
+        title="Compute units, local monoids, and maximal subgroups",
+        description="Return the identity (if any), the unit group, one local monoid per "
+        "idempotent with its maximal subgroup, and the minimal ideal; all outputs "
+        "are complete functions of the supplied table.",
+        request_type=LocalStructureRequest,
+        result_type=LocalStructureResult,
+        run=_run_local_structure,
+        tags=("algebra", "semigroup", "exact", "complete"),
+        examples=(
+            OperationExample(
+                name="local_structure_z3",
+                description="Local structure of Z/3Z; the semigroup must be associative.",
+                input={"semigroup": _SEMIGROUP},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="semigroup.ideals.subsemigroups.enumerate",
+        title="Enumerate ideals and subsemigroups",
+        description="Enumerate all two-sided ideals and subsemigroups under an honest "
+        "admission bound (at most 12 elements); every subset is checked exactly.",
+        request_type=IdealEnumerationRequest,
+        result_type=IdealEnumerationResult,
+        run=_run_ideal_enumeration,
+        tags=("algebra", "semigroup", "exact", "complete"),
+        examples=(
+            OperationExample(
+                name="enumerate_z3",
+                description="Enumerate ideals of Z/3Z; enumeration is admitted for small tables.",
+                input={"semigroup": _SEMIGROUP},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="semigroup.opposite.compute",
+        title="Compute the opposite semigroup",
+        description="Transpose the multiplication table; the carrier labels are preserved "
+        "and associativity is re-established.",
+        request_type=OppositeRequest,
+        result_type=OppositeResult,
+        run=_run_opposite,
+        tags=("algebra", "semigroup", "exact"),
+        examples=(
+            OperationExample(
+                name="opposite_z3",
+                description="Opposite of Z/3Z; the carrier is preserved.",
+                input={"semigroup": _SEMIGROUP},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="semigroup.product.compute",
+        title="Compute a direct product of semigroups",
+        description="Return the componentwise product with explicit left/right projections; "
+        "the product size must fit the 50-element bound.",
+        request_type=ProductRequest,
+        result_type=ProductResult,
+        run=_run_product,
+        tags=("algebra", "semigroup", "exact"),
+        examples=(
+            OperationExample(
+                name="product_z3_z3",
+                description="Product of Z/3Z with itself; both factors must be associative.",
+                input={"left": _SEMIGROUP, "right": _SEMIGROUP},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="semigroup.adjoin_identity.compute",
+        title="Adjoin an identity element",
+        description="Adjoin a fresh two-sided identity with the inclusion embedding; "
+        "the fresh label avoids the existing carrier.",
+        request_type=AdjoinIdentityRequest,
+        result_type=AdjoinIdentityResult,
+        run=_run_adjoin_identity,
+        tags=("algebra", "semigroup", "exact"),
+        examples=(
+            OperationExample(
+                name="adjoin_identity_z3",
+                description="Adjoin an identity to Z/3Z; the source must be associative.",
+                input={"semigroup": _SEMIGROUP},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="semigroup.adjoin_zero.compute",
+        title="Adjoin an absorbing zero",
+        description="Adjoin a fresh absorbing zero with the inclusion embedding; "
+        "the fresh label avoids the existing carrier.",
+        request_type=AdjoinZeroRequest,
+        result_type=AdjoinZeroResult,
+        run=_run_adjoin_zero,
+        tags=("algebra", "semigroup", "exact"),
+        examples=(
+            OperationExample(
+                name="adjoin_zero_z3",
+                description="Adjoin a zero to Z/3Z; the source must be associative.",
+                input={"semigroup": _SEMIGROUP},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="semigroup.rees_quotient.compute",
+        title="Compute a Rees quotient by an ideal",
+        description="Collapse a two-sided ideal to a single zero class with the explicit "
+        "projection; the ideal must be two-sided and use declared order.",
+        request_type=ReesQuotientRequest,
+        result_type=ReesQuotientResult,
+        run=_run_rees_quotient,
+        tags=("algebra", "semigroup", "exact"),
+        examples=(
+            OperationExample(
+                name="rees_collapse_z3",
+                description="Collapse the whole of Z/3Z; the ideal must be two-sided.",
+                input={"semigroup": _SEMIGROUP, "ideal": ["0", "1", "2"]},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="semigroup.karoubi_projection.compute",
+        title="Project a semigroup onto its Karoubi envelope",
+        description="Return the idempotent-splitting finite category with objects as "
+        "idempotents and morphisms f*s*e triples; composition replays the semigroup.",
+        request_type=KaroubiProjectionRequest,
+        result_type=KaroubiProjectionResult,
+        run=_run_karoubi,
+        tags=("algebra", "semigroup", "category", "exact"),
+        examples=(
+            OperationExample(
+                name="karoubi_z3",
+                description="Karoubi envelope of Z/3Z; the source must be associative.",
+                input={"semigroup": _SEMIGROUP},
             ),
         ),
     ),

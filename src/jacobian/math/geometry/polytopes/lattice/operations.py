@@ -33,6 +33,7 @@ no points).
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from fractions import Fraction
 from itertools import product
 from operator import mul
@@ -57,11 +58,14 @@ from jacobian.math.geometry.polytopes.lattice._models import (
     MAX_FACET_TESTS,
     MAX_LATTICE_POINTS,
     MAX_TOTAL_SCAN,
+    MAX_WEIGHTED_EVAL_WORK,
     CountLatticePointsResult,
     EhrhartResult,
     EnumerateLatticePointsResult,
     LatticePoint,
+    WeightedEhrhartResult,
     require_ehrhart_source,
+    require_weighted_ehrhart_source,
 )
 from jacobian.math.geometry.polytopes.values import Halfspace, Vertex
 from jacobian.math.polynomials.values import (
@@ -70,7 +74,12 @@ from jacobian.math.polynomials.values import (
     SparseRationalPolynomial,
 )
 
-__all__ = ["count_lattice_points", "ehrhart_polynomial", "enumerate_lattice_points"]
+__all__ = [
+    "count_lattice_points",
+    "ehrhart_polynomial",
+    "enumerate_lattice_points",
+    "weighted_ehrhart_polynomial",
+]
 
 AdmittedGeometry = tuple[
     list[tuple[tuple[int, ...], int]],
@@ -602,7 +611,7 @@ def _ehrhart_scan_plans(
     return plans
 
 
-def _interpolate_ehrhart(values: list[int], degree: int) -> list[Fraction]:
+def _interpolate_ehrhart(values: Sequence[Fraction], degree: int) -> list[Fraction]:
     """Interpolate and return ascending-power exact coefficients."""
     coefficients = [Fraction(0) for _ in range(degree + 1)]
     for sample in range(degree + 1):
@@ -649,7 +658,7 @@ def ehrhart_polynomial(
         values.append(count)
 
     degree = degree_bound
-    coefficients = _interpolate_ehrhart(values, degree)
+    coefficients = _interpolate_ehrhart([Fraction(value) for value in values], degree)
 
     def evaluate(dilation: int) -> int:
         result = Fraction(0)
@@ -685,4 +694,124 @@ def ehrhart_polynomial(
         max_dilation=max_dilation,
         counts=tuple((dilation, values[dilation]) for dilation in range(len(values))),
         polynomial=polynomial,
+    )
+
+
+def _scan_weighted_box(
+    facets: list[tuple[tuple[int, ...], int]],
+    lo: list[int],
+    hi: list[int],
+    d: int,
+    weight_terms: tuple[tuple[Fraction, tuple[int, ...]], ...],
+) -> Fraction:
+    """Sum the exact weight over every lattice point of one admitted box."""
+
+    total = Fraction(0)
+    for coord in product(*(range(lo[k], hi[k] + 1) for k in range(d))):
+        if not _is_inside_int(coord, facets):
+            continue
+        for coefficient, exponents in weight_terms:
+            monomial = coefficient
+            for coordinate, exponent in zip(coord, exponents, strict=True):
+                monomial *= coordinate**exponent
+            total += monomial
+    return total
+
+
+def weighted_ehrhart_polynomial(
+    vertices: tuple[Vertex, ...],
+    weight: RationalPolynomial,
+    degree_bound: int,
+    max_dilation: int,
+) -> WeightedEhrhartResult:
+    """Count weighted dilates and recover their exact counting polynomial."""
+    try:
+        require_weighted_ehrhart_source(vertices, weight, degree_bound, max_dilation)
+        plans = _ehrhart_scan_plans(vertices, max_dilation)
+    except LatticePolytopeAdmissionError as exc:
+        _raise_projected_lattice_error(
+            exc,
+            location=("vertices", "weight", "max_dilation"),
+            budget_code="polytope.weighted_ehrhart.scan_budget",
+            admission_code="polytope.weighted_ehrhart.admission",
+        )
+    except ValueError as exc:
+        raise OperationDomainValidationError(
+            location=("vertices", "weight", "degree_bound", "max_dilation"),
+            code="polytope.weighted_ehrhart.invalid_source",
+            message=str(exc),
+        ) from exc
+
+    weight_terms = tuple(
+        (term.coefficient.as_fraction(), term.exponents)
+        for term in weight.polynomial.terms
+    )
+    evaluation_work = 0
+    for _facets, lo, hi, _dimension in plans:
+        scan = 1
+        for lower, upper in zip(lo, hi, strict=True):
+            scan *= upper - lower + 1
+        evaluation_work += scan * max(1, len(weight_terms))
+    if evaluation_work > MAX_WEIGHTED_EVAL_WORK:
+        raise OperationResourceAdmissionError(
+            location=("vertices", "weight", "max_dilation"),
+            code="polytope.weighted_ehrhart.evaluation_budget",
+            message="weighted dilation evaluation exceeds the admitted work bound",
+        )
+
+    origin_value = Fraction(
+        sum(
+            coefficient
+            for coefficient, exponents in weight_terms
+            if all(exponent == 0 for exponent in exponents)
+        )
+    )
+    values: list[Fraction] = [origin_value]
+    for facets, lo, hi, plan_dimension in plans:
+        values.append(_scan_weighted_box(facets, lo, hi, plan_dimension, weight_terms))
+
+    degree = degree_bound
+    coefficients = _interpolate_ehrhart(values, degree)
+
+    def evaluate(dilation: int) -> Fraction:
+        result = Fraction(0)
+        for coefficient in reversed(coefficients):
+            result = result * dilation + coefficient
+        return result
+
+    if any(evaluate(dilation) != values[dilation] for dilation in range(len(values))):
+        raise OperationDomainValidationError(
+            location=("degree_bound",),
+            code="polytope.weighted_ehrhart.degree_insufficient",
+            message="degree_bound does not reproduce every requested weighted count",
+        )
+    polynomial = RationalPolynomial(
+        variables=("t",),
+        polynomial=SparseRationalPolynomial(
+            terms=tuple(
+                RationalPolynomialTerm(
+                    coefficient=CanonicalRational.from_fraction(value),
+                    exponents=(power,),
+                )
+                for power, value in reversed(tuple(enumerate(coefficients)))
+                if value
+            )
+        ),
+    )
+    coefficient_table = tuple(
+        CanonicalRational.from_fraction(coefficients[power] if power < len(coefficients) else Fraction(0))
+        for power in range(degree + 1)
+    )
+    return WeightedEhrhartResult._from_kernel(
+        vertices=vertices,
+        weight=weight,
+        dimension=len(vertices[0].coordinates),
+        degree_bound=degree,
+        max_dilation=max_dilation,
+        counts=tuple(
+            (dilation, CanonicalRational.from_fraction(values[dilation]))
+            for dilation in range(len(values))
+        ),
+        polynomial=polynomial,
+        coefficient_table=coefficient_table,
     )

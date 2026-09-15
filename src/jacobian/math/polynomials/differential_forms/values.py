@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Self
+from typing import Literal, Self
 
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
@@ -145,6 +145,138 @@ class PolynomialDifferentialForm(StrictModel):
         )
 
 
+def _require_coefficient_budget(coefficient: RationalPolynomial, *, label: str) -> None:
+    try:
+        require_polynomial_budget(
+            coefficient,
+            maximum_terms=MAX_DIFFERENTIAL_FORM_TERMS,
+            maximum_exponent=MAX_DIFFERENTIAL_FORM_EXPONENT,
+            maximum_coefficient_digits=MAX_DIFFERENTIAL_FORM_COEFFICIENT_DIGITS,
+            label=label,
+        )
+    except ValueError as exc:
+        raise _error("coefficient_budget", str(exc)) from exc
+
+
+class PolynomialVectorField(StrictModel):
+    """A polynomial vector field on an ordered affine QQ coordinate axis."""
+
+    variables: tuple[PolynomialVariable, ...] = Field(
+        min_length=0, max_length=MAX_POLYNOMIAL_VARIABLES
+    )
+    components: tuple[RationalPolynomial, ...] = Field(
+        max_length=MAX_POLYNOMIAL_VARIABLES,
+        description=(
+            "One sparse QQ coefficient per axis variable, in axis order. "
+            "Each component admits the same term, exponent, and digit bounds "
+            "as a differential-form coefficient."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_canonical_field(self) -> Self:
+        dimension = len(self.variables)
+        if len(set(self.variables)) != dimension:
+            raise _error("variable_axis", "field variables must be unique")
+        if len(self.components) != dimension:
+            raise _error(
+                "component_axis",
+                "a vector field carries one component per axis variable",
+            )
+        for component in self.components:
+            if component.variables != self.variables:
+                raise _error(
+                    "coefficient_axis",
+                    "every field component must use the complete field variable axis",
+                )
+            _require_coefficient_budget(component, label="vector-field component")
+        return self
+
+
+class PolynomialMap(StrictModel):
+    """A polynomial map between ordered affine QQ coordinate axes."""
+
+    source_variables: tuple[PolynomialVariable, ...] = Field(
+        min_length=0, max_length=MAX_POLYNOMIAL_VARIABLES
+    )
+    target_variables: tuple[PolynomialVariable, ...] = Field(
+        min_length=0, max_length=MAX_POLYNOMIAL_VARIABLES
+    )
+    images: tuple[RationalPolynomial, ...] = Field(
+        max_length=MAX_POLYNOMIAL_VARIABLES,
+        description=(
+            "One sparse QQ image polynomial per target variable, in target "
+            "order, each on the source variable axis."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_canonical_map(self) -> Self:
+        if len(set(self.source_variables)) != len(self.source_variables):
+            raise _error("source_axis", "map source variables must be unique")
+        if len(set(self.target_variables)) != len(self.target_variables):
+            raise _error("target_axis", "map target variables must be unique")
+        if len(self.images) != len(self.target_variables):
+            raise _error(
+                "image_axis",
+                "a polynomial map carries one image per target variable",
+            )
+        for image in self.images:
+            if image.variables != self.source_variables:
+                raise _error(
+                    "image_axis",
+                    "every map image must use the complete source variable axis",
+                )
+            _require_coefficient_budget(image, label="polynomial-map image")
+        return self
+
+
+class PrimitiveResult(StrictModel):
+    """An affine-homotopy primitive claim for a polynomial differential form."""
+
+    source: PolynomialDifferentialForm
+    outcome: Literal["CONSTRUCTED", "NOT_APPLICABLE"]
+    primitive: PolynomialDifferentialForm | None = None
+
+    @model_validator(mode="after")
+    def require_primitive_shape(self) -> Self:
+        if self.outcome == "NOT_APPLICABLE":
+            if self.primitive is not None:
+                raise _error(
+                    "primitive_outcome",
+                    "a non-applicable primitive claim cannot carry a primitive",
+                )
+            return self
+        if self.primitive is None:
+            raise _error(
+                "primitive_outcome",
+                "a constructed primitive claim requires a primitive form",
+            )
+        if self.primitive.variables != self.source.variables:
+            raise _error(
+                "primitive_axis",
+                "a primitive must use the source variable axis",
+            )
+        if self.primitive.degree != self.source.degree - 1:
+            raise _error(
+                "primitive_degree",
+                "a primitive has degree exactly one below its source",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        source: PolynomialDifferentialForm,
+        outcome: Literal["CONSTRUCTED", "NOT_APPLICABLE"],
+        primitive: PolynomialDifferentialForm | None = None,
+    ) -> Self:
+        return cls.model_construct(
+            source=source, outcome=outcome, primitive=primitive
+        )
+
+
 __all__ = [
     "MAX_DIFFERENTIAL_FORM_COEFFICIENT_DIGITS",
     "MAX_DIFFERENTIAL_FORM_COMPONENTS",
@@ -152,4 +284,7 @@ __all__ = [
     "MAX_DIFFERENTIAL_FORM_TERMS",
     "FormComponent",
     "PolynomialDifferentialForm",
+    "PolynomialMap",
+    "PolynomialVectorField",
+    "PrimitiveResult",
 ]

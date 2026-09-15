@@ -34,6 +34,18 @@ from jacobian.math.finite_fields import (
     projective_line,
     restrict_scalars,
 )
+from jacobian.math.finite_fields._algebraic_set_models import (
+    AffineZeroCountRequest,
+    AffineZeroCountResult,
+    AffineZeroSetRequest,
+    AffineZeroSetResult,
+    BaseChangeRequest,
+    BaseChangeResult,
+    ProjectiveZeroCountRequest,
+    ProjectiveZeroCountResult,
+    ProjectiveZeroSetRequest,
+    ProjectiveZeroSetResult,
+)
 from jacobian.math.finite_fields._matrix_rank_models import (
     MatrixRankRequest,
     MatrixRankResult,
@@ -172,6 +184,44 @@ _FIXED_ACTION: dict[str, object] = {
         }
     ],
 }
+_F2_PRIME: dict[str, object] = _F2_VALUE.model_dump(mode="json")
+_F2_ZERO: dict[str, object] = FiniteFieldElement(
+    presentation=_F2_VALUE, coordinates=(0,)
+).model_dump(mode="json")
+_F2_ONE_JSON: dict[str, object] = _F2_ONE.model_dump(mode="json")
+_AFFINE_AXIS_1: dict[str, object] = {"name": "vars", "labels": ["x"]}
+_AFFINE_AXIS_2: dict[str, object] = {"name": "vars", "labels": ["x", "y"]}
+_AFFINE_SYSTEM_SPLIT: dict[str, object] = {
+    "presentation": _F2_PRIME,
+    "variable_axis": _AFFINE_AXIS_1,
+    "equations": [
+        {
+            "presentation": _F2_PRIME,
+            "variable_axis": _AFFINE_AXIS_1,
+            "terms": [
+                {"coefficient": _F2_ONE_JSON, "exponents": [2]},
+                {"coefficient": _F2_ONE_JSON, "exponents": [1]},
+            ],
+        }
+    ],
+}
+_PROJECTIVE_SYSTEM_X: dict[str, object] = {
+    "presentation": _F2_PRIME,
+    "variable_axis": _AFFINE_AXIS_2,
+    "equations": [
+        {
+            "presentation": _F2_PRIME,
+            "variable_axis": _AFFINE_AXIS_2,
+            "terms": [{"coefficient": _F2_ONE_JSON, "exponents": [1, 0]}],
+        }
+    ],
+}
+_GF4_ZERO: dict[str, object] = _element(0, 0)
+_BASE_EMBEDDING_F2_TO_GF4: dict[str, object] = {
+    "source": _F2_PRIME,
+    "target": _FIELD,
+    "generator_image": _GF4_ZERO,
+}
 
 
 def _enumerate_projective_line(request: ProjectiveLineRequest) -> ProjectiveLine:
@@ -230,6 +280,60 @@ def _homogeneous_fixed_subspace(
     request: HomogeneousFixedSubspaceRequest,
 ) -> HomogeneousFixedSubspace:
     return homogeneous_fixed_subspace(request.action, request.degree)
+
+
+def _affine_zero_set(request: AffineZeroSetRequest) -> AffineZeroSetResult:
+    from jacobian.math.finite_fields import _algebraic_sets as algebraic
+
+    return AffineZeroSetResult._from_kernel(
+        system=request.system, points=algebraic.affine_zero_set(request.system)
+    )
+
+
+def _affine_zero_count(request: AffineZeroCountRequest) -> AffineZeroCountResult:
+    from jacobian.math.finite_fields import _algebraic_sets as algebraic
+    from jacobian.math.finite_fields._algebraic_set_models import AffineZeroCountResult
+
+    return AffineZeroCountResult._from_kernel(
+        system=request.system,
+        point_count=algebraic.affine_zero_count(request.system),
+    )
+
+
+def _projective_zero_set(request: ProjectiveZeroSetRequest) -> ProjectiveZeroSetResult:
+    from jacobian.math.finite_fields import _algebraic_sets as algebraic
+    from jacobian.math.finite_fields._algebraic_set_models import (
+        ProjectiveZeroSetResult,
+    )
+
+    return ProjectiveZeroSetResult._from_kernel(
+        system=request.system, points=algebraic.projective_zero_set(request.system)
+    )
+
+
+def _projective_zero_count(
+    request: ProjectiveZeroCountRequest,
+) -> ProjectiveZeroCountResult:
+    from jacobian.math.finite_fields import _algebraic_sets as algebraic
+    from jacobian.math.finite_fields._algebraic_set_models import (
+        ProjectiveZeroCountResult,
+    )
+
+    return ProjectiveZeroCountResult._from_kernel(
+        system=request.system,
+        point_count=algebraic.projective_zero_count(request.system),
+    )
+
+
+def _base_change(request: BaseChangeRequest) -> BaseChangeResult:
+    from jacobian.math.finite_fields import _algebraic_sets as algebraic
+    from jacobian.math.finite_fields._algebraic_set_models import BaseChangeResult
+
+    return BaseChangeResult._from_kernel(
+        system=request.system,
+        embedding=request.embedding,
+        transported=algebraic.base_change_system(request.system, request.embedding),
+    )
 
 
 def _build_tools() -> MathTools:
@@ -464,6 +568,122 @@ def _build_tools() -> MathTools:
             ),
         ),
     )
+    affine_zero_operation = MathTool(
+        operation_id="finite_field.affine_zero_set.compute",
+        title="Compute an affine zero set over a finite field",
+        description=(
+            "Return all and only simultaneous zeros of a supplied affine polynomial "
+            "system in canonical coordinate order with an agreeing count; every "
+            "ambient point, evaluation, and output is preflight-bounded."
+        ),
+        request_type=AffineZeroSetRequest,
+        result_type=AffineZeroSetResult,
+        run=_affine_zero_set,
+        tags=("finite-field", "algebraic-set", "affine", "exact", "complete"),
+        examples=(
+            OperationExample(
+                name="split_quadratic_over_f2",
+                description=(
+                    "Zeros of x^2+x over F_2 are 0 and 1; the system must share one "
+                    "presentation and variable axis."
+                ),
+                input={"system": _AFFINE_SYSTEM_SPLIT},
+            ),
+        ),
+    )
+    affine_count_operation = MathTool(
+        operation_id="finite_field.affine_zero_count.compute",
+        title="Count an affine zero set over a finite field",
+        description=(
+            "Return the compact point count agreeing exactly with the complete affine "
+            "enumeration; the system must share one presentation and variable axis."
+        ),
+        request_type=AffineZeroCountRequest,
+        result_type=AffineZeroCountResult,
+        run=_affine_zero_count,
+        tags=("finite-field", "algebraic-set", "affine", "count", "exact"),
+        examples=(
+            OperationExample(
+                name="split_quadratic_count_over_f2",
+                description=(
+                    "Count zeros of x^2+x over F_2; the system must share one "
+                    "presentation and variable axis."
+                ),
+                input={"system": _AFFINE_SYSTEM_SPLIT},
+            ),
+        ),
+    )
+    projective_zero_operation = MathTool(
+        operation_id="finite_field.projective_zero_set.compute",
+        title="Compute a projective zero set over a finite field",
+        description=(
+            "Return canonical scalar-class representatives of the zeros of a "
+            "homogeneous system; only homogeneous systems are admitted and every "
+            "ambient state is preflight-bounded."
+        ),
+        request_type=ProjectiveZeroSetRequest,
+        result_type=ProjectiveZeroSetResult,
+        run=_projective_zero_set,
+        tags=("finite-field", "algebraic-set", "projective", "exact", "complete"),
+        examples=(
+            OperationExample(
+                name="vanishing_x_over_f2",
+                description=(
+                    "Projective zeros of x over F_2 are the single class [0:1]; the "
+                    "system must be homogeneous."
+                ),
+                input={"system": _PROJECTIVE_SYSTEM_X},
+            ),
+        ),
+    )
+    projective_count_operation = MathTool(
+        operation_id="finite_field.projective_zero_count.compute",
+        title="Count a projective zero set over a finite field",
+        description=(
+            "Return the compact projective count agreeing exactly with the complete "
+            "scalar-class enumeration; the system must be homogeneous."
+        ),
+        request_type=ProjectiveZeroCountRequest,
+        result_type=ProjectiveZeroCountResult,
+        run=_projective_zero_count,
+        tags=("finite-field", "algebraic-set", "projective", "count", "exact"),
+        examples=(
+            OperationExample(
+                name="vanishing_x_count_over_f2",
+                description=(
+                    "Count projective zeros of x over F_2; the system must be "
+                    "homogeneous."
+                ),
+                input={"system": _PROJECTIVE_SYSTEM_X},
+            ),
+        ),
+    )
+    base_change_operation = MathTool(
+        operation_id="finite_field.algebraic_set.base_change.compute",
+        title="Transport an algebraic set along a field embedding",
+        description=(
+            "Transport a polynomial system along an explicit exact field embedding, "
+            "checking the generator root relation; the system must use the embedding "
+            "source and characteristics must agree."
+        ),
+        request_type=BaseChangeRequest,
+        result_type=BaseChangeResult,
+        run=_base_change,
+        tags=("finite-field", "algebraic-set", "base-change", "exact"),
+        examples=(
+            OperationExample(
+                name="split_quadratic_f2_to_gf4",
+                description=(
+                    "Transport x^2+x from F_2 to GF(4); the embedding must carry an "
+                    "explicit generator image satisfying the source modulus."
+                ),
+                input={
+                    "system": _AFFINE_SYSTEM_SPLIT,
+                    "embedding": _BASE_EMBEDDING_F2_TO_GF4,
+                },
+            ),
+        ),
+    )
     return (
         projective_line_operation,
         matrix_rank_operation,
@@ -478,6 +698,11 @@ def _build_tools() -> MathTools:
         permutation_operation,
         paley_tournament_operation,
         fixed_subspace_operation,
+        affine_zero_operation,
+        affine_count_operation,
+        projective_zero_operation,
+        projective_count_operation,
+        base_change_operation,
     )
 
 

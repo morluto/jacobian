@@ -18,6 +18,7 @@ from jacobian._execution import (
 )
 from jacobian.canonical import (
     CanonicalLimits,
+    encode_strict_json,
     format_canonical_integer,
     loads_strict_json,
 )
@@ -42,14 +43,21 @@ from jacobian.math.polynomials.root_critical._models import (
     MAX_ROOT_CRITICAL_DISTANCE_DEGREE,
     MAX_ROOT_CRITICAL_PAIRS,
     MAX_ROOT_CRITICAL_ROOT_COMPONENT_DIGITS,
+    ExactSplittingField,
     RootCriticalDistanceProfile,
     RootCriticalDistanceRow,
     RootCriticalRectangle,
     RootCriticalRoot,
+    SplittingFieldDistanceProfile,
+    SplittingFieldKernelPayload,
 )
 from jacobian.math.polynomials.root_critical._profile_process import (
     PROFILE_STDOUT_BYTES,
     run_profile_worker_process,
+)
+from jacobian.math.polynomials.root_critical._splitting_process import (
+    SPLITTING_STDOUT_BYTES,
+    run_splitting_worker_process,
 )
 from jacobian.math.polynomials.values import RationalPolynomial
 
@@ -57,7 +65,11 @@ _PROFILE_FINALIZATION_SECONDS = 1.0
 
 _NTH_ROOT_RELATIVE_BITS = 96
 
-__all__ = ["root_critical_distance_profile"]
+__all__ = [
+    "exact_splitting_field",
+    "root_critical_distance_profile",
+    "splitting_field_distance_profile",
+]
 
 ROOT_CRITICAL_WALL_SECONDS = 60.0
 
@@ -1135,4 +1147,229 @@ def root_critical_distance_profile(
         max_pair_rows=max_pair_rows,
         deadline=deadline,
         cancellation_signal=execution.cancellation_signal,
+    )
+
+
+def _run_splitting_worker(
+    polynomial: RationalPolynomial,
+    *,
+    mode: str,
+    embedding_index: int,
+    max_pair_rows: object,
+    deadline: float,
+    cancellation_signal: RequestCancellationSignal | None,
+) -> tuple[SplittingFieldKernelPayload, RootCriticalDistanceProfile | None]:
+    """Run the splitting-field kernel in a killable child and decode its output."""
+
+    remaining = deadline - time.monotonic() - _PROFILE_FINALIZATION_SECONDS
+    if remaining <= 0:
+        from jacobian._execution import OperationExecutionTimeoutError
+
+        raise OperationExecutionTimeoutError(
+            "splitting-field deadline expired before the kernel worker"
+        )
+    worker_stdout = run_splitting_worker_process(
+        polynomial,
+        mode=mode,
+        embedding_index=embedding_index,
+        max_pair_rows=max_pair_rows,
+        remaining_seconds=remaining,
+        cancellation_signal=cancellation_signal,
+    )
+    response = loads_strict_json(
+        worker_stdout,
+        limits=CanonicalLimits(
+            max_input_bytes=SPLITTING_STDOUT_BYTES,
+            max_output_bytes=SPLITTING_STDOUT_BYTES,
+        ),
+    )
+    if not isinstance(response, dict):
+        raise RuntimeError(
+            "bounded splitting-field kernel worker returned malformed output"
+        )
+    if response.get("ok") is False:
+        _raise_worker_error(response)
+    field = response.get("field")
+    if response.get("ok") is not True or not isinstance(field, dict):
+        raise RuntimeError(
+            "bounded splitting-field kernel worker returned malformed output"
+        )
+    payload = SplittingFieldKernelPayload.model_validate_json(
+        encode_strict_json(field), strict=True
+    )
+    profile: RootCriticalDistanceProfile | None = None
+    raw_profile = response.get("profile")
+    if raw_profile is not None:
+        if not isinstance(raw_profile, (str, dict)):
+            raise RuntimeError(
+                "bounded splitting-field kernel worker returned malformed profile"
+            )
+        profile = RootCriticalDistanceProfile.model_validate_json(
+            raw_profile
+            if isinstance(raw_profile, str)
+            else encode_strict_json(raw_profile),
+            strict=True,
+        )
+    request_checkpoint("after splitting-field kernel worker")
+    return payload, profile
+
+
+def _splitting_deadline() -> tuple[float, RequestCancellationSignal | None]:
+    execution = current_request_execution()
+    assert execution is not None
+    deadline = execution.started_at + ROOT_CRITICAL_WALL_SECONDS
+    if execution.deadline is not None:
+        deadline = min(deadline, execution.deadline)
+    bind_request_deadline(deadline)
+    return deadline, execution.cancellation_signal
+
+
+def _require_splitting_polynomial(polynomial: object, embedding_index: object) -> None:
+    if not isinstance(polynomial, RationalPolynomial):
+        raise OperationDomainValidationError(
+            location=("polynomial",),
+            code="polynomial.root_critical.splitting_field_polynomial_type",
+            message="a splitting field requires a rational polynomial",
+        )
+    if type(embedding_index) is not int or isinstance(embedding_index, bool):
+        raise OperationDomainValidationError(
+            location=("embedding_index",),
+            code="polynomial.root_critical.embedding_index_type",
+            message="embedding_index must be a non-boolean integer",
+        )
+    if embedding_index < 0:
+        raise OperationDomainValidationError(
+            location=("embedding_index",),
+            code="polynomial.root_critical.embedding_index_range",
+            message="embedding_index must be nonnegative",
+        )
+
+
+def _field_from_payload(
+    payload: SplittingFieldKernelPayload, polynomial: RationalPolynomial
+) -> ExactSplittingField:
+    return ExactSplittingField._from_kernel(
+        source_polynomial=polynomial,
+        squarefree_support=payload.squarefree_support,
+        defining_polynomial=payload.defining_polynomial,
+        conjugation_coefficients=payload.conjugation_coefficients,
+        embedding_index=payload.embedding_index,
+        embedding_rectangle=payload.embedding_rectangle,
+        roots=payload.roots,
+    )
+
+
+def exact_splitting_field(
+    polynomial: RationalPolynomial,
+    *,
+    embedding_index: int = 0,
+) -> ExactSplittingField:
+    """Return the exact splitting field of the square-free ``p * p'`` support.
+
+    The blocking SymPy phases (``all_roots``, ``to_number_field``, and
+    ``minimal_polynomial``) run inside a killable child process so the request
+    deadline and cancellation can stop them; the returned field is re-validated
+    before it is trusted.
+    """
+
+    _require_splitting_polynomial(polynomial, embedding_index)
+    if current_request_execution() is None:
+        with request_execution(time.monotonic()):
+            return exact_splitting_field(
+                polynomial, embedding_index=embedding_index
+            )
+    deadline, cancellation_signal = _splitting_deadline()
+    payload, _profile = _run_splitting_worker(
+        polynomial,
+        mode="field",
+        embedding_index=embedding_index,
+        max_pair_rows=0,
+        deadline=deadline,
+        cancellation_signal=cancellation_signal,
+    )
+    return _field_from_payload(payload, polynomial)
+
+
+def splitting_field_distance_profile(
+    polynomial: RationalPolynomial,
+    splitting_field: ExactSplittingField,
+    *,
+    max_pair_rows: int = MAX_ROOT_CRITICAL_PAIRS,
+) -> SplittingFieldDistanceProfile:
+    """Bind the root-critical distance profile to a supplied splitting field.
+
+    The supplied field must be bound to this exact polynomial: its source and
+    square-free support must match the computed ``p * p'`` support, and its
+    defining polynomial, conjugation element, and root family must agree with
+    the field the kernel rebuilds. Distances are returned as exact field
+    elements together with the certified nonnegative interval of the in-process
+    profile.
+    """
+
+    _require_splitting_polynomial(polynomial, 0)
+    if not isinstance(splitting_field, ExactSplittingField):
+        raise OperationDomainValidationError(
+            location=("splitting_field",),
+            code="polynomial.root_critical.splitting_field_type",
+            message="a bound profile requires an exact splitting field value",
+        )
+    if type(max_pair_rows) is not int or isinstance(max_pair_rows, bool):
+        raise OperationDomainValidationError(
+            location=("max_pair_rows",),
+            code="polynomial.root_critical.pair_row_type",
+            message="max_pair_rows must be a non-boolean integer",
+        )
+    if max_pair_rows < 0 or max_pair_rows > MAX_ROOT_CRITICAL_PAIRS:
+        raise OperationDomainValidationError(
+            location=("max_pair_rows",),
+            code="polynomial.root_critical.pair_row_range",
+            message="max_pair_rows must lie in the admitted 0..64 row budget",
+        )
+    if splitting_field.source_polynomial != polynomial:
+        raise OperationDomainValidationError(
+            location=("splitting_field", "source_polynomial"),
+            code="polynomial.root_critical.binding_source_mismatch",
+            message="the splitting field must be bound to the exact source polynomial",
+        )
+    if current_request_execution() is None:
+        with request_execution(time.monotonic()):
+            return splitting_field_distance_profile(
+                polynomial, splitting_field, max_pair_rows=max_pair_rows
+            )
+    deadline, cancellation_signal = _splitting_deadline()
+    payload, profile = _run_splitting_worker(
+        polynomial,
+        mode="bind",
+        embedding_index=splitting_field.embedding_index,
+        max_pair_rows=max_pair_rows,
+        deadline=deadline,
+        cancellation_signal=cancellation_signal,
+    )
+    if profile is None:
+        raise RuntimeError("bound splitting-field worker did not return a profile")
+    rebuilt = _field_from_payload(payload, polynomial)
+    rebuilt_root_coefficients = tuple(
+        root.coefficients_ascending for root in rebuilt.roots
+    )
+    supplied_root_coefficients = tuple(
+        root.coefficients_ascending for root in splitting_field.roots
+    )
+    if (
+        rebuilt.squarefree_support != splitting_field.squarefree_support
+        or rebuilt.defining_polynomial != splitting_field.defining_polynomial
+        or rebuilt.conjugation_coefficients
+        != splitting_field.conjugation_coefficients
+        or rebuilt_root_coefficients != supplied_root_coefficients
+    ):
+        raise OperationDomainValidationError(
+            location=("splitting_field",),
+            code="polynomial.root_critical.binding_field_mismatch",
+            message="the supplied splitting field is not the computed exact field",
+        )
+    return SplittingFieldDistanceProfile._from_kernel(
+        splitting_field=splitting_field,
+        profile=profile,
+        root_field_coefficients=payload.root_field_coefficients,
+        critical_field_coefficients=payload.critical_field_coefficients,
+        distance_field_coefficients=payload.distance_field_coefficients,
     )

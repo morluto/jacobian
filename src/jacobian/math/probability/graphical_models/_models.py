@@ -9,6 +9,8 @@ from pydantic import Field, model_validator
 from jacobian._models import StrictModel
 from jacobian.math.probability.graphical_models.values import (
     MAX_MODEL_VARS,
+    BayesianNetwork,
+    ConditionalProbabilityTable,
     Factor,
     Variable,
 )
@@ -122,13 +124,157 @@ class DSeparationResult(StrictModel):
         )
 
 
+class BayesNetConstructRequest(StrictModel):
+    variable_count: int = Field(ge=1, le=MAX_MODEL_VARS)
+    edges: tuple[tuple[int, int], ...] = Field(default=())
+    domain_sizes: tuple[int, ...] = Field(min_length=1, max_length=MAX_MODEL_VARS)
+    tables: tuple[ConditionalProbabilityTable, ...] = Field(
+        min_length=1, max_length=MAX_MODEL_VARS
+    )
+
+
+class BayesNetConstructResult(StrictModel):
+    network: BayesianNetwork
+
+    @classmethod
+    def _from_kernel(cls, network: BayesianNetwork) -> Self:
+        return cls.model_construct(network=network)
+
+
+class BayesNetJointRequest(StrictModel):
+    network: BayesianNetwork
+
+
+class BayesNetJointResult(StrictModel):
+    network: BayesianNetwork
+    joint: Factor
+
+    @classmethod
+    def _from_kernel(cls, network: BayesianNetwork, joint: Factor) -> Self:
+        return cls.model_construct(network=network, joint=joint)
+
+
+class EliminationStep(StrictModel):
+    eliminated: Variable
+    input_scopes: tuple[tuple[Variable, ...], ...]
+    product_scope: tuple[Variable, ...]
+    product: Factor
+    output_scope: tuple[Variable, ...]
+    output: Factor
+    fill_edges: tuple[tuple[Variable, ...], ...]
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        eliminated: int,
+        input_scopes: tuple[tuple[int, ...], ...],
+        product_scope: tuple[int, ...],
+        product: Factor,
+        output_scope: tuple[int, ...],
+        output: Factor,
+        fill_edges: tuple[tuple[int, int], ...],
+    ) -> Self:
+        return cls.model_construct(
+            eliminated=eliminated,
+            input_scopes=input_scopes,
+            product_scope=product_scope,
+            product=product,
+            output_scope=output_scope,
+            output=output,
+            fill_edges=fill_edges,
+        )
+
+
+class VariableEliminationTraceRequest(StrictModel):
+    factors: tuple[Factor, ...] = Field(min_length=1, max_length=64)
+    domain_sizes: tuple[int, ...] = Field(min_length=1, max_length=MAX_MODEL_VARS)
+    elimination_order: tuple[Variable, ...] = Field(max_length=MAX_MODEL_VARS)
+    query_variables: tuple[Variable, ...] = Field(max_length=MAX_MODEL_VARS)
+
+
+class VariableEliminationTraceResult(StrictModel):
+    factors: tuple[Factor, ...]
+    domain_sizes: tuple[int, ...]
+    elimination_order: tuple[Variable, ...]
+    query_variables: tuple[Variable, ...]
+    steps: tuple[EliminationStep, ...]
+    final: Factor
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        factors: tuple[Factor, ...],
+        domain_sizes: tuple[int, ...],
+        elimination_order: tuple[Variable, ...],
+        query_variables: tuple[Variable, ...],
+        steps: tuple[EliminationStep, ...],
+        final: Factor,
+    ) -> Self:
+        return cls.model_construct(
+            factors=factors,
+            domain_sizes=domain_sizes,
+            elimination_order=elimination_order,
+            query_variables=query_variables,
+            steps=steps,
+            final=final,
+        )
+
+
+class JunctionTreeCalibrateRequest(StrictModel):
+    network: BayesianNetwork
+    elimination_order: tuple[Variable, ...] = Field(max_length=MAX_MODEL_VARS)
+
+
+class JunctionTreeCalibrateResult(StrictModel):
+    network: BayesianNetwork
+    elimination_order: tuple[Variable, ...]
+    cliques: tuple[tuple[Variable, ...], ...]
+    separators: tuple[tuple[Variable, ...], ...]
+    clique_marginals: tuple[Factor, ...]
+    separator_marginals: tuple[Factor, ...]
+    partition: Factor
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        network: BayesianNetwork,
+        elimination_order: tuple[Variable, ...],
+        cliques: tuple[tuple[int, ...], ...],
+        separators: tuple[tuple[int, ...], ...],
+        clique_marginals: tuple[Factor, ...],
+        separator_marginals: tuple[Factor, ...],
+        partition: Factor,
+    ) -> Self:
+        return cls.model_construct(
+            network=network,
+            elimination_order=elimination_order,
+            cliques=cliques,
+            separators=separators,
+            clique_marginals=clique_marginals,
+            separator_marginals=separator_marginals,
+            partition=partition,
+        )
+
+
 __all__ = [
+    "BayesNetConstructRequest",
+    "BayesNetConstructResult",
+    "BayesNetJointRequest",
+    "BayesNetJointResult",
     "BayesianDAG",
     "DSeparationQuery",
     "DSeparationRequest",
     "DSeparationResult",
+    "EliminationStep",
     "FactorMarginalizeRequest",
     "FactorMarginalizeResult",
     "FactorMultiplyRequest",
     "FactorMultiplyResult",
+    "JunctionTreeCalibrateRequest",
+    "JunctionTreeCalibrateResult",
+    "VariableEliminationTraceRequest",
+    "VariableEliminationTraceResult",
 ]

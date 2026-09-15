@@ -9,6 +9,8 @@ from jacobian.math.number_theory.diophantine_approximation._surd_models import (
     NearestIntegerDistanceValue,
     RangeProfileRequest,
     RangeProfileResult,
+    RecordMinimaRequest,
+    RecordMinimaResult,
     ScaledFloorRequest,
     ScaledFloorValue,
     SimultaneousProductRequest,
@@ -42,6 +44,14 @@ def _simultaneous_product(
 
 def _range_profile(request: RangeProfileRequest) -> RangeProfileResult:
     return native.range_profile(
+        request.radicands,
+        request.limit,
+        request.scale_bits,
+    )
+
+
+def _record_minima(request: RecordMinimaRequest) -> RecordMinimaResult:
+    return native.record_minima(
         request.radicands,
         request.limit,
         request.scale_bits,
@@ -136,7 +146,34 @@ SURD_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
                 name="sqrt_two_sqrt_three_to_ten",
                 description=(
                     "Complete certified range for distinct nonsquare radicands "
-                    "2 and 3 up to 10."
+                    "2 and 3 up to 10; the range must cover every integer 1..10."
+                ),
+                input={"radicands": [2, 3], "limit": 10, "scale_bits": 32},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="number_theory.simultaneous_approximation.record_minima.compute",
+        title="Extract certified simultaneous-approximation record minima",
+        description=(
+            "Extract the strict record-minimum sequence and finite argmin from a "
+            "complete certified simultaneous-approximation range over 1 <= n <= limit. "
+            "A new record is accepted only when its product-enclosure upper bound lies "
+            "strictly below every prior incumbent lower bound; touching enclosures "
+            "still prove distinct irrational values. Overlapping enclosures return "
+            "UNRESOLVED with the first undecided row and both enclosures, never an "
+            "arbitrary tie-break or argmin claim."
+        ),
+        request_type=RecordMinimaRequest,
+        result_type=RecordMinimaResult,
+        run=_record_minima,
+        tags=("number-theory", "simultaneous-approximation", "record-minima", "certified"),
+        examples=(
+            OperationExample(
+                name="sqrt_two_sqrt_three_records_to_ten",
+                description=(
+                    "Strict record minima for distinct nonsquare radicands 2 and 3 "
+                    "up to 10; the range must cover every integer 1..10."
                 ),
                 input={"radicands": [2, 3], "limit": 10, "scale_bits": 32},
             ),

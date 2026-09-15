@@ -1,25 +1,41 @@
 """Finite semigroup operations."""
 
 from jacobian.math.finite_semigroups.operations import (
+    adjoin_identity,
+    adjoin_zero,
     element_power,
     generated_subsemigroup,
     green_relations,
+    ideal_enumeration,
     idempotents,
+    karoubi_projection,
+    local_structure,
     nilpotent_elements,
+    opposite_semigroup,
     power_profile,
     principal_ideals,
+    product_semigroup,
+    rees_quotient,
     regular_elements,
     verify_generated_subsemigroup,
 )
 
 __all__: list[str] = [
+    "adjoin_identity",
+    "adjoin_zero",
     "element_power",
     "generated_subsemigroup",
     "green_relations",
+    "ideal_enumeration",
     "idempotents",
+    "karoubi_projection",
+    "local_structure",
     "nilpotent_elements",
+    "opposite_semigroup",
     "power_profile",
     "principal_ideals",
+    "product_semigroup",
+    "rees_quotient",
     "regular_elements",
     "verify_generated_subsemigroup",
 ]

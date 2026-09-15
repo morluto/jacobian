@@ -1,17 +1,24 @@
 """Exact canonical-form kernels and typed contracts over QQ."""
 
 from jacobian.math.matrices.canonical_forms._models import (
+    CentralizerResult,
     InvariantFactorEntry,
+    InvariantFactorProfileResult,
     MatrixPolynomialEvaluationResult,
     MatrixPolynomialRemainderResult,
     MinimalPolynomialResult,
     MonicPolynomial,
     PrimaryDecompositionResult,
     RationalCanonicalFormResult,
+    SimilarityRequest,
+    SimilarityResult,
 )
 from jacobian.math.matrices.canonical_forms.operations import (
+    centralizer_basis,
     characteristic_polynomial,
+    decide_similarity,
     evaluate_matrix_polynomial_value,
+    invariant_factor_profile,
     invariant_factors,
     minimal_polynomial,
     primary_decomposition,
@@ -22,15 +29,22 @@ from jacobian.math.matrices.canonical_forms.operations import (
 )
 
 __all__ = [
+    "CentralizerResult",
     "InvariantFactorEntry",
+    "InvariantFactorProfileResult",
     "MatrixPolynomialEvaluationResult",
     "MatrixPolynomialRemainderResult",
     "MinimalPolynomialResult",
     "MonicPolynomial",
     "PrimaryDecompositionResult",
     "RationalCanonicalFormResult",
+    "SimilarityRequest",
+    "SimilarityResult",
+    "centralizer_basis",
     "characteristic_polynomial",
+    "decide_similarity",
     "evaluate_matrix_polynomial_value",
+    "invariant_factor_profile",
     "invariant_factors",
     "minimal_polynomial",
     "primary_decomposition",

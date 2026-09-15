@@ -13,13 +13,13 @@ from jacobian.math.number_theory.sequences.core.operations import (
 )
 
 
-def test_record_minima_remains_unpublished() -> None:
-    """Record extraction composes the public range operation in native code."""
+def test_record_minima_is_published() -> None:
+    """Record extraction is published as its own certified operation (#3725)."""
     assert (
         Catalog.open().operation(
             "number_theory.simultaneous_approximation.record_minima.compute"
         )
-        is None
+        is not None
     )
 
 

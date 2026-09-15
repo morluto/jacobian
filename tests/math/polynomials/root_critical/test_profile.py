@@ -572,6 +572,39 @@ def test_rectangles_separate_irrational_siblings() -> None:
     assert 0 < gap < sympy.Float("1e-127")
 
 
+def test_public_operation_isolates_irrational_siblings() -> None:
+    """The public profile refuses to publish a non-isolating rectangle.
+
+    ``(z**2 - 2)(z**2 - (2 + 1/q))`` with ``q = 10**127`` is run through the
+    final public operation; every published axis rectangle must contain exactly
+    one support root, so the near-degenerate ``sqrt(2)``/``sqrt(2 + 1/q)`` pair
+    cannot share a rectangle.
+    """
+    import sympy
+    from tests.math.polynomials.root_critical._isolation_invariants import (
+        require_axis_rectangles_are_isolating,
+    )
+
+    from jacobian.math.polynomials._conversions import rational_polynomial_from_sympy
+
+    q = 10**127
+    z = sympy.Symbol("z")
+    source = sympy.Poly(
+        (z**2 - 2) * (z**2 - (2 + sympy.Rational(1, q))), z, domain="QQ"
+    )
+    profile = root_critical_distance_profile(
+        rational_polynomial_from_sympy(source, ("z",))
+    )
+    require_axis_rectangles_are_isolating(
+        source.sqf_part(), tuple(root.rectangle for root in profile.roots)
+    )
+    derivative_support = source.diff().sqf_part()
+    require_axis_rectangles_are_isolating(
+        derivative_support,
+        tuple(point.rectangle for point in profile.critical_points),
+    )
+
+
 def test_simplest_rational_between_uses_minimal_denominators() -> None:
     """The sibling-separation helper returns the simplest interior rational."""
     from fractions import Fraction

@@ -144,12 +144,27 @@ def _canonical(coefficients: list[Fraction]) -> tuple[CanonicalRational, ...]:
     return tuple(CanonicalRational.from_fraction(value) for value in coefficients)
 
 
-def rectangle_for_root(root: Any) -> Any:
-    """Return an exact isolating rectangle for one SymPy algebraic root."""
+def rectangle_for_root(root: Any, polynomial: Any, roots: tuple[Any, ...]) -> Any:
+    """Return an exact isolating rectangle for one root of ``polynomial``.
 
-    from jacobian.math.polynomials.root_critical.operations import _isolating_rectangle
+    ``roots`` is the complete root family of ``polynomial``, so the rectangle is
+    refined against every sibling instead of only its own factor.
+    """
 
-    return _isolating_rectangle(root, None, ())
+    from jacobian.math.polynomials.root_critical.operations import (
+        _isolating_rectangle,
+        _root_is_real,
+        _root_rational_value,
+    )
+
+    real_roots = tuple(sibling for sibling in roots if _root_is_real(sibling))
+    return _isolating_rectangle(
+        root,
+        _root_rational_value(root),
+        real_roots,
+        tuple(roots),
+        polynomial,
+    )
 
 
 def compute_splitting_field(
@@ -226,13 +241,17 @@ def compute_splitting_field(
         "defining_polynomial": _polynomial_from_ascending(modulus, "t"),
         "conjugation_coefficients": _canonical(conjugation),
         "embedding_index": embedding_index,
-        "embedding_rectangle": rectangle_for_root(embedding_roots[embedding_index]),
+        "embedding_rectangle": rectangle_for_root(
+            embedding_roots[embedding_index],
+            primitive.minpoly,
+            embedding_roots,
+        ),
         "roots": [
             {
                 "axis_index": index,
                 "coefficients_ascending": _canonical(coefficients),
                 "multiplicity": 1,
-                "rectangle": rectangle_for_root(root),
+                "rectangle": rectangle_for_root(root, support_monic, roots),
             }
             for index, (root, coefficients) in enumerate(
                 zip(roots, root_coefficients, strict=True)

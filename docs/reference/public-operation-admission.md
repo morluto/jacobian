@@ -46,7 +46,12 @@ canonical value `Y` satisfying a mathematical relation `P(X, Y)`.  Then state
 the defining invariant—an identity, reconstruction, exhaustive relation, or
 independent oracle—that establishes a computed `Y` satisfies `P`.  The
 postcondition is the admission object; the invariant is its test evidence, not
-a second operation or a proof replay during ordinary execution.
+a second operation or a proof replay during ordinary execution. When the
+postcondition includes identity or isolation evidence, the invariant must
+quantify over the complete invariant family—every factor, root, branch, or
+sibling—rather than an exactly-representable subset that is easy to compare.
+Narrowing that family to the cases the implementation happens to handle admits
+a postcondition the operation does not actually establish.
 
 A source theorem may reveal a useful postcondition, but its reduction,
 parameter choices, contradiction, and stopping rule remain caller-owned unless

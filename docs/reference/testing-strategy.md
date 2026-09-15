@@ -256,6 +256,27 @@ and require the consuming operation to reject both forgeries. For
 ordinary computed results, test the defining invariant of the returned value;
 do not introduce a replay path solely for that test.
 
+### Isolation, refinement, and separation evidence
+
+For an operation that publishes an isolating interval, rectangle, or box, the
+defining invariant is separation: each object contains exactly one root of the
+relevant complete axis polynomial, and objects on one axis are pairwise
+disjoint. Check both with an independent oracle such as `strict_root_count` or
+`count_roots` over the returned box, not by re-reading the producer's own
+refinement. Do not narrow the obstacle set to the values that are convenient to
+compare: a guard that separates only rational, real, or same-factor siblings is
+a partial-obstacle-set bug even when every accepted bound passes.
+
+Generate near-degenerate structure deliberately instead of sampling uniformly,
+because a uniform draw will not hit a gap smaller than a naive enclosure. A
+property-based strategy should construct the degeneracy, for example a surd
+pair `sqrt(a)` and `sqrt(a + 1/q)` with a large `q`, a Pell rational
+approximation of a quadratic irrational, or a reflected root. Then assert the
+defining invariant on every generated case. Pair that property with one
+minimally reduced motivating regression through the final public operation, and
+cross-check any parallel refinement against an independent oracle the way a
+base, Karatsuba, and generic algorithm are compared.
+
 For every exact-success branch, assert the defining equation or preservation
 law and reject every representable status/diagnostic combination that would
 claim success while admitting that the invariant failed. Checking only that a

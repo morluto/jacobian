@@ -692,3 +692,107 @@ def test_group_like_verifier_preserves_tensor_admission_failure() -> None:
     element = GroupLikeElement(coefficients=(1,) + (0,) * 16)
     with pytest.raises(OperationResourceAdmissionError, match="structure constants"):
         verify_group_like_element(coalgebra, element)
+
+
+def _structure(
+    coalgebra: Coalgebra,
+) -> tuple[tuple[tuple[tuple[int, ...], ...], ...], tuple[int, ...], int, int]:
+    """Raw comultiplication tensor, counit, prime, and dimension."""
+    prime, dimension = coalgebra.prime, coalgebra.dimension
+    delta = tuple(
+        tuple(
+            tuple(entry % prime for entry in row)
+            for row in coalgebra.comultiplication[index]
+        )
+        for index in range(dimension)
+    )
+    counit_values = tuple(value % prime for value in coalgebra.counit)
+    return delta, counit_values, prime, dimension
+
+
+def _satisfies_coassociativity(
+    delta: tuple[tuple[tuple[int, ...], ...], ...], prime: int, dimension: int
+) -> bool:
+    """(Delta (x) id) Delta == (id (x) Delta) Delta, checked entrywise."""
+    for i in range(dimension):
+        for left in range(dimension):
+            for middle in range(dimension):
+                for right in range(dimension):
+                    first = (
+                        sum(
+                            delta[i][j][right] * delta[j][left][middle]
+                            for j in range(dimension)
+                        )
+                        % prime
+                    )
+                    second = (
+                        sum(
+                            delta[i][left][n] * delta[n][middle][right]
+                            for n in range(dimension)
+                        )
+                        % prime
+                    )
+                    if first != second:
+                        return False
+    return True
+
+
+def _satisfies_counit(
+    delta: tuple[tuple[tuple[int, ...], ...], ...],
+    counit_values: tuple[int, ...],
+    prime: int,
+    dimension: int,
+) -> bool:
+    """(epsilon (x) id) Delta == id == (id (x) epsilon) Delta, entrywise."""
+    for i in range(dimension):
+        for a in range(dimension):
+            for b in range(dimension):
+                left = sum(delta[i][j][b] * counit_values[j] for j in range(dimension))
+                right = sum(delta[i][a][k] * counit_values[k] for k in range(dimension))
+                if left % prime != (1 if b == i else 0):
+                    return False
+                if right % prime != (1 if a == i else 0):
+                    return False
+    return True
+
+
+def _diagonal_coalgebra() -> Coalgebra:
+    return Coalgebra(
+        prime=5,
+        dimension=2,
+        comultiplication=(
+            ((1, 0), (0, 0)),
+            ((0, 0), (0, 1)),
+        ),
+        counit=(1, 1),
+    )
+
+
+def test_coassociativity_and_counit_laws_hold_on_group_like_coalgebras() -> None:
+    for coalgebra in (
+        Coalgebra(prime=5, dimension=1, comultiplication=(((1,),),), counit=(1,)),
+        _diagonal_coalgebra(),
+    ):
+        delta, counit_values, prime, dimension = _structure(coalgebra)
+        assert _satisfies_coassociativity(delta, prime, dimension)
+        assert _satisfies_counit(delta, counit_values, prime, dimension)
+        for index in range(dimension):
+            assert counit(coalgebra, index) == counit_values[index]
+            matrix = comultiplication(coalgebra, index)
+            assert tuple(tuple(row) for row in matrix.entries) == delta[index]
+
+
+def test_law_oracles_reject_a_non_coassociative_tensor() -> None:
+    # Delta(c_0) = c_0 (x) c_1 with Delta(c_1) = 0: the two triple
+    # coproducts disagree on c_0, so the coassociativity oracle must fail.
+    broken = Coalgebra(
+        prime=5,
+        dimension=2,
+        comultiplication=(
+            ((0, 1), (0, 0)),
+            ((0, 0), (0, 0)),
+        ),
+        counit=(0, 0),
+    )
+    delta, _, prime, dimension = _structure(broken)
+    assert not _satisfies_coassociativity(delta, prime, dimension)

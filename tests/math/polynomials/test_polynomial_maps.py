@@ -168,3 +168,38 @@ def test_composition_rejects_multivariate_operands() -> None:
     )
     with pytest.raises(OperationDomainValidationError):
         _compose(request)
+
+
+def _evaluate_direct(polynomial: RationalPolynomial, value: Fraction) -> Fraction:
+    """Hand evaluation of a univariate sparse polynomial, no kernel reuse."""
+    total = Fraction(0)
+    for term in polynomial.polynomial.terms:
+        total += term.coefficient.as_fraction() * value ** term.exponents[0]
+    return total
+
+
+def test_composition_matches_pointwise_evaluation_oracle() -> None:
+    outer = _polynomial(("u",), {(3,): 1, (1,): 2})
+    inner = _polynomial(("x",), {(2,): 1, (1,): 2})
+    result = _compose(
+        CompositionRequest(
+            outer=outer,
+            inner=inner,
+            inner_variable="x",
+            outer_variable="u",
+        )
+    )
+    for point in (Fraction(0), Fraction(1), Fraction(-1, 2), Fraction(3, 2)):
+        assert _evaluate_direct(result.polynomial, point) == _evaluate_direct(
+            outer, _evaluate_direct(inner, point)
+        )
+    # Swapping inner and outer is a different polynomial.
+    swapped = _compose(
+        CompositionRequest(
+            outer=_polynomial(("u",), {(2,): 1, (1,): 2}),
+            inner=_polynomial(("x",), {(3,): 1, (1,): 2}),
+            inner_variable="x",
+            outer_variable="u",
+        )
+    )
+    assert swapped.polynomial != result.polynomial

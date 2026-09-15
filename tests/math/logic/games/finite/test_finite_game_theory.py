@@ -267,3 +267,45 @@ def test_equilibrium_verifier_rejects_invalid_simplex_and_value(
             value=_r(value),
         )
     )
+
+
+def _no_unilateral_deviation(
+    matrix: PayoffMatrix,
+    row_strategy: tuple[Fraction, ...],
+    col_strategy: tuple[Fraction, ...],
+    value: Fraction,
+) -> bool:
+    """Bilateral best-response oracle: no pure deviation improves either side."""
+    entries = [entry.as_fraction() for entry in matrix.entries]
+    grid = [
+        entries[row * matrix.n_cols : (row + 1) * matrix.n_cols]
+        for row in range(matrix.n_rows)
+    ]
+    row_payoffs = [
+        sum(grid[row][col] * col_strategy[col] for col in range(matrix.n_cols))
+        for row in range(matrix.n_rows)
+    ]
+    col_payoffs = [
+        sum(row_strategy[row] * grid[row][col] for row in range(matrix.n_rows))
+        for col in range(matrix.n_cols)
+    ]
+    return all(payoff <= value for payoff in row_payoffs) and all(
+        payoff >= value for payoff in col_payoffs
+    )
+
+
+def test_equilibrium_admits_no_unilateral_deviation() -> None:
+    matrix = PayoffMatrix(
+        n_rows=2,
+        n_cols=2,
+        entries=(_r(2), _r(0), _r(-1), _r(3)),
+    )
+    result = nash_equilibrium(matrix)
+    row = tuple(value.as_fraction() for value in result.row_strategy)
+    col = tuple(value.as_fraction() for value in result.col_strategy)
+    assert sum(row) == 1 and sum(col) == 1
+    assert all(x >= 0 for x in (*row, *col))
+    assert _no_unilateral_deviation(matrix, row, col, result.value.as_fraction())
+    # A forged row strategy lets the column player deviate profitably.
+    forged = (Fraction(1), Fraction(0))
+    assert not _no_unilateral_deviation(matrix, forged, col, result.value.as_fraction())

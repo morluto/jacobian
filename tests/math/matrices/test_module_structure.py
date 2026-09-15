@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from fractions import Fraction
+from typing import Any
 
 from jacobian._exact import CanonicalRational
 from jacobian.math.matrices.canonical_forms.operations import (
@@ -25,7 +27,7 @@ def _matrix(rows: tuple[tuple[int, ...], ...]) -> RationalMatrix:
     )
 
 
-def _poly_product(factors) -> list[Fraction]:
+def _poly_product(factors: Iterable[Any]) -> list[Fraction]:
     from sympy import Poly, Symbol
 
     x = Symbol("x")
@@ -41,7 +43,7 @@ def _poly_product(factors) -> list[Fraction]:
     return [Fraction(c) for c in product.all_coeffs()[::-1]]
 
 
-def _monic_to_poly(factor):
+def _monic_to_poly(factor: Any) -> Any:
     from sympy import Poly, Symbol
 
     x = Symbol("x")
@@ -104,3 +106,46 @@ def test_centralizer_basis_commutes() -> None:
             for i in range(2)
         ]
         assert left == right
+
+
+def _multiply(
+    left: list[list[Fraction]], right: list[list[Fraction]]
+) -> list[list[Fraction]]:
+    size = len(left)
+    return [
+        [
+            sum(
+                (left[i][k] * right[k][j] for k in range(size)),
+                Fraction(0),
+            )
+            for j in range(size)
+        ]
+        for i in range(size)
+    ]
+
+
+def test_similar_pair_exhibits_an_explicit_conjugation() -> None:
+    """P^-1 A P = B for the swap permutation, matching the verdict."""
+    left = [[Fraction(2), Fraction(0)], [Fraction(0), Fraction(3)]]
+    swap = [[Fraction(0), Fraction(1)], [Fraction(1), Fraction(0)]]
+    conjugated = _multiply(_multiply(swap, left), swap)
+    assert conjugated == [[Fraction(3), Fraction(0)], [Fraction(0), Fraction(2)]]
+    assert (
+        decide_similarity(_matrix(((2, 0), (0, 3))), _matrix(((3, 0), (0, 2)))).similar
+        is True
+    )
+
+
+def test_same_characteristic_polynomial_does_not_imply_similarity() -> None:
+    """diag(2,2,3) and diag(J2(2),[3]) share charpoly but not minpoly."""
+    diagonal = _matrix(((2, 0, 0), (0, 2, 0), (0, 0, 3)))
+    defective = _matrix(((2, 1, 0), (0, 2, 0), (0, 0, 3)))
+    assert decide_similarity(diagonal, defective).similar is False
+    assert len(invariant_factor_profile(diagonal).invariant_factors) == 2
+    assert len(invariant_factor_profile(defective).invariant_factors) == 1
+
+
+def test_nilpotent_jordan_block_centralizer_is_polynomial() -> None:
+    result = centralizer_basis(_matrix(((0, 1, 0), (0, 0, 1), (0, 0, 0))))
+    assert result.dimension == 3
+    assert len(result.basis) == 3

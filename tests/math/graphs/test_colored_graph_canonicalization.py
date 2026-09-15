@@ -623,3 +623,46 @@ def test_serialized_relabeling_claim_is_verified_without_enumeration() -> None:
     assert not verify_colored_graph_canonicalization(
         ColoredGraphCanonicalizationResult.model_validate(recolored)
     )
+
+
+def _brute_force_minimum(
+    vertices: tuple[str, ...], edges: tuple[tuple[str, str], ...]
+) -> tuple[tuple[str, str], ...]:
+    """Least sorted edge form over every vertex labeling, independently."""
+    import itertools
+
+    labels = tuple(f"v{i:02d}" for i in range(len(vertices)))
+    best: tuple[tuple[str, str], ...] | None = None
+    for image in itertools.permutations(labels):
+        mapping = dict(zip(vertices, image, strict=True))
+        pairs: list[tuple[str, str]] = []
+        for left, right in edges:
+            first, second = sorted((mapping[left], mapping[right]))
+            pairs.append((first, second))
+        relabeled = tuple(sorted(pairs))
+        if best is None or relabeled < best:
+            best = relabeled
+    assert best is not None
+    return best
+
+
+def test_canonical_graph_is_the_brute_force_minimum_labeling() -> None:
+    cases = (
+        (("a", "b", "c"), (("a", "b"), ("b", "c"))),
+        (("a", "b", "c", "d"), (("a", "b"), ("b", "c"), ("c", "d"))),
+        (("a", "b", "c"), (("a", "b"), ("b", "c"), ("a", "c"))),
+    )
+    for vertices, edges in cases:
+        result = _canonicalize(_graph(vertices, edges))
+        assert result.canonical_graph.graph.edges == _brute_force_minimum(
+            vertices, edges
+        )
+
+
+def test_non_minimum_labeling_is_not_the_canonical_graph() -> None:
+    vertices, edges = ("a", "b", "c"), (("a", "b"), ("b", "c"))
+    result = _canonicalize(_graph(vertices, edges))
+    non_minimum = _independent_relabel(
+        _graph(vertices, edges), {"a": "v00", "b": "v01", "c": "v02"}
+    )
+    assert non_minimum.graph.edges != result.canonical_graph.graph.edges

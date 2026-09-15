@@ -321,7 +321,8 @@ def test_reductions_reuse_the_admitted_factor_map(
 
     def counting(index: int) -> dict[int, int]:
         calls.append(index)
-        return original(index)
+        result: dict[int, int] = original(index)
+        return result
 
     monkeypatch.setattr(sympy, "factorint", counting)
     assert len(cyclotomic(3988).coefficients) == 1992 + 1
@@ -567,3 +568,56 @@ def test_oversized_backend_integer_is_a_typed_backend_failure() -> None:
             _require_admitted_coefficients(coefficients, admission)
         assert exc_info.value.reason is BackendFailureReason.INVALID_OUTPUT
     _require_admitted_coefficients((1, 0, 1), admission)
+
+
+def _divisors(n: int) -> list[int]:
+    return [d for d in range(1, n + 1) if n % d == 0]
+
+
+def _convolve(left: tuple[int, ...], right: tuple[int, ...]) -> tuple[int, ...]:
+    """Descending-coefficient convolution, matching the result carrier."""
+    result = [0] * (len(left) + len(right) - 1)
+    for i, a in enumerate(left):
+        for j, b in enumerate(right):
+            result[i + j] += a * b
+    return tuple(result)
+
+
+def _cyclotomic_coefficients(index: int) -> tuple[int, ...]:
+    return _run(CyclotomicRequest(index=index)).polynomial.coefficients
+
+
+def test_divisor_product_reconstructs_xn_minus_one() -> None:
+    """x^n - 1 == prod_{d|n} Phi_d, by independent integer convolution."""
+    for n in range(1, 13):
+        product: tuple[int, ...] = (1,)
+        for divisor in _divisors(n):
+            product = _convolve(product, _cyclotomic_coefficients(divisor))
+        assert product == (1, *((0,) * (n - 1)), -1)
+
+
+def test_cyclotomic_at_one_is_prime_power_detector() -> None:
+    """Phi_n(1) is p for n = p^k and 1 otherwise, evaluated directly."""
+    assert sum(_cyclotomic_coefficients(8)) == 2
+    assert sum(_cyclotomic_coefficients(9)) == 3
+    assert sum(_cyclotomic_coefficients(12)) == 1
+    assert sum(_cyclotomic_coefficients(7)) == 7
+    assert sum(_cyclotomic_coefficients(1)) == 0
+
+
+def test_cyclotomics_are_irreducible_over_qq() -> None:
+    from sympy import Poly, Symbol
+
+    x = Symbol("x")
+    for index in (3, 4, 5, 6, 7, 8, 9, 12):
+        assert Poly(
+            list(_cyclotomic_coefficients(index)), x, domain="QQ"
+        ).is_irreducible
+
+
+def test_forged_cyclotomic_breaks_the_divisor_product() -> None:
+    product = _convolve(_cyclotomic_coefficients(2), (1, 0, 2))
+    assert product != (1, 0, 0, 0, -1)
+    forged_total: int = sum((1, 0, 2))
+    assert forged_total == 3
+    assert forged_total != sum(_cyclotomic_coefficients(4))

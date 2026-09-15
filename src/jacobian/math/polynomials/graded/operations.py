@@ -1096,6 +1096,7 @@ def h_vector(
 
 
 __all__ = [
+    "groebner_basis",
     "h_vector",
     "hilbert_dimension",
     "hilbert_function",

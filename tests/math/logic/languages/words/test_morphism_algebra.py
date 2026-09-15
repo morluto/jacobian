@@ -59,9 +59,7 @@ def test_compose_known_answer() -> None:
         target_alphabet=("x", "y"),
         images=(("y",), ("x",)),
     )
-    result = compute_morphism_compose(
-        MorphismComposeRequest(first=_fib(), second=swap)
-    )
+    result = compute_morphism_compose(MorphismComposeRequest(first=_fib(), second=swap))
     assert result.composite.images == (("y", "x"), ("y",))
     assert result.composite.source_alphabet == ("a", "b")
     assert result.composite.target_alphabet == ("x", "y")
@@ -73,9 +71,7 @@ def test_compose_known_answer() -> None:
 
 
 def test_power_zero_is_identity_and_iterate_zero_is_fixed() -> None:
-    power = compute_morphism_power(
-        MorphismPowerRequest(morphism=_fib(), exponent=0)
-    )
+    power = compute_morphism_power(MorphismPowerRequest(morphism=_fib(), exponent=0))
     assert power.power.images == (("a",), ("b",))
     word = FiniteWord(alphabet=("a", "b"), letters=("a", "b"))
     iterated = compute_morphism_iterate(
@@ -85,9 +81,7 @@ def test_power_zero_is_identity_and_iterate_zero_is_fixed() -> None:
 
 
 def test_power_and_iterate_agree() -> None:
-    power = compute_morphism_power(
-        MorphismPowerRequest(morphism=_fib(), exponent=2)
-    )
+    power = compute_morphism_power(MorphismPowerRequest(morphism=_fib(), exponent=2))
     assert power.power.images == (("a", "b", "a"), ("a", "b"))
     word = FiniteWord(alphabet=("a", "b"), letters=("a",))
     iterated = compute_morphism_iterate(
@@ -109,9 +103,7 @@ def test_image_lengths_bound_to_source() -> None:
 
 def test_apply_rejects_axis_mismatch() -> None:
     with pytest.raises(Exception, match="source alphabet"):
-        apply_morphism(
-            _fib(), FiniteWord(alphabet=("x", "y"), letters=("x",))
-        )
+        apply_morphism(_fib(), FiniteWord(alphabet=("x", "y"), letters=("x",)))
 
 
 def test_compose_rejects_middle_mismatch() -> None:

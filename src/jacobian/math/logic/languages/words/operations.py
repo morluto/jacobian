@@ -305,7 +305,9 @@ class FactorComplexityAnalysis:
     families: tuple[tuple[tuple[str, ...], ...], ...]
 
 
-def factor_complexity_prefix(word: FiniteWord, max_order: int) -> FactorComplexityAnalysis:
+def factor_complexity_prefix(
+    word: FiniteWord, max_order: int
+) -> FactorComplexityAnalysis:
     """Return distinct-factor counts p(0)..p(max) of the supplied prefix.
 
     The scope is exactly the supplied finite word; no infinite-language limit

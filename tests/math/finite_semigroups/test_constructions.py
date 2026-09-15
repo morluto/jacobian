@@ -26,9 +26,14 @@ def _z3() -> FiniteSemigroup:
 def test_opposite_is_involution() -> None:
     source = _z3()
     opposite = opposite_semigroup(source).opposite
-    assert opposite_semigroup(
-        FiniteSemigroup(elements=opposite.elements, multiplication=opposite.multiplication)
-    ).opposite == source
+    assert (
+        opposite_semigroup(
+            FiniteSemigroup(
+                elements=opposite.elements, multiplication=opposite.multiplication
+            )
+        ).opposite
+        == source
+    )
 
 
 def test_product_projections_replay() -> None:

@@ -28,14 +28,14 @@ def _vertex(*coordinates: int) -> Vertex:
     )
 
 
-def _weight(variables: tuple[str, ...], *terms: tuple[int, tuple[int, ...]]) -> RationalPolynomial:
+def _weight(
+    variables: tuple[str, ...], *terms: tuple[int, tuple[int, ...]]
+) -> RationalPolynomial:
     return RationalPolynomial(
         variables=variables,
         polynomial=SparseRationalPolynomial(
             terms=tuple(
-                RationalPolynomialTerm(
-                    coefficient=R(num=c, den=1), exponents=exponents
-                )
+                RationalPolynomialTerm(coefficient=R(num=c, den=1), exponents=exponents)
                 for c, exponents in terms
             )
         ),

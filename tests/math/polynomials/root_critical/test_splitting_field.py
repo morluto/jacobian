@@ -85,8 +85,10 @@ def test_cubic_splitting_field_degree_and_conjugation() -> None:
     # The support of x^3-2 times 3x^2 is square-free and contains 0.
     assert len(field.roots) == 4
     zero_root = next(
-        root for root in field.roots if _fractions(root.coefficients_ascending) == (
-            Fraction(0),) + (Fraction(0),) * 5
+        root
+        for root in field.roots
+        if _fractions(root.coefficients_ascending)
+        == (Fraction(0),) + (Fraction(0),) * 5
     )
     assert zero_root.axis_index == 0
 
@@ -142,9 +144,7 @@ def test_field_degree_bound_rejected() -> None:
     # x^19 - 2 has degree 19 support; rejected before any backend work.
     coefficients = [Fraction(0)] * 19 + [Fraction(-2), Fraction(1)]
     with pytest.raises(OperationDomainValidationError):
-        exact_splitting_field(
-            _polynomial_from_ascending(coefficients, "x")
-        )
+        exact_splitting_field(_polynomial_from_ascending(coefficients, "x"))
 
 
 def test_native_field_type_rejected() -> None:

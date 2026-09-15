@@ -24,11 +24,10 @@ def _q(num: int, den: int) -> CanonicalRational:
 
 
 def _factors() -> tuple[tuple[Factor, ...], tuple[int, ...]]:
-    prior = Factor(
-        variables=(0,), domain_sizes=(2, 2), table=(_q(3, 5), _q(2, 5))
-    )
+    prior = Factor(variables=(0,), domain_sizes=(2, 2), table=(_q(3, 5), _q(2, 5)))
     likelihood = Factor(
-        variables=(0, 1), domain_sizes=(2, 2),
+        variables=(0, 1),
+        domain_sizes=(2, 2),
         table=(_q(1, 4), _q(1, 2), _q(3, 4), _q(1, 2)),
     )
     return (prior, likelihood), (2, 2)
@@ -43,7 +42,8 @@ def test_trace_returns_scopes_factors_and_fill() -> None:
     assert step.product_scope == (0, 1)
     assert step.output_scope == (1,)
     assert tuple(v.as_fraction() for v in final.table) == (
-        Fraction(9, 20), Fraction(1, 2),
+        Fraction(9, 20),
+        Fraction(1, 2),
     )
     # Final agrees with the plain elimination kernel.
     assert final == variable_elimination(factors, domain, (0,), (1,))
@@ -54,7 +54,9 @@ def test_junction_calibration_is_consistent() -> None:
         variable=0, parents=(), domain_sizes=(2, 2), table=(_q(3, 5), _q(2, 5))
     )
     child = ConditionalProbabilityTable(
-        variable=1, parents=(0,), domain_sizes=(2, 2),
+        variable=1,
+        parents=(0,),
+        domain_sizes=(2, 2),
         table=(_q(1, 4), _q(1, 2), _q(3, 4), _q(1, 2)),
     )
     network = construct_bayes_net(2, ((0, 1),), (2, 2), (root, child))
@@ -76,5 +78,8 @@ def test_junction_calibration_is_consistent() -> None:
     # Clique marginals marginalize the exact joint.
     joint = bayes_net_joint(network)
     assert tuple(v.as_fraction() for v in joint.table) == (
-        Fraction(3, 20), Fraction(9, 20), Fraction(1, 5), Fraction(1, 5),
+        Fraction(3, 20),
+        Fraction(9, 20),
+        Fraction(1, 5),
+        Fraction(1, 5),
     )

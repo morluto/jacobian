@@ -666,9 +666,7 @@ def _admit_vector_field(
     return value
 
 
-def _admit_map(
-    value: object, *, location: tuple[str, ...]
-) -> PolynomialMap:
+def _admit_map(value: object, *, location: tuple[str, ...]) -> PolynomialMap:
     """Admit a native polynomial map without expanding any composition."""
 
     if not isinstance(value, PolynomialMap):
@@ -757,8 +755,7 @@ def _poly_mul(
             if completed % _CONVOLUTION_CHECKPOINT_INTERVAL == 0:
                 request_checkpoint("during differential calculus convolution")
             exponents = tuple(
-                a + b
-                for a, b in zip(left_exponents, right_exponents, strict=True)
+                a + b for a, b in zip(left_exponents, right_exponents, strict=True)
             )
             if any(exponent > MAX_DIFFERENTIAL_FORM_EXPONENT for exponent in exponents):
                 raise _calculus_budget(
@@ -877,7 +874,10 @@ def exterior_derivative(
             position = sum(1 for index in component.indices if index < variable)
             merged = tuple(sorted((*component.indices, variable)))
             _add_monomials(
-                aggregate, merged, derived, -1 if position % 2 else 1,
+                aggregate,
+                merged,
+                derived,
+                -1 if position % 2 else 1,
                 location=location,
             )
     for terms in aggregate.values():
@@ -928,11 +928,12 @@ def interior_product(
                 field_terms[variable],
                 location=location,
             )
-            remaining = tuple(
-                index for index in component.indices if index != variable
-            )
+            remaining = tuple(index for index in component.indices if index != variable)
             _add_monomials(
-                aggregate, remaining, contracted, -1 if position % 2 else 1,
+                aggregate,
+                remaining,
+                contracted,
+                -1 if position % 2 else 1,
                 location=location,
             )
     _admit_remaining_support(aggregate)
@@ -964,7 +965,9 @@ def pullback(
         }
         for image in mapping.images
     )
-    differentials = [_differential_of_image(image, source_dimension) for image in images]
+    differentials = [
+        _differential_of_image(image, source_dimension) for image in images
+    ]
     aggregate: _RemainingTerms = {}
     location = ("map", "form")
     for component in form.components:
@@ -1005,7 +1008,10 @@ def pullback(
             )
             merged = tuple(sorted(chosen))
             _add_monomials(
-                aggregate, merged, contribution, -1 if inversions % 2 else 1,
+                aggregate,
+                merged,
+                contribution,
+                -1 if inversions % 2 else 1,
                 location=location,
             )
     _admit_remaining_support(aggregate)
@@ -1087,7 +1093,10 @@ def affine_homotopy_primitive(
                 key = tuple(shifted)
                 weighted[key] = weighted.get(key, Fraction()) + value
             _add_monomials(
-                aggregate, remaining, weighted, -1 if position % 2 else 1,
+                aggregate,
+                remaining,
+                weighted,
+                -1 if position % 2 else 1,
                 location=location,
             )
     _admit_remaining_support(aggregate)

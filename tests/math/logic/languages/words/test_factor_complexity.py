@@ -40,7 +40,9 @@ def test_rauzy_graph_known_answer() -> None:
     analysis = rauzy_graph(_word(), 1)
     assert analysis.vertices == (("a",), ("b",))
     assert tuple(label for _, label, _ in analysis.edges) == (
-        ("a", "b"), ("b", "a"), ("a", "a"),
+        ("a", "b"),
+        ("b", "a"),
+        ("a", "a"),
     )
     result = compute_rauzy_graph(RauzyGraphRequest(word=_word(), order=1))
     assert len(result.edges) == 3
@@ -66,9 +68,7 @@ def test_sturmian_prefix_complexity() -> None:
         }
     )
     result = compute_substitution_factor_complexity(
-        SubstitutionFactorComplexityRequest(
-            source=source, prefix_length=8, max_order=3
-        )
+        SubstitutionFactorComplexityRequest(source=source, prefix_length=8, max_order=3)
     )
     assert result.complexity == (1, 2, 3, 4)
     assert len(result.prefix.letters) == 8

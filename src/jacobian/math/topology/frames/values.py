@@ -171,7 +171,9 @@ class CyclotomicFrame(StrictModel):
                 "cyclotomic_vector_dimension_mismatch",
                 "all cyclotomic vectors must have equal dimension",
             )
-        if any(scalar.order != self.order for vector in self.vectors for scalar in vector):
+        if any(
+            scalar.order != self.order for vector in self.vectors for scalar in vector
+        ):
             raise _validation_error(
                 "cyclotomic_order_mismatch",
                 "every scalar must share the frame cyclotomic order",

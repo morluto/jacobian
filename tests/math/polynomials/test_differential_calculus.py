@@ -79,7 +79,10 @@ def _coeff(form, indices=(0, 1)):
 def _field(*components):
     return PolynomialVectorField(
         variables=("x", "y"),
-        components=tuple(_poly(*terms) if terms else _poly_on_axis(("x", "y")) for terms in components),
+        components=tuple(
+            _poly(*terms) if terms else _poly_on_axis(("x", "y"))
+            for terms in components
+        ),
     )
 
 
@@ -106,9 +109,11 @@ def test_exterior_derivative_leibniz() -> None:
         PolynomialDifferentialForm as F,
     )
 
-    scalar = F(variables=("x", "y"), degree=0, components=(
-        FormComponent(indices=(), coefficient=_poly((1, (2, 1)))),
-    ))
+    scalar = F(
+        variables=("x", "y"),
+        degree=0,
+        components=(FormComponent(indices=(), coefficient=_poly((1, (2, 1)))),),
+    )
     result = exterior_derivative(scalar)
     assert _coeff(result, (0,)) == {(1, 1): Fraction(2)}
     assert _coeff(result, (1,)) == {(2, 0): Fraction(1)}
@@ -209,9 +214,13 @@ def test_primitive_rejects_degree_zero() -> None:
         PolynomialDifferentialForm as F,
     )
 
-    scalar = F(variables=("x",), degree=0, components=(
-        FormComponent(indices=(), coefficient=_poly_on_axis(("x",), (1, (2,)))),
-    ))
+    scalar = F(
+        variables=("x",),
+        degree=0,
+        components=(
+            FormComponent(indices=(), coefficient=_poly_on_axis(("x",), (1, (2,)))),
+        ),
+    )
     assert affine_homotopy_primitive(scalar).outcome == "NOT_APPLICABLE"
 
 

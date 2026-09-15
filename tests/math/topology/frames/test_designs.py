@@ -34,9 +34,7 @@ _PHI_24 = Poly(cyclotomic_poly(24, _z), _z)
 def _zeta_reduce(powers: dict[int, Fraction]) -> CyclotomicScalar:
     """Reduce a zeta_24 exponent dictionary with the maintained backend only."""
 
-    poly = sum(
-        coeff * _z**exponent for exponent, coeff in powers.items()
-    )
+    poly = sum(coeff * _z**exponent for exponent, coeff in powers.items())
     reduced = Poly(poly, _z).rem(_PHI_24)
     coefficients = [Fraction(0)] * euler_phi(24)
     for monomial, coeff in reduced.as_dict().items():
@@ -53,9 +51,7 @@ def _zeta_mul(
     """Multiply two zeta_24 dictionaries with the maintained backend only."""
 
     product = sum(
-        a * b * _z ** (i + j)
-        for i, a in left.items()
-        for j, b in right.items()
+        a * b * _z ** (i + j) for i, a in left.items() for j, b in right.items()
     )
     reduced = Poly(product, _z).rem(_PHI_24)
     coefficients = [Fraction(0)] * euler_phi(24)
@@ -106,9 +102,7 @@ def test_qubit_basis_is_projective_1_design() -> None:
     one = GaussianRational(real=R(num=1, den=1), imaginary=R(num=0, den=1))
     zero = GaussianRational(real=R(num=0, den=1), imaginary=R(num=0, den=1))
     frame = ComplexFrame(dimension=2, vectors=((one, zero), (zero, one)))
-    result = projective_design_profile(
-        frame, (R.from_fraction(Fraction(1, 2)),) * 2, 1
-    )
+    result = projective_design_profile(frame, (R.from_fraction(Fraction(1, 2)),) * 2, 1)
     assert result.is_design is True
     assert result.welch_value.as_fraction() == Fraction(1, 2)
     assert result.welch_target.as_fraction() == Fraction(1, 2)
@@ -118,9 +112,7 @@ def test_qubit_basis_is_not_2_design() -> None:
     one = GaussianRational(real=R(num=1, den=1), imaginary=R(num=0, den=1))
     zero = GaussianRational(real=R(num=0, den=1), imaginary=R(num=0, den=1))
     frame = ComplexFrame(dimension=2, vectors=((one, zero), (zero, one)))
-    result = projective_design_profile(
-        frame, (R.from_fraction(Fraction(1, 2)),) * 2, 2
-    )
+    result = projective_design_profile(frame, (R.from_fraction(Fraction(1, 2)),) * 2, 2)
     assert result.is_design is False
     assert result.welch_value.as_fraction() == Fraction(1, 2)
     assert result.welch_target.as_fraction() == Fraction(1, 3)
@@ -181,7 +173,10 @@ def test_broken_tetrahedron_is_not_sic() -> None:
     broken = CyclotomicFrame(
         order=frame.order,
         dimension=frame.dimension,
-        vectors=(*frame.vectors[:3], (_zeta_reduce({0: Fraction(2)}), frame.vectors[3][1])),
+        vectors=(
+            *frame.vectors[:3],
+            (_zeta_reduce({0: Fraction(2)}), frame.vectors[3][1]),
+        ),
     )
     assert cyclotomic_sic_profile(broken).is_sic is False
 
@@ -219,9 +214,7 @@ def test_sic_povm_effects_are_scaled_projectors() -> None:
                         _cyclo_mul(plain[row][k], plain[k][column], modulus, degree),
                     )
                 scaled = _cyclo_mul(plain[row][column], common, modulus, degree)
-                assert _cyclo_is_zero(
-                    _cyclo_add(square, [-value for value in scaled])
-                )
+                assert _cyclo_is_zero(_cyclo_add(square, [-value for value in scaled]))
         trace = [Fraction(0)] * degree
         for row in range(2):
             trace = _cyclo_add(trace, plain[row][row])
@@ -248,14 +241,8 @@ def test_povm_effects_replay_resolution() -> None:
             total = [Fraction(0)] * degree
             for matrix in result.effect_numerators:
                 total = _cyclo_add(total, _scalar_fractions(matrix[row][column]))
-            target = (
-                list(denominator)
-                if row == column
-                else [Fraction(0)] * degree
-            )
-            assert _cyclo_is_zero(
-                _cyclo_add(total, [-value for value in target])
-            )
+            target = list(denominator) if row == column else [Fraction(0)] * degree
+            assert _cyclo_is_zero(_cyclo_add(total, [-value for value in target]))
 
 
 def test_forged_overlap_ledger_rejected() -> None:
@@ -273,9 +260,7 @@ def test_forged_overlap_ledger_rejected() -> None:
 
 def test_design_requests_validate_axes() -> None:
     with pytest.raises(ValidationError):
-        SphericalDesignRequest(
-            family=_octahedron(), weights=_uniform(5), strength=2
-        )
+        SphericalDesignRequest(family=_octahedron(), weights=_uniform(5), strength=2)
     one = GaussianRational(real=R(num=1, den=1), imaginary=R(num=0, den=1))
     zero = GaussianRational(real=R(num=0, den=1), imaginary=R(num=0, den=1))
     with pytest.raises(ValidationError):

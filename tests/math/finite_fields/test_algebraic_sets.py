@@ -47,7 +47,12 @@ def _f2() -> FiniteFieldPresentation:
 
 
 def _one(presentation: FiniteFieldPresentation) -> FiniteFieldElement:
-    return element(presentation, (1,) * presentation.degree if presentation.degree == 1 else (1,) + (0,) * (presentation.degree - 1))
+    return element(
+        presentation,
+        (1,) * presentation.degree
+        if presentation.degree == 1
+        else (1,) + (0,) * (presentation.degree - 1),
+    )
 
 
 def _split_system() -> PolynomialSystem:
@@ -58,12 +63,8 @@ def _split_system() -> PolynomialSystem:
         presentation=presentation,
         variable_axis=axis,
         terms=(
-            AlgebraicMonomial._from_kernel(
-                coefficient=one, exponents=(2,)
-            ),
-            AlgebraicMonomial._from_kernel(
-                coefficient=one, exponents=(1,)
-            ),
+            AlgebraicMonomial._from_kernel(coefficient=one, exponents=(2,)),
+            AlgebraicMonomial._from_kernel(coefficient=one, exponents=(1,)),
         ),
     )
     return PolynomialSystem._from_kernel(
@@ -78,9 +79,7 @@ def _projective_system() -> PolynomialSystem:
     poly = AlgebraicPolynomial._from_kernel(
         presentation=presentation,
         variable_axis=axis,
-        terms=(
-            AlgebraicMonomial._from_kernel(coefficient=one, exponents=(1, 0)),
-        ),
+        terms=(AlgebraicMonomial._from_kernel(coefficient=one, exponents=(1, 0)),),
     )
     return PolynomialSystem._from_kernel(
         presentation=presentation, variable_axis=axis, equations=(poly,)

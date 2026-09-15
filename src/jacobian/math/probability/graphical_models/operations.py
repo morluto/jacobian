@@ -529,9 +529,15 @@ def junction_tree_calibrate(
 
     all_vars = tuple(sorted({table.variable for table in network.tables}))
     if len(set(elimination_order)) != len(elimination_order):
-        _reject("elimination_order", "elimination order cannot repeat", "elimination_order")
+        _reject(
+            "elimination_order", "elimination order cannot repeat", "elimination_order"
+        )
     if not set(elimination_order) <= set(all_vars):
-        _reject("elimination_order", "elimination order must use model variables", "elimination_order")
+        _reject(
+            "elimination_order",
+            "elimination order must use model variables",
+            "elimination_order",
+        )
     query = tuple(sorted(set(all_vars) - set(elimination_order)))
     if not query:
         query = all_vars[:1]
@@ -591,12 +597,8 @@ def _check_cpt_rows(table: ConditionalProbabilityTable) -> None:
         return
     parent_size = scope_size(parents, domain_sizes)
     for parent_index in range(parent_size):
-        parent_assignment = _index_to_assignment(
-            parent_index, parents, domain_sizes
-        )
-        positions = {
-            variable: index for index, variable in enumerate(variables)
-        }
+        parent_assignment = _index_to_assignment(parent_index, parents, domain_sizes)
+        positions = {variable: index for index, variable in enumerate(variables)}
         total = Fraction(0)
         for value in range(domain_sizes[table.variable]):
             full = [0] * len(variables)
@@ -604,9 +606,7 @@ def _check_cpt_rows(table: ConditionalProbabilityTable) -> None:
                 if variable == table.variable:
                     full[position] = value
                 else:
-                    full[position] = parent_assignment[
-                        parents.index(variable)
-                    ]
+                    full[position] = parent_assignment[parents.index(variable)]
             flat = _assignment_to_index(tuple(full), variables, domain_sizes)
             total += table.table[flat].as_fraction()
         if total != 1:
@@ -646,7 +646,9 @@ def construct_bayes_net(
     """Bind every CPT exactly to its DAG parent set with normalized rows."""
 
     if type(variable_count) is not int or not 1 <= variable_count <= MAX_MODEL_VARS:
-        _reject("variable_count", "variable count is outside its bound", "variable_count")
+        _reject(
+            "variable_count", "variable count is outside its bound", "variable_count"
+        )
     normalized: list[tuple[int, int]] = []
     for edge in edges:
         if type(edge) is not tuple or len(edge) != 2:
@@ -686,7 +688,9 @@ def bayes_net_joint(network: BayesianNetwork) -> Factor:
 
     for table in network.tables:
         _check_cpt_rows(table)
-    factors = [table.as_factor() for table in sorted(network.tables, key=lambda t: t.variable)]
+    factors = [
+        table.as_factor() for table in sorted(network.tables, key=lambda t: t.variable)
+    ]
     joint = _multiply_all(factors)
     total = sum((value.as_fraction() for value in joint.table), Fraction(0))
     if total != 1:

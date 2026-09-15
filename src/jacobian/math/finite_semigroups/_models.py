@@ -465,9 +465,7 @@ class OppositeResult(StrictModel):
     opposite: FiniteSemigroup
 
     @classmethod
-    def _from_kernel(
-        cls, source: FiniteSemigroup, opposite: FiniteSemigroup
-    ) -> Self:
+    def _from_kernel(cls, source: FiniteSemigroup, opposite: FiniteSemigroup) -> Self:
         return cls.model_construct(source=source, opposite=opposite)
 
 
@@ -517,9 +515,7 @@ class AdjoinIdentityResult(StrictModel):
         result: FiniteSemigroup,
         embedding: tuple[tuple[OpaqueLabel, OpaqueLabel], ...],
     ) -> Self:
-        return cls.model_construct(
-            source=source, result=result, embedding=embedding
-        )
+        return cls.model_construct(source=source, result=result, embedding=embedding)
 
 
 class AdjoinZeroRequest(StrictModel):
@@ -538,9 +534,7 @@ class AdjoinZeroResult(StrictModel):
         result: FiniteSemigroup,
         embedding: tuple[tuple[OpaqueLabel, OpaqueLabel], ...],
     ) -> Self:
-        return cls.model_construct(
-            source=source, result=result, embedding=embedding
-        )
+        return cls.model_construct(source=source, result=result, embedding=embedding)
 
 
 class ReesQuotientRequest(StrictModel):
@@ -583,6 +577,4 @@ class KaroubiProjectionResult(StrictModel):
         objects: tuple[OpaqueLabel, ...],
         category: FiniteCategory,
     ) -> Self:
-        return cls.model_construct(
-            source=source, objects=objects, category=category
-        )
+        return cls.model_construct(source=source, objects=objects, category=category)

@@ -33,7 +33,8 @@ def _poly_product(factors) -> list[Fraction]:
     for entry in factors:
         factor = entry.factor if hasattr(entry, "factor") else entry
         poly = sum(
-            Fraction(term.coefficient.num, term.coefficient.den) * x**term.exponents[0]
+            Fraction(term.coefficient.num, term.coefficient.den)
+            * x ** term.exponents[0]
             for term in factor.polynomial.terms
         )
         product *= Poly(poly, x)
@@ -45,7 +46,7 @@ def _monic_to_poly(factor):
 
     x = Symbol("x")
     poly = sum(
-        Fraction(term.coefficient.num, term.coefficient.den) * x**term.exponents[0]
+        Fraction(term.coefficient.num, term.coefficient.den) * x ** term.exponents[0]
         for term in factor.polynomial.terms
     )
     return Poly(poly, x)
@@ -91,9 +92,7 @@ def test_centralizer_basis_commutes() -> None:
 
     matrix = _matrix(((2, 0), (0, 3)))
     result = centralizer_basis(matrix)
-    entries = [
-        [Fraction(v.num, v.den) for v in row] for row in matrix.entries
-    ]
+    entries = [[Fraction(v.num, v.den) for v in row] for row in matrix.entries]
     for basis_matrix in result.basis:
         other = [[Fraction(v.num, v.den) for v in row] for row in basis_matrix.entries]
         left = [

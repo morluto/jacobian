@@ -24,9 +24,7 @@ pytestmark = pytest.mark.requires_backend("pari")
 
 
 def _field(*coefficients: int) -> SimpleNumberFieldPresentation:
-    return SimpleNumberFieldPresentation(
-        coefficients_descending=tuple(coefficients)
-    )
+    return SimpleNumberFieldPresentation(coefficients_descending=tuple(coefficients))
 
 
 def test_imaginary_quadratic_class_two() -> None:
@@ -102,9 +100,7 @@ def test_request_validators_gate_degree() -> None:
     coefficients = (1,) + (0,) * MAX_CLASS_GROUP_DEGREE + (1,)
     with pytest.raises(ValidationError):
         NumberFieldClassGroupRequest(
-            field=SimpleNumberFieldPresentation(
-                coefficients_descending=coefficients
-            )
+            field=SimpleNumberFieldPresentation(coefficients_descending=coefficients)
         )
 
 
@@ -148,7 +144,9 @@ def test_forged_rank_signature_rejected() -> None:
 
 
 def test_unit_request_validates_field_type() -> None:
-    with pytest.raises(OperationDomainValidationError, match="SimpleNumberFieldPresentation"):
+    with pytest.raises(
+        OperationDomainValidationError, match="SimpleNumberFieldPresentation"
+    ):
         unit_group("not a field")
 
 

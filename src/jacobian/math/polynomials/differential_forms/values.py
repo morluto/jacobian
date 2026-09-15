@@ -272,9 +272,7 @@ class PrimitiveResult(StrictModel):
         outcome: Literal["CONSTRUCTED", "NOT_APPLICABLE"],
         primitive: PolynomialDifferentialForm | None = None,
     ) -> Self:
-        return cls.model_construct(
-            source=source, outcome=outcome, primitive=primitive
-        )
+        return cls.model_construct(source=source, outcome=outcome, primitive=primitive)
 
 
 __all__ = [

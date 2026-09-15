@@ -532,7 +532,11 @@ class CyclotomicSicResult(CyclotomicSicRequest):
             raise PydanticCustomError(
                 "frames.cyclotomic_sic_axes", "norm ledgers must retain source axes"
             )
-        if any(scalar.order != self.frame.order for row in self.squared_overlaps for scalar in row):
+        if any(
+            scalar.order != self.frame.order
+            for row in self.squared_overlaps
+            for scalar in row
+        ):
             raise PydanticCustomError(
                 "frames.cyclotomic_sic_order",
                 "overlap witnesses must share the frame cyclotomic order",
@@ -575,9 +579,7 @@ class CyclotomicSicPovmResult(CyclotomicSicPovmRequest):
     """
 
     effect_denominator: CyclotomicScalar
-    effect_numerators: tuple[
-        tuple[tuple[CyclotomicScalar, ...], ...], ...
-    ]
+    effect_numerators: tuple[tuple[tuple[CyclotomicScalar, ...], ...], ...]
 
     @model_validator(mode="after")
     def require_povm_shape(self) -> Self:

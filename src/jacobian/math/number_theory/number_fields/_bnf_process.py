@@ -137,9 +137,7 @@ def run_bnf_worker(request: _BnfRequest) -> BnfWorkerResult:
     if completed.cancelled:
         raise OperationExecutionCancelledError("class/unit group computation cancelled")
     if completed.timed_out:
-        raise OperationExecutionTimeoutError(
-            "class/unit group computation timed out"
-        )
+        raise OperationExecutionTimeoutError("class/unit group computation timed out")
     if (
         completed.stdout_exceeded
         or completed.stderr_exceeded
@@ -256,11 +254,17 @@ def _decode_worker_response(
             raise ValueError("worker response is not bound to its request")
         if response.get("kind") == "rejected":
             if set(response) != {
-                "kind", "resource", "code", "message", "request_digest",
+                "kind",
+                "resource",
+                "code",
+                "message",
+                "request_digest",
             }:
                 raise ValueError("rejected worker response has invalid fields")
             code, message, resource = (
-                response["code"], response["message"], response["resource"],
+                response["code"],
+                response["message"],
+                response["resource"],
             )
             if (
                 not isinstance(code, str)

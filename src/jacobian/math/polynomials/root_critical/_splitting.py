@@ -102,8 +102,6 @@ def conjugate_element(
     return reduce_modulus(total, modulus)
 
 
-
-
 def _primitive_integer_monic(sympy: Any, polynomial: Any, variable: Any) -> Any:
     """Return a monic integer ``Poly`` equal up to the zero set of ``polynomial``."""
 
@@ -117,7 +115,13 @@ def _primitive_integer_monic(sympy: Any, polynomial: Any, variable: Any) -> Any:
         coefficients = [value // content for value in coefficients]
     if coefficients[0] < 0:
         coefficients = [-value for value in coefficients]
-    return sympy.Poly(sum(c * variable ** (len(coefficients) - 1 - i) for i, c in enumerate(coefficients)), variable)
+    return sympy.Poly(
+        sum(
+            c * variable ** (len(coefficients) - 1 - i)
+            for i, c in enumerate(coefficients)
+        ),
+        variable,
+    )
 
 
 def _polynomial_from_ascending(
@@ -177,7 +181,9 @@ def compute_splitting_field(
     product = sympy.Poly(source.as_expr() * derivative.as_expr(), variable)
     repeated = sympy.gcd(product, product.diff(variable))
     support = sympy.cancel(product.as_expr() / repeated.as_expr())
-    support_monic = _primitive_integer_monic(sympy, sympy.Poly(support, variable), variable)
+    support_monic = _primitive_integer_monic(
+        sympy, sympy.Poly(support, variable), variable
+    )
     roots = support_monic.all_roots()
     if not roots:
         raise _error("no_roots", "the splitting-field support has no roots")
@@ -298,7 +304,9 @@ def compute_bound_profile(
     return field_data
 
 
-def _canonical_many(values: list[list[Fraction]]) -> tuple[tuple[CanonicalRational, ...], ...]:
+def _canonical_many(
+    values: list[list[Fraction]],
+) -> tuple[tuple[CanonicalRational, ...], ...]:
     return tuple(_canonical(value) for value in values)
 
 

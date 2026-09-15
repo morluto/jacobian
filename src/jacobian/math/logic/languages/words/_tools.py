@@ -213,7 +213,9 @@ def compute_rauzy_graph(request: RauzyGraphRequest) -> RauzyGraphResult:
         code="words.rauzy_graph_not_admitted",
     )
     edges = tuple(
-        RauzyGraphEdge(source=source, label=label, target=target, occurrences=occurrences)
+        RauzyGraphEdge(
+            source=source, label=label, target=target, occurrences=occurrences
+        )
         for (source, label, target), occurrences in zip(
             analysis.edges, analysis.occurrences, strict=True
         )
@@ -232,9 +234,7 @@ def compute_substitution_factor_complexity(
         code="words.fixed_point_prefix_not_admitted",
     )
     complexity_analysis = _admit(
-        lambda: factor_complexity_prefix(
-            prefix_analysis.prefix, request.max_order
-        ),
+        lambda: factor_complexity_prefix(prefix_analysis.prefix, request.max_order),
         location=("source", "max_order"),
         code="words.factor_complexity_not_admitted",
     )

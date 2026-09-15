@@ -31,11 +31,15 @@ def _q(num: int, den: int) -> CanonicalRational:
 
 def _chain_tables() -> tuple[ConditionalProbabilityTable, ConditionalProbabilityTable]:
     root = ConditionalProbabilityTable(
-        variable=0, parents=(), domain_sizes=(2, 2),
+        variable=0,
+        parents=(),
+        domain_sizes=(2, 2),
         table=(_q(3, 5), _q(2, 5)),
     )
     child = ConditionalProbabilityTable(
-        variable=1, parents=(0,), domain_sizes=(2, 2),
+        variable=1,
+        parents=(0,),
+        domain_sizes=(2, 2),
         table=(_q(1, 4), _q(1, 2), _q(3, 4), _q(1, 2)),
     )
     return root, child
@@ -46,7 +50,10 @@ def test_joint_known_answer() -> None:
     network = construct_bayes_net(2, ((0, 1),), (2, 2), (root, child))
     joint = bayes_net_joint(network)
     assert tuple(v.as_fraction() for v in joint.table) == (
-        Fraction(3, 20), Fraction(9, 20), Fraction(1, 5), Fraction(1, 5),
+        Fraction(3, 20),
+        Fraction(9, 20),
+        Fraction(1, 5),
+        Fraction(1, 5),
     )
     assert sum((v.as_fraction() for v in joint.table), Fraction(0)) == 1
     result = _bayes_net_joint(BayesNetJointRequest(network=network))
@@ -55,17 +62,24 @@ def test_joint_known_answer() -> None:
 
 def test_single_root_network() -> None:
     table = ConditionalProbabilityTable(
-        variable=0, parents=(), domain_sizes=(2,),
+        variable=0,
+        parents=(),
+        domain_sizes=(2,),
         table=(_q(1, 3), _q(2, 3)),
     )
     network = construct_bayes_net(1, (), (2,), (table,))
     joint = bayes_net_joint(network)
-    assert tuple(v.as_fraction() for v in joint.table) == (Fraction(1, 3), Fraction(2, 3))
+    assert tuple(v.as_fraction() for v in joint.table) == (
+        Fraction(1, 3),
+        Fraction(2, 3),
+    )
 
 
 def test_rejects_non_normalized_row() -> None:
     bad = ConditionalProbabilityTable(
-        variable=0, parents=(), domain_sizes=(2,),
+        variable=0,
+        parents=(),
+        domain_sizes=(2,),
         table=(_q(1, 2), _q(1, 3)),
     )
     with pytest.raises(OperationDomainValidationError, match="sum exactly"):
@@ -75,7 +89,9 @@ def test_rejects_non_normalized_row() -> None:
 def test_rejects_parent_mismatch_and_cycle() -> None:
     root, _ = _chain_tables()
     wrong = ConditionalProbabilityTable(
-        variable=1, parents=(), domain_sizes=(2, 2),
+        variable=1,
+        parents=(),
+        domain_sizes=(2, 2),
         table=(_q(1, 2), _q(1, 2)),
     )
     with pytest.raises(OperationDomainValidationError, match="parent"):

@@ -799,7 +799,9 @@ def weighted_ehrhart_polynomial(
         ),
     )
     coefficient_table = tuple(
-        CanonicalRational.from_fraction(coefficients[power] if power < len(coefficients) else Fraction(0))
+        CanonicalRational.from_fraction(
+            coefficients[power] if power < len(coefficients) else Fraction(0)
+        )
         for power in range(degree + 1)
     )
     return WeightedEhrhartResult._from_kernel(

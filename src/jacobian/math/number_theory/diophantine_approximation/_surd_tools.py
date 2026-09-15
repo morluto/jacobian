@@ -167,7 +167,12 @@ SURD_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         request_type=RecordMinimaRequest,
         result_type=RecordMinimaResult,
         run=_record_minima,
-        tags=("number-theory", "simultaneous-approximation", "record-minima", "certified"),
+        tags=(
+            "number-theory",
+            "simultaneous-approximation",
+            "record-minima",
+            "certified",
+        ),
         examples=(
             OperationExample(
                 name="sqrt_two_sqrt_three_records_to_ten",

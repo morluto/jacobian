@@ -735,7 +735,8 @@ class WeightedEhrhartResult(StrictModel):
                 "coefficient_table must carry degree_bound + 1 entries",
             )
         retained = {
-            term.exponents[0]: term.coefficient for term in self.polynomial.polynomial.terms
+            term.exponents[0]: term.coefficient
+            for term in self.polynomial.polynomial.terms
         }
         for power, coefficient in enumerate(self.coefficient_table):
             expected = retained.get(power)

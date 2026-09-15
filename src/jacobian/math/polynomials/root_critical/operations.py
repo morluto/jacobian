@@ -1275,9 +1275,7 @@ def exact_splitting_field(
     _require_splitting_polynomial(polynomial, embedding_index)
     if current_request_execution() is None:
         with request_execution(time.monotonic()):
-            return exact_splitting_field(
-                polynomial, embedding_index=embedding_index
-            )
+            return exact_splitting_field(polynomial, embedding_index=embedding_index)
     deadline, cancellation_signal = _splitting_deadline()
     payload, _profile = _run_splitting_worker(
         polynomial,
@@ -1357,8 +1355,7 @@ def splitting_field_distance_profile(
     if (
         rebuilt.squarefree_support != splitting_field.squarefree_support
         or rebuilt.defining_polynomial != splitting_field.defining_polynomial
-        or rebuilt.conjugation_coefficients
-        != splitting_field.conjugation_coefficients
+        or rebuilt.conjugation_coefficients != splitting_field.conjugation_coefficients
         or rebuilt_root_coefficients != supplied_root_coefficients
     ):
         raise OperationDomainValidationError(

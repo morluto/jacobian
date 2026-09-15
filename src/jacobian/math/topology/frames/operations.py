@@ -1226,9 +1226,7 @@ def _sphere_moment(exponents: tuple[int, ...], dimension: int) -> Fraction:
     return numerator / denominator
 
 
-def _monomial_exponents(
-    dimension: int, degree: int
-) -> tuple[tuple[int, ...], ...]:
+def _monomial_exponents(dimension: int, degree: int) -> tuple[tuple[int, ...], ...]:
     """Enumerate degree-exact exponent tuples in descending lex order."""
 
     if dimension == 1:
@@ -1253,10 +1251,7 @@ def spherical_design_verify(
             code="frames.design_family_type",
             message="a spherical design needs a vector family value",
         )
-    if (
-        type(strength) is not int
-        or not 1 <= strength <= MAX_DESIGN_STRENGTH
-    ):
+    if type(strength) is not int or not 1 <= strength <= MAX_DESIGN_STRENGTH:
         raise OperationDomainValidationError(
             location=("strength",),
             code="frames.design_strength_range",
@@ -1335,6 +1330,7 @@ def projective_design_profile(
     """Decide the weighted Welch identity for a complex projective family."""
 
     from math import comb
+
     _admit_complex_frame(frame)
     if type(strength) is not int or not 1 <= strength <= MAX_PROJECTIVE_STRENGTH:
         raise OperationDomainValidationError(
@@ -1372,9 +1368,7 @@ def projective_design_profile(
             overlap = (real * real + imaginary * imaginary) / (
                 norms[left_index] * norms[right_index]
             )
-            total += (
-                fractions[left_index] * fractions[right_index] * overlap**strength
-            )
+            total += fractions[left_index] * fractions[right_index] * overlap**strength
     target = Fraction(1, comb(frame.dimension + strength - 1, strength))
     return ProjectiveDesignResult._from_kernel(
         frame=frame,
@@ -1402,9 +1396,7 @@ def _cyclotomic_modulus_coefficients(order: int) -> tuple[int, ...]:
     return ascending
 
 
-def _cyclo_add(
-    left: list[Fraction], right: list[Fraction]
-) -> list[Fraction]:
+def _cyclo_add(left: list[Fraction], right: list[Fraction]) -> list[Fraction]:
     return [a + b for a, b in zip(left, right, strict=True)]
 
 
@@ -1507,7 +1499,9 @@ def _cyclo_inner_parts(
                 _cyclo_conj_power(left_index, order), modulus, degree, order
             )
             scaled = [left_value * value for value in conjugated]
-            product = _cyclo_mul(scaled, _scalar_fractions(right_scalar), modulus, degree)
+            product = _cyclo_mul(
+                scaled, _scalar_fractions(right_scalar), modulus, degree
+            )
             total = _cyclo_add(total, product)
     return total
 
@@ -1548,7 +1542,12 @@ def cyclotomic_sic_profile(frame: CyclotomicFrame) -> CyclotomicSicResult:
         row: list[list[Fraction]] = []
         for right in frame.vectors:
             overlap = _cyclo_inner_parts(left, right, modulus, degree, order)
-            squared = _cyclo_mul(overlap, _cyclo_conj_list(overlap, modulus, degree, order), modulus, degree)
+            squared = _cyclo_mul(
+                overlap,
+                _cyclo_conj_list(overlap, modulus, degree, order),
+                modulus,
+                degree,
+            )
             row.append(squared)
         overlaps.append(row)
     equiangular = True
@@ -1563,7 +1562,11 @@ def cyclotomic_sic_profile(frame: CyclotomicFrame) -> CyclotomicSicResult:
                 degree,
             )
             difference = _cyclo_add(
-                scaled, [-value for value in _cyclo_mul(left_norm, right_norm, modulus, degree)]
+                scaled,
+                [
+                    -value
+                    for value in _cyclo_mul(left_norm, right_norm, modulus, degree)
+                ],
             )
             if not _cyclo_is_zero(difference):
                 equiangular = False
@@ -1583,7 +1586,9 @@ def cyclotomic_sic_profile(frame: CyclotomicFrame) -> CyclotomicSicResult:
     retained_norms = tuple(
         CyclotomicScalar._from_kernel(
             order=order,
-            coefficients=tuple(CanonicalRational.from_fraction(value) for value in norm),
+            coefficients=tuple(
+                CanonicalRational.from_fraction(value) for value in norm
+            ),
         )
         for norm in norms
     )
@@ -1666,10 +1671,7 @@ def cyclotomic_sic_povm(frame: CyclotomicFrame) -> CyclotomicSicPovmResult:  # n
                 square_row.append(entry)
             square.append(square_row)
         scaled = [
-            [
-                _cyclo_mul(entry, norm, modulus, degree)
-                for entry in row
-            ]
+            [_cyclo_mul(entry, norm, modulus, degree) for entry in row]
             for row in matrix
         ]
         for row in range(dimension):
@@ -1706,10 +1708,7 @@ def cyclotomic_sic_povm(frame: CyclotomicFrame) -> CyclotomicSicPovmResult:  # n
                 cofactor = _cyclo_mul(cofactor, norm, modulus, degree)
         numerators.append(
             [
-                [
-                    _cyclo_mul(entry, cofactor, modulus, degree)
-                    for entry in row
-                ]
+                [_cyclo_mul(entry, cofactor, modulus, degree) for entry in row]
                 for row in matrix
             ]
         )
@@ -1724,9 +1723,7 @@ def cyclotomic_sic_povm(frame: CyclotomicFrame) -> CyclotomicSicPovmResult:  # n
                 if row == column
                 else [Fraction(0)] * degree
             )
-            if not _cyclo_is_zero(
-                _cyclo_add(total, [-value for value in target])
-            ):
+            if not _cyclo_is_zero(_cyclo_add(total, [-value for value in target])):
                 raise OperationDomainValidationError(
                     location=("frame",),
                     code="frames.cyclotomic_povm_resolution",

@@ -31,7 +31,9 @@ def _encoder() -> PrimeFieldLinearEncoder:
     )
 
 
-def _relabel(encoder: PrimeFieldLinearEncoder, perm: tuple[int, ...]) -> PrimeFieldLinearEncoder:
+def _relabel(
+    encoder: PrimeFieldLinearEncoder, perm: tuple[int, ...]
+) -> PrimeFieldLinearEncoder:
     return PrimeFieldLinearEncoder(
         field_order=encoder.field_order,
         message_axis=encoder.message_axis,
@@ -63,7 +65,8 @@ def _independent_rref(
             if r != row and rows[r][column] % prime:
                 factor = rows[r][column]
                 rows[r] = [
-                    (a - factor * b) % prime for a, b in zip(rows[r], rows[row], strict=True)
+                    (a - factor * b) % prime
+                    for a, b in zip(rows[r], rows[row], strict=True)
                 ]
         pivots.append(column)
         row += 1
@@ -178,9 +181,7 @@ def test_brute_force_orbit_matches_independent_rref_oracle() -> None:
     for perm in permutations(range(3)):
         permuted = tuple(tuple(row[i] for i in perm) for row in source.generator_matrix)
         seen.add(_independent_rref(permuted, source.field_order))
-    result = canonicalize_linear_code(
-        LinearCodeCanonicalizationRequest(encoder=source)
-    )
+    result = canonicalize_linear_code(LinearCodeCanonicalizationRequest(encoder=source))
     assert result.canonical_encoder.generator_matrix == min(seen)
     assert result.orbit_size == len(seen)
 

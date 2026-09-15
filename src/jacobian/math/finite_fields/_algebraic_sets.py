@@ -326,7 +326,9 @@ def affine_zero_set(system: PolynomialSystem) -> tuple[AffinePoint, ...]:
                 )
             )
     # Canonical order: lexicographic by encoded coordinates.
-    points.sort(key=lambda point: tuple(_encoded_coordinates(c) for c in point.coordinates))
+    points.sort(
+        key=lambda point: tuple(_encoded_coordinates(c) for c in point.coordinates)
+    )
     return tuple(points)
 
 
@@ -392,7 +394,9 @@ def projective_zero_set(system: PolynomialSystem) -> tuple[ProjectivePoint, ...]
                 ),
             )
         )
-    representatives.sort(key=lambda point: tuple(_encoded_coordinates(c) for c in point.coordinates))
+    representatives.sort(
+        key=lambda point: tuple(_encoded_coordinates(c) for c in point.coordinates)
+    )
     return tuple(representatives)
 
 

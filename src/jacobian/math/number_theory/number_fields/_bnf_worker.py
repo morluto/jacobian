@@ -67,9 +67,7 @@ def main() -> int:
         generators = pari(f"{_BNF_VARIABLE}.gen")
         representatives: list[list[list[int]]] = []
         for index in range(len(generators)):
-            hnf = pari(
-                f"idealhnf({_BNF_VARIABLE}, {_BNF_VARIABLE}.gen[{index + 1}])"
-            )
+            hnf = pari(f"idealhnf({_BNF_VARIABLE}, {_BNF_VARIABLE}.gen[{index + 1}])")
             # The HNF columns are the ideal basis vectors in the power basis.
             representatives.append(
                 [
@@ -107,10 +105,7 @@ def main() -> int:
                 for value in torsion_generator
             ],
             "fundamental_units": [
-                [
-                    {"num": format_canonical_integer(value), "den": "1"}
-                    for value in unit
-                ]
+                [{"num": format_canonical_integer(value), "den": "1"} for value in unit]
                 for unit in fundamental_units
             ],
             "request_digest": digest,

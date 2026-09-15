@@ -558,7 +558,8 @@ def _find_identity(
     for candidate in elements:
         ci = idx[candidate]
         if all(
-            multiplication[ci][j] == elements[j] and multiplication[j][ci] == elements[j]
+            multiplication[ci][j] == elements[j]
+            and multiplication[j][ci] == elements[j]
             for j in range(len(elements))
         ):
             return candidate
@@ -674,15 +675,11 @@ def opposite_semigroup(semigroup: FiniteSemigroup) -> OppositeResult:
     transposed = tuple(
         tuple(semigroup.multiplication[j][i] for j in range(n)) for i in range(n)
     )
-    opposite = FiniteSemigroup(
-        elements=semigroup.elements, multiplication=transposed
-    )
+    opposite = FiniteSemigroup(elements=semigroup.elements, multiplication=transposed)
     return OppositeResult._from_kernel(semigroup, opposite)
 
 
-def product_semigroup(
-    left: FiniteSemigroup, right: FiniteSemigroup
-) -> ProductResult:
+def product_semigroup(left: FiniteSemigroup, right: FiniteSemigroup) -> ProductResult:
     """Return the direct product with componentwise multiplication."""
 
     from jacobian.math.finite_semigroups._models import ProductResult
@@ -744,7 +741,8 @@ def adjoin_identity(semigroup: FiniteSemigroup) -> AdjoinIdentityResult:
     idx = {label: i for i, label in enumerate(semigroup.elements)}
     table = tuple(
         tuple(
-            semigroup.multiplication[idx[a]][idx[b]] if a in idx and b in idx
+            semigroup.multiplication[idx[a]][idx[b]]
+            if a in idx and b in idx
             else (a if b == one else b)
             for b in elements
         )
@@ -767,8 +765,7 @@ def adjoin_zero(semigroup: FiniteSemigroup) -> AdjoinZeroResult:
     idx = {label: i for i, label in enumerate(semigroup.elements)}
     table = tuple(
         tuple(
-            semigroup.multiplication[idx[a]][idx[b]] if a in idx and b in idx
-            else zero
+            semigroup.multiplication[idx[a]][idx[b]] if a in idx and b in idx else zero
             for b in elements
         )
         for a in elements
@@ -819,7 +816,11 @@ def rees_quotient(
             code="finite_semigroup.empty_ideal",
             message="rees quotient requires a nonempty ideal",
         )
-    zero = "0" if "0" not in [a for a in semigroup.elements if a not in ideal_set] else "0#1"
+    zero = (
+        "0"
+        if "0" not in [a for a in semigroup.elements if a not in ideal_set]
+        else "0#1"
+    )
     survivors = tuple(a for a in semigroup.elements if a not in ideal_set)
     elements = (*survivors, zero)
 
@@ -864,9 +865,7 @@ def karoubi_projection(semigroup: FiniteSemigroup) -> KaroubiProjectionResult:
             for s in elements:
                 # Hom(e, f) = {s | f*s*e == s}.
                 if (
-                    multiplication[idx[target]][
-                        idx[multiplication[idx[s]][idx[e]]]
-                    ]
+                    multiplication[idx[target]][idx[multiplication[idx[s]][idx[e]]]]
                     == s
                 ):
                     generators.append(
@@ -900,9 +899,7 @@ def karoubi_projection(semigroup: FiniteSemigroup) -> KaroubiProjectionResult:
             product_label = multiplication[idx[g_s]][idx[_f_s]]
             result_id = ((f_source, product_label), g_target)
             if result_id in by_id:
-                composition.append(
-                    (g_spec.morphism_id, f_spec.morphism_id, result_id)
-                )
+                composition.append((g_spec.morphism_id, f_spec.morphism_id, result_id))
     category = FiniteCategory(
         objects=tuple(idempotents_list),
         morphisms=tuple(spec for spec, _e, _s, _t in generators),

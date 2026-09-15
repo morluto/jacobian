@@ -1707,9 +1707,7 @@ class CentralizerResult(StrictModel):
         dimension: int,
         basis: tuple[RationalMatrix, ...],
     ) -> Self:
-        return cls.model_construct(
-            matrix=matrix, dimension=dimension, basis=basis
-        )
+        return cls.model_construct(matrix=matrix, dimension=dimension, basis=basis)
 
 
 __all__ = [

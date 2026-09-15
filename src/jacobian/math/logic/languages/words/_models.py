@@ -510,9 +510,7 @@ class MorphismImageLengthsResult(MorphismImageLengthsRequest):
                 "morphism_lengths_axis_mismatch",
                 "lengths must have one entry per source symbol",
             )
-        if tuple(self.lengths) != tuple(
-            len(image) for image in self.morphism.images
-        ):
+        if tuple(self.lengths) != tuple(len(image) for image in self.morphism.images):
             raise _validation_error(
                 "morphism_lengths_mismatch",
                 "lengths must equal the retained morphism image lengths",
@@ -616,9 +614,7 @@ class RauzyGraphResult(RauzyGraphRequest):
 
     vertices: tuple[tuple[str, ...], ...]
     edges: tuple[RauzyGraphEdge, ...]
-    scope: Literal["RAUZY_OF_SUPPLIED_PREFIX_ONLY"] = (
-        "RAUZY_OF_SUPPLIED_PREFIX_ONLY"
-    )
+    scope: Literal["RAUZY_OF_SUPPLIED_PREFIX_ONLY"] = "RAUZY_OF_SUPPLIED_PREFIX_ONLY"
 
     @model_validator(mode="after")
     def require_rauzy_shape(self) -> Self:

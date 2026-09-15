@@ -1008,9 +1008,7 @@ def invariant_factor_profile(matrix: RationalMatrix) -> InvariantFactorProfileRe
     )
 
 
-def decide_similarity(
-    left: RationalMatrix, right: RationalMatrix
-) -> SimilarityResult:
+def decide_similarity(left: RationalMatrix, right: RationalMatrix) -> SimilarityResult:
     """Decide similarity from complete invariant-factor data."""
 
     _admit_square(left)
@@ -1019,20 +1017,22 @@ def decide_similarity(
         left_factors, _, _ = _rational_canonical_components(left)
         right_factors, _, _ = _rational_canonical_components(right)
         return SimilarityResult._from_kernel(
-            left=left, right=right, similar=False,
-            left_factors=left_factors, right_factors=right_factors,
+            left=left,
+            right=right,
+            similar=False,
+            left_factors=left_factors,
+            right_factors=right_factors,
         )
     left_factors, _, _ = _rational_canonical_components(left)
     right_factors, _, _ = _rational_canonical_components(right)
-    left_key = tuple(
-        tuple(entry.factor.coefficients) for entry in left_factors
-    )
-    right_key = tuple(
-        tuple(entry.factor.coefficients) for entry in right_factors
-    )
+    left_key = tuple(tuple(entry.factor.coefficients) for entry in left_factors)
+    right_key = tuple(tuple(entry.factor.coefficients) for entry in right_factors)
     return SimilarityResult._from_kernel(
-        left=left, right=right, similar=left_key == right_key,
-        left_factors=left_factors, right_factors=right_factors,
+        left=left,
+        right=right,
+        similar=left_key == right_key,
+        left_factors=left_factors,
+        right_factors=right_factors,
     )
 
 
@@ -1073,9 +1073,7 @@ def centralizer_basis(matrix: RationalMatrix) -> CentralizerResult:
     basis: list[RationalMatrixValue] = []
     for vector in null.basis_vectors:
         cells = tuple(vector)
-        grid = tuple(
-            tuple(cells[i * n + j] for j in range(n)) for i in range(n)
-        )
+        grid = tuple(tuple(cells[i * n + j] for j in range(n)) for i in range(n))
         basis.append(
             RationalMatrixValue(domain="QQ", row_count=n, column_count=n, entries=grid)
         )

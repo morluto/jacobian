@@ -246,9 +246,7 @@ class ExactSplittingField(StrictModel):
     )
     embedding_index: StrictInt = Field(ge=0, le=MAX_SPLITTING_FIELD_CELLS)
     embedding_rectangle: RootCriticalRectangle
-    roots: tuple[SplittingFieldRoot, ...] = Field(
-        max_length=MAX_SPLITTING_FIELD_CELLS
-    )
+    roots: tuple[SplittingFieldRoot, ...] = Field(max_length=MAX_SPLITTING_FIELD_CELLS)
 
     @model_validator(mode="after")
     def require_field_shape(self) -> Self:
@@ -265,9 +263,7 @@ class ExactSplittingField(StrictModel):
             else 0
         )
         if not 1 <= degree <= MAX_SPLITTING_FIELD_DEGREE:
-            raise _error(
-                "field_degree", "the splitting-field degree exceeds its bound"
-            )
+            raise _error("field_degree", "the splitting-field degree exceeds its bound")
         if len(self.conjugation_coefficients) != degree:
             raise _error(
                 "field_conjugation_degree",
@@ -323,7 +319,9 @@ class SplittingFieldDistanceProfile(StrictModel):
                 "the splitting field must be bound to the exact source polynomial",
             )
         if len(self.root_field_coefficients) != len(self.profile.roots):
-            raise _error("binding_root_axis", "root field rows must match the root axis")
+            raise _error(
+                "binding_root_axis", "root field rows must match the root axis"
+            )
         if len(self.critical_field_coefficients) != len(self.profile.critical_points):
             raise _error(
                 "binding_critical_axis",

@@ -10,7 +10,6 @@ from jacobian.math.matrices.canonical_forms._models import (
     MonicPolynomial,
     PrimaryDecompositionResult,
     RationalCanonicalFormResult,
-    SimilarityRequest,
     SimilarityResult,
 )
 from jacobian.math.matrices.canonical_forms.operations import (
@@ -38,7 +37,6 @@ __all__ = [
     "MonicPolynomial",
     "PrimaryDecompositionResult",
     "RationalCanonicalFormResult",
-    "SimilarityRequest",
     "SimilarityResult",
     "centralizer_basis",
     "characteristic_polynomial",

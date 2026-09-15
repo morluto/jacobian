@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from fractions import Fraction
 from time import monotonic
 
 import pytest
@@ -634,8 +635,13 @@ def test_native_monomial_order_is_validated_before_ideal_inspection(
     (HilbertDimensionResult, HilbertMultiplicityResult, HVectorResult),
 )
 def test_hilbert_projection_results_bind_the_source_ring(
-    result_type: type[object],
+    result_type: (
+        type[HilbertDimensionResult]
+        | type[HilbertMultiplicityResult]
+        | type[HVectorResult]
+    ),
 ) -> None:
+    result: HilbertDimensionResult | HilbertMultiplicityResult | HVectorResult
     if result_type is HilbertDimensionResult:
         result = hilbert_dimension(_ideal((2, 0)))
     elif result_type is HilbertMultiplicityResult:
@@ -858,9 +864,12 @@ def test_graded_binds_one_deadline_before_groebner(
 ) -> None:
     from jacobian._execution import current_request_execution, request_execution
     from jacobian.math.polynomials.ideals._models import IdealComputationBudget
+    from jacobian.math.polynomials.ideals.operations import (
+        groebner_basis as real_groebner_function,
+    )
 
     observed: dict[str, float | None] = {}
-    real_groebner = graded_operations.groebner_basis
+    real_groebner: Callable[..., object] = real_groebner_function
 
     def wrapped(*args: object, **kwargs: object) -> object:
         execution = current_request_execution()
@@ -1208,7 +1217,9 @@ def test_nested_budget_keeps_the_request_start_anchor(
     def fake_groebner(
         ideal: object, order: str = "grevlex", **kwargs: object
     ) -> object:
-        captured["wall_seconds"] = kwargs["resource_budget"].wall_seconds  # type: ignore[union-attr]
+        budget = kwargs["resource_budget"]
+        assert isinstance(budget, IdealComputationBudget)
+        captured["wall_seconds"] = budget.wall_seconds
         captured["outer_deadline"] = kwargs["_outer_deadline"]
         raise StopError()
 
@@ -1342,3 +1353,81 @@ def test_embedded_initial_ideals_must_be_monomial() -> None:
     payload["initial_ideal"] = non_monomial.model_dump(mode="json")
     with pytest.raises(ValidationError):
         HilbertSeriesResult.model_validate(payload)
+
+
+def _compositions(nvars: int, degree: int) -> Iterator[tuple[int, ...]]:
+    """All exponent tuples of total degree `degree` in `nvars` variables."""
+    if nvars == 1:
+        yield (degree,)
+        return
+    for first in range(degree + 1):
+        for rest in _compositions(nvars - 1, degree - first):
+            yield (first, *rest)
+
+
+def _brute_force_standard_count(
+    generators: tuple[tuple[int, ...], ...], nvars: int, degree: int
+) -> int:
+    """Count degree-`degree` monomials divisible by no generator, directly."""
+    count = 0
+    for monomial in _compositions(nvars, degree):
+        if not any(
+            all(m >= g for m, g in zip(monomial, generator, strict=True))
+            for generator in generators
+        ):
+            count += 1
+    return count
+
+
+def _evaluate_univariate(polynomial: RationalPolynomial, value: int) -> Fraction:
+    total = Fraction(0)
+    for term in polynomial.polynomial.terms:
+        total += term.coefficient.as_fraction() * Fraction(value) ** term.exponents[0]
+    return total
+
+
+def test_hilbert_values_match_brute_force_standard_monomial_counts() -> None:
+    cases = (
+        (((2, 0),), 2, (1, 2, 2, 2, 2)),
+        (((2, 0), (1, 1)), 2, (1, 2, 1, 1, 1)),
+        (((1, 0), (0, 1)), 2, (1, 0, 0, 0, 0)),
+    )
+    for generators, nvars, expected in cases:
+        ideal = _ideal(*generators)
+        profile = hilbert_function(ideal, max_degree=4)
+        assert profile.values == expected
+        for degree, value in enumerate(expected):
+            assert _brute_force_standard_count(generators, nvars, degree) == value
+            claimed = standard_monomials(
+                initial_monomial_ideal(ideal).initial_ideal, degree
+            )
+            assert claimed.count == value
+
+
+def test_unit_ideal_collapses_hilbert_function() -> None:
+    # The unit generator (0, 0) divides even the constant monomial 1, so no
+    # standard monomial survives at any degree, including degree zero.
+    unit = _ideal((0, 0))
+    assert hilbert_function(unit, max_degree=3).values == (0, 0, 0, 0)
+
+
+def test_hilbert_polynomial_agrees_with_function_past_stabilization() -> None:
+    ideal = _ideal((2, 0), (1, 1))
+    claimed = hilbert_polynomial(ideal)
+    profile = hilbert_function(ideal, max_degree=8)
+    for degree in range(claimed.stabilization_degree, 9):
+        assert (
+            _evaluate_univariate(claimed.polynomial, degree) == profile.values[degree]
+        )
+    # The eventually constant value 1 is already visible before stabilization.
+    assert profile.values[2:] == (1,) * 7
+
+
+def test_series_prefix_reproduces_hilbert_function_values() -> None:
+    ideal = _ideal((2, 0), (1, 1))
+    series = hilbert_series(ideal, prefix_degree=5)
+    assert series.prefix == hilbert_function(ideal, max_degree=5).values
+    forged = series.model_dump(mode="json")
+    forged["prefix"] = [1, 2, 3, 4, 5, 6]
+    with pytest.raises(ValidationError):
+        HilbertSeriesResult.model_validate(forged)

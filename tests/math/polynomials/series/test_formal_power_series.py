@@ -1,6 +1,7 @@
 """Tests for truncated formal power series operations."""
 
 import json
+from fractions import Fraction
 from typing import Any, cast
 
 from jacobian._exact import CanonicalRational
@@ -11,6 +12,7 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.polynomials.series import (
+    add,
     compose,
     derivative,
     identity_check,
@@ -490,3 +492,124 @@ def test_all_formal_series_results_retain_canonical_types_after_json() -> None:
         assert (
             tool.result_type.model_validate_json(result.model_dump_json()) == result
         ), tool.operation_id
+
+
+def _fractions(series: TruncatedSeries) -> tuple[Fraction, ...]:
+    return tuple(coefficient.as_fraction() for coefficient in series.coefficients)
+
+
+def _series_of(values: tuple[Fraction, ...]) -> TruncatedSeries:
+    return TruncatedSeries(
+        variable="x",
+        truncation_order=len(values),
+        coefficients=tuple(CanonicalRational.from_fraction(value) for value in values),
+    )
+
+
+def test_multiply_matches_cauchy_convolution_oracle() -> None:
+    from fractions import Fraction
+
+    left = _series_of((Fraction(1, 2), Fraction(2, 3), Fraction(3, 4), Fraction(4, 5)))
+    right = _series_of((Fraction(1), Fraction(-1), Fraction(1, 3), Fraction(0)))
+    result = multiply(left, right)
+    left_f, right_f = _fractions(left), _fractions(right)
+    expected = tuple(
+        sum(left_f[i] * right_f[k - i] for i in range(k + 1))
+        for k in range(left.truncation_order)
+    )
+    assert _fractions(result.result) == expected
+    # A forged coefficient breaks the convolution identity.
+    forged = list(expected)
+    forged[2] += Fraction(1)
+    assert _fractions(result.result) != tuple(forged)
+
+
+def test_add_is_coefficientwise_and_power_is_repeated_multiplication() -> None:
+    from fractions import Fraction
+
+    base = _series_of((Fraction(1), Fraction(2), Fraction(3)))
+    total = add(base, base)
+    assert _fractions(total.result) == (Fraction(2), Fraction(4), Fraction(6))
+    cubed = power(base, 3)
+    twice = multiply(base, base)
+    assert _fractions(cubed.result) == _fractions(multiply(twice.result, base).result)
+    assert _fractions(cubed.result)[0] == Fraction(1)
+
+
+def test_derivative_integral_round_trip_termwise() -> None:
+    from fractions import Fraction
+
+    series = _series_of((Fraction(5), Fraction(1, 2), Fraction(-3, 4), Fraction(2)))
+    derived = derivative(series)
+    assert _fractions(derived.result) == (
+        Fraction(1, 2),
+        Fraction(-3, 2),
+        Fraction(6),
+    )
+    recovered = integral_zero_constant(derived.result, 4)
+    assert _fractions(recovered.result) == (
+        Fraction(0),
+        Fraction(1, 2),
+        Fraction(-3, 4),
+        Fraction(2),
+    )
+
+
+def _compose_coefficients(
+    outer: tuple[Fraction, ...], inner: tuple[Fraction, ...], order: int
+) -> tuple[Fraction, ...]:
+    """Direct coefficient composition, independent of the compose kernel."""
+    powers = [[Fraction(1)] + [Fraction(0)] * (order - 1)]
+    for _ in range(1, order):
+        prior = powers[-1]
+        powers.append(
+            [
+                sum(
+                    (prior[i] * inner[k - i] for i in range(k + 1)),
+                    Fraction(0),
+                )
+                for k in range(order)
+            ]
+        )
+    return tuple(
+        sum(
+            (outer[j] * powers[j][k] for j in range(min(len(outer), order))),
+            Fraction(0),
+        )
+        for k in range(order)
+    )
+
+
+def test_compose_matches_nested_evaluation_oracle() -> None:
+    from fractions import Fraction
+
+    outer = _series_of((Fraction(1), Fraction(1), Fraction(1, 2)))
+    inner = _series_of((Fraction(0), Fraction(1, 3), Fraction(-1, 4)))
+    result = compose(outer, inner)
+    expected = _compose_coefficients(_fractions(outer), _fractions(inner), 3)
+    assert _fractions(result.result) == expected
+    # A forged coefficient breaks the composition identity.
+    forged = list(expected)
+    forged[1] += Fraction(1)
+    assert _fractions(result.result) != tuple(forged)
+    # Composing with the zero series yields the constant outer term.
+    zero_inner = _series_of((Fraction(0), Fraction(0), Fraction(0)))
+    constant = compose(outer, zero_inner)
+    assert _fractions(constant.result) == (Fraction(1), Fraction(0), Fraction(0))
+
+
+def test_truncate_replays_the_source_prefix() -> None:
+    from fractions import Fraction
+
+    series = _series_of(
+        (Fraction(3), Fraction(1, 7), Fraction(-2), Fraction(9, 5), Fraction(0))
+    )
+    prefix = truncate(series, 3)
+    assert _fractions(prefix.result) == _fractions(series)[:3]
+    full = truncate(series, 5)
+    assert _fractions(full.result) == _fractions(series)
+    zero = multiply(
+        _series_of((Fraction(0), Fraction(0))),
+        _series_of((Fraction(1), Fraction(2))),
+    )
+    assert _fractions(zero.result) == (Fraction(0), Fraction(0))

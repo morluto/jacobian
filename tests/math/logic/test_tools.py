@@ -1582,3 +1582,66 @@ def test_unsupported_smt_command_identifies_source_field() -> None:
     for command in ("set-logic", "declare-const", "declare-fun", "assert", "check-sat"):
         assert command in detail["msg"]
     assert "Inline" in detail["msg"]
+
+
+def _canonical_cnf(
+    variables: tuple[str, ...], clauses: tuple[tuple[int, ...], ...]
+) -> CanonicalCnf:
+    from jacobian.math.logic._cnf import CnfCanonicalizeRequest, canonicalize_cnf
+
+    return canonicalize_cnf(
+        CnfCanonicalizeRequest(variable_names=variables, clauses=clauses)
+    ).cnf
+
+
+def _satisfying_assignments(cnf: CanonicalCnf) -> list[tuple[bool, ...]]:
+    """Brute-force SAT oracle over all 2^n assignments, no solver involved."""
+    found = []
+    for bits in range(1 << len(cnf.variables)):
+        assignment = tuple(
+            bool(bits & (1 << index)) for index in range(len(cnf.variables))
+        )
+        if all(
+            any(
+                (
+                    assignment[abs(literal) - 1]
+                    if literal > 0
+                    else not assignment[abs(literal) - 1]
+                )
+                for literal in clause
+            )
+            for clause in cnf.clauses
+        ):
+            found.append(assignment)
+    return found
+
+
+def test_sat_unsat_matches_brute_force_oracle() -> None:
+    cnf = _canonical_cnf(
+        ("x", "y"),
+        ((1, 2), (-1, 2), (1, -2), (-1, -2)),
+    )
+    assert _satisfying_assignments(cnf) == []
+    result = solve_sat(SatSolveRequest(cnf=cnf))
+    assert result.outcome == "UNSAT"
+    assert result.assignment is None
+
+
+def test_sat_assignment_satisfies_every_clause_by_oracle() -> None:
+    cnf = _canonical_cnf(
+        ("x", "y"),
+        ((1, 2), (-1, 2)),
+    )
+    result = solve_sat(SatSolveRequest(cnf=cnf))
+    assert result.outcome == "SAT"
+    assert result.assignment is not None
+    assert tuple(result.assignment) in _satisfying_assignments(cnf)
+    # A flipped assignment no longer satisfies the formula.
+    forged = tuple(not value for value in result.assignment)
+    assert forged not in _satisfying_assignments(cnf)
+
+
+def test_sat_contradictory_unit_clauses_are_unsat() -> None:
+    cnf = _canonical_cnf(("x",), ((1,), (-1,)))
+    assert _satisfying_assignments(cnf) == []
+    assert solve_sat(SatSolveRequest(cnf=cnf)).outcome == "UNSAT"

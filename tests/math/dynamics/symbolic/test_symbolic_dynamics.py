@@ -807,3 +807,71 @@ def test_presentation_verification_resource_limit_is_not_a_false_relation(
     monkeypatch.setattr(_bounds, "MAX_PRESENTATION_VERIFICATION_WORK", 1)
     with pytest.raises(OperationResourceAdmissionError, match="work bound"):
         verify_block_presentation(claim)
+
+
+def _trace_powers(matrix: tuple[tuple[int, ...], ...], count: int) -> tuple[int, ...]:
+    """Independent fixed-point oracle: |Fix(T^n)| = tr(A^n) by hand powering."""
+    size = len(matrix)
+    power = [[1 if i == j else 0 for j in range(size)] for i in range(size)]
+    traces = []
+    for _ in range(count):
+        power = [
+            [sum(power[i][k] * matrix[k][j] for k in range(size)) for j in range(size)]
+            for i in range(size)
+        ]
+        traces.append(sum(power[i][i] for i in range(size)))
+    return tuple(traces)
+
+
+def test_periodic_profile_matches_trace_powers_oracle() -> None:
+    cases = (
+        ((1, 1), (1, 0)),
+        ((2,),),
+        ((0, 1), (1, 0)),
+        ((2, 0), (0, 3)),
+    )
+    for matrix in cases:
+        fixed, exact, orbits = periodic_point_profile(AdjacencyShift(matrix=matrix), 6)
+        assert fixed == _trace_powers(matrix, 6)
+        # Mobius inversion is integral: every exact count splits into orbits.
+        for period in range(1, 7):
+            divisors = [d for d in range(1, period + 1) if period % d == 0]
+            assert fixed[period - 1] == sum(exact[d - 1] for d in divisors)
+            assert exact[period - 1] == orbits[period - 1] * period
+
+
+def test_golden_mean_fixed_counts_are_lucas_numbers() -> None:
+    fixed, _, _ = periodic_point_profile(AdjacencyShift(matrix=((1, 1), (1, 0))), 6)
+    assert fixed == (1, 3, 4, 7, 11, 18)
+
+
+def test_zeta_series_prefix_matches_periodic_profile() -> None:
+    """log zeta = sum Fix_n t^n / n: the determinant determines the counts."""
+    from fractions import Fraction
+
+    fixed, _, _ = periodic_point_profile(AdjacencyShift(matrix=((1, 1), (1, 0))), 5)
+    # exp(sum Fix_k t^k / k) expands with Fibonacci coefficients F_{n+1}:
+    # S_0 = 1 and S_n = (1/n) sum_{k<=n} Fix_k S_{n-k}.
+    series = [Fraction(1)]
+    for n in range(1, 6):
+        series.append(
+            Fraction(
+                sum(Fraction(fixed[k - 1]) * series[n - k] for k in range(1, n + 1)),
+                n,
+            )
+        )
+    assert series == [Fraction(f) for f in (1, 1, 2, 3, 5, 8)]
+
+
+def test_higher_block_states_match_block_language_oracle() -> None:
+    shift = _golden_mean()
+    two_block = higher_block_presentation(shift, 2)
+    assert tuple(two_block.state_blocks) == tuple(block_language(shift, 2))
+    assert verify_block_presentation(two_block)
+    # Every length-3 word projects onto consecutive length-2 states.
+    words = set(block_language(shift, 3))
+    states = set(block_language(shift, 2))
+    assert words, "golden mean has length-3 words"
+    for word in words:
+        assert word[:2] in states
+        assert word[1:] in states

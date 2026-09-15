@@ -337,6 +337,15 @@ unity, and the exact fundamental units as power-basis field elements. The
 regulator is deliberately not returned: PARI reports it as a floating-point
 value, and an exact operation must not promote a float to an exact verdict.
 
+Unit identity is modulo associates: a returned fundamental unit is one
+representative among its sign and torsion multiples, and no canonical sign,
+ordering, or normalization convention is currently published. Consumers
+comparing unit claims across runs or producers should compare norms, torsion
+order, and rank/signature relations rather than raw coefficient identity.
+Class-group and unit-group results likewise have no standalone claim verifier
+yet; re-checking such a claim currently means recomputing the operation and
+comparing the typed result.
+
 One request-owned killable worker owns irreducibility recognition, the
 `bnfinit` call, ideal normalization, and coefficient lifting under a fixed
 degree and coefficient envelope. Missing CyPari is a typed resource refusal,

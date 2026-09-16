@@ -1,17 +1,25 @@
-"""Native entry point for discrete Morse matching construction."""
+"""Native entry points for discrete Morse matching, paths, and Morse complex."""
 
 from __future__ import annotations
 
-from jacobian.math.topology._models import FiniteSimplicialComplex
+from jacobian.math.topology._models import FiniteSimplicialComplex, Simplex
 from jacobian.math.topology._request_admission import (
     require_canonical_complex_admission,
+)
+from jacobian.math.topology.discrete_morse._kernel import (
+    compute_gradient_paths as _compute_gradient_paths,
+)
+from jacobian.math.topology.discrete_morse._kernel import (
+    compute_morse_complex as _compute_morse_complex,
 )
 from jacobian.math.topology.discrete_morse._kernel import (
     construct_matching as _construct_matching,
 )
 from jacobian.math.topology.discrete_morse._models import (
     DiscreteMorseMatchingResult,
+    GradientPathsResult,
     MatchingPair,
+    MorseComplexResult,
 )
 
 
@@ -30,4 +38,40 @@ def construct_matching(
     return _construct_matching(complex_, pairs)
 
 
-__all__ = ["construct_matching"]
+def compute_gradient_paths(
+    complex_: FiniteSimplicialComplex,
+    pairs: tuple[MatchingPair, ...],
+    start: Simplex,
+    target: Simplex | None = None,
+) -> GradientPathsResult:
+    """Enumerate the complete bounded gradient-path family from a critical cell.
+
+    The kernel first re-establishes that the supplied pairs are an acyclic
+    matching, then replays every alternating down/up V-path from the selected
+    critical cell to its critical targets of the adjacent lower dimension.
+    """
+
+    require_canonical_complex_admission(complex_)
+    return _compute_gradient_paths(complex_, pairs, start, target)
+
+
+def compute_morse_complex(
+    complex_: FiniteSimplicialComplex,
+    pairs: tuple[MatchingPair, ...],
+) -> MorseComplexResult:
+    """Compute the graded GF(2) Morse complex of a bounded acyclic matching.
+
+    The kernel re-establishes acyclicity, grades the critical cells by
+    dimension, and derives every reduced boundary coefficient from complete
+    gradient-path counts.
+    """
+
+    require_canonical_complex_admission(complex_)
+    return _compute_morse_complex(complex_, pairs)
+
+
+__all__ = [
+    "compute_gradient_paths",
+    "compute_morse_complex",
+    "construct_matching",
+]

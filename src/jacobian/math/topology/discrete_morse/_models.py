@@ -12,7 +12,7 @@ obstruction, never as an operational failure.
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Any, Self
+from typing import Any, Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
@@ -28,6 +28,18 @@ from jacobian.math.topology._models import (
 MAX_MORSE_CELLS = 4096
 MAX_MORSE_PAIRS = 2048
 MAX_MORSE_HASSE_EDGES = 65536
+
+# The Morse-complex and gradient-path outputs enumerate complete path families
+# and materialize the reduced boundary, so they admit materially smaller inputs
+# than the matching classifier.  Each ceiling follows from the quantity it
+# actually bounds: critical cells from the graded basis, gradient paths from the
+# complete alternating-path family, search states from the directed Hasse walk,
+# and boundary entries from the nonzero reduced incidence rows.
+MAX_MORSE_CRITICAL_CELLS = 1024
+MAX_MORSE_GRADIENT_PATHS = 4096
+MAX_MORSE_GRADIENT_STATES = 200_000
+MAX_MORSE_BOUNDARY_ENTRIES = 8192
+MAX_MORSE_PATH_STEPS = MAX_MORSE_CELLS
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -262,18 +274,352 @@ class DiscreteMorseMatchingResult(StrictModel):
         return cls.model_construct(**values)
 
 
+def _require_canonical_cell(cell: Simplex, reason: str) -> None:
+    if len(set(cell)) != len(cell) or tuple(sorted(cell)) != cell:
+        raise _validation_error(reason, "cells must be canonical vertex subsets")
+
+
+class MorseGradientStepKind(StrEnum):
+    """Direction of one cover step of a discrete Morse gradient path.
+
+    A ``DOWN`` step traverses an unmatched cover from a coface to a
+    codimension-one face; an ``UP`` step traverses a matched cover from a face
+    to the coface paired with it.
+    """
+
+    DOWN = "DOWN"
+    UP = "UP"
+
+
+class GradientPathStep(StrictModel):
+    """One oriented cover step of one gradient path."""
+
+    kind: MorseGradientStepKind
+    source: Simplex = Field(min_length=1)
+    target: Simplex = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def require_canonical_cover_step(self) -> Self:
+        _require_canonical_cell(self.source, "non_canonical_gradient_step")
+        _require_canonical_cell(self.target, "non_canonical_gradient_step")
+        expected = (
+            len(self.source) + 1
+            if self.kind is MorseGradientStepKind.UP
+            else len(self.source) - 1
+        )
+        if len(self.target) != expected:
+            raise _validation_error(
+                "gradient_step_dimension",
+                "a gradient step must join consecutive dimensions in its direction",
+            )
+        return self
+
+
+class GradientPath(StrictModel):
+    """One complete alternating gradient path between adjacent critical cells.
+
+    The steps begin and end with a ``DOWN`` step, so ``start`` has dimension
+    one above ``target``.  The path is exactly the finite alternating
+    matched/unmatched incidence sequence contributing to the Morse boundary
+    coefficient from ``start`` to ``target``.
+    """
+
+    start: Simplex = Field(min_length=1)
+    target: Simplex = Field(min_length=1)
+    steps: tuple[GradientPathStep, ...] = Field(
+        min_length=1, max_length=MAX_MORSE_PATH_STEPS
+    )
+
+    @model_validator(mode="after")
+    def require_alternating_replay(self) -> Self:
+        kinds = tuple(step.kind for step in self.steps)
+        if kinds[0] is not MorseGradientStepKind.DOWN or (
+            kinds[-1] is not MorseGradientStepKind.DOWN
+        ):
+            raise _validation_error(
+                "gradient_path_shape",
+                "a gradient path begins and ends with a DOWN step",
+            )
+        for index, kind in enumerate(kinds):
+            expected = (
+                MorseGradientStepKind.DOWN
+                if index % 2 == 0
+                else MorseGradientStepKind.UP
+            )
+            if kind is not expected:
+                raise _validation_error(
+                    "gradient_path_alternation",
+                    "gradient-path steps must alternate DOWN, UP, DOWN, ...",
+                )
+        if self.steps[0].source != self.start or self.steps[-1].target != self.target:
+            raise _validation_error(
+                "gradient_path_binding",
+                "gradient-path start and target must match its first and last steps",
+            )
+        for left, right in zip(self.steps, self.steps[1:], strict=False):
+            if right.source != left.target:
+                raise _validation_error(
+                    "gradient_path_chain",
+                    "consecutive gradient steps must share their intermediate cell",
+                )
+        return self
+
+
+class GradientPathCount(StrictModel):
+    """The number of bounded gradient paths ending at one critical cell."""
+
+    target: Simplex = Field(min_length=1)
+    count: StrictInt = Field(ge=1, le=MAX_MORSE_GRADIENT_PATHS)
+
+
+class GradientPathsRequest(StrictModel):
+    """One acyclic matching, a critical start cell, and an optional target.
+
+    ``target`` is a critical cell one dimension below ``start``; when omitted
+    the result enumerates every gradient path from ``start`` to any critical
+    cell of the adjacent lower dimension.
+    """
+
+    complex: SimplicialComplexRequest
+    pairs: tuple[MatchingPair, ...] = Field(default=(), max_length=MAX_MORSE_PAIRS)
+    start: Simplex = Field(min_length=1)
+    target: Simplex | None = Field(default=None, min_length=1)
+
+    @model_validator(mode="after")
+    def require_adjacent_critical_selection(self) -> Self:
+        _require_canonical_cell(self.start, "non_canonical_gradient_start")
+        if self.target is None:
+            return self
+        _require_canonical_cell(self.target, "non_canonical_gradient_target")
+        if len(self.target) != len(self.start) - 1:
+            raise _validation_error(
+                "gradient_target_dimension",
+                "a gradient-path target must lie one dimension below its start",
+            )
+        return self
+
+
+class GradientPathsResult(StrictModel):
+    """The complete bounded family of gradient paths from one critical cell.
+
+    Every path is replayed as its explicit alternating down/up step sequence.
+    ``counts_by_target`` groups the family by terminal critical cell.
+    """
+
+    complex: FiniteSimplicialComplex
+    pairs: tuple[MatchingPair, ...] = Field(default=(), max_length=MAX_MORSE_PAIRS)
+    critical_profile: CriticalCellProfile
+    start: Simplex = Field(min_length=1)
+    target: Simplex | None = Field(default=None, min_length=1)
+    paths: tuple[GradientPath, ...] = Field(
+        default=(), max_length=MAX_MORSE_GRADIENT_PATHS
+    )
+    counts_by_target: tuple[GradientPathCount, ...] = Field(
+        default=(), max_length=MAX_MORSE_CELLS
+    )
+
+    @model_validator(mode="after")
+    def require_bounded_family(self) -> Self:
+        if any(path.start != self.start for path in self.paths):
+            raise _validation_error(
+                "gradient_path_family_start",
+                "every returned gradient path must start at the selected cell",
+            )
+        if self.target is not None and any(
+            path.target != self.target for path in self.paths
+        ):
+            raise _validation_error(
+                "gradient_path_family_target",
+                "every returned gradient path must end at the selected target",
+            )
+        if sum(item.count for item in self.counts_by_target) != len(self.paths):
+            raise _validation_error(
+                "gradient_path_count_mismatch",
+                "gradient-path counts must partition the returned family",
+            )
+        targets = tuple(item.target for item in self.counts_by_target)
+        if targets != tuple(sorted(set(targets))):
+            raise _validation_error(
+                "gradient_path_counts_order",
+                "gradient-path counts must be unique and canonically ordered",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(cls, **values: Any) -> Self:
+        """Build after the admitted gradient-path kernel established the family."""
+
+        return cls.model_construct(**values)
+
+
+class CriticalCellBasis(StrictModel):
+    """The critical cells of one complex dimension in canonical order."""
+
+    dimension: StrictInt = Field(ge=0, le=MAX_TOPOLOGY_DIMENSION)
+    cells: tuple[Simplex, ...] = Field(default=(), max_length=MAX_MORSE_CRITICAL_CELLS)
+
+    @model_validator(mode="after")
+    def require_canonical_basis(self) -> Self:
+        if any(
+            len(cell) != self.dimension + 1 or tuple(sorted(cell)) != cell
+            for cell in self.cells
+        ):
+            raise _validation_error(
+                "critical_basis_dimension",
+                "basis cells must be canonical simplices of the declared dimension",
+            )
+        if tuple(sorted(set(self.cells))) != self.cells:
+            raise _validation_error(
+                "critical_basis_order",
+                "basis cells must be unique and lexicographically ordered",
+            )
+        return self
+
+
+class MorseBoundaryEntry(StrictModel):
+    """One nonzero gradient-path contribution to the reduced Morse boundary.
+
+    ``gradient_path_count`` is the exact number of gradient paths from
+    ``source`` to ``target``; ``coefficient`` is its GF(2) parity, the signed
+    incidence over the characteristic-two field where orientation signs vanish.
+    """
+
+    source: Simplex = Field(min_length=2)
+    target: Simplex = Field(min_length=1)
+    gradient_path_count: StrictInt = Field(ge=1, le=MAX_MORSE_GRADIENT_PATHS)
+    coefficient: StrictInt = Field(ge=0, le=1)
+
+    @model_validator(mode="after")
+    def require_gf2_incidence(self) -> Self:
+        if len(self.target) != len(self.source) - 1:
+            raise _validation_error(
+                "morse_boundary_dimension",
+                "a Morse boundary entry must join adjacent dimensions",
+            )
+        if self.coefficient != self.gradient_path_count % 2:
+            raise _validation_error(
+                "morse_boundary_coefficient",
+                "the GF(2) coefficient must equal the gradient-path parity",
+            )
+        return self
+
+
+class MorseComplexRequest(StrictModel):
+    """One acyclic matching over a bounded complex, taken over GF(2)."""
+
+    complex: SimplicialComplexRequest
+    pairs: tuple[MatchingPair, ...] = Field(default=(), max_length=MAX_MORSE_PAIRS)
+    coefficient_field: Literal["GF(2)"] = "GF(2)"
+
+
+class MorseComplexResult(StrictModel):
+    """The graded Morse complex of one acyclic matching over GF(2).
+
+    The basis is the critical cells by dimension, the boundary rows are the
+    signed GF(2) incidences recovered from complete gradient-path counts, and
+    the Euler characteristic and Betti numbers are the reduced complex's own.
+    """
+
+    complex: FiniteSimplicialComplex
+    pairs: tuple[MatchingPair, ...] = Field(default=(), max_length=MAX_MORSE_PAIRS)
+    critical_profile: CriticalCellProfile
+    coefficient_field: Literal["GF(2)"] = "GF(2)"
+    critical_cells_by_dimension: tuple[CriticalCellBasis, ...] = Field(
+        min_length=1, max_length=MAX_TOPOLOGY_DIMENSION + 1
+    )
+    boundary_entries: tuple[MorseBoundaryEntry, ...] = Field(
+        default=(), max_length=MAX_MORSE_BOUNDARY_ENTRIES
+    )
+    gradient_path_total: StrictInt = Field(ge=0, le=MAX_MORSE_GRADIENT_PATHS)
+    boundary_square_zero: bool
+    morse_euler_characteristic: StrictInt
+    closure_euler_characteristic: StrictInt
+    betti_numbers: tuple[StrictInt, ...] = Field(
+        default=(), max_length=MAX_TOPOLOGY_DIMENSION + 1
+    )
+
+    @model_validator(mode="after")
+    def require_graded_morse_complex(self) -> Self:
+        dimensions = tuple(
+            basis.dimension for basis in self.critical_cells_by_dimension
+        )
+        if dimensions != tuple(range(len(dimensions))):
+            raise _validation_error(
+                "morse_basis_dimensions",
+                "Morse basis cells must cover contiguous dimensions from zero",
+            )
+        cells = tuple(
+            cell for basis in self.critical_cells_by_dimension for cell in basis.cells
+        )
+        if tuple(sorted(cells)) != tuple(sorted(self.critical_profile.critical_cells)):
+            raise _validation_error(
+                "morse_basis_partition",
+                "the Morse basis must be exactly the critical-cell family",
+            )
+        counts = tuple(len(basis.cells) for basis in self.critical_cells_by_dimension)
+        if counts != self.critical_profile.counts_by_dimension:
+            raise _validation_error(
+                "morse_basis_counts",
+                "Morse basis sizes must match the critical counts by dimension",
+            )
+        euler = sum((-1) ** dimension * count for dimension, count in enumerate(counts))
+        if (
+            self.morse_euler_characteristic != euler
+            or self.closure_euler_characteristic != euler
+        ):
+            raise _validation_error(
+                "morse_euler_identity",
+                "critical-count and closure Euler characteristics must agree",
+            )
+        if len(self.betti_numbers) != len(dimensions) or any(
+            value < 0 for value in self.betti_numbers
+        ):
+            raise _validation_error(
+                "morse_betti_shape",
+                "Betti numbers must be nonnegative and cover every dimension",
+            )
+        sources = tuple(entry.source for entry in self.boundary_entries)
+        if sources != tuple(sorted(sources)):
+            raise _validation_error(
+                "morse_boundary_order",
+                "Morse boundary entries must be canonically ordered by source cell",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(cls, **values: Any) -> Self:
+        """Build after the admitted Morse-complex kernel established the boundary."""
+
+        return cls.model_construct(**values)
+
+
 def _canonical_cell_order(complex_: FiniteSimplicialComplex) -> tuple[Simplex, ...]:
     return tuple(face for group in complex_.faces_by_dimension for face in group.faces)
 
 
 __all__ = [
+    "MAX_MORSE_BOUNDARY_ENTRIES",
     "MAX_MORSE_CELLS",
+    "MAX_MORSE_CRITICAL_CELLS",
+    "MAX_MORSE_GRADIENT_PATHS",
+    "MAX_MORSE_GRADIENT_STATES",
     "MAX_MORSE_HASSE_EDGES",
     "MAX_MORSE_PAIRS",
+    "MAX_MORSE_PATH_STEPS",
+    "CriticalCellBasis",
     "CriticalCellProfile",
     "DiscreteMorseMatchingRequest",
     "DiscreteMorseMatchingResult",
+    "GradientPath",
+    "GradientPathCount",
+    "GradientPathStep",
+    "GradientPathsRequest",
+    "GradientPathsResult",
     "MatchingPair",
+    "MorseBoundaryEntry",
+    "MorseComplexRequest",
+    "MorseComplexResult",
+    "MorseGradientStepKind",
     "MorseMatchingFault",
     "MorseMatchingOutcome",
 ]

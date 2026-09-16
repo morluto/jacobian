@@ -10,10 +10,13 @@ from jacobian.math.geometry.polytopes._models import (
     PolytopeSupportResult,
     PolytopeVolumeRequest,
     PolytopeVolumeResult,
+    PyramidRequest,
+    PyramidResult,
     RationalVPolytope,
 )
 from jacobian.math.geometry.polytopes.operations import (
     facet_incidence,
+    polytope_pyramid,
     polytope_support,
     polytope_volume,
 )
@@ -33,6 +36,11 @@ def compute_facet_incidence(request: FacetIncidenceRequest) -> FacetIncidenceRes
             Vertex(coordinates=vertex.coordinates) for vertex in vertices.vertices
         )
     return facet_incidence(vertices, request.dimension_bound)
+
+
+def compute_polytope_pyramid(request: PyramidRequest) -> PyramidResult:
+    """Unpack a request and project the native pyramid result."""
+    return polytope_pyramid(request.polytope, request.height_axis)
 
 
 def compute_polytope_volume(request: PolytopeVolumeRequest) -> PolytopeVolumeResult:
@@ -251,6 +259,50 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                             "offset": {"num": "1", "den": "1"},
                         },
                     ],
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="polytope.rational.pyramid.compute",
+        title="Compute the exact pyramid over a bounded rational polytope",
+        description="Embed each base vertex p as (p, 0) on a fresh height axis and "
+        "take the convex hull with the apex (0, ..., 0, 1), returning the exact "
+        "pyramid V-polytope with base vertices keeping their source IDs, the "
+        "reserved apex ID 'apex', explicit source-to-base transport, and the "
+        "replayed dimension identity dim(pyramid) = dim(P) + 1. The source must "
+        "be a nonempty labelled rational V-polytope; the height axis must be a "
+        "fresh label and no source vertex may use the reserved apex ID.",
+        request_type=PyramidRequest,
+        result_type=PyramidResult,
+        run=compute_polytope_pyramid,
+        tags=("polytope", "pyramid", "exact-rational"),
+        discovery_terms=(
+            "pyramid over a polytope",
+            "cone over a polytope",
+            "join with a point",
+        ),
+        examples=(
+            OperationExample(
+                name="segment_pyramid_triangle",
+                description="Build the exact triangle that is the pyramid over the unit "
+                "segment on axis [x]; the height axis 'h' must be fresh and no "
+                "source vertex may use the reserved apex ID.",
+                input={
+                    "polytope": {
+                        "space": {"axes": ["x"]},
+                        "vertices": [
+                            {
+                                "vertex_id": "left",
+                                "coordinates": [{"num": "0", "den": "1"}],
+                            },
+                            {
+                                "vertex_id": "right",
+                                "coordinates": [{"num": "1", "den": "1"}],
+                            },
+                        ],
+                    },
+                    "height_axis": "h",
                 },
             ),
         ),

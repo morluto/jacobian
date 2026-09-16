@@ -7,9 +7,10 @@ import math
 import sys
 import time
 from enum import StrEnum
+from fractions import Fraction
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Any, Literal, NamedTuple, Self
+from typing import Annotated, Any, Literal, NamedTuple, Self
 
 from pydantic import (
     Field,
@@ -19,6 +20,7 @@ from pydantic import (
 )
 from pydantic_core import PydanticCustomError
 
+from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian._execution import (
     BackendFailureReason,
     ExecutionResource,
@@ -34,13 +36,22 @@ from jacobian._execution import (
 )
 from jacobian._models import StrictModel
 from jacobian._worker_errors import decode_worker_execution_error
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.canonical import format_canonical_integer
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.logic._solver_errors import (
     _Z3_SOURCE_DIAGNOSTIC,
     _classify_exhaustion,
     _project_unknown,
     _raise_exhaustion,
     _UnknownResource,
+)
+from jacobian.math.number_theory.algebraic_numbers.real import (
+    MAX_REAL_ALGEBRAIC_COEFFICIENT_DIGITS,
+    MAX_REAL_ALGEBRAIC_DEGREE,
+    RealAlgebraicValue,
 )
 from jacobian.process import (
     ProcessResourceLimits,
@@ -131,6 +142,30 @@ class SmtLogic(StrEnum):
     QF_UF = "QF_UF"
     QF_LIA = "QF_LIA"
     QF_LRA = "QF_LRA"
+    QF_NRA = "QF_NRA"
+
+
+# Bounded structurally enforceable quantifier-free nonlinear real-arithmetic
+# grammar. The admitted terms are Boolean combinations of equalities,
+# inequalities, and strict inequalities between rational polynomials over
+# declared real constants. Division, integer variables, quantifiers, and
+# transcendental or underspecified operators are rejected before Z3 solves.
+# The variable, assertion, degree, monomial, coefficient-digit, and aggregate
+# polynomial-work ceilings bound polynomial expansion independently of the
+# source byte and compound-term lexicons.
+_MAX_NRA_VARIABLES = 32
+_MAX_NRA_ASSERTIONS = 1_024
+_MAX_NRA_TOTAL_DEGREE = 16
+_MAX_NRA_MONOMIALS = 4_096
+_MAX_NRA_COEFFICIENT_DIGITS = _MAX_SMTLIB_NUMERAL_DIGITS
+_MAX_NRA_POLYNOMIAL_WORK = 1_000_000
+# A satisfying model is published only through exact carriers. Rational
+# components use the canonical reduced rational; irrational components are
+# admitted exactly through the real algebraic value when their minimal
+# polynomial fits the shared carrier envelope. Anything else returns UNKNOWN.
+_MAX_NRA_MODEL_DEGREE = MAX_REAL_ALGEBRAIC_DEGREE
+_MAX_NRA_MODEL_COEFFICIENT_DIGITS = MAX_REAL_ALGEBRAIC_COEFFICIENT_DIGITS
+_MAX_NRA_EXACT_MODEL_BYTES = 64_000
 
 
 class _ArithmeticBound(NamedTuple):
@@ -460,7 +495,22 @@ def _is_smtlib_source_diagnostic(exc: Exception) -> bool:
 
 
 class SmtSolveRequest(StrictModel):
-    logic: SmtLogic
+    logic: SmtLogic = Field(
+        description=(
+            "Declared quantifier-free fragment. QF_UF admits Boolean-sorted "
+            "uninterpreted constants and functions; QF_LIA and QF_LRA admit pure "
+            "linear integer and real arithmetic; QF_NRA admits quantifier-free "
+            "Boolean combinations of rational-polynomial equalities, "
+            "inequalities, and strict inequalities over declared real variables "
+            "with no division, integer variables, or transcendental operators. "
+            "The nonlinear fragment is additionally bounded by "
+            f"{_MAX_NRA_VARIABLES} real variables, {_MAX_NRA_ASSERTIONS} "
+            f"assertions, total degree {_MAX_NRA_TOTAL_DEGREE}, "
+            f"{_MAX_NRA_MONOMIALS} monomials per polynomial, "
+            f"{_MAX_NRA_COEFFICIENT_DIGITS} coefficient digits, and "
+            f"{_MAX_NRA_POLYNOMIAL_WORK:,} coefficient operations."
+        )
+    )
     smtlib: str = Field(
         min_length=1,
         max_length=_MAX_SMTLIB_BYTES,
@@ -567,6 +617,53 @@ class SmtSolveRequest(StrictModel):
         return self
 
 
+class SmtRationalModelValue(StrictModel):
+    """One exact rational component of a QF_NRA satisfying model."""
+
+    kind: Literal["RATIONAL"] = "RATIONAL"
+    value: CanonicalRational = Field(
+        description="Exact reduced rational value of one declared real variable."
+    )
+
+
+class SmtAlgebraicModelValue(StrictModel):
+    """One exact real algebraic component of a QF_NRA satisfying model."""
+
+    kind: Literal["ALGEBRAIC"] = "ALGEBRAIC"
+    value: RealAlgebraicValue = Field(
+        description=(
+            "Exact indexed real root of an integer minimal polynomial, using the "
+            "domain-owned real algebraic carrier rather than a decimal approximation."
+        )
+    )
+
+
+SmtModelValue = Annotated[
+    SmtRationalModelValue | SmtAlgebraicModelValue,
+    Field(discriminator="kind"),
+]
+
+
+class SmtModelBinding(StrictModel):
+    """One declared real variable bound to its exact model value."""
+
+    variable: str = Field(min_length=1, max_length=256)
+    value: SmtModelValue
+
+
+class SmtExactModel(StrictModel):
+    """Source-bound exact model of one satisfied QF_NRA query."""
+
+    bindings: tuple[SmtModelBinding, ...] = Field(
+        max_length=_MAX_NRA_VARIABLES,
+        description=(
+            "One binding per declared real variable, in canonical name order. "
+            "Each value is an exact canonical rational or an exact real algebraic "
+            "root; no floating-point component is ever published."
+        ),
+    )
+
+
 class SmtSolveResult(StrictModel):
     """One solver outcome bound to the exact SMT-LIB request it answers."""
 
@@ -578,7 +675,15 @@ class SmtSolveResult(StrictModel):
         description=(
             "Bounded Z3 display projection of the worker's satisfying model. It is "
             "provided for inspection, not as a canonical mathematical value or an "
-            "independently verifiable model encoding."
+            "independently verifiable model encoding. For QF_NRA it renders exact "
+            "rational or root-object spells, never decimal approximations."
+        ),
+    )
+    exact_model: SmtExactModel | None = Field(
+        default=None,
+        description=(
+            "Exact source-bound model for a satisfied QF_NRA query. Present only "
+            "for QF_NRA SAT outcomes; other logics retain the display projection."
         ),
     )
     exhausted: _UnknownResource | None = Field(default=None)
@@ -590,6 +695,17 @@ class SmtSolveResult(StrictModel):
             raise _validation_error(
                 "logic.sat_model_outcome", "only a SAT result may carry a model"
             )
+        is_nra = self.source.logic == SmtLogic.QF_NRA
+        if self.exact_model is not None and (self.outcome != "SAT" or not is_nra):
+            raise _validation_error(
+                "logic.exact_model_outcome",
+                "only a QF_NRA SAT result may carry an exact model",
+            )
+        if self.outcome == "SAT" and is_nra and self.exact_model is None:
+            raise _validation_error(
+                "logic.exact_model_required",
+                "a QF_NRA SAT result must carry an exact model",
+            )
         if self.exhausted is not None and self.outcome != "UNKNOWN":
             raise _validation_error(
                 "logic.unknown_exhaustion",
@@ -598,11 +714,20 @@ class SmtSolveResult(StrictModel):
         return self
 
 
-def _solver_settings(timeout_ms: int) -> dict[str, int]:
-    """Return the full request-scoped Z3 budget: wall time, work, and memory."""
+def _solver_settings(timeout_ms: int, *, logic: str | None = None) -> dict[str, int]:
+    """Return the full request-scoped Z3 budget: wall time, work, and memory.
 
+    Nonlinear real arithmetic may overrun a per-call timeout until Z3 reaches a
+    safe interruption point, so QF_NRA reserves half of the remaining lifecycle
+    allowance for the solver call.  The outer killable worker keeps the full
+    request wall limit as the hard safety bound.
+    """
+
+    timeout = remaining_timeout_ms(timeout_ms)
+    if logic == SmtLogic.QF_NRA.value:
+        timeout = max(1, timeout // 2)
     return {
-        "timeout": remaining_timeout_ms(timeout_ms),
+        "timeout": timeout,
         "rlimit": _SOLVER_RLIMIT,
         "max_memory": _SOLVER_MAX_MEMORY_MB,
     }
@@ -640,6 +765,334 @@ def _require_supported_fragment_nodes(
         stack.extend(expression.children())
 
 
+def _nra_domain_error(code: str, message: str) -> OperationDomainValidationError:
+    return OperationDomainValidationError(
+        location=("smtlib",), code=code, message=message
+    )
+
+
+def _nra_resource_error(code: str, message: str) -> OperationResourceAdmissionError:
+    return OperationResourceAdmissionError(
+        location=("smtlib",), code=code, message=message
+    )
+
+
+def _nra_coefficient_digits(value: Fraction) -> int:
+    return max(
+        len(format_canonical_integer(abs(value.numerator))),
+        len(format_canonical_integer(value.denominator)),
+    )
+
+
+class _NraExpressionState:
+    """Bounded exact polynomial expansion for one admitted QF_NRA source.
+
+    Every declared real constant becomes a formal variable; addition,
+    subtraction, negation, multiplication, and nonnegative integer powers build
+    the exact sparse rational polynomial of each Real-sorted subterm. Monomial
+    count, total degree, coefficient digits, and aggregate multiplication work
+    are charged during expansion so an admitted source cannot materialize an
+    unbounded polynomial.
+    """
+
+    def __init__(self, z3: Any, index: dict[str, int]) -> None:
+        self.z3 = z3
+        self.index = index
+        self.width = len(index)
+        self.work = 0
+        self.memo: dict[int, dict[tuple[int, ...], Fraction]] = {}
+
+    def _degree_limit(self, polynomial: dict[tuple[int, ...], Fraction]) -> None:
+        if len(polynomial) > _MAX_NRA_MONOMIALS:
+            raise _nra_resource_error(
+                "logic.smt.nra_monomial_budget",
+                f"a QF_NRA polynomial exceeds the {_MAX_NRA_MONOMIALS}-monomial envelope",
+            )
+        for exponents in polynomial:
+            if sum(exponents) > _MAX_NRA_TOTAL_DEGREE:
+                raise _nra_resource_error(
+                    "logic.smt.nra_degree_budget",
+                    f"a QF_NRA polynomial exceeds total degree {_MAX_NRA_TOTAL_DEGREE}",
+                )
+        for coefficient in polynomial.values():
+            if _nra_coefficient_digits(coefficient) > _MAX_NRA_COEFFICIENT_DIGITS:
+                raise _nra_resource_error(
+                    "logic.smt.nra_coefficient_budget",
+                    "a QF_NRA coefficient exceeds the "
+                    f"{_MAX_NRA_COEFFICIENT_DIGITS}-digit envelope",
+                )
+
+    def _charge_work(self, amount: int) -> None:
+        self.work += amount
+        if self.work > _MAX_NRA_POLYNOMIAL_WORK:
+            raise _nra_resource_error(
+                "logic.smt.nra_work_budget",
+                f"QF_NRA polynomial expansion exceeds {_MAX_NRA_POLYNOMIAL_WORK} "
+                "coefficient operations",
+            )
+
+    def constant(self, value: Fraction) -> dict[tuple[int, ...], Fraction]:
+        if value == 0:
+            return {}
+        return {(0,) * self.width: value}
+
+    def one(self) -> dict[tuple[int, ...], Fraction]:
+        return {(0,) * self.width: Fraction(1)}
+
+    def add(
+        self,
+        left: dict[tuple[int, ...], Fraction],
+        right: dict[tuple[int, ...], Fraction],
+    ) -> dict[tuple[int, ...], Fraction]:
+        self._charge_work(len(left) + len(right))
+        result = dict(left)
+        for exponents, coefficient in right.items():
+            total = result.get(exponents, Fraction(0)) + coefficient
+            if total:
+                result[exponents] = total
+            else:
+                result.pop(exponents, None)
+        self._degree_limit(result)
+        return result
+
+    def negate(
+        self, polynomial: dict[tuple[int, ...], Fraction]
+    ) -> dict[tuple[int, ...], Fraction]:
+        return {
+            exponents: -coefficient for exponents, coefficient in polynomial.items()
+        }
+
+    def multiply(
+        self,
+        left: dict[tuple[int, ...], Fraction],
+        right: dict[tuple[int, ...], Fraction],
+    ) -> dict[tuple[int, ...], Fraction]:
+        self._charge_work(max(1, len(left)) * max(1, len(right)))
+        result: dict[tuple[int, ...], Fraction] = {}
+        for left_exponents, left_coefficient in left.items():
+            for right_exponents, right_coefficient in right.items():
+                exponents = tuple(
+                    a + b for a, b in zip(left_exponents, right_exponents, strict=True)
+                )
+                if sum(exponents) > _MAX_NRA_TOTAL_DEGREE:
+                    raise _nra_resource_error(
+                        "logic.smt.nra_degree_budget",
+                        "a QF_NRA polynomial product exceeds total degree "
+                        f"{_MAX_NRA_TOTAL_DEGREE}",
+                    )
+                total = result.get(exponents, Fraction(0)) + (
+                    left_coefficient * right_coefficient
+                )
+                if total:
+                    result[exponents] = total
+                else:
+                    result.pop(exponents, None)
+                if len(result) > _MAX_NRA_MONOMIALS:
+                    raise _nra_resource_error(
+                        "logic.smt.nra_monomial_budget",
+                        "a QF_NRA polynomial product exceeds the "
+                        f"{_MAX_NRA_MONOMIALS}-monomial envelope",
+                    )
+        self._degree_limit(result)
+        return result
+
+    def power(
+        self,
+        polynomial: dict[tuple[int, ...], Fraction],
+        exponent: int,
+    ) -> dict[tuple[int, ...], Fraction]:
+        result = self.one()
+        for _ in range(exponent):
+            result = self.multiply(result, polynomial)
+        return result
+
+
+def _nra_real_polynomial(
+    expression: Any, state: _NraExpressionState
+) -> dict[tuple[int, ...], Fraction]:
+    z3 = state.z3
+    expression_id = expression.get_id()
+    if expression_id in state.memo:
+        return state.memo[expression_id]
+    if z3.is_rational_value(expression):
+        value = expression.as_fraction()
+        polynomial = state.constant(value)
+        state.memo[expression_id] = polynomial
+        return polynomial
+    if not z3.is_app(expression):
+        raise _nra_domain_error(
+            "logic.smt.nra_operator",
+            "QF_NRA admits only applied polynomial terms",
+        )
+    kind = expression.decl().kind()
+    if kind == z3.Z3_OP_UNINTERPRETED:
+        name = expression.decl().name()
+        position = state.index.get(name)
+        if position is None:
+            raise _nra_domain_error(
+                "logic.smt.nra_declaration",
+                "QF_NRA admits only declared real constants",
+            )
+        vector = tuple(1 if i == position else 0 for i in range(state.width))
+        polynomial = {vector: Fraction(1)}
+        state.memo[expression_id] = polynomial
+        return polynomial
+    children = expression.children()
+    if kind in (z3.Z3_OP_ADD, z3.Z3_OP_SUB):
+        result = _nra_real_polynomial(children[0], state)
+        for child in children[1:]:
+            operand = _nra_real_polynomial(child, state)
+            if kind == z3.Z3_OP_SUB:
+                result = state.add(result, state.negate(operand))
+            else:
+                result = state.add(result, operand)
+        state.memo[expression_id] = result
+        return result
+    if kind == z3.Z3_OP_UMINUS:
+        result = state.negate(_nra_real_polynomial(children[0], state))
+        state.memo[expression_id] = result
+        return result
+    if kind == z3.Z3_OP_MUL:
+        result = state.one()
+        for child in children:
+            result = state.multiply(result, _nra_real_polynomial(child, state))
+        state.memo[expression_id] = result
+        return result
+    if kind == z3.Z3_OP_POWER:
+        exponent_expression = children[1]
+        if not z3.is_int_value(exponent_expression):
+            raise _nra_domain_error(
+                "logic.smt.nra_operator",
+                "QF_NRA admits only constant nonnegative integer powers",
+            )
+        exponent = exponent_expression.as_long()
+        if exponent < 0 or exponent > _MAX_NRA_TOTAL_DEGREE:
+            raise _nra_resource_error(
+                "logic.smt.nra_degree_budget",
+                f"QF_NRA powers are bounded by total degree {_MAX_NRA_TOTAL_DEGREE}",
+            )
+        result = state.power(_nra_real_polynomial(children[0], state), exponent)
+        state.memo[expression_id] = result
+        return result
+    raise _nra_domain_error(
+        "logic.smt.nra_operator",
+        f"QF_NRA rejects the non-polynomial operator {expression.decl().name()}",
+    )
+
+
+def _nra_require_boolean(expression: Any, state: _NraExpressionState) -> None:
+    z3 = state.z3
+    if not z3.is_app(expression):
+        raise _nra_domain_error(
+            "logic.smt.nra_operator",
+            "QF_NRA admits only applied Boolean terms",
+        )
+    kind = expression.decl().kind()
+    if kind in (z3.Z3_OP_TRUE, z3.Z3_OP_FALSE):
+        return
+    children = expression.children()
+    if kind in (
+        z3.Z3_OP_AND,
+        z3.Z3_OP_OR,
+        z3.Z3_OP_XOR,
+        z3.Z3_OP_NOT,
+        z3.Z3_OP_IMPLIES,
+    ):
+        for child in children:
+            _nra_require_boolean(child, state)
+        return
+    if kind in (z3.Z3_OP_EQ, z3.Z3_OP_DISTINCT):
+        sorts = {child.sort().kind() for child in children}
+        if sorts <= {z3.Z3_REAL_SORT}:
+            for child in children:
+                _nra_real_polynomial(child, state)
+            return
+        if sorts <= {z3.Z3_BOOL_SORT}:
+            for child in children:
+                _nra_require_boolean(child, state)
+            return
+        raise _nra_domain_error(
+            "logic.smt.nra_sort",
+            "QF_NRA equalities must compare Real or Boolean terms, not mixed sorts",
+        )
+    if kind in (
+        z3.Z3_OP_LT,
+        z3.Z3_OP_LE,
+        z3.Z3_OP_GT,
+        z3.Z3_OP_GE,
+    ):
+        for child in children:
+            if child.sort().kind() != z3.Z3_REAL_SORT:
+                raise _nra_domain_error(
+                    "logic.smt.nra_sort",
+                    "QF_NRA inequalities require Real-sorted polynomial terms",
+                )
+            _nra_real_polynomial(child, state)
+        return
+    raise _nra_domain_error(
+        "logic.smt.nra_operator",
+        f"QF_NRA rejects the non-polynomial Boolean operator {expression.decl().name()}",
+    )
+
+
+def _require_qf_nra_fragment(assertions: tuple[Any, ...], z3: Any) -> None:
+    """Admit one structurally bounded quantifier-free nonlinear real query."""
+
+    context = assertions[0].ctx
+    raw_goal = z3.Goal(ctx=context)
+    raw_goal.add(*assertions)
+    if float(z3.Probe("has-quantifiers", ctx=context)(raw_goal)) != 0.0:
+        raise _nra_domain_error(
+            "logic.smt.nra_quantifier",
+            "QF_NRA admits no quantifiers",
+        )
+    if len(assertions) > _MAX_NRA_ASSERTIONS:
+        raise _nra_resource_error(
+            "logic.smt.nra_assertion_budget",
+            f"QF_NRA admits at most {_MAX_NRA_ASSERTIONS} assertions",
+        )
+
+    variable_names: set[str] = set()
+    stack = list(assertions)
+    seen: set[int] = set()
+    while stack:
+        expression = stack.pop()
+        expression_id = expression.get_id()
+        if expression_id in seen:
+            continue
+        seen.add(expression_id)
+        if not z3.is_app(expression):
+            raise _nra_domain_error(
+                "logic.smt.nra_operator",
+                "QF_NRA admits no quantifiers or binding terms",
+            )
+        sort_kind = expression.sort().kind()
+        if sort_kind not in (z3.Z3_BOOL_SORT, z3.Z3_REAL_SORT):
+            raise _nra_domain_error(
+                "logic.smt.nra_sort",
+                "QF_NRA admits only Real-sorted variables and Boolean structure",
+            )
+        if expression.decl().kind() == z3.Z3_OP_UNINTERPRETED:
+            if expression.decl().arity() != 0 or sort_kind != z3.Z3_REAL_SORT:
+                raise _nra_domain_error(
+                    "logic.smt.nra_declaration",
+                    "QF_NRA admits only zero-arity Real-sorted declarations",
+                )
+            variable_names.add(expression.decl().name())
+        stack.extend(expression.children())
+
+    variables = tuple(sorted(variable_names))
+    if len(variables) > _MAX_NRA_VARIABLES:
+        raise _nra_resource_error(
+            "logic.smt.nra_variable_budget",
+            f"QF_NRA admits at most {_MAX_NRA_VARIABLES} real variables",
+        )
+    index = {name: position for position, name in enumerate(variables)}
+    state = _NraExpressionState(z3, index)
+    for assertion in assertions:
+        _nra_require_boolean(assertion, state)
+
+
 def _probe_declared_logic(
     assertions: Any, logic: str, z3: Any, *, simplify_arithmetic: bool = True
 ) -> None:
@@ -647,6 +1100,9 @@ def _probe_declared_logic(
 
     assertion_tuple = tuple(assertions)
     if not assertion_tuple:
+        return
+    if logic == SmtLogic.QF_NRA.value:
+        _require_qf_nra_fragment(assertion_tuple, z3)
         return
     _require_supported_fragment_nodes(assertion_tuple, logic, z3)
     if logic in (SmtLogic.QF_LIA.value, SmtLogic.QF_LRA.value):
@@ -700,9 +1156,182 @@ def _probe_declared_logic(
         raise ValueError(f"SMT terms must belong to the declared {logic} fragment")
 
 
-def _solve_smt_kernel(
-    *, logic: str, smtlib: str, timeout_ms: int
-) -> dict[str, str | None]:
+def _rejected_response(error: OperationDomainValidationError) -> dict[str, Any]:
+    """Project one typed admission failure into the bounded worker response."""
+
+    detail = error.errors()[0]
+    return {
+        "kind": "rejected",
+        "resource": isinstance(error, OperationResourceAdmissionError),
+        "code": str(detail["type"])[:128],
+        "message": str(detail["msg"])[:1_024],
+    }
+
+
+def _within_digit_bound(magnitude: int, digits: int) -> bool:
+    if magnitude.bit_length() <= 3 * digits:
+        return True
+    return bool(magnitude < 10**digits)
+
+
+def _nra_exact_model_value(value: Any, z3: Any) -> dict[str, Any] | None:
+    """Return one exact wire component for a Z3 model value, or ``None``.
+
+    Rational values are reduced exactly. Irrational values are admitted only
+    through the domain-owned real algebraic carrier as an integer minimal
+    polynomial with an increasing real-root index; anything else is refused so
+    that no lossy decimal can enter a published mathematical value.
+    """
+
+    if z3.is_rational_value(value):
+        fraction = value.as_fraction()
+        if not _within_digit_bound(
+            max(abs(fraction.numerator), fraction.denominator),
+            MAX_CANONICAL_RATIONAL_DIGITS,
+        ):
+            return None
+        return {
+            "kind": "RATIONAL",
+            "value": {"num": fraction.numerator, "den": fraction.denominator},
+        }
+    if z3.is_algebraic_value(value):
+        coefficients: list[int] = []
+        for coefficient in value.poly():
+            if z3.is_int_value(coefficient):
+                coefficients.append(coefficient.as_long())
+            elif (
+                z3.is_rational_value(coefficient)
+                and coefficient.denominator_as_long() == 1
+            ):
+                coefficients.append(coefficient.numerator_as_long())
+            else:
+                return None
+        coefficients_tuple = tuple(coefficients)
+        if len(coefficients_tuple) - 1 > _MAX_NRA_MODEL_DEGREE:
+            return None
+        if coefficients_tuple[-1] <= 0:
+            return None
+        if any(
+            not _within_digit_bound(abs(coefficient), _MAX_NRA_MODEL_COEFFICIENT_DIGITS)
+            for coefficient in coefficients_tuple
+        ):
+            return None
+        root_index = int(value.index())
+        if root_index < 1:
+            return None
+        return {
+            "kind": "ALGEBRAIC",
+            "value": {
+                "polynomial": tuple(reversed(coefficients_tuple)),
+                "real_root_index": root_index - 1,
+            },
+        }
+    return None
+
+
+def _nra_model_projection(bindings: list[tuple[str, Any]], z3: Any) -> str:
+    """Render an exact, float-free S-expression projection of an NRA model."""
+
+    lines: list[str] = []
+    for name, value in bindings:
+        if z3.is_rational_value(value):
+            fraction = value.as_fraction()
+            rendered = (
+                str(fraction.numerator)
+                if fraction.denominator == 1
+                else f"(/ {fraction.numerator} {fraction.denominator})"
+            )
+        else:
+            rendered = value.sexpr()
+        lines.append(f"(define-fun {name} () Real {rendered})")
+    return "\n".join(lines)
+
+
+def _materialize_nra_model(
+    model: Any, z3: Any
+) -> tuple[dict[str, Any] | None, str | None]:
+    """Return an exact model payload and projection, or a bounded UNKNOWN reason."""
+
+    exact_bindings: list[dict[str, Any]] = []
+    projection_bindings: list[tuple[str, Any]] = []
+    for declaration in sorted(model.decls(), key=lambda decl: decl.name()):
+        value = model.eval(declaration(), model_completion=True)
+        component = _nra_exact_model_value(value, z3)
+        if component is None:
+            return (
+                None,
+                "the solver model has a component outside the exact algebraic envelope",
+            )
+        exact_bindings.append({"variable": declaration.name(), "value": component})
+        projection_bindings.append((declaration.name(), value))
+    exact_model: dict[str, Any] = {"bindings": exact_bindings}
+    encoded = json.dumps(exact_model, separators=(",", ":"))
+    if len(encoded.encode("utf-8")) > _MAX_NRA_EXACT_MODEL_BYTES:
+        return None, "the exact model exceeds the admitted representation envelope"
+    model_smtlib = _nra_model_projection(projection_bindings, z3)
+    if len(model_smtlib.encode("utf-8")) > _MAX_MODEL_BYTES:
+        return None, "the model projection exceeds the admitted display envelope"
+    return exact_model, model_smtlib
+
+
+def _nra_unknown_payload(reason: str | None) -> dict[str, Any]:
+    """Project an inconclusive QF_NRA solver answer without raising."""
+
+    exhausted = _classify_exhaustion(reason or "")
+    if exhausted is not None:
+        detail = f"the solver exhausted its {exhausted} budget"
+    elif (reason or "").strip():
+        detail = "the solver returned an inconclusive answer"
+    else:
+        detail = "the solver returned no completeness evidence"
+    return {
+        "outcome": "UNKNOWN",
+        "model_smtlib": None,
+        "exact_model": None,
+        "exhausted": exhausted,
+        "detail": detail,
+    }
+
+
+def _sat_kernel_response(
+    model: Any, assertions: tuple[Any, ...], *, is_nra: bool, z3: Any
+) -> dict[str, Any]:
+    """Validate one Z3 model against every source assertion and project it."""
+
+    if not all(
+        z3.is_true(model.eval(assertion, model_completion=True))
+        for assertion in assertions
+    ):
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+    if is_nra:
+        exact_model, model_smtlib = _materialize_nra_model(model, z3)
+        if exact_model is None:
+            return {
+                "outcome": "UNKNOWN",
+                "model_smtlib": None,
+                "exact_model": None,
+                "exhausted": None,
+                "detail": model_smtlib,
+            }
+        return {
+            "outcome": "SAT",
+            "model_smtlib": model_smtlib,
+            "exact_model": exact_model,
+            "exhausted": None,
+            "detail": None,
+        }
+    model_smtlib = model.sexpr()
+    if len(model_smtlib.encode("utf-8")) > _MAX_MODEL_BYTES:
+        raise OperationResourceExhaustedError(ExecutionResource.OUTPUT)
+    return {
+        "outcome": "SAT",
+        "model_smtlib": model_smtlib,
+        "exhausted": None,
+        "detail": None,
+    }
+
+
+def _solve_smt_kernel(*, logic: str, smtlib: str, timeout_ms: int) -> dict[str, Any]:
     """Run one complete Z3 lifecycle inside the owned worker process."""
 
     try:
@@ -710,32 +1339,23 @@ def _solve_smt_kernel(
     except (ImportError, OSError) as exc:
         raise OperationBackendError(BackendFailureReason.INITIALIZATION) from exc
 
+    is_nra = logic == SmtLogic.QF_NRA.value
     try:
         assertions = z3.parse_smt2_string(smtlib)
         try:
             _probe_declared_logic(assertions, logic, z3)
+        except OperationDomainValidationError as exc:
+            return _rejected_response(exc)
         except ValueError as exc:
             return {"kind": "invalid", "detail": str(exc)[:1_024]}
         solver = z3.SolverFor(logic)
         solver.add(assertions)
-        solver.set(**_solver_settings(timeout_ms))
+        solver.set(**_solver_settings(timeout_ms, logic=logic))
         outcome = solver.check()
         if outcome == z3.sat:
-            model = solver.model()
-            if not all(
-                z3.is_true(model.eval(assertion, model_completion=True))
-                for assertion in assertions
-            ):
-                raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
-            model_smtlib = model.sexpr()
-            if len(model_smtlib.encode("utf-8")) > _MAX_MODEL_BYTES:
-                raise OperationResourceExhaustedError(ExecutionResource.OUTPUT)
-            return {
-                "outcome": "SAT",
-                "model_smtlib": model_smtlib,
-                "exhausted": None,
-                "detail": None,
-            }
+            return _sat_kernel_response(
+                solver.model(), tuple(assertions), is_nra=is_nra, z3=z3
+            )
         if outcome == z3.unsat:
             return {
                 "outcome": "UNSAT",
@@ -752,9 +1372,13 @@ def _solve_smt_kernel(
                 "detail": "SMT-LIB source could not be parsed as SMT-LIB",
             }
         exhausted = _classify_exhaustion(str(exc))
+        if is_nra and exhausted is not None:
+            return _nra_unknown_payload(str(exc))
         if exhausted is not None:
             _raise_exhaustion(exhausted, cause=exc)
         raise OperationBackendError(BackendFailureReason.ABNORMAL_EXIT) from exc
+    if is_nra:
+        return _nra_unknown_payload(solver.reason_unknown())
     exhausted, detail = _project_unknown(solver.reason_unknown())
     return {
         "outcome": "UNKNOWN",
@@ -826,10 +1450,29 @@ def _run_smt_worker(request: SmtSolveRequest) -> SmtSolveResult:
                 code="logic.smtlib_source",
                 message=response["detail"],
             )
+        if (
+            set(response) == {"kind", "resource", "code", "message"}
+            and response.get("kind") == "rejected"
+            and isinstance(response.get("resource"), bool)
+            and isinstance(response.get("code"), str)
+            and 0 < len(response["code"]) <= 128
+            and isinstance(response.get("message"), str)
+            and 0 < len(response["message"]) <= 1_024
+        ):
+            error_type = (
+                OperationResourceAdmissionError
+                if response["resource"]
+                else OperationDomainValidationError
+            )
+            raise error_type(
+                location=("smtlib",),
+                code=response["code"],
+                message=response["message"],
+            )
         result = SmtSolveResult.model_validate(
             {"source": request.model_dump(mode="json"), **response}
         )
-        if result.exhausted is not None:
+        if result.exhausted is not None and result.source.logic != SmtLogic.QF_NRA:
             _raise_exhaustion(result.exhausted)
         _require_execution_deadline(deadline, "after SMT result projection")
         return result

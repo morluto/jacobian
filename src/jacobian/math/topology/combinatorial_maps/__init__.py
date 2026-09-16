@@ -1,6 +1,7 @@
 """Supported native combinatorial-map API."""
 
 from jacobian.math.topology.combinatorial_maps.operations import (
+    check_orientable_embedding,
     connected_components,
     connected_components_vertices,
     dual_map,
@@ -10,6 +11,7 @@ from jacobian.math.topology.combinatorial_maps.operations import (
     orientation_reverse,
     rotation_successor,
     verify_dual,
+    verify_orientable_embedding,
     verify_orientation_reverse,
     verify_vertex_face_incidence,
     vertex_face_incidence,
@@ -22,6 +24,7 @@ from jacobian.math.topology.combinatorial_maps.values import (
 __all__ = [
     "FacialWalk",
     "FiniteCombinatorialMap",
+    "check_orientable_embedding",
     "connected_components",
     "connected_components_vertices",
     "dual_map",
@@ -31,6 +34,7 @@ __all__ = [
     "orientation_reverse",
     "rotation_successor",
     "verify_dual",
+    "verify_orientable_embedding",
     "verify_orientation_reverse",
     "verify_vertex_face_incidence",
     "vertex_face_incidence",

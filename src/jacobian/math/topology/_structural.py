@@ -9,7 +9,7 @@ pseudomanifolds retain their already separate owners.
 from __future__ import annotations
 
 from collections.abc import Iterable
-from itertools import combinations
+from itertools import combinations, pairwise
 from typing import Any, Self
 
 from pydantic import Field, StrictInt, model_validator
@@ -442,6 +442,120 @@ class JoinResult(StrictModel):
         return cls.model_construct(**values)
 
 
+class ConeFaceTransport(StrictModel):
+    """One source face and its cone face obtained by adding the apex."""
+
+    source_face: tuple[str, ...] = Field(min_length=1)
+    cone_face: tuple[str, ...] = Field(min_length=2)
+
+    @model_validator(mode="after")
+    def require_structural_transport(self) -> Self:
+        if tuple(sorted(self.source_face)) != self.source_face:
+            raise _validation_error(
+                "topology.require_cone_transport_1",
+                "transport source faces must use canonical vertex order",
+            )
+        if tuple(sorted(self.cone_face)) != self.cone_face:
+            raise _validation_error(
+                "topology.require_cone_transport_2",
+                "transport cone faces must use canonical vertex order",
+            )
+        if not set(self.source_face) < set(self.cone_face):
+            raise _validation_error(
+                "topology.require_cone_transport_3",
+                "a cone face must strictly contain its source face",
+            )
+        if len(self.cone_face) != len(self.source_face) + 1:
+            raise _validation_error(
+                "topology.require_cone_transport_4",
+                "a cone face adds exactly one vertex to its source face",
+            )
+        return self
+
+
+class ConeRequest(StrictModel):
+    """Join one complex with a single fresh tagged apex vertex."""
+
+    complex: SimplicialComplexRequest
+    apex: VertexLabel = "cone_apex"
+
+
+class ConeResult(StrictModel):
+    """The complete cone complex with its apex and source-face transport."""
+
+    complex: SimplicialComplexRequest
+    apex: str
+    cone_vertices: tuple[str, ...]
+    cone_facets: tuple[tuple[str, ...], ...]
+    cone_dimension: int
+    cone_complex: FiniteSimplicialComplex
+    source_face_transport: tuple[ConeFaceTransport, ...] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def require_structural_cone(self) -> Self:
+        _require_complex_matches_facets(
+            self.cone_complex,
+            facets=self.cone_facets,
+            vertices=self.cone_vertices,
+            empty_message="empty cone must have no complex",
+            missing_message="non-empty cone requires cone_complex",
+            facets_message="cone_complex maximal simplices must match cone_facets",
+            vertices_message="cone_complex vertices must match cone_vertices",
+        )
+        if self.cone_complex is not None and (
+            self.cone_complex.dimension != self.cone_dimension
+        ):
+            raise _validation_error(
+                "topology.require_cone_canonical_1",
+                "cone_complex dimension must match cone_dimension",
+            )
+        if self.apex not in set(self.cone_vertices):
+            raise _validation_error(
+                "topology.require_cone_canonical_2",
+                "the apex must be a vertex of the cone complex",
+            )
+        for row in self.source_face_transport:
+            if set(row.cone_face) != set(row.source_face) | {self.apex}:
+                raise _validation_error(
+                    "topology.require_cone_canonical_3",
+                    "every transported cone face must add exactly the apex",
+                )
+        return self
+
+    @classmethod
+    def _from_kernel(cls, **values: Any) -> Self:
+        return cls.model_construct(**values)
+
+
+def _require_cone_admission(
+    complex_: SimplicialComplexRequest, apex: str
+) -> tuple[tuple[str, ...], ...]:
+    if apex in set(complex_.vertices):
+        raise _validation_error(
+            "topology.require_cone_admission_1",
+            "cone apex must be a fresh tagged vertex outside the source complex",
+        )
+    vertices = tuple(sorted(set(complex_.vertices) | {apex}))
+    if len(vertices) > MAX_TOPOLOGY_VERTICES:
+        raise _validation_error(
+            "topology.require_cone_admission_2",
+            f"cone would span {len(vertices)} vertices, above the {MAX_TOPOLOGY_VERTICES}-vertex canonical bound",
+        )
+    facets = tuple(tuple(sorted(set(facet) | {apex})) for facet in complex_.facets)
+    width = max(len(facet) for facet in facets)
+    if width > MAX_TOPOLOGY_DIMENSION + 1:
+        raise _validation_error(
+            "topology.require_cone_admission_3",
+            f"cone facets would span {width} vertices, above the {MAX_TOPOLOGY_DIMENSION + 1}-vertex facet bound",
+        )
+    if len(facets) > MAX_TOPOLOGY_FACETS:
+        raise _validation_error(
+            "topology.require_cone_admission_4",
+            f"cone would carry {len(facets)} maximal facets, above the {MAX_TOPOLOGY_FACETS}-facet result contract",
+        )
+    return facets
+
+
 class ElementaryCollapseRequest(StrictModel):
     """Check and perform one elementary collapse step (free face must be codimension-one)."""
 
@@ -641,6 +755,160 @@ def compute_join(request: JoinRequest) -> JoinResult:
     )
 
 
+def compute_cone(request: ConeRequest) -> ConeResult:
+    require_complex_admission(request.complex)
+    facets = run_topology_admission(
+        lambda: _require_cone_admission(request.complex, request.apex),
+        location=("apex",),
+    )
+    vertices = tuple(sorted(set(request.complex.vertices) | {request.apex}))
+    cone_complex = canonical_complex(vertices, facets)
+    transport = tuple(
+        ConeFaceTransport(
+            source_face=face, cone_face=tuple(sorted(set(face) | {request.apex}))
+        )
+        for face in sorted(_all_nonempty_faces(request.complex.facets))
+    )
+    return ConeResult._from_kernel(
+        complex=request.complex,
+        apex=request.apex,
+        cone_vertices=vertices,
+        cone_facets=tuple(tuple(sorted(facet)) for facet in facets),
+        cone_dimension=cone_complex.dimension,
+        cone_complex=cone_complex,
+        source_face_transport=transport,
+    )
+
+
+class BoundaryRequest(StrictModel):
+    """Return the exact boundary subcomplex of a pseudomanifold with boundary."""
+
+    complex: SimplicialComplexRequest
+
+
+class BoundaryResult(StrictModel):
+    """Boundary ridges, their downward closure, and its component count."""
+
+    complex: SimplicialComplexRequest
+    dimension: int
+    boundary_ridges: tuple[tuple[str, ...], ...]
+    boundary_vertices: tuple[str, ...]
+    boundary_facets: tuple[tuple[str, ...], ...]
+    boundary_complex: FiniteSimplicialComplex
+    component_count: int = Field(ge=1)
+
+    @model_validator(mode="after")
+    def require_structural_boundary(self) -> Self:
+        _require_complex_matches_facets(
+            self.boundary_complex,
+            facets=self.boundary_facets,
+            vertices=self.boundary_vertices,
+            empty_message="nontrivial boundary must have no empty complex",
+            missing_message="nontrivial boundary requires boundary_complex",
+            facets_message="boundary_complex maximal simplices must match boundary_facets",
+            vertices_message="boundary_complex vertices must match boundary_vertices",
+        )
+        if tuple(sorted(self.boundary_ridges)) != tuple(
+            sorted(tuple(sorted(ridge)) for ridge in self.boundary_facets)
+        ):
+            raise _validation_error(
+                "topology.require_boundary_canonical_1",
+                "boundary ridges must match boundary facets",
+            )
+        if any(len(ridge) != self.dimension for ridge in self.boundary_ridges):
+            raise _validation_error(
+                "topology.require_boundary_canonical_2",
+                "every boundary ridge must be a codimension-one face",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(cls, **values: Any) -> Self:
+        return cls.model_construct(**values)
+
+
+def _boundary_ridges(
+    facets: tuple[Simplex, ...],
+) -> tuple[tuple[str, ...], ...]:
+    """Return the sorted codimension-one faces lying in exactly one facet."""
+
+    incidence: dict[frozenset[str], int] = {}
+    for facet in facets:
+        for face in combinations(sorted(facet), len(facet) - 1):
+            key = frozenset(face)
+            incidence[key] = incidence.get(key, 0) + 1
+    return tuple(
+        tuple(sorted(face))
+        for face, count in sorted(incidence.items(), key=lambda item: sorted(item[0]))
+        if count == 1
+    )
+
+
+def _connected_components(
+    vertices: tuple[str, ...], facets: tuple[tuple[str, ...], ...]
+) -> int:
+    """Count vertex-connected components joined by shared facets."""
+
+    parent = {vertex: vertex for vertex in vertices}
+
+    def find(vertex: str) -> str:
+        while parent[vertex] != vertex:
+            parent[vertex] = parent[parent[vertex]]
+            vertex = parent[vertex]
+        return vertex
+
+    for facet in facets:
+        for first, second in pairwise(facet):
+            parent[find(first)] = find(second)
+    return len({find(vertex) for vertex in vertices})
+
+
+def compute_boundary(request: BoundaryRequest) -> BoundaryResult:
+    """Generate the boundary subcomplex of a checked pseudomanifold."""
+    from jacobian.math.topology._pseudomanifold import pseudomanifold_decision
+
+    require_complex_admission(request.complex)
+
+    def admit() -> tuple[tuple[str, ...], ...]:
+        decision = pseudomanifold_decision(request.complex.facets)
+        if not decision.is_pseudomanifold:
+            raise _validation_error(
+                "topology.require_boundary_admission_1",
+                f"boundary requires a pseudomanifold: {decision.obstruction}",
+            )
+        if decision.is_closed:
+            raise _validation_error(
+                "topology.require_boundary_admission_2",
+                "closed pseudomanifolds have empty boundary; submit a complex "
+                "with a boundary ridge",
+            )
+        if decision.dimension < 1:
+            raise _validation_error(
+                "topology.require_boundary_admission_3",
+                "boundary requires positive dimension",
+            )
+        ridges = _boundary_ridges(request.complex.facets)
+        if not ridges:
+            raise _validation_error(
+                "topology.require_boundary_admission_4",
+                "no codimension-one face has incidence one",
+            )
+        return ridges
+
+    ridges = run_topology_admission(admit, location=("complex",))
+    dimension = max(len(facet) - 1 for facet in request.complex.facets)
+    vertices = tuple(sorted({vertex for ridge in ridges for vertex in ridge}))
+    return BoundaryResult._from_kernel(
+        complex=request.complex,
+        dimension=dimension,
+        boundary_ridges=ridges,
+        boundary_vertices=vertices,
+        boundary_facets=ridges,
+        boundary_complex=canonical_complex(vertices, ridges),
+        component_count=_connected_components(vertices, ridges),
+    )
+
+
 def compute_elementary_collapse(
     request: ElementaryCollapseRequest,
 ) -> ElementaryCollapseResult:
@@ -667,6 +935,11 @@ def compute_elementary_collapse(
 
 
 __all__ = [
+    "BoundaryRequest",
+    "BoundaryResult",
+    "ConeFaceTransport",
+    "ConeRequest",
+    "ConeResult",
     "ElementaryCollapseRequest",
     "ElementaryCollapseResult",
     "FVectorRequest",
@@ -682,6 +955,8 @@ __all__ = [
     "VertexDeletionRequest",
     "VertexDeletionResult",
     "collapse_remaining_facets",
+    "compute_boundary",
+    "compute_cone",
     "compute_elementary_collapse",
     "compute_f_vector",
     "compute_join",

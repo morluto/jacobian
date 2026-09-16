@@ -183,7 +183,11 @@ def test_result_round_trip_remains_canonical_for_the_next_consumer() -> None:
 def test_example_description_states_input_preconditions() -> None:
     """The published example teaches the canonical QQ(x) wire contract."""
 
-    (tool,) = TOOLS
+    tool = next(
+        candidate
+        for candidate in TOOLS
+        if candidate.operation_id == "rational_function.hermite_reduction.compute"
+    )
     assert "envelope admits numerator degree 6" in tool.description.lower()
     for example_spec in tool.examples:
         text = str(example_spec.description).lower()

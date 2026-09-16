@@ -9,6 +9,10 @@ if TYPE_CHECKING:
         BinaryPowerSumGapProfile,
         BinaryPowerSumValueBucket,
     )
+    from jacobian.math.number_theory.number_fields._relative_trace_norm import (
+        NumberFieldRelativeTraceNormResult,
+        relative_trace_norm,
+    )
     from jacobian.math.number_theory.number_fields._ring_of_integers import (
         NumberFieldRingOfIntegersResult,
         ring_of_integers,
@@ -42,6 +46,7 @@ __all__ = [
     "GaussianRational",
     "NumberFieldEmbeddingProfile",
     "NumberFieldRealValueEnclosure",
+    "NumberFieldRelativeTraceNormResult",
     "NumberFieldRingOfIntegersResult",
     "RealNumberFieldEmbedding",
     "SimpleNumberFieldElement",
@@ -53,6 +58,7 @@ __all__ = [
     "compare_real_embedding_elements",
     "discriminant",
     "embeddings",
+    "relative_trace_norm",
     "ring_of_integers",
     "unit_group",
     "verify_binary_power_sum_gap_profile",
@@ -68,12 +74,14 @@ _OWNER_MODULES = {
     "NumberFieldEmbeddingProfile": "values",
     "NumberFieldRealValueEnclosure": "values",
     "NumberFieldRingOfIntegersResult": "_ring_of_integers",
+    "NumberFieldRelativeTraceNormResult": "_relative_trace_norm",
     "RealNumberFieldEmbedding": "values",
     "SimpleNumberFieldElement": "values",
     "SimpleNumberFieldPresentation": "values",
     "SimpleNumberFieldRealEmbeddingBinding": "values",
     "SimpleNumberFieldRealEmbeddingOrder": "values",
     "ring_of_integers": "_ring_of_integers",
+    "relative_trace_norm": "_relative_trace_norm",
 }
 
 

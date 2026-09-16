@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal, Self
+from typing import Any, Literal, Self
 
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
@@ -21,6 +21,7 @@ from jacobian.math.matrices.values import IntegerMatrix
 
 MAX_SIPHON_TRAP_WORK = 20_000_000
 MAX_SIPHON_TRAP_PLACES = 20
+MAX_FIRING_SEQUENCE_LENGTH = 1024
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -245,12 +246,166 @@ class SiphonTrapResult(StrictModel):
         return self
 
 
+class FiringSequenceReplayRequest(StrictModel):
+    """Replay a bounded transition sequence from a source marking."""
+
+    net: PetriNet
+    marking: Marking
+    sequence: tuple[int, ...] = Field(
+        default=(),
+        max_length=MAX_FIRING_SEQUENCE_LENGTH,
+        description=(
+            "Ordered transition indices to fire from the source marking; "
+            "a later transition cannot repair an earlier disabled one."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_valid_sequence_axes(self) -> Self:
+        if len(self.marking.tokens) != self.net.place_count:
+            raise _validation_error(
+                "marking_length", "marking length must match place_count"
+            )
+        if any(
+            not 0 <= transition < self.net.transition_count
+            for transition in self.sequence
+        ):
+            raise _validation_error(
+                "transition_axis", "sequence transitions must use the net axis"
+            )
+        return self
+
+
+class FiringSequenceReplayResult(StrictModel):
+    """Closed firing-sequence replay: FIRES or first-blocked BLOCKED."""
+
+    net: PetriNet
+    marking: Marking
+    sequence: tuple[int, ...] = Field(max_length=MAX_FIRING_SEQUENCE_LENGTH)
+    status: Literal["FIRES", "BLOCKED"]
+    prefix_markings: tuple[Marking, ...]
+    final_marking: Marking | None = None
+    parikh: tuple[int, ...]
+    state_equation_residual: tuple[int, ...]
+    blocked_index: int | None = None
+    deficit: tuple[int, ...] | None = None
+    first_deficient_place: int | None = None
+
+    def _require_shared_axes(self) -> None:
+        if len(self.marking.tokens) != self.net.place_count:
+            raise _validation_error(
+                "marking_length", "marking length must match place_count"
+            )
+        if any(
+            not 0 <= transition < self.net.transition_count
+            for transition in self.sequence
+        ):
+            raise _validation_error(
+                "transition_axis", "sequence transitions must use the net axis"
+            )
+        if len(self.parikh) != self.net.transition_count or any(
+            count < 0 for count in self.parikh
+        ):
+            raise _validation_error(
+                "parikh_axis", "parikh must be a nonnegative transition multiset"
+            )
+        if len(self.state_equation_residual) != self.net.place_count:
+            raise _validation_error(
+                "residual_axis", "state-equation residual must use the place axis"
+            )
+
+    def _require_fires_payload(self) -> None:
+        assert self.status == "FIRES"
+        if (
+            self.final_marking is None
+            or self.blocked_index is not None
+            or self.deficit is not None
+            or self.first_deficient_place is not None
+        ):
+            raise _validation_error(
+                "fires_payload", "FIRES must carry only a final marking"
+            )
+        if len(self.prefix_markings) != len(self.sequence):
+            raise _validation_error(
+                "fires_prefix", "FIRES must record one marking per transition"
+            )
+        if sum(self.parikh) != len(self.sequence):
+            raise _validation_error(
+                "fires_parikh", "FIRES parikh must count every transition"
+            )
+        if any(entry != 0 for entry in self.state_equation_residual):
+            raise _validation_error(
+                "fires_residual", "FIRES residual must witness state-equation equality"
+            )
+        if self.sequence and self.prefix_markings[-1] != self.final_marking:
+            raise _validation_error(
+                "fires_final", "FIRES final marking must extend the prefix ledger"
+            )
+        if not self.sequence and self.final_marking != self.marking:
+            raise _validation_error(
+                "fires_empty", "an empty sequence leaves the marking unchanged"
+            )
+
+    def _require_blocked_payload(self) -> None:
+        assert self.status == "BLOCKED"
+        if (
+            self.final_marking is not None
+            or self.blocked_index is None
+            or self.deficit is None
+            or self.first_deficient_place is None
+        ):
+            raise _validation_error(
+                "blocked_payload", "BLOCKED must carry only its obstruction"
+            )
+        if not 0 <= self.blocked_index < len(self.sequence):
+            raise _validation_error(
+                "blocked_index", "blocked index must point into the sequence"
+            )
+        if len(self.prefix_markings) != self.blocked_index:
+            raise _validation_error(
+                "blocked_prefix", "BLOCKED must record exactly the fired prefix"
+            )
+        if sum(self.parikh) != self.blocked_index:
+            raise _validation_error(
+                "blocked_parikh", "BLOCKED parikh must count the fired prefix"
+            )
+        if len(self.deficit) != self.net.place_count or not any(
+            entry > 0 for entry in self.deficit
+        ):
+            raise _validation_error(
+                "blocked_deficit", "BLOCKED deficit must be a nonempty place profile"
+            )
+        if self.deficit[self.first_deficient_place] <= 0 or any(
+            entry > 0 for entry in self.deficit[: self.first_deficient_place]
+        ):
+            raise _validation_error(
+                "blocked_first",
+                "first deficient place must be the first positive deficit",
+            )
+
+    @model_validator(mode="after")
+    def require_branch_consistency(self) -> Self:
+        self._require_shared_axes()
+        if self.status == "FIRES":
+            self._require_fires_payload()
+        else:
+            self._require_blocked_payload()
+        return self
+
+    @classmethod
+    def _from_kernel(cls, **values: Any) -> Self:
+        return cls.model_construct(**values)
+
+
 __all__ = [
+    "MAX_FIRING_SEQUENCE_LENGTH",
     "MAX_SIPHON_TRAP_WORK",
     "EnabledTransitionsRequest",
     "EnabledTransitionsResult",
     "FireTransitionRequest",
     "FireTransitionResult",
+    "FiringSequenceReplayRequest",
+    "FiringSequenceReplayResult",
     "IncidenceMatrixRequest",
     "IncidenceMatrixResult",
     "PetriMarkingState",

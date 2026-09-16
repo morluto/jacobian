@@ -11,7 +11,11 @@ from __future__ import annotations
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
+from jacobian.math.graphs.values import SimpleUndirectedGraph
 from jacobian.math.matrices.values import (
     SparseRationalMatrix,
     SparseRationalMatrixEntry,
@@ -19,12 +23,17 @@ from jacobian.math.matrices.values import (
 
 from ._face_orbits import face_orbit_data
 from ._models import (
+    MAX_EMBEDDING_DEGREE,
+    MAX_EMBEDDING_EDGES,
+    MAX_EMBEDDING_ROTATION_ENTRIES,
+    MAX_EMBEDDING_VERTICES,
     CombinatorialMapBijection,
     ConnectedComponentsResult,
     DualResult,
     EulerCharacteristicCounts,
     EulerCharacteristicResult,
     FacesResult,
+    OrientableEmbeddingCheckResult,
     OrientableGenusResult,
     OrientationReverseResult,
     VertexFaceIncidenceResult,
@@ -38,6 +47,7 @@ from .values import (
 )
 
 __all__ = [
+    "check_orientable_embedding",
     "connected_components",
     "connected_components_vertices",
     "dual_map",
@@ -47,6 +57,7 @@ __all__ = [
     "orientation_reverse",
     "rotation_successor",
     "verify_dual",
+    "verify_orientable_embedding",
     "verify_orientation_reverse",
     "verify_vertex_face_incidence",
     "vertex_face_incidence",
@@ -407,6 +418,236 @@ def vertex_face_incidence(
             column_count=len(walks),
         ),
     )
+
+
+def _admit_embedding_candidate(
+    graph: SimpleUndirectedGraph, rotations: tuple[tuple[int, ...], ...]
+) -> None:
+    """Share the catalog checker envelope with native callers."""
+
+    if not graph.vertices:
+        raise OperationDomainValidationError(
+            location=("graph",),
+            code="topology.embedding.empty_graph",
+            message="the embedding checker requires at least one graph vertex",
+        )
+    if len(graph.vertices) > MAX_EMBEDDING_VERTICES:
+        raise OperationResourceAdmissionError(
+            location=("graph",),
+            code="topology.embedding.vertex_bound",
+            message="graph vertices exceed the admitted embedding-check envelope",
+        )
+    if len(graph.edges) > MAX_EMBEDDING_EDGES:
+        raise OperationResourceAdmissionError(
+            location=("graph",),
+            code="topology.embedding.edge_bound",
+            message="graph edges exceed the admitted embedding-check envelope",
+        )
+    if any(len(row) > MAX_EMBEDDING_DEGREE for row in rotations):
+        raise OperationResourceAdmissionError(
+            location=("rotations",),
+            code="topology.embedding.degree_bound",
+            message="a local rotation exceeds the admitted embedding-check envelope",
+        )
+    if sum(len(row) for row in rotations) > MAX_EMBEDDING_ROTATION_ENTRIES:
+        raise OperationResourceAdmissionError(
+            location=("rotations",),
+            code="topology.embedding.rotation_bound",
+            message="rotation entries exceed the admitted embedding-check envelope",
+        )
+
+
+def _embedding_adjacency(
+    graph: SimpleUndirectedGraph,
+) -> tuple[dict[str, int], list[set[int]]]:
+    index = {label: position for position, label in enumerate(graph.vertices)}
+    incident: list[set[int]] = [set() for _ in graph.vertices]
+    for edge_index, (left, right) in enumerate(graph.edges):
+        incident[index[left]].add(edge_index)
+        incident[index[right]].add(edge_index)
+    return index, incident
+
+
+def _embedding_connected(graph: SimpleUndirectedGraph, index: dict[str, int]) -> bool:
+    parent = list(range(len(graph.vertices)))
+
+    def find(node: int) -> int:
+        while parent[node] != node:
+            parent[node] = parent[parent[node]]
+            node = parent[node]
+        return node
+
+    for left, right in graph.edges:
+        first, second = find(index[left]), find(index[right])
+        if first != second:
+            parent[first] = second
+    return len({find(node) for node in range(len(graph.vertices))}) <= 1
+
+
+def _canonical_edge_rotation(row: tuple[int, ...]) -> tuple[int, ...]:
+    if not row:
+        return ()
+    pivot = row.index(min(row))
+    return row[pivot:] + row[:pivot]
+
+
+def _invalid_embedding(
+    graph: SimpleUndirectedGraph,
+    rotations: tuple[tuple[int, ...], ...],
+    code: str,
+    detail: str,
+) -> OrientableEmbeddingCheckResult:
+    canonical = tuple(_canonical_edge_rotation(tuple(row)) for row in rotations)
+    return OrientableEmbeddingCheckResult._from_kernel(
+        graph=graph,
+        status="INVALID_EMBEDDING",
+        rotations=canonical,
+        vertices=len(graph.vertices),
+        edges=len(graph.edges),
+        obstruction_code=code,
+        obstruction_detail=detail,
+    )
+
+
+def _embedding_obstruction(
+    graph: SimpleUndirectedGraph,
+    rotations: tuple[tuple[int, ...], ...],
+    incident: list[set[int]],
+) -> tuple[str, str] | None:
+    """Return the first malformed-incidence obstruction, if any."""
+
+    if len(rotations) != len(graph.vertices):
+        return (
+            "ROTATION_ROW_COUNT",
+            "the rotation system must carry exactly one row per graph vertex",
+        )
+    for position, row in enumerate(rotations):
+        if len(row) != len(incident[position]):
+            return (
+                "ROTATION_DEGREE_MISMATCH",
+                f"rotation row {position} does not list every incident edge",
+            )
+    for position, row in enumerate(rotations):
+        seen: set[int] = set()
+        for edge_index in row:
+            if not 0 <= edge_index < len(graph.edges):
+                return (
+                    "EDGE_INDEX_OUT_OF_RANGE",
+                    f"rotation row {position} references an undeclared edge index",
+                )
+            if edge_index not in incident[position]:
+                return (
+                    "FOREIGN_INCIDENCE",
+                    f"edge {edge_index} is not incident to vertex {position}",
+                )
+            if edge_index in seen:
+                return (
+                    "DUPLICATE_INCIDENCE",
+                    f"rotation row {position} repeats edge {edge_index}",
+                )
+            seen.add(edge_index)
+    return None
+
+
+def _embedding_ledger(
+    graph: SimpleUndirectedGraph,
+    canonical: tuple[tuple[int, ...], ...],
+    index: dict[str, int],
+) -> OrientableEmbeddingCheckResult:
+    """Build the complete dart-permutation and face ledger of an admitted system."""
+
+    vertex_count = len(graph.vertices)
+    endpoints = [(index[left], index[right]) for left, right in graph.edges]
+    darts: list[tuple[int, int, int]] = []
+    for edge_index, (tail, head) in enumerate(endpoints):
+        darts.append((tail, head, 2 * edge_index + 1))
+        darts.append((head, tail, 2 * edge_index))
+    dart_rotations: list[tuple[int, ...]] = []
+    for position in range(vertex_count):
+        row = []
+        for edge_index in canonical[position]:
+            tail, _head = endpoints[edge_index]
+            row.append(2 * edge_index if tail == position else 2 * edge_index + 1)
+        dart_rotations.append(tuple(row))
+    dart_count = len(darts)
+    alpha = [dart[2] for dart in darts]
+    sigma = [0] * dart_count
+    for rotation in dart_rotations:
+        for offset, dart in enumerate(rotation):
+            sigma[dart] = rotation[(offset + 1) % len(rotation)]
+    phi = [alpha[sigma[dart]] for dart in range(dart_count)]
+    face_walks: list[tuple[int, ...]] = []
+    face_of_dart = [0] * dart_count
+    visited = [False] * dart_count
+    for start in range(dart_count):
+        if visited[start]:
+            continue
+        walk: list[int] = []
+        current = start
+        while not visited[current]:
+            visited[current] = True
+            face_of_dart[current] = len(face_walks)
+            walk.append(current)
+            current = phi[current]
+        face_walks.append(tuple(walk))
+    faces = len(face_walks) if dart_count else 1
+    characteristic = vertex_count - len(graph.edges) + faces
+    excess = 2 - characteristic
+    if excess < 0 or excess % 2 != 0:
+        raise RuntimeError(
+            "a connected unsigned rotation system must induce an orientable surface"
+        )
+    return OrientableEmbeddingCheckResult._from_kernel(
+        graph=graph,
+        status="ORIENTABLE_CELLULAR_EMBEDDING",
+        rotations=canonical,
+        dart_rotations=tuple(dart_rotations),
+        darts=tuple(darts),
+        alpha=tuple(alpha),
+        sigma=tuple(sigma),
+        phi=tuple(phi),
+        face_walks=tuple(face_walks),
+        face_of_dart=tuple(face_of_dart),
+        vertices=vertex_count,
+        edges=len(graph.edges),
+        faces=faces,
+        euler_characteristic=characteristic,
+        genus=excess // 2,
+    )
+
+
+def check_orientable_embedding(
+    graph: SimpleUndirectedGraph, rotations: tuple[tuple[int, ...], ...]
+) -> OrientableEmbeddingCheckResult:
+    """Check one supplied rotation system as an orientable cellular embedding.
+
+    The rotation system is a cyclic order of incident edge indices at every
+    vertex.  Every accepted unsigned rotation system describes a cellular
+    embedding of the connected graph in a closed orientable surface, so
+    orientability is a convention here rather than an optional flag: faces are
+    the cycles of ``phi = alpha . sigma``.  This is a checker for a supplied
+    rotation system, not a genus minimizer.
+    """
+
+    _admit_embedding_candidate(graph, rotations)
+    index, incident = _embedding_adjacency(graph)
+    obstruction = _embedding_obstruction(graph, rotations, incident)
+    if obstruction is not None:
+        return _invalid_embedding(graph, rotations, *obstruction)
+    if not _embedding_connected(graph, index):
+        return _invalid_embedding(
+            graph,
+            rotations,
+            "GRAPH_DISCONNECTED",
+            "the supplied graph is not connected",
+        )
+    canonical = tuple(_canonical_edge_rotation(tuple(row)) for row in rotations)
+    return _embedding_ledger(graph, canonical, index)
+
+
+def verify_orientable_embedding(claim: OrientableEmbeddingCheckResult) -> bool:
+    """Check a claimed embedding by replaying the supplied rotation system."""
+    return check_orientable_embedding(claim.graph, claim.rotations) == claim
 
 
 def verify_dual(claim: DualResult) -> bool:

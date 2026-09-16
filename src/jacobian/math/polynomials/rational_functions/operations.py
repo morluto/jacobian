@@ -14,14 +14,20 @@ from jacobian.catalog.models import (
 from jacobian.math.polynomials._conversions import (
     rational_function_from_sympy,
     rational_function_to_sympy,
+    rational_polynomial_to_sympy,
     symbols_for_variables,
 )
 from jacobian.math.polynomials.rational_functions._models import (
     HermiteReductionResult,
+    PartialFractionsResult,
+    PartialFractionTerm,
+    RationalFunctionFactorPower,
     require_hermite_reduction_budget,
+    require_partial_fraction_budget,
 )
 from jacobian.math.polynomials.values import (
     RationalFunction,
+    RationalPolynomial,
     RationalPolynomialTerm,
     SparseRationalPolynomial,
 )
@@ -137,4 +143,120 @@ def verify_hermite_reduction(claim: HermiteReductionResult) -> bool:
         return False
 
 
-__all__ = ["hermite_reduction", "verify_hermite_reduction"]
+def _run_partial_fraction_admission(function: RationalFunction) -> None:
+    try:
+        require_partial_fraction_budget(function)
+    except OperationResourceAdmissionError:
+        raise
+    except PydanticCustomError as exc:
+        raise OperationDomainValidationError(
+            location=(), code=exc.type, message=exc.message()
+        ) from exc
+    except ValueError as exc:
+        raise OperationDomainValidationError(
+            location=(), code="polynomial.rational_function_admission", message=str(exc)
+        ) from exc
+
+
+def _sum_partial_fraction_terms(
+    terms: tuple[PartialFractionTerm, ...],
+    variables: tuple[str, ...],
+) -> RationalFunction:
+    """Replay a sum of exact ``numerator / factor**exponent`` terms."""
+
+    from sympy import cancel
+
+    expression = 0
+    for term in terms:
+        numerator = rational_polynomial_to_sympy(term.numerator).as_expr()
+        factor = rational_polynomial_to_sympy(term.factor).as_expr()
+        expression += numerator / factor**term.exponent
+    return rational_function_from_sympy(cancel(expression), variables)
+
+
+def _partial_fractions_admitted(function: RationalFunction) -> PartialFractionsResult:
+    """Compute the factor-power profile after shared owner admission."""
+
+    from jacobian.math.polynomials._elementary_kernel import (
+        rational_partial_fraction_decomposition,
+    )
+    from jacobian.math.polynomials.operations import polynomial_factorization
+
+    variables = function.variables
+    numerator = RationalPolynomial(variables=variables, polynomial=function.numerator)
+    denominator = RationalPolynomial(
+        variables=variables, polynomial=function.denominator
+    )
+    decomposition = rational_partial_fraction_decomposition(numerator, denominator)
+    factorization = polynomial_factorization(denominator)
+    factors = tuple(
+        RationalFunctionFactorPower(factor=record.factor, exponent=record.multiplicity)
+        for record in factorization.factors
+    )
+    terms = tuple(
+        PartialFractionTerm(
+            factor=term.denominator_factor,
+            exponent=term.denominator_exponent,
+            numerator=term.numerator,
+        )
+        for term in decomposition.terms
+    )
+    reconstructed = RationalFunction._from_kernel(
+        variables=variables,
+        numerator=decomposition.reconstruction_numerator.polynomial,
+        denominator=decomposition.reconstruction_denominator.polynomial,
+    )
+    if reconstructed != function:
+        raise RuntimeError("partial-fraction replay did not reconstruct the source")
+
+    _, hermite_remainder = hermite_reduction(function)
+    simple_pole_part = _sum_partial_fraction_terms(
+        tuple(term for term in terms if term.exponent == 1), variables
+    )
+    hermite_agreement = simple_pole_part == hermite_remainder
+    if not hermite_agreement:
+        raise RuntimeError("partial fractions disagree with Hermite reduction")
+
+    return PartialFractionsResult._from_kernel(
+        function=function,
+        polynomial_part=decomposition.polynomial_part,
+        factors=factors,
+        terms=terms,
+        reconstructed=reconstructed,
+        hermite_remainder=hermite_remainder,
+        hermite_agreement=hermite_agreement,
+    )
+
+
+def partial_fractions(function: RationalFunction) -> PartialFractionsResult:
+    """Compute the canonical partial-fraction profile of ``f`` in ``QQ(x)``.
+
+    Return the unique reduced ``f = A + sum n_(i,k)/g_i^k`` decomposition over
+    ``QQ`` with the monic irreducible factor-power profile of the reduced
+    denominator, a common-denominator replay, and the independently computed
+    Hermite remainder. ``g_i`` are monic irreducible over ``QQ`` and every
+    ``n_(i,k)`` has degree below ``g_i``. This does not split irreducibles into
+    algebraic roots.
+    """
+
+    _run_partial_fraction_admission(function)
+    return _partial_fractions_admitted(function)
+
+
+def verify_partial_fractions(claim: PartialFractionsResult) -> bool:
+    """Verify a partial-fraction profile against its source function."""
+
+    try:
+        return partial_fractions(claim.function) == claim
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
+        return False
+
+
+__all__ = [
+    "hermite_reduction",
+    "partial_fractions",
+    "verify_hermite_reduction",
+    "verify_partial_fractions",
+]

@@ -6,12 +6,23 @@ from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.combinatorics.matroids._models import (
     MatroidClosureRequest,
     MatroidClosureResult,
+    MaximumWeightBasisRequest,
+    MaximumWeightBasisResult,
 )
-from jacobian.math.combinatorics.matroids.operations import closure_result
+from jacobian.math.combinatorics.matroids.operations import (
+    closure_result,
+    maximum_weight_basis_result,
+)
 
 
 def _run_closure(request: MatroidClosureRequest) -> MatroidClosureResult:
     return closure_result(request.matroid, request.subset)
+
+
+def _run_maximum_weight_basis(
+    request: MaximumWeightBasisRequest,
+) -> MaximumWeightBasisResult:
+    return maximum_weight_basis_result(request.matroid, request.weights)
 
 
 _CLOSURE_EXAMPLE: dict[str, Any] = {
@@ -23,6 +34,17 @@ _CLOSURE_EXAMPLE: dict[str, Any] = {
         },
     },
     "subset": [0, 1],
+}
+
+_MAXIMUM_WEIGHT_BASIS_EXAMPLE: dict[str, Any] = {
+    "matroid": {
+        "matrix": {
+            "prime": 5,
+            "entries": [[1, 0, 1], [0, 1, 1]],
+            "columns": 3,
+        },
+    },
+    "weights": [3, 2, 5],
 }
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
@@ -43,6 +65,35 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 name="closure_of_basis",
                 description="Compute the closure of {0, 1} in a rank-2 matroid.",
                 input=_CLOSURE_EXAMPLE,
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="matroid.basis.maximum_weight.compute",
+        title="Compute a maximum-weight basis of a linear matroid",
+        description=(
+            "Run the deterministic greedy algorithm (decreasing weight, ties "
+            "by increasing index) on a represented matroid with exact integer "
+            "weights keyed by the ground set. Return one maximum-weight "
+            "basis, its exact total, the deterministic greedy order, and one "
+            "fundamental-circuit exchange row per outside element replaying "
+            "that no valid single-element exchange strictly improves the total."
+        ),
+        request_type=MaximumWeightBasisRequest,
+        result_type=MaximumWeightBasisResult,
+        run=_run_maximum_weight_basis,
+        tags=("matroid", "basis", "maximum-weight", "greedy", "exact"),
+        discovery_terms=(
+            "maximum weight basis",
+            "matroid greedy algorithm",
+            "fundamental circuit",
+            "basis exchange",
+        ),
+        examples=(
+            OperationExample(
+                name="triangle_weights_3_2_5",
+                description="Maximum-weight basis of a rank-2 matroid picks {0, 2}.",
+                input=_MAXIMUM_WEIGHT_BASIS_EXAMPLE,
             ),
         ),
     ),

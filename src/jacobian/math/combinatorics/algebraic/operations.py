@@ -23,10 +23,14 @@ from jacobian.catalog.models import (
 )
 from jacobian.math.combinatorics.algebraic._models import (
     DominanceRelation,
+    KnuthMovesResult,
+    KnuthNeighbor,
     PartitionDominanceResult,
     RSKResult,
     SemistandardTableauCheckResult,
     SemistandardYoungTableauCountResult,
+    SkewLittlewoodRichardsonCheckResult,
+    SkewReadingConvention,
     StandardTableauCheckResult,
 )
 from jacobian.math.combinatorics.algebraic._rsk import (
@@ -53,15 +57,19 @@ from jacobian.math.logic.languages.words.values import FiniteWord
 
 __all__ = [
     "check_semistandard_tableau",
+    "check_skew_littlewood_richardson",
     "check_standard_tableau",
     "conjugate_partition",
     "hook_lengths",
     "inverse_row_insertion_rsk",
+    "knuth_moves",
     "partition_dominance",
     "row_insertion_rsk",
     "semistandard_young_tableaux_count",
     "standard_young_tableaux_count",
+    "verify_knuth_moves",
     "verify_rsk",
+    "verify_skew_littlewood_richardson",
 ]
 
 
@@ -493,6 +501,78 @@ def _rsk_permutation(
     return _row_insert(permutation)
 
 
+def knuth_moves(word: FiniteWord) -> tuple[KnuthNeighbor, ...]:
+    """Return every one-step Knuth neighbor of a bounded ordered word.
+
+    Ranks come from the word's explicit alphabet order under
+    ROW_INSERTION_RSK_V1: ``xzy <-> zxy`` when ``x <= y < z`` (K1, swapping
+    the first two window letters) and ``yxz <-> yzx`` when ``x < y <= z``
+    (K2, swapping the last two). At most one relation applies per window, so
+    the neighborhood holds at most ``len(letters) - 2`` rows.
+    """
+
+    try:
+        canonical = FiniteWord(alphabet=word.alphabet, letters=word.letters)
+    except ValidationError as exc:
+        raise OperationDomainValidationError(
+            location=("word",),
+            code="algebraic_combinatorics.word_not_over_alphabet",
+            message="knuth word letters must belong to the declared alphabet",
+        ) from exc
+    rank = {symbol: index for index, symbol in enumerate(canonical.alphabet)}
+    letters = canonical.letters
+    neighbors: list[KnuthNeighbor] = []
+    for position in range(len(letters) - 2):
+        first, second, third = (
+            rank[letters[position]],
+            rank[letters[position + 1]],
+            rank[letters[position + 2]],
+        )
+        relation: str | None = None
+        swapped: tuple[str, ...] | None = None
+        if first <= third < second or second <= third < first:
+            relation = "K1"
+            swapped = (
+                *letters[:position],
+                letters[position + 1],
+                letters[position],
+                letters[position + 2],
+                *letters[position + 3 :],
+            )
+        elif second < first <= third or third < first <= second:
+            relation = "K2"
+            swapped = (
+                *letters[:position],
+                letters[position],
+                letters[position + 2],
+                letters[position + 1],
+                *letters[position + 3 :],
+            )
+        if relation is None or swapped is None:
+            continue
+        neighbors.append(
+            KnuthNeighbor.model_construct(
+                position=position,
+                relation=relation,
+                neighbor=FiniteWord.model_construct(
+                    alphabet=canonical.alphabet, letters=swapped
+                ),
+            )
+        )
+    return tuple(neighbors)
+
+
+def verify_knuth_moves(claim: KnuthMovesResult) -> bool:
+    """Replay a Knuth neighborhood against its retained source word."""
+
+    try:
+        return knuth_moves(claim.word) == claim.neighbors and (
+            claim.neighbor_count == len(claim.neighbors)
+        )
+    except OperationDomainValidationError:
+        return False
+
+
 def verify_rsk(claim: RSKResult) -> bool:
     """Check bounded permutation admission, RSK correspondence, and LIS/LDS.
 
@@ -772,3 +852,194 @@ def check_semistandard_tableau(
             return SemistandardTableauCheckResult(tableau=candidate, is_member=False)
         raise
     return SemistandardTableauCheckResult(tableau=candidate, is_member=True)
+
+
+def _skew_offsets(
+    outer: IntegerPartition, inner: IntegerPartition
+) -> tuple[int, ...] | None:
+    """Return inner row offsets, or ``None`` when containment fails."""
+    length = max(len(outer.parts), len(inner.parts))
+    offsets: list[int] = []
+    for index in range(length):
+        outer_part = outer.parts[index] if index < len(outer.parts) else 0
+        inner_part = inner.parts[index] if index < len(inner.parts) else 0
+        if inner_part > outer_part:
+            return None
+        offsets.append(inner_part)
+    return tuple(offsets)
+
+
+def check_skew_littlewood_richardson(  # noqa: C901
+    outer: IntegerPartition,
+    inner: IntegerPartition,
+    tableau: TableauCandidate,
+    content: IntegerPartition,
+    convention: SkewReadingConvention = "READING_WORD_RL_TOP_V1",
+) -> SkewLittlewoodRichardsonCheckResult:
+    """Replay skew-LR membership: coverage, semistandardity, content, lattice.
+
+    The reading word concatenates rows top to bottom, each right to left,
+    under READING_WORD_RL_TOP_V1. Every prefix must satisfy the Yamanouchi
+    inequalities ``count(1) >= count(2) >= ...``. The result carries the
+    first failed stage with its concrete prefix length or cell.
+    """
+    outer = _require_canonical_partition(outer)
+    inner = _require_canonical_partition(inner)
+    content = _require_canonical_partition(content)
+    candidate = _revalidate_candidate(tableau)
+    rows = candidate.rows
+
+    offsets = _skew_offsets(outer, inner)
+    if offsets is None:
+        return SkewLittlewoodRichardsonCheckResult._from_kernel(
+            outer,
+            inner,
+            tableau,
+            content,
+            convention,
+            is_member=False,
+            reading_word=(),
+            failure_kind="CELL_COVERAGE",
+        )
+    skew_lengths = tuple(
+        (outer.parts[index] if index < len(outer.parts) else 0) - offsets[index]
+        for index in range(len(offsets))
+    )
+    # Candidate rows carry exactly the nonempty skew rows in top-to-bottom
+    # order; empty skew rows are omitted (TableauRow carriers are nonempty).
+    present = tuple(index for index, length in enumerate(skew_lengths) if length > 0)
+    if len(rows) != len(present) or any(
+        len(row) != skew_lengths[present[pos]] for pos, row in enumerate(rows)
+    ):
+        failed_row = next(
+            (
+                pos
+                for pos in range(max(len(rows), len(present)))
+                if pos >= len(rows)
+                or pos >= len(present)
+                or len(rows[pos]) != skew_lengths[present[pos]]
+            ),
+            -1,
+        )
+        return SkewLittlewoodRichardsonCheckResult._from_kernel(
+            outer,
+            inner,
+            tableau,
+            content,
+            convention,
+            is_member=False,
+            reading_word=(),
+            failure_kind="CELL_COVERAGE",
+            failed_row=failed_row,
+        )
+    for pos, row in enumerate(rows):
+        failed_column = next(
+            (index for index in range(len(row) - 1) if row[index] > row[index + 1]),
+            None,
+        )
+        if failed_column is not None:
+            return SkewLittlewoodRichardsonCheckResult._from_kernel(
+                outer,
+                inner,
+                tableau,
+                content,
+                convention,
+                is_member=False,
+                reading_word=(),
+                failure_kind="SEMISTANDARD_ROW",
+                failed_row=present[pos],
+                failed_column=failed_column,
+            )
+    # Column strictness over vertically adjacent skew cells: collect each
+    # diagram column top to bottom and require a strict increase.
+    widest = max(skew_lengths, default=0) + max(offsets, default=0)
+    for column in range(widest):
+        column_cells: list[tuple[int, int]] = []
+        for pos, true_row in enumerate(present):
+            local = column - offsets[true_row]
+            if 0 <= local < len(rows[pos]):
+                column_cells.append((true_row, rows[pos][local]))
+        for index in range(len(column_cells) - 1):
+            if column_cells[index][1] >= column_cells[index + 1][1]:
+                return SkewLittlewoodRichardsonCheckResult._from_kernel(
+                    outer,
+                    inner,
+                    tableau,
+                    content,
+                    convention,
+                    is_member=False,
+                    reading_word=(),
+                    failure_kind="SEMISTANDARD_COLUMN",
+                    failed_row=column_cells[index][0],
+                    failed_column=column,
+                )
+    multiplicities: dict[int, int] = {}
+    for row in rows:
+        for entry in row:
+            multiplicities[entry] = multiplicities.get(entry, 0) + 1
+    max_value = max(
+        (*multiplicities, len(content.parts)),
+        default=0,
+    )
+    for value in range(1, max_value + 1):
+        expected = content.parts[value - 1] if value - 1 < len(content.parts) else 0
+        if multiplicities.get(value, 0) != expected:
+            return SkewLittlewoodRichardsonCheckResult._from_kernel(
+                outer,
+                inner,
+                tableau,
+                content,
+                convention,
+                is_member=False,
+                reading_word=(),
+                failure_kind="CONTENT",
+                failed_value=value,
+            )
+    word = tuple(entry for row in rows for entry in reversed(row))
+    counts: dict[int, int] = {}
+    for prefix_length, entry in enumerate(word, start=1):
+        counts[entry] = counts.get(entry, 0) + 1
+        for value in range(2, max(counts, default=1) + 1):
+            if counts.get(value - 1, 0) < counts.get(value, 0):
+                return SkewLittlewoodRichardsonCheckResult._from_kernel(
+                    outer,
+                    inner,
+                    tableau,
+                    content,
+                    convention,
+                    is_member=False,
+                    reading_word=word,
+                    failure_kind="LATTICE",
+                    failed_prefix_length=prefix_length,
+                    failed_value=value,
+                )
+    return SkewLittlewoodRichardsonCheckResult._from_kernel(
+        outer,
+        inner,
+        tableau,
+        content,
+        convention,
+        is_member=True,
+        reading_word=word,
+        failure_kind="OK",
+    )
+
+
+def verify_skew_littlewood_richardson(
+    claim: SkewLittlewoodRichardsonCheckResult,
+) -> bool:
+    """Replay a serialized skew-LR claim against its retained source."""
+
+    try:
+        return (
+            check_skew_littlewood_richardson(
+                claim.outer,
+                claim.inner,
+                claim.tableau,
+                claim.content,
+                claim.convention,
+            )
+            == claim
+        )
+    except (OperationDomainValidationError, TypeError, ValueError):
+        return False

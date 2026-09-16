@@ -30,6 +30,7 @@ def test_catalog_contains_only_audited_agent_outcome() -> None:
     assert {tool.operation_id for tool in TOOLS} == {
         "delta_matroid.from_feasible_sets.compute",
         "delta_matroid.twist.compute",
+        "delta_matroid.width.compute",
     }
 
 

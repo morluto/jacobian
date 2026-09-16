@@ -103,6 +103,33 @@ TOOLS: MathTools = (
         ),
     ),
     MathTool(
+        operation_id="delta_matroid.width.compute",
+        title="Compute the width of a finite delta-matroid",
+        description=(
+            "Return the exact width max |F| - min |F| of one canonical finite "
+            "delta-matroid over its complete feasible family. The carrier is "
+            "reconstructed before measuring so a forged value with malformed "
+            "rows is a domain reject, not a number."
+        ),
+        request_type=DeltaMatroidWidthRequest,
+        result_type=DeltaMatroidWidthResult,
+        run=_width,
+        tags=("delta-matroid", "width", "exact"),
+        discovery_terms=("delta-matroid width", "feasible size range"),
+        examples=(
+            OperationExample(
+                name="width_two_family",
+                description="Width of {∅,{a},{b},{a,b}} is 2 - 0 = 2.",
+                input={
+                    "delta_matroid": {
+                        "ground": ["a", "b"],
+                        "feasible": [[], [0], [0, 1], [1]],
+                    },
+                },
+            ),
+        ),
+    ),
+    MathTool(
         operation_id="delta_matroid.twist.compute",
         title="Twist a finite delta-matroid",
         description=(

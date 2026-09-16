@@ -14,6 +14,16 @@ from jacobian.math.polynomials.unit_circle._root_profile import (
     UnitDiskProfile,
     unit_disk_profile,
 )
+from jacobian.math.polynomials.unit_circle._sup_norm import (
+    unit_circle_sup_norm_squared,
+    verify_unit_circle_sup_norm_squared,
+)
+from jacobian.math.polynomials.unit_circle._sup_norm_models import (
+    GaussianRationalPolynomial,
+    GaussianRationalPolynomialTerm,
+    UnitCircleCriticalPoint,
+    UnitCircleSupNormSquaredResult,
+)
 from jacobian.math.polynomials.unit_circle.operations import (
     real_symmetric_degree_one_fejer_riesz_factor,
     unit_circle_arc_energy,
@@ -26,14 +36,20 @@ __all__ = [
     "FejerRieszFactored",
     "FejerRieszNegative",
     "FejerRieszZero",
+    "GaussianRationalPolynomial",
+    "GaussianRationalPolynomialTerm",
     "HermitianLaurentPolynomial",
     "HermitianLaurentTerm",
     "RealDegreeOnePolynomialFactor",
     "UnitCircleArcEnergyResult",
+    "UnitCircleCriticalPoint",
+    "UnitCircleSupNormSquaredResult",
     "UnitDiskProfile",
     "real_symmetric_degree_one_fejer_riesz_factor",
     "unit_circle_arc_energy",
+    "unit_circle_sup_norm_squared",
     "unit_disk_profile",
     "verify_real_symmetric_degree_one_fejer_riesz_factor",
     "verify_unit_circle_arc_energy",
+    "verify_unit_circle_sup_norm_squared",
 ]

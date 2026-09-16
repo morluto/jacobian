@@ -3,15 +3,22 @@
 from typing import Any
 
 from jacobian.catalog.models import MathTool, OperationExample
+from jacobian.math.topology._models import (
+    FiniteSimplicialComplex,
+    canonical_complex,
+)
 from jacobian.math.topology.edge_paths._models import (
     EdgePathConcatenateRequest,
     EdgePathConcatenateResult,
     EdgePathWordRequest,
     EdgePathWordResult,
+    FundamentalGroupPresentationRequest,
+    FundamentalGroupPresentationResult,
 )
 from jacobian.math.topology.edge_paths.operations import (
     concatenate_edge_paths,
     edge_path_word,
+    fundamental_group_presentation,
 )
 
 
@@ -23,6 +30,15 @@ def _word(request: EdgePathWordRequest) -> EdgePathWordResult:
 
 def _concatenate(request: EdgePathConcatenateRequest) -> EdgePathConcatenateResult:
     return concatenate_edge_paths(request.vertex_count, request.path_a, request.path_b)
+
+
+def _fundamental_group(
+    request: FundamentalGroupPresentationRequest,
+) -> FundamentalGroupPresentationResult:
+    canonical: FiniteSimplicialComplex = canonical_complex(
+        request.complex.vertices, request.complex.facets
+    )
+    return fundamental_group_presentation(canonical, request.base_vertex)
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
@@ -67,6 +83,48 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                     "vertex_count": 3,
                     "path_a": [0, 1],
                     "path_b": [1, 2],
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="topology.simplicial.fundamental_group.presentation.compute",
+        title="Compute the finite edge-path fundamental-group presentation",
+        description=(
+            "For one bounded finite simplicial complex and a selected base "
+            "vertex, collapse the basepoint 1-component along one "
+            "lexicographic breadth-first spanning tree, assign a generator to "
+            "every non-tree edge, and translate each oriented two-simplex "
+            "boundary into one freely reduced relator. Return the exact "
+            "spanning tree, generator and oriented-edge word maps, triangle "
+            "relators, the finite presentation, and its exact integer "
+            "abelianization (relation matrix, Smith rank, invariant factors). "
+            "Disconnected input requires the explicit basepoint component."
+        ),
+        request_type=FundamentalGroupPresentationRequest,
+        result_type=FundamentalGroupPresentationResult,
+        run=_fundamental_group,
+        tags=("topology", "simplicial", "fundamental-group", "exact"),
+        discovery_terms=(
+            "fundamental group presentation",
+            "edge path group",
+            "spanning tree generators",
+            "triangle relators",
+            "abelianization invariants",
+        ),
+        examples=(
+            OperationExample(
+                name="triangulated_circle",
+                description=(
+                    "Three edges around a triangle as a 1-dimensional circle: "
+                    "one non-tree generator and no relator."
+                ),
+                input={
+                    "complex": {
+                        "vertices": ["0", "1", "2"],
+                        "facets": [["0", "1"], ["1", "2"], ["0", "2"]],
+                    },
+                    "base_vertex": "0",
                 },
             ),
         ),

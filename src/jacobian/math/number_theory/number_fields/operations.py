@@ -51,6 +51,9 @@ from jacobian.math.number_theory.number_fields._models import (
 from jacobian.math.number_theory.number_fields._real_embedding_order import (
     compare_real_embedding_elements,
 )
+from jacobian.math.number_theory.number_fields._relative_trace_norm import (
+    relative_trace_norm,
+)
 from jacobian.math.number_theory.number_fields.values import (
     MAX_NUMBER_FIELD_EMBEDDING_DEGREE,
     ComplexNumberFieldEmbedding,
@@ -512,6 +515,7 @@ __all__ = [
     "compare_real_embedding_elements",
     "discriminant",
     "embeddings",
+    "relative_trace_norm",
     "unit_group",
     "verify_binary_power_sum_gap_profile",
     "verify_discriminant",

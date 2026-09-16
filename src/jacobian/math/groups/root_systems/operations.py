@@ -21,6 +21,7 @@ from jacobian.math.groups.root_systems._models import (
     RootComponentData,
     RootSystemDataResult,
     SimpleReflectionResult,
+    SimpleReflectionsResult,
     WeylGroupOrderResult,
 )
 
@@ -242,9 +243,108 @@ def weyl_group_order(
     return WeylGroupOrderResult._from_kernel(cartan, _weyl_group_order(rows))
 
 
+def _reflection_matrix(
+    rows: tuple[tuple[int, ...], ...], index: int, *, transpose: bool
+) -> tuple[tuple[int, ...], ...]:
+    """Return the exact matrix of ``s_index`` on a root-like lattice.
+
+    On the root lattice ``s_i(v) = v - <v, alpha_i^vee> alpha_i`` with
+    ``<alpha_j, alpha_i^vee> = A[i][j]``; the coroot lattice uses the
+    transposed pairing ``A[j][i]``.
+    """
+    rank = len(rows)
+    matrix: list[list[int]] = [[int(k == j) for j in range(rank)] for k in range(rank)]
+    for target in range(rank):
+        for source in range(rank):
+            pairing = rows[index][source] if not transpose else rows[source][index]
+            matrix[target][source] -= int(target == index) * pairing
+    return tuple(tuple(row) for row in matrix)
+
+
+def _weight_reflection_matrix(
+    rows: tuple[tuple[int, ...], ...], index: int, *, transpose: bool
+) -> tuple[tuple[int, ...], ...]:
+    """Return the exact matrix of ``s_index`` on a weight-like lattice.
+
+    For weights ``s_i(lambda) = lambda - lambda_i alpha_i`` with
+    ``alpha_i = sum_k A[k][i] omega_k``; coweights use the transposed
+    coefficients ``A[i][k]``.
+    """
+    rank = len(rows)
+    matrix: list[list[int]] = [[int(k == j) for j in range(rank)] for k in range(rank)]
+    for target in range(rank):
+        coefficient = rows[target][index] if not transpose else rows[index][target]
+        matrix[target][index] -= coefficient
+    return tuple(tuple(row) for row in matrix)
+
+
+def _square_is_identity(matrix: tuple[tuple[int, ...], ...]) -> bool:
+    rank = len(matrix)
+    return all(
+        sum(matrix[row][k] * matrix[k][column] for k in range(rank))
+        == int(row == column)
+        for row in range(rank)
+        for column in range(rank)
+    )
+
+
+def simple_reflections(
+    matrix: CartanMatrix | tuple[tuple[int, ...], ...],
+) -> SimpleReflectionsResult:
+    """Compute every simple-reflection matrix on the four root-datum lattices."""
+    from jacobian.math.matrices.values import IntegerMatrix
+
+    cartan = _as_cartan(matrix)
+    rows = cartan.entries
+    _admit_cartan_finite_type(rows)
+    rank = len(rows)
+
+    def _as_integer_matrix(
+        entries: tuple[tuple[int, ...], ...],
+    ) -> IntegerMatrix:
+        return IntegerMatrix(
+            row_count=rank,
+            column_count=rank,
+            entries=entries,
+        )
+
+    root = tuple(
+        _as_integer_matrix(_reflection_matrix(rows, i, transpose=False))
+        for i in range(rank)
+    )
+    coroot = tuple(
+        _as_integer_matrix(_reflection_matrix(rows, i, transpose=True))
+        for i in range(rank)
+    )
+    weight = tuple(
+        _as_integer_matrix(_weight_reflection_matrix(rows, i, transpose=False))
+        for i in range(rank)
+    )
+    coweight = tuple(
+        _as_integer_matrix(_weight_reflection_matrix(rows, i, transpose=True))
+        for i in range(rank)
+    )
+    for family in (root, coroot, weight, coweight):
+        for reflection in family:
+            if not _square_is_identity(reflection.entries):
+                raise OperationDomainValidationError(
+                    location=("matrix",),
+                    code="root_system.reflection_not_involution",
+                    message="simple reflections must square to the identity",
+                )
+    return SimpleReflectionsResult._from_kernel(
+        cartan,
+        root_matrices=root,
+        coroot_matrices=coroot,
+        weight_matrices=weight,
+        coweight_matrices=coweight,
+    )
+
+
 __all__ = [
     "positive_roots",
     "root_system_data",
     "simple_reflection",
+    "simple_reflections",
     "weyl_group_order",
 ]

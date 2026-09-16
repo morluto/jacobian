@@ -255,6 +255,7 @@ def test_catalog_declares_the_composable_principal_operations() -> None:
     assert tuple(tool.operation_id for tool in TOOLS) == (
         "dirichlet_character.principal.compute",
         "dirichlet_character.principal.value.compute",
+        "dirichlet_character.group.compute",
     )
 
 
@@ -264,6 +265,7 @@ def test_published_catalog_includes_table_and_value_operations() -> None:
     assert published == (
         "dirichlet_character.principal.compute",
         "dirichlet_character.principal.value.compute",
+        "dirichlet_character.group.compute",
     )
 
 

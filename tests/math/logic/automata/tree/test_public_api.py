@@ -15,9 +15,11 @@ def test_exact_public_api_symbols() -> None:
         "accepted_tree_count",
         "reachable_state_profile",
         "run_tree_automaton",
+        "trim_tree_automaton",
         "verify_accepted_tree_count",
         "verify_reachable_state_profile",
         "verify_tree_run",
+        "verify_trim_tree_automaton",
     )
     assert tuple(tree_automata.__all__) == expected
     assert len(tree_automata.__all__) == len(set(tree_automata.__all__))

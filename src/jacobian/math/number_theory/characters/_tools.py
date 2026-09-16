@@ -7,11 +7,15 @@ from typing import Literal, cast
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.number_theory.characters import operations as native
 from jacobian.math.number_theory.characters._models import (
+    CharacterGroupRequest,
     PrincipalDirichletCharacterRequest,
     PrincipalDirichletCharacterValueRequest,
     PrincipalDirichletCharacterValueResult,
 )
-from jacobian.math.number_theory.characters.values import PrincipalDirichletCharacter
+from jacobian.math.number_theory.characters.values import (
+    DirichletCharacterGroup,
+    PrincipalDirichletCharacter,
+)
 
 
 def compute_principal_dirichlet_character(
@@ -38,6 +42,12 @@ def compute_principal_dirichlet_character_value(
         is_unit=value == 1,
         value=cast(Literal[0, 1], value),
     )
+
+
+def compute_character_group(request: CharacterGroupRequest) -> DirichletCharacterGroup:
+    """Compute the finite unit-group decomposition for one modulus."""
+
+    return native.character_group(request.modulus)
 
 
 TOOLS: MathTools = (
@@ -84,6 +94,31 @@ TOOLS: MathTools = (
                     },
                     "integer": "5",
                 },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="dirichlet_character.group.compute",
+        title="Compute a finite Dirichlet character group",
+        description=(
+            "Compute the finite unit group modulo a bounded positive modulus: "
+            "the unit set, invariant factors, canonical generators with "
+            "residue-coordinate maps, the common root-of-unity exponent, and "
+            "the character count equal to phi(modulus)."
+        ),
+        request_type=CharacterGroupRequest,
+        result_type=DirichletCharacterGroup,
+        run=compute_character_group,
+        tags=("number-theory", "dirichlet-character", "unit-group", "exact"),
+        discovery_terms=(
+            "Dirichlet character group",
+            "unit group decomposition",
+        ),
+        examples=(
+            OperationExample(
+                name="character_group_mod_12",
+                description="Compute the unit-group decomposition modulo 12; the modulus must be positive and its unit table must fit the 2,048-entry bound.",
+                input={"modulus": 12},
             ),
         ),
     ),

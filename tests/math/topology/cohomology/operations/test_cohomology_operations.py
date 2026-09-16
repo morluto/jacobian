@@ -625,6 +625,7 @@ class TestCatalogPublication:
 
         published = tuple(tool.operation_id for tool in TOOLS)
         assert published == (
+            "topology.simplicial.cohomology.compute",
             "cohomology.steenrod_square.compute",
             "cohomology.bockstein.compute",
         )

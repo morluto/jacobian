@@ -13,6 +13,8 @@ from jacobian.math.combinatorics.algebraic._models import (
     ConjugatePartitionResult,
     HookLengthRequest,
     HookLengthResult,
+    KnuthMovesRequest,
+    KnuthMovesResult,
     PartitionDominanceRequest,
     PartitionDominanceResult,
     RSKInverseWordRequest,
@@ -23,6 +25,8 @@ from jacobian.math.combinatorics.algebraic._models import (
     SemistandardTableauCheckResult,
     SemistandardYoungTableauCountRequest,
     SemistandardYoungTableauCountResult,
+    SkewLittlewoodRichardsonCheckRequest,
+    SkewLittlewoodRichardsonCheckResult,
     StandardTableauCheckRequest,
     StandardTableauCheckResult,
     StandardYoungTableauCountRequest,
@@ -111,6 +115,24 @@ def inverse_rsk_word(request: RSKInverseWordRequest) -> FiniteWord:
             code="algebraic_combinatorics.rsk_pair_incompatible",
             message=str(exc),
         ) from exc
+
+
+def knuth_moves(request: KnuthMovesRequest) -> KnuthMovesResult:
+    return KnuthMovesResult._from_kernel(
+        request, neighbors=native.knuth_moves(request.word)
+    )
+
+
+def check_skew_littlewood_richardson(
+    request: SkewLittlewoodRichardsonCheckRequest,
+) -> SkewLittlewoodRichardsonCheckResult:
+    return native.check_skew_littlewood_richardson(
+        request.outer,
+        request.inner,
+        request.tableau,
+        request.content,
+        request.convention,
+    )
 
 
 _PARTITION_321 = {"partition": {"parts": [3, 2, 1]}}
@@ -242,6 +264,71 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                         "convention": "ROW_INSERTION_RSK_V1",
                     },
                     "convention": "ROW_INSERTION_RSK_V1",
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="word.knuth_moves.compute",
+        title="Compute every one-step Knuth neighbor of an ordered word",
+        description="Materialize the complete finite one-step Knuth neighborhood of a "
+        "bounded word over an explicit ordered alphabet: xzy<->zxy when x<=y<z "
+        "(K1) and yxz<->yzx when x<y<=z (K2) under ROW_INSERTION_RSK_V1. Every "
+        "neighbor carries its window position and the relation used; each "
+        "neighbor shares the source insertion tableau. At most one neighbor "
+        "per length-three window.",
+        request_type=KnuthMovesRequest,
+        result_type=KnuthMovesResult,
+        run=knuth_moves,
+        tags=("combinatorics", "words", "knuth", "plactic", "exact"),
+        discovery_terms=("knuth moves", "plactic equivalence", "knuth relations"),
+        examples=(
+            OperationExample(
+                name="k1_neighbor",
+                description="The word (a, c, b) over a<b<c admits one K1 move to (c, a, b).",
+                input={
+                    "word": {
+                        "alphabet": ["a", "b", "c"],
+                        "letters": ["a", "c", "b"],
+                    },
+                    "convention": "ROW_INSERTION_RSK_V1",
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="combinatorics.tableau.skew_littlewood_richardson.check",
+        title="Check skew Littlewood-Richardson tableau membership",
+        description="Replay complete skew Littlewood-Richardson membership for one "
+        "candidate tableau on a skew shape outer/inner with claimed content nu: "
+        "cell coverage of the skew diagram, weak-row/strict-column "
+        "semistandardity, exact content multiplicities, and every reading-word "
+        "prefix Yamanouchi lattice inequality under "
+        "READING_WORD_RL_TOP_V1. Returns the source-bound decision with the "
+        "first failed stage and its concrete cell, value, or prefix length.",
+        request_type=SkewLittlewoodRichardsonCheckRequest,
+        result_type=SkewLittlewoodRichardsonCheckResult,
+        run=check_skew_littlewood_richardson,
+        tags=("combinatorics", "young-tableaux", "littlewood-richardson", "exact"),
+        discovery_terms=(
+            "littlewood-richardson tableau",
+            "skew shape tableau membership",
+            "yamanouchi lattice word",
+        ),
+        examples=(
+            OperationExample(
+                name="skew_21_over_1",
+                description=(
+                    "Check the LR tableau [[1],[2]] of content (1,1) on the skew "
+                    "shape (2,1)/(1); rows carry exactly the nonempty skew cells "
+                    "in top-to-bottom order."
+                ),
+                input={
+                    "outer": {"parts": [2, 1]},
+                    "inner": {"parts": [1]},
+                    "tableau": {"rows": [[1], [2]]},
+                    "content": {"parts": [1, 1]},
+                    "convention": "READING_WORD_RL_TOP_V1",
                 },
             ),
         ),

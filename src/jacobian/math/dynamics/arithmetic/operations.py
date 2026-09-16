@@ -13,6 +13,7 @@ from jacobian.canonical import format_canonical_integer
 from jacobian.math._rational_height import RationalHeight
 from jacobian.math.dynamics.arithmetic._models import (
     MAX_COEFFICIENT_DIGITS,
+    MAX_CRITICAL_DEGREE,
     MAX_DEGREE,
     MAX_DYNATOMIC_DEGREE,
     MAX_FIELD_PRIME,
@@ -21,6 +22,8 @@ from jacobian.math.dynamics.arithmetic._models import (
     MAX_ORBIT_STEPS,
     MAX_POLYNOMIAL_OUTPUT_DIGITS,
     CoefficientHeight,
+    CriticalPointFactor,
+    CriticalPointsResult,
     _add_heights,
     _ArithmeticInputError,
     _ArithmeticResourceError,
@@ -448,10 +451,80 @@ def _require_bounded_output_coefficients(polynomial: Any) -> None:
         )
 
 
+def _critical_source(polynomial: RationalPolynomial) -> tuple[Any, int]:
+    """Admit the bounded critical-point source before any backend expansion."""
+
+    if polynomial.variables != ("x",):
+        raise _ArithmeticInputError(
+            "critical-point polynomial must be univariate in variable x"
+        )
+    if any(
+        term.exponents[0] > MAX_CRITICAL_DEGREE for term in polynomial.polynomial.terms
+    ):
+        raise _ArithmeticResourceError(
+            "critical-point polynomial degree exceeds the admitted bound"
+        )
+    if any(
+        _fraction_digits(term.coefficient.as_fraction()) > MAX_COEFFICIENT_DIGITS
+        for term in polynomial.polynomial.terms
+    ):
+        raise _ArithmeticInputError(
+            "critical-point polynomial coefficient exceeds the input digit bound"
+        )
+    source = _to_sympy(polynomial)
+    if source.degree() < 1:
+        raise _ArithmeticInputError("critical-point polynomial must be nonconstant")
+    return source, int(source.degree())
+
+
+def critical_points(polynomial: RationalPolynomial) -> CriticalPointsResult:
+    """Return the exact finite critical divisor of a bounded polynomial map.
+
+    ``f'`` is factored exactly over QQ into monic irreducible factors with
+    multiplicities; the factorization profile plus exact degree data is the
+    published critical-point value.  No approximate algebraic root is used.
+    """
+
+    source, degree = _critical_source(polynomial)
+    derivative = source.diff()
+    _require_bounded_output_coefficients(derivative)
+    factor_rows: list[tuple[Any, int]] = []
+    if derivative.degree() > 0:
+        for factor, multiplicity in derivative.factor_list()[1]:
+            monic = factor.monic()
+            _require_bounded_output_coefficients(monic)
+            factor_rows.append((monic, int(multiplicity)))
+    factor_rows.sort(
+        key=lambda row: tuple(Fraction(value) for value in row[0].all_coeffs())
+    )
+    factors = tuple(
+        CriticalPointFactor(
+            factor=_from_sympy(monic, MAX_DEGREE + 1),
+            degree=int(monic.degree()),
+            multiplicity=multiplicity,
+            contribution=int(monic.degree()) * multiplicity,
+        )
+        for monic, multiplicity in factor_rows
+    )
+    return CriticalPointsResult._from_kernel(
+        source_polynomial=polynomial,
+        degree=degree,
+        derivative=_from_sympy(derivative, MAX_DEGREE + 1),
+        derivative_degree=int(derivative.degree()),
+        factors=factors,
+        distinct_finite_critical_points=sum(row.degree for row in factors),
+        total_multiplicity=sum(row.contribution for row in factors),
+        affine=degree == 1,
+        infinity_is_critical=degree >= 2,
+        finite_critical_multiplier=CanonicalRational.from_integer_ratio(0, 1),
+    )
+
+
 __all__ = [
     "FunctionalGraph",
     "OrbitComputation",
     "RepeatEvidence",
+    "critical_points",
     "cycle_multiplier",
     "dynatomic_polynomial",
     "finite_field_functional_graph",

@@ -6,6 +6,8 @@ from jacobian.math.number_theory import modular_forms
 def test_exact_public_api_symbols() -> None:
     assert tuple(modular_forms.__all__) == (
         "LevelOneModularQExpansion",
+        "ModularFormSpace",
         "level_one_named_q_expansion",
+        "space_dimension",
     )
     assert all(hasattr(modular_forms, name) for name in modular_forms.__all__)

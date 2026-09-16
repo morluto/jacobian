@@ -34,7 +34,10 @@ from sympy import Matrix, Rational
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian.canonical import format_canonical_integer
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.geometry.polytopes._models import (
     COORDINATE_DIGITS,
     MAX_BOUNDEDNESS_COMBINATIONS,
@@ -53,6 +56,9 @@ from jacobian.math.geometry.polytopes._models import (
     PolytopeSupportResult,
     PolytopeVolumeResult,
     PrimitiveFacet,
+    PyramidBaseVertexMap,
+    PyramidResult,
+    RationalCoordinateSpace,
     RationalCovector,
     RationalPolytopeVertex,
     RationalVPolytope,
@@ -67,7 +73,11 @@ from jacobian.math.geometry.polytopes._rational_geometry import (
     recession_cone_is_trivial,
     vertices_from_halfspaces,
 )
-from jacobian.math.geometry.polytopes.values import Halfspace, Vertex
+from jacobian.math.geometry.polytopes.values import (
+    MAX_RATIONAL_POLYTOPE_DIMENSION,
+    Halfspace,
+    Vertex,
+)
 
 # Absolute combinatorial ceiling: reject vertex enumeration that would
 # attempt to solve more subsystems than this. With ``MAX_FACETS = 64``
@@ -990,9 +1000,166 @@ def verify_facet_incidence(claim: FacetIncidenceResult) -> bool:
     return facet_incidence(claim.vertices, claim.dimension) == claim
 
 
+PYRAMID_APEX_VERTEX_ID = "apex"
+"""Reserved vertex ID of the pyramid apex.
+
+Base vertices retain their source IDs unchanged, so a source polytope
+already using this label is outside the admitted domain; the caller
+relabels that source vertex first.
+"""
+
+
+def _affine_dimension(points: list[list[Rational]]) -> int:
+    """Exact affine dimension of a finite rational point family."""
+
+    if len(points) <= 1:
+        return 0
+    reference = points[0]
+    dim = len(reference)
+    columns = [
+        Matrix([[point[axis] - reference[axis]] for axis in range(dim)])
+        for point in points[1:]
+    ]
+    return Matrix.hstack(*columns).rank() if columns else 0
+
+
+def _admit_pyramid(polytope: RationalVPolytope, height_axis: object) -> int:
+    """Enforce the pyramid execution envelope shared by native and catalog calls.
+
+    Returns the source ambient dimension. Structural label conflicts raise
+    ``OperationDomainValidationError``; envelope overflows raise
+    ``OperationResourceAdmissionError``.
+    """
+
+    if not isinstance(height_axis, str) or not height_axis:
+        raise OperationDomainValidationError(
+            location=("height_axis",),
+            code="polytope.pyramid.height_axis_not_a_label",
+            message="pyramid height axis must be a nonempty label",
+        )
+    source_axes = tuple(polytope.space.axes)
+    if height_axis in source_axes:
+        raise OperationDomainValidationError(
+            location=("height_axis",),
+            code="polytope.pyramid.height_axis_not_fresh",
+            message="pyramid height axis must not occur among the source axes",
+        )
+    source_ids = [vertex.vertex_id for vertex in polytope.vertices]
+    if PYRAMID_APEX_VERTEX_ID in source_ids:
+        raise OperationDomainValidationError(
+            location=("polytope",),
+            code="polytope.pyramid.apex_label_collision",
+            message="source vertex IDs must not use the reserved apex label 'apex'",
+        )
+    ambient = len(source_axes)
+    if ambient + 1 > MAX_RATIONAL_POLYTOPE_DIMENSION:
+        raise OperationResourceAdmissionError(
+            location=("polytope",),
+            code="polytope.pyramid.ambient_dimension_over_envelope",
+            message=(
+                "pyramid ambient dimension "
+                f"{ambient + 1} exceeds the {MAX_RATIONAL_POLYTOPE_DIMENSION} "
+                "axis envelope"
+            ),
+        )
+    if len(source_ids) + 1 > MAX_VERTICES:
+        raise OperationResourceAdmissionError(
+            location=("polytope",),
+            code="polytope.pyramid.vertex_count_over_envelope",
+            message=(f"pyramid vertex rows exceed the {MAX_VERTICES}-vertex envelope"),
+        )
+    return ambient
+
+
+def polytope_pyramid(polytope: RationalVPolytope, height_axis: str) -> PyramidResult:
+    """Compute the exact pyramid ``conv(base(P) union {apex})``.
+
+    Each base vertex ``p`` embeds as ``(p, 0)`` on the fresh height axis and
+    the apex is ``(0, ..., 0, 1)``. Before return the kernel replays the
+    tagged realization (base rows at height 0, apex alone at height 1), the
+    base-face exposure (height is the unique minimizer functional), and the
+    dimension identity ``dim(pyramid) = dim(P) + 1``.
+    """
+
+    if not isinstance(polytope, RationalVPolytope):
+        raise OperationDomainValidationError(
+            location=("polytope",),
+            code="polytope.pyramid.source_not_a_v_polytope",
+            message="pyramid source must be a labelled rational V-polytope value",
+        )
+    ambient = _admit_pyramid(polytope, height_axis)
+    zero = CanonicalRational.from_integer_ratio(0, 1)
+    one = CanonicalRational.from_integer_ratio(1, 1)
+    base_vertices = tuple(
+        RationalPolytopeVertex(
+            vertex_id=vertex.vertex_id,
+            coordinates=(*vertex.coordinates, zero),
+        )
+        for vertex in polytope.vertices
+    )
+    apex_coordinates = (*tuple(zero for _ in range(ambient)), one)
+    apex = RationalPolytopeVertex(
+        vertex_id=PYRAMID_APEX_VERTEX_ID, coordinates=apex_coordinates
+    )
+    ordered = tuple(sorted((*base_vertices, apex), key=lambda v: v.vertex_id))
+    pyramid = RationalVPolytope(
+        space=RationalCoordinateSpace(axes=(*polytope.space.axes, height_axis)),
+        vertices=ordered,
+    )
+    # Replay the tagged realization exactly.
+    for vertex in base_vertices:
+        if vertex.coordinates[-1].as_fraction() != 0:
+            raise OperationDomainValidationError(
+                location=("pyramid",),
+                code="polytope.pyramid.base_height_replay_failed",
+                message="every base vertex must carry height coordinate 0",
+            )
+    if apex_coordinates[-1].as_fraction() != 1 or any(
+        c.as_fraction() != 0 for c in apex_coordinates[:-1]
+    ):
+        raise OperationDomainValidationError(
+            location=("pyramid",),
+            code="polytope.pyramid.apex_replay_failed",
+            message="the apex must be (0, ..., 0, 1)",
+        )
+    source_points = [
+        [Rational(*c.as_integer_ratio()) for c in vertex.coordinates]
+        for vertex in polytope.vertices
+    ]
+    pyramid_points = [
+        [Rational(*c.as_integer_ratio()) for c in vertex.coordinates]
+        for vertex in ordered
+    ]
+    source_dim = _affine_dimension(source_points)
+    result_dim = _affine_dimension(pyramid_points)
+    if result_dim != source_dim + 1:
+        raise OperationDomainValidationError(
+            location=("pyramid",),
+            code="polytope.pyramid.dimension_identity_failed",
+            message=(
+                "pyramid affine dimension "
+                f"{result_dim} is not source dimension {source_dim} plus one"
+            ),
+        )
+    transport = tuple(
+        PyramidBaseVertexMap(
+            source_vertex_id=vertex.vertex_id,
+            pyramid_vertex_id=vertex.vertex_id,
+        )
+        for vertex in sorted(polytope.vertices, key=lambda v: v.vertex_id)
+    )
+    return PyramidResult._from_kernel(
+        pyramid=pyramid,
+        base_vertex_map=transport,
+        source_affine_dimension=source_dim,
+        pyramid_affine_dimension=result_dim,
+    )
+
+
 __all__ = [
     "convex_hull_volume",
     "facet_incidence",
+    "polytope_pyramid",
     "polytope_support",
     "polytope_volume",
     "verify_facet_incidence",

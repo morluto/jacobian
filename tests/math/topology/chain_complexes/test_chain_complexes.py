@@ -1606,8 +1606,12 @@ class TestNativeSurface:
         import jacobian.math.topology.chain_complexes as chain_complexes_package
 
         assert set(chain_complexes_package.__all__) == {
+            "AssociatedGradedResult",
             "ChainComplexValue",
             "CoefficientRing",
+            "FilteredSubspace",
+            "FiltrationLevel",
+            "GradedSquareLedgerEntry",
             "HomologyGroup",
             "HomologyGroupValue",
             "HomologyResult",
@@ -1615,6 +1619,7 @@ class TestNativeSurface:
             "IntegralHomologyGroupValue",
             "IntegralTorsionGenerator",
             "IntegralVector",
+            "associated_graded",
             "chain_map_commutes",
             "construct_chain_complex",
             "differential_squares_to_zero",

@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from fractions import Fraction
-from typing import Literal, Self
+from typing import Any, Literal, Self
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
@@ -23,6 +23,7 @@ MAX_ORBIT_STEPS = 1_000
 MAX_ORBIT_VALUE_DIGITS = 2_048
 MAX_POLYNOMIAL_OUTPUT_DIGITS = 32_768
 MAX_FIELD_PRIME = 10_000
+MAX_CRITICAL_DEGREE = 16
 
 CoefficientHeight = RationalHeight | None
 
@@ -73,6 +74,11 @@ _VALIDATION_CODES = {
     "cycle must contain distinct points": "cycle_points_not_distinct",
     "cycle points do not follow the polynomial map": "cycle_map_mismatch",
     "polynomial coefficients must omit trailing zeros modulo p": "trailing_zero_coefficients",
+    "critical-point polynomial must be univariate in variable x": "critical_points.univariate_required",
+    "critical-point polynomial must be nonconstant": "critical_points.nonconstant_required",
+    "critical-point polynomial degree exceeds the admitted bound": "critical_points.degree_bound",
+    "critical-point polynomial coefficient exceeds the input digit bound": "critical_points.coefficient_bound",
+    "critical-point factor coefficient exceeds the output digit bound": "critical_points.factor_coefficient_bound",
 }
 
 _VALIDATION_FRAGMENTS = (
@@ -438,7 +444,94 @@ class FiniteFieldMapResult(StrictModel):
         )
 
 
+class CriticalPointsRequest(PolynomialCoefficientRequest):
+    """Compute the exact finite critical divisor of a bounded polynomial map."""
+
+
+class CriticalPointFactor(StrictModel):
+    """One monic irreducible factor of ``f'`` over QQ and its multiplicity.
+
+    ``degree`` counts the distinct roots carried by the factor and
+    ``contribution`` is ``degree * multiplicity``, the factor's total
+    contribution to ``deg f'``.
+    """
+
+    factor: RationalPolynomial
+    degree: int = Field(ge=1)
+    multiplicity: int = Field(ge=1)
+    contribution: int = Field(ge=1)
+
+    @model_validator(mode="after")
+    def require_contribution_product(self) -> Self:
+        if self.contribution != self.degree * self.multiplicity:
+            raise ValueError(
+                "critical-point factor contribution must be degree times multiplicity"
+            )
+        return self
+
+
+class CriticalPointsResult(StrictModel):
+    """The exact finite critical-point divisor of a polynomial map over QQ.
+
+    This is the honest bounded slice: ``f'`` is factored exactly over QQ into
+    monic irreducible factors with multiplicities and exact degree data,
+    without approximate algebraic roots.  Every finite critical point is a root
+    of ``f'``, so its exact multiplier ``f'(c)`` is zero.  When ``d >= 2`` the
+    projective completion adds infinity as a critical point.
+    """
+
+    source_polynomial: RationalPolynomial
+    degree: int = Field(ge=1, le=MAX_CRITICAL_DEGREE)
+    derivative: RationalPolynomial
+    derivative_degree: int = Field(ge=0)
+    factors: tuple[CriticalPointFactor, ...]
+    distinct_finite_critical_points: int = Field(ge=0)
+    total_multiplicity: int = Field(ge=0)
+    affine: bool
+    infinity_is_critical: bool
+    finite_critical_multiplier: CanonicalRational
+
+    @model_validator(mode="after")
+    def require_degree_identity(self) -> Self:
+        if self.derivative_degree != self.degree - 1:
+            raise ValueError(
+                "critical-point derivative degree must equal source degree minus one"
+            )
+        if self.total_multiplicity != self.derivative_degree:
+            raise ValueError(
+                "critical-point multiplicity total must equal the derivative degree"
+            )
+        if self.total_multiplicity != sum(
+            factor.contribution for factor in self.factors
+        ):
+            raise ValueError(
+                "critical-point factor contributions must sum to the multiplicity total"
+            )
+        if self.distinct_finite_critical_points != sum(
+            factor.degree for factor in self.factors
+        ):
+            raise ValueError(
+                "distinct critical-point count must sum the factor degrees"
+            )
+        if self.affine != (self.degree == 1):
+            raise ValueError("an affine map is exactly a degree-one map")
+        if self.infinity_is_critical != (self.degree >= 2):
+            raise ValueError(
+                "infinity is critical exactly when the degree is at least two"
+            )
+        if self.finite_critical_multiplier.as_fraction() != 0:
+            raise ValueError("every finite critical point has multiplier zero")
+        return self
+
+    @classmethod
+    def _from_kernel(cls, **values: Any) -> Self:
+        return cls.model_construct(**values)
+
+
 __all__ = [
+    "CriticalPointFactor",
+    "CriticalPointsRequest",
+    "CriticalPointsResult",
     "CycleMultiplierRequest",
     "CycleMultiplierResult",
     "DynatomicPolynomialRequest",

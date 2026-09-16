@@ -2140,6 +2140,121 @@ class PolytopeVolumeResult(StrictModel):
     """``"vertices"`` or ``"halfspaces"``: the input representation used."""
 
 
+class PyramidBaseVertexMap(StrictModel):
+    """One exact source-to-base vertex transport row of a pyramid construction."""
+
+    source_vertex_id: str = Field(min_length=1, max_length=MAX_COORDINATE_LABEL_LENGTH)
+    pyramid_vertex_id: str = Field(min_length=1, max_length=MAX_COORDINATE_LABEL_LENGTH)
+
+
+class PyramidRequest(StrictModel):
+    """Compute the exact pyramid over one bounded rational V-polytope.
+
+    The pyramid embeds each base vertex ``p`` as ``(p, 0)`` on a fresh
+    height axis and adds one apex ``(0, ..., 0, 1)``. The height axis must
+    be a fresh label outside the source coordinate space, and the reserved
+    apex vertex ID ``apex`` must not already occur among the source vertex
+    IDs. The admitted envelope is one extra ambient dimension (at most
+    ``MAX_RATIONAL_POLYTOPE_DIMENSION``) and one extra vertex row (at most
+    ``MAX_VERTICES``); the construction itself adds no coordinate growth.
+    """
+
+    polytope: RationalVPolytope = Field(
+        description=(
+            "Nonempty bounded rational V-polytope serving as the pyramid base; "
+            "base vertices keep their source IDs unchanged."
+        )
+    )
+    height_axis: CoordinateAxis = Field(
+        description=(
+            "Fresh coordinate label carrying the pyramid height; it must not "
+            "occur among the source space axes."
+        )
+    )
+
+
+class PyramidResult(StrictModel):
+    """Exact pyramid polytope with base/apex transport and dimension identity."""
+
+    pyramid: RationalVPolytope = Field(
+        description=(
+            "Exact pyramid V-polytope on the source axes plus the height axis; "
+            "base vertices carry last coordinate 0 and the apex carries 1."
+        )
+    )
+    apex_vertex_id: str = Field(min_length=1, max_length=MAX_COORDINATE_LABEL_LENGTH)
+    base_vertex_map: tuple[PyramidBaseVertexMap, ...] = Field(
+        min_length=1,
+        max_length=MAX_VERTICES,
+        description=(
+            "One transport row per source vertex, sorted by source vertex ID; "
+            "base vertices retain their source IDs."
+        ),
+    )
+    source_affine_dimension: int = Field(ge=0, le=MAX_FACET_DIMENSION)
+    pyramid_affine_dimension: int = Field(ge=1, le=MAX_FACET_DIMENSION)
+
+    @model_validator(mode="after")
+    def require_pyramid_transport_shape(self) -> Self:
+        if self.apex_vertex_id != "apex":
+            raise _validation_error(
+                "pyramid_apex_id",
+                "the pyramid apex vertex ID is the reserved label 'apex'",
+            )
+        source_ids = tuple(row.source_vertex_id for row in self.base_vertex_map)
+        if source_ids != tuple(sorted(source_ids)) or len(set(source_ids)) != len(
+            source_ids
+        ):
+            raise _validation_error(
+                "pyramid_transport_order",
+                "base transport rows must be unique and sorted by source vertex ID",
+            )
+        pyramid_ids = tuple(vertex.vertex_id for vertex in self.pyramid.vertices)
+        if self.apex_vertex_id not in pyramid_ids:
+            raise _validation_error(
+                "pyramid_apex_binding",
+                "the apex vertex ID must occur among the pyramid vertices",
+            )
+        base_ids = tuple(row.pyramid_vertex_id for row in self.base_vertex_map)
+        if tuple(sorted(base_ids)) != tuple(sorted(set(base_ids))) or len(
+            base_ids
+        ) != len(self.base_vertex_map):
+            raise _validation_error(
+                "pyramid_base_binding",
+                "base transport targets must be distinct pyramid vertices",
+            )
+        if set(base_ids) | {self.apex_vertex_id} != set(pyramid_ids):
+            raise _validation_error(
+                "pyramid_vertex_cover",
+                "base transport plus the apex must cover every pyramid vertex",
+            )
+        if self.pyramid_affine_dimension != self.source_affine_dimension + 1:
+            raise _validation_error(
+                "pyramid_dimension_identity",
+                "pyramid affine dimension must be exactly source dimension plus one",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        pyramid: RationalVPolytope,
+        base_vertex_map: tuple[PyramidBaseVertexMap, ...],
+        source_affine_dimension: int,
+        pyramid_affine_dimension: int,
+    ) -> Self:
+        """Build a trusted kernel outcome without replaying its construction."""
+
+        return cls.model_construct(
+            pyramid=pyramid,
+            apex_vertex_id="apex",
+            base_vertex_map=base_vertex_map,
+            source_affine_dimension=source_affine_dimension,
+            pyramid_affine_dimension=pyramid_affine_dimension,
+        )
+
+
 __all__ = [
     "MAX_BOUNDEDNESS_COMBINATIONS",
     "MAX_COMPUTED_FACETS",
@@ -2163,6 +2278,9 @@ __all__ = [
     "PolytopeVolumeRequest",
     "PolytopeVolumeResult",
     "PrimitiveFacet",
+    "PyramidBaseVertexMap",
+    "PyramidRequest",
+    "PyramidResult",
     "RationalCoordinateSpace",
     "RationalCovector",
     "RationalExposedFace",

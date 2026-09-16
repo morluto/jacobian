@@ -892,15 +892,149 @@ def _iter_sample_words(
     return tuple(words)
 
 
+def _is_common_output_prefix(
+    state: int,
+    prefix: tuple[int, ...],
+    alphabet_size: int,
+    transitions: dict[tuple[int, int], tuple[int, tuple[int, ...]]],
+    finals: dict[int, tuple[int, ...]],
+) -> bool:
+    """Decide whether every accepted output from ``state`` starts with ``prefix``.
+
+    A breadth-first search over ``(state, matched)`` configurations finds a
+    counterexample path: a transition whose output mismatches the next prefix
+    symbol, or an accepting stop whose output is shorter (or mismatched)
+    before the prefix is matched.  Once ``matched`` reaches the prefix length
+    the remaining output is unconstrained, so that branch stops.
+    """
+
+    target = len(prefix)
+    visited: set[tuple[int, int]] = set()
+    stack: list[tuple[int, int]] = [(state, 0)]
+    while stack:
+        current, matched = stack.pop()
+        if matched >= target or (current, matched) in visited:
+            continue
+        visited.add((current, matched))
+        final = finals.get(current)
+        if final is not None:
+            span = min(len(final), target - matched)
+            if final[:span] != prefix[matched : matched + span]:
+                return False
+            if matched + len(final) < target:
+                return False
+        for symbol in range(alphabet_size):
+            step = transitions.get((current, symbol))
+            if step is None:
+                continue
+            target_state, output = step
+            span = min(len(output), target - matched)
+            if output[:span] != prefix[matched : matched + span]:
+                return False
+            stack.append((target_state, matched + span))
+    return True
+
+
+def _output_prefixes(
+    state_count: int,
+    alphabet_size: int,
+    transitions: dict[tuple[int, int], tuple[int, tuple[int, ...]]],
+    finals: dict[int, tuple[int, ...]],
+    initial_state: int,
+) -> list[tuple[int, ...]]:
+    """Return each state's longest common output prefix (initial pinned empty).
+
+    The prefix of a state is the longest word shared by the outputs of every
+    successful path starting there, including the reached final outputs.  It
+    is grown one symbol at a time: at most one symbol can extend the current
+    common prefix, so the greedy extension is exact.  The initial state is
+    pinned to the empty prefix because this value model has no initial output
+    to absorb a global prefix; pinning it keeps the realized function
+    unchanged.
+    """
+
+    prefix: list[tuple[int, ...]] = []
+    for state in range(state_count):
+        current: tuple[int, ...] = ()
+        while True:
+            extended = next(
+                (
+                    (*current, symbol)
+                    for symbol in range(alphabet_size)
+                    if _is_common_output_prefix(
+                        state,
+                        (*current, symbol),
+                        alphabet_size,
+                        transitions,
+                        finals,
+                    )
+                ),
+                None,
+            )
+            if extended is None:
+                break
+            current = extended
+        prefix.append(current)
+    prefix[initial_state] = ()
+    return prefix
+
+
+def _push_output_prefixes(
+    state_count: int,
+    alphabet_size: int,
+    transitions: dict[tuple[int, int], tuple[int, tuple[int, ...]]],
+    finals: dict[int, tuple[int, ...]],
+    initial_state: int,
+) -> tuple[
+    dict[tuple[int, int], tuple[int, tuple[int, ...]]],
+    dict[int, tuple[int, ...]],
+]:
+    """Rewrite outputs so no live state carries a common output prefix.
+
+    Each transition ``q --s/w--> q'`` becomes ``q --s/u--> q'`` with
+    ``c(q) u = w c(q')``, and each final output ``f`` becomes
+    ``strip(c(q), f)``.  The telescoping identity makes the total output of
+    every accepted path unchanged, so the realized partial function is
+    preserved while the output prefixes move to the incoming transitions.
+    """
+
+    prefix = _output_prefixes(
+        state_count, alphabet_size, transitions, finals, initial_state
+    )
+    pushed_transitions: dict[tuple[int, int], tuple[int, tuple[int, ...]]] = {}
+    for (state, symbol), (target, output) in transitions.items():
+        combined = output + prefix[target]
+        head = prefix[state]
+        if combined[: len(head)] != head:
+            raise RuntimeError(
+                "output-prefix normalization broke a transition prefix invariant"
+            )
+        pushed_transitions[(state, symbol)] = (target, combined[len(head) :])
+    pushed_finals: dict[int, tuple[int, ...]] = {}
+    for state, final in finals.items():
+        head = prefix[state]
+        if final[: len(head)] != head:
+            raise RuntimeError(
+                "output-prefix normalization broke a final-output prefix invariant"
+            )
+        pushed_finals[state] = final[len(head) :]
+    return pushed_transitions, pushed_finals
+
+
 def minimize_subsequential(
     transducer: SubsequentialTransducer,
     sample_max_length: int = 5,
 ) -> MinimizeResult:
     """Minimize a subsequential transducer preserving its partial function.
 
-    The kernel trims to live states, merges the coarsest exact-output
-    bisimulation by partition refinement, and replays the shipped run
-    semantics on every word of length at most ``sample_max_length``.
+    The kernel trims to live states, pushes common output prefixes onto the
+    incoming transitions so no live state carries a redundant output prefix,
+    merges the coarsest exact-output bisimulation of the normalized machine
+    by partition refinement, and replays the shipped run semantics on every
+    word of length at most ``sample_max_length``.  Pushing preserves the
+    realized partial function and can only merge states the raw exact-output
+    bisimulation would separate, so the quotient is the state-minimal machine
+    for this value model.
     """
 
     _admit_minimize(transducer, sample_max_length)
@@ -922,6 +1056,13 @@ def minimize_subsequential(
             ),
             sample_agreement=True,
         )
+    transitions, finals = _push_output_prefixes(
+        trimmed.state_count,
+        trimmed.input_alphabet_size,
+        transitions,
+        finals,
+        trimmed.initial_state,
+    )
     block_of = _refine_subsequential_partition(
         trimmed.state_count,
         trimmed.input_alphabet_size,

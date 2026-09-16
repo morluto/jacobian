@@ -53,9 +53,14 @@ def test_affine_plane_profile_matches_the_orbit_cone_correspondence() -> None:
         (relation.tau_cone_id, relation.sigma_cone_id)
         for relation in result.face_relations
     ) == (
-        (0, 0), (0, 1), (0, 2), (0, 3),
-        (1, 1), (1, 3),
-        (2, 2), (2, 3),
+        (0, 0),
+        (0, 1),
+        (0, 2),
+        (0, 3),
+        (1, 1),
+        (1, 3),
+        (2, 2),
+        (2, 3),
         (3, 3),
     )
 
@@ -85,10 +90,13 @@ def test_projective_plane_face_relations_are_exactly_subset_inclusion() -> None:
         for sigma in range(len(cones))
         if tau <= sigma and set(cones[tau]) <= set(cones[sigma])
     )
-    assert tuple(
-        (relation.tau_cone_id, relation.sigma_cone_id)
-        for relation in result.face_relations
-    ) == expected
+    assert (
+        tuple(
+            (relation.tau_cone_id, relation.sigma_cone_id)
+            for relation in result.face_relations
+        )
+        == expected
+    )
 
 
 def test_degree_six_del_pezzo_profile_is_smooth_with_six_two_cones() -> None:
@@ -147,9 +155,10 @@ def test_zero_cone_only_fan_profile() -> None:
 
 def test_single_ray_fan_profile_and_incidence() -> None:
     result = compute_orbit_cone_profile(fan(((1, 0),), ((), (0,)), rank=2))
-    assert [
-        (row.dimension, row.orbit_dimension) for row in result.cones
-    ] == [(0, 2), (1, 1)]
+    assert [(row.dimension, row.orbit_dimension) for row in result.cones] == [
+        (0, 2),
+        (1, 1),
+    ]
     assert tuple(
         (relation.tau_cone_id, relation.sigma_cone_id)
         for relation in result.face_relations

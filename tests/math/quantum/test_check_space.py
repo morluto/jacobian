@@ -7,9 +7,9 @@ import pytest
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.quantum import (
     BinaryPauliRow,
-    CheckSpaceCanonicalizeRequest,
     canonicalize_check_space,
 )
+from jacobian.math.quantum._models import CheckSpaceCanonicalizeRequest
 from jacobian.math.quantum._tools import TOOLS
 
 

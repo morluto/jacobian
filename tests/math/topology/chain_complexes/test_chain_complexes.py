@@ -1609,7 +1609,6 @@ class TestNativeSurface:
             "AssociatedGradedResult",
             "ChainComplexValue",
             "CoefficientRing",
-            "FilteredChainComplexRequest",
             "FilteredSubspace",
             "FiltrationLevel",
             "GradedSquareLedgerEntry",

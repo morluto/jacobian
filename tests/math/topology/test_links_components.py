@@ -8,10 +8,10 @@ from pydantic import ValidationError
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.topology.links import (
     ArcPairing,
-    LinkComponentsRequest,
     LinkCrossing,
     OrientedLinkDiagram,
 )
+from jacobian.math.topology.links._models import LinkComponentsRequest
 from jacobian.math.topology.links._tools import TOOLS
 from jacobian.math.topology.links.operations import link_components
 

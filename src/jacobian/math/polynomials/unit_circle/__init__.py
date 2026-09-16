@@ -22,7 +22,6 @@ from jacobian.math.polynomials.unit_circle._sup_norm_models import (
     GaussianRationalPolynomial,
     GaussianRationalPolynomialTerm,
     UnitCircleCriticalPoint,
-    UnitCircleSupNormSquaredRequest,
     UnitCircleSupNormSquaredResult,
 )
 from jacobian.math.polynomials.unit_circle.operations import (
@@ -44,7 +43,6 @@ __all__ = [
     "RealDegreeOnePolynomialFactor",
     "UnitCircleArcEnergyResult",
     "UnitCircleCriticalPoint",
-    "UnitCircleSupNormSquaredRequest",
     "UnitCircleSupNormSquaredResult",
     "UnitDiskProfile",
     "real_symmetric_degree_one_fejer_riesz_factor",

@@ -12,10 +12,10 @@ from jacobian.math.geometry.convex import (
     ConvexHPolytope,
     ConvexInequality,
     ConvexSpace,
-    DirectionLocalMotionRequest,
     RationalConvexDirection,
     RationalConvexPoint,
 )
+from jacobian.math.geometry.convex._models import DirectionLocalMotionRequest
 from jacobian.math.geometry.convex._tools import TOOLS
 from jacobian.math.geometry.convex.operations import direction_local_motion
 

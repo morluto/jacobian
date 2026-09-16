@@ -11,15 +11,17 @@ from jacobian.catalog.models import (
 )
 from jacobian.math.topology._models import FiniteSimplicialComplex, canonical_complex
 from jacobian.math.topology.cellular_sheaves import (
-    CoverRestrictionInput,
     FiniteCellularSheaf,
-    FromCoverMapsRequest,
     FromCoverMapsResult,
     SheafField,
     SheafObstructionCode,
     SheafOutcome,
     SheafStalk,
     from_cover_maps,
+)
+from jacobian.math.topology.cellular_sheaves._models import (
+    CoverRestrictionInput,
+    FromCoverMapsRequest,
 )
 
 OPERATION_ID = "cellular_sheaf.from_cover_maps.compute"

@@ -63,11 +63,7 @@ def _fm_feasible(rows: list[_LpRow], variables: int) -> bool:
                     scale_down * a + scale_up * b
                     for a, b in zip(upper[0], lower[0], strict=True)
                 )
-                kind = (
-                    "gt"
-                    if "gt" in (upper[1], lower[1])
-                    else "ge"
-                )
+                kind = "gt" if "gt" in (upper[1], lower[1]) else "ge"
                 combined.append(
                     (
                         coefficients,
@@ -78,8 +74,7 @@ def _fm_feasible(rows: list[_LpRow], variables: int) -> bool:
         rows = _deduplicate_rows(combined)
         if len(rows) > MAX_TORIC_FM_TABLEAU_ROWS:
             _reject_budget(
-                "exact feasibility tableau exceeds "
-                f"{MAX_TORIC_FM_TABLEAU_ROWS} rows"
+                f"exact feasibility tableau exceeds {MAX_TORIC_FM_TABLEAU_ROWS} rows"
             )
     for coefficients, kind, rhs in rows:
         if all(value == 0 for value in coefficients):
@@ -118,7 +113,9 @@ def _substitute_equalities(rows: list[_LpRow], index: int) -> list[_LpRow]:
                 continue
             remaining.append(
                 (
-                    tuple(a - coefficient * b for a, b in zip(row[0], solved, strict=True)),
+                    tuple(
+                        a - coefficient * b for a, b in zip(row[0], solved, strict=True)
+                    ),
                     row[1],
                     row[2] - coefficient * solved_rhs,
                 )
@@ -215,11 +212,15 @@ def _matrix_rank(rows: tuple[tuple[int, ...], ...]) -> int:
     return rank
 
 
-def _cone_dimension(ray_indices: tuple[int, ...], rays: tuple[tuple[int, ...], ...]) -> int:
+def _cone_dimension(
+    ray_indices: tuple[int, ...], rays: tuple[tuple[int, ...], ...]
+) -> int:
     return _matrix_rank(tuple(rays[index] for index in ray_indices))
 
 
-def _is_smooth(ray_indices: tuple[int, ...], rays: tuple[tuple[int, ...], ...], dimension: int) -> bool:
+def _is_smooth(
+    ray_indices: tuple[int, ...], rays: tuple[tuple[int, ...], ...], dimension: int
+) -> bool:
     if len(ray_indices) != dimension:
         return False
     diagonal = integer_smith_normal_form(tuple(rays[index] for index in ray_indices))
@@ -252,7 +253,7 @@ def _subset_is_face(
     return _feasible(equalities, strict_rows, 0, rank)
 
 
-def recognize_fan(
+def recognize_fan(  # noqa: C901
     rays: tuple[tuple[int, ...], ...],
     cones: tuple[tuple[int, ...], ...],
     lattice_rank: int,
@@ -274,9 +275,7 @@ def recognize_fan(
 
     for ray_index, ray in enumerate(rays):
         if all(value == 0 for value in ray):
-            return obstruct(
-                "toric.ray_zero", f"ray {ray_index} is the zero vector"
-            )
+            return obstruct("toric.ray_zero", f"ray {ray_index} is the zero vector")
         divisor = 0
         for value in ray:
             divisor = gcd(divisor, abs(value))
@@ -293,9 +292,7 @@ def recognize_fan(
 
     for cone_id, cone in enumerate(cone_generators):
         generators = tuple(rays[index] for index in cone)
-        if not _feasible(
-            [], list(generators), 0, lattice_rank
-        ):
+        if not _feasible([], list(generators), 0, lattice_rank):
             return obstruct(
                 "toric.cone_not_strongly_convex",
                 f"cone {cone_id} admits no character positive on every generator",

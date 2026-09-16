@@ -10,7 +10,6 @@ if TYPE_CHECKING:
         BinaryPowerSumValueBucket,
     )
     from jacobian.math.number_theory.number_fields._relative_trace_norm import (
-        NumberFieldRelativeTraceNormRequest,
         NumberFieldRelativeTraceNormResult,
         relative_trace_norm,
     )
@@ -47,7 +46,6 @@ __all__ = [
     "GaussianRational",
     "NumberFieldEmbeddingProfile",
     "NumberFieldRealValueEnclosure",
-    "NumberFieldRelativeTraceNormRequest",
     "NumberFieldRelativeTraceNormResult",
     "NumberFieldRingOfIntegersResult",
     "RealNumberFieldEmbedding",
@@ -76,12 +74,14 @@ _OWNER_MODULES = {
     "NumberFieldEmbeddingProfile": "values",
     "NumberFieldRealValueEnclosure": "values",
     "NumberFieldRingOfIntegersResult": "_ring_of_integers",
+    "NumberFieldRelativeTraceNormResult": "_relative_trace_norm",
     "RealNumberFieldEmbedding": "values",
     "SimpleNumberFieldElement": "values",
     "SimpleNumberFieldPresentation": "values",
     "SimpleNumberFieldRealEmbeddingBinding": "values",
     "SimpleNumberFieldRealEmbeddingOrder": "values",
     "ring_of_integers": "_ring_of_integers",
+    "relative_trace_norm": "_relative_trace_norm",
 }
 
 

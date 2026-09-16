@@ -79,9 +79,7 @@ def compute_relation_lattice_data(
     rows = _rows_from_matrix(configuration)
     row_count = configuration.row_count
     column_count = configuration.column_count
-    reduction = smith_reduce(
-        rows, row_count=row_count, column_count=column_count
-    )
+    reduction = smith_reduce(rows, row_count=row_count, column_count=column_count)
     rank = reduction.rank
     nullity = column_count - rank
 
@@ -112,9 +110,7 @@ def compute_relation_lattice_data(
     )
 
     if basis_rows:
-        saturated_rows, inclusion_rows, saturation_index = saturate_lattice(
-            basis_rows
-        )
+        saturated_rows, inclusion_rows, saturation_index = saturate_lattice(basis_rows)
     else:
         saturated_rows, inclusion_rows, saturation_index = [], [], 1
     saturated_basis = _integer_matrix(saturated_rows, column_count=column_count)
@@ -128,7 +124,9 @@ def compute_relation_lattice_data(
         hnf_transformation=hnf_transformation,
         rank=rank,
         nullity=nullity,
-        smith_invariant_factors=tuple(int(value) for value in reduction.invariant_factors),
+        smith_invariant_factors=tuple(
+            int(value) for value in reduction.invariant_factors
+        ),
         smith_rank=rank,
         saturated_basis=saturated_basis,
         saturation_inclusion_transform=saturation_inclusion_transform,

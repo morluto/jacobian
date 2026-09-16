@@ -3,7 +3,6 @@
 from jacobian.math.geometry.polytopes._models import (
     PolytopeSupportResult,
     PyramidBaseVertexMap,
-    PyramidRequest,
     PyramidResult,
     RationalCoordinateSpace,
     RationalCovector,
@@ -24,7 +23,6 @@ __all__ = [
     "Halfspace",
     "PolytopeSupportResult",
     "PyramidBaseVertexMap",
-    "PyramidRequest",
     "PyramidResult",
     "RationalCoordinateSpace",
     "RationalCovector",

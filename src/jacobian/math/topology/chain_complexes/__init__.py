@@ -2,7 +2,6 @@
 
 from jacobian.math.topology.chain_complexes._filtered_models import (
     AssociatedGradedResult,
-    FilteredChainComplexRequest,
     FilteredSubspace,
     FiltrationLevel,
     GradedSquareLedgerEntry,
@@ -37,7 +36,6 @@ __all__ = [
     "AssociatedGradedResult",
     "ChainComplexValue",
     "CoefficientRing",
-    "FilteredChainComplexRequest",
     "FilteredSubspace",
     "FiltrationLevel",
     "GradedSquareLedgerEntry",

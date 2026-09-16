@@ -36,8 +36,14 @@ from jacobian.math.geometry.toric.operations import validate_fan
 @pytest.mark.parametrize(
     "presentation",
     [a2_fan(), p2_fan(), dp6_fan(), singular_fan(), square_fan(), p4_fan()],
-    ids=["affine_plane", "projective_plane", "del_pezzo_six", "singular_chart",
-         "square_pyramid", "projective_four_space"],
+    ids=[
+        "affine_plane",
+        "projective_plane",
+        "del_pezzo_six",
+        "singular_chart",
+        "square_pyramid",
+        "projective_four_space",
+    ],
 )
 def test_known_fans_are_recognized_valid(presentation: ToricFanPresentation) -> None:
     result = validate_fan(presentation)
@@ -64,31 +70,34 @@ def test_missing_face_is_an_exact_obstruction() -> None:
 
 
 def test_non_primitive_ray_is_rejected() -> None:
-    result = validate_fan(
-        fan(((2, 0), (0, 1)), ((), (0,), (1,), (0, 1)))
-    )
+    result = validate_fan(fan(((2, 0), (0, 1)), ((), (0,), (1,), (0, 1))))
     assert result.status == "INVALID"
     assert result.obstruction_code == "toric.ray_not_primitive"
 
 
 def test_zero_ray_is_rejected() -> None:
-    result = validate_fan(fan(((0, 0), (1, 0)), ((), (0,), (1,),)))
+    result = validate_fan(
+        fan(
+            ((0, 0), (1, 0)),
+            (
+                (),
+                (0,),
+                (1,),
+            ),
+        )
+    )
     assert result.status == "INVALID"
     assert result.obstruction_code == "toric.ray_zero"
 
 
 def test_duplicate_rays_are_rejected() -> None:
-    result = validate_fan(
-        fan(((1, 0), (1, 0)), ((), (0,), (1,), (0, 1)))
-    )
+    result = validate_fan(fan(((1, 0), (1, 0)), ((), (0,), (1,), (0, 1))))
     assert result.status == "INVALID"
     assert result.obstruction_code == "toric.duplicate_rays"
 
 
 def test_cone_containing_a_line_is_rejected() -> None:
-    result = validate_fan(
-        fan(((1, 0), (-1, 0)), ((), (0,), (1,), (0, 1)))
-    )
+    result = validate_fan(fan(((1, 0), (-1, 0)), ((), (0,), (1,), (0, 1))))
     assert result.status == "INVALID"
     assert result.obstruction_code == "toric.cone_not_strongly_convex"
 

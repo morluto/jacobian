@@ -12,12 +12,12 @@ from jacobian.math.topology._models import (
 )
 from jacobian.math.topology.discrete_morse import (
     CriticalCellProfile,
-    DiscreteMorseMatchingRequest,
     DiscreteMorseMatchingResult,
     MorseMatchingFault,
     MorseMatchingOutcome,
     construct_matching,
 )
+from jacobian.math.topology.discrete_morse._models import DiscreteMorseMatchingRequest
 
 OPERATION_ID = "topology.discrete_morse.matching.construct"
 

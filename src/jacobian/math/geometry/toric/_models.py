@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import itertools
 from typing import TYPE_CHECKING, Literal, Self
 
 from pydantic import Field, StrictBool, StrictInt, model_validator
@@ -92,9 +93,7 @@ class ToricFanPresentation(StrictModel):
                     "cone_ray_index_out_of_range",
                     "cone ray indices must address declared rays",
                 )
-            if any(
-                first >= second for first, second in zip(cone, cone[1:], strict=False)
-            ):
+            if any(first >= second for first, second in itertools.pairwise(cone)):
                 raise _validation_error(
                     "cone_ray_indices_strictly_increasing",
                     "cone ray indices must be strictly increasing",
@@ -145,7 +144,10 @@ class FanValidationResult(StrictModel):
     @model_validator(mode="after")
     def require_bound_obstruction(self) -> Self:
         if self.status == "VALID":
-            if self.obstruction_code is not None or self.obstruction_message is not None:
+            if (
+                self.obstruction_code is not None
+                or self.obstruction_message is not None
+            ):
                 raise _validation_error(
                     "valid_fan_has_no_obstruction",
                     "a VALID fan must not carry an obstruction",
@@ -174,12 +176,8 @@ class OrbitConeRow(StrictModel):
     """One cone's exact orbit-cone profile row."""
 
     cone_id: ToricRayIndex
-    ray_indices: tuple[ToricRayIndex, ...] = Field(
-        max_length=MAX_TORIC_CONE_GENERATORS
-    )
-    dimension: ToricRayIndex = Field(
-        description="Rank of the generator span over Q."
-    )
+    ray_indices: tuple[ToricRayIndex, ...] = Field(max_length=MAX_TORIC_CONE_GENERATORS)
+    dimension: ToricRayIndex = Field(description="Rank of the generator span over Q.")
     orbit_dimension: ToricRayIndex = Field(
         description="n - dimension, the dimension of the corresponding torus orbit."
     )
@@ -229,9 +227,7 @@ class OrbitConeProfileResult(StrictModel):
             "V(tau) contains V(sigma)."
         )
     )
-    ray_incidence: tuple[RayConeIncidence, ...] = Field(
-        max_length=MAX_TORIC_RAY_COUNT
-    )
+    ray_incidence: tuple[RayConeIncidence, ...] = Field(max_length=MAX_TORIC_RAY_COUNT)
 
     @model_validator(mode="after")
     def require_structural_consistency(self) -> Self:

@@ -101,8 +101,7 @@ def _require_index_table(
             if len(level) != degree + 1:
                 raise _validation_error(
                     "degeneracy_map_count_mismatch",
-                    f"degree {degree} must carry exactly {degree + 1} "
-                    "degeneracy maps",
+                    f"degree {degree} must carry exactly {degree + 1} degeneracy maps",
                 )
             for index, row in enumerate(level):
                 if len(row) != sizes[degree] or any(
@@ -138,9 +137,7 @@ class SimplicialSetTablesRequest(StrictModel):
 class SimplicialIdentityObstruction(StrictModel):
     """The first unequal simplicial-identity row, with its full comparison."""
 
-    identity_family: Literal[
-        "FACE_FACE", "FACE_DEGENERACY", "DEGENERACY_DEGENERACY"
-    ]
+    identity_family: Literal["FACE_FACE", "FACE_DEGENERACY", "DEGENERACY_DEGENERACY"]
     degree: int = Field(ge=0, le=MAX_SIMPLICIAL_SET_DEGREE)
     left_description: str = Field(min_length=1, max_length=128)
     right_description: str = Field(min_length=1, max_length=128)

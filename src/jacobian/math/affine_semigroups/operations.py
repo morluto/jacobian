@@ -37,11 +37,7 @@ def _admit_relation_lattice(configuration: IntegerMatrix) -> None:
             ),
         )
     limit = 10**MAX_RELATION_LATTICE_INPUT_DIGITS
-    if any(
-        abs(int(value)) >= limit
-        for row in configuration.entries
-        for value in row
-    ):
+    if any(abs(int(value)) >= limit for row in configuration.entries for value in row):
         raise OperationResourceAdmissionError(
             location=("configuration",),
             code="affine_semigroup.relation_lattice.budget_exceeded",

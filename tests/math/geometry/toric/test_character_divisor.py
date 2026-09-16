@@ -53,11 +53,16 @@ def test_divisor_is_additive_in_the_character() -> None:
     first = compute_character_divisor(p2_fan(), character(2, -1))
     second = compute_character_divisor(p2_fan(), character(-3, 4))
     total = compute_character_divisor(p2_fan(), character(-1, 3))
-    assert tuple(a + b for a, b in zip(first.coefficients, second.coefficients,
-                                       strict=True)) == total.coefficients
-    assert tuple(
-        index for index, value in enumerate(total.coefficients) if value != 0
-    ) == total.support_ray_indices
+    assert (
+        tuple(
+            a + b for a, b in zip(first.coefficients, second.coefficients, strict=True)
+        )
+        == total.coefficients
+    )
+    assert (
+        tuple(index for index, value in enumerate(total.coefficients) if value != 0)
+        == total.support_ray_indices
+    )
 
 
 def test_divisor_is_negated_by_the_inverse_character() -> None:
@@ -73,9 +78,7 @@ def test_divisor_is_negated_by_the_inverse_character() -> None:
 def test_coefficients_pair_the_character_with_every_ray(
     presentation: ToricFanPresentation,
 ) -> None:
-    m = tuple(
-        1 if index % 2 == 0 else -2 for index in range(presentation.lattice_rank)
-    )
+    m = tuple(1 if index % 2 == 0 else -2 for index in range(presentation.lattice_rank))
     result = compute_character_divisor(presentation, character(*m))
     assert result.coefficients == tuple(
         sum(m_i * coordinate for m_i, coordinate in zip(m, ray, strict=True))
@@ -93,9 +96,7 @@ def test_ray_order_and_zero_coefficients_are_retained() -> None:
 
 def test_invalid_fan_is_rejected_before_pairing() -> None:
     cones = tuple(cone for cone in DP6_CONES if cone != (3,))
-    invalid = fan(
-        ((1, 0), (0, 1), (-1, 0), (0, -1), (1, 1), (-1, -1)), cones
-    )
+    invalid = fan(((1, 0), (0, 1), (-1, 0), (0, -1), (1, 1), (-1, -1)), cones)
     with pytest.raises(OperationDomainValidationError) as rejection:
         compute_character_divisor(invalid, character(1, 1))
     assert rejection.value.errors()[0]["type"] == "toric.fan_not_valid"
@@ -103,9 +104,7 @@ def test_invalid_fan_is_rejected_before_pairing() -> None:
 
 def test_character_rank_must_match_the_lattice() -> None:
     with pytest.raises(ValidationError):
-        CharacterDivisorRequest(
-            fan=p2_fan(), character=character(1, 0, 0)
-        )
+        CharacterDivisorRequest(fan=p2_fan(), character=character(1, 0, 0))
 
 
 def test_result_round_trips_through_strict_json() -> None:

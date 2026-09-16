@@ -100,7 +100,7 @@ def test_octagon_cone_with_eight_generators_is_accepted() -> None:
 
 def test_nine_generators_are_rejected_on_the_wire() -> None:
     with pytest.raises(ValidationError):
-        fan(OCTAGON_RAYS + ((5, 1, 1),), ((), tuple(range(9))), rank=3)
+        fan((*OCTAGON_RAYS, (5, 1, 1)), ((), tuple(range(9))), rank=3)
 
 
 def test_forty_one_cones_are_rejected_on_the_wire() -> None:
@@ -142,7 +142,7 @@ def test_native_admission_rejects_constructed_over_envelope_values() -> None:
         compute_orbit_cone_profile(over_rays)
     over_generators = ToricFanPresentation.model_construct(
         lattice_rank=3,
-        rays=OCTAGON_RAYS + ((5, 1, 1),),
+        rays=(*OCTAGON_RAYS, (5, 1, 1)),
         cones=(tuple(range(MAX_TORIC_CONE_GENERATORS + 1)),),
     )
     with pytest.raises(OperationResourceAdmissionError):
@@ -151,9 +151,7 @@ def test_native_admission_rejects_constructed_over_envelope_values() -> None:
         lattice_rank=2,
         rays=TWELVE_RAY_CIRCLE,
         cones=tuple(
-            (first, second)
-            for first in range(12)
-            for second in range(first + 1, 12)
+            (first, second) for first in range(12) for second in range(first + 1, 12)
         ),
     )
     with pytest.raises(OperationResourceAdmissionError):

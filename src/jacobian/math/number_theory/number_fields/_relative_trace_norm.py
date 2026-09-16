@@ -344,9 +344,11 @@ def _power_sums(monic_descending: list[Fraction]) -> list[Fraction]:
         if power == 0:
             sums.append(Fraction(degree))
         else:
+            # Newton: p_k + c_1 p_{k-1} + ... + c_{k-1} p_1 + k c_k = 0.
             total = Fraction(0)
-            for index in range(1, power + 1):
+            for index in range(1, power):
                 total += companion[index] * sums[power - index]
+            total += power * companion[power]
             sums.append(-total)
     return sums
 
@@ -409,7 +411,12 @@ def _resultant_norm(
         for column, coefficient in enumerate(g_hat):
             sylvester[element_degree + row][row + column] = coefficient
     resultant = _bareiss_determinant(sylvester)
-    return Fraction(resultant, (common**degree) * (leading**element_degree))
+    # The Sylvester matrix built with the ``element_degree`` f-rows above the
+    # ``degree`` g-rows has determinant ``(-1)^{degree * element_degree} *
+    # res(f, Ghat)``; recover res(f, Ghat) with that sign before clearing the
+    # common denominator and the leading coefficient.
+    sign = -1 if (degree * element_degree) % 2 else 1
+    return Fraction(sign * resultant, (common**degree) * (leading**element_degree))
 
 
 def relative_trace_norm(

@@ -123,7 +123,6 @@ class RelationLatticeResult(StrictModel):
 
     @model_validator(mode="after")
     def require_structural_consistency(self) -> Self:
-        rows = self.configuration.row_count
         columns = self.configuration.column_count
         if self.rank + self.nullity != columns:
             raise _validation_error(
@@ -183,7 +182,9 @@ class RelationLatticeResult(StrictModel):
             hnf_transformation=hnf_transformation,
             rank=rank,
             nullity=nullity,
-            smith_invariant_factors=tuple(int(value) for value in smith_invariant_factors),
+            smith_invariant_factors=tuple(
+                int(value) for value in smith_invariant_factors
+            ),
             smith_rank=smith_rank,
             saturated_basis=saturated_basis,
             saturation_inclusion_transform=saturation_inclusion_transform,

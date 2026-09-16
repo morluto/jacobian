@@ -62,8 +62,7 @@ def admit_tables(
             location=("sets",),
             code="simplicial_set.total_simplex_budget_exceeded",
             message=(
-                f"{sum(sizes)} simplices exceed the "
-                f"{MAX_TOTAL_SIMPLICES}-cell bound"
+                f"{sum(sizes)} simplices exceed the {MAX_TOTAL_SIMPLICES}-cell bound"
             ),
         )
     _admit_index_table(face_maps, tuple(sizes), kind="face")
@@ -71,9 +70,7 @@ def admit_tables(
     return tuple(sizes)
 
 
-def _admit_index_table(
-    table: MapTable, sizes: tuple[int, ...], *, kind: str
-) -> None:
+def _admit_index_table(table: MapTable, sizes: tuple[int, ...], *, kind: str) -> None:
     expected_levels = len(sizes) - 1
     label = "face_maps" if kind == "face" else "degeneracy_maps"
     if not isinstance(table, tuple) or len(table) != expected_levels:
@@ -96,7 +93,8 @@ def _admit_index_table(
                 not isinstance(row, tuple)
                 or len(row) != sizes[degree]
                 or any(
-                    not isinstance(target, int) or not 0 <= target < sizes[target_degree]
+                    not isinstance(target, int)
+                    or not 0 <= target < sizes[target_degree]
                     for target in row
                 )
             ):
@@ -141,9 +139,7 @@ def from_tables(request: SimplicialSetTablesRequest) -> SimplicialSetTablesResul
             obstruction=degeneracy_obstruction,
         )
     checked += _degeneracy_degeneracy_count(request.max_degree)
-    face_degeneracy_obstruction, extra = _check_face_degeneracy(
-        request, sizes, checked
-    )
+    face_degeneracy_obstruction, extra = _check_face_degeneracy(request, sizes, checked)
     if face_degeneracy_obstruction is not None:
         return SimplicialSetTablesResult._from_kernel(
             status="NOT_A_SIMPLICIAL_SET",
@@ -173,19 +169,15 @@ def _face_face_count(max_degree: int) -> int:
 
 
 def _degeneracy_degeneracy_count(max_degree: int) -> int:
-    return sum(
-        (degree + 1) * (degree + 2) // 2 for degree in range(max_degree - 1)
-    )
+    return sum((degree + 1) * (degree + 2) // 2 for degree in range(max_degree - 1))
 
 
 def _face_degeneracy_count(max_degree: int) -> int:
     return sum((degree + 1) * (degree + 2) for degree in range(max_degree))
 
 
-def _first_difference(
-    left: tuple[int, ...], right: tuple[int, ...]
-) -> int | None:
-    for position, (left_value, right_value) in enumerate(zip(left, right)):
+def _first_difference(left: tuple[int, ...], right: tuple[int, ...]) -> int | None:
+    for position, (left_value, right_value) in enumerate(zip(left, right, strict=True)):
         if left_value != right_value:
             return position
     return None

@@ -11,10 +11,10 @@ from jacobian.math.gauge import (
     GaugeFieldEdgeLabel,
     GaugeLattice,
     GaugePathStep,
-    HolonomyRequest,
     OrientedGaugePath,
     PermutationLabel,
 )
+from jacobian.math.gauge._models import HolonomyRequest
 from jacobian.math.gauge._tools import TOOLS
 from jacobian.math.gauge.operations import path_holonomy
 

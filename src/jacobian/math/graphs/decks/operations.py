@@ -15,8 +15,8 @@ from jacobian.math.graphs.decks._models import (
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 __all__ = [
-    "vertex_deletion_family",
     "verify_vertex_deletion_family",
+    "vertex_deletion_family",
 ]
 
 

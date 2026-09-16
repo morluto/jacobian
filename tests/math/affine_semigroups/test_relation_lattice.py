@@ -103,7 +103,9 @@ def test_oversized_scalars_are_rejected_at_native_admission() -> None:
 
 def test_oversized_axes_are_rejected_at_native_admission() -> None:
     order = MAX_RELATION_LATTICE_DIMENSION + 1
-    entries = [[1 if column == row else 0 for column in range(order)] for row in range(order)]
+    entries = [
+        [1 if column == row else 0 for column in range(order)] for row in range(order)
+    ]
 
     with pytest.raises(OperationResourceAdmissionError) as excinfo:
         relation_lattice(_matrix(entries))

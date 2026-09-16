@@ -32,9 +32,7 @@ def _reject_envelope(message: str) -> None:
 
 
 def _reject_domain(location: tuple[str | int, ...], code: str, message: str) -> None:
-    raise OperationDomainValidationError(
-        location=location, code=code, message=message
-    )
+    raise OperationDomainValidationError(location=location, code=code, message=message)
 
 
 def _admit_fan(fan: ToricFanPresentation) -> None:
@@ -47,9 +45,7 @@ def _admit_fan(fan: ToricFanPresentation) -> None:
     """
 
     if not 1 <= fan.lattice_rank <= MAX_TORIC_LATTICE_RANK:
-        _reject_envelope(
-            f"lattice rank is limited to {MAX_TORIC_LATTICE_RANK}"
-        )
+        _reject_envelope(f"lattice rank is limited to {MAX_TORIC_LATTICE_RANK}")
     if len(fan.rays) > MAX_TORIC_RAY_COUNT:
         _reject_envelope(f"fans are limited to {MAX_TORIC_RAY_COUNT} rays")
     if len(fan.cones) > MAX_TORIC_CONE_COUNT:
@@ -72,8 +68,7 @@ def _admit_fan(fan: ToricFanPresentation) -> None:
     for cone in fan.cones:
         if len(cone) > MAX_TORIC_CONE_GENERATORS:
             _reject_envelope(
-                "cones are limited to "
-                f"{MAX_TORIC_CONE_GENERATORS} generators"
+                f"cones are limited to {MAX_TORIC_CONE_GENERATORS} generators"
             )
         if any(index < 0 or index >= len(fan.rays) for index in cone):
             _reject_domain(
@@ -81,7 +76,7 @@ def _admit_fan(fan: ToricFanPresentation) -> None:
                 "toric.fan_presentation_malformed",
                 "cone ray indices must address declared rays",
             )
-        face_subsets += 2**len(cone)
+        face_subsets += 2 ** len(cone)
         membership_problems += len(cone)
     cone_count = len(fan.cones)
     pair_problems = cone_count * (cone_count - 1) // 2
@@ -90,9 +85,7 @@ def _admit_fan(fan: ToricFanPresentation) -> None:
         face_subsets + membership_problems + cone_count * cone_count
     ) * (fan.lattice_rank + MAX_TORIC_CONE_GENERATORS)
     if recognition_work > MAX_TORIC_RECOGNITION_WORK:
-        _reject_envelope(
-            f"fan recognition work exceeds {MAX_TORIC_RECOGNITION_WORK}"
-        )
+        _reject_envelope(f"fan recognition work exceeds {MAX_TORIC_RECOGNITION_WORK}")
 
 
 def _admit_character(fan: ToricFanPresentation, character: CharacterVector) -> None:
@@ -147,7 +140,10 @@ def compute_character_divisor(
     recognized = _recognize_or_reject(fan)
     _admit_character(fan, character)
     coefficients = tuple(
-        sum(m_value * ray[coordinate] for coordinate, m_value in enumerate(character.entries))
+        sum(
+            m_value * ray[coordinate]
+            for coordinate, m_value in enumerate(character.entries)
+        )
         for ray in recognized.rays
     )
     return CharacterDivisorResult._from_coefficients(

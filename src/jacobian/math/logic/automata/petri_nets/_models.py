@@ -397,6 +397,84 @@ class FiringSequenceReplayResult(StrictModel):
         return cls.model_construct(**values)
 
 
+class PetriInvariantsRequest(StrictModel):
+    """Compute P-invariants and T-invariants as exact integer modules."""
+
+    net: PetriNet
+
+
+class PetriInvariantsResult(PetriInvariantsRequest):
+    """P/T-invariant bases with their incidence rank profile.
+
+    Deserialization checks only the canonical shape: incidence axes match
+    the net, every vector uses its axis, each basis is sign-normalized,
+    sorted, and unique with the nullity the Smith rank predicts, and the
+    replay flag is set. The owner-local kernel establishes that every
+    vector lies in the incidence (left) kernel.
+    """
+
+    incidence: IntegerMatrix
+    incidence_rank: int = Field(ge=0)
+    p_invariants: tuple[tuple[int, ...], ...] = Field(default=())
+    t_invariants: tuple[tuple[int, ...], ...] = Field(default=())
+    replayed: bool
+
+    @model_validator(mode="after")
+    def require_canonical_invariant_shape(self) -> Self:
+        if (
+            self.incidence.row_count != self.net.place_count
+            or self.incidence.column_count != self.net.transition_count
+        ):
+            raise _validation_error(
+                "invariants_incidence_axes", "incidence axes must match the net"
+            )
+        if self.incidence_rank > min(self.net.place_count, self.net.transition_count):
+            raise _validation_error(
+                "invariants_rank_bound",
+                "the incidence rank fits inside the net axes",
+            )
+        if len(self.p_invariants) != self.net.place_count - self.incidence_rank:
+            raise _validation_error(
+                "invariants_p_nullity",
+                "the P-basis size must match the left nullity",
+            )
+        if len(self.t_invariants) != self.net.transition_count - self.incidence_rank:
+            raise _validation_error(
+                "invariants_t_nullity",
+                "the T-basis size must match the right nullity",
+            )
+        for vectors, ambient in (
+            (self.p_invariants, self.net.place_count),
+            (self.t_invariants, self.net.transition_count),
+        ):
+            if vectors != tuple(sorted(set(vectors))):
+                raise _validation_error(
+                    "invariants_not_canonical",
+                    "invariant bases must be sorted and unique",
+                )
+            for vector in vectors:
+                if len(vector) != ambient or not any(vector):
+                    raise _validation_error(
+                        "invariants_axis",
+                        "invariant vectors must use their axis nontrivially",
+                    )
+                if next(value for value in vector if value) < 0:
+                    raise _validation_error(
+                        "invariants_sign",
+                        "invariant vectors must be sign-normalized",
+                    )
+        if not self.replayed:
+            raise _validation_error(
+                "invariants_not_replayed",
+                "an invariant result must replay its bases in the kernel",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(cls, **values: Any) -> Self:
+        return cls.model_construct(**values)
+
+
 __all__ = [
     "MAX_FIRING_SEQUENCE_LENGTH",
     "MAX_SIPHON_TRAP_WORK",
@@ -408,6 +486,8 @@ __all__ = [
     "FiringSequenceReplayResult",
     "IncidenceMatrixRequest",
     "IncidenceMatrixResult",
+    "PetriInvariantsRequest",
+    "PetriInvariantsResult",
     "PetriMarkingState",
     "PetriPlaceSubset",
     "PetriReachabilityEdge",

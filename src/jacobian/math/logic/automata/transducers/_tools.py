@@ -6,6 +6,8 @@ from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.logic.automata.transducers._models import (
     ComposeRequest,
     ComposeResult,
+    MinimizeRequest,
+    MinimizeResult,
     RelationPathReplayRequest,
     RelationPathReplayResult,
     SubseqRunRequest,
@@ -15,6 +17,7 @@ from jacobian.math.logic.automata.transducers._models import (
 )
 from jacobian.math.logic.automata.transducers.operations import (
     compose_subsequential,
+    minimize_subsequential,
     replay_rational_path,
     run_subsequential,
     trim_subsequential,
@@ -45,6 +48,10 @@ def compute_compose(request: ComposeRequest) -> ComposeResult:
 def compute_trim(request: TrimRequest) -> TrimResult:
     trimmed, old_to_new = trim_subsequential(request.transducer)
     return TrimResult._from_kernel(request, trimmed=trimmed, old_to_new=old_to_new)
+
+
+def compute_minimize(request: MinimizeRequest) -> MinimizeResult:
+    return minimize_subsequential(request.transducer, request.sample_max_length)
 
 
 def compute_relation_path_replay(
@@ -99,6 +106,28 @@ _TRIM_SOURCE = {
         {"source": 2, "input_symbol": 1, "target": 2, "output": [1]},
     ],
     "final_outputs": [{"state": 0, "output": []}],
+}
+
+# Three-state source with two equivalent live states (0 and 1): both are
+# final with empty output and agree on every transition up to renaming.
+_MINIMIZE_SOURCE = {
+    "input_alphabet_size": 2,
+    "output_alphabet_size": 2,
+    "state_count": 3,
+    "initial_state": 0,
+    "transitions": [
+        {"source": 0, "input_symbol": 0, "target": 1, "output": [0]},
+        {"source": 0, "input_symbol": 1, "target": 2, "output": [1]},
+        {"source": 1, "input_symbol": 0, "target": 1, "output": [0]},
+        {"source": 1, "input_symbol": 1, "target": 2, "output": [1]},
+        {"source": 2, "input_symbol": 0, "target": 2, "output": [0]},
+        {"source": 2, "input_symbol": 1, "target": 2, "output": [1]},
+    ],
+    "final_outputs": [
+        {"state": 0, "output": []},
+        {"state": 1, "output": []},
+        {"state": 2, "output": [0]},
+    ],
 }
 
 _RELATION = {
@@ -169,6 +198,30 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 "state and one unreachable state down to its live single-state "
                 "restriction.",
                 input={"transducer": _TRIM_SOURCE},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="transducer.subsequential.minimize.compute",
+        title="Minimize a subsequential transducer",
+        description="Merge the coarsest exact-output bisimulation of one "
+        "subsequential transducer by partition refinement, preserving the "
+        "realized partial function exactly. Return the quotient transducer "
+        "with old-to-new and new-to-old state maps, the merged partition, "
+        "a Myhill-Nerode-style state-distinguishability table, and a replay "
+        "of the shipped run semantics on every word up to a bounded sample "
+        "length.",
+        request_type=MinimizeRequest,
+        result_type=MinimizeResult,
+        run=compute_minimize,
+        tags=("transducer", "subsequential", "minimization", "exact"),
+        discovery_terms=("minimize", "minimization", "state merging", "bisimulation"),
+        examples=(
+            OperationExample(
+                name="merge_two_equivalent_states",
+                description="Minimize a three-state transducer whose states 0 "
+                "and 1 realize the same partial function down to two states.",
+                input={"transducer": _MINIMIZE_SOURCE, "sample_max_length": 3},
             ),
         ),
     ),

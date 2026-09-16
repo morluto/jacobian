@@ -14,9 +14,11 @@ from jacobian.catalog.models import (
 from jacobian.math.logic.automata.tree._models import (
     AcceptedTreeCountResult,
     TreeAutomatonTrimResult,
+    TreeDeterminizeResult,
     TreeRunResult,
 )
 from jacobian.math.logic.automata.tree.values import (
+    MAX_RUN_TREE_NODES,
     MAX_TREE_AUTOMATON_WORK,
     BottomUpTreeAutomaton,
     RankedTree,
@@ -32,15 +34,21 @@ from jacobian.math.logic.automata.tree.values import (
 __all__ = [
     "ReachableStateProfile",
     "accepted_tree_count",
+    "determinize_tree_automaton",
     "reachable_state_profile",
     "run_tree_automaton",
     "tree_state_chart",
     "trim_tree_automaton",
     "verify_accepted_tree_count",
+    "verify_determinization",
     "verify_reachable_state_profile",
     "verify_tree_run",
     "verify_trim_tree_automaton",
 ]
+
+
+MAX_DETERMINIZE_WORK = 500_000
+MAX_DETERMINIZE_SAMPLE_TREES = 4096
 
 
 def reachable_state_profile(
@@ -379,6 +387,457 @@ def verify_accepted_tree_count(claim: AcceptedTreeCountResult) -> bool:
 
     try:
         return accepted_tree_count(claim.automaton, claim.tree_size) == claim.count
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
+        return False
+
+
+class _DeterminizeBudgetError(Exception):
+    """Internal signal that subset construction exceeded its budget."""
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(reason)
+        self.reason = reason
+
+
+def _determinize_images(
+    automaton: BottomUpTreeAutomaton,
+) -> dict[tuple[int, tuple[int, ...]], int]:
+    """Map each source transition row to its target-state bitmask."""
+
+    images: dict[tuple[int, tuple[int, ...]], int] = {}
+    for transition in automaton.transitions:
+        key = (transition.symbol, transition.child_states)
+        images[key] = images.get(key, 0) | (1 << transition.target_state)
+    return images
+
+
+def _image_of_subsets(
+    images: dict[tuple[int, tuple[int, ...]], int],
+    state_count: int,
+    symbol: int,
+    children: tuple[tuple[int, ...], ...],
+    work: list[int],
+) -> tuple[int, ...]:
+    """Return the sorted source-state image of one subset tuple.
+
+    ``work`` is a single-cell budget ledger: every elementary source-state
+    combination consumes one unit and raises ``_DeterminizeBudgetError`` past
+    the work envelope.
+    """
+
+    mask = 0
+    combos: list[tuple[int, ...]] = [()]
+    for subset in children:
+        work[0] += max(1, len(combos)) * max(1, len(subset))
+        if work[0] > MAX_DETERMINIZE_WORK:
+            raise _DeterminizeBudgetError("WORK_BUDGET")
+        combos = [(*prefix, state) for prefix in combos for state in subset]
+        if len(combos) > MAX_DETERMINIZE_WORK:
+            raise _DeterminizeBudgetError("WORK_BUDGET")
+    work[0] += max(1, len(combos))
+    if work[0] > MAX_DETERMINIZE_WORK:
+        raise _DeterminizeBudgetError("WORK_BUDGET")
+    for combo in combos:
+        mask |= images.get((symbol, combo), 0)
+    return tuple(state for state in range(state_count) if mask & (1 << state))
+
+
+def _combos_for_expansion(subsets: int, arity: tuple[int, ...]) -> int:
+    """Count fresh subset tuples when the newest subset has an index.
+
+    Expanding subset ``subsets - 1`` evaluates exactly the tuples whose
+    maximum child index equals it; count them, stopping past the budget.
+    """
+
+    total = 0
+    for rank in arity:
+        if rank == 0:
+            continue
+        fresh = 1
+        for _ in range(rank):
+            fresh *= subsets
+            if fresh > MAX_DETERMINIZE_WORK:
+                return MAX_DETERMINIZE_WORK + 1
+        old = 1
+        for _ in range(rank):
+            old *= subsets - 1
+            if old > MAX_DETERMINIZE_WORK:
+                break
+        total += fresh - old
+        if total > MAX_DETERMINIZE_WORK:
+            return MAX_DETERMINIZE_WORK + 1
+    return total
+
+
+def _seed_nullary_subsets(
+    automaton: BottomUpTreeAutomaton,
+    images: dict[tuple[int, tuple[int, ...]], int],
+    subsets: list[tuple[int, ...]],
+    index_of: dict[tuple[int, ...], int],
+    rows: dict[tuple[int, tuple[int, ...]], int],
+    combos: list[int],
+    work: list[int],
+    max_subset_states: int,
+) -> None:
+    """Intern the image of every nullary symbol before worklist expansion."""
+
+    for symbol, rank in enumerate(automaton.arity):
+        if rank != 0:
+            continue
+        combos[0] += 1
+        work[0] += 1
+        if work[0] > MAX_DETERMINIZE_WORK:
+            raise _DeterminizeBudgetError("WORK_BUDGET")
+        image = _image_of_subsets(images, automaton.state_count, symbol, (), work)
+        target = _intern_subset(image, subsets, index_of, max_subset_states)
+        if target is not None:
+            rows[(symbol, ())] = target
+
+
+def _intern_subset(
+    image: tuple[int, ...],
+    subsets: list[tuple[int, ...]],
+    index_of: dict[tuple[int, ...], int],
+    max_subset_states: int,
+) -> int | None:
+    """Intern one nonempty image, signalling the state budget when full."""
+
+    if not image:
+        return None
+    if image not in index_of:
+        if len(subsets) >= max_subset_states:
+            raise _DeterminizeBudgetError("STATE_BUDGET")
+        index_of[image] = len(subsets)
+        subsets.append(image)
+    return index_of[image]
+
+
+def _expand_newest_subset(
+    automaton: BottomUpTreeAutomaton,
+    images: dict[tuple[int, tuple[int, ...]], int],
+    subsets: list[tuple[int, ...]],
+    index_of: dict[tuple[int, ...], int],
+    rows: dict[tuple[int, tuple[int, ...]], int],
+    combos: list[int],
+    work: list[int],
+    newest: int,
+    expanded: int,
+    max_subset_states: int,
+) -> None:
+    """Evaluate every subset tuple whose maximum child index is ``newest``."""
+
+    if _combos_for_expansion(expanded, automaton.arity) > (
+        MAX_DETERMINIZE_WORK - work[0]
+    ):
+        raise _DeterminizeBudgetError("WORK_BUDGET")
+    for symbol, rank in enumerate(automaton.arity):
+        if rank == 0:
+            continue
+        for children in product(range(expanded), repeat=rank):
+            if max(children) != newest:
+                continue
+            combos[0] += 1
+            image = _image_of_subsets(
+                images,
+                automaton.state_count,
+                symbol,
+                tuple(subsets[child] for child in children),
+                work,
+            )
+            target = _intern_subset(image, subsets, index_of, max_subset_states)
+            if target is not None:
+                key = (symbol, children)
+                if key not in rows and len(rows) == 4096:
+                    raise _DeterminizeBudgetError("WORK_BUDGET")
+                rows[key] = target
+
+
+def _subset_construction(
+    automaton: BottomUpTreeAutomaton,
+    max_subset_states: int,
+) -> tuple[
+    list[tuple[int, ...]], dict[tuple[int, tuple[int, ...]], int], int, str | None
+]:
+    """Run bounded subset construction, returning subsets and DFA rows.
+
+    Returns ``(subsets, rows, combos_evaluated, truncation_reason)`` where
+    rows map ``(symbol, child DFA indices)`` to target DFA indices over the
+    discovery-ordered subset list. ``truncation_reason`` is ``None`` exactly
+    when every subset tuple over the final subset list was evaluated.
+    """
+
+    images = _determinize_images(automaton)
+    subsets: list[tuple[int, ...]] = []
+    index_of: dict[tuple[int, ...], int] = {}
+    rows: dict[tuple[int, tuple[int, ...]], int] = {}
+    combos = [0]
+    work = [0]
+    try:
+        _seed_nullary_subsets(
+            automaton,
+            images,
+            subsets,
+            index_of,
+            rows,
+            combos,
+            work,
+            max_subset_states,
+        )
+        expanded = 0
+        while expanded < len(subsets):
+            newest = expanded
+            expanded += 1
+            _expand_newest_subset(
+                automaton,
+                images,
+                subsets,
+                index_of,
+                rows,
+                combos,
+                work,
+                newest,
+                expanded,
+                max_subset_states,
+            )
+    except _DeterminizeBudgetError as truncated:
+        return subsets, rows, combos[0], truncated.reason
+    return subsets, rows, combos[0], None
+
+
+def _canonical_dfa(
+    automaton: BottomUpTreeAutomaton,
+    subsets: list[tuple[int, ...]],
+    rows: dict[tuple[int, tuple[int, ...]], int],
+) -> tuple[BottomUpTreeAutomaton, tuple[tuple[int, ...], ...]]:
+    """Order subsets lexicographically and build the deterministic machine."""
+
+    order = sorted(range(len(subsets)), key=lambda index: subsets[index])
+    renumber = {old: new for new, old in enumerate(order)}
+    canonical = tuple(subsets[old] for old in order)
+    source_finals = set(automaton.final_states)
+    deterministic = BottomUpTreeAutomaton(
+        state_count=max(1, len(canonical)),
+        arity=automaton.arity,
+        transitions=tuple(
+            sorted(
+                (
+                    TreeAutomatonTransition(
+                        symbol=symbol,
+                        child_states=tuple(renumber[child] for child in children),
+                        target_state=renumber[target],
+                    )
+                    for (symbol, children), target in rows.items()
+                    if all(child < len(subsets) for child in children)
+                    and target < len(subsets)
+                ),
+                key=lambda row: (row.symbol, row.child_states, row.target_state),
+            )
+        ),
+        final_states=tuple(
+            sorted(
+                index
+                for index, subset in enumerate(canonical)
+                if set(subset) & source_finals
+            )
+        ),
+    )
+    return deterministic, canonical
+
+
+def _replay_dfa_closure(
+    automaton: BottomUpTreeAutomaton,
+    deterministic: BottomUpTreeAutomaton,
+    subset_map: tuple[tuple[int, ...], ...],
+) -> int:
+    """Replay every DFA row against the subset map; return rows checked."""
+
+    images = _determinize_images(automaton)
+    work = [0]
+    checked = 0
+    for transition in deterministic.transitions:
+        image = _image_of_subsets(
+            images,
+            automaton.state_count,
+            transition.symbol,
+            tuple(subset_map[child] for child in transition.child_states),
+            work,
+        )
+        if image != subset_map[transition.target_state]:
+            raise RuntimeError("determinized row disagrees with subset construction")
+        checked += 1
+    return checked
+
+
+def _trees_of_height(
+    automaton: BottomUpTreeAutomaton, max_height: int
+) -> tuple[RankedTree, ...]:
+    """Enumerate all run-admissible ground trees of height at most ``max_height``.
+
+    Trees whose node count exceeds the run envelope are pruned during
+    generation; enumeration stops with a resource error past the sample
+    budget.
+    """
+
+    levels: list[list[tuple[RankedTree, int, int]]] = []
+    current: list[tuple[RankedTree, int, int]] = []
+    for symbol, rank in enumerate(automaton.arity):
+        if rank == 0:
+            current.append((RankedTree(symbol=symbol, children=()), 0, 1))
+    if len(current) > MAX_DETERMINIZE_SAMPLE_TREES:
+        raise OperationResourceAdmissionError(
+            location=("automaton", "sample_max_height"),
+            code="tree_automata.determinize_sample_bound_exceeded",
+            message="the bounded-height tree sample exceeds the admitted budget; "
+            "shrink sample_max_height",
+        )
+    levels.append(sorted(current, key=lambda entry: entry[0].symbol))
+    for _ in range(max_height):
+        previous = [entry for level in levels for entry in level]
+        following: list[tuple[RankedTree, int, int]] = []
+        for symbol, rank in enumerate(automaton.arity):
+            if rank == 0:
+                continue
+            for children in product(previous, repeat=rank):
+                if max(child[1] for child in children) != len(levels) - 1:
+                    continue
+                total = 1 + sum(child[2] for child in children)
+                if total > MAX_RUN_TREE_NODES:
+                    continue
+                following.append(
+                    (
+                        RankedTree(
+                            symbol=symbol,
+                            children=tuple(child[0] for child in children),
+                        ),
+                        len(levels),
+                        total,
+                    )
+                )
+                if len(previous) + len(following) > MAX_DETERMINIZE_SAMPLE_TREES:
+                    raise OperationResourceAdmissionError(
+                        location=("automaton", "sample_max_height"),
+                        code="tree_automata.determinize_sample_bound_exceeded",
+                        message="the bounded-height tree sample exceeds the admitted "
+                        "budget; shrink sample_max_height",
+                    )
+        if not following:
+            break
+        following.sort(
+            key=lambda entry: (
+                entry[0].symbol,
+                tuple(child.symbol for child in entry[0].children),
+                entry[2],
+            )
+        )
+        levels.append(following)
+    return tuple(tree for level in levels for tree, _, _ in level)
+
+
+def determinize_tree_automaton(
+    automaton: BottomUpTreeAutomaton,
+    max_subset_states: int = 64,
+    sample_max_height: int = 3,
+) -> TreeDeterminizeResult:
+    """Determinize a bottom-up tree automaton by subset construction.
+
+    On success return the complete deterministic machine with its subset
+    map, a replayed transition-closure certificate, and acceptance
+    agreement on every ground tree of height at most ``sample_max_height``.
+    When the powerset exceeds ``max_subset_states`` (or the shared work
+    envelope), return the partial construction with ``TRUNCATED`` status
+    and no language-equivalence claim.
+    """
+
+    if type(max_subset_states) is not int or not 1 <= max_subset_states <= 64:
+        raise OperationDomainValidationError(
+            location=("max_subset_states",),
+            code="tree_automata.determinize_subset_budget",
+            message="max_subset_states must be within 1..64",
+        )
+    if type(sample_max_height) is not int or not 0 <= sample_max_height <= 5:
+        raise OperationDomainValidationError(
+            location=("sample_max_height",),
+            code="tree_automata.determinize_sample_height",
+            message="sample_max_height must be within 0..5",
+        )
+    subsets, rows, combos, truncation = _subset_construction(
+        automaton, max_subset_states
+    )
+    if truncation is not None:
+        deterministic, canonical = _canonical_dfa(automaton, subsets, rows)
+        return TreeDeterminizeResult._from_kernel(
+            automaton=automaton,
+            max_subset_states=max_subset_states,
+            sample_max_height=sample_max_height,
+            status="TRUNCATED",
+            truncation_reason=truncation,
+            deterministic=deterministic,
+            subset_map=canonical,
+            equivalence_claim=False,
+            closure_rows_checked=0,
+            combos_evaluated=combos,
+            sample_trees_checked=0,
+            sample_agreement=False,
+        )
+    if not subsets:
+        deterministic = BottomUpTreeAutomaton(
+            state_count=1, arity=automaton.arity, transitions=(), final_states=()
+        )
+        return TreeDeterminizeResult._from_kernel(
+            automaton=automaton,
+            max_subset_states=max_subset_states,
+            sample_max_height=sample_max_height,
+            status="COMPLETE",
+            truncation_reason="NONE",
+            deterministic=deterministic,
+            subset_map=((),),
+            equivalence_claim=True,
+            closure_rows_checked=0,
+            combos_evaluated=combos,
+            sample_trees_checked=0,
+            sample_agreement=True,
+        )
+    deterministic, canonical = _canonical_dfa(automaton, subsets, rows)
+    closure_rows = _replay_dfa_closure(automaton, deterministic, canonical)
+    sample = _trees_of_height(automaton, sample_max_height)
+    source_finals = set(automaton.final_states)
+    for tree in sample:
+        source_roots = run_tree_automaton(automaton, tree)
+        deterministic_roots = run_tree_automaton(deterministic, tree)
+        source_accepted = bool(source_roots & source_finals)
+        deterministic_accepted = bool(
+            deterministic_roots & set(deterministic.final_states)
+        )
+        if source_accepted != deterministic_accepted:
+            raise RuntimeError("determinized automaton disagrees with its source")
+    return TreeDeterminizeResult._from_kernel(
+        automaton=automaton,
+        max_subset_states=max_subset_states,
+        sample_max_height=sample_max_height,
+        status="COMPLETE",
+        truncation_reason="NONE",
+        deterministic=deterministic,
+        subset_map=canonical,
+        equivalence_claim=True,
+        closure_rows_checked=closure_rows,
+        combos_evaluated=combos,
+        sample_trees_checked=len(sample),
+        sample_agreement=True,
+    )
+
+
+def verify_determinization(claim: TreeDeterminizeResult) -> bool:
+    """Verify a determinization against its retained source automaton."""
+
+    try:
+        return (
+            determinize_tree_automaton(
+                claim.automaton, claim.max_subset_states, claim.sample_max_height
+            )
+            == claim
+        )
     except OperationResourceAdmissionError:
         raise
     except OperationDomainValidationError:

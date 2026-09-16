@@ -11,6 +11,8 @@ from jacobian.catalog.models import (
 )
 from jacobian.math.logic.automata.transducers._models import (
     ComposeResult,
+    MinimizeResult,
+    StatePairDistinguishability,
     SubseqRunResult,
 )
 from jacobian.math.logic.automata.transducers.values import (
@@ -29,13 +31,18 @@ __all__ = [
     "compose_subsequential",
     "identity_transducer",
     "invert_rational",
+    "minimize_subsequential",
     "reachable_states",
     "replay_rational_path",
     "run_subsequential",
     "trim_subsequential",
     "verify_composition",
+    "verify_minimization",
     "verify_subsequential_run",
 ]
+
+
+MAX_MINIMIZE_SAMPLE_WORDS = 20000
 
 
 def _reject(code: str, message: str, *location: str) -> None:
@@ -580,6 +587,330 @@ def verify_composition(claim: ComposeResult) -> bool:
 
     try:
         return compose_subsequential(claim.first, claim.second) == claim.transducer
+    except OperationResourceAdmissionError:
+        raise
+    except (TypeError, ValueError, OperationDomainValidationError):
+        return False
+
+
+def _minimize_sample_word_count(alphabet_size: int, max_length: int) -> int:
+    """Return the number of words of length at most ``max_length``."""
+
+    if alphabet_size <= 1:
+        return max_length + 1
+    count = 0
+    power = 1
+    for _ in range(max_length + 1):
+        count += power
+        if count > MAX_MINIMIZE_SAMPLE_WORDS:
+            return count
+        power *= alphabet_size
+    return count
+
+
+def _admit_minimize(
+    transducer: SubsequentialTransducer, sample_max_length: int
+) -> None:
+    if not isinstance(transducer, SubsequentialTransducer):
+        _reject(
+            "transducer_type",
+            "transducer must be a SubsequentialTransducer value",
+            "transducer",
+        )
+    if type(sample_max_length) is not int or sample_max_length < 0:
+        _reject(
+            "sample_length",
+            "sample_max_length must be a nonnegative integer",
+            "sample_max_length",
+        )
+    words = _minimize_sample_word_count(
+        transducer.input_alphabet_size, sample_max_length
+    )
+    if words > MAX_MINIMIZE_SAMPLE_WORDS:
+        raise OperationResourceAdmissionError(
+            location=("transducer", "sample_max_length"),
+            code="finite_state_transducer.minimize_sample_bound_exceeded",
+            message=(
+                "the distinguishing sample exceeds the admitted word budget; "
+                "shrink sample_max_length"
+            ),
+        )
+
+
+def _refine_subsequential_partition(
+    state_count: int,
+    alphabet_size: int,
+    transitions: dict[tuple[int, int], tuple[int, tuple[int, ...]]],
+    finals: dict[int, tuple[int, ...]],
+) -> tuple[list[int], dict[tuple[int, int], tuple[int, ...]]]:
+    """Refine behavioral equivalence with distinguishing-word witnesses.
+
+    Two states share a block exactly when they realize the same partial
+    function: equal final outputs and, per input symbol, jointly undefined
+    or equal output words with equivalent targets.  Every split pair maps
+    to a distinguishing word of length at most ``state_count``.
+    """
+
+    block_of = [-1] * state_count
+    seed_keys: dict[tuple[int, tuple[int, ...] | None], int] = {}
+    for state in range(state_count):
+        key = (1, finals.get(state))
+        if key not in seed_keys:
+            seed_keys[key] = len(seed_keys)
+        block_of[state] = seed_keys[key]
+    witnesses: dict[tuple[int, int], tuple[int, ...]] = {}
+    for first in range(state_count):
+        for second in range(first + 1, state_count):
+            if block_of[first] != block_of[second]:
+                witnesses[(first, second)] = ()
+    while True:
+        split_found = False
+        next_block = [-1] * state_count
+        next_id = 0
+        for _block in sorted(set(block_of)):
+            members = sorted(
+                state for state in range(state_count) if block_of[state] == _block
+            )
+            signatures: dict[
+                tuple[tuple[tuple[int, ...], tuple[int]] | None, ...], list[int]
+            ] = {}
+            for state in members:
+                signature: list[tuple[tuple[int, ...], tuple[int]] | None] = []
+                for symbol in range(alphabet_size):
+                    target = transitions.get((state, symbol))
+                    if target is None:
+                        signature.append(None)
+                    else:
+                        next_state, output = target
+                        signature.append((output, (block_of[next_state],)))
+                signature_key = tuple(signature)
+                signatures.setdefault(signature_key, []).append(state)
+            groups = list(signatures.values())
+            if len(groups) > 1:
+                split_found = True
+                _record_refinement_witnesses(
+                    groups, alphabet_size, transitions, block_of, witnesses
+                )
+            for group in groups:
+                for state in group:
+                    next_block[state] = next_id
+                next_id += 1
+        block_of = next_block
+        if not split_found:
+            return block_of, witnesses
+
+
+def _record_refinement_witnesses(
+    groups: list[list[int]],
+    alphabet_size: int,
+    transitions: dict[tuple[int, int], tuple[int, tuple[int, ...]]],
+    block_of: list[int],
+    witnesses: dict[tuple[int, int], tuple[int, ...]],
+) -> None:
+    """Record distinguishing words for pairs separated in one round."""
+
+    for left in range(len(groups)):
+        for right in range(left + 1, len(groups)):
+            for first in groups[left]:
+                for second in groups[right]:
+                    pair = (min(first, second), max(first, second))
+                    if pair in witnesses:
+                        continue
+                    word = _separating_word(
+                        first, second, alphabet_size, transitions, block_of, witnesses
+                    )
+                    if word is not None:
+                        witnesses[pair] = word
+
+
+def _separating_word(
+    first: int,
+    second: int,
+    alphabet_size: int,
+    transitions: dict[tuple[int, int], tuple[int, tuple[int, ...]]],
+    block_of: list[int],
+    witnesses: dict[tuple[int, int], tuple[int, ...]],
+) -> tuple[int, ...] | None:
+    """Return a word separating two states under the previous partition."""
+
+    for symbol in range(alphabet_size):
+        left = transitions.get((first, symbol))
+        right = transitions.get((second, symbol))
+        if left is None or right is None:
+            if left != right:
+                return (symbol,)
+            continue
+        (left_target, left_output) = left
+        (right_target, right_output) = right
+        if left_output != right_output:
+            return (symbol,)
+        if block_of[left_target] != block_of[right_target]:
+            pair = (min(left_target, right_target), max(left_target, right_target))
+            if pair in witnesses:
+                return (symbol, *witnesses[pair])
+    return None
+
+
+def _iter_sample_words(
+    alphabet_size: int, max_length: int
+) -> tuple[tuple[int, ...], ...]:
+    """Enumerate every word of length at most ``max_length`` in lex order."""
+
+    words: list[tuple[int, ...]] = [()]
+    frontier: list[tuple[int, ...]] = [()]
+    for _ in range(max_length):
+        following: list[tuple[int, ...]] = []
+        for word in frontier:
+            for symbol in range(alphabet_size):
+                extended = (*word, symbol)
+                words.append(extended)
+                following.append(extended)
+        frontier = following
+    return tuple(words)
+
+
+def minimize_subsequential(
+    transducer: SubsequentialTransducer,
+    sample_max_length: int = 5,
+) -> MinimizeResult:
+    """Minimize a subsequential transducer preserving its partial function.
+
+    The kernel trims to live states, merges the coarsest exact-output
+    bisimulation by partition refinement, and replays the shipped run
+    semantics on every word of length at most ``sample_max_length``.
+    """
+
+    _admit_minimize(transducer, sample_max_length)
+    trimmed, trim_map = trim_subsequential(transducer)
+    trim_new_to_old = {new: old for old, new in trim_map.items()}
+    transitions = _transition_map(trimmed)
+    finals = _final_output_map(trimmed)
+    if trimmed.state_count == 1 and not trim_map:
+        return MinimizeResult._from_kernel(
+            transducer=transducer,
+            sample_max_length=sample_max_length,
+            minimized=trimmed,
+            old_to_new=tuple(-1 for _ in range(transducer.state_count)),
+            new_to_old=(),
+            partition=(),
+            distinguishability=(),
+            sample_words_checked=_minimize_sample_word_count(
+                transducer.input_alphabet_size, sample_max_length
+            ),
+            sample_agreement=True,
+        )
+    block_of, witnesses = _refine_subsequential_partition(
+        trimmed.state_count,
+        trimmed.input_alphabet_size,
+        transitions,
+        finals,
+    )
+    blocks: dict[int, list[int]] = {}
+    for state, block in enumerate(block_of):
+        blocks.setdefault(block, []).append(state)
+    ordered = sorted(blocks.values(), key=min)
+    state_to_block = {
+        state: index for index, block in enumerate(ordered) for state in block
+    }
+    rep_of = {index: min(block) for index, block in enumerate(ordered)}
+    minimized_transitions = tuple(
+        sorted(
+            (
+                SubseqTransition(
+                    source=state_to_block[rep],
+                    input_symbol=symbol,
+                    target=state_to_block[target],
+                    output=output,
+                )
+                for rep in (rep_of[index] for index in range(len(ordered)))
+                for symbol in range(trimmed.input_alphabet_size)
+                if (rep, symbol) in transitions
+                for (target, output) in [transitions[(rep, symbol)]]
+            ),
+            key=lambda row: (row.source, row.input_symbol, row.target, row.output),
+        )
+    )
+    minimized_finals = tuple(
+        sorted(
+            (
+                SubseqFinalOutput(state=index, output=finals[rep_of[index]])
+                for index in range(len(ordered))
+                if rep_of[index] in finals
+            ),
+            key=lambda row: row.state,
+        )
+    )
+    minimized = SubsequentialTransducer(
+        input_alphabet_size=trimmed.input_alphabet_size,
+        output_alphabet_size=trimmed.output_alphabet_size,
+        state_count=len(ordered),
+        initial_state=state_to_block[trim_map[transducer.initial_state]],
+        transitions=minimized_transitions,
+        final_outputs=minimized_finals,
+    )
+    sample_words = _iter_sample_words(transducer.input_alphabet_size, sample_max_length)
+    for word in sample_words:
+        source_status, source_output, _, _, _ = run_subsequential(transducer, word)
+        minimized_status, minimized_output, _, _, _ = run_subsequential(minimized, word)
+        # The shipped trim/run semantics preserve the realized partial
+        # function: definedness with equal output words. Distinct failure
+        # modes (undefined transition vs nonfinal state) both mean the word
+        # is outside the domain.
+        if (source_status == "OUTPUT", source_output) != (
+            minimized_status == "OUTPUT",
+            minimized_output,
+        ):
+            raise RuntimeError("minimized transducer disagrees with its source")
+    old_to_new = tuple(
+        state_to_block[trim_map[state]] if state in trim_map else -1
+        for state in range(transducer.state_count)
+    )
+    new_to_old = tuple(trim_new_to_old[rep_of[index]] for index in range(len(ordered)))
+    partition = tuple(
+        tuple(sorted(trim_new_to_old[state] for state in block)) for block in ordered
+    )
+    original_of = {new: trim_new_to_old[new] for new in range(trimmed.state_count)}
+    table_rows: list[StatePairDistinguishability] = []
+    for first in range(trimmed.state_count):
+        for second in range(first + 1, trimmed.state_count):
+            equivalent = block_of[first] == block_of[second]
+            witness: tuple[int, ...] = ()
+            if not equivalent:
+                if (first, second) not in witnesses:
+                    raise RuntimeError(
+                        "partition refinement split a pair without a witness"
+                    )
+                witness = witnesses[(first, second)]
+            table_rows.append(
+                StatePairDistinguishability(
+                    first_state=original_of[first],
+                    second_state=original_of[second],
+                    equivalent=equivalent,
+                    witness_word=witness,
+                )
+            )
+    table_rows.sort(key=lambda row: (row.first_state, row.second_state))
+    distinguishability = tuple(table_rows)
+    return MinimizeResult._from_kernel(
+        transducer=transducer,
+        sample_max_length=sample_max_length,
+        minimized=minimized,
+        old_to_new=old_to_new,
+        new_to_old=new_to_old,
+        partition=partition,
+        distinguishability=distinguishability,
+        sample_words_checked=len(sample_words),
+        sample_agreement=True,
+    )
+
+
+def verify_minimization(claim: MinimizeResult) -> bool:
+    """Verify a minimization against its retained source transducer."""
+
+    try:
+        return (
+            minimize_subsequential(claim.transducer, claim.sample_max_length) == claim
+        )
     except OperationResourceAdmissionError:
         raise
     except (TypeError, ValueError, OperationDomainValidationError):

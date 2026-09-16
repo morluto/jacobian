@@ -15,6 +15,8 @@ from jacobian.math.logic.automata.petri_nets._models import (
     FiringSequenceReplayResult,
     IncidenceMatrixRequest,
     IncidenceMatrixResult,
+    PetriInvariantsRequest,
+    PetriInvariantsResult,
     ReachabilityRequest,
     ReachabilityResult,
     SiphonTrapRequest,
@@ -24,6 +26,7 @@ from jacobian.math.logic.automata.petri_nets.operations import (
     compute_incidence_matrix,
     enabled_transitions,
     fire_transition,
+    petri_invariants,
     reachability_graph,
     replay_firing_sequence,
     siphon_trap,
@@ -52,6 +55,10 @@ def compute_siphon_trap(request: SiphonTrapRequest) -> SiphonTrapResult:
     return siphon_trap(request.net)
 
 
+def compute_petri_invariants(request: PetriInvariantsRequest) -> PetriInvariantsResult:
+    return petri_invariants(request.net)
+
+
 def compute_firing_sequence_replay(
     request: FiringSequenceReplayRequest,
 ) -> FiringSequenceReplayResult:
@@ -77,6 +84,15 @@ _NET2 = {
         "pre": [[1, 0], [0, 0]],
         "post": [[0, 0], [0, 1]],
     },
+}
+
+# Producer/consumer net: t0 produces a token into p0, t1 consumes it.
+# C = [[1, -1]]: T-invariants span (1, 1); no nonzero P-invariant exists.
+_PRODUCER_CONSUMER_NET = {
+    "place_count": 1,
+    "transition_count": 2,
+    "pre": [[0, 1]],
+    "post": [[1, 0]],
 }
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
@@ -184,6 +200,28 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                     "marking": {"tokens": [2, 0]},
                     "sequence": [0, 0],
                 },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="petri_net.invariants.compute",
+        title="Compute P-invariants and T-invariants of a Petri net",
+        description="Return exact integer bases for the P-invariants "
+        "(left kernel of the incidence matrix) and T-invariants (right "
+        "kernel) with the incidence rank profile. Kernel bases come from "
+        "the certified Smith owner kernel, canonicalized through the "
+        "Hermite owner kernel, and every vector is replayed against the "
+        "incidence matrix inside the kernel.",
+        request_type=PetriInvariantsRequest,
+        result_type=PetriInvariantsResult,
+        run=compute_petri_invariants,
+        tags=("petri-net", "invariants", "exact"),
+        discovery_terms=("p-invariants", "t-invariants", "place invariants"),
+        examples=(
+            OperationExample(
+                name="producer_consumer_invariants",
+                description="Invariants of a one-place producer/consumer net.",
+                input={"net": _PRODUCER_CONSUMER_NET},
             ),
         ),
     ),

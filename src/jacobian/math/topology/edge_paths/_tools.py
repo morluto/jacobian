@@ -2,7 +2,13 @@
 
 from typing import Any
 
-from jacobian.catalog.models import MathTool, OperationExample
+from pydantic import ValidationError
+
+from jacobian.catalog.models import (
+    MathTool,
+    OperationDomainValidationError,
+    OperationExample,
+)
 from jacobian.math.topology._models import (
     FiniteSimplicialComplex,
     canonical_complex,
@@ -35,9 +41,16 @@ def _concatenate(request: EdgePathConcatenateRequest) -> EdgePathConcatenateResu
 def _fundamental_group(
     request: FundamentalGroupPresentationRequest,
 ) -> FundamentalGroupPresentationResult:
-    canonical: FiniteSimplicialComplex = canonical_complex(
-        request.complex.vertices, request.complex.facets
-    )
+    try:
+        canonical: FiniteSimplicialComplex = canonical_complex(
+            request.complex.vertices, request.complex.facets
+        )
+    except (ValueError, ValidationError) as error:
+        raise OperationDomainValidationError(
+            location=("complex",),
+            code="topology.simplicial_complex_not_canonical",
+            message=str(error),
+        ) from error
     return fundamental_group_presentation(canonical, request.base_vertex)
 
 

@@ -10,6 +10,7 @@ def test_exact_public_api_symbols() -> None:
     expected = (
         "FacialWalk",
         "FiniteCombinatorialMap",
+        "check_orientable_embedding",
         "connected_components",
         "connected_components_vertices",
         "dual_map",
@@ -19,6 +20,7 @@ def test_exact_public_api_symbols() -> None:
         "orientation_reverse",
         "rotation_successor",
         "verify_dual",
+        "verify_orientable_embedding",
         "verify_orientation_reverse",
         "verify_vertex_face_incidence",
         "vertex_face_incidence",

@@ -12,6 +12,8 @@ from jacobian.math.topology.combinatorial_maps._models import (
     EulerCharacteristicResult,
     FacesRequest,
     FacesResult,
+    OrientableEmbeddingCheckRequest,
+    OrientableEmbeddingCheckResult,
     OrientableGenusRequest,
     OrientableGenusResult,
     OrientationReverseRequest,
@@ -20,6 +22,7 @@ from jacobian.math.topology.combinatorial_maps._models import (
     VertexFaceIncidenceResult,
 )
 from jacobian.math.topology.combinatorial_maps.operations import (
+    check_orientable_embedding,
     connected_components,
     dual_map,
     euler_characteristic,
@@ -66,6 +69,12 @@ def compute_vertex_face_incidence(
     request: VertexFaceIncidenceRequest,
 ) -> VertexFaceIncidenceResult:
     return vertex_face_incidence(request.map)
+
+
+def compute_orientable_embedding_check(
+    request: OrientableEmbeddingCheckRequest,
+) -> OrientableEmbeddingCheckResult:
+    return check_orientable_embedding(request.graph, request.rotations)
 
 
 # A 4-cycle on the sphere: 4 vertices, 4 edges, 2 faces.
@@ -223,6 +232,53 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 name="four_cycle_incidence",
                 description="Vertex-face incidence of a 4-cycle on the sphere.",
                 input={"map": _CYCLE_MAP["map"]},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="graph.embedding.orientable.check",
+        title="Check an orientable cellular graph embedding",
+        description=(
+            "Check one supplied rotation system of a connected bounded simple "
+            "graph as a cellular embedding in a closed orientable surface. The "
+            "result carries canonical local rotations, the dart permutations "
+            "alpha, sigma, and phi = alpha . sigma, complete face walks, "
+            "chi = V - E + F, and the exact orientable genus g = (2 - chi)/2. "
+            "Unsigned rotation systems are orientable by convention; an "
+            "INVALID_EMBEDDING carries the first rotation obstruction. This is a "
+            "checker for a supplied rotation system, not a genus minimizer."
+        ),
+        request_type=OrientableEmbeddingCheckRequest,
+        result_type=OrientableEmbeddingCheckResult,
+        run=compute_orientable_embedding_check,
+        tags=("graph", "embedding", "genus", "orientable", "exact"),
+        discovery_terms=(
+            "rotation system",
+            "orientable embedding",
+            "graph genus",
+            "combinatorial map",
+        ),
+        examples=(
+            OperationExample(
+                name="tetrahedron_sphere",
+                description=(
+                    "A planar rotation system of K4; rotations list incident "
+                    "edge indices at each vertex in edge-list order."
+                ),
+                input={
+                    "graph": {
+                        "vertices": ["a", "b", "c", "d"],
+                        "edges": [
+                            ["a", "b"],
+                            ["a", "c"],
+                            ["a", "d"],
+                            ["b", "c"],
+                            ["b", "d"],
+                            ["c", "d"],
+                        ],
+                    },
+                    "rotations": [[0, 1, 2], [0, 4, 3], [1, 3, 5], [2, 5, 4]],
+                },
             ),
         ),
     ),

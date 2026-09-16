@@ -1,5 +1,15 @@
 """Finite based chain complexes over exact coefficient rings."""
 
+from jacobian.math.topology.chain_complexes._filtered_models import (
+    AssociatedGradedResult,
+    FilteredChainComplexRequest,
+    FilteredSubspace,
+    FiltrationLevel,
+    GradedSquareLedgerEntry,
+)
+from jacobian.math.topology.chain_complexes._filtered_operations import (
+    associated_graded,
+)
 from jacobian.math.topology.chain_complexes.operations import (
     chain_map_commutes,
     construct_chain_complex,
@@ -24,8 +34,13 @@ from jacobian.math.topology.chain_complexes.values import (
 # directly. Wire-envelope request handlers live in ``_tools.py`` and are not
 # part of this native API.
 __all__ = [
+    "AssociatedGradedResult",
     "ChainComplexValue",
     "CoefficientRing",
+    "FilteredChainComplexRequest",
+    "FilteredSubspace",
+    "FiltrationLevel",
+    "GradedSquareLedgerEntry",
     "HomologyGroup",
     "HomologyGroupValue",
     "HomologyResult",
@@ -33,6 +48,7 @@ __all__ = [
     "IntegralHomologyGroupValue",
     "IntegralTorsionGenerator",
     "IntegralVector",
+    "associated_graded",
     "chain_map_commutes",
     "construct_chain_complex",
     "differential_squares_to_zero",

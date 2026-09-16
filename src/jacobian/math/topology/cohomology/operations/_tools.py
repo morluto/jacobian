@@ -9,6 +9,11 @@ from jacobian.math.topology.cohomology.operations._models import (
     SteenrodSquareRequest,
     SteenrodSquareResult,
 )
+from jacobian.math.topology.cohomology.operations._simplicial import (
+    SimplicialCohomologyRequest,
+    SimplicialCohomologyResult,
+    simplicial_cohomology,
+)
 from jacobian.math.topology.cohomology.operations.operations import (
     bockstein,
     steenrod_square,
@@ -37,6 +42,12 @@ def _run_bockstein(request: BocksteinRequest) -> BocksteinResult:
     )
 
 
+def _run_simplicial_cohomology(
+    request: SimplicialCohomologyRequest,
+) -> SimplicialCohomologyResult:
+    return simplicial_cohomology(request.complex, request.prime, request.convention)
+
+
 _SQ_EXAMPLE: dict[str, Any] = {
     "cochain_degree": 1,
     "simplex_values": [[0, 1], [0, 2]],
@@ -54,6 +65,67 @@ _BOCKSTEIN_EXAMPLE: dict[str, Any] = {
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
+    MathTool(
+        operation_id="topology.simplicial.cohomology.compute",
+        title="Compute prime-field simplicial cohomology with exact bases",
+        description=(
+            "Build the cochain groups C^k=Hom(C_k,GF(p)) with coboundary "
+            "delta^k=transpose(boundary_{k+1}) for one bounded canonical "
+            "finite simplicial complex and return per-degree cochain, "
+            "cocycle, coboundary, and cohomology-class bases with "
+            "dim H^k cross-checked against prime-field homology. The "
+            "complex must carry its complete canonical face closure, the "
+            "prime must be prime at most 251, and each cochain group holds "
+            "at most 64 simplices. Cup products and induced maps are not "
+            "computed here."
+        ),
+        request_type=SimplicialCohomologyRequest,
+        result_type=SimplicialCohomologyResult,
+        run=_run_simplicial_cohomology,
+        tags=(
+            "topology",
+            "simplicial-cohomology",
+            "betti-number",
+            "cocycle-basis",
+            "prime-field",
+            "exact",
+        ),
+        discovery_terms=(
+            "simplicial cohomology",
+            "cochain complex",
+            "cocycle basis",
+            "coboundary rank",
+            "cohomology basis",
+            "Betti number",
+        ),
+        examples=(
+            OperationExample(
+                name="circle_cohomology_mod_two",
+                description=(
+                    "Compute H^0 and H^1 over F_2 for a triangle boundary; "
+                    "the complex must carry its canonical face closure."
+                ),
+                input={
+                    "complex": {
+                        "vertices": ["a", "b", "c"],
+                        "maximal_simplices": [["a", "b"], ["a", "c"], ["b", "c"]],
+                        "faces_by_dimension": [
+                            {"dimension": 0, "faces": [["a"], ["b"], ["c"]]},
+                            {
+                                "dimension": 1,
+                                "faces": [["a", "b"], ["a", "c"], ["b", "c"]],
+                            },
+                        ],
+                        "dimension": 1,
+                        "f_vector": [3, 3],
+                        "closure_size": 6,
+                    },
+                    "prime": 2,
+                    "convention": "UNREDUCED",
+                },
+            ),
+        ),
+    ),
     MathTool(
         operation_id="cohomology.steenrod_square.compute",
         title="Compute Sq^0, Sq^n (cup) and Sq^k=0 for k>n over GF(2) for cocycles",

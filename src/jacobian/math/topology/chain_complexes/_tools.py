@@ -8,6 +8,13 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationExample,
 )
+from jacobian.math.topology.chain_complexes._filtered_models import (
+    AssociatedGradedResult,
+    FilteredChainComplexRequest,
+)
+from jacobian.math.topology.chain_complexes._filtered_operations import (
+    associated_graded as _associated_graded_native,
+)
 from jacobian.math.topology.chain_complexes._models import (
     ComputeHomologyRequest,
     ConstructChainComplexRequest,
@@ -88,6 +95,11 @@ def _mapping_cone(request: MappingConeRequest) -> MappingConeResult:
 def _tensor_product(request: TensorProductRequest) -> TensorProductResult:
     """Project a wire request into the canonical tensor operation."""
     return tensor_product_complex(request.left, request.right)
+
+
+def _associated_graded(request: FilteredChainComplexRequest) -> AssociatedGradedResult:
+    """Project a wire request into the canonical associated-graded operation."""
+    return _associated_graded_native(request.complex, request.filtration)
 
 
 _CIRCLE_COMPLEX = {
@@ -248,6 +260,54 @@ TOOLS: MathTools = (
                 name="tensor_two_circles",
                 description="Tensor product of two circle chain complexes.",
                 input={"left": _CIRCLE_COMPLEX, "right": _CIRCLE_COMPLEX},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="homological.filtered_chain_complex.associated_graded.compute",
+        title="Compute the associated graded of a filtered chain complex",
+        description=(
+            "Compute Gr_p C_n = F_p C_n / F_{p-1} C_n with the induced "
+            "degree-preserving differentials for a finite bounded increasing "
+            "QQ or GF(p) filtration; the top level must span every chain "
+            "group and the differential must preserve each level."
+        ),
+        request_type=FilteredChainComplexRequest,
+        result_type=AssociatedGradedResult,
+        run=_associated_graded,
+        tags=("chain-complex", "filtered-complex", "associated-graded", "exact"),
+        discovery_terms=(
+            "filtered chain complex",
+            "associated graded",
+            "filtration quotient",
+            "graded differential",
+        ),
+        examples=(
+            OperationExample(
+                name="two_step_associated_graded",
+                description=(
+                    "Compute the associated graded of a two-term complex with "
+                    "a zero bottom level and an exhaustive top level; the "
+                    "top graded piece recovers the source differential."
+                ),
+                input={
+                    "complex": {
+                        "coefficient_ring": "QQ",
+                        "degree_min": 0,
+                        "degree_max": 1,
+                        "basis_sizes": [1, 1],
+                        "differential_matrices": [[["1"]]],
+                    },
+                    "filtration": [
+                        {"subspaces": [{"vectors": []}, {"vectors": []}]},
+                        {
+                            "subspaces": [
+                                {"vectors": [["1"]]},
+                                {"vectors": [["1"]]},
+                            ]
+                        },
+                    ],
+                },
             ),
         ),
     ),

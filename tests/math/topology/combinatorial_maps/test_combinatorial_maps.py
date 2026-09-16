@@ -156,6 +156,7 @@ def test_catalog_contains_only_audited_agent_outcomes() -> None:
         "combinatorial_map.connected_components.compute",
         "combinatorial_map.dual.compute",
         "combinatorial_map.vertex_face_incidence.compute",
+        "graph.embedding.orientable.check",
     }
 
 

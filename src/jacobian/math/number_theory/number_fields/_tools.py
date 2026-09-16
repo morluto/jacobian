@@ -30,6 +30,12 @@ from jacobian.math.number_theory.number_fields._models import (
 from jacobian.math.number_theory.number_fields._real_embedding_order import (
     NumberFieldRealEmbeddingOrderError,
 )
+from jacobian.math.number_theory.number_fields._relative_trace_norm import (
+    MAX_RELATIVE_TRACE_NORM_DEGREE,
+    NumberFieldRelativeTraceNormRequest,
+    NumberFieldRelativeTraceNormResult,
+    relative_trace_norm,
+)
 from jacobian.math.number_theory.number_fields._ring_of_integers import (
     NumberFieldRingOfIntegersResult,
 )
@@ -113,6 +119,12 @@ def _compute_unit_group(
     request: NumberFieldUnitGroupRequest,
 ) -> NumberFieldUnitGroupResult:
     return unit_group(request.field)
+
+
+def _compute_relative_trace_norm(
+    request: NumberFieldRelativeTraceNormRequest,
+) -> NumberFieldRelativeTraceNormResult:
+    return relative_trace_norm(request.field, request.element)
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
@@ -400,6 +412,57 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                         "domain": "QQ",
                         "coefficients_descending": ["1", "0", "-2"],
                     }
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="number_field.relative_trace_norm.compute",
+        title="Compute the exact relative trace and norm of a number-field element",
+        description=(
+            "Return the exact trace and norm of one power-basis element of a "
+            "presented simple number field QQ(alpha) over QQ, read from the "
+            "QQ-linear multiplication matrix (trace and determinant) and "
+            "cross-checked against the complete embedding family through "
+            "Newton power-sum and resultant replays, with the full "
+            "multiplication matrix and characteristic polynomial retained. "
+            "The defining polynomial must be irreducible of degree at most "
+            f"{MAX_RELATIVE_TRACE_NORM_DEGREE}; reducible input is a domain "
+            "rejection, never a zero trace or norm."
+        ),
+        request_type=NumberFieldRelativeTraceNormRequest,
+        result_type=NumberFieldRelativeTraceNormResult,
+        run=_compute_relative_trace_norm,
+        tags=("number-field", "trace", "norm", "exact"),
+        discovery_terms=(
+            "relative trace and norm of a number-field element",
+            "multiplication matrix trace and determinant",
+            "embedding sum and product replay",
+            "trace norm of x^3-2 element",
+        ),
+        examples=(
+            OperationExample(
+                name="cbrt2_trace_norm",
+                description=(
+                    "Trace 0 and norm 2 of the primitive element of QQ(cbrt(2)); "
+                    "the field must be irreducible of degree at most 8."
+                ),
+                input={
+                    "field": {
+                        "domain": "QQ",
+                        "coefficients_descending": ["1", "0", "0", "-2"],
+                    },
+                    "element": {
+                        "presentation": {
+                            "domain": "QQ",
+                            "coefficients_descending": ["1", "0", "0", "-2"],
+                        },
+                        "coefficients_ascending": [
+                            {"num": "0", "den": "1"},
+                            {"num": "1", "den": "1"},
+                            {"num": "0", "den": "1"},
+                        ],
+                    },
                 },
             ),
         ),

@@ -7,7 +7,10 @@ from jacobian.math.number_theory.characters import __all__
 
 def test_public_api_exports_only_canonical_value_and_native_operations() -> None:
     assert __all__ == [
+        "DirichletCharacterGroup",
         "PrincipalDirichletCharacter",
+        "character_group",
         "principal_dirichlet_character",
         "principal_dirichlet_character_value",
+        "require_complete_character_group",
     ]

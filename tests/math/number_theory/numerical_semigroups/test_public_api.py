@@ -12,6 +12,7 @@ def test_catalog_contains_only_audited_agent_outcomes() -> None:
         "number_theory.numerical_semigroup.summary.compute",
         "number_theory.numerical_semigroup.membership.compute",
         "number_theory.numerical_semigroup.factorizations.compute",
+        "number_theory.numerical_semigroup.factorization_lengths.compute",
         "number_theory.numerical_semigroup.factorization_graph.compute",
         "number_theory.numerical_semigroup.betti_elements.compute",
         "number_theory.numerical_semigroup.minimal_presentation.compute",

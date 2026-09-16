@@ -4,7 +4,14 @@ from fractions import Fraction
 
 from pydantic_core import PydanticCustomError
 
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
+from jacobian.math.matrices.values import RationalMatrix, rational_matrix_from_fractions
+from jacobian.math.number_theory.quadratic_forms.general._models import (
+    MAX_COEFFICIENT_MATRIX_AXIS,
+)
 from jacobian.math.number_theory.quadratic_forms.general.values import (
     RationalCoordinateVector,
     RationalQuadraticForm,
@@ -52,4 +59,68 @@ def evaluate_rational_quadratic_form(
     return diagonal + cross
 
 
-__all__ = ["evaluate_rational_quadratic_form"]
+def require_coefficient_matrix_budget(form: RationalQuadraticForm) -> None:
+    """Preflight the dense symmetric-matrix output envelope once per call.
+
+    The kernel writes exactly ``n * n`` rationals for a form of dimension
+    ``n``; every entry is a stored diagonal coefficient or half of a stored
+    cross-term coefficient, so per-entry digits stay within one digit of the
+    form's own coefficient bound. Bounding ``n`` before allocation bounds
+    both the quadratic kernel traversal and the serialized result.
+    """
+
+    if not isinstance(form, RationalQuadraticForm):
+        raise OperationDomainValidationError(
+            location=("form",),
+            code="quadratic_form.coefficient_matrix_form_type",
+            message="form must be a rational quadratic form value",
+        )
+    dimension = len(form.axis)
+    if dimension > MAX_COEFFICIENT_MATRIX_AXIS:
+        raise OperationResourceAdmissionError(
+            location=("form", "axis"),
+            code="quadratic_form.coefficient_matrix_axis_bound",
+            message=(
+                "quadratic-form dimension exceeds the "
+                f"{MAX_COEFFICIENT_MATRIX_AXIS}-axis coefficient-matrix envelope"
+            ),
+        )
+
+
+def coefficient_matrix_entries(
+    form: RationalQuadraticForm,
+) -> tuple[tuple[Fraction, ...], ...]:
+    """Return the exact symmetric matrix with ``Q(x) = x^T A x``.
+
+    Diagonal entry ``(i, i)`` is the ``x_i^2`` polynomial coefficient and
+    off-diagonal entries ``(i, j)``/``(j, i)`` are half the ``x_i*x_j``
+    polynomial coefficient, so odd cross terms yield half-integral entries.
+    """
+
+    require_coefficient_matrix_budget(form)
+    dimension = len(form.axis)
+    entries: list[list[Fraction]] = [
+        [Fraction(0) for _ in range(dimension)] for _ in range(dimension)
+    ]
+    for index, coefficient in enumerate(form.diagonal_coefficients):
+        entries[index][index] = coefficient.as_fraction()
+    for term in form.cross_terms:
+        half = term.coefficient.as_fraction() / 2
+        entries[term.left][term.right] = half
+        entries[term.right][term.left] = half
+    return tuple(tuple(row) for row in entries)
+
+
+def coefficient_matrix(form: RationalQuadraticForm) -> RationalMatrix:
+    """Build the exact symmetric ``RationalMatrix`` with ``Q(x) = x^T A x``."""
+
+    entries = coefficient_matrix_entries(form)
+    return rational_matrix_from_fractions(entries)
+
+
+__all__ = [
+    "coefficient_matrix",
+    "coefficient_matrix_entries",
+    "evaluate_rational_quadratic_form",
+    "require_coefficient_matrix_budget",
+]

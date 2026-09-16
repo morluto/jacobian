@@ -306,6 +306,32 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
     ),
     MathTool(
+        operation_id="number_theory.numerical_semigroup.factorization_lengths.compute",
+        title="Compute the complete sorted factorization-length set L(s)",
+        description="Given positive gcd-one generators (general-path generators each at most "
+        f"{MAX_GENERATOR}; a presentation containing 1 uses the constant-size "
+        "free-semigroup path) and an element, compute the complete sorted "
+        "duplicate-free factorization-length set L(s) on the increasing minimal "
+        "generator axis. Lengths derive from complete exact dynamic-programming "
+        "counting, not from extremal witnesses alone; nonmembers return the exact "
+        "empty set. Redundant or reordered generators normalize before exact "
+        "output validation.",
+        request_type=FactorizationLengthsComputeRequest,
+        result_type=FactorizationLengthsComputeResult,
+        run=compute_factorization_lengths,
+        tags=("number-theory", "numerical-semigroup", "factorization", "exact"),
+        discovery_terms=("factorization lengths", "set of lengths"),
+        examples=(
+            OperationExample(
+                name="lengths_15_in_3_5",
+                description="Factorization lengths of 15 in <3,5>; positive gcd-one "
+                f"general-path generators, each at most {MAX_GENERATOR}, normalize "
+                "to the minimal axis and the value must be within the element bound.",
+                input={"generators": ["3", "5"], "value": "15"},
+            ),
+        ),
+    ),
+    MathTool(
         operation_id="number_theory.numerical_semigroup.factorization_graph.compute",
         title="Compute factorization graph with connected components",
         description="Build the standard factorization graph where two factorizations "

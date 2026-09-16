@@ -210,6 +210,72 @@ class TestFactorizationLengths:
         result = compute_factorization_lengths(req)
         assert result.lengths == (4, 5, 6, 7, 8, 9)
 
+    def test_lengths_zero_element(self) -> None:
+        req = FactorizationLengthsComputeRequest(generators=(3, 5), value=0)
+        result = compute_factorization_lengths(req)
+        assert result.lengths == (0,)
+        assert result.in_semigroup is True
+
+    def test_lengths_normalize_redundant_permuted_generators(self) -> None:
+        """Lengths always use the canonical minimal-generator axis."""
+        result = compute_factorization_lengths(
+            FactorizationLengthsComputeRequest(generators=(8, 5, 3), value=15)
+        )
+        assert result.minimal_generators == (3, 5)
+        assert result.lengths == (3, 5)
+
+    def test_lengths_contain_interior_values_beyond_extrema(self) -> None:
+        """An extrema-only algorithm returns {4, 9} for 36 in <4,6,9>;
+        complete counting must also report every interior length."""
+        result = compute_factorization_lengths(
+            FactorizationLengthsComputeRequest(generators=(4, 6, 9), value=36)
+        )
+        assert result.lengths[0] == 4
+        assert result.lengths[-1] == 9
+        assert set(result.lengths) == {4, 5, 6, 7, 8, 9}
+
+    def test_lengths_agree_with_the_complete_family(self) -> None:
+        """Defining invariant: L(s) is the sorted length projection of Z(s)."""
+        for value in (0, 7, 12, 15, 30):
+            lengths = compute_factorization_lengths(
+                FactorizationLengthsComputeRequest(generators=(3, 5), value=value)
+            )
+            family = compute_factorizations(
+                FactorizationComputeRequest(generators=(3, 5), value=value)
+            )
+            assert lengths.minimal_generators == family.minimal_generators
+            assert lengths.in_semigroup == family.in_semigroup
+            assert lengths.lengths == tuple(
+                sorted({sum(map(int, item)) for item in family.factorizations})
+            )
+
+    def test_lengths_native_and_catalog_results_agree(self) -> None:
+        from jacobian.math.number_theory.numerical_semigroups.operations import (
+            factorization_lengths_profile,
+        )
+
+        request = FactorizationLengthsComputeRequest(generators=(4, 6, 9), value=36)
+        assert compute_factorization_lengths(request) == factorization_lengths_profile(
+            (4, 6, 9), 36
+        )
+
+    def test_lengths_declared_example_executes_through_the_catalog(self) -> None:
+        import copy
+
+        from jacobian.catalog.catalog import Catalog
+        from jacobian.dispatch import invoke_operation
+
+        operation_id = "number_theory.numerical_semigroup.factorization_lengths.compute"
+        catalog = Catalog.open()
+        operation = catalog.operation(operation_id)
+        assert operation is not None
+        payload = copy.deepcopy(operation.examples[0].input)
+        output = invoke_operation(operation_id, payload, catalog).output
+        request = FactorizationLengthsComputeRequest(generators=(3, 5), value=15)
+        # Dispatch output uses canonical JSON (exact integers as strings).
+        assert output == compute_factorization_lengths(request).model_dump(mode="json")
+        assert output["lengths"] == ["3", "5"]
+
 
 class TestFactorizationDistance:
     def test_distance_15_in_3_5(self) -> None:

@@ -17,6 +17,7 @@ from jacobian._exact import ExactInteger
 from jacobian._models import StrictModel
 from jacobian.canonical import format_canonical_integer
 from jacobian.math.number_theory.characters.values import (
+    MAX_CHARACTER_GROUP_MODULUS,
     MAX_PRINCIPAL_CHARACTER_MODULUS,
     PrincipalDirichletCharacter,
 )
@@ -54,6 +55,20 @@ class PrincipalDirichletCharacterRequest(StrictModel):
         description=(
             "Positive modulus; the complete residue table has exactly this many "
             "entries and is bounded to 2,048 entries."
+        ),
+    )
+
+
+class CharacterGroupRequest(StrictModel):
+    """Compute the finite unit-group decomposition for one modulus."""
+
+    modulus: StrictInt = Field(
+        ge=1,
+        le=MAX_CHARACTER_GROUP_MODULUS,
+        description=(
+            "Positive modulus; the unit table and generator-coordinate maps "
+            "cover exactly phi(modulus) unit residues within the 2,048-entry "
+            "bound."
         ),
     )
 
@@ -114,6 +129,7 @@ class PrincipalDirichletCharacterValueResult(StrictModel):
 
 __all__ = [
     "MAX_INTEGER_DIGITS",
+    "CharacterGroupRequest",
     "DirichletCharacterInteger",
     "PrincipalDirichletCharacterRequest",
     "PrincipalDirichletCharacterValueRequest",

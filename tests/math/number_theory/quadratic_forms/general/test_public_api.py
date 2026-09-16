@@ -8,7 +8,10 @@ def test_exact_public_api_symbols() -> None:
         "QuadraticCrossTerm",
         "RationalCoordinateVector",
         "RationalQuadraticForm",
+        "coefficient_matrix",
+        "coefficient_matrix_entries",
         "evaluate_rational_quadratic_form",
+        "require_coefficient_matrix_budget",
     )
     assert tuple(quadratic_forms.__all__) == expected
     assert len(quadratic_forms.__all__) == len(set(quadratic_forms.__all__))

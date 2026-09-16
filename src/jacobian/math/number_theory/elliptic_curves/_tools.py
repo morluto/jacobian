@@ -13,6 +13,11 @@ from jacobian.math.number_theory.elliptic_curves._models import (
     ScalarMultiplicationRequest,
     ScalarMultiplicationResult,
 )
+from jacobian.math.number_theory.elliptic_curves.finite_field import (
+    FiniteFieldDiscriminantRequest,
+    FiniteFieldDiscriminantResult,
+    finite_field_discriminant,
+)
 from jacobian.math.number_theory.elliptic_curves.operations import (
     add_points,
     discriminant,
@@ -43,6 +48,15 @@ def compute_scalar_multiply(
 ) -> ScalarMultiplicationResult:
     """Unpack a wire request for the native scalar-multiplication operation."""
     return scalar_multiply(request.curve, request.point, request.scalar)
+
+
+def compute_finite_field_discriminant(
+    request: FiniteFieldDiscriminantRequest,
+) -> FiniteFieldDiscriminantResult:
+    """Unpack a wire request for the native finite-field discriminant."""
+    return finite_field_discriminant(
+        request.field, request.coefficient_a, request.coefficient_b
+    )
 
 
 _DISCRIMINANT_EXAMPLE: dict[str, Any] = {
@@ -109,6 +123,27 @@ _SCALAR_MULT_EXAMPLE: dict[str, Any] = {
         "at_infinity": False,
     },
     "scalar": 2,
+}
+
+
+_F5_PRESENTATION: dict[str, Any] = {
+    "characteristic": "5",
+    "modulus_coefficients": ["0", "1"],
+    "generator": "a",
+}
+
+
+def _finite_field_element(coordinate: int) -> dict[str, Any]:
+    return {
+        "presentation": _F5_PRESENTATION,
+        "coordinates": [str(coordinate)],
+    }
+
+
+_FINITE_FIELD_DISCRIMINANT_EXAMPLE: dict[str, Any] = {
+    "field": _F5_PRESENTATION,
+    "coefficient_a": _finite_field_element(1),
+    "coefficient_b": _finite_field_element(1),
 }
 
 
@@ -181,6 +216,32 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 name="double_point_on_x_cubed_minus_x",
                 description="Compute 2*(1,0) on y² = x³ - x; the result is at infinity.",
                 input=_SCALAR_MULT_EXAMPLE,
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="elliptic_curve.finite_field.short_weierstrass.discriminant.compute",
+        title="Compute the discriminant of a finite-field short Weierstrass pair",
+        description="Compute 4A³, 27B², Δ = -16(4A³ + 27B²), the nonsingularity "
+        "predicate, and the j-invariant (present exactly when Δ ≠ 0) for "
+        "coefficients A, B over one declared finite field of odd "
+        "characteristic above 3. Characteristics 2 and 3 need generalized "
+        "models and are rejected before arithmetic.",
+        request_type=FiniteFieldDiscriminantRequest,
+        result_type=FiniteFieldDiscriminantResult,
+        run=compute_finite_field_discriminant,
+        tags=("elliptic-curve", "finite-field", "discriminant", "exact"),
+        discovery_terms=(
+            "finite field Weierstrass discriminant",
+            "elliptic curve singularity over a finite field",
+            "j-invariant over a finite field",
+        ),
+        examples=(
+            OperationExample(
+                name="discriminant_over_f5",
+                description="Compute the discriminant data of y² = x³ + x + 1 over F_5; "
+                "the coefficients must share the declared field presentation.",
+                input=_FINITE_FIELD_DISCRIMINANT_EXAMPLE,
             ),
         ),
     ),

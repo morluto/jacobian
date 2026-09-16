@@ -9,6 +9,11 @@ if TYPE_CHECKING:
         BinaryPowerSumGapProfile,
         BinaryPowerSumValueBucket,
     )
+    from jacobian.math.number_theory.number_fields._relative_trace_norm import (
+        NumberFieldRelativeTraceNormRequest,
+        NumberFieldRelativeTraceNormResult,
+        relative_trace_norm,
+    )
     from jacobian.math.number_theory.number_fields._ring_of_integers import (
         NumberFieldRingOfIntegersResult,
         ring_of_integers,
@@ -42,6 +47,8 @@ __all__ = [
     "GaussianRational",
     "NumberFieldEmbeddingProfile",
     "NumberFieldRealValueEnclosure",
+    "NumberFieldRelativeTraceNormRequest",
+    "NumberFieldRelativeTraceNormResult",
     "NumberFieldRingOfIntegersResult",
     "RealNumberFieldEmbedding",
     "SimpleNumberFieldElement",
@@ -53,6 +60,7 @@ __all__ = [
     "compare_real_embedding_elements",
     "discriminant",
     "embeddings",
+    "relative_trace_norm",
     "ring_of_integers",
     "unit_group",
     "verify_binary_power_sum_gap_profile",

@@ -3,22 +3,103 @@
 from __future__ import annotations
 
 import math
+from itertools import product
+from math import gcd
 
-from jacobian.catalog.models import OperationDomainValidationError
+from sympy import factorint
+
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.number_theory.characters._models import (
     PrincipalDirichletCharacterValueResult,
 )
 from jacobian.math.number_theory.characters.values import (
+    MAX_CHARACTER_GROUP_MODULUS,
     MAX_PRINCIPAL_CHARACTER_MODULUS,
+    DirichletCharacterGroup,
     PrincipalDirichletCharacter,
 )
 
 __all__ = [
+    "character_group",
     "principal_dirichlet_character",
     "principal_dirichlet_character_value",
+    "require_complete_character_group",
     "require_complete_principal_dirichlet_character",
     "require_principal_dirichlet_character_value_result",
 ]
+
+MAX_CHARACTER_GROUP_WORK = 500_000
+
+
+def _admit_character_group(modulus: int) -> None:
+    """Admit one character-group modulus, shared by native and catalog paths."""
+
+    if type(modulus) is not int:
+        raise OperationDomainValidationError(
+            location=("modulus",),
+            code="dirichlet_character.group.modulus_type",
+            message="character-group modulus must be an integer",
+        )
+    if modulus < 1:
+        raise OperationDomainValidationError(
+            location=("modulus",),
+            code="dirichlet_character.group.modulus_sign",
+            message="character-group modulus must be positive",
+        )
+    if modulus > MAX_CHARACTER_GROUP_MODULUS:
+        raise OperationResourceAdmissionError(
+            location=("modulus",),
+            code="dirichlet_character.group.modulus_bound",
+            message=(
+                "character-group modulus exceeds the bound "
+                f"{MAX_CHARACTER_GROUP_MODULUS}"
+            ),
+        )
+    phi = _euler_phi(modulus)
+    table_work = modulus + phi * max(1, len(f"{modulus}"))
+    if phi > MAX_CHARACTER_GROUP_MODULUS or table_work > MAX_CHARACTER_GROUP_WORK:
+        raise OperationResourceAdmissionError(
+            location=("modulus",),
+            code="dirichlet_character.group.table_bound",
+            message="character-group unit table exceeds the admitted work envelope",
+        )
+
+
+def _euler_phi(modulus: int) -> int:
+    """Return Euler's totient using exact prime factorization."""
+
+    if modulus <= 1:
+        return 1
+    result = 1
+    for prime, exponent in factorint(modulus).items():
+        result *= (prime - 1) * prime ** (exponent - 1)
+    return result
+
+
+def _multiplicative_order(residue: int, order_group: int, modulus: int) -> int:
+    """Return the exact multiplicative order of a unit modulo ``modulus``."""
+
+    order = order_group
+    for prime, _ in factorint(order).items():
+        while order % prime == 0 and pow(residue, order // prime, modulus) == 1:
+            order //= prime
+    return order
+
+
+def _primitive_root_prime_power(prime: int, exponent: int) -> tuple[int, int]:
+    """Return the canonical generator and order of an odd prime-power group."""
+
+    modulus = prime**exponent
+    group_order = (prime - 1) * prime ** (exponent - 1)
+    for candidate in range(2, modulus):
+        if gcd(candidate, modulus) != 1:
+            continue
+        if _multiplicative_order(candidate, group_order, modulus) == group_order:
+            return candidate, group_order
+    raise RuntimeError("odd prime-power unit group has no generator")
 
 
 def require_complete_principal_dirichlet_character(
@@ -99,3 +180,244 @@ def principal_dirichlet_character_value(
         raise TypeError("principal-character input must be an integer")
     require_complete_principal_dirichlet_character(character)
     return character.values[integer % character.modulus]
+
+
+def _canonical_blocks(modulus: int) -> tuple[tuple[int, int, int], ...]:
+    """Return the nontrivial canonical prime-power generator blocks.
+
+    Blocks of order one generate nothing and carry no coordinates; they are
+    dropped so the generator tuple is a genuine generating set.
+    """
+
+    if modulus <= 1:
+        return ()
+    return tuple(
+        block
+        for prime, exponent in sorted(factorint(modulus).items())
+        for block in _prime_power_blocks(prime, exponent)
+        if block[2] > 1
+    )
+
+
+def _prime_power_blocks(prime: int, exponent: int) -> tuple[tuple[int, int, int], ...]:
+    """Return canonical ``(block modulus, generator, order)`` rows.
+
+    Odd prime powers are cyclic with the smallest primitive-root generator.
+    Powers of two use the standard ``{-1, 5}`` presentation.
+    """
+
+    modulus = prime**exponent
+    if modulus <= 2:
+        return ((modulus, 1 % modulus, 1),)
+    if prime == 2 and modulus == 4:
+        return ((4, 3, 2),)
+    if prime == 2:
+        return ((modulus, modulus - 1, 2), (modulus, 5, 2 ** (exponent - 2)))
+    generator, order = _primitive_root_prime_power(prime, exponent)
+    return ((modulus, generator, order),)
+
+
+def _crt_lift(modulus: int, block_modulus: int, block_residue: int) -> int:
+    """Lift one block residue to ``modulus`` as 1 outside its block."""
+
+    cofactor = modulus // block_modulus
+    first = block_residue * cofactor * pow(cofactor % block_modulus, -1, block_modulus)
+    if cofactor == 1:
+        return first % modulus
+    second = block_modulus * pow(block_modulus % cofactor, -1, cofactor)
+    return (first + second) % modulus
+
+
+def _invariant_factors(component_orders: tuple[int, ...]) -> tuple[int, ...]:
+    """Combine cyclic component orders into the divisibility chain."""
+
+    if not component_orders or all(order == 1 for order in component_orders):
+        return ()
+    prime_exponents: dict[int, list[int]] = {}
+    for order in component_orders:
+        if order == 1:
+            continue
+        for prime, exponent in factorint(order).items():
+            prime_exponents.setdefault(prime, []).append(prime**exponent)
+    rank = max(len(powers) for powers in prime_exponents.values())
+    for powers in prime_exponents.values():
+        powers.sort()
+        while len(powers) < rank:
+            powers.insert(0, 1)
+    factors = tuple(
+        math.prod(powers[index] for powers in prime_exponents.values())
+        for index in range(rank)
+    )
+    return tuple(sorted(factors))
+
+
+def _discrete_log(generator: int, target: int, order: int, modulus: int) -> int:
+    """Return the bounded discrete logarithm of ``target`` to ``generator``."""
+
+    power = 1 % modulus
+    for exponent in range(order):
+        if power == target:
+            return exponent
+        power = (power * generator) % modulus
+    raise ValueError("target is not in the cyclic subgroup")
+
+
+def _component_log_table(
+    block_modulus: int, generators_orders: tuple[tuple[int, int], ...]
+) -> dict[int, tuple[int, ...]]:
+    """Tabulate joint discrete logarithms over one prime-power block.
+
+    Blocks with several generators (powers of two) are solved jointly by
+    enumerating the bounded product exactly once; first enumeration order is
+    canonical.
+    """
+
+    table: dict[int, tuple[int, ...]] = {}
+    ranges = [range(order) for _, order in generators_orders]
+    for coordinates in product(*ranges):
+        value = 1 % block_modulus
+        for (generator, _), coordinate in zip(
+            generators_orders, coordinates, strict=True
+        ):
+            value = (value * pow(generator, coordinate, block_modulus)) % block_modulus
+        table.setdefault(value, coordinates)
+    return table
+
+
+def require_complete_character_group(group: DirichletCharacterGroup) -> None:
+    """Check the mathematical decomposition claimed by a caller-supplied group."""
+
+    _admit_character_group(group.modulus)
+    expected_units = tuple(
+        residue
+        for residue in range(group.modulus)
+        if math.gcd(residue, group.modulus) == 1
+    )
+    if group.unit_residues != expected_units:
+        raise OperationDomainValidationError(
+            location=("group", "unit_residues"),
+            code="dirichlet_character.group.unit_residues_mismatch",
+            message=(
+                "unit residues must be the complete canonical unit group modulo modulus"
+            ),
+        )
+    if group.character_count != len(expected_units):
+        raise OperationDomainValidationError(
+            location=("group", "character_count"),
+            code="dirichlet_character.group.character_count_mismatch",
+            message="character count must equal phi(modulus)",
+        )
+    expected_blocks = _canonical_blocks(group.modulus)
+    expected_orders = tuple(block[2] for block in expected_blocks)
+    if tuple(group.generator_orders) != expected_orders:
+        raise OperationDomainValidationError(
+            location=("group", "generator_orders"),
+            code="dirichlet_character.group.generator_order_mismatch",
+            message="generator orders must match the canonical prime-power blocks",
+        )
+    expected_generators = tuple(
+        _crt_lift(group.modulus, block_modulus, generator)
+        for block_modulus, generator, _ in expected_blocks
+    )
+    if tuple(group.generators) != expected_generators:
+        raise OperationDomainValidationError(
+            location=("group", "generators"),
+            code="dirichlet_character.group.generator_mismatch",
+            message="generators must be the canonical CRT lifts of block generators",
+        )
+    if tuple(group.invariant_factors) != _invariant_factors(expected_orders):
+        raise OperationDomainValidationError(
+            location=("group", "invariant_factors"),
+            code="dirichlet_character.group.invariant_factor_mismatch",
+            message="invariant factors must be the canonical divisibility chain",
+        )
+    expected_exponent = math.lcm(*expected_orders) if expected_orders else 1
+    if group.exponent != expected_exponent:
+        raise OperationDomainValidationError(
+            location=("group", "exponent"),
+            code="dirichlet_character.group.exponent_mismatch",
+            message="the common exponent must be the least common multiple of orders",
+        )
+    _require_generator_coordinate_round_trip(group)
+
+
+def _require_generator_coordinate_round_trip(group: DirichletCharacterGroup) -> None:
+    """Replay the generator-coordinate identity on every claimed unit."""
+
+    unit_index = dict(zip(group.unit_residues, group.unit_coordinates, strict=True))
+    for residue, row in zip(group.unit_residues, group.unit_coordinates, strict=True):
+        rebuilt = 1 % group.modulus
+        for generator, coordinate, _order in zip(
+            group.generators, row, group.generator_orders, strict=True
+        ):
+            rebuilt = (
+                rebuilt * pow(generator, coordinate, group.modulus)
+            ) % group.modulus
+        if rebuilt != residue or unit_index[residue] != row:
+            raise OperationDomainValidationError(
+                location=("group", "unit_coordinates"),
+                code="dirichlet_character.group.coordinate_mismatch",
+                message="generator coordinates must rebuild every unit residue",
+            )
+
+
+def character_group(modulus: int) -> DirichletCharacterGroup:
+    """Return the finite unit-group decomposition and character coordinates."""
+
+    _admit_character_group(modulus)
+    if modulus == 1:
+        return DirichletCharacterGroup._from_kernel(
+            modulus=1,
+            unit_residues=(0,),
+            character_count=1,
+            invariant_factors=(),
+            generators=(),
+            generator_orders=(),
+            unit_coordinates=(((),)),
+            exponent=1,
+        )
+    units = tuple(
+        residue for residue in range(modulus) if math.gcd(residue, modulus) == 1
+    )
+    blocks = _canonical_blocks(modulus)
+    generators = tuple(
+        _crt_lift(modulus, block_modulus, generator)
+        for block_modulus, generator, _ in blocks
+    )
+    orders = tuple(block[2] for block in blocks)
+    for generator, order in zip(generators, orders, strict=True):
+        if math.gcd(generator, modulus) != 1:
+            raise RuntimeError("lifted generator is not a unit")
+        if _multiplicative_order(generator, order, modulus) != order:
+            raise RuntimeError("lifted generator order failed its defining check")
+    grouped: dict[int, list[tuple[int, int]]] = {}
+    for block_modulus, block_generator, order in blocks:
+        grouped.setdefault(block_modulus, []).append((block_generator, order))
+    tables = {}
+    for block_modulus, generators_orders in grouped.items():
+        table = _component_log_table(block_modulus, tuple(generators_orders))
+        if len(table) != _euler_phi(block_modulus):
+            raise RuntimeError("block generators failed their completeness check")
+        tables[block_modulus] = table
+    coordinates = tuple(
+        tuple(
+            coordinate
+            for block_modulus in grouped
+            for coordinate in tables[block_modulus][residue % block_modulus]
+        )
+        for residue in units
+    )
+    group = DirichletCharacterGroup._from_kernel(
+        modulus=modulus,
+        unit_residues=units,
+        character_count=len(units),
+        invariant_factors=_invariant_factors(orders),
+        generators=generators,
+        generator_orders=orders,
+        unit_coordinates=coordinates,
+        exponent=math.lcm(*orders) if orders else 1,
+    )
+    _require_generator_coordinate_round_trip(group)
+    if group.character_count != _euler_phi(modulus):
+        raise RuntimeError("character count failed its phi(modulus) identity")
+    return group

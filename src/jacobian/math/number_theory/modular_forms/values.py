@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
@@ -13,6 +13,9 @@ from jacobian.math.number_theory.modular_forms.kernel import (
     metadata,
 )
 from jacobian.math.polynomials.series._models import TruncatedSeries
+
+MAX_MODULAR_FORM_LEVEL = 100_000
+MAX_MODULAR_FORM_WEIGHT = 1_000_000
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -75,4 +78,41 @@ class LevelOneModularQExpansion(StrictModel):
         )
 
 
-__all__ = ["LevelOneModularQExpansion"]
+class ModularFormSpace(StrictModel):
+    """One supported exact holomorphic or cuspidal modular-form space.
+
+    Version 1 binds the trivial character over QQ on Gamma0(N); only level
+    one admits dimension computation so far, and higher levels are rejected
+    by the owning operation before any backend work.
+    """
+
+    group: Literal["GAMMA0"] = Field(
+        default="GAMMA0", description="Congruence subgroup family."
+    )
+    level: StrictInt = Field(
+        ge=1,
+        le=MAX_MODULAR_FORM_LEVEL,
+        description="Level N of Gamma0(N).",
+    )
+    weight: StrictInt = Field(
+        ge=0,
+        le=MAX_MODULAR_FORM_WEIGHT,
+        description="Integer modular weight k.",
+    )
+    kind: Literal["M", "S"] = Field(
+        description="Full holomorphic space M_k or cuspidal subspace S_k."
+    )
+    character: Literal["TRIVIAL"] = Field(
+        default="TRIVIAL", description="Dirichlet character (trivial only)."
+    )
+    coefficient_domain: Literal["QQ"] = Field(
+        default="QQ", description="Exact coefficient domain."
+    )
+
+
+__all__ = [
+    "MAX_MODULAR_FORM_LEVEL",
+    "MAX_MODULAR_FORM_WEIGHT",
+    "LevelOneModularQExpansion",
+    "ModularFormSpace",
+]

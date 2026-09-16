@@ -2,10 +2,16 @@
 
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.geometry.toric._models import (
+    MAX_TORIC_CHART_BOX,
+    MAX_TORIC_CHART_CANDIDATES,
+    MAX_TORIC_CHART_DUAL_RAYS,
+    MAX_TORIC_CHART_GENERATORS,
+    MAX_TORIC_CHART_RELATIONS,
     MAX_TORIC_CONE_COUNT,
     MAX_TORIC_CONE_GENERATORS,
     MAX_TORIC_COORDINATE_DIGITS,
     MAX_TORIC_LATTICE_RANK,
+    MAX_TORIC_MORPHISM_WORK,
     MAX_TORIC_RAY_COUNT,
     CharacterDivisorRequest,
     CharacterDivisorResult,
@@ -13,8 +19,14 @@ from jacobian.math.geometry.toric._models import (
     FanValidationResult,
     OrbitConeProfileRequest,
     OrbitConeProfileResult,
+    ToricAffineChartRequest,
+    ToricAffineChartResult,
+    ToricMorphismRequest,
+    ToricMorphismResult,
 )
 from jacobian.math.geometry.toric.operations import (
+    check_toric_morphism,
+    compute_affine_chart,
     compute_character_divisor,
     compute_orbit_cone_profile,
     validate_fan,
@@ -40,6 +52,14 @@ def _run_character_divisor(
     request: CharacterDivisorRequest,
 ) -> CharacterDivisorResult:
     return compute_character_divisor(request.fan, request.character)
+
+
+def _run_affine_chart(request: ToricAffineChartRequest) -> ToricAffineChartResult:
+    return compute_affine_chart(request.fan, request.cone)
+
+
+def _run_morphism(request: ToricMorphismRequest) -> ToricMorphismResult:
+    return check_toric_morphism(request.source, request.target, request.matrix)
 
 
 FAN_VALIDATE_OPERATION = MathTool(
@@ -185,10 +205,117 @@ CHARACTER_DIVISOR_OPERATION = MathTool(
     ),
 )
 
+AFFINE_CHART_OPERATION = MathTool(
+    operation_id="toric.affine_chart.compute",
+    title="Compute an exact affine monomial toric chart",
+    description=(
+        "For one full-dimensional cone of a validated rational fan, return the "
+        "affine chart Spec k[sigma^vee cap M]: the primitive extreme rays of the "
+        "exact dual cone, the complete Hilbert basis of the affine semigroup "
+        "(reduced from the fundamental-parallelepiped candidates), the canonical "
+        "integer relation lattice with every relation replayed to zero on the "
+        "generators, and the face localizations inverting the canonical "
+        "supporting character of each proper face. Only cones whose derived dual "
+        "cone, parallelepiped, Hilbert basis, and relation lattice fit the "
+        f"published envelope (at most {MAX_TORIC_CHART_DUAL_RAYS} dual rays, "
+        f"{MAX_TORIC_CHART_BOX} parallelepiped box points, "
+        f"{MAX_TORIC_CHART_CANDIDATES} candidates, "
+        f"{MAX_TORIC_CHART_GENERATORS} generators, "
+        f"{MAX_TORIC_CHART_RELATIONS} relations) are admitted; an unbounded "
+        "request is refused rather than returned with an incomplete basis. "
+        + _ENVELOPE_SENTENCE
+    ),
+    request_type=ToricAffineChartRequest,
+    result_type=ToricAffineChartResult,
+    run=_run_affine_chart,
+    tags=("geometry", "toric", "affine-chart", "hilbert-basis", "exact"),
+    discovery_terms=(
+        "affine toric chart",
+        "monoid algebra of a cone",
+        "Hilbert basis of a rational cone",
+        "dual cone semigroup presentation",
+    ),
+    examples=(
+        OperationExample(
+            name="affine_plane_chart",
+            description=(
+                "Compute the affine chart of the two-dimensional cone spanned by "
+                "e1 and e2 in the affine-plane fan: the polynomial chart "
+                "Spec k[x, y] with two Hilbert generators, no relations, and the "
+                "three face localizations."
+            ),
+            input={
+                "fan": {
+                    "lattice_rank": 2,
+                    "rays": [["1", "0"], ["0", "1"]],
+                    "cones": [[], [0], [1], [0, 1]],
+                },
+                "cone": [0, 1],
+            },
+        ),
+    ),
+)
+
+MORPHISM_CHECK_OPERATION = MathTool(
+    operation_id="toric.morphism.check",
+    title="Check an exact lattice-equivariant toric morphism",
+    description=(
+        "For two validated rational fans and an integer lattice matrix "
+        "phi: N_1 -> N_2, decide the toric-morphism condition: every source cone "
+        "must map into a single target cone. Return the induced fan-compatible "
+        "source-cone to target-cone assignment with the source ray images, or the "
+        "first obstructing source cone with its image vectors and, when a single "
+        "ray image already leaves every target cone, that ray and image as the "
+        "witness. Every assignment is replayed by exact cone-membership of the "
+        "ray images. Admission bounds the fan recognition for both fans and the "
+        f"exact cone-membership work (at most {MAX_TORIC_MORPHISM_WORK} "
+        "source-cone/ray/target-cone tests). " + _ENVELOPE_SENTENCE
+    ),
+    request_type=ToricMorphismRequest,
+    result_type=ToricMorphismResult,
+    run=_run_morphism,
+    tags=("geometry", "toric", "morphism", "fan-map", "exact"),
+    discovery_terms=(
+        "toric morphism",
+        "fan-compatible lattice map",
+        "equivariant map of toric varieties",
+        "lattice homomorphism of fans",
+    ),
+    examples=(
+        OperationExample(
+            name="projective_plane_identity",
+            description=(
+                "Check that the identity lattice map is a toric morphism from the "
+                "projective-plane fan to itself, returning the induced cone "
+                "assignments and ray images."
+            ),
+            input={
+                "source": {
+                    "lattice_rank": 2,
+                    "rays": [["1", "0"], ["0", "1"], ["-1", "-1"]],
+                    "cones": [[], [0], [1], [2], [0, 1], [0, 2], [1, 2]],
+                },
+                "target": {
+                    "lattice_rank": 2,
+                    "rays": [["1", "0"], ["0", "1"], ["-1", "-1"]],
+                    "cones": [[], [0], [1], [2], [0, 1], [0, 2], [1, 2]],
+                },
+                "matrix": {
+                    "row_count": 2,
+                    "column_count": 2,
+                    "entries": [["1", "0"], ["0", "1"]],
+                },
+            },
+        ),
+    ),
+)
+
 TOOLS: MathTools = (
     FAN_VALIDATE_OPERATION,
     ORBIT_CONE_PROFILE_OPERATION,
     CHARACTER_DIVISOR_OPERATION,
+    AFFINE_CHART_OPERATION,
+    MORPHISM_CHECK_OPERATION,
 )
 
 __all__ = ["TOOLS"]

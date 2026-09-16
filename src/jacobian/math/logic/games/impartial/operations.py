@@ -7,6 +7,7 @@ from functools import reduce
 from heapq import heapify, heappop, heappush
 from operator import xor
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.logic.games.impartial._models import (
     DisjunctiveSumResult,
     OutcomeProfileResult,
@@ -280,7 +281,11 @@ def _lexicographical_topological_order(
             if indegree[target] == 0:
                 heappush(available, target)
     if len(order) != len(game.positions):
-        raise ValueError("impartial game must be acyclic")
+        raise OperationDomainValidationError(
+            location=("game", "moves"),
+            code="impartial_game_acyclic",
+            message="impartial game must be acyclic",
+        )
     return tuple(order)
 
 
@@ -288,11 +293,23 @@ def _validate_subtraction_input(
     subtraction_set: tuple[int, ...], max_heap: int
 ) -> tuple[int, ...]:
     if not 0 <= max_heap <= MAX_HEAP_BOUND:
-        raise ValueError("maximum heap is outside the supported bound")
+        raise OperationDomainValidationError(
+            location=("max_heap",),
+            code="impartial_game_heap_bound",
+            message="maximum heap is outside the supported bound",
+        )
     if not subtraction_set or subtraction_set != tuple(sorted(set(subtraction_set))):
-        raise ValueError("subtraction set must be nonempty, distinct, and sorted")
+        raise OperationDomainValidationError(
+            location=("subtraction_set",),
+            code="impartial_game_subtraction_set",
+            message="subtraction set must be nonempty, distinct, and sorted",
+        )
     if any(not 1 <= value <= MAX_SUBTRACTION_VALUE for value in subtraction_set):
-        raise ValueError("subtraction value is outside the supported bound")
+        raise OperationDomainValidationError(
+            location=("subtraction_set",),
+            code="impartial_game_subtraction_value",
+            message="subtraction value is outside the supported bound",
+        )
     return subtraction_set
 
 

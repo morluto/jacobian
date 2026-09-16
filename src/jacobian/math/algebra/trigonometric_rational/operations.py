@@ -12,7 +12,10 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.algebra.trigonometric_rational._laurent_gcd_process import (
     cancel_common_factor,
 )
@@ -385,8 +388,10 @@ def _root_of_unity(quarter_turns: int) -> Gaussian:
 
 def _trig(angle: IntegerAffineAngleForm, axis: int, *, sine: bool) -> _Evaluated:
     if len(angle.coefficients) != axis:
-        raise PydanticCustomError(
-            "trigonometric.angle_axis", "angle coefficients must align with variables"
+        raise OperationDomainValidationError(
+            location=("angle",),
+            code="trigonometric.angle_axis",
+            message="angle coefficients must align with variables",
         )
     forward = tuple(angle.coefficients)
     backward = tuple(-value for value in forward)
@@ -439,9 +444,10 @@ def _evaluate(
         left = _evaluate(expression.numerator, axis, nodes)
         right = _evaluate(expression.denominator, axis, nodes)
         if not right.numerator:
-            raise PydanticCustomError(
-                "trigonometric.zero_denominator",
-                "division by the identically zero expression is undefined",
+            raise OperationDomainValidationError(
+                location=("expression", "denominator"),
+                code="trigonometric.zero_denominator",
+                message="division by the identically zero expression is undefined",
             )
         # The denominator's zero locus is its numerator's zero locus (the
         # denominator's own denominator is a nonzero monomial): record those
@@ -485,8 +491,10 @@ def _evaluate(
 
 def _canonicalize(numerator: Polynomial, denominator: Polynomial) -> RationalFunction:
     if not denominator:
-        raise PydanticCustomError(
-            "trigonometric.zero_denominator", "denominator is identically zero"
+        raise OperationDomainValidationError(
+            location=("denominator",),
+            code="trigonometric.zero_denominator",
+            message="denominator is identically zero",
         )
     if not numerator:
         return {}, {(0,) * len(next(iter(denominator))): (Fraction(1), Fraction())}
@@ -791,8 +799,10 @@ def normalize_trigonometric_rational(
     request: TrigonometricRationalSource,
 ) -> TrigonometricRationalNormalizeResult:
     if len(set(request.variables)) != len(request.variables):
-        raise PydanticCustomError(
-            "trigonometric.variable_axis", "variables must be unique"
+        raise OperationDomainValidationError(
+            location=("variables",),
+            code="trigonometric.variable_axis",
+            message="variables must be unique",
         )
     axis = len(request.variables)
     evaluated = _evaluate(request.expression, axis, [0])

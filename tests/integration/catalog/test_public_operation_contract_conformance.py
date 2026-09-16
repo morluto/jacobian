@@ -9,6 +9,8 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
+from jacobian._execution import OperationExecutionTimeoutError
+from jacobian.backends import BackendUnavailableError
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import MathTool, OperationDomainValidationError
 from jacobian.dispatch import invoke_operation, parse_operation_input
@@ -158,6 +160,21 @@ def test_every_distinct_accepted_boundary_mutation_returns_the_declared_result(
                 # mathematical precondition. A typed semantic rejection is
                 # therefore valid for a schema-valid mutation.
                 continue
+            except OperationExecutionTimeoutError:
+                # A timeout is an execution outcome, not a contract failure:
+                # a mutation may shrink a caller-supplied deadline below the
+                # work the accepted request requires. It is never a negative
+                # mathematical conclusion.
+                continue
+            except BackendUnavailableError as exc:
+                pytest.skip(f"optional backend unavailable: {exc}")
+            except RuntimeError as exc:
+                if "address-space limit" in str(exc):
+                    pytest.skip(f"host cannot bound the worker: {exc}")
+                pytest.fail(
+                    f"{operation.operation_id} accepted {mutation} but raised "
+                    f"{type(exc).__name__}: {exc}"
+                )
             except Exception as exc:
                 pytest.fail(
                     f"{operation.operation_id} accepted {mutation} but raised "

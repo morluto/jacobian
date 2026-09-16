@@ -343,3 +343,59 @@ class WeylGroupOrderResult(StrictModel):
             matrix=matrix,
             group_order=group_order,
         )
+
+
+class SimpleReflectionsResult(StrictModel):
+    """One exact simple-reflection matrix per simple root and lattice."""
+
+    matrix: CartanMatrix
+    rank: int = Field(ge=1, le=MAX_RANK)
+    root_matrices: tuple[IntegerMatrix, ...]
+    coroot_matrices: tuple[IntegerMatrix, ...]
+    weight_matrices: tuple[IntegerMatrix, ...]
+    coweight_matrices: tuple[IntegerMatrix, ...]
+    involution_verified: bool
+
+    @model_validator(mode="after")
+    def require_reflection_family_shape(self) -> Self:
+        families = (
+            self.root_matrices,
+            self.coroot_matrices,
+            self.weight_matrices,
+            self.coweight_matrices,
+        )
+        if any(len(family) != self.rank for family in families) or any(
+            reflection.row_count != self.rank or reflection.column_count != self.rank
+            for family in families
+            for reflection in family
+        ):
+            raise _validation_error(
+                "reflection_family_shape",
+                "each lattice must carry one square reflection matrix per simple root",
+            )
+        if self.involution_verified is not True:
+            raise _validation_error(
+                "reflection_involution",
+                "reflection families must square to the identity",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        matrix: CartanMatrix,
+        *,
+        root_matrices: tuple[IntegerMatrix, ...],
+        coroot_matrices: tuple[IntegerMatrix, ...],
+        weight_matrices: tuple[IntegerMatrix, ...],
+        coweight_matrices: tuple[IntegerMatrix, ...],
+    ) -> Self:
+        return cls.model_construct(
+            matrix=matrix,
+            rank=len(matrix),
+            root_matrices=root_matrices,
+            coroot_matrices=coroot_matrices,
+            weight_matrices=weight_matrices,
+            coweight_matrices=coweight_matrices,
+            involution_verified=True,
+        )

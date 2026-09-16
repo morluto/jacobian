@@ -93,6 +93,11 @@ def test_claim_verifiers_propagate_backend_value_errors(
             wire.verify_cycle_multiplier,
             "eval",
         ),
+        "arithmetic_dynamics.critical_points.compute": (
+            wire.compute_critical_points,
+            wire.verify_critical_points,
+            "factor_list",
+        ),
         "arithmetic_dynamics.finite_field.functional_graph.compute": (
             wire.compute_finite_field_map,
             wire.verify_finite_field_map,

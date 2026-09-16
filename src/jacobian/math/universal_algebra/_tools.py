@@ -95,6 +95,67 @@ _TERM = {
 }
 
 
+# Left-projection magma on {0, 1}: x*y = x. Associative but not commutative,
+# so it is a countermodel to (associativity => commutativity).
+_COUNTERMODEL_MAGMA = {
+    "carrier": ["0", "1"],
+    "operations": [{"operation_id": "mul", "arity": 2}],
+    "tables": [[0, 0, 1, 1]],
+}
+
+
+def _magma_variable(variable_id: int) -> dict[str, object]:
+    return {"nodes": [{"kind": "variable", "variable_id": variable_id}], "root": 0}
+
+
+# (x*y)*z over operation 0 with flat node indices 0..4.
+_ASSOCIATIVE_LEFT = {
+    "nodes": [
+        {"kind": "variable", "variable_id": 0},
+        {"kind": "variable", "variable_id": 1},
+        {"kind": "variable", "variable_id": 2},
+        {"kind": "application", "operation": 0, "children": [0, 1]},
+        {"kind": "application", "operation": 0, "children": [3, 2]},
+    ],
+    "root": 4,
+}
+
+
+# x*(y*z) over operation 0 with flat node indices 0..4.
+_ASSOCIATIVE_RIGHT = {
+    "nodes": [
+        {"kind": "variable", "variable_id": 0},
+        {"kind": "variable", "variable_id": 1},
+        {"kind": "variable", "variable_id": 2},
+        {"kind": "application", "operation": 0, "children": [1, 2]},
+        {"kind": "application", "operation": 0, "children": [0, 3]},
+    ],
+    "root": 4,
+}
+
+
+# x*y over operation 0.
+_PRODUCT_XY = {
+    "nodes": [
+        {"kind": "variable", "variable_id": 0},
+        {"kind": "variable", "variable_id": 1},
+        {"kind": "application", "operation": 0, "children": [0, 1]},
+    ],
+    "root": 2,
+}
+
+
+# y*x over operation 0.
+_PRODUCT_YX = {
+    "nodes": [
+        {"kind": "variable", "variable_id": 0},
+        {"kind": "variable", "variable_id": 1},
+        {"kind": "application", "operation": 0, "children": [1, 0]},
+    ],
+    "root": 2,
+}
+
+
 TOOLS: tuple[MathTool[Any, Any], ...] = (
     MathTool(
         operation_id="universal_algebra.term.evaluate.compute",
@@ -147,6 +208,41 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                         "root": 0,
                     },
                     "variable_count": 1,
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="universal_algebra.implication.countermodel.check",
+        title="Check one finite magma as an equation-implication countermodel",
+        description="Exhaust every premise equation and the target equation over "
+        "their complete finite assignment spaces in one magma with exactly one "
+        "binary operation. Return every premise profile with its first violation, "
+        "the target profile with its refutation, and whether the magma is a "
+        "countermodel (all premises hold universally and the target fails). "
+        "Duplicate premises normalize to their first occurrence; requests whose "
+        "complete term-evaluation work exceeds the enumeration budget are rejected.",
+        request_type=ImplicationCountermodelCheckRequest,
+        result_type=ImplicationCountermodelCheckResult,
+        run=compute_implication_countermodel_check,
+        tags=("universal-algebra", "countermodel", "exact"),
+        discovery_terms=("countermodel", "equation implication", "finite magma"),
+        examples=(
+            OperationExample(
+                name="left_projection_countermodel",
+                description="Check the 2-element left-projection magma against "
+                "associativity as premise and commutativity as target; the magma "
+                "must carry exactly one binary operation and the complete "
+                "assignment work must fit the enumeration budget.",
+                input={
+                    "algebra": _COUNTERMODEL_MAGMA,
+                    "premises": [
+                        {
+                            "left": _ASSOCIATIVE_LEFT,
+                            "right": _ASSOCIATIVE_RIGHT,
+                        }
+                    ],
+                    "target": {"left": _PRODUCT_XY, "right": _PRODUCT_YX},
                 },
             ),
         ),

@@ -12,6 +12,11 @@ from jacobian.math.finite_fields._algebraic_sets import (
     projective_zero_count,
     projective_zero_set,
 )
+from jacobian.math.finite_fields._jacobian_syzygy import check_jacobian_syzygy
+from jacobian.math.finite_fields._jacobian_syzygy_models import (
+    JacobianSyzygyCheckResult,
+    JacobianSyzygyRowReduction,
+)
 from jacobian.math.finite_fields._matrix_rank import verify_matrix_rank
 from jacobian.math.finite_fields._matrix_rank_models import MatrixRankResult
 from jacobian.math.finite_fields.operations import (
@@ -81,6 +86,8 @@ __all__ = [
     "FinitePolynomial",
     "FinitePolynomialMap",
     "HomogeneousFixedSubspace",
+    "JacobianSyzygyCheckResult",
+    "JacobianSyzygyRowReduction",
     "MatrixRankResult",
     "OrbitDistribution",
     "PaleyTournamentResult",
@@ -96,6 +103,7 @@ __all__ = [
     "analyze_collisions",
     "analyze_permutation",
     "base_change_system",
+    "check_jacobian_syzygy",
     "direction_rank_ledger",
     "element",
     "evaluate_finite_polynomial",

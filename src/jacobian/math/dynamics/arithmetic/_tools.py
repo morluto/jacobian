@@ -13,6 +13,8 @@ from jacobian.catalog.models import (
 )
 from jacobian.math.dynamics.arithmetic._models import (
     MAX_DEGREE,
+    CriticalPointsRequest,
+    CriticalPointsResult,
     CycleMultiplierRequest,
     CycleMultiplierResult,
     DynatomicPolynomialRequest,
@@ -29,6 +31,7 @@ from jacobian.math.dynamics.arithmetic._models import (
     _validation_code,
 )
 from jacobian.math.dynamics.arithmetic.operations import (
+    critical_points,
     cycle_multiplier,
     dynatomic_polynomial,
     finite_field_functional_graph,
@@ -157,6 +160,15 @@ def compute_cycle_multiplier(
     )
 
 
+def compute_critical_points(
+    request: CriticalPointsRequest,
+) -> CriticalPointsResult:
+    try:
+        return critical_points(request.polynomial)
+    except _ArithmeticInputError as exc:
+        _translate_value_error(exc, ("polynomial",))
+
+
 def compute_finite_field_map(request: FiniteFieldMapRequest) -> FiniteFieldMapResult:
     polynomial_map = request.polynomial_map
     if (
@@ -256,6 +268,18 @@ def verify_cycle_multiplier(claim: CycleMultiplierResult) -> bool:
     return claim == expected
 
 
+def verify_critical_points(claim: CriticalPointsResult) -> bool:
+    try:
+        expected = compute_critical_points(
+            CriticalPointsRequest(polynomial=claim.source_polynomial)
+        )
+    except OperationResourceAdmissionError:
+        raise
+    except (ValidationError, OperationDomainValidationError):
+        return False
+    return claim == expected
+
+
 TOOLS: tuple[MathTool[Any, Any], ...] = (
     MathTool(
         operation_id="arithmetic_dynamics.map.iterate.compute",
@@ -345,6 +369,33 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
     ),
     MathTool(
+        operation_id="arithmetic_dynamics.critical_points.compute",
+        title="Compute the exact finite critical divisor of a polynomial map",
+        description=(
+            "Factor f' exactly over QQ into monic irreducible factors with "
+            "multiplicities and exact degree data. The result carries the "
+            "derivative, the factorization profile, the multiplicity total "
+            "deg f' = d - 1, the exact finite critical multiplier f'(c) = 0, and "
+            "a flag that infinity is critical exactly when d >= 2. This is an "
+            "exact factorization profile, not approximate algebraic roots."
+        ),
+        request_type=CriticalPointsRequest,
+        result_type=CriticalPointsResult,
+        run=compute_critical_points,
+        tags=("arithmetic-dynamics", "critical-points", "exact"),
+        discovery_terms=("critical points", "ramification", "critical divisor"),
+        examples=(
+            OperationExample(
+                name="cubic_two_critical_points",
+                description=(
+                    "Critical points of f(x)=x^3-3x; f'=3(x-1)(x+1) has two "
+                    "distinct roots, each of multiplicity one."
+                ),
+                input={"polynomial": _polynomial_example((0, -3, 0, 1))},
+            ),
+        ),
+    ),
+    MathTool(
         operation_id="arithmetic_dynamics.finite_field.functional_graph.compute",
         title="Compute functional graph of a polynomial map over GF(p)",
         description="Compute the complete functional graph of a polynomial map "
@@ -367,11 +418,13 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
 
 __all__ = [
     "TOOLS",
+    "compute_critical_points",
     "compute_cycle_multiplier",
     "compute_dynatomic_polynomial",
     "compute_finite_field_map",
     "compute_map_iterate",
     "compute_orbit_prefix",
+    "verify_critical_points",
     "verify_cycle_multiplier",
     "verify_dynatomic_polynomial",
     "verify_finite_field_map",

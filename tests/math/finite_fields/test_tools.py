@@ -27,6 +27,10 @@ from jacobian.math.finite_fields import (
     finite_polynomial_map,
     projective_line,
 )
+from jacobian.math.finite_fields._jacobian_syzygy_models import (
+    JacobianSyzygyCheckRequest,
+    JacobianSyzygyCheckResult,
+)
 from jacobian.math.finite_fields._models import (
     DirectionRankLedgerRequest,
     FiniteMapTableRequest,
@@ -81,6 +85,7 @@ def test_bundle_declares_atomic_inline_typed_operations() -> None:
         "finite_field.projective_zero_set.compute",
         "finite_field.projective_zero_count.compute",
         "finite_field.algebraic_set.base_change.compute",
+        "finite_field.jacobian_syzygy.check",
     )
     (
         projective,
@@ -101,6 +106,7 @@ def test_bundle_declares_atomic_inline_typed_operations() -> None:
         _,
         _,
         _,
+        jacobian_syzygy,
     ) = bundle
     for operation in bundle:
         assert isinstance(operation, MathTool)
@@ -114,6 +120,9 @@ def test_bundle_declares_atomic_inline_typed_operations() -> None:
     assert point_evaluation.result_type is FiniteFieldElement
     assert paley.request_type is PaleyTournamentRequest
     assert fixed.result_type is HomogeneousFixedSubspace
+    assert jacobian_syzygy.request_type is JacobianSyzygyCheckRequest
+    assert jacobian_syzygy.result_type is JacobianSyzygyCheckResult
+    assert 1 <= len(jacobian_syzygy.discovery_terms) <= 8
 
 
 def test_projective_enumeration_refuses_large_output_before_allocation() -> None:

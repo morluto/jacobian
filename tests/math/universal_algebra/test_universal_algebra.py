@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 from typing import cast
 
 import pytest
@@ -158,6 +159,7 @@ def test_catalog_contains_only_audited_agent_outcomes() -> None:
     assert {tool.operation_id for tool in TOOLS} == {
         "universal_algebra.term.evaluate.compute",
         "universal_algebra.equation.profile.compute",
+        "universal_algebra.implication.countermodel.check",
         "universal_algebra.subalgebra.generated.compute",
         "universal_algebra.map.homomorphism_profile.compute",
         "universal_algebra.congruence.check.compute",
@@ -982,6 +984,83 @@ def test_native_implication_check_uses_mathematical_arguments() -> None:
         ImplicationCountermodelCheckRequest(algebra=magma, premises=(), target=target)
     )
     assert result.is_countermodel
+
+
+class TestImplicationCountermodelPublication:
+    def test_declared_example_executes_through_the_catalog(self) -> None:
+        from jacobian.catalog.catalog import Catalog
+        from jacobian.dispatch import invoke_operation
+
+        operation_id = "universal_algebra.implication.countermodel.check"
+        catalog = Catalog.open()
+        operation = catalog.operation(operation_id)
+        assert operation is not None
+        assert operation.examples
+        payload = copy.deepcopy(operation.examples[0].input)
+        output = invoke_operation(operation_id, payload, catalog).output
+        result = ImplicationCountermodelCheckResult.model_validate(output)
+        assert result.premises[0].status == "HOLDS"
+        assert result.target.status == "FAILS"
+        assert result.is_countermodel is True
+
+    def test_native_and_catalog_results_agree(self) -> None:
+        from jacobian.catalog.catalog import Catalog
+        from jacobian.dispatch import invoke_operation
+
+        operation_id = "universal_algebra.implication.countermodel.check"
+        operation = Catalog.open().operation(operation_id)
+        assert operation is not None
+        payload = copy.deepcopy(operation.examples[0].input)
+        request = ImplicationCountermodelCheckRequest.model_validate(payload)
+        assert ImplicationCountermodelCheckResult.model_validate(
+            invoke_operation(operation_id, payload, Catalog.open()).output
+        ) == compute_implication_countermodel_check(request)
+
+    def test_empty_premises_with_holding_target_is_not_a_countermodel(self) -> None:
+        equation = MagmaEquation(left=_variable_term(0), right=_variable_term(0))
+        result = compute_implication_countermodel_check(
+            ImplicationCountermodelCheckRequest(
+                algebra=_cyclic_addition_algebra(2),
+                premises=(),
+                target=equation,
+            )
+        )
+        assert result.target.status == "HOLDS"
+        assert result.is_countermodel is False
+
+    def test_target_holds_while_premises_hold_is_not_a_countermodel(self) -> None:
+        # Z2 addition is commutative and associative: premises hold, target
+        # holds, so the verdict must be False (adversarial against a checker
+        # that reports True whenever the target merely fails somewhere).
+        magma = _cyclic_addition_algebra(2)
+        x, y = _variable_term(0), _variable_term(1)
+        xy = FlatTerm(
+            nodes=(
+                *x.nodes,
+                *y.nodes,
+                ApplicationTerm(kind="application", operation=0, children=(0, 1)),
+            ),
+            root=2,
+        )
+        yx = FlatTerm(
+            nodes=(
+                *x.nodes,
+                *y.nodes,
+                ApplicationTerm(kind="application", operation=0, children=(1, 0)),
+            ),
+            root=2,
+        )
+        commutative = MagmaEquation(left=xy, right=yx)
+        result = compute_implication_countermodel_check(
+            ImplicationCountermodelCheckRequest(
+                algebra=magma,
+                premises=(commutative,),
+                target=commutative,
+            )
+        )
+        assert result.premises[0].status == "HOLDS"
+        assert result.target.status == "HOLDS"
+        assert result.is_countermodel is False
 
 
 def test_native_implication_check_bounds_raw_premise_tuple_before_deduplication() -> (

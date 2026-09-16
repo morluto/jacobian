@@ -1,6 +1,7 @@
 """Exact bounded arithmetic dynamics."""
 
 from jacobian.math.dynamics.arithmetic._tools import (
+    verify_critical_points,
     verify_cycle_multiplier,
     verify_dynatomic_polynomial,
     verify_finite_field_map,
@@ -11,6 +12,7 @@ from jacobian.math.dynamics.arithmetic.operations import (
     FunctionalGraph,
     OrbitComputation,
     RepeatEvidence,
+    critical_points,
     cycle_multiplier,
     dynatomic_polynomial,
     finite_field_functional_graph,
@@ -26,6 +28,7 @@ __all__ = [
     "FunctionalGraph",
     "OrbitComputation",
     "RepeatEvidence",
+    "critical_points",
     "cycle_multiplier",
     "dynatomic_polynomial",
     "finite_field_functional_graph",
@@ -35,6 +38,7 @@ __all__ = [
     "polynomial_coefficients",
     "polynomial_from_coefficients",
     "validate_cycle",
+    "verify_critical_points",
     "verify_cycle_multiplier",
     "verify_dynatomic_polynomial",
     "verify_finite_field_map",

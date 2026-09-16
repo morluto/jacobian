@@ -9,17 +9,23 @@ from jacobian.math.groups.root_systems._models import (
     RootSystemDataResult,
     SimpleReflectionRequest,
     SimpleReflectionResult,
+    SimpleReflectionsResult,
     WeylGroupOrderResult,
 )
 from jacobian.math.groups.root_systems.operations import (
     root_system_data,
     simple_reflection,
+    simple_reflections,
     weyl_group_order,
 )
 
 
 def _run_root_system_data(request: CartanMatrixRequest) -> RootSystemDataResult:
     return root_system_data(request.matrix)
+
+
+def _run_simple_reflections(request: CartanMatrixRequest) -> SimpleReflectionsResult:
+    return simple_reflections(request.matrix)
 
 
 def _run_simple_reflection(request: SimpleReflectionRequest) -> SimpleReflectionResult:
@@ -81,6 +87,36 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 "a finite-type generalized Cartan matrix, the vector has its "
                 "two simple-root coordinates, and index 0 is below its rank.",
                 input={"matrix": _A2["matrix"], "vector": [1, 0], "simple_index": 0},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="weyl_group.simple_reflections.compute",
+        title="Compute all simple-reflection matrices of a Weyl group",
+        description=(
+            "Compute the exact action matrix of every simple reflection s_i on "
+            "the root, coroot, weight, and coweight lattices of a finite "
+            "crystallographic root system from its Cartan matrix of rank at "
+            f"most {MAX_RANK}. Each returned reflection squares to the "
+            "identity, replayed by the kernel before construction."
+        ),
+        request_type=CartanMatrixRequest,
+        result_type=SimpleReflectionsResult,
+        run=_run_simple_reflections,
+        tags=("algebra", "weyl-group", "root-system", "reflection", "exact"),
+        discovery_terms=(
+            "simple reflection matrices",
+            "Weyl group generators",
+            "reflection action on weights",
+            "coroot reflection",
+        ),
+        examples=(
+            OperationExample(
+                name="a2_simple_reflections",
+                description="Compute the two simple-reflection matrices of A2 on all "
+                "four lattices; the matrix must be a valid finite-type Cartan "
+                "matrix of rank at most 8.",
+                input={"matrix": _A2["matrix"]},
             ),
         ),
     ),

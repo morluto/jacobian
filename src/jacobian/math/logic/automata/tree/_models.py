@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Self
+from typing import Any, Self
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_core import PydanticCustomError
@@ -132,6 +132,82 @@ class AcceptedTreeCountResult(AcceptedTreeCountRequest):
         )
 
 
+class TreeAutomatonTrimRequest(StrictModel):
+    """Restrict an automaton to its reachable and productive states."""
+
+    automaton: BottomUpTreeAutomaton
+
+
+class TreeAutomatonTrimResult(StrictModel):
+    """Trimmed automaton with old/new transport and trimmed-state witnesses."""
+
+    automaton: BottomUpTreeAutomaton
+    trimmed: BottomUpTreeAutomaton
+    kept_states: tuple[int, ...]
+    dropped_states: tuple[int, ...]
+    old_to_new: tuple[int, ...]
+    new_to_old: tuple[int, ...]
+    empty_language: bool
+    witnesses: tuple[TreeStateWitness, ...] = Field(
+        description=(
+            "One canonical minimum-node witness tree per kept state, replayed "
+            "on the trimmed automaton so every witness uses kept states only."
+        )
+    )
+
+    @model_validator(mode="after")
+    def require_canonical_trim(self) -> Self:
+        state_count = self.automaton.state_count
+        if self.kept_states != tuple(sorted(set(self.kept_states))) or any(
+            not 0 <= state < state_count for state in self.kept_states
+        ):
+            raise _validation_error(
+                "kept_states_not_canonical", "kept states must be unique and sorted"
+            )
+        if set(self.kept_states) | set(self.dropped_states) != set(
+            range(state_count)
+        ) or set(self.kept_states) & set(self.dropped_states):
+            raise _validation_error(
+                "kept_dropped_not_partition",
+                "kept and dropped states must partition the automaton states",
+            )
+        if len(self.old_to_new) != state_count:
+            raise _validation_error(
+                "old_to_new_axis", "old-to-new map must cover every source state"
+            )
+        for old, new in enumerate(self.old_to_new):
+            expected = self.kept_states.index(old) if old in self.kept_states else -1
+            if new != expected:
+                raise _validation_error(
+                    "old_to_new_mismatch", "old-to-new map must index the kept states"
+                )
+        if self.new_to_old != self.kept_states:
+            raise _validation_error(
+                "new_to_old_mismatch", "new-to-old map must list the kept states"
+            )
+        if self.empty_language != (not self.kept_states):
+            raise _validation_error(
+                "empty_language_mismatch",
+                "empty language must agree with keeping no state",
+            )
+        if self.trimmed.arity != self.automaton.arity:
+            raise _validation_error(
+                "trimmed_alphabet", "trimming preserves the ranked alphabet"
+            )
+        if tuple(witness.state for witness in self.witnesses) != tuple(
+            range(self.trimmed.state_count)
+        ):
+            raise _validation_error(
+                "witnesses_not_aligned",
+                "witnesses must carry exactly one entry per trimmed state in order",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(cls, **values: Any) -> Self:
+        return cls.model_construct(**values)
+
+
 class TreeAutomatonReachabilityRequest(StrictModel):
     __doc__ = f"""Compute ground-tree reachable states through bottom-up hyperedges.
 
@@ -172,6 +248,8 @@ __all__ = [
     "AcceptedTreeCountRequest",
     "AcceptedTreeCountResult",
     "TreeAutomatonReachabilityRequest",
+    "TreeAutomatonTrimRequest",
+    "TreeAutomatonTrimResult",
     "TreeRunRequest",
     "TreeRunResult",
     "TreeStateChartEntry",

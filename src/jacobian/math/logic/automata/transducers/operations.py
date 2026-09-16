@@ -196,6 +196,15 @@ def coaccessible_states(
     return visited
 
 
+def _admit_trim(transducer: SubsequentialTransducer) -> None:
+    if not isinstance(transducer, SubsequentialTransducer):
+        _reject(
+            "transducer_type",
+            "transducer must be a SubsequentialTransducer value",
+            "transducer",
+        )
+
+
 def trim_subsequential(
     transducer: SubsequentialTransducer,
 ) -> tuple[SubsequentialTransducer, dict[int, int]]:
@@ -203,6 +212,7 @@ def trim_subsequential(
 
     Returns the trimmed transducer and an old-state -> new-state map.
     """
+    _admit_trim(transducer)
     reachable = reachable_states(transducer)
     coaccessible = coaccessible_states(transducer)
     keep = reachable & coaccessible

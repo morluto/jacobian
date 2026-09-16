@@ -13,9 +13,11 @@ from jacobian.catalog.models import (
 )
 from jacobian.math.logic.automata.tree._models import (
     AcceptedTreeCountResult,
+    TreeAutomatonTrimResult,
     TreeRunResult,
 )
 from jacobian.math.logic.automata.tree.values import (
+    MAX_TREE_AUTOMATON_WORK,
     BottomUpTreeAutomaton,
     RankedTree,
     ReachableStateProfile,
@@ -33,9 +35,11 @@ __all__ = [
     "reachable_state_profile",
     "run_tree_automaton",
     "tree_state_chart",
+    "trim_tree_automaton",
     "verify_accepted_tree_count",
     "verify_reachable_state_profile",
     "verify_tree_run",
+    "verify_trim_tree_automaton",
 ]
 
 
@@ -45,6 +49,137 @@ def reachable_state_profile(
     """Return each reachable state and its canonical minimum-node witness tree."""
 
     return _build_reachable_state_profile(automaton)
+
+
+def _productive_states(automaton: BottomUpTreeAutomaton) -> set[int]:
+    """Return every state occurring inside some accepting run.
+
+    Backward least fixed point seeded with the final states: a transition
+    whose target is productive makes all of its child states productive. The
+    pass prices the same saturation it runs and shares the tree-automaton
+    work envelope with the reachability admission.
+    """
+
+    maximum_arity = max(
+        (len(row.child_states) for row in automaton.transitions), default=0
+    )
+    rounds = automaton.state_count + 1
+    if rounds * len(automaton.transitions) * (maximum_arity + 1) > (
+        MAX_TREE_AUTOMATON_WORK
+    ):
+        _reject_tree("tree automaton productivity work bound exceeded")
+    useful = set(automaton.final_states)
+    for _ in range(rounds):
+        grown = set(useful)
+        for transition in automaton.transitions:
+            if transition.target_state in useful:
+                grown.update(transition.child_states)
+        if grown == useful:
+            return useful
+        useful = grown
+    raise RuntimeError("tree automaton productivity did not reach a fixed point")
+
+
+def trim_tree_automaton(
+    automaton: BottomUpTreeAutomaton,
+) -> TreeAutomatonTrimResult:
+    """Restrict an automaton to its reachable and productive states.
+
+    Every accepting run of the source uses reachable productive states only,
+    so restriction preserves the accepted language exactly. The empty
+    language trims to the canonical one-state automaton with no transitions
+    and no final states. Witnesses are replayed on the trimmed automaton, so
+    each uses kept states only.
+    """
+
+    profile = _build_reachable_state_profile(automaton)
+    kept = tuple(sorted(set(profile.reachable_states) & _productive_states(automaton)))
+    dropped = tuple(
+        state for state in range(automaton.state_count) if state not in set(kept)
+    )
+    old_to_new = tuple(
+        kept.index(state) if state in set(kept) else -1
+        for state in range(automaton.state_count)
+    )
+    if not kept:
+        trimmed = BottomUpTreeAutomaton(
+            state_count=1,
+            arity=automaton.arity,
+            transitions=(),
+            final_states=(),
+        )
+        return TreeAutomatonTrimResult._from_kernel(
+            automaton=automaton,
+            trimmed=trimmed,
+            kept_states=(),
+            dropped_states=dropped,
+            old_to_new=old_to_new,
+            new_to_old=(),
+            empty_language=True,
+            witnesses=(),
+        )
+    kept_set = set(kept)
+    remap = {old: new for new, old in enumerate(kept)}
+    trimmed = BottomUpTreeAutomaton(
+        state_count=len(kept),
+        arity=automaton.arity,
+        transitions=tuple(
+            sorted(
+                (
+                    TreeAutomatonTransition(
+                        symbol=transition.symbol,
+                        child_states=tuple(
+                            remap[state] for state in transition.child_states
+                        ),
+                        target_state=remap[transition.target_state],
+                    )
+                    for transition in automaton.transitions
+                    if transition.target_state in kept_set
+                    and all(state in kept_set for state in transition.child_states)
+                ),
+                key=lambda row: (row.symbol, row.child_states, row.target_state),
+            )
+        ),
+        final_states=tuple(
+            sorted(
+                remap[state] for state in automaton.final_states if state in kept_set
+            )
+        ),
+    )
+    replay = _build_reachable_state_profile(trimmed)
+    if set(replay.reachable_states) != set(range(len(kept))):
+        raise OperationDomainValidationError(
+            location=("automaton",),
+            code="tree_automata.trim_replay_mismatch",
+            message="a kept state is unreachable in the trimmed automaton",
+        )
+    if not trimmed.final_states:
+        raise OperationDomainValidationError(
+            location=("automaton",),
+            code="tree_automata.trim_replay_mismatch",
+            message="a nonempty trim must retain a final state",
+        )
+    return TreeAutomatonTrimResult._from_kernel(
+        automaton=automaton,
+        trimmed=trimmed,
+        kept_states=kept,
+        dropped_states=dropped,
+        old_to_new=old_to_new,
+        new_to_old=kept,
+        empty_language=not trimmed.final_states,
+        witnesses=replay.witnesses,
+    )
+
+
+def verify_trim_tree_automaton(claim: TreeAutomatonTrimResult) -> bool:
+    """Verify a trim against its retained source automaton."""
+
+    try:
+        return trim_tree_automaton(claim.automaton) == claim
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
+        return False
 
 
 def run_tree_automaton(

@@ -10,6 +10,8 @@ from jacobian.math.logic.automata.tree._models import (
     AcceptedTreeCountRequest,
     AcceptedTreeCountResult,
     TreeAutomatonReachabilityRequest,
+    TreeAutomatonTrimRequest,
+    TreeAutomatonTrimResult,
     TreeRunRequest,
     TreeRunResult,
 )
@@ -17,6 +19,7 @@ from jacobian.math.logic.automata.tree.operations import (
     _accepted_tree_count_admitted,
     _tree_state_chart_unchecked,
     reachable_state_profile,
+    trim_tree_automaton,
 )
 from jacobian.math.logic.automata.tree.values import (
     ReachableStateProfile,
@@ -62,6 +65,14 @@ def compute_tree_automaton_reachability(
     """Compute the exact reachable-state profile with minimum tree witnesses."""
 
     return reachable_state_profile(request.automaton)
+
+
+def compute_tree_automaton_trim(
+    request: TreeAutomatonTrimRequest,
+) -> TreeAutomatonTrimResult:
+    """Restrict an automaton to its reachable and productive states."""
+
+    return trim_tree_automaton(request.automaton)
 
 
 # Automaton: states {0, 1}, symbols {a (arity 0), f (arity 2)}
@@ -113,6 +124,31 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 "constructor; every transition's symbol must index the "
                 "ranked alphabet and its child_states count must equal "
                 "arity[symbol].",
+                input={
+                    "automaton": _RUN_EXAMPLE["automaton"],
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="tree_automaton.trim.compute",
+        title="Trim a bottom-up tree automaton",
+        description="Restrict a bottom-up nondeterministic tree automaton to the "
+        "states that are both reachable by a ground tree and productive inside "
+        "an accepting run, returning the trimmed automaton, old/new state "
+        "maps, and one replayed minimum-node witness tree per kept state on "
+        "the trimmed automaton. Restriction preserves the accepted language "
+        "exactly; the empty language trims to the canonical one-state "
+        "automaton with no transitions and no final states.",
+        request_type=TreeAutomatonTrimRequest,
+        result_type=TreeAutomatonTrimResult,
+        run=compute_tree_automaton_trim,
+        tags=("tree-automata", "trim", "reachability", "exact"),
+        discovery_terms=("tree automaton trim", "useful states", "trimming"),
+        examples=(
+            OperationExample(
+                name="drop_unreachable_state",
+                description="Drop the unreachable state 1 from a two-state automaton.",
                 input={
                     "automaton": _RUN_EXAMPLE["automaton"],
                 },

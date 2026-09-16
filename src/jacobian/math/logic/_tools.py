@@ -78,11 +78,18 @@ TOOLS: MathTools = (
         title="Find a model or decide a bounded SMT-LIB query",
         description=(
             "Decide one bounded quantifier-free SMT-LIB query and return SAT, "
-            "UNSAT, or UNKNOWN; SAT includes a satisfying model projection."
-            " timeout_ms provides up to 120 seconds for the full lifecycle without "
-            "increasing the fixed solver work limit. Resource exhaustion and backend "
-            "failures raise execution errors; UNKNOWN denotes a healthy inconclusive "
-            "solver answer."
+            "UNSAT, or UNKNOWN. The admitted fragments are QF_UF, QF_LIA, QF_LRA, "
+            "and the bounded QF_NRA fragment: quantifier-free Boolean combinations "
+            "of rational-polynomial equalities, inequalities, and strict "
+            "inequalities over declared real variables, with no division, integer "
+            "variables, or transcendental operators. A QF_NRA SAT result carries an "
+            "exact source-bound model whose components are canonical rationals or "
+            "exact real algebraic roots (never floats); QF_NRA time, work, or "
+            "model-materialization limits return UNKNOWN with a bounded reason. "
+            "Other fragments return a bounded display model. timeout_ms provides "
+            "up to 120 seconds for the full lifecycle without increasing the fixed "
+            "solver work limit. Resource exhaustion and backend failures raise "
+            "execution errors; UNKNOWN denotes a healthy inconclusive solver answer."
         ),
         request_type=SmtSolveRequest,
         result_type=SmtSolveResult,
@@ -91,6 +98,8 @@ TOOLS: MathTools = (
         discovery_terms=(
             "satisfying model",
             "quantifier-free linear integer constraints",
+            "bounded nonlinear real arithmetic satisfiability",
+            "polynomial equality and inequality feasibility",
         ),
         examples=(
             OperationExample(

@@ -9,10 +9,12 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.logic.automata.petri_nets._models import (
+    MAX_FIRING_SEQUENCE_LENGTH,
     MAX_SIPHON_TRAP_PLACES,
     MAX_SIPHON_TRAP_WORK,
     EnabledTransitionsResult,
     FireTransitionResult,
+    FiringSequenceReplayResult,
     IncidenceMatrixResult,
     PetriMarkingState,
     PetriPlaceSubset,
@@ -35,9 +37,11 @@ __all__ = [
     "find_minimal_traps",
     "fire_transition",
     "reachability_graph",
+    "replay_firing_sequence",
     "siphon_trap",
     "verify_enabled_transitions",
     "verify_fire_transition",
+    "verify_firing_sequence_replay",
     "verify_incidence_matrix",
     "verify_reachability_graph",
     "verify_siphon_trap",
@@ -127,6 +131,117 @@ def fire_transition(
         status="FIRED" if success else "NOT_ENABLED",
         new_marking=Marking(tokens=new_tokens),
     )
+
+
+def _require_sequence_axes(net: PetriNet, sequence: tuple[int, ...]) -> None:
+    """Share the catalog sequence-axis admission with native callers."""
+
+    if len(sequence) > MAX_FIRING_SEQUENCE_LENGTH:
+        raise OperationResourceAdmissionError(
+            location=("sequence",),
+            code="petri_net.firing_sequence_length",
+            message="firing sequence exceeds the admitted replay length",
+        )
+    for transition in sequence:
+        if type(transition) is not int or not 0 <= transition < net.transition_count:
+            raise OperationDomainValidationError(
+                location=("sequence",),
+                code="petri_net.transition_axis",
+                message="sequence transitions must use the net axis",
+            )
+
+
+def replay_firing_sequence(
+    net: PetriNet, marking: Marking, sequence: tuple[int, ...]
+) -> FiringSequenceReplayResult:
+    """Replay a bounded transition sequence step by step from a marking."""
+
+    _require_marking_size(net, marking)
+    _require_sequence_axes(net, sequence)
+    current = list(marking.tokens)
+    prefix: list[Marking] = []
+    parikh = [0] * net.transition_count
+    for index, transition in enumerate(sequence):
+        deficit = tuple(
+            max(0, net.pre[place][transition] - current[place])
+            for place in range(net.place_count)
+        )
+        if any(entry > 0 for entry in deficit):
+            return FiringSequenceReplayResult._from_kernel(
+                net=net,
+                marking=marking,
+                sequence=tuple(sequence),
+                status="BLOCKED",
+                prefix_markings=tuple(prefix),
+                final_marking=None,
+                parikh=tuple(parikh),
+                state_equation_residual=tuple(
+                    current[place]
+                    - marking.tokens[place]
+                    - sum(
+                        (net.post[place][t] - net.pre[place][t]) * parikh[t]
+                        for t in range(net.transition_count)
+                    )
+                    for place in range(net.place_count)
+                ),
+                blocked_index=index,
+                deficit=deficit,
+                first_deficient_place=next(
+                    place for place, entry in enumerate(deficit) if entry > 0
+                ),
+            )
+        current = [
+            current[place] - net.pre[place][transition] + net.post[place][transition]
+            for place in range(net.place_count)
+        ]
+        if any(token > MAX_PETRI_MARKING for token in current):
+            raise OperationResourceAdmissionError(
+                location=("net", "sequence"),
+                code="petri_net.firing_sequence_token_bound",
+                message="a replayed marking escapes the declared token envelope",
+            )
+        prefix.append(Marking(tokens=tuple(current)))
+        parikh[transition] += 1
+    final = Marking(tokens=tuple(current))
+    residual = tuple(
+        final.tokens[place]
+        - marking.tokens[place]
+        - sum(
+            (net.post[place][t] - net.pre[place][t]) * parikh[t]
+            for t in range(net.transition_count)
+        )
+        for place in range(net.place_count)
+    )
+    if any(entry != 0 for entry in residual):  # pragma: no cover - kernel invariant.
+        raise OperationDomainValidationError(
+            location=("net", "sequence"),
+            code="petri_net.state_equation_mismatch",
+            message="replayed firing violates the state equation",
+        )
+    return FiringSequenceReplayResult._from_kernel(
+        net=net,
+        marking=marking,
+        sequence=tuple(sequence),
+        status="FIRES",
+        prefix_markings=tuple(prefix),
+        final_marking=final,
+        parikh=tuple(parikh),
+        state_equation_residual=residual,
+        blocked_index=None,
+        deficit=None,
+        first_deficient_place=None,
+    )
+
+
+def verify_firing_sequence_replay(claim: FiringSequenceReplayResult) -> bool:
+    """Verify a firing-sequence replay against its retained source context."""
+
+    try:
+        return replay_firing_sequence(claim.net, claim.marking, claim.sequence) == claim
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
+        return False
 
 
 def compute_incidence_matrix(net: PetriNet) -> IncidenceMatrixResult:

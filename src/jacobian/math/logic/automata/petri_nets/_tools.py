@@ -11,6 +11,8 @@ from jacobian.math.logic.automata.petri_nets._models import (
     EnabledTransitionsResult,
     FireTransitionRequest,
     FireTransitionResult,
+    FiringSequenceReplayRequest,
+    FiringSequenceReplayResult,
     IncidenceMatrixRequest,
     IncidenceMatrixResult,
     ReachabilityRequest,
@@ -23,6 +25,7 @@ from jacobian.math.logic.automata.petri_nets.operations import (
     enabled_transitions,
     fire_transition,
     reachability_graph,
+    replay_firing_sequence,
     siphon_trap,
 )
 
@@ -47,6 +50,12 @@ def compute_reachability(request: ReachabilityRequest) -> ReachabilityResult:
 
 def compute_siphon_trap(request: SiphonTrapRequest) -> SiphonTrapResult:
     return siphon_trap(request.net)
+
+
+def compute_firing_sequence_replay(
+    request: FiringSequenceReplayRequest,
+) -> FiringSequenceReplayResult:
+    return replay_firing_sequence(request.net, request.marking, request.sequence)
 
 
 # Simple net: 2 places, 2 transitions
@@ -148,6 +157,32 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                     "net": _NET["net"],
                     "initial_marking": {"tokens": [1, 0]},
                     "max_states": 100,
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="petri_net.firing_sequence.replay.compute",
+        title="Replay a bounded Petri-net firing sequence",
+        description="Fire one bounded transition sequence step by step from a source "
+        "marking. FIRES returns every prefix marking, the final marking, the "
+        "Parikh vector, and a zero state-equation residual witnessing "
+        "M_k = M_0 + C x_k. BLOCKED returns the first blocked index with the "
+        "source prefix marking and the complete place-deficit profile. A "
+        "later transition cannot repair an earlier disabled one.",
+        request_type=FiringSequenceReplayRequest,
+        result_type=FiringSequenceReplayResult,
+        run=compute_firing_sequence_replay,
+        tags=("petri-net", "firing-sequence", "replay", "exact"),
+        discovery_terms=("firing sequence", "sequence replay", "parikh vector"),
+        examples=(
+            OperationExample(
+                name="two_step_replay",
+                description="Replay transition 0 twice from marking [2, 0].",
+                input={
+                    "net": _NET["net"],
+                    "marking": {"tokens": [2, 0]},
+                    "sequence": [0, 0],
                 },
             ),
         ),

@@ -257,6 +257,8 @@ class SmtUnsatCoreRequest(SmtSolveRequest):
         parse below.
         """
 
+        if self.logic is SmtLogic.QF_NRA:
+            raise _logic_error("UNSAT cores do not admit the QF_NRA fragment")
         tokens = _tokenize_smtlib(self.smtlib)
         if len(tokens) > _MAX_CORE_TOKENS:
             raise _logic_error(

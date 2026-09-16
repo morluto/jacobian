@@ -23,12 +23,15 @@ from jacobian.math.logic.automata.transducers._models import (
     ComposeRequest,
     RelationPathReplayRequest,
     SubseqRunRequest,
+    TrimRequest,
+    TrimResult,
 )
 from jacobian.math.logic.automata.transducers._tools import (
     TOOLS,
     compute_compose,
     compute_relation_path_replay,
     compute_run,
+    compute_trim,
 )
 
 
@@ -197,6 +200,162 @@ class TestNativeTransformations:
         assert trimmed.state_count == 1
         assert state_map == {0: 0}
 
+    def test_trim_drops_reachable_dead_state_and_its_transitions(self) -> None:
+        # State 1 is reachable (0 -1-> 1) but dead: no final-output state is
+        # reachable from it. A reachable-only trim would keep it; the exact
+        # trim must drop both the state and the transition leading into it.
+        source = SubsequentialTransducer(
+            input_alphabet_size=2,
+            output_alphabet_size=2,
+            state_count=2,
+            initial_state=0,
+            transitions=(
+                SubseqTransition(source=0, input_symbol=0, target=0, output=(0,)),
+                SubseqTransition(source=0, input_symbol=1, target=1, output=(1,)),
+                SubseqTransition(source=1, input_symbol=0, target=1, output=(0,)),
+                SubseqTransition(source=1, input_symbol=1, target=1, output=(1,)),
+            ),
+            final_outputs=(SubseqFinalOutput(state=0, output=()),),
+        )
+        result = compute_trim(TrimRequest(transducer=source))
+
+        assert result.trimmed.state_count == 1
+        assert result.old_to_new == ((0, 0),)
+        assert result.new_to_old == (0,)
+        assert result.trimmed.transitions == (
+            SubseqTransition(source=0, input_symbol=0, target=0, output=(0,)),
+        )
+        assert result.trimmed.final_outputs == (SubseqFinalOutput(state=0, output=()),)
+
+    def test_trim_of_live_machine_is_the_identity_restriction(self) -> None:
+        result = compute_trim(TrimRequest(transducer=_flip()))
+
+        assert result.trimmed == _flip()
+        assert result.old_to_new == ((0, 0),)
+        assert result.new_to_old == (0,)
+
+    def test_trim_without_final_states_returns_the_canonical_placeholder(self) -> None:
+        source = SubsequentialTransducer(
+            input_alphabet_size=1,
+            output_alphabet_size=1,
+            state_count=2,
+            initial_state=0,
+            transitions=(
+                SubseqTransition(source=0, input_symbol=0, target=1, output=(0,)),
+            ),
+            final_outputs=(),
+        )
+        result = compute_trim(TrimRequest(transducer=source))
+
+        assert result.trimmed.state_count == 1
+        assert result.trimmed.initial_state == 0
+        assert result.trimmed.transitions == ()
+        assert result.trimmed.final_outputs == ()
+        assert result.old_to_new == ()
+        assert result.new_to_old == ()
+
+    def test_trim_preserves_the_partial_function(self) -> None:
+        from itertools import product
+
+        source = SubsequentialTransducer(
+            input_alphabet_size=2,
+            output_alphabet_size=2,
+            state_count=3,
+            initial_state=0,
+            transitions=(
+                SubseqTransition(source=0, input_symbol=0, target=0, output=(0,)),
+                SubseqTransition(source=0, input_symbol=1, target=1, output=(1,)),
+                SubseqTransition(source=1, input_symbol=0, target=1, output=(0,)),
+                SubseqTransition(source=1, input_symbol=1, target=1, output=(1,)),
+                SubseqTransition(source=2, input_symbol=0, target=2, output=(0,)),
+                SubseqTransition(source=2, input_symbol=1, target=2, output=(1,)),
+            ),
+            final_outputs=(SubseqFinalOutput(state=0, output=(1,)),),
+        )
+        result = compute_trim(TrimRequest(transducer=source))
+
+        def function_value(
+            transducer: SubsequentialTransducer, word: tuple[int, ...]
+        ) -> tuple[bool, tuple[int, ...]]:
+            status, output, *_ = run_subsequential(transducer, word)
+            return (status == "OUTPUT", output)
+
+        for length in range(6):
+            for raw in product((0, 1), repeat=length):
+                word = tuple(raw)
+                assert function_value(source, word) == function_value(
+                    result.trimmed, word
+                ), word
+
+    def test_trimmed_states_are_exactly_the_live_states(self) -> None:
+        from jacobian.math.logic.automata.transducers import (
+            coaccessible_states,
+            reachable_states,
+        )
+
+        source = SubsequentialTransducer(
+            input_alphabet_size=2,
+            output_alphabet_size=2,
+            state_count=3,
+            initial_state=0,
+            transitions=(
+                SubseqTransition(source=0, input_symbol=0, target=0, output=(0,)),
+                SubseqTransition(source=0, input_symbol=1, target=1, output=(1,)),
+                SubseqTransition(source=1, input_symbol=0, target=1, output=(0,)),
+                SubseqTransition(source=1, input_symbol=1, target=1, output=(1,)),
+                SubseqTransition(source=2, input_symbol=0, target=2, output=(0,)),
+                SubseqTransition(source=2, input_symbol=1, target=2, output=(1,)),
+            ),
+            final_outputs=(SubseqFinalOutput(state=0, output=(1,)),),
+        )
+        result = compute_trim(TrimRequest(transducer=source))
+        live = set(range(result.trimmed.state_count))
+
+        assert reachable_states(result.trimmed) == live
+        assert coaccessible_states(result.trimmed) == live
+        assert set(result.new_to_old) == reachable_states(source) & (
+            coaccessible_states(source)
+        )
+
+    def test_trim_native_and_catalog_results_agree(self) -> None:
+        request = TrimRequest(transducer=_flip())
+        result = compute_trim(request)
+        trimmed, state_map = trim_subsequential(request.transducer)
+
+        assert result.transducer == request.transducer
+        assert result.trimmed == trimmed
+        assert dict(result.old_to_new) == state_map
+        decoded = TrimResult.model_validate_json(result.model_dump_json())
+        assert decoded == result
+
+    def test_trim_result_rejects_disagreeing_state_maps(self) -> None:
+        request = TrimRequest(transducer=_flip())
+        result = compute_trim(request)
+        payload = result.model_dump(mode="json")
+        payload["new_to_old"] = [1]
+        with pytest.raises(ValidationError, match="outside the source"):
+            TrimResult.model_validate(payload)
+        payload = result.model_dump(mode="json")
+        payload["old_to_new"] = [[0, 1]]
+        with pytest.raises(ValidationError, match="new-state range"):
+            TrimResult.model_validate(payload)
+
+    def test_trim_declared_example_executes_through_the_catalog(self) -> None:
+        import copy
+
+        from jacobian.catalog.catalog import Catalog
+        from jacobian.dispatch import invoke_operation
+
+        operation_id = "transducer.subsequential.trim.compute"
+        catalog = Catalog.open()
+        operation = catalog.operation(operation_id)
+        assert operation is not None
+        payload = copy.deepcopy(operation.examples[0].input)
+        output = invoke_operation(operation_id, payload, catalog).output
+        result = TrimResult.model_validate(output)
+        assert result.trimmed.state_count == 1
+        assert result.new_to_old == (0,)
+
     def test_rational_inverse_swaps_labels_and_alphabets(self) -> None:
         relation = _relation().model_copy(update={"output_alphabet_size": 3})
         inverse = invert_rational(relation)
@@ -213,6 +372,7 @@ class TestNativeTransformations:
             "transducer.relation.path.replay.compute",
             "transducer.subsequential.compose.compute",
             "transducer.subsequential.run.compute",
+            "transducer.subsequential.trim.compute",
         }
 
 

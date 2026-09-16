@@ -10,11 +10,14 @@ from jacobian.math.logic.automata.transducers._models import (
     RelationPathReplayResult,
     SubseqRunRequest,
     SubseqRunResult,
+    TrimRequest,
+    TrimResult,
 )
 from jacobian.math.logic.automata.transducers.operations import (
     compose_subsequential,
     replay_rational_path,
     run_subsequential,
+    trim_subsequential,
 )
 
 
@@ -37,6 +40,11 @@ def compute_compose(request: ComposeRequest) -> ComposeResult:
         request,
         transducer=compose_subsequential(request.first, request.second),
     )
+
+
+def compute_trim(request: TrimRequest) -> TrimResult:
+    trimmed, old_to_new = trim_subsequential(request.transducer)
+    return TrimResult._from_kernel(request, trimmed=trimmed, old_to_new=old_to_new)
 
 
 def compute_relation_path_replay(
@@ -73,6 +81,24 @@ _FLIP = {
         {"source": 0, "input_symbol": 0, "target": 0, "output": [1]},
         {"source": 0, "input_symbol": 1, "target": 0, "output": [0]},
     ],
+}
+
+# Three-state source with one reachable dead state (1) and one unreachable
+# state (2). Only state 0 can reach the final output, so trim keeps {0}.
+_TRIM_SOURCE = {
+    "input_alphabet_size": 2,
+    "output_alphabet_size": 2,
+    "state_count": 3,
+    "initial_state": 0,
+    "transitions": [
+        {"source": 0, "input_symbol": 0, "target": 0, "output": [0]},
+        {"source": 0, "input_symbol": 1, "target": 1, "output": [1]},
+        {"source": 1, "input_symbol": 0, "target": 1, "output": [0]},
+        {"source": 1, "input_symbol": 1, "target": 1, "output": [1]},
+        {"source": 2, "input_symbol": 0, "target": 2, "output": [0]},
+        {"source": 2, "input_symbol": 1, "target": 2, "output": [1]},
+    ],
+    "final_outputs": [{"state": 0, "output": []}],
 }
 
 _RELATION = {
@@ -120,6 +146,29 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 name="identity_then_flip",
                 description="Compose the binary identity with the binary symbol flip.",
                 input={"first": _IDENTITY, "second": _FLIP},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="transducer.subsequential.trim.compute",
+        title="Trim a subsequential transducer to live states",
+        description="Restrict one subsequential transducer to states that are both "
+        "reachable from the initial state and able to reach a final-output state. "
+        "Return the restricted transducer with exact old-to-new and new-to-old "
+        "state maps. The restriction preserves the partial function: every defined "
+        "input word produces the same output word as before.",
+        request_type=TrimRequest,
+        result_type=TrimResult,
+        run=compute_trim,
+        tags=("transducer", "subsequential", "trim", "exact"),
+        discovery_terms=("trim", "reachable states", "coaccessible states"),
+        examples=(
+            OperationExample(
+                name="drop_dead_and_unreachable_states",
+                description="Trim a three-state transducer with one reachable dead "
+                "state and one unreachable state down to its live single-state "
+                "restriction.",
+                input={"transducer": _TRIM_SOURCE},
             ),
         ),
     ),

@@ -132,6 +132,133 @@ class ComposeResult(ComposeRequest):
         )
 
 
+class TrimRequest(StrictModel):
+    transducer: SubsequentialTransducer
+
+
+class TrimResult(TrimRequest):
+    """A subsequential transducer restricted to its live states.
+
+    Deserialization checks only the canonical shape of a claimed restriction:
+    the two state maps are inverse bijections and every retained index is in
+    range.  The owner-local kernel establishes that the kept states are exactly
+    the reachable and coaccessible ones; trusted kernel output is constructed
+    through ``_from_kernel`` below.
+    """
+
+    trimmed: SubsequentialTransducer
+    old_to_new: tuple[tuple[int, int], ...] = Field(
+        description="Old-state to new-state pairs in strictly increasing old-state order."
+    )
+    new_to_old: tuple[int, ...] = Field(
+        description="Old state retained at each new-state index."
+    )
+
+    @model_validator(mode="after")
+    def require_canonical_trim_shape(self) -> Self:
+        source_count = self.transducer.state_count
+        if self.new_to_old != tuple(sorted(set(self.new_to_old))):
+            raise _validation_error(
+                "trim_new_to_old_not_canonical",
+                "new_to_old must list each retained old state once in increasing order",
+            )
+        if any(not 0 <= old < source_count for old in self.new_to_old):
+            raise _validation_error(
+                "trim_new_to_old_out_of_range",
+                "new_to_old lists an old state outside the source transducer",
+            )
+        olds = [old for old, _ in self.old_to_new]
+        news = [new for _, new in self.old_to_new]
+        if tuple(olds) != tuple(sorted(set(olds))):
+            raise _validation_error(
+                "trim_old_to_new_not_canonical",
+                "old_to_new must carry each mapped old state once in increasing order",
+            )
+        if sorted(news) != list(range(len(self.new_to_old))):
+            raise _validation_error(
+                "trim_new_ids_not_canonical",
+                "old_to_new must address exactly the new-state range",
+            )
+        if set(olds) != set(self.new_to_old):
+            raise _validation_error(
+                "trim_maps_disagree",
+                "old_to_new and new_to_old must describe the same retained states",
+            )
+        if (
+            self.trimmed.input_alphabet_size != self.transducer.input_alphabet_size
+            or self.trimmed.output_alphabet_size != self.transducer.output_alphabet_size
+        ):
+            raise _validation_error(
+                "trim_alphabet_mismatch",
+                "the trimmed transducer must retain both source alphabets",
+            )
+        if not self.new_to_old:
+            if (
+                self.trimmed.state_count != 1
+                or self.trimmed.initial_state != 0
+                or self.trimmed.transitions
+                or self.trimmed.final_outputs
+            ):
+                raise _validation_error(
+                    "trim_empty_restriction_shape",
+                    "an empty restriction must be the canonical single-state transducer",
+                )
+            return self
+        if self.trimmed.state_count != len(self.new_to_old):
+            raise _validation_error(
+                "trim_state_count_mismatch",
+                "the trimmed state count must match the retained-state map",
+            )
+        forward = dict(self.old_to_new)
+        if self.transducer.initial_state not in forward:
+            raise _validation_error(
+                "trim_initial_state_dropped",
+                "a nonempty restriction must retain the source initial state",
+            )
+        if self.trimmed.initial_state != forward[self.transducer.initial_state]:
+            raise _validation_error(
+                "trim_initial_state_mismatch",
+                "the trimmed initial state must follow the old-to-new map",
+            )
+        if any(
+            not 0 <= transition.source < self.trimmed.state_count
+            or not 0 <= transition.target < self.trimmed.state_count
+            for transition in self.trimmed.transitions
+        ):
+            raise _validation_error(
+                "trim_transition_out_of_range",
+                "a trimmed transition leaves the retained state range",
+            )
+        if any(
+            not 0 <= final.state < self.trimmed.state_count
+            for final in self.trimmed.final_outputs
+        ):
+            raise _validation_error(
+                "trim_final_output_out_of_range",
+                "a trimmed final output leaves the retained state range",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: TrimRequest,
+        *,
+        trimmed: SubsequentialTransducer,
+        old_to_new: dict[int, int],
+    ) -> Self:
+        """Construct a restriction emitted by the trusted owner-local kernel."""
+
+        pairs = tuple(sorted(old_to_new.items()))
+        new_to_old = tuple(old for _, old in sorted((new, old) for old, new in pairs))
+        return cls.model_construct(
+            transducer=request.transducer,
+            trimmed=trimmed,
+            old_to_new=pairs,
+            new_to_old=new_to_old,
+        )
+
+
 class RelationPathReplayRequest(StrictModel):
     transducer: RationalTransducer
     initial_state: int = Field(ge=0, lt=MAX_FST_STATES)
@@ -211,4 +338,6 @@ __all__ = [
     "RelationPathReplayResult",
     "SubseqRunRequest",
     "SubseqRunResult",
+    "TrimRequest",
+    "TrimResult",
 ]

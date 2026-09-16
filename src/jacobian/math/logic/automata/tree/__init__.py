@@ -4,9 +4,11 @@ from jacobian.math.logic.automata.tree.operations import (
     accepted_tree_count,
     reachable_state_profile,
     run_tree_automaton,
+    trim_tree_automaton,
     verify_accepted_tree_count,
     verify_reachable_state_profile,
     verify_tree_run,
+    verify_trim_tree_automaton,
 )
 from jacobian.math.logic.automata.tree.values import (
     BottomUpTreeAutomaton,
@@ -23,7 +25,9 @@ __all__ = [
     "accepted_tree_count",
     "reachable_state_profile",
     "run_tree_automaton",
+    "trim_tree_automaton",
     "verify_accepted_tree_count",
     "verify_reachable_state_profile",
     "verify_tree_run",
+    "verify_trim_tree_automaton",
 ]

@@ -204,13 +204,16 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     MathTool(
         operation_id="transducer.subsequential.minimize.compute",
         title="Minimize a subsequential transducer",
-        description="Merge the coarsest exact-output bisimulation of one "
-        "subsequential transducer by partition refinement, preserving the "
-        "realized partial function exactly. Return the quotient transducer "
-        "with old-to-new and new-to-old state maps, the merged partition, "
-        "a Myhill-Nerode-style state-distinguishability table, and a replay "
-        "of the shipped run semantics on every word up to a bounded sample "
-        "length.",
+        description="Normalize one subsequential transducer by pushing each live "
+        "state's common output prefix onto its incoming transitions, then merge "
+        "the coarsest exact-output bisimulation of the normalized machine by "
+        "partition refinement, preserving the realized partial function exactly. "
+        "Because pushing can only coarsen the bisimulation, the quotient is the "
+        "state-minimal transducer for this value model, which has no separate "
+        "initial output. Return the quotient transducer with old-to-new and "
+        "new-to-old state maps, the merged partition, a Myhill-Nerode-style "
+        "state-distinguishability table, and a replay of the shipped run "
+        "semantics on every word up to a bounded sample length.",
         request_type=MinimizeRequest,
         result_type=MinimizeResult,
         run=compute_minimize,

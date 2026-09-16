@@ -49,6 +49,36 @@ def _three_state_machine() -> SubsequentialTransducer:
     )
 
 
+def _offset_state_machine() -> SubsequentialTransducer:
+    """Two inequivalent states whose difference is a pushable output prefix.
+
+    State 1 realizes the constant function ``w |-> (0,)`` and state 2 the
+    constant function ``w |-> ()``.  They are inequivalent under the raw
+    exact-output bisimulation, but pushing state 1's final output onto the
+    ``0 --0--> 1`` transition makes both realize the constant ``()`` function.
+    """
+
+    return SubsequentialTransducer(
+        input_alphabet_size=2,
+        output_alphabet_size=2,
+        state_count=3,
+        initial_state=0,
+        transitions=(
+            SubseqTransition(source=0, input_symbol=0, target=1, output=()),
+            SubseqTransition(source=0, input_symbol=1, target=2, output=()),
+            SubseqTransition(source=1, input_symbol=0, target=1, output=()),
+            SubseqTransition(source=1, input_symbol=1, target=1, output=()),
+            SubseqTransition(source=2, input_symbol=0, target=2, output=()),
+            SubseqTransition(source=2, input_symbol=1, target=2, output=()),
+        ),
+        final_outputs=(
+            SubseqFinalOutput(state=0, output=()),
+            SubseqFinalOutput(state=1, output=(0,)),
+            SubseqFinalOutput(state=2, output=()),
+        ),
+    )
+
+
 def _run_from(
     transducer: SubsequentialTransducer, state: int, word: tuple[int, ...]
 ) -> tuple[bool, tuple[int, ...]]:
@@ -202,6 +232,42 @@ class TestWitnessSoundness:
                     assert _run_from(
                         source, row.first_state, row.witness_word
                     ) != _run_from(source, row.second_state, row.witness_word)
+
+
+class TestMinimality:
+    def test_output_prefix_pushing_merges_offset_states(self) -> None:
+        source = _offset_state_machine()
+        result = minimize_subsequential(source, 3)
+
+        assert result.minimized.state_count == 2
+        assert result.partition == ((0,), (1, 2))
+        for length in range(6):
+            for raw in product((0, 1), repeat=length):
+                word = tuple(raw)
+                assert (
+                    run_subsequential(source, word)[:2]
+                    == run_subsequential(result.minimized, word)[:2]
+                ), word
+
+    def test_minimization_is_idempotent(self) -> None:
+        for source in (_three_state_machine(), _offset_state_machine()):
+            once = minimize_subsequential(source, 3)
+            twice = minimize_subsequential(once.minimized, 3)
+            assert twice.minimized.state_count == once.minimized.state_count
+            assert twice.minimized == once.minimized
+
+    def test_no_two_minimized_states_are_equivalent(self) -> None:
+        for source in (_three_state_machine(), _offset_state_machine()):
+            minimized = minimize_subsequential(source, 3).minimized
+            signatures = set()
+            for state in range(minimized.state_count):
+                signature = tuple(
+                    _run_from(minimized, state, word)
+                    for length in range(minimized.state_count + 1)
+                    for word in product((0, 1), repeat=length)
+                )
+                signatures.add(signature)
+            assert len(signatures) == minimized.state_count
 
 
 class TestBoundary:

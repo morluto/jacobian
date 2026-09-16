@@ -42,26 +42,37 @@ from jacobian.math.geometry.polytopes._models import (
     COORDINATE_DIGITS,
     MAX_BOUNDEDNESS_COMBINATIONS,
     MAX_COMPUTED_FACETS,
+    MAX_COORDINATE_LABEL_LENGTH,
     MAX_DIMENSION,
     MAX_EXTREMALITY_HEIGHT_WORK,
     MAX_FACET_COORDINATE_DIGITS,
+    MAX_FACET_DIMENSION,
     MAX_FACET_INCIDENCES,
     MAX_FACET_SIGN_TESTS,
     MAX_HULL_SUBFACETS,
     MAX_SUPPORT_ORIENTATION_TESTS,
     MAX_SUPPORT_VERTEX_SUBSETS,
     MAX_VERTICES,
+    EdgeProfileResult,
     FacetIncidenceResult,
+    JoinResult,
+    JoinVertexMap,
     PolytopeAdmissionError,
+    PolytopeEdge,
     PolytopeSupportResult,
     PolytopeVolumeResult,
     PrimitiveFacet,
+    PrismResult,
+    PrismVertexMap,
     PyramidBaseVertexMap,
     PyramidResult,
     RationalCoordinateSpace,
     RationalCovector,
     RationalPolytopeVertex,
     RationalVPolytope,
+    VertexFigurePolytope,
+    VertexFigureResult,
+    VertexFigureVertexMap,
     _canonical_v_polytope_vertices,
     _prepare_volume_components,
     _validate_halfspaces,
@@ -1156,11 +1167,802 @@ def polytope_pyramid(polytope: RationalVPolytope, height_axis: str) -> PyramidRe
     )
 
 
+def _admit_prism(polytope: RationalVPolytope, height_axis: object) -> int:
+    """Enforce the prism execution envelope shared by native and catalog calls.
+
+    Returns the source ambient dimension. Structural label conflicts raise
+    ``OperationDomainValidationError``; envelope overflows raise
+    ``OperationResourceAdmissionError``.
+    """
+
+    if not isinstance(height_axis, str) or not height_axis:
+        raise OperationDomainValidationError(
+            location=("height_axis",),
+            code="polytope.prism.height_axis_not_a_label",
+            message="prism height axis must be a nonempty label",
+        )
+    source_axes = tuple(polytope.space.axes)
+    if height_axis in source_axes:
+        raise OperationDomainValidationError(
+            location=("height_axis",),
+            code="polytope.prism.height_axis_not_fresh",
+            message="prism height axis must not occur among the source axes",
+        )
+    ambient = len(source_axes)
+    if ambient + 1 > MAX_RATIONAL_POLYTOPE_DIMENSION:
+        raise OperationResourceAdmissionError(
+            location=("polytope",),
+            code="polytope.prism.ambient_dimension_over_envelope",
+            message=(
+                "prism ambient dimension "
+                f"{ambient + 1} exceeds the {MAX_RATIONAL_POLYTOPE_DIMENSION} "
+                "axis envelope"
+            ),
+        )
+    if 2 * len(polytope.vertices) > MAX_VERTICES:
+        raise OperationResourceAdmissionError(
+            location=("polytope",),
+            code="polytope.prism.vertex_count_over_envelope",
+            message=(f"prism vertex rows exceed the {MAX_VERTICES}-vertex envelope"),
+        )
+    return ambient
+
+
+def polytope_prism(polytope: RationalVPolytope, height_axis: str) -> PrismResult:
+    """Compute the exact prism ``P x [0, 1]``.
+
+    Each source vertex ``p`` yields a bottom vertex ``(p, 0)`` and a top
+    vertex ``(p, 1)`` with suffixed transport IDs. Before return the kernel
+    replays the tagged realization (bottom rows at height 0, top rows at
+    height 1, prefixes recovering the source coordinates) and the dimension
+    identity ``dim(prism) = dim(P) + 1``.
+    """
+
+    if not isinstance(polytope, RationalVPolytope):
+        raise OperationDomainValidationError(
+            location=("polytope",),
+            code="polytope.prism.source_not_a_v_polytope",
+            message="prism source must be a labelled rational V-polytope value",
+        )
+    _admit_prism(polytope, height_axis)
+    zero = CanonicalRational.from_integer_ratio(0, 1)
+    one = CanonicalRational.from_integer_ratio(1, 1)
+    bottom_ids: list[str] = []
+    top_ids: list[str] = []
+    for vertex in polytope.vertices:
+        for side in ("bottom", "top"):
+            candidate = f"{vertex.vertex_id}_{side}"
+            if not 1 <= len(candidate) <= 64:
+                raise OperationDomainValidationError(
+                    location=("polytope",),
+                    code="polytope.prism.transport_label_too_long",
+                    message="prism transport vertex ID exceeds the label bound",
+                )
+        bottom_ids.append(f"{vertex.vertex_id}_bottom")
+        top_ids.append(f"{vertex.vertex_id}_top")
+    if len(set(bottom_ids)) != len(bottom_ids) or len(set(top_ids)) != len(top_ids):
+        raise OperationDomainValidationError(
+            location=("polytope",),
+            code="polytope.prism.transport_label_collision",
+            message="suffixed prism vertex IDs must be distinct within each side",
+        )
+    if set(bottom_ids) & set(top_ids):
+        raise OperationDomainValidationError(
+            location=("polytope",),
+            code="polytope.prism.transport_label_collision",
+            message="bottom and top prism vertex IDs must be disjoint",
+        )
+    bottom_vertices = tuple(
+        RationalPolytopeVertex(
+            vertex_id=f"{vertex.vertex_id}_bottom",
+            coordinates=(*vertex.coordinates, zero),
+        )
+        for vertex in polytope.vertices
+    )
+    top_vertices = tuple(
+        RationalPolytopeVertex(
+            vertex_id=f"{vertex.vertex_id}_top",
+            coordinates=(*vertex.coordinates, one),
+        )
+        for vertex in polytope.vertices
+    )
+    ordered = tuple(
+        sorted((*bottom_vertices, *top_vertices), key=lambda v: v.vertex_id)
+    )
+    prism = RationalVPolytope(
+        space=RationalCoordinateSpace(axes=(*polytope.space.axes, height_axis)),
+        vertices=ordered,
+    )
+    # Replay the tagged realization exactly.
+    source_by_id = {vertex.vertex_id: vertex for vertex in polytope.vertices}
+    for vertex in bottom_vertices:
+        if vertex.coordinates[-1].as_fraction() != 0:
+            raise OperationDomainValidationError(
+                location=("prism",),
+                code="polytope.prism.bottom_height_replay_failed",
+                message="every bottom vertex must carry height coordinate 0",
+            )
+        source = source_by_id[vertex.vertex_id[: -len("_bottom")]]
+        if tuple(vertex.coordinates[:-1]) != source.coordinates:
+            raise OperationDomainValidationError(
+                location=("prism",),
+                code="polytope.prism.bottom_prefix_replay_failed",
+                message="every bottom vertex must project to its source coordinates",
+            )
+    for vertex in top_vertices:
+        if vertex.coordinates[-1].as_fraction() != 1:
+            raise OperationDomainValidationError(
+                location=("prism",),
+                code="polytope.prism.top_height_replay_failed",
+                message="every top vertex must carry height coordinate 1",
+            )
+        source = source_by_id[vertex.vertex_id[: -len("_top")]]
+        if tuple(vertex.coordinates[:-1]) != source.coordinates:
+            raise OperationDomainValidationError(
+                location=("prism",),
+                code="polytope.prism.top_prefix_replay_failed",
+                message="every top vertex must project to its source coordinates",
+            )
+    source_points = [
+        [Rational(*c.as_integer_ratio()) for c in vertex.coordinates]
+        for vertex in polytope.vertices
+    ]
+    prism_points = [
+        [Rational(*c.as_integer_ratio()) for c in vertex.coordinates]
+        for vertex in ordered
+    ]
+    source_dim = _affine_dimension(source_points)
+    result_dim = _affine_dimension(prism_points)
+    if result_dim != source_dim + 1:
+        raise OperationDomainValidationError(
+            location=("prism",),
+            code="polytope.prism.dimension_identity_failed",
+            message=(
+                "prism affine dimension "
+                f"{result_dim} is not source dimension {source_dim} plus one"
+            ),
+        )
+    ordered_sources = sorted(polytope.vertices, key=lambda v: v.vertex_id)
+    bottom_map = tuple(
+        PrismVertexMap(
+            source_vertex_id=vertex.vertex_id,
+            prism_vertex_id=f"{vertex.vertex_id}_bottom",
+            side="bottom",
+        )
+        for vertex in ordered_sources
+    )
+    top_map = tuple(
+        PrismVertexMap(
+            source_vertex_id=vertex.vertex_id,
+            prism_vertex_id=f"{vertex.vertex_id}_top",
+            side="top",
+        )
+        for vertex in ordered_sources
+    )
+    return PrismResult._from_kernel(
+        prism=prism,
+        bottom_vertex_map=bottom_map,
+        top_vertex_map=top_map,
+        source_affine_dimension=source_dim,
+        prism_affine_dimension=result_dim,
+    )
+
+
+def _admit_join(
+    left: RationalVPolytope, right: RationalVPolytope, height_axis: object
+) -> None:
+    """Enforce the join execution envelope shared by native and catalog calls."""
+
+    if not isinstance(height_axis, str) or not height_axis:
+        raise OperationDomainValidationError(
+            location=("height_axis",),
+            code="polytope.join.height_axis_not_a_label",
+            message="join height axis must be a nonempty label",
+        )
+    left_axes = tuple(left.space.axes)
+    right_axes = tuple(right.space.axes)
+    if set(left_axes) & set(right_axes):
+        raise OperationDomainValidationError(
+            location=("right",),
+            code="polytope.join.factor_axes_overlap",
+            message="join factors must live on disjoint axis labels",
+        )
+    if height_axis in set(left_axes) | set(right_axes):
+        raise OperationDomainValidationError(
+            location=("height_axis",),
+            code="polytope.join.height_axis_not_fresh",
+            message="join height axis must not occur among either factor's axes",
+        )
+    left_ids = [vertex.vertex_id for vertex in left.vertices]
+    right_ids = [vertex.vertex_id for vertex in right.vertices]
+    if set(left_ids) & set(right_ids):
+        raise OperationDomainValidationError(
+            location=("right",),
+            code="polytope.join.factor_vertex_ids_overlap",
+            message="join factors must carry disjoint vertex IDs",
+        )
+    total_axes = len(left_axes) + len(right_axes) + 1
+    if total_axes > MAX_RATIONAL_POLYTOPE_DIMENSION:
+        raise OperationResourceAdmissionError(
+            location=("left",),
+            code="polytope.join.ambient_dimension_over_envelope",
+            message=(
+                "join ambient dimension "
+                f"{total_axes} exceeds the {MAX_RATIONAL_POLYTOPE_DIMENSION} "
+                "axis envelope"
+            ),
+        )
+    if len(left_ids) + len(right_ids) > MAX_VERTICES:
+        raise OperationResourceAdmissionError(
+            location=("left",),
+            code="polytope.join.vertex_count_over_envelope",
+            message=(f"join vertex rows exceed the {MAX_VERTICES}-vertex envelope"),
+        )
+
+
+def polytope_join(
+    left: RationalVPolytope, right: RationalVPolytope, height_axis: str
+) -> JoinResult:
+    """Compute the exact join ``P * Q``.
+
+    The left factor embeds as ``(p, 0, 0)`` and the right factor as
+    ``(0, q, 1)`` on ``(*left.axes, *right.axes, height_axis)``, keeping
+    source vertex IDs unchanged. Before return the kernel replays the
+    tagged realization (zero blocks and heights, projections recovering
+    each factor) and the dimension identity
+    ``dim(join) = dim(P) + dim(Q) + 1``.
+    """
+
+    if not isinstance(left, RationalVPolytope) or not isinstance(
+        right, RationalVPolytope
+    ):
+        raise OperationDomainValidationError(
+            location=("left",),
+            code="polytope.join.source_not_a_v_polytope",
+            message="join factors must be labelled rational V-polytope values",
+        )
+    _admit_join(left, right, height_axis)
+    left_axes = tuple(left.space.axes)
+    right_axes = tuple(right.space.axes)
+    zero = CanonicalRational.from_integer_ratio(0, 1)
+    one = CanonicalRational.from_integer_ratio(1, 1)
+    left_zeros = tuple(zero for _ in right_axes)
+    right_zeros = tuple(zero for _ in left_axes)
+    left_vertices = tuple(
+        RationalPolytopeVertex(
+            vertex_id=vertex.vertex_id,
+            coordinates=(*vertex.coordinates, *left_zeros, zero),
+        )
+        for vertex in left.vertices
+    )
+    right_vertices = tuple(
+        RationalPolytopeVertex(
+            vertex_id=vertex.vertex_id,
+            coordinates=(*right_zeros, *vertex.coordinates, one),
+        )
+        for vertex in right.vertices
+    )
+    ordered = tuple(
+        sorted((*left_vertices, *right_vertices), key=lambda v: v.vertex_id)
+    )
+    join = RationalVPolytope(
+        space=RationalCoordinateSpace(axes=(*left_axes, *right_axes, height_axis)),
+        vertices=ordered,
+    )
+    # Replay the tagged realization exactly.
+    left_by_id = {vertex.vertex_id: vertex for vertex in left.vertices}
+    right_by_id = {vertex.vertex_id: vertex for vertex in right.vertices}
+    left_width = len(left_axes)
+    for vertex in left_vertices:
+        if vertex.coordinates[left_width:-1] != left_zeros:
+            raise OperationDomainValidationError(
+                location=("join",),
+                code="polytope.join.left_zero_block_replay_failed",
+                message="every left join vertex must carry zeros on the right block",
+            )
+        if vertex.coordinates[-1].as_fraction() != 0:
+            raise OperationDomainValidationError(
+                location=("join",),
+                code="polytope.join.left_height_replay_failed",
+                message="every left join vertex must carry height coordinate 0",
+            )
+        if (
+            tuple(vertex.coordinates[:left_width])
+            != left_by_id[vertex.vertex_id].coordinates
+        ):
+            raise OperationDomainValidationError(
+                location=("join",),
+                code="polytope.join.left_prefix_replay_failed",
+                message="every left join vertex must project to its source coordinates",
+            )
+    for vertex in right_vertices:
+        if vertex.coordinates[:left_width] != right_zeros:
+            raise OperationDomainValidationError(
+                location=("join",),
+                code="polytope.join.right_zero_block_replay_failed",
+                message="every right join vertex must carry zeros on the left block",
+            )
+        if vertex.coordinates[-1].as_fraction() != 1:
+            raise OperationDomainValidationError(
+                location=("join",),
+                code="polytope.join.right_height_replay_failed",
+                message="every right join vertex must carry height coordinate 1",
+            )
+        if (
+            tuple(vertex.coordinates[left_width:-1])
+            != right_by_id[vertex.vertex_id].coordinates
+        ):
+            raise OperationDomainValidationError(
+                location=("join",),
+                code="polytope.join.right_prefix_replay_failed",
+                message="every right join vertex must project to its source coordinates",
+            )
+    left_points = [
+        [Rational(*c.as_integer_ratio()) for c in vertex.coordinates]
+        for vertex in left.vertices
+    ]
+    right_points = [
+        [Rational(*c.as_integer_ratio()) for c in vertex.coordinates]
+        for vertex in right.vertices
+    ]
+    join_points = [
+        [Rational(*c.as_integer_ratio()) for c in vertex.coordinates]
+        for vertex in ordered
+    ]
+    left_dim = _affine_dimension(left_points)
+    right_dim = _affine_dimension(right_points)
+    result_dim = _affine_dimension(join_points)
+    if result_dim != left_dim + right_dim + 1:
+        raise OperationDomainValidationError(
+            location=("join",),
+            code="polytope.join.dimension_identity_failed",
+            message=(
+                "join affine dimension "
+                f"{result_dim} is not {left_dim} + {right_dim} + 1"
+            ),
+        )
+    left_map = tuple(
+        JoinVertexMap(
+            source_vertex_id=vertex.vertex_id,
+            join_vertex_id=vertex.vertex_id,
+            side="left",
+        )
+        for vertex in sorted(left.vertices, key=lambda v: v.vertex_id)
+    )
+    right_map = tuple(
+        JoinVertexMap(
+            source_vertex_id=vertex.vertex_id,
+            join_vertex_id=vertex.vertex_id,
+            side="right",
+        )
+        for vertex in sorted(right.vertices, key=lambda v: v.vertex_id)
+    )
+    return JoinResult._from_kernel(
+        join=join,
+        left_vertex_map=left_map,
+        right_vertex_map=right_map,
+        left_affine_dimension=left_dim,
+        right_affine_dimension=right_dim,
+        join_affine_dimension=result_dim,
+    )
+
+
+def _admit_edge_profile(polytope: RationalVPolytope, dimension_bound: object) -> int:
+    """Enforce the edge-profile execution envelope shared by native calls.
+
+    Returns the source ambient dimension. Structural violations raise
+    ``OperationDomainValidationError``; envelope overflows raise
+    ``OperationResourceAdmissionError``. The side-test budget mirrors the
+    facet envelope exactly: distinct source rows create the candidate
+    hyperplanes, so ``m * C(m, d)`` with ``m`` distinct rows is charged
+    before any exact enumeration starts.
+    """
+
+    if not isinstance(polytope, RationalVPolytope):
+        raise OperationDomainValidationError(
+            location=("polytope",),
+            code="polytope.edge_profile.source_not_a_v_polytope",
+            message="edge-profile source must be a labelled rational V-polytope value",
+        )
+    if (
+        not isinstance(dimension_bound, int)
+        or isinstance(dimension_bound, bool)
+        or not 1 <= dimension_bound <= MAX_FACET_DIMENSION
+    ):
+        raise OperationDomainValidationError(
+            location=("dimension_bound",),
+            code="polytope.edge_profile.dimension_bound_not_admitted",
+            message=(
+                "edge-profile dimension bound must be an integer between 1 and "
+                f"{MAX_FACET_DIMENSION}"
+            ),
+        )
+    ambient = len(polytope.space.axes)
+    if ambient > dimension_bound:
+        raise OperationDomainValidationError(
+            location=("polytope",),
+            code="polytope.edge_profile.dimension_over_bound",
+            message=(
+                f"dimension {ambient} exceeds the dimension bound {dimension_bound}"
+            ),
+        )
+    for vertex in polytope.vertices:
+        for coordinate in vertex.coordinates:
+            try:
+                require_bounded_rational(
+                    coordinate,
+                    max_digits=MAX_FACET_COORDINATE_DIGITS,
+                    label="edge-profile vertex coordinate",
+                )
+            except ValueError as exc:
+                raise OperationResourceAdmissionError(
+                    location=("polytope",),
+                    code="polytope.edge_profile.coordinate_digits_over_envelope",
+                    message=str(exc),
+                ) from exc
+    points = [
+        [Rational(*coordinate.as_integer_ratio()) for coordinate in vertex.coordinates]
+        for vertex in polytope.vertices
+    ]
+    if ambient == 1:
+        if len({point[0] for point in points}) < 2:
+            raise OperationDomainValidationError(
+                location=("polytope",),
+                code="polytope.edge_profile.not_full_dimensional",
+                message=(
+                    "V-representation is not full-dimensional; lower-dimensional "
+                    "hulls require intrinsic affine coordinates"
+                ),
+            )
+    elif (
+        Matrix(
+            [
+                [points[index][axis] - points[0][axis] for axis in range(ambient)]
+                for index in range(1, len(points))
+            ]
+        ).rank()
+        < ambient
+    ):
+        raise OperationDomainValidationError(
+            location=("polytope",),
+            code="polytope.edge_profile.not_full_dimensional",
+            message=(
+                "V-representation is not full-dimensional; lower-dimensional "
+                "hulls require intrinsic affine coordinates"
+            ),
+        )
+    distinct_points = _deduplicate_source_rows(points)
+    side_tests = len(distinct_points) * math.comb(len(distinct_points), ambient)
+    if side_tests > MAX_FACET_SIGN_TESTS:
+        raise OperationResourceAdmissionError(
+            location=("polytope",),
+            code="polytope.edge_profile.side_test_budget_exceeded",
+            message=(
+                "edge-profile enumeration exceeds the "
+                f"{MAX_FACET_SIGN_TESTS}-side-test bound "
+                f"({side_tests} > {MAX_FACET_SIGN_TESTS})"
+            ),
+        )
+    return ambient
+
+
+def _extreme_positions_from_facets(
+    facets: tuple[PrimitiveFacet, ...], point_count: int, dim: int
+) -> list[int]:
+    """Return the source positions that are exact extreme vertices.
+
+    A source row is an extreme vertex exactly when the normals of the
+    facets containing it span the ambient space (the active-constraint
+    rank test). Redundant interior and boundary rows are rank-deficient
+    and carry no polytope edges.
+    """
+
+    active_normals: list[list[list[Rational]]] = [[] for _ in range(point_count)]
+    for facet in facets:
+        normal = [
+            Rational(*coefficient.as_integer_ratio())
+            for coefficient in facet.halfspace.coefficients
+        ]
+        for index in facet.source_vertex_indices:
+            if 0 <= index < point_count:
+                active_normals[index].append(normal)
+    return [
+        index
+        for index in range(point_count)
+        if active_normals[index] and Matrix(active_normals[index]).rank() == dim
+    ]
+
+
+def _minimal_face_dimension(
+    containing: list[set[int]],
+    points: list[list[Rational]],
+    first: int,
+    second: int,
+) -> int:
+    """Affine dimension of the minimal face containing two source rows.
+
+    Faces of a polytope are exactly the intersections of facet families,
+    so the minimal face containing ``{first, second}`` is the
+    intersection of all facets containing both, and its vertex set is
+    every source row lying on each of those common facets (with the
+    empty intersection ranging over the whole polytope). The dimension
+    is the exact rank of that vertex set's coordinate differences.
+    """
+
+    common = containing[first] & containing[second]
+    members = [
+        point for index, point in enumerate(points) if common <= containing[index]
+    ]
+    return _affine_dimension(members)
+
+
+def _compute_edge_data(
+    polytope: RationalVPolytope, ambient: int
+) -> tuple[tuple[tuple[str, str], ...], int]:
+    """Shared exact edge enumeration used by the edge and figure kernels.
+
+    Returns the sorted endpoint-ID pairs and the replayed affine dimension.
+    Raises ``OperationDomainValidationError`` for structural failures and
+    ``OperationResourceAdmissionError`` when the materialized profile
+    overflows its result envelope.
+    """
+
+    bare = tuple(Vertex(coordinates=vertex.coordinates) for vertex in polytope.vertices)
+    try:
+        facets = _computed_facets_from_vertices(bare, ambient)
+    except ValueError as exc:
+        message = str(exc)
+        if "side-test" in message or "result bound" in message:
+            raise OperationResourceAdmissionError(
+                location=("polytope",),
+                code="polytope.edge_profile.enumeration_over_envelope",
+                message=message,
+            ) from exc
+        raise OperationDomainValidationError(
+            location=("polytope",),
+            code="polytope.edge_profile.facet_profile_not_admitted",
+            message=message,
+        ) from exc
+    points = [
+        [Rational(*coordinate.as_integer_ratio()) for coordinate in vertex.coordinates]
+        for vertex in polytope.vertices
+    ]
+    point_count = len(points)
+    containing: list[set[int]] = [set() for _ in range(point_count)]
+    for facet_index, facet in enumerate(facets):
+        for index in facet.source_vertex_indices:
+            if 0 <= index < point_count:
+                containing[index].add(facet_index)
+    extreme = _extreme_positions_from_facets(facets, point_count, ambient)
+    extreme_set = set(extreme)
+    vertex_ids = [vertex.vertex_id for vertex in polytope.vertices]
+    pairs: list[tuple[str, str]] = []
+    for position_a in range(len(extreme)):
+        for position_b in range(position_a + 1, len(extreme)):
+            first = extreme[position_a]
+            second = extreme[position_b]
+            if _minimal_face_dimension(containing, points, first, second) != 1:
+                continue
+            first_id = vertex_ids[first]
+            second_id = vertex_ids[second]
+            # Replay that no third extreme vertex lies in the minimal face:
+            # the face members restricted to extreme rows are exactly the
+            # pair, up to redundant collinear source rows on the segment.
+            common = containing[first] & containing[second]
+            face_extreme = sorted(
+                index for index in extreme_set if common <= containing[index]
+            )
+            face_points = [points[index] for index in face_extreme]
+            if len(face_extreme) != 2 or _affine_dimension(face_points) != 1:
+                continue
+            pairs.append(
+                (first_id, second_id) if first_id < second_id else (second_id, first_id)
+            )
+    pairs.sort()
+    source_dimension = _affine_dimension(points)
+    if source_dimension != ambient:
+        raise OperationDomainValidationError(
+            location=("polytope",),
+            code="polytope.edge_profile.dimension_replay_failed",
+            message=(
+                "replayed affine dimension "
+                f"{source_dimension} does not match the ambient dimension {ambient}"
+            ),
+        )
+    return tuple(pairs), source_dimension
+
+
+def polytope_edge_profile(
+    polytope: RationalVPolytope, dimension_bound: int = MAX_FACET_DIMENSION
+) -> EdgeProfileResult:
+    """Compute the exact vertex-adjacency (edge) graph of a V-polytope.
+
+    A pair ``(i, j)`` of distinct source rows is an edge exactly when the
+    minimal face containing both is one-dimensional. Faces of a polytope
+    are precisely the intersections of facet families, so with ``F(k)``
+    the set of facets containing row ``k`` the minimal face containing
+    ``{i, j}`` is ``intersection{f : f in F(i) cap F(j)}`` and its vertex
+    set is ``{k : F(i) cap F(j) subset F(k)}``; the pair is an edge iff
+    that vertex set has affine rank one. Equivalently the pair is
+    contained in a common facet and adjacent within every common facet's
+    restricted profile: if the minimal face had dimension two or more it
+    would contain a third extreme vertex of some common facet, and if the
+    pair shared no facet the minimal face would be the whole polytope of
+    dimension at least two. The kernel therefore enumerates the complete
+    facet profile with the existing bounded machinery, restricts candidate
+    pairs to exact extreme vertices (the active-normal rank test, so
+    redundant rows carry no edges), and keeps exactly the pairs whose
+    minimal face has dimension one with no third extreme vertex inside.
+    Endpoints are returned as sorted source-ID pairs with the replayed
+    affine dimension.
+    """
+
+    ambient = _admit_edge_profile(polytope, dimension_bound)
+    pairs, source_dimension = _compute_edge_data(polytope, ambient)
+    edges = tuple(
+        PolytopeEdge(endpoint_a=first, endpoint_b=second) for first, second in pairs
+    )
+    return EdgeProfileResult._from_kernel(
+        polytope=polytope,
+        edges=edges,
+        affine_dimension=source_dimension,
+    )
+
+
+def polytope_vertex_figure(
+    polytope: RationalVPolytope, vertex_id: str
+) -> VertexFigureResult:
+    """Compute the exact vertex figure of one polytope vertex.
+
+    The vertex figure at the extreme vertex ``v`` is the convex hull of
+    the edge-midpoints ``(v + u) / 2`` over the edge neighbors ``u`` read
+    from the shared edge kernel above (not from the public operation).
+    Figure vertex IDs are derived deterministically as
+    ``sec_<neighbor_id>``. Before return the kernel replays the midpoint
+    identity ``2 * sec(u) - v = u`` for every figure vertex and the
+    dimension identity ``dim(figure) = dim(P) - 1``; a center with no
+    incident edges (an unknown ID is rejected earlier, a redundant row
+    here) and a dimension-zero source are outside the admitted domain.
+    """
+
+    if not isinstance(polytope, RationalVPolytope):
+        raise OperationDomainValidationError(
+            location=("polytope",),
+            code="polytope.vertex_figure.source_not_a_v_polytope",
+            message="vertex-figure source must be a labelled rational V-polytope value",
+        )
+    if not isinstance(vertex_id, str) or not vertex_id:
+        raise OperationDomainValidationError(
+            location=("vertex_id",),
+            code="polytope.vertex_figure.vertex_id_not_a_label",
+            message="vertex-figure center must be a nonempty vertex ID",
+        )
+    by_id = {vertex.vertex_id: vertex for vertex in polytope.vertices}
+    center = by_id.get(vertex_id)
+    if center is None:
+        raise OperationDomainValidationError(
+            location=("vertex_id",),
+            code="polytope.vertex_figure.unknown_vertex_id",
+            message=f"vertex ID {vertex_id!r} does not occur among the source vertices",
+        )
+    ambient = _admit_edge_profile(polytope, MAX_FACET_DIMENSION)
+    pairs, source_dimension = _compute_edge_data(polytope, ambient)
+    if source_dimension < 1:
+        raise OperationDomainValidationError(
+            location=("polytope",),
+            code="polytope.vertex_figure.source_dimension_too_small",
+            message="vertex figures require a source of affine dimension at least one",
+        )
+    neighbors = sorted(
+        second if first == vertex_id else first
+        for first, second in pairs
+        if first == vertex_id or second == vertex_id
+    )
+    if not neighbors:
+        raise OperationDomainValidationError(
+            location=("vertex_id",),
+            code="polytope.vertex_figure.center_not_a_vertex",
+            message="vertex-figure center must be an exact extreme vertex",
+        )
+    for neighbor_id in neighbors:
+        candidate = f"sec_{neighbor_id}"
+        if not 1 <= len(candidate) <= MAX_COORDINATE_LABEL_LENGTH:
+            raise OperationDomainValidationError(
+                location=("polytope",),
+                code="polytope.vertex_figure.transport_label_too_long",
+                message="vertex-figure vertex ID exceeds the label bound",
+            )
+    if len({f"sec_{neighbor_id}" for neighbor_id in neighbors}) != len(neighbors):
+        raise OperationDomainValidationError(
+            location=("polytope",),
+            code="polytope.vertex_figure.transport_label_collision",
+            message="derived vertex-figure vertex IDs must be distinct",
+        )
+    center_coordinates = tuple(
+        coordinate.as_fraction() for coordinate in center.coordinates
+    )
+    neighbor_coordinates = {
+        neighbor_id: tuple(
+            coordinate.as_fraction() for coordinate in by_id[neighbor_id].coordinates
+        )
+        for neighbor_id in neighbors
+    }
+    figure_vertices = tuple(
+        RationalPolytopeVertex(
+            vertex_id=f"sec_{neighbor_id}",
+            coordinates=tuple(
+                CanonicalRational.from_fraction((center_value + neighbor_value) / 2)
+                for center_value, neighbor_value in zip(
+                    center_coordinates,
+                    neighbor_coordinates[neighbor_id],
+                    strict=True,
+                )
+            ),
+        )
+        for neighbor_id in neighbors
+    )
+    ordered = tuple(sorted(figure_vertices, key=lambda vertex: vertex.vertex_id))
+    figure = VertexFigurePolytope(
+        space=RationalCoordinateSpace(axes=polytope.space.axes),
+        vertices=ordered,
+    )
+    # Replay the midpoint identity exactly: 2 * sec(u) - v recovers u.
+    figure_by_id = {vertex.vertex_id: vertex for vertex in ordered}
+    for neighbor_id in neighbors:
+        midpoint = tuple(
+            coordinate.as_fraction()
+            for coordinate in figure_by_id[f"sec_{neighbor_id}"].coordinates
+        )
+        recovered = tuple(
+            2 * middle - center_value
+            for middle, center_value in zip(midpoint, center_coordinates, strict=True)
+        )
+        if recovered != neighbor_coordinates[neighbor_id]:
+            raise OperationDomainValidationError(
+                location=("figure",),
+                code="polytope.vertex_figure.midpoint_replay_failed",
+                message="every figure vertex must be the edge-midpoint (v + u) / 2",
+            )
+    figure_points = [
+        [Rational(*coordinate.as_integer_ratio()) for coordinate in vertex.coordinates]
+        for vertex in ordered
+    ]
+    figure_dimension = _affine_dimension(figure_points)
+    if figure_dimension != source_dimension - 1:
+        raise OperationDomainValidationError(
+            location=("figure",),
+            code="polytope.vertex_figure.dimension_identity_failed",
+            message=(
+                "vertex-figure affine dimension "
+                f"{figure_dimension} is not source dimension {source_dimension} "
+                "minus one"
+            ),
+        )
+    transport = tuple(
+        VertexFigureVertexMap(
+            source_vertex_id=neighbor_id,
+            figure_vertex_id=f"sec_{neighbor_id}",
+        )
+        for neighbor_id in neighbors
+    )
+    return VertexFigureResult._from_kernel(
+        figure=figure,
+        center_vertex_id=vertex_id,
+        vertex_map=transport,
+        source_affine_dimension=source_dimension,
+        figure_affine_dimension=figure_dimension,
+    )
+
+
 __all__ = [
     "convex_hull_volume",
     "facet_incidence",
+    "polytope_edge_profile",
+    "polytope_join",
+    "polytope_prism",
     "polytope_pyramid",
     "polytope_support",
+    "polytope_vertex_figure",
     "polytope_volume",
     "verify_facet_incidence",
     "verify_primitive_facet",

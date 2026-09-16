@@ -4,20 +4,32 @@ from typing import Any
 
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.geometry.polytopes._models import (
+    EdgeProfileRequest,
+    EdgeProfileResult,
     FacetIncidenceRequest,
     FacetIncidenceResult,
+    JoinRequest,
+    JoinResult,
     PolytopeSupportRequest,
     PolytopeSupportResult,
     PolytopeVolumeRequest,
     PolytopeVolumeResult,
+    PrismRequest,
+    PrismResult,
     PyramidRequest,
     PyramidResult,
     RationalVPolytope,
+    VertexFigureRequest,
+    VertexFigureResult,
 )
 from jacobian.math.geometry.polytopes.operations import (
     facet_incidence,
+    polytope_edge_profile,
+    polytope_join,
+    polytope_prism,
     polytope_pyramid,
     polytope_support,
+    polytope_vertex_figure,
     polytope_volume,
 )
 from jacobian.math.geometry.polytopes.values import Vertex
@@ -41,6 +53,26 @@ def compute_facet_incidence(request: FacetIncidenceRequest) -> FacetIncidenceRes
 def compute_polytope_pyramid(request: PyramidRequest) -> PyramidResult:
     """Unpack a request and project the native pyramid result."""
     return polytope_pyramid(request.polytope, request.height_axis)
+
+
+def compute_polytope_prism(request: PrismRequest) -> PrismResult:
+    """Unpack a request and project the native prism result."""
+    return polytope_prism(request.polytope, request.height_axis)
+
+
+def compute_polytope_join(request: JoinRequest) -> JoinResult:
+    """Unpack a request and project the native join result."""
+    return polytope_join(request.left, request.right, request.height_axis)
+
+
+def compute_polytope_edge_profile(request: EdgeProfileRequest) -> EdgeProfileResult:
+    """Unpack a request and project the native edge-profile result."""
+    return polytope_edge_profile(request.polytope, request.dimension_bound)
+
+
+def compute_polytope_vertex_figure(request: VertexFigureRequest) -> VertexFigureResult:
+    """Unpack a request and project the native vertex-figure result."""
+    return polytope_vertex_figure(request.polytope, request.vertex_id)
 
 
 def compute_polytope_volume(request: PolytopeVolumeRequest) -> PolytopeVolumeResult:
@@ -303,6 +335,227 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                         ],
                     },
                     "height_axis": "h",
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="polytope.rational.prism.compute",
+        title="Compute the exact prism over a bounded rational polytope",
+        description="Embed each source vertex p as a bottom vertex (p, 0) and a top "
+        "vertex (p, 1) on a fresh height axis, returning the exact prism "
+        "V-polytope P x [0, 1] with suffixed bottom/top transport IDs and the "
+        "replayed dimension identity dim(prism) = dim(P) + 1. The height axis "
+        "must be fresh and the suffixed IDs must be distinct.",
+        request_type=PrismRequest,
+        result_type=PrismResult,
+        run=compute_polytope_prism,
+        tags=("polytope", "prism", "exact-rational"),
+        discovery_terms=(
+            "prism over a polytope",
+            "product with an interval",
+            "extrusion of a polytope",
+        ),
+        examples=(
+            OperationExample(
+                name="segment_prism_square",
+                description="Build the exact unit square that is the prism over the unit "
+                "segment on axis [x]; the height axis 'h' must be fresh.",
+                input={
+                    "polytope": {
+                        "space": {"axes": ["x"]},
+                        "vertices": [
+                            {
+                                "vertex_id": "left",
+                                "coordinates": [{"num": "0", "den": "1"}],
+                            },
+                            {
+                                "vertex_id": "right",
+                                "coordinates": [{"num": "1", "den": "1"}],
+                            },
+                        ],
+                    },
+                    "height_axis": "h",
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="polytope.rational.join.compute",
+        title="Compute the exact join of two bounded rational polytopes",
+        description="Embed the left factor as (p, 0, 0) and the right factor as "
+        "(0, q, 1) on (*left.axes, *right.axes, height_axis), returning the "
+        "exact join V-polytope with unchanged source vertex IDs, explicit "
+        "left/right transport, and the replayed dimension identity "
+        "dim(join) = dim(P) + dim(Q) + 1. The factors must live on disjoint "
+        "axes with disjoint vertex IDs and the height axis must be fresh.",
+        request_type=JoinRequest,
+        result_type=JoinResult,
+        run=compute_polytope_join,
+        tags=("polytope", "join", "exact-rational"),
+        discovery_terms=(
+            "join of polytopes",
+            "convex join",
+            "pyramid over two polytopes",
+        ),
+        examples=(
+            OperationExample(
+                name="segment_segment_join_tetrahedron",
+                description="Build the exact tetrahedron that is the join of two unit "
+                "segments on disjoint axes [x] and [y]; the height axis 'h' "
+                "must be fresh and the factors must carry disjoint vertex IDs.",
+                input={
+                    "left": {
+                        "space": {"axes": ["x"]},
+                        "vertices": [
+                            {
+                                "vertex_id": "left_a",
+                                "coordinates": [{"num": "0", "den": "1"}],
+                            },
+                            {
+                                "vertex_id": "left_b",
+                                "coordinates": [{"num": "1", "den": "1"}],
+                            },
+                        ],
+                    },
+                    "right": {
+                        "space": {"axes": ["y"]},
+                        "vertices": [
+                            {
+                                "vertex_id": "right_a",
+                                "coordinates": [{"num": "0", "den": "1"}],
+                            },
+                            {
+                                "vertex_id": "right_b",
+                                "coordinates": [{"num": "1", "den": "1"}],
+                            },
+                        ],
+                    },
+                    "height_axis": "h",
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="polytope.rational.edge_profile.compute",
+        title="Compute the exact edge graph of a bounded rational polytope",
+        description="Compute every vertex-adjacency edge of a full-dimensional "
+        "labelled rational V-polytope from its bounded facet profile: a pair "
+        "is an edge exactly when the minimal face containing both (the "
+        "intersection of their common facets) is one-dimensional with no "
+        "third extreme vertex inside. Returns the sorted edge pairs over the "
+        "exact extreme vertices with the replayed affine dimension. "
+        "Redundant source rows carry no edges.",
+        request_type=EdgeProfileRequest,
+        result_type=EdgeProfileResult,
+        run=compute_polytope_edge_profile,
+        tags=("polytope", "edge-graph", "adjacency", "exact-rational"),
+        discovery_terms=(
+            "edge graph of a polytope",
+            "vertex adjacency of a polytope",
+            "one-skeleton of a polytope",
+        ),
+        examples=(
+            OperationExample(
+                name="unit_square_edges",
+                description="Compute the four vertex-adjacency edges (the 4-cycle) "
+                "of the unit square on axes [x, y].",
+                input={
+                    "polytope": {
+                        "space": {"axes": ["x", "y"]},
+                        "vertices": [
+                            {
+                                "vertex_id": "bottom_left",
+                                "coordinates": [
+                                    {"num": "0", "den": "1"},
+                                    {"num": "0", "den": "1"},
+                                ],
+                            },
+                            {
+                                "vertex_id": "bottom_right",
+                                "coordinates": [
+                                    {"num": "1", "den": "1"},
+                                    {"num": "0", "den": "1"},
+                                ],
+                            },
+                            {
+                                "vertex_id": "top_left",
+                                "coordinates": [
+                                    {"num": "0", "den": "1"},
+                                    {"num": "1", "den": "1"},
+                                ],
+                            },
+                            {
+                                "vertex_id": "top_right",
+                                "coordinates": [
+                                    {"num": "1", "den": "1"},
+                                    {"num": "1", "den": "1"},
+                                ],
+                            },
+                        ],
+                    },
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="polytope.rational.vertex_figure.compute",
+        title="Compute the exact vertex figure of a polytope vertex",
+        description="Compute the vertex figure at one extreme vertex as the "
+        "convex hull of the edge-midpoints (v + u) / 2 over its edge "
+        "neighbors u, returned as a V-polytope on the source axes with "
+        "neighbor-to-figure transport (`sec_<neighbor_id>`) and the replayed "
+        "midpoint and dimension identities dim(figure) = dim(P) - 1.",
+        request_type=VertexFigureRequest,
+        result_type=VertexFigureResult,
+        run=compute_polytope_vertex_figure,
+        tags=("polytope", "vertex-figure", "exact-rational"),
+        discovery_terms=(
+            "vertex figure of a polytope",
+            "link of a polytope vertex",
+            "section of a polytope at a vertex",
+        ),
+        examples=(
+            OperationExample(
+                name="square_vertex_figure_segment",
+                description="Compute the vertex figure at the bottom_left corner "
+                "of the unit square: the segment joining the midpoints of "
+                "the two incident edges.",
+                input={
+                    "polytope": {
+                        "space": {"axes": ["x", "y"]},
+                        "vertices": [
+                            {
+                                "vertex_id": "bottom_left",
+                                "coordinates": [
+                                    {"num": "0", "den": "1"},
+                                    {"num": "0", "den": "1"},
+                                ],
+                            },
+                            {
+                                "vertex_id": "bottom_right",
+                                "coordinates": [
+                                    {"num": "1", "den": "1"},
+                                    {"num": "0", "den": "1"},
+                                ],
+                            },
+                            {
+                                "vertex_id": "top_left",
+                                "coordinates": [
+                                    {"num": "0", "den": "1"},
+                                    {"num": "1", "den": "1"},
+                                ],
+                            },
+                            {
+                                "vertex_id": "top_right",
+                                "coordinates": [
+                                    {"num": "1", "den": "1"},
+                                    {"num": "1", "den": "1"},
+                                ],
+                            },
+                        ],
+                    },
+                    "vertex_id": "bottom_left",
                 },
             ),
         ),

@@ -5,11 +5,13 @@ from jacobian.math.logic.automata.transducers.operations import (
     compose_subsequential,
     identity_transducer,
     invert_rational,
+    minimize_subsequential,
     reachable_states,
     replay_rational_path,
     run_subsequential,
     trim_subsequential,
     verify_composition,
+    verify_minimization,
     verify_subsequential_run,
 )
 from jacobian.math.logic.automata.transducers.values import (
@@ -30,10 +32,12 @@ __all__ = [
     "compose_subsequential",
     "identity_transducer",
     "invert_rational",
+    "minimize_subsequential",
     "reachable_states",
     "replay_rational_path",
     "run_subsequential",
     "trim_subsequential",
     "verify_composition",
+    "verify_minimization",
     "verify_subsequential_run",
 ]

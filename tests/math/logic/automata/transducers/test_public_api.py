@@ -17,11 +17,13 @@ def test_exact_public_api_symbols() -> None:
         "compose_subsequential",
         "identity_transducer",
         "invert_rational",
+        "minimize_subsequential",
         "reachable_states",
         "replay_rational_path",
         "run_subsequential",
         "trim_subsequential",
         "verify_composition",
+        "verify_minimization",
         "verify_subsequential_run",
     )
     assert tuple(finite_state_transducers.__all__) == expected

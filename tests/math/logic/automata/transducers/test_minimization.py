@@ -51,10 +51,44 @@ def _three_state_machine() -> SubsequentialTransducer:
 
 def _run_from(
     transducer: SubsequentialTransducer, state: int, word: tuple[int, ...]
-) -> tuple[str, tuple[int, ...]]:
+) -> tuple[bool, tuple[int, ...]]:
+    """The realized partial function: definedness plus output word.
+
+    ``run_subsequential`` reports ``UNDEFINED_TRANSITION`` and
+    ``NONFINAL_DOMAIN_STATE`` as distinct statuses, but both mean the word is
+    outside the state's partial function.  Comparing raw statuses would treat
+    two undefined runs as a separation, so collapse to definedness.
+    """
     relocated = transducer.model_copy(update={"initial_state": state})
     status, output, _, _, _ = run_subsequential(relocated, word)
-    return status, output
+    return status == "OUTPUT", output
+
+
+def _nonfinal_target_machine() -> SubsequentialTransducer:
+    """States 1 and 2 differ only on a symbol whose target is not final.
+
+    State 1 has a 0-transition into the non-final state 0; state 2 has no
+    0-transition.  The one-symbol word ``(0,)`` is outside both partial
+    functions, so it does not separate them; a word reaching a final state
+    through state 0 is required.
+    """
+    return SubsequentialTransducer(
+        input_alphabet_size=2,
+        output_alphabet_size=2,
+        state_count=3,
+        initial_state=0,
+        transitions=(
+            SubseqTransition(source=0, input_symbol=0, target=1, output=()),
+            SubseqTransition(source=0, input_symbol=1, target=2, output=()),
+            SubseqTransition(source=1, input_symbol=0, target=0, output=()),
+            SubseqTransition(source=1, input_symbol=1, target=1, output=()),
+            SubseqTransition(source=2, input_symbol=1, target=2, output=()),
+        ),
+        final_outputs=(
+            SubseqFinalOutput(state=1, output=()),
+            SubseqFinalOutput(state=2, output=()),
+        ),
+    )
 
 
 class TestKnownAnswer:
@@ -136,6 +170,38 @@ class TestPreservationReplay:
 
         assert result.sample_words_checked == 1 + 2 + 4 + 8 + 16
         assert result.sample_agreement
+
+
+class TestWitnessSoundness:
+    def test_witness_is_defined_and_separates(self) -> None:
+        source = _nonfinal_target_machine()
+        result = minimize_subsequential(source, 4)
+        table = {
+            (row.first_state, row.second_state): row
+            for row in result.distinguishability
+        }
+        row = table[(1, 2)]
+
+        assert not row.equivalent
+        assert row.witness_word
+        assert _run_from(source, row.first_state, row.witness_word) != _run_from(
+            source, row.second_state, row.witness_word
+        )
+
+    def test_every_non_equivalent_witness_separates_its_pair(self) -> None:
+        for source in (_three_state_machine(), _nonfinal_target_machine()):
+            result = minimize_subsequential(source, 4)
+            finals = {entry.state: entry.output for entry in source.final_outputs}
+            for row in result.distinguishability:
+                if row.equivalent:
+                    continue
+                assert row.witness_word or (
+                    finals.get(row.first_state) != finals.get(row.second_state)
+                )
+                if row.witness_word:
+                    assert _run_from(
+                        source, row.first_state, row.witness_word
+                    ) != _run_from(source, row.second_state, row.witness_word)
 
 
 class TestBoundary:

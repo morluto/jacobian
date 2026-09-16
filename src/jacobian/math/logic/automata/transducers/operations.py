@@ -642,13 +642,14 @@ def _refine_subsequential_partition(
     alphabet_size: int,
     transitions: dict[tuple[int, int], tuple[int, tuple[int, ...]]],
     finals: dict[int, tuple[int, ...]],
-) -> tuple[list[int], dict[tuple[int, int], tuple[int, ...]]]:
-    """Refine behavioral equivalence with distinguishing-word witnesses.
+) -> list[int]:
+    """Refine behavioral equivalence by stable partition refinement.
 
     Two states share a block exactly when they realize the same partial
     function: equal final outputs and, per input symbol, jointly undefined
-    or equal output words with equivalent targets.  Every split pair maps
-    to a distinguishing word of length at most ``state_count``.
+    or equal output words with equivalent targets.  Trimming to coaccessible
+    states first makes the fixed point the coarsest such partition, so every
+    separated pair is genuinely inequivalent.
     """
 
     block_of = [-1] * state_count
@@ -658,11 +659,6 @@ def _refine_subsequential_partition(
         if key not in seed_keys:
             seed_keys[key] = len(seed_keys)
         block_of[state] = seed_keys[key]
-    witnesses: dict[tuple[int, int], tuple[int, ...]] = {}
-    for first in range(state_count):
-        for second in range(first + 1, state_count):
-            if block_of[first] != block_of[second]:
-                witnesses[(first, second)] = ()
     while True:
         split_found = False
         next_block = [-1] * state_count
@@ -688,67 +684,194 @@ def _refine_subsequential_partition(
             groups = list(signatures.values())
             if len(groups) > 1:
                 split_found = True
-                _record_refinement_witnesses(
-                    groups, alphabet_size, transitions, block_of, witnesses
-                )
             for group in groups:
                 for state in group:
                     next_block[state] = next_id
                 next_id += 1
         block_of = next_block
         if not split_found:
-            return block_of, witnesses
+            return block_of
 
 
-def _record_refinement_witnesses(
-    groups: list[list[int]],
-    alphabet_size: int,
-    transitions: dict[tuple[int, int], tuple[int, tuple[int, ...]]],
-    block_of: list[int],
-    witnesses: dict[tuple[int, int], tuple[int, ...]],
-) -> None:
-    """Record distinguishing words for pairs separated in one round."""
+_MAX_WITNESS_NODES = 200_000
+"""Bound on pair nodes explored per inequivalent pair before refusing.
 
-    for left in range(len(groups)):
-        for right in range(left + 1, len(groups)):
-            for first in groups[left]:
-                for second in groups[right]:
-                    pair = (min(first, second), max(first, second))
-                    if pair in witnesses:
-                        continue
-                    word = _separating_word(
-                        first, second, alphabet_size, transitions, block_of, witnesses
-                    )
-                    if word is not None:
-                        witnesses[pair] = word
+The search tracks the residual output difference between the two states,
+which the admitted envelopes keep small; the cap only guards a pathological
+output-heavy request from unbounded work.
+"""
 
 
-def _separating_word(
+def _advance_output_residual(
+    sign: int,
+    residual: tuple[int, ...],
+    first_output: tuple[int, ...],
+    second_output: tuple[int, ...],
+) -> tuple[int, tuple[int, ...]] | None:
+    """Fold one emitted-output pair into the residual difference.
+
+    ``sign`` is ``0`` when the accumulated outputs are equal, ``1`` when the
+    first state is ahead by ``residual``, and ``-1`` when the second is.
+    Returns the new ``(sign, residual)`` with the common prefix stripped when
+    the accumulated outputs stay prefix-comparable, or ``None`` when they are
+    incomparable (a difference no continuation can cancel).
+    """
+
+    if sign == 0:
+        left, right = first_output, second_output
+    elif sign == 1:
+        left, right = residual + first_output, second_output
+    else:
+        left, right = first_output, residual + second_output
+    common = 0
+    while common < len(left) and common < len(right) and left[common] == right[common]:
+        common += 1
+    left = left[common:]
+    right = right[common:]
+    if not left and not right:
+        return (0, ())
+    if not left:
+        return (-1, right)
+    if not right:
+        return (1, left)
+    return None
+
+
+def _witness_terminal(
+    node: tuple[int | None, int | None, int, tuple[int, ...]],
+    finals: dict[int, tuple[int, ...]],
+) -> bool:
+    """Decide whether a pair node realizes differing partial functions."""
+
+    first, second, sign, residual = node
+    first_final = first is not None and first in finals
+    second_final = second is not None and second in finals
+    if first_final != second_final:
+        return True
+    if not (first_final and second_final):
+        return False
+    assert first is not None and second is not None
+    first_output = finals[first]
+    second_output = finals[second]
+    if sign == 2:
+        return True
+    if sign == 0:
+        return first_output != second_output
+    if sign == 1:
+        return residual + first_output != second_output
+    return first_output != residual + second_output
+
+
+def _find_separating_word(
     first: int,
     second: int,
     alphabet_size: int,
     transitions: dict[tuple[int, int], tuple[int, tuple[int, ...]]],
-    block_of: list[int],
-    witnesses: dict[tuple[int, int], tuple[int, ...]],
+    finals: dict[int, tuple[int, ...]],
 ) -> tuple[int, ...] | None:
-    """Return a word separating two states under the previous partition."""
+    """Breadth-first search for the shortest word separating two states.
 
-    for symbol in range(alphabet_size):
-        left = transitions.get((first, symbol))
-        right = transitions.get((second, symbol))
-        if left is None or right is None:
-            if left != right:
-                return (symbol,)
-            continue
-        (left_target, left_output) = left
-        (right_target, right_output) = right
-        if left_output != right_output:
-            return (symbol,)
-        if block_of[left_target] != block_of[right_target]:
-            pair = (min(left_target, right_target), max(left_target, right_target))
-            if pair in witnesses:
-                return (symbol, *witnesses[pair])
+    Nodes track the residual output difference so a transition-level
+    difference canceled by later output or a final output is not mistaken
+    for a separation.  The residual is exact; the node budget bounds the
+    search instead of a length cap, since a residual may be canceled by any
+    later emitted output.
+    """
+
+    start: tuple[int | None, int | None, int, tuple[int, ...]] = (
+        first,
+        second,
+        0,
+        (),
+    )
+    if _witness_terminal(start, finals):
+        return ()
+    seen = {start}
+    queue: deque[
+        tuple[tuple[int | None, int | None, int, tuple[int, ...]], tuple[int, ...]]
+    ] = deque([(start, ())])
+    explored = 0
+    while queue:
+        node, word = queue.popleft()
+        explored += 1
+        if explored > _MAX_WITNESS_NODES:
+            raise OperationResourceAdmissionError(
+                location=("transducer",),
+                code="finite_state_transducer.witness_search_exceeded",
+                message=("the distinguishing-witness search exceeds its node budget"),
+            )
+        current_first, current_second, sign, residual = node
+        for symbol in range(alphabet_size):
+            first_step = (
+                transitions.get((current_first, symbol))
+                if current_first is not None
+                else None
+            )
+            second_step = (
+                transitions.get((current_second, symbol))
+                if current_second is not None
+                else None
+            )
+            if first_step is None and second_step is None:
+                continue
+            next_first = first_step[0] if first_step is not None else None
+            next_second = second_step[0] if second_step is not None else None
+            next_sign = sign
+            next_residual = residual
+            if sign != 2:
+                advanced = _advance_output_residual(
+                    sign,
+                    residual,
+                    first_step[1] if first_step is not None else (),
+                    second_step[1] if second_step is not None else (),
+                )
+                if advanced is None:
+                    next_sign, next_residual = 2, ()
+                else:
+                    next_sign, next_residual = advanced
+            child = (next_first, next_second, next_sign, next_residual)
+            extended = (*word, symbol)
+            if _witness_terminal(child, finals):
+                return extended
+            if child not in seen:
+                seen.add(child)
+                queue.append((child, extended))
     return None
+
+
+def _compute_distinguishing_witnesses(
+    state_count: int,
+    alphabet_size: int,
+    transitions: dict[tuple[int, int], tuple[int, tuple[int, ...]]],
+    finals: dict[int, tuple[int, ...]],
+    block_of: list[int],
+) -> dict[tuple[int, int], tuple[int, ...]]:
+    """Return a separating word for every pair of inequivalent states.
+
+    Witnesses are computed only after the partition has stabilized, so a
+    shared block means the two states realize the same partial function and
+    is skipped.  Each inequivalent pair is witnessed by the shortest word
+    whose realized partial functions differ.
+    """
+
+    witnesses: dict[tuple[int, int], tuple[int, ...]] = {}
+    for first in range(state_count):
+        for second in range(first + 1, state_count):
+            if block_of[first] == block_of[second]:
+                continue
+            word = _find_separating_word(
+                first,
+                second,
+                alphabet_size,
+                transitions,
+                finals,
+            )
+            if word is None:
+                raise RuntimeError(
+                    "partition refinement separated pairs without distinguishing words"
+                )
+            witnesses[(first, second)] = word
+    return witnesses
 
 
 def _iter_sample_words(
@@ -799,11 +922,18 @@ def minimize_subsequential(
             ),
             sample_agreement=True,
         )
-    block_of, witnesses = _refine_subsequential_partition(
+    block_of = _refine_subsequential_partition(
         trimmed.state_count,
         trimmed.input_alphabet_size,
         transitions,
         finals,
+    )
+    witnesses = _compute_distinguishing_witnesses(
+        trimmed.state_count,
+        trimmed.input_alphabet_size,
+        transitions,
+        finals,
+        block_of,
     )
     blocks: dict[int, list[int]] = {}
     for state, block in enumerate(block_of):

@@ -11,9 +11,14 @@ from jacobian.catalog.models import (
 from jacobian.math.topology.chain_complexes._filtered_models import (
     AssociatedGradedResult,
     FilteredChainComplexRequest,
+    SpectralPageRequest,
+    SpectralPageResult,
 )
 from jacobian.math.topology.chain_complexes._filtered_operations import (
     associated_graded as _associated_graded_native,
+)
+from jacobian.math.topology.chain_complexes._filtered_operations import (
+    spectral_page as _spectral_page_native,
 )
 from jacobian.math.topology.chain_complexes._models import (
     ComputeHomologyRequest,
@@ -100,6 +105,11 @@ def _tensor_product(request: TensorProductRequest) -> TensorProductResult:
 def _associated_graded(request: FilteredChainComplexRequest) -> AssociatedGradedResult:
     """Project a wire request into the canonical associated-graded operation."""
     return _associated_graded_native(request.complex, request.filtration)
+
+
+def _spectral_page(request: SpectralPageRequest) -> SpectralPageResult:
+    """Project a wire request into the canonical spectral-page operation."""
+    return _spectral_page_native(request.complex, request.filtration, request.page)
 
 
 _CIRCLE_COMPLEX = {
@@ -260,6 +270,66 @@ TOOLS: MathTools = (
                 name="tensor_two_circles",
                 description="Tensor product of two circle chain complexes.",
                 input={"left": _CIRCLE_COMPLEX, "right": _CIRCLE_COMPLEX},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="homological.spectral_sequence.page.compute",
+        title="Compute one page of the spectral sequence of a filtered complex",
+        description=(
+            "Compute the E^r page of a finite bounded increasing QQ or GF(p) "
+            "filtered chain complex as bigraded modules with explicit "
+            "quotient representatives and the induced d^r differentials of "
+            "bidegree (-r, r - 1); d^r d^r = 0 is replayed inside the "
+            "kernel. Page 0 is the associated graded. The result previews "
+            "the next-page dimensions as the homology of (E^r, d^r) and "
+            "reports STABILIZED only when every longer differential "
+            "provably vanishes, TRUNCATED when the page budget ceiling cuts "
+            "the sequence first, and ACTIVE otherwise."
+        ),
+        request_type=SpectralPageRequest,
+        result_type=SpectralPageResult,
+        run=_spectral_page,
+        tags=("chain-complex", "filtered-complex", "spectral-sequence", "exact"),
+        discovery_terms=(
+            "spectral sequence page",
+            "spectral sequence differentials",
+            "filtered complex E1 E2",
+            "spectral sequence collapse",
+        ),
+        examples=(
+            OperationExample(
+                name="two_step_spectral_page_one",
+                description=(
+                    "Compute the E^1 page of a two-term complex with a zero "
+                    "bottom level and an exhaustive top level; the d^1 map "
+                    "recovers the connecting differential and the next-page "
+                    "preview shows the collapse."
+                ),
+                input={
+                    "complex": {
+                        "coefficient_ring": "QQ",
+                        "degree_min": 0,
+                        "degree_max": 1,
+                        "basis_sizes": [1, 1],
+                        "differential_matrices": [[["1"]]],
+                    },
+                    "filtration": [
+                        {
+                            "subspaces": [
+                                {"vectors": [["1"]]},
+                                {"vectors": []},
+                            ]
+                        },
+                        {
+                            "subspaces": [
+                                {"vectors": [["1"]]},
+                                {"vectors": [["1"]]},
+                            ]
+                        },
+                    ],
+                    "page": 1,
+                },
             ),
         ),
     ),

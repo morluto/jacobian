@@ -4,6 +4,10 @@ from jacobian.math.topology.cellular_sheaves._models import (
     DiamondCounterexample,
     FiniteCellularSheaf,
     FromCoverMapsResult,
+    SheafCoboundaryLedgerEntry,
+    SheafCochainCoordinate,
+    SheafCohomologyGroup,
+    SheafCohomologyResult,
     SheafField,
     SheafObstruction,
     SheafObstructionCode,
@@ -11,12 +15,19 @@ from jacobian.math.topology.cellular_sheaves._models import (
     SheafRestriction,
     SheafStalk,
 )
-from jacobian.math.topology.cellular_sheaves.operations import from_cover_maps
+from jacobian.math.topology.cellular_sheaves.operations import (
+    from_cover_maps,
+    sheaf_cohomology,
+)
 
 __all__ = [
     "DiamondCounterexample",
     "FiniteCellularSheaf",
     "FromCoverMapsResult",
+    "SheafCoboundaryLedgerEntry",
+    "SheafCochainCoordinate",
+    "SheafCohomologyGroup",
+    "SheafCohomologyResult",
     "SheafField",
     "SheafObstruction",
     "SheafObstructionCode",
@@ -24,4 +35,5 @@ __all__ = [
     "SheafRestriction",
     "SheafStalk",
     "from_cover_maps",
+    "sheaf_cohomology",
 ]

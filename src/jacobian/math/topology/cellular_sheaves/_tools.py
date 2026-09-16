@@ -6,8 +6,13 @@ from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.topology.cellular_sheaves._models import (
     FromCoverMapsRequest,
     FromCoverMapsResult,
+    SheafCohomologyRequest,
+    SheafCohomologyResult,
 )
-from jacobian.math.topology.cellular_sheaves.operations import from_cover_maps
+from jacobian.math.topology.cellular_sheaves.operations import (
+    from_cover_maps,
+    sheaf_cohomology,
+)
 
 __all__ = ["TOOLS"]
 
@@ -22,6 +27,12 @@ def _run_from_cover_maps(
         request.stalks,
         request.cover_maps,
     )
+
+
+def _run_sheaf_cohomology(
+    request: SheafCohomologyRequest,
+) -> SheafCohomologyResult:
+    return sheaf_cohomology(request.sheaf)
 
 
 _INTERVAL_CANONICAL = {
@@ -84,6 +95,76 @@ def _identity_cover_maps() -> list[dict[str, object]]:
 
 
 TOOLS: MathTools = (
+    MathTool(
+        operation_id="cellular_sheaf.cohomology.compute",
+        title="Compute cellular sheaf cohomology with representative cocycles",
+        description=(
+            "Compute the cellular cohomology of a checked finite cellular "
+            "sheaf over QQ or a bounded prime field: assemble the "
+            "signed-incidence cochain complex from the complete restriction "
+            "diagram, replay delta^2 = 0 and the Euler-characteristic "
+            "identity inside the kernel, and return per-degree Betti "
+            "numbers with representative cocycles in cochain coordinates."
+        ),
+        request_type=SheafCohomologyRequest,
+        result_type=SheafCohomologyResult,
+        run=_run_sheaf_cohomology,
+        tags=(
+            "topology",
+            "cellular-sheaf",
+            "sheaf-cohomology",
+            "betti-number",
+            "exact",
+        ),
+        discovery_terms=(
+            "cellular sheaf cohomology",
+            "sheaf Betti numbers",
+            "sheaf cocycles",
+            "cellular cochain complex",
+        ),
+        examples=(
+            OperationExample(
+                name="interval_constant_sheaf_cohomology",
+                description=(
+                    "Cohomology of the constant rank-one QQ sheaf on an "
+                    "interval: H^0 is one-dimensional and H^1 vanishes."
+                ),
+                input={
+                    "sheaf": {
+                        "complex": _INTERVAL_CANONICAL,
+                        "coefficient_field": "QQ",
+                        "prime": None,
+                        "stalks": [
+                            {"simplex": ["a"], "basis": ["x"]},
+                            {"simplex": ["b"], "basis": ["x"]},
+                            {"simplex": ["a", "b"], "basis": ["x"]},
+                        ],
+                        "cover_restrictions": [
+                            {
+                                "source": ["a"],
+                                "target": ["a", "b"],
+                                "row_basis": ["x"],
+                                "column_basis": ["x"],
+                                "entries": [["1"]],
+                                "cover_path": [["a"], ["a", "b"]],
+                            },
+                            {
+                                "source": ["b"],
+                                "target": ["a", "b"],
+                                "row_basis": ["x"],
+                                "column_basis": ["x"],
+                                "entries": [["1"]],
+                                "cover_path": [["b"], ["a", "b"]],
+                            },
+                        ],
+                        "derived_restrictions": [],
+                        "diamonds": 0,
+                        "comparable_pairs": 2,
+                    }
+                },
+            ),
+        ),
+    ),
     MathTool(
         operation_id="cellular_sheaf.from_cover_maps.compute",
         title="Construct a cellular sheaf from its cover restriction maps",

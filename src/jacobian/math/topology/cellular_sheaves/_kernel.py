@@ -25,6 +25,7 @@ from jacobian.math.topology._request_admission import (
     require_canonical_complex_admission,
 )
 from jacobian.math.topology.cellular_sheaves._models import (
+    MAX_SHEAF_COHOMOLOGY_CELLS,
     MAX_SHEAF_COVER_MAPS,
     MAX_SHEAF_DERIVED_RESTRICTIONS,
     MAX_SHEAF_DIAMONDS,
@@ -38,6 +39,10 @@ from jacobian.math.topology.cellular_sheaves._models import (
     DiamondCounterexample,
     FiniteCellularSheaf,
     FromCoverMapsResult,
+    SheafCoboundaryLedgerEntry,
+    SheafCochainCoordinate,
+    SheafCohomologyGroup,
+    SheafCohomologyResult,
     SheafField,
     SheafObstruction,
     SheafObstructionCode,
@@ -507,6 +512,412 @@ def _negative(obstruction: SheafObstruction) -> FromCoverMapsResult:
         sheaf=None,
         obstruction=obstruction,
     )
+
+
+def _cochain_neg(field: _ExactField, value: Scalar) -> Scalar:
+    if field.field is SheafField.RATIONAL:
+        assert isinstance(value, Fraction)
+        return -value
+    assert field.prime is not None
+    return (-int(value)) % field.prime
+
+
+def _cochain_inv(field: _ExactField, value: Scalar) -> Scalar:
+    if field.field is SheafField.RATIONAL:
+        assert isinstance(value, Fraction)
+        return Fraction(1, 1) / value
+    assert field.prime is not None
+    return pow(int(value), -1, field.prime)
+
+
+def _cochain_add(field: _ExactField, left: Scalar, right: Scalar) -> Scalar:
+    total = left + right
+    if field.field is SheafField.PRIME_FIELD:
+        assert field.prime is not None
+        return int(total) % field.prime
+    return total
+
+
+def _cochain_mul(field: _ExactField, left: Scalar, right: Scalar) -> Scalar:
+    product = left * right
+    if field.field is SheafField.PRIME_FIELD:
+        assert field.prime is not None
+        return int(product) % field.prime
+    return product
+
+
+def _cochain_rref(
+    field: _ExactField, matrix: list[list[Scalar]]
+) -> tuple[list[list[Scalar]], tuple[int, ...]]:
+    """Exact reduced row echelon form over the declared sheaf field."""
+    rows = [list(row) for row in matrix]
+    pivots: list[int] = []
+    pivot_row = 0
+    columns = len(rows[0]) if rows else 0
+    for column in range(columns):
+        candidate: int | None = None
+        for row in range(pivot_row, len(rows)):
+            if rows[row][column] != 0:
+                candidate = row
+                break
+        if candidate is None:
+            continue
+        rows[pivot_row], rows[candidate] = rows[candidate], rows[pivot_row]
+        scale = _cochain_inv(field, rows[pivot_row][column])
+        rows[pivot_row] = [
+            _cochain_mul(field, value, scale) for value in rows[pivot_row]
+        ]
+        for row in range(len(rows)):
+            if row != pivot_row and rows[row][column] != 0:
+                factor = rows[row][column]
+                rows[row] = [
+                    _cochain_add(
+                        field,
+                        current,
+                        _cochain_neg(field, _cochain_mul(field, factor, pivot)),
+                    )
+                    for current, pivot in zip(rows[row], rows[pivot_row], strict=True)
+                ]
+        pivots.append(column)
+        pivot_row += 1
+    return rows, tuple(pivots)
+
+
+def _cochain_rank(field: _ExactField, rows: list[list[Scalar]]) -> int:
+    if not rows or not rows[0]:
+        return 0
+    _, pivots = _cochain_rref(field, rows)
+    return len(pivots)
+
+
+def _cochain_nullspace(
+    field: _ExactField, rows: list[list[Scalar]], width: int
+) -> list[list[Scalar]]:
+    """Basis of ``{x : rows @ x == 0}`` over the declared sheaf field."""
+    if not rows:
+        return [
+            [
+                field.one() if position == column else field.zero()
+                for position in range(width)
+            ]
+            for column in range(width)
+        ]
+    reduced, pivots = _cochain_rref(field, rows)
+    pivot_set = set(pivots)
+    basis: list[list[Scalar]] = []
+    for column in range(width):
+        if column in pivot_set:
+            continue
+        vector = [field.zero() for _ in range(width)]
+        vector[column] = field.one()
+        for row_index, pivot in enumerate(pivots):
+            vector[pivot] = _cochain_neg(field, reduced[row_index][column])
+        basis.append(vector)
+    return basis
+
+
+def _cochain_in_span(
+    field: _ExactField, basis: list[list[Scalar]], vector: list[Scalar]
+) -> bool:
+    if not basis:
+        return all(value == 0 for value in vector)
+    system = _transpose_rows(basis)
+    if not system:
+        return all(value == 0 for value in vector)
+    augmented = [[*row, rhs] for row, rhs in zip(system, vector, strict=True)]
+    width = len(augmented[0])
+    reduced, _ = _cochain_rref(field, augmented)
+    return not any(
+        all(value == 0 for value in row[: width - 1]) and row[width - 1] != 0
+        for row in reduced
+    )
+
+
+def _cochain_mat_vec(
+    field: _ExactField, matrix: list[list[Scalar]], vector: list[Scalar]
+) -> list[Scalar]:
+    result: list[Scalar] = []
+    for row in matrix:
+        total = field.zero()
+        for left, right in zip(row, vector, strict=True):
+            total = _cochain_add(field, total, _cochain_mul(field, left, right))
+        result.append(total)
+    return result
+
+
+def _cochain_mat_mul(
+    field: _ExactField, left: list[list[Scalar]], right: list[list[Scalar]]
+) -> list[list[Scalar]]:
+    if not left or not right or not right[0]:
+        return [[] for _ in range(len(left))]
+    columns = len(right[0])
+    inner = len(right)
+    product: list[list[Scalar]] = []
+    for left_row in left:
+        row: list[Scalar] = []
+        for column in range(columns):
+            total = field.zero()
+            for step in range(inner):
+                total = _cochain_add(
+                    field,
+                    total,
+                    _cochain_mul(field, left_row[step], right[step][column]),
+                )
+            row.append(total)
+        product.append(row)
+    return product
+
+
+def _cohomology_admission(sheaf: FiniteCellularSheaf) -> _ExactField:
+    """Admit the sheaf field and the cochain work envelope exactly once."""
+    field = _admit_field(sheaf.coefficient_field, sheaf.prime)
+    if sheaf.coefficient_field is SheafField.PRIME_FIELD:
+        assert sheaf.prime is not None
+        if not _is_prime(sheaf.prime):
+            raise _domain(
+                "prime_not_admitted",
+                "cellular cohomology needs a prime modulus",
+                ("sheaf", "prime"),
+            )
+    cells = _cells(sheaf.complex)
+    if len(cells) > MAX_SHEAF_SIMPLICES:
+        raise _resource(
+            "cohomology.simplices",
+            "cellular cohomology admits at most "
+            f"{MAX_SHEAF_SIMPLICES} nonempty simplices",
+            ("sheaf",),
+        )
+    for index, stalk in enumerate(sheaf.stalks):
+        if len(stalk.basis) > MAX_SHEAF_STALK_RANK:
+            raise _resource(
+                "cohomology.stalk_rank",
+                f"stalk {index} has rank {len(stalk.basis)}, above the "
+                f"{MAX_SHEAF_STALK_RANK}-dimension stalk envelope",
+                ("sheaf", "stalks", index),
+            )
+    basis_for = {stalk.simplex: stalk.basis for stalk in sheaf.stalks}
+    cochain_sizes = [
+        sum(len(basis_for[face]) for face in group.faces)
+        for group in sheaf.complex.faces_by_dimension
+    ]
+    if sum(cochain_sizes) > MAX_SHEAF_TOTAL_STALK_RANK:
+        raise _resource(
+            "cohomology.total_stalk_rank",
+            "the cochain complex exceeds the "
+            f"{MAX_SHEAF_TOTAL_STALK_RANK}-coordinate envelope",
+            ("sheaf",),
+        )
+    work_cells = sum(
+        cochain_sizes[degree] * cochain_sizes[degree + 1]
+        for degree in range(len(cochain_sizes) - 1)
+    )
+    if work_cells > MAX_SHEAF_COHOMOLOGY_CELLS:
+        raise _resource(
+            "cohomology.coboundary_cells",
+            f"the coboundary matrices allocate {work_cells} cells, above the "
+            f"{MAX_SHEAF_COHOMOLOGY_CELLS}-cell envelope",
+            ("sheaf",),
+        )
+    return field
+
+
+def sheaf_cohomology(  # noqa: C901
+    sheaf: FiniteCellularSheaf,
+) -> SheafCohomologyResult:
+    """Compute cellular cohomology of a checked finite cellular sheaf.
+
+    The kernel assembles the signed-incidence cochain complex from the
+    complete restriction diagram, replays ``delta^2 = 0`` and the
+    Euler-characteristic identity, and returns Betti numbers with
+    representative cocycles. Diamond commutativity, already established
+    by construction, is what makes the signed coboundary square to zero.
+    """
+    field = _cohomology_admission(sheaf)
+    basis_for = {stalk.simplex: stalk.basis for stalk in sheaf.stalks}
+    parsed: dict[CoverKey, Matrix] = {}
+    for restriction in (*sheaf.cover_restrictions, *sheaf.derived_restrictions):
+        key: CoverKey = (restriction.source, restriction.target)
+        if len(restriction.entries) != len(basis_for[restriction.target]) or any(
+            len(row) != len(basis_for[restriction.source])
+            for row in restriction.entries
+        ):
+            raise _domain(
+                "restriction_axis_mismatch",
+                "restriction entries must match the declared stalk bases",
+                ("sheaf",),
+            )
+        try:
+            parsed[key] = tuple(
+                tuple(field.parse(entry) for entry in row)
+                for row in restriction.entries
+            )
+        except (ValueError, ZeroDivisionError) as exc:
+            raise _domain(
+                "entry_not_exact",
+                f"the restriction for ({list(key[0])}, {list(key[1])}) carries "
+                f"a scalar outside the declared exact field: {exc}",
+                ("sheaf",),
+            ) from exc
+    cells = _cells(sheaf.complex)
+    for source in cells:
+        for target in cells:
+            if (
+                source != target
+                and set(source) < set(target)
+                and (
+                    source,
+                    target,
+                )
+                not in parsed
+            ):
+                raise _domain(
+                    "restriction_diagram_incomplete",
+                    "cellular cohomology needs the complete derived "
+                    f"restriction diagram; the first missing pair is "
+                    f"({list(source)}, {list(target)})",
+                    ("sheaf",),
+                )
+
+    faces_by_degree = [list(group.faces) for group in sheaf.complex.faces_by_dimension]
+    dimension = sheaf.complex.dimension
+    cochain_bases: list[list[SheafCochainCoordinate]] = []
+    offsets: list[dict[tuple[Simplex, str], int]] = []
+    for faces in faces_by_degree:
+        basis: list[SheafCochainCoordinate] = []
+        offset: dict[tuple[Simplex, str], int] = {}
+        for face in faces:
+            for label in basis_for[face]:
+                offset[(face, label)] = len(basis)
+                basis.append(SheafCochainCoordinate(simplex=face, basis_label=label))
+        cochain_bases.append(basis)
+        offsets.append(offset)
+    cochain_sizes = [len(basis) for basis in cochain_bases]
+
+    scalar_coboundaries: list[list[list[Scalar]]] = []
+    for degree in range(dimension):
+        block = [
+            [field.zero() for _ in range(cochain_sizes[degree])]
+            for _ in range(cochain_sizes[degree + 1])
+        ]
+        for coface in faces_by_degree[degree + 1]:
+            for position in range(len(coface)):
+                face = coface[:position] + coface[position + 1 :]
+                if face not in basis_for:
+                    continue
+                restriction_matrix = parsed[(face, coface)]
+                for row, label in enumerate(basis_for[coface]):
+                    for column, source_label in enumerate(basis_for[face]):
+                        value = restriction_matrix[row][column]
+                        if position % 2 == 1:
+                            value = _cochain_neg(field, value)
+                        current = block[offsets[degree + 1][(coface, label)]][
+                            offsets[degree][(face, source_label)]
+                        ]
+                        block[offsets[degree + 1][(coface, label)]][
+                            offsets[degree][(face, source_label)]
+                        ] = _cochain_add(field, current, value)
+        scalar_coboundaries.append(block)
+
+    ledger: list[SheafCoboundaryLedgerEntry] = []
+    for degree in range(max(0, dimension - 1)):
+        product = _cochain_mat_mul(
+            field, scalar_coboundaries[degree + 1], scalar_coboundaries[degree]
+        )
+        if any(value != 0 for row in product for value in row):
+            raise _domain(
+                "coboundary_square_nonzero",
+                "the cellular coboundary must square to zero",
+                ("sheaf",),
+            )
+        ledger.append(
+            SheafCoboundaryLedgerEntry(
+                degree=degree,
+                product_rows=cochain_sizes[degree + 2],
+                product_columns=cochain_sizes[degree],
+                nonzero_entries=0,
+            )
+        )
+
+    groups: list[SheafCohomologyGroup] = []
+    euler_cohomology = 0
+    for degree in range(dimension + 1):
+        outgoing = scalar_coboundaries[degree] if degree < dimension else []
+        cocycles = _cochain_nullspace(field, outgoing, cochain_sizes[degree])
+        incoming = scalar_coboundaries[degree - 1] if degree > 0 else []
+        incoming_rank = _cochain_rank(field, incoming)
+        # Coboundaries in C^k coordinates are the column space of delta^{k-1}.
+        boundary_rows = _transpose_rows(incoming)
+        chosen: list[list[Scalar]] = []
+        representatives: list[list[Scalar]] = []
+        for cocycle in cocycles:
+            if not _cochain_in_span(field, boundary_rows + chosen, cocycle):
+                chosen.append(list(cocycle))
+                representatives.append(list(cocycle))
+        betti = len(cocycles) - incoming_rank
+        if len(representatives) != betti:
+            raise _domain(
+                "cohomology_quotient_invalid",
+                "cocycle representatives must span the cohomology quotient",
+                ("sheaf",),
+            )
+        for vector in representatives:
+            residual = _cochain_mat_vec(field, outgoing, vector)
+            if any(value != 0 for value in residual):
+                raise _domain(
+                    "cocycle_kernel_invalid",
+                    "a representative cocycle lies outside the kernel",
+                    ("sheaf",),
+                )
+        groups.append(
+            SheafCohomologyGroup(
+                degree=degree,
+                cochain_dimension=cochain_sizes[degree],
+                cocycle_rank=len(cocycles),
+                coboundary_rank=incoming_rank,
+                betti_number=betti,
+                cocycle_representatives=tuple(
+                    tuple(field.text(value) for value in vector)
+                    for vector in representatives
+                ),
+            )
+        )
+        euler_cohomology += betti if degree % 2 == 0 else -betti
+    euler_stalk = sum(
+        (len(basis_for[face]) if degree % 2 == 0 else -len(basis_for[face]))
+        for degree, faces in enumerate(faces_by_degree)
+        for face in faces
+    )
+    if euler_stalk != euler_cohomology:
+        raise _domain(
+            "euler_characteristic_mismatch",
+            "the stalk and cohomology Euler characteristics must agree",
+            ("sheaf",),
+        )
+    return SheafCohomologyResult._from_kernel(
+        sheaf=sheaf,
+        cochain_dimensions=tuple(cochain_sizes),
+        cochain_bases=tuple(tuple(basis) for basis in cochain_bases),
+        coboundary_matrices=tuple(
+            tuple(tuple(field.text(value) for value in row) for row in block)
+            for block in scalar_coboundaries
+        ),
+        groups=tuple(groups),
+        euler_characteristic_stalk=euler_stalk,
+        euler_characteristic_cohomology=euler_cohomology,
+        differential_squared_zero=tuple(ledger),
+    )
+
+
+def _transpose_rows(rows: list[list[Scalar]]) -> list[list[Scalar]]:
+    if not rows:
+        return []
+    return [
+        [rows[row][column] for row in range(len(rows))]
+        for column in range(len(rows[0]))
+    ]
+
+
+__all__ = ["from_cover_maps", "sheaf_cohomology"]
 
 
 def from_cover_maps(

@@ -13,9 +13,14 @@ from jacobian.math.topology.chain_complexes._filtered_models import (
     MAX_FILTER_AMBIENT_DIMENSION,
     MAX_FILTER_LEVELS,
     MAX_FILTER_VECTORS_PER_GROUP,
+    MAX_SPECTRAL_PAGE,
     AssociatedGradedResult,
     FiltrationLevel,
     GradedSquareLedgerEntry,
+    SpectralDifferential,
+    SpectralPageResult,
+    SpectralPageStatus,
+    SpectralSquareLedgerEntry,
 )
 from jacobian.math.topology.chain_complexes.values import (
     ChainComplexValue,
@@ -27,7 +32,12 @@ Scalar = Fraction | int
 Matrix = list[list[Scalar]]
 VectorList = list[Scalar]
 
-__all__ = ["admit_filtered", "associated_graded"]
+__all__ = [
+    "admit_filtered",
+    "admit_spectral_page",
+    "associated_graded",
+    "spectral_page",
+]
 
 
 def _fail(
@@ -220,9 +230,11 @@ def _solve(system: Matrix, target: VectorList, prime: int | None) -> VectorList 
         if all(_is_zero(value) for value in row[:width]) and not _is_zero(row[width]):
             return None
     solution: VectorList = [_parse_entry("0", prime) for _ in range(width)]
-    for row, pivot in zip(reduced, pivots, strict=True):
+    # Reduced echelon form keeps pivot rows first, so pivot ``i`` owns
+    # ``reduced[i]`` even when dependent rows leave trailing zero rows.
+    for row_index, pivot in enumerate(pivots):
         if pivot < width:
-            solution[pivot] = row[width]
+            solution[pivot] = reduced[row_index][width]
     return solution
 
 
@@ -274,6 +286,331 @@ def _mat_mul(left: Matrix, right: Matrix, prime: int | None) -> Matrix:
         return [[] for _ in range(len(left))]
     columns = _transpose(right)
     return [[_dot(row, column, prime) for column in columns] for row in left]
+
+
+def admit_spectral_page(page: int) -> None:
+    """Shared native+catalog admission for one requested spectral page."""
+    if isinstance(page, bool) or not isinstance(page, int):
+        raise _fail(
+            ("page",),
+            "spectral_sequence.page_type_invalid",
+            "the requested spectral page must be an integer",
+        )
+    if page < 0:
+        raise _fail(
+            ("page",),
+            "spectral_sequence.page_negative",
+            "the requested spectral page must be nonnegative",
+        )
+    if page > MAX_SPECTRAL_PAGE:
+        raise OperationResourceAdmissionError(
+            location=("page",),
+            code="spectral_sequence.page_budget_exceeded",
+            message="spectral pages admit at most "
+            f"page {MAX_SPECTRAL_PAGE} within the bounded bidegree window",
+        )
+
+
+def _zero_vector(width: int, prime: int | None) -> VectorList:
+    return [_parse_entry("0", prime) for _ in range(width)]
+
+
+def _rank_of(rows: Matrix, prime: int | None) -> int:
+    if not rows or not rows[0]:
+        return 0
+    _, pivots = _rref(rows, prime)
+    return len(pivots)
+
+
+def _nullspace(rows: Matrix, width: int, prime: int | None) -> Matrix:
+    """Basis of ``{x in F^width : rows @ x == 0}`` in ambient coordinates."""
+    if not rows:
+        one = _parse_entry("1", prime)
+        return [
+            [_parse_entry("0", prime) if i != j else one for i in range(width)]
+            for j in range(width)
+        ]
+    reduced, pivots = _rref(rows, prime)
+    pivot_set = set(pivots)
+    free = [column for column in range(width) if column not in pivot_set]
+    basis: Matrix = []
+    for column in free:
+        vector = _zero_vector(width, prime)
+        vector[column] = _parse_entry("1", prime)
+        for row_index, pivot in enumerate(pivots):
+            vector[pivot] = _neg(reduced[row_index][column], prime)
+        basis.append(vector)
+    return basis
+
+
+def _cycle_rows(
+    level_bases: list[list[Matrix]],
+    differentials: list[Matrix],
+    ambient_sizes: tuple[int, ...],
+    level: int,
+    degree_index: int,
+    cycles: int,
+    prime: int | None,
+) -> Matrix:
+    """Reduced basis of Z^s_{p, n - p} inside ambient C_n coordinates.
+
+    ``Z^s`` holds the level-``p`` chains whose differential lands ``s``
+    levels lower; ``s = 0`` is the full filtration subspace itself.
+    """
+    if level < 0:
+        return []
+    upper = level_bases[min(level, len(level_bases) - 1)][degree_index]
+    if cycles <= 0 or degree_index == 0:
+        return [list(row) for row in upper]
+    width = ambient_sizes[degree_index - 1]
+    lower = (
+        []
+        if level - cycles < 0
+        else level_bases[min(level - cycles, len(level_bases) - 1)][degree_index - 1]
+    )
+    images = [_mat_vec(differentials[degree_index - 1], row, prime) for row in upper]
+    orthogonal = _nullspace(lower, width, prime)
+    if not orthogonal:
+        return [list(row) for row in upper]
+    constraint = _mat_mul(images, _transpose(orthogonal), prime)
+    coordinates = _nullspace(_transpose(constraint), len(constraint), prime)
+    combined: Matrix = []
+    for weights in coordinates:
+        vector = _zero_vector(ambient_sizes[degree_index], prime)
+        for weight, row in zip(weights, upper, strict=True):
+            vector = [
+                _add(current, _mul(weight, value, prime), prime)
+                for current, value in zip(vector, row, strict=True)
+            ]
+        combined.append(vector)
+    return _row_basis(combined, prime)
+
+
+def _denominator_rows(
+    level_bases: list[list[Matrix]],
+    differentials: list[Matrix],
+    ambient_sizes: tuple[int, ...],
+    level: int,
+    degree_index: int,
+    page: int,
+    prime: int | None,
+) -> Matrix:
+    """Reduced basis of D^r inside ambient C_n coordinates.
+
+    ``D^r = Z^{r-1}_{p-1} + d(Z^{r-1}_{p+r-1})``; the incoming cycles are
+    clamped to the exhaustive top filtration level.
+    """
+    degree_count = len(ambient_sizes)
+    lower = (
+        []
+        if level - 1 < 0
+        else _cycle_rows(
+            level_bases,
+            differentials,
+            ambient_sizes,
+            level - 1,
+            degree_index,
+            page - 1,
+            prime,
+        )
+    )
+    incoming: Matrix = []
+    if degree_index + 1 < degree_count:
+        rising = _cycle_rows(
+            level_bases,
+            differentials,
+            ambient_sizes,
+            level + page - 1,
+            degree_index + 1,
+            page - 1,
+            prime,
+        )
+        incoming = [_mat_vec(differentials[degree_index], row, prime) for row in rising]
+    return _row_basis([*lower, *incoming], prime)
+
+
+def _quotient_extension(lower: Matrix, upper: Matrix, prime: int | None) -> Matrix:
+    """Rows of ``upper`` extending ``lower`` to a quotient basis."""
+    chosen: Matrix = []
+    for candidate in upper:
+        if not _in_span(lower + chosen, candidate, prime):
+            chosen.append(list(candidate))
+    return chosen
+
+
+def _spectral_bidegree_page(  # noqa: C901
+    complex_value: ChainComplexValue,
+    filtration: tuple[FiltrationLevel, ...],
+    level_bases: list[list[Matrix]],
+    differentials: list[Matrix],
+    page: int,
+) -> SpectralPageResult:
+    """Compute E^r for ``r >= 1`` from the admitted filtration data."""
+    prime = complex_value.prime
+    degree_count = len(complex_value.basis_sizes)
+    level_count = len(filtration)
+    ambient_sizes = tuple(complex_value.basis_sizes)
+
+    cycle_grid: list[list[Matrix]] = [
+        [[] for _ in range(degree_count)] for _ in range(level_count)
+    ]
+    denominator_grid: list[list[Matrix]] = [
+        [[] for _ in range(degree_count)] for _ in range(level_count)
+    ]
+    combined_grid: list[list[Matrix]] = [
+        [[] for _ in range(degree_count)] for _ in range(level_count)
+    ]
+    dimensions: list[list[int]] = [
+        [0 for _ in range(degree_count)] for _ in range(level_count)
+    ]
+    representatives: list[list[list[tuple[str, ...]]]] = [
+        [[] for _ in range(degree_count)] for _ in range(level_count)
+    ]
+    for level in range(level_count):
+        for index in range(degree_count):
+            cycles = _cycle_rows(
+                level_bases, differentials, ambient_sizes, level, index, page, prime
+            )
+            denominator = _denominator_rows(
+                level_bases, differentials, ambient_sizes, level, index, page, prime
+            )
+            for vector in denominator:
+                if not _in_span(cycles, vector, prime):
+                    raise _fail(
+                        ("filtration", level),
+                        "spectral_sequence.denominator_not_cycles",
+                        "the page denominator must lie inside the page cycles",
+                    )
+            quotient = _quotient_extension(denominator, cycles, prime)
+            cycle_grid[level][index] = cycles
+            denominator_grid[level][index] = denominator
+            combined_grid[level][index] = [*denominator, *quotient]
+            dimensions[level][index] = len(quotient)
+            representatives[level][index] = [
+                tuple(_serialize_scalar(value, prime) for value in row)
+                for row in quotient
+            ]
+
+    records: list[SpectralDifferential] = []
+    scalar_records: dict[tuple[int, int], Matrix] = {}
+    for level in range(level_count):
+        for index in range(degree_count):
+            if index == 0 or level - page < 0:
+                continue
+            source_degree = complex_value.degree_min + index
+            target_degree = source_degree - 1
+            target_level = level - page
+            target_combined = combined_grid[target_level][index - 1]
+            target_denominator = denominator_grid[target_level][index - 1]
+            target_dim = dimensions[target_level][index - 1]
+            source_dim = dimensions[level][index]
+            block: Matrix = [_zero_vector(source_dim, prime) for _ in range(target_dim)]
+            for column, rep in enumerate(
+                combined_grid[level][index][len(denominator_grid[level][index]) :]
+            ):
+                image = _mat_vec(differentials[index - 1], rep, prime)
+                try:
+                    coordinates = _coordinates(target_combined, image, prime)
+                except ValueError as exc:
+                    raise _fail(
+                        ("filtration", level),
+                        "spectral_sequence.differential_not_closed",
+                        "a page differential lands outside the target cycles",
+                    ) from exc
+                for row in range(target_dim):
+                    block[row][column] = coordinates[len(target_denominator) + row]
+            for bound in denominator_grid[level][index]:
+                image = _mat_vec(differentials[index - 1], bound, prime)
+                if not _in_span(target_denominator, image, prime):
+                    raise _fail(
+                        ("filtration", level),
+                        "spectral_sequence.differential_not_well_defined",
+                        "a page denominator must map into the target denominator",
+                    )
+            scalar_records[(level, index)] = block
+            records.append(
+                SpectralDifferential(
+                    source_level=level,
+                    source_degree=source_degree,
+                    target_level=target_level,
+                    target_degree=target_degree,
+                    rows=target_dim,
+                    columns=source_dim,
+                    entries=tuple(
+                        tuple(_serialize_scalar(value, prime) for value in row)
+                        for row in block
+                    ),
+                )
+            )
+
+    by_source = {
+        (record.source_level, record.source_degree): record for record in records
+    }
+    ledger: list[SpectralSquareLedgerEntry] = []
+    for record in records:
+        follower = by_source.get((record.target_level, record.target_degree))
+        if follower is None:
+            continue
+        first = scalar_records[
+            (record.source_level, record.source_degree - complex_value.degree_min)
+        ]
+        second = scalar_records[
+            (follower.source_level, follower.source_degree - complex_value.degree_min)
+        ]
+        product = _mat_mul(second, first, prime)
+        if any(not _is_zero(value) for row in product for value in row):
+            raise _fail(
+                ("filtration", record.source_level),
+                "spectral_sequence.square_nonzero",
+                "the page differentials must compose to zero",
+            )
+        ledger.append(
+            SpectralSquareLedgerEntry(
+                source_level=record.source_level,
+                source_degree=record.source_degree,
+                middle_level=record.target_level,
+                middle_degree=record.target_degree,
+                product_rows=follower.rows,
+                product_columns=record.columns,
+                nonzero_entries=0,
+            )
+        )
+
+    ranks = {key: _rank_of(block, prime) for key, block in scalar_records.items()}
+    next_dimensions: list[list[int]] = [
+        [0 for _ in range(degree_count)] for _ in range(level_count)
+    ]
+    for level in range(level_count):
+        for index in range(degree_count):
+            outgoing = ranks.get((level, index), 0)
+            incoming = ranks.get((level + page, index + 1), 0)
+            next_dimensions[level][index] = (
+                dimensions[level][index] - outgoing - incoming
+            )
+    vanishes = all(rank == 0 for rank in ranks.values())
+    if vanishes and page >= level_count - 1:
+        status = SpectralPageStatus.STABILIZED
+    elif page >= MAX_SPECTRAL_PAGE:
+        status = SpectralPageStatus.TRUNCATED
+    else:
+        status = SpectralPageStatus.ACTIVE
+    return SpectralPageResult._from_kernel(
+        complex=complex_value,
+        filtration=filtration,
+        page=page,
+        max_page=MAX_SPECTRAL_PAGE,
+        level_count=level_count,
+        degree_min=complex_value.degree_min,
+        degree_max=complex_value.degree_max,
+        page_dimensions=tuple(tuple(row) for row in dimensions),
+        page_representatives=tuple(
+            tuple(tuple(degree) for degree in level) for level in representatives
+        ),
+        differentials=tuple(records),
+        differential_squared_zero=tuple(ledger),
+        next_page_dimensions=tuple(tuple(row) for row in next_dimensions),
+        page_status=status,
+    )
 
 
 def associated_graded(  # noqa: C901
@@ -421,4 +758,147 @@ def associated_graded(  # noqa: C901
             tuple(matrix for matrix in level) for level in graded_differentials
         ),
         differential_squared_zero=tuple(ledger),
+    )
+
+
+def _spectral_zero_page(
+    graded: AssociatedGradedResult,
+    page: int,
+) -> SpectralPageResult:
+    """Lift the associated graded value to the E^0 page result shape."""
+    complex_value = graded.complex
+    prime = complex_value.prime
+    degree_count = len(complex_value.basis_sizes)
+    records: list[SpectralDifferential] = []
+    scalar_records: dict[tuple[int, int], Matrix] = {}
+    for level, diffs in enumerate(graded.graded_differentials):
+        for index, matrix in enumerate(diffs):
+            block = [[_parse_entry(entry, prime) for entry in row] for row in matrix]
+            scalar_records[(level, index + 1)] = block
+            records.append(
+                SpectralDifferential(
+                    source_level=level,
+                    source_degree=complex_value.degree_min + index + 1,
+                    target_level=level,
+                    target_degree=complex_value.degree_min + index,
+                    rows=graded.graded_dimensions[level][index],
+                    columns=graded.graded_dimensions[level][index + 1],
+                    entries=matrix,
+                )
+            )
+    by_source = {
+        (record.source_level, record.source_degree): record for record in records
+    }
+    ledger: list[SpectralSquareLedgerEntry] = []
+    for record in records:
+        follower = by_source.get((record.target_level, record.target_degree))
+        if follower is None:
+            continue
+        first = scalar_records[
+            (record.source_level, record.source_degree - complex_value.degree_min)
+        ]
+        second = scalar_records[
+            (
+                follower.source_level,
+                follower.source_degree - complex_value.degree_min,
+            )
+        ]
+        product = _mat_mul(second, first, prime)
+        if any(not _is_zero(value) for row in product for value in row):
+            raise _fail(
+                ("filtration", record.source_level),
+                "spectral_sequence.square_nonzero",
+                "the page differentials must compose to zero",
+            )
+        ledger.append(
+            SpectralSquareLedgerEntry(
+                source_level=record.source_level,
+                source_degree=record.source_degree,
+                middle_level=record.target_level,
+                middle_degree=record.target_degree,
+                product_rows=follower.rows,
+                product_columns=record.columns,
+                nonzero_entries=0,
+            )
+        )
+    ranks = {key: _rank_of(block, prime) for key, block in scalar_records.items()}
+    next_dimensions = [
+        [
+            graded.graded_dimensions[level][index]
+            - ranks.get((level, index), 0)
+            - ranks.get((level, index + 1), 0)
+            for index in range(degree_count)
+        ]
+        for level in range(len(graded.filtration))
+    ]
+    vanishes = all(rank == 0 for rank in ranks.values())
+    if vanishes and page >= len(graded.filtration) - 1:
+        status = SpectralPageStatus.STABILIZED
+    elif page >= MAX_SPECTRAL_PAGE:
+        status = SpectralPageStatus.TRUNCATED
+    else:
+        status = SpectralPageStatus.ACTIVE
+    return SpectralPageResult._from_kernel(
+        complex=complex_value,
+        filtration=graded.filtration,
+        page=page,
+        max_page=MAX_SPECTRAL_PAGE,
+        level_count=len(graded.filtration),
+        degree_min=complex_value.degree_min,
+        degree_max=complex_value.degree_max,
+        page_dimensions=graded.graded_dimensions,
+        page_representatives=graded.quotient_representatives,
+        differentials=tuple(records),
+        differential_squared_zero=tuple(ledger),
+        next_page_dimensions=tuple(tuple(row) for row in next_dimensions),
+        page_status=status,
+    )
+
+
+def spectral_page(
+    complex_value: ChainComplexValue,
+    filtration: tuple[FiltrationLevel, ...],
+    page: int,
+) -> SpectralPageResult:
+    """Compute the E^r page of an admitted filtered chain complex.
+
+    Page 0 reuses the associated-graded kernel unchanged; later pages
+    form the bigraded quotients ``Z^r / D^r`` with the induced ``d^r``
+    differentials of bidegree ``(-r, r - 1)`` and replay ``d^r d^r = 0``
+    inside the kernel.
+    """
+    admit_spectral_page(page)
+    if page == 0:
+        return _spectral_zero_page(associated_graded(complex_value, filtration), page)
+    admit_filtered(complex_value, filtration)
+    prime = complex_value.prime
+    degree_count = len(complex_value.basis_sizes)
+    differentials = [
+        [[_parse_entry(entry, prime) for entry in row] for row in matrix]
+        for matrix in complex_value.differential_matrices
+    ]
+    for index in range(len(differentials) - 1):
+        product = _mat_mul(differentials[index], differentials[index + 1], prime)
+        if any(not _is_zero(value) for row in product for value in row):
+            raise _fail(
+                ("complex",),
+                "spectral_sequence.source_not_a_complex",
+                "the source differentials must satisfy d^2 = 0",
+            )
+    parsed_levels: list[list[Matrix]] = [
+        [
+            [
+                [_parse_entry(entry, prime) for entry in vector]
+                for vector in level.subspaces[degree].vectors
+            ]
+            for degree in range(degree_count)
+        ]
+        for level in filtration
+    ]
+    level_bases: list[list[Matrix]] = [
+        [_row_basis(level[degree], prime) for degree in range(degree_count)]
+        for level in parsed_levels
+    ]
+    return _spectral_bidegree_page(
+        complex_value, filtration, level_bases, differentials, page
     )

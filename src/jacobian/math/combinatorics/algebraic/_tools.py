@@ -126,7 +126,13 @@ def knuth_moves(request: KnuthMovesRequest) -> KnuthMovesResult:
 def check_skew_littlewood_richardson(
     request: SkewLittlewoodRichardsonCheckRequest,
 ) -> SkewLittlewoodRichardsonCheckResult:
-    return native.check_skew_littlewood_richardson(request)
+    return native.check_skew_littlewood_richardson(
+        request.outer,
+        request.inner,
+        request.tableau,
+        request.content,
+        request.convention,
+    )
 
 
 _PARTITION_321 = {"partition": {"parts": [3, 2, 1]}}

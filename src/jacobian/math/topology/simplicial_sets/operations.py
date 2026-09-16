@@ -12,7 +12,6 @@ from jacobian.math.topology.simplicial_sets._models import (
     MAX_TOTAL_SIMPLICES,
     FiniteTruncatedSimplicialSet,
     SimplicialIdentityObstruction,
-    SimplicialSetTablesRequest,
     SimplicialSetTablesResult,
 )
 
@@ -113,13 +112,16 @@ def _compose(first: tuple[int, ...], second: tuple[int, ...]) -> tuple[int, ...]
     return tuple(second[source] for source in first)
 
 
-def from_tables(request: SimplicialSetTablesRequest) -> SimplicialSetTablesResult:
+def from_tables(
+    max_degree: int,
+    sets: DegreeSets,
+    face_maps: MapTable,
+    degeneracy_maps: MapTable,
+) -> SimplicialSetTablesResult:
     """Check every simplicial identity in degrees <= N for finite tables."""
-    sizes = admit_tables(
-        request.max_degree, request.sets, request.face_maps, request.degeneracy_maps
-    )
+    sizes = admit_tables(max_degree, sets, face_maps, degeneracy_maps)
     checked = 0
-    face_face_obstruction = _check_face_face(request, sizes)
+    face_face_obstruction = _check_face_face(max_degree, face_maps, sizes)
     if face_face_obstruction is not None:
         return SimplicialSetTablesResult._from_kernel(
             status="NOT_A_SIMPLICIAL_SET",
@@ -127,9 +129,9 @@ def from_tables(request: SimplicialSetTablesRequest) -> SimplicialSetTablesResul
             checked_identities=checked + face_face_obstruction[1],
             obstruction=face_face_obstruction[0],
         )
-    checked += _face_face_count(request.max_degree)
+    checked += _face_face_count(max_degree)
     degeneracy_obstruction, extra = _check_degeneracy_degeneracy(
-        request, sizes, checked
+        max_degree, degeneracy_maps, sizes, checked
     )
     if degeneracy_obstruction is not None:
         return SimplicialSetTablesResult._from_kernel(
@@ -138,8 +140,10 @@ def from_tables(request: SimplicialSetTablesRequest) -> SimplicialSetTablesResul
             checked_identities=checked + extra,
             obstruction=degeneracy_obstruction,
         )
-    checked += _degeneracy_degeneracy_count(request.max_degree)
-    face_degeneracy_obstruction, extra = _check_face_degeneracy(request, sizes, checked)
+    checked += _degeneracy_degeneracy_count(max_degree)
+    face_degeneracy_obstruction, extra = _check_face_degeneracy(
+        max_degree, sets, face_maps, degeneracy_maps, sizes, checked
+    )
     if face_degeneracy_obstruction is not None:
         return SimplicialSetTablesResult._from_kernel(
             status="NOT_A_SIMPLICIAL_SET",
@@ -147,12 +151,12 @@ def from_tables(request: SimplicialSetTablesRequest) -> SimplicialSetTablesResul
             checked_identities=checked + extra,
             obstruction=face_degeneracy_obstruction,
         )
-    checked += _face_degeneracy_count(request.max_degree)
+    checked += _face_degeneracy_count(max_degree)
     simplicial_set = FiniteTruncatedSimplicialSet._from_kernel(
-        max_degree=request.max_degree,
-        sets=request.sets,
-        face_maps=request.face_maps,
-        degeneracy_maps=request.degeneracy_maps,
+        max_degree=max_degree,
+        sets=sets,
+        face_maps=face_maps,
+        degeneracy_maps=degeneracy_maps,
         total_simplices=sum(sizes),
         checked_identities=checked,
     )
@@ -184,19 +188,20 @@ def _first_difference(left: tuple[int, ...], right: tuple[int, ...]) -> int | No
 
 
 def _check_face_face(
-    request: SimplicialSetTablesRequest, sizes: tuple[int, ...]
+    max_degree: int, face_maps: MapTable, sizes: tuple[int, ...]
 ) -> tuple[SimplicialIdentityObstruction, int] | None:
+    del sizes
     position = 0
-    for degree in range(2, request.max_degree + 1):
+    for degree in range(2, max_degree + 1):
         for outer in range(degree + 1):
             for inner in range(outer):
                 left = _compose(
-                    request.face_maps[degree - 1][outer],
-                    request.face_maps[degree - 2][inner],
+                    face_maps[degree - 1][outer],
+                    face_maps[degree - 2][inner],
                 )
                 right = _compose(
-                    request.face_maps[degree - 1][inner],
-                    request.face_maps[degree - 2][outer - 1],
+                    face_maps[degree - 1][inner],
+                    face_maps[degree - 2][outer - 1],
                 )
                 row = _first_difference(left, right)
                 if row is not None:
@@ -217,20 +222,23 @@ def _check_face_face(
 
 
 def _check_degeneracy_degeneracy(
-    request: SimplicialSetTablesRequest, sizes: tuple[int, ...], checked: int
+    max_degree: int,
+    degeneracy_maps: MapTable,
+    sizes: tuple[int, ...],
+    checked: int,
 ) -> tuple[SimplicialIdentityObstruction | None, int]:
     del sizes
     position = 0
-    for degree in range(request.max_degree - 1):
+    for degree in range(max_degree - 1):
         for outer in range(degree + 1):
             for inner in range(outer + 1):
                 left = _compose(
-                    request.degeneracy_maps[degree][outer],
-                    request.degeneracy_maps[degree + 1][inner],
+                    degeneracy_maps[degree][outer],
+                    degeneracy_maps[degree + 1][inner],
                 )
                 right = _compose(
-                    request.degeneracy_maps[degree][inner],
-                    request.degeneracy_maps[degree + 1][outer + 1],
+                    degeneracy_maps[degree][inner],
+                    degeneracy_maps[degree + 1][outer + 1],
                 )
                 row = _first_difference(left, right)
                 if row is not None:
@@ -251,31 +259,36 @@ def _check_degeneracy_degeneracy(
 
 
 def _check_face_degeneracy(
-    request: SimplicialSetTablesRequest, sizes: tuple[int, ...], checked: int
+    max_degree: int,
+    sets: DegreeSets,
+    face_maps: MapTable,
+    degeneracy_maps: MapTable,
+    sizes: tuple[int, ...],
+    checked: int,
 ) -> tuple[SimplicialIdentityObstruction | None, int]:
     del sizes, checked
     position = 0
-    for degree in range(request.max_degree):
-        level_size = len(request.sets[degree])
+    for degree in range(max_degree):
+        level_size = len(sets[degree])
         for outer in range(degree + 2):
             for inner in range(degree + 1):
                 left = _compose(
-                    request.degeneracy_maps[degree][inner],
-                    request.face_maps[degree][outer],
+                    degeneracy_maps[degree][inner],
+                    face_maps[degree][outer],
                 )
                 if degree == 0 or outer in (inner, inner + 1):
                     right = _identity_row(level_size)
                     right_description = "id"
                 elif outer < inner:
                     right = _compose(
-                        request.face_maps[degree - 1][outer],
-                        request.degeneracy_maps[degree - 1][inner - 1],
+                        face_maps[degree - 1][outer],
+                        degeneracy_maps[degree - 1][inner - 1],
                     )
                     right_description = f"s_{inner - 1} d_{outer}"
                 else:
                     right = _compose(
-                        request.face_maps[degree - 1][outer - 1],
-                        request.degeneracy_maps[degree - 1][inner],
+                        face_maps[degree - 1][outer - 1],
+                        degeneracy_maps[degree - 1][inner],
                     )
                     right_description = f"s_{inner} d_{outer - 1}"
                 row = _first_difference(left, right)

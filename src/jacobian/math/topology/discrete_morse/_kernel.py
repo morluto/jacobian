@@ -19,7 +19,6 @@ from jacobian.math.topology.discrete_morse._models import (
     MAX_MORSE_HASSE_EDGES,
     MAX_MORSE_PAIRS,
     CriticalCellProfile,
-    DiscreteMorseMatchingRequest,
     DiscreteMorseMatchingResult,
     MatchingPair,
     MorseMatchingFault,
@@ -64,7 +63,7 @@ def _cover_relations(
 
 def _admit_envelope(
     cells: tuple[tuple[Simplex, ...], ...],
-    request: DiscreteMorseMatchingRequest,
+    pairs: tuple[MatchingPair, ...],
     covers: list[tuple[Simplex, Simplex]],
 ) -> int:
     """Check every public resource bound before matching work begins."""
@@ -77,10 +76,10 @@ def _admit_envelope(
             f"{MAX_MORSE_CELLS}-cell matching envelope",
             ("complex",),
         )
-    if len(request.pairs) > MAX_MORSE_PAIRS:
+    if len(pairs) > MAX_MORSE_PAIRS:
         raise _resource(
             "admission.pairs",
-            f"the matching has {len(request.pairs)} pairs, above the "
+            f"the matching has {len(pairs)} pairs, above the "
             f"{MAX_MORSE_PAIRS}-pair envelope",
             ("pairs",),
         )
@@ -116,7 +115,7 @@ def _invalid(
 
 def _check_pairs(
     complex_: FiniteSimplicialComplex,
-    request: DiscreteMorseMatchingRequest,
+    pairs: tuple[MatchingPair, ...],
     covers: list[tuple[Simplex, Simplex]],
     cells: tuple[tuple[Simplex, ...], ...],
 ) -> (
@@ -132,7 +131,7 @@ def _check_pairs(
     matched: dict[Simplex, Simplex] = {}
     used: set[Simplex] = set()
     accepted: list[tuple[Simplex, Simplex]] = []
-    for position, pair in enumerate(request.pairs):
+    for position, pair in enumerate(pairs):
         face: Simplex = tuple(sorted(pair.face))
         coface: Simplex = tuple(sorted(pair.coface))
         for cell in (face, coface):
@@ -240,14 +239,14 @@ def _critical_profile(
 
 def construct_matching(
     complex_: FiniteSimplicialComplex,
-    request: DiscreteMorseMatchingRequest,
+    pairs: tuple[MatchingPair, ...],
 ) -> DiscreteMorseMatchingResult:
     """Decide one supplied matching against the canonical source complex."""
 
     cells = _closure_cells(complex_)
     covers = _cover_relations(cells)
-    cell_count = _admit_envelope(cells, request, covers)
-    checked = _check_pairs(complex_, request, covers, cells)
+    cell_count = _admit_envelope(cells, pairs, covers)
+    checked = _check_pairs(complex_, pairs, covers, cells)
     if isinstance(checked, DiscreteMorseMatchingResult):
         return checked
     canonical_pairs, matched, used = checked

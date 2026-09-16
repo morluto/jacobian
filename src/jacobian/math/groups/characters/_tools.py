@@ -13,7 +13,7 @@ from jacobian.math.groups.characters.operations import class_function_inner_prod
 def _run_inner_product(
     request: ClassFunctionInnerProductRequest,
 ) -> ClassFunctionInnerProductResult:
-    return class_function_inner_product(request)
+    return class_function_inner_product(request.phi, request.psi)
 
 
 def _rational_value(numerator: int) -> dict[str, Any]:

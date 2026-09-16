@@ -6,11 +6,9 @@ from jacobian.math.combinatorics.algebraic._models import (
     SkewLittlewoodRichardsonCheckRequest,
     SkewLittlewoodRichardsonCheckResult,
 )
-from jacobian.math.combinatorics.algebraic._tools import (
-    TOOLS,
-    check_skew_littlewood_richardson,
-)
+from jacobian.math.combinatorics.algebraic._tools import TOOLS
 from jacobian.math.combinatorics.algebraic.operations import (
+    check_skew_littlewood_richardson,
     verify_skew_littlewood_richardson,
 )
 from jacobian.math.combinatorics.symmetric_functions.values import (
@@ -19,24 +17,22 @@ from jacobian.math.combinatorics.symmetric_functions.values import (
 )
 
 
-def _request(
+def _args(
     outer: tuple[int, ...],
     inner: tuple[int, ...],
     rows: list[list[int]],
     content: tuple[int, ...],
-) -> SkewLittlewoodRichardsonCheckRequest:
-    return SkewLittlewoodRichardsonCheckRequest(
-        outer=IntegerPartition(parts=outer),
-        inner=IntegerPartition(parts=inner),
-        tableau=TableauCandidate(rows=tuple(tuple(row) for row in rows)),
-        content=IntegerPartition(parts=content),
+) -> tuple[IntegerPartition, IntegerPartition, TableauCandidate, IntegerPartition]:
+    return (
+        IntegerPartition(parts=outer),
+        IntegerPartition(parts=inner),
+        TableauCandidate(rows=tuple(tuple(row) for row in rows)),
+        IntegerPartition(parts=content),
     )
 
 
 def test_membership_for_small_skew_shape() -> None:
-    result = check_skew_littlewood_richardson(
-        _request((2, 1), (1,), [[1], [2]], (1, 1))
-    )
+    result = check_skew_littlewood_richardson(*_args((2, 1), (1,), [[1], [2]], (1, 1)))
 
     assert result.is_member
     assert result.failure_kind == "OK"
@@ -44,9 +40,7 @@ def test_membership_for_small_skew_shape() -> None:
 
 
 def test_lattice_word_violation_is_reported_with_prefix() -> None:
-    result = check_skew_littlewood_richardson(
-        _request((2, 1), (1,), [[2], [1]], (1, 1))
-    )
+    result = check_skew_littlewood_richardson(*_args((2, 1), (1,), [[2], [1]], (1, 1)))
 
     assert not result.is_member
     assert result.failure_kind == "LATTICE"
@@ -55,30 +49,28 @@ def test_lattice_word_violation_is_reported_with_prefix() -> None:
 
 
 def test_non_containment_is_a_cell_coverage_failure() -> None:
-    result = check_skew_littlewood_richardson(_request((1,), (2,), [[1]], (1,)))
+    result = check_skew_littlewood_richardson(*_args((1,), (2,), [[1]], (1,)))
 
     assert not result.is_member
     assert result.failure_kind == "CELL_COVERAGE"
 
 
 def test_row_coverage_mismatch_is_reported() -> None:
-    result = check_skew_littlewood_richardson(_request((2, 1), (1,), [[1, 2]], (1, 1)))
+    result = check_skew_littlewood_richardson(*_args((2, 1), (1,), [[1, 2]], (1, 1)))
 
     assert not result.is_member
     assert result.failure_kind == "CELL_COVERAGE"
 
 
 def test_column_strictness_is_replayed_on_vertical_cells() -> None:
-    result = check_skew_littlewood_richardson(
-        _request((2, 2), (1, 1), [[1], [1]], (2,))
-    )
+    result = check_skew_littlewood_richardson(*_args((2, 2), (1, 1), [[1], [1]], (2,)))
 
     assert not result.is_member
     assert result.failure_kind == "SEMISTANDARD_COLUMN"
 
 
 def test_content_mismatch_is_reported_with_value() -> None:
-    result = check_skew_littlewood_richardson(_request((2, 1), (1,), [[1], [2]], (2,)))
+    result = check_skew_littlewood_richardson(*_args((2, 1), (1,), [[1], [2]], (2,)))
 
     assert not result.is_member
     assert result.failure_kind == "CONTENT"
@@ -86,9 +78,7 @@ def test_content_mismatch_is_reported_with_value() -> None:
 
 
 def test_serialized_claim_round_trips_and_forgery_is_rejected() -> None:
-    result = check_skew_littlewood_richardson(
-        _request((2, 1), (1,), [[1], [2]], (1, 1))
-    )
+    result = check_skew_littlewood_richardson(*_args((2, 1), (1,), [[1], [2]], (1, 1)))
     decoded = SkewLittlewoodRichardsonCheckResult.model_validate_json(
         result.model_dump_json()
     )

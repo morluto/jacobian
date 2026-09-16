@@ -6,10 +6,7 @@ import pytest
 
 from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.models import OperationResourceAdmissionError
-from jacobian.math.topology._models import (
-    canonical_complex,
-    simplicial_complex_request_from_value,
-)
+from jacobian.math.topology._models import FiniteSimplicialComplex, canonical_complex
 from jacobian.math.topology.discrete_morse import (
     CriticalCellProfile,
     DiscreteMorseMatchingResult,
@@ -17,7 +14,11 @@ from jacobian.math.topology.discrete_morse import (
     MorseMatchingOutcome,
     construct_matching,
 )
-from jacobian.math.topology.discrete_morse._models import DiscreteMorseMatchingRequest
+from jacobian.math.topology.discrete_morse._models import (
+    DiscreteMorseMatchingRequest,
+    MatchingPair,
+)
+from jacobian.math.topology.operations import canonicalize
 
 OPERATION_ID = "topology.discrete_morse.matching.construct"
 
@@ -35,16 +36,31 @@ def _request(
     )
 
 
-def _circle_request(
+def _args(
+    vertices: list[str],
+    facets: list[list[str]],
     pairs: list[tuple[list[str], list[str]]],
-) -> DiscreteMorseMatchingRequest:
-    return _request(["a", "b", "c"], [["a", "b"], ["b", "c"], ["a", "c"]], pairs)
+) -> tuple[FiniteSimplicialComplex, tuple[MatchingPair, ...]]:
+    request = DiscreteMorseMatchingRequest.model_validate(
+        {
+            "complex": {"vertices": vertices, "facets": facets},
+            "pairs": [{"face": face, "coface": coface} for face, coface in pairs],
+        }
+    )
+    canonical = canonicalize(request.complex.vertices, request.complex.facets).complex
+    return canonical, request.pairs
+
+
+def _circle_args(
+    pairs: list[tuple[list[str], list[str]]],
+) -> tuple[FiniteSimplicialComplex, tuple[MatchingPair, ...]]:
+    return _args(["a", "b", "c"], [["a", "b"], ["b", "c"], ["a", "c"]], pairs)
 
 
 class TestKnownAnswer:
     def test_circle_matching_leaves_one_vertex_and_one_edge(self) -> None:
         result = construct_matching(
-            _circle_request([(["a"], ["a", "b"]), (["c"], ["a", "c"])])
+            *_circle_args([(["a"], ["a", "b"]), (["c"], ["a", "c"])])
         )
         assert result.outcome is MorseMatchingOutcome.ACYCLIC_MATCHING
         profile = result.critical_profile
@@ -57,7 +73,7 @@ class TestKnownAnswer:
 
     def test_single_two_simplex_collapses_to_one_vertex(self) -> None:
         result = construct_matching(
-            _request(
+            *_args(
                 ["a", "b", "c"],
                 [["a", "b", "c"]],
                 [
@@ -76,7 +92,7 @@ class TestKnownAnswer:
 
     def test_topological_order_respects_directed_hasse_edges(self) -> None:
         result = construct_matching(
-            _circle_request([(["a"], ["a", "b"]), (["c"], ["a", "c"])])
+            *_circle_args([(["a"], ["a", "b"]), (["c"], ["a", "c"])])
         )
         assert result.outcome is MorseMatchingOutcome.ACYCLIC_MATCHING
         order = result.topological_order
@@ -96,7 +112,7 @@ class TestKnownAnswer:
 
 class TestBoundaryDegenerate:
     def test_empty_matching_makes_every_cell_critical(self) -> None:
-        result = construct_matching(_circle_request([]))
+        result = construct_matching(*_circle_args([]))
         assert result.outcome is MorseMatchingOutcome.ACYCLIC_MATCHING
         profile = result.critical_profile
         assert profile is not None
@@ -105,7 +121,7 @@ class TestBoundaryDegenerate:
         assert result.pairs == ()
 
     def test_single_vertex_complex(self) -> None:
-        result = construct_matching(_request(["a"], [["a"]], []))
+        result = construct_matching(*_args(["a"], [["a"]], []))
         assert result.outcome is MorseMatchingOutcome.ACYCLIC_MATCHING
         profile = result.critical_profile
         assert profile is not None
@@ -116,7 +132,7 @@ class TestBoundaryDegenerate:
 
     def test_interval_full_collapse_has_one_critical_vertex(self) -> None:
         result = construct_matching(
-            _request(
+            *_args(
                 ["a", "b", "c", "d"],
                 [["a", "b"], ["b", "c"], ["c", "d"]],
                 [
@@ -133,7 +149,7 @@ class TestBoundaryDegenerate:
         assert profile.euler_characteristic == 1
 
     def test_two_isolated_points_leave_two_critical_vertices(self) -> None:
-        result = construct_matching(_request(["a", "b"], [["a"], ["b"]], []))
+        result = construct_matching(*_args(["a", "b"], [["a"], ["b"]], []))
         assert result.outcome is MorseMatchingOutcome.ACYCLIC_MATCHING
         profile = result.critical_profile
         assert profile is not None
@@ -144,7 +160,7 @@ class TestBoundaryDegenerate:
 class TestAdversarial:
     def test_cyclic_matching_returns_concrete_closed_v_path(self) -> None:
         result = construct_matching(
-            _circle_request(
+            *_circle_args(
                 [
                     (["a"], ["a", "b"]),
                     (["b"], ["b", "c"]),
@@ -161,7 +177,7 @@ class TestAdversarial:
 
     def test_closed_v_path_replays_on_the_directed_hasse_graph(self) -> None:
         result = construct_matching(
-            _circle_request(
+            *_circle_args(
                 [
                     (["a"], ["a", "b"]),
                     (["b"], ["b", "c"]),
@@ -180,7 +196,7 @@ class TestAdversarial:
 
     def test_non_cover_pair_is_rejected(self) -> None:
         result = construct_matching(
-            _request(
+            *_args(
                 ["a", "b", "c"],
                 [["a", "b", "c"]],
                 [(["a"], ["a", "b", "c"])],
@@ -191,14 +207,14 @@ class TestAdversarial:
         assert result.fault_pair_index == 0
 
     def test_unknown_cell_is_rejected(self) -> None:
-        result = construct_matching(_circle_request([(["a"], ["a", "z"])]))
+        result = construct_matching(*_circle_args([(["a"], ["a", "z"])]))
         assert result.outcome is MorseMatchingOutcome.INVALID_MATCHING
         assert result.fault is MorseMatchingFault.UNKNOWN_CELL
         assert result.fault_pair_index == 0
 
     def test_duplicate_cell_across_pairs_is_rejected(self) -> None:
         result = construct_matching(
-            _circle_request([(["a"], ["a", "b"]), (["a"], ["a", "c"])])
+            *_circle_args([(["a"], ["a", "b"]), (["a"], ["a", "c"])])
         )
         assert result.outcome is MorseMatchingOutcome.INVALID_MATCHING
         assert result.fault is MorseMatchingFault.DUPLICATE_CELL
@@ -207,7 +223,7 @@ class TestAdversarial:
     def test_source_substitution_from_equal_shaped_complex_is_rejected(
         self,
     ) -> None:
-        result = construct_matching(_circle_request([(["x"], ["x", "y"])]))
+        result = construct_matching(*_circle_args([(["x"], ["x", "y"])]))
         assert result.outcome is MorseMatchingOutcome.INVALID_MATCHING
         assert result.fault is MorseMatchingFault.UNKNOWN_CELL
 
@@ -224,7 +240,7 @@ class TestDefiningInvariant:
     def test_euler_identity_between_critical_and_closure_counts(
         self, pairs: list[tuple[list[str], list[str]]]
     ) -> None:
-        result = construct_matching(_circle_request(pairs))
+        result = construct_matching(*_circle_args(pairs))
         assert result.outcome is MorseMatchingOutcome.ACYCLIC_MATCHING
         profile = result.critical_profile
         assert profile is not None
@@ -242,7 +258,7 @@ class TestDefiningInvariant:
 
     def test_critical_and_matched_cells_partition_the_closure(self) -> None:
         result = construct_matching(
-            _circle_request([(["a"], ["a", "b"]), (["c"], ["a", "c"])])
+            *_circle_args([(["a"], ["a", "b"]), (["c"], ["a", "c"])])
         )
         assert result.outcome is MorseMatchingOutcome.ACYCLIC_MATCHING
         profile = result.critical_profile
@@ -258,8 +274,14 @@ class TestDefiningInvariant:
 class TestNativeCatalogParity:
     def test_catalog_tool_runs_the_same_kernel(self) -> None:
         tool = next(tool for tool in BUILTIN_TOOLS if tool.operation_id == OPERATION_ID)
-        request = _circle_request([(["a"], ["a", "b"]), (["c"], ["a", "c"])])
-        assert tool.run(request) == construct_matching(request)
+        request = _request(
+            ["a", "b", "c"],
+            [["a", "b"], ["b", "c"], ["a", "c"]],
+            [(["a"], ["a", "b"]), (["c"], ["a", "c"])],
+        )
+        assert tool.run(request) == construct_matching(
+            *_circle_args([(["a"], ["a", "b"]), (["c"], ["a", "c"])])
+        )
 
     def test_published_examples_execute(self) -> None:
         tool = next(tool for tool in BUILTIN_TOOLS if tool.operation_id == OPERATION_ID)
@@ -276,7 +298,7 @@ class TestNativeCatalogParity:
 class TestSerialization:
     def test_acyclic_result_round_trips(self) -> None:
         result = construct_matching(
-            _circle_request([(["a"], ["a", "b"]), (["c"], ["a", "c"])])
+            *_circle_args([(["a"], ["a", "b"]), (["c"], ["a", "c"])])
         )
         restored = DiscreteMorseMatchingResult.model_validate_json(
             result.model_dump_json()
@@ -285,7 +307,7 @@ class TestSerialization:
 
     def test_cyclic_result_round_trips(self) -> None:
         result = construct_matching(
-            _circle_request(
+            *_circle_args(
                 [
                     (["a"], ["a", "b"]),
                     (["b"], ["b", "c"]),
@@ -300,7 +322,7 @@ class TestSerialization:
 
     def test_forged_critical_profile_fails_validation(self) -> None:
         result = construct_matching(
-            _circle_request([(["a"], ["a", "b"]), (["c"], ["a", "c"])])
+            *_circle_args([(["a"], ["a", "b"]), (["c"], ["a", "c"])])
         )
         payload = result.model_dump(mode="json")
         payload["critical_profile"]["euler_characteristic"] = 7
@@ -308,7 +330,7 @@ class TestSerialization:
             DiscreteMorseMatchingResult.model_validate(payload)
 
     def test_forged_partition_fails_validation(self) -> None:
-        result = construct_matching(_circle_request([]))
+        result = construct_matching(*_circle_args([]))
         payload = result.model_dump(mode="json")
         payload["critical_profile"]["critical_cells"] = [["a"]]
         with pytest.raises(ValueError):
@@ -318,39 +340,26 @@ class TestSerialization:
 class TestEnvelope:
     def test_pair_count_above_the_envelope_is_a_resource_rejection(self) -> None:
         canonical = canonical_complex(("a", "b"), (("a", "b"),))
-        from jacobian.math.topology.discrete_morse._models import (
-            MAX_MORSE_PAIRS,
-            MatchingPair,
-        )
+        from jacobian.math.topology.discrete_morse._models import MAX_MORSE_PAIRS
 
-        request = DiscreteMorseMatchingRequest.model_construct(
-            complex=simplicial_complex_request_from_value(canonical),
-            pairs=tuple(
-                MatchingPair(face=("a",), coface=("a", "b"))
-                for _ in range(MAX_MORSE_PAIRS + 1)
-            ),
+        pairs = tuple(
+            MatchingPair(face=("a",), coface=("a", "b"))
+            for _ in range(MAX_MORSE_PAIRS + 1)
         )
         with pytest.raises(OperationResourceAdmissionError) as excinfo:
-            construct_matching(request)
+            construct_matching(canonical, pairs)
         assert excinfo.value.errors()[0]["type"] == (
             "topology.discrete_morse.admission.pairs"
         )
 
     def test_pair_count_at_the_envelope_is_admitted(self) -> None:
         canonical = canonical_complex(("a", "b"), (("a", "b"),))
-        from jacobian.math.topology.discrete_morse._models import (
-            MAX_MORSE_PAIRS,
-            MatchingPair,
-        )
+        from jacobian.math.topology.discrete_morse._models import MAX_MORSE_PAIRS
 
-        request = DiscreteMorseMatchingRequest.model_construct(
-            complex=simplicial_complex_request_from_value(canonical),
-            pairs=tuple(
-                MatchingPair(face=("a",), coface=("a", "b"))
-                for _ in range(MAX_MORSE_PAIRS)
-            ),
+        pairs = tuple(
+            MatchingPair(face=("a",), coface=("a", "b")) for _ in range(MAX_MORSE_PAIRS)
         )
-        result = construct_matching(request)
+        result = construct_matching(canonical, pairs)
         assert result.outcome is MorseMatchingOutcome.INVALID_MATCHING
         assert result.fault is MorseMatchingFault.DUPLICATE_CELL
 

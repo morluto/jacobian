@@ -99,9 +99,7 @@ GF3_Y = _element(GF3_FIELD, (_zero(3), _one(3)))
 def _multiply(
     left: FiniteFunctionFieldElement, right: FiniteFunctionFieldElement
 ) -> FiniteFunctionFieldElement:
-    return function_field_element_multiply(
-        FunctionFieldElementMultiplyRequest(left=left, right=right)
-    ).product
+    return function_field_element_multiply(left, right).product
 
 
 def _equal(left: FiniteFunctionFieldElement, right: FiniteFunctionFieldElement) -> bool:
@@ -256,9 +254,7 @@ class TestIndependentBackendCrossCheck:
         return [str(value) for value in descending]
 
     def test_gf2_generator_squared_matches_sympy(self) -> None:
-        result = function_field_element_multiply(
-            FunctionFieldElementMultiplyRequest(left=GF2_Y, right=GF2_Y)
-        )
+        result = function_field_element_multiply(GF2_Y, GF2_Y)
         expected = self._reduce_with_sympy(
             2, ((0, 1), (1,), (1,)), ((), (1,)), ((), (1,))
         )
@@ -267,9 +263,7 @@ class TestIndependentBackendCrossCheck:
         )
 
     def test_gf3_generator_squared_matches_sympy(self) -> None:
-        result = function_field_element_multiply(
-            FunctionFieldElementMultiplyRequest(left=GF3_Y, right=GF3_Y)
-        )
+        result = function_field_element_multiply(GF3_Y, GF3_Y)
         expected = self._reduce_with_sympy(
             3, ((0, 2), (), (1,)), ((), (1,)), ((), (1,))
         )
@@ -280,9 +274,7 @@ class TestIndependentBackendCrossCheck:
     def test_gf2_mixed_product_matches_sympy(self) -> None:
         left = _element(GF2_FIELD, (_x(2), _one(2)))
         right = _element(GF2_FIELD, (_one(2), _one(2)))
-        result = function_field_element_multiply(
-            FunctionFieldElementMultiplyRequest(left=left, right=right)
-        )
+        result = function_field_element_multiply(left, right)
         expected = self._reduce_with_sympy(
             2, ((0, 1), (1,), (1,)), ((0, 1), (1,)), ((1,), (1,))
         )
@@ -367,11 +359,8 @@ class TestBoundariesAndAdversarial:
             field=field,
             coordinates=tuple(_zero(2) for _ in range(degree)),
         )
-        request = FunctionFieldElementMultiplyRequest.model_construct(
-            left=element, right=element
-        )
         with pytest.raises(OperationResourceAdmissionError) as exc_info:
-            function_field_element_multiply(request)
+            function_field_element_multiply(element, element)
         assert (
             exc_info.value.errors()[0]["type"]
             == "function_field.extension_degree_exceeds_envelope"
@@ -384,7 +373,7 @@ class TestParityAndSerialization:
         request = FunctionFieldElementMultiplyRequest(left=GF2_Y, right=GF2_Y)
         assert (
             tool.run(request).model_dump()
-            == function_field_element_multiply(request).model_dump()
+            == function_field_element_multiply(request.left, request.right).model_dump()
         )
 
     def test_request_round_trip_through_json(self) -> None:
@@ -395,9 +384,7 @@ class TestParityAndSerialization:
         )
 
     def test_result_round_trip_through_json(self) -> None:
-        result = function_field_element_multiply(
-            FunctionFieldElementMultiplyRequest(left=GF2_Y, right=GF2_Y)
-        )
+        result = function_field_element_multiply(GF2_Y, GF2_Y)
         encoded = result.model_dump_json()
         parsed = type(result).model_validate_json(encoded)
         assert parsed.model_dump() == result.model_dump()

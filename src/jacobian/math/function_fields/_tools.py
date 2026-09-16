@@ -13,7 +13,7 @@ from jacobian.math.function_fields.operations import function_field_element_mult
 def _run_element_multiply(
     request: FunctionFieldElementMultiplyRequest,
 ) -> FunctionFieldElementMultiplyResult:
-    return function_field_element_multiply(request)
+    return function_field_element_multiply(request.left, request.right)
 
 
 def _rational_function(numerator: list[int], denominator: list[int]) -> dict[str, Any]:

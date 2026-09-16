@@ -11,6 +11,19 @@ from jacobian.math.topology.cellular_sheaves.operations import from_cover_maps
 
 __all__ = ["TOOLS"]
 
+
+def _run_from_cover_maps(
+    request: FromCoverMapsRequest,
+) -> FromCoverMapsResult:
+    return from_cover_maps(
+        request.complex,
+        request.coefficient_field,
+        request.prime,
+        request.stalks,
+        request.cover_maps,
+    )
+
+
 _INTERVAL_CANONICAL = {
     "vertices": ["a", "b"],
     "maximal_simplices": [["a", "b"]],
@@ -88,7 +101,7 @@ TOOLS: MathTools = (
         ),
         request_type=FromCoverMapsRequest,
         result_type=FromCoverMapsResult,
-        run=from_cover_maps,
+        run=_run_from_cover_maps,
         tags=(
             "topology",
             "cellular-sheaf",

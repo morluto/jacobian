@@ -29,8 +29,8 @@ from jacobian.math.combinatorics.algebraic._models import (
     RSKResult,
     SemistandardTableauCheckResult,
     SemistandardYoungTableauCountResult,
-    SkewLittlewoodRichardsonCheckRequest,
     SkewLittlewoodRichardsonCheckResult,
+    SkewReadingConvention,
     StandardTableauCheckResult,
 )
 from jacobian.math.combinatorics.algebraic._rsk import (
@@ -870,7 +870,11 @@ def _skew_offsets(
 
 
 def check_skew_littlewood_richardson(  # noqa: C901
-    request: SkewLittlewoodRichardsonCheckRequest,
+    outer: IntegerPartition,
+    inner: IntegerPartition,
+    tableau: TableauCandidate,
+    content: IntegerPartition,
+    convention: SkewReadingConvention = "READING_WORD_RL_TOP_V1",
 ) -> SkewLittlewoodRichardsonCheckResult:
     """Replay skew-LR membership: coverage, semistandardity, content, lattice.
 
@@ -879,16 +883,20 @@ def check_skew_littlewood_richardson(  # noqa: C901
     inequalities ``count(1) >= count(2) >= ...``. The result carries the
     first failed stage with its concrete prefix length or cell.
     """
-    outer = _require_canonical_partition(request.outer)
-    inner = _require_canonical_partition(request.inner)
-    content = _require_canonical_partition(request.content)
-    candidate = _revalidate_candidate(request.tableau)
+    outer = _require_canonical_partition(outer)
+    inner = _require_canonical_partition(inner)
+    content = _require_canonical_partition(content)
+    candidate = _revalidate_candidate(tableau)
     rows = candidate.rows
 
     offsets = _skew_offsets(outer, inner)
     if offsets is None:
         return SkewLittlewoodRichardsonCheckResult._from_kernel(
-            request,
+            outer,
+            inner,
+            tableau,
+            content,
+            convention,
             is_member=False,
             reading_word=(),
             failure_kind="CELL_COVERAGE",
@@ -914,7 +922,11 @@ def check_skew_littlewood_richardson(  # noqa: C901
             -1,
         )
         return SkewLittlewoodRichardsonCheckResult._from_kernel(
-            request,
+            outer,
+            inner,
+            tableau,
+            content,
+            convention,
             is_member=False,
             reading_word=(),
             failure_kind="CELL_COVERAGE",
@@ -927,7 +939,11 @@ def check_skew_littlewood_richardson(  # noqa: C901
         )
         if failed_column is not None:
             return SkewLittlewoodRichardsonCheckResult._from_kernel(
-                request,
+                outer,
+                inner,
+                tableau,
+                content,
+                convention,
                 is_member=False,
                 reading_word=(),
                 failure_kind="SEMISTANDARD_ROW",
@@ -946,7 +962,11 @@ def check_skew_littlewood_richardson(  # noqa: C901
         for index in range(len(column_cells) - 1):
             if column_cells[index][1] >= column_cells[index + 1][1]:
                 return SkewLittlewoodRichardsonCheckResult._from_kernel(
-                    request,
+                    outer,
+                    inner,
+                    tableau,
+                    content,
+                    convention,
                     is_member=False,
                     reading_word=(),
                     failure_kind="SEMISTANDARD_COLUMN",
@@ -965,7 +985,11 @@ def check_skew_littlewood_richardson(  # noqa: C901
         expected = content.parts[value - 1] if value - 1 < len(content.parts) else 0
         if multiplicities.get(value, 0) != expected:
             return SkewLittlewoodRichardsonCheckResult._from_kernel(
-                request,
+                outer,
+                inner,
+                tableau,
+                content,
+                convention,
                 is_member=False,
                 reading_word=(),
                 failure_kind="CONTENT",
@@ -978,7 +1002,11 @@ def check_skew_littlewood_richardson(  # noqa: C901
         for value in range(2, max(counts, default=1) + 1):
             if counts.get(value - 1, 0) < counts.get(value, 0):
                 return SkewLittlewoodRichardsonCheckResult._from_kernel(
-                    request,
+                    outer,
+                    inner,
+                    tableau,
+                    content,
+                    convention,
                     is_member=False,
                     reading_word=word,
                     failure_kind="LATTICE",
@@ -986,7 +1014,11 @@ def check_skew_littlewood_richardson(  # noqa: C901
                     failed_value=value,
                 )
     return SkewLittlewoodRichardsonCheckResult._from_kernel(
-        request,
+        outer,
+        inner,
+        tableau,
+        content,
+        convention,
         is_member=True,
         reading_word=word,
         failure_kind="OK",
@@ -999,13 +1031,15 @@ def verify_skew_littlewood_richardson(
     """Replay a serialized skew-LR claim against its retained source."""
 
     try:
-        request = SkewLittlewoodRichardsonCheckRequest(
-            outer=claim.outer,
-            inner=claim.inner,
-            tableau=claim.tableau,
-            content=claim.content,
-            convention=claim.convention,
+        return (
+            check_skew_littlewood_richardson(
+                claim.outer,
+                claim.inner,
+                claim.tableau,
+                claim.content,
+                claim.convention,
+            )
+            == claim
         )
-        return check_skew_littlewood_richardson(request) == claim
     except (OperationDomainValidationError, TypeError, ValueError):
         return False

@@ -19,7 +19,6 @@ from jacobian.math.number_theory.kempner._models import (
     MAX_KEMPNER_SERIES_DIGITS,
     MAX_KEMPNER_SERIES_NUMERALS,
     KempnerSeriesEnclosure,
-    KempnerSeriesEnclosureRequest,
 )
 
 
@@ -162,9 +161,9 @@ def enclose_kempner_series(
         raise RuntimeError("Kempner enumeration missed its admitted numeral count")
     tail = _tail_bound(base, len(allowed), len(nonzero), cutoff)
     upper = partial + tail
-    request = KempnerSeriesEnclosureRequest(digit_set=digit_set, cutoff=cutoff)
     return KempnerSeriesEnclosure._from_kernel(
-        request,
+        digit_set,
+        cutoff,
         partial_sum=CanonicalRational.from_fraction(partial),
         tail_upper_bound=CanonicalRational.from_fraction(tail),
         lower=CanonicalRational.from_fraction(partial),
@@ -172,14 +171,7 @@ def enclose_kempner_series(
     )
 
 
-def compute_kempner_series_enclosure(
-    request: KempnerSeriesEnclosureRequest,
-) -> KempnerSeriesEnclosure:
-    return enclose_kempner_series(request.digit_set, request.cutoff)
-
-
 __all__ = [
-    "compute_kempner_series_enclosure",
     "enclose_kempner_series",
     "require_series_admission",
 ]

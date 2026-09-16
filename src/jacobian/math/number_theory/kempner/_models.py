@@ -74,7 +74,8 @@ class KempnerSeriesEnclosure(StrictModel):
     @classmethod
     def _from_kernel(
         cls,
-        request: KempnerSeriesEnclosureRequest,
+        digit_set: KempnerDigitSet,
+        cutoff: int,
         *,
         partial_sum: CanonicalRational,
         tail_upper_bound: CanonicalRational,
@@ -84,8 +85,8 @@ class KempnerSeriesEnclosure(StrictModel):
         """Build one enclosure after the admitted kernel established it."""
 
         return cls.model_construct(
-            digit_set=request.digit_set,
-            cutoff=request.cutoff,
+            digit_set=digit_set,
+            cutoff=cutoff,
             partial_sum=partial_sum,
             tail_upper_bound=tail_upper_bound,
             lower=lower,

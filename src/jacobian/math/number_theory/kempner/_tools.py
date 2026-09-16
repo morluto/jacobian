@@ -6,8 +6,15 @@ from jacobian.math.number_theory.kempner._models import (
     KempnerSeriesEnclosureRequest,
 )
 from jacobian.math.number_theory.kempner.operations import (
-    compute_kempner_series_enclosure,
+    enclose_kempner_series,
 )
+
+
+def _run_enclosure(
+    request: KempnerSeriesEnclosureRequest,
+) -> KempnerSeriesEnclosure:
+    return enclose_kempner_series(request.digit_set, request.cutoff)
+
 
 TOOLS: MathTools = (
     MathTool(
@@ -25,7 +32,7 @@ TOOLS: MathTools = (
         ),
         request_type=KempnerSeriesEnclosureRequest,
         result_type=KempnerSeriesEnclosure,
-        run=compute_kempner_series_enclosure,
+        run=_run_enclosure,
         tags=("number-theory", "kempner", "reciprocal-series", "enclosure", "exact"),
         discovery_terms=(
             "Kempner series enclosure",

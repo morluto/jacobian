@@ -103,7 +103,7 @@ class SheafStalk(StrictModel):
         return self
 
 
-class CoverRestrictionInput(StrictModel):
+class CoverRestrictionMatrix(StrictModel):
     """One candidate restriction matrix on a face-poset cover inclusion.
 
     ``source`` must be a codimension-one face of ``target``.  ``entries`` is
@@ -137,7 +137,7 @@ class FromCoverMapsRequest(StrictModel):
     coefficient_field: SheafField = SheafField.RATIONAL
     prime: StrictInt | None = Field(default=None, ge=2, le=MAX_SHEAF_PRIME)
     stalks: tuple[SheafStalk, ...] = Field(default=())
-    cover_maps: tuple[CoverRestrictionInput, ...] = Field(default=())
+    cover_maps: tuple[CoverRestrictionMatrix, ...] = Field(default=())
 
 
 class SheafRestriction(StrictModel):
@@ -360,7 +360,7 @@ __all__ = [
     "MAX_SHEAF_STALK_RANK",
     "MAX_SHEAF_TOTAL_STALK_RANK",
     "BasisLabel",
-    "CoverRestrictionInput",
+    "CoverRestrictionMatrix",
     "DiamondCounterexample",
     "FiniteCellularSheaf",
     "FromCoverMapsRequest",

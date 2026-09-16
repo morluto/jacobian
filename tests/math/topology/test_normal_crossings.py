@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from itertools import combinations, pairwise
+from typing import NamedTuple
 
 import pytest
 from pydantic import ValidationError
@@ -17,6 +18,7 @@ from jacobian.math.topology.normal_crossings._models import (
     MAX_NC_STRATA,
     DualComplexResult,
     NearbyCycleLatticesResult,
+    NormalCrossingsPresentation,
     NormalCrossingsPresentationRequest,
     NormalCrossingsStratum,
     SpecializationMap,
@@ -38,16 +40,33 @@ def _tool(operation_id: str):
     return next(tool for tool in TOOLS if tool.operation_id == operation_id)
 
 
+def _strata(
+    strata: tuple[tuple[tuple[str, ...], int], ...],
+) -> tuple[NormalCrossingsStratum, ...]:
+    return tuple(
+        NormalCrossingsStratum(components=key, dimension=dimension)
+        for key, dimension in strata
+    )
+
+
+class _Args(NamedTuple):
+    components: tuple[str, ...]
+    strata: tuple[NormalCrossingsStratum, ...]
+
+
 def _request(
+    components: tuple[str, ...],
+    strata: tuple[tuple[tuple[str, ...], int], ...],
+) -> _Args:
+    return _Args(components=components, strata=_strata(strata))
+
+
+def _wire_request(
     components: tuple[str, ...],
     strata: tuple[tuple[tuple[str, ...], int], ...],
 ) -> NormalCrossingsPresentationRequest:
     return NormalCrossingsPresentationRequest(
-        components=components,
-        strata=tuple(
-            NormalCrossingsStratum(components=key, dimension=dimension)
-            for key, dimension in strata
-        ),
+        components=components, strata=_strata(strata)
     )
 
 
@@ -127,27 +146,27 @@ def _specialization(
 
 class TestKnownAnswers:
     def test_smooth_local_model_dual_point(self) -> None:
-        result = dual_complex(_SMOOTH)
+        result = dual_complex(_SMOOTH.components, _SMOOTH.strata)
         assert result.dual_complex.vertices == ("D0",)
         assert result.dual_complex.maximal_simplices == (("D0",),)
         assert result.dual_complex.dimension == 0
         assert result.dual_complex.f_vector == (1,)
 
     def test_node_local_model_dual_interval(self) -> None:
-        result = dual_complex(_NODE)
+        result = dual_complex(_NODE.components, _NODE.strata)
         assert result.dual_complex.vertices == ("D0", "D1")
         assert result.dual_complex.maximal_simplices == (("D0", "D1"),)
         assert result.dual_complex.dimension == 1
         assert result.dual_complex.f_vector == (2, 1)
 
     def test_triple_point_local_model_dual_full_simplex(self) -> None:
-        result = dual_complex(_TRIPLE)
+        result = dual_complex(_TRIPLE.components, _TRIPLE.strata)
         assert result.dual_complex.maximal_simplices == (("D0", "D1", "D2"),)
         assert result.dual_complex.dimension == 2
         assert result.dual_complex.f_vector == (3, 3, 1)
 
     def test_dual_face_counts_match_strata_by_cardinality(self) -> None:
-        result = dual_complex(_TRIPLE)
+        result = dual_complex(_TRIPLE.components, _TRIPLE.strata)
         assert result.dual_complex.f_vector == tuple(
             len(group.strata) for group in result.strata_by_cardinality
         )
@@ -158,7 +177,7 @@ class TestKnownAnswers:
         )
 
     def test_branch_multiplicity_transport(self) -> None:
-        result = dual_complex(_TRIPLE)
+        result = dual_complex(_TRIPLE.components, _TRIPLE.strata)
         assert tuple(
             (record.components, record.branch_multiplicity) for record in result.strata
         ) == tuple(
@@ -167,7 +186,7 @@ class TestKnownAnswers:
         )
 
     def test_cech_signed_incidence_matrices(self) -> None:
-        result = dual_complex(_TRIPLE)
+        result = dual_complex(_TRIPLE.components, _TRIPLE.strata)
         assert result.cech_value.basis_sizes == (3, 3, 1)
         assert result.cech_value.coefficient_ring.value == "ZZ"
         assert result.cech_value.differential_matrices[0] == (
@@ -185,7 +204,7 @@ class TestKnownAnswers:
         ) == (1, 2)
 
     def test_triple_point_stalk_lattice(self) -> None:
-        result = nearby_cycle_lattices(_TRIPLE)
+        result = nearby_cycle_lattices(_TRIPLE.components, _TRIPLE.strata)
         stalk = next(
             lattice
             for lattice in result.lattices
@@ -196,7 +215,7 @@ class TestKnownAnswers:
         assert stalk.milnor_fiber_cohomology_ranks == (1, 2, 1)
 
     def test_node_stalk_and_zero_specialization(self) -> None:
-        result = nearby_cycle_lattices(_NODE)
+        result = nearby_cycle_lattices(_NODE.components, _NODE.strata)
         stalk = next(
             lattice for lattice in result.lattices if lattice.components == ("D0", "D1")
         )
@@ -209,7 +228,7 @@ class TestKnownAnswers:
             assert map_.matrix.entries == ((),)
 
     def test_triple_point_sum_fold_specializations(self) -> None:
-        result = nearby_cycle_lattices(_TRIPLE)
+        result = nearby_cycle_lattices(_TRIPLE.components, _TRIPLE.strata)
         assert _specialization(
             result, ("D0", "D1"), ("D0", "D1", "D2")
         ).matrix.entries == ((1,), (0,))
@@ -224,7 +243,7 @@ class TestKnownAnswers:
 
 class TestBoundaryDegenerate:
     def test_single_component_rank_zero_lattice(self) -> None:
-        result = nearby_cycle_lattices(_SMOOTH)
+        result = nearby_cycle_lattices(_SMOOTH.components, _SMOOTH.strata)
         assert len(result.lattices) == 1
         stalk = result.lattices[0]
         assert stalk.lattice_rank == 0
@@ -240,17 +259,17 @@ class TestBoundaryDegenerate:
         assert result.specializations == ()
 
     def test_disconnected_components_dual_and_cech(self) -> None:
-        result = dual_complex(_DISJOINT)
+        result = dual_complex(_DISJOINT.components, _DISJOINT.strata)
         assert result.dual_complex.maximal_simplices == (("D0",), ("D1",))
         assert result.cech_value.basis_sizes == (2,)
         assert result.cech_value.differential_matrices == ()
         assert result.differential_squared_zero == ()
 
     def test_two_disjoint_nodes(self) -> None:
-        result = dual_complex(_TWO_NODES)
+        result = dual_complex(_TWO_NODES.components, _TWO_NODES.strata)
         assert result.dual_complex.maximal_simplices == (("D0", "D1"), ("D2", "D3"))
         assert result.cech_value.basis_sizes == (4, 2)
-        lattices = nearby_cycle_lattices(_TWO_NODES)
+        lattices = nearby_cycle_lattices(_TWO_NODES.components, _TWO_NODES.strata)
         assert len(lattices.specializations) == 4
         assert all(
             lattice.lattice_rank == len(lattice.components) - 1
@@ -270,9 +289,9 @@ class TestBoundaryDegenerate:
                 (("D0", "D1"), 1),
             ),
         )
-        result = dual_complex(shuffled)
+        result = dual_complex(shuffled.components, shuffled.strata)
         assert result.presentation.components == ("D0", "D1", "D2")
-        assert result == dual_complex(_TRIPLE)
+        assert result == dual_complex(_TRIPLE.components, _TRIPLE.strata)
 
 
 class TestAdversarial:
@@ -289,7 +308,7 @@ class TestAdversarial:
             ),
         )
         with pytest.raises(OperationDomainValidationError) as excinfo:
-            dual_complex(broken)
+            dual_complex(broken.components, broken.strata)
         assert (
             excinfo.value.errors()[0]["type"]
             == "topology.normal_crossings.not_downward_closed"
@@ -301,7 +320,7 @@ class TestAdversarial:
             ((("D0",), 1), (("D0", "D1"), 0)),
         )
         with pytest.raises(OperationDomainValidationError) as excinfo:
-            nearby_cycle_lattices(broken)
+            nearby_cycle_lattices(broken.components, broken.strata)
         assert (
             excinfo.value.errors()[0]["type"]
             == "topology.normal_crossings.missing_component_stratum"
@@ -318,7 +337,7 @@ class TestAdversarial:
             ),
         )
         with pytest.raises(OperationDomainValidationError) as excinfo:
-            dual_complex(broken)
+            dual_complex(broken.components, broken.strata)
         assert (
             excinfo.value.errors()[0]["type"]
             == "topology.normal_crossings.duplicate_stratum"
@@ -327,7 +346,7 @@ class TestAdversarial:
     def test_undeclared_component_rejected(self) -> None:
         broken = _request(("D0",), ((("D0", "D1"), 0), (("D0",), 1), (("D1",), 1)))
         with pytest.raises(OperationDomainValidationError) as excinfo:
-            dual_complex(broken)
+            dual_complex(broken.components, broken.strata)
         assert (
             excinfo.value.errors()[0]["type"]
             == "topology.normal_crossings.undeclared_component"
@@ -339,14 +358,14 @@ class TestAdversarial:
             ((("D0",), 1), (("D1",), 2), (("D0", "D1"), 0)),
         )
         with pytest.raises(OperationDomainValidationError) as excinfo:
-            dual_complex(broken)
+            dual_complex(broken.components, broken.strata)
         assert (
             excinfo.value.errors()[0]["type"]
             == "topology.normal_crossings.dimension_identity_violated"
         )
 
     def test_forged_specialization_matrix_fails_verification(self) -> None:
-        claim = nearby_cycle_lattices(_TRIPLE)
+        claim = nearby_cycle_lattices(_TRIPLE.components, _TRIPLE.strata)
         assert verify_nearby_cycle_lattices_claim(claim)
         honest = _specialization(claim, ("D0", "D1"), ("D0", "D1", "D2"))
         forged_map = SpecializationMap(
@@ -362,14 +381,14 @@ class TestAdversarial:
         )
 
     def test_forged_dual_complex_claim_fails_verification(self) -> None:
-        claim = dual_complex(_TRIPLE)
+        claim = dual_complex(_TRIPLE.components, _TRIPLE.strata)
         assert verify_dual_complex_claim(claim)
         assert not verify_dual_complex_claim(
             claim.model_copy(update={"differential_squared_zero": ()})
         )
 
     def test_forged_presentation_fails_verification(self) -> None:
-        claim = dual_complex(_TRIPLE)
+        claim = dual_complex(_TRIPLE.components, _TRIPLE.strata)
         forged_strata = tuple(
             stratum.model_copy(update={"dimension": stratum.dimension + 1})
             for stratum in claim.presentation.strata
@@ -391,9 +410,9 @@ class TestDefiningInvariants:
         [_SMOOTH, _NODE, _TRIPLE, _DISJOINT, _TWO_NODES],
     )
     def test_cech_differential_squares_to_zero(
-        self, presentation: NormalCrossingsPresentationRequest
+        self, presentation: NormalCrossingsPresentation
     ) -> None:
-        result = dual_complex(presentation)
+        result = dual_complex(presentation.components, presentation.strata)
         matrices = tuple(
             tuple(tuple(int(entry) for entry in row) for row in matrix)
             for matrix in result.cech_value.differential_matrices
@@ -404,9 +423,9 @@ class TestDefiningInvariants:
 
     @pytest.mark.parametrize("presentation", [_SMOOTH, _NODE, _TRIPLE, _TWO_NODES])
     def test_saturated_basis_sum_zero_replay(
-        self, presentation: NormalCrossingsPresentationRequest
+        self, presentation: NormalCrossingsPresentation
     ) -> None:
-        result = nearby_cycle_lattices(presentation)
+        result = nearby_cycle_lattices(presentation.components, presentation.strata)
         for lattice in result.lattices:
             r = lattice.branch_multiplicity
             assert lattice.saturated_basis.entries == _basis_rows(r)
@@ -414,11 +433,11 @@ class TestDefiningInvariants:
 
     @pytest.mark.parametrize("presentation", [_NODE, _TRIPLE, _TWO_NODES])
     def test_specializations_land_in_target_kernel(
-        self, presentation: NormalCrossingsPresentationRequest
+        self, presentation: NormalCrossingsPresentation
     ) -> None:
         """Row-sum-zero replay: ambient images of source basis vectors."""
 
-        result = nearby_cycle_lattices(presentation)
+        result = nearby_cycle_lattices(presentation.components, presentation.strata)
         for map_ in result.specializations:
             target_rows = _basis_rows(len(map_.target_components))
             positions = {
@@ -438,27 +457,31 @@ class TestDefiningInvariants:
                 assert sum(ambient) == 0
 
     def test_composition_equals_direct_map(self) -> None:
-        result = nearby_cycle_lattices(_TRIPLE)
+        result = nearby_cycle_lattices(_TRIPLE.components, _TRIPLE.strata)
         first = _specialization(result, ("D0", "D1"), ("D0", "D1", "D2"))
         second = _specialization(result, ("D0",), ("D0", "D1"))
-        direct = specialization_matrix(_TRIPLE, ("D0", "D1", "D2"), ("D0",))
+        direct = specialization_matrix(
+            _TRIPLE.components, _TRIPLE.strata, ("D0", "D1", "D2"), ("D0",)
+        )
         assert (
             _matmul(first.matrix.entries, second.matrix.entries)
             == direct.matrix.entries
         )
 
     def test_direct_two_step_composition(self) -> None:
-        result = nearby_cycle_lattices(_TRIPLE)
+        result = nearby_cycle_lattices(_TRIPLE.components, _TRIPLE.strata)
         middle = _specialization(result, ("D1", "D2"), ("D0", "D1", "D2"))
         second = _specialization(result, ("D1",), ("D1", "D2"))
-        direct = specialization_matrix(_TRIPLE, ("D0", "D1", "D2"), ("D1",))
+        direct = specialization_matrix(
+            _TRIPLE.components, _TRIPLE.strata, ("D0", "D1", "D2"), ("D1",)
+        )
         assert (
             _matmul(middle.matrix.entries, second.matrix.entries)
             == direct.matrix.entries
         )
 
     def test_exterior_rank_table_matches_binomials(self) -> None:
-        result = nearby_cycle_lattices(_TRIPLE)
+        result = nearby_cycle_lattices(_TRIPLE.components, _TRIPLE.strata)
         for lattice in result.lattices:
             r = lattice.branch_multiplicity
             assert lattice.milnor_fiber_cohomology_ranks == tuple(
@@ -479,7 +502,9 @@ class TestEnvelope:
     def test_component_budget(self) -> None:
         components = tuple(f"D{index}" for index in range(MAX_NC_COMPONENTS + 1))
         with pytest.raises(ValidationError):
-            _request(components, tuple(((component,), 0) for component in components))
+            _wire_request(
+                components, tuple(((component,), 0) for component in components)
+            )
 
     def test_strata_budget(self) -> None:
         components = tuple(f"D{index}" for index in range(MAX_NC_COMPONENTS))
@@ -492,7 +517,7 @@ class TestEnvelope:
             if len(strata) < MAX_NC_STRATA + 1
         )
         with pytest.raises(ValidationError):
-            _request(components, tuple(strata))
+            _wire_request(components, tuple(strata))
 
     def test_branch_multiplicity_budget(self) -> None:
         components = tuple(
@@ -500,9 +525,9 @@ class TestEnvelope:
         )
         strata = tuple(((component,), 0) for component in components)
         with pytest.raises(ValidationError):
-            _request(components, (*strata, (components, 0)))
+            _wire_request(components, (*strata, (components, 0)))
 
-    def _full_local_model(self, count: int) -> NormalCrossingsPresentationRequest:
+    def _full_local_model(self, count: int) -> _Args:
         components = tuple(f"D{index}" for index in range(count))
         return _request(
             components,
@@ -515,7 +540,7 @@ class TestEnvelope:
 
     def test_envelope_maximum_lattice_model_accepts(self) -> None:
         request = self._full_local_model(MAX_NC_BRANCH_MULTIPLICITY)
-        result = nearby_cycle_lattices(request)
+        result = nearby_cycle_lattices(request.components, request.strata)
         top = next(
             lattice
             for lattice in result.lattices
@@ -525,7 +550,7 @@ class TestEnvelope:
 
     def test_envelope_maximum_dual_model_accepts(self) -> None:
         request = self._full_local_model(6)
-        dual = dual_complex(request)
+        dual = dual_complex(request.components, request.strata)
         assert dual.dual_complex.maximal_simplices == (
             ("D0", "D1", "D2", "D3", "D4", "D5"),
         )
@@ -533,7 +558,7 @@ class TestEnvelope:
     def test_full_eight_branch_cech_rejected_by_preflight(self) -> None:
         request = self._full_local_model(MAX_NC_BRANCH_MULTIPLICITY)
         with pytest.raises(OperationResourceAdmissionError) as excinfo:
-            dual_complex(request)
+            dual_complex(request.components, request.strata)
         assert (
             excinfo.value.errors()[0]["type"]
             == "topology.normal_crossings.cech_group_budget"
@@ -557,7 +582,12 @@ class TestCatalogParity:
                 ],
             }
         )
-        assert tool.run(request) == dual_complex(request)
+        presentation = NormalCrossingsPresentation(
+            components=request.components, strata=request.strata
+        )
+        assert tool.run(request) == dual_complex(
+            presentation.components, presentation.strata
+        )
 
     def test_native_matches_catalog_lattices(self) -> None:
         tool = _tool(_LATTICE_ID)
@@ -571,7 +601,12 @@ class TestCatalogParity:
                 ],
             }
         )
-        assert tool.run(request) == nearby_cycle_lattices(request)
+        presentation = NormalCrossingsPresentation(
+            components=request.components, strata=request.strata
+        )
+        assert tool.run(request) == nearby_cycle_lattices(
+            presentation.components, presentation.strata
+        )
 
     def test_examples_execute(self) -> None:
         for operation_id in (_DUAL_ID, _LATTICE_ID):
@@ -582,9 +617,9 @@ class TestCatalogParity:
                 assert tool.run(request) is not None
 
     def test_serialization_round_trips(self) -> None:
-        dual = dual_complex(_TRIPLE)
+        dual = dual_complex(_TRIPLE.components, _TRIPLE.strata)
         assert DualComplexResult.model_validate_json(dual.model_dump_json()) == dual
-        lattices = nearby_cycle_lattices(_TRIPLE)
+        lattices = nearby_cycle_lattices(_TRIPLE.components, _TRIPLE.strata)
         assert (
             NearbyCycleLatticesResult.model_validate_json(lattices.model_dump_json())
             == lattices

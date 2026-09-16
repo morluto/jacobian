@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from fractions import Fraction
 
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -129,8 +130,11 @@ def _serialize_scalar(value: Scalar, prime: int | None) -> str:
         return str(value % prime)
     assert isinstance(value, Fraction)
     if value.denominator == 1:
-        return str(value.numerator)
-    return f"{value.numerator}/{value.denominator}"
+        return format_canonical_integer(value.numerator)
+    return (
+        f"{format_canonical_integer(value.numerator)}/"
+        f"{format_canonical_integer(value.denominator)}"
+    )
 
 
 def _add(left: Scalar, right: Scalar, prime: int | None) -> Scalar:

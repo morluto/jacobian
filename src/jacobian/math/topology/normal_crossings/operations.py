@@ -37,7 +37,6 @@ from jacobian.math.topology.normal_crossings._models import (
     NearbyCycleLattice,
     NearbyCycleLatticesResult,
     NormalCrossingsPresentation,
-    NormalCrossingsPresentationRequest,
     NormalCrossingsStratum,
     NormalCrossingsStratumRecord,
     SpecializationMap,
@@ -107,7 +106,8 @@ class AdmittedPresentation:
 
 
 def admit_presentation(
-    request: NormalCrossingsPresentationRequest,
+    components: tuple[str, ...],
+    strata: tuple[NormalCrossingsStratum, ...],
 ) -> AdmittedPresentation:
     """Validate and canonicalize one finite strict-SNC incidence presentation.
 
@@ -118,17 +118,17 @@ def admit_presentation(
     any dual-complex, Cech, lattice, or specialization value is materialized.
     """
 
-    components = tuple(sorted(request.components))
-    if len(set(components)) != len(components):
+    ordered_components = tuple(sorted(components))
+    if len(set(ordered_components)) != len(ordered_components):
         raise _domain_error(
             ("components",),
             "duplicate_component",
             "presentation components must be distinct labels",
         )
-    declared = set(components)
+    declared = set(ordered_components)
 
     keys: list[StratumKey] = []
-    for position, stratum in enumerate(request.strata):
+    for position, stratum in enumerate(strata):
         key = tuple(stratum.components)
         if not set(key) <= declared:
             raise _domain_error(
@@ -154,8 +154,8 @@ def admit_presentation(
             f"{MAX_NC_SUBSET_INCIDENCES}-pair admission bound",
         )
 
-    index = dict(zip(keys, request.strata, strict=True))
-    for component in components:
+    index = dict(zip(keys, strata, strict=True))
+    for component in ordered_components:
         if (component,) not in index:
             raise _domain_error(
                 ("strata",),
@@ -188,7 +188,7 @@ def admit_presentation(
     for key in ordered_keys:
         groups[len(key) - 1].append(key)
     value = NormalCrossingsPresentation(
-        components=components,
+        components=ordered_components,
         strata=tuple(index[key] for key in ordered_keys),
     )
     return AdmittedPresentation(
@@ -276,7 +276,8 @@ def _require_dual_complex_admission(
 
 
 def dual_complex(
-    request: NormalCrossingsPresentationRequest,
+    components: tuple[str, ...],
+    strata: tuple[NormalCrossingsStratum, ...],
 ) -> DualComplexResult:
     """Compute the dual complex and Cech incidence complex of an SNC presentation.
 
@@ -289,7 +290,7 @@ def dual_complex(
     result is returned.
     """
 
-    admitted = admit_presentation(request)
+    admitted = admit_presentation(components, strata)
     keys = tuple(stratum.components for stratum in admitted.value.strata)
     facets = maximal_strata(keys)
     _require_dual_complex_admission(admitted, facets)
@@ -444,7 +445,8 @@ def _require_lattice_admission(
 
 
 def nearby_cycle_lattices(
-    request: NormalCrossingsPresentationRequest,
+    components: tuple[str, ...],
+    strata: tuple[NormalCrossingsStratum, ...],
 ) -> NearbyCycleLatticesResult:
     """Compute the integral nearby-cycle stalk lattices of an SNC presentation.
 
@@ -458,7 +460,7 @@ def nearby_cycle_lattices(
     component of ``I`` in sorted order, expressed in the saturated bases.
     """
 
-    admitted = admit_presentation(request)
+    admitted = admit_presentation(components, strata)
     pairs = _cover_pairs(admitted)
     _require_lattice_admission(pairs)
     lattices = tuple(
@@ -490,7 +492,8 @@ def nearby_cycle_lattices(
 
 
 def specialization_matrix(
-    request: NormalCrossingsPresentationRequest,
+    components: tuple[str, ...],
+    strata: tuple[NormalCrossingsStratum, ...],
     source_components: StratumKey,
     target_components: StratumKey,
 ) -> SpecializationMap:
@@ -501,7 +504,7 @@ def specialization_matrix(
     the largest component of ``I``.  Cover compositions equal this map.
     """
 
-    admitted = admit_presentation(request)
+    admitted = admit_presentation(components, strata)
     source = tuple(sorted(source_components))
     target = tuple(sorted(target_components))
     admitted.require(source)
@@ -520,20 +523,14 @@ def specialization_matrix(
     )
 
 
-def _request_of(
-    presentation: NormalCrossingsPresentation,
-) -> NormalCrossingsPresentationRequest:
-    return NormalCrossingsPresentationRequest(
-        components=presentation.components,
-        strata=presentation.strata,
-    )
-
-
 def verify_dual_complex_claim(claim: DualComplexResult) -> bool:
     """Verify a dual-complex claim by replaying the shared admitted kernel."""
 
     try:
-        return dual_complex(_request_of(claim.presentation)) == claim
+        return (
+            dual_complex(claim.presentation.components, claim.presentation.strata)
+            == claim
+        )
     except OperationResourceAdmissionError:
         raise
     except OperationDomainValidationError:
@@ -544,7 +541,12 @@ def verify_nearby_cycle_lattices_claim(claim: NearbyCycleLatticesResult) -> bool
     """Verify a nearby-cycle lattice claim by replaying the admitted kernel."""
 
     try:
-        return nearby_cycle_lattices(_request_of(claim.presentation)) == claim
+        return (
+            nearby_cycle_lattices(
+                claim.presentation.components, claim.presentation.strata
+            )
+            == claim
+        )
     except OperationResourceAdmissionError:
         raise
     except OperationDomainValidationError:

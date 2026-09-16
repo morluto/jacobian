@@ -457,7 +457,11 @@ class SkewLittlewoodRichardsonCheckResult(StrictModel):
     @classmethod
     def _from_kernel(
         cls,
-        request: SkewLittlewoodRichardsonCheckRequest,
+        outer: IntegerPartition,
+        inner: IntegerPartition,
+        tableau: TableauCandidate,
+        content: IntegerPartition,
+        convention: SkewReadingConvention,
         *,
         is_member: bool,
         reading_word: tuple[int, ...],
@@ -470,10 +474,11 @@ class SkewLittlewoodRichardsonCheckResult(StrictModel):
         """Build one result after the admitted skew-LR kernel established it."""
 
         return cls.model_construct(
-            outer=request.outer,
-            inner=request.inner,
-            tableau=request.tableau,
-            content=request.content,
+            outer=outer,
+            inner=inner,
+            tableau=tableau,
+            content=content,
+            convention=convention,
             is_member=is_member,
             reading_word=reading_word,
             failure_kind=failure_kind,
@@ -481,7 +486,6 @@ class SkewLittlewoodRichardsonCheckResult(StrictModel):
             failed_column=failed_column,
             failed_value=failed_value,
             failed_prefix_length=failed_prefix_length,
-            convention=request.convention,
         )
 
 

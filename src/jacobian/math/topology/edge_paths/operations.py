@@ -11,9 +11,9 @@ from jacobian.catalog.models import (
 )
 from jacobian.math.matrices.operations import smith_normal_form_result
 from jacobian.math.matrices.values import IntegerMatrix
-from jacobian.math.topology._models import FiniteSimplicialComplex, canonical_complex
+from jacobian.math.topology._models import FiniteSimplicialComplex
 from jacobian.math.topology._request_admission import (
-    require_complex_admission,
+    require_canonical_complex_admission,
     run_topology_admission,
 )
 from jacobian.math.topology.edge_paths._models import (
@@ -29,7 +29,6 @@ from jacobian.math.topology.edge_paths._models import (
     EdgeWordEntry,
     FiniteGroupPresentation,
     FiniteGroupWord,
-    FundamentalGroupPresentationRequest,
     FundamentalGroupPresentationResult,
     OrientedEdge,
     TriangleRelator,
@@ -226,17 +225,17 @@ def _free_reduce(
     return tuple(stack)
 
 
-def _canonical_fundamental_complex(
-    request: FundamentalGroupPresentationRequest,
-) -> FiniteSimplicialComplex:
-    require_complex_admission(request.complex)
-    if request.base_vertex not in set(request.complex.vertices):
+def _admit_fundamental_complex(
+    complex_: FiniteSimplicialComplex,
+    base_vertex: str,
+) -> None:
+    require_canonical_complex_admission(complex_)
+    if base_vertex not in set(complex_.vertices):
         _reject(
             location=("base_vertex",),
             code="base_vertex_missing",
             message="the base vertex must be a vertex of the source complex",
         )
-    return canonical_complex(request.complex.vertices, request.complex.facets)
 
 
 def _one_skeleton_edges(
@@ -331,12 +330,13 @@ def _abelianization(
 
 
 def _fundamental_group_kernel(
-    request: FundamentalGroupPresentationRequest,
+    complex_value: FiniteSimplicialComplex,
+    base_vertex: str,
 ) -> FundamentalGroupPresentationResult:
-    complex_value = _canonical_fundamental_complex(request)
+    _admit_fundamental_complex(complex_value, base_vertex)
     edges = _one_skeleton_edges(complex_value)
     component_vertices, tree_edges = _component_and_tree(
-        complex_value.vertices, edges, request.base_vertex
+        complex_value.vertices, edges, base_vertex
     )
     component_set = set(component_vertices)
     component_edges = tuple(
@@ -431,7 +431,7 @@ def _fundamental_group_kernel(
     )
     return FundamentalGroupPresentationResult._from_kernel(
         complex=complex_value,
-        base_vertex=request.base_vertex,
+        base_vertex=base_vertex,
         component_vertices=component_vertices,
         spanning_tree_edges=tree_edges,
         non_tree_edges=non_tree_edges,
@@ -443,7 +443,8 @@ def _fundamental_group_kernel(
 
 
 def fundamental_group_presentation(
-    request: FundamentalGroupPresentationRequest,
+    complex_: FiniteSimplicialComplex,
+    base_vertex: str,
 ) -> FundamentalGroupPresentationResult:
     """Compute the finite edge-path presentation of the basepoint component.
 
@@ -456,7 +457,7 @@ def fundamental_group_presentation(
     """
 
     return run_topology_admission(
-        lambda: _fundamental_group_kernel(request),
+        lambda: _fundamental_group_kernel(complex_, base_vertex),
         location=("complex",),
     )
 

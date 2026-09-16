@@ -76,9 +76,7 @@ S3_STANDARD = _class_function(
 
 
 def _inner(phi: FiniteClassFunction, psi: FiniteClassFunction) -> CyclotomicValue:
-    return class_function_inner_product(
-        ClassFunctionInnerProductRequest(phi=phi, psi=psi)
-    ).inner_product
+    return class_function_inner_product(phi, psi).inner_product
 
 
 def _is_rational(value: CyclotomicValue, rational: int | Fraction) -> bool:
@@ -105,9 +103,7 @@ class TestKnownAnswers:
         assert _is_rational(_inner(S3_SIGN, S3_STANDARD), 0)
 
     def test_contribution_table_is_complete(self) -> None:
-        result = class_function_inner_product(
-            ClassFunctionInnerProductRequest(phi=S3_TRIVIAL, psi=S3_SIGN)
-        )
+        result = class_function_inner_product(S3_TRIVIAL, S3_SIGN)
         assert tuple(row.class_index for row in result.contributions) == (0, 1, 2)
         assert tuple(row.class_size for row in result.contributions) == S3_SIZES
         terms = [
@@ -199,9 +195,7 @@ class TestBoundariesAndAdversarial:
     def test_mismatched_axis_is_rejected(self) -> None:
         other = _class_function(1, (2, 4), (_value(1, (1,)), _value(1, (1,))))
         with pytest.raises(OperationDomainValidationError) as exc_info:
-            class_function_inner_product(
-                ClassFunctionInnerProductRequest(phi=S3_TRIVIAL, psi=other)
-            )
+            class_function_inner_product(S3_TRIVIAL, other)
         assert (
             exc_info.value.errors()[0]["type"]
             == "groups.characters.class_axis_mismatch"
@@ -232,9 +226,8 @@ class TestEnvelope:
         )
         values = (_value(1, (1,)),) * len(sizes)
         phi = FiniteClassFunction.model_construct(axis=axis, values=values)
-        request = ClassFunctionInnerProductRequest.model_construct(phi=phi, psi=phi)
         with pytest.raises(OperationResourceAdmissionError) as exc_info:
-            class_function_inner_product(request)
+            class_function_inner_product(phi, phi)
         assert (
             exc_info.value.errors()[0]["type"]
             == "groups.characters.class_count_exceeds_envelope"
@@ -245,7 +238,7 @@ class TestParityAndSerialization:
     def test_native_matches_catalog_tool(self) -> None:
         tool = next(tool for tool in TOOLS if tool.operation_id == OPERATION_ID)
         request = ClassFunctionInnerProductRequest(phi=S3_TRIVIAL, psi=S3_STANDARD)
-        native = class_function_inner_product(request)
+        native = class_function_inner_product(request.phi, request.psi)
         catalog = tool.run(request)
         assert native.model_dump() == catalog.model_dump()
 
@@ -255,9 +248,7 @@ class TestParityAndSerialization:
         assert ClassFunctionInnerProductRequest.model_validate_json(encoded) == request
 
     def test_result_round_trip_through_json(self) -> None:
-        result = class_function_inner_product(
-            ClassFunctionInnerProductRequest(phi=S3_TRIVIAL, psi=S3_SIGN)
-        )
+        result = class_function_inner_product(S3_TRIVIAL, S3_SIGN)
         encoded = result.model_dump_json()
         parsed = type(result).model_validate_json(encoded)
         assert parsed.model_dump() == result.model_dump()

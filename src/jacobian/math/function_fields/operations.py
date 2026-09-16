@@ -30,7 +30,6 @@ from jacobian.math.function_fields._models import (
     MAX_POLYNOMIAL_X_DEGREE,
     FiniteFunctionField,
     FiniteFunctionFieldElement,
-    FunctionFieldElementMultiplyRequest,
     FunctionFieldElementMultiplyResult,
     FunctionFieldProductTerm,
     FunctionFieldReductionStep,
@@ -329,11 +328,12 @@ def _multiply_internal(
 
 
 def function_field_element_multiply(
-    request: FunctionFieldElementMultiplyRequest,
+    left: FiniteFunctionFieldElement,
+    right: FiniteFunctionFieldElement,
 ) -> FunctionFieldElementMultiplyResult:
     """Exact product in GF(p)(x)[y]/(f) with a complete reduction ledger."""
 
-    field, left, right = _admit_elements(request.left, request.right)
+    field, left, right = _admit_elements(left, right)
     prime = field.characteristic
     kpoly = _field_kpoly(field)
     reduced, raw_terms, reduction_steps = _multiply_internal(

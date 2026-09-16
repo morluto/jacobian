@@ -11,7 +11,6 @@ from jacobian.math.quantum._models import (
     MAX_QUBITS,
     BinaryPauliRow,
     CanonicalCheckRow,
-    CheckSpaceCanonicalizeRequest,
     CheckSpaceCanonicalizeResult,
     NonCommutingWitness,
 )
@@ -174,12 +173,6 @@ def canonicalize_check_space(
         basis=basis,
         witness=None,
     )
-
-
-def _run_canonicalize_check_space(
-    request: CheckSpaceCanonicalizeRequest,
-) -> CheckSpaceCanonicalizeResult:
-    return canonicalize_check_space(request.qubit_ids, request.generators)
 
 
 __all__ = ["canonicalize_check_space"]

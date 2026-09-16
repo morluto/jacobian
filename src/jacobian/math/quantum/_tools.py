@@ -5,7 +5,14 @@ from jacobian.math.quantum._models import (
     CheckSpaceCanonicalizeRequest,
     CheckSpaceCanonicalizeResult,
 )
-from jacobian.math.quantum.operations import _run_canonicalize_check_space
+from jacobian.math.quantum.operations import canonicalize_check_space
+
+
+def _run_canonicalize_check_space(
+    request: CheckSpaceCanonicalizeRequest,
+) -> CheckSpaceCanonicalizeResult:
+    return canonicalize_check_space(request.qubit_ids, request.generators)
+
 
 TOOLS = (
     MathTool(

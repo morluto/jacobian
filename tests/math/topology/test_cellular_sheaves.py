@@ -20,7 +20,7 @@ from jacobian.math.topology.cellular_sheaves import (
     from_cover_maps,
 )
 from jacobian.math.topology.cellular_sheaves._models import (
-    CoverRestrictionInput,
+    CoverRestrictionMatrix,
     FromCoverMapsRequest,
 )
 
@@ -32,6 +32,16 @@ _TRIANGLE = canonical_complex(("a", "b", "c"), (("a", "b", "c"),))
 
 def _cells(complex_: FiniteSimplicialComplex) -> list[tuple[str, ...]]:
     return [face for group in complex_.faces_by_dimension for face in group.faces]
+
+
+def _native(request: FromCoverMapsRequest) -> FromCoverMapsResult:
+    return from_cover_maps(
+        request.complex,
+        request.coefficient_field,
+        request.prime,
+        request.stalks,
+        request.cover_maps,
+    )
 
 
 def _covers(
@@ -63,7 +73,7 @@ def _rank_one_request(
             SheafStalk(simplex=cell, basis=("x",)) for cell in _cells(complex_)
         ),
         cover_maps=tuple(
-            CoverRestrictionInput(source=source, target=target, entries=((scalar,),))
+            CoverRestrictionMatrix(source=source, target=target, entries=((scalar,),))
             for source, target in _covers(complex_)
         ),
     )
@@ -73,7 +83,7 @@ class TestKnownAnswer:
     def test_constant_rank_one_triangle_sheaf_has_identity_restrictions(
         self,
     ) -> None:
-        result = from_cover_maps(_rank_one_request(_TRIANGLE))
+        result = _native(_rank_one_request(_TRIANGLE))
         assert result.outcome is SheafOutcome.CELLULAR_SHEAF
         sheaf = result.sheaf
         assert sheaf is not None
@@ -89,14 +99,14 @@ class TestKnownAnswer:
         request = _rank_one_request(_TRIANGLE, scalar="1")
         maps = {(map_.source, map_.target): map_ for map_ in request.cover_maps}
         scaled = tuple(
-            CoverRestrictionInput(
+            CoverRestrictionMatrix(
                 source=source,
                 target=target,
                 entries=(("3",),) if len(target) == 3 else (("2",),),
             )
             for source, target in maps
         )
-        result = from_cover_maps(request.model_copy(update={"cover_maps": scaled}))
+        result = _native(request.model_copy(update={"cover_maps": scaled}))
         assert result.outcome is SheafOutcome.CELLULAR_SHEAF
         sheaf = result.sheaf
         assert sheaf is not None
@@ -115,7 +125,7 @@ class TestKnownAnswer:
             )
             for map_ in request.cover_maps
         )
-        result = from_cover_maps(request.model_copy(update={"cover_maps": scaled}))
+        result = _native(request.model_copy(update={"cover_maps": scaled}))
         assert result.outcome is SheafOutcome.CELLULAR_SHEAF
         sheaf = result.sheaf
         assert sheaf is not None
@@ -130,7 +140,7 @@ class TestKnownAnswer:
 class TestBoundaryDegenerate:
     def test_single_vertex_constant_sheaf(self) -> None:
         point = canonical_complex(("a",), (("a",),))
-        result = from_cover_maps(_rank_one_request(point))
+        result = _native(_rank_one_request(point))
         assert result.outcome is SheafOutcome.CELLULAR_SHEAF
         sheaf = result.sheaf
         assert sheaf is not None
@@ -147,11 +157,11 @@ class TestBoundaryDegenerate:
                 SheafStalk(simplex=cell, basis=()) for cell in _cells(_INTERVAL)
             ),
             cover_maps=tuple(
-                CoverRestrictionInput(source=source, target=target, entries=())
+                CoverRestrictionMatrix(source=source, target=target, entries=())
                 for source, target in _covers(_INTERVAL)
             ),
         )
-        result = from_cover_maps(request)
+        result = _native(request)
         assert result.outcome is SheafOutcome.CELLULAR_SHEAF
         sheaf = result.sheaf
         assert sheaf is not None
@@ -160,7 +170,7 @@ class TestBoundaryDegenerate:
             assert restriction.entries == ()
 
     def test_interval_constant_sheaf(self) -> None:
-        result = from_cover_maps(_rank_one_request(_INTERVAL))
+        result = _native(_rank_one_request(_INTERVAL))
         assert result.outcome is SheafOutcome.CELLULAR_SHEAF
         sheaf = result.sheaf
         assert sheaf is not None
@@ -177,7 +187,7 @@ class TestAdversarial:
             else map_
             for map_ in request.cover_maps
         )
-        result = from_cover_maps(request.model_copy(update={"cover_maps": corrupted}))
+        result = _native(request.model_copy(update={"cover_maps": corrupted}))
         assert result.outcome is SheafOutcome.NOT_A_SHEAF
         obstruction = result.obstruction
         assert obstruction is not None
@@ -194,7 +204,7 @@ class TestAdversarial:
 
     def test_missing_cover_map_is_the_first_obstruction(self) -> None:
         request = _rank_one_request(_TRIANGLE)
-        result = from_cover_maps(
+        result = _native(
             request.model_copy(update={"cover_maps": request.cover_maps[:-1]})
         )
         assert result.outcome is SheafOutcome.NOT_A_SHEAF
@@ -219,15 +229,15 @@ class TestAdversarial:
                 SheafStalk(simplex=("a", "b"), basis=("z",)),
             ),
             cover_maps=(
-                CoverRestrictionInput(
+                CoverRestrictionMatrix(
                     source=("a",), target=("a", "b"), entries=(("1",),)
                 ),
-                CoverRestrictionInput(
+                CoverRestrictionMatrix(
                     source=("b",), target=("a", "b"), entries=(("1",),)
                 ),
             ),
         )
-        result = from_cover_maps(request)
+        result = _native(request)
         assert result.outcome is SheafOutcome.NOT_A_SHEAF
         obstruction = result.obstruction
         assert obstruction is not None
@@ -238,7 +248,7 @@ class TestAdversarial:
     def test_nonprime_modulus_is_a_domain_rejection(self) -> None:
         request = _rank_one_request(_INTERVAL, field=SheafField.PRIME_FIELD, prime=4)
         with pytest.raises(OperationDomainValidationError) as excinfo:
-            from_cover_maps(request)
+            _native(request)
         assert excinfo.value.errors()[0]["type"] == (
             "topology.cellular_sheaf.prime_not_admitted"
         )
@@ -246,7 +256,7 @@ class TestAdversarial:
     def test_missing_prime_is_a_domain_rejection(self) -> None:
         request = _rank_one_request(_INTERVAL, field=SheafField.PRIME_FIELD, prime=None)
         with pytest.raises(OperationDomainValidationError) as excinfo:
-            from_cover_maps(request)
+            _native(request)
         assert excinfo.value.errors()[0]["type"] == (
             "topology.cellular_sheaf.prime_required"
         )
@@ -254,7 +264,7 @@ class TestAdversarial:
     def test_incomplete_stalk_domain_is_a_domain_rejection(self) -> None:
         request = _rank_one_request(_INTERVAL)
         with pytest.raises(OperationDomainValidationError) as excinfo:
-            from_cover_maps(request.model_copy(update={"stalks": request.stalks[:2]}))
+            _native(request.model_copy(update={"stalks": request.stalks[:2]}))
         assert excinfo.value.errors()[0]["type"] == (
             "topology.cellular_sheaf.stalk_domain_incomplete"
         )
@@ -263,12 +273,12 @@ class TestAdversarial:
         request = _rank_one_request(_TRIANGLE)
         forged = (
             *request.cover_maps,
-            CoverRestrictionInput(
+            CoverRestrictionMatrix(
                 source=("a",), target=("a", "b", "c"), entries=(("1",),)
             ),
         )
         with pytest.raises(OperationDomainValidationError) as excinfo:
-            from_cover_maps(request.model_copy(update={"cover_maps": forged}))
+            _native(request.model_copy(update={"cover_maps": forged}))
         assert excinfo.value.errors()[0]["type"] == (
             "topology.cellular_sheaf.cover_map_not_a_cover"
         )
@@ -280,7 +290,7 @@ class TestAdversarial:
             request.cover_maps[1],
         )
         with pytest.raises(OperationDomainValidationError) as excinfo:
-            from_cover_maps(request.model_copy(update={"cover_maps": corrupted}))
+            _native(request.model_copy(update={"cover_maps": corrupted}))
         assert excinfo.value.errors()[0]["type"] == (
             "topology.cellular_sheaf.entry_not_exact"
         )
@@ -289,7 +299,7 @@ class TestAdversarial:
 class TestDefiningInvariant:
     def test_every_diamond_replays_from_the_returned_cover_maps(self) -> None:
         request = _rank_one_request(_TRIANGLE, scalar="2")
-        result = from_cover_maps(request)
+        result = _native(request)
         assert result.outcome is SheafOutcome.CELLULAR_SHEAF
         sheaf = result.sheaf
         assert sheaf is not None
@@ -342,7 +352,7 @@ class TestNativeCatalogParity:
     def test_catalog_tool_runs_the_same_kernel(self) -> None:
         tool = next(tool for tool in BUILTIN_TOOLS if tool.operation_id == OPERATION_ID)
         request = _rank_one_request(_TRIANGLE)
-        assert tool.run(request) == from_cover_maps(request)
+        assert tool.run(request) == _native(request)
 
     def test_published_examples_execute(self) -> None:
         tool = next(tool for tool in BUILTIN_TOOLS if tool.operation_id == OPERATION_ID)
@@ -359,7 +369,7 @@ class TestNativeCatalogParity:
 
 class TestSerialization:
     def test_sheaf_result_round_trips(self) -> None:
-        result = from_cover_maps(_rank_one_request(_TRIANGLE))
+        result = _native(_rank_one_request(_TRIANGLE))
         restored = FromCoverMapsResult.model_validate_json(result.model_dump_json())
         assert restored == result
 
@@ -371,19 +381,19 @@ class TestSerialization:
             else map_
             for map_ in request.cover_maps
         )
-        result = from_cover_maps(request.model_copy(update={"cover_maps": corrupted}))
+        result = _native(request.model_copy(update={"cover_maps": corrupted}))
         restored = FromCoverMapsResult.model_validate_json(result.model_dump_json())
         assert restored == result
 
     def test_forged_derived_map_fails_validation(self) -> None:
-        result = from_cover_maps(_rank_one_request(_TRIANGLE))
+        result = _native(_rank_one_request(_TRIANGLE))
         payload = result.model_dump(mode="json")
         payload["sheaf"]["derived_restrictions"][0]["entries"] = [["1", "2"]]
         with pytest.raises(ValueError):
             FromCoverMapsResult.model_validate(payload)
 
     def test_forged_cover_path_fails_validation(self) -> None:
-        result = from_cover_maps(_rank_one_request(_TRIANGLE))
+        result = _native(_rank_one_request(_TRIANGLE))
         payload = result.model_dump(mode="json")
         payload["sheaf"]["derived_restrictions"][0]["cover_path"] = [
             ["a"],
@@ -393,7 +403,7 @@ class TestSerialization:
             FromCoverMapsResult.model_validate(payload)
 
     def test_forged_outcome_payload_mix_is_rejected(self) -> None:
-        result = from_cover_maps(_rank_one_request(_TRIANGLE))
+        result = _native(_rank_one_request(_TRIANGLE))
         payload = result.model_dump(mode="json")
         payload["obstruction"] = {
             "code": "MISSING_COVER_MAP",
@@ -405,7 +415,7 @@ class TestSerialization:
             FromCoverMapsResult.model_validate(payload)
 
     def test_forged_commutativity_claim_is_rejected(self) -> None:
-        result = from_cover_maps(_rank_one_request(_TRIANGLE))
+        result = _native(_rank_one_request(_TRIANGLE))
         payload = result.model_dump(mode="json")
         payload["sheaf"]["stalks"][0]["basis"] = ["forged"]
         with pytest.raises(ValueError):
@@ -428,11 +438,11 @@ class TestEnvelope:
                 SheafStalk(simplex=cell, basis=()) for cell in _cells(complex_)
             ),
             cover_maps=tuple(
-                CoverRestrictionInput(source=source, target=target, entries=())
+                CoverRestrictionMatrix(source=source, target=target, entries=())
                 for source, target in _covers(complex_)
             ),
         )
-        result = from_cover_maps(request)
+        result = _native(request)
         assert result.outcome is SheafOutcome.CELLULAR_SHEAF
 
     def test_above_the_simplex_envelope_is_a_resource_rejection(self) -> None:
@@ -448,7 +458,7 @@ class TestEnvelope:
             ),
         )
         with pytest.raises(OperationResourceAdmissionError) as excinfo:
-            from_cover_maps(request)
+            _native(request)
         assert excinfo.value.errors()[0]["type"] == (
             "topology.cellular_sheaf.admission.simplices"
         )
@@ -466,7 +476,7 @@ class TestEnvelope:
             ),
         )
         with pytest.raises(OperationResourceAdmissionError) as excinfo:
-            from_cover_maps(request)
+            _native(request)
         assert excinfo.value.errors()[0]["type"] == (
             "topology.cellular_sheaf.admission.stalk_rank"
         )
@@ -480,14 +490,14 @@ class TestEnvelope:
                 SheafStalk(simplex=cell, basis=("x",)) for cell in _cells(_INTERVAL)
             ),
             cover_maps=tuple(
-                CoverRestrictionInput(
+                CoverRestrictionMatrix(
                     source=("a",), target=("a", "b"), entries=(("1",),)
                 )
                 for _ in range(513)
             ),
         )
         with pytest.raises(OperationResourceAdmissionError) as excinfo:
-            from_cover_maps(request)
+            _native(request)
         assert excinfo.value.errors()[0]["type"] == (
             "topology.cellular_sheaf.admission.cover_maps"
         )
@@ -499,7 +509,7 @@ class TestEnvelope:
             request.cover_maps[1],
         )
         with pytest.raises(OperationResourceAdmissionError) as excinfo:
-            from_cover_maps(request.model_copy(update={"cover_maps": corrupted}))
+            _native(request.model_copy(update={"cover_maps": corrupted}))
         assert excinfo.value.errors()[0]["type"] == (
             "topology.cellular_sheaf.admission.entry_digits"
         )

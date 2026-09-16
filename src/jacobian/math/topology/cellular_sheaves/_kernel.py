@@ -15,6 +15,7 @@ from __future__ import annotations
 from fractions import Fraction
 from itertools import pairwise
 
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -33,9 +34,9 @@ from jacobian.math.topology.cellular_sheaves._models import (
     MAX_SHEAF_SIMPLICES,
     MAX_SHEAF_STALK_RANK,
     MAX_SHEAF_TOTAL_STALK_RANK,
+    CoverRestrictionMatrix,
     DiamondCounterexample,
     FiniteCellularSheaf,
-    FromCoverMapsRequest,
     FromCoverMapsResult,
     SheafField,
     SheafObstruction,
@@ -99,8 +100,11 @@ class _ExactField:
         if self.field is SheafField.RATIONAL:
             assert isinstance(value, Fraction)
             if value.denominator == 1:
-                return str(value.numerator)
-            return f"{value.numerator}/{value.denominator}"
+                return format_canonical_integer(value.numerator)
+            return (
+                f"{format_canonical_integer(value.numerator)}/"
+                f"{format_canonical_integer(value.denominator)}"
+            )
         return str(int(value))
 
     def zero(self) -> Scalar:
@@ -176,31 +180,35 @@ def _canonical_chain(source: Simplex, target: Simplex) -> list[Simplex]:
     return chain
 
 
-def _admit_field(request: FromCoverMapsRequest) -> _ExactField:
-    if request.coefficient_field is SheafField.PRIME_FIELD:
-        if request.prime is None:
+def _admit_field(coefficient_field: SheafField, prime: int | None) -> _ExactField:
+    if coefficient_field is SheafField.PRIME_FIELD:
+        if prime is None:
             raise _domain(
                 "prime_required",
                 "GF(p) sheaves must declare their prime modulus",
                 ("prime",),
             )
-        if not _is_prime(request.prime) or not 2 <= request.prime <= MAX_SHEAF_PRIME:
+        if not _is_prime(prime) or not 2 <= prime <= MAX_SHEAF_PRIME:
             raise _domain(
                 "prime_not_admitted",
-                f"the declared modulus {request.prime} is not a prime within the "
+                f"the declared modulus {prime} is not a prime within the "
                 f"bounded sheaf envelope",
                 ("prime",),
             )
-    elif request.prime is not None:
+    elif prime is not None:
         raise _domain(
             "prime_forbidden",
             "QQ sheaves must not declare a prime modulus",
             ("prime",),
         )
-    return _ExactField(request.coefficient_field, request.prime)
+    return _ExactField(coefficient_field, prime)
 
 
-def _admit_resources(request: FromCoverMapsRequest, cell_count: int) -> None:
+def _admit_resources(
+    stalks: tuple[SheafStalk, ...],
+    cover_maps: tuple[CoverRestrictionMatrix, ...],
+    cell_count: int,
+) -> None:
     if cell_count > MAX_SHEAF_SIMPLICES:
         raise _resource(
             "admission.simplices",
@@ -208,22 +216,22 @@ def _admit_resources(request: FromCoverMapsRequest, cell_count: int) -> None:
             f"{MAX_SHEAF_SIMPLICES}-simplex sheaf envelope",
             ("complex",),
         )
-    if len(request.stalks) > MAX_SHEAF_SIMPLICES:
+    if len(stalks) > MAX_SHEAF_SIMPLICES:
         raise _resource(
             "admission.stalks",
-            f"the request declares {len(request.stalks)} stalks, above the "
+            f"the request declares {len(stalks)} stalks, above the "
             f"{MAX_SHEAF_SIMPLICES}-stalk envelope",
             ("stalks",),
         )
-    if len(request.cover_maps) > MAX_SHEAF_COVER_MAPS:
+    if len(cover_maps) > MAX_SHEAF_COVER_MAPS:
         raise _resource(
             "admission.cover_maps",
-            f"the request supplies {len(request.cover_maps)} cover maps, above "
+            f"the request supplies {len(cover_maps)} cover maps, above "
             f"the {MAX_SHEAF_COVER_MAPS}-map envelope",
             ("cover_maps",),
         )
     total_rank = 0
-    for index, stalk in enumerate(request.stalks):
+    for index, stalk in enumerate(stalks):
         if len(stalk.basis) > MAX_SHEAF_STALK_RANK:
             raise _resource(
                 "admission.stalk_rank",
@@ -239,7 +247,7 @@ def _admit_resources(request: FromCoverMapsRequest, cell_count: int) -> None:
             f"{MAX_SHEAF_TOTAL_STALK_RANK}-coordinate envelope",
             ("stalks",),
         )
-    for index, cover_map in enumerate(request.cover_maps):
+    for index, cover_map in enumerate(cover_maps):
         for row in cover_map.entries:
             for entry in row:
                 if len(entry) > MAX_SHEAF_ENTRY_DIGITS:
@@ -252,12 +260,12 @@ def _admit_resources(request: FromCoverMapsRequest, cell_count: int) -> None:
 
 
 def _admit_stalks(
-    request: FromCoverMapsRequest, cells: tuple[Simplex, ...]
+    stalks: tuple[SheafStalk, ...], cells: tuple[Simplex, ...]
 ) -> tuple[dict[Simplex, tuple[str, ...]], dict[Simplex, SheafStalk]]:
     known = set(cells)
     basis_for: dict[Simplex, tuple[str, ...]] = {}
     stalk_for: dict[Simplex, SheafStalk] = {}
-    for index, stalk in enumerate(request.stalks):
+    for index, stalk in enumerate(stalks):
         if stalk.simplex in basis_for:
             raise _domain(
                 "duplicate_stalk",
@@ -285,11 +293,13 @@ def _admit_stalks(
 
 
 def _admit_cover_maps(
-    request: FromCoverMapsRequest, covers: list[CoverKey], field: _ExactField
+    cover_maps: tuple[CoverRestrictionMatrix, ...],
+    covers: list[CoverKey],
+    field: _ExactField,
 ) -> dict[CoverKey, Matrix]:
     cover_set = set(covers)
     supplied: dict[CoverKey, Matrix] = {}
-    for index, cover_map in enumerate(request.cover_maps):
+    for index, cover_map in enumerate(cover_maps):
         key: CoverKey = (cover_map.source, cover_map.target)
         if key not in cover_set:
             raise _domain(
@@ -499,21 +509,26 @@ def _negative(obstruction: SheafObstruction) -> FromCoverMapsResult:
     )
 
 
-def from_cover_maps(request: FromCoverMapsRequest) -> FromCoverMapsResult:
+def from_cover_maps(
+    complex_: FiniteSimplicialComplex,
+    coefficient_field: SheafField,
+    prime: int | None,
+    stalks: tuple[SheafStalk, ...],
+    cover_maps: tuple[CoverRestrictionMatrix, ...],
+) -> FromCoverMapsResult:
     """Construct the canonical sheaf or return the first diagram obstruction."""
 
-    complex_ = request.complex
-    field = _admit_field(request)
+    field = _admit_field(coefficient_field, prime)
     try:
         require_canonical_complex_admission(complex_)
     except ValueError as exc:
         raise _domain("complex_not_canonical", str(exc), ("complex",)) from exc
 
     cells = _cells(complex_)
-    _admit_resources(request, len(cells))
-    basis_for, stalk_for = _admit_stalks(request, cells)
+    _admit_resources(stalks, cover_maps, len(cells))
+    basis_for, stalk_for = _admit_stalks(stalks, cells)
     covers = _cover_relations(cells)
-    supplied = _admit_cover_maps(request, covers, field)
+    supplied = _admit_cover_maps(cover_maps, covers, field)
 
     dimension_of = {cell: len(cell) - 1 for cell in cells}
     comparable = sorted(
@@ -541,8 +556,8 @@ def from_cover_maps(request: FromCoverMapsRequest) -> FromCoverMapsResult:
     )
     sheaf = FiniteCellularSheaf._from_kernel(
         complex=complex_,
-        coefficient_field=request.coefficient_field,
-        prime=request.prime,
+        coefficient_field=coefficient_field,
+        prime=prime,
         stalks=tuple(stalk_for[cell] for cell in cells),
         cover_restrictions=cover_restrictions,
         derived_restrictions=derived_restrictions,

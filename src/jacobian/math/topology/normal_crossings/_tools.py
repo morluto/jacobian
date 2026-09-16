@@ -47,13 +47,13 @@ _TRIPLE_POINT = {
 def _dual_complex(
     request: NormalCrossingsPresentationRequest,
 ) -> DualComplexResult:
-    return dual_complex(request)
+    return dual_complex(request.components, request.strata)
 
 
 def _nearby_cycle_lattices(
     request: NormalCrossingsPresentationRequest,
 ) -> NearbyCycleLatticesResult:
-    return nearby_cycle_lattices(request)
+    return nearby_cycle_lattices(request.components, request.strata)
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (

@@ -3,13 +3,25 @@
 from __future__ import annotations
 
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
+from jacobian.math.topology._models import FiniteSimplicialComplex
 from jacobian.math.topology.discrete_morse._models import (
     DiscreteMorseMatchingRequest,
     DiscreteMorseMatchingResult,
 )
 from jacobian.math.topology.discrete_morse.operations import construct_matching
+from jacobian.math.topology.operations import canonicalize
 
 __all__ = ["TOOLS"]
+
+
+def _run_construct_matching(
+    request: DiscreteMorseMatchingRequest,
+) -> DiscreteMorseMatchingResult:
+    canonical: FiniteSimplicialComplex = canonicalize(
+        request.complex.vertices, request.complex.facets
+    ).complex
+    return construct_matching(canonical, request.pairs)
+
 
 _CIRCLE_FACETS = {
     "vertices": ["a", "b", "c"],
@@ -33,7 +45,7 @@ TOOLS: MathTools = (
         ),
         request_type=DiscreteMorseMatchingRequest,
         result_type=DiscreteMorseMatchingResult,
-        run=construct_matching,
+        run=_run_construct_matching,
         tags=(
             "topology",
             "discrete-morse",

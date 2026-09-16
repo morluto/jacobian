@@ -3,6 +3,10 @@
 from typing import Any
 
 from jacobian.catalog.models import MathTool, OperationExample
+from jacobian.math.topology._models import (
+    FiniteSimplicialComplex,
+    canonical_complex,
+)
 from jacobian.math.topology.edge_paths._models import (
     EdgePathConcatenateRequest,
     EdgePathConcatenateResult,
@@ -31,7 +35,10 @@ def _concatenate(request: EdgePathConcatenateRequest) -> EdgePathConcatenateResu
 def _fundamental_group(
     request: FundamentalGroupPresentationRequest,
 ) -> FundamentalGroupPresentationResult:
-    return fundamental_group_presentation(request)
+    canonical: FiniteSimplicialComplex = canonical_complex(
+        request.complex.vertices, request.complex.facets
+    )
+    return fundamental_group_presentation(canonical, request.base_vertex)
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (

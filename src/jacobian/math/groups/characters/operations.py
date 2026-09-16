@@ -25,7 +25,6 @@ from jacobian.math.groups.characters._models import (
     MAX_INNER_PRODUCT_WORK,
     MAX_VALUE_COEFFICIENT_DIGITS,
     ClassContribution,
-    ClassFunctionInnerProductRequest,
     ClassFunctionInnerProductResult,
     CyclotomicValue,
     FiniteClassFunction,
@@ -112,12 +111,11 @@ def _admit_inner_product(phi: FiniteClassFunction, psi: FiniteClassFunction) -> 
 
 
 def class_function_inner_product(
-    request: ClassFunctionInnerProductRequest,
+    phi: FiniteClassFunction,
+    psi: FiniteClassFunction,
 ) -> ClassFunctionInnerProductResult:
     """Exact Hermitian inner product with a complete class contribution table."""
 
-    phi = request.phi
-    psi = request.psi
     _admit_inner_product(phi, psi)
     axis = phi.axis
     order = axis.cyclotomic_order

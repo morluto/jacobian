@@ -24,9 +24,6 @@ from jacobian.math.number_theory.kempner._models import (
     KempnerSeriesEnclosureRequest,
 )
 from jacobian.math.number_theory.kempner._tools import TOOLS
-from jacobian.math.number_theory.kempner.operations import (
-    compute_kempner_series_enclosure,
-)
 
 
 def _family(base: int, digits: tuple[int, ...]) -> list[int]:
@@ -163,16 +160,14 @@ def test_agrees_with_direct_family_enumeration() -> None:
 def test_native_and_catalog_results_agree() -> None:
     digit_set = KempnerDigitSet(base=10, allowed_digits=(1,))
     native = enclose_kempner_series(digit_set, 2)
-    catalog = compute_kempner_series_enclosure(
-        KempnerSeriesEnclosureRequest(digit_set=digit_set, cutoff=2)
-    )
+    assert len(TOOLS) == 1
+    assert TOOLS[0].operation_id == "number_theory.kempner_series.enclose"
+    catalog = TOOLS[0].run(KempnerSeriesEnclosureRequest(digit_set=digit_set, cutoff=2))
 
     assert catalog == native
     assert (
         KempnerSeriesEnclosure.model_validate_json(catalog.model_dump_json()) == catalog
     )
-    assert len(TOOLS) == 1
-    assert TOOLS[0].operation_id == "number_theory.kempner_series.enclose"
 
 
 def test_noncanonical_digit_set_rejected() -> None:

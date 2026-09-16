@@ -144,11 +144,4 @@ def link_components(diagram: OrientedLinkDiagram) -> LinkComponentsResult:
     return LinkComponentsResult._from_kernel(components=ordered)
 
 
-def _run_link_components(request: object) -> LinkComponentsResult:
-    from jacobian.math.topology.links._models import LinkComponentsRequest as _Request
-
-    assert isinstance(request, _Request)
-    return link_components(request.diagram)
-
-
 __all__ = ["link_components"]

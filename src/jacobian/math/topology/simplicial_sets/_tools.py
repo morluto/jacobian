@@ -9,7 +9,9 @@ from jacobian.math.topology.simplicial_sets.operations import from_tables
 
 
 def _run_from_tables(request: SimplicialSetTablesRequest) -> SimplicialSetTablesResult:
-    return from_tables(request)
+    return from_tables(
+        request.max_degree, request.sets, request.face_maps, request.degeneracy_maps
+    )
 
 
 # Delta[1] truncated to degrees 0..1: X_0 = {0, 1}, X_1 = {00, 01, 11};

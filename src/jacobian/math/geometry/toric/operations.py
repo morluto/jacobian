@@ -2,28 +2,54 @@
 
 from __future__ import annotations
 
+from math import gcd
+from typing import NoReturn
+
+from jacobian._execution import execution_deadline
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.math.geometry.toric._kernel import RecognizedFan, recognize_fan
+from jacobian.math.geometry.toric._kernel import (
+    RecognizedCone,
+    RecognizedFan,
+    _ray_in_cone,
+    compute_affine_chart_data,
+    compute_toric_morphism_data,
+    facet_localizing_character,
+    recognize_fan,
+)
 from jacobian.math.geometry.toric._models import (
     MAX_TORIC_CONE_COUNT,
     MAX_TORIC_CONE_GENERATORS,
     MAX_TORIC_COORDINATE_DIGITS,
     MAX_TORIC_LATTICE_RANK,
+    MAX_TORIC_MORPHISM_WORK,
     MAX_TORIC_RAY_COUNT,
     CharacterDivisorResult,
     CharacterVector,
     FanValidationResult,
     OrbitConeProfileResult,
+    ToricAffineChartResult,
+    ToricChartLocalization,
+    ToricConeAssignment,
     ToricFanPresentation,
+    ToricMorphismObstruction,
+    ToricMorphismResult,
 )
+from jacobian.math.matrices.values import IntegerMatrix
 
 MAX_TORIC_RECOGNITION_WORK = 5_000_000
 
+# Operation-owned wall allowance for the affine-chart and morphism kernels. The
+# admitted envelopes keep every mandatory phase well inside this margin; the
+# deadline is a safety net for the untrusted Z3 reduction, never mathematical
+# evidence.
+MAX_TORIC_CHART_SECONDS = 30.0
+MAX_TORIC_MORPHISM_SECONDS = 30.0
 
-def _reject_envelope(message: str) -> None:
+
+def _reject_envelope(message: str) -> NoReturn:
     raise OperationResourceAdmissionError(
         location=("fan",),
         code="toric.resource_budget_exceeded",
@@ -31,7 +57,9 @@ def _reject_envelope(message: str) -> None:
     )
 
 
-def _reject_domain(location: tuple[str | int, ...], code: str, message: str) -> None:
+def _reject_domain(
+    location: tuple[str | int, ...], code: str, message: str
+) -> NoReturn:
     raise OperationDomainValidationError(location=location, code=code, message=message)
 
 
@@ -151,8 +179,242 @@ def compute_character_divisor(
     )
 
 
+def _primitive_character(values: tuple[int, ...]) -> tuple[int, ...]:
+    divisor = 0
+    for value in values:
+        divisor = gcd(divisor, abs(value))
+    if divisor <= 1:
+        return values
+    return tuple(value // divisor for value in values)
+
+
+def _locate_full_dimensional_cone(
+    fan: ToricFanPresentation, recognized: RecognizedFan, cone: tuple[int, ...]
+) -> RecognizedCone:
+    label = tuple(sorted(set(cone)))
+    for recognized_cone in recognized.cones:
+        if recognized_cone.ray_indices != label:
+            continue
+        if recognized_cone.dimension != fan.lattice_rank:
+            _reject_domain(
+                ("cone",),
+                "toric.chart_cone_not_full_dimensional",
+                "affine monomial charts require a full-dimensional cone",
+            )
+        return recognized_cone
+    _reject_domain(
+        ("cone",),
+        "toric.chart_cone_not_declared",
+        "the cone label must be one of the fan's declared cones",
+    )
+
+
+def _chart_localizations(
+    recognized: RecognizedFan, cone_id: int, lattice_rank: int
+) -> tuple[ToricChartLocalization, ...]:
+    """Localizing characters for every proper face of one full-dimensional cone."""
+
+    sigma_rays = tuple(
+        recognized.rays[index] for index in recognized.cones[cone_id].ray_indices
+    )
+    facet_characters: dict[int, tuple[int, ...]] = {}
+    for facet in recognized.cones:
+        if (
+            facet.cone_id == cone_id
+            or facet.dimension != lattice_rank - 1
+            or not set(facet.ray_indices).issubset(
+                recognized.cones[cone_id].ray_indices
+            )
+        ):
+            continue
+        facet_rays = tuple(recognized.rays[index] for index in facet.ray_indices)
+        character = facet_localizing_character(sigma_rays, facet_rays, lattice_rank)
+        if character is None:
+            raise ArithmeticError(
+                "a declared facet of a full-dimensional cone has no primitive "
+                "supporting character"
+            )
+        facet_characters[facet.cone_id] = character
+    localizations: list[ToricChartLocalization] = []
+    for tau_id, sigma_id in recognized.face_relations:
+        if sigma_id != cone_id or tau_id == cone_id:
+            continue
+        tau = recognized.cones[tau_id]
+        tau_rays = set(tau.ray_indices)
+        total = [0] * lattice_rank
+        for facet in recognized.cones:
+            if facet.cone_id not in facet_characters:
+                continue
+            if not tau_rays.issubset(facet.ray_indices):
+                continue
+            character = facet_characters[facet.cone_id]
+            for coordinate in range(lattice_rank):
+                total[coordinate] += character[coordinate]
+        localizations.append(
+            ToricChartLocalization.model_construct(
+                face_cone_id=tau_id,
+                face_ray_indices=tau.ray_indices,
+                localizing_character=_primitive_character(tuple(total)),
+            )
+        )
+    localizations.sort(key=lambda localization: localization.face_cone_id)
+    return tuple(localizations)
+
+
+def compute_affine_chart(
+    fan: ToricFanPresentation, cone: tuple[int, ...]
+) -> ToricAffineChartResult:
+    """Return the affine chart ``Spec k[sigma^vee cap M]`` of one fan cone.
+
+    The cone is resolved exactly, its dual cone is computed by the shipped
+    double description, the complete Hilbert basis is reduced from the
+    fundamental-parallelepiped candidates, and the relation lattice is replayed
+    against the generators. Only full-dimensional cones with a bounded derived
+    presentation are admitted.
+    """
+
+    recognized = _recognize_or_reject(fan)
+    recognized_cone = _locate_full_dimensional_cone(fan, recognized, cone)
+    deadline = execution_deadline(MAX_TORIC_CHART_SECONDS)
+    data = compute_affine_chart_data(
+        tuple(recognized.rays[index] for index in recognized_cone.ray_indices),
+        fan.lattice_rank,
+        deadline,
+    )
+    localizations = _chart_localizations(
+        recognized, recognized_cone.cone_id, fan.lattice_rank
+    )
+    return ToricAffineChartResult._from_components(
+        fan=fan,
+        cone_id=recognized_cone.cone_id,
+        cone_ray_indices=recognized_cone.ray_indices,
+        dimension=recognized_cone.dimension,
+        dual_cone_rays=data.dual_cone_rays,
+        hilbert_basis=data.hilbert_basis,
+        relations=data.relations,
+        is_smooth=recognized_cone.is_smooth,
+        localizations=localizations,
+    )
+
+
+def _admit_morphism_matrix(
+    source: ToricFanPresentation,
+    target: ToricFanPresentation,
+    matrix: IntegerMatrix,
+) -> None:
+    entries = matrix.entries
+    if len(entries) != target.lattice_rank or any(
+        len(row) != source.lattice_rank for row in entries
+    ):
+        _reject_domain(
+            ("matrix",),
+            "toric.morphism_matrix_shape",
+            "the matrix must have target lattice rank rows and source lattice "
+            "rank columns",
+        )
+    limit = 10**MAX_TORIC_COORDINATE_DIGITS
+    if any(abs(int(value)) >= limit for row in entries for value in row):
+        _reject_envelope(
+            "morphism matrix entries are limited to "
+            f"{MAX_TORIC_COORDINATE_DIGITS} decimal digits"
+        )
+
+
+def check_toric_morphism(
+    source: ToricFanPresentation,
+    target: ToricFanPresentation,
+    matrix: IntegerMatrix,
+) -> ToricMorphismResult:
+    """Decide whether one integer lattice map is a toric morphism.
+
+    Every source cone must map into a single target cone. The verdict returns
+    the induced fan-compatible cone assignment, or the first source cone whose
+    image leaves every target cone together with the witnessing ray images. Each
+    assignment is replayed with exact cone-membership checks.
+    """
+
+    recognized_source = _recognize_or_reject(source)
+    recognized_target = _recognize_or_reject(target)
+    _admit_morphism_matrix(source, target, matrix)
+    source_cones = tuple(cone.ray_indices for cone in recognized_source.cones)
+    target_cones = tuple(cone.ray_indices for cone in recognized_target.cones)
+    work = sum(len(cone) + 1 for cone in source_cones) * len(target_cones)
+    if work > MAX_TORIC_MORPHISM_WORK:
+        _reject_envelope(
+            f"morphism cone-membership work exceeds {MAX_TORIC_MORPHISM_WORK}"
+        )
+    execution_deadline(MAX_TORIC_MORPHISM_SECONDS)
+    data = compute_toric_morphism_data(
+        recognized_source.rays,
+        source_cones,
+        recognized_target.rays,
+        target_cones,
+        matrix.entries,
+    )
+    if data.is_toric_morphism:
+        for source_cone_id, target_cone_id in data.assignments:
+            source_cone = source_cones[source_cone_id]
+            target_generators = tuple(
+                recognized_target.rays[index] for index in target_cones[target_cone_id]
+            )
+            for ray_index in source_cone:
+                if not _ray_in_cone(data.ray_images[ray_index], target_generators):
+                    raise ArithmeticError(
+                        "assigned target cone does not contain every ray image"
+                    )
+        return ToricMorphismResult._from_components(
+            source=source,
+            target=target,
+            matrix=matrix,
+            is_toric_morphism=True,
+            ray_images=data.ray_images,
+            assignments=tuple(
+                ToricConeAssignment.model_construct(
+                    source_cone_id=source_cone_id,
+                    target_cone_id=target_cone_id,
+                )
+                for source_cone_id, target_cone_id in data.assignments
+            ),
+            obstruction=None,
+        )
+    obstruction = data.obstruction
+    if obstruction is None:
+        raise ArithmeticError("a non-morphism must carry its first obstruction")
+    for position, candidates in enumerate(obstruction.candidate_target_cone_ids):
+        image = obstruction.image_vectors[position]
+        for target_cone_id in candidates:
+            target_generators = tuple(
+                recognized_target.rays[index] for index in target_cones[target_cone_id]
+            )
+            if not _ray_in_cone(image, target_generators):
+                raise ArithmeticError(
+                    "declared candidate target cone does not contain the ray image"
+                )
+    return ToricMorphismResult._from_components(
+        source=source,
+        target=target,
+        matrix=matrix,
+        is_toric_morphism=False,
+        ray_images=data.ray_images,
+        assignments=(),
+        obstruction=ToricMorphismObstruction.model_construct(
+            source_cone_id=obstruction.source_cone_id,
+            source_ray_indices=obstruction.source_ray_indices,
+            image_vectors=obstruction.image_vectors,
+            candidate_target_cone_ids=obstruction.candidate_target_cone_ids,
+            failing_ray_index=obstruction.failing_ray_index,
+            failing_image=obstruction.failing_image,
+            reason=obstruction.reason,
+        ),
+    )
+
+
 __all__ = [
+    "MAX_TORIC_CHART_SECONDS",
+    "MAX_TORIC_MORPHISM_SECONDS",
     "MAX_TORIC_RECOGNITION_WORK",
+    "check_toric_morphism",
+    "compute_affine_chart",
     "compute_character_divisor",
     "compute_orbit_cone_profile",
     "validate_fan",

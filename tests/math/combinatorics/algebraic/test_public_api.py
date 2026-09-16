@@ -22,6 +22,7 @@ def test_exact_public_api_symbols() -> None:
         "conjugate_partition",
         "hook_lengths",
         "inverse_row_insertion_rsk",
+        "knuth_moves",
         "partition_dominance",
         "row_insertion_rsk",
         "semistandard_young_tableaux_count",

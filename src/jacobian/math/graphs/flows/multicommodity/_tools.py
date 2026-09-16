@@ -4,8 +4,11 @@ from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.graphs.flows.multicommodity._models import (
     MulticommodityFlowProfileRequest,
     MulticommodityFlowProfileResult,
+    MulticommodityFlowWitnessCheckRequest,
+    MulticommodityFlowWitnessCheckResult,
 )
 from jacobian.math.graphs.flows.multicommodity.operations import (
+    check_multicommodity_flow_witness,
     compute_multicommodity_flow_profile,
 )
 
@@ -14,6 +17,12 @@ def _run_multicommodity_flow_profile(
     request: MulticommodityFlowProfileRequest,
 ) -> MulticommodityFlowProfileResult:
     return compute_multicommodity_flow_profile(request.flow)
+
+
+def _run_multicommodity_flow_witness_check(
+    request: MulticommodityFlowWitnessCheckRequest,
+) -> MulticommodityFlowWitnessCheckResult:
+    return check_multicommodity_flow_witness(request.flow)
 
 
 TOOLS: MathTools = (
@@ -43,6 +52,107 @@ TOOLS: MathTools = (
             OperationExample(
                 name="two_commodities_share_a_bottleneck",
                 description="Profile two exact commodity flows sharing a directed bottleneck; "
+                "network edges, commodities, and nonzero entries must use their "
+                "published canonical sort orders.",
+                input={
+                    "flow": {
+                        "network": {
+                            "vertex_count": 4,
+                            "edges": [
+                                {
+                                    "source": 0,
+                                    "target": 2,
+                                    "capacity": {"num": "2", "den": "1"},
+                                },
+                                {
+                                    "source": 1,
+                                    "target": 2,
+                                    "capacity": {"num": "2", "den": "1"},
+                                },
+                                {
+                                    "source": 2,
+                                    "target": 3,
+                                    "capacity": {"num": "3", "den": "1"},
+                                },
+                            ],
+                        },
+                        "commodities": [
+                            {
+                                "commodity_id": "a",
+                                "source": 0,
+                                "sink": 3,
+                                "demand": {"num": "1", "den": "1"},
+                            },
+                            {
+                                "commodity_id": "b",
+                                "source": 1,
+                                "sink": 3,
+                                "demand": {"num": "2", "den": "1"},
+                            },
+                        ],
+                        "entries": [
+                            {
+                                "commodity_id": "a",
+                                "source": 0,
+                                "target": 2,
+                                "amount": {"num": "1", "den": "1"},
+                            },
+                            {
+                                "commodity_id": "a",
+                                "source": 2,
+                                "target": 3,
+                                "amount": {"num": "1", "den": "1"},
+                            },
+                            {
+                                "commodity_id": "b",
+                                "source": 1,
+                                "target": 2,
+                                "amount": {"num": "2", "den": "1"},
+                            },
+                            {
+                                "commodity_id": "b",
+                                "source": 2,
+                                "target": 3,
+                                "amount": {"num": "2", "den": "1"},
+                            },
+                        ],
+                    }
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="network.multicommodity_flow.witness.check",
+        title="Check an exact multicommodity-flow witness",
+        description=(
+            "Replay one submitted canonical sparse commodity-by-edge flow in "
+            "exact rational arithmetic. For every commodity and vertex recompute "
+            "outgoing minus incoming flow and compare it with the declared "
+            "terminals and demand (source +d, sink -d, otherwise 0), and for "
+            "every directed edge compare the aggregate load with its capacity. "
+            "Return FEASIBLE with the divergence ledger, per-edge loads and "
+            "slacks, congestion, and work, or INFEASIBLE with the exact "
+            "violating commodities, commodity-vertex cells, and edges. Entries "
+            "are nonnegative by construction; omitted entries are exact zero. "
+            "No floating-point solver participates."
+        ),
+        request_type=MulticommodityFlowWitnessCheckRequest,
+        result_type=MulticommodityFlowWitnessCheckResult,
+        run=_run_multicommodity_flow_witness_check,
+        tags=(
+            "network",
+            "multicommodity-flow",
+            "witness",
+            "feasibility",
+            "conservation",
+            "capacity",
+            "exact",
+            "bounded",
+        ),
+        examples=(
+            OperationExample(
+                name="two_commodities_share_a_bottleneck",
+                description="Check two exact commodity flows sharing a directed bottleneck; "
                 "network edges, commodities, and nonzero entries must use their "
                 "published canonical sort orders.",
                 input={

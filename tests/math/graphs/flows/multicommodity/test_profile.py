@@ -67,7 +67,8 @@ def shared_bottleneck_flow() -> MulticommodityFlow:
 
 def test_catalog_contains_the_audited_multicommodity_profile() -> None:
     assert {tool.operation_id for tool in TOOLS} == {
-        "network.multicommodity_flow.profile.compute"
+        "network.multicommodity_flow.profile.compute",
+        "network.multicommodity_flow.witness.check",
     }
 
 

@@ -26,6 +26,10 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"matroid.{reason}", message)
 
 
+MAX_WEIGHT_DIGITS = 12
+"""Schema-visible cap on decimal digits of one matroid weight entry."""
+
+
 class LinearMatroid(StrictModel):
     """A linear matroid over GF(p) represented by a canonical matrix.
 
@@ -185,9 +189,163 @@ class MatroidClosureResult(MatroidClosureRequest):
         )
 
 
+class MaximumWeightBasisRequest(StrictModel):
+    """Compute a maximum-weight basis of a bounded linear matroid.
+
+    ``weights[i]`` is the exact integer weight of ground element ``i``; the
+    tuple covers the matroid ground set exactly once in ground order.
+    """
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "description": (
+                "A bounded linear matroid plus one exact integer weight per "
+                "ground element in ground order. Negative and zero weights "
+                "are admitted."
+            )
+        }
+    )
+
+    matroid: LinearMatroid
+    weights: tuple[int, ...] = Field(
+        max_length=MAX_GROUND_SIZE,
+        description=(
+            "One exact integer weight per ground element in ground order; "
+            "length must equal matroid.matrix.columns."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_ground_keyed_weights(self) -> Self:
+        if len(self.weights) != self.matroid.ground_size:
+            raise _validation_error(
+                "weights.ground_coverage",
+                "weights must cover the matroid ground set exactly once",
+            )
+        if any(type(weight) is not int for weight in self.weights):
+            raise _validation_error(
+                "weights.integer",
+                "matroid weights must be exact integers",
+            )
+        if any(abs(weight) >= 10**MAX_WEIGHT_DIGITS for weight in self.weights):
+            raise _validation_error(
+                "weights.digits",
+                "matroid weights must have fewer than "
+                f"{MAX_WEIGHT_DIGITS} decimal digits",
+            )
+        return self
+
+
+class ExchangeLedgerRow(StrictModel):
+    """One fundamental-circuit exchange replay row for an outside element."""
+
+    outside: StrictInt = Field(
+        ge=0,
+        description="Ground element outside the selected basis.",
+    )
+    circuit: tuple[StrictInt, ...] = Field(
+        description=(
+            "The fundamental circuit of `outside` with respect to the basis, "
+            "as distinct ground indices in increasing order."
+        ),
+    )
+    best_delta: StrictInt = Field(
+        description=(
+            "Maximum single-element exchange improvement "
+            "weights[outside] - weights[replaced]; nonpositive at optimum."
+        ),
+    )
+
+
+class MaximumWeightBasisResult(StrictModel):
+    """One deterministic maximum-weight basis bound to its source weights.
+
+    Deserialization establishes only the retained request and bounded
+    canonical result shape. Kernel output uses ``_from_kernel`` after its
+    trusted bounded computation.
+    """
+
+    matroid: LinearMatroid
+    weights: tuple[int, ...] = Field(max_length=MAX_GROUND_SIZE)
+    basis: tuple[StrictInt, ...] = Field(
+        max_length=MAX_GROUND_SIZE,
+        description="Selected basis as distinct ground indices in increasing order.",
+    )
+    total_weight: StrictInt = Field(
+        description="Exact sum of the selected basis weights, derived from `basis`."
+    )
+    rank: StrictInt = Field(
+        ge=0,
+        description="Exact rank of the matroid, equal to the basis cardinality.",
+    )
+    greedy_order: tuple[StrictInt, ...] = Field(
+        max_length=MAX_GROUND_SIZE,
+        description=(
+            "Deterministic greedy consideration order: ground elements sorted "
+            "by decreasing weight with ties broken by increasing index."
+        ),
+    )
+    exchange_ledger: tuple[ExchangeLedgerRow, ...] = Field(
+        max_length=MAX_GROUND_SIZE,
+        description=(
+            "One fundamental-circuit row per ground element outside the basis."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_canonical_claim(self) -> Self:
+        if len(self.weights) != self.matroid.ground_size:
+            raise _validation_error(
+                "weights.ground_coverage",
+                "weights must cover the matroid ground set exactly once",
+            )
+        if self.basis != tuple(sorted(set(self.basis))):
+            raise _validation_error(
+                "basis.canonical",
+                "basis indices must be distinct and in increasing order",
+            )
+        if any(not 0 <= index < self.matroid.ground_size for index in self.basis):
+            raise _validation_error(
+                "basis.indices",
+                "basis indices must be in 0..matroid.matrix.columns-1",
+            )
+        if sorted(self.greedy_order) != list(range(self.matroid.ground_size)):
+            raise _validation_error(
+                "greedy_order.coverage",
+                "greedy order must cover the ground set exactly once",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        matroid: LinearMatroid,
+        weights: tuple[int, ...],
+        basis: tuple[int, ...],
+        total_weight: int,
+        rank: int,
+        greedy_order: tuple[int, ...],
+        exchange_ledger: tuple[ExchangeLedgerRow, ...],
+    ) -> Self:
+        """Construct trusted output of the owner-local greedy kernel."""
+
+        return cls.model_construct(
+            matroid=matroid,
+            weights=weights,
+            basis=basis,
+            total_weight=total_weight,
+            rank=rank,
+            greedy_order=greedy_order,
+            exchange_ledger=exchange_ledger,
+        )
+
+
 __all__ = [
+    "ExchangeLedgerRow",
     "LinearMatroid",
     "MatroidClosureRequest",
     "MatroidClosureResult",
+    "MaximumWeightBasisRequest",
+    "MaximumWeightBasisResult",
     "validate_subset_indices",
 ]

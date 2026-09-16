@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from fractions import Fraction
-from typing import NamedTuple, Self
+from typing import Literal, NamedTuple, Self
 
 from pydantic import Field, StrictStr, model_validator
 from pydantic_core import PydanticCustomError
@@ -664,6 +664,159 @@ class MulticommodityFlowProfileResult(StrictModel):
         )
 
 
+class CommodityVertexViolation(StrictModel):
+    """One commodity/vertex cell whose exact divergence does not route its demand."""
+
+    commodity_id: StrictStr = Field(
+        min_length=1,
+        max_length=64,
+        pattern=r"^[A-Za-z][A-Za-z0-9_.-]*$",
+    )
+    vertex: int = Field(ge=0, le=63)
+    divergence: CanonicalRational
+    expected: CanonicalRational
+
+
+class EdgeCapacityViolation(StrictModel):
+    """One directed edge whose exact aggregate load exceeds its capacity."""
+
+    source: int = Field(ge=0, le=63)
+    target: int = Field(ge=0, le=63)
+    load: CanonicalRational
+    capacity: CanonicalRational
+
+
+class MulticommodityFlowWitnessCheckRequest(StrictModel):
+    """Check one submitted exact commodity-by-edge flow against its contract."""
+
+    flow: MulticommodityFlow = Field(
+        description=(
+            "Canonical sparse commodity-by-edge tensor over its retained "
+            "network and labelled demands; omitted entries are exact zero."
+        )
+    )
+
+
+class MulticommodityFlowWitnessCheckResult(StrictModel):
+    """The exact feasibility verdict for one submitted multicommodity flow.
+
+    The verdict is decided only by exact rational replay: every commodity's
+    divergence is recomputed from the submitted tensor and compared with its
+    declared terminals and demand, and every edge's aggregate load is compared
+    with its capacity.  No floating-point solve participates.
+    """
+
+    flow: MulticommodityFlow
+    status: Literal["FEASIBLE", "INFEASIBLE"]
+    divergences: tuple[CommodityDivergence, ...] = Field(
+        min_length=1, max_length=MAX_COMMODITY_VERTEX_CELLS
+    )
+    edge_profiles: tuple[EdgeLoadProfile, ...] = Field(
+        min_length=1, max_length=MAX_MULTICOMMODITY_EDGES
+    )
+    all_demands_routed: bool
+    capacity_feasible: bool
+    nonnegative: bool
+    congestion: CanonicalRational | None = Field(default=None)
+    violating_commodities: tuple[StrictStr, ...] = Field(default=(), max_length=256)
+    violating_vertices: tuple[CommodityVertexViolation, ...] = Field(
+        default=(), max_length=MAX_COMMODITY_VERTEX_CELLS
+    )
+    violating_edges: tuple[EdgeCapacityViolation, ...] = Field(
+        default=(), max_length=MAX_MULTICOMMODITY_EDGES
+    )
+    work: MulticommodityFlowProfileWork
+
+    @model_validator(mode="after")
+    def require_structural_witness(self) -> Self:
+        expected_divergence_keys = tuple(
+            (commodity.commodity_id, vertex)
+            for commodity in self.flow.commodities
+            for vertex in range(self.flow.network.vertex_count)
+        )
+        actual_divergence_keys = tuple(
+            (row.commodity_id, row.vertex) for row in self.divergences
+        )
+        if actual_divergence_keys != expected_divergence_keys:
+            raise PydanticCustomError(
+                "graph.witness_divergence_rows_must_match_source_axis",
+                "witness divergence rows must match the source commodity-vertex axis",
+            )
+        expected_edge_keys = tuple(
+            (edge.source, edge.target) for edge in self.flow.network.edges
+        )
+        actual_edge_keys = tuple((row.source, row.target) for row in self.edge_profiles)
+        if actual_edge_keys != expected_edge_keys:
+            raise PydanticCustomError(
+                "graph.witness_edge_rows_must_match_network_edges",
+                "witness edge rows must match the source network edges",
+            )
+        if tuple(sorted(self.violating_commodities)) != self.violating_commodities:
+            raise PydanticCustomError(
+                "graph.witness_violating_commodities_must_be_sorted",
+                "violating commodities must be unique and sorted",
+            )
+        if self.status == "FEASIBLE":
+            if (
+                self.violating_commodities
+                or self.violating_vertices
+                or self.violating_edges
+                or not self.all_demands_routed
+                or not self.capacity_feasible
+                or not self.nonnegative
+            ):
+                raise PydanticCustomError(
+                    "graph.witness_feasible_carries_no_violation",
+                    "a FEASIBLE witness must route every demand within capacity",
+                )
+        elif not (
+            self.violating_commodities
+            or self.violating_vertices
+            or self.violating_edges
+            or not self.all_demands_routed
+            or not self.capacity_feasible
+            or not self.nonnegative
+        ):
+            raise PydanticCustomError(
+                "graph.witness_infeasible_needs_a_violation",
+                "an INFEASIBLE witness must report at least one violation",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        flow: MulticommodityFlow,
+        *,
+        divergences: tuple[CommodityDivergence, ...],
+        edge_profiles: tuple[EdgeLoadProfile, ...],
+        all_demands_routed: bool,
+        capacity_feasible: bool,
+        congestion: CanonicalRational | None,
+        violating_commodities: tuple[str, ...],
+        violating_vertices: tuple[CommodityVertexViolation, ...],
+        violating_edges: tuple[EdgeCapacityViolation, ...],
+        work: MulticommodityFlowProfileWork,
+    ) -> Self:
+        status = (
+            "FEASIBLE" if all_demands_routed and capacity_feasible else "INFEASIBLE"
+        )
+        return cls.model_construct(
+            flow=flow,
+            status=status,
+            divergences=divergences,
+            edge_profiles=edge_profiles,
+            all_demands_routed=all_demands_routed,
+            capacity_feasible=capacity_feasible,
+            nonnegative=True,
+            congestion=congestion,
+            violating_commodities=violating_commodities,
+            violating_vertices=violating_vertices,
+            violating_edges=violating_edges,
+            work=work,
+        )
+
+
 __all__ = [
     "MAX_COMMODITY_VERTEX_CELLS",
     "MAX_MULTICOMMODITY_EDGES",
@@ -677,10 +830,14 @@ __all__ = [
     "CommodityDemand",
     "CommodityDivergence",
     "CommodityEdgeFlow",
+    "CommodityVertexViolation",
+    "EdgeCapacityViolation",
     "EdgeLoadProfile",
     "MulticommodityFlow",
     "MulticommodityFlowProfileRequest",
     "MulticommodityFlowProfileResult",
     "MulticommodityFlowProfileWork",
+    "MulticommodityFlowWitnessCheckRequest",
+    "MulticommodityFlowWitnessCheckResult",
     "derived_profile_digit_budget",
 ]

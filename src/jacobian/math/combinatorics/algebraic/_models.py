@@ -284,12 +284,217 @@ class RSKInverseWordRequest(StrictModel):
     convention: RSKConvention = "ROW_INSERTION_RSK_V1"
 
 
+KnuthRelation = Literal["K1", "K2"]
+
+
+class KnuthNeighbor(StrictModel):
+    """One one-step Knuth neighbor with its local position and relation."""
+
+    position: StrictInt = Field(
+        ge=0,
+        description="Left index of the length-three window carrying the relation.",
+    )
+    relation: KnuthRelation = Field(
+        description=(
+            "K1 swaps the first two letters of xzy<->zxy with x<=y<z; "
+            "K2 swaps the last two letters of yxz<->yzx with x<y<=z, "
+            "compared in the word's explicit alphabet order."
+        )
+    )
+    neighbor: FiniteWord = Field(
+        description="The full word after applying the relation once."
+    )
+
+
+class KnuthMovesRequest(StrictModel):
+    __doc__ = f"""One bounded ordered word whose Knuth neighborhood is materialized.
+
+    The word has at most {MAX_RSK_WORD_LENGTH} letters; the neighborhood holds
+    at most one row per length-three window, so output is linear in the word.
+    """
+
+    word: FiniteWord = Field(
+        description=(
+            "A finite word over an explicit ordered tuple of unique strings; "
+            "alphabet order determines every relation side condition."
+        )
+    )
+    convention: RSKConvention = "ROW_INSERTION_RSK_V1"
+
+
+class KnuthMovesResult(StrictModel):
+    """Every valid one-step Knuth neighbor bound to its source word."""
+
+    word: FiniteWord
+    neighbors: tuple[KnuthNeighbor, ...]
+    neighbor_count: StrictInt = Field(ge=0)
+    convention: RSKConvention = "ROW_INSERTION_RSK_V1"
+
+    @model_validator(mode="after")
+    def require_structural_neighbors(self) -> Self:
+        if self.neighbor_count != len(self.neighbors):
+            raise PydanticCustomError(
+                "algebraic_combinatorics.knuth_count_mismatch",
+                "neighbor count must equal the number of neighbor rows",
+            )
+        positions = [neighbor.position for neighbor in self.neighbors]
+        if positions != sorted(positions) or len(set(positions)) != len(positions):
+            raise PydanticCustomError(
+                "algebraic_combinatorics.knuth_positions_not_canonical",
+                "neighbor positions must be strictly increasing",
+            )
+        for neighbor in self.neighbors:
+            if neighbor.position + 2 >= len(self.word.letters):
+                raise PydanticCustomError(
+                    "algebraic_combinatorics.knuth_position_out_of_range",
+                    "neighbor position must start a length-three window",
+                )
+            if neighbor.neighbor.alphabet != self.word.alphabet or len(
+                neighbor.neighbor.letters
+            ) != len(self.word.letters):
+                raise PydanticCustomError(
+                    "algebraic_combinatorics.knuth_neighbor_shape_mismatch",
+                    "every neighbor must share the source alphabet and length",
+                )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: KnuthMovesRequest,
+        *,
+        neighbors: tuple[KnuthNeighbor, ...],
+    ) -> Self:
+        """Build one result after the admitted Knuth kernel established it."""
+
+        return cls.model_construct(
+            word=request.word,
+            neighbors=neighbors,
+            neighbor_count=len(neighbors),
+            convention=request.convention,
+        )
+
+
+# ---------------------------------------------------------------------------
+# Skew Littlewood-Richardson checking
+# ---------------------------------------------------------------------------
+
+SkewReadingConvention = Literal["READING_WORD_RL_TOP_V1"]
+
+SkewLRFailureKind = Literal[
+    "OK",
+    "CELL_COVERAGE",
+    "SEMISTANDARD_ROW",
+    "SEMISTANDARD_COLUMN",
+    "CONTENT",
+    "LATTICE",
+]
+
+
+class SkewLittlewoodRichardsonCheckRequest(StrictModel):
+    """Check LR-tableau membership on a skew shape under one reading convention.
+
+    ``tableau`` rows carry only skew cells: row ``i`` holds exactly
+    ``outer.parts[i] - inner.parts[i]`` entries (with ``inner`` padded by
+    zeros), left to right within the skew row. The reading word concatenates
+    rows top to bottom, each right to left, under READING_WORD_RL_TOP_V1.
+    """
+
+    outer: IntegerPartition
+    inner: IntegerPartition
+    tableau: TableauCandidate
+    content: IntegerPartition = Field(
+        description=(
+            "Claimed content nu as a partition: exactly nu_i copies of value i."
+        ),
+    )
+    convention: SkewReadingConvention = "READING_WORD_RL_TOP_V1"
+
+
+class SkewLittlewoodRichardsonCheckResult(StrictModel):
+    """Skew-LR membership bound to the checked skew source.
+
+    Deserialization establishes only the retained source and bounded result
+    shape. Kernel output uses ``_from_kernel`` after its trusted bounded
+    replay of cell coverage, semistandardity, content, and every prefix
+    lattice inequality.
+    """
+
+    outer: IntegerPartition
+    inner: IntegerPartition
+    tableau: TableauCandidate
+    content: IntegerPartition
+    is_member: bool
+    reading_word: tuple[StrictInt, ...] = Field(
+        max_length=MAX_CANONICAL_PARTITION_SIZE,
+        description="Reading word under the declared convention.",
+    )
+    failure_kind: SkewLRFailureKind = Field(
+        description=(
+            "OK for members, else the first failed replay stage: cell "
+            "coverage, row semistandardity, column semistandardity, content, "
+            "or a prefix lattice inequality."
+        ),
+    )
+    failed_row: StrictInt = Field(
+        ge=-1,
+        description="Zero-based failing row, or -1 when not a row/cell failure.",
+    )
+    failed_column: StrictInt = Field(
+        ge=-1,
+        description="Zero-based failing skew-row position, or -1 otherwise.",
+    )
+    failed_value: StrictInt = Field(
+        ge=-1,
+        description="Failing entry value for content failures, else -1.",
+    )
+    failed_prefix_length: StrictInt = Field(
+        ge=0,
+        description="Length of the first lattice-violating prefix, else 0.",
+    )
+    convention: SkewReadingConvention = "READING_WORD_RL_TOP_V1"
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: SkewLittlewoodRichardsonCheckRequest,
+        *,
+        is_member: bool,
+        reading_word: tuple[int, ...],
+        failure_kind: SkewLRFailureKind,
+        failed_row: int = -1,
+        failed_column: int = -1,
+        failed_value: int = -1,
+        failed_prefix_length: int = 0,
+    ) -> Self:
+        """Build one result after the admitted skew-LR kernel established it."""
+
+        return cls.model_construct(
+            outer=request.outer,
+            inner=request.inner,
+            tableau=request.tableau,
+            content=request.content,
+            is_member=is_member,
+            reading_word=reading_word,
+            failure_kind=failure_kind,
+            failed_row=failed_row,
+            failed_column=failed_column,
+            failed_value=failed_value,
+            failed_prefix_length=failed_prefix_length,
+            convention=request.convention,
+        )
+
+
 __all__ = [
     "ConjugatePartitionRequest",
     "ConjugatePartitionResult",
     "DominanceRelation",
     "HookLengthRequest",
     "HookLengthResult",
+    "KnuthMovesRequest",
+    "KnuthMovesResult",
+    "KnuthNeighbor",
+    "KnuthRelation",
     "PartitionDominanceRequest",
     "PartitionDominanceResult",
     "RSKInverseWordRequest",
@@ -300,6 +505,10 @@ __all__ = [
     "SemistandardTableauCheckResult",
     "SemistandardYoungTableauCountRequest",
     "SemistandardYoungTableauCountResult",
+    "SkewLRFailureKind",
+    "SkewLittlewoodRichardsonCheckRequest",
+    "SkewLittlewoodRichardsonCheckResult",
+    "SkewReadingConvention",
     "StandardTableauCheckRequest",
     "StandardTableauCheckResult",
     "StandardYoungTableauCountRequest",

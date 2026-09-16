@@ -2255,10 +2255,582 @@ class PyramidResult(StrictModel):
         )
 
 
+class PrismVertexMap(StrictModel):
+    """One exact source-to-prism vertex transport row."""
+
+    source_vertex_id: str = Field(min_length=1, max_length=MAX_COORDINATE_LABEL_LENGTH)
+    prism_vertex_id: str = Field(min_length=1, max_length=MAX_COORDINATE_LABEL_LENGTH)
+    side: str = Field(description="Either 'bottom' (height 0) or 'top' (height 1).")
+
+    @model_validator(mode="after")
+    def require_known_side(self) -> Self:
+        if self.side not in ("bottom", "top"):
+            raise _validation_error(
+                "prism_side", "prism transport side must be 'bottom' or 'top'"
+            )
+        return self
+
+
+class PrismRequest(StrictModel):
+    """Compute the exact prism ``P x [0, 1]`` over one rational V-polytope.
+
+    Each source vertex ``p`` yields a bottom vertex ``(p, 0)`` and a top
+    vertex ``(p, 1)`` on a fresh height axis. Transport IDs are
+    ``f"{source_id}_bottom"`` and ``f"{source_id}_top"``; a source whose
+    suffixed IDs collide or exceed the label bound is outside the admitted
+    domain and the caller relabels first. The admitted envelope is one
+    extra ambient dimension (at most ``MAX_RATIONAL_POLYTOPE_DIMENSION``)
+    and twice the source vertex rows (at most ``MAX_VERTICES``); the
+    construction itself adds no coordinate growth.
+    """
+
+    polytope: RationalVPolytope = Field(
+        description=("Nonempty bounded rational V-polytope serving as the prism base.")
+    )
+    height_axis: CoordinateAxis = Field(
+        description=(
+            "Fresh coordinate label carrying the prism height; it must not "
+            "occur among the source space axes."
+        )
+    )
+
+
+class PrismResult(StrictModel):
+    """Exact prism polytope with bottom/top transport and dimension identity."""
+
+    prism: RationalVPolytope = Field(
+        description=(
+            "Exact prism V-polytope on the source axes plus the height axis; "
+            "bottom vertices carry last coordinate 0 and top vertices carry 1."
+        )
+    )
+    bottom_vertex_map: tuple[PrismVertexMap, ...] = Field(
+        min_length=1,
+        max_length=MAX_VERTICES,
+        description=(
+            "One bottom transport row per source vertex, sorted by source vertex ID."
+        ),
+    )
+    top_vertex_map: tuple[PrismVertexMap, ...] = Field(
+        min_length=1,
+        max_length=MAX_VERTICES,
+        description=(
+            "One top transport row per source vertex, sorted by source vertex ID."
+        ),
+    )
+    source_affine_dimension: int = Field(ge=0, le=MAX_FACET_DIMENSION)
+    prism_affine_dimension: int = Field(ge=1, le=MAX_FACET_DIMENSION)
+
+    @model_validator(mode="after")
+    def require_prism_transport_shape(self) -> Self:
+        for row in (*self.bottom_vertex_map, *self.top_vertex_map):
+            if row.side not in ("bottom", "top"):
+                raise _validation_error(
+                    "prism_side", "prism transport side must be 'bottom' or 'top'"
+                )
+        if any(row.side != "bottom" for row in self.bottom_vertex_map):
+            raise _validation_error(
+                "prism_side", "bottom transport rows must all carry side 'bottom'"
+            )
+        if any(row.side != "top" for row in self.top_vertex_map):
+            raise _validation_error(
+                "prism_side", "top transport rows must all carry side 'top'"
+            )
+        bottom_sources = tuple(row.source_vertex_id for row in self.bottom_vertex_map)
+        top_sources = tuple(row.source_vertex_id for row in self.top_vertex_map)
+        if bottom_sources != tuple(sorted(bottom_sources)) or len(
+            set(bottom_sources)
+        ) != len(bottom_sources):
+            raise _validation_error(
+                "prism_transport_order",
+                "bottom transport rows must be unique and sorted by source vertex ID",
+            )
+        if top_sources != tuple(sorted(top_sources)) or len(set(top_sources)) != len(
+            top_sources
+        ):
+            raise _validation_error(
+                "prism_transport_order",
+                "top transport rows must be unique and sorted by source vertex ID",
+            )
+        if set(bottom_sources) != set(top_sources):
+            raise _validation_error(
+                "prism_transport_cover",
+                "bottom and top transport rows must cover the same source vertices",
+            )
+        prism_ids = tuple(vertex.vertex_id for vertex in self.prism.vertices)
+        bottom_ids = tuple(row.prism_vertex_id for row in self.bottom_vertex_map)
+        top_ids = tuple(row.prism_vertex_id for row in self.top_vertex_map)
+        if len(set(bottom_ids)) != len(bottom_ids) or len(set(top_ids)) != len(top_ids):
+            raise _validation_error(
+                "prism_binding",
+                "prism transport targets must be distinct within each side",
+            )
+        if set(bottom_ids) & set(top_ids):
+            raise _validation_error(
+                "prism_binding",
+                "bottom and top prism vertex IDs must be disjoint",
+            )
+        if set(bottom_ids) | set(top_ids) != set(prism_ids):
+            raise _validation_error(
+                "prism_vertex_cover",
+                "bottom plus top transport must cover every prism vertex",
+            )
+        if self.prism_affine_dimension != self.source_affine_dimension + 1:
+            raise _validation_error(
+                "prism_dimension_identity",
+                "prism affine dimension must be exactly source dimension plus one",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        prism: RationalVPolytope,
+        bottom_vertex_map: tuple[PrismVertexMap, ...],
+        top_vertex_map: tuple[PrismVertexMap, ...],
+        source_affine_dimension: int,
+        prism_affine_dimension: int,
+    ) -> Self:
+        """Build a trusted kernel outcome without replaying its construction."""
+
+        return cls.model_construct(
+            prism=prism,
+            bottom_vertex_map=bottom_vertex_map,
+            top_vertex_map=top_vertex_map,
+            source_affine_dimension=source_affine_dimension,
+            prism_affine_dimension=prism_affine_dimension,
+        )
+
+
+class JoinVertexMap(StrictModel):
+    """One exact source-to-join vertex transport row."""
+
+    source_vertex_id: str = Field(min_length=1, max_length=MAX_COORDINATE_LABEL_LENGTH)
+    join_vertex_id: str = Field(min_length=1, max_length=MAX_COORDINATE_LABEL_LENGTH)
+    side: str = Field(description="Either 'left' or 'right'.")
+
+    @model_validator(mode="after")
+    def require_known_side(self) -> Self:
+        if self.side not in ("left", "right"):
+            raise _validation_error(
+                "join_side", "join transport side must be 'left' or 'right'"
+            )
+        return self
+
+
+class JoinRequest(StrictModel):
+    """Compute the exact join ``P * Q`` of two rational V-polytopes.
+
+    The factors must live on disjoint axis labels and carry disjoint
+    vertex IDs; the height axis must be fresh outside both spaces. The
+    left factor embeds as ``(p, 0, 0)`` and the right factor as
+    ``(0, q, 1)`` on the output axes
+    ``(*left.axes, *right.axes, height_axis)``, keeping source vertex IDs
+    unchanged. The admitted envelope is the combined ambient dimension
+    (at most ``MAX_RATIONAL_POLYTOPE_DIMENSION``) and the combined vertex
+    rows (at most ``MAX_VERTICES``); the construction itself adds no
+    coordinate growth.
+    """
+
+    left: RationalVPolytope = Field(
+        description="Left join factor; axes and vertex IDs must be disjoint from right."
+    )
+    right: RationalVPolytope = Field(
+        description="Right join factor; axes and vertex IDs must be disjoint from left."
+    )
+    height_axis: CoordinateAxis = Field(
+        description=(
+            "Fresh coordinate label carrying the join height; it must not "
+            "occur among either factor's space axes."
+        )
+    )
+
+
+class JoinResult(StrictModel):
+    """Exact join polytope with left/right transport and dimension identity."""
+
+    join: RationalVPolytope = Field(
+        description=(
+            "Exact join V-polytope on (*left.axes, *right.axes, height_axis); "
+            "left vertices carry right-block 0 and height 0, right vertices "
+            "carry left-block 0 and height 1."
+        )
+    )
+    left_vertex_map: tuple[JoinVertexMap, ...] = Field(
+        min_length=1,
+        max_length=MAX_VERTICES,
+        description="One transport row per left vertex, sorted by source vertex ID.",
+    )
+    right_vertex_map: tuple[JoinVertexMap, ...] = Field(
+        min_length=1,
+        max_length=MAX_VERTICES,
+        description="One transport row per right vertex, sorted by source vertex ID.",
+    )
+    left_affine_dimension: int = Field(ge=0, le=MAX_FACET_DIMENSION)
+    right_affine_dimension: int = Field(ge=0, le=MAX_FACET_DIMENSION)
+    join_affine_dimension: int = Field(ge=1, le=MAX_FACET_DIMENSION)
+
+    @model_validator(mode="after")
+    def require_join_transport_shape(self) -> Self:
+        if any(row.side != "left" for row in self.left_vertex_map):
+            raise _validation_error(
+                "join_side", "left transport rows must all carry side 'left'"
+            )
+        if any(row.side != "right" for row in self.right_vertex_map):
+            raise _validation_error(
+                "join_side", "right transport rows must all carry side 'right'"
+            )
+        left_sources = tuple(row.source_vertex_id for row in self.left_vertex_map)
+        right_sources = tuple(row.source_vertex_id for row in self.right_vertex_map)
+        if left_sources != tuple(sorted(left_sources)) or len(set(left_sources)) != len(
+            left_sources
+        ):
+            raise _validation_error(
+                "join_transport_order",
+                "left transport rows must be unique and sorted by source vertex ID",
+            )
+        if right_sources != tuple(sorted(right_sources)) or len(
+            set(right_sources)
+        ) != len(right_sources):
+            raise _validation_error(
+                "join_transport_order",
+                "right transport rows must be unique and sorted by source vertex ID",
+            )
+        join_ids = tuple(vertex.vertex_id for vertex in self.join.vertices)
+        left_ids = tuple(row.join_vertex_id for row in self.left_vertex_map)
+        right_ids = tuple(row.join_vertex_id for row in self.right_vertex_map)
+        if set(left_ids) & set(right_ids):
+            raise _validation_error(
+                "join_binding",
+                "left and right join vertex IDs must be disjoint",
+            )
+        if set(left_ids) | set(right_ids) != set(join_ids):
+            raise _validation_error(
+                "join_vertex_cover",
+                "left plus right transport must cover every join vertex",
+            )
+        if self.join_affine_dimension != (
+            self.left_affine_dimension + self.right_affine_dimension + 1
+        ):
+            raise _validation_error(
+                "join_dimension_identity",
+                "join affine dimension must be left plus right plus one",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        join: RationalVPolytope,
+        left_vertex_map: tuple[JoinVertexMap, ...],
+        right_vertex_map: tuple[JoinVertexMap, ...],
+        left_affine_dimension: int,
+        right_affine_dimension: int,
+        join_affine_dimension: int,
+    ) -> Self:
+        """Build a trusted kernel outcome without replaying its construction."""
+
+        return cls.model_construct(
+            join=join,
+            left_vertex_map=left_vertex_map,
+            right_vertex_map=right_vertex_map,
+            left_affine_dimension=left_affine_dimension,
+            right_affine_dimension=right_affine_dimension,
+            join_affine_dimension=join_affine_dimension,
+        )
+
+
+class PolytopeEdge(StrictModel):
+    """One undirected edge of a labelled rational polytope edge profile.
+
+    Endpoints are source vertex IDs with ``endpoint_a < endpoint_b`` so every
+    edge has one canonical serialization; loops are never edges.
+    """
+
+    endpoint_a: str = Field(
+        min_length=1,
+        max_length=MAX_COORDINATE_LABEL_LENGTH,
+    )
+    endpoint_b: str = Field(
+        min_length=1,
+        max_length=MAX_COORDINATE_LABEL_LENGTH,
+    )
+
+    @model_validator(mode="after")
+    def require_ordered_endpoints(self) -> Self:
+        for endpoint in (self.endpoint_a, self.endpoint_b):
+            _require_unicode_scalar_label(endpoint)
+        if not self.endpoint_a < self.endpoint_b:
+            raise _validation_error(
+                "edge_endpoints",
+                "edge endpoints must satisfy endpoint_a < endpoint_b",
+            )
+        return self
+
+
+MAX_EDGE_PROFILE_EDGES = 2016
+"""Maximum number of edges materialized by one edge-profile result.
+
+The complete graph on ``MAX_VERTICES = 64`` rows has ``64 * 63 / 2``
+pairs; no profile reports more.
+"""
+
+
+class EdgeProfileRequest(StrictModel):
+    """Compute the exact vertex-adjacency (edge) graph of one V-polytope.
+
+    The source must be full-dimensional: the points must affinely span
+    their ambient dimension, exactly as the facet operation requires,
+    because the kernel reuses its bounded facet enumeration. Repeated
+    source rows are retained for incidence binding but create no
+    candidate hyperplanes or candidate side tests, so admission requires
+    ``m * C(m, d) <= MAX_FACET_SIGN_TESTS`` candidate-side tests, where
+    ``m`` is the number of distinct rows; the final edge pass ranges
+    over all source positions and is bounded by the materialized-profile
+    result limit. Both charges apply during the single owner-local
+    execution.
+    """
+
+    polytope: RationalVPolytope = Field(
+        description=(
+            "Full-dimensional labelled rational V-polytope whose edge graph "
+            "is computed; redundant boundary rows carry no edges."
+        )
+    )
+    dimension_bound: int = Field(
+        default=MAX_FACET_DIMENSION,
+        ge=1,
+        le=MAX_FACET_DIMENSION,
+        description="Maximum admitted ambient dimension for this edge profile.",
+    )
+
+
+class EdgeProfileResult(StrictModel):
+    """Exact edge graph of a labelled rational polytope with dimension replay."""
+
+    polytope: RationalVPolytope = Field(
+        description="The exact retained source V-representation.",
+    )
+    edges: tuple[PolytopeEdge, ...] = Field(
+        min_length=0,
+        max_length=MAX_EDGE_PROFILE_EDGES,
+        description=(
+            "All undirected vertex-adjacency edges over the exact extreme "
+            "vertices, sorted lexicographically by endpoint pair."
+        ),
+    )
+    edge_count: int = Field(
+        ge=0,
+        le=MAX_EDGE_PROFILE_EDGES,
+        description="Number of reported edges; always equals ``len(edges)``.",
+    )
+    affine_dimension: int = Field(
+        ge=0,
+        le=MAX_FACET_DIMENSION,
+        description="Replayed exact affine dimension of the source polytope.",
+    )
+
+    @model_validator(mode="after")
+    def require_edge_profile_shape(self) -> Self:
+        if self.edge_count != len(self.edges):
+            raise _validation_error(
+                "edge_count",
+                "edge_count must equal the number of reported edges",
+            )
+        pairs = tuple((edge.endpoint_a, edge.endpoint_b) for edge in self.edges)
+        if pairs != tuple(sorted(pairs)) or len(set(pairs)) != len(pairs):
+            raise _validation_error(
+                "edge_order",
+                "edges must be unique and sorted lexicographically",
+            )
+        source_ids = {vertex.vertex_id for vertex in self.polytope.vertices}
+        if any(endpoint not in source_ids for pair in pairs for endpoint in pair):
+            raise _validation_error(
+                "edge_binding",
+                "every edge endpoint must occur among the retained polytope vertices",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        polytope: RationalVPolytope,
+        edges: tuple[PolytopeEdge, ...],
+        affine_dimension: int,
+    ) -> Self:
+        """Build a trusted kernel outcome without replaying its enumeration."""
+
+        return cls.model_construct(
+            polytope=polytope,
+            edges=edges,
+            edge_count=len(edges),
+            affine_dimension=affine_dimension,
+        )
+
+
+class VertexFigureVertexMap(StrictModel):
+    """One exact neighbor-to-figure vertex transport row of a vertex figure."""
+
+    source_vertex_id: str = Field(min_length=1, max_length=MAX_COORDINATE_LABEL_LENGTH)
+    figure_vertex_id: str = Field(min_length=1, max_length=MAX_COORDINATE_LABEL_LENGTH)
+
+
+class VertexFigureRequest(StrictModel):
+    """Compute the exact vertex figure of one polytope vertex.
+
+    The vertex figure at ``vertex_id`` is the convex hull of the
+    edge-midpoints ``(v + u) / 2`` over the edge neighbors ``u`` of ``v``.
+    The center must be an exact extreme vertex of a polytope of affine
+    dimension at least one; redundant source rows and dimension-zero
+    sources are outside the admitted domain. Figure vertex IDs are
+    derived deterministically as ``sec_<neighbor_id>`` and must respect
+    the label bound, so an over-long neighbor ID is rejected and the
+    caller relabels first. The admitted envelope mirrors the edge
+    profile's: ``m * C(m, d) <= MAX_FACET_SIGN_TESTS`` candidate-side
+    tests on the distinct source rows.
+    """
+
+    polytope: RationalVPolytope = Field(
+        description=(
+            "Full-dimensional labelled rational V-polytope carrying the center vertex."
+        )
+    )
+    vertex_id: CoordinateAxis = Field(
+        description="Vertex ID of the center whose figure is computed.",
+    )
+
+
+class VertexFigurePolytope(StrictModel):
+    """A labelled exact vertex-figure V-representation on its source axes.
+
+    Unlike the canonical full-dimensional ``RationalVPolytope`` value, a
+    vertex figure of a ``d``-polytope is ``(d - 1)``-dimensional in the
+    same ambient space, so it cannot satisfy the full-dimensional count
+    invariant. Its IDs are still strictly ordered with distinct
+    coordinates of the declared axis length; extremality and the
+    dimension identity are established by the owning vertex-figure
+    operation rather than when this value is parsed.
+    """
+
+    space: RationalCoordinateSpace
+    vertices: tuple[RationalPolytopeVertex, ...] = Field(
+        min_length=1,
+        max_length=MAX_VERTICES,
+    )
+
+    @model_validator(mode="after")
+    def require_canonical_figure_vertices(self) -> Self:
+        dimension = len(self.space.axes)
+        vertex_ids = tuple(vertex.vertex_id for vertex in self.vertices)
+        if tuple(sorted(vertex_ids)) != vertex_ids or len(set(vertex_ids)) != len(
+            vertex_ids
+        ):
+            raise _validation_error(
+                "vertex_ids", "vertex IDs must be unique and strictly ordered"
+            )
+        coordinates = tuple(vertex.coordinates for vertex in self.vertices)
+        if any(len(point) != dimension for point in coordinates):
+            raise _validation_error(
+                "polytope_vertices",
+                "every vertex must use the polytope coordinate axis",
+            )
+        if len(set(coordinates)) != len(coordinates):
+            raise _validation_error(
+                "polytope_vertices", "polytope vertices must have distinct coordinates"
+            )
+        return self
+
+
+class VertexFigureResult(StrictModel):
+    """Exact vertex figure with neighbor transport and dimension identity."""
+
+    figure: VertexFigurePolytope = Field(
+        description=(
+            "Exact vertex-figure V-polytope on the source axes; every vertex "
+            "is the midpoint (v + u) / 2 of the center v with one edge "
+            "neighbor u."
+        )
+    )
+    center_vertex_id: str = Field(min_length=1, max_length=MAX_COORDINATE_LABEL_LENGTH)
+    vertex_map: tuple[VertexFigureVertexMap, ...] = Field(
+        min_length=1,
+        max_length=MAX_VERTICES,
+        description=(
+            "One transport row per edge neighbor of the center, sorted by "
+            "source vertex ID; figure IDs are `sec_<neighbor_id>`."
+        ),
+    )
+    source_affine_dimension: int = Field(ge=1, le=MAX_FACET_DIMENSION)
+    figure_affine_dimension: int = Field(ge=0, le=MAX_FACET_DIMENSION)
+
+    @model_validator(mode="after")
+    def require_vertex_figure_transport_shape(self) -> Self:
+        source_ids = tuple(row.source_vertex_id for row in self.vertex_map)
+        if source_ids != tuple(sorted(source_ids)) or len(set(source_ids)) != len(
+            source_ids
+        ):
+            raise _validation_error(
+                "vertex_figure_transport_order",
+                "vertex-figure transport rows must be unique and sorted "
+                "by source vertex ID",
+            )
+        for row in self.vertex_map:
+            _require_unicode_scalar_label(row.source_vertex_id)
+            _require_unicode_scalar_label(row.figure_vertex_id)
+            if row.figure_vertex_id != f"sec_{row.source_vertex_id}":
+                raise _validation_error(
+                    "vertex_figure_id_derivation",
+                    "figure vertex IDs must be exactly `sec_<neighbor_id>`",
+                )
+        figure_ids = tuple(vertex.vertex_id for vertex in self.figure.vertices)
+        mapped_ids = tuple(row.figure_vertex_id for row in self.vertex_map)
+        if set(mapped_ids) != set(figure_ids) or len(mapped_ids) != len(figure_ids):
+            raise _validation_error(
+                "vertex_figure_vertex_cover",
+                "neighbor transport must cover every figure vertex exactly once",
+            )
+        if self.center_vertex_id in set(figure_ids) | set(source_ids):
+            raise _validation_error(
+                "vertex_figure_center_binding",
+                "the center vertex ID must not occur among the figure "
+                "vertices or neighbor IDs",
+            )
+        if self.figure_affine_dimension != self.source_affine_dimension - 1:
+            raise _validation_error(
+                "vertex_figure_dimension_identity",
+                "figure affine dimension must be exactly source dimension minus one",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        figure: VertexFigurePolytope,
+        center_vertex_id: str,
+        vertex_map: tuple[VertexFigureVertexMap, ...],
+        source_affine_dimension: int,
+        figure_affine_dimension: int,
+    ) -> Self:
+        """Build a trusted kernel outcome without replaying its construction."""
+
+        return cls.model_construct(
+            figure=figure,
+            center_vertex_id=center_vertex_id,
+            vertex_map=vertex_map,
+            source_affine_dimension=source_affine_dimension,
+            figure_affine_dimension=figure_affine_dimension,
+        )
+
+
 __all__ = [
     "MAX_BOUNDEDNESS_COMBINATIONS",
     "MAX_COMPUTED_FACETS",
     "MAX_DIMENSION",
+    "MAX_EDGE_PROFILE_EDGES",
     "MAX_EXTREMALITY_HEIGHT_WORK",
     "MAX_FACETS",
     "MAX_FACET_COORDINATE_DIGITS",
@@ -2270,14 +2842,23 @@ __all__ = [
     "MAX_SUPPORT_ORIENTATION_TESTS",
     "MAX_SUPPORT_VERTEX_SUBSETS",
     "MAX_VERTICES",
+    "EdgeProfileRequest",
+    "EdgeProfileResult",
     "FacetIncidenceRequest",
     "FacetIncidenceResult",
     "Halfspace",
+    "JoinRequest",
+    "JoinResult",
+    "JoinVertexMap",
+    "PolytopeEdge",
     "PolytopeSupportRequest",
     "PolytopeSupportResult",
     "PolytopeVolumeRequest",
     "PolytopeVolumeResult",
     "PrimitiveFacet",
+    "PrismRequest",
+    "PrismResult",
+    "PrismVertexMap",
     "PyramidBaseVertexMap",
     "PyramidRequest",
     "PyramidResult",
@@ -2287,4 +2868,8 @@ __all__ = [
     "RationalPolytopeVertex",
     "RationalVPolytope",
     "Vertex",
+    "VertexFigurePolytope",
+    "VertexFigureRequest",
+    "VertexFigureResult",
+    "VertexFigureVertexMap",
 ]

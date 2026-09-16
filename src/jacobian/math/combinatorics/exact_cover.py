@@ -33,6 +33,24 @@ def _combinatorics_validation_error(message: str) -> PydanticCustomError:
     return PydanticCustomError(code, message, {})
 
 
+def _exact_cover_domain_error(
+    location: tuple[str | int, ...], message: str
+) -> OperationDomainValidationError:
+    """Build the typed semantic rejection for one exact-cover operation body.
+
+    ``_combinatorics_validation_error`` returns a ``PydanticCustomError``,
+    which is the correct signal inside a Pydantic validator but an untyped
+    ``ValueError`` when raised from an operation or kernel body. Semantic
+    failures discovered after parsing use this owner-typed error instead.
+    """
+
+    lowered = message.lower()
+    code = "combinatorics.exact_cover_invariant"
+    if "bound" in lowered or "count" in lowered or "limit" in lowered:
+        code = "combinatorics.exact_cover_bound"
+    return OperationDomainValidationError(location=location, code=code, message=message)
+
+
 MAX_EXACT_COVER_ITEMS = 4_096
 MAX_EXACT_COVER_PRIMARY_ITEMS = MAX_EXACT_COVER_ITEMS
 MAX_EXACT_COVER_SECONDARY_ITEMS = MAX_EXACT_COVER_ITEMS
@@ -562,8 +580,9 @@ def _solve_generalized_exact_cover(
 
     digest = exact_cover_instance_digest(instance)
     if shard is not None and shard.instance_digest != digest:
-        raise _combinatorics_validation_error(
-            "exact-cover shard digest must match the canonical instance"
+        raise _exact_cover_domain_error(
+            ("shard", "instance_digest"),
+            "exact-cover shard digest must match the canonical instance",
         )
     rows_by_id = {row.row_id: index for index, row in enumerate(instance.rows)}
     try:
@@ -573,13 +592,14 @@ def _solve_generalized_exact_cover(
             else ()
         )
     except KeyError as error:
-        raise _combinatorics_validation_error(
-            "exact-cover shard fixed rows must belong to the canonical instance"
+        raise _exact_cover_domain_error(
+            ("shard", "fixed_row_prefix"),
+            "exact-cover shard fixed rows must belong to the canonical instance",
         ) from error
     try:
         search = search_generalized_exact_cover(instance, search_node_limit, fixed_rows)
     except ValueError as error:
-        raise _combinatorics_validation_error(str(error)) from error
+        raise _exact_cover_domain_error(("instance",), str(error)) from error
     if search.status != "FOUND":
         return GeneralizedExactCoverResult._from_kernel(
             instance=instance,
@@ -691,15 +711,18 @@ def split_generalized_exact_cover_shard(
 
     digest = exact_cover_instance_digest(request.instance)
     if request.shard.instance_digest != digest:
-        raise _combinatorics_validation_error(
-            "exact-cover shard digest must match the canonical instance"
+        raise _exact_cover_domain_error(
+            ("shard", "instance_digest"),
+            "exact-cover shard digest must match the canonical instance",
         )
     rows_by_id = {row.row_id: index for index, row in enumerate(request.instance.rows)}
     try:
         prefix = tuple(rows_by_id[row_id] for row_id in request.shard.fixed_row_prefix)
         children = split_exact_cover_prefix(request.instance, prefix)
     except (KeyError, ValueError) as error:
-        raise _combinatorics_validation_error(str(error)) from error
+        raise _exact_cover_domain_error(
+            ("shard", "fixed_row_prefix"), str(error)
+        ) from error
     shards = tuple(
         GeneralizedExactCoverShard(
             instance_digest=digest,
@@ -729,8 +752,9 @@ def combine_generalized_exact_cover_shard_results(
         if result.source_shard is not None
     }
     if actual != expected or len(actual) != len(request.child_results):
-        raise _combinatorics_validation_error(
-            "combined results must cover each disjoint child shard exactly once"
+        raise _exact_cover_domain_error(
+            ("child_results",),
+            "combined results must cover each disjoint child shard exactly once",
         )
     confirmed = tuple(
         _solve_generalized_exact_cover(

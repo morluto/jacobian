@@ -10,6 +10,7 @@ from jacobian._execution import (
     request_cancellation,
     request_execution,
 )
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.exact_cover import (
     ExactCoverRow,
     GeneralizedExactCoverInstance,
@@ -244,3 +245,43 @@ def test_combine_rejects_partial_child_coverage() -> None:
                 instance=instance, parent_shard=root, child_results=partial
             )
         )
+
+
+def test_shard_semantic_rejections_are_owner_typed() -> None:
+    """Shard digest and coverage failures use the typed domain rejection.
+
+    ``PydanticCustomError`` (a bare ``ValueError``) escaping an operation body
+    would bypass the canonical ``OperationDomainValidationError`` boundary and
+    surface an untyped error to the caller.
+    """
+
+    instance = GeneralizedExactCoverInstance(
+        primary_items=("p",),
+        secondary_items=(),
+        rows=(
+            ExactCoverRow(row_id="a", items=("p",)),
+            ExactCoverRow(row_id="b", items=("p",)),
+        ),
+    )
+    stale = GeneralizedExactCoverShard(
+        instance_digest="sha256:" + "1" * 64, fixed_row_prefix=()
+    )
+
+    with pytest.raises(OperationDomainValidationError) as split_error:
+        split_generalized_exact_cover_shard(
+            GeneralizedExactCoverShardSplitRequest(instance=instance, shard=stale)
+        )
+    assert split_error.value.errors()[0]["loc"] == ("shard", "instance_digest")
+
+    root = _root(instance)
+    children = split_generalized_exact_cover_shard(
+        GeneralizedExactCoverShardSplitRequest(instance=instance, shard=root)
+    ).children
+    partial = (find_generalized_exact_cover(instance, shard=children[0]),)
+    with pytest.raises(OperationDomainValidationError) as combine_error:
+        combine_generalized_exact_cover_shard_results(
+            GeneralizedExactCoverShardResultsCombineRequest(
+                instance=instance, parent_shard=root, child_results=partial
+            )
+        )
+    assert combine_error.value.errors()[0]["loc"] == ("child_results",)

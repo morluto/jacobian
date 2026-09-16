@@ -408,12 +408,13 @@ class CharacterDivisorResult(StrictModel):
 
 
 class ToricAffineChartRequest(StrictModel):
-    """Compute the affine monomial chart of one full-dimensional fan cone.
+    """Compute the affine monomial chart of one fan cone.
 
     The cone is identified by its strictly increasing ray-index label, which
     must be one of the fan's declared cones. The chart is
-    ``Spec k[sigma^vee cap M]``; only full-dimensional cones (and therefore
-    pointed dual semigroups with a finite Hilbert basis) are admitted.
+    ``Spec k[sigma^vee cap M]``; a full-dimensional cone has a pointed dual
+    semigroup with a finite Hilbert basis, and a lower-dimensional cone is
+    presented by its free (torus) lineality factor plus the pointed quotient.
     """
 
     fan: ToricFanPresentation = Field(
@@ -425,8 +426,7 @@ class ToricAffineChartRequest(StrictModel):
     cone: tuple[ToricRayIndex, ...] = Field(
         max_length=MAX_TORIC_CONE_GENERATORS,
         description=(
-            "Strictly increasing ray-index label of a declared full-dimensional "
-            "cone of the fan."
+            "Strictly increasing ray-index label of a declared cone of the fan."
         ),
     )
 
@@ -482,8 +482,15 @@ class ToricAffineChartResult(StrictModel):
     hilbert_basis: tuple[tuple[ExactInteger, ...], ...] = Field(
         max_length=MAX_TORIC_CHART_GENERATORS,
         description=(
-            "Complete canonical Hilbert basis of the affine semigroup "
+            "Complete canonical Hilbert basis of the pointed part of "
             "sigma^vee cap M, lexicographically sorted."
+        ),
+    )
+    torus_basis: tuple[tuple[ExactInteger, ...], ...] = Field(
+        max_length=MAX_TORIC_LATTICE_RANK,
+        description=(
+            "Basis of the lineality lattice sigma^perp cap M, the free (torus) "
+            "factor of the chart; empty for a full-dimensional cone."
         ),
     )
     relations: tuple[tuple[ExactInteger, ...], ...] = Field(
@@ -507,6 +514,15 @@ class ToricAffineChartResult(StrictModel):
         if any(len(generator) != self.lattice_rank for generator in self.hilbert_basis):
             raise _validation_error(
                 "chart_generator_rank", "every Hilbert generator must use the lattice"
+            )
+        if any(len(vector) != self.lattice_rank for vector in self.torus_basis):
+            raise _validation_error(
+                "chart_torus_rank", "every torus-basis vector must use the lattice"
+            )
+        if len(self.torus_basis) != self.lattice_rank - self.dimension:
+            raise _validation_error(
+                "chart_torus_rank",
+                "the torus basis must have rank lattice_rank - dimension",
             )
         if any(len(relation) != len(self.hilbert_basis) for relation in self.relations):
             raise _validation_error(
@@ -539,6 +555,7 @@ class ToricAffineChartResult(StrictModel):
         dual_cone_rays: tuple[tuple[int, ...], ...],
         hilbert_basis: tuple[tuple[int, ...], ...],
         relations: tuple[tuple[int, ...], ...],
+        torus_basis: tuple[tuple[int, ...], ...],
         is_smooth: bool,
         localizations: tuple[ToricChartLocalization, ...],
     ) -> Self:
@@ -551,6 +568,7 @@ class ToricAffineChartResult(StrictModel):
             dual_cone_rays=dual_cone_rays,
             hilbert_basis=hilbert_basis,
             relations=relations,
+            torus_basis=torus_basis,
             is_smooth=is_smooth,
             localizations=localizations,
         )

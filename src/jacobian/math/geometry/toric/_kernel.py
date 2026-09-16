@@ -633,6 +633,163 @@ class AffineChartData:
     dual_cone_rays: tuple[tuple[int, ...], ...]
     hilbert_basis: tuple[tuple[int, ...], ...]
     relations: tuple[tuple[int, ...], ...]
+    torus_basis: tuple[tuple[int, ...], ...] = ()
+
+
+def _integer_kernel_basis(
+    rows: tuple[tuple[int, ...], ...], columns: int
+) -> tuple[tuple[int, ...], ...]:
+    """Rows of a primitive (saturated) basis of ``ker(rows)`` in ``Z^columns``.
+
+    The maintained affine-semigroup relation-lattice kernel returns an exact
+    saturated basis; a bare rational-nullspace basis from FLINT need not be
+    saturated and would give the wrong lineality lattice.
+    """
+
+    if not rows:
+        return tuple(
+            tuple(1 if row == column else 0 for row in range(columns))
+            for column in range(columns)
+        )
+    from jacobian.math.affine_semigroups._kernel import compute_relation_lattice_data
+    from jacobian.math.matrices.values import IntegerMatrix
+
+    configuration = IntegerMatrix(
+        row_count=len(rows),
+        column_count=columns,
+        entries=tuple(tuple(int(value) for value in row) for row in rows),
+    )
+    data = compute_relation_lattice_data(configuration)
+    return tuple(
+        tuple(int(value) for value in row) for row in data.relation_basis.entries
+    )
+
+
+def _column_determinant(columns: tuple[tuple[int, ...], ...]) -> int:
+    from flint import fmpz_mat
+
+    size = len(columns)
+    matrix = fmpz_mat(
+        [[columns[column][row] for column in range(size)] for row in range(size)]
+    )
+    return int(matrix.det())
+
+
+_CANDIDATE_BOX = 3
+_COMPLETION_BUDGET = 200_000
+
+
+def _unimodular_complement(
+    lineality: tuple[tuple[int, ...], ...],
+    lattice_rank: int,
+) -> tuple[tuple[int, ...], ...]:
+    """Complement columns making ``lineality + complement`` a basis of ``Z^n``.
+
+    ``lineality`` is a saturated sublattice, so a completion exists; it is
+    found by bounded backtracking over small integer vectors and certified by
+    the ``+/-1`` determinant of the assembled square matrix. A completion
+    outside the admitted box is refused rather than approximated.
+    """
+
+    needed = lattice_rank - len(lineality)
+    if needed == 0:
+        return ()
+    span = list(lineality)
+    candidates = sorted(
+        (
+            vector
+            for vector in product(
+                range(-_CANDIDATE_BOX, _CANDIDATE_BOX + 1), repeat=lattice_rank
+            )
+            if any(vector)
+        ),
+        key=lambda vector: (sum(abs(value) for value in vector), vector),
+    )
+    budget = [_COMPLETION_BUDGET]
+
+    def extend(remaining: int) -> tuple[tuple[int, ...], ...] | None:
+        if remaining == 0:
+            return () if abs(_column_determinant(tuple(span))) == 1 else None
+        for candidate in candidates:
+            budget[0] -= 1
+            if budget[0] < 0:
+                _reject_budget(
+                    "affine-chart unimodular completion exceeds its search budget"
+                )
+            trial = [*span, candidate]
+            if _matrix_rank(tuple(trial)) < len(trial):
+                continue
+            span.append(candidate)
+            found = extend(remaining - 1)
+            span.pop()
+            if found is not None:
+                return (candidate, *found)
+        return None
+
+    found = extend(needed)
+    if found is None:
+        _reject_budget(
+            "affine-chart lineality complement was not found in the admitted box"
+        )
+    return found
+
+
+def _quotient_projection(
+    lineality: tuple[tuple[int, ...], ...],
+    complement: tuple[tuple[int, ...], ...],
+    lattice_rank: int,
+    dimension: int,
+) -> tuple[tuple[int, ...], ...]:
+    """Rows ``P`` with ``<m', pi(y)> = <sum_k m'_k P[k], y>`` for the quotient.
+
+    ``U = [lineality | complement]`` is unimodular, so ``U^{-1}`` is integral
+    and ``pi(y)`` is the last ``dimension`` coordinates of ``U^{-1} y``.  The
+    returned rows are those coordinates as functionals on ``y``.
+    """
+
+    from flint import fmpz_mat
+
+    columns = [*lineality, *complement]
+    matrix = fmpz_mat(
+        [
+            [columns[column][row] for column in range(lattice_rank)]
+            for row in range(lattice_rank)
+        ]
+    )
+    inverse = matrix.inv()
+    return tuple(
+        tuple(
+            int(inverse[lattice_rank - dimension + k, row])
+            for row in range(lattice_rank)
+        )
+        for k in range(dimension)
+    )
+
+
+def _lift_quotient_vector(
+    vector: tuple[int, ...], complement: tuple[tuple[int, ...], ...]
+) -> tuple[int, ...]:
+    """Lift a quotient-lattice vector to ``Z^n`` along the complement basis."""
+
+    lift = [0] * len(complement[0]) if complement else []
+    for coefficient, column in zip(vector, complement, strict=True):
+        for row in range(len(column)):
+            lift[row] += coefficient * column[row]
+    return tuple(lift)
+
+
+def _lift_quotient_character(
+    character: tuple[int, ...], projection: tuple[tuple[int, ...], ...]
+) -> tuple[int, ...]:
+    """Lift a quotient character ``m'`` to ``m`` with ``<m, y> = <m', pi(y)>``."""
+
+    if not projection:
+        return ()
+    lift = [0] * len(projection[0])
+    for coefficient, row in zip(character, projection, strict=True):
+        for index in range(len(row)):
+            lift[index] += coefficient * row[index]
+    return tuple(lift)
 
 
 def _max_component_digits(*families: tuple[tuple[int, ...], ...]) -> int:
@@ -646,18 +803,10 @@ def _max_component_digits(*families: tuple[tuple[int, ...], ...]) -> int:
     return digits
 
 
-def compute_affine_chart_data(
-    rays: tuple[tuple[int, ...], ...],
-    dimension: int,
-    deadline: float,
+def _full_dimensional_chart_data(
+    rays: tuple[tuple[int, ...], ...], dimension: int, deadline: float
 ) -> AffineChartData:
-    """Compute the complete affine-monoid presentation of one full-dimensional cone.
-
-    The dual cone, the fundamental-parallelepiped lattice points, the Hilbert
-    basis, and the relation lattice are each checked against their admitted
-    envelope. A cone whose derived work or output leaves the envelope is
-    refused rather than returned with an incomplete basis.
-    """
+    """Hilbert basis of the dual of a full-dimensional cone."""
 
     dual_rays = _dual_cone_extreme_rays(rays, dimension)
     if not dual_rays:
@@ -695,17 +844,108 @@ def compute_affine_chart_data(
         _reject_budget(
             f"affine-chart relation lattice exceeds {MAX_TORIC_CHART_RELATIONS}"
         )
-    digits = _max_component_digits(generators, relations)
-    if digits > MAX_TORIC_CHART_COMPONENT_DIGITS:
-        _reject_budget(
-            "affine-chart exact components exceed "
-            f"{MAX_TORIC_CHART_COMPONENT_DIGITS} decimal digits"
-        )
+    _require_chart_component_digits(generators, relations)
     return AffineChartData(
         dual_cone_rays=tuple(sorted(dual_rays)),
         hilbert_basis=generators,
         relations=relations,
     )
+
+
+def _require_chart_component_digits(
+    *families: tuple[tuple[int, ...], ...],
+) -> None:
+    if _max_component_digits(*families) > MAX_TORIC_CHART_COMPONENT_DIGITS:
+        _reject_budget(
+            "affine-chart exact components exceed "
+            f"{MAX_TORIC_CHART_COMPONENT_DIGITS} decimal digits"
+        )
+
+
+def _lower_dimensional_chart_data(
+    rays: tuple[tuple[int, ...], ...],
+    lattice_rank: int,
+    dimension: int,
+    deadline: float,
+) -> AffineChartData:
+    """Free torus factor plus the pointed quotient of a lower-dimensional cone."""
+
+    lineality = _integer_kernel_basis(rays, lattice_rank)
+    complement = _unimodular_complement(lineality, lattice_rank)
+    # The quotient cone is ``{z : (R W) z >= 0}``; passing its H-rows to the
+    # full-dimensional kernel returns the Hilbert basis of that cone, i.e. of
+    # the pointed semigroup sigma^vee / sigma^perp.
+    quotient_rays = tuple(
+        tuple(
+            sum(ray[index] * column[index] for index in range(lattice_rank))
+            for column in complement
+        )
+        for ray in rays
+    )
+    quotient = compute_affine_chart_data(quotient_rays, dimension, deadline)
+    dual_rays = tuple(
+        sorted(
+            {
+                _lift_quotient_vector(vector, complement)
+                for vector in quotient.dual_cone_rays
+            }
+        )
+    )
+    generators = tuple(
+        sorted(
+            {
+                _lift_quotient_vector(vector, complement)
+                for vector in quotient.hilbert_basis
+            }
+        )
+    )
+    if len(dual_rays) > MAX_TORIC_CHART_DUAL_RAYS:
+        _reject_budget(
+            f"affine-chart dual cone exceeds {MAX_TORIC_CHART_DUAL_RAYS} rays"
+        )
+    if len(generators) > MAX_TORIC_CHART_GENERATORS:
+        _reject_budget(
+            f"affine-chart Hilbert basis exceeds {MAX_TORIC_CHART_GENERATORS}"
+        )
+    _require_chart_component_digits(generators, quotient.relations, lineality)
+    return AffineChartData(
+        dual_cone_rays=dual_rays,
+        hilbert_basis=generators,
+        relations=quotient.relations,
+        torus_basis=tuple(sorted(lineality)),
+    )
+
+
+def compute_affine_chart_data(
+    rays: tuple[tuple[int, ...], ...],
+    lattice_rank: int,
+    deadline: float,
+) -> AffineChartData:
+    """Compute the exact affine-monoid presentation of one cone.
+
+    A cone whose generators span the whole lattice is handled by the shipped
+    full-dimensional double description.  A lower-dimensional cone has a
+    non-pointed dual: its lineality ``sigma^perp`` is the free (torus) part,
+    and the pointed quotient ``sigma^vee / sigma^perp`` is presented by the
+    same full-dimensional kernel in quotient coordinates. The returned
+    ``torus_basis`` generates the free part and ``hilbert_basis`` the pointed
+    part.
+    """
+
+    dimension = _matrix_rank(rays)
+    if dimension == 0:
+        return AffineChartData(
+            dual_cone_rays=(),
+            hilbert_basis=(),
+            relations=(),
+            torus_basis=tuple(
+                tuple(1 if row == column else 0 for row in range(lattice_rank))
+                for column in range(lattice_rank)
+            ),
+        )
+    if dimension == lattice_rank:
+        return _full_dimensional_chart_data(rays, dimension, deadline)
+    return _lower_dimensional_chart_data(rays, lattice_rank, dimension, deadline)
 
 
 def facet_localizing_character(

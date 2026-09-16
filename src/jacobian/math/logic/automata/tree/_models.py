@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Self
+from typing import Any, Literal, Self
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_core import PydanticCustomError
@@ -244,12 +244,133 @@ class TreeAutomatonReachabilityRequest(StrictModel):
     )
 
 
+class TreeDeterminizeRequest(StrictModel):
+    """Determinize a bottom-up tree automaton by subset construction."""
+
+    automaton: BottomUpTreeAutomaton
+    max_subset_states: int = Field(default=64, ge=1, le=64)
+    sample_max_height: int = Field(default=3, ge=0, le=5)
+
+
+class TreeDeterminizeResult(TreeDeterminizeRequest):
+    """A bounded subset-construction outcome with explicit status semantics.
+
+    Deserialization checks only the canonical shape: the subset map covers
+    exactly the deterministic states, the deterministic machine is
+    deterministic with finals consistent with the subset map, and the
+    equivalence claim agrees with the status. The owner-local kernel
+    establishes transition closure and sample acceptance agreement on the
+    COMPLETE path; a TRUNCATED construction never claims equivalence.
+    """
+
+    status: Literal["COMPLETE", "TRUNCATED"]
+    truncation_reason: Literal["NONE", "STATE_BUDGET", "WORK_BUDGET"]
+    deterministic: BottomUpTreeAutomaton
+    subset_map: tuple[tuple[int, ...], ...]
+    equivalence_claim: bool
+    closure_rows_checked: int = Field(ge=0)
+    combos_evaluated: int = Field(ge=0)
+    sample_trees_checked: int = Field(ge=0)
+    sample_agreement: bool
+
+    @model_validator(mode="after")
+    def require_canonical_determinize_shape(self) -> Self:
+        if self.deterministic.arity != self.automaton.arity:
+            raise _validation_error(
+                "determinize_alphabet", "determinization preserves the ranked alphabet"
+            )
+        if len(self.subset_map) != self.deterministic.state_count:
+            raise _validation_error(
+                "determinize_subset_axis",
+                "the subset map must cover every deterministic state",
+            )
+        for subset in self.subset_map:
+            if subset != tuple(sorted(set(subset))):
+                raise _validation_error(
+                    "determinize_subset_not_canonical",
+                    "subsets must be unique and sorted",
+                )
+            if any(not 0 <= state < self.automaton.state_count for state in subset):
+                raise _validation_error(
+                    "determinize_subset_out_of_range",
+                    "subsets must use source states",
+                )
+        keys = [
+            (transition.symbol, transition.child_states)
+            for transition in self.deterministic.transitions
+        ]
+        if len(set(keys)) != len(keys):
+            raise _validation_error(
+                "determinize_not_deterministic",
+                "the deterministic machine must have unique transition keys",
+            )
+        if any(
+            not 0 <= transition.target_state < self.deterministic.state_count
+            or any(
+                not 0 <= child < self.deterministic.state_count
+                for child in transition.child_states
+            )
+            for transition in self.deterministic.transitions
+        ):
+            raise _validation_error(
+                "determinize_transition_out_of_range",
+                "deterministic transitions must use deterministic states",
+            )
+        source_finals = set(self.automaton.final_states)
+        if set(self.deterministic.final_states) != {
+            index
+            for index, subset in enumerate(self.subset_map)
+            if set(subset) & source_finals
+        }:
+            raise _validation_error(
+                "determinize_finals_mismatch",
+                "deterministic finals must meet the source finals through subsets",
+            )
+        if self.status == "COMPLETE":
+            if (
+                self.truncation_reason != "NONE"
+                or not self.equivalence_claim
+                or not self.sample_agreement
+            ):
+                raise _validation_error(
+                    "determinize_complete_claim",
+                    "a complete construction claims equivalence with agreement",
+                )
+            if self.closure_rows_checked != len(self.deterministic.transitions):
+                raise _validation_error(
+                    "determinize_closure_count",
+                    "a complete construction replays every deterministic row",
+                )
+        else:
+            if (
+                self.truncation_reason == "NONE"
+                or self.equivalence_claim
+                or self.sample_agreement
+            ):
+                raise _validation_error(
+                    "determinize_truncated_claim",
+                    "a truncated construction must never claim equivalence",
+                )
+            if self.closure_rows_checked != 0 or self.sample_trees_checked != 0:
+                raise _validation_error(
+                    "determinize_truncated_evidence",
+                    "a truncated construction carries no replayed evidence",
+                )
+        return self
+
+    @classmethod
+    def _from_kernel(cls, **values: Any) -> Self:
+        return cls.model_construct(**values)
+
+
 __all__ = [
     "AcceptedTreeCountRequest",
     "AcceptedTreeCountResult",
     "TreeAutomatonReachabilityRequest",
     "TreeAutomatonTrimRequest",
     "TreeAutomatonTrimResult",
+    "TreeDeterminizeRequest",
+    "TreeDeterminizeResult",
     "TreeRunRequest",
     "TreeRunResult",
     "TreeStateChartEntry",

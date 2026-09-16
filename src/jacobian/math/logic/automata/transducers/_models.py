@@ -259,6 +259,250 @@ class TrimResult(TrimRequest):
         )
 
 
+class StatePairDistinguishability(StrictModel):
+    """One row of a Myhill-Nerode-style state-distinguishability table.
+
+    Deserialization checks only the canonical pair shape. The owner-local
+    kernel establishes that ``equivalent`` agrees with the minimized
+    partition and that every inequivalent pair carries a word separating
+    the two states.
+    """
+
+    first_state: int = Field(ge=0, lt=MAX_FST_STATES)
+    second_state: int = Field(ge=0, lt=MAX_FST_STATES)
+    equivalent: bool
+    witness_word: tuple[int, ...] = Field(default=(), max_length=MAX_FST_WORD_LENGTH)
+
+    @model_validator(mode="after")
+    def require_canonical_pair_shape(self) -> Self:
+        if not self.first_state < self.second_state:
+            raise _validation_error(
+                "distinguishability_pair_order",
+                "distinguishability pairs must list two distinct states in order",
+            )
+        if self.equivalent and self.witness_word:
+            raise _validation_error(
+                "distinguishability_witness_shape",
+                "an equivalent pair cannot carry a separating word",
+            )
+        return self
+
+
+class MinimizeRequest(StrictModel):
+    transducer: SubsequentialTransducer
+    sample_max_length: int = Field(default=5, ge=0, le=12)
+
+
+class MinimizeResult(MinimizeRequest):
+    """A minimized subsequential transducer with its equivalence certificate.
+
+    Deserialization checks only the canonical shape of the quotient: the
+    partition covers exactly the mapped (live) states, the state maps are
+    inverse on representatives, the distinguishability table covers every
+    live pair exactly once with ``equivalent`` agreeing with the partition,
+    and the replayed sample size matches the requested sample budget. The
+    owner-local kernel establishes that the quotient preserves the realized
+    partial function.
+    """
+
+    minimized: SubsequentialTransducer
+    old_to_new: tuple[int, ...]
+    new_to_old: tuple[int, ...]
+    partition: tuple[tuple[int, ...], ...]
+    distinguishability: tuple[StatePairDistinguishability, ...]
+    sample_words_checked: int = Field(ge=0)
+    sample_agreement: bool
+
+    @model_validator(mode="after")
+    def require_canonical_minimize_shape(self) -> Self:
+        if (
+            self.minimized.input_alphabet_size != self.transducer.input_alphabet_size
+            or self.minimized.output_alphabet_size
+            != self.transducer.output_alphabet_size
+        ):
+            raise _validation_error(
+                "minimize_alphabet_mismatch",
+                "the minimized transducer must retain both source alphabets",
+            )
+        if not self.partition:
+            if (
+                self.minimized.state_count != 1
+                or self.minimized.initial_state != 0
+                or self.minimized.transitions
+                or self.minimized.final_outputs
+                or self.old_to_new != (-1,) * self.transducer.state_count
+                or self.new_to_old
+                or self.distinguishability
+            ):
+                raise _validation_error(
+                    "minimize_empty_restriction_shape",
+                    "an empty restriction must be the canonical single-state transducer",
+                )
+            self._require_sample_agreement()
+            return self
+        live = self._require_quotient_shape()
+        self._require_table_shape(live)
+        self._require_sample_agreement()
+        return self
+
+    def _require_quotient_shape(self) -> set[int]:
+        """Check the quotient maps and partition; return the live states."""
+
+        if not (
+            self.minimized.state_count == len(self.partition) == len(self.new_to_old)
+        ):
+            raise _validation_error(
+                "minimize_block_count_mismatch",
+                "partition, representatives, and minimized states must agree",
+            )
+        if len(self.old_to_new) != self.transducer.state_count:
+            raise _validation_error(
+                "minimize_map_axis",
+                "old-to-new map must cover every source state",
+            )
+        if any(
+            new != -1 and not 0 <= new < self.minimized.state_count
+            for new in self.old_to_new
+        ):
+            raise _validation_error(
+                "minimize_map_out_of_range",
+                "old-to-new entries must be -1 or a minimized state",
+            )
+        for block in self.partition:
+            if block != tuple(sorted(set(block))):
+                raise _validation_error(
+                    "minimize_partition_not_canonical",
+                    "partition blocks must be unique and sorted",
+                )
+            if any(not 0 <= old < self.transducer.state_count for old in block):
+                raise _validation_error(
+                    "minimize_partition_out_of_range",
+                    "partition blocks must use source states",
+                )
+        if [min(block) for block in self.partition] != sorted(
+            min(block) for block in self.partition
+        ) or len({min(block) for block in self.partition}) != len(self.partition):
+            raise _validation_error(
+                "minimize_partition_order",
+                "partition blocks must be ordered by strictly increasing minimum",
+            )
+        live = {old for block in self.partition for old in block}
+        if sum(len(block) for block in self.partition) != len(live):
+            raise _validation_error(
+                "minimize_partition_overlap",
+                "partition blocks must be disjoint",
+            )
+        if {old for old, new in enumerate(self.old_to_new) if new != -1} != live:
+            raise _validation_error(
+                "minimize_maps_disagree",
+                "mapped states must agree with the partition union",
+            )
+        if self.new_to_old != tuple(min(block) for block in self.partition):
+            raise _validation_error(
+                "minimize_representatives",
+                "representatives must be the least state of each block",
+            )
+        block_of = {
+            old: index for index, block in enumerate(self.partition) for old in block
+        }
+        if any(self.old_to_new[old] != block_of[old] for old in live) or any(
+            self.old_to_new[new] != index for index, new in enumerate(self.new_to_old)
+        ):
+            raise _validation_error(
+                "minimize_map_block_mismatch",
+                "old-to-new must send each block to its own minimized state",
+            )
+        return live
+
+    def _require_table_shape(self, live: set[int]) -> None:
+        """Check the distinguishability table against the partition."""
+
+        block_of = {
+            old: index for index, block in enumerate(self.partition) for old in block
+        }
+        pairs = {(row.first_state, row.second_state) for row in self.distinguishability}
+        live_sorted = sorted(live)
+        expected = {
+            (first, second)
+            for pos, first in enumerate(live_sorted)
+            for second in live_sorted[pos + 1 :]
+        }
+        if pairs != expected:
+            raise _validation_error(
+                "minimize_table_coverage",
+                "the distinguishability table must cover every live pair once",
+            )
+        for row in self.distinguishability:
+            same_block = block_of[row.first_state] == block_of[row.second_state]
+            if row.equivalent != same_block:
+                raise _validation_error(
+                    "minimize_table_partition_mismatch",
+                    "equivalence flags must agree with the partition",
+                )
+            # An empty witness word is meaningful: the pair is already
+            # distinguished by its final outputs on the empty word.
+            if any(
+                not 0 <= symbol < self.transducer.input_alphabet_size
+                for symbol in row.witness_word
+            ):
+                raise _validation_error(
+                    "minimize_witness_symbol_out_of_range",
+                    "separating words must use the input alphabet",
+                )
+            if len(row.witness_word) > self.transducer.state_count:
+                raise _validation_error(
+                    "minimize_witness_too_long",
+                    "separating words are bounded by the source state count",
+                )
+
+    def _require_sample_agreement(self) -> None:
+        alphabet = self.transducer.input_alphabet_size
+        if alphabet <= 1:
+            expected_words = self.sample_max_length + 1
+        else:
+            expected_words = sum(
+                alphabet**length for length in range(self.sample_max_length + 1)
+            )
+        if self.sample_words_checked != expected_words:
+            raise _validation_error(
+                "minimize_sample_count",
+                "the replayed sample size must match the requested sample budget",
+            )
+        if not self.sample_agreement:
+            raise _validation_error(
+                "minimize_sample_disagreement",
+                "a minimization result must replay its sample in agreement",
+            )
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        transducer: SubsequentialTransducer,
+        sample_max_length: int,
+        minimized: SubsequentialTransducer,
+        old_to_new: tuple[int, ...],
+        new_to_old: tuple[int, ...],
+        partition: tuple[tuple[int, ...], ...],
+        distinguishability: tuple[StatePairDistinguishability, ...],
+        sample_words_checked: int,
+        sample_agreement: bool,
+    ) -> Self:
+        """Construct a minimization emitted by the trusted owner-local kernel."""
+
+        return cls.model_construct(
+            transducer=transducer,
+            sample_max_length=sample_max_length,
+            minimized=minimized,
+            old_to_new=old_to_new,
+            new_to_old=new_to_old,
+            partition=partition,
+            distinguishability=distinguishability,
+            sample_words_checked=sample_words_checked,
+            sample_agreement=sample_agreement,
+        )
+
+
 class RelationPathReplayRequest(StrictModel):
     transducer: RationalTransducer
     initial_state: int = Field(ge=0, lt=MAX_FST_STATES)
@@ -334,8 +578,11 @@ class RelationPathReplayResult(RelationPathReplayRequest):
 __all__ = [
     "ComposeRequest",
     "ComposeResult",
+    "MinimizeRequest",
+    "MinimizeResult",
     "RelationPathReplayRequest",
     "RelationPathReplayResult",
+    "StatePairDistinguishability",
     "SubseqRunRequest",
     "SubseqRunResult",
     "TrimRequest",

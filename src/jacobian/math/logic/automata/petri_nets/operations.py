@@ -8,6 +8,7 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
+from jacobian.math.lattices.operations import hermite_normal_form
 from jacobian.math.logic.automata.petri_nets._models import (
     MAX_FIRING_SEQUENCE_LENGTH,
     MAX_SIPHON_TRAP_PLACES,
@@ -16,6 +17,7 @@ from jacobian.math.logic.automata.petri_nets._models import (
     FireTransitionResult,
     FiringSequenceReplayResult,
     IncidenceMatrixResult,
+    PetriInvariantsResult,
     PetriMarkingState,
     PetriPlaceSubset,
     PetriReachabilityEdge,
@@ -28,6 +30,12 @@ from jacobian.math.logic.automata.petri_nets.values import (
     PetriNet,
     require_reachability_bounds,
 )
+from jacobian.math.matrices.certified_snf.operations import (
+    smith_normal_form_certificate,
+)
+from jacobian.math.matrices.certified_snf.values import (
+    MAX_CERTIFIED_SNF_INPUT_DIMENSION,
+)
 from jacobian.math.matrices.values import IntegerMatrix
 
 __all__ = [
@@ -36,6 +44,7 @@ __all__ = [
     "find_minimal_siphons",
     "find_minimal_traps",
     "fire_transition",
+    "petri_invariants",
     "reachability_graph",
     "replay_firing_sequence",
     "siphon_trap",
@@ -43,6 +52,7 @@ __all__ = [
     "verify_fire_transition",
     "verify_firing_sequence_replay",
     "verify_incidence_matrix",
+    "verify_invariants",
     "verify_reachability_graph",
     "verify_siphon_trap",
 ]
@@ -527,6 +537,172 @@ def verify_siphon_trap(claim: SiphonTrapResult) -> bool:
 
     try:
         return siphon_trap(claim.net) == claim
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
+        return False
+
+
+def _admit_invariants(net: PetriNet) -> None:
+    """Admit the certified Smith envelope shared with the SNF owner kernel."""
+
+    if (
+        net.place_count > MAX_CERTIFIED_SNF_INPUT_DIMENSION
+        or net.transition_count > MAX_CERTIFIED_SNF_INPUT_DIMENSION
+    ):
+        raise OperationResourceAdmissionError(
+            location=("net",),
+            code="petri_net.invariants_dimension_bound",
+            message=(
+                "invariant computation supports at most "
+                f"{MAX_CERTIFIED_SNF_INPUT_DIMENSION} places and transitions "
+                "for exact certified-Smith kernel composition"
+            ),
+        )
+
+
+def _snf_integer_kernel(rows: list[list[int]]) -> tuple[tuple[int, ...], ...]:
+    """Return the saturated integer basis of the kernel of ``rows``.
+
+    Consumer composition over the certified Smith owner kernel: with
+    ``D = U A V`` and rank ``r``, the final ``n - r`` columns of the
+    unimodular ``V`` span ``ker_Z(A)``.
+    """
+
+    matrix = IntegerMatrix(
+        row_count=len(rows),
+        column_count=len(rows[0]),
+        entries=tuple(tuple(row) for row in rows),
+    )
+    certificate = smith_normal_form_certificate(matrix)
+    right = certificate.right_transformation.entries
+    ambient = len(rows[0])
+    return tuple(
+        tuple(int(right[row][column]) for row in range(ambient))
+        for column in range(certificate.rank, ambient)
+    )
+
+
+def _canonicalize_invariant_basis(
+    vectors: tuple[tuple[int, ...], ...],
+) -> tuple[tuple[int, ...], ...]:
+    """Canonicalize one invariant basis through the HNF owner kernel.
+
+    The row Hermite normal form of the stacked basis spans the same integer
+    module; rows are sign-normalized and sorted for a deterministic carrier.
+    A failed HNF admission falls back to the sign-normalized SNF basis,
+    which the kernel replays either way.
+    """
+
+    if not vectors:
+        return ()
+    try:
+        normal, _transformation = hermite_normal_form(
+            [list(vector) for vector in vectors]
+        )
+        rows = [
+            [int(normal[row, column]) for column in range(normal.ncols())]
+            for row in range(normal.nrows())
+        ]
+    except (ValueError, TypeError, ArithmeticError, OperationDomainValidationError):
+        rows = [list(vector) for vector in vectors]
+    canonical: list[tuple[int, ...]] = []
+    for row in rows:
+        if not any(row):
+            continue
+        if next(value for value in row if value) < 0:
+            row = [-value for value in row]
+        canonical.append(tuple(row))
+    return tuple(sorted(set(canonical)))
+
+
+def _replay_invariants(
+    incidence: list[list[int]],
+    p_invariants: tuple[tuple[int, ...], ...],
+    t_invariants: tuple[tuple[int, ...], ...],
+) -> None:
+    """Replay every invariant against the incidence matrix in the kernel."""
+
+    places = len(incidence)
+    transitions = len(incidence[0]) if incidence else 0
+    for vector in t_invariants:
+        if any(
+            sum(incidence[place][t] * vector[t] for t in range(transitions))
+            for place in range(places)
+        ):
+            raise RuntimeError("a T-invariant escapes the incidence kernel")
+    for vector in p_invariants:
+        if any(
+            sum(vector[place] * incidence[place][t] for place in range(places))
+            for t in range(transitions)
+        ):
+            raise RuntimeError("a P-invariant escapes the left incidence kernel")
+
+
+def petri_invariants(net: PetriNet) -> PetriInvariantsResult:
+    """Compute P-invariants and T-invariants as exact integer modules.
+
+    P-invariants span ``ker_Z(C^T)`` and T-invariants span ``ker_Z(C)``
+    for the incidence matrix ``C``. Kernel bases come from the certified
+    Smith owner kernel, canonicalized through the Hermite owner kernel;
+    every returned vector is replayed against ``C`` inside this kernel.
+    """
+
+    incidence_matrix = compute_incidence_matrix(net).incidence
+    incidence = [[int(value) for value in row] for row in incidence_matrix.entries]
+    places = net.place_count
+    transitions = net.transition_count
+    if places == 0 or transitions == 0:
+        p_basis = (
+            ()
+            if places == 0
+            else tuple(
+                sorted(
+                    tuple(1 if place == index else 0 for place in range(places))
+                    for index in range(places)
+                )
+            )
+        )
+        t_basis = (
+            ()
+            if transitions == 0
+            else tuple(
+                sorted(
+                    tuple(1 if t == index else 0 for t in range(transitions))
+                    for index in range(transitions)
+                )
+            )
+        )
+        rank = 0
+    else:
+        _admit_invariants(net)
+        t_basis = _canonicalize_invariant_basis(_snf_integer_kernel(incidence))
+        transposed = [
+            [incidence[place][t] for place in range(places)] for t in range(transitions)
+        ]
+        p_basis = _canonicalize_invariant_basis(_snf_integer_kernel(transposed))
+        # Both certificates see the same rank r: len(t) = t - r and
+        # len(p) = p - r, so r = min(p, t) - min(len(p), len(t)). The shape
+        # check below rejects any disagreement between the two owners.
+        rank = min(places, transitions) - min(len(p_basis), len(t_basis))
+        if len(t_basis) != transitions - rank or len(p_basis) != places - rank:
+            raise RuntimeError("invariant bases disagree with the Smith rank")
+    _replay_invariants(incidence, p_basis, t_basis)
+    return PetriInvariantsResult._from_kernel(
+        net=net,
+        incidence=incidence_matrix,
+        incidence_rank=rank,
+        p_invariants=p_basis,
+        t_invariants=t_basis,
+        replayed=True,
+    )
+
+
+def verify_invariants(claim: PetriInvariantsResult) -> bool:
+    """Verify P/T-invariant bases against their retained net."""
+
+    try:
+        return petri_invariants(claim.net) == claim
     except OperationResourceAdmissionError:
         raise
     except OperationDomainValidationError:

@@ -12,12 +12,15 @@ from jacobian.math.logic.automata.tree._models import (
     TreeAutomatonReachabilityRequest,
     TreeAutomatonTrimRequest,
     TreeAutomatonTrimResult,
+    TreeDeterminizeRequest,
+    TreeDeterminizeResult,
     TreeRunRequest,
     TreeRunResult,
 )
 from jacobian.math.logic.automata.tree.operations import (
     _accepted_tree_count_admitted,
     _tree_state_chart_unchecked,
+    determinize_tree_automaton,
     reachable_state_profile,
     trim_tree_automaton,
 )
@@ -75,6 +78,18 @@ def compute_tree_automaton_trim(
     return trim_tree_automaton(request.automaton)
 
 
+def compute_tree_automaton_determinize(
+    request: TreeDeterminizeRequest,
+) -> TreeDeterminizeResult:
+    """Determinize an automaton by bounded subset construction."""
+
+    return determinize_tree_automaton(
+        request.automaton,
+        request.max_subset_states,
+        request.sample_max_height,
+    )
+
+
 # Automaton: states {0, 1}, symbols {a (arity 0), f (arity 2)}
 # Transitions: a -> 0, f(0, 0) -> 0, f(1, 0) -> 1, f(0, 1) -> 1, f(1, 1) -> 1
 # Final states: {0}
@@ -98,6 +113,30 @@ _RUN_EXAMPLE = {
             {"symbol": 0, "children": []},
         ],
     },
+}
+
+# Nondeterministic automaton for boolean AND-trees: states {0 (false),
+# 1 (true), 2 (true alias)}. Symbols: 0=false (arity 0), 1=true (arity 0),
+# 2=AND (arity 2). Subset construction reaches {{0}, {1, 2}}.
+_DETERMINIZE_EXAMPLE = {
+    "state_count": 3,
+    "arity": [0, 0, 2],
+    "transitions": [
+        {"symbol": 0, "child_states": [], "target_state": 0},
+        {"symbol": 1, "child_states": [], "target_state": 1},
+        {"symbol": 1, "child_states": [], "target_state": 2},
+        {"symbol": 2, "child_states": [0, 0], "target_state": 0},
+        {"symbol": 2, "child_states": [0, 1], "target_state": 0},
+        {"symbol": 2, "child_states": [0, 2], "target_state": 0},
+        {"symbol": 2, "child_states": [1, 0], "target_state": 0},
+        {"symbol": 2, "child_states": [2, 0], "target_state": 0},
+        {"symbol": 2, "child_states": [1, 1], "target_state": 1},
+        {"symbol": 2, "child_states": [1, 2], "target_state": 1},
+        {"symbol": 2, "child_states": [2, 1], "target_state": 1},
+        {"symbol": 2, "child_states": [2, 2], "target_state": 1},
+        {"symbol": 2, "child_states": [2, 2], "target_state": 2},
+    ],
+    "final_states": [1],
 }
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
@@ -151,6 +190,34 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 description="Drop the unreachable state 1 from a two-state automaton.",
                 input={
                     "automaton": _RUN_EXAMPLE["automaton"],
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="tree_automaton.determinize.compute",
+        title="Determinize a bottom-up tree automaton",
+        description="Run bounded subset construction on a nondeterministic "
+        "bottom-up tree automaton. On success return the complete "
+        "deterministic machine with its subset map, a replayed "
+        "transition-closure certificate, and acceptance agreement on every "
+        "ground tree up to a bounded height. When the powerset exceeds the "
+        "state-set budget, return the partial construction with TRUNCATED "
+        "status and no language-equivalence claim.",
+        request_type=TreeDeterminizeRequest,
+        result_type=TreeDeterminizeResult,
+        run=compute_tree_automaton_determinize,
+        tags=("tree-automata", "determinization", "subset-construction", "exact"),
+        discovery_terms=("determinize", "subset construction", "powerset"),
+        examples=(
+            OperationExample(
+                name="determinize_and_trees",
+                description="Determinize a nondeterministic automaton for "
+                "boolean AND-trees with an aliased true state.",
+                input={
+                    "automaton": _DETERMINIZE_EXAMPLE,
+                    "max_subset_states": 64,
+                    "sample_max_height": 3,
                 },
             ),
         ),

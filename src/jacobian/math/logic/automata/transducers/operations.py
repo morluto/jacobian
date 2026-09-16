@@ -11,6 +11,8 @@ from jacobian.catalog.models import (
 )
 from jacobian.math.logic.automata.transducers._models import (
     ComposeResult,
+    MinimizeResult,
+    StatePairDistinguishability,
     SubseqRunResult,
 )
 from jacobian.math.logic.automata.transducers.values import (
@@ -29,13 +31,18 @@ __all__ = [
     "compose_subsequential",
     "identity_transducer",
     "invert_rational",
+    "minimize_subsequential",
     "reachable_states",
     "replay_rational_path",
     "run_subsequential",
     "trim_subsequential",
     "verify_composition",
+    "verify_minimization",
     "verify_subsequential_run",
 ]
+
+
+MAX_MINIMIZE_SAMPLE_WORDS = 20000
 
 
 def _reject(code: str, message: str, *location: str) -> None:
@@ -580,6 +587,460 @@ def verify_composition(claim: ComposeResult) -> bool:
 
     try:
         return compose_subsequential(claim.first, claim.second) == claim.transducer
+    except OperationResourceAdmissionError:
+        raise
+    except (TypeError, ValueError, OperationDomainValidationError):
+        return False
+
+
+def _minimize_sample_word_count(alphabet_size: int, max_length: int) -> int:
+    """Return the number of words of length at most ``max_length``."""
+
+    if alphabet_size <= 1:
+        return max_length + 1
+    count = 0
+    power = 1
+    for _ in range(max_length + 1):
+        count += power
+        if count > MAX_MINIMIZE_SAMPLE_WORDS:
+            return count
+        power *= alphabet_size
+    return count
+
+
+def _admit_minimize(
+    transducer: SubsequentialTransducer, sample_max_length: int
+) -> None:
+    if not isinstance(transducer, SubsequentialTransducer):
+        _reject(
+            "transducer_type",
+            "transducer must be a SubsequentialTransducer value",
+            "transducer",
+        )
+    if type(sample_max_length) is not int or sample_max_length < 0:
+        _reject(
+            "sample_length",
+            "sample_max_length must be a nonnegative integer",
+            "sample_max_length",
+        )
+    words = _minimize_sample_word_count(
+        transducer.input_alphabet_size, sample_max_length
+    )
+    if words > MAX_MINIMIZE_SAMPLE_WORDS:
+        raise OperationResourceAdmissionError(
+            location=("transducer", "sample_max_length"),
+            code="finite_state_transducer.minimize_sample_bound_exceeded",
+            message=(
+                "the distinguishing sample exceeds the admitted word budget; "
+                "shrink sample_max_length"
+            ),
+        )
+
+
+def _refine_subsequential_partition(
+    state_count: int,
+    alphabet_size: int,
+    transitions: dict[tuple[int, int], tuple[int, tuple[int, ...]]],
+    finals: dict[int, tuple[int, ...]],
+) -> list[int]:
+    """Refine behavioral equivalence by stable partition refinement.
+
+    Two states share a block exactly when they realize the same partial
+    function: equal final outputs and, per input symbol, jointly undefined
+    or equal output words with equivalent targets.  Trimming to coaccessible
+    states first makes the fixed point the coarsest such partition, so every
+    separated pair is genuinely inequivalent.
+    """
+
+    block_of = [-1] * state_count
+    seed_keys: dict[tuple[int, tuple[int, ...] | None], int] = {}
+    for state in range(state_count):
+        key = (1, finals.get(state))
+        if key not in seed_keys:
+            seed_keys[key] = len(seed_keys)
+        block_of[state] = seed_keys[key]
+    while True:
+        split_found = False
+        next_block = [-1] * state_count
+        next_id = 0
+        for _block in sorted(set(block_of)):
+            members = sorted(
+                state for state in range(state_count) if block_of[state] == _block
+            )
+            signatures: dict[
+                tuple[tuple[tuple[int, ...], tuple[int]] | None, ...], list[int]
+            ] = {}
+            for state in members:
+                signature: list[tuple[tuple[int, ...], tuple[int]] | None] = []
+                for symbol in range(alphabet_size):
+                    target = transitions.get((state, symbol))
+                    if target is None:
+                        signature.append(None)
+                    else:
+                        next_state, output = target
+                        signature.append((output, (block_of[next_state],)))
+                signature_key = tuple(signature)
+                signatures.setdefault(signature_key, []).append(state)
+            groups = list(signatures.values())
+            if len(groups) > 1:
+                split_found = True
+            for group in groups:
+                for state in group:
+                    next_block[state] = next_id
+                next_id += 1
+        block_of = next_block
+        if not split_found:
+            return block_of
+
+
+_MAX_WITNESS_NODES = 200_000
+"""Bound on pair nodes explored per inequivalent pair before refusing.
+
+The search tracks the residual output difference between the two states,
+which the admitted envelopes keep small; the cap only guards a pathological
+output-heavy request from unbounded work.
+"""
+
+
+def _advance_output_residual(
+    sign: int,
+    residual: tuple[int, ...],
+    first_output: tuple[int, ...],
+    second_output: tuple[int, ...],
+) -> tuple[int, tuple[int, ...]] | None:
+    """Fold one emitted-output pair into the residual difference.
+
+    ``sign`` is ``0`` when the accumulated outputs are equal, ``1`` when the
+    first state is ahead by ``residual``, and ``-1`` when the second is.
+    Returns the new ``(sign, residual)`` with the common prefix stripped when
+    the accumulated outputs stay prefix-comparable, or ``None`` when they are
+    incomparable (a difference no continuation can cancel).
+    """
+
+    if sign == 0:
+        left, right = first_output, second_output
+    elif sign == 1:
+        left, right = residual + first_output, second_output
+    else:
+        left, right = first_output, residual + second_output
+    common = 0
+    while common < len(left) and common < len(right) and left[common] == right[common]:
+        common += 1
+    left = left[common:]
+    right = right[common:]
+    if not left and not right:
+        return (0, ())
+    if not left:
+        return (-1, right)
+    if not right:
+        return (1, left)
+    return None
+
+
+def _witness_terminal(
+    node: tuple[int | None, int | None, int, tuple[int, ...]],
+    finals: dict[int, tuple[int, ...]],
+) -> bool:
+    """Decide whether a pair node realizes differing partial functions."""
+
+    first, second, sign, residual = node
+    first_final = first is not None and first in finals
+    second_final = second is not None and second in finals
+    if first_final != second_final:
+        return True
+    if not (first_final and second_final):
+        return False
+    assert first is not None and second is not None
+    first_output = finals[first]
+    second_output = finals[second]
+    if sign == 2:
+        return True
+    if sign == 0:
+        return first_output != second_output
+    if sign == 1:
+        return residual + first_output != second_output
+    return first_output != residual + second_output
+
+
+def _find_separating_word(
+    first: int,
+    second: int,
+    alphabet_size: int,
+    transitions: dict[tuple[int, int], tuple[int, tuple[int, ...]]],
+    finals: dict[int, tuple[int, ...]],
+) -> tuple[int, ...] | None:
+    """Breadth-first search for the shortest word separating two states.
+
+    Nodes track the residual output difference so a transition-level
+    difference canceled by later output or a final output is not mistaken
+    for a separation.  The residual is exact; the node budget bounds the
+    search instead of a length cap, since a residual may be canceled by any
+    later emitted output.
+    """
+
+    start: tuple[int | None, int | None, int, tuple[int, ...]] = (
+        first,
+        second,
+        0,
+        (),
+    )
+    if _witness_terminal(start, finals):
+        return ()
+    seen = {start}
+    queue: deque[
+        tuple[tuple[int | None, int | None, int, tuple[int, ...]], tuple[int, ...]]
+    ] = deque([(start, ())])
+    explored = 0
+    while queue:
+        node, word = queue.popleft()
+        explored += 1
+        if explored > _MAX_WITNESS_NODES:
+            raise OperationResourceAdmissionError(
+                location=("transducer",),
+                code="finite_state_transducer.witness_search_exceeded",
+                message=("the distinguishing-witness search exceeds its node budget"),
+            )
+        current_first, current_second, sign, residual = node
+        for symbol in range(alphabet_size):
+            first_step = (
+                transitions.get((current_first, symbol))
+                if current_first is not None
+                else None
+            )
+            second_step = (
+                transitions.get((current_second, symbol))
+                if current_second is not None
+                else None
+            )
+            if first_step is None and second_step is None:
+                continue
+            next_first = first_step[0] if first_step is not None else None
+            next_second = second_step[0] if second_step is not None else None
+            next_sign = sign
+            next_residual = residual
+            if sign != 2:
+                advanced = _advance_output_residual(
+                    sign,
+                    residual,
+                    first_step[1] if first_step is not None else (),
+                    second_step[1] if second_step is not None else (),
+                )
+                if advanced is None:
+                    next_sign, next_residual = 2, ()
+                else:
+                    next_sign, next_residual = advanced
+            child = (next_first, next_second, next_sign, next_residual)
+            extended = (*word, symbol)
+            if _witness_terminal(child, finals):
+                return extended
+            if child not in seen:
+                seen.add(child)
+                queue.append((child, extended))
+    return None
+
+
+def _compute_distinguishing_witnesses(
+    state_count: int,
+    alphabet_size: int,
+    transitions: dict[tuple[int, int], tuple[int, tuple[int, ...]]],
+    finals: dict[int, tuple[int, ...]],
+    block_of: list[int],
+) -> dict[tuple[int, int], tuple[int, ...]]:
+    """Return a separating word for every pair of inequivalent states.
+
+    Witnesses are computed only after the partition has stabilized, so a
+    shared block means the two states realize the same partial function and
+    is skipped.  Each inequivalent pair is witnessed by the shortest word
+    whose realized partial functions differ.
+    """
+
+    witnesses: dict[tuple[int, int], tuple[int, ...]] = {}
+    for first in range(state_count):
+        for second in range(first + 1, state_count):
+            if block_of[first] == block_of[second]:
+                continue
+            word = _find_separating_word(
+                first,
+                second,
+                alphabet_size,
+                transitions,
+                finals,
+            )
+            if word is None:
+                raise RuntimeError(
+                    "partition refinement separated pairs without distinguishing words"
+                )
+            witnesses[(first, second)] = word
+    return witnesses
+
+
+def _iter_sample_words(
+    alphabet_size: int, max_length: int
+) -> tuple[tuple[int, ...], ...]:
+    """Enumerate every word of length at most ``max_length`` in lex order."""
+
+    words: list[tuple[int, ...]] = [()]
+    frontier: list[tuple[int, ...]] = [()]
+    for _ in range(max_length):
+        following: list[tuple[int, ...]] = []
+        for word in frontier:
+            for symbol in range(alphabet_size):
+                extended = (*word, symbol)
+                words.append(extended)
+                following.append(extended)
+        frontier = following
+    return tuple(words)
+
+
+def minimize_subsequential(
+    transducer: SubsequentialTransducer,
+    sample_max_length: int = 5,
+) -> MinimizeResult:
+    """Minimize a subsequential transducer preserving its partial function.
+
+    The kernel trims to live states, merges the coarsest exact-output
+    bisimulation by partition refinement, and replays the shipped run
+    semantics on every word of length at most ``sample_max_length``.
+    """
+
+    _admit_minimize(transducer, sample_max_length)
+    trimmed, trim_map = trim_subsequential(transducer)
+    trim_new_to_old = {new: old for old, new in trim_map.items()}
+    transitions = _transition_map(trimmed)
+    finals = _final_output_map(trimmed)
+    if trimmed.state_count == 1 and not trim_map:
+        return MinimizeResult._from_kernel(
+            transducer=transducer,
+            sample_max_length=sample_max_length,
+            minimized=trimmed,
+            old_to_new=tuple(-1 for _ in range(transducer.state_count)),
+            new_to_old=(),
+            partition=(),
+            distinguishability=(),
+            sample_words_checked=_minimize_sample_word_count(
+                transducer.input_alphabet_size, sample_max_length
+            ),
+            sample_agreement=True,
+        )
+    block_of = _refine_subsequential_partition(
+        trimmed.state_count,
+        trimmed.input_alphabet_size,
+        transitions,
+        finals,
+    )
+    witnesses = _compute_distinguishing_witnesses(
+        trimmed.state_count,
+        trimmed.input_alphabet_size,
+        transitions,
+        finals,
+        block_of,
+    )
+    blocks: dict[int, list[int]] = {}
+    for state, block in enumerate(block_of):
+        blocks.setdefault(block, []).append(state)
+    ordered = sorted(blocks.values(), key=min)
+    state_to_block = {
+        state: index for index, block in enumerate(ordered) for state in block
+    }
+    rep_of = {index: min(block) for index, block in enumerate(ordered)}
+    minimized_transitions = tuple(
+        sorted(
+            (
+                SubseqTransition(
+                    source=state_to_block[rep],
+                    input_symbol=symbol,
+                    target=state_to_block[target],
+                    output=output,
+                )
+                for rep in (rep_of[index] for index in range(len(ordered)))
+                for symbol in range(trimmed.input_alphabet_size)
+                if (rep, symbol) in transitions
+                for (target, output) in [transitions[(rep, symbol)]]
+            ),
+            key=lambda row: (row.source, row.input_symbol, row.target, row.output),
+        )
+    )
+    minimized_finals = tuple(
+        sorted(
+            (
+                SubseqFinalOutput(state=index, output=finals[rep_of[index]])
+                for index in range(len(ordered))
+                if rep_of[index] in finals
+            ),
+            key=lambda row: row.state,
+        )
+    )
+    minimized = SubsequentialTransducer(
+        input_alphabet_size=trimmed.input_alphabet_size,
+        output_alphabet_size=trimmed.output_alphabet_size,
+        state_count=len(ordered),
+        initial_state=state_to_block[trim_map[transducer.initial_state]],
+        transitions=minimized_transitions,
+        final_outputs=minimized_finals,
+    )
+    sample_words = _iter_sample_words(transducer.input_alphabet_size, sample_max_length)
+    for word in sample_words:
+        source_status, source_output, _, _, _ = run_subsequential(transducer, word)
+        minimized_status, minimized_output, _, _, _ = run_subsequential(minimized, word)
+        # The shipped trim/run semantics preserve the realized partial
+        # function: definedness with equal output words. Distinct failure
+        # modes (undefined transition vs nonfinal state) both mean the word
+        # is outside the domain.
+        if (source_status == "OUTPUT", source_output) != (
+            minimized_status == "OUTPUT",
+            minimized_output,
+        ):
+            raise RuntimeError("minimized transducer disagrees with its source")
+    old_to_new = tuple(
+        state_to_block[trim_map[state]] if state in trim_map else -1
+        for state in range(transducer.state_count)
+    )
+    new_to_old = tuple(trim_new_to_old[rep_of[index]] for index in range(len(ordered)))
+    partition = tuple(
+        tuple(sorted(trim_new_to_old[state] for state in block)) for block in ordered
+    )
+    original_of = {new: trim_new_to_old[new] for new in range(trimmed.state_count)}
+    table_rows: list[StatePairDistinguishability] = []
+    for first in range(trimmed.state_count):
+        for second in range(first + 1, trimmed.state_count):
+            equivalent = block_of[first] == block_of[second]
+            witness: tuple[int, ...] = ()
+            if not equivalent:
+                if (first, second) not in witnesses:
+                    raise RuntimeError(
+                        "partition refinement split a pair without a witness"
+                    )
+                witness = witnesses[(first, second)]
+            table_rows.append(
+                StatePairDistinguishability(
+                    first_state=original_of[first],
+                    second_state=original_of[second],
+                    equivalent=equivalent,
+                    witness_word=witness,
+                )
+            )
+    table_rows.sort(key=lambda row: (row.first_state, row.second_state))
+    distinguishability = tuple(table_rows)
+    return MinimizeResult._from_kernel(
+        transducer=transducer,
+        sample_max_length=sample_max_length,
+        minimized=minimized,
+        old_to_new=old_to_new,
+        new_to_old=new_to_old,
+        partition=partition,
+        distinguishability=distinguishability,
+        sample_words_checked=len(sample_words),
+        sample_agreement=True,
+    )
+
+
+def verify_minimization(claim: MinimizeResult) -> bool:
+    """Verify a minimization against its retained source transducer."""
+
+    try:
+        return (
+            minimize_subsequential(claim.transducer, claim.sample_max_length) == claim
+        )
     except OperationResourceAdmissionError:
         raise
     except (TypeError, ValueError, OperationDomainValidationError):

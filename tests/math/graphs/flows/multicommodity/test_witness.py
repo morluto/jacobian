@@ -8,7 +8,7 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
-from jacobian.dispatch import parse_operation_input
+from jacobian.canonical import encode_strict_json
 from jacobian.math.graphs.flows._models import CapacitatedEdge, FlowGraph
 from jacobian.math.graphs.flows.multicommodity._models import (
     CommodityDemand,
@@ -197,8 +197,8 @@ def test_catalog_and_native_paths_agree() -> None:
         for tool in TOOLS
         if tool.operation_id == "network.multicommodity_flow.witness.check"
     ).examples[0]
-    request = parse_operation_input(
-        MulticommodityFlowWitnessCheckRequest, example.input
+    request = MulticommodityFlowWitnessCheckRequest.model_validate_json(
+        encode_strict_json(example.input), strict=True
     )
     catalog_result = _run_multicommodity_flow_witness_check(request)
     native_result = check_multicommodity_flow_witness(shared_bottleneck())

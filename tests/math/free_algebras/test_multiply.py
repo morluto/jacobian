@@ -12,12 +12,10 @@ from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import encode_strict_json
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.dispatch import invoke_operation
 from jacobian.math.free_algebras._models import (
     MAX_FREE_ALGEBRA_COEFFICIENT_DIGITS,
     MAX_FREE_ALGEBRA_OPERAND_TERMS,
@@ -245,11 +243,9 @@ def test_result_round_trips_and_matches_native_and_catalog() -> None:
         == native
     )
 
-    catalog = Catalog.open()
-    tool = catalog.operation(OPERATION_ID)
-    assert tool is not None
-    public = invoke_operation(OPERATION_ID, tool.examples[0].input, catalog)
-    assert public.output == native.model_dump(mode="json")
+    command = next(tool for tool in TOOLS if tool.operation_id == OPERATION_ID)
+    public = command.run(request)
+    assert public.model_dump(mode="json") == native.model_dump(mode="json")
 
 
 def test_cross_check_against_sympy_noncommutative_symbols() -> None:

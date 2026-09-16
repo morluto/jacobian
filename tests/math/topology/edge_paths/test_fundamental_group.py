@@ -3,13 +3,10 @@
 from __future__ import annotations
 
 import itertools
-import json
 
 import pytest
 
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.dispatch import invoke_operation
 from jacobian.math.topology._models import (
     HomologyConvention,
     SimplicialComplexRequest,
@@ -246,22 +243,8 @@ class TestNativeCatalogParity:
         request = _request(("0", "1", "2"), _CIRCLE, "0")
         assert _fundamental_group(request) == _native(request)
 
-    def test_catalog_invocation_matches_native_result(self) -> None:
+    def test_owner_adapter_matches_native_result(self) -> None:
         request = _request(tuple(str(i) for i in range(6)), _RP2, "0")
         native = _native(request)
-        catalog = Catalog.open()
-        invocation = invoke_operation(
-            _OPERATION_ID,
-            {
-                "complex": {
-                    "vertices": list(request.complex.vertices),
-                    "facets": [list(facet) for facet in request.complex.facets],
-                },
-                "base_vertex": "0",
-            },
-            catalog,
-        )
-        decoded = FundamentalGroupPresentationResult.model_validate_json(
-            json.dumps(invocation.output)
-        )
-        assert decoded == native
+        operation = next(tool for tool in TOOLS if tool.operation_id == _OPERATION_ID)
+        assert operation.run(request) == native

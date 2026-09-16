@@ -18,8 +18,8 @@ from tests.math.geometry.toric._fixtures import (
     square_fan,
 )
 
+from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.dispatch import parse_operation_input
 from jacobian.math.geometry.toric._models import (
     OrbitConeProfileRequest,
     OrbitConeProfileResult,
@@ -195,7 +195,9 @@ def test_catalog_and_native_profiles_agree_and_round_trip() -> None:
             "cones": [[], [0], [1], [0, 1]],
         }
     }
-    request = parse_operation_input(OrbitConeProfileRequest, payload)
+    request = OrbitConeProfileRequest.model_validate_json(
+        encode_strict_json(payload), strict=True
+    )
     catalog_result = ORBIT_CONE_PROFILE_OPERATION.run(request)
     native_result = compute_orbit_cone_profile(a2_fan())
     assert catalog_result == native_result

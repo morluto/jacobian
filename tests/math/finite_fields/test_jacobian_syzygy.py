@@ -7,7 +7,6 @@ import json
 import pytest
 from pydantic import ValidationError
 
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -112,18 +111,13 @@ def test_graf_frozen_example_verifies_with_derived_char_two_jacobian() -> None:
     assert result.polynomial is f
 
 
-def test_declared_tool_example_runs_through_the_catalog_projection() -> None:
+def test_declared_tool_example_runs_through_the_owner_projection() -> None:
     tool = _tool()
     payload = json.dumps(tool.examples[0].input)
     request = JacobianSyzygyCheckRequest.model_validate_json(payload)
     result = tool.run(request)
     assert result.status == "VERIFIED"
     assert result.ledger[1].remainder.terms[0].coefficient.is_zero
-
-    catalog_tool = Catalog.open().operation(OPERATION_ID)
-    assert catalog_tool is not None
-    catalog_result = catalog_tool.run(request)
-    assert catalog_result.model_dump_json() == result.model_dump_json()
 
 
 def test_unit_row_is_rejected_with_exact_x_squared_remainder() -> None:

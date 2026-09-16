@@ -3,6 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
+from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.logic.automata.transducers import (
     RationalEdge,
@@ -340,19 +341,16 @@ class TestNativeTransformations:
         with pytest.raises(ValidationError, match="new-state range"):
             TrimResult.model_validate(payload)
 
-    def test_trim_declared_example_executes_through_the_catalog(self) -> None:
-        import copy
-
-        from jacobian.catalog.catalog import Catalog
-        from jacobian.dispatch import invoke_operation
-
-        operation_id = "transducer.subsequential.trim.compute"
-        catalog = Catalog.open()
-        operation = catalog.operation(operation_id)
-        assert operation is not None
-        payload = copy.deepcopy(operation.examples[0].input)
-        output = invoke_operation(operation_id, payload, catalog).output
-        result = TrimResult.model_validate(output)
+    def test_trim_declared_example_executes_through_the_owner_adapter(self) -> None:
+        operation = next(
+            tool
+            for tool in TOOLS
+            if tool.operation_id == "transducer.subsequential.trim.compute"
+        )
+        request = operation.request_type.model_validate_json(
+            encode_strict_json(operation.examples[0].input), strict=True
+        )
+        result = operation.run(request)
         assert result.trimmed.state_count == 1
         assert result.new_to_old == (0,)
 

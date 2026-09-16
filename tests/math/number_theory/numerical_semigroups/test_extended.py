@@ -8,6 +8,7 @@ from tests.math.number_theory.numerical_semigroups._support import (
     operation_domain_error,
 )
 
+from jacobian.canonical import encode_strict_json
 from jacobian.math.number_theory.numerical_semigroups._element_invariant_models import (
     ElementCatenaryDegreeRequest,
     ElementCatenaryDegreeResult,
@@ -45,6 +46,7 @@ from jacobian.math.number_theory.numerical_semigroups._presentation_models impor
     PresentationBinomialsResult,
 )
 from jacobian.math.number_theory.numerical_semigroups._tools import (
+    TOOLS,
     compute_betti_elements,
     compute_catenary_degree,
     compute_delta_set,
@@ -259,20 +261,19 @@ class TestFactorizationLengths:
             (4, 6, 9), 36
         )
 
-    def test_lengths_declared_example_executes_through_the_catalog(self) -> None:
-        import copy
-
-        from jacobian.catalog.catalog import Catalog
-        from jacobian.dispatch import invoke_operation
-
-        operation_id = "number_theory.numerical_semigroup.factorization_lengths.compute"
-        catalog = Catalog.open()
-        operation = catalog.operation(operation_id)
-        assert operation is not None
-        payload = copy.deepcopy(operation.examples[0].input)
-        output = invoke_operation(operation_id, payload, catalog).output
+    def test_lengths_declared_example_executes_through_the_owner_adapter(self) -> None:
+        operation = next(
+            tool
+            for tool in TOOLS
+            if tool.operation_id
+            == "number_theory.numerical_semigroup.factorization_lengths.compute"
+        )
+        example_request = operation.request_type.model_validate_json(
+            encode_strict_json(operation.examples[0].input), strict=True
+        )
+        # Canonical JSON encodes exact integers as strings.
+        output = operation.run(example_request).model_dump(mode="json")
         request = FactorizationLengthsComputeRequest(generators=(3, 5), value=15)
-        # Dispatch output uses canonical JSON (exact integers as strings).
         assert output == compute_factorization_lengths(request).model_dump(mode="json")
         assert output["lengths"] == ["3", "5"]
 

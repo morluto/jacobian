@@ -22,8 +22,8 @@ from tests.math.geometry.toric._fixtures import (
     square_fan,
 )
 
+from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import OperationResourceAdmissionError
-from jacobian.dispatch import parse_operation_input
 from jacobian.math.geometry.toric._models import (
     FanValidationRequest,
     FanValidationResult,
@@ -166,7 +166,9 @@ def test_catalog_and_native_paths_share_one_recognition() -> None:
             "cones": [[], [0], [1], [2], [0, 1], [0, 2], [1, 2]],
         }
     }
-    request = parse_operation_input(FanValidationRequest, payload)
+    request = FanValidationRequest.model_validate_json(
+        encode_strict_json(payload), strict=True
+    )
     catalog_result = FAN_VALIDATE_OPERATION.run(request)
     native_result = validate_fan(p2_fan())
     assert catalog_result == native_result

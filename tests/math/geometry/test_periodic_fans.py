@@ -8,8 +8,8 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
+from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import OperationResourceAdmissionError
-from jacobian.dispatch import parse_operation_input
 from jacobian.math.geometry.periodic_fans._models import (
     PeriodicFanPresentation,
     PeriodicFanValidationRequest,
@@ -237,7 +237,9 @@ def test_validation_result_round_trips_through_strict_json() -> None:
 
 def test_catalog_and_native_paths_share_one_recognition() -> None:
     payload = PERIODIC_FAN_VALIDATE_OPERATION.examples[0].input
-    request = parse_operation_input(PeriodicFanValidationRequest, payload)
+    request = PeriodicFanValidationRequest.model_validate_json(
+        encode_strict_json(payload), strict=True
+    )
     catalog_result = PERIODIC_FAN_VALIDATE_OPERATION.run(request)
     native_result = validate_periodic_fan(unit_square_fan())
     assert catalog_result == native_result

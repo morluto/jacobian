@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import copy
 from typing import cast
 
 import pytest
 from pydantic import ValidationError
 
+from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.universal_algebra import (
     ApplicationTerm,
@@ -987,34 +987,31 @@ def test_native_implication_check_uses_mathematical_arguments() -> None:
 
 
 class TestImplicationCountermodelPublication:
-    def test_declared_example_executes_through_the_catalog(self) -> None:
-        from jacobian.catalog.catalog import Catalog
-        from jacobian.dispatch import invoke_operation
+    @staticmethod
+    def _operation():
+        return next(
+            tool
+            for tool in TOOLS
+            if tool.operation_id == "universal_algebra.implication.countermodel.check"
+        )
 
-        operation_id = "universal_algebra.implication.countermodel.check"
-        catalog = Catalog.open()
-        operation = catalog.operation(operation_id)
-        assert operation is not None
+    def test_declared_example_executes_through_the_owner_adapter(self) -> None:
+        operation = self._operation()
         assert operation.examples
-        payload = copy.deepcopy(operation.examples[0].input)
-        output = invoke_operation(operation_id, payload, catalog).output
-        result = ImplicationCountermodelCheckResult.model_validate(output)
+        request = operation.request_type.model_validate_json(
+            encode_strict_json(operation.examples[0].input), strict=True
+        )
+        result = operation.run(request)
         assert result.premises[0].status == "HOLDS"
         assert result.target.status == "FAILS"
         assert result.is_countermodel is True
 
-    def test_native_and_catalog_results_agree(self) -> None:
-        from jacobian.catalog.catalog import Catalog
-        from jacobian.dispatch import invoke_operation
-
-        operation_id = "universal_algebra.implication.countermodel.check"
-        operation = Catalog.open().operation(operation_id)
-        assert operation is not None
-        payload = copy.deepcopy(operation.examples[0].input)
-        request = ImplicationCountermodelCheckRequest.model_validate(payload)
-        assert ImplicationCountermodelCheckResult.model_validate(
-            invoke_operation(operation_id, payload, Catalog.open()).output
-        ) == compute_implication_countermodel_check(request)
+    def test_native_and_owner_adapter_results_agree(self) -> None:
+        operation = self._operation()
+        request = operation.request_type.model_validate_json(
+            encode_strict_json(operation.examples[0].input), strict=True
+        )
+        assert operation.run(request) == compute_implication_countermodel_check(request)
 
     def test_empty_premises_with_holding_target_is_not_a_countermodel(self) -> None:
         equation = MagmaEquation(left=_variable_term(0), right=_variable_term(0))

@@ -5,12 +5,12 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
+from jacobian.canonical import encode_strict_json
 from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.dispatch import parse_operation_input
 from jacobian.math.function_fields._models import (
     MAX_EXTENSION_DEGREE,
     FiniteFunctionField,
@@ -391,7 +391,9 @@ class TestParityAndSerialization:
 
     def test_catalog_example_is_executable(self) -> None:
         tool = next(tool for tool in TOOLS if tool.operation_id == OPERATION_ID)
-        request = parse_operation_input(tool.request_type, tool.examples[0].input)
+        request = tool.request_type.model_validate_json(
+            encode_strict_json(tool.examples[0].input), strict=True
+        )
         result = tool.run(request)
         assert result.product.coordinates[0].numerator.coefficients == (0, 1)
         assert result.product.coordinates[1].numerator.coefficients == (1,)

@@ -16,8 +16,8 @@ from tests.math.geometry.toric._fixtures import (
     square_fan,
 )
 
+from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.dispatch import parse_operation_input
 from jacobian.math.geometry.toric._models import (
     CharacterDivisorRequest,
     CharacterDivisorResult,
@@ -123,7 +123,9 @@ def test_catalog_and_native_paths_agree() -> None:
         },
         "character": {"entries": ["1", "1"]},
     }
-    request = parse_operation_input(CharacterDivisorRequest, payload)
+    request = CharacterDivisorRequest.model_validate_json(
+        encode_strict_json(payload), strict=True
+    )
     catalog_result = CHARACTER_DIVISOR_OPERATION.run(request)
     native_result = compute_character_divisor(p2_fan(), character(1, 1))
     assert catalog_result == native_result

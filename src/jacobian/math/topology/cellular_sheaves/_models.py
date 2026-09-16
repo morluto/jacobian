@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from enum import StrEnum
 from itertools import pairwise
-from typing import Annotated, Any, Self
+from typing import Annotated, Any, Literal, Self
 
 from pydantic import Field, StrictInt, StringConstraints, model_validator
 from pydantic_core import PydanticCustomError
@@ -31,6 +31,7 @@ MAX_SHEAF_PRIME = 1000003
 MAX_SHEAF_DERIVED_RESTRICTIONS = 2048
 MAX_SHEAF_RESTRICTION_CELLS = 65536
 MAX_SHEAF_DIAMONDS = 65536
+MAX_SHEAF_COHOMOLOGY_CELLS = 65536
 
 BasisLabel = Annotated[
     str,
@@ -349,7 +350,186 @@ class FromCoverMapsResult(StrictModel):
         return cls.model_construct(**values)
 
 
+class SheafCohomologyRequest(StrictModel):
+    """Compute cellular cohomology of a checked finite cellular sheaf."""
+
+    sheaf: FiniteCellularSheaf
+
+
+class SheafCochainCoordinate(StrictModel):
+    """One cochain basis vector: one basis label of one stalk."""
+
+    simplex: Simplex
+    basis_label: BasisLabel
+
+    @model_validator(mode="after")
+    def require_nonempty_simplex(self) -> Self:
+        _require_canonical_simplex(self.simplex, label="cochain simplex")
+        return self
+
+
+class SheafCohomologyGroup(StrictModel):
+    """Cohomology in one degree with representative cocycles.
+
+    ``cocycle_representatives`` holds one cochain per cohomology basis
+    vector in ``C^k`` coordinates; its length is the Betti number.
+    """
+
+    degree: StrictInt = Field(ge=0)
+    cochain_dimension: StrictInt = Field(ge=0)
+    cocycle_rank: StrictInt = Field(ge=0)
+    coboundary_rank: StrictInt = Field(ge=0)
+    betti_number: StrictInt = Field(ge=0)
+    cocycle_representatives: tuple[tuple[str, ...], ...] = Field(default=())
+
+
+class SheafCoboundaryLedgerEntry(StrictModel):
+    """One replayed delta^{k+1} delta^k = 0 product."""
+
+    degree: StrictInt = Field(ge=0)
+    product_rows: StrictInt = Field(ge=0)
+    product_columns: StrictInt = Field(ge=0)
+    nonzero_entries: Literal[0] = 0
+
+
+class SheafCohomologyResult(StrictModel):
+    """Cellular cohomology of a retained finite cellular sheaf.
+
+    ``coboundary_matrices[k]`` is the dense signed-incidence coboundary
+    ``C^k -> C^{k+1}`` (rows index the degree-``k+1`` cochain basis,
+    columns the degree-``k`` basis) and ``cochain_bases[k]`` binds each
+    axis to its stalk coordinates. ``euler_characteristic_stalk`` is the
+    alternating stalk-rank sum and ``euler_characteristic_cohomology``
+    the alternating Betti sum; both are stored kernel accounting whose
+    equality the kernel establishes for finite free stalks.
+    """
+
+    sheaf: FiniteCellularSheaf
+    cochain_dimensions: tuple[StrictInt, ...] = Field(min_length=1)
+    cochain_bases: tuple[tuple[SheafCochainCoordinate, ...], ...] = Field(min_length=1)
+    coboundary_matrices: tuple[tuple[tuple[str, ...], ...], ...] = Field(default=())
+    groups: tuple[SheafCohomologyGroup, ...] = Field(min_length=1)
+    euler_characteristic_stalk: StrictInt
+    euler_characteristic_cohomology: StrictInt
+    differential_squared_zero: tuple[SheafCoboundaryLedgerEntry, ...] = Field(
+        default=()
+    )
+
+    @model_validator(mode="after")
+    def require_structural_cohomology(self) -> Self:  # noqa: C901
+        dimension = self.sheaf.complex.dimension
+        if len(self.cochain_dimensions) != dimension + 1:
+            raise _validation_error(
+                "cohomology_degree_coverage_invalid",
+                "cochain dimensions must cover every simplex dimension",
+            )
+        if len(self.cochain_bases) != dimension + 1 or any(
+            len(basis) != size
+            for basis, size in zip(
+                self.cochain_bases, self.cochain_dimensions, strict=True
+            )
+        ):
+            raise _validation_error(
+                "cochain_basis_axis_mismatch",
+                "cochain bases must match the cochain dimensions",
+            )
+        faces = {
+            face
+            for group in self.sheaf.complex.faces_by_dimension
+            for face in group.faces
+        }
+        for degree, basis in enumerate(self.cochain_bases):
+            for coordinate in basis:
+                if coordinate.simplex not in faces or len(coordinate.simplex) != (
+                    degree + 1
+                ):
+                    raise _validation_error(
+                        "cochain_coordinate_face_invalid",
+                        "every cochain coordinate must name a face of its degree",
+                    )
+        if len(self.coboundary_matrices) != dimension:
+            raise _validation_error(
+                "coboundary_count_mismatch",
+                "there must be one coboundary matrix per adjacent degree pair",
+            )
+        for degree, matrix in enumerate(self.coboundary_matrices):
+            rows = self.cochain_dimensions[degree + 1]
+            columns = self.cochain_dimensions[degree]
+            if len(matrix) != rows or any(len(row) != columns for row in matrix):
+                raise _validation_error(
+                    "coboundary_shape_mismatch",
+                    f"coboundary {degree} must have shape C^{degree + 1} x C^{degree}",
+                )
+        if tuple(group.degree for group in self.groups) != tuple(range(dimension + 1)):
+            raise _validation_error(
+                "cohomology_degree_coverage_invalid",
+                "cohomology groups must cover every degree exactly once",
+            )
+        for degree, group in enumerate(self.groups):
+            if group.cochain_dimension != self.cochain_dimensions[degree]:
+                raise _validation_error(
+                    "cohomology_cochain_dimension_mismatch",
+                    "each group must retain its cochain dimension",
+                )
+            if group.cocycle_rank > group.cochain_dimension:
+                raise _validation_error(
+                    "cocycle_rank_exceeded",
+                    "cocycle rank cannot exceed the cochain dimension",
+                )
+            if group.betti_number != group.cocycle_rank - group.coboundary_rank:
+                raise _validation_error(
+                    "cohomology_rank_identity_invalid",
+                    "betti_number must equal cocycle_rank - coboundary_rank",
+                )
+            if group.betti_number < 0:
+                raise _validation_error(
+                    "betti_number_negative",
+                    "the Betti number cannot be negative",
+                )
+            if degree == 0 and group.coboundary_rank != 0:
+                raise _validation_error(
+                    "coboundary_rank_degree_zero_invalid",
+                    "nothing bounds into degree zero",
+                )
+            if len(group.cocycle_representatives) != group.betti_number or any(
+                len(vector) != group.cochain_dimension
+                for vector in group.cocycle_representatives
+            ):
+                raise _validation_error(
+                    "cocycle_representative_axis_invalid",
+                    "cocycle representatives must span the Betti number in "
+                    "cochain coordinates",
+                )
+        if self.euler_characteristic_stalk != self.euler_characteristic_cohomology:
+            raise _validation_error(
+                "euler_characteristic_mismatch",
+                "the stalk and cohomology Euler characteristics must agree",
+            )
+        if {entry.degree for entry in self.differential_squared_zero} != set(
+            range(max(0, dimension - 1))
+        ) or len(self.differential_squared_zero) != max(0, dimension - 1):
+            raise _validation_error(
+                "coboundary_square_ledger_incomplete",
+                "the square-zero ledger must cover every adjacent "
+                "coboundary pair exactly once",
+            )
+        for entry in self.differential_squared_zero:
+            rows = self.cochain_dimensions[entry.degree + 2]
+            columns = self.cochain_dimensions[entry.degree]
+            if entry.product_rows != rows or entry.product_columns != columns:
+                raise _validation_error(
+                    "coboundary_square_product_shape_mismatch",
+                    "each ledger product shape must match its outer axes",
+                )
+        return self
+
+    @classmethod
+    def _from_kernel(cls, **values: Any) -> Self:
+        return cls.model_construct(**values)
+
+
 __all__ = [
+    "MAX_SHEAF_COHOMOLOGY_CELLS",
     "MAX_SHEAF_COVER_MAPS",
     "MAX_SHEAF_DERIVED_RESTRICTIONS",
     "MAX_SHEAF_DIAMONDS",
@@ -365,6 +545,11 @@ __all__ = [
     "FiniteCellularSheaf",
     "FromCoverMapsRequest",
     "FromCoverMapsResult",
+    "SheafCoboundaryLedgerEntry",
+    "SheafCochainCoordinate",
+    "SheafCohomologyGroup",
+    "SheafCohomologyRequest",
+    "SheafCohomologyResult",
     "SheafField",
     "SheafObstruction",
     "SheafObstructionCode",

@@ -14,10 +14,23 @@ from jacobian.math.polynomials.unit_circle._root_profile import (
     UnitDiskProfileRequest,
     unit_disk_profile,
 )
+from jacobian.math.polynomials.unit_circle._sup_norm import (
+    unit_circle_sup_norm_squared,
+)
+from jacobian.math.polynomials.unit_circle._sup_norm_models import (
+    UnitCircleSupNormSquaredRequest,
+    UnitCircleSupNormSquaredResult,
+)
 from jacobian.math.polynomials.unit_circle.operations import (
     real_symmetric_degree_one_fejer_riesz_factor,
     unit_circle_arc_energy,
 )
+
+
+def _run_sup_norm(
+    request: UnitCircleSupNormSquaredRequest,
+) -> UnitCircleSupNormSquaredResult:
+    return unit_circle_sup_norm_squared(request.polynomial)
 
 
 def _run_arc_energy(request: UnitCircleArcEnergyRequest) -> UnitCircleArcEnergyResult:
@@ -43,6 +56,28 @@ POLYNOMIAL_ONE_PLUS_Z = {
     },
     "start_turn": {"num": "-1", "den": "4"},
     "end_turn": {"num": "1", "den": "4"},
+}
+
+
+SUP_NORM_ONE_PLUS_Z = {
+    "polynomial": {
+        "terms": [
+            {
+                "coefficient": {
+                    "real": {"num": "1", "den": "1"},
+                    "imaginary": {"num": "0", "den": "1"},
+                },
+                "exponent": 1,
+            },
+            {
+                "coefficient": {
+                    "real": {"num": "1", "den": "1"},
+                    "imaginary": {"num": "0", "den": "1"},
+                },
+                "exponent": 0,
+            },
+        ]
+    }
 }
 
 
@@ -140,6 +175,44 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                         {"exponent": 1, "coefficient": {"num": "-1", "den": "1"}},
                     ]
                 },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="polynomial.unit_circle.sup_norm_squared.compute",
+        title="Compute a certified unit-circle supremum norm squared",
+        description=(
+            "For a bounded Gaussian-rational polynomial P(z), return a certified "
+            "rational enclosure of max_{|z|=1} |P(z)|^2 together with the exact "
+            "transformed numerator Q(t) and denominator exponent d, the exact "
+            "derivative numerator whose real roots are the finite critical "
+            "points, the complete critical-value comparison ledger, and the "
+            "separate z=-1 endpoint. Also returns a rational enclosure of "
+            "max |P| and reports a full-circle maximizing set when the modulus "
+            "is constant. Exact arithmetic; no sampled grid, float maximum, or "
+            "unverified upper bound is ever returned."
+        ),
+        request_type=UnitCircleSupNormSquaredRequest,
+        result_type=UnitCircleSupNormSquaredResult,
+        run=_run_sup_norm,
+        tags=(
+            "polynomial",
+            "unit-circle",
+            "sup-norm",
+            "maximum-modulus",
+            "littlewood",
+            "exact",
+        ),
+        discovery_terms=(
+            "unit circle sup norm",
+            "maximum modulus on the unit circle",
+            "Littlewood polynomial extremum",
+        ),
+        examples=(
+            OperationExample(
+                name="one_plus_z",
+                description="max |1+z|^2 on the circle is 4, attained at z=1.",
+                input=SUP_NORM_ONE_PLUS_Z,
             ),
         ),
     ),

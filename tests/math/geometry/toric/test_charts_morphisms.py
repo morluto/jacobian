@@ -24,6 +24,7 @@ from tests.math.geometry.toric._fixtures import (
     dp6_fan,
     fan,
     p2_fan,
+    p4_fan,
     singular_fan,
     square_fan,
 )
@@ -272,12 +273,39 @@ def test_rank_one_ray_chart_is_the_affine_line() -> None:
     ] == [(0, (1,))]
 
 
-def test_lower_dimensional_cone_is_refused() -> None:
-    with pytest.raises(OperationDomainValidationError) as rejection:
-        compute_affine_chart(p2_fan(), (0,))
-    assert (
-        rejection.value.errors()[0]["type"] == "toric.chart_cone_not_full_dimensional"
-    )
+def test_lower_dimensional_cone_chart_has_a_torus_factor() -> None:
+    """A ray cone of P^2 has chart A^1 x G_m: one pointed generator and a
+    one-dimensional free (torus) factor instead of a finite Hilbert basis."""
+
+    for cone in ((0,), (1,), (2,)):
+        result = compute_affine_chart(p2_fan(), cone)
+        assert result.dimension == 1
+        assert result.lattice_rank == 2
+        assert len(result.torus_basis) == 1
+        assert len(result.hilbert_basis) == 1
+        # Every reported generator lies in the dual cone sigma^vee.
+        fan_rays = p2_fan().rays
+        cone_rays = tuple(fan_rays[index] for index in cone)
+        for generator in result.hilbert_basis:
+            assert all(
+                sum(ray[axis] * generator[axis] for axis in range(2)) >= 0
+                for ray in cone_rays
+            )
+        # The torus basis generates exactly the lineality sigma^perp.
+        torus = result.torus_basis[0]
+        assert all(
+            sum(ray[axis] * torus[axis] for axis in range(2)) == 0 for ray in cone_rays
+        )
+        assert result.relations == ()
+
+
+def test_origin_cone_chart_is_the_full_torus() -> None:
+    result = compute_affine_chart(p2_fan(), ())
+    assert result.dimension == 0
+    assert len(result.torus_basis) == 2
+    assert result.hilbert_basis == ()
+    assert result.dual_cone_rays == ()
+    assert result.localizations == ()
 
 
 def test_undeclared_cone_is_refused() -> None:
@@ -462,3 +490,120 @@ def test_known_counts_and_fixtures_are_retained() -> None:
     assert len(P2_CONES) == 7
     assert len(DP6_CONES) == 13
     assert len(SQUARE_CONES) == 10
+
+
+def _dot_int(left: tuple[int, ...], right: tuple[int, ...]) -> int:
+    return sum(a * b for a, b in zip(left, right, strict=True))
+
+
+def _in_dual(
+    generator: tuple[int, ...], cone_rays: tuple[tuple[int, ...], ...]
+) -> bool:
+    return all(_dot_int(ray, generator) >= 0 for ray in cone_rays)
+
+
+def _decomposes_into(
+    point: tuple[int, ...],
+    generators: tuple[tuple[int, ...], ...],
+    torus_basis: tuple[tuple[int, ...], ...],
+) -> bool:
+    import z3
+
+    solver = z3.Solver()
+    coefficients = [z3.Int(f"h{index}") for index in range(len(generators))]
+    torus = [z3.Int(f"t{index}") for index in range(len(torus_basis))]
+    for coefficient in coefficients:
+        solver.add(coefficient >= 0)
+    for coordinate in range(len(point)):
+        solver.add(
+            z3.Sum(
+                [
+                    coefficients[index] * int(generators[index][coordinate])
+                    for index in range(len(generators))
+                ]
+                + [
+                    torus[index] * int(torus_basis[index][coordinate])
+                    for index in range(len(torus_basis))
+                ]
+            )
+            == int(point[coordinate])
+        )
+    return solver.check() == z3.sat
+
+
+_LOWER_DIMENSIONAL_CASES = (
+    ("p2_ray", lambda: p2_fan(), (0,)),
+    ("square_ray", lambda: square_fan(), (0,)),
+    ("square_facet", lambda: square_fan(), (0, 1)),
+    ("p4_ray", lambda: p4_fan(), (0,)),
+    ("p4_facet", lambda: p4_fan(), (0, 1)),
+)
+
+
+@pytest.mark.parametrize(
+    "presentation_factory,cone",
+    [case[1:] for case in _LOWER_DIMENSIONAL_CASES],
+    ids=[case[0] for case in _LOWER_DIMENSIONAL_CASES],
+)
+def test_lower_dimensional_chart_structural_oracles(presentation_factory, cone) -> None:
+    presentation = presentation_factory()
+    result = compute_affine_chart(presentation, cone)
+    rank = result.lattice_rank
+    top_cone = next(item for item in presentation.cones if item == tuple(sorted(cone)))
+    cone_rays = tuple(presentation.rays[index] for index in top_cone)
+
+    assert len(result.torus_basis) == rank - result.dimension
+    # Every pointed generator lies in the dual cone; the torus basis is
+    # exactly the lineality (annihilates every ray of the cone).
+    for generator in result.hilbert_basis:
+        assert _in_dual(generator, cone_rays)
+    for vector in result.torus_basis:
+        assert all(_dot_int(ray, vector) == 0 for ray in cone_rays)
+    # Every localization character vanishes on its face and is positive on the
+    # rays of the cone outside that face.
+    for localization in result.localizations:
+        face = set(localization.face_ray_indices)
+        for index in face:
+            assert (
+                _dot_int(localization.localizing_character, presentation.rays[index])
+                == 0
+            )
+        for index in top_cone:
+            if index not in face:
+                assert (
+                    _dot_int(
+                        localization.localizing_character, presentation.rays[index]
+                    )
+                    > 0
+                )
+    # Relations replay to zero on the pointed generators.
+    for relation in result.relations:
+        for coordinate in range(rank):
+            assert (
+                sum(
+                    relation[index] * result.hilbert_basis[index][coordinate]
+                    for index in range(len(result.hilbert_basis))
+                )
+                == 0
+            )
+
+
+def test_lower_dimensional_generators_generate_the_semigroup() -> None:
+    """Independent oracle: sampled dual-cone points decompose into the
+    reported Hilbert basis over the torus lattice."""
+
+    presentation = p2_fan()
+    result = compute_affine_chart(presentation, (0,))
+    cone_rays = tuple(presentation.rays[index] for index in (0,))
+
+    samples = 0
+    for x in range(-2, 3):
+        for y in range(-2, 3):
+            point = (x, y)
+            if not _in_dual(point, cone_rays):
+                continue
+            assert _decomposes_into(point, result.hilbert_basis, result.torus_basis), (
+                point
+            )
+            samples += 1
+    assert samples > 5

@@ -13,7 +13,11 @@ from jacobian.catalog.models import (
 from jacobian.math.geometry.toric._kernel import (
     RecognizedCone,
     RecognizedFan,
+    _integer_kernel_basis,
+    _lift_quotient_character,
+    _quotient_projection,
     _ray_in_cone,
+    _unimodular_complement,
     compute_affine_chart_data,
     compute_toric_morphism_data,
     facet_localizing_character,
@@ -188,20 +192,11 @@ def _primitive_character(values: tuple[int, ...]) -> tuple[int, ...]:
     return tuple(value // divisor for value in values)
 
 
-def _locate_full_dimensional_cone(
-    fan: ToricFanPresentation, recognized: RecognizedFan, cone: tuple[int, ...]
-) -> RecognizedCone:
+def _locate_cone(recognized: RecognizedFan, cone: tuple[int, ...]) -> RecognizedCone:
     label = tuple(sorted(set(cone)))
     for recognized_cone in recognized.cones:
-        if recognized_cone.ray_indices != label:
-            continue
-        if recognized_cone.dimension != fan.lattice_rank:
-            _reject_domain(
-                ("cone",),
-                "toric.chart_cone_not_full_dimensional",
-                "affine monomial charts require a full-dimensional cone",
-            )
-        return recognized_cone
+        if recognized_cone.ray_indices == label:
+            return recognized_cone
     _reject_domain(
         ("cone",),
         "toric.chart_cone_not_declared",
@@ -212,29 +207,56 @@ def _locate_full_dimensional_cone(
 def _chart_localizations(
     recognized: RecognizedFan, cone_id: int, lattice_rank: int
 ) -> tuple[ToricChartLocalization, ...]:
-    """Localizing characters for every proper face of one full-dimensional cone."""
+    """Localizing characters for every proper face of one cone.
 
-    sigma_rays = tuple(
-        recognized.rays[index] for index in recognized.cones[cone_id].ray_indices
-    )
+    For a full-dimensional cone the characters are the facet characters in
+    the ambient lattice.  For a lower-dimensional cone they are computed on
+    the pointed quotient ``sigma^vee / sigma^perp`` and lifted along the
+    quotient projection, so ``<m, r> = <m', pi(r)>`` on every ray.
+    """
+
+    sigma = recognized.cones[cone_id]
+    sigma_rays = tuple(recognized.rays[index] for index in sigma.ray_indices)
+    quotient = sigma.dimension < lattice_rank
+    projection: tuple[tuple[int, ...], ...] = ()
+    quotient_dimension = sigma.dimension
+    if quotient:
+        lineality = _integer_kernel_basis(sigma_rays, lattice_rank)
+        complement = _unimodular_complement(lineality, lattice_rank)
+        projection = _quotient_projection(
+            lineality, complement, lattice_rank, quotient_dimension
+        )
+
+    def quotient_ray(ray: tuple[int, ...]) -> tuple[int, ...]:
+        if not quotient:
+            return ray
+        return tuple(
+            sum(row[index] * ray[index] for index in range(lattice_rank))
+            for row in projection
+        )
+
+    sigma_quotient_rays = tuple(quotient_ray(ray) for ray in sigma_rays)
     facet_characters: dict[int, tuple[int, ...]] = {}
     for facet in recognized.cones:
         if (
             facet.cone_id == cone_id
-            or facet.dimension != lattice_rank - 1
-            or not set(facet.ray_indices).issubset(
-                recognized.cones[cone_id].ray_indices
-            )
+            or facet.dimension != sigma.dimension - 1
+            or not set(facet.ray_indices).issubset(sigma.ray_indices)
         ):
             continue
-        facet_rays = tuple(recognized.rays[index] for index in facet.ray_indices)
-        character = facet_localizing_character(sigma_rays, facet_rays, lattice_rank)
+        facet_rays = tuple(
+            quotient_ray(recognized.rays[index]) for index in facet.ray_indices
+        )
+        character = facet_localizing_character(
+            sigma_quotient_rays, facet_rays, quotient_dimension
+        )
         if character is None:
             raise ArithmeticError(
-                "a declared facet of a full-dimensional cone has no primitive "
-                "supporting character"
+                "a declared facet of a cone has no primitive supporting character"
             )
-        facet_characters[facet.cone_id] = character
+        facet_characters[facet.cone_id] = (
+            _lift_quotient_character(character, projection) if quotient else character
+        )
     localizations: list[ToricChartLocalization] = []
     for tau_id, sigma_id in recognized.face_relations:
         if sigma_id != cone_id or tau_id == cone_id:
@@ -266,15 +288,16 @@ def compute_affine_chart(
 ) -> ToricAffineChartResult:
     """Return the affine chart ``Spec k[sigma^vee cap M]`` of one fan cone.
 
-    The cone is resolved exactly, its dual cone is computed by the shipped
-    double description, the complete Hilbert basis is reduced from the
-    fundamental-parallelepiped candidates, and the relation lattice is replayed
-    against the generators. Only full-dimensional cones with a bounded derived
-    presentation are admitted.
+    The cone is resolved exactly.  A full-dimensional cone uses the shipped
+    double description; a lower-dimensional cone is decomposed into its free
+    torus lineality factor and the pointed quotient semigroup, and its facet
+    localizations are computed on that quotient.  The complete Hilbert basis
+    is reduced from the fundamental-parallelepiped candidates and the relation
+    lattice is replayed against the generators.
     """
 
     recognized = _recognize_or_reject(fan)
-    recognized_cone = _locate_full_dimensional_cone(fan, recognized, cone)
+    recognized_cone = _locate_cone(recognized, cone)
     deadline = execution_deadline(MAX_TORIC_CHART_SECONDS)
     data = compute_affine_chart_data(
         tuple(recognized.rays[index] for index in recognized_cone.ray_indices),
@@ -292,6 +315,7 @@ def compute_affine_chart(
         dual_cone_rays=data.dual_cone_rays,
         hilbert_basis=data.hilbert_basis,
         relations=data.relations,
+        torus_basis=data.torus_basis,
         is_smooth=recognized_cone.is_smooth,
         localizations=localizations,
     )

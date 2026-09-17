@@ -22,6 +22,42 @@ from jacobian.math.logic.relational_structures.values import (
     FiniteRelationalStructure,
 )
 
+# Exhaustive homomorphism search work: every candidate carrier map is
+# replayed over every source tuple. The candidate cap bounds enumeration
+# overhead (map construction is linear in the source carrier); the joint
+# work cap bounds tuple replays, the dominant cost.
+MAX_SEARCH_CANDIDATES = 65_536
+MAX_SEARCH_TUPLE_REPLAYS = 1_048_576
+
+
+def candidate_space(source_size: int, target_size: int) -> int:
+    """Return ``|B|^|A|``, the complete carrier-map count.
+
+    The empty source admits exactly the empty map; a nonempty source
+    into the empty carrier admits no map at all.
+    """
+
+    if source_size == 0:
+        return 1
+    if target_size == 0:
+        return 0
+    return int(pow(target_size, source_size))
+
+
+def core_search_work(source_size: int, transport_tuples: int) -> int:
+    """Return the worst-case core-iteration replay work.
+
+    Retraction strictly shrinks the carrier, so at most one exhaustive
+    endomorphism scan runs per size from ``source_size`` down to 1; the
+    transport tables only shrink along restrictions, hence the source
+    count bounds every level.
+    """
+
+    return int(
+        sum(pow(size, size) for size in range(1, source_size + 1))
+        * max(transport_tuples, 1)
+    )
+
 
 def admit_homomorphism_check(
     source: FiniteRelationalStructure,
@@ -87,4 +123,86 @@ def admit_homomorphism_check(
     return transport_tuples
 
 
-__all__ = ["MAX_RELATIONAL_TRANSPORT_TUPLES", "admit_homomorphism_check"]
+def admit_homomorphism_search(
+    source: FiniteRelationalStructure,
+    target: FiniteRelationalStructure,
+) -> tuple[int, int]:
+    """Preflight one exhaustive homomorphism search; return space and tuples.
+
+    Returns the ``(|B|^|A| carrier-map count, source tuple count)`` pair.
+    Raises ``OperationDomainValidationError`` when the two structures do
+    not share one signature, and ``OperationResourceAdmissionError`` when
+    the candidate space or the joint replay work exceeds the published
+    search envelope.
+    """
+
+    if source.signature != target.signature:
+        raise OperationDomainValidationError(
+            location=("target",),
+            code="relational.homomorphism.signature_mismatch",
+            message=(
+                "source and target structures must be declared over one "
+                "shared signature; signature transport is a separate "
+                "explicit map, not an implicit coercion"
+            ),
+        )
+    space = candidate_space(source.carrier_size, target.carrier_size)
+    if space > MAX_SEARCH_CANDIDATES:
+        raise OperationResourceAdmissionError(
+            location=("source",),
+            code="relational.homomorphism.search_space",
+            message=(
+                f"the exhaustive search spans {space} carrier maps from a "
+                f"{source.carrier_size}-element source into a "
+                f"{target.carrier_size}-element target, exceeding the "
+                f"{MAX_SEARCH_CANDIDATES}-candidate envelope"
+            ),
+        )
+    transport_tuples = sum(len(table) for table in source.relation_tables)
+    work = space * max(transport_tuples, 1)
+    if work > MAX_SEARCH_TUPLE_REPLAYS:
+        raise OperationResourceAdmissionError(
+            location=("source",),
+            code="relational.homomorphism.search_work",
+            message=(
+                f"the exhaustive search replays {transport_tuples} source "
+                f"relation tuples across {space} carrier maps, exceeding the "
+                f"{MAX_SEARCH_TUPLE_REPLAYS}-replay envelope"
+            ),
+        )
+    return space, transport_tuples
+
+
+def admit_core_computation(source: FiniteRelationalStructure) -> int:
+    """Preflight one core iteration; return its worst-case replay work.
+
+    Raises ``OperationResourceAdmissionError`` when the summed
+    level-by-level endomorphism replay work exceeds the published
+    envelope shared with homomorphism search.
+    """
+
+    transport_tuples = sum(len(table) for table in source.relation_tables)
+    work = core_search_work(source.carrier_size, transport_tuples)
+    if work > MAX_SEARCH_TUPLE_REPLAYS:
+        raise OperationResourceAdmissionError(
+            location=("source",),
+            code="relational.core.search_work",
+            message=(
+                f"the core iteration replays {transport_tuples} source "
+                f"relation tuples across shrinking endomorphism spaces, "
+                f"exceeding the {MAX_SEARCH_TUPLE_REPLAYS}-replay envelope"
+            ),
+        )
+    return work
+
+
+__all__ = [
+    "MAX_RELATIONAL_TRANSPORT_TUPLES",
+    "MAX_SEARCH_CANDIDATES",
+    "MAX_SEARCH_TUPLE_REPLAYS",
+    "admit_core_computation",
+    "admit_homomorphism_check",
+    "admit_homomorphism_search",
+    "candidate_space",
+    "core_search_work",
+]

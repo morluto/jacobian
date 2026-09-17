@@ -1,12 +1,20 @@
-"""Exact finite relational structures and homomorphism checking."""
+"""Exact finite relational structures with homomorphism check and search."""
 
 from jacobian.math.logic.relational_structures._models import (
     HomomorphismCheckResult,
+    HomomorphismSearchResult,
+    HomomorphismSearchStatus,
     HomomorphismStatus,
     HomomorphismViolationWitness,
     SymbolTransportProfile,
 )
-from jacobian.math.logic.relational_structures.operations import check_homomorphism
+from jacobian.math.logic.relational_structures.operations import (
+    check_homomorphism,
+    compute_core,
+    count_homomorphisms,
+    search_embedding,
+    search_homomorphism,
+)
 from jacobian.math.logic.relational_structures.values import (
     FiniteRelationalStructure,
     FiniteRelationSymbol,
@@ -19,8 +27,16 @@ __all__ = [
     "FiniteRelationSymbol",
     "FiniteRelationalStructure",
     "HomomorphismCheckResult",
+    "HomomorphismCountRequest",
+    "HomomorphismCountResult",
+    "HomomorphismSearchResult",
+    "HomomorphismSearchStatus",
     "HomomorphismStatus",
     "HomomorphismViolationWitness",
     "SymbolTransportProfile",
     "check_homomorphism",
+    "compute_core",
+    "count_homomorphisms",
+    "search_embedding",
+    "search_homomorphism",
 ]

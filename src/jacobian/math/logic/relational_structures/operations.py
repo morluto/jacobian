@@ -3,12 +3,22 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from itertools import product
 
+from jacobian._execution import request_checkpoint
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.logic.relational_structures._admission import (
+    admit_core_computation,
     admit_homomorphism_check,
+    admit_homomorphism_search,
 )
 from jacobian.math.logic.relational_structures._models import (
+    EmbeddingSearchResult,
     HomomorphismCheckResult,
+    HomomorphismCoreResult,
+    HomomorphismCountResult,
+    HomomorphismSearchResult,
+    HomomorphismSearchStatus,
     HomomorphismStatus,
     HomomorphismViolationWitness,
     SymbolTransportProfile,
@@ -80,4 +90,251 @@ def check_homomorphism(
     )
 
 
-__all__ = ["check_homomorphism"]
+def search_homomorphism(
+    source: FiniteRelationalStructure,
+    target: FiniteRelationalStructure,
+) -> HomomorphismSearchResult:
+    """Search two structures for a homomorphism by exhaustive replay.
+
+    Candidate carrier maps run in lexicographic order (source label 0
+    varying slowest) through the complete ``|B|^|A|`` space admitted up
+    front. Every candidate is decided by the reused homomorphism replay,
+    so a FOUND map carries its complete check and an EXHAUSTED scan is
+    a proved negative: every map was examined and none transports.
+    """
+
+    if not isinstance(source, FiniteRelationalStructure) or not isinstance(
+        target, FiniteRelationalStructure
+    ):
+        raise OperationDomainValidationError(
+            location=("source",),
+            code="relational.homomorphism.structure_type",
+            message="homomorphism search consumes finite relational structures",
+        )
+    total_candidates, _transport_tuples = admit_homomorphism_search(source, target)
+    found = _first_homomorphism(
+        source, target, total_candidates, require_injective=False
+    )
+    if found is not None:
+        check, examined = found
+        return HomomorphismSearchResult._from_kernel(
+            status=HomomorphismSearchStatus.FOUND,
+            source=source,
+            target=target,
+            check=check,
+            candidates_examined=examined,
+            total_candidates=total_candidates,
+        )
+    return HomomorphismSearchResult._from_kernel(
+        status=HomomorphismSearchStatus.EXHAUSTED,
+        source=source,
+        target=target,
+        check=None,
+        candidates_examined=total_candidates,
+        total_candidates=total_candidates,
+    )
+
+
+def _first_homomorphism(
+    source: FiniteRelationalStructure,
+    target: FiniteRelationalStructure,
+    total_candidates: int,
+    *,
+    require_injective: bool,
+) -> tuple[HomomorphismCheckResult, int] | None:
+    """Scan carrier maps in lexicographic order for the first replay that
+    transports, optionally requiring distinct images.
+
+    Returns the winning check with its one-based examination count, or
+    ``None`` after a complete scan. Shared by homomorphism and embedding
+    search so both see identical order and receipts.
+    """
+
+    examined = 0
+    for candidate in product(range(target.carrier_size), repeat=source.carrier_size):
+        examined += 1
+        if examined % 4_096 == 0:
+            request_checkpoint("during homomorphism search enumeration")
+        if require_injective and len(set(candidate)) != source.carrier_size:
+            continue
+        check = check_homomorphism(source, target, candidate)
+        if check.status is HomomorphismStatus.HOMOMORPHISM:
+            return check, examined
+    assert examined == total_candidates
+    return None
+
+
+def search_embedding(
+    source: FiniteRelationalStructure,
+    target: FiniteRelationalStructure,
+) -> EmbeddingSearchResult:
+    """Search two structures for an injective homomorphism.
+
+    The same admitted space the homomorphism search scans is replayed
+    in the same order, but only maps with distinct images are decided:
+    FOUND retains the first embedding with its complete check and
+    EXHAUSTED proves no injective map transports.
+    """
+
+    if not isinstance(source, FiniteRelationalStructure) or not isinstance(
+        target, FiniteRelationalStructure
+    ):
+        raise OperationDomainValidationError(
+            location=("source",),
+            code="relational.homomorphism.structure_type",
+            message="embedding search consumes finite relational structures",
+        )
+    total_candidates, _transport_tuples = admit_homomorphism_search(source, target)
+    found = _first_homomorphism(
+        source, target, total_candidates, require_injective=True
+    )
+    if found is not None:
+        check, examined = found
+        return EmbeddingSearchResult._from_kernel(
+            status=HomomorphismSearchStatus.FOUND,
+            source=source,
+            target=target,
+            check=check,
+            candidates_examined=examined,
+            total_candidates=total_candidates,
+        )
+    return EmbeddingSearchResult._from_kernel(
+        status=HomomorphismSearchStatus.EXHAUSTED,
+        source=source,
+        target=target,
+        check=None,
+        candidates_examined=total_candidates,
+        total_candidates=total_candidates,
+    )
+
+
+def count_homomorphisms(
+    source: FiniteRelationalStructure,
+    target: FiniteRelationalStructure,
+) -> HomomorphismCountResult:
+    """Count every homomorphism by exhaustive replay without early stopping.
+
+    The same admitted space the search scans is replayed completely:
+    every carrier map is decided by the reused homomorphism replay and
+    transporting maps are counted. The count is exact and complete.
+    """
+
+    if not isinstance(source, FiniteRelationalStructure) or not isinstance(
+        target, FiniteRelationalStructure
+    ):
+        raise OperationDomainValidationError(
+            location=("source",),
+            code="relational.homomorphism.structure_type",
+            message="homomorphism counting consumes finite relational structures",
+        )
+    total_candidates, _transport_tuples = admit_homomorphism_search(source, target)
+    count = 0
+    examined = 0
+    for candidate in product(range(target.carrier_size), repeat=source.carrier_size):
+        examined += 1
+        if examined % 4_096 == 0:
+            request_checkpoint("during homomorphism count enumeration")
+        if check_homomorphism(source, target, candidate).status is (
+            HomomorphismStatus.HOMOMORPHISM
+        ):
+            count += 1
+    assert examined == total_candidates
+    return HomomorphismCountResult._from_kernel(
+        source=source,
+        target=target,
+        count=count,
+        total_candidates=total_candidates,
+    )
+
+
+def _induced_substructure(
+    structure: FiniteRelationalStructure, image: tuple[int, ...]
+) -> FiniteRelationalStructure:
+    """Restrict to the sorted image labels with canonical relabeling.
+
+    Core label ``c`` denotes image label ``image[c]``; a table tuple
+    survives exactly when every coordinate lies in the image, relabeled
+    by rank. Tables stay canonical: filtering and relabeling preserve
+    strictly increasing unique rows.
+    """
+
+    rank = {label: position for position, label in enumerate(image)}
+    tables = tuple(
+        tuple(
+            tuple(rank[coordinate] for coordinate in row)
+            for row in table
+            if all(coordinate in rank for coordinate in row)
+        )
+        for table in structure.relation_tables
+    )
+    return FiniteRelationalStructure(
+        carrier_size=len(image),
+        signature=structure.signature,
+        relation_tables=tables,
+    )
+
+
+def compute_core(
+    source: FiniteRelationalStructure,
+) -> HomomorphismCoreResult:
+    """Compute the minimal retract with its witnessing maps.
+
+    Each level scans endomorphisms in lexicographic order; the first
+    map with a smaller image restricts the structure to its sorted
+    image with canonical relabeling, and the scan repeats. The final
+    level examines every endomorphism and finds no smaller image, so
+    the retained structure is minimal. The composed retraction is
+    replayed once through the reused check before construction.
+    """
+
+    if not isinstance(source, FiniteRelationalStructure):
+        raise OperationDomainValidationError(
+            location=("source",),
+            code="relational.homomorphism.structure_type",
+            message="core computation consumes a finite relational structure",
+        )
+    admit_core_computation(source)
+    current = source
+    inclusion = tuple(range(source.carrier_size))
+    retraction = tuple(range(source.carrier_size))
+    scanned = 0
+    while True:
+        size = current.carrier_size
+        step: tuple[int, ...] | None = None
+        for candidate in product(range(size), repeat=size):
+            scanned += 1
+            if scanned % 4_096 == 0:
+                request_checkpoint("during core endomorphism enumeration")
+            check = check_homomorphism(current, current, candidate)
+            if (
+                check.status is HomomorphismStatus.HOMOMORPHISM
+                and len(set(candidate)) < size
+            ):
+                step = tuple(candidate)
+                break
+        if step is None:
+            break
+        image = tuple(sorted(set(step)))
+        relabel = {label: position for position, label in enumerate(image)}
+        retraction = tuple(relabel[step[label]] for label in retraction)
+        inclusion = tuple(inclusion[label] for label in image)
+        current = _induced_substructure(current, image)
+    composed = tuple(inclusion[label] for label in retraction)
+    final = check_homomorphism(source, source, composed)
+    assert final.status is HomomorphismStatus.HOMOMORPHISM
+    assert tuple(sorted(set(composed))) == inclusion
+    return HomomorphismCoreResult._from_kernel(
+        source=source,
+        core=current,
+        inclusion=inclusion,
+        retraction=retraction,
+    )
+
+
+__all__ = [
+    "check_homomorphism",
+    "compute_core",
+    "count_homomorphisms",
+    "search_embedding",
+    "search_homomorphism",
+]

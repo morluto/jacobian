@@ -1,11 +1,9 @@
 """Canonical values and native operations for square-free affine forms."""
 
 from jacobian.math.number_theory.squarefree_affine_forms._admissibility import (
-    LocalAdmissibilityRequest,
     LocalAdmissibilityResult,
 )
 from jacobian.math.number_theory.squarefree_affine_forms._interval_count import (
-    IntervalCountRequest,
     IntervalCountResult,
     IntervalObstruction,
 )
@@ -24,10 +22,8 @@ from jacobian.math.number_theory.squarefree_affine_forms.values import (
 )
 
 __all__ = [
-    "IntervalCountRequest",
     "IntervalCountResult",
     "IntervalObstruction",
-    "LocalAdmissibilityRequest",
     "LocalAdmissibilityResult",
     "SquarefreeAffineFamily",
     "SquarefreeAffineForm",

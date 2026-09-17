@@ -143,6 +143,7 @@ class SmtLogic(StrEnum):
     QF_LIA = "QF_LIA"
     QF_LRA = "QF_LRA"
     QF_NRA = "QF_NRA"
+    QF_BV = "QF_BV"
 
 
 # Bounded structurally enforceable quantifier-free nonlinear real-arithmetic
@@ -166,6 +167,18 @@ _MAX_NRA_POLYNOMIAL_WORK = 1_000_000
 _MAX_NRA_MODEL_DEGREE = MAX_REAL_ALGEBRAIC_DEGREE
 _MAX_NRA_MODEL_COEFFICIENT_DIGITS = MAX_REAL_ALGEBRAIC_COEFFICIENT_DIGITS
 _MAX_NRA_EXACT_MODEL_BYTES = 64_000
+
+
+# Bounded fixed-width bit-vector fragment.  Widths are capped per sort and in
+# aggregate over distinct AST nodes so bit-blasting stays bounded; the
+# operator whitelist covers arithmetic, shifts, bitwise logic, concat,
+# extract, and signed/unsigned comparisons.  Uninterpreted functions,
+# conversions (bv2int/int2bv), reduction predicates, and overflow predicates
+# are rejected: only uninterpreted constants (including bit-vector
+# declarations) are admitted.  Models publish through the display
+# projection, which is exact for bit-vector numerals.
+_MAX_BV_WIDTH = 1024
+_MAX_BV_NODE_BITS = 65_536
 
 
 class _ArithmeticBound(NamedTuple):
@@ -502,13 +515,21 @@ class SmtSolveRequest(StrictModel):
             "linear integer and real arithmetic; QF_NRA admits quantifier-free "
             "Boolean combinations of rational-polynomial equalities, "
             "inequalities, and strict inequalities over declared real variables "
-            "with no division, integer variables, or transcendental operators. "
+            "with no division, integer variables, or transcendental operators; "
+            "QF_BV admits fixed-width bit-vector arithmetic, shifts, bitwise "
+            "logic, concat, extract, and signed/unsigned comparisons over "
+            "declared bit-vector constants, with uninterpreted functions, "
+            "conversions, and quantifiers rejected. "
             "The nonlinear fragment is additionally bounded by "
             f"{_MAX_NRA_VARIABLES} real variables, {_MAX_NRA_ASSERTIONS} "
             f"assertions, total degree {_MAX_NRA_TOTAL_DEGREE}, "
             f"{_MAX_NRA_MONOMIALS} monomials per polynomial, "
             f"{_MAX_NRA_COEFFICIENT_DIGITS} coefficient digits, and "
-            f"{_MAX_NRA_POLYNOMIAL_WORK:,} coefficient operations."
+            f"{_MAX_NRA_POLYNOMIAL_WORK:,} coefficient operations. "
+            "The bit-vector fragment is additionally bounded by "
+            f"{_MAX_BV_WIDTH}-bit sorts and {_MAX_BV_NODE_BITS:,} aggregate "
+            "term width; SAT models publish through the display projection, "
+            "which is exact for bit-vector numerals."
         )
     )
     smtlib: str = Field(
@@ -1093,6 +1114,113 @@ def _require_qf_nra_fragment(assertions: tuple[Any, ...], z3: Any) -> None:
         _nra_require_boolean(assertion, state)
 
 
+def _bv_resource_error(code: str, message: str) -> OperationResourceAdmissionError:
+    return OperationResourceAdmissionError(
+        location=("smtlib",), code=code, message=message
+    )
+
+
+def _require_qf_bv_fragment(assertions: tuple[Any, ...], z3: Any) -> None:
+    """Reject parsed assertions outside the bounded bit-vector fragment.
+
+    Sorts are restricted to Booleans and fixed-width bit-vectors; operator
+    applications are restricted to the whitelisted Boolean connectives,
+    comparisons, and bit-vector arithmetic, shift, bitwise, concat, extract,
+    and comparison operators; uninterpreted symbols are admitted only as
+    constants.  Widths are capped per sort and in aggregate so bit-blasting
+    stays bounded.  Raw (unsimplified) terms are probed so internal solver
+    normal forms never widen the admitted fragment.
+    """
+
+    allowed_ops = frozenset(
+        {
+            z3.Z3_OP_TRUE,
+            z3.Z3_OP_FALSE,
+            z3.Z3_OP_AND,
+            z3.Z3_OP_OR,
+            z3.Z3_OP_NOT,
+            z3.Z3_OP_XOR,
+            z3.Z3_OP_IMPLIES,
+            z3.Z3_OP_EQ,
+            z3.Z3_OP_DISTINCT,
+            z3.Z3_OP_ITE,
+            z3.Z3_OP_BNEG,
+            z3.Z3_OP_BADD,
+            z3.Z3_OP_BSUB,
+            z3.Z3_OP_BMUL,
+            z3.Z3_OP_BSDIV,
+            z3.Z3_OP_BUDIV,
+            z3.Z3_OP_BSREM,
+            z3.Z3_OP_BUREM,
+            z3.Z3_OP_BSMOD,
+            z3.Z3_OP_BSHL,
+            z3.Z3_OP_BLSHR,
+            z3.Z3_OP_BASHR,
+            z3.Z3_OP_BAND,
+            z3.Z3_OP_BOR,
+            z3.Z3_OP_BNOT,
+            z3.Z3_OP_BXOR,
+            z3.Z3_OP_BNAND,
+            z3.Z3_OP_BNOR,
+            z3.Z3_OP_BXNOR,
+            z3.Z3_OP_CONCAT,
+            z3.Z3_OP_EXTRACT,
+            z3.Z3_OP_ULT,
+            z3.Z3_OP_ULEQ,
+            z3.Z3_OP_UGT,
+            z3.Z3_OP_UGEQ,
+            z3.Z3_OP_SLT,
+            z3.Z3_OP_SLEQ,
+            z3.Z3_OP_SGT,
+            z3.Z3_OP_SGEQ,
+            z3.Z3_OP_BNUM,
+            z3.Z3_OP_BIT1,
+            z3.Z3_OP_BIT0,
+        }
+    )
+    raw_goal = z3.Goal(ctx=assertions[0].ctx)
+    raw_goal.add(*assertions)
+    if float(z3.Probe("has-quantifiers", ctx=assertions[0].ctx)(raw_goal)) != 0.0:
+        raise ValueError("SMT terms must belong to the declared QF_BV fragment")
+    total_bits = 0
+    stack = list(assertions)
+    seen: set[int] = set()
+    while stack:
+        expression = stack.pop()
+        expression_id = expression.get_id()
+        if expression_id in seen:
+            continue
+        seen.add(expression_id)
+        sort_kind = expression.sort().kind()
+        if sort_kind == z3.Z3_BV_SORT:
+            width = expression.sort().size()
+            if width < 1:
+                raise ValueError("SMT terms must belong to the declared QF_BV fragment")
+            if width > _MAX_BV_WIDTH:
+                raise _bv_resource_error(
+                    "logic.qf_bv_width_bound",
+                    f"bit-vector width {width} exceeds {_MAX_BV_WIDTH}",
+                )
+            total_bits += width
+            if total_bits > _MAX_BV_NODE_BITS:
+                raise _bv_resource_error(
+                    "logic.qf_bv_bit_budget",
+                    "bit-vector terms exceed the admitted aggregate width",
+                )
+        elif sort_kind != z3.Z3_BOOL_SORT:
+            raise ValueError("SMT terms must belong to the declared QF_BV fragment")
+        if z3.is_app(expression):
+            declaration = expression.decl()
+            if declaration.kind() == z3.Z3_OP_UNINTERPRETED:
+                if declaration.arity() != 0:
+                    raise ValueError(
+                        "SMT terms must belong to the declared QF_BV fragment"
+                    )
+            elif declaration.kind() not in allowed_ops:
+                raise ValueError("SMT terms must belong to the declared QF_BV fragment")
+        stack.extend(expression.children())
+
+
 def _probe_declared_logic(
     assertions: Any, logic: str, z3: Any, *, simplify_arithmetic: bool = True
 ) -> None:
@@ -1103,6 +1231,9 @@ def _probe_declared_logic(
         return
     if logic == SmtLogic.QF_NRA.value:
         _require_qf_nra_fragment(assertion_tuple, z3)
+        return
+    if logic == SmtLogic.QF_BV.value:
+        _require_qf_bv_fragment(assertion_tuple, z3)
         return
     _require_supported_fragment_nodes(assertion_tuple, logic, z3)
     if logic in (SmtLogic.QF_LIA.value, SmtLogic.QF_LRA.value):
@@ -1340,6 +1471,7 @@ def _solve_smt_kernel(*, logic: str, smtlib: str, timeout_ms: int) -> dict[str, 
         raise OperationBackendError(BackendFailureReason.INITIALIZATION) from exc
 
     is_nra = logic == SmtLogic.QF_NRA.value
+    is_bv = logic == SmtLogic.QF_BV.value
     try:
         assertions = z3.parse_smt2_string(smtlib)
         try:
@@ -1377,7 +1509,7 @@ def _solve_smt_kernel(*, logic: str, smtlib: str, timeout_ms: int) -> dict[str, 
         if exhausted is not None:
             _raise_exhaustion(exhausted, cause=exc)
         raise OperationBackendError(BackendFailureReason.ABNORMAL_EXIT) from exc
-    if is_nra:
+    if is_nra or is_bv:
         return _nra_unknown_payload(solver.reason_unknown())
     exhausted, detail = _project_unknown(solver.reason_unknown())
     return {
@@ -1472,7 +1604,10 @@ def _run_smt_worker(request: SmtSolveRequest) -> SmtSolveResult:
         result = SmtSolveResult.model_validate(
             {"source": request.model_dump(mode="json"), **response}
         )
-        if result.exhausted is not None and result.source.logic != SmtLogic.QF_NRA:
+        if result.exhausted is not None and result.source.logic not in (
+            SmtLogic.QF_NRA,
+            SmtLogic.QF_BV,
+        ):
             _raise_exhaustion(result.exhausted)
         _require_execution_deadline(deadline, "after SMT result projection")
         return result

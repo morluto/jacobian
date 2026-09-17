@@ -12,12 +12,20 @@ from jacobian.math.geometry.polygon_kernel._kernel import (
     oriented_half_planes,
     polygon_signed_area,
 )
+from jacobian.math.geometry.polygon_kernel._measure import (
+    measure_certificate as _measure_certificate,
+)
+from jacobian.math.geometry.polygon_kernel._measure import (
+    verify_measure_certificate as _verify_measure_certificate,
+)
 from jacobian.math.geometry.polygon_kernel._models import (
     MAX_HALF_PLANE_COEFFICIENT_DIGITS,
     MAX_INTERSECTION_COMPONENT_DIGITS,
     MAX_KERNEL_COORDINATE_DIGITS,
     MAX_KERNEL_FEASIBILITY_WORK,
     KernelPolygon,
+    MeasureCertificateResult,
+    MeasureComparison,
     OrientedEdgeHalfPlane,
     PolygonKernelResult,
 )
@@ -96,4 +104,17 @@ def visibility_kernel(polygon: KernelPolygon) -> PolygonKernelResult:
     return PolygonKernelResult._from_kernel(polygon, data=data)
 
 
-__all__ = ["visibility_kernel"]
+def measure_certificate(
+    kernel: PolygonKernelResult,
+    comparisons: tuple[MeasureComparison, ...] = (),
+) -> MeasureCertificateResult:
+    """Certify exact lengths, perimeters, and comparisons over a kernel result."""
+    return _measure_certificate(kernel, comparisons)
+
+
+def verify_measure_certificate(claim: MeasureCertificateResult) -> bool:
+    """Check a claimed measure certificate by recomputing it from its kernel."""
+    return _verify_measure_certificate(claim)
+
+
+__all__ = ["measure_certificate", "verify_measure_certificate", "visibility_kernel"]

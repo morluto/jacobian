@@ -1,16 +1,16 @@
 """Typed contracts for exact unit-circle supremum norms of polynomials.
 
-The main result is intentionally a *certified rational enclosure* together
-with the complete critical-point ledger, not a ``RealAlgebraicValue``.  The
-maximum of ``|P(z)|^2`` on ``|z| = 1`` is the value of the rational function
-``Q(t) / (1 + t**2)**degree`` at a real root of an exact derivative
-numerator.  Its minimal polynomial can have degree exponential in the input
-degree, far beyond the shared degree-16 real-algebraic carrier and its
-degree-8 distinct-polynomial comparison envelope, so this owner does not
-pretend to normalize it to a minimal polynomial.  Instead the exact value is
-bound to its defining data (the retained numerator, denominator exponent, and
-the isolating root index) and every reported quantity is a rational interval
-that provably brackets it.
+The main result is a certified rational enclosure together with the complete
+critical-point ledger.  The maximum of ``|P(z)|^2`` on ``|z| = 1`` is the
+value of the rational function ``Q(t) / (1 + t**2)**degree`` at a real root of
+an exact derivative numerator.  Its minimal polynomial divides the critical
+resultant, whose ``y``-degree is the derivative-numerator degree; the two
+leading ``t**(2m+1)`` terms of the derivative numerator cancel exactly, so
+that degree is at most twice the input degree (hence at most 16 here) and the
+minimal factor always fits the shared degree-16 real-algebraic carrier.  The
+exact value is therefore always bound as an indexed root except in the
+theoretical coefficient-height overflow case, where the field is ``None`` and
+the enclosure remains the complete certificate.
 """
 
 from __future__ import annotations
@@ -24,6 +24,7 @@ from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
 from jacobian.math.number_theory.algebraic_numbers.real import (
     RationalIsolatingInterval,
+    RealAlgebraicValue,
 )
 from jacobian.math.number_theory.number_fields import GaussianRational
 
@@ -127,6 +128,12 @@ class UnitCircleSupNormSquaredResult(StrictModel):
     ``z = (1 + i t) / (1 - i t)``) can be replayed, the exact derivative
     numerator whose real roots are the finite critical points, the complete
     critical ledger, and the separate ``z = -1`` endpoint candidate.
+    ``sup_norm_squared_exact`` carries the maximum itself as an indexed root
+    of its irreducible resultant factor.  The factor degree is at most twice
+    the input degree (leading-term cancellation in the derivative numerator),
+    hence always inside the shared carrier; the field is ``None`` only in the
+    theoretical coefficient-height overflow case, in which the enclosure is
+    the complete certificate.
     """
 
     polynomial: GaussianRationalPolynomial
@@ -150,6 +157,7 @@ class UnitCircleSupNormSquaredResult(StrictModel):
         "CRITICAL_AND_ENDPOINT",
     ]
     sup_norm_squared_enclosure: RationalIsolatingInterval
+    sup_norm_squared_exact: RealAlgebraicValue | None = None
     sup_norm_enclosure: RationalIsolatingInterval
     representation: Literal["CERTIFIED_RATIONAL_ENCLOSURE_WITH_CRITICAL_LEDGER"] = (
         "CERTIFIED_RATIONAL_ENCLOSURE_WITH_CRITICAL_LEDGER"
@@ -169,6 +177,7 @@ class UnitCircleSupNormSquaredResult(StrictModel):
         endpoint_minus_one_is_maximizer: bool,
         maximizing_status: str,
         sup_norm_squared_enclosure: RationalIsolatingInterval,
+        sup_norm_squared_exact: RealAlgebraicValue | None,
         sup_norm_enclosure: RationalIsolatingInterval,
     ) -> Self:
         """Construct after the admitted exact kernel established every field."""
@@ -184,6 +193,7 @@ class UnitCircleSupNormSquaredResult(StrictModel):
             endpoint_minus_one_is_maximizer=endpoint_minus_one_is_maximizer,
             maximizing_status=maximizing_status,
             sup_norm_squared_enclosure=sup_norm_squared_enclosure,
+            sup_norm_squared_exact=sup_norm_squared_exact,
             sup_norm_enclosure=sup_norm_enclosure,
         )
 

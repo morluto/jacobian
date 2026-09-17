@@ -20,11 +20,14 @@ from jacobian.math.topology.combinatorial_maps._models import (
     OrientationReverseResult,
     RotationSystemFindRequest,
     RotationSystemFindResult,
+    SignedEmbeddingCheckRequest,
+    SignedEmbeddingCheckResult,
     VertexFaceIncidenceRequest,
     VertexFaceIncidenceResult,
 )
 from jacobian.math.topology.combinatorial_maps.operations import (
     check_orientable_embedding,
+    check_signed_embedding,
     connected_components,
     dual_map,
     euler_characteristic,
@@ -85,6 +88,14 @@ def compute_rotation_system_find(
 ) -> RotationSystemFindResult:
     return find_rotation_system(
         request.graph, request.max_genus, request.max_candidates
+    )
+
+
+def compute_signed_embedding_check(
+    request: SignedEmbeddingCheckRequest,
+) -> SignedEmbeddingCheckResult:
+    return check_signed_embedding(
+        request.graph, request.rotations, request.signs, request.twisted_edges
     )
 
 
@@ -289,6 +300,80 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                         ],
                     },
                     "rotations": [[0, 1, 2], [0, 4, 3], [1, 3, 5], [2, 5, 4]],
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="graph.embedding.nonorientable.check",
+        title="Check a signed cellular graph embedding for orientability",
+        description=(
+            "Check one supplied signed rotation system of a connected bounded "
+            "simple graph as a cellular embedding in a closed surface. Each "
+            "edge carries a sign (1 untwisted, 0 twisted). Faces are projected "
+            "from the orientable double cover through the unsigned face "
+            "ledger; orientability is decided by the exact balance test "
+            "(every cycle even), never by face parity. An ORIENTABLE_EMBEDDING "
+            "carries chi = V - E + F and genus g = (2 - chi)/2; a "
+            "NONORIENTABLE_EMBEDDING carries genus h = 2 - chi and a concrete "
+            "odd-twist orientation-reversing witness walk; an "
+            "INVALID_EMBEDDING carries the first rotation or sign obstruction. "
+            "This is a checker for a supplied signed rotation system, not a "
+            "genus minimizer."
+        ),
+        request_type=SignedEmbeddingCheckRequest,
+        result_type=SignedEmbeddingCheckResult,
+        run=compute_signed_embedding_check,
+        tags=("graph", "embedding", "genus", "nonorientable", "exact"),
+        discovery_terms=(
+            "signed rotation system",
+            "nonorientable embedding",
+            "graph genus",
+            "orientable double cover",
+        ),
+        examples=(
+            OperationExample(
+                name="tetrahedron_sphere_untwisted",
+                description=(
+                    "A planar rotation system of K4 with every edge untwisted; "
+                    "rotations list incident edge indices at each vertex in "
+                    "edge-list order."
+                ),
+                input={
+                    "graph": {
+                        "vertices": ["a", "b", "c", "d"],
+                        "edges": [
+                            ["a", "b"],
+                            ["a", "c"],
+                            ["a", "d"],
+                            ["b", "c"],
+                            ["b", "d"],
+                            ["c", "d"],
+                        ],
+                    },
+                    "rotations": [[0, 1, 2], [0, 4, 3], [1, 3, 5], [2, 5, 4]],
+                },
+            ),
+            OperationExample(
+                name="tetrahedron_projective_plane",
+                description=(
+                    "The same rotation system with one twisted edge, embedding "
+                    "K4 in the projective plane with an odd-twist witness."
+                ),
+                input={
+                    "graph": {
+                        "vertices": ["a", "b", "c", "d"],
+                        "edges": [
+                            ["a", "b"],
+                            ["a", "c"],
+                            ["a", "d"],
+                            ["b", "c"],
+                            ["b", "d"],
+                            ["c", "d"],
+                        ],
+                    },
+                    "rotations": [[0, 1, 2], [0, 4, 3], [1, 3, 5], [2, 5, 4]],
+                    "twisted_edges": [0],
                 },
             ),
         ),

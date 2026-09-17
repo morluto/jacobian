@@ -38,6 +38,14 @@ from jacobian.math.finite_fields._models import (
     PaleyTournamentRequest,
     ProjectiveLineRequest,
 )
+from jacobian.math.finite_fields._syzygy_compute_models import (
+    FiniteFieldJacobianRequest,
+    FiniteFieldJacobianResult,
+    QuotientReduceRequest,
+    QuotientReduceResult,
+    SyzygyGeneratorsRequest,
+    SyzygyGeneratorsResult,
+)
 from jacobian.math.finite_fields._tools import TOOLS
 
 
@@ -86,6 +94,9 @@ def test_bundle_declares_atomic_inline_typed_operations() -> None:
         "finite_field.projective_zero_count.compute",
         "finite_field.algebraic_set.base_change.compute",
         "finite_field.jacobian_syzygy.check",
+        "finite_field.polynomial.jacobian.compute",
+        "finite_field.quotient.reduce.compute",
+        "finite_field.jacobian_syzygy.generators.compute",
     )
     (
         projective,
@@ -107,6 +118,9 @@ def test_bundle_declares_atomic_inline_typed_operations() -> None:
         _,
         _,
         jacobian_syzygy,
+        jacobian_compute,
+        quotient_reduce,
+        syzygy_generators,
     ) = bundle
     for operation in bundle:
         assert isinstance(operation, MathTool)
@@ -123,6 +137,12 @@ def test_bundle_declares_atomic_inline_typed_operations() -> None:
     assert jacobian_syzygy.request_type is JacobianSyzygyCheckRequest
     assert jacobian_syzygy.result_type is JacobianSyzygyCheckResult
     assert 1 <= len(jacobian_syzygy.discovery_terms) <= 8
+    assert jacobian_compute.request_type is FiniteFieldJacobianRequest
+    assert jacobian_compute.result_type is FiniteFieldJacobianResult
+    assert quotient_reduce.request_type is QuotientReduceRequest
+    assert quotient_reduce.result_type is QuotientReduceResult
+    assert syzygy_generators.request_type is SyzygyGeneratorsRequest
+    assert syzygy_generators.result_type is SyzygyGeneratorsResult
 
 
 def test_projective_enumeration_refuses_large_output_before_allocation() -> None:

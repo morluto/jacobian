@@ -7,9 +7,12 @@ from itertools import product as iproduct
 from jacobian.catalog.models import OperationDomainValidationError
 
 from ._models import (
+    MAX_COUNTERMODEL_ORDER,
+    MAX_COUNTERMODEL_TABLES,
     MAX_ENUMERATION_WORK,
     CongruenceObstruction,
     CongruenceResult,
+    CountermodelFindResult,
     EquationCounterexample,
     EquationProfileResult,
     EvaluateResult,
@@ -36,6 +39,7 @@ from .values import (
 
 __all__ = [
     "congruence_check",
+    "countermodel_find",
     "equation_profile",
     "evaluate_term",
     "generated_subalgebra",
@@ -43,6 +47,7 @@ __all__ = [
     "implication_countermodel_check",
     "quotient",
     "verify_congruence",
+    "verify_countermodel_find",
     "verify_equation_profile",
     "verify_evaluate",
     "verify_generated_subalgebra",
@@ -509,6 +514,212 @@ def verify_generated_subalgebra(claim: SubalgebraResult) -> bool:
 
     try:
         return generated_subalgebra(claim.algebra, claim.generators) == claim
+    except (OperationDomainValidationError, ValueError, TypeError):
+        return False
+
+
+def _admit_countermodel_find(
+    premises: tuple[MagmaEquation, ...],
+    target: MagmaEquation,
+    min_order: int,
+    max_order: int,
+    table_budget: int,
+) -> None:
+    """Admit one bounded countermodel search before any table is examined."""
+
+    if not isinstance(premises, tuple) or any(
+        not isinstance(premise, MagmaEquation) for premise in premises
+    ):
+        _reject(
+            location=("premises",),
+            code="premises_type",
+            message="premises must be a tuple of MagmaEquation values",
+        )
+    if len(premises) > 16:
+        _reject(
+            location=("premises",),
+            code="premise_count",
+            message="at most sixteen premises are admitted",
+        )
+    if not isinstance(target, MagmaEquation):
+        _reject(
+            location=("target",),
+            code="target_type",
+            message="target must be a MagmaEquation value",
+        )
+    for name, order in (("min_order", min_order), ("max_order", max_order)):
+        if type(order) is not int or not 1 <= order <= MAX_COUNTERMODEL_ORDER:
+            _reject(
+                location=(name,),
+                code="order_range",
+                message="carrier orders stay within the admitted search range",
+            )
+    if min_order > max_order:
+        _reject(
+            location=("min_order", "max_order"),
+            code="order_range",
+            message="min_order must not exceed max_order",
+        )
+    if type(table_budget) is not int or table_budget < 1:
+        _reject(
+            location=("table_budget",),
+            code="table_budget_positive",
+            message="the table budget must be a positive integer",
+        )
+    if table_budget > MAX_COUNTERMODEL_TABLES:
+        _reject(
+            location=("table_budget",),
+            code="table_budget_bound",
+            message="the table budget exceeds the admitted search envelope",
+        )
+    template = FiniteAlgebra(
+        carrier=("0",),
+        operations=(OperationSymbol(operation_id="diamond", arity=2),),
+        tables=((0,),),
+    )
+    equations = (*premises, target)
+    for equation_index, equation in enumerate(equations):
+        for term in (equation.left, equation.right):
+            try:
+                require_term_for_algebra(term, template)
+            except UniversalAlgebraAdmissionError as exc:
+                _reject(
+                    location=("equations", equation_index),
+                    code="term_signature",
+                    message=str(exc),
+                )
+        variable_count = max(
+            equation.left.variable_count, equation.right.variable_count
+        )
+        if variable_count > 8:
+            _reject(
+                location=("equations", equation_index),
+                code="variable_count_bound",
+                message="an equation may use at most eight variables",
+            )
+    worst_work = sum(
+        max_order ** max(equation.left.variable_count, equation.right.variable_count)
+        * (len(equation.left.nodes) + len(equation.right.nodes))
+        for equation in equations
+    )
+    if worst_work > MAX_ENUMERATION_WORK:
+        _reject(
+            location=("equations",),
+            code="countermodel_work_bound",
+            message=(
+                "complete assignment work at the largest searched order "
+                "exceeds the bound"
+            ),
+        )
+
+
+def _magma_table_algebra(order: int, cells: tuple[int, ...]) -> FiniteAlgebra:
+    """Build the canonical magma value for one enumerated table."""
+
+    return FiniteAlgebra(
+        carrier=tuple(str(element) for element in range(order)),
+        operations=(OperationSymbol(operation_id="diamond", arity=2),),
+        tables=(cells,),
+    )
+
+
+def _countermodel_table_total(min_order: int, max_order: int) -> int:
+    """Return the exact admitted table count across the declared orders.
+
+    Every order contributes ``n^(n^2)`` tables.
+    """
+
+    return sum(order ** (order * order) for order in range(min_order, max_order + 1))
+
+
+def countermodel_find(
+    premises: tuple[MagmaEquation, ...],
+    target: MagmaEquation,
+    min_order: int,
+    max_order: int,
+    table_budget: int,
+) -> CountermodelFindResult:
+    """Find a finite-magma countermodel by bounded exhaustive table search.
+
+    Carrier orders enumerate increasingly; within one order, tables enumerate
+    row-major with ascending cell values, so the all-zero table comes first.
+    Each examined table runs the exact countermodel checker:
+
+    - ``FOUND`` carries the first countermodel's order and certificate;
+      every smaller searched order was completely examined, so the witness
+      is minimal within the declared range;
+    - ``EXHAUSTED_UP_TO_BOUND`` carries the receipt that every table of
+      every declared order was examined -- a finite bounded conclusion only,
+      never a proof that the implication holds in all magmas;
+    - ``UNKNOWN`` carries the spent budget and the order under search.
+    """
+
+    _admit_countermodel_find(premises, target, min_order, max_order, table_budget)
+    total = _countermodel_table_total(min_order, max_order)
+    examined = 0
+    orders_complete: list[int] = []
+    for order in range(min_order, max_order + 1):
+        for cells in iproduct(range(order), repeat=order * order):
+            if examined >= table_budget:
+                return CountermodelFindResult._from_kernel(
+                    premises=premises,
+                    target=target,
+                    min_order=min_order,
+                    max_order=max_order,
+                    table_budget=table_budget,
+                    status="UNKNOWN",
+                    orders_complete=tuple(orders_complete),
+                    tables_examined=examined,
+                    total_tables=total,
+                    current_order=order,
+                    stop_reason="TABLE_BUDGET_EXHAUSTED",
+                )
+            certificate = implication_countermodel_check(
+                _magma_table_algebra(order, cells), premises, target
+            )
+            examined += 1
+            if certificate.is_countermodel:
+                return CountermodelFindResult._from_kernel(
+                    premises=premises,
+                    target=target,
+                    min_order=min_order,
+                    max_order=max_order,
+                    table_budget=table_budget,
+                    status="FOUND",
+                    orders_complete=tuple(orders_complete),
+                    order=order,
+                    certificate=certificate,
+                    tables_examined=examined,
+                    total_tables=total,
+                )
+        orders_complete.append(order)
+    return CountermodelFindResult._from_kernel(
+        premises=premises,
+        target=target,
+        min_order=min_order,
+        max_order=max_order,
+        table_budget=table_budget,
+        status="EXHAUSTED_UP_TO_BOUND",
+        orders_complete=tuple(orders_complete),
+        tables_examined=examined,
+        total_tables=total,
+    )
+
+
+def verify_countermodel_find(claim: CountermodelFindResult) -> bool:
+    """Check a claimed countermodel search by replaying it within its budget."""
+
+    try:
+        return (
+            countermodel_find(
+                claim.premises,
+                claim.target,
+                claim.min_order,
+                claim.max_order,
+                claim.table_budget,
+            )
+            == claim
+        )
     except (OperationDomainValidationError, ValueError, TypeError):
         return False
 

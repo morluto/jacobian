@@ -187,10 +187,12 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "transformed numerator Q(t) and denominator exponent d, the exact "
             "derivative numerator whose real roots are the finite critical "
             "points, the complete critical-value comparison ledger, and the "
-            "separate z=-1 endpoint. Also returns a rational enclosure of "
-            "max |P| and reports a full-circle maximizing set when the modulus "
-            "is constant. Exact arithmetic; no sampled grid, float maximum, or "
-            "unverified upper bound is ever returned."
+            "separate z=-1 endpoint. Also returns the exact maximum as an "
+            "indexed real-algebraic root whenever its irreducible resultant "
+            "factor fits the shared carrier (else None), a rational enclosure "
+            "of max |P|, and reports a full-circle maximizing set when the "
+            "modulus is constant. Exact arithmetic; no sampled grid, float "
+            "maximum, or unverified upper bound is ever returned."
         ),
         request_type=UnitCircleSupNormSquaredRequest,
         result_type=UnitCircleSupNormSquaredResult,

@@ -19,6 +19,11 @@ MAX_LOCAL_FACTOR_WORK = 8_000_000
 MAX_LEDGER_ROWS = 8_192
 MAX_EULER_PRIMES = 16
 MAX_EULER_WORK = 32_000_000
+MAX_ADMISSIBILITY_CUTOFF = 1_000
+MAX_ADMISSIBILITY_WORK = 64_000_000
+MAX_INTERVAL_LENGTH = 20_000
+MAX_INTERVAL_VALUE = 10**12
+MAX_INTERVAL_SIEVE_RESIDUES = 4_000_000
 CROSSCHECK_MAX_PRIME = 31
 
 _CODE_PREFIX = "number_theory.squarefree_affine"
@@ -134,15 +139,92 @@ def admit_euler_product(
         admit_local_factor_work(source.form_count, prime)
 
 
+def admit_admissibility_cutoff(cutoff: int) -> None:
+    """Require a checkable cutoff inside the prime envelope."""
+
+    if cutoff < 1:
+        raise _domain_error(
+            "cutoff_positive", "the admissibility cutoff is at least one"
+        )
+    if cutoff > MAX_ADMISSIBILITY_CUTOFF:
+        raise _resource_error(
+            "cutoff_budget",
+            f"the admissibility cutoff exceeds {MAX_ADMISSIBILITY_CUTOFF}, "
+            "beyond the checkable prime envelope",
+        )
+
+
+def admit_admissibility_work(form_count: int, primes: tuple[int, ...]) -> None:
+    """Preflight the aggregate p^2 work before any factor enumeration."""
+
+    total_work = sum(prime * prime for prime in primes) * form_count
+    if total_work > MAX_ADMISSIBILITY_WORK:
+        raise _resource_error(
+            "work_budget",
+            f"admissibility needs {total_work} bounded congruence steps, "
+            f"exceeding {MAX_ADMISSIBILITY_WORK}",
+        )
+    for prime in primes:
+        admit_local_factor_work(form_count, prime)
+
+
+def admit_interval(source: SquarefreeAffineFamily, lower: int, upper: int) -> int:
+    """Admit one integer interval and return the governing value magnitude."""
+
+    admit_family(source)
+    if type(lower) is not int or type(upper) is not int:
+        raise _domain_error("interval_integers", "interval bounds must be integers")
+    if lower > upper:
+        raise _domain_error(
+            "interval_order", "the interval lower bound must not exceed the upper"
+        )
+    length = upper - lower + 1
+    if length > MAX_INTERVAL_LENGTH:
+        raise _resource_error(
+            "interval_length_budget",
+            f"interval length {length} exceeds {MAX_INTERVAL_LENGTH}",
+        )
+    magnitude = 0
+    for form in source.forms:
+        for bound in (lower, upper):
+            value = abs(form.coefficient * bound + form.constant)
+            if value > magnitude:
+                magnitude = value
+    if magnitude > MAX_INTERVAL_VALUE:
+        raise _resource_error(
+            "interval_value_budget",
+            f"affine values reach {magnitude}, exceeding {MAX_INTERVAL_VALUE}",
+        )
+    return magnitude
+
+
+def admit_interval_sieve_residues(work: int) -> None:
+    """Preflight congruence-class enumeration before any residue arithmetic."""
+
+    if work > MAX_INTERVAL_SIEVE_RESIDUES:
+        raise _resource_error(
+            "interval_sieve_budget",
+            f"interval sieve would enumerate {work} congruence classes, "
+            f"exceeding {MAX_INTERVAL_SIEVE_RESIDUES}",
+        )
+
+
 __all__ = [
     "CROSSCHECK_MAX_PRIME",
+    "MAX_ADMISSIBILITY_CUTOFF",
+    "MAX_ADMISSIBILITY_WORK",
     "MAX_EULER_PRIMES",
     "MAX_EULER_WORK",
+    "MAX_INTERVAL_LENGTH",
+    "MAX_INTERVAL_SIEVE_RESIDUES",
+    "MAX_INTERVAL_VALUE",
     "MAX_LEDGER_ROWS",
     "MAX_LOCAL_FACTOR_PRIME",
     "MAX_LOCAL_FACTOR_WORK",
     "admit_euler_product",
     "admit_family",
+    "admit_interval",
+    "admit_interval_sieve_residues",
     "admit_local_factor",
     "admit_prime",
     "admit_prime_set",

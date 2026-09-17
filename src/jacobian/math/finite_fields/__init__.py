@@ -19,6 +19,20 @@ from jacobian.math.finite_fields._jacobian_syzygy_models import (
 )
 from jacobian.math.finite_fields._matrix_rank import verify_matrix_rank
 from jacobian.math.finite_fields._matrix_rank_models import MatrixRankResult
+from jacobian.math.finite_fields._syzygy_compute import (
+    jacobian_compute,
+    quotient_reduce,
+    syzygy_generators,
+    verify_jacobian,
+    verify_quotient_reduction,
+    verify_syzygy_generators,
+)
+from jacobian.math.finite_fields._syzygy_compute_models import (
+    FiniteFieldJacobianResult,
+    QuotientReduceResult,
+    ReduceStep,
+    SyzygyGeneratorsResult,
+)
 from jacobian.math.finite_fields.operations import (
     analyze_collisions,
     analyze_permutation,
@@ -80,6 +94,7 @@ __all__ = [
     "FieldEmbedding",
     "FiniteDimensionalSubspace",
     "FiniteFieldElement",
+    "FiniteFieldJacobianResult",
     "FiniteFieldPresentation",
     "FiniteLinearMap",
     "FiniteMapTable",
@@ -97,7 +112,10 @@ __all__ = [
     "PrimeFieldLinearAction",
     "ProjectiveLine",
     "ProjectivePoint",
+    "QuotientReduceResult",
     "RankResult",
+    "ReduceStep",
+    "SyzygyGeneratorsResult",
     "affine_zero_count",
     "affine_zero_set",
     "analyze_collisions",
@@ -113,6 +131,7 @@ __all__ = [
     "finite_polynomial",
     "finite_polynomial_map",
     "homogeneous_fixed_subspace",
+    "jacobian_compute",
     "linear_map_rank",
     "matrix_rank",
     "orbit_distribution",
@@ -121,11 +140,16 @@ __all__ = [
     "projective_point",
     "projective_zero_count",
     "projective_zero_set",
+    "quotient_reduce",
     "restrict_scalars",
+    "syzygy_generators",
     "verify_collisions",
     "verify_fiber_partition",
+    "verify_jacobian",
     "verify_matrix_rank",
     "verify_orbit_distribution",
     "verify_paley_tournament",
     "verify_permutation",
+    "verify_quotient_reduction",
+    "verify_syzygy_generators",
 ]

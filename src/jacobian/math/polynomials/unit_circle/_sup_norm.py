@@ -24,7 +24,8 @@ from __future__ import annotations
 
 import time
 from fractions import Fraction
-from math import isqrt
+from itertools import pairwise
+from math import gcd, isqrt, lcm
 from typing import Any
 
 import sympy
@@ -42,7 +43,10 @@ from jacobian.catalog.models import (
 )
 from jacobian.math._root_isolation import strict_root_count
 from jacobian.math.number_theory.algebraic_numbers.real import (
+    MAX_REAL_ALGEBRAIC_COEFFICIENT_DIGITS,
+    MAX_REAL_ALGEBRAIC_DEGREE,
     RationalIsolatingInterval,
+    RealAlgebraicValue,
 )
 from jacobian.math.polynomials.unit_circle._sup_norm_models import (
     MAX_SUP_NORM_CERTIFICATE_BYTES,
@@ -340,6 +344,140 @@ def _sqrt_bounds(value: Fraction) -> tuple[Fraction, Fraction]:
     return lower, Fraction(root + 1, value.denominator)
 
 
+def _rational_algebraic_value(value: Fraction) -> RealAlgebraicValue:
+    """Return the degree-one carrier of a rational maximum."""
+
+    return RealAlgebraicValue._from_admitted_polynomial(
+        polynomial=(value.denominator, -value.numerator),
+        real_root_index=0,
+    )
+
+
+def _primitive_descending_integers(
+    descending: list[Fraction],
+) -> tuple[int, ...] | None:
+    """Return the primitive positive-leading integer spelling of a factor.
+
+    Returns ``None`` when the spelling leaves the shared real-algebraic
+    coefficient envelope.
+    """
+
+    denominator = 1
+    for value in descending:
+        denominator = lcm(denominator, value.denominator)
+    integers = [int(value * denominator) for value in descending]
+    content = 0
+    for coefficient in integers:
+        content = gcd(content, coefficient)
+    if content == 0:
+        return None
+    integers = [coefficient // content for coefficient in integers]
+    if integers[0] < 0:
+        integers = [-coefficient for coefficient in integers]
+    if integers[0] <= 0:
+        return None
+    if any(
+        len(str(abs(coefficient))) > MAX_REAL_ALGEBRAIC_COEFFICIENT_DIGITS
+        for coefficient in integers
+    ):
+        return None
+    return tuple(integers)
+
+
+def _sturm_root_index_below(factor: Any, bound: Fraction) -> int | None:
+    """Count the factor's real roots strictly below ``bound`` via Sturm."""
+
+    sequence = factor.sturm()
+    if not sequence:
+        return None
+    point = _sympy_rational(bound)
+    negative_signs: list[int] = []
+    for term in sequence:
+        coefficients = term.all_coeffs()
+        if not coefficients:
+            continue
+        sign = 1 if coefficients[0] > 0 else -1
+        if term.degree() % 2:
+            sign = -sign
+        negative_signs.append(sign)
+    bound_signs: list[int] = []
+    for term in sequence:
+        value = term.eval(point)
+        if value == 0:
+            continue
+        bound_signs.append(1 if value > 0 else -1)
+    negative_variations = sum(
+        1 for first, second in pairwise(negative_signs) if first != second
+    )
+    bound_variations = sum(
+        1 for first, second in pairwise(bound_signs) if first != second
+    )
+    return negative_variations - bound_variations
+
+
+def _exact_critical_maximum(
+    resultant_polynomial: Any,
+    value_roots: tuple[tuple[Fraction, Fraction], ...],
+    maximum_key: int,
+) -> RealAlgebraicValue | None:
+    """Identify the maximal critical value as an indexed resultant-factor root.
+
+    Every irreducible factor has simple roots, so the factor carrying the
+    maximum is the unique one changing sign strictly inside the maximal
+    isolating interval (or vanishing at a singleton).  The resultant
+    ``y``-degree is the coprime derivative-numerator degree, which is at most
+    twice the input degree: writing ``Q = A**2 + B**2`` with ``deg <= d``,
+    the ``t**(2m+1)`` leading terms of ``Q'(1+t**2)`` and ``2*d*t*Q`` cancel
+    exactly, so the minimal factor always fits the shared carrier.  Returns
+    ``None`` only on theoretical coefficient-height overflow; the certified
+    enclosure still carries the complete maximum in that case.
+    """
+
+    lower, upper = value_roots[maximum_key]
+    _content, factors = resultant_polynomial.factor_list()
+    candidates: list[Any] = []
+    for factor, _multiplicity in factors:
+        if factor.degree() < 1:
+            continue
+        low_value = factor.eval(_sympy_rational(lower))
+        if lower == upper:
+            if low_value == 0:
+                candidates.append(factor)
+            continue
+        if low_value * factor.eval(_sympy_rational(upper)) < 0:
+            candidates.append(factor)
+    if len(candidates) != 1:
+        return None
+    factor = candidates[0]
+    degree = factor.degree()
+    if degree > MAX_REAL_ALGEBRAIC_DEGREE:
+        # Defensive only: the cancellation noted above keeps every minimal
+        # factor within twice the input degree (hence at most 16 here).
+        return None
+    descending = [
+        Fraction(int(coefficient.p), int(coefficient.q))
+        for coefficient in factor.all_coeffs()
+    ]
+    spelling = _primitive_descending_integers(descending)
+    if spelling is None or len(spelling) - 1 != degree:
+        return None
+    if degree == 1:
+        return RealAlgebraicValue._from_admitted_polynomial(
+            polynomial=spelling, real_root_index=0
+        )
+    if lower == upper:
+        # An irreducible factor of degree two or more has no rational root.
+        return None
+    if factor.eval(_sympy_rational(lower)) == 0:
+        return None
+    index = _sturm_root_index_below(factor, lower)
+    if index is None or not 0 <= index < degree:
+        return None
+    return RealAlgebraicValue._from_admitted_polynomial(
+        polynomial=spelling, real_root_index=index
+    )
+
+
 def unit_circle_sup_norm_squared(  # noqa: C901
     polynomial: GaussianRationalPolynomial,
 ) -> UnitCircleSupNormSquaredResult:
@@ -392,6 +530,7 @@ def unit_circle_sup_norm_squared(  # noqa: C901
             endpoint_minus_one_is_maximizer=True,
             maximizing_status="FULL_CIRCLE",
             sup_norm_squared_enclosure=enclosure,
+            sup_norm_squared_exact=_rational_algebraic_value(constant),
             sup_norm_enclosure=_interval(lower, upper),
         )
 
@@ -533,6 +672,16 @@ def unit_circle_sup_norm_squared(  # noqa: C901
     sup_norm_low, _ = _sqrt_bounds(squared_low)
     _, sup_norm_high = _sqrt_bounds(squared_high)
 
+    checkpoint()
+    if endpoint_is_maximizer:
+        exact_maximum: RealAlgebraicValue | None = _rational_algebraic_value(
+            endpoint_value
+        )
+    else:
+        exact_maximum = _exact_critical_maximum(
+            resultant_polynomial, value_roots, maximum_key
+        )
+
     return UnitCircleSupNormSquaredResult._from_kernel(
         polynomial=polynomial,
         degree=degree,
@@ -546,6 +695,7 @@ def unit_circle_sup_norm_squared(  # noqa: C901
         endpoint_minus_one_is_maximizer=endpoint_is_maximizer,
         maximizing_status=status,
         sup_norm_squared_enclosure=_interval(squared_low, squared_high),
+        sup_norm_squared_exact=exact_maximum,
         sup_norm_enclosure=_interval(sup_norm_low, sup_norm_high),
     )
 
@@ -574,17 +724,16 @@ def _compare_rational_to_value_root(
     return -1 if count else 1
 
 
-def verify_unit_circle_sup_norm_squared(  # noqa: C901
+def verify_unit_circle_sup_norm_squared(
     claim: UnitCircleSupNormSquaredResult,
 ) -> bool:
-    """Replay the retained defining data of a supremum-norm certificate.
+    """Check a claimed supremum-norm certificate by replaying the kernel.
 
-    This checks the source binding, the exact transformed numerator and
-    derivative numerator, the ``z = -1`` endpoint value, that every critical
-    interval isolates a real root of the retained derivative numerator, and
-    that the claimed value and circle-image intervals bracket the exact
-    rational-function evaluation.  Comparison ranks are replayed from the
-    certified value enclosures and the endpoint value.
+    The admitted kernel is deterministic and canonical, so a claim is accepted
+    exactly when it equals the recomputed result.  This rejects forged
+    aggregate fields (the enclosures, ``maximizing_status``, comparison ranks,
+    ``is_maximizer`` flags, and the exact value) in addition to mismatched
+    defining data; a weakened claim that drops the exact value is rejected too.
     """
 
     if not isinstance(claim, UnitCircleSupNormSquaredResult):
@@ -592,73 +741,9 @@ def verify_unit_circle_sup_norm_squared(  # noqa: C901
     if not isinstance(claim.polynomial, GaussianRationalPolynomial):
         return False
     try:
-        coefficients = _admit_sup_norm_polynomial(claim.polynomial)
+        recomputed = unit_circle_sup_norm_squared(claim.polynomial)
     except OperationResourceAdmissionError:
         raise
     except OperationDomainValidationError:
         return False
-    degree = len(coefficients) - 1
-    if claim.degree != degree or claim.denominator_exponent != degree:
-        return False
-    numerator, derivative = _transformed_numerator(coefficients)
-    if (
-        tuple(
-            CanonicalRational(num=value.numerator, den=value.denominator)
-            for value in numerator
-        )
-        != claim.transformed_numerator
-    ):
-        return False
-    if (
-        tuple(
-            CanonicalRational(num=value.numerator, den=value.denominator)
-            for value in derivative
-        )
-        != claim.derivative_numerator
-    ):
-        return False
-    endpoint = _endpoint_modulus_squared(coefficients)
-    if endpoint != claim.endpoint_minus_one_value.as_fraction():
-        return False
-
-    symbol = sympy.Symbol("t", real=True)
-    derivative_polynomial = sympy.Poly(
-        _expression(derivative, symbol), symbol, domain=sympy.QQ
-    )
-    for point in claim.critical_points:
-        lower = point.parameter.lower.as_fraction()
-        upper = point.parameter.upper.as_fraction()
-        if lower > upper:
-            return False
-        if not _root_inside(derivative_polynomial, lower, upper):
-            return False
-        value_low, value_high = _value_enclosure(numerator, degree, lower, upper)
-        if not (
-            point.value.lower.as_fraction() <= value_high
-            and value_low <= point.value.upper.as_fraction()
-        ):
-            return False
-        real_low, real_high, imaginary_low, imaginary_high = _circle_image_enclosure(
-            lower, upper
-        )
-        if not (
-            point.z_real.lower.as_fraction() <= real_high
-            and real_low <= point.z_real.upper.as_fraction()
-        ):
-            return False
-        if not (
-            point.z_imaginary.lower.as_fraction() <= imaginary_high
-            and imaginary_low <= point.z_imaginary.upper.as_fraction()
-        ):
-            return False
-
-    if claim.maximizing_status == "FULL_CIRCLE":
-        if claim.critical_points:
-            return False
-        squared = claim.sup_norm_squared_enclosure
-        return (
-            squared.lower == squared.upper
-            and squared.lower.as_fraction() == endpoint
-            and not any(value != 0 for value in derivative)
-        )
-    return True
+    return recomputed == claim

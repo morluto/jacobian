@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal, Self
+from fractions import Fraction
+from typing import TYPE_CHECKING, Any, Literal, Self
 
 from pydantic import ConfigDict, Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
@@ -250,16 +251,336 @@ class PolygonKernelResult(StrictModel):
         )
 
 
+MAX_MEASURE_COMPARISONS = 16
+
+MeasureSelector = Literal[
+    "POLYGON_AREA",
+    "KERNEL_AREA",
+    "HULL_AREA",
+    "POLYGON_PERIMETER",
+    "HULL_PERIMETER",
+    "KERNEL_PERIMETER",
+    "KERNEL_TO_POLYGON_AREA_RATIO",
+    "POLYGON_TO_HULL_AREA_RATIO",
+]
+
+MeasureOperator = Literal["LT", "LE", "EQ", "GE", "GT"]
+
+
+class EdgeLengthEntry(StrictModel):
+    """One exact cyclic edge length: its square always, its root when rational."""
+
+    squared_length: CanonicalRational
+    exact_length: CanonicalRational | None = None
+
+    @model_validator(mode="after")
+    def require_length_shape(self) -> Self:
+        if self.squared_length.as_fraction() < 0:
+            raise _validation_error(
+                "measure_edge_squared_nonnegative",
+                "a squared edge length is nonnegative",
+            )
+        if self.exact_length is not None:
+            if self.exact_length.as_fraction() < 0:
+                raise _validation_error(
+                    "measure_edge_length_nonnegative",
+                    "an exact edge length is nonnegative",
+                )
+            if (
+                self.exact_length.as_fraction() * self.exact_length.as_fraction()
+                != self.squared_length.as_fraction()
+            ):
+                raise _validation_error(
+                    "measure_edge_length_consistency",
+                    "an exact edge length must square to its squared length",
+                )
+        return self
+
+
+class RingMeasureProfile(StrictModel):
+    """Exact edge lengths and perimeter of one cyclic boundary, if rational."""
+
+    vertices: tuple[RationalPoint2D, ...] = Field(max_length=128)
+    edges: tuple[EdgeLengthEntry, ...] = Field(max_length=128)
+    perimeter: CanonicalRational | None = None
+
+    @model_validator(mode="after")
+    def require_ring_shape(self) -> Self:
+        if len(self.edges) not in (0, len(self.vertices)):
+            raise _validation_error(
+                "measure_ring_edge_count",
+                "a ring carries no edges or one edge per cyclic vertex",
+            )
+        if self.edges and any(entry.exact_length is None for entry in self.edges) != (
+            self.perimeter is None
+        ):
+            raise _validation_error(
+                "measure_ring_perimeter_agreement",
+                "a perimeter is present exactly when every edge length is rational",
+            )
+        return self
+
+
+class MeasureComparison(StrictModel):
+    """One caller-specified exact comparison between two scalar measures."""
+
+    left: MeasureSelector
+    right: MeasureSelector
+    operator: MeasureOperator
+    expected_difference: CanonicalRational | None = None
+
+
+class MeasureComparisonOutcome(StrictModel):
+    """The exact difference of one comparison and whether it holds."""
+
+    comparison: MeasureComparison
+    difference: CanonicalRational
+    holds: bool
+
+
+class MeasureCertificateRequest(StrictModel):
+    """Certify exact lengths, perimeters, and comparisons over a kernel result."""
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "description": (
+                "Exact measure certificate over a `PolygonKernelResult`: the "
+                "kernel replays every relied-upon half-plane, boundary point, "
+                "and area, then extends the profile with exact edge lengths, "
+                "rational perimeters where every edge is rational, and "
+                "caller-specified exact comparisons."
+            )
+        }
+    )
+
+    kernel: PolygonKernelResult = Field(
+        description=(
+            "The bound kernel result whose half-planes, boundary, hull, and "
+            "areas are replayed before any measure is certified."
+        ),
+    )
+    comparisons: tuple[MeasureComparison, ...] = Field(
+        default=(),
+        max_length=MAX_MEASURE_COMPARISONS,
+        description=(
+            "Caller-specified exact comparisons between scalar measures; "
+            "each referenced measure must be present (rational)."
+        ),
+    )
+
+
+class MeasureCertificateResult(StrictModel):
+    """Exact measure profile bound to one replayed kernel result.
+
+    ``polygon_measures``/``hull_measures`` ring the source polygon and its
+    convex hull.  ``kernel_measures`` rings the kernel boundary when the
+    kernel is a polygon, holds its two endpoints with an exact squared
+    segment length (and the segment length itself when it is rational) when
+    the kernel is a segment, holds its single point with a zero perimeter
+    when the kernel is a point, and is empty when the kernel is empty.
+    """
+
+    kernel: PolygonKernelResult
+    polygon_measures: RingMeasureProfile
+    hull_measures: RingMeasureProfile
+    kernel_measures: RingMeasureProfile
+    kernel_segment_length: CanonicalRational | None = None
+    kernel_segment_squared_length: CanonicalRational | None = None
+    comparisons: tuple[MeasureComparisonOutcome, ...] = Field(
+        default=(), max_length=MAX_MEASURE_COMPARISONS
+    )
+
+    @model_validator(mode="after")
+    def require_measure_rings(self) -> Self:
+        if (
+            tuple(self.polygon_measures.vertices) != self.kernel.polygon.points
+            or tuple(self.hull_measures.vertices) != self.kernel.convex_hull.points
+        ):
+            raise _validation_error(
+                "measure_ring_vertices",
+                "measure rings must use the bound polygon and hull vertices",
+            )
+        boundary = tuple(row.point for row in self.kernel.kernel_boundary)
+        dimension = self.kernel.kernel_dimension
+        if dimension == "POLYGON":
+            if (
+                tuple(self.kernel_measures.vertices) != boundary
+                or self.kernel_segment_length is not None
+                or self.kernel_segment_squared_length is not None
+            ):
+                raise _validation_error(
+                    "measure_kernel_polygon_ring",
+                    "a polygon kernel rings its boundary with no segment length",
+                )
+        elif dimension == "SEGMENT":
+            if (
+                tuple(self.kernel_measures.vertices) != boundary
+                or self.kernel_measures.edges
+                or self.kernel_measures.perimeter is not None
+                or self.kernel_segment_squared_length is None
+            ):
+                raise _validation_error(
+                    "measure_kernel_segment_ring",
+                    "a segment kernel holds its endpoints and exact squared length",
+                )
+            length = self.kernel_segment_length
+            if (
+                length is not None
+                and length.as_fraction() ** 2
+                != self.kernel_segment_squared_length.as_fraction()
+            ):
+                raise _validation_error(
+                    "measure_kernel_segment_length",
+                    "a present segment length must square to the squared length",
+                )
+        elif dimension == "POINT":
+            if (
+                tuple(self.kernel_measures.vertices) != boundary
+                or self.kernel_measures.edges
+                or self.kernel_measures.perimeter is None
+                or self.kernel_measures.perimeter.as_fraction() != 0
+                or self.kernel_segment_length is not None
+                or self.kernel_segment_squared_length is not None
+            ):
+                raise _validation_error(
+                    "measure_kernel_point_ring",
+                    "a point kernel holds its point with a zero perimeter",
+                )
+        elif (
+            tuple(self.kernel_measures.vertices) != ()
+            or self.kernel_measures.edges
+            or self.kernel_measures.perimeter is not None
+            or self.kernel_segment_length is not None
+            or self.kernel_segment_squared_length is not None
+        ):
+            raise _validation_error(
+                "measure_kernel_empty_ring",
+                "an empty kernel holds no ring measures",
+            )
+        for profile in (
+            self.polygon_measures,
+            self.hull_measures,
+            self.kernel_measures,
+        ):
+            if len(profile.edges) not in (0, len(profile.vertices)):
+                raise _validation_error(
+                    "measure_ring_edge_count",
+                    "a ring carries no edges or one edge per cyclic vertex",
+                )
+        return self
+
+    @model_validator(mode="after")
+    def require_measure_orientation(self) -> Self:
+        if self.kernel.polygon_area.as_fraction() <= 0:
+            raise _validation_error(
+                "measure_polygon_area_positive",
+                "the bound polygon must have positive (counterclockwise) area",
+            )
+        return self
+
+    @model_validator(mode="after")
+    def require_measure_scalars(self) -> Self:
+        for profile in (
+            self.polygon_measures,
+            self.hull_measures,
+            self.kernel_measures,
+        ):
+            if profile.edges and any(
+                entry.exact_length is None for entry in profile.edges
+            ) != (profile.perimeter is None):
+                raise _validation_error(
+                    "measure_ring_perimeter_agreement",
+                    "a perimeter is present exactly when every edge length is rational",
+                )
+        scalars: dict[str, CanonicalRational | None] = _measure_scalars(self)
+        for outcome in self.comparisons:
+            left = scalars[outcome.comparison.left]
+            right = scalars[outcome.comparison.right]
+            if left is None or right is None:
+                raise _validation_error(
+                    "measure_comparison_available",
+                    "every compared measure must be present (rational)",
+                )
+            difference, holds = _evaluate_comparison(
+                left.as_fraction(),
+                right.as_fraction(),
+                outcome.comparison.operator,
+                outcome.comparison.expected_difference.as_fraction()
+                if outcome.comparison.expected_difference is not None
+                else None,
+            )
+            if (
+                CanonicalRational.from_fraction(difference) != outcome.difference
+                or holds != outcome.holds
+            ):
+                raise _validation_error(
+                    "measure_comparison_consistency",
+                    "every comparison outcome must match its exact difference",
+                )
+        return self
+
+    @classmethod
+    def _from_kernel(cls, **values: Any) -> Self:
+        return cls.model_construct(**values)
+
+
+def _measure_scalars(
+    result: MeasureCertificateResult,
+) -> dict[str, CanonicalRational | None]:
+    """Project the result's scalar measures by selector name."""
+
+    return {
+        "POLYGON_AREA": result.kernel.polygon_area,
+        "KERNEL_AREA": result.kernel.kernel_area,
+        "HULL_AREA": result.kernel.convex_hull_area,
+        "POLYGON_PERIMETER": result.polygon_measures.perimeter,
+        "HULL_PERIMETER": result.hull_measures.perimeter,
+        "KERNEL_PERIMETER": result.kernel_measures.perimeter,
+        "KERNEL_TO_POLYGON_AREA_RATIO": result.kernel.kernel_to_polygon_area_ratio,
+        "POLYGON_TO_HULL_AREA_RATIO": result.kernel.polygon_to_hull_area_ratio,
+    }
+
+
+def _evaluate_comparison(
+    left: Fraction,
+    right: Fraction,
+    operator: MeasureOperator,
+    expected_difference: Fraction | None,
+) -> tuple[Fraction, bool]:
+    """Evaluate one exact scalar comparison."""
+
+    difference = left - right
+    holds = {
+        "LT": difference < 0,
+        "LE": difference <= 0,
+        "EQ": difference == 0,
+        "GE": difference >= 0,
+        "GT": difference > 0,
+    }[operator]
+    if expected_difference is not None:
+        holds = holds and difference == expected_difference
+    return difference, holds
+
+
 __all__ = [
     "MAX_HALF_PLANE_COEFFICIENT_DIGITS",
     "MAX_INTERSECTION_COMPONENT_DIGITS",
     "MAX_KERNEL_COORDINATE_DIGITS",
     "MAX_KERNEL_FEASIBILITY_WORK",
     "MAX_KERNEL_SOURCE_VERTICES",
+    "MAX_MEASURE_COMPARISONS",
+    "EdgeLengthEntry",
     "KernelBoundaryIntersection",
     "KernelPolygon",
+    "MeasureCertificateRequest",
+    "MeasureCertificateResult",
+    "MeasureComparison",
+    "MeasureComparisonOutcome",
+    "MeasureOperator",
+    "MeasureSelector",
     "OrientedEdgeHalfPlane",
     "PolygonKernelRequest",
     "PolygonKernelResult",
     "PolygonVertexTurn",
+    "RingMeasureProfile",
 ]

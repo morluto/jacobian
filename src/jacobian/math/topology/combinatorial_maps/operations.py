@@ -39,7 +39,6 @@ from ._models import (
     OrientableEmbeddingCheckResult,
     OrientableGenusResult,
     OrientationReverseResult,
-    SignedEmbeddingCheckRequest,
     SignedEmbeddingCheckResult,
     VertexFaceIncidenceResult,
 )
@@ -658,55 +657,56 @@ def verify_orientable_embedding(claim: OrientableEmbeddingCheckResult) -> bool:
 
 
 def _signed_embedding_signs(
-    request: SignedEmbeddingCheckRequest,
+    graph: SimpleUndirectedGraph,
+    rotations: tuple[tuple[int, ...], ...],
+    signs: tuple[int, ...] | None,
+    twisted_edges: tuple[int, ...] | None,
 ) -> tuple[int, ...] | SignedEmbeddingCheckResult:
     """Resolve the two sign encodings to one admission-checked sign tuple."""
 
-    edges = request.graph.edges
-    if request.signs is not None and request.twisted_edges is not None:
+    edges = graph.edges
+    if signs is not None and twisted_edges is not None:
         return _invalid_signed_embedding(
-            request.graph,
-            request.rotations,
-            request.signs,
+            graph,
+            rotations,
+            signs,
             "SIGN_INDEX_OUT_OF_RANGE",
             "provide either signs or twisted_edges, not both",
         )
-    if request.signs is not None:
-        signs = request.signs
+    if signs is not None:
         if any(sign not in (0, 1) for sign in signs):
             return _invalid_signed_embedding(
-                request.graph,
-                request.rotations,
+                graph,
+                rotations,
                 signs,
                 "SIGN_INDEX_OUT_OF_RANGE",
                 "each edge sign must be 0 (twisted) or 1 (untwisted)",
             )
         if len(signs) != len(edges):
             return _invalid_signed_embedding(
-                request.graph,
-                request.rotations,
+                graph,
+                rotations,
                 signs,
                 "SIGN_INDEX_OUT_OF_RANGE",
                 "signs must carry exactly one entry per graph edge",
             )
         return signs
-    twisted = request.twisted_edges
-    if twisted is None:
+    if twisted_edges is None:
         return (1,) * len(edges)
     seen: set[int] = set()
-    for edge_index in twisted:
+    for edge_index in twisted_edges:
         if type(edge_index) is not int or not 0 <= edge_index < len(edges):
             return _invalid_signed_embedding(
-                request.graph,
-                request.rotations,
+                graph,
+                rotations,
                 (),
                 "SIGN_INDEX_OUT_OF_RANGE",
                 "twisted_edges must index a declared graph edge",
             )
         if edge_index in seen:
             return _invalid_signed_embedding(
-                request.graph,
-                request.rotations,
+                graph,
+                rotations,
                 (),
                 "SIGN_INDEX_OUT_OF_RANGE",
                 f"twisted_edges repeats edge {edge_index}",
@@ -1226,10 +1226,7 @@ def check_signed_embedding(
     """
 
     _admit_signed_embedding_candidate(graph, rotations)
-    request = SignedEmbeddingCheckRequest.model_construct(
-        graph=graph, rotations=rotations, signs=signs, twisted_edges=twisted_edges
-    )
-    resolved = _signed_embedding_signs(request)
+    resolved = _signed_embedding_signs(graph, rotations, signs, twisted_edges)
     if isinstance(resolved, SignedEmbeddingCheckResult):
         return resolved
     index, incident = _embedding_adjacency(graph)

@@ -412,6 +412,23 @@ class TestUnsplittableCheck:
         with pytest.raises(ValidationError):
             UnsplittablePath(commodity_id="a", vertices=(0, 2, 0, 3))
 
+    def test_duplicate_paths_per_commodity_are_rejected(self) -> None:
+        # The checker adds one demand per path, so a routing with two paths for
+        # one commodity would silently double its load.
+        commodities = (
+            CommodityDemand(commodity_id="a", source=0, sink=3, demand=q(1)),
+        )
+
+        with pytest.raises(ValidationError):
+            UnsplittableRouting(
+                network=_bottleneck(),
+                commodities=commodities,
+                paths=(
+                    UnsplittablePath(commodity_id="a", vertices=(0, 2, 3)),
+                    UnsplittablePath(commodity_id="a", vertices=(0, 2, 3)),
+                ),
+            )
+
     def test_native_and_catalog_paths_agree(self) -> None:
         routing = UnsplittableRouting(
             network=_bottleneck(),

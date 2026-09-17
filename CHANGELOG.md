@@ -1,5 +1,59 @@
 # Changelog
 
+## [0.22.0](https://github.com/morluto/jacobian/compare/jacobian-v0.21.0...jacobian-v0.22.0) (2026-09-17)
+
+
+### Features
+
+* **complex-tori:** add polarization search ([#2448](https://github.com/morluto/jacobian/issues/2448)) ([#3786](https://github.com/morluto/jacobian/issues/3786)) ([ff8d02a](https://github.com/morluto/jacobian/commit/ff8d02a211223517ea4ad548b3b9b377a6dac204))
+* **finite-fields:** add syzygy producer leaves ([#964](https://github.com/morluto/jacobian/issues/964)) ([#3779](https://github.com/morluto/jacobian/issues/3779)) ([b546c06](https://github.com/morluto/jacobian/commit/b546c067c0cb314df15826d978bf53f7772cd839))
+* **geometry:** add polygon measure certificates ([#974](https://github.com/morluto/jacobian/issues/974)) ([#3780](https://github.com/morluto/jacobian/issues/3780)) ([54b9eed](https://github.com/morluto/jacobian/commit/54b9eedf3efb0655d1f4de9147c2e182accffba8))
+* **geometry:** add rational polytope join, prism, edge profile, and vertex figure ([#3764](https://github.com/morluto/jacobian/issues/3764)) ([06f6302](https://github.com/morluto/jacobian/commit/06f6302b77286f2dcb8f62d9985211ef009fb8cc))
+* **geometry:** add toric affine charts and morphism checks ([#3769](https://github.com/morluto/jacobian/issues/3769)) ([d473ceb](https://github.com/morluto/jacobian/commit/d473ceb35c99e0601cf9bf175485e5b966a53bdf))
+* **graph:** add bounded minor and topological-minor search ([#3765](https://github.com/morluto/jacobian/issues/3765)) ([95c9c00](https://github.com/morluto/jacobian/commit/95c9c00abb20829d039f82b56972fe62790e1f9a))
+* implement requested math-operation catalog additions ([#3750](https://github.com/morluto/jacobian/issues/3750)) ([ae003c7](https://github.com/morluto/jacobian/commit/ae003c77d4c2fb6c001f8a9051f353244352c33b))
+* **logic:** return the state-minimal subsequential transducer ([#3775](https://github.com/morluto/jacobian/issues/3775)) ([b983817](https://github.com/morluto/jacobian/commit/b98381700f65f04519bdfff07760aa9e118f3402))
+* **logic:** support bounded QF_BV queries in smt.solve ([#2274](https://github.com/morluto/jacobian/issues/2274)) ([#3785](https://github.com/morluto/jacobian/issues/3785)) ([958eb53](https://github.com/morluto/jacobian/commit/958eb53ccc1682167e7ce7f15ab4420a34cfbe4a))
+* **logic:** transducer minimization, tree determinization, and Petri invariants ([#3766](https://github.com/morluto/jacobian/issues/3766)) ([3b3fb32](https://github.com/morluto/jacobian/commit/3b3fb324b413780f8112404e265a9647338ad222))
+* **math:** complete domain vocabulary slices ([#3712](https://github.com/morluto/jacobian/issues/3712)-[#3727](https://github.com/morluto/jacobian/issues/3727)) ([#3737](https://github.com/morluto/jacobian/issues/3737)) ([0cd678d](https://github.com/morluto/jacobian/commit/0cd678d204417851a547302dda186496adfc5913))
+* **network:** add exact multicommodity-flow solves ([#1710](https://github.com/morluto/jacobian/issues/1710), [#3752](https://github.com/morluto/jacobian/issues/3752)) ([#3783](https://github.com/morluto/jacobian/issues/3783)) ([1d53c48](https://github.com/morluto/jacobian/commit/1d53c489efa4cb95c7987a3ca78a9bb51a2b8f35))
+* **number-theory:** add admissibility and interval-count leaves ([#1705](https://github.com/morluto/jacobian/issues/1705)) ([#3782](https://github.com/morluto/jacobian/issues/3782)) ([337ebd4](https://github.com/morluto/jacobian/commit/337ebd4386999e99bee91973c75fdecab78f1de6))
+* **polynomials:** bind exact unit-circle sup-norm maxima ([#2768](https://github.com/morluto/jacobian/issues/2768)) ([#3787](https://github.com/morluto/jacobian/issues/3787)) ([ac2f7b5](https://github.com/morluto/jacobian/commit/ac2f7b52a4dec85088e4ed809f739f8b2e2c7307))
+* **topology:** add bounded rotation-system genus search ([#3753](https://github.com/morluto/jacobian/issues/3753)) ([#3778](https://github.com/morluto/jacobian/issues/3778)) ([6926a27](https://github.com/morluto/jacobian/commit/6926a27ab5544b42ff647e8a35117a84652566f0))
+* **topology:** add cup products, cohomology rings, induced maps ([#1716](https://github.com/morluto/jacobian/issues/1716)) ([#3784](https://github.com/morluto/jacobian/issues/3784)) ([a743143](https://github.com/morluto/jacobian/commit/a7431438197f3fc2d7eb6873a34223da7446192f))
+* **topology:** add discrete Morse gradient paths and complex ([#3768](https://github.com/morluto/jacobian/issues/3768)) ([abffc2a](https://github.com/morluto/jacobian/commit/abffc2abef4c02aa056df251e7b3ab8d0fedb3f4))
+* **topology:** add nonorientable embedding check ([#3753](https://github.com/morluto/jacobian/issues/3753)) ([#3777](https://github.com/morluto/jacobian/issues/3777)) ([1be1381](https://github.com/morluto/jacobian/commit/1be1381cdfc764d652a1f170b16118cd85e51e1a))
+* **topology:** add spectral-sequence pages and cellular-sheaf cohomology ([#3767](https://github.com/morluto/jacobian/issues/3767)) ([7f92c69](https://github.com/morluto/jacobian/commit/7f92c69dd8000edae7bde350d8b38a29866949a1))
+* **toric:** support lower-dimensional cones in affine charts ([#3774](https://github.com/morluto/jacobian/issues/3774)) ([86c682b](https://github.com/morluto/jacobian/commit/86c682b8f6b06a420c95c712d8bfd33a8ad4d74f))
+* **universal-algebra:** add bounded countermodel search ([#1686](https://github.com/morluto/jacobian/issues/1686)) ([#3781](https://github.com/morluto/jacobian/issues/3781)) ([221919e](https://github.com/morluto/jacobian/commit/221919ebbd0f700e404384e8d8397b1e1c0c2e19))
+
+
+### Bug Fixes
+
+* **ci:** keep math-lane tests on owner-local adapters ([82dffa7](https://github.com/morluto/jacobian/commit/82dffa7d590e37fa65197755001fafd2ca1df604))
+* **combinatorics:** raise typed domain errors from exact-cover shard operations ([#3773](https://github.com/morluto/jacobian/issues/3773)) ([f3ee43e](https://github.com/morluto/jacobian/commit/f3ee43ea693b0e02428a2ee1a140edbf6e8b2c67))
+* **number-theory:** keep squarefree affine wire requests private ([9abb2d8](https://github.com/morluto/jacobian/commit/9abb2d8ba86cd8c69b674537faecc451c20587a4))
+* **polynomials:** fail closed on root-critical isolation across all siblings ([#3739](https://github.com/morluto/jacobian/issues/3739)) ([11c6ae2](https://github.com/morluto/jacobian/commit/11c6ae2e3c0271b6a930ef57336f00437440507b))
+* **polynomials:** separate root rectangles from irrational siblings ([#3738](https://github.com/morluto/jacobian/issues/3738)) ([65b3ec9](https://github.com/morluto/jacobian/commit/65b3ec9d6fa15ea26bf60ae9c02c4b16efbe5590))
+* raise typed domain errors for schema-valid boundary mutations ([#3776](https://github.com/morluto/jacobian/issues/3776)) ([2540044](https://github.com/morluto/jacobian/commit/254004432e778f139a78bcbb62d8ed7d222c8f2c))
+
+
+### Dependencies
+
+* **deps-dev:** bump pytest-randomly from 4.1.0 to 5.0.0 ([#3735](https://github.com/morluto/jacobian/issues/3735)) ([f300c72](https://github.com/morluto/jacobian/commit/f300c7250ba62fdf2e2098d5f92896fc98759f53))
+* **deps-dev:** bump ruff from 0.16.4 to 0.16.7 ([#3733](https://github.com/morluto/jacobian/issues/3733)) ([f30c1c7](https://github.com/morluto/jacobian/commit/f30c1c7e42fb0138fd920d20156bdcc6408b2c94))
+* **deps:** bump @inquirer/prompts from 8.7.1 to 8.7.2 in /npm ([#3730](https://github.com/morluto/jacobian/issues/3730)) ([d278791](https://github.com/morluto/jacobian/commit/d2787910c12ae035692af1bb26385e4404c2bf85))
+* **deps:** bump anyio from 4.14.2 to 4.15.1 ([#3734](https://github.com/morluto/jacobian/issues/3734)) ([3ecf032](https://github.com/morluto/jacobian/commit/3ecf032430758523259d847cff0e689488041ced))
+* **deps:** bump astral-sh/setup-uv from 10.0.1 to 10.1.0 ([#3731](https://github.com/morluto/jacobian/issues/3731)) ([d7c0c2c](https://github.com/morluto/jacobian/commit/d7c0c2c8b6e96edfad0fd3d95d96a5b684c92078))
+* **deps:** bump filelock from 3.32.0 to 3.32.6 ([#3732](https://github.com/morluto/jacobian/issues/3732)) ([7618136](https://github.com/morluto/jacobian/commit/7618136eee120387d2dcbcf5289a0923de70cdeb))
+* **deps:** bump https://github.com/astral-sh/ruff-pre-commit ([#3729](https://github.com/morluto/jacobian/issues/3729)) ([293777e](https://github.com/morluto/jacobian/commit/293777eb141715d801fe532a410cdb7db3f05abf))
+* **deps:** bump numpy from 2.5.1 to 2.5.3 ([#3736](https://github.com/morluto/jacobian/issues/3736)) ([234f106](https://github.com/morluto/jacobian/commit/234f10633146efb13c3266c895d0d61d1db29de5))
+
+
+### Documentation
+
+* clarify PARI unit identity and class/unit verifier status ([#3746](https://github.com/morluto/jacobian/issues/3746)) ([75561a6](https://github.com/morluto/jacobian/commit/75561a6949eda0f248a7ca67c385bb39ec5d32a3))
+
 ## [0.21.0](https://github.com/morluto/jacobian/compare/jacobian-v0.20.0...jacobian-v0.21.0) (2026-09-14)
 
 

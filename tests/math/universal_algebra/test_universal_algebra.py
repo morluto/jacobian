@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from typing import cast
+from typing import Any, cast
 
 import pytest
 from pydantic import ValidationError
 
 from jacobian.canonical import encode_strict_json
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import MathTool, OperationDomainValidationError
 from jacobian.math.universal_algebra import (
     ApplicationTerm,
     FiniteAlgebra,
@@ -160,6 +160,7 @@ def test_catalog_contains_only_audited_agent_outcomes() -> None:
         "universal_algebra.term.evaluate.compute",
         "universal_algebra.equation.profile.compute",
         "universal_algebra.implication.countermodel.check",
+        "universal_algebra.magma_implication.countermodel.find",
         "universal_algebra.subalgebra.generated.compute",
         "universal_algebra.map.homomorphism_profile.compute",
         "universal_algebra.congruence.check.compute",
@@ -964,7 +965,6 @@ class TestValidation:
 
 
 def test_native_evaluation_binds_assignment_keys_to_the_term_variable_axis() -> None:
-    from jacobian.catalog.models import OperationDomainValidationError
     from jacobian.math.universal_algebra import evaluate_term
 
     algebra = _boolean_algebra()
@@ -988,7 +988,7 @@ def test_native_implication_check_uses_mathematical_arguments() -> None:
 
 class TestImplicationCountermodelPublication:
     @staticmethod
-    def _operation():
+    def _operation() -> MathTool[Any, Any]:
         return next(
             tool
             for tool in TOOLS

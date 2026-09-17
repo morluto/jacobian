@@ -3,6 +3,7 @@
 from jacobian.math.universal_algebra._models import MagmaEquation
 from jacobian.math.universal_algebra.operations import (
     congruence_check,
+    countermodel_find,
     equation_profile,
     evaluate_term,
     generated_subalgebra,
@@ -10,6 +11,7 @@ from jacobian.math.universal_algebra.operations import (
     implication_countermodel_check,
     quotient,
     verify_congruence,
+    verify_countermodel_find,
     verify_equation_profile,
     verify_evaluate,
     verify_generated_subalgebra,
@@ -36,6 +38,7 @@ __all__ = [
     "Term",
     "VariableTerm",
     "congruence_check",
+    "countermodel_find",
     "equation_profile",
     "evaluate_term",
     "generated_subalgebra",
@@ -43,6 +46,7 @@ __all__ = [
     "implication_countermodel_check",
     "quotient",
     "verify_congruence",
+    "verify_countermodel_find",
     "verify_equation_profile",
     "verify_evaluate",
     "verify_generated_subalgebra",

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Literal, Self
+from typing import Annotated, Any, Literal, Self
 
 from pydantic import ConfigDict, Field, model_validator
 from pydantic_core import PydanticCustomError
@@ -442,9 +442,15 @@ class QuotientRequest(_PartitionRequest):
 
 
 __all__ = [
+    "MAX_COUNTERMODEL_ORDER",
+    "MAX_COUNTERMODEL_TABLES",
     "CongruenceObstruction",
     "CongruenceRequest",
     "CongruenceResult",
+    "CountermodelFindRequest",
+    "CountermodelFindResult",
+    "CountermodelFindStatus",
+    "CountermodelFindStopReason",
     "EquationCounterexample",
     "EquationProfileRequest",
     "EquationProfileResult",
@@ -460,3 +466,239 @@ __all__ = [
     "SubalgebraRequest",
     "SubalgebraResult",
 ]
+
+
+MAX_COUNTERMODEL_ORDER = 4
+MAX_COUNTERMODEL_TABLES = 500_000
+MAX_COUNTERMODEL_PREMISES = 16
+
+CountermodelFindStatus = Literal["FOUND", "EXHAUSTED_UP_TO_BOUND", "UNKNOWN"]
+
+CountermodelFindStopReason = Literal["TABLE_BUDGET_EXHAUSTED"]
+
+
+class CountermodelFindRequest(StrictModel):
+    """Find a finite-magma countermodel by bounded table search.
+
+    Carrier orders from ``min_order`` through ``max_order`` are enumerated
+    in increasing order; within one order, tables enumerate row-major with
+    cell values ascending, so the all-zero table comes first.  With
+    ``break_symmetry``, tables with a nonzero ``0 diamond 0`` entry are
+    skipped: every finite magma is isomorphic to one with an idempotent
+    relabelled to 0, and equation satisfaction is isomorphism-invariant,
+    so exhaustion still decides the bounded range.  At most
+    ``table_budget`` tables are checked before reporting UNKNOWN.
+    """
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "description": (
+                "Bounded countermodel search over finite magma tables. "
+                "Orders enumerate increasingly; tables enumerate row-major "
+                "with ascending cell values. A negative conclusion follows "
+                "only from completed search within the declared orders."
+            )
+        }
+    )
+
+    premises: tuple[MagmaEquation, ...] = Field(
+        default=(),
+        max_length=MAX_COUNTERMODEL_PREMISES,
+        description="Premise equations; all must hold in a countermodel.",
+    )
+    target: MagmaEquation = Field(
+        description="The target equation a countermodel refutes.",
+    )
+    min_order: int = Field(
+        ge=1,
+        le=MAX_COUNTERMODEL_ORDER,
+        description="Smallest carrier order searched.",
+    )
+    max_order: int = Field(
+        ge=1,
+        le=MAX_COUNTERMODEL_ORDER,
+        description="Largest carrier order searched.",
+    )
+    table_budget: int = Field(
+        ge=1,
+        le=MAX_COUNTERMODEL_TABLES,
+        description="Check at most this many tables before reporting UNKNOWN.",
+    )
+    break_symmetry: bool = Field(
+        default=False,
+        description=(
+            "Skip tables with nonzero 0-diamond-0; every finite magma is "
+            "isomorphic to one with an idempotent at 0."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_order_range(self) -> Self:
+        if self.min_order > self.max_order:
+            raise _validation_error(
+                "countermodel_find_order_range",
+                "min_order must not exceed max_order",
+            )
+        return self
+
+
+class CountermodelFindResult(StrictModel):
+    """A bounded countermodel-search outcome with its exhaustion receipt.
+
+    - ``FOUND``: ``order`` and ``certificate`` carry the first enumerated
+      countermodel; ``orders_complete`` holds every smaller searched order
+      fully examined, so the witness is minimal within the declared range.
+    - ``EXHAUSTED_UP_TO_BOUND``: every rotation-free table of every
+      declared order was examined; ``tables_examined == total_tables``.
+      This is a finite bounded conclusion only, never a proof that the
+      implication holds in all magmas.
+    - ``UNKNOWN``: ``stop_reason`` records the spent table budget;
+      ``current_order`` is the order under search when it ran out.
+
+    ``total_tables`` is the exact admitted table count: ``n^(n^2)`` per
+    order, or ``n^(n^2 - 1)`` with symmetry breaking (first cell fixed).
+    """
+
+    premises: tuple[MagmaEquation, ...] = Field(
+        default=(), max_length=MAX_COUNTERMODEL_PREMISES
+    )
+    target: MagmaEquation
+    min_order: int = Field(ge=1, le=MAX_COUNTERMODEL_ORDER)
+    max_order: int = Field(ge=1, le=MAX_COUNTERMODEL_ORDER)
+    table_budget: int = Field(ge=1, le=MAX_COUNTERMODEL_TABLES)
+    break_symmetry: bool = False
+    status: CountermodelFindStatus
+    orders_complete: tuple[int, ...] = ()
+    order: int | None = None
+    certificate: ImplicationCountermodelCheckResult | None = None
+    tables_examined: int = Field(default=0, ge=0)
+    total_tables: int = Field(default=0, ge=0)
+    current_order: int | None = None
+    stop_reason: CountermodelFindStopReason | None = None
+
+    @model_validator(mode="after")
+    def require_find_payload(self) -> Self:
+        if self.status == "UNKNOWN":
+            if self.stop_reason is None:
+                raise _validation_error(
+                    "countermodel_find_reason_payload",
+                    "an unknown search carries its stop reason",
+                )
+            if self.order is not None or self.certificate is not None:
+                raise _validation_error(
+                    "countermodel_find_unknown_witness",
+                    "an unknown search carries no order or certificate",
+                )
+            if self.current_order is None:
+                raise _validation_error(
+                    "countermodel_find_current_order",
+                    "an unknown search carries its current order",
+                )
+            return self
+        if self.stop_reason is not None or self.current_order is not None:
+            raise _validation_error(
+                "countermodel_find_decided_payload",
+                "a decided search carries no stop reason or current order",
+            )
+        if self.status == "FOUND":
+            if self.order is None or self.certificate is None:
+                raise _validation_error(
+                    "countermodel_find_found_payload",
+                    "a found search carries its order and certificate",
+                )
+        elif self.order is not None or self.certificate is not None:
+            raise _validation_error(
+                "countermodel_find_exhausted_payload",
+                "an exhausted search carries no order or certificate",
+            )
+        return self
+
+    @model_validator(mode="after")
+    def require_find_certificate(self) -> Self:
+        if self.status != "FOUND":
+            return self
+        certificate = self.certificate
+        assert certificate is not None
+        if not certificate.is_countermodel:
+            raise _validation_error(
+                "countermodel_find_certificate_status",
+                "the certificate must establish a countermodel",
+            )
+        if len(certificate.algebra.carrier) != self.order:
+            raise _validation_error(
+                "countermodel_find_certificate_order",
+                "the certificate carrier must match the found order",
+            )
+        if self.break_symmetry and certificate.algebra.tables[0][0] != 0:
+            raise _validation_error(
+                "countermodel_find_symmetry_binding",
+                "a symmetry-broken witness has 0-diamond-0 equal to 0",
+            )
+        return self
+
+    @model_validator(mode="after")
+    def require_find_receipt(self) -> Self:
+        if self.total_tables < 1:
+            raise _validation_error(
+                "countermodel_find_total_tables",
+                "the total table count is at least one",
+            )
+        if not 0 <= self.tables_examined <= self.total_tables:
+            raise _validation_error(
+                "countermodel_find_examined_bounds",
+                "examined tables must lie between zero and the total",
+            )
+        if list(self.orders_complete) != sorted(self.orders_complete) or len(
+            set(self.orders_complete)
+        ) != len(self.orders_complete):
+            raise _validation_error(
+                "countermodel_find_orders_complete",
+                "completed orders are distinct and increasing",
+            )
+        if self.status == "FOUND":
+            if self.order is None:
+                raise _validation_error(
+                    "countermodel_find_found_order",
+                    "a found search carries its order",
+                )
+            if tuple(range(self.min_order, self.order)) != self.orders_complete:
+                raise _validation_error(
+                    "countermodel_find_minimality_receipt",
+                    "every smaller searched order was completely examined",
+                )
+            if self.tables_examined < 1:
+                raise _validation_error(
+                    "countermodel_find_found_examined",
+                    "a found search examined at least its witness",
+                )
+        elif self.status == "EXHAUSTED_UP_TO_BOUND":
+            if tuple(range(self.min_order, self.max_order + 1)) != self.orders_complete:
+                raise _validation_error(
+                    "countermodel_find_exhaustion_orders",
+                    "an exhausted search completed every declared order",
+                )
+            if self.tables_examined != self.total_tables:
+                raise _validation_error(
+                    "countermodel_find_exhaustion_receipt",
+                    "an exhausted search examined every table",
+                )
+            if self.total_tables > self.table_budget:
+                raise _validation_error(
+                    "countermodel_find_exhaustion_budget",
+                    "an exhausted search fit its table budget",
+                )
+        elif self.tables_examined != self.table_budget:
+            raise _validation_error(
+                "countermodel_find_budget_receipt",
+                "a budget-exhausted search spent its full budget",
+            )
+        if self.status == "UNKNOWN" and self.total_tables <= self.table_budget:
+            raise _validation_error(
+                "countermodel_find_budget_scope",
+                "a budget-exhausted search left tables unexamined",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(cls, **values: Any) -> Self:
+        return cls.model_construct(**values)

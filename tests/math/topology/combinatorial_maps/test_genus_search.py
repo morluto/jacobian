@@ -9,6 +9,7 @@ admission envelope shared with the embedding checker.
 from __future__ import annotations
 
 import json
+import math
 from itertools import combinations, permutations, product
 
 import pytest
@@ -193,6 +194,25 @@ class TestUnknown:
         assert result.candidates_examined == 0
         # The rotation-system count is still exact: 1 * 1 * 1.
         assert result.total_candidates == 1
+
+    def test_high_degree_vertex_respects_budget_without_materializing(self) -> None:
+        # K_{3,12}: each ``a`` vertex has degree 12, so it owns ``11!`` cyclic
+        # orders, and the graph is non-planar, so no candidate qualifies.  A
+        # budget of one must stop after a single candidate instead of building
+        # factorial-many rows before consulting the budget.
+        left = tuple(f"a{index}" for index in range(3))
+        right = tuple(f"b{index}" for index in range(12))
+        graph = SimpleUndirectedGraph(
+            vertices=left + right,
+            edges=tuple((a, b) for a in left for b in right),
+        )
+
+        result = find_rotation_system(graph, 0, 1)
+
+        assert result.status == "UNKNOWN"
+        assert result.reason == "CANDIDATE_BUDGET_EXCEEDED"
+        assert result.candidates_examined == 1
+        assert result.total_candidates == math.factorial(11) ** 3 * math.factorial(2) ** 12
 
 
 class TestInvalidRequests:

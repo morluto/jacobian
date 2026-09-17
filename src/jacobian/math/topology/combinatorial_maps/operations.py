@@ -8,7 +8,9 @@ dart IDs; no backend embedding object crosses the boundary.
 
 from __future__ import annotations
 
-from itertools import permutations, product
+from collections.abc import Callable, Iterator
+from itertools import permutations
+from math import factorial
 
 from pydantic_core import PydanticCustomError
 
@@ -658,32 +660,56 @@ def verify_orientable_embedding(claim: OrientableEmbeddingCheckResult) -> bool:
 
 def _rotation_system_row_choices(
     incident: list[set[int]],
-) -> list[list[tuple[int, ...]]]:
-    """List each vertex's cyclic orders with the first entry fixed.
+) -> list[Callable[[], Iterator[tuple[int, ...]]]]:
+    """Return one lazy cyclic-order factory per vertex.
 
     Fixing the first entry to the least incident edge identifies cyclic
-    shifts, so each list holds exactly ``(degree - 1)!`` orders (one order
-    for an isolated or degree-one vertex) in lexicographic order.
+    shifts, so each factory yields exactly ``(degree - 1)!`` orders (one
+    order for an isolated or degree-one vertex) in lexicographic order.
+    Returning factories, not materialized lists, keeps a high-degree vertex
+    from building its factorial many rows before the candidate budget is
+    consulted.
     """
 
-    rows: list[list[tuple[int, ...]]] = []
+    factories: list[Callable[[], Iterator[tuple[int, ...]]]] = []
     for edges in incident:
         ordered = sorted(edges)
         if not ordered:
-            rows.append([()])
+            factories.append(lambda: iter(((),)))
             continue
         first, rest = ordered[0], ordered[1:]
-        rows.append([(first, *perm) for perm in permutations(rest)])
-    return rows
+
+        def factory(
+            first: int = first, rest: list[int] = rest
+        ) -> Iterator[tuple[int, ...]]:
+            return ((first, *perm) for perm in permutations(rest))
+
+        factories.append(factory)
+    return factories
 
 
-def _rotation_system_total(rows: list[list[tuple[int, ...]]]) -> int:
-    """Return the exact rotation-system count of the row choices."""
+def _rotation_system_total(incident: list[set[int]]) -> int:
+    """Return the exact rotation-system count ``product of (degree - 1)!``."""
 
     total = 1
-    for choices in rows:
-        total *= len(choices)
+    for edges in incident:
+        if edges:
+            total *= factorial(len(edges) - 1)
     return total
+
+
+def _lazy_product(
+    factories: list[Callable[[], Iterator[tuple[int, ...]]]],
+) -> Iterator[tuple[tuple[int, ...], ...]]:
+    """Cartesian product that consumes each factory only as needed."""
+
+    if not factories:
+        yield ()
+        return
+    first, rest = factories[0], factories[1:]
+    for head in first():
+        for tail in _lazy_product(rest):
+            yield (head, *tail)
 
 
 def _admit_rotation_system_search(
@@ -764,7 +790,7 @@ def find_rotation_system(
     _admit_rotation_system_search(graph, max_genus, max_candidates)
     index, incident = _embedding_adjacency(graph)
     rows = _rotation_system_row_choices(incident)
-    total = _rotation_system_total(rows)
+    total = _rotation_system_total(incident)
     if not _embedding_connected(graph, index):
         return _unknown_rotation_system(
             graph,
@@ -776,7 +802,7 @@ def find_rotation_system(
             "the genus search requires a connected graph",
         )
     examined = 0
-    for rotations in product(*rows):
+    for rotations in _lazy_product(rows):
         if examined >= max_candidates:
             return _unknown_rotation_system(
                 graph,

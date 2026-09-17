@@ -387,3 +387,48 @@ def test_absent_exact_maximum_still_verifies() -> None:
     weakened = result.model_copy(update={"sup_norm_squared_exact": None})
 
     assert verify_unit_circle_sup_norm_squared(weakened)
+
+
+def test_top_admitted_degree_carries_an_exact_value() -> None:
+    # Degree-8 input: the leading t**(2m+1) terms of Q'(1+t^2) and 2*d*t*Q
+    # cancel, so every critical-value minimal factor has degree at most 2*d
+    # and fits the shared carrier.  This pins that bound at the envelope.
+    result = _result(
+        {exponent: (1 if exponent % 3 else -1, 0) for exponent in range(9)}
+    )
+
+    assert result.degree == MAX_SUP_NORM_DEGREE
+    exact = result.sup_norm_squared_exact
+    assert exact is not None
+    assert tuple(exact.polynomial) == (
+        65536,
+        -3474944,
+        43543305,
+        -179214444,
+        225009495,
+    )
+    assert exact.real_root_index == 3
+    assert len(exact.polynomial) - 1 <= 2 * result.degree
+    assert verify_unit_circle_sup_norm_squared(result)
+
+
+@pytest.mark.parametrize(
+    "coefficients",
+    [
+        {0: (1, 0), 1: (1, 0), 2: (-1, 0), 3: (1, 0)},
+        {0: (-2, 0), 2: (2, 0), 3: (-3, 0), 4: (-3, 0)},
+        {exponent: (1 if exponent % 3 else -1, 0) for exponent in range(9)},
+    ],
+)
+def test_exact_value_respects_the_resultant_degree_carrier(
+    coefficients: dict[int, tuple[int, int]],
+) -> None:
+    result = _result(coefficients)
+
+    exact = result.sup_norm_squared_exact
+    if exact is None:
+        # Only the theoretical height overflow may omit the exact value.
+        return
+    assert len(exact.polynomial) - 1 <= 2 * result.degree
+    assert exact.real_root_index < len(exact.polynomial) - 1
+    assert verify_unit_circle_sup_norm_squared(result)

@@ -424,8 +424,12 @@ def _exact_critical_maximum(
 
     Every irreducible factor has simple roots, so the factor carrying the
     maximum is the unique one changing sign strictly inside the maximal
-    isolating interval (or vanishing at a singleton).  Returns ``None`` when
-    that factor leaves the shared real-algebraic carrier; the certified
+    isolating interval (or vanishing at a singleton).  The resultant
+    ``y``-degree is the coprime derivative-numerator degree, which is at most
+    twice the input degree: writing ``Q = A**2 + B**2`` with ``deg <= d``,
+    the ``t**(2m+1)`` leading terms of ``Q'(1+t**2)`` and ``2*d*t*Q`` cancel
+    exactly, so the minimal factor always fits the shared carrier.  Returns
+    ``None`` only on theoretical coefficient-height overflow; the certified
     enclosure still carries the complete maximum in that case.
     """
 
@@ -447,6 +451,8 @@ def _exact_critical_maximum(
     factor = candidates[0]
     degree = factor.degree()
     if degree > MAX_REAL_ALGEBRAIC_DEGREE:
+        # Defensive only: the cancellation noted above keeps every minimal
+        # factor within twice the input degree (hence at most 16 here).
         return None
     descending = [
         Fraction(int(coefficient.p), int(coefficient.q))

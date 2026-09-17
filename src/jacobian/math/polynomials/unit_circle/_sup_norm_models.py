@@ -3,15 +3,13 @@
 The main result is a certified rational enclosure together with the complete
 critical-point ledger.  The maximum of ``|P(z)|^2`` on ``|z| = 1`` is the
 value of the rational function ``Q(t) / (1 + t**2)**degree`` at a real root of
-an exact derivative numerator.  Its minimal polynomial can have degree
-exponential in the input degree, far beyond the shared degree-16
-real-algebraic carrier, so this owner does not promise to normalize every
-maximum to a minimal polynomial.  Instead the exact value is bound to its
-defining data (the retained numerator, denominator exponent, and the
-isolating root index) and every reported quantity is a rational interval that
-provably brackets it.  When the maximal value is rational, or its irreducible
-resultant factor fits the shared carrier, the result additionally carries the
-exact value as a ``RealAlgebraicValue``; otherwise that field is ``None`` and
+an exact derivative numerator.  Its minimal polynomial divides the critical
+resultant, whose ``y``-degree is the derivative-numerator degree; the two
+leading ``t**(2m+1)`` terms of the derivative numerator cancel exactly, so
+that degree is at most twice the input degree (hence at most 16 here) and the
+minimal factor always fits the shared degree-16 real-algebraic carrier.  The
+exact value is therefore always bound as an indexed root except in the
+theoretical coefficient-height overflow case, where the field is ``None`` and
 the enclosure remains the complete certificate.
 """
 
@@ -131,9 +129,11 @@ class UnitCircleSupNormSquaredResult(StrictModel):
     numerator whose real roots are the finite critical points, the complete
     critical ledger, and the separate ``z = -1`` endpoint candidate.
     ``sup_norm_squared_exact`` carries the maximum itself as an indexed root
-    of its irreducible resultant factor whenever that factor fits the shared
-    real-algebraic carrier; it is ``None`` when the minimal factor leaves the
-    carrier, in which case the enclosure is the complete certificate.
+    of its irreducible resultant factor.  The factor degree is at most twice
+    the input degree (leading-term cancellation in the derivative numerator),
+    hence always inside the shared carrier; the field is ``None`` only in the
+    theoretical coefficient-height overflow case, in which the enclosure is
+    the complete certificate.
     """
 
     polynomial: GaussianRationalPolynomial

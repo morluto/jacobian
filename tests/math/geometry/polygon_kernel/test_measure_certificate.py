@@ -359,10 +359,67 @@ class TestModelBranches:
                         "perimeter": None,
                     },
                     "kernel_segment_length": {"num": "5", "den": "1"},
+                    "kernel_segment_squared_length": {"num": "25", "den": "1"},
                 }
             )
         )
         assert forged_claim.kernel_segment_length is not None
+
+    def test_irrational_segment_length_round_trips(self) -> None:
+        # A segment kernel may have an irrational length (endpoints at
+        # rational coordinates).  The squared length stays exact and the
+        # length is absent, so the result must still serialize and reload.
+        result = self._nakano_result()
+        forged = json.loads(result.model_dump_json())
+        forged["kernel"]["kernel_dimension"] = "SEGMENT"
+        boundary = forged["kernel"]["kernel_boundary"][:2]
+        forged["kernel"]["kernel_boundary"] = boundary
+        forged_claim = MeasureCertificateResult.model_validate_json(
+            json.dumps(
+                {
+                    **forged,
+                    "kernel_measures": {
+                        "vertices": [row["point"] for row in boundary],
+                        "edges": [],
+                        "perimeter": None,
+                    },
+                    "kernel_segment_length": None,
+                    "kernel_segment_squared_length": {"num": "2", "den": "1"},
+                }
+            )
+        )
+
+        assert forged_claim.kernel_segment_length is None
+        restored = MeasureCertificateResult.model_validate_json(
+            forged_claim.model_dump_json()
+        )
+        assert restored == forged_claim
+        assert restored.kernel_segment_squared_length is not None
+        assert restored.kernel_segment_squared_length.as_fraction() == 2
+
+    def test_segment_length_must_square_to_squared_length(self) -> None:
+        result = self._nakano_result()
+        forged = json.loads(result.model_dump_json())
+        forged["kernel"]["kernel_dimension"] = "SEGMENT"
+        boundary = forged["kernel"]["kernel_boundary"][:2]
+        forged["kernel"]["kernel_boundary"] = boundary
+
+        with pytest.raises(ValidationError):
+            MeasureCertificateResult.model_validate_json(
+                json.dumps(
+                    {
+                        **forged,
+                        "kernel_measures": {
+                            "vertices": [row["point"] for row in boundary],
+                            "edges": [],
+                            "perimeter": None,
+                        },
+                        "kernel_segment_length": {"num": "3", "den": "1"},
+                        "kernel_segment_squared_length": {"num": "2", "den": "1"},
+                    }
+                )
+            )
+
 
     def test_point_branch_shape(self) -> None:
         result = self._nakano_result()

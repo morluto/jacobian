@@ -229,12 +229,14 @@ def measure_certificate(
     if kernel.kernel_dimension == "POLYGON":
         kernel_measures = _ring_measures(boundary)
         segment_length = None
+        segment_squared_length = None
     elif kernel.kernel_dimension == "SEGMENT":
         (first, second) = boundary
         squared = _squared_length(first, second)
         kernel_measures = RingMeasureProfile(
             vertices=boundary, edges=(), perimeter=None
         )
+        segment_squared_length = CanonicalRational.from_fraction(squared)
         segment_length = _exact_length(squared)
     elif kernel.kernel_dimension == "POINT":
         kernel_measures = RingMeasureProfile(
@@ -243,9 +245,11 @@ def measure_certificate(
             perimeter=CanonicalRational.from_fraction(Fraction(0)),
         )
         segment_length = None
+        segment_squared_length = None
     else:
         kernel_measures = RingMeasureProfile(vertices=(), edges=(), perimeter=None)
         segment_length = None
+        segment_squared_length = None
     scalars: dict[str, CanonicalRational | None] = {
         "POLYGON_AREA": kernel.polygon_area,
         "KERNEL_AREA": kernel.kernel_area,
@@ -287,6 +291,7 @@ def measure_certificate(
         hull_measures=hull_measures,
         kernel_measures=kernel_measures,
         kernel_segment_length=segment_length,
+        kernel_segment_squared_length=segment_squared_length,
         comparisons=tuple(outcomes),
     )
 

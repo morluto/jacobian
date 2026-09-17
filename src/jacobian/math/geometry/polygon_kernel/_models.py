@@ -374,10 +374,10 @@ class MeasureCertificateResult(StrictModel):
 
     ``polygon_measures``/``hull_measures`` ring the source polygon and its
     convex hull.  ``kernel_measures`` rings the kernel boundary when the
-    kernel is a polygon, holds its two endpoints with an exact segment
-    length when the kernel is a segment, holds its single point with a
-    zero perimeter when the kernel is a point, and is empty when the
-    kernel is empty.
+    kernel is a polygon, holds its two endpoints with an exact squared
+    segment length (and the segment length itself when it is rational) when
+    the kernel is a segment, holds its single point with a zero perimeter
+    when the kernel is a point, and is empty when the kernel is empty.
     """
 
     kernel: PolygonKernelResult
@@ -385,6 +385,7 @@ class MeasureCertificateResult(StrictModel):
     hull_measures: RingMeasureProfile
     kernel_measures: RingMeasureProfile
     kernel_segment_length: CanonicalRational | None = None
+    kernel_segment_squared_length: CanonicalRational | None = None
     comparisons: tuple[MeasureComparisonOutcome, ...] = Field(
         default=(), max_length=MAX_MEASURE_COMPARISONS
     )
@@ -405,6 +406,7 @@ class MeasureCertificateResult(StrictModel):
             if (
                 tuple(self.kernel_measures.vertices) != boundary
                 or self.kernel_segment_length is not None
+                or self.kernel_segment_squared_length is not None
             ):
                 raise _validation_error(
                     "measure_kernel_polygon_ring",
@@ -415,11 +417,21 @@ class MeasureCertificateResult(StrictModel):
                 tuple(self.kernel_measures.vertices) != boundary
                 or self.kernel_measures.edges
                 or self.kernel_measures.perimeter is not None
-                or self.kernel_segment_length is None
+                or self.kernel_segment_squared_length is None
             ):
                 raise _validation_error(
                     "measure_kernel_segment_ring",
-                    "a segment kernel holds its endpoints with one segment length",
+                    "a segment kernel holds its endpoints and exact squared length",
+                )
+            length = self.kernel_segment_length
+            if (
+                length is not None
+                and length.as_fraction() ** 2
+                != self.kernel_segment_squared_length.as_fraction()
+            ):
+                raise _validation_error(
+                    "measure_kernel_segment_length",
+                    "a present segment length must square to the squared length",
                 )
         elif dimension == "POINT":
             if (
@@ -428,6 +440,7 @@ class MeasureCertificateResult(StrictModel):
                 or self.kernel_measures.perimeter is None
                 or self.kernel_measures.perimeter.as_fraction() != 0
                 or self.kernel_segment_length is not None
+                or self.kernel_segment_squared_length is not None
             ):
                 raise _validation_error(
                     "measure_kernel_point_ring",
@@ -438,6 +451,7 @@ class MeasureCertificateResult(StrictModel):
             or self.kernel_measures.edges
             or self.kernel_measures.perimeter is not None
             or self.kernel_segment_length is not None
+            or self.kernel_segment_squared_length is not None
         ):
             raise _validation_error(
                 "measure_kernel_empty_ring",

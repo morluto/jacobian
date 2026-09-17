@@ -124,17 +124,13 @@ class TestFound:
         # report a false exhaustion.  This witness has no idempotent at all, so
         # a complete order-2 search must still find it.
         premise = MagmaEquation(
-            left=_term(
-                [_variable(0), _variable(1), _apply((0, 1)), _apply((2, 0))], 3
-            ),
+            left=_term([_variable(0), _variable(1), _apply((0, 1)), _apply((2, 0))], 3),
             right=_term(
                 [_variable(0), _variable(1), _apply((0, 1)), _apply((0, 2))], 3
             ),
         )
         target = MagmaEquation(
-            left=_term(
-                [_variable(0), _variable(1), _apply((0, 1)), _apply((2, 0))], 3
-            ),
+            left=_term([_variable(0), _variable(1), _apply((0, 1)), _apply((2, 0))], 3),
             right=_term(
                 [_variable(0), _variable(1), _apply((0, 0)), _apply((2, 1))], 3
             ),

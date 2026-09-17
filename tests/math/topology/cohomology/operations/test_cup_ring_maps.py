@@ -276,9 +276,7 @@ class TestCupProduct:
 
         with pytest.raises(OperationDomainValidationError) as exc_info:
             cup_product(_CIRCLE, 2, left, right)
-        assert (
-            exc_info.value.errors()[0]["type"] == "topology.cup_product_degree_bound"
-        )
+        assert exc_info.value.errors()[0]["type"] == "topology.cup_product_degree_bound"
 
 
 class TestCohomologyRing:
@@ -437,7 +435,9 @@ class TestInducedMaps:
         # pullback is a coboundary; the pulled generator need not be the zero
         # cochain, and the induced degree-1 matrix must be the 0x1 zero map.
         disc = _complex(["0", "1", "2"], [["0", "1", "2"]])
-        collapse = SimplicialMap(source=disc, target=_CIRCLE, vertex_map=("a", "b", "b"))
+        collapse = SimplicialMap(
+            source=disc, target=_CIRCLE, vertex_map=("a", "b", "b")
+        )
 
         result = induced_cohomology_map(collapse, 2)
         by_degree = {matrix.degree: matrix for matrix in result.matrices}

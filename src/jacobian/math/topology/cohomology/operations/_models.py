@@ -452,6 +452,7 @@ __all__ = [
     "SteenrodSquareResult",
 ]
 
+
 class SimplicialCochain(StrictModel):
     """One prime-field simplicial cochain bound to its complex and degree.
 

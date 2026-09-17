@@ -5,10 +5,14 @@ from __future__ import annotations
 from fractions import Fraction
 from unittest.mock import patch
 
+import pytest
 from tests.fixtures.accounting import assert_charged_work_parity
 
 from jacobian._exact import CanonicalRational
 from jacobian.math.polynomials.multivariate import _factor_backend
+from jacobian.math.polynomials.multivariate._factor_backend import (
+    factor_worker_containment_available,
+)
 from jacobian.math.polynomials.multivariate._factor_models import (
     MultivariateFactorRequest,
 )
@@ -38,6 +42,11 @@ def _factorable_polynomial() -> RationalPolynomial:
     )
 
 
+@pytest.mark.skipif(
+    not factor_worker_containment_available(),
+    reason="the bounded factorization worker needs hard memory containment "
+    "(prlimit or the Linux self-applied address-space cap)",
+)
 def test_factorization_charges_its_single_backend_job() -> None:
     with patch.object(
         _factor_backend,

@@ -35,6 +35,7 @@ __all__ = [
     "FactorBackendCancelledError",
     "FactorBackendFailureError",
     "FactorBackendInterruptedError",
+    "factor_worker_containment_available",
     "run_bounded_factorization",
 ]
 
@@ -66,6 +67,33 @@ class FactorBackendInterruptedError(Exception):
     size of the exact output; this is a retryable execution condition,
     not a mathematical conclusion.
     """
+
+
+def _posix_self_limit_available() -> bool:
+    """Report whether the worker can self-apply a hard address-space cap.
+
+    The worker bounds itself with ``setrlimit(RLIMIT_AS)`` when the
+    coordinator could not wrap the launch in ``prlimit``. That mechanism
+    is supported and enforced on Linux only: macOS refuses to lower the
+    address-space, data-segment, and resident-set limits, and Windows is
+    not POSIX at all. Only platforms with an established hard cap are
+    claimed; everything else fails closed before spawning a worker.
+    """
+
+    return os.name == "posix" and sys.platform == "linux"
+
+
+def factor_worker_containment_available() -> bool:
+    """Report whether the bounded factorization worker can run here.
+
+    Containment needs either the ``prlimit`` launcher or the Linux
+    self-applied address-space cap. Callers that advertise or exercise
+    the real worker (published examples, worker-dependent tests) use
+    this probe to skip when the backend is unavailable instead of
+    recording a fail-closed refusal as a test failure.
+    """
+
+    return shutil.which("prlimit") is not None or _posix_self_limit_available()
 
 
 def _serialized_request(polynomial: RationalPolynomial) -> bytes:
@@ -149,8 +177,9 @@ def run_bounded_factorization(
     # worker additionally self-applies the same cap portably on POSIX so
     # the bound survives platforms without the prlimit binary.  A platform
     # offering neither mechanism cannot run this kernel safely, so fail
-    # closed instead of launching an unbounded child.
-    if prlimit is None and os.name == "nt":
+    # closed before spawning a worker instead of launching an unbounded
+    # child and reporting its refusal afterwards.
+    if not factor_worker_containment_available():
         raise FactorBackendFailureError(
             "no portable hard memory limit is available for the bounded "
             "factorization worker on this platform"

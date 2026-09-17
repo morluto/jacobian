@@ -13,6 +13,9 @@ from jacobian.math.polynomials.multivariate._division import (
     MultivariateDivisionRequest,
     MultivariateDivisionResult,
 )
+from jacobian.math.polynomials.multivariate._factor_backend import (
+    factor_worker_containment_available,
+)
 from jacobian.math.polynomials.multivariate._factor_models import (
     MultivariateFactorRequest,
     MultivariateFactorResult,
@@ -100,6 +103,11 @@ def _scalar(
     return _poly(variables, ((f"{num}/{den}", (0,) * len(variables)),))
 
 
+@pytest.mark.skipif(
+    not factor_worker_containment_available(),
+    reason="the bounded factorization worker needs hard memory containment "
+    "(prlimit or the Linux self-applied address-space cap)",
+)
 def test_serialized_multivariate_claims_are_source_bound_and_verifiable() -> None:
     left = _poly(
         ("x", "y"),

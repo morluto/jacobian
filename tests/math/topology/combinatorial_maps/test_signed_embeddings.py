@@ -196,7 +196,9 @@ class TestKnownAnswers:
         assert result.genus == 1
         assert _resolved_signs(result) == (0, 1, 1, 1, 1, 1)
         assert result.witness_dart_walk is not None
-        assert _is_closed_odd_walk(_k4(), _resolved_signs(result), result.witness_dart_walk)
+        assert _is_closed_odd_walk(
+            _k4(), _resolved_signs(result), result.witness_dart_walk
+        )
 
     def test_k4_two_twists_is_the_klein_bottle(self) -> None:
         result = check_signed_embedding(_k4(), _K4_SPHERE, twisted_edges=(0, 1))
@@ -206,7 +208,9 @@ class TestKnownAnswers:
         assert result.euler_characteristic == 0
         assert result.genus == 2
         assert result.witness_dart_walk is not None
-        assert _is_closed_odd_walk(_k4(), _resolved_signs(result), result.witness_dart_walk)
+        assert _is_closed_odd_walk(
+            _k4(), _resolved_signs(result), result.witness_dart_walk
+        )
 
     def test_k7_torus_untwisted_is_genus_one(self) -> None:
         result = check_signed_embedding(_k7(), _K7_TORUS)
@@ -223,7 +227,9 @@ class TestKnownAnswers:
         assert result.euler_characteristic <= 1
         assert result.genus == 2 - result.euler_characteristic
         assert result.witness_dart_walk is not None
-        assert _is_closed_odd_walk(_k7(), _resolved_signs(result), result.witness_dart_walk)
+        assert _is_closed_odd_walk(
+            _k7(), _resolved_signs(result), result.witness_dart_walk
+        )
 
     def test_tree_is_orientable_for_any_signs(self) -> None:
         # A tree has no cycles, so every signature is balanced.
@@ -241,7 +247,9 @@ class TestKnownAnswers:
         assert result.euler_characteristic == 1
         assert result.genus == 1
         assert result.witness_dart_walk is not None
-        assert _is_closed_odd_walk(graph, _resolved_signs(result), result.witness_dart_walk)
+        assert _is_closed_odd_walk(
+            graph, _resolved_signs(result), result.witness_dart_walk
+        )
 
     def test_cycle_untwisted_is_the_sphere(self) -> None:
         graph = _cycle(5)
@@ -351,7 +359,9 @@ class TestDefiningInvariants:
 
         assert result.status == "NONORIENTABLE_EMBEDDING"
         assert result.witness_dart_walk is not None
-        assert _is_closed_odd_walk(graph, _resolved_signs(result), result.witness_dart_walk)
+        assert _is_closed_odd_walk(
+            graph, _resolved_signs(result), result.witness_dart_walk
+        )
         assert not _is_balanced(graph, _resolved_signs(result))
 
     def test_deterministic_replay(self) -> None:

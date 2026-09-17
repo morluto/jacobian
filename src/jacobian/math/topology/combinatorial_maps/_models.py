@@ -274,8 +274,10 @@ class SignedEmbeddingCheckResult(StrictModel):
                 "alpha and sigma must cover every dart and darts must reference "
                 "declared vertices and darts",
             )
-        if self.signs is None or len(self.signs) != len(self.graph.edges) or any(
-            sign not in (0, 1) for sign in self.signs
+        if (
+            self.signs is None
+            or len(self.signs) != len(self.graph.edges)
+            or any(sign not in (0, 1) for sign in self.signs)
         ):
             raise _validation_error(
                 "signed_embedding_cell_counts",

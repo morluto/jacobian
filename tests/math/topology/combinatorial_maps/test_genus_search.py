@@ -212,7 +212,9 @@ class TestUnknown:
         assert result.status == "UNKNOWN"
         assert result.reason == "CANDIDATE_BUDGET_EXCEEDED"
         assert result.candidates_examined == 1
-        assert result.total_candidates == math.factorial(11) ** 3 * math.factorial(2) ** 12
+        assert (
+            result.total_candidates == math.factorial(11) ** 3 * math.factorial(2) ** 12
+        )
 
 
 class TestInvalidRequests:

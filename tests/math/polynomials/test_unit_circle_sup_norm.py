@@ -18,6 +18,7 @@ from fractions import Fraction
 import pytest
 from pydantic import ValidationError
 
+from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
@@ -382,11 +383,40 @@ def test_forged_exact_maximum_is_rejected() -> None:
     assert not verify_unit_circle_sup_norm_squared(forged)
 
 
-def test_absent_exact_maximum_still_verifies() -> None:
+def test_weakened_exact_maximum_is_rejected() -> None:
     result = _result({0: (1, 0), 1: (1, 0), 2: (-1, 0), 3: (1, 0)})
     weakened = result.model_copy(update={"sup_norm_squared_exact": None})
 
-    assert verify_unit_circle_sup_norm_squared(weakened)
+    assert not verify_unit_circle_sup_norm_squared(weakened)
+
+
+def test_forged_aggregate_fields_are_rejected() -> None:
+    result = _result({0: (1, 0), 1: (1, 0), 2: (-1, 0), 3: (1, 0)})
+    enclosure = result.sup_norm_squared_enclosure
+
+    forged_enclosure = result.model_copy(
+        update={
+            "sup_norm_squared_enclosure": enclosure.model_copy(
+                update={
+                    "lower": CanonicalRational(num=1, den=1),
+                    "upper": CanonicalRational(num=1_000_000, den=1),
+                }
+            )
+        }
+    )
+    forged_rank = result.model_copy(
+        update={
+            "critical_points": tuple(
+                point.model_copy(update={"comparison_rank": 99, "is_maximizer": True})
+                for point in result.critical_points
+            )
+        }
+    )
+    forged_status = result.model_copy(update={"maximizing_status": "ENDPOINT"})
+
+    assert not verify_unit_circle_sup_norm_squared(forged_enclosure)
+    assert not verify_unit_circle_sup_norm_squared(forged_rank)
+    assert not verify_unit_circle_sup_norm_squared(forged_status)
 
 
 def test_top_admitted_degree_carries_an_exact_value() -> None:

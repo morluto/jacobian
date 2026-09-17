@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import ConfigDict, Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
@@ -18,6 +18,7 @@ MAX_EMBEDDING_VERTICES = 64
 MAX_EMBEDDING_EDGES = 256
 MAX_EMBEDDING_DEGREE = 64
 MAX_EMBEDDING_ROTATION_ENTRIES = 4 * MAX_EMBEDDING_EDGES
+MAX_ROTATION_SYSTEM_CANDIDATES = 100_000
 
 EmbeddingCheckStatus = Literal["ORIENTABLE_CELLULAR_EMBEDDING", "INVALID_EMBEDDING"]
 
@@ -139,6 +140,197 @@ class OrientableEmbeddingCheckResult(StrictModel):
             raise _validation_error(
                 "embedding_genus",
                 "orientable genus requires a nonnegative even 2 - chi",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(cls, **values: Any) -> Self:
+        return cls.model_construct(**values)
+
+
+RotationSystemFindStatus = Literal["FOUND", "EXHAUSTED", "UNKNOWN"]
+
+RotationSystemFindReason = Literal[
+    "CANDIDATE_BUDGET_EXCEEDED",
+    "GRAPH_DISCONNECTED",
+]
+
+
+class RotationSystemFindRequest(StrictModel):
+    """Find a rotation system of genus at most ``max_genus`` by bounded search.
+
+    Rotation systems are enumerated in deterministic vertex order with each
+    local row ranging over cyclic orders (first entry fixed), so every
+    distinct cellular embedding appears exactly once up to cyclic shifts.
+    At most ``max_candidates`` systems are examined; a negative conclusion
+    follows only from completed search.  The graph must satisfy the shared
+    embedding-check envelope.
+    """
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "description": (
+                "A connected `SimpleUndirectedGraph` with a genus bound and "
+                "a candidate budget. Enumeration visits rotation systems in "
+                "deterministic vertex order; at most `max_candidates` systems "
+                "are checked, and a negative conclusion follows only from "
+                "completed search."
+            )
+        }
+    )
+
+    graph: SimpleUndirectedGraph = Field(
+        description="The connected simple graph to embed.",
+    )
+    max_genus: int = Field(
+        ge=0,
+        description="Accept the first rotation system of genus at most this bound.",
+    )
+    max_candidates: int = Field(
+        ge=1,
+        le=MAX_ROTATION_SYSTEM_CANDIDATES,
+        description=(
+            "Examine at most this many rotation systems before reporting "
+            "UNKNOWN with a budget reason."
+        ),
+    )
+
+
+class RotationSystemFindResult(StrictModel):
+    """A bounded genus-search outcome with its exhaustion receipt.
+
+    - ``FOUND``: ``rotations`` is the first enumerated rotation system of
+      genus at most ``max_genus`` and ``certificate`` is its checker result;
+      ``candidates_examined`` counts systems examined up to and including
+      the witness.
+    - ``EXHAUSTED``: every one of the ``total_candidates`` rotation systems
+      was examined and none has genus at most ``max_genus``; the receipt is
+      ``candidates_examined == total_candidates``.
+    - ``UNKNOWN``: no conclusion; ``reason`` distinguishes the spent
+      candidate budget from a disconnected graph (which the connected
+      Euler convention does not cover).
+
+    ``total_candidates`` is the exact product over vertices of
+    ``(degree - 1)!`` (one row for an isolated or degree-one vertex).
+    """
+
+    graph: SimpleUndirectedGraph
+    max_genus: int = Field(default=0, ge=0)
+    max_candidates: int = Field(default=1, ge=1)
+    status: RotationSystemFindStatus
+    rotations: tuple[tuple[int, ...], ...] = ()
+    certificate: OrientableEmbeddingCheckResult | None = None
+    candidates_examined: int = Field(default=0, ge=0)
+    total_candidates: int = Field(default=0, ge=0)
+    reason: RotationSystemFindReason | None = None
+    reason_detail: str | None = None
+
+    @model_validator(mode="after")
+    def require_find_payload(self) -> Self:
+        if (self.reason is None) != (self.reason_detail is None):
+            raise _validation_error(
+                "genus_search_reason_payload",
+                "reason and detail must agree",
+            )
+        if self.status == "UNKNOWN":
+            if self.reason is None:
+                raise _validation_error(
+                    "genus_search_unknown_payload",
+                    "an unknown search carries its bounded reason",
+                )
+            if self.rotations or self.certificate is not None:
+                raise _validation_error(
+                    "genus_search_unknown_witness",
+                    "an unknown search carries no rotation system",
+                )
+            return self
+        if self.reason is not None:
+            raise _validation_error(
+                "genus_search_decided_payload",
+                "a decided search carries no reason",
+            )
+        if self.status == "FOUND":
+            if not self.rotations or self.certificate is None:
+                raise _validation_error(
+                    "genus_search_found_payload",
+                    "a found search carries its rotation system and certificate",
+                )
+        elif self.rotations or self.certificate is not None:
+            raise _validation_error(
+                "genus_search_exhausted_payload",
+                "an exhausted search carries no rotation system",
+            )
+        return self
+
+    @model_validator(mode="after")
+    def require_find_certificate(self) -> Self:
+        if self.status != "FOUND":
+            return self
+        certificate = self.certificate
+        assert certificate is not None
+        if certificate.graph != self.graph:
+            raise _validation_error(
+                "genus_search_certificate_graph",
+                "the certificate must check the searched graph",
+            )
+        if certificate.status != "ORIENTABLE_CELLULAR_EMBEDDING":
+            raise _validation_error(
+                "genus_search_certificate_status",
+                "the certificate must be an admitted cellular embedding",
+            )
+        if certificate.rotations != self.rotations:
+            raise _validation_error(
+                "genus_search_certificate_rotations",
+                "the certificate must check the found rotation system",
+            )
+        if certificate.genus > self.max_genus:
+            raise _validation_error(
+                "genus_search_certificate_genus",
+                "the certificate genus must respect the search bound",
+            )
+        return self
+
+    @model_validator(mode="after")
+    def require_find_receipt(self) -> Self:
+        if self.total_candidates < 1:
+            raise _validation_error(
+                "genus_search_total_candidates",
+                "the total rotation-system count is at least one",
+            )
+        if not 0 <= self.candidates_examined <= self.total_candidates:
+            raise _validation_error(
+                "genus_search_examined_bounds",
+                "examined systems must lie between zero and the total",
+            )
+        if self.status == "EXHAUSTED":
+            if self.candidates_examined != self.total_candidates:
+                raise _validation_error(
+                    "genus_search_exhaustion_receipt",
+                    "an exhausted search examined every rotation system",
+                )
+            if self.total_candidates > self.max_candidates:
+                raise _validation_error(
+                    "genus_search_exhaustion_budget",
+                    "an exhausted search fit its candidate budget",
+                )
+        elif self.status == "FOUND":
+            if self.candidates_examined < 1:
+                raise _validation_error(
+                    "genus_search_found_receipt",
+                    "a found search examined at least its witness",
+                )
+        elif self.reason == "CANDIDATE_BUDGET_EXCEEDED":
+            if self.candidates_examined != min(
+                self.total_candidates, self.max_candidates
+            ):
+                raise _validation_error(
+                    "genus_search_budget_receipt",
+                    "a budget-exhausted search spent its full budget",
+                )
+        elif self.candidates_examined != 0:
+            raise _validation_error(
+                "genus_search_disconnected_receipt",
+                "a disconnected search examined no rotation system",
             )
         return self
 
@@ -402,6 +594,10 @@ __all__ = [
     "OrientableGenusResult",
     "OrientationReverseRequest",
     "OrientationReverseResult",
+    "RotationSystemFindReason",
+    "RotationSystemFindRequest",
+    "RotationSystemFindResult",
+    "RotationSystemFindStatus",
     "VertexFaceIncidenceRequest",
     "VertexFaceIncidenceResult",
 ]

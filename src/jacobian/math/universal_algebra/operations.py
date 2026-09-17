@@ -623,20 +623,12 @@ def _magma_table_algebra(order: int, cells: tuple[int, ...]) -> FiniteAlgebra:
     )
 
 
-def _countermodel_table_total(
-    min_order: int, max_order: int, break_symmetry: bool
-) -> int:
+def _countermodel_table_total(min_order: int, max_order: int) -> int:
     """Return the exact admitted table count across the declared orders.
 
-    Without symmetry breaking every order contributes ``n^(n^2)`` tables;
-    with breaking, the first cell is fixed to 0 and each order contributes
-    ``n^(n^2 - 1)`` tables.
+    Every order contributes ``n^(n^2)`` tables.
     """
 
-    if break_symmetry:
-        return sum(
-            order ** (order * order - 1) for order in range(min_order, max_order + 1)
-        )
     return sum(order ** (order * order) for order in range(min_order, max_order + 1))
 
 
@@ -646,17 +638,12 @@ def countermodel_find(
     min_order: int,
     max_order: int,
     table_budget: int,
-    break_symmetry: bool = False,
 ) -> CountermodelFindResult:
     """Find a finite-magma countermodel by bounded exhaustive table search.
 
     Carrier orders enumerate increasingly; within one order, tables enumerate
     row-major with ascending cell values, so the all-zero table comes first.
-    With ``break_symmetry``, tables with nonzero ``0 diamond 0`` are skipped:
-    every finite magma is isomorphic to one with an idempotent relabelled to
-    0, and equation satisfaction is isomorphism-invariant, so exhaustion
-    still decides the bounded range.  Each examined table runs the exact
-    countermodel checker:
+    Each examined table runs the exact countermodel checker:
 
     - ``FOUND`` carries the first countermodel's order and certificate;
       every smaller searched order was completely examined, so the witness
@@ -668,13 +655,11 @@ def countermodel_find(
     """
 
     _admit_countermodel_find(premises, target, min_order, max_order, table_budget)
-    total = _countermodel_table_total(min_order, max_order, break_symmetry)
+    total = _countermodel_table_total(min_order, max_order)
     examined = 0
     orders_complete: list[int] = []
     for order in range(min_order, max_order + 1):
         for cells in iproduct(range(order), repeat=order * order):
-            if break_symmetry and cells[0] != 0:
-                continue
             if examined >= table_budget:
                 return CountermodelFindResult._from_kernel(
                     premises=premises,
@@ -682,7 +667,6 @@ def countermodel_find(
                     min_order=min_order,
                     max_order=max_order,
                     table_budget=table_budget,
-                    break_symmetry=break_symmetry,
                     status="UNKNOWN",
                     orders_complete=tuple(orders_complete),
                     tables_examined=examined,
@@ -701,7 +685,6 @@ def countermodel_find(
                     min_order=min_order,
                     max_order=max_order,
                     table_budget=table_budget,
-                    break_symmetry=break_symmetry,
                     status="FOUND",
                     orders_complete=tuple(orders_complete),
                     order=order,
@@ -716,7 +699,6 @@ def countermodel_find(
         min_order=min_order,
         max_order=max_order,
         table_budget=table_budget,
-        break_symmetry=break_symmetry,
         status="EXHAUSTED_UP_TO_BOUND",
         orders_complete=tuple(orders_complete),
         tables_examined=examined,
@@ -735,7 +717,6 @@ def verify_countermodel_find(claim: CountermodelFindResult) -> bool:
                 claim.min_order,
                 claim.max_order,
                 claim.table_budget,
-                claim.break_symmetry,
             )
             == claim
         )

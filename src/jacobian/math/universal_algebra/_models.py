@@ -482,11 +482,7 @@ class CountermodelFindRequest(StrictModel):
 
     Carrier orders from ``min_order`` through ``max_order`` are enumerated
     in increasing order; within one order, tables enumerate row-major with
-    cell values ascending, so the all-zero table comes first.  With
-    ``break_symmetry``, tables with a nonzero ``0 diamond 0`` entry are
-    skipped: every finite magma is isomorphic to one with an idempotent
-    relabelled to 0, and equation satisfaction is isomorphism-invariant,
-    so exhaustion still decides the bounded range.  At most
+    cell values ascending, so the all-zero table comes first.  At most
     ``table_budget`` tables are checked before reporting UNKNOWN.
     """
 
@@ -524,13 +520,6 @@ class CountermodelFindRequest(StrictModel):
         le=MAX_COUNTERMODEL_TABLES,
         description="Check at most this many tables before reporting UNKNOWN.",
     )
-    break_symmetry: bool = Field(
-        default=False,
-        description=(
-            "Skip tables with nonzero 0-diamond-0; every finite magma is "
-            "isomorphic to one with an idempotent at 0."
-        ),
-    )
 
     @model_validator(mode="after")
     def require_order_range(self) -> Self:
@@ -556,7 +545,7 @@ class CountermodelFindResult(StrictModel):
       ``current_order`` is the order under search when it ran out.
 
     ``total_tables`` is the exact admitted table count: ``n^(n^2)`` per
-    order, or ``n^(n^2 - 1)`` with symmetry breaking (first cell fixed).
+    order.
     """
 
     premises: tuple[MagmaEquation, ...] = Field(
@@ -566,7 +555,6 @@ class CountermodelFindResult(StrictModel):
     min_order: int = Field(ge=1, le=MAX_COUNTERMODEL_ORDER)
     max_order: int = Field(ge=1, le=MAX_COUNTERMODEL_ORDER)
     table_budget: int = Field(ge=1, le=MAX_COUNTERMODEL_TABLES)
-    break_symmetry: bool = False
     status: CountermodelFindStatus
     orders_complete: tuple[int, ...] = ()
     order: int | None = None
@@ -628,11 +616,6 @@ class CountermodelFindResult(StrictModel):
             raise _validation_error(
                 "countermodel_find_certificate_order",
                 "the certificate carrier must match the found order",
-            )
-        if self.break_symmetry and certificate.algebra.tables[0][0] != 0:
-            raise _validation_error(
-                "countermodel_find_symmetry_binding",
-                "a symmetry-broken witness has 0-diamond-0 equal to 0",
             )
         return self
 

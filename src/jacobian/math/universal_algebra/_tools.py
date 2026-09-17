@@ -60,7 +60,6 @@ def compute_countermodel_find(
         request.min_order,
         request.max_order,
         request.table_budget,
-        request.break_symmetry,
     )
 
 
@@ -438,7 +437,6 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                     "min_order": 1,
                     "max_order": 2,
                     "table_budget": 1000,
-                    "break_symmetry": False,
                 },
             ),
             OperationExample(
@@ -453,7 +451,6 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                     "min_order": 1,
                     "max_order": 2,
                     "table_budget": 1000,
-                    "break_symmetry": False,
                 },
             ),
         ),

@@ -199,7 +199,7 @@ jobs:
     name: Publish to MCP Registry
     needs: [build, publish-npm]
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     permissions:
       contents: read
       id-token: write
@@ -212,6 +212,28 @@ jobs:
         env:
           RELEASE_SHA: ${{ needs.build.outputs.release_sha }}
         run: test "$(git rev-parse HEAD)" = "$RELEASE_SHA"
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+          package-manager-cache: false
+      - name: Wait for the npm distribution to become visible
+        # The MCP Registry validates that the referenced npm package version
+        # exists. npm publish can return before that version is served by the
+        # registry CDN, so wait for it instead of racing it. Without this wait
+        # every release failed registry validation with a 404 (v0.15.1 through
+        # v0.22.0) and only recovered after a manual re-dispatch.
+        run: |
+          version="$(node -p "require('./npm/package.json').version")"
+          echo "Waiting for jacobian@${version} to appear on the npm registry"
+          deadline=$(( SECONDS + 480 ))
+          until curl -fsS "https://registry.npmjs.org/jacobian/${version}" >/dev/null 2>&1; do
+            if (( SECONDS >= deadline )); then
+              echo "::error title=npm distribution unavailable::jacobian@${version} was not visible on the npm registry within 8 minutes."
+              exit 1
+            fi
+            sleep 15
+          done
+          echo "jacobian@${version} is available on the npm registry"
       - name: Install MCP Registry publisher
         env:
           MCP_PUBLISHER_VERSION: v1.8.0
@@ -241,4 +263,19 @@ jobs:
       - name: Authenticate to MCP Registry
         run: ./mcp-publisher login github-oidc
       - name: Publish server metadata
-        run: ./mcp-publisher publish
+        # The registry can remain briefly inconsistent after the npm version
+        # becomes visible, so retry the publish with backoff.
+        run: |
+          attempts=5
+          for attempt in $(seq 1 "$attempts"); do
+            if ./mcp-publisher publish; then
+              exit 0
+            fi
+            if (( attempt == attempts )); then
+              echo "::error title=MCP Registry publish failed::mcp-publisher publish failed after ${attempts} attempts."
+              exit 1
+            fi
+            delay=$(( attempt * 20 ))
+            echo "Publish attempt ${attempt} failed; retrying in ${delay}s"
+            sleep "$delay"
+          done

@@ -130,6 +130,34 @@ def test_mcp_publisher_is_verified_before_oidc_or_publication() -> None:
     )
 
 
+def test_mcp_publish_waits_for_the_npm_distribution_and_retries() -> None:
+    # The MCP Registry rejects metadata whose npm version is not yet visible.
+    # npm publish returns before CDN propagation, so the job must wait for the
+    # exact version and retry the publish instead of racing it (v0.15.1 through
+    # v0.22.0 all failed registry validation with a 404).
+    publisher = _job(_workflow(), "publish-mcp")
+
+    wait = _named_step(publisher, "Wait for the npm distribution to become visible")
+    wait_script = wait["run"]
+    assert isinstance(wait_script, str)
+    assert "require('./npm/package.json').version" in wait_script
+    assert "registry.npmjs.org/jacobian/${version}" in wait_script
+
+    steps = _step_names(publisher)
+    assert (
+        steps.index("Wait for the npm distribution to become visible")
+        < steps.index("Authenticate to MCP Registry")
+        < steps.index("Publish server metadata")
+    )
+
+    publication = _named_step(publisher, "Publish server metadata")
+    publish_script = publication["run"]
+    assert isinstance(publish_script, str)
+    assert "./mcp-publisher publish" in publish_script
+    assert "attempts=5" in publish_script
+    assert "sleep" in publish_script
+
+
 def test_npm_publish_sets_the_release_tag_without_a_second_registry_write() -> None:
     npm = _job(_workflow(), "publish-npm")
     publication = _named_step(npm, "Publish npm distribution")

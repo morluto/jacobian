@@ -68,6 +68,14 @@ from jacobian.math.finite_fields._models import (
     ProjectiveLineRequest,
     RestrictScalarsRequest,
 )
+from jacobian.math.finite_fields._syzygy_compute_models import (
+    FiniteFieldJacobianRequest,
+    FiniteFieldJacobianResult,
+    QuotientReduceRequest,
+    QuotientReduceResult,
+    SyzygyGeneratorsRequest,
+    SyzygyGeneratorsResult,
+)
 
 _FIELD_VALUE = FiniteFieldPresentation(
     characteristic=2,
@@ -381,6 +389,37 @@ def _jacobian_syzygy_check(
         rows=request.rows,
         ideal_generators=request.ideal_generators,
         reduction_variable=request.reduction_variable,
+    )
+
+
+def _finite_field_jacobian(
+    request: FiniteFieldJacobianRequest,
+) -> FiniteFieldJacobianResult:
+    from jacobian.math.finite_fields._syzygy_compute import jacobian_compute
+
+    return jacobian_compute(request.polynomial)
+
+
+def _quotient_reduce(request: QuotientReduceRequest) -> QuotientReduceResult:
+    from jacobian.math.finite_fields._syzygy_compute import quotient_reduce
+
+    return quotient_reduce(
+        request.polynomial,
+        request.ideal_generators,
+        request.reduction_variable,
+    )
+
+
+def _syzygy_generators(request: SyzygyGeneratorsRequest) -> SyzygyGeneratorsResult:
+    from jacobian.math.finite_fields._syzygy_compute import (
+        syzygy_generators as compute_generators,
+    )
+
+    return compute_generators(
+        request.polynomial,
+        request.ideal_generators,
+        request.reduction_variable,
+        request.max_syzygy_degree,
     )
 
 
@@ -794,6 +833,130 @@ def _build_tools() -> MathTools:
             ),
         ),
     )
+    jacobian_compute_operation = MathTool(
+        operation_id="finite_field.polynomial.jacobian.compute",
+        title="Derive the formal characteristic-p gradient",
+        description=(
+            "Derive the formal partial derivatives of one GF(p) multivariate "
+            "polynomial itself, bound to its presentation and variable axis: "
+            "exponents divisible by the characteristic vanish. Every partial "
+            "shares the source parent, so a wrong-characteristic gradient "
+            "cannot slip through."
+        ),
+        request_type=FiniteFieldJacobianRequest,
+        result_type=FiniteFieldJacobianResult,
+        run=_finite_field_jacobian,
+        tags=(
+            "finite-field",
+            "jacobian",
+            "differentiation",
+            "characteristic-p",
+            "exact",
+        ),
+        discovery_terms=(
+            "characteristic p derivative",
+            "finite field gradient",
+            "formal partial derivative",
+            "Jacobian",
+        ),
+        examples=(
+            OperationExample(
+                name="graf_char_two_gradient",
+                description=(
+                    "Graf's F2 polynomial z^2+x^3+y^5 differentiates to "
+                    "(x^2, y^4, 0): the z term vanishes in characteristic 2."
+                ),
+                input={"polynomial": _GRAF_F},
+            ),
+        ),
+    )
+    quotient_reduce_operation = MathTool(
+        operation_id="finite_field.quotient.reduce.compute",
+        title="Reduce to normal form modulo a principal ideal",
+        description=(
+            "Reduce one GF(p) polynomial to its unique normal form under the "
+            "admitted principal-monic regime (empty ideal, or one generator "
+            "monic in the declared reduction variable) with a replayable "
+            "monomial-choice ledger. Replaying the steps against the retained "
+            "generator reproduces the remainder; equal remainders decide "
+            "quotient equality."
+        ),
+        request_type=QuotientReduceRequest,
+        result_type=QuotientReduceResult,
+        run=_quotient_reduce,
+        tags=(
+            "finite-field",
+            "quotient-ring",
+            "normal-form",
+            "characteristic-p",
+            "exact",
+        ),
+        discovery_terms=(
+            "quotient ring normal form",
+            "principal ideal reduction",
+            "monic reduction variable",
+            "quotient equality",
+        ),
+        examples=(
+            OperationExample(
+                name="graf_generator_reduces_to_zero",
+                description=(
+                    "Graf's generator z^2+x^3+y^5 reduces to zero modulo "
+                    "itself in one recorded step."
+                ),
+                input={
+                    "polynomial": _GRAF_F,
+                    "ideal_generators": [_GRAF_F],
+                    "reduction_variable": "z",
+                },
+            ),
+        ),
+    )
+    syzygy_generators_operation = MathTool(
+        operation_id="finite_field.jacobian_syzygy.generators.compute",
+        title="Compute a bounded-degree Jacobian syzygy slice basis",
+        description=(
+            "Compute an exact GF(p)-basis of the syzygy rows whose every "
+            "component has total degree at most max_syzygy_degree and whose "
+            "dot product with the characteristic-p Jacobian reduces to zero "
+            "in the admitted quotient regime. Every returned row replays to "
+            "a zero remainder; the dimension theorem binds rows to "
+            "unknowns - rank. An empty family is exact (the slice is zero), "
+            "never a claim beyond the slice or about the full module."
+        ),
+        request_type=SyzygyGeneratorsRequest,
+        result_type=SyzygyGeneratorsResult,
+        run=_syzygy_generators,
+        tags=(
+            "finite-field",
+            "jacobian",
+            "syzygy",
+            "quotient-ring",
+            "characteristic-p",
+            "exact",
+        ),
+        discovery_terms=(
+            "Jacobian syzygy generators",
+            "syzygy module basis",
+            "characteristic p syzygies",
+            "Der module generators",
+        ),
+        examples=(
+            OperationExample(
+                name="graf_char_two_syzygy_slice",
+                description=(
+                    "Graf's F2 Jacobian (x^2,y^4,0): the degree-4 slice "
+                    "contains (0,0,1) and (y^4,x^2,0) among its basis rows."
+                ),
+                input={
+                    "polynomial": _GRAF_F,
+                    "ideal_generators": [_GRAF_F],
+                    "reduction_variable": "z",
+                    "max_syzygy_degree": 4,
+                },
+            ),
+        ),
+    )
     return (
         projective_line_operation,
         matrix_rank_operation,
@@ -814,6 +977,9 @@ def _build_tools() -> MathTools:
         projective_count_operation,
         base_change_operation,
         jacobian_syzygy_operation,
+        jacobian_compute_operation,
+        quotient_reduce_operation,
+        syzygy_generators_operation,
     )
 
 

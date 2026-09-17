@@ -314,9 +314,13 @@ def _bounded_monomials(nvars: int, degree: int) -> list[tuple[int, ...]]:
     return sorted(out)
 
 
-def _nullspace_gfp(matrix: list[list[int]], prime: int) -> tuple[list[list[int]], int]:
+def _nullspace_gfp(
+    matrix: list[list[int]], prime: int, unknowns: int
+) -> tuple[list[list[int]], int]:
     """Return a kernel basis and rank of an exact GF(p) matrix.
 
+    ``unknowns`` is supplied by the caller so a zero-equation slice still spans
+    the full coordinate space; the matrix shape alone cannot recover it.
     Reduced row-echelon form with deterministic pivot order; free columns
     in order give the basis.  Raises a resource error past the admitted
     elimination-update budget.
@@ -324,7 +328,6 @@ def _nullspace_gfp(matrix: list[list[int]], prime: int) -> tuple[list[list[int]]
 
     rows = [row[:] for row in matrix]
     equations = len(rows)
-    unknowns = len(rows[0]) if rows else 0
     pivots: list[int] = []
     updates = 0
     pivot_row = 0
@@ -452,7 +455,7 @@ def syzygy_generators(
     for column_index, column in enumerate(columns):
         for row_index, coefficient in column.items():
             matrix[row_index][column_index] = coefficient
-    basis, rank = _nullspace_gfp(matrix, prime)
+    basis, rank = _nullspace_gfp(matrix, prime, unknowns)
     rows: list[tuple[AlgebraicPolynomial, ...]] = []
     for vector in basis:
         entries: list[AlgebraicPolynomial] = []

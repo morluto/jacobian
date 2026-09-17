@@ -409,6 +409,30 @@ class TestSyzygyGenerators:
         assert len(result.rows) == result.unknowns - result.rank
         assert verify_syzygy_generators(result)
 
+    def test_zero_jacobian_slice_spans_the_full_space(self) -> None:
+        # x^2 over F2 has vanishing partials, so the slice is the kernel of the
+        # zero map: the full coordinate space, not the empty family.
+        presentation = finite_field(2, (0, 1))
+        axis = Axis(name="vars", labels=("x", "y"))
+        f = _poly(presentation, axis, {(2, 0): 1})
+
+        result = syzygy_generators(f, (), None, 0)
+
+        assert result.unknowns == 2
+        assert result.rank == 0
+        assert len(result.rows) == result.unknowns - result.rank
+        rows = {
+            tuple(tuple(sorted(_term_map(entry).items())) for entry in row)
+            for row in result.rows
+        }
+        assert rows == {
+            ((((0, 0), 1),), ()),
+            ((), (((0, 0), 1),)),
+        }
+        assert verify_syzygy_generators(result)
+        restored = SyzygyGeneratorsResult.model_validate_json(result.model_dump_json())
+        assert restored == result
+
     def test_rows_match_an_independent_nullspace(self) -> None:
         # Rebuild the slice linear system with separately written GF(2)
         # elimination and compare nullities; every produced row must satisfy

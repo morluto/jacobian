@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import ConfigDict, Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
@@ -27,6 +27,22 @@ EmbeddingObstructionCode = Literal[
     "EDGE_INDEX_OUT_OF_RANGE",
     "FOREIGN_INCIDENCE",
     "DUPLICATE_INCIDENCE",
+    "GRAPH_DISCONNECTED",
+]
+
+SignedEmbeddingCheckStatus = Literal[
+    "ORIENTABLE_EMBEDDING",
+    "NONORIENTABLE_EMBEDDING",
+    "INVALID_EMBEDDING",
+]
+
+SignedEmbeddingObstructionCode = Literal[
+    "ROTATION_ROW_COUNT",
+    "ROTATION_DEGREE_MISMATCH",
+    "EDGE_INDEX_OUT_OF_RANGE",
+    "FOREIGN_INCIDENCE",
+    "DUPLICATE_INCIDENCE",
+    "SIGN_INDEX_OUT_OF_RANGE",
     "GRAPH_DISCONNECTED",
 ]
 
@@ -145,6 +161,296 @@ class OrientableEmbeddingCheckResult(StrictModel):
     @classmethod
     def _from_kernel(cls, **values: Any) -> Self:
         return cls.model_construct(**values)
+
+
+class SignedEmbeddingCheckResult(StrictModel):
+    """A checked signed embedding with its orientability decision.
+
+    A signed rotation system gives every edge a sign: 1 (untwisted) or 0
+    (twisted, orientation-reversing).  The checker decides orientability
+    through the orientable double cover and an exact balance test rather
+    than from face parities: a connected signed system is orientable
+    exactly when every cycle carries an even number of twisted edges
+    (equivalently, when its orientable double cover is disconnected).
+
+    For an admitted signed rotation system the result carries the canonical
+    local rotations, the base dart data (``darts`` with ``(tail, head,
+    reverse)``, the edge-reversal permutation ``alpha`` and the rotation
+    successor ``sigma``, exactly as in the unsigned checker), the complete
+    base face-walk family, ``chi = V - E + F``, and the surface
+    classification:
+
+    - ``ORIENTABLE_EMBEDDING``: the signature is balanced; the closed
+      surface is the orientable one of genus ``g = (2 - chi) / 2`` and no
+      witness is carried.
+    - ``NONORIENTABLE_EMBEDDING``: the signature is unbalanced; the closed
+      surface is the nonorientable one of genus ``h = 2 - chi`` and
+      ``witness_dart_walk`` records a concrete orientation-reversing closed
+      walk (an odd-twist cycle, hence closed and head-to-tail).
+    - ``INVALID_EMBEDDING``: the rotation system does not describe a
+      cellular embedding of the graph; ``obstruction_code`` and
+      ``obstruction_detail`` carry the first reason.
+
+    ``signs`` holds the resolved 0/1 signing for an admitted system, and is
+    ``None`` only when a ``twisted_edges`` encoding failed before resolution.
+    ``twisted_edges`` retains the supplied twisted-edge list for such failed
+    encodings, so the verifier can replay the exact input.
+
+    Face walks are dart cycles in the checker's ``alpha . sigma``
+    convention, matching ``graph.embedding.orientable.check``: consecutive
+    entries need not be head-to-tail darts, and a walk may repeat darts.
+    Every graph edge occurs in exactly two face-walk positions in total.
+    The faces are projected from the orientable double cover, so each one
+    crosses an even number of twisted edges; orientability is decided by
+    the balance test, never by face parity.
+    """
+
+    graph: SimpleUndirectedGraph
+    status: SignedEmbeddingCheckStatus
+    signs: tuple[int, ...] | None = None
+    twisted_edges: tuple[int, ...] | None = None
+    rotations: tuple[tuple[int, ...], ...] = ()
+    dart_rotations: tuple[tuple[int, ...], ...] = ()
+    darts: tuple[tuple[int, int, int], ...] = ()
+    alpha: tuple[int, ...] = ()
+    sigma: tuple[int, ...] = ()
+    face_walks: tuple[tuple[int, ...], ...] = ()
+    vertices: int = Field(default=0, ge=0)
+    edges: int = Field(default=0, ge=0)
+    faces: int = Field(default=0, ge=0)
+    euler_characteristic: int = 0
+    genus: int = Field(default=0, ge=0)
+    orientable: bool = False
+    witness_dart_walk: tuple[int, ...] | None = None
+    obstruction_code: SignedEmbeddingObstructionCode | None = None
+    obstruction_detail: str | None = None
+
+    @model_validator(mode="after")
+    def require_signed_embedding_payload(self) -> Self:
+        if (self.obstruction_code is None) != (self.obstruction_detail is None):
+            raise _validation_error(
+                "signed_embedding_obstruction_payload",
+                "obstruction code and detail must agree",
+            )
+        if self.status == "INVALID_EMBEDDING":
+            if self.obstruction_code is None:
+                raise _validation_error(
+                    "signed_embedding_invalid_payload",
+                    "an invalid embedding carries its first obstruction",
+                )
+            return self
+        if self.obstruction_code is not None:
+            raise _validation_error(
+                "signed_embedding_valid_payload",
+                "a checked embedding carries no obstruction",
+            )
+        if self.status == "ORIENTABLE_EMBEDDING":
+            if not self.orientable or self.witness_dart_walk is not None:
+                raise _validation_error(
+                    "signed_embedding_orientable_payload",
+                    "an orientable embedding carries no orientation-reversing witness",
+                )
+        elif self.orientable or self.witness_dart_walk is None:
+            raise _validation_error(
+                "signed_embedding_witness_payload",
+                "a nonorientable embedding carries an orientation-reversing witness",
+            )
+        return self
+
+    @model_validator(mode="after")
+    def require_signed_embedding_cells(self) -> Self:
+        if self.status == "INVALID_EMBEDDING":
+            return self
+        dart_count = len(self.darts)
+        if not (len(self.alpha) == len(self.sigma) == dart_count) or any(
+            len(dart) != 3
+            or not 0 <= dart[0] < len(self.graph.vertices)
+            or not 0 <= dart[1] < len(self.graph.vertices)
+            or not 0 <= dart[2] < dart_count
+            for dart in self.darts
+        ):
+            raise _validation_error(
+                "signed_embedding_permutation_axes",
+                "alpha and sigma must cover every dart and darts must reference "
+                "declared vertices and darts",
+            )
+        if (
+            self.signs is None
+            or len(self.signs) != len(self.graph.edges)
+            or any(sign not in (0, 1) for sign in self.signs)
+        ):
+            raise _validation_error(
+                "signed_embedding_cell_counts",
+                "signs must carry one 0/1 entry per edge of the bound graph",
+            )
+        if self.vertices != len(self.graph.vertices) or self.edges != len(
+            self.graph.edges
+        ):
+            raise _validation_error(
+                "signed_embedding_graph_counts",
+                "vertex and edge counts must match the bound graph",
+            )
+        if self.euler_characteristic != self.vertices - self.edges + self.faces:
+            raise _validation_error(
+                "signed_embedding_euler_characteristic",
+                "characteristic must equal vertices - edges + faces",
+            )
+        return self
+
+    @model_validator(mode="after")
+    def require_signed_embedding_faces(self) -> Self:
+        if self.status == "INVALID_EMBEDDING":
+            return self
+        dart_count = len(self.darts)
+        if dart_count == 0:
+            if self.faces != 1 or self.face_walks:
+                raise _validation_error(
+                    "signed_embedding_edgeless_faces",
+                    "the edgeless single-vertex embedding has one empty face",
+                )
+            if self.euler_characteristic != 2 or self.genus != 0 or not self.orientable:
+                raise _validation_error(
+                    "signed_embedding_edgeless_surface",
+                    "the edgeless single-vertex embedding is the trivial sphere",
+                )
+            return self
+        if any(not 0 <= dart < dart_count for walk in self.face_walks for dart in walk):
+            raise _validation_error(
+                "signed_embedding_face_walk_shape",
+                "face walks must reference declared darts",
+            )
+        occurrences = [0] * len(self.graph.edges)
+        for walk in self.face_walks:
+            for dart in walk:
+                occurrences[dart // 2] += 1
+        if any(count != 2 for count in occurrences):
+            raise _validation_error(
+                "signed_embedding_face_partition",
+                "every graph edge must occur in exactly two face-walk positions",
+            )
+        if len(self.face_walks) != self.faces:
+            raise _validation_error(
+                "signed_embedding_face_count",
+                "the face ledger must carry one walk per face",
+            )
+        return self
+
+    @model_validator(mode="after")
+    def require_signed_embedding_surface(self) -> Self:
+        if self.status == "INVALID_EMBEDDING" or not self.darts:
+            return self
+        if self.status == "ORIENTABLE_EMBEDDING":
+            excess = 2 - self.euler_characteristic
+            if excess < 0 or excess % 2 != 0 or self.genus != excess // 2:
+                raise _validation_error(
+                    "signed_embedding_orientable_genus",
+                    "orientable genus requires a nonnegative even 2 - chi",
+                )
+            return self
+        if self.euler_characteristic > 1 or self.genus != 2 - self.euler_characteristic:
+            raise _validation_error(
+                "signed_embedding_nonorientable_genus",
+                "nonorientable genus requires chi <= 1 and h = 2 - chi",
+            )
+        witness = self.witness_dart_walk
+        assert witness is not None
+        dart_count = len(self.darts)
+        if not witness or any(not 0 <= dart < dart_count for dart in witness):
+            raise _validation_error(
+                "signed_embedding_witness_shape",
+                "the witness must be a nonempty closed dart walk",
+            )
+        tails = [self.darts[dart][0] for dart in witness]
+        heads = [self.darts[dart][1] for dart in witness]
+        if any(
+            heads[position] != tails[(position + 1) % len(witness)]
+            for position in range(len(witness))
+        ):
+            raise _validation_error(
+                "signed_embedding_witness_binding",
+                "the witness must be a closed head-to-tail dart walk",
+            )
+        if self.signs is None:
+            raise _validation_error(
+                "signed_embedding_witness_signs",
+                "a nonorientable embedding carries its resolved signing",
+            )
+        if sum(1 for dart in witness if self.signs[dart // 2] == 0) % 2 != 1:
+            raise _validation_error(
+                "signed_embedding_witness_parity",
+                "the witness must cross an odd number of twisted edges",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(cls, **values: Any) -> Self:
+        return cls.model_construct(**values)
+
+
+class SignedEmbeddingCheckRequest(StrictModel):
+    """Check one supplied signed rotation system of a connected simple graph.
+
+    ``rotations[i]`` is the cyclic order at ``graph.vertices[i]`` of incident
+    edge indices into ``graph.edges``.  ``signs[j]`` is 1 when edge ``j``
+    preserves the local orientation at both endpoints and 0 when traversing
+    the edge reverses the surface orientation (a twisted, crosscap-carrying
+    edge).  Edge signs may be transported either as one integer per edge
+    (``signs``) or as a list of twisted edge indices (``twisted_edges``);
+    at most one form may be supplied, and supplying neither means every
+    edge is untwisted.
+    """
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "description": (
+                "A connected `SimpleUndirectedGraph` with one cyclic rotation "
+                "row per vertex listing incident edge indices, plus edge "
+                "signs. Provide either `signs` (one 0/1 integer per edge, in "
+                "edge order) or `twisted_edges` (indices of edges whose sign "
+                "is 0, i.e. orientation-reversing); unset means every edge "
+                "is untwisted."
+            )
+        }
+    )
+
+    graph: SimpleUndirectedGraph = Field(
+        description=(
+            "The connected simple graph being embedded. Vertices keep their "
+            "labels; edges are canonical label-ordered pairs."
+        ),
+    )
+    rotations: tuple[tuple[int, ...], ...] = Field(
+        description=(
+            "One cyclic order of incident edge indices per graph vertex, "
+            "aligned with `graph.vertices`. Each incident edge appears "
+            "exactly once in its endpoint's row."
+        ),
+    )
+    signs: tuple[int, ...] | None = Field(
+        default=None,
+        description=(
+            "Exactly one sign per graph edge in edge order: 1 (untwisted) or "
+            "0 (twisted, orientation-reversing). Omit when using "
+            "`twisted_edges`."
+        ),
+    )
+    twisted_edges: tuple[int, ...] | None = Field(
+        default=None,
+        description=(
+            "Indices of edges whose sign is 0 (twisted). Omit when using "
+            "`signs`; an omitted `twisted_edges` with no `signs` means all "
+            "edges are untwisted."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_one_sign_encoding(self) -> Self:
+        if self.signs is not None and self.twisted_edges is not None:
+            raise _validation_error(
+                "signed_embedding_sign_encoding",
+                "provide either signs or twisted_edges, not both",
+            )
+        return self
 
 
 class FacesRequest(StrictModel):
@@ -402,6 +708,10 @@ __all__ = [
     "OrientableGenusResult",
     "OrientationReverseRequest",
     "OrientationReverseResult",
+    "SignedEmbeddingCheckRequest",
+    "SignedEmbeddingCheckResult",
+    "SignedEmbeddingCheckStatus",
+    "SignedEmbeddingObstructionCode",
     "VertexFaceIncidenceRequest",
     "VertexFaceIncidenceResult",
 ]

@@ -11,6 +11,7 @@ def test_exact_public_api_symbols() -> None:
         "FacialWalk",
         "FiniteCombinatorialMap",
         "check_orientable_embedding",
+        "check_signed_embedding",
         "connected_components",
         "connected_components_vertices",
         "dual_map",
@@ -22,6 +23,7 @@ def test_exact_public_api_symbols() -> None:
         "verify_dual",
         "verify_orientable_embedding",
         "verify_orientation_reverse",
+        "verify_signed_embedding",
         "verify_vertex_face_incidence",
         "vertex_face_incidence",
     )

@@ -2,6 +2,7 @@
 
 from jacobian.math.topology.combinatorial_maps.operations import (
     check_orientable_embedding,
+    check_signed_embedding,
     connected_components,
     connected_components_vertices,
     dual_map,
@@ -13,6 +14,7 @@ from jacobian.math.topology.combinatorial_maps.operations import (
     verify_dual,
     verify_orientable_embedding,
     verify_orientation_reverse,
+    verify_signed_embedding,
     verify_vertex_face_incidence,
     vertex_face_incidence,
 )
@@ -25,6 +27,7 @@ __all__ = [
     "FacialWalk",
     "FiniteCombinatorialMap",
     "check_orientable_embedding",
+    "check_signed_embedding",
     "connected_components",
     "connected_components_vertices",
     "dual_map",
@@ -36,6 +39,7 @@ __all__ = [
     "verify_dual",
     "verify_orientable_embedding",
     "verify_orientation_reverse",
+    "verify_signed_embedding",
     "verify_vertex_face_incidence",
     "vertex_face_incidence",
 ]

@@ -8,6 +8,9 @@ dart IDs; no backend embedding object crosses the boundary.
 
 from __future__ import annotations
 
+from collections import deque
+from itertools import pairwise
+
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
@@ -36,6 +39,8 @@ from ._models import (
     OrientableEmbeddingCheckResult,
     OrientableGenusResult,
     OrientationReverseResult,
+    SignedEmbeddingCheckRequest,
+    SignedEmbeddingCheckResult,
     VertexFaceIncidenceResult,
 )
 from .values import (
@@ -48,6 +53,7 @@ from .values import (
 
 __all__ = [
     "check_orientable_embedding",
+    "check_signed_embedding",
     "connected_components",
     "connected_components_vertices",
     "dual_map",
@@ -59,6 +65,7 @@ __all__ = [
     "verify_dual",
     "verify_orientable_embedding",
     "verify_orientation_reverse",
+    "verify_signed_embedding",
     "verify_vertex_face_incidence",
     "vertex_face_incidence",
 ]
@@ -648,6 +655,609 @@ def check_orientable_embedding(
 def verify_orientable_embedding(claim: OrientableEmbeddingCheckResult) -> bool:
     """Check a claimed embedding by replaying the supplied rotation system."""
     return check_orientable_embedding(claim.graph, claim.rotations) == claim
+
+
+def _signed_embedding_signs(
+    request: SignedEmbeddingCheckRequest,
+) -> tuple[int, ...] | SignedEmbeddingCheckResult:
+    """Resolve the two sign encodings to one admission-checked sign tuple."""
+
+    edges = request.graph.edges
+    if request.signs is not None and request.twisted_edges is not None:
+        return _invalid_signed_embedding(
+            request.graph,
+            request.rotations,
+            request.signs,
+            "SIGN_INDEX_OUT_OF_RANGE",
+            "provide either signs or twisted_edges, not both",
+        )
+    if request.signs is not None:
+        signs = request.signs
+        if any(sign not in (0, 1) for sign in signs):
+            return _invalid_signed_embedding(
+                request.graph,
+                request.rotations,
+                signs,
+                "SIGN_INDEX_OUT_OF_RANGE",
+                "each edge sign must be 0 (twisted) or 1 (untwisted)",
+            )
+        if len(signs) != len(edges):
+            return _invalid_signed_embedding(
+                request.graph,
+                request.rotations,
+                signs,
+                "SIGN_INDEX_OUT_OF_RANGE",
+                "signs must carry exactly one entry per graph edge",
+            )
+        return signs
+    twisted = request.twisted_edges
+    if twisted is None:
+        return (1,) * len(edges)
+    seen: set[int] = set()
+    for edge_index in twisted:
+        if type(edge_index) is not int or not 0 <= edge_index < len(edges):
+            return _invalid_signed_embedding(
+                request.graph,
+                request.rotations,
+                (),
+                "SIGN_INDEX_OUT_OF_RANGE",
+                "twisted_edges must index a declared graph edge",
+            )
+        if edge_index in seen:
+            return _invalid_signed_embedding(
+                request.graph,
+                request.rotations,
+                (),
+                "SIGN_INDEX_OUT_OF_RANGE",
+                f"twisted_edges repeats edge {edge_index}",
+            )
+        seen.add(edge_index)
+    return tuple(0 if edge_index in seen else 1 for edge_index in range(len(edges)))
+
+
+def _invalid_signed_embedding(
+    graph: SimpleUndirectedGraph,
+    rotations: tuple[tuple[int, ...], ...],
+    signs: tuple[int, ...],
+    code: str,
+    detail: str,
+) -> SignedEmbeddingCheckResult:
+    canonical = tuple(_canonical_edge_rotation(tuple(row)) for row in rotations)
+    return SignedEmbeddingCheckResult._from_kernel(
+        graph=graph,
+        status="INVALID_EMBEDDING",
+        signs=signs,
+        rotations=canonical,
+        vertices=len(graph.vertices),
+        edges=len(graph.edges),
+        obstruction_code=code,
+        obstruction_detail=detail,
+    )
+
+
+def _signed_cover_graph(
+    endpoints: list[tuple[int, int]],
+    canonical: tuple[tuple[int, ...], ...],
+    signs: tuple[int, ...],
+) -> tuple[list[tuple[int, int]], list[list[int]]]:
+    """Build the orientable double cover: endpoints and rotation rows.
+
+    Cover vertices are ``base_position * 2 + sheet``; cover edges are
+    ``base_edge * 2 + sheet-lift`` in base edge order.  Twisted base edges
+    cross sheets; the second sheet carries mirrored rotations.
+    """
+
+    vertex_count = len(canonical)
+    twisted = [sign == 0 for sign in signs]
+    cover_endpoints: list[tuple[int, int]] = []
+    for edge_index, (left, right) in enumerate(endpoints):
+        turn = 1 if twisted[edge_index] else 0
+        cover_endpoints.append((left * 2, right * 2 + turn))
+        cover_endpoints.append((left * 2 + 1, right * 2 + (1 - turn)))
+    cover_rows: list[list[int]] = [[] for _ in range(2 * vertex_count)]
+    for position in range(vertex_count):
+        for sheet in (0, 1):
+            order = (
+                list(canonical[position])
+                if sheet == 0
+                else list(reversed(canonical[position]))
+            )
+            row: list[int] = []
+            for edge_index in order:
+                left, right = endpoints[edge_index]
+                turn = 1 if twisted[edge_index] else 0
+                # Lift 2e joins (left, 0) to (right, turn); lift 2e+1 joins
+                # (left, 1) to (right, 1 - turn).  Exactly one lift carries
+                # (position, sheet).
+                if (position == left and sheet == 0) or (
+                    position == right and sheet == turn
+                ):
+                    row.append(2 * edge_index)
+                else:
+                    row.append(2 * edge_index + 1)
+            cover_rows[position * 2 + sheet] = row
+    return cover_endpoints, cover_rows
+
+
+def _cover_components(
+    cover_endpoints: list[tuple[int, int]], vertex_count: int
+) -> list[list[int]]:
+    """Split cover vertices into connected components in vertex order."""
+
+    adjacency: list[set[int]] = [set() for _ in range(vertex_count)]
+    for left, right in cover_endpoints:
+        adjacency[left].add(right)
+        adjacency[right].add(left)
+    seen = [False] * vertex_count
+    components: list[list[int]] = []
+    for start in range(vertex_count):
+        if seen[start]:
+            continue
+        queue = deque([start])
+        seen[start] = True
+        component = [start]
+        while queue:
+            node = queue.popleft()
+            for target in sorted(adjacency[node]):
+                if not seen[target]:
+                    seen[target] = True
+                    component.append(target)
+                    queue.append(target)
+        components.append(component)
+    return components
+
+
+def _project_component_faces(
+    endpoints: list[tuple[int, int]],
+    cover_endpoints: list[tuple[int, int]],
+    cover_rows: list[list[int]],
+    component: list[int],
+) -> list[tuple[int, ...]]:
+    """Run the unsigned ledger on one cover component and project its faces."""
+
+    members = set(component)
+    edge_order = [
+        edge_index
+        for edge_index, (left, right) in enumerate(cover_endpoints)
+        if left in members and right in members
+    ]
+    local_of = {edge_index: position for position, edge_index in enumerate(edge_order)}
+    labels = tuple(str(vertex) for vertex in component)
+    ordered_edges: list[tuple[str, str]] = []
+    for edge_index in edge_order:
+        left = str(cover_endpoints[edge_index][0])
+        right = str(cover_endpoints[edge_index][1])
+        ordered_edges.append((left, right) if left < right else (right, left))
+    comp_graph = SimpleUndirectedGraph(
+        vertices=labels,
+        edges=tuple(ordered_edges),
+    )
+    comp_index = {label: position for position, label in enumerate(labels)}
+    comp_canonical = tuple(
+        _canonical_edge_rotation(
+            tuple(
+                local_of[edge_index]
+                for edge_index in cover_rows[vertex]
+                if edge_index in local_of
+            )
+        )
+        for vertex in component
+    )
+    ledger = _embedding_ledger(comp_graph, comp_canonical, comp_index)
+    projected: list[tuple[int, ...]] = []
+    for walk in ledger.face_walks:
+        base_walk: list[int] = []
+        for dart in walk:
+            local_edge = dart // 2
+            global_edge = edge_order[local_edge]
+            base_edge = global_edge // 2
+            # Match the dart tail by vertex identity, not by parity.
+            local_tail = ledger.darts[dart][0]
+            cover_tail = component[local_tail]
+            base_left, base_right = endpoints[base_edge]
+            base_vertex = cover_tail // 2
+            if base_vertex == base_left:
+                base_walk.append(2 * base_edge)
+            elif base_vertex == base_right:
+                base_walk.append(2 * base_edge + 1)
+            else:
+                raise RuntimeError("a cover dart does not project to its base edge")
+        projected.append(tuple(base_walk))
+    return projected
+
+
+def _signed_cover_faces(
+    endpoints: list[tuple[int, int]],
+    canonical: tuple[tuple[int, ...], ...],
+    signs: tuple[int, ...],
+) -> list[tuple[int, ...]]:
+    """Project the double-cover faces to base dart walks.
+
+    Runs the unsigned face ledger on each connected cover component and
+    projects every cover face to a closed base dart walk.  Each base edge
+    occurs in exactly two projected positions.
+    """
+
+    cover_endpoints, cover_rows = _signed_cover_graph(endpoints, canonical, signs)
+    components = _cover_components(cover_endpoints, 2 * len(canonical))
+    projected: list[tuple[int, ...]] = []
+    for component in components:
+        projected.extend(
+            _project_component_faces(endpoints, cover_endpoints, cover_rows, component)
+        )
+    return projected
+
+
+def _signed_base_dart_data(
+    endpoints: list[tuple[int, int]],
+    canonical: tuple[tuple[int, ...], ...],
+) -> tuple[
+    tuple[tuple[int, int, int], ...],
+    tuple[tuple[int, ...], ...],
+    tuple[int, ...],
+    tuple[int, ...],
+]:
+    """Build base darts, dart rotations, alpha, and sigma of an admitted system."""
+
+    darts: list[tuple[int, int, int]] = []
+    for edge_index, (tail, head) in enumerate(endpoints):
+        darts.append((tail, head, 2 * edge_index + 1))
+        darts.append((head, tail, 2 * edge_index))
+    dart_rotations: list[tuple[int, ...]] = []
+    for position in range(len(canonical)):
+        row = []
+        for edge_index in canonical[position]:
+            tail, _head = endpoints[edge_index]
+            row.append(2 * edge_index if tail == position else 2 * edge_index + 1)
+        dart_rotations.append(tuple(row))
+    alpha = [dart[2] for dart in darts]
+    sigma = [0] * len(darts)
+    for rotation in dart_rotations:
+        for offset, dart in enumerate(rotation):
+            sigma[dart] = rotation[(offset + 1) % len(rotation)]
+    return tuple(darts), tuple(dart_rotations), tuple(alpha), tuple(sigma)
+
+
+def _require_closed_odd_witness(
+    darts: tuple[tuple[int, int, int], ...],
+    signs: tuple[int, ...],
+    witness: tuple[int, ...] | None,
+) -> tuple[int, ...]:
+    """Require a nonempty closed odd-twist dart walk."""
+
+    dart_count = len(darts)
+    if witness is None or not witness:
+        raise RuntimeError("the odd-twist witness must be a closed odd walk")
+    tails = [darts[dart][0] for dart in witness]
+    heads = [darts[dart][1] for dart in witness]
+    if (
+        any(not 0 <= dart < dart_count for dart in witness)
+        or any(
+            heads[position] != tails[(position + 1) % len(witness)]
+            for position in range(len(witness))
+        )
+        or sum(1 for dart in witness if signs[dart // 2] == 0) % 2 != 1
+    ):
+        raise RuntimeError("the odd-twist witness must be a closed odd walk")
+    return witness
+
+
+def _canonical_walk_key(walk: tuple[int, ...]) -> tuple[int, ...]:
+    if not walk:
+        return ()
+    return min(walk[offset:] + walk[:offset] for offset in range(len(walk)))
+
+
+def _reverse_walk_key(walk: tuple[int, ...]) -> tuple[int, ...]:
+    if not walk:
+        return ()
+    reversed_walk = tuple(dart ^ 1 for dart in reversed(walk))
+    return min(
+        reversed_walk[offset:] + reversed_walk[:offset]
+        for offset in range(len(reversed_walk))
+    )
+
+
+def _signed_base_faces(projected: list[tuple[int, ...]]) -> list[tuple[int, ...]]:
+    """Quotient projected cover walks to one walk per base face.
+
+    Exact-duplicate walks (the same directed walk lifted twice) pair
+    first; remaining walks pair with their reverse-direction partner.
+    A walk equal to its own reverse is kept alone.  Selection is
+    deterministic: groups are processed in canonical-key order.
+    """
+
+    keys = [_canonical_walk_key(walk) for walk in projected]
+    reverse_keys = [_reverse_walk_key(walk) for walk in projected]
+    used = [False] * len(projected)
+    base: list[tuple[int, ...]] = []
+    groups: dict[tuple[int, ...], list[int]] = {}
+    for position, key in enumerate(keys):
+        groups.setdefault(key, []).append(position)
+    leftovers: list[int] = []
+    for key in sorted(groups):
+        members = groups[key]
+        for offset in range(0, len(members) - 1, 2):
+            used[members[offset]] = used[members[offset + 1]] = True
+            base.append(projected[members[offset]])
+        if len(members) % 2 == 1:
+            leftovers.append(members[-1])
+    leftovers.sort(key=lambda position: keys[position])
+    while leftovers:
+        position = leftovers.pop()
+        if used[position]:
+            continue
+        partner: int | None = None
+        for candidate in leftovers:
+            if used[candidate] or len(projected[candidate]) != len(projected[position]):
+                continue
+            if (
+                keys[candidate] == keys[position]
+                or keys[candidate] == reverse_keys[position]
+            ):
+                partner = candidate
+                break
+        if partner is None:
+            if reverse_keys[position] == keys[position]:
+                used[position] = True
+                base.append(projected[position])
+                continue
+            raise RuntimeError("a projected cover walk has no base-face partner")
+        leftovers.remove(partner)
+        used[position] = used[partner] = True
+        first, second = keys[position], keys[partner]
+        base.append(projected[position] if first <= second else projected[partner])
+    base.sort(key=_canonical_walk_key)
+    return base
+
+
+def _signed_balance_witness(
+    endpoints: list[tuple[int, int]],
+    vertex_count: int,
+    signs: tuple[int, ...],
+) -> tuple[int, ...] | None:
+    """Return an odd-twist closed dart walk, or None when balanced."""
+
+    adjacency: list[list[tuple[int, int, int]]] = [[] for _ in range(vertex_count)]
+    for edge_index, (left, right) in enumerate(endpoints):
+        parity = 1 if signs[edge_index] == 0 else 0
+        adjacency[left].append((right, parity, edge_index))
+        adjacency[right].append((left, parity, edge_index))
+    potential: dict[int, int] = {}
+    parent: dict[int, tuple[int, int]] = {}
+    for root in range(vertex_count):
+        if root in potential:
+            continue
+        potential[root] = 0
+        queue = deque([root])
+        while queue:
+            node = queue.popleft()
+            for target, parity, edge_index in adjacency[node]:
+                if target not in potential:
+                    potential[target] = potential[node] ^ parity
+                    parent[target] = (node, edge_index)
+                    queue.append(target)
+                elif potential[target] != potential[node] ^ parity:
+                    chain: list[int] = [node]
+                    cursor = node
+                    while cursor != root:
+                        cursor = parent[cursor][0]
+                        chain.append(cursor)
+                    down: list[int] = [target]
+                    cursor = target
+                    while cursor != root:
+                        cursor = parent[cursor][0]
+                        down.append(cursor)
+                    down = down[::-1]
+                    vertex_walk = chain + down[1:] + [node]
+                    darts: list[int] = []
+                    for first, second in pairwise(vertex_walk):
+                        for candidate, (left, right) in enumerate(endpoints):
+                            if {left, right} == {first, second}:
+                                darts.append(
+                                    2 * candidate
+                                    if left == first
+                                    else 2 * candidate + 1
+                                )
+                                break
+                    return tuple(darts)
+    return None
+
+
+def _signed_embedding_ledger(
+    graph: SimpleUndirectedGraph,
+    signs: tuple[int, ...],
+    canonical: tuple[tuple[int, ...], ...],
+    index: dict[str, int],
+) -> SignedEmbeddingCheckResult:
+    """Build the complete signed dart ledger and decide orientability.
+
+    Faces are projected from the orientable double cover (mirrored
+    rotations on the second sheet) through the unsigned face ledger, so
+    every projected face crosses an even number of twisted edges.
+    Orientability is decided by the exact balance test: the surface is
+    orientable exactly when every cycle carries an even number of twisted
+    edges.  A nonorientable result carries a concrete odd-twist cycle as
+    its orientation-reversing witness.
+    """
+
+    vertex_count = len(graph.vertices)
+    endpoints = [(index[left], index[right]) for left, right in graph.edges]
+    darts, dart_rotations, alpha, sigma = _signed_base_dart_data(endpoints, canonical)
+    dart_count = len(darts)
+    if dart_count == 0:
+        if len(signs) != 0:
+            raise RuntimeError("signs must be empty for the edgeless embedding")
+        return SignedEmbeddingCheckResult._from_kernel(
+            graph=graph,
+            status="ORIENTABLE_EMBEDDING",
+            signs=signs,
+            rotations=canonical,
+            dart_rotations=dart_rotations,
+            darts=darts,
+            alpha=alpha,
+            sigma=sigma,
+            face_walks=(),
+            vertices=vertex_count,
+            edges=len(graph.edges),
+            faces=1,
+            euler_characteristic=2,
+            genus=0,
+            orientable=True,
+            witness_dart_walk=None,
+        )
+    projected = _signed_cover_faces(endpoints, canonical, signs)
+    faces = _signed_base_faces(projected)
+    occurrences = [0] * len(graph.edges)
+    for walk in faces:
+        for dart in walk:
+            if not 0 <= dart < dart_count:
+                raise RuntimeError("a projected face references no base dart")
+            occurrences[dart // 2] += 1
+    if any(count != 2 for count in occurrences):
+        raise RuntimeError("every base edge must occur in two face positions")
+    characteristic = vertex_count - len(graph.edges) + len(faces)
+    witness = _signed_balance_witness(endpoints, vertex_count, signs)
+    if witness is None:
+        excess = 2 - characteristic
+        if excess < 0 or excess % 2 != 0:
+            raise RuntimeError(
+                "a balanced signed rotation system must induce an orientable surface"
+            )
+        return SignedEmbeddingCheckResult._from_kernel(
+            graph=graph,
+            status="ORIENTABLE_EMBEDDING",
+            signs=signs,
+            rotations=canonical,
+            dart_rotations=dart_rotations,
+            darts=darts,
+            alpha=alpha,
+            sigma=sigma,
+            face_walks=tuple(faces),
+            vertices=vertex_count,
+            edges=len(graph.edges),
+            faces=len(faces),
+            euler_characteristic=characteristic,
+            genus=excess // 2,
+            orientable=True,
+            witness_dart_walk=None,
+        )
+    if characteristic > 1:
+        raise RuntimeError(
+            "an unbalanced signed rotation system must induce a nonorientable surface"
+        )
+    return SignedEmbeddingCheckResult._from_kernel(
+        graph=graph,
+        status="NONORIENTABLE_EMBEDDING",
+        signs=signs,
+        rotations=canonical,
+        dart_rotations=dart_rotations,
+        darts=darts,
+        alpha=alpha,
+        sigma=sigma,
+        face_walks=tuple(faces),
+        vertices=vertex_count,
+        edges=len(graph.edges),
+        faces=len(faces),
+        euler_characteristic=characteristic,
+        genus=2 - characteristic,
+        orientable=False,
+        witness_dart_walk=_require_closed_odd_witness(darts, signs, witness),
+    )
+
+
+def _admit_signed_embedding_candidate(
+    graph: SimpleUndirectedGraph, rotations: tuple[tuple[int, ...], ...]
+) -> None:
+    """Share the signed checker envelope with native callers."""
+
+    if not graph.vertices:
+        raise OperationDomainValidationError(
+            location=("graph",),
+            code="topology.embedding.empty_graph",
+            message="the embedding checker requires at least one graph vertex",
+        )
+    if len(graph.vertices) > MAX_EMBEDDING_VERTICES:
+        raise OperationResourceAdmissionError(
+            location=("graph",),
+            code="topology.embedding.vertex_bound",
+            message="graph vertices exceed the admitted embedding-check envelope",
+        )
+    if len(graph.edges) > MAX_EMBEDDING_EDGES:
+        raise OperationResourceAdmissionError(
+            location=("graph",),
+            code="topology.embedding.edge_bound",
+            message="graph edges exceed the admitted embedding-check envelope",
+        )
+    if any(len(row) > MAX_EMBEDDING_DEGREE for row in rotations):
+        raise OperationResourceAdmissionError(
+            location=("rotations",),
+            code="topology.embedding.degree_bound",
+            message="a local rotation exceeds the admitted embedding-check envelope",
+        )
+    if sum(len(row) for row in rotations) > MAX_EMBEDDING_ROTATION_ENTRIES:
+        raise OperationResourceAdmissionError(
+            location=("rotations",),
+            code="topology.embedding.rotation_bound",
+            message="rotation entries exceed the admitted embedding-check envelope",
+        )
+
+
+def check_signed_embedding(
+    graph: SimpleUndirectedGraph,
+    rotations: tuple[tuple[int, ...], ...],
+    signs: tuple[int, ...] | None = None,
+    twisted_edges: tuple[int, ...] | None = None,
+) -> SignedEmbeddingCheckResult:
+    """Check one supplied signed rotation system for orientability.
+
+    A signed rotation system gives every edge a sign: 1 (untwisted) or 0
+    (twisted, orientation-reversing).  Faces are projected from the
+    orientable double cover (mirrored rotations on the second sheet)
+    through the unsigned face ledger, so every projected face crosses an
+    even number of twisted edges.  Orientability is decided by the exact
+    balance test: the surface is orientable exactly when every cycle
+    carries an even number of twisted edges.  A nonorientable result
+    carries a concrete odd-twist cycle as its orientation-reversing
+    witness.  The surface classification is ``chi = V - E + F`` with
+    orientable genus ``g = (2 - chi) / 2`` or nonorientable genus
+    ``h = 2 - chi``.  This is a checker for a supplied signed rotation
+    system, not a genus minimizer.
+    """
+
+    _admit_signed_embedding_candidate(graph, rotations)
+    request = SignedEmbeddingCheckRequest.model_construct(
+        graph=graph, rotations=rotations, signs=signs, twisted_edges=twisted_edges
+    )
+    resolved = _signed_embedding_signs(request)
+    if isinstance(resolved, SignedEmbeddingCheckResult):
+        return resolved
+    index, incident = _embedding_adjacency(graph)
+    obstruction = _embedding_obstruction(graph, rotations, incident)
+    if obstruction is not None:
+        return _invalid_signed_embedding(graph, rotations, resolved, *obstruction)
+    if not _embedding_connected(graph, index):
+        return _invalid_signed_embedding(
+            graph,
+            rotations,
+            resolved,
+            "GRAPH_DISCONNECTED",
+            "the supplied graph is not connected",
+        )
+    canonical = tuple(_canonical_edge_rotation(tuple(row)) for row in rotations)
+    return _signed_embedding_ledger(graph, resolved, canonical, index)
+
+
+def verify_signed_embedding(claim: SignedEmbeddingCheckResult) -> bool:
+    """Check a claimed signed embedding by replaying its rotation system."""
+    return (
+        check_signed_embedding(
+            claim.graph,
+            claim.rotations,
+            signs=claim.signs,
+        )
+        == claim
+    )
 
 
 def verify_dual(claim: DualResult) -> bool:

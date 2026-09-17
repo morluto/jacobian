@@ -817,6 +817,565 @@ class MulticommodityFlowWitnessCheckResult(StrictModel):
         )
 
 
+class MulticommodityFeasibilityRequest(StrictModel):
+    """Solve one exact rational multicommodity-flow feasibility problem."""
+
+    network: FlowGraph = Field(
+        description="Directed capacitated network with sorted unique edges.",
+    )
+    commodities: tuple[CommodityDemand, ...] = Field(
+        min_length=1,
+        description=(
+            "Labelled demands sorted lexicographically by commodity_id with "
+            "distinct sources and sinks and strictly positive demands."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_canonical_contract(self) -> Self:
+        _require_canonical_network(self.network)
+        _require_canonical_commodities(self.network, self.commodities)
+        return self
+
+
+class NetworkFarkasCertificate(StrictModel):
+    """An exact infeasibility certificate in network coordinates.
+
+    Node potentials (free) on every commodity-vertex cell and nonnegative
+    edge prices satisfy, for every commodity edge ``(u, v)``, the reduced
+    stationarity ``price + potential[u] - potential[v] >= 0``, while the
+    Farkas value ``sum_c demand_c * (potential[source_c] - potential[sink_c])
+    + sum_e price_e * capacity_e`` is strictly negative.
+    """
+
+    node_potentials: tuple[tuple[CanonicalRational, ...], ...]
+    edge_prices: tuple[CanonicalRational, ...]
+    farkas_value: CanonicalRational
+
+    @model_validator(mode="after")
+    def require_farkas_shape(self) -> Self:
+        if any(price.as_fraction() < 0 for price in self.edge_prices):
+            raise PydanticCustomError(
+                "graph.farkas_edge_prices_nonnegative",
+                "Farkas edge prices must be nonnegative",
+            )
+        if self.farkas_value.as_fraction() >= 0:
+            raise PydanticCustomError(
+                "graph.farkas_value_negative",
+                "the Farkas value must be strictly negative",
+            )
+        return self
+
+
+class MulticommodityFeasibilityResult(StrictModel):
+    """An exact multicommodity-flow feasibility outcome with its evidence.
+
+    ``FEASIBLE`` carries an exact rational tensor verified by the witness
+    checker.  ``INFEASIBLE`` carries a network Farkas certificate whose
+    balance the kernel replays.  ``UNKNOWN`` carries the bounded backend
+    reason; a truncated computation never becomes a verdict.
+    """
+
+    network: FlowGraph
+    commodities: tuple[CommodityDemand, ...] = Field(min_length=1)
+    status: Literal["FEASIBLE", "INFEASIBLE", "UNKNOWN"]
+    flow: MulticommodityFlow | None = None
+    certificate: NetworkFarkasCertificate | None = None
+    unknown_reason: Literal["LP_EXECUTION_BOUND_EXCEEDED"] | None = None
+    unknown_detail: str | None = None
+
+    @model_validator(mode="after")
+    def require_feasibility_payload(self) -> Self:
+        if (self.unknown_reason is None) != (self.unknown_detail is None):
+            raise PydanticCustomError(
+                "graph.feasibility_reason_payload",
+                "unknown reason and detail must agree",
+            )
+        if self.status == "FEASIBLE":
+            if self.flow is None or self.certificate is not None:
+                raise PydanticCustomError(
+                    "graph.feasible_carries_flow_only",
+                    "a FEASIBLE outcome carries its flow and no certificate",
+                )
+            if self.unknown_reason is not None:
+                raise PydanticCustomError(
+                    "graph.feasible_carries_no_reason",
+                    "a FEASIBLE outcome carries no unknown reason",
+                )
+            if (
+                self.flow.network != self.network
+                or self.flow.commodities != self.commodities
+            ):
+                raise PydanticCustomError(
+                    "graph.feasible_flow_binds_source",
+                    "the feasible tensor must retain the source network and demands",
+                )
+        elif self.status == "INFEASIBLE":
+            if self.certificate is None or self.flow is not None:
+                raise PydanticCustomError(
+                    "graph.infeasible_carries_certificate_only",
+                    "an INFEASIBLE outcome carries its certificate and no flow",
+                )
+            if self.unknown_reason is not None:
+                raise PydanticCustomError(
+                    "graph.infeasible_carries_no_reason",
+                    "an INFEASIBLE outcome carries no unknown reason",
+                )
+            if len(self.certificate.node_potentials) != len(self.commodities):
+                raise PydanticCustomError(
+                    "graph.farkas_potential_rows",
+                    "Farkas potentials need one row per commodity",
+                )
+            for potentials in self.certificate.node_potentials:
+                if len(potentials) != self.network.vertex_count:
+                    raise PydanticCustomError(
+                        "graph.farkas_potential_axis",
+                        "Farkas potentials need one entry per vertex",
+                    )
+            if len(self.certificate.edge_prices) != len(self.network.edges):
+                raise PydanticCustomError(
+                    "graph.farkas_price_axis",
+                    "Farkas prices need one entry per network edge",
+                )
+        elif self.flow is not None or self.certificate is not None:
+            raise PydanticCustomError(
+                "graph.unknown_carries_no_evidence",
+                "an UNKNOWN outcome carries no flow or certificate",
+            )
+        elif self.unknown_reason is None:
+            raise PydanticCustomError(
+                "graph.unknown_needs_a_reason",
+                "an UNKNOWN outcome carries its bounded reason",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        network: FlowGraph,
+        commodities: tuple[CommodityDemand, ...],
+        status: Literal["FEASIBLE", "INFEASIBLE", "UNKNOWN"],
+        flow: MulticommodityFlow | None = None,
+        certificate: NetworkFarkasCertificate | None = None,
+        unknown_reason: Literal["LP_EXECUTION_BOUND_EXCEEDED"] | None = None,
+        unknown_detail: str | None = None,
+    ) -> Self:
+        return cls.model_construct(
+            network=network,
+            commodities=commodities,
+            status=status,
+            flow=flow,
+            certificate=certificate,
+            unknown_reason=unknown_reason,
+            unknown_detail=unknown_detail,
+        )
+
+
+class MinimumCongestionRequest(StrictModel):
+    """Minimize exact congestion over rational multicommodity flows."""
+
+    network: FlowGraph = Field(
+        description="Directed capacitated network with sorted unique edges.",
+    )
+    commodities: tuple[CommodityDemand, ...] = Field(
+        min_length=1,
+        description=(
+            "Labelled demands sorted lexicographically by commodity_id with "
+            "distinct sources and sinks and strictly positive demands."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_canonical_contract(self) -> Self:
+        _require_canonical_network(self.network)
+        _require_canonical_commodities(self.network, self.commodities)
+        return self
+
+
+class MinimumCongestionResult(StrictModel):
+    """An exact minimum-congestion outcome with its attaining evidence.
+
+    ``FEASIBLE`` carries the exact minimum congestion ratio and a tensor
+    attaining it (every positive-capacity edge load is at most congestion
+    times its capacity; zero-capacity edges carry no load).  ``INFEASIBLE``
+    carries a network Farkas certificate for the underlying routability.
+    ``UNKNOWN`` carries the bounded backend reason.
+    """
+
+    network: FlowGraph
+    commodities: tuple[CommodityDemand, ...] = Field(min_length=1)
+    status: Literal["FEASIBLE", "INFEASIBLE", "UNKNOWN"]
+    congestion: CanonicalRational | None = None
+    flow: MulticommodityFlow | None = None
+    certificate: NetworkFarkasCertificate | None = None
+    unknown_reason: Literal["LP_EXECUTION_BOUND_EXCEEDED"] | None = None
+    unknown_detail: str | None = None
+
+    @model_validator(mode="after")
+    def require_congestion_payload(self) -> Self:
+        if (self.unknown_reason is None) != (self.unknown_detail is None):
+            raise PydanticCustomError(
+                "graph.congestion_reason_payload",
+                "unknown reason and detail must agree",
+            )
+        if self.congestion is not None and self.congestion.as_fraction() < 0:
+            raise PydanticCustomError(
+                "graph.congestion_nonnegative",
+                "minimum congestion is nonnegative",
+            )
+        if self.status == "FEASIBLE":
+            if (
+                self.flow is None
+                or self.congestion is None
+                or self.certificate is not None
+                or self.unknown_reason is not None
+            ):
+                raise PydanticCustomError(
+                    "graph.congestion_feasible_payload",
+                    "a FEASIBLE outcome carries its congestion, flow, and nothing else",
+                )
+            if (
+                self.flow.network != self.network
+                or self.flow.commodities != self.commodities
+            ):
+                raise PydanticCustomError(
+                    "graph.congestion_flow_binds_source",
+                    "the attaining tensor must retain the source network and demands",
+                )
+        elif self.status == "INFEASIBLE":
+            if (
+                self.certificate is None
+                or self.flow is not None
+                or self.congestion is not None
+                or self.unknown_reason is not None
+            ):
+                raise PydanticCustomError(
+                    "graph.congestion_infeasible_payload",
+                    "an INFEASIBLE outcome carries its certificate and nothing else",
+                )
+            if len(self.certificate.node_potentials) != len(self.commodities):
+                raise PydanticCustomError(
+                    "graph.farkas_potential_rows",
+                    "Farkas potentials need one row per commodity",
+                )
+            for potentials in self.certificate.node_potentials:
+                if len(potentials) != self.network.vertex_count:
+                    raise PydanticCustomError(
+                        "graph.farkas_potential_axis",
+                        "Farkas potentials need one entry per vertex",
+                    )
+            if len(self.certificate.edge_prices) != len(self.network.edges):
+                raise PydanticCustomError(
+                    "graph.farkas_price_axis",
+                    "Farkas prices need one entry per network edge",
+                )
+        elif (
+            self.flow is not None
+            or self.certificate is not None
+            or self.congestion is not None
+        ):
+            raise PydanticCustomError(
+                "graph.unknown_carries_no_evidence",
+                "an UNKNOWN outcome carries no flow, certificate, or congestion",
+            )
+        elif self.unknown_reason is None:
+            raise PydanticCustomError(
+                "graph.unknown_needs_a_reason",
+                "an UNKNOWN outcome carries its bounded reason",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        network: FlowGraph,
+        commodities: tuple[CommodityDemand, ...],
+        status: Literal["FEASIBLE", "INFEASIBLE", "UNKNOWN"],
+        congestion: CanonicalRational | None = None,
+        flow: MulticommodityFlow | None = None,
+        certificate: NetworkFarkasCertificate | None = None,
+        unknown_reason: Literal["LP_EXECUTION_BOUND_EXCEEDED"] | None = None,
+        unknown_detail: str | None = None,
+    ) -> Self:
+        return cls.model_construct(
+            network=network,
+            commodities=commodities,
+            status=status,
+            congestion=congestion,
+            flow=flow,
+            certificate=certificate,
+            unknown_reason=unknown_reason,
+            unknown_detail=unknown_detail,
+        )
+
+
+class UnsplittablePath(StrictModel):
+    """One simple directed source-to-sink vertex path for one commodity."""
+
+    commodity_id: StrictStr = Field(min_length=1, max_length=64)
+    vertices: tuple[int, ...] = Field(min_length=2, max_length=64)
+
+    @model_validator(mode="after")
+    def require_simple_walk(self) -> Self:
+        if any(not 0 <= vertex <= 63 for vertex in self.vertices):
+            raise PydanticCustomError(
+                "graph.unsplittable_path_vertices_bounded",
+                "unsplittable path vertices must lie in 0..63",
+            )
+        if len(set(self.vertices)) != len(self.vertices):
+            raise PydanticCustomError(
+                "graph.unsplittable_path_simple",
+                "an unsplittable path visits no vertex twice",
+            )
+        return self
+
+
+class UnsplittableRouting(StrictModel):
+    """One simple path per commodity over a shared directed network."""
+
+    network: FlowGraph
+    commodities: tuple[CommodityDemand, ...] = Field(min_length=1)
+    paths: tuple[UnsplittablePath, ...] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def require_routing_coverage(self) -> Self:
+        _require_canonical_network(self.network)
+        _require_canonical_commodities(self.network, self.commodities)
+        commodity_ids = tuple(commodity.commodity_id for commodity in self.commodities)
+        path_ids = tuple(path.commodity_id for path in self.paths)
+        if path_ids != commodity_ids:
+            raise PydanticCustomError(
+                "graph.unsplittable_routing_coverage",
+                "an unsplittable routing carries exactly one path per commodity "
+                "in commodity_id order",
+            )
+        return self
+
+
+class UnsplittableRoutingCheckRequest(StrictModel):
+    """Check one submitted one-path-per-commodity routing."""
+
+    routing: UnsplittableRouting
+
+
+class UnsplittablePathViolation(StrictModel):
+    """One routing defect: a non-edge step, endpoint mismatch, or overload."""
+
+    commodity_id: StrictStr
+    detail: str = Field(min_length=1, max_length=512)
+
+
+class UnsplittableRoutingCheckResult(StrictModel):
+    """The exact verdict for one submitted unsplittable routing.
+
+    FEASIBLE means every commodity path is a simple network walk from its
+    source to its sink and every directed edge load (one demand per using
+    commodity) fits its capacity.  INFEASIBLE names every defect.
+    """
+
+    routing: UnsplittableRouting
+    status: Literal["FEASIBLE", "INFEASIBLE"]
+    path_violations: tuple[UnsplittablePathViolation, ...] = ()
+    edge_violations: tuple[EdgeCapacityViolation, ...] = ()
+    congestion: CanonicalRational | None = None
+
+    @model_validator(mode="after")
+    def require_routing_verdict(self) -> Self:
+        if self.status == "FEASIBLE" and (self.path_violations or self.edge_violations):
+            raise PydanticCustomError(
+                "graph.unsplittable_feasible_no_violations",
+                "a FEASIBLE routing carries no violations",
+            )
+        if self.status == "INFEASIBLE" and not (
+            self.path_violations or self.edge_violations
+        ):
+            raise PydanticCustomError(
+                "graph.unsplittable_infeasible_needs_violation",
+                "an INFEASIBLE routing names at least one violation",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        routing: UnsplittableRouting,
+        *,
+        status: Literal["FEASIBLE", "INFEASIBLE"],
+        path_violations: tuple[UnsplittablePathViolation, ...] = (),
+        edge_violations: tuple[EdgeCapacityViolation, ...] = (),
+        congestion: CanonicalRational | None = None,
+    ) -> Self:
+        return cls.model_construct(
+            routing=routing,
+            status=status,
+            path_violations=path_violations,
+            edge_violations=edge_violations,
+            congestion=congestion,
+        )
+
+
+class UnsplittableRoutingFindRequest(StrictModel):
+    """Find one feasible one-path-per-commodity routing by bounded search."""
+
+    network: FlowGraph
+    commodities: tuple[CommodityDemand, ...] = Field(min_length=1)
+    max_paths_per_commodity: int = Field(
+        default=256,
+        ge=1,
+        le=4096,
+        description=(
+            "Enumerate at most this many simple source-to-sink paths per "
+            "commodity before reporting UNKNOWN."
+        ),
+    )
+    combination_budget: int = Field(
+        ge=1,
+        le=50000,
+        description=(
+            "Check at most this many path combinations before reporting UNKNOWN."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_canonical_contract(self) -> Self:
+        _require_canonical_network(self.network)
+        _require_canonical_commodities(self.network, self.commodities)
+        return self
+
+
+class UnsplittableRoutingFindResult(StrictModel):
+    """A bounded unsplittable-routing search outcome with its receipt.
+
+    ``FOUND`` carries the first feasible routing with its checker
+    certificate.  ``EXHAUSTED`` carries the receipt that every combination
+    of the exact per-commodity path inventories was checked.  ``UNKNOWN``
+    carries the bounded reason with the search position.
+    """
+
+    network: FlowGraph
+    commodities: tuple[CommodityDemand, ...] = Field(min_length=1)
+    max_paths_per_commodity: int = Field(ge=1)
+    combination_budget: int = Field(ge=1)
+    status: Literal["FOUND", "EXHAUSTED", "UNKNOWN"]
+    routing: UnsplittableRouting | None = None
+    certificate: UnsplittableRoutingCheckResult | None = None
+    paths_per_commodity: tuple[int, ...] = ()
+    combinations_examined: int = Field(default=0, ge=0)
+    total_combinations: int = Field(default=0, ge=0)
+    current_commodity: StrictStr | None = None
+    stop_reason: Literal["PATH_CAP_EXCEEDED", "COMBINATION_BUDGET_EXCEEDED"] | None = (
+        None
+    )
+
+    @model_validator(mode="after")
+    def require_routing_search_payload(self) -> Self:
+        if len(self.paths_per_commodity) != len(self.commodities):
+            raise PydanticCustomError(
+                "graph.routing_path_inventory_axis",
+                "path inventories need one count per commodity",
+            )
+        if (self.stop_reason is None) == (self.status == "UNKNOWN"):
+            raise PydanticCustomError(
+                "graph.routing_reason_payload",
+                "UNKNOWN carries a stop reason; decided outcomes carry none",
+            )
+        if self.status == "FOUND":
+            if self.routing is None or self.certificate is None:
+                raise PydanticCustomError(
+                    "graph.routing_found_payload",
+                    "a found search carries its routing and certificate",
+                )
+            if (
+                self.certificate.status != "FEASIBLE"
+                or self.certificate.routing != self.routing
+            ):
+                raise PydanticCustomError(
+                    "graph.routing_certificate_binding",
+                    "the certificate must feasibly check the found routing",
+                )
+        elif self.routing is not None or self.certificate is not None:
+            raise PydanticCustomError(
+                "graph.routing_undecided_payload",
+                "an unfinished search carries no routing or certificate",
+            )
+        return self
+
+    @model_validator(mode="after")
+    def require_routing_search_receipt(self) -> Self:
+        if self.status == "EXHAUSTED":
+            product = 1
+            for count in self.paths_per_commodity:
+                product *= count
+            if product != self.total_combinations:
+                raise PydanticCustomError(
+                    "graph.routing_exhaustion_product",
+                    "an exhausted search inventories multiply to its total",
+                )
+            if self.combinations_examined != self.total_combinations:
+                raise PydanticCustomError(
+                    "graph.routing_exhaustion_receipt",
+                    "an exhausted search examined every combination",
+                )
+        if self.status == "UNKNOWN":
+            if self.stop_reason == "PATH_CAP_EXCEEDED":
+                if self.current_commodity not in {
+                    commodity.commodity_id for commodity in self.commodities
+                }:
+                    raise PydanticCustomError(
+                        "graph.routing_cap_commodity",
+                        "a path-capped search names its capped commodity",
+                    )
+            elif self.current_commodity is not None:
+                raise PydanticCustomError(
+                    "graph.routing_budget_commodity",
+                    "a budget-exhausted search names no current commodity",
+                )
+            elif self.combinations_examined != self.combination_budget:
+                raise PydanticCustomError(
+                    "graph.routing_budget_receipt",
+                    "a budget-exhausted search spent its full budget",
+                )
+            elif self.total_combinations <= self.combination_budget:
+                raise PydanticCustomError(
+                    "graph.routing_budget_scope",
+                    "a budget-exhausted search left combinations unexamined",
+                )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        network: FlowGraph,
+        commodities: tuple[CommodityDemand, ...],
+        max_paths_per_commodity: int,
+        combination_budget: int,
+        status: Literal["FOUND", "EXHAUSTED", "UNKNOWN"],
+        routing: UnsplittableRouting | None = None,
+        certificate: UnsplittableRoutingCheckResult | None = None,
+        paths_per_commodity: tuple[int, ...] = (),
+        combinations_examined: int = 0,
+        total_combinations: int = 0,
+        current_commodity: StrictStr | None = None,
+        stop_reason: (
+            Literal["PATH_CAP_EXCEEDED", "COMBINATION_BUDGET_EXCEEDED"] | None
+        ) = None,
+    ) -> Self:
+        return cls.model_construct(
+            network=network,
+            commodities=commodities,
+            max_paths_per_commodity=max_paths_per_commodity,
+            combination_budget=combination_budget,
+            status=status,
+            routing=routing,
+            certificate=certificate,
+            paths_per_commodity=paths_per_commodity,
+            combinations_examined=combinations_examined,
+            total_combinations=total_combinations,
+            current_commodity=current_commodity,
+            stop_reason=stop_reason,
+        )
+
+
 __all__ = [
     "MAX_COMMODITY_VERTEX_CELLS",
     "MAX_MULTICOMMODITY_EDGES",
@@ -833,11 +1392,23 @@ __all__ = [
     "CommodityVertexViolation",
     "EdgeCapacityViolation",
     "EdgeLoadProfile",
+    "MinimumCongestionRequest",
+    "MinimumCongestionResult",
+    "MulticommodityFeasibilityRequest",
+    "MulticommodityFeasibilityResult",
     "MulticommodityFlow",
     "MulticommodityFlowProfileRequest",
     "MulticommodityFlowProfileResult",
     "MulticommodityFlowProfileWork",
     "MulticommodityFlowWitnessCheckRequest",
     "MulticommodityFlowWitnessCheckResult",
+    "NetworkFarkasCertificate",
+    "UnsplittablePath",
+    "UnsplittablePathViolation",
+    "UnsplittableRouting",
+    "UnsplittableRoutingCheckRequest",
+    "UnsplittableRoutingCheckResult",
+    "UnsplittableRoutingFindRequest",
+    "UnsplittableRoutingFindResult",
     "derived_profile_digit_budget",
 ]

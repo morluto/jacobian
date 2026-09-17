@@ -7,6 +7,8 @@ from jacobian.math.universal_algebra import operations as native
 from jacobian.math.universal_algebra._models import (
     CongruenceRequest,
     CongruenceResult,
+    CountermodelFindRequest,
+    CountermodelFindResult,
     EquationProfileRequest,
     EquationProfileResult,
     EvaluateRequest,
@@ -46,6 +48,18 @@ def compute_implication_countermodel_check(
 ) -> ImplicationCountermodelCheckResult:
     return native.implication_countermodel_check(
         request.algebra, request.premises, request.target
+    )
+
+
+def compute_countermodel_find(
+    request: CountermodelFindRequest,
+) -> CountermodelFindResult:
+    return native.countermodel_find(
+        request.premises,
+        request.target,
+        request.min_order,
+        request.max_order,
+        request.table_budget,
     )
 
 
@@ -153,6 +167,62 @@ _PRODUCT_YX = {
         {"kind": "application", "operation": 0, "children": [1, 0]},
     ],
     "root": 2,
+}
+
+
+# Benchmark premise (x*y) = (((y*x)*x)*y) over operation 0.
+_BENCHMARK_PREMISE_LEFT = {
+    "nodes": [
+        {"kind": "variable", "variable_id": 0},
+        {"kind": "variable", "variable_id": 1},
+        {"kind": "application", "operation": 0, "children": [0, 1]},
+    ],
+    "root": 2,
+}
+_BENCHMARK_PREMISE_RIGHT = {
+    "nodes": [
+        {"kind": "variable", "variable_id": 0},
+        {"kind": "variable", "variable_id": 1},
+        {"kind": "application", "operation": 0, "children": [1, 0]},
+        {"kind": "application", "operation": 0, "children": [2, 0]},
+        {"kind": "application", "operation": 0, "children": [3, 1]},
+    ],
+    "root": 4,
+}
+
+
+# Benchmark target ((x*y)*y) = ((y*x)*x) over operation 0.
+_BENCHMARK_TARGET_LEFT = {
+    "nodes": [
+        {"kind": "variable", "variable_id": 0},
+        {"kind": "variable", "variable_id": 1},
+        {"kind": "application", "operation": 0, "children": [0, 1]},
+        {"kind": "application", "operation": 0, "children": [2, 1]},
+    ],
+    "root": 3,
+}
+_BENCHMARK_TARGET_RIGHT = {
+    "nodes": [
+        {"kind": "variable", "variable_id": 0},
+        {"kind": "variable", "variable_id": 1},
+        {"kind": "application", "operation": 0, "children": [1, 0]},
+        {"kind": "application", "operation": 0, "children": [2, 0]},
+    ],
+    "root": 3,
+}
+
+
+# Idempotent law x*x = x over operation 0 (used for the exhaustion example).
+_IDEMPOTENT_LEFT = {
+    "nodes": [
+        {"kind": "variable", "variable_id": 0},
+        {"kind": "application", "operation": 0, "children": [0, 0]},
+    ],
+    "root": 1,
+}
+_IDEMPOTENT_RIGHT = {
+    "nodes": [{"kind": "variable", "variable_id": 0}],
+    "root": 0,
 }
 
 
@@ -328,6 +398,60 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 name="trivial_quotient",
                 description="The quotient by the universal congruence is a one-element algebra.",
                 input={"algebra": _ALGEBRA, "partition": [[0, 1]]},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="universal_algebra.magma_implication.countermodel.find",
+        title="Find a finite-magma equation-implication countermodel",
+        description="Enumerate finite magma tables in deterministic order "
+        "(orders increasingly, tables row-major with ascending cells) and "
+        "check each one against premise equations and a target equation with "
+        "the exact countermodel checker. FOUND carries the first countermodel "
+        "order and certificate with every smaller searched order exhausted; "
+        "EXHAUSTED_UP_TO_BOUND carries the receipt that every table of every "
+        "declared order was examined; UNKNOWN carries the spent budget and "
+        "current order. A truncated search never yields a negative conclusion.",
+        request_type=CountermodelFindRequest,
+        result_type=CountermodelFindResult,
+        run=compute_countermodel_find,
+        tags=("universal-algebra", "countermodel", "exact"),
+        discovery_terms=("countermodel", "equation implication", "finite magma"),
+        examples=(
+            OperationExample(
+                name="benchmark_implication_countermodel",
+                description="The held-out benchmark implication fails already "
+                "in carrier orders 1 and 2: bounded search finds the first "
+                "countermodel table with its checker certificate.",
+                input={
+                    "premises": [
+                        {
+                            "left": _BENCHMARK_PREMISE_LEFT,
+                            "right": _BENCHMARK_PREMISE_RIGHT,
+                        }
+                    ],
+                    "target": {
+                        "left": _BENCHMARK_TARGET_LEFT,
+                        "right": _BENCHMARK_TARGET_RIGHT,
+                    },
+                    "min_order": 1,
+                    "max_order": 2,
+                    "table_budget": 1000,
+                },
+            ),
+            OperationExample(
+                name="idempotence_exhaustion",
+                description="Idempotence implies itself: all 17 tables of "
+                "orders 1 and 2 are examined with no countermodel.",
+                input={
+                    "premises": [
+                        {"left": _IDEMPOTENT_LEFT, "right": _IDEMPOTENT_RIGHT}
+                    ],
+                    "target": {"left": _IDEMPOTENT_LEFT, "right": _IDEMPOTENT_RIGHT},
+                    "min_order": 1,
+                    "max_order": 2,
+                    "table_budget": 1000,
+                },
             ),
         ),
     ),

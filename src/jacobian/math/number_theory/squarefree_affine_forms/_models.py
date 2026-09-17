@@ -23,6 +23,7 @@ MAX_ADMISSIBILITY_CUTOFF = 1_000
 MAX_ADMISSIBILITY_WORK = 64_000_000
 MAX_INTERVAL_LENGTH = 20_000
 MAX_INTERVAL_VALUE = 10**12
+MAX_INTERVAL_SIEVE_RESIDUES = 4_000_000
 CROSSCHECK_MAX_PRIME = 31
 
 _CODE_PREFIX = "number_theory.squarefree_affine"
@@ -197,6 +198,17 @@ def admit_interval(source: SquarefreeAffineFamily, lower: int, upper: int) -> in
     return magnitude
 
 
+def admit_interval_sieve_residues(work: int) -> None:
+    """Preflight congruence-class enumeration before any residue arithmetic."""
+
+    if work > MAX_INTERVAL_SIEVE_RESIDUES:
+        raise _resource_error(
+            "interval_sieve_budget",
+            f"interval sieve would enumerate {work} congruence classes, "
+            f"exceeding {MAX_INTERVAL_SIEVE_RESIDUES}",
+        )
+
+
 __all__ = [
     "CROSSCHECK_MAX_PRIME",
     "MAX_ADMISSIBILITY_CUTOFF",
@@ -204,6 +216,7 @@ __all__ = [
     "MAX_EULER_PRIMES",
     "MAX_EULER_WORK",
     "MAX_INTERVAL_LENGTH",
+    "MAX_INTERVAL_SIEVE_RESIDUES",
     "MAX_INTERVAL_VALUE",
     "MAX_LEDGER_ROWS",
     "MAX_LOCAL_FACTOR_PRIME",
@@ -211,6 +224,7 @@ __all__ = [
     "admit_euler_product",
     "admit_family",
     "admit_interval",
+    "admit_interval_sieve_residues",
     "admit_local_factor",
     "admit_prime",
     "admit_prime_set",

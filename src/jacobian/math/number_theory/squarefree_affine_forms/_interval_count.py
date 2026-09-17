@@ -11,6 +11,7 @@ caller requests the ledger.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from math import gcd, isqrt
 from typing import Any, Self
 
@@ -29,6 +30,7 @@ from jacobian.math.number_theory.squarefree_affine_forms._admissibility import (
 from jacobian.math.number_theory.squarefree_affine_forms._models import (
     MAX_INTERVAL_LENGTH,
     admit_interval,
+    admit_interval_sieve_residues,
 )
 from jacobian.math.number_theory.squarefree_affine_forms.values import (
     SquarefreeAffineFamily,
@@ -138,19 +140,40 @@ class IntervalCountResult(StrictModel):
 
 def _congruence_classes(
     coefficient: int, constant: int, modulus: int
-) -> tuple[int, ...]:
-    """Return residues ``n mod modulus`` with ``a*n+b == 0``, ascending."""
+) -> Iterator[int] | None:
+    """Yield residues ``n mod modulus`` with ``a*n+b == 0``, ascending.
+
+    Returns ``None`` when the congruence holds for every residue (``a`` and
+    ``b`` are both divisible by ``modulus``); the caller then marks the whole
+    interval directly instead of materializing ``modulus`` residues.
+    """
 
     divisor = gcd(coefficient, modulus)
     if constant % divisor != 0:
-        return ()
+        return iter(())
     if divisor == modulus:
-        return tuple(range(modulus))
+        return None
     stride = modulus // divisor
     root = (-(constant // divisor) * pow(coefficient // divisor, -1, stride)) % stride
     step = modulus // divisor
     count = divisor
-    return tuple(root + offset * step for offset in range(count))
+    return (root + offset * step for offset in range(count))
+
+
+def _interval_sieve_residue_work(
+    source: SquarefreeAffineFamily, primes: tuple[int, ...], length: int
+) -> int:
+    """Count congruence classes the interval sieve would enumerate."""
+
+    work = 0
+    for prime in primes:
+        modulus = prime * prime
+        for form in source.forms:
+            divisor = gcd(form.coefficient, modulus)
+            if form.constant % divisor != 0:
+                continue
+            work += length if divisor == modulus else divisor
+    return work
 
 
 def interval_count(
@@ -190,6 +213,9 @@ def interval_count(
     # always be probed even when that bound admits none.
     limit = max(isqrt(magnitude), 2)
     primes = primes_up_to(limit)
+    admit_interval_sieve_residues(
+        _interval_sieve_residue_work(source, primes, upper - lower + 1)
+    )
     # obstruction[n] = (form_index, prime), first hit wins: primes ascend and
     # forms keep source order, so the recorded pair is the least prime and,
     # on ties, the first form.
@@ -197,7 +223,14 @@ def interval_count(
     for prime in primes:
         modulus = prime * prime
         for form_index, form in enumerate(source.forms):
-            for root in _congruence_classes(form.coefficient, form.constant, modulus):
+            residues = _congruence_classes(form.coefficient, form.constant, modulus)
+            if residues is None:
+                # The congruence holds for every residue: mark the whole
+                # interval instead of enumerating ``modulus`` classes.
+                for point in range(lower, upper + 1):
+                    obstruction.setdefault(point, (form_index, prime))
+                continue
+            for root in residues:
                 # Smallest class member at or above the interval lower bound.
                 point = root + (-((root - lower) // modulus)) * modulus
                 while point <= upper:

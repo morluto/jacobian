@@ -43,7 +43,9 @@ from jacobian.math.number_theory.squarefree_affine_forms._local_factor import (
 )
 from jacobian.math.number_theory.squarefree_affine_forms._models import (
     MAX_EULER_PRIMES,
+    MAX_INTERVAL_SIEVE_RESIDUES,
     MAX_LOCAL_FACTOR_PRIME,
+    admit_interval_sieve_residues,
 )
 from jacobian.math.number_theory.squarefree_affine_forms._tools import (
     TOOLS,
@@ -762,6 +764,25 @@ def test_interval_count_matches_brute_force() -> None:
         value = form.coefficient * row.n + form.constant
         assert value % (row.prime * row.prime) == 0
     assert verify_interval_count(result)
+
+
+def test_interval_count_square_coefficient_does_not_materialize_residues() -> None:
+    # 9973^2 | coefficient: the congruence holds for every residue mod 9973^2.
+    # The sieve must mark the interval directly instead of building ~10^8
+    # residues; the least prime is 2 at n=0 and 9973 at n=1.
+    family = _family(_form("sq", 9973**2, 0))
+
+    result = interval_count(family, 0, 1, True)
+
+    assert result.count == 0
+    assert result.matching == ()
+    assert [(row.n, row.prime) for row in result.obstructions] == [(0, 2), (1, 9973)]
+    assert verify_interval_count(result)
+
+
+def test_interval_sieve_residue_budget_is_a_resource_boundary() -> None:
+    with pytest.raises(OperationResourceAdmissionError):
+        admit_interval_sieve_residues(MAX_INTERVAL_SIEVE_RESIDUES + 1)
 
 
 def test_interval_count_zero_form_is_obstructed() -> None:

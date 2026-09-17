@@ -424,6 +424,7 @@ def test_catalog_examples_round_trip_through_each_result_contract() -> None:
     assert {tool.operation_id for tool in TOOLS} == {
         "complex_torus.neron_severi_lattice.compute",
         "complex_torus.riemann_form.profile.compute",
+        "complex_torus.polarization.find",
     }
     for tool in TOOLS:
         request = tool.request_type.model_validate_json(

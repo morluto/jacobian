@@ -1,10 +1,12 @@
 """Exact contract tests for certified unit-circle supremum norms.
 
 The operation returns a certified rational enclosure of ``max_{|z|=1} |P(z)|^2``
-together with the complete critical-point ledger; these tests check the known
-closed-form values, the independent defining identity
-``|P(z)|^2 = Q(t) / (1 + t**2)**d``, the ``z = -1`` endpoint, the full-circle
-degenerate branch, and the admission envelope.
+together with the complete critical-point ledger, plus the exact maximum as
+an indexed real-algebraic root whenever its irreducible resultant factor fits
+the shared carrier; these tests check the known closed-form values, the
+independent defining identity ``|P(z)|^2 = Q(t) / (1 + t**2)**d``, the
+``z = -1`` endpoint, the full-circle degenerate branch, exact-value replay
+and forgery rejection, and the admission envelope.
 """
 
 from __future__ import annotations
@@ -19,8 +21,11 @@ from pydantic import ValidationError
 from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
+from jacobian.math.number_theory.algebraic_numbers.real import RealAlgebraicValue
+from jacobian.math.number_theory.number_fields import GaussianRational
 from jacobian.math.polynomials.unit_circle._sup_norm import (
     unit_circle_sup_norm_squared,
+    verify_unit_circle_sup_norm_squared,
 )
 from jacobian.math.polynomials.unit_circle._sup_norm_models import (
     MAX_SUP_NORM_DEGREE,
@@ -64,9 +69,7 @@ def _exact(result: UnitCircleSupNormSquaredResult) -> Fraction | None:
     return None
 
 
-def _gaussian(real: int, imaginary: int):
-    from jacobian.math.number_theory.number_fields import GaussianRational
-
+def _gaussian(real: int, imaginary: int) -> GaussianRational:
     return GaussianRational.model_validate_json(
         json.dumps(
             {
@@ -83,6 +86,13 @@ def _evaluate_transformed(
     total = Fraction(0)
     for coefficient in reversed(coefficients_ascending):
         total = total * t + coefficient
+    return total
+
+
+def _horner_descending(descending: tuple[int, ...], value: Fraction) -> Fraction:
+    total = Fraction(0)
+    for coefficient in descending:
+        total = total * value + coefficient
     return total
 
 
@@ -293,3 +303,87 @@ def test_duplicate_exponents_are_rejected() -> None:
 
     with pytest.raises(ValidationError):
         UnitCircleSupNormSquaredRequest.model_validate_json(json.dumps(payload))
+
+
+@pytest.mark.parametrize(
+    ("coefficients", "expected"),
+    [
+        ({0: (1, 0), 1: (1, 0), 2: (1, 0)}, (1, -9)),
+        ({1: (1, 1)}, (1, -2)),
+        ({0: (1, 0), 1: (-1, 0)}, (1, -4)),
+        ({0: (-1, 0), 2: (-2, 0), 3: (1, 0)}, (1, -16)),
+    ],
+)
+def test_exact_maximum_for_rational_maximizers(
+    coefficients: dict[int, tuple[int, int]], expected: tuple[int, int]
+) -> None:
+    result = _result(coefficients)
+
+    assert result.sup_norm_squared_exact is not None
+    assert tuple(result.sup_norm_squared_exact.polynomial) == expected
+    assert result.sup_norm_squared_exact.real_root_index == 0
+    assert verify_unit_circle_sup_norm_squared(result)
+
+
+@pytest.mark.parametrize(
+    ("coefficients", "expected", "index"),
+    [
+        ({0: (1, 0), 1: (1, 0), 2: (-1, 0), 3: (1, 0)}, (27, -216, 176), 1),
+        (
+            {0: (-2, 0), 2: (2, 0), 3: (-3, 0), 4: (-3, 0)},
+            (4608, -318684, 2623484, 8833),
+            2,
+        ),
+    ],
+)
+def test_exact_maximum_for_irrational_maximizers(
+    coefficients: dict[int, tuple[int, int]],
+    expected: tuple[int, ...],
+    index: int,
+) -> None:
+    result = _result(coefficients)
+
+    exact = result.sup_norm_squared_exact
+    assert exact is not None
+    assert tuple(exact.polynomial) == expected
+    assert exact.real_root_index == index
+    # Independent replay without the SymPy backend: the retained enclosure
+    # strictly brackets one root of the claimed minimal polynomial.
+    enclosure = result.sup_norm_squared_enclosure
+    lower = Fraction(*enclosure.lower.as_integer_ratio())
+    upper = Fraction(*enclosure.upper.as_integer_ratio())
+    assert lower < upper
+    assert _horner_descending(expected, lower) * _horner_descending(expected, upper) < 0
+    assert verify_unit_circle_sup_norm_squared(result)
+
+
+def test_exact_maximum_round_trip_through_serialization() -> None:
+    result = _result({0: (1, 0), 1: (1, 0), 2: (-1, 0), 3: (1, 0)})
+    decoded = UnitCircleSupNormSquaredResult.model_validate_json(
+        result.model_dump_json()
+    )
+
+    assert decoded == result
+    assert decoded.sup_norm_squared_exact is not None
+    assert tuple(decoded.sup_norm_squared_exact.polynomial) == (27, -216, 176)
+
+
+def test_forged_exact_maximum_is_rejected() -> None:
+    result = _result({0: (1, 0), 1: (1, 0), 2: (-1, 0), 3: (1, 0)})
+    forged = result.model_copy(
+        update={
+            "sup_norm_squared_exact": RealAlgebraicValue._from_admitted_polynomial(
+                polynomial=(1, -999),
+                real_root_index=0,
+            )
+        }
+    )
+
+    assert not verify_unit_circle_sup_norm_squared(forged)
+
+
+def test_absent_exact_maximum_still_verifies() -> None:
+    result = _result({0: (1, 0), 1: (1, 0), 2: (-1, 0), 3: (1, 0)})
+    weakened = result.model_copy(update={"sup_norm_squared_exact": None})
+
+    assert verify_unit_circle_sup_norm_squared(weakened)

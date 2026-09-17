@@ -24,7 +24,8 @@ from __future__ import annotations
 
 import time
 from fractions import Fraction
-from math import isqrt
+from itertools import pairwise
+from math import gcd, isqrt, lcm
 from typing import Any
 
 import sympy
@@ -42,7 +43,10 @@ from jacobian.catalog.models import (
 )
 from jacobian.math._root_isolation import strict_root_count
 from jacobian.math.number_theory.algebraic_numbers.real import (
+    MAX_REAL_ALGEBRAIC_COEFFICIENT_DIGITS,
+    MAX_REAL_ALGEBRAIC_DEGREE,
     RationalIsolatingInterval,
+    RealAlgebraicValue,
 )
 from jacobian.math.polynomials.unit_circle._sup_norm_models import (
     MAX_SUP_NORM_CERTIFICATE_BYTES,
@@ -340,6 +344,134 @@ def _sqrt_bounds(value: Fraction) -> tuple[Fraction, Fraction]:
     return lower, Fraction(root + 1, value.denominator)
 
 
+def _rational_algebraic_value(value: Fraction) -> RealAlgebraicValue:
+    """Return the degree-one carrier of a rational maximum."""
+
+    return RealAlgebraicValue._from_admitted_polynomial(
+        polynomial=(value.denominator, -value.numerator),
+        real_root_index=0,
+    )
+
+
+def _primitive_descending_integers(
+    descending: list[Fraction],
+) -> tuple[int, ...] | None:
+    """Return the primitive positive-leading integer spelling of a factor.
+
+    Returns ``None`` when the spelling leaves the shared real-algebraic
+    coefficient envelope.
+    """
+
+    denominator = 1
+    for value in descending:
+        denominator = lcm(denominator, value.denominator)
+    integers = [int(value * denominator) for value in descending]
+    content = 0
+    for coefficient in integers:
+        content = gcd(content, coefficient)
+    if content == 0:
+        return None
+    integers = [coefficient // content for coefficient in integers]
+    if integers[0] < 0:
+        integers = [-coefficient for coefficient in integers]
+    if integers[0] <= 0:
+        return None
+    if any(
+        len(str(abs(coefficient))) > MAX_REAL_ALGEBRAIC_COEFFICIENT_DIGITS
+        for coefficient in integers
+    ):
+        return None
+    return tuple(integers)
+
+
+def _sturm_root_index_below(factor: Any, bound: Fraction) -> int | None:
+    """Count the factor's real roots strictly below ``bound`` via Sturm."""
+
+    sequence = factor.sturm()
+    if not sequence:
+        return None
+    point = _sympy_rational(bound)
+    negative_signs: list[int] = []
+    for term in sequence:
+        coefficients = term.all_coeffs()
+        if not coefficients:
+            continue
+        sign = 1 if coefficients[0] > 0 else -1
+        if term.degree() % 2:
+            sign = -sign
+        negative_signs.append(sign)
+    bound_signs: list[int] = []
+    for term in sequence:
+        value = term.eval(point)
+        if value == 0:
+            continue
+        bound_signs.append(1 if value > 0 else -1)
+    negative_variations = sum(
+        1 for first, second in pairwise(negative_signs) if first != second
+    )
+    bound_variations = sum(
+        1 for first, second in pairwise(bound_signs) if first != second
+    )
+    return negative_variations - bound_variations
+
+
+def _exact_critical_maximum(
+    resultant_polynomial: Any,
+    value_roots: tuple[tuple[Fraction, Fraction], ...],
+    maximum_key: int,
+) -> RealAlgebraicValue | None:
+    """Identify the maximal critical value as an indexed resultant-factor root.
+
+    Every irreducible factor has simple roots, so the factor carrying the
+    maximum is the unique one changing sign strictly inside the maximal
+    isolating interval (or vanishing at a singleton).  Returns ``None`` when
+    that factor leaves the shared real-algebraic carrier; the certified
+    enclosure still carries the complete maximum in that case.
+    """
+
+    lower, upper = value_roots[maximum_key]
+    _content, factors = resultant_polynomial.factor_list()
+    candidates: list[Any] = []
+    for factor, _multiplicity in factors:
+        if factor.degree() < 1:
+            continue
+        low_value = factor.eval(_sympy_rational(lower))
+        if lower == upper:
+            if low_value == 0:
+                candidates.append(factor)
+            continue
+        if low_value * factor.eval(_sympy_rational(upper)) < 0:
+            candidates.append(factor)
+    if len(candidates) != 1:
+        return None
+    factor = candidates[0]
+    degree = factor.degree()
+    if degree > MAX_REAL_ALGEBRAIC_DEGREE:
+        return None
+    descending = [
+        Fraction(int(coefficient.p), int(coefficient.q))
+        for coefficient in factor.all_coeffs()
+    ]
+    spelling = _primitive_descending_integers(descending)
+    if spelling is None or len(spelling) - 1 != degree:
+        return None
+    if degree == 1:
+        return RealAlgebraicValue._from_admitted_polynomial(
+            polynomial=spelling, real_root_index=0
+        )
+    if lower == upper:
+        # An irreducible factor of degree two or more has no rational root.
+        return None
+    if factor.eval(_sympy_rational(lower)) == 0:
+        return None
+    index = _sturm_root_index_below(factor, lower)
+    if index is None or not 0 <= index < degree:
+        return None
+    return RealAlgebraicValue._from_admitted_polynomial(
+        polynomial=spelling, real_root_index=index
+    )
+
+
 def unit_circle_sup_norm_squared(  # noqa: C901
     polynomial: GaussianRationalPolynomial,
 ) -> UnitCircleSupNormSquaredResult:
@@ -392,6 +524,7 @@ def unit_circle_sup_norm_squared(  # noqa: C901
             endpoint_minus_one_is_maximizer=True,
             maximizing_status="FULL_CIRCLE",
             sup_norm_squared_enclosure=enclosure,
+            sup_norm_squared_exact=_rational_algebraic_value(constant),
             sup_norm_enclosure=_interval(lower, upper),
         )
 
@@ -533,6 +666,16 @@ def unit_circle_sup_norm_squared(  # noqa: C901
     sup_norm_low, _ = _sqrt_bounds(squared_low)
     _, sup_norm_high = _sqrt_bounds(squared_high)
 
+    checkpoint()
+    if endpoint_is_maximizer:
+        exact_maximum: RealAlgebraicValue | None = _rational_algebraic_value(
+            endpoint_value
+        )
+    else:
+        exact_maximum = _exact_critical_maximum(
+            resultant_polynomial, value_roots, maximum_key
+        )
+
     return UnitCircleSupNormSquaredResult._from_kernel(
         polynomial=polynomial,
         degree=degree,
@@ -546,6 +689,7 @@ def unit_circle_sup_norm_squared(  # noqa: C901
         endpoint_minus_one_is_maximizer=endpoint_is_maximizer,
         maximizing_status=status,
         sup_norm_squared_enclosure=_interval(squared_low, squared_high),
+        sup_norm_squared_exact=exact_maximum,
         sup_norm_enclosure=_interval(sup_norm_low, sup_norm_high),
     )
 
@@ -574,6 +718,15 @@ def _compare_rational_to_value_root(
     return -1 if count else 1
 
 
+def _replayed_exact_value_matches(claim: UnitCircleSupNormSquaredResult) -> bool:
+    """Replay the exact maximum: a present value must equal the kernel's."""
+
+    if claim.sup_norm_squared_exact is None:
+        return True
+    recomputed = unit_circle_sup_norm_squared(claim.polynomial)
+    return recomputed.sup_norm_squared_exact == claim.sup_norm_squared_exact
+
+
 def verify_unit_circle_sup_norm_squared(  # noqa: C901
     claim: UnitCircleSupNormSquaredResult,
 ) -> bool:
@@ -584,7 +737,9 @@ def verify_unit_circle_sup_norm_squared(  # noqa: C901
     interval isolates a real root of the retained derivative numerator, and
     that the claimed value and circle-image intervals bracket the exact
     rational-function evaluation.  Comparison ranks are replayed from the
-    certified value enclosures and the endpoint value.
+    certified value enclosures and the endpoint value.  A present exact
+    maximum is replayed by rerunning the admitted kernel and requiring
+    equality.
     """
 
     if not isinstance(claim, UnitCircleSupNormSquaredResult):
@@ -656,9 +811,11 @@ def verify_unit_circle_sup_norm_squared(  # noqa: C901
         if claim.critical_points:
             return False
         squared = claim.sup_norm_squared_enclosure
-        return (
+        if not (
             squared.lower == squared.upper
             and squared.lower.as_fraction() == endpoint
             and not any(value != 0 for value in derivative)
-        )
-    return True
+        ):
+            return False
+        return _replayed_exact_value_matches(claim)
+    return _replayed_exact_value_matches(claim)

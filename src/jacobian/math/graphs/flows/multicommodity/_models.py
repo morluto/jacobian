@@ -1141,9 +1141,7 @@ class UnsplittableRouting(StrictModel):
     def require_routing_coverage(self) -> Self:
         _require_canonical_network(self.network)
         _require_canonical_commodities(self.network, self.commodities)
-        commodity_ids = tuple(
-            commodity.commodity_id for commodity in self.commodities
-        )
+        commodity_ids = tuple(commodity.commodity_id for commodity in self.commodities)
         path_ids = tuple(path.commodity_id for path in self.paths)
         if path_ids != commodity_ids:
             raise PydanticCustomError(

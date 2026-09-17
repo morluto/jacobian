@@ -168,6 +168,12 @@ def _is_balanced(graph: SimpleUndirectedGraph, signs: tuple[int, ...]) -> bool:
     return True
 
 
+def _resolved_signs(result: SignedEmbeddingCheckResult) -> tuple[int, ...]:
+    """Return the resolved signing of an admitted result for the tests."""
+    assert result.signs is not None
+    return result.signs
+
+
 class TestKnownAnswers:
     def test_k4_untwisted_is_the_sphere(self) -> None:
         result = check_signed_embedding(_k4(), _K4_SPHERE)
@@ -178,7 +184,7 @@ class TestKnownAnswers:
         assert result.euler_characteristic == 2
         assert result.genus == 0
         assert result.witness_dart_walk is None
-        assert result.signs == (1,) * 6
+        assert _resolved_signs(result) == (1,) * 6
 
     def test_k4_one_twist_is_the_projective_plane(self) -> None:
         result = check_signed_embedding(_k4(), _K4_SPHERE, twisted_edges=(0,))
@@ -188,9 +194,9 @@ class TestKnownAnswers:
         assert (result.vertices, result.edges, result.faces) == (4, 6, 3)
         assert result.euler_characteristic == 1
         assert result.genus == 1
-        assert result.signs == (0, 1, 1, 1, 1, 1)
+        assert _resolved_signs(result) == (0, 1, 1, 1, 1, 1)
         assert result.witness_dart_walk is not None
-        assert _is_closed_odd_walk(_k4(), result.signs, result.witness_dart_walk)
+        assert _is_closed_odd_walk(_k4(), _resolved_signs(result), result.witness_dart_walk)
 
     def test_k4_two_twists_is_the_klein_bottle(self) -> None:
         result = check_signed_embedding(_k4(), _K4_SPHERE, twisted_edges=(0, 1))
@@ -200,7 +206,7 @@ class TestKnownAnswers:
         assert result.euler_characteristic == 0
         assert result.genus == 2
         assert result.witness_dart_walk is not None
-        assert _is_closed_odd_walk(_k4(), result.signs, result.witness_dart_walk)
+        assert _is_closed_odd_walk(_k4(), _resolved_signs(result), result.witness_dart_walk)
 
     def test_k7_torus_untwisted_is_genus_one(self) -> None:
         result = check_signed_embedding(_k7(), _K7_TORUS)
@@ -217,7 +223,7 @@ class TestKnownAnswers:
         assert result.euler_characteristic <= 1
         assert result.genus == 2 - result.euler_characteristic
         assert result.witness_dart_walk is not None
-        assert _is_closed_odd_walk(_k7(), result.signs, result.witness_dart_walk)
+        assert _is_closed_odd_walk(_k7(), _resolved_signs(result), result.witness_dart_walk)
 
     def test_tree_is_orientable_for_any_signs(self) -> None:
         # A tree has no cycles, so every signature is balanced.
@@ -235,7 +241,7 @@ class TestKnownAnswers:
         assert result.euler_characteristic == 1
         assert result.genus == 1
         assert result.witness_dart_walk is not None
-        assert _is_closed_odd_walk(graph, result.signs, result.witness_dart_walk)
+        assert _is_closed_odd_walk(graph, _resolved_signs(result), result.witness_dart_walk)
 
     def test_cycle_untwisted_is_the_sphere(self) -> None:
         graph = _cycle(5)
@@ -296,12 +302,12 @@ class TestDefiningInvariants:
         # orientability follows the balance test, never face parity.
         result = check_signed_embedding(_k4(), _K4_SPHERE, twisted_edges=(0,))
         parities = [
-            sum(1 for dart in walk if result.signs[dart // 2] == 0) % 2
+            sum(1 for dart in walk if _resolved_signs(result)[dart // 2] == 0) % 2
             for walk in result.face_walks
         ]
 
         assert parities == [0] * len(parities)
-        assert not _is_balanced(_k4(), result.signs)
+        assert not _is_balanced(_k4(), _resolved_signs(result))
         assert result.status == "NONORIENTABLE_EMBEDDING"
 
     def test_untwisted_matches_unsigned_checker(self) -> None:
@@ -345,8 +351,8 @@ class TestDefiningInvariants:
 
         assert result.status == "NONORIENTABLE_EMBEDDING"
         assert result.witness_dart_walk is not None
-        assert _is_closed_odd_walk(graph, result.signs, result.witness_dart_walk)
-        assert not _is_balanced(graph, result.signs)
+        assert _is_closed_odd_walk(graph, _resolved_signs(result), result.witness_dart_walk)
+        assert not _is_balanced(graph, _resolved_signs(result))
 
     def test_deterministic_replay(self) -> None:
         first = check_signed_embedding(_k4(), _K4_SPHERE, twisted_edges=(0, 5))
@@ -428,6 +434,34 @@ class TestInvalidCandidates:
 
         assert result.status == "INVALID_EMBEDDING"
         assert result.obstruction_code == "SIGN_INDEX_OUT_OF_RANGE"
+
+    def test_sign_encoding_error_results_replay_and_round_trip(self) -> None:
+        # Each malformed encoding must verify: the result retains the exact
+        # argument (signs and/or twisted_edges) needed to reproduce it.
+        for kwargs in (
+            {"signs": (1,) * 6, "twisted_edges": (0,)},
+            {"signs": (2, 1, 1, 1, 1, 1)},
+            {"signs": (1, 1, 1)},
+            {"twisted_edges": (6,)},
+            {"twisted_edges": (0, 0)},
+        ):
+            result = check_signed_embedding(_k4(), _K4_SPHERE, **kwargs)
+
+            assert result.status == "INVALID_EMBEDDING"
+            assert result.obstruction_code == "SIGN_INDEX_OUT_OF_RANGE"
+            assert verify_signed_embedding(result)
+            restored = SignedEmbeddingCheckResult.model_validate_json(
+                result.model_dump_json()
+            )
+            assert restored == result
+
+    def test_forged_encoding_detail_is_rejected(self) -> None:
+        result = check_signed_embedding(_k4(), _K4_SPHERE, twisted_edges=(6,))
+        forged = result.model_copy(
+            update={"obstruction_detail": "twisted_edges repeats edge 6"}
+        )
+
+        assert not verify_signed_embedding(forged)
 
     def test_request_rejects_both_sign_encodings(self) -> None:
         with pytest.raises(ValidationError):

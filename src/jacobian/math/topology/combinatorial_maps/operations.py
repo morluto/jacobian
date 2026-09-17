@@ -672,6 +672,7 @@ def _signed_embedding_signs(
             signs,
             "SIGN_INDEX_OUT_OF_RANGE",
             "provide either signs or twisted_edges, not both",
+            twisted_edges=twisted_edges,
         )
     if signs is not None:
         if any(sign not in (0, 1) for sign in signs):
@@ -699,17 +700,19 @@ def _signed_embedding_signs(
             return _invalid_signed_embedding(
                 graph,
                 rotations,
-                (),
+                None,
                 "SIGN_INDEX_OUT_OF_RANGE",
                 "twisted_edges must index a declared graph edge",
+                twisted_edges=twisted_edges,
             )
         if edge_index in seen:
             return _invalid_signed_embedding(
                 graph,
                 rotations,
-                (),
+                None,
                 "SIGN_INDEX_OUT_OF_RANGE",
                 f"twisted_edges repeats edge {edge_index}",
+                twisted_edges=twisted_edges,
             )
         seen.add(edge_index)
     return tuple(0 if edge_index in seen else 1 for edge_index in range(len(edges)))
@@ -718,15 +721,17 @@ def _signed_embedding_signs(
 def _invalid_signed_embedding(
     graph: SimpleUndirectedGraph,
     rotations: tuple[tuple[int, ...], ...],
-    signs: tuple[int, ...],
+    signs: tuple[int, ...] | None,
     code: str,
     detail: str,
+    twisted_edges: tuple[int, ...] | None = None,
 ) -> SignedEmbeddingCheckResult:
     canonical = tuple(_canonical_edge_rotation(tuple(row)) for row in rotations)
     return SignedEmbeddingCheckResult._from_kernel(
         graph=graph,
         status="INVALID_EMBEDDING",
         signs=signs,
+        twisted_edges=twisted_edges,
         rotations=canonical,
         vertices=len(graph.vertices),
         edges=len(graph.edges),
@@ -1246,12 +1251,17 @@ def check_signed_embedding(
 
 
 def verify_signed_embedding(claim: SignedEmbeddingCheckResult) -> bool:
-    """Check a claimed signed embedding by replaying its rotation system."""
+    """Check a claimed signed embedding by replaying its exact encoding.
+
+    Both the resolved ``signs`` and any retained ``twisted_edges`` are
+    replayed, so encoding-error results round-trip as well as admitted ones.
+    """
     return (
         check_signed_embedding(
             claim.graph,
             claim.rotations,
             signs=claim.signs,
+            twisted_edges=claim.twisted_edges,
         )
         == claim
     )

@@ -191,6 +191,11 @@ class SignedEmbeddingCheckResult(StrictModel):
       cellular embedding of the graph; ``obstruction_code`` and
       ``obstruction_detail`` carry the first reason.
 
+    ``signs`` holds the resolved 0/1 signing for an admitted system, and is
+    ``None`` only when a ``twisted_edges`` encoding failed before resolution.
+    ``twisted_edges`` retains the supplied twisted-edge list for such failed
+    encodings, so the verifier can replay the exact input.
+
     Face walks are dart cycles in the checker's ``alpha . sigma``
     convention, matching ``graph.embedding.orientable.check``: consecutive
     entries need not be head-to-tail darts, and a walk may repeat darts.
@@ -202,7 +207,8 @@ class SignedEmbeddingCheckResult(StrictModel):
 
     graph: SimpleUndirectedGraph
     status: SignedEmbeddingCheckStatus
-    signs: tuple[int, ...] = ()
+    signs: tuple[int, ...] | None = None
+    twisted_edges: tuple[int, ...] | None = None
     rotations: tuple[tuple[int, ...], ...] = ()
     dart_rotations: tuple[tuple[int, ...], ...] = ()
     darts: tuple[tuple[int, int, int], ...] = ()
@@ -268,7 +274,7 @@ class SignedEmbeddingCheckResult(StrictModel):
                 "alpha and sigma must cover every dart and darts must reference "
                 "declared vertices and darts",
             )
-        if len(self.signs) != len(self.graph.edges) or any(
+        if self.signs is None or len(self.signs) != len(self.graph.edges) or any(
             sign not in (0, 1) for sign in self.signs
         ):
             raise _validation_error(
@@ -361,6 +367,11 @@ class SignedEmbeddingCheckResult(StrictModel):
             raise _validation_error(
                 "signed_embedding_witness_binding",
                 "the witness must be a closed head-to-tail dart walk",
+            )
+        if self.signs is None:
+            raise _validation_error(
+                "signed_embedding_witness_signs",
+                "a nonorientable embedding carries its resolved signing",
             )
         if sum(1 for dart in witness if self.signs[dart // 2] == 0) % 2 != 1:
             raise _validation_error(

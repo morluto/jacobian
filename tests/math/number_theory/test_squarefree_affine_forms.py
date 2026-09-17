@@ -775,6 +775,26 @@ def test_interval_count_zero_form_is_obstructed() -> None:
     assert (obstruction.n, obstruction.prime) == (0, 2)
 
 
+def test_interval_count_interior_zero_is_obstructed() -> None:
+    # A zero value is divisible by every square.  When it is an interior point
+    # of a short interval the governing magnitude (taken at the endpoints) can
+    # be below 4, so the least prime must still be sieved.
+    result = interval_count(SINGLE_N, 0, 3, True)
+
+    assert result.count == 3
+    assert result.matching == (1, 2, 3)
+    assert [(row.n, row.prime) for row in result.obstructions] == [(0, 2)]
+    assert verify_interval_count(result)
+
+    shifted = _family(_form("n_minus_one", 1, -1))
+    shifted_result = interval_count(shifted, 0, 4, True)
+
+    assert shifted_result.count == 4
+    assert shifted_result.matching == (0, 2, 3, 4)
+    assert [(row.n, row.prime) for row in shifted_result.obstructions] == [(1, 2)]
+    assert verify_interval_count(shifted_result)
+
+
 def test_interval_count_native_and_catalog_paths_agree() -> None:
     request = IntervalCountRequest(
         source=SINGLE_N, lower=1, upper=20, include_ledger=True

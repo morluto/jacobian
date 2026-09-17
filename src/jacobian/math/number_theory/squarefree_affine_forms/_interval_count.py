@@ -184,7 +184,11 @@ def interval_count(
             matching=(),
             obstructions=zero_obstructions,
         )
-    limit = isqrt(magnitude)
+    # A nonzero value divisible by a square has a prime ``p`` with
+    # ``p**2 <= magnitude``, so ``isqrt(magnitude)`` bounds the useful primes.
+    # The value ``0`` is divisible by every square, so the least prime must
+    # always be probed even when that bound admits none.
+    limit = max(isqrt(magnitude), 2)
     primes = primes_up_to(limit)
     # obstruction[n] = (form_index, prime), first hit wins: primes ascend and
     # forms keep source order, so the recorded pair is the least prime and,

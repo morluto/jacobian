@@ -2,16 +2,25 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Self
+from typing import Annotated, Any, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.canonical import format_canonical_integer
-from jacobian.math.topology._models import FiniteSimplicialComplex
+from jacobian.math.topology._models import (
+    MAX_TOPOLOGY_CHAIN_GROUP,
+    MAX_TOPOLOGY_DIMENSION,
+    MAX_TOPOLOGY_PRIME,
+    FiniteSimplicialComplex,
+    HomologyConvention,
+)
 from jacobian.math.topology._request_admission import (
     require_canonical_complex_admission,
+)
+from jacobian.math.topology.cohomology.operations._simplicial import (
+    SimplicialCohomologyResult,
 )
 
 MAX_AMBIENT_SIMPLEX_VERTICES = 64
@@ -418,6 +427,340 @@ class BocksteinResult(BocksteinRequest):
 __all__ = [
     "BocksteinRequest",
     "BocksteinResult",
+    "CohomologyRingRequest",
+    "CohomologyRingResult",
+    "CupProductEntry",
+    "CupProductRequest",
+    "CupProductResult",
+    "InducedCohomologyMapRequest",
+    "InducedCohomologyMapResult",
+    "InducedCohomologyMatrix",
+    "SimplicialCochain",
+    "SimplicialMap",
     "SteenrodSquareRequest",
     "SteenrodSquareResult",
 ]
+
+
+class SimplicialCochain(StrictModel):
+    """One prime-field simplicial cochain bound to its complex and degree.
+
+    Coefficients align with ``complex.faces_by_dimension[degree].faces`` in
+    canonical order and lie in ``0..prime-1``.  Degrees above the complex
+    dimension carry the empty (zero) cochain.
+    """
+
+    complex: FiniteSimplicialComplex
+    prime: StrictInt = Field(ge=2, le=MAX_TOPOLOGY_PRIME)
+    degree: StrictInt = Field(ge=0, le=MAX_TOPOLOGY_DIMENSION)
+    coefficients: tuple[StrictInt, ...] = Field(max_length=MAX_TOPOLOGY_CHAIN_GROUP)
+
+    @model_validator(mode="after")
+    def require_cochain_axis(self) -> Self:
+        dimensions = tuple(entry.dimension for entry in self.complex.faces_by_dimension)
+        if self.degree in dimensions:
+            faces = self.complex.faces_by_dimension[dimensions.index(self.degree)].faces
+        else:
+            faces = ()
+        if len(self.coefficients) != len(faces):
+            raise _validation_error(
+                "simplicial_cochain_axis",
+                "cochain coefficients must cover the degree faces exactly once",
+            )
+        if any(
+            coefficient < 0 or coefficient >= self.prime
+            for coefficient in self.coefficients
+        ):
+            raise _validation_error(
+                "simplicial_cochain_coefficients",
+                "cochain coefficients must lie in the prime field",
+            )
+        return self
+
+
+class SimplicialMap(StrictModel):
+    """One simplicial vertex map between canonical complexes.
+
+    ``vertex_map`` lists the target label of each source vertex in source
+    vertex order.  Every source face must map onto a target face (degenerate
+    images onto lower-dimensional faces are admitted); this simpliciality is
+    the value's defining invariant and is checked on construction.
+    """
+
+    source: FiniteSimplicialComplex
+    target: FiniteSimplicialComplex
+    vertex_map: tuple[str, ...] = Field(max_length=64)
+
+    @model_validator(mode="after")
+    def require_simplicial_map(self) -> Self:
+        if len(self.vertex_map) != len(self.source.vertices):
+            raise _validation_error(
+                "simplicial_map_vertex_axis",
+                "the vertex map covers every source vertex exactly once",
+            )
+        target_vertices = set(self.target.vertices)
+        if any(label not in target_vertices for label in self.vertex_map):
+            raise _validation_error(
+                "simplicial_map_target_labels",
+                "every vertex image must be a declared target vertex",
+            )
+        target_faces = {
+            face for entry in self.target.faces_by_dimension for face in entry.faces
+        }
+        source_index = {
+            label: position for position, label in enumerate(self.source.vertices)
+        }
+        for entry in self.source.faces_by_dimension:
+            for face in entry.faces:
+                image = tuple(
+                    sorted({self.vertex_map[source_index[vertex]] for vertex in face})
+                )
+                if image not in target_faces:
+                    raise _validation_error(
+                        "simplicial_map_face_image",
+                        "every source face must map onto a target face",
+                    )
+        return self
+
+
+class CupProductRequest(StrictModel):
+    """Multiply two simplicial cochains by Alexander-Whitney."""
+
+    complex: FiniteSimplicialComplex
+    prime: StrictInt = Field(ge=2, le=MAX_TOPOLOGY_PRIME)
+    left: SimplicialCochain
+    right: SimplicialCochain
+
+
+class CupProductResult(StrictModel):
+    """The Alexander-Whitney product cochain with its source factors."""
+
+    complex: FiniteSimplicialComplex
+    prime: StrictInt = Field(ge=2, le=MAX_TOPOLOGY_PRIME)
+    left: SimplicialCochain
+    right: SimplicialCochain
+    product: SimplicialCochain
+
+    @model_validator(mode="after")
+    def require_cup_product_shape(self) -> Self:
+        for name, cochain in (("left", self.left), ("right", self.right)):
+            if cochain.complex != self.complex or cochain.prime != self.prime:
+                raise _validation_error(
+                    "cup_product_source_binding",
+                    f"the {name} cochain must bind the source complex and prime",
+                )
+        if self.product.complex != self.complex or self.product.prime != self.prime:
+            raise _validation_error(
+                "cup_product_source_binding",
+                "the product cochain must bind the source complex and prime",
+            )
+        if self.product.degree != self.left.degree + self.right.degree:
+            raise _validation_error(
+                "cup_product_degree",
+                "the product degree is the sum of the factor degrees",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(cls, **values: Any) -> Self:
+        return cls.model_construct(**values)
+
+
+class CupProductEntry(StrictModel):
+    """One cohomology product in class and coboundary coordinates.
+
+    ``class_components`` are the coordinates of the left-cup-right product
+    in the product-degree cohomology basis; ``coboundary_components``
+    complete the exact cochain equation products from the basis product.
+    """
+
+    left_degree: StrictInt = Field(ge=0, le=MAX_TOPOLOGY_DIMENSION)
+    left_index: StrictInt = Field(ge=0)
+    right_degree: StrictInt = Field(ge=0, le=MAX_TOPOLOGY_DIMENSION)
+    right_index: StrictInt = Field(ge=0)
+    class_components: tuple[StrictInt, ...]
+    coboundary_components: tuple[StrictInt, ...]
+
+
+class CohomologyRingRequest(StrictModel):
+    """Compute the prime-field cohomology ring multiplication table."""
+
+    complex: FiniteSimplicialComplex
+    prime: StrictInt = Field(ge=2, le=MAX_TOPOLOGY_PRIME)
+    convention: HomologyConvention = HomologyConvention.UNREDUCED
+
+
+class CohomologyRingResult(StrictModel):
+    """Cohomology with its cup-product structure constants.
+
+    ``products`` holds one entry per cohomology-basis pair whose degrees
+    fit in the complex dimension, in degree-major order.  Together with the
+    retained cohomology bases, the entries determine the full graded ring.
+    """
+
+    complex: FiniteSimplicialComplex
+    prime: StrictInt = Field(ge=2, le=MAX_TOPOLOGY_PRIME)
+    convention: HomologyConvention
+    cohomology: SimplicialCohomologyResult
+    products: tuple[CupProductEntry, ...]
+
+    @model_validator(mode="after")
+    def require_ring_shape(self) -> Self:
+        if (
+            self.cohomology.complex != self.complex
+            or self.cohomology.prime != self.prime
+            or self.cohomology.convention != self.convention
+        ):
+            raise _validation_error(
+                "cohomology_ring_source_binding",
+                "retained cohomology must bind the source complex, prime, "
+                "and convention",
+            )
+        betti = {
+            group.dimension: group.betti_number for group in self.cohomology.groups
+        }
+        coboundary_ranks = {
+            group.dimension: len(group.coboundary_basis)
+            for group in self.cohomology.groups
+        }
+        expected: list[tuple[int, int, int, int]] = []
+        for left_degree, left_betti in betti.items():
+            for left_index in range(left_betti):
+                for right_degree, right_betti in betti.items():
+                    total = left_degree + right_degree
+                    if total > self.complex.dimension:
+                        continue
+                    for right_index in range(right_betti):
+                        expected.append(
+                            (left_degree, left_index, right_degree, right_index)
+                        )
+        actual = tuple(
+            (
+                entry.left_degree,
+                entry.left_index,
+                entry.right_degree,
+                entry.right_index,
+            )
+            for entry in self.products
+        )
+        if actual != tuple(expected):
+            raise _validation_error(
+                "cohomology_ring_table_coverage",
+                "products must cover every in-dimension basis pair exactly once",
+            )
+        for entry in self.products:
+            total = entry.left_degree + entry.right_degree
+            if len(entry.class_components) != betti.get(total, 0):
+                raise _validation_error(
+                    "cohomology_ring_class_axis",
+                    "class components must cover the product-degree basis",
+                )
+            if len(entry.coboundary_components) != coboundary_ranks.get(total, 0):
+                raise _validation_error(
+                    "cohomology_ring_coboundary_axis",
+                    "coboundary components must cover the product-degree basis",
+                )
+            for coefficient in (*entry.class_components, *entry.coboundary_components):
+                if coefficient < 0 or coefficient >= self.prime:
+                    raise _validation_error(
+                        "cohomology_ring_coefficients",
+                        "structure constants must lie in the prime field",
+                    )
+        return self
+
+    @classmethod
+    def _from_kernel(cls, **values: Any) -> Self:
+        return cls.model_construct(**values)
+
+
+class InducedCohomologyMapRequest(StrictModel):
+    """Pull cohomology classes back along a simplicial map."""
+
+    map: SimplicialMap
+    prime: StrictInt = Field(ge=2, le=MAX_TOPOLOGY_PRIME)
+    convention: HomologyConvention = HomologyConvention.UNREDUCED
+
+
+class InducedCohomologyMatrix(StrictModel):
+    """Pullback ``H^k(target) -> H^k(source)`` in the retained bases.
+
+    Rows index the source cohomology basis, columns the target basis;
+    either side is empty when the degree exceeds its complex dimension.
+    """
+
+    degree: StrictInt = Field(ge=0, le=MAX_TOPOLOGY_DIMENSION)
+    rows: tuple[tuple[StrictInt, ...], ...]
+
+
+class InducedCohomologyMapResult(StrictModel):
+    """Source and target cohomology with every pullback matrix."""
+
+    map: SimplicialMap
+    prime: StrictInt = Field(ge=2, le=MAX_TOPOLOGY_PRIME)
+    convention: HomologyConvention
+    source_cohomology: SimplicialCohomologyResult
+    target_cohomology: SimplicialCohomologyResult
+    matrices: tuple[InducedCohomologyMatrix, ...]
+
+    @model_validator(mode="after")
+    def require_induced_map_shape(self) -> Self:
+        if (
+            self.source_cohomology.complex != self.map.source
+            or self.target_cohomology.complex != self.map.target
+        ):
+            raise _validation_error(
+                "induced_map_cohomology_binding",
+                "retained cohomologies must bind the map source and target",
+            )
+        for cohomology in (self.source_cohomology, self.target_cohomology):
+            if (
+                cohomology.prime != self.prime
+                or cohomology.convention != self.convention
+            ):
+                raise _validation_error(
+                    "induced_map_coefficient_binding",
+                    "retained cohomologies must bind the prime and convention",
+                )
+        top = max(self.map.source.dimension, self.map.target.dimension)
+        if tuple(matrix.degree for matrix in self.matrices) != tuple(range(top + 1)):
+            raise _validation_error(
+                "induced_map_degree_coverage",
+                "matrices must cover every degree through the top dimension",
+            )
+        for matrix in self.matrices:
+            source_betti = next(
+                (
+                    group.betti_number
+                    for group in self.source_cohomology.groups
+                    if group.dimension == matrix.degree
+                ),
+                0,
+            )
+            target_betti = next(
+                (
+                    group.betti_number
+                    for group in self.target_cohomology.groups
+                    if group.dimension == matrix.degree
+                ),
+                0,
+            )
+            if len(matrix.rows) != source_betti or any(
+                len(row) != target_betti for row in matrix.rows
+            ):
+                raise _validation_error(
+                    "induced_map_matrix_shape",
+                    "each matrix must map target classes to source classes",
+                )
+            for row in matrix.rows:
+                if any(
+                    coefficient < 0 or coefficient >= self.prime for coefficient in row
+                ):
+                    raise _validation_error(
+                        "induced_map_coefficients",
+                        "pullback entries must lie in the prime field",
+                    )
+        return self
+
+    @classmethod
+    def _from_kernel(cls, **values: Any) -> Self:
+        return cls.model_construct(**values)

@@ -628,6 +628,9 @@ class TestCatalogPublication:
             "topology.simplicial.cohomology.compute",
             "cohomology.steenrod_square.compute",
             "cohomology.bockstein.compute",
+            "topology.simplicial.cup_product.compute",
+            "topology.simplicial.cohomology_ring.compute",
+            "topology.simplicial_map.induced_cohomology.compute",
         )
 
     def test_bockstein_native_symbol_is_supported(self) -> None:

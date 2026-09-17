@@ -420,7 +420,6 @@ class TestModelBranches:
                 )
             )
 
-
     def test_point_branch_shape(self) -> None:
         result = self._nakano_result()
         forged = json.loads(result.model_dump_json())

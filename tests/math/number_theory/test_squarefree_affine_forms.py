@@ -18,12 +18,24 @@ from jacobian.math.number_theory.squarefree_affine_forms import (
     SquarefreeAffineFamily,
     SquarefreeAffineForm,
     euler_product,
+    interval_count,
+    local_admissibility,
     local_factor,
+    verify_interval_count,
+    verify_local_admissibility,
     verify_squarefree_affine_family,
+)
+from jacobian.math.number_theory.squarefree_affine_forms._admissibility import (
+    LocalAdmissibilityRequest,
+    LocalAdmissibilityResult,
 )
 from jacobian.math.number_theory.squarefree_affine_forms._euler_product import (
     SquarefreeEulerProductRequest,
     SquarefreeEulerProductResult,
+)
+from jacobian.math.number_theory.squarefree_affine_forms._interval_count import (
+    IntervalCountRequest,
+    IntervalCountResult,
 )
 from jacobian.math.number_theory.squarefree_affine_forms._local_factor import (
     SquarefreeLocalFactorRequest,
@@ -36,6 +48,8 @@ from jacobian.math.number_theory.squarefree_affine_forms._models import (
 from jacobian.math.number_theory.squarefree_affine_forms._tools import (
     TOOLS,
     compute_euler_product,
+    compute_interval_count,
+    compute_local_admissibility,
     compute_local_factor,
 )
 from jacobian.math.number_theory.squarefree_affine_forms.values import (
@@ -153,6 +167,7 @@ def test_constant_forms_are_handled_explicitly() -> None:
     )
     row = progression.form_rows[0]
     assert (row.bad_count, row.stride) == (3, 3)
+    assert row.root is not None
     assert [item.residue for item in progression.bad_residues] == [
         row.root,
         row.root + 3,
@@ -567,6 +582,8 @@ def test_tool_declarations_are_published() -> None:
     assert operation_ids == {
         "number_theory.squarefree_affine_forms.local_factor.compute",
         "number_theory.squarefree_affine_forms.euler_product.compute",
+        "number_theory.squarefree_affine_forms.local_admissibility.decide",
+        "number_theory.squarefree_affine_forms.interval_count.compute",
     }
     for tool in TOOLS:
         assert 1 <= len(tool.discovery_terms) <= 8
@@ -575,3 +592,234 @@ def test_tool_declarations_are_published() -> None:
             request = tool.request_type.model_validate_json(json.dumps(example.input))
             result = tool.run(request)
             assert result is not None
+
+
+def _twin_pair() -> SquarefreeAffineFamily:
+    return _family(_form("n", 1, 0), _form("n_plus_2", 1, 2))
+
+
+def _brute_force_admissible(family: SquarefreeAffineFamily, bound: int) -> bool:
+    """Independent obstruction search over small primes for the tests."""
+
+    from sympy import isprime
+
+    for prime in range(2, bound + 1):
+        if not isprime(prime):
+            continue
+        modulus = prime * prime
+        if all(
+            any(
+                (form.coefficient * residue + form.constant) % modulus == 0
+                for form in family.forms
+            )
+            for residue in range(modulus)
+        ):
+            return False
+    return True
+
+
+def test_twin_pair_is_locally_admissible() -> None:
+    family = _twin_pair()
+    result = local_admissibility(family)
+
+    assert result.status == "LOCALLY_ADMISSIBLE"
+    assert result.cutoff == 1
+    assert result.rows == ()
+    assert result.obstruction is None
+    assert verify_local_admissibility(result)
+
+
+def test_single_form_is_locally_admissible() -> None:
+    result = local_admissibility(SINGLE_N)
+
+    assert result.status == "LOCALLY_ADMISSIBLE"
+    assert result.cutoff == 1
+    assert verify_local_admissibility(result)
+
+
+def test_constant_four_is_obstructed_at_two() -> None:
+    family = _family(_form("c", 0, 4))
+    result = local_admissibility(family)
+
+    assert result.status == "LOCALLY_OBSTRUCTED"
+    assert result.obstruction is not None
+    assert result.obstruction.prime == 2
+    assert result.obstruction.valid_count == 0
+    assert verify_local_admissibility(result)
+
+
+def test_admissibility_cutoff_and_rows_replay() -> None:
+    family = _family(_form("a", 6, 1), _form("b", 10, 3), _form("c", 15, 7))
+    result = local_admissibility(family)
+
+    # Cutoff: A = 15, M = max(3 forms, no constant forms) = 3, B = 15.
+    assert (result.cutoff, result.max_abs_coefficient, result.large_prime_bound) == (
+        15,
+        15,
+        3,
+    )
+    assert [row.prime for row in result.rows] == list(primerange(2, 16))
+    assert result.status == "LOCALLY_ADMISSIBLE"
+    assert all(row.valid_count > 0 for row in result.rows)
+    assert _brute_force_admissible(family, 15)
+    assert verify_local_admissibility(result)
+
+
+def test_admissibility_matches_brute_force() -> None:
+    family = _family(_form("n", 2, 1), _form("m", 3, 2))
+    result = local_admissibility(family)
+
+    assert result.status == "LOCALLY_ADMISSIBLE"
+    assert _brute_force_admissible(family, result.cutoff)
+    assert verify_local_admissibility(result)
+
+
+def test_admissibility_native_and_catalog_paths_agree() -> None:
+    family = _twin_pair()
+    request = LocalAdmissibilityRequest(source=family)
+
+    assert compute_local_admissibility(request) == local_admissibility(family)
+
+
+def test_admissibility_round_trip_and_forgery() -> None:
+    family = _family(_form("c", 0, 4))
+    result = local_admissibility(family)
+    restored = LocalAdmissibilityResult.model_validate_json(result.model_dump_json())
+
+    assert restored == result
+    assert verify_local_admissibility(restored)
+    forged = json.loads(restored.model_dump_json())
+    forged["status"] = "LOCALLY_ADMISSIBLE"
+    forged["obstruction"] = None
+    with pytest.raises(ValidationError):
+        LocalAdmissibilityResult.model_validate_json(json.dumps(forged))
+    forged_rows = json.loads(restored.model_dump_json())
+    forged_rows["rows"][0]["bad_count"] = 1
+    forged_rows["rows"][0]["valid_count"] = 3
+    with pytest.raises(ValidationError):
+        LocalAdmissibilityResult.model_validate_json(json.dumps(forged_rows))
+
+
+def test_admissibility_cutoff_budget_is_a_resource_boundary() -> None:
+    family = _family(_form("big", 10**7, 1))
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
+        local_admissibility(family)
+    assert "cutoff" in exc_info.value.errors()[0]["type"]
+
+
+def test_interval_count_one_to_twenty() -> None:
+    result = interval_count(SINGLE_N, 1, 20, True)
+
+    assert result.count == 13
+    assert result.matching == (1, 2, 3, 5, 6, 7, 10, 11, 13, 14, 15, 17, 19)
+    assert [(row.n, row.form_id, row.prime) for row in result.obstructions] == [
+        (4, "n", 2),
+        (8, "n", 2),
+        (9, "n", 3),
+        (12, "n", 2),
+        (16, "n", 2),
+        (18, "n", 3),
+        (20, "n", 2),
+    ]
+    assert verify_interval_count(result)
+
+
+def test_interval_count_without_ledger() -> None:
+    result = interval_count(SINGLE_N, 1, 20, False)
+
+    assert result.count == 13
+    assert result.matching == ()
+    assert result.obstructions == ()
+    assert verify_interval_count(result)
+
+
+def test_interval_count_matches_brute_force() -> None:
+    import math
+
+    family = _family(_form("a", 2, 1), _form("b", 3, 1))
+
+    def is_squarefree(value: int) -> bool:
+        root = math.isqrt(abs(value))
+        return all(value % (prime * prime) for prime in range(2, root + 1))
+
+    expected = sum(
+        1
+        for n in range(-10, 31)
+        if all(
+            is_squarefree(form.coefficient * n + form.constant) for form in family.forms
+        )
+    )
+    result = interval_count(family, -10, 30, True)
+
+    assert result.count == expected
+    for point in result.matching:
+        assert all(
+            is_squarefree(form.coefficient * point + form.constant)
+            for form in family.forms
+        )
+    for row in result.obstructions:
+        form = next(f for f in family.forms if f.form_id == row.form_id)
+        value = form.coefficient * row.n + form.constant
+        assert value % (row.prime * row.prime) == 0
+    assert verify_interval_count(result)
+
+
+def test_interval_count_zero_form_is_obstructed() -> None:
+    family = SINGLE_N
+    # n = 0 makes the single form vanish; it is rejected with prime 2.
+    result = interval_count(family, 0, 0, True)
+
+    assert result.count == 0
+    assert result.matching == ()
+    (obstruction,) = result.obstructions
+    assert (obstruction.n, obstruction.prime) == (0, 2)
+
+
+def test_interval_count_native_and_catalog_paths_agree() -> None:
+    request = IntervalCountRequest(
+        source=SINGLE_N, lower=1, upper=20, include_ledger=True
+    )
+
+    assert compute_interval_count(request) == interval_count(SINGLE_N, 1, 20, True)
+
+
+def test_interval_count_round_trip_and_forgery() -> None:
+    result = interval_count(SINGLE_N, 1, 20, True)
+    restored = IntervalCountResult.model_validate_json(result.model_dump_json())
+
+    assert restored == result
+    assert verify_interval_count(restored)
+    forged = json.loads(restored.model_dump_json())
+    forged["count"] = 14
+    with pytest.raises(ValidationError):
+        IntervalCountResult.model_validate_json(json.dumps(forged))
+    forged_moved = json.loads(restored.model_dump_json())
+    # Move n = 4 from rejected to accepted with a consistent count: the
+    # claim stays wire-valid but false, so only replay catches it.
+    forged_moved["matching"] = sorted([*forged_moved["matching"], 4])
+    forged_moved["obstructions"] = [
+        row for row in forged_moved["obstructions"] if row["n"] != 4
+    ]
+    forged_moved["count"] = len(forged_moved["matching"])
+    forged_claim = IntervalCountResult.model_validate_json(json.dumps(forged_moved))
+    assert not verify_interval_count(forged_claim)
+
+
+def test_interval_reversed_bounds_are_rejected() -> None:
+    with pytest.raises(OperationDomainValidationError):
+        interval_count(SINGLE_N, 20, 1, False)
+    with pytest.raises(ValidationError):
+        IntervalCountRequest(source=SINGLE_N, lower=20, upper=1)
+
+
+def test_interval_length_budget_is_a_resource_boundary() -> None:
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
+        interval_count(SINGLE_N, 0, 20_000, False)
+    assert "interval_length" in exc_info.value.errors()[0]["type"]
+
+
+def test_interval_value_budget_is_a_resource_boundary() -> None:
+    family = _family(_form("big", 99_999_999, 0))
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
+        interval_count(family, 0, 19999, False)
+    assert "interval_value" in exc_info.value.errors()[0]["type"]

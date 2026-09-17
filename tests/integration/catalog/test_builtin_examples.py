@@ -12,6 +12,9 @@ from jacobian.canonical import encode_strict_json
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import MathTool
 from jacobian.dispatch import OperationRequestValidationError, invoke_operation
+from jacobian.math.polynomials.multivariate._factor_backend import (
+    factor_worker_containment_available,
+)
 
 _CATALOG = Catalog.open()
 _SINGULAR_OPERATION_IDS = frozenset(
@@ -23,6 +26,7 @@ _SINGULAR_OPERATION_IDS = frozenset(
         "polynomial.map.generic_degree.compute",
     }
 )
+_FACTOR_WORKER_OPERATION_IDS = frozenset({"polynomial.multivariate.factor.compute"})
 
 
 def _builtin_operations() -> tuple[MathTool[Any, Any], ...]:
@@ -44,6 +48,13 @@ def test_advertised_invocation_example_executes_when_backend_is_available(
     operation_id = operation.operation_id
     if operation_id in _SINGULAR_OPERATION_IDS and shutil.which("Singular") is None:
         pytest.skip("the published example is owned by the Singular runtime lane")
+    if (
+        operation_id in _FACTOR_WORKER_OPERATION_IDS
+        and not factor_worker_containment_available()
+    ):
+        pytest.skip(
+            "the published example needs the hard-memory-containment worker lane"
+        )
     examples = operation.examples
     assert examples, f"{operation_id} must advertise one executable example"
     for invocation_example in examples:

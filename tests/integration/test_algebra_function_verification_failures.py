@@ -9,6 +9,11 @@ import pytest
 from jacobian._execution import OperationExecutionTimeoutError
 from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.math.polynomials.multivariate._factor_backend import (
+    factor_worker_containment_available,
+)
+
+_FACTOR_WORKER_OPERATION_IDS = frozenset({"polynomial.multivariate.factor.compute"})
 
 CASES = (
     (
@@ -477,6 +482,11 @@ def test_additional_verifier_preserves_operational_noncompletion(
     boundary: str,
     failure: type[Exception],
 ) -> None:
+    if (
+        operation_id in _FACTOR_WORKER_OPERATION_IDS
+        and not factor_worker_containment_available()
+    ):
+        pytest.skip("the genuine claim needs the hard-memory-containment worker lane")
     test_verifier_preserves_operational_noncompletion(
         monkeypatch, operation_id, module_name, verifier_name, boundary, failure
     )

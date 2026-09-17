@@ -12,6 +12,9 @@ from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.polynomials.multivariate._factor_backend import (
+    factor_worker_containment_available,
+)
 from jacobian.math.polynomials.multivariate._factor_models import (
     MultivariateFactorRequest,
     MultivariateFactorResult,
@@ -27,6 +30,27 @@ from jacobian.math.polynomials.values import (
 )
 
 type PolynomialTerm = tuple[int, int, tuple[int, ...]]
+
+requires_worker_containment = pytest.mark.skipif(
+    not factor_worker_containment_available(),
+    reason="the bounded factorization worker needs hard memory containment "
+    "(prlimit or the Linux self-applied address-space cap)",
+)
+
+
+def _assume_contained_platform(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Pretend this platform offers hard worker containment.
+
+    Tests that fake worker replies classify the reply, not the
+    fail-closed refusal, so they force the containment probe instead of
+    depending on the host platform.
+    """
+
+    monkeypatch.setattr(
+        "jacobian.math.polynomials.multivariate._factor_backend"
+        ".factor_worker_containment_available",
+        lambda: True,
+    )
 
 
 def _poly(
@@ -46,6 +70,7 @@ def _poly(
     )
 
 
+@requires_worker_containment
 class TestMultivariateFactor:
     def test_factor_order_survives_native_integer_and_json_roundtrip(self) -> None:
         # (x + y + 10)(x + y + 2): canonical decimal order puts 10 before 2.
@@ -106,6 +131,7 @@ class TestMultivariateFactor:
 
 
 class TestMultivariateFactorResultInvariants:
+    @requires_worker_containment
     def test_roundtrip_result_validates(self) -> None:
         poly = _poly(("x", "y"), ((1, 1, (2, 1)), (-1, 1, (1, 0))))
         result = _compute_factor(MultivariateFactorRequest(polynomial=poly))
@@ -203,6 +229,7 @@ class TestAggregateDegreeGate:
             )
 
 
+@requires_worker_containment
 class TestConversionAndResultBoundAlignment:
     def test_factor_within_representation_bound_validates(self) -> None:
         """(x^23-1)(y^23-1) + z(x-1)(y-1) has an irreducible factor with 530
@@ -228,6 +255,7 @@ class TestConversionAndResultBoundAlignment:
         assert MultivariateFactorResult.model_validate(result.model_dump()) == result
 
 
+@requires_worker_containment
 class TestBoundedReconstruction:
     def test_telescoped_geometric_product_replays_boundedly(self) -> None:
         """(x^64-1)(y^64-1)(z^64-1) reconstructs through many geometric-sum
@@ -275,6 +303,7 @@ def _difference_product_terms(
     return terms
 
 
+@requires_worker_containment
 class TestUniqueFactorizationReplay:
     def test_paired_cyclotomic_product_returns_typed_result(self) -> None:
         """prod_{i=1..8} (x_i^12 - 1) is the review counterexample whose
@@ -359,6 +388,7 @@ class TestAggregateContentAdmission:
         with pytest.raises(OperationDomainValidationError):
             _compute_factor(request)
 
+    @requires_worker_containment
     def test_small_shared_denominators_still_admitted(self) -> None:
         """Ordinary rational coefficients clear to small primitive values
         and remain serviceable end to end."""
@@ -450,6 +480,7 @@ class TestKillableFactorBackend:
         elapsed = time.monotonic() - started
         assert elapsed < 30.0
 
+    @requires_worker_containment
     def test_worker_backend_agrees_with_in_process_factor_list(self) -> None:
         """The bounded worker returns the same exact decomposition as an
         in-process ``factor_list`` on ordinary inputs."""
@@ -507,6 +538,7 @@ class TestKillableFactorBackend:
                 stdout=b"<traceback> not json",
             )
 
+        _assume_contained_platform(monkeypatch)
         monkeypatch.setattr("jacobian.process.run_bounded_process", fake_run)
         poly = _poly(("x", "y"), ((1, 1, (2, 1)), (-1, 1, (1, 0))))
         with pytest.raises(FactorBackendFailureError):
@@ -527,6 +559,7 @@ class TestKillableFactorBackend:
         sigxcpu = getattr(signal, "SIGXCPU", None)
         if sigxcpu is None:
             pytest.skip("POSIX-only signal semantics")
+        _assume_contained_platform(monkeypatch)
         monkeypatch.setattr(
             "jacobian.process.run_bounded_process",
             lambda *_a, **_k: TestExecutionInterruptionSeparation._fake_completed(
@@ -552,6 +585,7 @@ class TestKillableFactorBackend:
 
         payload = _json.dumps({"ok": True, "as_limit_applied": True}).encode()
 
+        _assume_contained_platform(monkeypatch)
         monkeypatch.setattr(
             "jacobian.process.run_bounded_process",
             lambda *_a, **_k: TestExecutionInterruptionSeparation._fake_completed(
@@ -581,6 +615,7 @@ class TestKillableFactorBackend:
                 stdout=b"",
             )
 
+        _assume_contained_platform(monkeypatch)
         monkeypatch.setattr("jacobian.process.run_bounded_process", fake_run)
         poly = _poly(("x", "y"), ((1, 1, (2, 1)), (-1, 1, (1, 0))))
         with pytest.raises(FactorBackendFailureError):
@@ -674,6 +709,7 @@ class TestExecutionInterruptionSeparation:
         defaults.update(overrides)
         return SimpleNamespace(**defaults)
 
+    @requires_worker_containment
     def test_deadline_hit_raises_timeout(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """A worker stopped by its deadline raises a timeout."""
         poly = _poly(("x", "y"), ((1, 1, (60, 60)), (-1, 1, (59, 0))))
@@ -700,6 +736,7 @@ class TestExecutionInterruptionSeparation:
         def fake_run(*_args: Any, **_kwargs: Any) -> SimpleNamespace:
             return self._fake_completed(returncode=-9, timed_out=True)
 
+        _assume_contained_platform(monkeypatch)
         monkeypatch.setattr("jacobian.process.run_bounded_process", fake_run)
         poly = _poly(("x", "y"), ((1, 1, (2, 1)), (-1, 1, (1, 0))))
         with pytest.raises(FactorBackendInterruptedError):
@@ -727,6 +764,7 @@ class TestExecutionInterruptionSeparation:
                 returncode=1, stdout=payload
             )
 
+        _assume_contained_platform(monkeypatch)
         monkeypatch.setattr("jacobian.process.run_bounded_process", fake_run)
         poly = _poly(("x", "y"), ((1, 1, (2, 1)), (-1, 1, (1, 0))))
         with pytest.raises(FactorBackendInterruptedError):
@@ -752,6 +790,7 @@ class TestExecutionInterruptionSeparation:
                 returncode=1, stdout=payload
             )
 
+        _assume_contained_platform(monkeypatch)
         monkeypatch.setattr("jacobian.process.run_bounded_process", fake_run)
         poly = _poly(("x", "y"), ((1, 1, (2, 1)), (-1, 1, (1, 0))))
         with pytest.raises(TimeoutError):
@@ -805,6 +844,7 @@ class TestExecutionInterruptionSeparation:
         with pytest.raises(FactorBackendFailureError):
             run_bounded_factorization(poly)
 
+    @requires_worker_containment
     def test_worker_reports_address_space_flag(self) -> None:
         """The worker response carries its hard-limit proof on success."""
         import os
@@ -966,6 +1006,7 @@ class TestRebuildOracleWithoutBackend:
         ) != _to_sympy_poly(repeated)
 
 
+@requires_worker_containment
 class TestIndependentProductReconstruction:
     """The caller re-multiplies the decomposition instead of trusting it."""
 

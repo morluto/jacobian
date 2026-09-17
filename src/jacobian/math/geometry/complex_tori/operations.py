@@ -711,6 +711,18 @@ def polarization_search(
     if rank == 1:
         examined = 0
         for signs in ((1,), (-1,)):
+            if examined >= examination_budget:
+                return PolarizationSearchResult._from_kernel(
+                    torus=torus,
+                    coefficient_bound=coefficient_bound,
+                    examination_budget=examination_budget,
+                    status="UNKNOWN",
+                    ns_rank=1,
+                    examined=examined,
+                    total=total,
+                    current_coefficients=signs,
+                    unknown_reason="EXAMINATION_BUDGET_EXCEEDED",
+                )
             form = _polarization_candidate_form(torus, basis, signs)
             profile = compute_riemann_form_profile(torus, form)
             examined += 1

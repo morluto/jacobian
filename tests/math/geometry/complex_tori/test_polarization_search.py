@@ -128,6 +128,17 @@ class TestUnknown:
         assert result.current_coefficients is not None
         assert verify_polarization_search(result)
 
+    def test_rank_one_budget_below_two_stays_unknown(self) -> None:
+        # Rank one has two sign candidates; a budget of one must not conclude
+        # infeasibility, because the second sign was never examined.
+        result = polarization_search(quartic_rank_one_torus(), 2, 1)
+
+        assert result.status == "UNKNOWN"
+        assert result.unknown_reason == "EXAMINATION_BUDGET_EXCEEDED"
+        assert result.examined == 1
+        assert result.current_coefficients == (-1,)
+        assert verify_polarization_search(result)
+
 
 class TestInvalidRequests:
     def test_zero_coefficient_bound_is_rejected(self) -> None:

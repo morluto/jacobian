@@ -6,6 +6,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from fractions import Fraction
 from functools import partial
+from itertools import product
 from time import monotonic
 from typing import Any
 
@@ -25,6 +26,7 @@ from jacobian.math.geometry.complex_tori._models import (
     HermitianDefiniteness,
     HermitianInertia,
     LatticeComplexStructure,
+    PolarizationSearchResult,
     RiemannFormHodgeNonPositive,
     RiemannFormNotHodge,
     RiemannFormPositive,
@@ -623,9 +625,180 @@ def verify_riemann_form_profile(claim: RiemannFormProfile) -> bool:
         return False
 
 
+def _admit_polarization_search(coefficient_bound: int, examination_budget: int) -> None:
+    """Admit the search box and budget before any lattice computation."""
+
+    from jacobian.math.geometry.complex_tori._models import (
+        MAX_POLARIZATION_COEFFICIENT,
+        MAX_POLARIZATION_EXAMINED,
+    )
+
+    for name, value, cap in (
+        ("coefficient_bound", coefficient_bound, MAX_POLARIZATION_COEFFICIENT),
+        ("examination_budget", examination_budget, MAX_POLARIZATION_EXAMINED),
+    ):
+        if type(value) is not int or not 1 <= value <= cap:
+            raise OperationDomainValidationError(
+                location=(name,),
+                code="complex_torus.polarization_search_bound",
+                message=f"the polarization {name} stays within its envelope",
+            )
+
+
+def _polarization_candidate_form(
+    torus: LatticeComplexStructure,
+    basis: tuple[tuple[tuple[int, ...], ...], ...],
+    coefficients: tuple[int, ...],
+) -> IntegralBilinearForm:
+    """Combine saturated basis matrices with exact integer coefficients."""
+
+    from jacobian.math.matrices.values import IntegerMatrix
+
+    dimension = len(basis[0])
+    entries = tuple(
+        tuple(
+            sum(
+                coefficient * basis[form][row][column]
+                for coefficient, form in zip(
+                    coefficients, range(len(basis)), strict=True
+                )
+            )
+            for column in range(dimension)
+        )
+        for row in range(dimension)
+    )
+    return IntegralBilinearForm(
+        coordinate_axis=torus.coordinate_axis,
+        kind="ALTERNATING",
+        matrix=IntegerMatrix(entries=entries),
+    )
+
+
+def polarization_search(
+    torus: LatticeComplexStructure,
+    coefficient_bound: int,
+    examination_budget: int,
+) -> PolarizationSearchResult:
+    """Search the Neron-Severi lattice for a polarization by bounded search.
+
+    Rank zero is exactly unpolarizable; rank one decides both signs of its
+    primitive generator (scaling covers every nonzero class).  Higher ranks
+    enumerate nonzero coefficient combinations in the box in deterministic
+    lexicographic order, profiling each with the exact Riemann-form kernel:
+    FOUND carries the first positive-definite class with its profile;
+    UNKNOWN carries the exhausted box or the spent budget with its position.
+    A truncated search never yields a negative conclusion.
+    """
+
+    _admit_polarization_search(coefficient_bound, examination_budget)
+    lattice = compute_neron_severi_lattice(torus)
+    rank = lattice.rank
+    total = (2 * coefficient_bound + 1) ** rank
+    basis = tuple(
+        tuple(tuple(row) for row in form.matrix.entries) for form in lattice.basis_forms
+    )
+    if rank == 0:
+        return PolarizationSearchResult._from_kernel(
+            torus=torus,
+            coefficient_bound=coefficient_bound,
+            examination_budget=examination_budget,
+            status="INFEASIBLE",
+            ns_rank=0,
+            examined=0,
+            total=total,
+            infeasibility_reason="NS_RANK_ZERO",
+        )
+    if rank == 1:
+        examined = 0
+        for signs in ((1,), (-1,)):
+            form = _polarization_candidate_form(torus, basis, signs)
+            profile = compute_riemann_form_profile(torus, form)
+            examined += 1
+            if profile.outcome.status == "RIEMANN_FORM":
+                return PolarizationSearchResult._from_kernel(
+                    torus=torus,
+                    coefficient_bound=coefficient_bound,
+                    examination_budget=examination_budget,
+                    status="FOUND",
+                    ns_rank=1,
+                    form=form,
+                    profile=profile,
+                    examined=examined,
+                    total=total,
+                )
+        return PolarizationSearchResult._from_kernel(
+            torus=torus,
+            coefficient_bound=coefficient_bound,
+            examination_budget=examination_budget,
+            status="INFEASIBLE",
+            ns_rank=1,
+            examined=examined,
+            total=total,
+            infeasibility_reason="RANK_ONE_NO_DEFINITE_SIGN",
+        )
+    examined = 0
+    for coefficients in product(
+        range(-coefficient_bound, coefficient_bound + 1), repeat=rank
+    ):
+        if all(coefficient == 0 for coefficient in coefficients):
+            continue
+        if examined >= examination_budget:
+            return PolarizationSearchResult._from_kernel(
+                torus=torus,
+                coefficient_bound=coefficient_bound,
+                examination_budget=examination_budget,
+                status="UNKNOWN",
+                ns_rank=rank,
+                examined=examined,
+                total=total,
+                current_coefficients=coefficients,
+                unknown_reason="EXAMINATION_BUDGET_EXCEEDED",
+            )
+        form = _polarization_candidate_form(torus, basis, coefficients)
+        profile = compute_riemann_form_profile(torus, form)
+        examined += 1
+        if profile.outcome.status == "RIEMANN_FORM":
+            return PolarizationSearchResult._from_kernel(
+                torus=torus,
+                coefficient_bound=coefficient_bound,
+                examination_budget=examination_budget,
+                status="FOUND",
+                ns_rank=rank,
+                form=form,
+                profile=profile,
+                examined=examined,
+                total=total,
+            )
+    return PolarizationSearchResult._from_kernel(
+        torus=torus,
+        coefficient_bound=coefficient_bound,
+        examination_budget=examination_budget,
+        status="UNKNOWN",
+        ns_rank=rank,
+        examined=examined,
+        total=total,
+        unknown_reason="COEFFICIENT_BOX_EXHAUSTED",
+    )
+
+
+def verify_polarization_search(claim: PolarizationSearchResult) -> bool:
+    """Check a polarization search by replaying it within its bounds."""
+    try:
+        return (
+            polarization_search(
+                claim.torus, claim.coefficient_bound, claim.examination_budget
+            )
+            == claim
+        )
+    except (OperationDomainValidationError, PydanticCustomError, ValueError):
+        return False
+
+
 __all__ = [
     "compute_neron_severi_lattice",
     "compute_riemann_form_profile",
+    "polarization_search",
     "verify_neron_severi_lattice",
+    "verify_polarization_search",
     "verify_riemann_form_profile",
 ]

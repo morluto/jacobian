@@ -3,6 +3,8 @@
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.geometry.complex_tori._models import (
     NeronSeveriLatticeRequest,
+    PolarizationSearchRequest,
+    PolarizationSearchResult,
     RiemannFormProfile,
     RiemannFormProfileRequest,
 )
@@ -11,6 +13,9 @@ from jacobian.math.geometry.complex_tori.operations import (
 )
 from jacobian.math.geometry.complex_tori.operations import (
     compute_riemann_form_profile as _compute_riemann_form_profile_native,
+)
+from jacobian.math.geometry.complex_tori.operations import (
+    polarization_search as _polarization_search_native,
 )
 from jacobian.math.lattices.invariant_forms import InvariantBilinearFormLattice
 
@@ -25,6 +30,14 @@ def compute_riemann_form_profile(
     request: RiemannFormProfileRequest,
 ) -> RiemannFormProfile:
     return _compute_riemann_form_profile_native(request.torus, request.form)
+
+
+def compute_polarization_search(
+    request: PolarizationSearchRequest,
+) -> PolarizationSearchResult:
+    return _polarization_search_native(
+        request.torus, request.coefficient_bound, request.examination_budget
+    )
 
 
 NERON_SEVERI_LATTICE_OPERATION = MathTool(
@@ -129,6 +142,56 @@ RIEMANN_FORM_PROFILE_OPERATION = MathTool(
 TOOLS: MathTools = (
     NERON_SEVERI_LATTICE_OPERATION,
     RIEMANN_FORM_PROFILE_OPERATION,
+    MathTool(
+        operation_id="complex_torus.polarization.find",
+        title="Search a complex torus Neron-Severi lattice for a polarization",
+        description=(
+            "Search integer combinations of the saturated Neron-Severi basis "
+            "in a deterministic coefficient box, profiling each class with "
+            "the exact Riemann-form kernel. FOUND carries the first positive "
+            "definite class with its profile; INFEASIBLE carries an exact "
+            "certificate (zero lattice, or rank one with neither sign "
+            "definite); UNKNOWN carries the exhausted box or the spent "
+            "budget with its position. A truncated search never yields a "
+            "negative conclusion."
+        ),
+        request_type=PolarizationSearchRequest,
+        result_type=PolarizationSearchResult,
+        run=compute_polarization_search,
+        tags=("complex-torus", "polarization", "Neron-Severi", "exact"),
+        discovery_terms=(
+            "complex torus polarization",
+            "Riemann form search",
+            "positive definite Hodge class",
+        ),
+        examples=(
+            OperationExample(
+                name="elliptic_principal_polarization",
+                description="The standard elliptic torus carries its "
+                "principal polarization already at the first examined class.",
+                input={
+                    "torus": {
+                        "coordinate_axis": ["e1", "e2"],
+                        "complex_structure": {
+                            "domain": "QQ",
+                            "entries": [
+                                [
+                                    {"num": "0", "den": "1"},
+                                    {"num": "1", "den": "1"},
+                                ],
+                                [
+                                    {"num": "-1", "den": "1"},
+                                    {"num": "0", "den": "1"},
+                                ],
+                            ],
+                        },
+                    },
+                    "coefficient_bound": 2,
+                    "examination_budget": 100,
+                },
+            ),
+        ),
+    ),
 )
 
 __all__ = ["TOOLS"]

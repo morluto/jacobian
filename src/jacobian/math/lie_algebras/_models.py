@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from itertools import pairwise
 from typing import Annotated, Self
 
 from pydantic import Field, StringConstraints, model_validator
@@ -9,6 +10,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
+from jacobian.math.matrices.values import RationalMatrix
 
 LieBasisLabel = Annotated[
     str,
@@ -117,6 +119,80 @@ class LieAlgebraElement(StrictModel):
         return self
 
 
+class LieSubspace(StrictModel):
+    """One subspace of a Lie algebra's underlying vector space.
+
+    ``generators`` is the canonical reduced row echelon basis: every row
+    carries a leading one in a strictly increasing pivot column, pivot
+    columns are otherwise zero, and zero rows are absent. RREF is unique,
+    so equal subspaces have byte-identical generators, including the
+    zero subspace as a zero-row matrix retaining the ambient axis.
+    """
+
+    basis: tuple[LieBasisLabel, ...] = Field(
+        min_length=1,
+        max_length=MAX_LIE_DIMENSION,
+        description="The ambient ordered basis axis the rows are coordinatized in.",
+    )
+    generators: RationalMatrix = Field(
+        description=(
+            "RREF basis rows spanning the subspace; row count is the "
+            "dimension, column count matches the ambient basis axis."
+        )
+    )
+
+    @model_validator(mode="after")
+    def require_rref_generators(self) -> Self:
+        dimension = len(self.basis)
+        rows = self.generators.entries
+        if self.generators.column_count != dimension or any(
+            len(row) != dimension for row in rows
+        ):
+            raise _validation_error(
+                "subspace_axis",
+                "subspace generator rows must match the ambient basis axis",
+            )
+        if self.generators.row_count != len(rows) or len(rows) > dimension:
+            raise _validation_error(
+                "subspace_dimension",
+                "subspace generator count must not exceed the ambient dimension",
+            )
+        pivots: list[int] = []
+        for row in rows:
+            pivot = next(
+                (
+                    column
+                    for column, value in enumerate(row)
+                    if value.as_fraction() != 0
+                ),
+                None,
+            )
+            if pivot is None:
+                raise _validation_error(
+                    "subspace_zero_row", "subspace generators omit zero rows"
+                )
+            pivots.append(pivot)
+        if pivots != sorted(pivots) or len(set(pivots)) != len(pivots):
+            raise _validation_error(
+                "subspace_pivot_order", "RREF pivot columns strictly increase"
+            )
+        for rank, pivot in enumerate(pivots):
+            if rows[rank][pivot].as_fraction() != 1:
+                raise _validation_error(
+                    "subspace_leading_one", "RREF pivots carry leading ones"
+                )
+            if any(
+                rows[other][pivot].as_fraction() != 0
+                for other in range(len(rows))
+                if other != rank
+            ):
+                raise _validation_error(
+                    "subspace_pivot_column",
+                    "RREF pivot columns are zero outside their row",
+                )
+        return self
+
+
 class LieBracketRequest(StrictModel):
     """Two elements of one Lie algebra whose bracket is requested."""
 
@@ -135,6 +211,382 @@ class LieBracketRequest(StrictModel):
                 "bracket elements must use the algebra's ordered basis",
             )
         return self
+
+
+class LieAlgebraRequest(StrictModel):
+    """One Lie algebra whose invariant is requested."""
+
+    algebra: FiniteDimensionalLieAlgebra = Field(
+        description=(
+            "Finite-dimensional Lie algebra over QQ of dimension at most "
+            f"{MAX_LIE_DIMENSION} by ordered basis labels and sparse "
+            "structure constants; antisymmetry is canonical and every "
+            "basis-triple Jacobi identity is established by operation "
+            "admission before computation."
+        )
+    )
+
+
+class LieKillingResult(StrictModel):
+    """The exact Killing-form Gram matrix with its source algebra.
+
+    ``killing_form[i][j] = tr(ad_{b_i} ad_{b_j})`` in the algebra's
+    ordered basis. The form is symmetric and ad-invariant; Cartan's
+    criterion reads semisimplicity off its nondegeneracy, which
+    consuming operations decide.
+    """
+
+    algebra: FiniteDimensionalLieAlgebra
+    killing_form: RationalMatrix
+
+    @model_validator(mode="after")
+    def require_killing_shape(self) -> Self:
+        dimension = len(self.algebra.basis)
+        entries = self.killing_form.entries
+        if (
+            self.killing_form.row_count != dimension
+            or self.killing_form.column_count != dimension
+            or len(entries) != dimension
+            or any(len(row) != dimension for row in entries)
+        ):
+            raise _validation_error(
+                "killing_shape",
+                "the Killing matrix must be square on the algebra basis axis",
+            )
+        if any(
+            entries[row][column].as_fraction() != entries[column][row].as_fraction()
+            for row in range(dimension)
+            for column in range(dimension)
+        ):
+            raise _validation_error(
+                "killing_symmetry",
+                "the Killing form is symmetric in its basis arguments",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        algebra: FiniteDimensionalLieAlgebra,
+        killing_form: RationalMatrix,
+    ) -> Self:
+        return cls.model_construct(
+            algebra=algebra,
+            killing_form=killing_form,
+        )
+
+
+class LieCenterResult(StrictModel):
+    """The exact center with its source algebra.
+
+    The center retains the canonical RREF subspace of vectors bracketing
+    to zero against every basis element. Consuming series, quotient, and
+    nilpotency operations accept the subspace unchanged.
+    """
+
+    algebra: FiniteDimensionalLieAlgebra
+    center: LieSubspace
+
+    @model_validator(mode="after")
+    def require_center_binding(self) -> Self:
+        if self.center.basis != self.algebra.basis:
+            raise _validation_error(
+                "center_basis",
+                "the center subspace must use the algebra's ordered basis",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        algebra: FiniteDimensionalLieAlgebra,
+        center: LieSubspace,
+    ) -> Self:
+        return cls.model_construct(
+            algebra=algebra,
+            center=center,
+        )
+
+
+class LieIdealRequest(StrictModel):
+    """One algebra with a candidate ideal subspace."""
+
+    algebra: FiniteDimensionalLieAlgebra
+    candidate: LieSubspace = Field(
+        description=(
+            "Candidate RREF subspace on the algebra's ordered basis; "
+            "admission decides whether every algebra bracket with it "
+            "stays inside."
+        )
+    )
+
+    @model_validator(mode="after")
+    def require_candidate_binding(self) -> Self:
+        if self.candidate.basis != self.algebra.basis:
+            raise _validation_error(
+                "candidate_basis",
+                "the candidate subspace must use the algebra's ordered basis",
+            )
+        return self
+
+
+class IdealViolationWitness(StrictModel):
+    """The first basis bracket escaping the candidate subspace."""
+
+    basis_index: int = Field(ge=0, le=MAX_LIE_DIMENSION - 1)
+    subspace_row: int = Field(
+        ge=0,
+        description="The generator row whose bracket with the basis element escapes.",
+    )
+    bracket: LieAlgebraElement = Field(
+        description="The exact escaping bracket coordinates on the algebra basis."
+    )
+
+
+class LieIdealCheckResult(StrictModel):
+    """Whether a subspace absorbs every algebra bracket.
+
+    ``IDEAL`` retains no witness; ``NOT_IDEAL`` retains the first
+    escaping bracket in increasing (basis index, generator row) order.
+    """
+
+    algebra: FiniteDimensionalLieAlgebra
+    candidate: LieSubspace
+    is_ideal: bool
+    witness: IdealViolationWitness | None = None
+
+    @model_validator(mode="after")
+    def require_ideal_binding(self) -> Self:
+        if self.candidate.basis != self.algebra.basis:
+            raise _validation_error(
+                "ideal_binding",
+                "the candidate subspace must use the algebra's ordered basis",
+            )
+        if (self.witness is None) == (not self.is_ideal):
+            raise _validation_error(
+                "ideal_witness_binding",
+                "a non-ideal owns its first escaping bracket and an ideal "
+                "owns no witness",
+            )
+        if self.witness is not None and (
+            self.witness.bracket.basis != self.algebra.basis
+            or self.witness.basis_index >= len(self.algebra.basis)
+            or self.witness.subspace_row >= self.candidate.generators.row_count
+        ):
+            raise _validation_error(
+                "witness_axis",
+                "the witness must address the algebra basis and a generator row",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        algebra: FiniteDimensionalLieAlgebra,
+        candidate: LieSubspace,
+        is_ideal: bool,
+        witness: IdealViolationWitness | None,
+    ) -> Self:
+        return cls.model_construct(
+            algebra=algebra,
+            candidate=candidate,
+            is_ideal=is_ideal,
+            witness=witness,
+        )
+
+
+class LieQuotientRequest(StrictModel):
+    """One algebra with an ideal subspace and quotient basis labels."""
+
+    algebra: FiniteDimensionalLieAlgebra
+    ideal: LieSubspace = Field(
+        description=(
+            "RREF ideal subspace on the algebra's ordered basis; operation "
+            "admission verifies ideal absorption before forming cosets."
+        )
+    )
+    quotient_basis: tuple[LieBasisLabel, ...] = Field(
+        min_length=1,
+        max_length=MAX_LIE_DIMENSION,
+        description=(
+            "Fresh ordered labels for the quotient basis, one per free "
+            "column of the ideal RREF in increasing order; the count must "
+            "equal the algebra dimension minus the ideal dimension."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_quotient_binding(self) -> Self:
+        if self.ideal.basis != self.algebra.basis:
+            raise _validation_error(
+                "quotient_binding",
+                "the ideal subspace must use the algebra's ordered basis",
+            )
+        if len(set(self.quotient_basis)) != len(self.quotient_basis):
+            raise _validation_error(
+                "quotient_labels",
+                "quotient basis labels must be unique",
+            )
+        if len(self.quotient_basis) != len(self.algebra.basis) - (
+            self.ideal.generators.row_count
+        ):
+            raise _validation_error(
+                "quotient_dimension",
+                "quotient labels must number dimension minus ideal dimension",
+            )
+        return self
+
+
+class LieQuotientResult(StrictModel):
+    """A Lie algebra quotient by an ideal with its source data."""
+
+    algebra: FiniteDimensionalLieAlgebra
+    ideal: LieSubspace
+    quotient: FiniteDimensionalLieAlgebra
+
+    @model_validator(mode="after")
+    def require_quotient_shape(self) -> Self:
+        if (
+            self.ideal.basis != self.algebra.basis
+            or len(self.quotient.basis)
+            != len(self.algebra.basis) - self.ideal.generators.row_count
+        ):
+            raise _validation_error(
+                "quotient_shape",
+                "the quotient dimension is algebra dimension minus ideal "
+                "dimension on the bound bases",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        algebra: FiniteDimensionalLieAlgebra,
+        ideal: LieSubspace,
+        quotient: FiniteDimensionalLieAlgebra,
+    ) -> Self:
+        return cls.model_construct(
+            algebra=algebra,
+            ideal=ideal,
+            quotient=quotient,
+        )
+
+
+def _require_series_shape(
+    terms: tuple[LieSubspace, ...],
+    basis: tuple[LieBasisLabel, ...],
+    terminates: bool,
+    *,
+    kind: str,
+) -> None:
+    """Share the descending-series structural contract between both series."""
+
+    dimension = len(basis)
+    if not terms:
+        raise _validation_error(
+            "series_coverage", f"a {kind} series retains at least its head term"
+        )
+    identity = tuple(
+        tuple(1 if column == row else 0 for column in range(dimension))
+        for row in range(dimension)
+    )
+    head = terms[0].generators.entries
+    if (
+        terms[0].basis != basis
+        or tuple(tuple(value.as_fraction() for value in row) for row in head)
+        != identity
+    ):
+        raise _validation_error(
+            "series_head",
+            f"a {kind} series starts from the whole algebra",
+        )
+    dimensions = tuple(term.generators.row_count for term in terms)
+    if any(term.basis != basis for term in terms) or any(
+        first <= second for first, second in pairwise(dimensions)
+    ):
+        raise _validation_error(
+            "series_descent",
+            f"a {kind} series strictly descends along bound subspaces",
+        )
+    if terminates != (dimensions[-1] == 0):
+        raise _validation_error(
+            "series_decision",
+            f"a {kind} series terminates exactly at the zero subspace",
+        )
+
+
+class LieDerivedSeriesResult(StrictModel):
+    """The derived series with its solvability decision.
+
+    ``terms[0]`` is the algebra, ``terms[k+1] = [terms[k], terms[k]]``,
+    stopping at the zero subspace or the first fixed term. The algebra
+    is solvable exactly when the series reaches zero. Dimensions
+    strictly decrease, so the series holds at most ``dim + 1`` terms.
+    """
+
+    algebra: FiniteDimensionalLieAlgebra
+    terms: tuple[LieSubspace, ...]
+    solvable: bool
+
+    @model_validator(mode="after")
+    def require_derived_shape(self) -> Self:
+        _require_series_shape(
+            terms=self.terms,
+            basis=self.algebra.basis,
+            terminates=self.solvable,
+            kind="derived",
+        )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        algebra: FiniteDimensionalLieAlgebra,
+        terms: tuple[LieSubspace, ...],
+        solvable: bool,
+    ) -> Self:
+        return cls.model_construct(
+            algebra=algebra,
+            terms=terms,
+            solvable=solvable,
+        )
+
+
+class LieLowerCentralSeriesResult(StrictModel):
+    """The lower central series with its nilpotency decision.
+
+    ``terms[0]`` is the algebra, ``terms[k+1] = [algebra, terms[k]]``,
+    stopping at the zero subspace or the first fixed term. The algebra
+    is nilpotent exactly when the series reaches zero. Dimensions
+    strictly decrease, so the series holds at most ``dim + 1`` terms.
+    """
+
+    algebra: FiniteDimensionalLieAlgebra
+    terms: tuple[LieSubspace, ...]
+    nilpotent: bool
+
+    @model_validator(mode="after")
+    def require_central_shape(self) -> Self:
+        _require_series_shape(
+            terms=self.terms,
+            basis=self.algebra.basis,
+            terminates=self.nilpotent,
+            kind="lower central",
+        )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        algebra: FiniteDimensionalLieAlgebra,
+        terms: tuple[LieSubspace, ...],
+        nilpotent: bool,
+    ) -> Self:
+        return cls.model_construct(
+            algebra=algebra,
+            terms=terms,
+            nilpotent=nilpotent,
+        )
 
 
 class BracketPairContribution(StrictModel):

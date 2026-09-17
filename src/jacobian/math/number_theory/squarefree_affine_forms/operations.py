@@ -5,9 +5,27 @@ from __future__ import annotations
 from fractions import Fraction
 
 from jacobian._exact import CanonicalRational
+from jacobian.math.number_theory.squarefree_affine_forms._admissibility import (
+    LocalAdmissibilityResult,
+)
+from jacobian.math.number_theory.squarefree_affine_forms._admissibility import (
+    local_admissibility as _local_admissibility_kernel,
+)
+from jacobian.math.number_theory.squarefree_affine_forms._admissibility import (
+    verify_local_admissibility as _verify_local_admissibility_kernel,
+)
 from jacobian.math.number_theory.squarefree_affine_forms._euler_product import (
     SquarefreeEulerProductResult,
     SquarefreeLocalFactorRow,
+)
+from jacobian.math.number_theory.squarefree_affine_forms._interval_count import (
+    IntervalCountResult,
+)
+from jacobian.math.number_theory.squarefree_affine_forms._interval_count import (
+    interval_count as _interval_count_kernel,
+)
+from jacobian.math.number_theory.squarefree_affine_forms._interval_count import (
+    verify_interval_count as _verify_interval_count_kernel,
 )
 from jacobian.math.number_theory.squarefree_affine_forms._kernel import (
     closed_form_ledger,
@@ -101,8 +119,43 @@ def euler_product(
     )
 
 
+def local_admissibility(
+    source: SquarefreeAffineFamily,
+) -> LocalAdmissibilityResult:
+    """Decide local admissibility by finite check plus large-prime proof."""
+
+    return _local_admissibility_kernel(source)
+
+
+def verify_local_admissibility(claim: LocalAdmissibilityResult) -> bool:
+    """Check an admissibility claim by recomputing its cutoff and rows."""
+
+    return _verify_local_admissibility_kernel(claim)
+
+
+def interval_count(
+    source: SquarefreeAffineFamily,
+    lower: int,
+    upper: int,
+    include_ledger: bool = False,
+) -> IntervalCountResult:
+    """Count interval points where every affine form value is square-free."""
+
+    return _interval_count_kernel(source, lower, upper, include_ledger)
+
+
+def verify_interval_count(claim: IntervalCountResult) -> bool:
+    """Check an interval count by recomputing it within its bounds."""
+
+    return _verify_interval_count_kernel(claim)
+
+
 __all__ = [
     "euler_product",
+    "interval_count",
+    "local_admissibility",
     "local_factor",
+    "verify_interval_count",
+    "verify_local_admissibility",
     "verify_squarefree_affine_family",
 ]

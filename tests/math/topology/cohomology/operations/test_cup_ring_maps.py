@@ -254,6 +254,32 @@ class TestCupProduct:
         with pytest.raises(ValidationError):
             CupProductResult.model_validate_json(json.dumps(forged))
 
+    def test_product_above_the_complex_dimension_is_empty(self) -> None:
+        # A 6-simplex with two degree-6 cochains: the product degree 12 is
+        # above the complex dimension and above MAX_TOPOLOGY_DIMENSION, so it
+        # must be the empty cochain rather than a schema error.
+        simplex = _complex([str(index) for index in range(7)], [list("0123456")])
+        left = _cochain(simplex, 2, 6, (1,))
+        right = _cochain(simplex, 2, 6, (1,))
+
+        product = cup_product(simplex, 2, left, right).product
+
+        assert product.degree == 12
+        assert product.coefficients == ()
+        assert verify_cup_product(cup_product(simplex, 2, left, right))
+
+    def test_product_degree_beyond_the_envelope_is_rejected(self) -> None:
+        # Two degree-14 cochains have total degree 28, outside the retained
+        # MAX_COCHAIN_DEGREE envelope; the operation raises a typed error.
+        left = _cochain(_CIRCLE, 2, 14, ())
+        right = _cochain(_CIRCLE, 2, 14, ())
+
+        with pytest.raises(OperationDomainValidationError) as exc_info:
+            cup_product(_CIRCLE, 2, left, right)
+        assert (
+            exc_info.value.errors()[0]["type"] == "topology.cup_product_degree_bound"
+        )
+
 
 class TestCohomologyRing:
     def test_torus_has_nonzero_degree_one_products(self) -> None:
@@ -405,6 +431,19 @@ class TestInducedMaps:
 
         assert by_degree[0].rows == ((1,),)
         assert by_degree[1].rows == ((0,),)
+
+    def test_zero_source_cohomology_pullback_is_the_zero_matrix(self) -> None:
+        # A disc collapses onto a circle edge.  H^1(disc) = 0, so every
+        # pullback is a coboundary; the pulled generator need not be the zero
+        # cochain, and the induced degree-1 matrix must be the 0x1 zero map.
+        disc = _complex(["0", "1", "2"], [["0", "1", "2"]])
+        collapse = SimplicialMap(source=disc, target=_CIRCLE, vertex_map=("a", "b", "b"))
+
+        result = induced_cohomology_map(collapse, 2)
+        by_degree = {matrix.degree: matrix for matrix in result.matrices}
+
+        assert by_degree[1].rows == ()
+        assert verify_induced_cohomology_map(result)
 
     def test_functoriality_on_the_circle(self) -> None:
         # (g o f)* = f* o g* as exact matrices, checked entrywise.

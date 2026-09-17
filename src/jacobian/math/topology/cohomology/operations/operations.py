@@ -13,6 +13,7 @@ from jacobian.math.topology._models import (
 )
 from jacobian.math.topology.cohomology.operations._models import (
     MAX_AMBIENT_SIMPLEX_VERTICES,
+    MAX_COCHAIN_DEGREE,
     MAX_RESULT_COCHAIN_DEGREE,
     BocksteinResult,
     CohomologyRingResult,
@@ -614,7 +615,9 @@ def cup_product(
     On an ordered simplex ``[v_0, ..., v_{p+q}]`` the product evaluates the
     left factor on the front face and the right factor on the back face;
     the formula carries no signs.  Degrees above the complex dimension
-    yield the empty (zero) cochain.
+    yield the empty (zero) cochain of degree ``p + q``; a product degree
+    beyond the representable ``MAX_COCHAIN_DEGREE`` envelope is rejected
+    before any work.
     """
 
     from jacobian.math.topology.cohomology.operations._simplicial import (
@@ -628,6 +631,12 @@ def cup_product(
     )
     left_degree, right_degree = left.degree, right.degree
     total = left_degree + right_degree
+    if total > MAX_COCHAIN_DEGREE:
+        raise OperationDomainValidationError(
+            location=("left", "right"),
+            code="topology.cup_product_degree_bound",
+            message="the product degree exceeds the representable cochain envelope",
+        )
     if total > complex_.dimension:
         product = SimplicialCochain(
             complex=complex_, prime=prime, degree=total, coefficients=()
@@ -939,10 +948,12 @@ def induced_cohomology_map(
                     simplicial_map.source, prime, degree, pulled
                 ):
                     raise RuntimeError("a pulled-back cocycle must be a cocycle")
-                if not source_basis:
+                if not source_basis and not source_coboundaries:
+                    # No source cochains at this degree: the pullback must be
+                    # the zero cochain, hence has no class coordinates.
                     if any(value % prime for value in pulled):
                         raise RuntimeError(
-                            "a pullback into zero cohomology must vanish"
+                            "a pullback beyond the source dimension must vanish"
                         )
                     columns.append(())
                     continue
@@ -968,7 +979,7 @@ def verify_induced_cohomology_map(claim: InducedCohomologyMapResult) -> bool:
     """Verify an induced-map claim by recomputing its matrices."""
     try:
         return induced_cohomology_map(claim.map, claim.prime, claim.convention) == claim
-    except (OperationDomainValidationError, TypeError, ValueError):
+    except (OperationDomainValidationError, RuntimeError, TypeError, ValueError):
         return False
 
 

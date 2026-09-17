@@ -44,6 +44,17 @@ this budget is admitted, however far ``k`` lies above ``deg(x)``. Top squares
 return degree ``2*cochain_degree <= 32``, always inside this budget.
 """
 
+MAX_COCHAIN_DEGREE = 2 * MAX_TOPOLOGY_DIMENSION
+"""Cap on the degree of a bare ``SimplicialCochain``.
+
+A cochain above the complex dimension is the empty (zero) cochain, so the
+cap must cover the product of two bounded input cochains.  The cup product of
+degree-``p`` and degree-``q`` factors has degree ``p + q``, and both factors
+are admitted up to ``MAX_TOPOLOGY_DIMENSION``, so the product degree reaches
+``2 * MAX_TOPOLOGY_DIMENSION``; the kernel rejects any request whose product
+degree leaves this envelope.
+"""
+
 MAX_VERTEX_LABEL_DIGITS = 6
 """Bound on decimal digits per vertex label (abs value < 10**6).
 
@@ -441,18 +452,18 @@ __all__ = [
     "SteenrodSquareResult",
 ]
 
-
 class SimplicialCochain(StrictModel):
     """One prime-field simplicial cochain bound to its complex and degree.
 
     Coefficients align with ``complex.faces_by_dimension[degree].faces`` in
     canonical order and lie in ``0..prime-1``.  Degrees above the complex
-    dimension carry the empty (zero) cochain.
+    dimension carry the empty (zero) cochain; the degree envelope
+    ``MAX_COCHAIN_DEGREE`` covers the product of two bounded input cochains.
     """
 
     complex: FiniteSimplicialComplex
     prime: StrictInt = Field(ge=2, le=MAX_TOPOLOGY_PRIME)
-    degree: StrictInt = Field(ge=0, le=MAX_TOPOLOGY_DIMENSION)
+    degree: StrictInt = Field(ge=0, le=MAX_COCHAIN_DEGREE)
     coefficients: tuple[StrictInt, ...] = Field(max_length=MAX_TOPOLOGY_CHAIN_GROUP)
 
     @model_validator(mode="after")

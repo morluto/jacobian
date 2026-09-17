@@ -9,7 +9,9 @@ dart IDs; no backend embedding object crosses the boundary.
 from __future__ import annotations
 
 from collections import deque
-from itertools import pairwise
+from collections.abc import Callable, Iterator
+from itertools import pairwise, permutations
+from math import factorial
 
 from pydantic_core import PydanticCustomError
 
@@ -30,6 +32,7 @@ from ._models import (
     MAX_EMBEDDING_EDGES,
     MAX_EMBEDDING_ROTATION_ENTRIES,
     MAX_EMBEDDING_VERTICES,
+    MAX_ROTATION_SYSTEM_CANDIDATES,
     CombinatorialMapBijection,
     ConnectedComponentsResult,
     DualResult,
@@ -39,6 +42,7 @@ from ._models import (
     OrientableEmbeddingCheckResult,
     OrientableGenusResult,
     OrientationReverseResult,
+    RotationSystemFindResult,
     SignedEmbeddingCheckResult,
     VertexFaceIncidenceResult,
 )
@@ -58,6 +62,7 @@ __all__ = [
     "dual_map",
     "euler_characteristic",
     "face_orbits",
+    "find_rotation_system",
     "orientable_genus",
     "orientation_reverse",
     "rotation_successor",
@@ -654,6 +659,196 @@ def check_orientable_embedding(
 def verify_orientable_embedding(claim: OrientableEmbeddingCheckResult) -> bool:
     """Check a claimed embedding by replaying the supplied rotation system."""
     return check_orientable_embedding(claim.graph, claim.rotations) == claim
+
+
+def _rotation_system_row_choices(
+    incident: list[set[int]],
+) -> list[Callable[[], Iterator[tuple[int, ...]]]]:
+    """Return one lazy cyclic-order factory per vertex.
+
+    Fixing the first entry to the least incident edge identifies cyclic
+    shifts, so each factory yields exactly ``(degree - 1)!`` orders (one
+    order for an isolated or degree-one vertex) in lexicographic order.
+    Returning factories, not materialized lists, keeps a high-degree vertex
+    from building its factorial many rows before the candidate budget is
+    consulted.
+    """
+
+    factories: list[Callable[[], Iterator[tuple[int, ...]]]] = []
+    for edges in incident:
+        ordered = sorted(edges)
+        if not ordered:
+            factories.append(lambda: iter(((),)))
+            continue
+        first, rest = ordered[0], ordered[1:]
+
+        def factory(
+            first: int = first, rest: list[int] = rest
+        ) -> Iterator[tuple[int, ...]]:
+            return ((first, *perm) for perm in permutations(rest))
+
+        factories.append(factory)
+    return factories
+
+
+def _rotation_system_total(incident: list[set[int]]) -> int:
+    """Return the exact rotation-system count ``product of (degree - 1)!``."""
+
+    total = 1
+    for edges in incident:
+        if edges:
+            total *= factorial(len(edges) - 1)
+    return total
+
+
+def _lazy_product(
+    factories: list[Callable[[], Iterator[tuple[int, ...]]]],
+) -> Iterator[tuple[tuple[int, ...], ...]]:
+    """Cartesian product that consumes each factory only as needed."""
+
+    if not factories:
+        yield ()
+        return
+    first, rest = factories[0], factories[1:]
+    for head in first():
+        for tail in _lazy_product(rest):
+            yield (head, *tail)
+
+
+def _admit_rotation_system_search(
+    graph: SimpleUndirectedGraph, max_genus: int, max_candidates: int
+) -> None:
+    """Share the genus-search envelope with native callers."""
+
+    if not graph.vertices:
+        raise OperationDomainValidationError(
+            location=("graph",),
+            code="topology.embedding.empty_graph",
+            message="the genus search requires at least one graph vertex",
+        )
+    if type(max_genus) is not int or max_genus < 0:
+        raise OperationDomainValidationError(
+            location=("max_genus",),
+            code="topology.embedding.genus_bound",
+            message="the genus search requires a nonnegative genus bound",
+        )
+    if type(max_candidates) is not int or max_candidates < 1:
+        raise OperationDomainValidationError(
+            location=("max_candidates",),
+            code="topology.embedding.candidate_budget",
+            message="the genus search requires a positive candidate budget",
+        )
+    if max_candidates > MAX_ROTATION_SYSTEM_CANDIDATES:
+        raise OperationResourceAdmissionError(
+            location=("max_candidates",),
+            code="topology.embedding.candidate_bound",
+            message="the candidate budget exceeds the admitted search envelope",
+        )
+    _admit_embedding_candidate(graph, tuple(() for _ in graph.vertices))
+
+
+def _unknown_rotation_system(
+    graph: SimpleUndirectedGraph,
+    max_genus: int,
+    max_candidates: int,
+    total: int,
+    examined: int,
+    code: str,
+    detail: str,
+) -> RotationSystemFindResult:
+    return RotationSystemFindResult._from_kernel(
+        graph=graph,
+        max_genus=max_genus,
+        max_candidates=max_candidates,
+        status="UNKNOWN",
+        candidates_examined=examined,
+        total_candidates=total,
+        reason=code,
+        reason_detail=detail,
+    )
+
+
+def find_rotation_system(
+    graph: SimpleUndirectedGraph, max_genus: int, max_candidates: int
+) -> RotationSystemFindResult:
+    """Find a rotation system of genus at most ``max_genus`` by bounded search.
+
+    Rotation systems are enumerated in deterministic vertex order with each
+    local row ranging over cyclic orders (first entry fixed), so every
+    distinct cellular embedding is examined exactly once up to cyclic
+    shifts.  Each candidate is decided by the exact orientable checker:
+
+    - ``FOUND`` carries the first system of genus at most ``max_genus``
+      with its checker certificate;
+    - ``EXHAUSTED`` carries the receipt that every one of the
+      ``total_candidates`` systems was examined and none qualified;
+    - ``UNKNOWN`` carries a bounded reason: the candidate budget ran out
+      before exhaustion, or the graph is disconnected (outside the
+      connected Euler convention).
+
+    A truncated search never yields a negative conclusion: ``EXHAUSTED``
+    requires examining every rotation system within budget.
+    """
+
+    _admit_rotation_system_search(graph, max_genus, max_candidates)
+    index, incident = _embedding_adjacency(graph)
+    rows = _rotation_system_row_choices(incident)
+    total = _rotation_system_total(incident)
+    if not _embedding_connected(graph, index):
+        return _unknown_rotation_system(
+            graph,
+            max_genus,
+            max_candidates,
+            total,
+            0,
+            "GRAPH_DISCONNECTED",
+            "the genus search requires a connected graph",
+        )
+    examined = 0
+    for rotations in _lazy_product(rows):
+        if examined >= max_candidates:
+            return _unknown_rotation_system(
+                graph,
+                max_genus,
+                max_candidates,
+                total,
+                examined,
+                "CANDIDATE_BUDGET_EXCEEDED",
+                "the candidate budget ran out before exhaustion",
+            )
+        certificate = check_orientable_embedding(graph, rotations)
+        if certificate.status != "ORIENTABLE_CELLULAR_EMBEDDING":
+            raise RuntimeError(
+                "an enumerated rotation system must check as a cellular embedding"
+            )
+        examined += 1
+        if certificate.genus <= max_genus:
+            return RotationSystemFindResult._from_kernel(
+                graph=graph,
+                max_genus=max_genus,
+                max_candidates=max_candidates,
+                status="FOUND",
+                rotations=rotations,
+                certificate=certificate,
+                candidates_examined=examined,
+                total_candidates=total,
+            )
+    return RotationSystemFindResult._from_kernel(
+        graph=graph,
+        max_genus=max_genus,
+        max_candidates=max_candidates,
+        status="EXHAUSTED",
+        candidates_examined=examined,
+        total_candidates=total,
+    )
+
+
+def verify_rotation_system_find(claim: RotationSystemFindResult) -> bool:
+    """Check a claimed genus search by replaying it within its budget."""
+    return (
+        find_rotation_system(claim.graph, claim.max_genus, claim.max_candidates)
+        == claim
+    )
 
 
 def _signed_embedding_signs(

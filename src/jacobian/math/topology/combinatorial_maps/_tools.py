@@ -18,6 +18,8 @@ from jacobian.math.topology.combinatorial_maps._models import (
     OrientableGenusResult,
     OrientationReverseRequest,
     OrientationReverseResult,
+    RotationSystemFindRequest,
+    RotationSystemFindResult,
     SignedEmbeddingCheckRequest,
     SignedEmbeddingCheckResult,
     VertexFaceIncidenceRequest,
@@ -30,6 +32,7 @@ from jacobian.math.topology.combinatorial_maps.operations import (
     dual_map,
     euler_characteristic,
     face_orbits,
+    find_rotation_system,
     orientable_genus,
     orientation_reverse,
     vertex_face_incidence,
@@ -78,6 +81,14 @@ def compute_orientable_embedding_check(
     request: OrientableEmbeddingCheckRequest,
 ) -> OrientableEmbeddingCheckResult:
     return check_orientable_embedding(request.graph, request.rotations)
+
+
+def compute_rotation_system_find(
+    request: RotationSystemFindRequest,
+) -> RotationSystemFindResult:
+    return find_rotation_system(
+        request.graph, request.max_genus, request.max_candidates
+    )
 
 
 def compute_signed_embedding_check(
@@ -363,6 +374,81 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                     },
                     "rotations": [[0, 1, 2], [0, 4, 3], [1, 3, 5], [2, 5, 4]],
                     "twisted_edges": [0],
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="graph.embedding.rotation_system.find",
+        title="Find a rotation system of bounded orientable genus",
+        description=(
+            "Enumerate rotation systems of a connected bounded simple graph "
+            "in deterministic vertex order (first rotation entry fixed, so "
+            "each cellular embedding appears once up to cyclic shifts) and "
+            "decide each one with the exact orientable checker. FOUND carries "
+            "the first system of genus at most max_genus with its checker "
+            "certificate; EXHAUSTED carries the receipt that every one of the "
+            "exact total_candidates systems was examined; UNKNOWN carries a "
+            "bounded reason when the candidate budget runs out or the graph "
+            "is disconnected. A truncated search never yields a negative "
+            "conclusion."
+        ),
+        request_type=RotationSystemFindRequest,
+        result_type=RotationSystemFindResult,
+        run=compute_rotation_system_find,
+        tags=("graph", "embedding", "genus", "search", "exact"),
+        discovery_terms=(
+            "rotation system",
+            "graph genus",
+            "low genus embedding",
+            "bounded search",
+        ),
+        examples=(
+            OperationExample(
+                name="k4_planar_rotation",
+                description=(
+                    "K4 is planar: the bounded search finds a genus-zero "
+                    "rotation system."
+                ),
+                input={
+                    "graph": {
+                        "vertices": ["a", "b", "c", "d"],
+                        "edges": [
+                            ["a", "b"],
+                            ["a", "c"],
+                            ["a", "d"],
+                            ["b", "c"],
+                            ["b", "d"],
+                            ["c", "d"],
+                        ],
+                    },
+                    "max_genus": 0,
+                    "max_candidates": 1000,
+                },
+            ),
+            OperationExample(
+                name="k33_nonplanar_exhaustion",
+                description=(
+                    "K3,3 is nonplanar: all 64 rotation systems are examined "
+                    "and none has genus zero."
+                ),
+                input={
+                    "graph": {
+                        "vertices": ["a", "b", "c", "x", "y", "z"],
+                        "edges": [
+                            ["a", "x"],
+                            ["a", "y"],
+                            ["a", "z"],
+                            ["b", "x"],
+                            ["b", "y"],
+                            ["b", "z"],
+                            ["c", "x"],
+                            ["c", "y"],
+                            ["c", "z"],
+                        ],
+                    },
+                    "max_genus": 0,
+                    "max_candidates": 1000,
                 },
             ),
         ),

@@ -336,7 +336,7 @@ class TestValidation:
 
 
 class TestProduct:
-    def test_wire_preflight_matches_canonical_serialization(self) -> None:
+    def test_product_with_escaped_identifiers_serializes_canonically(self) -> None:
         left = FiniteCategory(
             objects=('A"\\é',),
             morphisms=(

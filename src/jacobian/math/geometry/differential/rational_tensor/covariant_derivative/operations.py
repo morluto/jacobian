@@ -84,7 +84,6 @@ def covariant_derivative(
     components, determinant_guards = evaluate_admitted_covariant_derivative(
         plan,
         axis,
-        sources=(),
         deadline=deadline,
     )
     guards = canonical_locus_guards(

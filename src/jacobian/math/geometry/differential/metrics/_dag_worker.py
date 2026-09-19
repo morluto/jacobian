@@ -1,12 +1,15 @@
-"""Standalone SymPy worker for admitted metric DAG arithmetic."""
+"""Standalone SymPy worker for admitted metric-expression DAGs."""
 
 from __future__ import annotations
 
+import hashlib
 import json
 import sys
 from typing import Any
 
 from sympy import QQ, Poly, Rational, Symbol
+
+_PROTOCOL_VERSION = 1
 
 
 def _polynomial(records: list[Any], symbols: tuple[Any, ...]) -> Any:
@@ -16,12 +19,12 @@ def _polynomial(records: list[Any], symbols: tuple[Any, ...]) -> Any:
         if not isinstance(record, list) or len(record) != variable_count + 2:
             raise ValueError("malformed polynomial record")
         exponents = tuple(record[:variable_count])
-        numerator = record[-2]
-        denominator = record[-1]
+        numerator, denominator = record[-2:]
         if (
             any(type(exponent) is not int or exponent < 0 for exponent in exponents)
             or not isinstance(numerator, str)
             or not isinstance(denominator, str)
+            or exponents in coefficients
         ):
             raise ValueError("malformed polynomial record")
         coefficients[exponents] = Rational(int(numerator), int(denominator))
@@ -112,7 +115,7 @@ def _apply_operation(
     raise ValueError("unknown DAG operation")
 
 
-def _expand_nodes(payload: dict[str, Any]) -> tuple[list[Any], int]:
+def _expand_nodes(payload: dict[str, Any]) -> list[Any]:
     variables = payload["variables"]
     nodes = payload["nodes"]
     if (
@@ -123,7 +126,6 @@ def _expand_nodes(payload: dict[str, Any]) -> tuple[list[Any], int]:
         or len(nodes) < 2
     ):
         raise ValueError("malformed DAG request")
-    variable_count = len(variables)
     generators = tuple(Symbol(name) for name in variables)
     cache: list[Any] = [
         Poly(0, *generators, domain=QQ),
@@ -144,59 +146,32 @@ def _expand_nodes(payload: dict[str, Any]) -> tuple[list[Any], int]:
             node,
             cache,
             generators,
-            variable_count,
+            len(variables),
         )
-        if index < 2:
-            continue
-        cache.append(result)
-    return cache, variable_count
+        if index >= 2:
+            cache.append(result)
+    return cache
 
 
-def _sources_are_coprime(payload: dict[str, Any], generators: tuple[Any, ...]) -> bool:
-    sources = payload.get("sources")
-    if not isinstance(sources, list):
-        raise ValueError("malformed source request")
-    for source in sources:
-        if (
-            not isinstance(source, dict)
-            or not isinstance(source.get("numerator"), list)
-            or not isinstance(source.get("denominator"), list)
-        ):
-            raise ValueError("malformed source request")
-        numerator = _polynomial(source["numerator"], generators)
-        denominator = _polynomial(source["denominator"], generators)
-        if not numerator.gcd(denominator).is_one:
-            return False
-    return True
-
-
-def _run_expansion(payload: dict[str, Any]) -> dict[str, Any]:
-    cache, _variable_count = _expand_nodes(payload)
-    return {"status": "ok", "values": [_dump(value) for value in cache]}
-
-
-def _run_admitted(payload: dict[str, Any]) -> dict[str, Any]:
-    variables = payload["variables"]
-    if (
-        not isinstance(variables, list)
-        or not variables
-        or any(not isinstance(name, str) or not name for name in variables)
+def _validate_indices(indices: object, cache: list[Any], label: str) -> list[int]:
+    if not isinstance(indices, list) or any(
+        type(index) is not int or index < 0 or index >= len(cache) for index in indices
     ):
+        raise ValueError(f"malformed {label} request")
+    return indices
+
+
+def _run(payload: dict[str, Any]) -> dict[str, Any]:
+    if set(payload) != {
+        "variables",
+        "nodes",
+        "fractions",
+        "determinants",
+        "undefined_numerators",
+    }:
         raise ValueError("malformed DAG request")
-    generators = tuple(Symbol(name) for name in variables)
-    if not _sources_are_coprime(payload, generators):
-        return {"status": "noncanonical"}
+    cache = _expand_nodes(payload)
     fractions = payload["fractions"]
-    determinants = payload["determinants"]
-    cache, _variable_count = _expand_nodes(payload)
-    if not isinstance(determinants, list) or any(
-        type(index) is not int or index < 0 or index >= len(cache)
-        for index in determinants
-    ):
-        raise ValueError("malformed determinant request")
-    for index in determinants:
-        if cache[index].is_zero:
-            return {"status": "singular"}
     if not isinstance(fractions, list):
         raise ValueError("malformed fraction request")
     cancelled: list[dict[str, Any]] = []
@@ -210,10 +185,20 @@ def _run_admitted(payload: dict[str, Any]) -> dict[str, Any]:
             )
         ):
             raise ValueError("malformed fraction request")
+        if cache[pair[1]].is_zero:
+            return {"status": "undefined"}
         numerator, denominator = _cancel(cache[pair[0]], cache[pair[1]])
         cancelled.append(
             {"numerator": _dump(numerator), "denominator": _dump(denominator)}
         )
+    undefined_numerators = _validate_indices(
+        payload["undefined_numerators"], cache, "undefined-numerator"
+    )
+    if any(cache[index].is_zero for index in undefined_numerators):
+        return {"status": "undefined"}
+    determinants = _validate_indices(payload["determinants"], cache, "determinant")
+    if any(cache[index].is_zero for index in determinants):
+        return {"status": "singular"}
     return {
         "status": "ok",
         "fractions": cancelled,
@@ -221,25 +206,47 @@ def _run_admitted(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _run(payload: dict[str, Any]) -> dict[str, Any]:
-    keys = set(payload)
-    if keys == {"variables", "nodes"}:
-        return _run_expansion(payload)
-    if keys == {"variables", "nodes", "fractions", "determinants", "sources"}:
-        return _run_admitted(payload)
-    raise ValueError("malformed DAG request")
+def _canonical_request_bytes(request: dict[str, Any]) -> bytes:
+    return json.dumps(
+        {"protocol_version": _PROTOCOL_VERSION, "request": request},
+        ensure_ascii=True,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("ascii")
+
+
+def _decode_request() -> tuple[str, dict[str, Any]]:
+    envelope = json.loads(sys.stdin.buffer.read().decode("ascii"))
+    if not isinstance(envelope, dict) or set(envelope) != {
+        "protocol_version",
+        "request_digest",
+        "request",
+    }:
+        raise ValueError("malformed DAG envelope")
+    if envelope["protocol_version"] != _PROTOCOL_VERSION:
+        raise ValueError("unsupported DAG protocol")
+    digest = envelope["request_digest"]
+    request = envelope["request"]
+    if not isinstance(digest, str) or not isinstance(request, dict):
+        raise ValueError("malformed DAG envelope")
+    expected = hashlib.sha256(_canonical_request_bytes(request)).hexdigest()
+    if digest != expected:
+        raise ValueError("DAG request digest mismatch")
+    return digest, request
 
 
 def main() -> int:
     try:
-        payload = json.loads(sys.stdin.buffer.read().decode("utf-8"))
-        if not isinstance(payload, dict):
-            raise ValueError("malformed DAG request")
-        response = _run(payload)
+        digest, request = _decode_request()
+        response = {
+            "protocol_version": _PROTOCOL_VERSION,
+            "request_digest": digest,
+            **_run(request),
+        }
     except Exception:
         return 1
     sys.stdout.buffer.write(
-        json.dumps(response, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        json.dumps(response, sort_keys=True, separators=(",", ":")).encode("ascii")
     )
     return 0
 

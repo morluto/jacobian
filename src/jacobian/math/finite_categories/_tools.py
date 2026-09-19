@@ -105,8 +105,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         description="Construct the exact Cartesian product category with structural pair "
         "identifiers, componentwise identities and composition, and explicit "
         "left/right projections for every product object and morphism. Object, "
-        "morphism, composable-pair, composable-triple, execution-work, identifier, "
-        "and canonical-result sizes are all preflight-bounded.",
+        "morphism, composable-pair, composable-triple, execution-work, and "
+        "identifier-shape bounds are admitted before construction.",
         request_type=CategoryProductRequest,
         result_type=FiniteCategoryProduct,
         run=compute_category_product,

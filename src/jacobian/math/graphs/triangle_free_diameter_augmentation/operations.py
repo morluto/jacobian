@@ -38,11 +38,4 @@ def triangle_free_diameter_augmentation(
     )
 
 
-def _compute_triangle_free_diameter_augmentation(
-    request: TriangleFreeDiameterAugmentationBudget,  # placeholder for catalog wrapper
-) -> TriangleFreeDiameterAugmentationResult:
-    # This wrapper is not used directly; catalog uses request type
-    raise NotImplementedError
-
-
 __all__ = ["triangle_free_diameter_augmentation"]

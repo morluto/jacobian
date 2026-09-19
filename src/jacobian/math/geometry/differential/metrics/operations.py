@@ -20,7 +20,8 @@ from jacobian.math.geometry.differential.metrics._dag import (
     Expression,
     admit_recognition_work,
 )
-from jacobian.math.geometry.differential.metrics._dag_evaluate_process import (
+from jacobian.math.geometry.differential.metrics._dag_process import (
+    DagDegeneracy,
     evaluate_admitted_dag,
 )
 from jacobian.math.geometry.differential.metrics._models import (
@@ -81,19 +82,18 @@ def curvature_profile(
             (*plan.inverse, *plan.connection, *plan.riemann, *plan.ricci, plan.scalar)
         )
     )
-    components, determinant_guards = evaluate_admitted_dag(
+    evaluation = evaluate_admitted_dag(
         plan.dag.nodes,
         axis,
         fractions=tuple(plan.fractions[value] for value in unique_outputs),
         determinants=tuple(dict.fromkeys(plan.determinant.numerator)),
-        sources=(),
         deadline=deadline,
         owner="metric curvature",
-        singular_metric=singular,
-        noncanonical_location=("metric",),
-        noncanonical_code="differential_geometry.curvature.noncanonical_source",
-        noncanonical_message="metric component must be a reduced canonical rational function",
     )
+    if isinstance(evaluation, DagDegeneracy):
+        raise singular()
+    components = evaluation.fractions
+    determinant_guards = evaluation.determinants
     normalized = dict(zip(unique_outputs, components, strict=True))
 
     def convert(values: tuple[Expression, ...]) -> tuple[RationalFunction, ...]:

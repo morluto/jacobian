@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from pydantic_core import PydanticCustomError
 
-from jacobian.canonical import strict_json_object_size
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.finite_categories.values import (
     MAX_CATEGORY_COMPOSABLE_PAIRS,
@@ -58,23 +57,6 @@ def _source_identifier_sizes(
     }
 
 
-def _array_size(count: int, item_bytes: int) -> int:
-    return 2 + max(count - 1, 0) + item_bytes
-
-
-def _object_overhead(*field_names: str) -> int:
-    return strict_json_object_size(tuple((field_name, 0) for field_name in field_names))
-
-
-def _cross_pair_bytes(left_sizes: tuple[int, ...], right_sizes: tuple[int, ...]) -> int:
-    count = len(left_sizes) * len(right_sizes)
-    return (
-        len(right_sizes) * sum(left_sizes)
-        + len(left_sizes) * sum(right_sizes)
-        + 3 * count
-    )
-
-
 def _require_pair_identifier_budget(
     left: tuple[CategoryIdentifier, ...],
     right: tuple[CategoryIdentifier, ...],
@@ -113,63 +95,6 @@ def _require_pair_identifier_budget(
             "product_identifier_character_budget",
             f"{label} exceed the structural identifier character budget",
         )
-
-
-def _product_category_wire_size(
-    left: FiniteCategory,
-    right: FiniteCategory,
-    identifier_sizes: dict[CategoryIdentifier, int],
-) -> int:
-    left_object_sizes = tuple(identifier_sizes[item] for item in left.objects)
-    right_object_sizes = tuple(identifier_sizes[item] for item in right.objects)
-    object_count = len(left.objects) * len(right.objects)
-    object_pair_bytes = _cross_pair_bytes(left_object_sizes, right_object_sizes)
-
-    morphism_count = len(left.morphisms) * len(right.morphisms)
-    left_morphism_fields = (
-        tuple(identifier_sizes[item.morphism_id] for item in left.morphisms),
-        tuple(identifier_sizes[item.source] for item in left.morphisms),
-        tuple(identifier_sizes[item.target] for item in left.morphisms),
-    )
-    right_morphism_fields = (
-        tuple(identifier_sizes[item.morphism_id] for item in right.morphisms),
-        tuple(identifier_sizes[item.source] for item in right.morphisms),
-        tuple(identifier_sizes[item.target] for item in right.morphisms),
-    )
-    morphism_item_bytes = morphism_count * _object_overhead(
-        "morphism_id", "source", "target"
-    ) + sum(
-        _cross_pair_bytes(left_sizes, right_sizes)
-        for left_sizes, right_sizes in zip(
-            left_morphism_fields, right_morphism_fields, strict=True
-        )
-    )
-
-    identity_pair_bytes = _cross_pair_bytes(
-        tuple(identifier_sizes[morphism_id] for _, morphism_id in left.identities),
-        tuple(identifier_sizes[morphism_id] for _, morphism_id in right.identities),
-    )
-    identity_item_bytes = 3 * object_count + object_pair_bytes + identity_pair_bytes
-
-    composition_count = len(left.composition) * len(right.composition)
-    composition_item_bytes = 4 * composition_count + sum(
-        _cross_pair_bytes(
-            tuple(identifier_sizes[row[index]] for row in left.composition),
-            tuple(identifier_sizes[row[index]] for row in right.composition),
-        )
-        for index in range(3)
-    )
-    return strict_json_object_size(
-        (
-            ("objects", _array_size(object_count, object_pair_bytes)),
-            ("morphisms", _array_size(morphism_count, morphism_item_bytes)),
-            ("identities", _array_size(object_count, identity_item_bytes)),
-            (
-                "composition",
-                _array_size(composition_count, composition_item_bytes),
-            ),
-        )
-    )
 
 
 def _admit_product(left: FiniteCategory, right: FiniteCategory) -> None:

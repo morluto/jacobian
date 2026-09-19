@@ -19,7 +19,8 @@ from jacobian.math.geometry.differential._recognition_process import (
     RationalFunctionRecognitionCandidate,
     recognize_canonical_rational_functions,
 )
-from jacobian.math.geometry.differential.metrics._dag_evaluate_process import (
+from jacobian.math.geometry.differential.metrics._dag_process import (
+    DagDegeneracy,
     evaluate_admitted_dag,
 )
 from jacobian.math.geometry.differential.metrics._models import RationalCoordinateMetric
@@ -234,7 +235,7 @@ def pullback_metric(
         )
     axis = map_value.source_variables
     unique_values = tuple(dict.fromkeys((*plan.output, *plan.guards)))
-    components, _determinant_guards = evaluate_admitted_dag(
+    evaluation = evaluate_admitted_dag(
         plan.dag.nodes,
         axis,
         fractions=tuple(plan.fractions[value] for value in unique_values),
@@ -242,23 +243,22 @@ def pullback_metric(
         undefined_numerators=tuple(
             dict.fromkeys(plan.fractions[value][0] for value in plan.guards[:-1])
         ),
-        sources=(),
         deadline=deadline,
         owner="rational metric pullback",
-        singular_metric=lambda: OperationDomainValidationError(
+    )
+    if isinstance(evaluation, DagDegeneracy):
+        if evaluation.kind == "undefined":
+            raise OperationDomainValidationError(
+                location=("metric",),
+                code="differential_geometry.rational_metric.pullback.undefined_metric_locus",
+                message="a required metric denominator or chart guard vanishes identically after substitution",
+            )
+        raise OperationDomainValidationError(
             location=("metric",),
             code="differential_geometry.rational_metric.pullback.singular_metric",
             message="metric determinant vanishes identically after substitution",
-        ),
-        undefined_metric_locus=lambda: OperationDomainValidationError(
-            location=("metric",),
-            code="differential_geometry.rational_metric.pullback.undefined_metric_locus",
-            message="a required metric denominator or chart guard vanishes identically after substitution",
-        ),
-        noncanonical_location=("metric", "map"),
-        noncanonical_code="differential_geometry.rational_metric.pullback.noncanonical_source",
-        noncanonical_message="metric and map components must be reduced canonical rational functions",
-    )
+        )
+    components = evaluation.fractions
     normalized = dict(zip(unique_values, components, strict=True))
     for value in plan.guards[:-1]:
         if not normalized[value].numerator.terms:

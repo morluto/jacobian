@@ -188,6 +188,24 @@ def _requires_singular_runtime(path: str) -> bool:
     )
 
 
+def _requires_process_boundary(path: str) -> bool:
+    """Select process evidence for owner-local child-process implementations.
+
+    Most owner-local process adapters are named ``*_process.py`` or
+    ``*_worker.py``.  The factorization owner is the deliberate exception:
+    its process launcher and worker protocol live in ``_factorization_kernels``.
+    Backend-specific runtimes already include their process tests, so the
+    generic process lane is only needed for the remaining owners.
+    """
+
+    if not path.startswith("src/jacobian/math/"):
+        return False
+    filename = PurePosixPath(path).name
+    return filename.endswith(("_process.py", "_worker.py")) or path.endswith(
+        "/number_theory/_factorization_kernels.py"
+    )
+
+
 def _complete_decision(reason: str) -> PathDecision:
     return PathDecision(
         run_catalog=True,
@@ -215,13 +233,20 @@ def _classify_math_path(path: str, repository: Path) -> PathDecision:
         if selected is None:
             return _complete_decision(f"math owner has no explicit test root: {path}")
         public_contract = _is_public_math_path(path)
+        run_singular = _requires_singular_runtime(path)
+        run_qepcad = _requires_qepcad_runtime(path)
         return PathDecision(
             math_tests=selected,
             run_catalog=public_contract,
             run_catalog_examples=public_contract,
             run_scale=_includes_scale_tests(selected),
-            run_singular=_requires_singular_runtime(path),
-            run_qepcad=_requires_qepcad_runtime(path),
+            boundary_lanes=(
+                ("process",)
+                if _requires_process_boundary(path) and not (run_singular or run_qepcad)
+                else ()
+            ),
+            run_singular=run_singular,
+            run_qepcad=run_qepcad,
         )
     return PathDecision()
 

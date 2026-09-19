@@ -20,7 +20,7 @@ TOOLS: MathTools = (
         "Return every nonempty indexed subset intersection and its volume, plus "
         "the complete source-bound inclusion-exclusion sum. Inputs contain one "
         "or more same-dimensional boxes in dimensions 1..64 whose echoed source "
-        "and complete ledger fit the published component bounds, at most 16 nonempty "
+        "and complete ledger fit the published component bounds, at most 15 nonempty "
         "boxes, and endpoint components within the canonical 32,768-digit "
         "rational limit; per-axis growth and ledger-component budgets determine "
         "admission. intervals=null is the "

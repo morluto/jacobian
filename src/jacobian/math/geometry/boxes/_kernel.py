@@ -64,20 +64,49 @@ def box_volume(box: RationalAxisAlignedBox) -> Fraction:
 def complete_intersection_ledger(
     boxes: tuple[RationalAxisAlignedBox, ...],
 ) -> tuple[tuple[IntersectionRecord, ...], Fraction]:
-    """Enumerate every nonempty intersection and its inclusion-exclusion sum."""
+    """Enumerate every nonempty intersection and its inclusion-exclusion sum.
+
+    Intersections are built by a subset dynamic program: removing one selected
+    box from a subset leaves a previously computed intersection, so each subset
+    needs only one two-box intersection instead of rescanning all of its boxes.
+    Emitting masks by cardinality and then lexicographic source position keeps
+    the public ledger order identical to the combinations-based definition.
+    """
 
     records: list[IntersectionRecord] = []
     union_volume = Fraction()
     indexed_nonempty = tuple(
         (index, box) for index, box in enumerate(boxes) if not box.is_empty
     )
-    for subset_size in range(1, len(indexed_nonempty) + 1):
-        coefficient = 1 if subset_size % 2 else -1
-        for selected in combinations(indexed_nonempty, subset_size):
-            box_indices = tuple(index for index, _box in selected)
-            intersection = intersect_boxes(tuple(box for _index, box in selected))
-            if intersection.is_empty:
+    active_count = len(indexed_nonempty)
+    intersections: list[RationalAxisAlignedBox | None] = [None] * (1 << active_count)
+    for mask in range(1, 1 << active_count):
+        bit = mask & -mask
+        position = bit.bit_length() - 1
+        parent = mask ^ bit
+        if parent == 0:
+            candidate = indexed_nonempty[position][1]
+        else:
+            parent_intersection = intersections[parent]
+            if parent_intersection is None:
                 continue
+            candidate = intersect_boxes(
+                (parent_intersection, indexed_nonempty[position][1])
+            )
+        if candidate.is_empty:
+            continue
+        intersections[mask] = candidate
+
+    for subset_size in range(1, active_count + 1):
+        coefficient = 1 if subset_size % 2 else -1
+        for selected_positions in combinations(range(active_count), subset_size):
+            mask = sum(1 << position for position in selected_positions)
+            intersection = intersections[mask]
+            if intersection is None:
+                continue
+            box_indices = tuple(
+                indexed_nonempty[position][0] for position in selected_positions
+            )
             volume = box_volume(intersection)
             records.append(
                 IntersectionRecord(

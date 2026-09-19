@@ -38,7 +38,7 @@ class BoxUnionVolumeRequest(StrictModel):
                 "rational limit, and admission rests on the coupled exact "
                 "growth and intersection-cardinality budgets rather than a "
                 "per-endpoint cap. intervals=null "
-                "denotes the canonical empty box; at most 16 boxes may be "
+                "denotes the canonical empty box; at most 15 boxes may be "
                 "nonempty, and equal interval endpoints are valid measure-zero "
                 "axes."
             ),
@@ -67,7 +67,7 @@ class BoxUnionVolumeRequest(StrictModel):
             "boxes use intervals=null and are pruned before subset expansion. "
             "The echoed source, the complete 2^nonempty_box_count-1 subset "
             "expansion, exact rational growth, and aggregate ledger components "
-            "must fit the published operation budgets; at most 16 boxes may "
+            "must fit the published operation budgets; at most 15 boxes may "
             "be nonempty."
         ),
     )

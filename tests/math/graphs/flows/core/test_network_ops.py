@@ -9,15 +9,24 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.graphs.flows import operations as flow_operations
 from jacobian.math.graphs.flows._models import (
+    CapacitatedEdge,
     CostedFlowEdge,
     CostedFlowGraph,
+    FlowGraph,
+    MaxFlowRequest,
     MinCostFlowRequest,
     MinCostFlowResult,
+    MinCutRequest,
 )
-from jacobian.math.graphs.flows._tools import TOOLS, compute_min_cost_flow
+from jacobian.math.graphs.flows._tools import (
+    TOOLS,
+    compute_max_flow,
+    compute_min_cost_flow,
+    compute_min_cut,
+)
 
 
 def test_catalog_contains_only_audited_operations() -> None:
@@ -373,8 +382,72 @@ def test_min_cost_flow_derived_scale_admission_fails_closed() -> None:
     )
     graph = CostedFlowGraph(vertex_count=64, edges=edges)
     request = MinCostFlowRequest(graph=graph, demands=tuple([0] * 64))
-    with pytest.raises(OperationDomainValidationError, match="derived-scale"):
+    with pytest.raises(OperationResourceAdmissionError, match="derived-scale"):
         compute_min_cost_flow(request)
+
+
+@pytest.mark.parametrize("compute", [compute_max_flow, compute_min_cut])
+def test_exact_flow_and_cut_height_is_admitted_before_backend(
+    compute: Callable[..., Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Large rational intermediates fail as typed admission, not result decoding."""
+    digits = 17_000
+    denominator_a = 10**digits + 1
+    denominator_b = 10**digits + 3
+    graph = FlowGraph(
+        vertex_count=4,
+        edges=(
+            CapacitatedEdge(
+                source=0,
+                target=1,
+                capacity=CanonicalRational.from_integer_ratio(1, denominator_a),
+            ),
+            CapacitatedEdge(
+                source=1,
+                target=3,
+                capacity=CanonicalRational.from_integer_ratio(1, denominator_a),
+            ),
+            CapacitatedEdge(
+                source=0,
+                target=2,
+                capacity=CanonicalRational.from_integer_ratio(1, denominator_b),
+            ),
+            CapacitatedEdge(
+                source=2,
+                target=3,
+                capacity=CanonicalRational.from_integer_ratio(1, denominator_b),
+            ),
+        ),
+    )
+    monkeypatch.setattr(
+        flow_operations.nx,
+        "maximum_flow" if compute is compute_max_flow else "minimum_cut",
+        lambda *args, **kwargs: pytest.fail("backend ran before height admission"),
+    )
+    request = (
+        MaxFlowRequest(graph=graph, source=0, sink=3)
+        if compute is compute_max_flow
+        else MinCutRequest(graph=graph, source=0, sink=3)
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="derived-height"):
+        compute(request)
+
+
+def test_exact_flow_height_admission_retains_small_rational_boundary() -> None:
+    graph = FlowGraph(
+        vertex_count=2,
+        edges=(
+            CapacitatedEdge(
+                source=0,
+                target=1,
+                capacity=CanonicalRational.from_integer_ratio(1, 3),
+            ),
+        ),
+    )
+    flow = compute_max_flow(MaxFlowRequest(graph=graph, source=0, sink=1))
+    cut = compute_min_cut(MinCutRequest(graph=graph, source=0, sink=1))
+    assert flow.flow_value.as_fraction() == Fraction(1, 3)
+    assert cut.cut_value.as_fraction() == Fraction(1, 3)
 
 
 @pytest.mark.parametrize("demands, feasible", [((0, 0), True), ((-1, 1), False)])

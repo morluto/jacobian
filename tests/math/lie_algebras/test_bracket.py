@@ -5,11 +5,19 @@ from fractions import Fraction
 import pytest
 from pydantic import ValidationError
 
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.lie_algebras._models import (
+    MAX_ELEMENT_COEFFICIENT_DIGITS,
+    MAX_LIE_DIMENSION,
+    MAX_STRUCTURE_COEFFICIENT_DIGITS,
+    MAX_STRUCTURE_NONZEROS,
     FiniteDimensionalLieAlgebra,
     LieAlgebraElement,
     LieBracketRequest,
+    StructureConstant,
 )
 from jacobian.math.lie_algebras.operations import lie_bracket
 
@@ -218,6 +226,96 @@ class TestBracketInvariants:
 
 
 class TestBracketAdmission:
+    def test_boundary_coordinate_and_structure_heights_are_admitted(self) -> None:
+        scale = (
+            10 ** min(MAX_ELEMENT_COEFFICIENT_DIGITS, MAX_STRUCTURE_COEFFICIENT_DIGITS)
+            - 1
+        )
+        algebra = _algebra(("x", "y"), ((0, 1, 1, scale),))
+        result = lie_bracket(
+            algebra,
+            _element(("x", "y"), (scale, 0)),
+            _element(("x", "y"), (0, scale)),
+        )
+
+        assert _coords(result.bracket) == (Fraction(0), Fraction(scale**3))
+        assert result.ledger[0].pair_coefficient.as_fraction() == Fraction(scale**2)
+        assert result.ledger[0].terms[0].coefficient.as_fraction() == Fraction(scale**3)
+
+    def test_over_bound_element_coefficient_is_rejected_before_expansion(self) -> None:
+        over_bound = 10**MAX_ELEMENT_COEFFICIENT_DIGITS
+        with pytest.raises(OperationDomainValidationError, match="64-digit bound"):
+            lie_bracket(
+                AXB,
+                _element(AXB_BASIS, (over_bound, 0)),
+                _element(AXB_BASIS, (0, 1)),
+            )
+
+    def test_over_bound_structure_coefficient_is_rejected_before_jacobi(self) -> None:
+        over_bound = 10**MAX_ELEMENT_COEFFICIENT_DIGITS
+        algebra = _algebra(AXB_BASIS, ((0, 1, 1, over_bound),))
+        with pytest.raises(OperationDomainValidationError, match="64-digit bound"):
+            lie_bracket(
+                algebra,
+                _element(AXB_BASIS, (1, 0)),
+                _element(AXB_BASIS, (0, 1)),
+            )
+
+    def test_over_bound_dimension_is_rejected_before_jacobi(self) -> None:
+        basis = tuple(f"e{index}" for index in range(MAX_LIE_DIMENSION + 1))
+        algebra = FiniteDimensionalLieAlgebra.model_construct(
+            basis=basis,
+            structure_constants=(),
+        )
+        zero = _element(AXB_BASIS, (0, 0)).coordinates[0]
+        element = LieAlgebraElement.model_construct(
+            basis=basis,
+            coordinates=(zero,) * len(basis),
+        )
+
+        with pytest.raises(OperationResourceAdmissionError, match="dimension"):
+            lie_bracket(algebra, element, element)
+
+    def test_over_bound_structure_table_is_rejected_before_jacobi(self) -> None:
+        constant = StructureConstant.model_construct(
+            i=0,
+            j=1,
+            k=0,
+            coefficient=AXB.structure_constants[0].coefficient,
+        )
+        algebra = FiniteDimensionalLieAlgebra.model_construct(
+            basis=("x", "y"),
+            structure_constants=(constant,) * (MAX_STRUCTURE_NONZEROS + 1),
+        )
+        element = _element(("x", "y"), (1, 0))
+
+        with pytest.raises(OperationResourceAdmissionError, match="structure-constant"):
+            lie_bracket(algebra, element, element)
+
+    def test_complete_ledger_keeps_every_nonzero_basis_pair(self) -> None:
+        basis = tuple(f"e{index}" for index in range(7))
+        constants = tuple(
+            (first, second, 6, 1)
+            for first in range(6)
+            for second in range(first + 1, 6)
+        )
+        algebra = _algebra(basis, constants)
+        result = lie_bracket(
+            algebra,
+            _element(basis, (1, 2, 3, 4, 5, 6, 7)),
+            _element(basis, (7, 6, 5, 4, 3, 2, 1)),
+        )
+
+        assert [(row.i, row.j) for row in result.ledger] == [
+            (first, second) for first in range(6) for second in range(first + 1, 6)
+        ]
+        assert all(len(row.terms) == 1 for row in result.ledger)
+        replayed = [Fraction(0)] * len(basis)
+        for row in result.ledger:
+            for term in row.terms:
+                replayed[term.k] += term.coefficient.as_fraction()
+        assert tuple(replayed) == _coords(result.bracket)
+
     def test_jacobi_violating_table_rejected(self) -> None:
         bad = _algebra(SL2_BASIS, ((0, 1, 2, 1), (0, 2, 0, -2), (1, 2, 1, -2)))
         with pytest.raises(OperationDomainValidationError) as exc_info:

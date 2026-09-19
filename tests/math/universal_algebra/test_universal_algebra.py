@@ -492,6 +492,23 @@ class TestGeneratedSubalgebra:
         assert result.generated_carrier == (0, 1)
         assert verify_generated_subalgebra(result)
 
+    def test_nontrivial_generated_closure_is_reported_closed(self) -> None:
+        algebra = _cyclic_addition_algebra(3)
+
+        result = compute_generated_subalgebra(
+            SubalgebraRequest(algebra=algebra, generators=(1,))
+        )
+
+        assert result.generated_carrier == (0, 1, 2)
+        assert result.rounds > 1
+        assert result.is_closed is True
+        assert all(
+            algebra.tables[0][3 * left + right] in result.generated_carrier
+            for left in result.generated_carrier
+            for right in result.generated_carrier
+        )
+        assert verify_generated_subalgebra(result)
+
 
 # ---------------------------------------------------------------------------
 # Supplied-map homomorphism profile

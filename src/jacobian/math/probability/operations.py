@@ -844,6 +844,7 @@ def convolution_power(
     """Return the complete exact law of a positive i.i.d. convolution power."""
 
     if type(exponent) is int and exponent == 1:
+        _admit_distribution(distribution.atoms, require_canonical=True)
         return FiniteConvolutionPowerResult._from_kernel(
             source=distribution,
             exponent=exponent,
@@ -878,6 +879,7 @@ def convolution_peak(
     """Return the exact largest atom mass and all values attaining it."""
 
     if type(exponent) is int and exponent == 1:
+        _admit_distribution(distribution.atoms, require_canonical=True)
         maximum = max(atom.probability.as_fraction() for atom in distribution.atoms)
         return FiniteConvolutionPeakResult._from_kernel(
             source=distribution,

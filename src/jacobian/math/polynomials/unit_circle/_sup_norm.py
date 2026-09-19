@@ -32,6 +32,8 @@ import sympy
 
 from jacobian._exact import CanonicalRational
 from jacobian._execution import (
+    BackendFailureReason,
+    OperationBackendError,
     OperationExecutionTimeoutError,
     bind_request_deadline,
     current_request_execution,
@@ -78,6 +80,10 @@ def _resource(reason: str, message: str) -> OperationResourceAdmissionError:
         code=f"polynomial.unit_circle.sup_norm.{reason}",
         message=message,
     )
+
+
+def _invalid_backend_output(message: str) -> OperationBackendError:
+    return OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
 
 
 def _digits(value: Fraction) -> int:
@@ -415,8 +421,106 @@ def _sturm_root_index_below(factor: Any, bound: Fraction) -> int | None:
     return negative_variations - bound_variations
 
 
+def _flint_resultant_and_factors_impl(
+    coprime: Any,
+    numerator: list[Fraction],
+    degree: int,
+    symbol: Any,
+) -> tuple[Any, tuple[Any, ...]]:
+    """Compute and factor the critical-value resultant through python-flint.
+
+    The input and output stay exact.  SymPy receives only the reconstructed
+    univariate result and already-factorized factors for its certified Sturm
+    isolation and interval comparison routines.
+    """
+
+    from flint import fmpq, fmpq_mpoly_ctx, fmpq_poly
+
+    context = fmpq_mpoly_ctx.get((str(symbol), "y"), "lex")
+
+    def mpoly_from_sympy(poly: Any) -> Any:
+        terms: dict[tuple[int, ...], fmpq] = {
+            (int(exponents[0]), 0): fmpq(int(coefficient.p), int(coefficient.q))
+            for exponents, coefficient in poly.terms()
+        }
+        return context.from_dict(terms)
+
+    derivative_mpoly = mpoly_from_sympy(coprime)
+    numerator_mpoly = context.from_dict(
+        {
+            (index, 0): fmpq(value.numerator, value.denominator)
+            for index, value in enumerate(numerator)
+            if value
+        }
+    )
+    t, y = context.gens()
+    level_mpoly = y * (1 + t * t) ** degree - numerator_mpoly
+    resultant_mpoly = derivative_mpoly.resultant(level_mpoly, str(symbol))
+    resultant_terms = resultant_mpoly.to_dict()
+    if any(exponents[0] != 0 for exponents in resultant_terms):
+        raise _invalid_backend_output(
+            "FLINT returned a bivariate critical-value resultant"
+        )
+    if not resultant_terms:
+        raise _invalid_backend_output("critical-value resultant vanished unexpectedly")
+    maximum_exponent = max(exponents[1] for exponents in resultant_terms)
+    coefficients = [fmpq(0) for _ in range(maximum_exponent + 1)]
+    for exponents, coefficient in resultant_terms.items():
+        coefficients[exponents[1]] = fmpq(int(coefficient.p), int(coefficient.q))
+    resultant_flint = fmpq_poly(coefficients)
+    if resultant_flint.is_zero():
+        raise _invalid_backend_output("critical-value resultant vanished unexpectedly")
+    content, raw_factors = resultant_flint.factor()
+    reconstructed = fmpq_poly([content])
+    for factor, multiplicity in raw_factors:
+        reconstructed *= factor ** int(multiplicity)
+    if reconstructed != resultant_flint:
+        raise _invalid_backend_output(
+            "FLINT returned a non-reconstructing resultant factorization"
+        )
+
+    y_symbol = sympy.Symbol("y")
+    resultant_expression = sum(
+        sympy.Rational(int(coefficient.p), int(coefficient.q)) * y_symbol**index
+        for index, coefficient in enumerate(resultant_flint.coeffs())
+    )
+    resultant_polynomial = sympy.Poly(resultant_expression, y_symbol, domain=sympy.QQ)
+    factors: list[Any] = []
+    for factor, _multiplicity in raw_factors:
+        factor_expression = sum(
+            sympy.Rational(int(coefficient.p), int(coefficient.q)) * y_symbol**index
+            for index, coefficient in enumerate(factor.coeffs())
+        )
+        factors.append(sympy.Poly(factor_expression, y_symbol, domain=sympy.QQ))
+    return resultant_polynomial, tuple(factors)
+
+
+def _flint_resultant_and_factors(
+    coprime: Any,
+    numerator: list[Fraction],
+    degree: int,
+    symbol: Any,
+) -> tuple[Any, tuple[Any, ...]]:
+    """Run the exact FLINT adapter with typed backend-failure boundaries."""
+
+    try:
+        # Probe the maintained symbols before entering the mathematical
+        # adapter.  Import/version failures are initialization failures;
+        # everything after this boundary is backend output validation.
+        from flint import fmpq, fmpq_mpoly_ctx, fmpq_poly  # noqa: F401
+    except (ImportError, ModuleNotFoundError, AttributeError) as exc:
+        raise OperationBackendError(BackendFailureReason.INITIALIZATION) from exc
+    try:
+        return _flint_resultant_and_factors_impl(coprime, numerator, degree, symbol)
+    except OperationBackendError:
+        raise
+    except Exception as exc:
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT) from exc
+
+
 def _exact_critical_maximum(
     resultant_polynomial: Any,
+    resultant_factors: tuple[Any, ...],
     value_roots: tuple[tuple[Fraction, Fraction], ...],
     maximum_key: int,
 ) -> RealAlgebraicValue | None:
@@ -434,9 +538,8 @@ def _exact_critical_maximum(
     """
 
     lower, upper = value_roots[maximum_key]
-    _content, factors = resultant_polynomial.factor_list()
     candidates: list[Any] = []
-    for factor, _multiplicity in factors:
+    for factor in resultant_factors:
         if factor.degree() < 1:
             continue
         low_value = factor.eval(_sympy_rational(lower))
@@ -550,17 +653,12 @@ def unit_circle_sup_norm_squared(  # noqa: C901
     while common.degree() > 0:
         coprime = sympy.div(coprime, common)[0]
         common = sympy.gcd(coprime, sympy.Poly(1 + symbol**2, symbol, domain=sympy.QQ))
-    resultant = sympy.resultant(
-        coprime.as_expr(),
-        sympy.Symbol("y") * (1 + symbol**2) ** degree - numerator_expression,
+    resultant_polynomial, resultant_factors = _flint_resultant_and_factors(
+        coprime,
+        numerator,
+        degree,
         symbol,
     )
-    if resultant == 0:
-        raise _resource(
-            "value_identification",
-            "critical-value resultant vanished unexpectedly",
-        )
-    resultant_polynomial = sympy.Poly(resultant, sympy.Symbol("y"), domain=sympy.QQ)
     value_roots = tuple(
         (Fraction(int(lower.p), int(lower.q)), Fraction(int(upper.p), int(upper.q)))
         for (lower, upper), _multiplicity in resultant_polynomial.intervals()
@@ -679,7 +777,7 @@ def unit_circle_sup_norm_squared(  # noqa: C901
         )
     else:
         exact_maximum = _exact_critical_maximum(
-            resultant_polynomial, value_roots, maximum_key
+            resultant_polynomial, resultant_factors, value_roots, maximum_key
         )
 
     return UnitCircleSupNormSquaredResult._from_kernel(

@@ -5,7 +5,11 @@ import time
 import pytest
 
 from jacobian import process as process_runtime
-from jacobian._execution import OperationExecutionTimeoutError, request_execution
+from jacobian._execution import (
+    OperationExecutionTimeoutError,
+    bind_request_deadline,
+    request_execution,
+)
 from jacobian.math.number_theory._certification_models import (
     CertifiedFactorizationRequest,
 )
@@ -61,6 +65,30 @@ def test_timed_out_direct_factorization_worker_raises_timeout(
         enumerate_divisors(request)
     with pytest.raises(TimeoutError):
         factorize_primes(request)
+
+
+def test_factorization_workers_use_the_inherited_request_deadline(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    recorded: list[float] = []
+
+    def timed_out_worker(*_args: object, **kwargs: object) -> BoundedProcessResult:
+        recorded.append(float(kwargs["timeout_seconds"]))
+        return _timed_out_worker()
+
+    monkeypatch.setattr(process_runtime, "run_bounded_process", timed_out_worker)
+    for operation, request in (
+        (factorize_certified, CertifiedFactorizationRequest(value=10403)),
+        (factorize_primes, FactorizationRequest(value=12)),
+    ):
+        started = time.monotonic()
+        with request_execution(started):
+            bind_request_deadline(started + 5)
+            with pytest.raises(OperationExecutionTimeoutError):
+                operation(request)
+
+    assert len(recorded) == 2
+    assert all(0 < timeout <= 5 for timeout in recorded)
 
 
 def test_factorization_workers_have_private_cwds_and_os_resource_limits(

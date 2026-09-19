@@ -55,9 +55,11 @@ class BinaryPauliRow(StrictModel):
     ``<v, w> = x.z' + z.x' mod 2``.
     """
 
-    row_id: Annotated[str, AfterValidator(_require_scalar_label)] = Field(
-        min_length=1, max_length=MAX_QUBIT_LABEL_LENGTH
-    )
+    row_id: Annotated[
+        str,
+        StringConstraints(min_length=1, max_length=MAX_QUBIT_LABEL_LENGTH, strict=True),
+        AfterValidator(_require_scalar_label),
+    ]
     x_bits: tuple[StrictInt, ...] = Field(min_length=1, max_length=MAX_QUBITS)
     z_bits: tuple[StrictInt, ...] = Field(min_length=1, max_length=MAX_QUBITS)
 
@@ -80,8 +82,8 @@ class CheckSpaceCanonicalizeRequest(StrictModel):
 
     The request carries an ordered register of 1 to ``MAX_QUBITS`` unique
     qubits and 1 to ``MAX_CHECK_ROWS`` labelled generator rows whose bit
-    rows match the register length. Row order is presentation only; the
-    canonical basis is independent of it.
+    rows match the register length. Generator IDs are unique and strictly
+    ordered so the serialized request has one canonical row presentation.
     """
 
     qubit_ids: tuple[QubitId, ...] = Field(min_length=1, max_length=MAX_QUBITS)

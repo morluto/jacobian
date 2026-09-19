@@ -8,6 +8,7 @@ from jacobian.catalog.models import (
 )
 from jacobian.math.quantum._models import (
     MAX_CHECK_ROWS,
+    MAX_QUBIT_LABEL_LENGTH,
     MAX_QUBITS,
     BinaryPauliRow,
     CanonicalCheckRow,
@@ -86,11 +87,42 @@ def _admit_canonicalize(
             )
     rows = tuple(generators)
     ids = tuple(qubit_ids)
+    if any(
+        not isinstance(qubit_id, str)
+        or not qubit_id
+        or len(qubit_id) > MAX_QUBIT_LABEL_LENGTH
+        or any(0xD800 <= ord(character) <= 0xDFFF for character in qubit_id)
+        for qubit_id in ids
+    ):
+        _reject(
+            "qubit_ids",
+            "stabilizer.check_space.qubit_id_not_strict_string",
+            "qubit IDs must be nonempty Unicode scalar strings",
+        )
     if len(set(ids)) != len(ids):
         _reject(
             "qubit_ids",
             "stabilizer.check_space.qubit_ids_not_unique",
             "qubit IDs must be unique",
+        )
+    row_ids = tuple(row.row_id for row in rows)
+    if any(
+        not isinstance(row_id, str)
+        or not row_id
+        or len(row_id) > MAX_QUBIT_LABEL_LENGTH
+        or any(0xD800 <= ord(character) <= 0xDFFF for character in row_id)
+        for row_id in row_ids
+    ):
+        _reject(
+            "generators",
+            "stabilizer.check_space.generator_row_id_not_strict_string",
+            "generator row IDs must be nonempty Unicode scalar strings",
+        )
+    if tuple(sorted(row_ids)) != row_ids or len(set(row_ids)) != len(row_ids):
+        _reject(
+            "generators",
+            "stabilizer.check_space.generator_row_ids",
+            "generator row IDs must be unique and strictly ordered",
         )
     width = len(ids)
     if width > MAX_QUBITS:
@@ -113,7 +145,7 @@ def _admit_canonicalize(
                 "stabilizer.check_space.register_binding_mismatch",
                 "every generator bit row must match the register length",
             )
-    return tuple(str(q) for q in ids), rows
+    return ids, rows
 
 
 def canonicalize_check_space(
@@ -126,8 +158,8 @@ def canonicalize_check_space(
     kernel first replays the complete pairwise pairing table: the first
     pair with pairing one becomes the explicit ``NOT_ISOTROPIC`` witness.
     Otherwise GF(2) elimination yields the canonical RREF basis, rank, and
-    ``ISOTROPIC_CHECK_SPACE`` decision. The RREF is independent of input
-    row order; zero rows contribute no pivot and reduce the rank.
+    ``ISOTROPIC_CHECK_SPACE`` decision. The RREF depends only on the GF(2)
+    row space; zero rows contribute no pivot and reduce the rank.
     """
 
     ids, rows = _admit_canonicalize(qubit_ids, generators)

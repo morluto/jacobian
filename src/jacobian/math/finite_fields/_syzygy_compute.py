@@ -242,7 +242,16 @@ def verify_quotient_reduction(claim: QuotientReduceResult) -> bool:
 
     try:
         prime = _admit_compute_source(claim.polynomial, claim.ideal_generators)
-    except (OperationDomainValidationError, OperationResourceAdmissionError):
+        _require_shared_parent(
+            claim.remainder,
+            claim.polynomial.presentation,
+            claim.polynomial.variable_axis,
+            ("remainder",),
+        )
+        _require_canonical(claim.remainder, "remainder")
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
     presentation = claim.polynomial.presentation
     axis = claim.polynomial.variable_axis
@@ -252,7 +261,9 @@ def verify_quotient_reduction(claim: QuotientReduceResult) -> bool:
         _reduction_index, tail, reduction_degree = _admit_reduction_regime(
             axis, claim.ideal_generators, claim.reduction_variable
         )
-    except (OperationDomainValidationError, OperationResourceAdmissionError):
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         return False
     if tail is None:
         return (
@@ -276,7 +287,15 @@ def verify_quotient_reduction(claim: QuotientReduceResult) -> bool:
     }
     reduction_index = axis.labels.index(claim.reduction_variable or "")
     for step in claim.steps:
-        if working.get(step.target, 0) != step.coefficient:
+        if (
+            len(step.target) != len(axis.labels)
+            or any(
+                type(exponent) is not int or exponent < 0 for exponent in step.target
+            )
+            or not 1 <= step.coefficient < prime
+            or step.target[reduction_index] < reduction_degree
+            or working.get(step.target, 0) != step.coefficient
+        ):
             return False
         coefficient = working.pop(step.target)
         base = list(step.target)
@@ -293,6 +312,8 @@ def verify_quotient_reduction(claim: QuotientReduceResult) -> bool:
                 working[shifted] = accumulated
             else:
                 working.pop(shifted, None)
+    if any(exponents[reduction_index] >= reduction_degree for exponents in working):
+        return False
     return working == {
         term.exponents: int(term.coefficient.coordinates[0])
         for term in claim.remainder.terms

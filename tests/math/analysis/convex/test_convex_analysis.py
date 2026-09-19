@@ -5,7 +5,10 @@ import json
 import pytest
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.analysis.convex._models import (
     AffinePiece,
     MaxAffineEvalRequest,
@@ -102,6 +105,68 @@ class TestMaxAffineEvaluation:
         result = compute_max_affine_evaluation(req)
         assert result.value.as_fraction() == 0
         assert len(result.active_pieces) == 2
+
+    def test_large_source_scalars_are_admitted_when_product_height_is_small(
+        self,
+    ) -> None:
+        height = 20_000
+        coefficient = 10**height
+        function = MaxAffineFunction(
+            pieces=(
+                AffinePiece(
+                    piece_id="p1",
+                    coefficients=(_rational(coefficient),),
+                    intercept=_rational(0),
+                ),
+            )
+        )
+        point = RationalPoint(coordinates=(_rational(1, coefficient),))
+
+        result = max_affine_evaluation(function, point)
+
+        assert result.value.as_fraction() == 1
+
+    def test_product_at_canonical_height_boundary_is_admitted(self) -> None:
+        value = 10**16_383
+        function = MaxAffineFunction(
+            pieces=(
+                AffinePiece(
+                    piece_id="p1",
+                    coefficients=(_rational(value),),
+                    intercept=_rational(0),
+                ),
+            )
+        )
+        point = RationalPoint(coordinates=(_rational(value),))
+
+        result = max_affine_evaluation(function, point)
+
+        assert result.value.num == 10**32_766
+
+    @pytest.mark.parametrize(
+        "operation", [max_affine_evaluation, max_affine_subdifferential]
+    )
+    def test_derived_product_height_is_rejected_before_exact_evaluation(
+        self, operation
+    ) -> None:
+        height = 16_384
+        value = 10**height
+        function = MaxAffineFunction(
+            pieces=(
+                AffinePiece(
+                    piece_id="p1",
+                    coefficients=(_rational(value),),
+                    intercept=_rational(0),
+                ),
+            )
+        )
+        point = RationalPoint(coordinates=(_rational(value),))
+
+        with pytest.raises(OperationResourceAdmissionError) as exc_info:
+            operation(function, point)
+        assert exc_info.value.errors()[0]["type"] == (
+            "convex_analysis.derived_height_exceeded"
+        )
 
 
 class TestSubdifferential:

@@ -10,6 +10,7 @@ from pydantic_core import PydanticCustomError
 from jacobian._models import StrictModel
 from jacobian.math.logic.term_rewriting.values import (
     MAX_CRITICAL_PAIR_RULES,
+    MAX_REWRITE_APPLICATIONS,
     MAX_RULES,
     MAX_TERM_DEPTH,
     MAX_VARIABLE_LABEL,
@@ -172,7 +173,9 @@ class RewriteStepResult(StrictModel):
     rules: tuple[RewriteRule, ...]
     selection: RewriteStepSelection | None
     scope: Literal["ALL_APPLICABLE_STEPS", "SELECTED_STEP"]
-    applications: tuple[RewriteApplication, ...]
+    applications: tuple[RewriteApplication, ...] = Field(
+        max_length=MAX_REWRITE_APPLICATIONS
+    )
 
     @model_validator(mode="after")
     def require_exact_applications(self) -> Self:

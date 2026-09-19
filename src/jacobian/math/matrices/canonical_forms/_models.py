@@ -26,6 +26,12 @@ from jacobian.math.polynomials.values import (
 
 MAX_CANONICAL_FORM_DIMENSION = 16
 MAX_CANONICAL_FORM_SCALAR_DIGITS = 256
+# The centralizer system has n^2 rows and columns.  This owner-local budget
+# admits the dense FLINT kernel through the published n=16 matrix boundary
+# while keeping its cubic exact-arithmetic work bounded independently of the
+# generic linear-algebra axis limit.
+MAX_CENTRALIZER_RREF_WORK = 2_000_000_000
+MAX_CENTRALIZER_OUTPUT_DIGIT_WORK = 20_000_000
 
 # A Horner pass performs ``degree`` dense n-by-n products. The retained
 # conservative envelope charges the producer pass and its source-bound

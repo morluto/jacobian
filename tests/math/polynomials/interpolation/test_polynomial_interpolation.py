@@ -5,12 +5,15 @@ import json
 import pytest
 from pydantic import ValidationError
 
+import jacobian.math.polynomials.interpolation.operations as interpolation_operations
 from jacobian._exact import CanonicalRational
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.polynomials.interpolation._models import (
     DividedDifferencesRequest,
     DividedDifferencesResult,
     InterpolationSamples,
     NewtonEvaluateRequest,
+    NewtonForm,
     NewtonFormRequest,
 )
 from jacobian.math.polynomials.interpolation._tools import TOOLS
@@ -115,6 +118,23 @@ def test_newton_coefficients_may_grow_beyond_input_digit_bound() -> None:
     )
 
     assert form.coefficients[1].den >= 10**256
+
+
+def test_newton_evaluation_rejects_admitted_intermediate_growth(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    form = NewtonForm(
+        nodes=(_q(0), _q(1)),
+        coefficients=(_q(10**6), _q(10**6)),
+    )
+    monkeypatch.setattr(interpolation_operations, "MAX_CANONICAL_RATIONAL_DIGITS", 8)
+    with pytest.raises(OperationDomainValidationError, match="intermediate growth"):
+        evaluate_newton(
+            # This test narrows the operation envelope without constructing a
+            # 32,768-digit fixture; the exact recurrence remains unchanged.
+            form,
+            _q(10**6),
+        )
 
 
 def test_equal_rational_nodes_are_rejected_before_division() -> None:

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from fractions import Fraction
+from functools import cache
+from math import comb
 from typing import TYPE_CHECKING, Annotated, Any, Literal, Self
 
 from pydantic import ConfigDict, Field, StrictInt, model_validator
@@ -110,6 +112,243 @@ def _connected_spanning_subgraph_counts(
     return tuple(counts)
 
 
+_InternalGraph = tuple[int, tuple[tuple[int, int], ...]]
+
+
+def _canonical_internal_graph(
+    vertex_count: int,
+    edges: tuple[tuple[int, int], ...],
+) -> _InternalGraph:
+    """Canonicalize the multigraph used by deletion/contraction.
+
+    Edges are retained with multiplicity.  A loop is represented by ``(v, v)``
+    and is not discarded: contraction can create loops, whose two states each
+    contribute to the edge-count profile.
+    """
+
+    return vertex_count, tuple(
+        sorted((min(left, right), max(left, right)) for left, right in edges)
+    )
+
+
+def _internal_graph_is_connected(
+    vertex_count: int,
+    edges: tuple[tuple[int, int], ...],
+) -> bool:
+    if vertex_count <= 1:
+        return True
+    adjacency: list[list[int]] = [[] for _ in range(vertex_count)]
+    for left, right in edges:
+        if left != right:
+            adjacency[left].append(right)
+            adjacency[right].append(left)
+    seen = {0}
+    pending = [0]
+    while pending:
+        vertex = pending.pop()
+        for neighbor in adjacency[vertex]:
+            if neighbor not in seen:
+                seen.add(neighbor)
+                pending.append(neighbor)
+    return len(seen) == vertex_count
+
+
+def _internal_bridge_indices(
+    vertex_count: int,
+    edges: tuple[tuple[int, int], ...],
+) -> tuple[int, ...]:
+    """Return bridge edge indices, handling parallel edges by edge identity."""
+
+    adjacency: list[list[tuple[int, int]]] = [[] for _ in range(vertex_count)]
+    for edge_index, (left, right) in enumerate(edges):
+        if left != right:
+            adjacency[left].append((right, edge_index))
+            adjacency[right].append((left, edge_index))
+    discovery = [-1] * vertex_count
+    low = [-1] * vertex_count
+    bridges: list[int] = []
+    clock = 0
+    # Keep the DFS iterative because the admitted graph carrier permits more
+    # than ten thousand vertices, while an edge-sparse path can be that deep.
+    for root in range(vertex_count):
+        if discovery[root] != -1:
+            continue
+        discovery[root] = low[root] = clock
+        clock += 1
+        stack: list[tuple[int, int, int, int]] = [(root, -1, -1, 0)]
+        while stack:
+            vertex, parent, parent_edge, next_index = stack[-1]
+            if next_index == len(adjacency[vertex]):
+                stack.pop()
+                if parent != -1:
+                    low[parent] = min(low[parent], low[vertex])
+                    if low[vertex] > discovery[parent]:
+                        bridges.append(parent_edge)
+                continue
+            neighbor, edge_index = adjacency[vertex][next_index]
+            stack[-1] = (vertex, parent, parent_edge, next_index + 1)
+            if edge_index == parent_edge:
+                continue
+            if discovery[neighbor] == -1:
+                discovery[neighbor] = low[neighbor] = clock
+                clock += 1
+                stack.append((neighbor, vertex, edge_index, 0))
+            else:
+                low[vertex] = min(low[vertex], discovery[neighbor])
+    return tuple(sorted(bridges))
+
+
+class _DisjointSet:
+    def __init__(self, size: int) -> None:
+        self.parent = list(range(size))
+
+    def find(self, value: int) -> int:
+        parent = self.parent
+        while parent[value] != value:
+            parent[value] = parent[parent[value]]
+            value = parent[value]
+        return value
+
+    def union(self, left: int, right: int) -> None:
+        left_root = self.find(left)
+        right_root = self.find(right)
+        if left_root != right_root:
+            parent = self.parent
+            parent[right_root] = left_root
+
+
+def _contract_bridges(
+    graph: _InternalGraph,
+    bridges: tuple[int, ...],
+) -> tuple[_InternalGraph, int]:
+    vertex_count, edges = graph
+    bridge_set = set(bridges)
+    components = _DisjointSet(vertex_count)
+    for edge_index in bridges:
+        left, right = edges[edge_index]
+        components.union(left, right)
+    roots = sorted({components.find(vertex) for vertex in range(vertex_count)})
+    root_index = {root: index for index, root in enumerate(roots)}
+    contracted_edges = tuple(
+        (
+            root_index[components.find(left)],
+            root_index[components.find(right)],
+        )
+        for edge_index, (left, right) in enumerate(edges)
+        if edge_index not in bridge_set
+    )
+    return (
+        _canonical_internal_graph(len(roots), contracted_edges),
+        len(bridges),
+    )
+
+
+def _delete_internal_edge(graph: _InternalGraph, edge_index: int) -> _InternalGraph:
+    vertex_count, edges = graph
+    return _canonical_internal_graph(
+        vertex_count,
+        tuple(edge for index, edge in enumerate(edges) if index != edge_index),
+    )
+
+
+def _contract_internal_edge(graph: _InternalGraph, edge_index: int) -> _InternalGraph:
+    vertex_count, edges = graph
+    left, right = edges[edge_index]
+    if left == right:
+        raise ValueError("deletion/contraction requires a non-loop edge")
+
+    # The edge tuple is canonical, so right is the vertex removed from the axis.
+    def remap(vertex: int) -> int:
+        return vertex - (vertex > right)
+
+    contracted_edges = []
+    for index, (edge_left, edge_right) in enumerate(edges):
+        if index == edge_index:
+            continue
+        edge_left = left if edge_left == right else edge_left
+        edge_right = left if edge_right == right else edge_right
+        contracted_edges.append((remap(edge_left), remap(edge_right)))
+    return _canonical_internal_graph(vertex_count - 1, tuple(contracted_edges))
+
+
+def _polynomial_shift(polynomial: tuple[int, ...], amount: int) -> tuple[int, ...]:
+    return (0,) * amount + polynomial
+
+
+def _polynomial_add(left: tuple[int, ...], right: tuple[int, ...]) -> tuple[int, ...]:
+    size = max(len(left), len(right))
+    return tuple(
+        (left[index] if index < len(left) else 0)
+        + (right[index] if index < len(right) else 0)
+        for index in range(size)
+    )
+
+
+def _all_loop_subsets(loop_count: int) -> tuple[int, ...]:
+    return tuple(comb(loop_count, index) for index in range(loop_count + 1))
+
+
+def _deletion_contraction_profile(
+    graph: _InternalGraph,
+) -> tuple[tuple[int, ...], int]:
+    """Compute ``C_G(z)`` and the number of unique recursive states.
+
+    The recurrence is ``C_G = C_{G-e} + z C_{G/e}`` for a non-loop edge.
+    Bridge components are contracted together before branching; all such edges
+    are mandatory and therefore shift the profile by their count.
+    """
+
+    @cache
+    def solve(state: _InternalGraph) -> tuple[int, ...]:
+        vertex_count, edges = state
+        if vertex_count == 1:
+            return _all_loop_subsets(len(edges))
+        if not _internal_graph_is_connected(vertex_count, edges):
+            return (0,)
+
+        bridges = _internal_bridge_indices(vertex_count, edges)
+        if bridges:
+            reduced, bridge_count = _contract_bridges(state, bridges)
+            return _polynomial_shift(solve(reduced), bridge_count)
+
+        edge_index = next(
+            (index for index, (left, right) in enumerate(edges) if left != right),
+            None,
+        )
+        if edge_index is None:
+            return (0,)
+        deleted = solve(_delete_internal_edge(state, edge_index))
+        contracted = solve(_contract_internal_edge(state, edge_index))
+        return _polynomial_add(deleted, _polynomial_shift(contracted, 1))
+
+    profile = solve(graph)
+    return profile, solve.cache_info().currsize
+
+
+def _connected_spanning_subgraph_counts_with_work(
+    graph: SimpleUndirectedGraph,
+) -> tuple[tuple[int, ...], int]:
+    """Select the exact kernel and report its actual explored-state count."""
+
+    vertex_count = len(graph.vertices)
+    edge_count = len(graph.edges)
+    vertex_index = {vertex: index for index, vertex in enumerate(graph.vertices)}
+    indexed_edges = tuple(
+        (vertex_index[left], vertex_index[right]) for left, right in graph.edges
+    )
+    internal = _canonical_internal_graph(vertex_count, indexed_edges)
+    # The recursive kernel is materially cheaper once the profile has at least
+    # eight edge axes.  Keep the small exhaustive regime stable and explicit.
+    if edge_count >= 8:
+        profile, work = _deletion_contraction_profile(internal)
+        return profile + (0,) * (edge_count + 1 - len(profile)), work
+    bridge_indices = _internal_bridge_indices(vertex_count, internal[1])
+    if not _internal_graph_is_connected(vertex_count, internal[1]) or bridge_indices:
+        profile, work = _deletion_contraction_profile(internal)
+        return profile + (0,) * (edge_count + 1 - len(profile)), work
+    return _connected_spanning_subgraph_counts(graph), 1 << edge_count
+
+
 def _evaluate_reliability(
     counts: tuple[int, ...],
     open_probability: Fraction,
@@ -135,7 +374,7 @@ class AllTerminalReliabilityResult(StrictModel):
     """Exact probability with its bounded connected-subgraph profile.
 
     Deserialization checks the structural result envelope. The kernel uses
-    ``_from_kernel`` after its one complete enumeration.
+    ``_from_kernel`` after one exact profile computation.
     """
 
     model_config = ConfigDict(
@@ -165,7 +404,10 @@ class AllTerminalReliabilityResult(StrictModel):
     visited_states: StrictInt = Field(
         ge=1,
         le=MAX_ALL_TERMINAL_RELIABILITY_STATES,
-        description="The number of edge-subset states exhaustively visited, 2^m.",
+        description=(
+            "The number of unique edge-subset or deletion/contraction states "
+            "explored by the exact kernel; it is at most 2^m."
+        ),
     )
     event: Literal["ALL_VERTICES_CONNECTED"] = "ALL_VERTICES_CONNECTED"
 
@@ -221,10 +463,8 @@ class AllTerminalReliabilityResult(StrictModel):
             raise _validation_error(
                 "connected-spanning-subgraph count exceeds its bounded integer range"
             )
-        if self.visited_states != 1 << len(self.graph.edges):
-            raise _validation_error(
-                "visited_states does not match the complete edge powerset"
-            )
+        if self.visited_states > 1 << len(self.graph.edges):
+            raise _validation_error("visited_states exceeds the complete edge powerset")
         if not 0 <= self.reliability_probability.as_fraction() <= 1:
             raise _validation_error(
                 "all-terminal reliability result probability must lie in [0, 1]"
@@ -266,11 +506,11 @@ def _compute_all_terminal_reliability(
             code="probability.all_terminal_reliability_not_admitted",
             message=str(exc),
         ) from None
-    counts = _connected_spanning_subgraph_counts(graph)
+    counts, visited_states = _connected_spanning_subgraph_counts_with_work(graph)
     return (
         counts,
         _evaluate_reliability(counts, open_probability),
-        1 << len(graph.edges),
+        visited_states,
     )
 
 

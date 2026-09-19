@@ -300,15 +300,19 @@ def factorize_certified(
             input_bytes = encode_strict_json(
                 {"value": format_canonical_integer(request.value)}
             )
+            request_checkpoint("before certified factorization worker startup")
+            worker_timeout = deadline - monotonic()
+            if worker_timeout <= 0:
+                request_checkpoint("before certified factorization worker startup")
             completed = run_bounded_process(
                 [sys.executable, str(_CERTIFIED_FACTORIZATION_WORKER)],
                 input_bytes=input_bytes,
-                timeout_seconds=_FACTORIZATION_WORKER_TIMEOUT_SECONDS,
+                timeout_seconds=worker_timeout,
                 environment=worker_environment(locale="C.UTF-8"),
                 stdout_limit=1024 * 1024,
                 stderr_limit=64 * 1024,
                 resource_limits=ProcessResourceLimits(
-                    cpu_seconds=math.ceil(_FACTORIZATION_WORKER_TIMEOUT_SECONDS),
+                    cpu_seconds=max(1, math.ceil(worker_timeout)),
                     address_space_bytes=_FACTORIZATION_WORKER_ADDRESS_SPACE_BYTES,
                     file_size_bytes=_FACTORIZATION_WORKER_FILE_SIZE_BYTES,
                 ),
@@ -403,19 +407,40 @@ def _bounded_direct_factorization(  # noqa: C901
                 )
             )
 
+    execution = current_request_execution()
+    if execution is not None and execution.deadline is not None:
+        remaining = execution.deadline - monotonic()
+        if remaining <= 0:
+            failed("REQUEST_DEADLINE_EXPIRED", "REQUEST_DEADLINE")
+            if failure is None:
+                raise OperationExecutionTimeoutError(
+                    "request deadline expired before factorization worker startup"
+                )
+            return None
+        timeout_seconds = min(timeout_seconds, remaining)
+
     try:
         with TemporaryDirectory(prefix="jacobian-direct-factor-") as worker_directory:
+            input_bytes = encode_strict_json({"value": format_canonical_integer(value)})
+            if execution is not None and execution.deadline is not None:
+                remaining = execution.deadline - monotonic()
+                if remaining <= 0:
+                    failed("REQUEST_DEADLINE_EXPIRED", "REQUEST_DEADLINE")
+                    if failure is None:
+                        raise OperationExecutionTimeoutError(
+                            "request deadline expired before factorization worker startup"
+                        )
+                    return None
+                timeout_seconds = min(timeout_seconds, remaining)
             completed = run_bounded_process(
                 [sys.executable, str(_DIRECT_FACTORIZATION_WORKER)],
-                input_bytes=encode_strict_json(
-                    {"value": format_canonical_integer(value)}
-                ),
+                input_bytes=input_bytes,
                 timeout_seconds=timeout_seconds,
                 environment=worker_environment(locale="C.UTF-8"),
                 stdout_limit=64 * 1024,
                 stderr_limit=64 * 1024,
                 resource_limits=ProcessResourceLimits(
-                    cpu_seconds=math.ceil(timeout_seconds),
+                    cpu_seconds=max(1, math.ceil(timeout_seconds)),
                     address_space_bytes=_FACTORIZATION_WORKER_ADDRESS_SPACE_BYTES,
                     file_size_bytes=_FACTORIZATION_WORKER_FILE_SIZE_BYTES,
                 ),

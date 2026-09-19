@@ -350,3 +350,27 @@ def test_shared_process_change_selects_both_exact_runtime_suites() -> None:
     assert plan.boundary_lanes == ("process",)
     assert plan.run_singular is True
     assert plan.run_qepcad is True
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "src/jacobian/math/number_theory/_factorization_kernels.py",
+        "src/jacobian/math/finite_fields/_fixed_subspace_process.py",
+        "src/jacobian/math/finite_fields/_fixed_subspace_worker.py",
+    ],
+)
+def test_owner_local_process_kernels_select_process_boundary(path: str) -> None:
+    plan = _plan([path])
+
+    assert plan.run_math is True
+    assert plan.boundary_lanes == ("process",)
+
+
+def test_backend_runtime_lanes_do_not_duplicate_generic_process_lane() -> None:
+    plan = _plan(
+        ["src/jacobian/math/polynomials/real_algebra/_qepcad_plane_process.py"]
+    )
+
+    assert plan.run_qepcad is True
+    assert plan.boundary_lanes == ()

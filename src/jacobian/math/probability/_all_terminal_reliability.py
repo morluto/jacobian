@@ -30,9 +30,10 @@ class AllTerminalReliabilityRequest(StrictModel):
                 "Compute all-terminal reliability for one nonempty canonical "
                 "simple undirected graph. Every edge is independently open with "
                 "the same exact rational `open_probability`. The graph may have "
-                "at most 20 edges, bounding each complete enumeration to 2^20 "
-                "states. The exact coefficient profile is bounded by the same "
-                "finite edge-subset family."
+                "at most 20 edges, bounding the complete edge-subset family to "
+                "2^20 states. The exact coefficient profile is bounded by the "
+                "same finite edge-subset family; the kernel may use an exact "
+                "deletion/contraction reduction within that bound."
             )
         }
     )
@@ -41,7 +42,8 @@ class AllTerminalReliabilityRequest(StrictModel):
         description=(
             "Nonempty canonical simple undirected graph with at most 20 edges. "
             "Isolated declared vertices participate in the all-terminal event. "
-            "The complete coefficient profile has at most 21 entries."
+            "The complete coefficient profile has at most 21 entries; exact "
+            "presolve and deletion/contraction may avoid enumerating every state."
         )
     )
     open_probability: CanonicalRational = Field(

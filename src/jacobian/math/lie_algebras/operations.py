@@ -3,17 +3,25 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import dataclass
 from fractions import Fraction
 from typing import Any
 
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.canonical import decimal_digit_width
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.lie_algebras._models import (
+    MAX_BRACKET_RESULT_COEFFICIENT_DIGITS,
+    MAX_BRACKET_WORK,
     MAX_ELEMENT_COEFFICIENT_DIGITS,
     MAX_LIE_DIMENSION,
     MAX_STRUCTURE_COEFFICIENT_DIGITS,
+    MAX_STRUCTURE_NONZEROS,
     BracketPairContribution,
     FiniteDimensionalLieAlgebra,
     IdealViolationWitness,
@@ -32,6 +40,25 @@ from jacobian.math.matrices.values import (
     RationalMatrix,
     rational_matrix_from_fractions,
 )
+
+
+@dataclass(frozen=True, slots=True)
+class _BracketPairPlan:
+    """One admitted nonzero basis-pair contribution."""
+
+    i: int
+    j: int
+    pair_coefficient: Fraction
+    terms: tuple[tuple[int, Fraction], ...]
+
+
+@dataclass(frozen=True, slots=True)
+class _BracketPlan:
+    """Exact pair products retained between admission and result construction."""
+
+    pairs: tuple[_BracketPairPlan, ...]
+    totals: tuple[Fraction, ...]
+    work: int
 
 
 def _as_algebra(
@@ -81,8 +108,28 @@ def _bracket_table(
     return table
 
 
-def _admit_lie_algebra(algebra: FiniteDimensionalLieAlgebra) -> None:
+def _admit_lie_algebra(
+    algebra: FiniteDimensionalLieAlgebra,
+) -> dict[tuple[int, int], dict[int, Fraction]]:
     """Establish antisymmetry and every basis-triple Jacobi identity."""
+    if not 1 <= len(algebra.basis) <= MAX_LIE_DIMENSION:
+        raise OperationResourceAdmissionError(
+            location=("algebra", "basis"),
+            code="lie_algebra.dimension_bound",
+            message=(
+                "the Lie algebra dimension must stay within the admitted "
+                f"1..{MAX_LIE_DIMENSION} basis bound"
+            ),
+        )
+    if len(algebra.structure_constants) > MAX_STRUCTURE_NONZEROS:
+        raise OperationResourceAdmissionError(
+            location=("algebra", "structure_constants"),
+            code="lie_algebra.structure_constant_bound",
+            message=(
+                "the Lie algebra exceeds the admitted sparse structure-constant "
+                f"bound of {MAX_STRUCTURE_NONZEROS}"
+            ),
+        )
     for index, constant in enumerate(algebra.structure_constants):
         _run_admission(
             lambda constant=constant: require_bounded_rational(
@@ -121,14 +168,38 @@ def _admit_lie_algebra(algebra: FiniteDimensionalLieAlgebra) -> None:
                         code="lie_algebra.jacobi_identity",
                         message="structure constants must satisfy the Jacobi identity",
                     )
+    return table
+
+
+def _require_fraction_bound(
+    value: Fraction,
+    *,
+    label: str,
+    location: tuple[str | int, ...],
+) -> None:
+    """Admit one derived rational before canonical result allocation."""
+
+    if (
+        decimal_digit_width(value.numerator) > MAX_BRACKET_RESULT_COEFFICIENT_DIGITS
+        or decimal_digit_width(value.denominator)
+        > MAX_BRACKET_RESULT_COEFFICIENT_DIGITS
+    ):
+        raise OperationResourceAdmissionError(
+            location=location,
+            code="lie_algebra.bracket.result_height_bound",
+            message=(
+                f"{label} exceeds the admitted "
+                f"{MAX_BRACKET_RESULT_COEFFICIENT_DIGITS}-digit canonical bound"
+            ),
+        )
 
 
 def _admit_bracket_operands(
     algebra: FiniteDimensionalLieAlgebra,
     left: LieAlgebraElement,
     right: LieAlgebraElement,
-) -> None:
-    _admit_lie_algebra(algebra)
+) -> _BracketPlan:
+    table = _admit_lie_algebra(algebra)
     if left.basis != algebra.basis or right.basis != algebra.basis:
         raise OperationDomainValidationError(
             location=("left",),
@@ -146,6 +217,68 @@ def _admit_bracket_operands(
                 location=(label, "coordinates", index),
             )
 
+    dimension = len(algebra.basis)
+    left_coords = tuple(coordinate.as_fraction() for coordinate in left.coordinates)
+    right_coords = tuple(coordinate.as_fraction() for coordinate in right.coordinates)
+    totals = [Fraction(0)] * dimension
+    pairs: list[_BracketPairPlan] = []
+    ledger_terms = 0
+    for first in range(dimension):
+        for second in range(first + 1, dimension):
+            pair = (
+                left_coords[first] * right_coords[second]
+                - left_coords[second] * right_coords[first]
+            )
+            if pair == 0:
+                continue
+            _require_fraction_bound(
+                pair,
+                label="bracket pair coefficient",
+                location=("left", "right", "pair_coefficient"),
+            )
+            row_terms: list[tuple[int, Fraction]] = []
+            for target, value in sorted(table.get((first, second), {}).items()):
+                scaled = pair * value
+                _require_fraction_bound(
+                    scaled,
+                    label="scaled structure constant",
+                    location=("ledger", len(pairs), "terms", len(row_terms)),
+                )
+                totals[target] += scaled
+                row_terms.append((target, scaled))
+            if not row_terms:
+                continue
+            ledger_terms += len(row_terms)
+            pairs.append(
+                _BracketPairPlan(
+                    i=first,
+                    j=second,
+                    pair_coefficient=pair,
+                    terms=tuple(row_terms),
+                )
+            )
+            if len(pairs) > len(algebra.basis) * (len(algebra.basis) - 1) // 2:
+                raise OperationResourceAdmissionError(
+                    location=("ledger",),
+                    code="lie_algebra.bracket.ledger_rows_bound",
+                    message="the complete bracket ledger exceeds its row bound",
+                )
+
+    for index, total in enumerate(totals):
+        _require_fraction_bound(
+            total,
+            label="bracket coordinate",
+            location=("bracket", "coordinates", index),
+        )
+    work = 2 * (dimension * (dimension - 1) // 2) + 2 * ledger_terms
+    if work > MAX_BRACKET_WORK:
+        raise OperationResourceAdmissionError(
+            location=("ledger",),
+            code="lie_algebra.bracket.work_bound",
+            message="bracket expansion exceeds its derived arithmetic-work bound",
+        )
+    return _BracketPlan(pairs=tuple(pairs), totals=tuple(totals), work=work)
+
 
 def lie_bracket(
     algebra: FiniteDimensionalLieAlgebra | Mapping[str, Any],
@@ -156,46 +289,34 @@ def lie_bracket(
     algebra_value = _as_algebra(algebra)
     left_value = _as_element(left)
     right_value = _as_element(right)
-    _admit_bracket_operands(algebra_value, left_value, right_value)
-    dimension = len(algebra_value.basis)
-    table = _bracket_table(algebra_value)
-    left_coords = [coordinate.as_fraction() for coordinate in left_value.coordinates]
-    right_coords = [coordinate.as_fraction() for coordinate in right_value.coordinates]
-    totals = [Fraction(0)] * dimension
+    plan = _admit_bracket_operands(algebra_value, left_value, right_value)
     ledger: list[BracketPairContribution] = []
-    for first in range(dimension):
-        for second in range(first + 1, dimension):
-            pair = (
-                left_coords[first] * right_coords[second]
-                - left_coords[second] * right_coords[first]
-            )
-            if pair == 0:
-                continue
-            row_terms: list[StructureConstant] = []
-            for target, value in sorted(table.get((first, second), {}).items()):
-                scaled = pair * value
-                totals[target] += scaled
-                row_terms.append(
-                    StructureConstant.model_construct(
-                        i=first,
-                        j=second,
-                        k=target,
-                        coefficient=CanonicalRational.from_fraction(scaled),
-                    )
-                )
-            if not row_terms:
-                continue
-            ledger.append(
-                BracketPairContribution.model_construct(
-                    i=first,
-                    j=second,
-                    pair_coefficient=CanonicalRational.from_fraction(pair),
-                    terms=tuple(row_terms),
+    for pair_plan in plan.pairs:
+        row_terms: list[StructureConstant] = []
+        for target, scaled in pair_plan.terms:
+            row_terms.append(
+                StructureConstant.model_construct(
+                    i=pair_plan.i,
+                    j=pair_plan.j,
+                    k=target,
+                    coefficient=CanonicalRational.from_fraction(scaled),
                 )
             )
+        ledger.append(
+            BracketPairContribution.model_construct(
+                i=pair_plan.i,
+                j=pair_plan.j,
+                pair_coefficient=CanonicalRational.from_fraction(
+                    pair_plan.pair_coefficient
+                ),
+                terms=tuple(row_terms),
+            )
+        )
     bracket = LieAlgebraElement.model_construct(
         basis=algebra_value.basis,
-        coordinates=tuple(CanonicalRational.from_fraction(value) for value in totals),
+        coordinates=tuple(
+            CanonicalRational.from_fraction(value) for value in plan.totals
+        ),
     )
     return LieBracketResult._from_kernel(
         algebra_value,

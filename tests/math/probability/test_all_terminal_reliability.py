@@ -25,6 +25,7 @@ from jacobian.math.probability._graph_connection_probability import (
 )
 from jacobian.math.probability.all_terminal_reliability import (
     MAX_ALL_TERMINAL_RELIABILITY_EDGES,
+    _deletion_contraction_profile,
     all_terminal_reliability,
 )
 
@@ -225,7 +226,14 @@ def test_successful_compute_enumerates_each_edge_subset_once(
 
     graph = _graph(
         ("a", "b", "c", "d"),
-        (("a", "b"), ("a", "c"), ("a", "d"), ("b", "c")),
+        (
+            ("a", "b"),
+            ("a", "c"),
+            ("a", "d"),
+            ("b", "c"),
+            ("b", "d"),
+            ("c", "d"),
+        ),
     )
     call_count = 0
     original = cast(
@@ -306,7 +314,7 @@ def test_request_rejects_outside_complete_domain(
         compute_all_terminal_reliability(request)
 
 
-def test_operation_executes_the_twenty_edge_enumeration_boundary() -> None:
+def test_operation_executes_the_twenty_edge_boundary_with_exact_presolve() -> None:
     vertices = tuple(f"v{index:02d}" for index in range(21))
     request = AllTerminalReliabilityRequest(
         graph=_graph(
@@ -323,7 +331,61 @@ def test_operation_executes_the_twenty_edge_enumeration_boundary() -> None:
         1,
     )
     assert result.reliability_probability.as_fraction() == Fraction(1, 1 << 20)
-    assert result.visited_states == 1 << 20
+    assert result.visited_states < 1 << 20
+
+
+def test_disconnected_twenty_edge_source_is_presolved_without_subset_search() -> None:
+    vertices = tuple(f"v{index:02d}" for index in range(22))
+    graph = _graph(
+        vertices,
+        tuple((vertices[index], vertices[index + 1]) for index in range(20)),
+    )
+
+    result = all_terminal_reliability(graph, Fraction(1, 2))
+
+    assert result.connected_spanning_subgraph_counts == (0,) + (0,) * 20
+    assert result.reliability_probability.as_fraction() == 0
+    assert result.visited_states == 1
+
+
+def test_sparse_large_vertex_carrier_does_not_recurse_through_vertices() -> None:
+    vertices = tuple(f"v{index:05d}" for index in range(12_256))
+    graph = _graph(
+        vertices,
+        tuple((vertices[index], vertices[index + 1]) for index in range(20)),
+    )
+
+    result = all_terminal_reliability(graph, Fraction(1, 2))
+
+    assert result.connected_spanning_subgraph_counts == (0,) * 21
+    assert result.reliability_probability.as_fraction() == 0
+    assert result.visited_states == 1
+
+
+def test_bridge_profile_is_shifted_by_mandatory_edges() -> None:
+    graph = _graph(
+        ("a", "b", "c", "d", "e"),
+        (
+            ("a", "b"),
+            ("b", "c"),
+            ("c", "d"),
+            ("a", "d"),
+            ("d", "e"),
+        ),
+    )
+
+    result = all_terminal_reliability(graph, Fraction(1, 2))
+
+    assert result.connected_spanning_subgraph_counts == (0, 0, 0, 0, 4, 1)
+    assert result.visited_states < 1 << len(graph.edges)
+
+
+def test_internal_contraction_retains_parallel_edges_and_created_loops() -> None:
+    # Contracting one of two parallel edges creates one loop.  The loop has an
+    # independent absent/present choice, so the resulting profile is (0, 2, 1).
+    profile, _ = _deletion_contraction_profile((2, ((0, 1), (0, 1))))
+
+    assert profile == (0, 2, 1)
 
 
 def test_request_allows_more_vertices_when_the_state_space_is_small() -> None:

@@ -19,6 +19,10 @@ MAX_POLYNOMIAL_VARIABLES = 8
 MAX_POLYNOMIAL_TERMS = 4_096
 MAX_POLYNOMIAL_EXPONENT = 32_768
 MAX_RATIONAL_FUNCTION_TERMS = 256
+# The wire value carrier is intentionally wider than the default operation
+# envelope.  Owners must pass their own admitted exponent below rather than
+# inheriting this representability limit as a work budget.
+MAX_RATIONAL_FUNCTION_REPRESENTATION_EXPONENT = 128
 MAX_RATIONAL_FUNCTION_EXPONENT = 64
 MAX_RATIONAL_FUNCTION_COEFFICIENT_DIGITS = 128
 
@@ -310,7 +314,7 @@ def _require_rational_function_shapes(value: RationalFunction) -> None:
         require_sparse_polynomial_budget(
             polynomial,
             maximum_terms=MAX_RATIONAL_FUNCTION_TERMS,
-            maximum_exponent=MAX_RATIONAL_FUNCTION_EXPONENT,
+            maximum_exponent=MAX_RATIONAL_FUNCTION_REPRESENTATION_EXPONENT,
             maximum_coefficient_digits=MAX_RATIONAL_FUNCTION_COEFFICIENT_DIGITS,
             label=f"rational-function {label}",
         )
@@ -530,6 +534,7 @@ __all__ = [
     "MAX_POLYNOMIAL_VARIABLES",
     "MAX_RATIONAL_FUNCTION_COEFFICIENT_DIGITS",
     "MAX_RATIONAL_FUNCTION_EXPONENT",
+    "MAX_RATIONAL_FUNCTION_REPRESENTATION_EXPONENT",
     "MAX_RATIONAL_FUNCTION_TERMS",
     "MonicPolynomial",
     "PolynomialVariable",

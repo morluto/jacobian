@@ -12,6 +12,10 @@ from fractions import Fraction
 from functools import lru_cache
 
 MAX_ARITHMETIC_ORDER = 60
+# For the supported arithmetic orders every cyclotomic polynomial coefficient
+# has at most one decimal digit.  This is an admission constant as well as a
+# checked backend-envelope fact: extending the order envelope must revisit it.
+MAX_CYCLOTOMIC_REDUCTION_COEFFICIENT_DIGITS = 1
 
 
 def euler_phi(order: int) -> int:
@@ -156,6 +160,7 @@ def value_from_power(order: int, exponent: int) -> tuple[Fraction, ...]:
 
 __all__ = [
     "MAX_ARITHMETIC_ORDER",
+    "MAX_CYCLOTOMIC_REDUCTION_COEFFICIENT_DIGITS",
     "add_values",
     "conjugate_value",
     "cyclotomic_polynomial",

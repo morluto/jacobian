@@ -6,7 +6,10 @@ from collections.abc import Iterable
 from fractions import Fraction
 from typing import Any
 
+import pytest
+
 from jacobian._exact import CanonicalRational
+from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.matrices.canonical_forms.operations import (
     centralizer_basis,
     decide_similarity,
@@ -87,6 +90,23 @@ def test_centralizer_dimensions() -> None:
     assert centralizer_basis(_matrix(((2, 0), (0, 2)))).dimension == 4
     # Nontrivial Jordan block: dimension 2.
     assert centralizer_basis(_matrix(((2, 1), (0, 2)))).dimension == 2
+    # Equal diagonal entries form a full matrix block, independently of the
+    # distinct third eigenspace.
+    assert centralizer_basis(_matrix(((2, 0, 0), (0, 2, 0), (0, 0, 3)))).dimension == 5
+
+
+def test_centralizer_two_by_two_maximum_height_uses_i_a_basis() -> None:
+    scalar = 10**255
+    matrix = _matrix(((scalar, scalar - 1), (0, scalar)))
+    result = centralizer_basis(matrix)
+
+    assert result.dimension == 2
+    assert len(result.basis) == 2
+    assert result.basis[0] == _matrix(((1, 0), (0, 1)))
+    assert result.basis[1] == matrix
+    # The nonzero off-diagonal entry proves I and A are linearly independent.
+    assert result.basis[1].entries[0][1].num == scalar - 1
+    _assert_centralizer_commutes(matrix, result.basis)
 
 
 def test_centralizer_basis_commutes() -> None:
@@ -106,6 +126,87 @@ def test_centralizer_basis_commutes() -> None:
             for i in range(2)
         ]
         assert left == right
+
+
+def _assert_centralizer_commutes(
+    matrix: RationalMatrix, basis: Iterable[RationalMatrix]
+) -> None:
+    source = [
+        [Fraction(value.num, value.den) for value in row] for row in matrix.entries
+    ]
+    for basis_matrix in basis:
+        other = [
+            [Fraction(value.num, value.den) for value in row]
+            for row in basis_matrix.entries
+        ]
+        assert _multiply(source, other) == _multiply(other, source)
+
+
+def test_centralizer_nine_by_nine_jordan_kernel_is_exact() -> None:
+    size = 9
+    matrix = _matrix(
+        tuple(
+            tuple(1 if column == row + 1 else 0 for column in range(size))
+            for row in range(size)
+        )
+    )
+    result = centralizer_basis(matrix)
+
+    assert result.dimension == size
+    assert len(result.basis) == size
+    _assert_centralizer_commutes(matrix, result.basis)
+
+
+def test_centralizer_sixteen_by_sixteen_jordan_kernel_is_exact() -> None:
+    size = 16
+    matrix = _matrix(
+        tuple(
+            tuple(1 if column == row + 1 else 0 for column in range(size))
+            for row in range(size)
+        )
+    )
+    result = centralizer_basis(matrix)
+
+    assert result.dimension == size
+    assert len(result.basis) == size
+    _assert_centralizer_commutes(matrix, result.basis)
+
+
+def test_centralizer_sixteen_by_sixteen_scalar_reaches_maximum_output() -> None:
+    size = 16
+    scalar = 10**255
+    matrix = _matrix(
+        tuple(
+            tuple(scalar if row == column else 0 for column in range(size))
+            for row in range(size)
+        )
+    )
+    result = centralizer_basis(matrix)
+
+    assert result.dimension == size * size
+    assert len(result.basis) == size * size
+    _assert_centralizer_commutes(matrix, result.basis)
+
+
+def test_centralizer_general_maximum_height_is_admitted_before_flint() -> None:
+    size = 16
+    scalar = 10**255
+    matrix = _matrix(
+        tuple(
+            tuple(
+                scalar
+                if row == column
+                else scalar - 1
+                if column == (row + 1) % size
+                else 0
+                for column in range(size)
+            )
+            for row in range(size)
+        )
+    )
+
+    with pytest.raises(OperationResourceAdmissionError, match="exact RREF work"):
+        centralizer_basis(matrix)
 
 
 def _multiply(

@@ -9,9 +9,13 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.canonical import encode_strict_json
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.logic import term_rewriting
 from jacobian.math.logic.term_rewriting import _kernel as operations_module
+from jacobian.math.logic.term_rewriting import operations as public_operations
 from jacobian.math.logic.term_rewriting._kernel import (
     _bounded_unify,
     _MaterializationBudget,
@@ -53,9 +57,14 @@ from jacobian.math.logic.term_rewriting._tools import (
     compute_unification,
 )
 from jacobian.math.logic.term_rewriting.values import (
+    MAX_CRITICAL_PAIR_CANDIDATE_WORK,
     MAX_CRITICAL_PAIR_CANDIDATES,
     MAX_CRITICAL_PAIR_RESULT_NODES,
+    MAX_NORMAL_FORM_RESULT_NODES,
+    MAX_REWRITE_APPLICATIONS,
+    MAX_SUBSTITUTION_BINDINGS,
     MAX_TERM_DEPTH,
+    MAX_TERM_NODES,
     MAX_VARIABLE_LABEL,
     RankedSignature,
     RewriteRule,
@@ -1543,6 +1552,143 @@ class TestDeepTermTraversal:
 
 
 class TestValidation:
+    def test_rewrite_result_envelope_preflights_all_application_modes(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # A depth-nine ternary RHS has 3,280 nodes, below the per-term bound.
+        # Retaining it across 64 admitted rules exceeds the result envelope;
+        # neither ALL_APPLICABLE nor SELECTED_STEP may enter the kernel first.
+        rhs = _complete_tree(1, _app(2), 3, 7)
+        rules = tuple(RewriteRule(lhs=_app(0, _var(0)), rhs=rhs) for _ in range(64))
+        term = _app(0, _app(2))
+
+        def no_rewrite(*_args: object, **_kwargs: object) -> object:
+            raise AssertionError("rewrite materialization must be preflighted")
+
+        monkeypatch.setattr(public_operations, "rewrite_steps", no_rewrite)
+        monkeypatch.setattr(public_operations, "selected_rewrite_step", no_rewrite)
+        for selection in (None, _selection((), 0)):
+            with pytest.raises(OperationResourceAdmissionError) as caught:
+                compute_rewrite_step(
+                    RewriteStepRequest(
+                        signature=_signature(1, 3, 0),
+                        term=term,
+                        rules=rules,
+                        selection=selection,
+                    )
+                )
+            assert caught.value.errors()[0]["type"] == "term_rewriting.result_nodes"
+
+    def test_substitution_result_envelope_preflights_all_retained_bindings(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # Exactly 32 bindings are allowed, but retaining 32 large values plus
+        # the source and substituted result exceeds the aggregate envelope.
+        replacement = _complete_tree(1, _app(2), 3, 7)
+        substitution = Substitution(
+            mapping=dict.fromkeys(range(MAX_SUBSTITUTION_BINDINGS), replacement)
+        )
+        request = SubstitutionRequest(
+            signature=_signature(1, 3, 0),
+            term=_var(0),
+            substitution=substitution,
+        )
+
+        def no_apply(*_args: object, **_kwargs: object) -> object:
+            raise AssertionError("substitution materialization must be preflighted")
+
+        monkeypatch.setattr(public_operations, "apply_substitution", no_apply)
+        with pytest.raises(OperationResourceAdmissionError) as caught:
+            compute_substitution(request)
+        assert caught.value.errors()[0]["type"] == "term_rewriting.result_nodes"
+
+    def test_bushy_term_total_nodes_are_admitted_before_kernel_work(self) -> None:
+        # A depth-four 16-ary tree is shallow but has 4,369 structural nodes;
+        # depth alone must not be the only public work guard.
+        term = _complete_tree(0, _app(1), 16, 3)
+        assert _term_node_count(term) > MAX_TERM_NODES
+        with _validation_error("term_rewriting.term_nodes"):
+            compute_substitution(
+                SubstitutionRequest(
+                    signature=RankedSignature(arities=(16, 0)),
+                    term=term,
+                    substitution=Substitution(),
+                )
+            )
+
+    def test_substitution_binding_count_is_admitted_before_application(self) -> None:
+        mapping = {index: _app(0) for index in range(MAX_SUBSTITUTION_BINDINGS + 1)}
+        with pytest.raises(OperationDomainValidationError) as caught:
+            compute_substitution(
+                SubstitutionRequest(
+                    signature=_signature(0),
+                    term=_var(0),
+                    substitution=Substitution(mapping=mapping),
+                )
+            )
+        assert caught.value.errors()[0]["type"] == (
+            "term_rewriting.substitution_bindings"
+        )
+
+    def test_positions_times_rules_work_is_admitted_before_enumeration(self) -> None:
+        term = _complete_tree(0, _app(1), 16, 2)
+        rules = tuple(
+            RewriteRule(
+                lhs=_app(0, *[_var(index * 16 + child) for child in range(16)]),
+                rhs=_var(index * 16),
+            )
+            for index in range(16)
+        )
+        assert _term_node_count(term) * len(rules) > MAX_REWRITE_APPLICATIONS
+        with pytest.raises(OperationDomainValidationError) as caught:
+            compute_rewrite_step(
+                RewriteStepRequest(
+                    signature=RankedSignature(arities=(16, 0)),
+                    term=term,
+                    rules=rules,
+                )
+            )
+        assert caught.value.errors()[0]["type"] == "term_rewriting.application_work"
+
+    def test_critical_pair_candidate_work_has_a_distinct_bound(self) -> None:
+        # Keep the candidate count under its cardinality bound while making
+        # each candidate retain a large source-side RHS. Candidate work must
+        # reject before overlap/result machinery materializes it.
+        rhs = _complete_tree(6, _app(7), 3, 9)
+        rules = tuple(
+            RewriteRule(lhs=_app(index, _var(index)), rhs=rhs) for index in range(6)
+        )
+        assert (
+            len(rules) * sum(len(_nonvariable_positions(rule.lhs)) for rule in rules)
+            - len(rules)
+            <= MAX_CRITICAL_PAIR_CANDIDATES
+        )
+        assert 30 * 2 * _term_node_count(rhs) > MAX_CRITICAL_PAIR_CANDIDATE_WORK
+        with _validation_error("term_rewriting.critical_pair_source"):
+            _run_critical_pairs(
+                signature=RankedSignature(arities=(1, 1, 1, 1, 1, 1, 3, 0)),
+                rules=rules,
+            )
+
+    def test_normal_form_cumulative_result_nodes_are_bounded(self) -> None:
+        rule = RewriteRule(lhs=_app(0, _var(0)), rhs=_app(0, _var(0)))
+        term = _app(0, _app(1))
+        rules = (rule,) * 64
+        # The operation must account for the complete bounded prefix, not just
+        # the final term and open next step.
+        with pytest.raises(OperationDomainValidationError) as caught:
+            compute_normal_form(
+                NormalFormRequest(
+                    signature=_signature(1, 0),
+                    term=term,
+                    rules=rules,
+                    strategy="LEFTMOST_OUTERMOST_RULE_ORDER",
+                    max_steps=1000,
+                )
+            )
+        assert caught.value.errors()[0]["type"] == "term_rewriting.normal_form_bound"
+        assert MAX_NORMAL_FORM_RESULT_NODES > 0
+
     def test_public_terms_must_use_one_ranked_signature(self) -> None:
         with _validation_error("term_rewriting.signature_arity"):
             compute_unification(

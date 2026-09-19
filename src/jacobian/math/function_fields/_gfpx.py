@@ -8,8 +8,14 @@ of the zero polynomial and one.  Every routine is exact modular arithmetic.
 
 from __future__ import annotations
 
+from jacobian._execution import (
+    BackendFailureReason,
+    OperationBackendError,
+)
+
 RF = tuple[tuple[int, ...], tuple[int, ...]]
 KPoly = tuple[RF, ...]
+MPolyTerms = dict[tuple[int, ...], int]
 
 ZERO_POLY: tuple[int, ...] = ()
 ONE_POLY: tuple[int, ...] = (1,)
@@ -239,6 +245,127 @@ def rf_evaluate(value: RF, point: int, prime: int) -> int | None:
     return (numerator * pow(denominator, prime - 2, prime)) % prime
 
 
+def _poly_lcm(
+    left: tuple[int, ...], right: tuple[int, ...], prime: int
+) -> tuple[int, ...]:
+    """Return the monic polynomial lcm in ``GF(prime)[x]``."""
+
+    if not left or not right:
+        return ZERO_POLY
+    common = poly_gcd(left, right, prime)
+    quotient, remainder = poly_divmod(left, common, prime)
+    if remainder:
+        raise ArithmeticError("polynomial lcm encountered a non-exact quotient")
+    return poly_monic(poly_mul(quotient, right, prime), prime)
+
+
+def _poly_content(
+    polynomials: tuple[tuple[int, ...], ...], prime: int
+) -> tuple[int, ...]:
+    """Return the monic gcd of nonzero coefficient polynomials."""
+
+    content: tuple[int, ...] = ZERO_POLY
+    for polynomial in polynomials:
+        if not polynomial:
+            continue
+        content = polynomial if not content else poly_gcd(content, polynomial, prime)
+        if content == ONE_POLY:
+            break
+    return poly_monic(content, prime) if content else content
+
+
+def _primitive_polynomial_terms(kpoly: KPoly, prime: int) -> MPolyTerms:
+    """Clear denominators and content from a ``GF(p)(x)[y]`` polynomial.
+
+    The returned sparse polynomial is primitive in ``GF(p)[x,y]``.  A monic
+    denominator is retained by the rational-function canonicalizer, so the
+    lcm is canonical up to the harmless nonzero constant that Gauss' lemma
+    permits.
+    """
+
+    denominator: tuple[int, ...] = ONE_POLY
+    for numerator, denominator_part in kpoly:
+        if numerator:
+            denominator = _poly_lcm(denominator, denominator_part, prime)
+    if not denominator:
+        raise ArithmeticError("defining polynomial has no nonzero coefficient")
+
+    cleared: list[tuple[int, ...]] = []
+    for numerator, denominator_part in kpoly:
+        quotient, remainder = poly_divmod(denominator, denominator_part, prime)
+        if remainder:
+            raise ArithmeticError(
+                "common denominator was not divisible by a coefficient denominator"
+            )
+        cleared.append(poly_mul(numerator, quotient, prime))
+    content = _poly_content(tuple(cleared), prime)
+    if not content:
+        raise ArithmeticError("defining polynomial is zero")
+
+    primitive: list[tuple[int, ...]] = []
+    for coefficient in cleared:
+        quotient, remainder = poly_divmod(coefficient, content, prime)
+        if remainder:
+            raise ArithmeticError("coefficient content was not exact")
+        primitive.append(quotient)
+
+    terms: MPolyTerms = {}
+    for y_degree, coefficient in enumerate(primitive):
+        for x_degree, value in enumerate(coefficient):
+            residue = value % prime
+            if residue:
+                terms[(x_degree, y_degree)] = residue
+    if not terms or not any(y_degree for _, y_degree in terms):
+        raise ArithmeticError("primitive polynomial lost its positive y degree")
+    return terms
+
+
+def is_irreducible_over_rational_function(kpoly: KPoly, prime: int) -> bool:
+    """Factor a bounded primitive lift over ``GF(prime)[x,y]``.
+
+    Clearing denominators and removing ``GF(prime)[x]`` content is exact by
+    Gauss' lemma.  FLINT's multivariate factorization is used only after that
+    normalization; the product is reconstructed in the same context before
+    the factor count is interpreted.  A backend failure is deliberately not
+    converted into a negative irreducibility claim by the caller.
+    """
+
+    try:
+        terms = _primitive_polynomial_terms(kpoly, prime)
+    except OperationBackendError:
+        raise
+    except (ArithmeticError, TypeError, ValueError) as exc:
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT) from exc
+    try:
+        from flint import nmod_mpoly_ctx
+    except (ImportError, ModuleNotFoundError, AttributeError) as exc:
+        raise OperationBackendError(BackendFailureReason.INITIALIZATION) from exc
+
+    try:
+        context = nmod_mpoly_ctx.get(("x", "y"), modulus=prime)
+        source = context.from_dict(terms)
+        unit, factors = source.factor()
+        reconstructed = context.constant(unit)
+        for factor, exponent in factors:
+            reconstructed *= factor ** int(exponent)
+        if reconstructed != source:
+            raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+
+        nonconstant: list[tuple[object, int]] = []
+        for factor, exponent in factors:
+            factor_terms = factor.to_dict()
+            if len(factor_terms) == 1 and next(iter(factor_terms)) == (0, 0):
+                continue
+            if max(term[1] for term in factor_terms) == 0:
+                raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+            nonconstant.append((factor, int(exponent)))
+        return len(nonconstant) == 1 and nonconstant[0][1] == 1
+    except OperationBackendError:
+        raise
+    except Exception as exc:
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT) from exc
+
+
 def _poly_evaluate(poly: tuple[int, ...], point: int, prime: int) -> int:
     result = 0
     for coefficient in reversed(poly):
@@ -384,6 +511,7 @@ __all__ = [
     "ZERO_RF",
     "KPoly",
     "is_irreducible_over_gf",
+    "is_irreducible_over_rational_function",
     "kp_add",
     "kp_derivative",
     "kp_divmod",

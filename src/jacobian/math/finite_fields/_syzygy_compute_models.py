@@ -19,6 +19,7 @@ from jacobian._models import StrictModel
 from jacobian.math.finite_fields._algebraic_sets import AlgebraicPolynomial
 from jacobian.math.finite_fields._jacobian_syzygy_models import (
     MAX_JACOBIAN_SYZYGY_IDEAL_GENERATORS,
+    MAX_JACOBIAN_SYZYGY_REDUCTION_STEPS,
 )
 
 MAX_SYZYGY_SLICE_DEGREE = 8
@@ -120,7 +121,9 @@ class QuotientReduceResult(StrictModel):
     )
     reduction_variable: str | None = None
     remainder: AlgebraicPolynomial
-    steps: tuple[ReduceStep, ...] = ()
+    steps: tuple[ReduceStep, ...] = Field(
+        default=(), max_length=MAX_JACOBIAN_SYZYGY_REDUCTION_STEPS
+    )
     characteristic: int = Field(gt=0)
 
     @model_validator(mode="after")

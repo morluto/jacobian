@@ -9,7 +9,19 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 
-MAX_TERMS = 32
+# Public structural and materialization envelopes.  These are deliberately
+# separate: a term may be deep enough to exercise the depth contract while
+# still being too broad for one bounded operation, and a result may contain
+# fewer terms but many retained substitutions/applications.
+MAX_SUBSTITUTION_BINDINGS = 32
+MAX_TERM_NODES = 4_096
+MAX_REWRITE_APPLICATIONS = 4_096
+MAX_REWRITE_RESULT_NODES = 42_752
+MAX_NORMAL_FORM_RESULT_NODES = 42_752
+MAX_CRITICAL_PAIR_CANDIDATE_WORK = 1_000_000
+# Kept as a compatibility alias for callers that imported the old name.  New
+# contracts should name the resource being bounded explicitly.
+MAX_TERMS = MAX_SUBSTITUTION_BINDINGS
 MAX_SYMBOLS = 64
 MAX_ARITY = 16
 MAX_RULES = 64
@@ -139,7 +151,7 @@ class Substitution(StrictModel):
 class RewriteApplication(StrictModel):
     """One fully witnessed one-step rewrite derivation."""
 
-    position: tuple[int, ...]
+    position: tuple[int, ...] = Field(max_length=MAX_TERM_DEPTH)
     rule_index: int = Field(ge=0)
     substitution: Substitution
     term: Term
@@ -199,14 +211,36 @@ def _require_term_depth(*terms: Term) -> None:
         stack.extend((child, depth + 1) for child in current.children)
 
 
+def _require_term_nodes(*terms: Term, maximum: int = MAX_TERM_NODES) -> None:
+    """Reject a term family whose structural node count exceeds ``maximum``."""
+    total = 0
+    for term in terms:
+        stack = [term]
+        while stack:
+            current = stack.pop()
+            total += 1
+            if total > maximum:
+                raise _validation_error(
+                    "term_nodes",
+                    f"term node count exceeds the supported bound of {maximum}",
+                )
+            stack.extend(current.children)
+
+
 __all__ = [
     "MAX_ARITY",
     "MAX_CRITICAL_PAIR_CANDIDATES",
+    "MAX_CRITICAL_PAIR_CANDIDATE_WORK",
     "MAX_CRITICAL_PAIR_RESULT_NODES",
     "MAX_CRITICAL_PAIR_RULES",
+    "MAX_NORMAL_FORM_RESULT_NODES",
+    "MAX_REWRITE_APPLICATIONS",
+    "MAX_REWRITE_RESULT_NODES",
+    "MAX_SUBSTITUTION_BINDINGS",
     "MAX_SYMBOLS",
     "MAX_TERMS",
     "MAX_TERM_DEPTH",
+    "MAX_TERM_NODES",
     "MAX_VARIABLE_LABEL",
     "CriticalOverlapCandidate",
     "CriticalPair",
@@ -216,4 +250,5 @@ __all__ = [
     "RewriteRule",
     "Substitution",
     "Term",
+    "_require_term_nodes",
 ]

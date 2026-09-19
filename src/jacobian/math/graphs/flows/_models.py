@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
-from math import lcm
+from math import gcd
 from typing import Literal, Self
 
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian._models import StrictModel
-from jacobian.canonical import format_canonical_integer
 from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
 
 # Derived integer scales that make rational capacities and costs exact
@@ -21,6 +20,12 @@ from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
 # documented conservative digit budget are rejected before any backend graph
 # is constructed.
 MAX_MIN_COST_FLOW_DERIVED_SCALE_DIGITS = 4096
+# A max-flow/min-cut result and every edge flow is bounded by the sum of the
+# input capacities.  Expressing that sum over the LCM of all input
+# denominators gives a sound preflight bound for the exact rational arithmetic
+# used by the flow kernel.  Keep this at the canonical rational limit so the
+# result constructors never become the first place that discovers growth.
+MAX_FLOW_DERIVED_HEIGHT_DIGITS = MAX_CANONICAL_RATIONAL_DIGITS
 MAX_BIPARTITE_FACTOR_DEMAND = 1_000_000_000
 MAX_BIPARTITE_FACTOR_DEMAND_DIGITS = 9
 MAX_BIPARTITE_FACTOR_ARCS = 512
@@ -31,19 +36,57 @@ BipartiteFactorStatus = Literal["FOUND", "INFEASIBLE"]
 
 def _bounded_denominator_scale(denominators: tuple[int, ...], kind: str) -> int:
     """Return the LCM of ``denominators`` under the derived-scale digit budget."""
+    maximum_scale = 10**MAX_MIN_COST_FLOW_DERIVED_SCALE_DIGITS - 1
     scale = 1
     for denominator in denominators:
-        scale = lcm(scale, abs(denominator))
-        if (
-            len(format_canonical_integer(scale))
-            > MAX_MIN_COST_FLOW_DERIVED_SCALE_DIGITS
-        ):
+        magnitude = abs(denominator)
+        reduced_denominator = magnitude // gcd(scale, magnitude)
+        if scale > maximum_scale // reduced_denominator:
             raise PydanticCustomError(
                 "graph.least_common_multiple_kind_denominators_exceeds_max",
                 f"the least common multiple of {kind} denominators exceeds the "
                 f"{MAX_MIN_COST_FLOW_DERIVED_SCALE_DIGITS}-digit derived-scale limit",
             )
+        scale *= reduced_denominator
     return scale
+
+
+def _bounded_flow_derived_height(edges: tuple[CapacitatedEdge, ...]) -> None:
+    """Admit the common-denominator height of exact flow arithmetic.
+
+    Every feasible edge flow, s-t flow value, and cut value is nonnegative and
+    no larger than the sum of the input capacities.  With ``D`` the LCM of
+    input denominators, these values have a denominator dividing ``D`` and a
+    numerator no larger than the sum of the capacities represented over ``D``.
+    Checking both derived components before invoking NetworkX therefore
+    bounds the exact backend arithmetic without inspecting a backend result.
+    """
+
+    # This is the largest integer component representable at the canonical
+    # height.  The quotient gates below ensure neither the LCM update nor a
+    # scaled-capacity term constructs an over-limit intermediate.
+    maximum_component = 10**MAX_FLOW_DERIVED_HEIGHT_DIGITS - 1
+    scale = 1
+    for edge in edges:
+        denominator = edge.capacity.as_integer_ratio()[1]
+        reduced_denominator = denominator // gcd(scale, denominator)
+        if scale > maximum_component // reduced_denominator:
+            raise ValueError(
+                "the least common multiple of capacity denominators exceeds the "
+                f"{MAX_FLOW_DERIVED_HEIGHT_DIGITS}-digit derived-height limit"
+            )
+        scale *= reduced_denominator
+    scaled_capacity_sum = 0
+    for edge in edges:
+        numerator, denominator = edge.capacity.as_integer_ratio()
+        multiplier = scale // denominator
+        magnitude = abs(numerator)
+        if magnitude > (maximum_component - scaled_capacity_sum) // multiplier:
+            raise ValueError(
+                "the flow capacity sum exceeds the "
+                f"{MAX_FLOW_DERIVED_HEIGHT_DIGITS}-digit derived-height limit"
+            )
+        scaled_capacity_sum += magnitude * multiplier
 
 
 class CapacitatedEdge(StrictModel):

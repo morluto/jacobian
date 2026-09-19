@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from fractions import Fraction
-from itertools import product
+from itertools import combinations, product
 
 import pytest
 from pydantic import ValidationError
@@ -16,6 +16,7 @@ from jacobian.math.geometry.boxes import (
     RationalAxisAlignedBox,
     compute_box_union_volume,
 )
+from jacobian.math.geometry.boxes._kernel import box_volume, intersect_boxes
 from jacobian.math.geometry.boxes._models import (
     BoxUnionVolumeRequest,
 )
@@ -101,6 +102,37 @@ def test_three_box_inclusion_exclusion_fixture() -> None:
         Fraction(1),
         Fraction(1, 2),
     )
+
+
+def test_subset_dp_matches_independent_combinations_ledger() -> None:
+    boxes = (
+        _box((0, 5), (0, 3)),
+        _box((1, 4), (1, 5)),
+        _empty_box(2),
+        _box((2, 6), (Fraction(1, 2), Fraction(7, 2))),
+        _box((3, 7), (2, 4)),
+    )
+    active = tuple((index, box) for index, box in enumerate(boxes) if not box.is_empty)
+    expected: list[tuple[tuple[int, ...], RationalAxisAlignedBox, Fraction]] = []
+    expected_volume = Fraction()
+    for size in range(1, len(active) + 1):
+        coefficient = 1 if size % 2 else -1
+        for selected in combinations(active, size):
+            indices = tuple(index for index, _box in selected)
+            intersection = intersect_boxes(tuple(box for _index, box in selected))
+            if intersection.is_empty:
+                continue
+            volume = box_volume(intersection)
+            expected.append((indices, intersection, volume))
+            expected_volume += coefficient * volume
+
+    result = compute_box_union_volume(boxes)
+
+    assert result.union_volume.as_fraction() == expected_volume
+    assert tuple(
+        (entry.box_indices, entry.intersection, entry.volume.as_fraction())
+        for entry in result.intersections
+    ) == tuple(expected)
 
 
 @pytest.mark.parametrize(

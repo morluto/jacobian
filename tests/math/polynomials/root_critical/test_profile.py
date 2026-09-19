@@ -183,6 +183,45 @@ def test_quartic_with_conjugates_is_refused_before_minpoly() -> None:
         root_critical_distance_profile(_polynomial((4, 1), (1, 1), (0, 1)))
 
 
+def test_quartic_crootof_with_rational_critical_points_has_exact_distances() -> None:
+    """A CRootOf source can use the bounded rational-critical regime.
+
+    For ``z^4 - 2 z^2 + 2`` the derivative roots are ``-1, 0, 1``.  The
+    distance kernel works from the source factor and a certified root box;
+    it never asks SymPy to take a minimal polynomial of two opaque CRootOf
+    values.
+    """
+    result = root_critical_distance_profile(_polynomial((4, 1), (2, -2), (0, 2)))
+
+    assert len(result.roots) == 4
+    assert len(result.critical_points) == 3
+    assert len(result.pairs) == 12
+    assert {tuple(row.distance_squared.polynomial) for row in result.pairs} == {
+        (1, 0, -2),
+        (1, -4, -2, -4, 1),
+    }
+    assert all(row.isolating_interval.lower.as_fraction() >= 0 for row in result.pairs)
+
+
+def test_distance_selector_refines_endpoint_overlap_before_selection() -> None:
+    """An unrefined ``[1, 2]`` isolator must not match ``[0, 1.0001]``."""
+    from fractions import Fraction
+
+    import sympy
+
+    from jacobian.math.polynomials.root_critical.operations import (
+        _select_eliminated_distance_root,
+    )
+
+    distance = sympy.Symbol("distance")
+    with pytest.raises(OperationDomainValidationError, match="isolate"):
+        _select_eliminated_distance_root(
+            [sympy.Poly(distance**2 - 2, distance, domain=sympy.QQ)],
+            Fraction(0),
+            Fraction(10001, 10000),
+        )
+
+
 def test_pair_budget_is_rejected_before_exact_root_expansion() -> None:
     with pytest.raises(OperationResourceAdmissionError) as error:
         root_critical_distance_profile(_polynomial((4, 1), (0, -2)), max_pair_rows=0)
@@ -390,6 +429,37 @@ def test_native_arguments_are_validated_before_worker_serialization() -> None:
             _polynomial((3, 1), (0, -1)),
             max_pair_rows="64",  # type: ignore[arg-type]
         )
+
+
+def test_worker_decoder_rejects_source_unbound_distance(monkeypatch) -> None:
+    """A structurally valid forged row cannot replace the worker result."""
+    import json
+
+    from jacobian.canonical import encode_strict_json
+    from jacobian.math.polynomials.root_critical import operations
+
+    polynomial = _polynomial((3, 1), (0, -1))
+    valid = root_critical_distance_profile(polynomial)
+    payload = json.loads(valid.model_dump_json())
+    payload["pairs"][0]["distance_squared"] = {
+        "polynomial": ["1", "-6"],
+        "real_root_index": 0,
+    }
+    payload["pairs"][0]["isolating_interval"] = {
+        "lower": {"num": "6", "den": "1"},
+        "upper": {"num": "7", "den": "1"},
+        "interval_type": "OPEN",
+    }
+    forged_output = encode_strict_json({"ok": True, "profile": json.dumps(payload)})
+    monkeypatch.setattr(
+        operations,
+        "run_profile_worker_process",
+        lambda *args, **kwargs: forged_output,
+    )
+    with pytest.raises(
+        (OperationDomainValidationError, RuntimeError), match="distance"
+    ):
+        root_critical_distance_profile(polynomial)
 
 
 def test_cleared_coefficient_height_is_bounded_before_factorization() -> None:

@@ -18,6 +18,10 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
+from jacobian.math.polynomials.series._flint import inverse_backend as _inverse_backend
+from jacobian.math.polynomials.series._flint import (
+    reversion_backend as _reversion_backend,
+)
 from jacobian.math.polynomials.series._models import (
     MAX_TRUNCATION_ORDER,
     SeriesArithmeticResult,
@@ -246,20 +250,16 @@ def _inverse_coefficients(series: TruncatedSeries) -> list[Fraction]:
 def inverse(series: TruncatedSeries) -> SeriesInverseResult:
     """Compute the multiplicative inverse of a series modulo x^N.
 
-    Requires a_0 != 0.  Computes B such that A*B = 1 (mod x^N) via the
-    standard recurrence: b_0 = 1/a_0; b_n = -(1/a_0) * sum_{i=1}^{n} a_i b_{n-i}.
+    Requires a_0 != 0.  The private exact backend computes B such that
+    A*B = 1 (mod x^N) and returns the established residual ledger.
     """
     _run_admission(lambda: admit_native_inverse(series))
     n = series.truncation_order
-    a = _series_fractions(series)
-    inv = _inverse_coefficients(series)
-    # Compute residual A*B - 1
-    product = _cauchy_convolve(a, inv, n)
-    product[0] -= Fraction(1)
+    inv, residual = _inverse_backend(tuple(_series_fractions(series)))
     return SeriesInverseResult._from_kernel(
         source=series,
         result=_series_result(series.variable, n, inv),
-        residual_coefficients=tuple(_wire(c) for c in product),
+        residual_coefficients=tuple(_wire(c) for c in residual),
     )
 
 
@@ -400,55 +400,18 @@ def reversion(series: TruncatedSeries) -> SeriesReversionResult:
       - F(G(x)) = x mod x^N (left identity)
       - G(F(x)) = x mod x^N (right identity)
 
-    Uses a coefficient-by-coefficient recurrence to determine coefficients
-    of G one at a time.
+    Uses the private exact backend's bounded Newton composition kernel and
+    returns both established composition residual ledgers.
     """
     _run_admission(lambda: admit_native_reversion(series))
     n = series.truncation_order
-    f = _series_fractions(series)
-
-    # G(x) = g_0 + g_1 x + g_2 x^2 + ... such that F(G(x)) = x mod x^N
-    # g_0 = 0, g_1 = 1/f_1
-    g = [Fraction(0)] * n
-    g[1] = Fraction(1) / f[1]
-    # Compute G powers up to N-1 and solve for g_k one at a time
-    for k in range(2, n if any(f[2:]) else 2):
-        target = Fraction(0)
-        # For j = 2 to k:
-        #   compute G^j using g_0..g_{k-1} and read off coefficient of x^k
-        g_powers = [[Fraction(0)] * (k + 1) for _ in range(k + 1)]
-        g_powers[0] = [Fraction(1)] + [Fraction(0)] * k  # G^0 = 1
-        g_powers[1] = [*list(g[:k]), Fraction(0)]
-        for j in range(2, k + 1):
-            g_powers[j] = [
-                sum(
-                    (g_powers[j - 1][m] * g_powers[1][i - m] for m in range(i + 1)),
-                    start=Fraction(),
-                )
-                for i in range(k + 1)
-            ]
-        known = Fraction(0)
-        for j in range(2, k + 1):
-            fj = f[j] if j < len(f) else Fraction(0)
-            known += fj * g_powers[j][k]
-        g[k] = (target - known) / f[1]
-
-    # Compute residuals F(G) and G(F)
-    source = _series_result(series.variable, n, f)
-    inverse = _series_result(series.variable, n, g)
-    fg_coeffs = _compose_coefficients(source, inverse)
-    left_residual = [
-        fg_coeffs[i] - (Fraction(1) if i == 1 else Fraction(0)) for i in range(n)
-    ]
-
-    gf_coeffs = _compose_coefficients(inverse, source)
-    right_residual = [
-        gf_coeffs[i] - (Fraction(1) if i == 1 else Fraction(0)) for i in range(n)
-    ]
+    g, left_residual, right_residual = _reversion_backend(
+        tuple(_series_fractions(series))
+    )
 
     return SeriesReversionResult._from_kernel(
         source=series,
-        result=inverse,
+        result=_series_result(series.variable, n, g),
         left_residual=tuple(_wire(c) for c in left_residual),
         right_residual=tuple(_wire(c) for c in right_residual),
     )

@@ -557,6 +557,25 @@ class TestGaussianQuadrature:
         }
         assert result.exactness_degree == 3
 
+    def test_unconsumed_moment_height_does_not_gate_quadrature(self) -> None:
+        moments = (
+            CanonicalRational(num=24, den=1),
+            CanonicalRational(num=0, den=1),
+            CanonicalRational(num=54, den=1),
+            CanonicalRational(num=0, den=1),
+            CanonicalRational(num=10**2000, den=1),
+        )
+
+        result = compute_gaussian_quadrature(
+            GaussianQuadratureRequest(prefix=_prefix(moments), order=2)
+        )
+
+        assert {node.node.as_fraction() for node in result.nodes} == {
+            Fraction(-3, 2),
+            Fraction(3, 2),
+        }
+        assert {node.weight.as_fraction() for node in result.nodes} == {Fraction(12)}
+
     def test_order_one_prefix_needs_only_two_moments(self) -> None:
         """An order-1 prefix (mu_0, mu_1) = (1, 2) determines the exact
         rule with node 2, weight 1, and exactness through degree 1; the

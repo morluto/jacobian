@@ -11,6 +11,7 @@ from jacobian.math.function_fields._gfpx import (
     ZERO_RF,
     KPoly,
     is_irreducible_over_gf,
+    is_irreducible_over_rational_function,
     kp_derivative,
     kp_divmod,
     kp_gcd,
@@ -121,13 +122,13 @@ def _field_kpoly(field: FiniteFunctionField) -> KPoly:
 
 
 def _admit_irreducibility(field: FiniteFunctionField, kpoly: KPoly) -> bool:
-    """Sound irreducibility admission by reduction at prime-field points.
+    """Admit irreducibility by specialization, then exact Gauss-lemma factoring.
 
     A monic factorization over GF(p)(x) specializes at a point with nonvanishing
     denominators to a monic factorization over GF(p); therefore an irreducible
-    specialization proves irreducibility.  The search is deliberately bounded
-    and may reject an irreducible polynomial whose every admitted specialization
-    is reducible, which is a reported limitation rather than a false admission.
+    specialization proves irreducibility.  If all bounded specializations are
+    reducible, clear rational-function denominators, remove the GF(p)[x]
+    content, and factor the primitive lift exactly over GF(p)[x,y].
     """
 
     prime = field.characteristic
@@ -145,7 +146,7 @@ def _admit_irreducibility(field: FiniteFunctionField, kpoly: KPoly) -> bool:
             continue
         if is_irreducible_over_gf(tuple(specialization), prime):
             return True
-    return False
+    return is_irreducible_over_rational_function(kpoly, prime)
 
 
 def _admit_field(field: FiniteFunctionField) -> None:
@@ -200,10 +201,7 @@ def _admit_field(field: FiniteFunctionField) -> None:
         raise OperationDomainValidationError(
             location=("field", "defining_polynomial"),
             code="function_field.extension_not_admitted_irreducible",
-            message=(
-                "no admitted prime-field specialization proves the defining "
-                "polynomial irreducible over GF(p)(x)"
-            ),
+            message=("the defining polynomial is reducible over GF(p)(x)"),
         )
 
 

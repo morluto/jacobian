@@ -81,7 +81,10 @@ def _fraction_exceeds_canonical_limit(value: Fraction) -> bool:
 
 
 def _require_gram_schmidt_heights_admissible(
-    moments: tuple[CanonicalRational, ...], max_degree: int
+    moments: tuple[CanonicalRational, ...],
+    max_degree: int,
+    *,
+    consumed_moments: int | None = None,
 ) -> None:
     """Bound moment heights before exact Gram-Schmidt projection begins."""
     if max_degree == 0:
@@ -89,7 +92,8 @@ def _require_gram_schmidt_heights_admissible(
     side = max_degree + 1
     per_entry = (MAX_CANONICAL_RATIONAL_DIGITS - 2 * side) // (2 * side * (side + 1))
     bound = max(per_entry, 8)
-    for value in moments[: 2 * max_degree + 1]:
+    consumed = 2 * max_degree + 1 if consumed_moments is None else consumed_moments
+    for value in moments[:consumed]:
         if RationalHeight.from_canonical(value).exceeds(bound):
             raise MomentsOrthogonalAdmissionError(
                 "gram_schmidt_height",
@@ -589,7 +593,9 @@ def _admit_gaussian_quadrature(
             f"quadrature order must be an integer between 1 and {MAX_QUADRATURE_ORDER}",
         )
     try:
-        _require_gram_schmidt_heights_admissible(prefix.moments, order)
+        _require_gram_schmidt_heights_admissible(
+            prefix.moments, order, consumed_moments=2 * order
+        )
     except MomentsOrthogonalAdmissionError as exc:
         raise GaussianQuadratureAdmissionError(exc.reason, str(exc)) from None
     needed = 2 * order

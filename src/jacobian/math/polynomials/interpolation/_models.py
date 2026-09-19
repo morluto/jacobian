@@ -477,6 +477,15 @@ class NewtonForm(StrictModel):
             )
         _require_distinct(self.nodes)
         _require_bounded(self.nodes, "Newton node")
+        # ``NewtonForm`` is also a caller-authored value, rather than only an
+        # internal result.  Keep its coefficient envelope explicit here so a
+        # direct consumer cannot bypass the canonical exact carrier contract.
+        for coefficient in self.coefficients:
+            require_bounded_rational(
+                coefficient,
+                max_digits=MAX_CANONICAL_RATIONAL_DIGITS,
+                label="Newton coefficient",
+            )
         return self
 
 

@@ -42,7 +42,12 @@ def _weight(
     )
 
 
-def _request(vertices, weight, degree_bound, max_dilation) -> WeightedEhrhartRequest:
+def _request(
+    vertices: tuple[Vertex, ...],
+    weight: RationalPolynomial,
+    degree_bound: int,
+    max_dilation: int,
+) -> WeightedEhrhartRequest:
     return WeightedEhrhartRequest(
         vertices=vertices,
         weight=weight,

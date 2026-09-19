@@ -34,6 +34,7 @@ from jacobian.math.number_theory.algebraic_numbers.real import (
     MAX_REAL_ALGEBRAIC_COEFFICIENT_DIGITS,
     RationalIsolatingInterval,
     RealAlgebraicValue,
+    require_primitive_real_algebraic_value,
 )
 from jacobian.math.polynomials._conversions import (
     rational_polynomial_from_sympy,
@@ -253,18 +254,11 @@ def _magnitude_guard(value: Fraction) -> Fraction:
 
 
 def _root_value(root_index: int, roots: tuple[Any, ...]) -> Any:
-    # ``all_roots`` gives SymPy's exact radicals for the low-degree slice.  A
-    # RootOf object is intentionally not allowed to reach the distance kernel:
-    # SymPy cannot reduce products of independently indexed RootOf values
-    # reliably, while the radical expressions have a stable minpoly path.
-    value = roots[root_index]
-    if isinstance(value, sympy.RootOf):
-        raise OperationDomainValidationError(
-            location=("polynomial",),
-            code="polynomial.root_critical.backend_root_form",
-            message="the admitted exact profile requires a backend root expression",
-        )
-    return value
+    # CRootOf is retained as a source identity.  It must not be handed to
+    # ``minpoly`` together with another independently indexed CRootOf (SymPy
+    # cannot reliably reduce that product).  The bounded distance kernel below
+    # works from the defining factor and a rational critical point instead.
+    return roots[root_index]
 
 
 def _algebraic_root_value(
@@ -1035,6 +1029,293 @@ def _unique_interval_hit(
     return None
 
 
+def _distance_box_for_rational_critical(
+    rectangle: RootCriticalRectangle,
+    critical: CanonicalRational,
+) -> tuple[Fraction, Fraction]:
+    """Bound ``|(x+iy)-critical|²`` over a certified root rectangle."""
+
+    real_lower = rectangle.real_lower.as_fraction()
+    real_upper = rectangle.real_upper.as_fraction()
+    imag_lower = rectangle.imaginary_lower.as_fraction()
+    imag_upper = rectangle.imaginary_upper.as_fraction()
+    c = critical.as_fraction()
+    if real_lower <= c <= real_upper:
+        real_min = Fraction()
+    else:
+        real_min = min((real_lower - c) ** 2, (real_upper - c) ** 2)
+    real_max = max((real_lower - c) ** 2, (real_upper - c) ** 2)
+    if imag_lower <= 0 <= imag_upper:
+        imag_min = Fraction()
+    else:
+        imag_min = min(imag_lower**2, imag_upper**2)
+    imag_max = max(imag_lower**2, imag_upper**2)
+    return real_min + imag_min, real_max + imag_max
+
+
+def _distance_box_for_rectangles(
+    root: RootCriticalRectangle,
+    critical: RootCriticalRectangle,
+) -> tuple[Fraction, Fraction]:
+    """Bound squared distance using two certified complex rectangles."""
+
+    real_lower = root.real_lower.as_fraction() - critical.real_upper.as_fraction()
+    real_upper = root.real_upper.as_fraction() - critical.real_lower.as_fraction()
+    imag_lower = (
+        root.imaginary_lower.as_fraction() - critical.imaginary_upper.as_fraction()
+    )
+    imag_upper = (
+        root.imaginary_upper.as_fraction() - critical.imaginary_lower.as_fraction()
+    )
+    real_min = (
+        Fraction()
+        if real_lower <= 0 <= real_upper
+        else min(real_lower**2, real_upper**2)
+    )
+    imag_min = (
+        Fraction()
+        if imag_lower <= 0 <= imag_upper
+        else min(imag_lower**2, imag_upper**2)
+    )
+    return (
+        real_min + imag_min,
+        max(real_lower**2, real_upper**2) + max(imag_lower**2, imag_upper**2),
+    )
+
+
+def _distance_interval_relation(
+    lower: Fraction,
+    upper: Fraction,
+    enclosure_lower: Fraction,
+    enclosure_upper: Fraction,
+) -> Literal["CONTAINED", "DISJOINT", "AMBIGUOUS"]:
+    """Classify an isolating interval against a closed exact enclosure.
+
+    Touching at an endpoint is deliberately ambiguous until refinement proves
+    whether the algebraic root lies on that endpoint.  A singleton endpoint
+    is exact and can therefore be classified immediately.
+    """
+
+    if lower == upper:
+        return (
+            "CONTAINED" if enclosure_lower <= lower <= enclosure_upper else "DISJOINT"
+        )
+    if lower >= enclosure_lower and upper <= enclosure_upper:
+        return "CONTAINED"
+    if upper < enclosure_lower or lower > enclosure_upper:
+        return "DISJOINT"
+    return "AMBIGUOUS"
+
+
+def _select_eliminated_distance_root(
+    factors: list[sympy.Poly],
+    enclosure_lower: Fraction,
+    enclosure_upper: Fraction,
+) -> tuple[sympy.Poly, int, Fraction, Fraction]:
+    """Refine factor root intervals until exactly one is in the enclosure."""
+
+    # The unrefined intervals are useful for cheap disjointness, then the
+    # progressively tighter rational isolators settle endpoint contacts.
+    epsilons: tuple[Fraction | None, ...] = (
+        None,
+        Fraction(1, 1 << 20),
+        Fraction(1, 1 << 40),
+        Fraction(1, 1 << 80),
+        Fraction(1, 1 << 160),
+        Fraction(1, 1 << 320),
+        Fraction(1, 1 << 640),
+        Fraction(1, 1 << 1280),
+    )
+    for epsilon in epsilons:
+        contained: list[tuple[sympy.Poly, int, Fraction, Fraction]] = []
+        ambiguous = False
+        for factor in factors:
+            intervals = (
+                factor.intervals() if epsilon is None else factor.intervals(eps=epsilon)
+            )
+            for index, ((lower, upper), _multiplicity) in enumerate(intervals):
+                relation = _distance_interval_relation(
+                    Fraction(lower),
+                    Fraction(upper),
+                    enclosure_lower,
+                    enclosure_upper,
+                )
+                if relation == "CONTAINED":
+                    contained.append((factor, index, Fraction(lower), Fraction(upper)))
+                elif relation == "AMBIGUOUS":
+                    ambiguous = True
+        if len(contained) > 1:
+            raise OperationDomainValidationError(
+                location=("pairs",),
+                code="polynomial.root_critical.distance_root_selection",
+                message="certified distance enclosure contains multiple algebraic roots",
+            )
+        if len(contained) == 1 and not ambiguous:
+            return contained[0]
+        if not ambiguous:
+            break
+    raise OperationDomainValidationError(
+        location=("pairs",),
+        code="polynomial.root_critical.distance_root_selection",
+        message="certified distance enclosure did not isolate one algebraic root",
+    )
+
+
+def _distance_value_from_elimination(
+    elimination: sympy.Poly,
+    rectangle: RootCriticalRectangle,
+    critical: CanonicalRational,
+) -> tuple[
+    RealAlgebraicValue,
+    RationalIsolatingInterval,
+    Literal["POSITIVE", "ZERO_DISTANCE"],
+]:
+    """Factor an exact elimination polynomial and select its geometric root.
+
+    The source root remains identified by its certified rectangle.  Thus this
+    routine never treats an opaque backend root index as a distance witness:
+    the witness is a primitive irreducible factor and one of its isolated real
+    roots selected by the rectangle's exact distance enclosure.
+    """
+
+    request_checkpoint("during root-critical distance factorization")
+    factors = sympy.factor_list(elimination)[1]
+    real_lower, real_upper = _distance_box_for_rational_critical(rectangle, critical)
+    factors_for_selection: list[sympy.Poly] = []
+    for factor, _multiplicity in factors:
+        primitive = _primitive_integer_poly(sympy.Poly(factor, elimination.gens[0]))
+        if primitive.degree() > MAX_ROOT_CRITICAL_DISTANCE_DEGREE:
+            continue
+        coefficients = tuple(int(value) for value in primitive.all_coeffs())
+        if any(
+            len(format_canonical_integer(abs(coefficient)))
+            > MAX_REAL_ALGEBRAIC_COEFFICIENT_DIGITS
+            for coefficient in coefficients
+        ):
+            raise OperationResourceAdmissionError(
+                location=("pairs",),
+                code="polynomial.root_critical.distance_coefficient_bound",
+                message="eliminated distance coefficients exceed the real-algebraic carrier",
+            )
+        factors_for_selection.append(primitive)
+    minimal, selected_index, lower, upper = _select_eliminated_distance_root(
+        factors_for_selection,
+        real_lower,
+        real_upper,
+    )
+    if lower < 0:
+        raise OperationDomainValidationError(
+            location=("pairs",),
+            code="polynomial.root_critical.distance_sign",
+            message="exact distance isolation did not establish nonnegativity",
+        )
+    coefficients = tuple(int(value) for value in minimal.all_coeffs())
+    value = RealAlgebraicValue._from_admitted_polynomial(
+        polynomial=coefficients,
+        real_root_index=selected_index,
+    )
+    interval = RationalIsolatingInterval(
+        lower=_rational(lower),
+        upper=_rational(upper),
+        interval_type="SINGLETON" if lower == upper else "OPEN",
+    )
+    return (
+        value,
+        interval,
+        "ZERO_DISTANCE" if lower == upper == 0 else "POSITIVE",
+    )
+
+
+def _root_factor(
+    polynomial: sympy.Poly,
+    root: Any,
+) -> sympy.Poly | None:
+    """Recover the rational source factor carrying a CRootOf root."""
+
+    backend_poly = getattr(root, "poly", None)
+    if backend_poly is None:
+        return None
+    try:
+        backend_variable = backend_poly.gens[0]
+        candidate = _primitive_integer_poly(
+            sympy.Poly(
+                backend_poly.as_expr().subs(backend_variable, polynomial.gens[0]),
+                polynomial.gens[0],
+                domain=sympy.QQ,
+            )
+        )
+    except (AttributeError, TypeError, ValueError, sympy.PolynomialError):
+        return None
+    for factor, _multiplicity in polynomial.factor_list()[1]:
+        primitive = _primitive_integer_poly(factor)
+        if primitive == candidate:
+            return primitive
+    return None
+
+
+def _eliminated_distance_polynomial(
+    factor: sympy.Poly,
+    root: Any,
+    critical: CanonicalRational,
+) -> sympy.Poly:
+    """Eliminate a source root against a rational critical point.
+
+    Real roots use a univariate resultant.  Non-real roots use real and
+    imaginary coordinates, which enforces conjugacy geometrically and avoids
+    the unsound independent-``CRootOf`` product that motivated this regime.
+    """
+
+    z = factor.gens[0]
+    c = sympy.Rational(critical.num, critical.den)
+    distance = sympy.Symbol("distance")
+    request_checkpoint("during root-critical distance elimination")
+    if _root_is_real(root):
+        result = sympy.resultant(factor.as_expr(), distance - (z - c) ** 2, z)
+        return _primitive_integer_poly(sympy.Poly(result, distance, domain=sympy.QQ))
+    real_part = sympy.Symbol("root_real", real=True)
+    imag_part = sympy.Symbol("root_imag", real=True)
+    expression = sympy.expand(factor.as_expr().subs(z, real_part + sympy.I * imag_part))
+    real_equation, imaginary_equation = expression.as_real_imag()
+    ideal = sympy.groebner(
+        (
+            real_equation,
+            imaginary_equation,
+            distance - ((real_part - c) ** 2 + imag_part**2),
+        ),
+        real_part,
+        imag_part,
+        distance,
+        order="lex",
+    )
+    distance_polynomials = [
+        sympy.Poly(generator, distance, domain=sympy.QQ)
+        for generator in ideal.polys
+        if generator.as_expr().free_symbols <= {distance}
+    ]
+    if not distance_polynomials:
+        raise OperationDomainValidationError(
+            location=("pairs",),
+            code="polynomial.root_critical.distance_elimination",
+            message="real/imaginary distance elimination produced no univariate polynomial",
+        )
+    result = min(distance_polynomials, key=lambda polynomial: polynomial.degree())
+    return _primitive_integer_poly(result)
+
+
+def _distance_value_from_root_factor(
+    factor: sympy.Poly,
+    root: Any,
+    rectangle: RootCriticalRectangle,
+    critical: CanonicalRational,
+) -> tuple[
+    RealAlgebraicValue,
+    RationalIsolatingInterval,
+    Literal["POSITIVE", "ZERO_DISTANCE"],
+]:
+    elimination = _eliminated_distance_polynomial(factor, root, critical)
+    return _distance_value_from_elimination(elimination, rectangle, critical)
+
+
 def _distance_value(
     left: Any,
     right: Any,
@@ -1262,15 +1543,35 @@ def _admit(
             message="the source can produce a distance algebraic degree beyond the admitted carrier",
         )
     request_checkpoint("during root-critical admission all_roots")
-    if any(
+    source_has_backend_roots = any(
         isinstance(root, sympy.RootOf)
-        for factor, _ in (*source_factors, *derivative_factors)
+        for factor, _ in source_factors
         for root in factor.all_roots()
+    )
+    derivative_has_backend_roots = any(
+        isinstance(root, sympy.RootOf)
+        for factor, _ in derivative_factors
+        for root in factor.all_roots()
+    )
+    # The bounded common-embedding regime is deliberately narrow: a CRootOf
+    # source root may be paired only with an exact rational critical point.  A
+    # second algebraic carrier would require a common number field and is not
+    # silently approximated here.
+    critical_is_nonrational = any(
+        _root_rational_value(root) is None
+        for factor, _ in derivative_factors
+        for root in factor.all_roots()
+    )
+    if derivative_has_backend_roots or (
+        source_has_backend_roots and critical_is_nonrational
     ):
         raise OperationResourceAdmissionError(
             location=("polynomial",),
             code="polynomial.root_critical.root_carrier_backend_form",
-            message="the exact-root carrier requires explicit maintained algebraic expressions",
+            message=(
+                "CRootOf distances are admitted only when every critical point "
+                "is rational; common algebraic embeddings remain unsupported"
+            ),
         )
     return source, root_count, critical_count
 
@@ -1299,7 +1600,21 @@ def _compute_profile(
         for critical_record, critical in zip(
             critical_points, critical_values, strict=True
         ):
-            value, interval, kind = _distance_value(root, critical)
+            critical_rational = _root_rational_value(critical)
+            source_factor = _root_factor(source, root)
+            if (
+                isinstance(root, sympy.RootOf)
+                and critical_rational is not None
+                and source_factor is not None
+            ):
+                value, interval, kind = _distance_value_from_root_factor(
+                    source_factor,
+                    root,
+                    root_record.rectangle,
+                    critical_rational,
+                )
+            else:
+                value, interval, kind = _distance_value(root, critical)
             rows.append(
                 RootCriticalDistanceRow(
                     root_axis_index=root_record.axis_index,
@@ -1318,6 +1633,70 @@ def _compute_profile(
     )
     request_checkpoint("after root-critical result construction")
     return result
+
+
+def _validate_worker_profile_source_binding(
+    profile: RootCriticalDistanceProfile,
+    polynomial: RationalPolynomial,
+) -> None:
+    """Validate worker rows against retained geometric source rectangles.
+
+    This is deliberately a cheap consumer check: it does not rerun
+    factorization or distance elimination.  Primitive irreducible row
+    polynomials are instead required to have exactly one isolated root inside
+    the certified geometric distance enclosure for their indexed pair.  It is
+    a consistency check, not adversarial authentication of the worker's
+    elimination relation.
+    """
+
+    if profile.source_polynomial != polynomial:
+        raise RuntimeError(
+            "root-critical worker returned a different source polynomial"
+        )
+    distance_symbol = sympy.Symbol("distance")
+    for row in profile.pairs:
+        root = profile.roots[row.root_axis_index]
+        critical = profile.critical_points[row.critical_axis_index]
+        enclosure_lower, enclosure_upper = _distance_box_for_rectangles(
+            root.rectangle,
+            critical.rectangle,
+        )
+        value = row.distance_squared
+        require_primitive_real_algebraic_value(value, location=("pairs",))
+        value_poly = sympy.Poly.from_list(
+            list(value.polynomial),
+            gens=distance_symbol,
+            domain=sympy.ZZ,
+        )
+        factor_list = sympy.factor_list(value_poly)[1]
+        if len(factor_list) != 1 or factor_list[0][1] != 1:
+            raise RuntimeError(
+                "root-critical worker returned a non-minimal distance polynomial"
+            )
+        selected_poly, selected_index, selected_lower, selected_upper = (
+            _select_eliminated_distance_root(
+                [value_poly],
+                enclosure_lower,
+                enclosure_upper,
+            )
+        )
+        if selected_poly != value_poly or selected_index != value.real_root_index:
+            raise RuntimeError(
+                "root-critical worker distance root is not bound to its source pair"
+            )
+        row_lower = row.isolating_interval.lower.as_fraction()
+        row_upper = row.isolating_interval.upper.as_fraction()
+        if row_lower > selected_lower or row_upper < selected_upper:
+            raise RuntimeError(
+                "root-critical worker interval does not contain its selected root"
+            )
+        selected_zero = selected_lower == selected_upper == 0
+        if row.kind == "ZERO_DISTANCE" and not selected_zero:
+            raise RuntimeError(
+                "root-critical worker zero-distance kind is not source-bound"
+            )
+        if row.kind == "POSITIVE" and selected_zero:
+            raise RuntimeError("root-critical worker positive kind is not source-bound")
 
 
 def _run_profile_worker(
@@ -1360,7 +1739,9 @@ def _run_profile_worker(
             "bounded root-critical kernel worker returned malformed output"
         )
     request_checkpoint("after root-critical kernel worker")
-    return RootCriticalDistanceProfile.model_validate_json(response["profile"])
+    profile = RootCriticalDistanceProfile.model_validate_json(response["profile"])
+    _validate_worker_profile_source_binding(profile, polynomial)
+    return profile
 
 
 def _raise_worker_error(response: dict[str, object]) -> NoReturn:

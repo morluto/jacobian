@@ -1520,10 +1520,30 @@ class TestDeepTermTraversal:
 
         with pytest.raises(ValueError, match="result nodes"):
             _bounded_unify(left, right)
-        with _validation_error("term_rewriting.unification_bound"):
+        with pytest.raises(OperationResourceAdmissionError) as caught:
             compute_unification(
                 UnificationRequest(signature=signature, left=left, right=right)
             )
+        assert caught.value.errors()[0]["type"] == "term_rewriting.unification_bound"
+
+    def test_unification_binding_envelope_is_resource_admission(self) -> None:
+        def tree(leaves: list[Term]) -> Term:
+            if len(leaves) == 1:
+                return leaves[0]
+            midpoint = len(leaves) // 2
+            return _app(0, tree(leaves[:midpoint]), tree(leaves[midpoint:]))
+
+        binding_count = MAX_SUBSTITUTION_BINDINGS + 1
+        left = tree([_var(index) for index in range(binding_count)])
+        right = tree([_app(1) for _ in range(binding_count)])
+
+        with pytest.raises(OperationResourceAdmissionError) as caught:
+            compute_unification(
+                UnificationRequest(signature=_signature(2, 0), left=left, right=right)
+            )
+        assert caught.value.errors()[0]["type"] == (
+            "term_rewriting.substitution_bindings"
+        )
 
     def test_deep_unification_and_matching_stay_typed(self) -> None:
         def chain(length: int) -> Term:

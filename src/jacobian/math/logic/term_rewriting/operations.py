@@ -292,17 +292,26 @@ def unification_result(
     _admit_terms(signature, (left, right), location=("left",))
     try:
         result = _bounded_unify(left, right)
-        if result is not None:
-            _require_term_depth(*result.values())
     except ValueError as error:
         fallback_code = (
             "substitution_bindings"
             if "substitution bindings" in str(error)
             else "unification_bound"
         )
-        raise _domain_error(
-            error, fallback_code=fallback_code, location=("left", "right")
+        raise OperationResourceAdmissionError(
+            location=("left", "right"),
+            code=f"term_rewriting.{fallback_code}",
+            message=str(error),
         ) from error
+    if result is not None:
+        try:
+            _require_term_depth(*result.values())
+        except ValueError as error:
+            raise _domain_error(
+                error,
+                fallback_code="unification_bound",
+                location=("left", "right"),
+            ) from error
     if result is None:
         return UnificationResult._from_kernel(
             signature=signature,

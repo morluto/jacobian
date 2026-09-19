@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Self
+from typing import Annotated, Literal, Self
 
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
@@ -16,6 +16,7 @@ MAX_REFLECTION_REPRESENTABLE = (1 << 53) - 1
 MAX_POSITIVE_ROOTS = 120
 MAX_ROOT_COORDINATE = 6
 MAX_COXETER_NUMBER = 30
+MAX_WEYL_WORD_LENGTH = 1024
 # E8 is the largest finite crystallographic Weyl group at the admitted rank.
 MAX_WEYL_GROUP_ORDER = 696_729_600
 
@@ -96,6 +97,61 @@ class CartanMatrixRequest(StrictModel):
             "and positive-definite symmetrization."
         )
     )
+
+
+CartanType = Literal["A", "B", "C", "D", "E", "F", "G"]
+
+VALID_CARTAN_TYPE_DESCRIPTION = (
+    "Finite Dynkin type: A_n (n >= 1), B_n (n >= 2), C_n (n >= 2), "
+    "D_n (n >= 4), E_6, E_7, E_8, F_4, G_2."
+)
+
+
+class CartanTypeRequest(StrictModel):
+    """A bounded finite Dynkin type and rank."""
+
+    cartan_type: CartanType = Field(
+        description=f"Simply-laced or multiply-laced {VALID_CARTAN_TYPE_DESCRIPTION}",
+    )
+    rank: int = Field(
+        ge=1,
+        le=MAX_RANK,
+        description=(
+            "Rank of the root system, from 1 through "
+            f"{MAX_RANK}. Only the finite-type pairs A_n (n >= 1), "
+            "B_n/C_n (n >= 2), D_n (n >= 4), E_6/E_7/E_8, F_4, and G_2 "
+            "are admitted."
+        ),
+    )
+
+
+class CartanTypeResult(StrictModel):
+    """The Cartan matrix built from a finite Dynkin type and rank."""
+
+    cartan_type: CartanType
+    rank: int = Field(ge=1, le=MAX_RANK)
+    matrix: CartanMatrix
+
+    @model_validator(mode="after")
+    def require_type_result_shape(self) -> Self:
+        if self.rank != len(self.matrix):
+            raise _validation_error(
+                "cartan_type_rank", "rank must equal the Cartan-matrix rank"
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        cartan_type: CartanType,
+        rank: int,
+        matrix: CartanMatrix,
+    ) -> Self:
+        return cls.model_construct(
+            cartan_type=cartan_type,
+            rank=rank,
+            matrix=matrix,
+        )
 
 
 class PositiveRootsResult(CartanMatrixRequest):
@@ -342,6 +398,161 @@ class WeylGroupOrderResult(StrictModel):
         return cls.model_construct(
             matrix=matrix,
             group_order=group_order,
+        )
+
+
+class WeylElementRequest(StrictModel):
+    """One bounded word in the simple reflections of a finite Weyl group."""
+
+    matrix: CartanMatrix = Field(
+        description=(
+            "Finite-type generalized Cartan matrix of rank 1 through "
+            f"{MAX_RANK}; it must meet the same Cartan conditions as "
+            "``CartanMatrixRequest.matrix``."
+        ),
+    )
+    word: tuple[Annotated[int, Field(ge=0)], ...] = Field(
+        max_length=MAX_WEYL_WORD_LENGTH,
+        description=(
+            "Simple-reflection indices applied left to right, zero-based; "
+            "each index must be below the Cartan-matrix rank and the word "
+            f"holds at most {MAX_WEYL_WORD_LENGTH} factors."
+        ),
+    )
+
+
+class WeylElementLengthResult(StrictModel):
+    """The length, reducedness, and inversion set of a Weyl-group word."""
+
+    matrix: CartanMatrix
+    word: tuple[int, ...]
+    length: int = Field(ge=0, le=MAX_POSITIVE_ROOTS)
+    is_reduced: bool
+    inversions: tuple[tuple[int, ...], ...]
+
+    @model_validator(mode="after")
+    def require_length_shape(self) -> Self:
+        rank = len(self.matrix)
+        if (
+            self.length != len(self.inversions)
+            or self.is_reduced != (self.length == len(self.word))
+            or self.inversions != tuple(sorted(set(self.inversions)))
+            or any(
+                len(root) != rank
+                or any(
+                    coordinate < 0 or coordinate > MAX_ROOT_COORDINATE
+                    for coordinate in root
+                )
+                or not any(root)
+                for root in self.inversions
+            )
+        ):
+            raise _validation_error(
+                "weyl_length_shape",
+                "length must count distinct sorted positive-root inversions "
+                "and reducedness must compare it with the word length",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        matrix: CartanMatrix,
+        word: tuple[int, ...],
+        length: int,
+        is_reduced: bool,
+        inversions: tuple[tuple[int, ...], ...],
+    ) -> Self:
+        return cls.model_construct(
+            matrix=matrix,
+            word=word,
+            length=length,
+            is_reduced=is_reduced,
+            inversions=inversions,
+        )
+
+
+class WeylLongestElementResult(StrictModel):
+    """A reduced word for the longest Weyl-group element.
+
+    The longest element is the unique element sending every positive
+    root negative, so its length equals the positive-root count and
+    the word is reduced.
+    """
+
+    matrix: CartanMatrix
+    word: tuple[int, ...]
+    length: int = Field(ge=1, le=MAX_POSITIVE_ROOTS)
+    num_positive_roots: int = Field(ge=1, le=MAX_POSITIVE_ROOTS)
+
+    @model_validator(mode="after")
+    def require_longest_shape(self) -> Self:
+        if (
+            self.length != self.num_positive_roots
+            or self.length != len(self.word)
+            or any(
+                type(index) is not int or index < 0 or index >= len(self.matrix)
+                for index in self.word
+            )
+        ):
+            raise _validation_error(
+                "weyl_longest_shape",
+                "a longest word is reduced and as long as the positive-root "
+                "count, with indices below the Cartan rank",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        matrix: CartanMatrix,
+        word: tuple[int, ...],
+        length: int,
+        num_positive_roots: int,
+    ) -> Self:
+        return cls.model_construct(
+            matrix=matrix,
+            word=word,
+            length=length,
+            num_positive_roots=num_positive_roots,
+        )
+
+
+class WeylDescentsResult(StrictModel):
+    """The left and right descent sets of a Weyl-group word."""
+
+    matrix: CartanMatrix
+    word: tuple[int, ...]
+    left_descents: tuple[int, ...]
+    right_descents: tuple[int, ...]
+
+    @model_validator(mode="after")
+    def require_descents_shape(self) -> Self:
+        rank = len(self.matrix)
+        for descents in (self.left_descents, self.right_descents):
+            if descents != tuple(sorted(set(descents))) or any(
+                type(index) is not int or index < 0 or index >= rank
+                for index in descents
+            ):
+                raise _validation_error(
+                    "weyl_descents_shape",
+                    "descent sets must be sorted index sets below the Cartan rank",
+                )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        matrix: CartanMatrix,
+        word: tuple[int, ...],
+        left_descents: tuple[int, ...],
+        right_descents: tuple[int, ...],
+    ) -> Self:
+        return cls.model_construct(
+            matrix=matrix,
+            word=word,
+            left_descents=left_descents,
+            right_descents=right_descents,
         )
 
 

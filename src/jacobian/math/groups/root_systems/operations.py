@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+from typing import cast
+
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.groups.root_systems._cartan import (
+    VALID_CARTAN_TYPE_RANKS,
+    cartan_type_matrix,
     connected_components,
 )
 from jacobian.math.groups.root_systems._cartan import (
@@ -12,17 +16,32 @@ from jacobian.math.groups.root_systems._cartan import (
 from jacobian.math.groups.root_systems._cartan import (
     simple_reflection as _simple_reflection_kernel,
 )
+from jacobian.math.groups.root_systems._cartan import (
+    weyl_longest_word as _weyl_longest_word_kernel,
+)
+from jacobian.math.groups.root_systems._cartan import (
+    weyl_word_descents as _weyl_word_descents_kernel,
+)
+from jacobian.math.groups.root_systems._cartan import (
+    weyl_word_inversions as _weyl_word_inversions_kernel,
+)
 from jacobian.math.groups.root_systems._models import (
     MAX_POSITIVE_ROOTS,
     MAX_RANK,
     MAX_REFLECTION_REPRESENTABLE,
+    MAX_WEYL_WORD_LENGTH,
     CartanMatrix,
+    CartanType,
+    CartanTypeResult,
     PositiveRootsResult,
     RootComponentData,
     RootSystemDataResult,
     SimpleReflectionResult,
     SimpleReflectionsResult,
+    WeylDescentsResult,
+    WeylElementLengthResult,
     WeylGroupOrderResult,
+    WeylLongestElementResult,
 )
 
 MAX_SIGNED_ROOT_ACTION_DEGREE = 2 * MAX_POSITIVE_ROOTS
@@ -92,6 +111,39 @@ def _admit_cartan_finite_type(matrix: tuple[tuple[int, ...], ...]) -> None:
             code="root_system.finite_type",
             message=str(error),
         ) from error
+
+
+def cartan_matrix_from_type(
+    cartan_type: str,
+    rank: int,
+) -> CartanTypeResult:
+    """Build the Cartan matrix of a finite Dynkin type and rank.
+
+    The admitted pairs are ``A_n`` (``n >= 1``), ``B_n``/``C_n``
+    (``n >= 2``), ``D_n`` (``n >= 4``), ``E_6``/``E_7``/``E_8``,
+    ``F_4``, and ``G_2`` with rank at most 8. The kernel asserts its
+    own output is finite-type before trusted result construction.
+    """
+    if type(cartan_type) is not str or cartan_type not in VALID_CARTAN_TYPE_RANKS:
+        raise OperationDomainValidationError(
+            location=("cartan_type",),
+            code="root_system.unknown_cartan_type",
+            message="cartan_type must be one of A, B, C, D, E, F, G",
+        )
+    if type(rank) is not int or rank not in VALID_CARTAN_TYPE_RANKS[cartan_type]:
+        raise OperationDomainValidationError(
+            location=("rank",),
+            code="root_system.invalid_cartan_type_rank",
+            message=(
+                f"rank {rank!r} is not a finite type for "
+                f"{cartan_type}; admitted ranks are "
+                f"{list(VALID_CARTAN_TYPE_RANKS[cartan_type])}"
+            ),
+        )
+    rows = cartan_type_matrix(cartan_type, rank)
+    _admit_cartan_finite_type(rows)
+    cartan = CartanMatrix.model_validate(rows)
+    return CartanTypeResult._from_kernel(cast("CartanType", cartan_type), rank, cartan)
 
 
 def root_system_data(
@@ -233,6 +285,90 @@ def simple_reflection(
     return SimpleReflectionResult._from_kernel(cartan, vector, simple_index, reflected)
 
 
+def _admit_weyl_word(word: tuple[int, ...] | list[int], rank: int) -> tuple[int, ...]:
+    """Admit a bounded Weyl word against a Cartan rank."""
+    if isinstance(word, list):
+        word = tuple(word)
+    if (
+        not isinstance(word, tuple)
+        or len(word) > MAX_WEYL_WORD_LENGTH
+        or any(type(index) is not int or index < 0 or index >= rank for index in word)
+    ):
+        raise OperationDomainValidationError(
+            location=("word",),
+            code="root_system.invalid_weyl_word",
+            message=(
+                "word must hold at most "
+                f"{MAX_WEYL_WORD_LENGTH} integer simple-reflection indices "
+                f"below the Cartan rank {rank}"
+            ),
+        )
+    return word
+
+
+def weyl_element_length(
+    matrix: CartanMatrix | tuple[tuple[int, ...], ...],
+    word: tuple[int, ...] | list[int],
+) -> WeylElementLengthResult:
+    """Compute the length, reducedness, and inversion set of a Weyl word.
+
+    The word lists simple-reflection indices applied left to right. The
+    length is the number of positive roots the word sends negative; the
+    word is reduced exactly when that count equals its factor count.
+    """
+    cartan = _as_cartan(matrix)
+    rows = cartan.entries
+    _admit_cartan_finite_type(rows)
+    word = _admit_weyl_word(word, len(rows))
+    inversions = _weyl_word_inversions_kernel(rows, word)
+    return WeylElementLengthResult._from_kernel(
+        cartan, word, len(inversions), len(inversions) == len(word), inversions
+    )
+
+
+def weyl_element_descents(
+    matrix: CartanMatrix | tuple[tuple[int, ...], ...],
+    word: tuple[int, ...] | list[int],
+) -> WeylDescentsResult:
+    """Compute the left and right descent sets of a Weyl-group word.
+
+    A word lists its factors in application order, so prepending is
+    right multiplication and appending is left multiplication: a right
+    descent lowers the length when prepended, a left descent when
+    appended. Both sets are carried as sorted simple-root index sets.
+    """
+    cartan = _as_cartan(matrix)
+    rows = cartan.entries
+    _admit_cartan_finite_type(rows)
+    admitted = _admit_weyl_word(word, len(rows))
+    left_descents, right_descents = _weyl_word_descents_kernel(rows, admitted)
+    return WeylDescentsResult._from_kernel(
+        cartan, admitted, left_descents, right_descents
+    )
+
+
+def weyl_longest_element(
+    matrix: CartanMatrix | tuple[tuple[int, ...], ...],
+) -> WeylLongestElementResult:
+    """Compute a reduced word for the longest Weyl-group element.
+
+    Greedy weak-order ascent appends one length-raising simple
+    reflection at a time, so the word is reduced by construction. The
+    kernel asserts maximality before trusted construction: the word's
+    inversion count must equal the positive-root count.
+    """
+    cartan = _as_cartan(matrix)
+    rows = cartan.entries
+    _admit_cartan_finite_type(rows)
+    word = _weyl_longest_word_kernel(rows)
+    num_positive_roots = len(enumerate_positive_roots(rows))
+    inversions = _weyl_word_inversions_kernel(rows, word)
+    assert len(word) == len(inversions) == num_positive_roots
+    return WeylLongestElementResult._from_kernel(
+        cartan, word, len(word), num_positive_roots
+    )
+
+
 def weyl_group_order(
     matrix: CartanMatrix | tuple[tuple[int, ...], ...],
 ) -> WeylGroupOrderResult:
@@ -342,9 +478,13 @@ def simple_reflections(
 
 
 __all__ = [
+    "cartan_matrix_from_type",
     "positive_roots",
     "root_system_data",
     "simple_reflection",
     "simple_reflections",
+    "weyl_element_descents",
+    "weyl_element_length",
     "weyl_group_order",
+    "weyl_longest_element",
 ]

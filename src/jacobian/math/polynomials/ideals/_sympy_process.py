@@ -138,9 +138,7 @@ def _run_sympy_kernel(
     if completed.timed_out:
         raise _SympyKernelTimeoutError()
     if completed.stdout_exceeded:
-        raise _ResultLimitExceededError(
-            "the exact kernel result exceeded the worker channel bound"
-        )
+        raise _SympyKernelError("SymPy worker exceeded its result channel bound")
     if completed.stderr_exceeded:
         raise _SympyKernelError("SymPy worker exceeded its diagnostic channel bound")
     if completed.returncode != 0:

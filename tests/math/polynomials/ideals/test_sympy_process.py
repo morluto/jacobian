@@ -62,8 +62,8 @@ def test_success_response_is_bound_to_the_request(
         (_completed(cancelled=True), _sympy_process._SympyKernelCancelledError, None),
         (
             _completed(stdout_exceeded=True),
-            _sympy_process._ResultLimitExceededError,
-            "channel bound",
+            _sympy_process._SympyKernelError,
+            "result channel",
         ),
         (
             _completed(stderr_exceeded=True),

@@ -143,6 +143,14 @@ A child-process adapter has the same obligations plus:
 - distinct typed unavailable, timeout, cancellation, and execution-error
   outcomes.
 
+Keep mathematical limits separate from process capacity. A worker may return an
+owner-defined result-limit status only when it establishes that a declared
+mathematical bound, such as a term or result-cardinality limit, was crossed.
+Exhausting the stdout or stderr byte allowance is operational resource
+exhaustion, not evidence about the mathematical result. Do not classify limits
+by matching backend exception text: preflight the bound where possible, or
+translate a known converter or backend limit exception at the worker boundary.
+
 The parent owns admission and final result construction. Every worker boundary
 checks object shape, collection cardinality, row widths, and scalar syntax
 before materializing nested values. Use the canonical codec when encoded bytes
@@ -174,6 +182,12 @@ the process supervisor and any canonical encoder or decoder at that boundary;
 the codec's ordinary unbounded-output mode must not silently substitute a
 different default.
 
+Decode the response envelope in dependency order: establish valid framing and
+the protocol version, verify its request or source binding, and only then
+interpret the status and decode result fields. A failure in framing, binding,
+or result shape is a worker protocol failure; it must not be projected as a
+mathematical limit or conclusion.
+
 Child processes use the shared bounded-process supervisor. Backend adapters test
 their codec, source binding, and outcome projection; the supervisor's owning
 tests prove process-group termination and descendant cleanup. Register each
@@ -182,12 +196,15 @@ are narrow ownership declarations, not a general math-to-process dependency.
 
 Mathematical workers use the supervisor's checked execution path by default.
 That path handles cancellation, timeout, output overflow, and abnormal exit in
-one documented order and raises transport-independent execution exceptions.
-Access to an unchecked process result is restricted to diagnostic availability
-probes and owners with a complete, independently tested exact fallback. The
-shared supervisor does not parse mathematical output or decide whether a
-backend's inconclusive status is a valid Jacobian partial result; the domain
-owner retains those decisions.
+one documented order and raises transport-independent execution exceptions. An
+owner may inspect the bounded result in a dedicated `_process.py` adapter when
+its public contract distinguishes those operational outcomes. That adapter must
+preserve the supervisor's precedence, classify channel exhaustion as an
+operational failure, and test every inspected field. Unchecked results are not
+available to mathematical kernels or ordinary operation code. The shared
+supervisor does not parse mathematical output or decide whether a backend's
+inconclusive status is a valid Jacobian partial result; the domain owner retains
+those decisions.
 
 The supervisor's wall deadline starts at adapter entry and is shared by input
 spooling, launch, resource setup, capture, execution, conversion, and result

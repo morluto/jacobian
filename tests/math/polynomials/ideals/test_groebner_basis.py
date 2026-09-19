@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import time
-from typing import Literal, NoReturn, TypedDict
+from typing import Any, Literal, NoReturn, TypedDict
 
 import pytest
 from pydantic import ValidationError
@@ -20,11 +20,13 @@ from jacobian.math.polynomials.ideals._models import (
     IdealNormalFormRequest,
     IdealNormalFormResult,
 )
-from jacobian.math.polynomials.ideals.operations import (
+from jacobian.math.polynomials.ideals._sympy_process import (
     _ResultLimitExceededError,
     _SympyKernelCancelledError,
     _SympyKernelError,
     _SympyKernelTimeoutError,
+)
+from jacobian.math.polynomials.ideals.operations import (
     elimination_ideal,
     groebner_basis,
     ideal_normal_form,
@@ -35,7 +37,7 @@ from jacobian.math.polynomials.values import (
     RationalPolynomial,
     RationalPolynomialIdeal,
 )
-from jacobian.process import BoundedProcessResult
+from jacobian.process import BoundedProcessResult, run_bounded_process
 
 
 def _run_groebner(request: GroebnerBasisRequest) -> GroebnerBasisResult:
@@ -416,8 +418,8 @@ class TestKillableWorkerContract:
         TIMEOUT. The operation therefore delegates every kernel call to
         ``run_bounded_process`` with the declared wall budget.
         """
-        observed: dict[str, object] = {}
-        real_runner = _sympy_process.run_bounded_process
+        observed: dict[str, Any] = {}
+        real_runner = run_bounded_process
 
         def spy(
             *args: object,
@@ -527,10 +529,10 @@ class TestBoundedResultConstruction:
                 GroebnerBasisRequest(ideal=_ideal(names, gens), monomial_order="lex")
             )
 
-    def test_stdout_limited_worker_returns_typed_limit(
+    def test_stdout_limited_worker_returns_backend_failure(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """A killed worker whose output exceeded its channel bound raises."""
+        """Channel exhaustion does not establish a mathematical result limit."""
 
         def fake_kernel(*args: object, **kwargs: object) -> BoundedProcessResult:
             return BoundedProcessResult(
@@ -544,5 +546,5 @@ class TestBoundedResultConstruction:
 
         monkeypatch.setattr(_sympy_process, "run_bounded_process", fake_kernel)
         g = _poly(("x", "y"), (1, 1, (2, 0)), (-1, 1, (0, 1)))
-        with pytest.raises(RuntimeError, match="exact-result limit"):
+        with pytest.raises(RuntimeError, match="result channel bound"):
             _run_groebner(GroebnerBasisRequest(ideal=_ideal(("x", "y"), (g,))))

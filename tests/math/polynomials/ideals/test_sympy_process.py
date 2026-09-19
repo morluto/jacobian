@@ -114,3 +114,36 @@ def test_response_digest_mismatch_is_rejected(
     )
     with pytest.raises(_sympy_process._SympyKernelError, match="not bound"):
         _sympy_process._run_sympy_kernel({"mode": "probe"}, 1)
+
+
+def test_conversion_term_budget_is_a_typed_result_limit() -> None:
+    polynomial = {
+        "domain": "QQ",
+        "variables": ["x"],
+        "polynomial": {
+            "terms": [
+                {
+                    "coefficient": {"num": "1", "den": "1"},
+                    "exponents": [1],
+                },
+                {
+                    "coefficient": {"num": "1", "den": "1"},
+                    "exponents": [0],
+                },
+            ]
+        },
+    }
+    with pytest.raises(
+        _sympy_process._ResultLimitExceededError,
+        match="1-term operation budget",
+    ):
+        _sympy_process._run_sympy_kernel(
+            {
+                "mode": "groebner",
+                "variables": ["x"],
+                "generators": [polynomial],
+                "order": "lex",
+                "maximum_terms": 1,
+            },
+            10,
+        )

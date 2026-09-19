@@ -19,6 +19,7 @@ from jacobian.math.polynomials._conversions import (
 )
 from jacobian.math.polynomials.values import (
     MAX_POLYNOMIAL_EXPONENT,
+    MAX_POLYNOMIAL_TERMS,
     RationalPolynomial,
 )
 
@@ -50,7 +51,15 @@ def _decimal_digit_count(value: int) -> int:
     return estimate
 
 
-def _require_admissible_polynomial(polynomial: Any) -> None:
+def _require_admissible_polynomial(
+    polynomial: Any,
+    *,
+    maximum_terms: int,
+) -> None:
+    if len(polynomial.terms()) > maximum_terms:
+        raise _WorkerLimitError(
+            f"polynomial result exceeds the {maximum_terms}-term operation budget"
+        )
     largest = max(
         (max(monomial) if monomial else 0 for monomial in polynomial.monoms()),
         default=0,
@@ -98,22 +107,19 @@ def _context(payload: JsonObject) -> _Context:
 def _dump_polynomial(
     expression: Any,
     variables: tuple[str, ...],
-    maximum_terms: int | None = None,
+    maximum_terms: int = MAX_POLYNOMIAL_TERMS,
 ) -> JsonObject:
     polynomial = sympy.Poly(
         expression,
         *symbols_for_variables(variables),
         domain=sympy.QQ,
     )
-    _require_admissible_polynomial(polynomial)
-    if maximum_terms is None:
-        converted = rational_polynomial_from_sympy(polynomial, variables)
-    else:
-        converted = rational_polynomial_from_sympy(
-            polynomial,
-            variables,
-            maximum_terms=maximum_terms,
-        )
+    _require_admissible_polynomial(polynomial, maximum_terms=maximum_terms)
+    converted = rational_polynomial_from_sympy(
+        polynomial,
+        variables,
+        maximum_terms=maximum_terms,
+    )
     return converted.model_dump(mode="json")
 
 
@@ -408,7 +414,6 @@ def _compute_elimination(context: _Context) -> JsonObject:
         order="lex",
         domain=sympy.QQ,
     )
-    remaining_symbols = tuple(symbols_for_variables(tuple(remaining)))
     generators: list[JsonObject] = []
     unit_ideal = False
     for expression in basis:
@@ -418,18 +423,7 @@ def _compute_elimination(context: _Context) -> JsonObject:
             unit_ideal = True
             break
         if involved.issubset(remaining):
-            converted = sympy.Poly(
-                expression,
-                *remaining_symbols,
-                domain=sympy.QQ,
-            )
-            _require_admissible_polynomial(converted)
-            generators.append(
-                rational_polynomial_from_sympy(
-                    converted,
-                    tuple(remaining),
-                ).model_dump(mode="json")
-            )
+            generators.append(_dump_polynomial(expression, tuple(remaining)))
     return {
         "unit_ideal": unit_ideal,
         "generators": generators,

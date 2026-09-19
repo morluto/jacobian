@@ -189,6 +189,24 @@ class TestFeasibility:
             result.certificate.farkas_value.as_fraction(),
         )
 
+    def test_edgeless_network_is_infeasible_with_exact_farkas(self) -> None:
+        network = FlowGraph(vertex_count=4, edges=())
+        result = solve_multicommodity_feasibility(network, _demands())
+
+        assert result.status == "INFEASIBLE"
+        assert result.certificate is not None
+        _replay_farkas(
+            network,
+            _demands(),
+            tuple(
+                tuple(value.as_fraction() for value in row)
+                for row in result.certificate.node_potentials
+            ),
+            tuple(price.as_fraction() for price in result.certificate.edge_prices),
+            result.certificate.farkas_value.as_fraction(),
+        )
+        assert verify_multicommodity_feasibility(result)
+
     def test_search_is_deterministic(self) -> None:
         first = solve_multicommodity_feasibility(_bottleneck(), _demands())
         second = solve_multicommodity_feasibility(_bottleneck(), _demands())

@@ -180,6 +180,24 @@ def solve_multicommodity_feasibility(
     """
 
     _admit_flow_contract(network, commodities)
+    if not network.edges:
+        # Every admitted commodity has distinct terminals and positive demand,
+        # so an edgeless network is infeasible.  Construct the elementary
+        # separating-potential certificate directly instead of asking the
+        # general LP carrier to represent a zero-variable program.
+        multipliers = [
+            CanonicalRational.from_fraction(Fraction(0))
+            for _ in range(len(commodities) * network.vertex_count)
+        ]
+        multipliers[commodities[0].source] = CanonicalRational.from_fraction(
+            Fraction(-1)
+        )
+        certificate = network_farkas_certificate(
+            network, commodities, tuple(multipliers)
+        )
+        return MulticommodityFeasibilityResult._from_kernel(
+            network, commodities, "INFEASIBLE", certificate=certificate
+        )
     program = feasibility_program(network, commodities)
     try:
         outcome = solve_flow_program(program)

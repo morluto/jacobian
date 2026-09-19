@@ -25,7 +25,8 @@ from jacobian.math.geometry.differential.laplace_beltrami._plan import (
     build_plan,
 )
 from jacobian.math.geometry.differential.metrics._dag import admit_recognition_work
-from jacobian.math.geometry.differential.metrics._dag_evaluate_process import (
+from jacobian.math.geometry.differential.metrics._dag_process import (
+    DagDegeneracy,
     evaluate_admitted_dag,
 )
 from jacobian.math.geometry.differential.metrics._models import RationalCoordinateMetric
@@ -110,19 +111,18 @@ def laplace_beltrami(
     _recognize_source(metric, scalar, deadline)
     plan = build_plan(metric, scalar)
     request_checkpoint("after Laplace--Beltrami admission")
-    (value,), determinant_guards = evaluate_admitted_dag(
+    evaluation = evaluate_admitted_dag(
         plan.dag.nodes,
         axis,
         fractions=(plan.fraction,),
         determinants=tuple(dict.fromkeys(plan.determinant.numerator)),
-        sources=(),
         deadline=deadline,
         owner="Laplace--Beltrami",
-        singular_metric=_singular_metric,
-        noncanonical_location=("laplace_beltrami",),
-        noncanonical_code="differential_geometry.laplace_beltrami.noncanonical_source",
-        noncanonical_message="metric and scalar must be reduced canonical rational functions",
     )
+    if isinstance(evaluation, DagDegeneracy):
+        raise _singular_metric()
+    (value,) = evaluation.fractions
+    determinant_guards = evaluation.determinants
     guards = canonical_locus_guards(
         metric.tensor.retained_nonzero_denominators,
         tuple(determinant_guards),

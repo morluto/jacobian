@@ -6,7 +6,6 @@ import math
 import re
 import shutil
 import tempfile
-import time
 from dataclasses import dataclass
 from fractions import Fraction
 from pathlib import Path
@@ -48,7 +47,6 @@ _COEFFICIENT = re.compile(r"^(0|-?[1-9][0-9]*)(?:/([1-9][0-9]*))?$")
 _STDOUT_LIMIT = 512 * 1024
 _STDERR_LIMIT = 64 * 1024
 _SINGULAR_ADDRESS_SPACE_BYTES = 1024 * 1024 * 1024
-_SYMPY_ADDRESS_SPACE_BYTES = 2 * 1024 * 1024 * 1024
 _WORKER_FILE_SIZE_BYTES = 1024 * 1024
 
 SingularOperation = Literal["radical", "quotient", "saturation"]
@@ -685,71 +683,3 @@ __all__ = [
     "run_singular_ideal_operation",
     "run_singular_minimal_primes",
 ]
-
-
-def run_bounded_stdin_python_kernel(
-    script: str,
-    payload_json: str,
-    *,
-    wall_seconds: float,
-    deadline: float | None = None,
-    stdout_limit: int,
-    stderr_limit: int,
-) -> tuple[bool | str, str, bool]:
-    """Run one bounded Python-kernel worker and return its bounded status.
-
-    The first tuple member is ``True`` for timeout and ``"CANCELLED"`` when
-    the caller cancelled the process.  Keeping cancellation in the existing
-    three-field result preserves the private helper's call shape while
-    preventing partial worker output from being parsed as a kernel result.
-
-    The child process is terminated on wall-budget expiry, so an admitted
-    request cannot leave detached computations running inside the server.
-    This owner owns every external-executable lookup and the killable
-    process launch for the domain's exact kernels.
-    """
-    import sys
-    import tempfile
-
-    from jacobian.process import (
-        ProcessPlatformTools,
-        ProcessResourceLimits,
-        run_bounded_process,
-        worker_environment,
-    )
-
-    # Deliberately not resolved: following the interpreter symlink would
-    # reparent the worker onto the base prefix without the environment's
-    # site-packages.
-    if deadline is not None and deadline <= time.monotonic():
-        return True, "", False
-    resolved = shutil.which(sys.executable) or sys.executable
-    prlimit = shutil.which("prlimit")
-    if prlimit is not None:
-        prlimit = str(Path(prlimit).resolve())
-    with tempfile.TemporaryDirectory(prefix="jacobian-sympy-") as directory:
-        if deadline is not None:
-            wall_seconds = deadline - time.monotonic()
-            if wall_seconds <= 0:
-                return True, "", False
-        completed = run_bounded_process(
-            [resolved, "-I", "-c", script],
-            input_bytes=payload_json.encode("ascii"),
-            timeout_seconds=float(wall_seconds),
-            environment=worker_environment(locale="C.UTF-8"),
-            stdout_limit=stdout_limit,
-            stderr_limit=stderr_limit,
-            resource_limits=ProcessResourceLimits(
-                cpu_seconds=max(1, math.ceil(wall_seconds)),
-                address_space_bytes=_SYMPY_ADDRESS_SPACE_BYTES,
-                file_size_bytes=_WORKER_FILE_SIZE_BYTES,
-            ),
-            platform_tools=ProcessPlatformTools(prlimit_executable=prlimit),
-            cwd=directory,
-        )
-    if completed.timed_out:
-        return True, "", False
-    if completed.cancelled:
-        return "CANCELLED", "", False
-    exceeded = completed.stdout_exceeded or completed.stderr_exceeded
-    return False, completed.stdout.decode("ascii", errors="replace"), exceeded

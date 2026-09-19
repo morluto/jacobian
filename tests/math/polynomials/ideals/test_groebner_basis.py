@@ -10,7 +10,7 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian._execution import OperationExecutionTimeoutError
-from jacobian.math.polynomials.ideals import operations
+from jacobian.math.polynomials.ideals import _sympy_process, operations
 from jacobian.math.polynomials.ideals._models import (
     EliminationIdealRequest,
     EliminationIdealResult,
@@ -19,9 +19,6 @@ from jacobian.math.polynomials.ideals._models import (
     IdealComputationBudget,
     IdealNormalFormRequest,
     IdealNormalFormResult,
-)
-from jacobian.math.polynomials.ideals._singular import (
-    run_bounded_stdin_python_kernel,
 )
 from jacobian.math.polynomials.ideals.operations import (
     _ResultLimitExceededError,
@@ -38,6 +35,7 @@ from jacobian.math.polynomials.values import (
     RationalPolynomial,
     RationalPolynomialIdeal,
 )
+from jacobian.process import BoundedProcessResult
 
 
 def _run_groebner(request: GroebnerBasisRequest) -> GroebnerBasisResult:
@@ -419,30 +417,18 @@ class TestKillableWorkerContract:
         ``run_bounded_process`` with the declared wall budget.
         """
         observed: dict[str, object] = {}
-        real_runner = run_bounded_stdin_python_kernel
+        real_runner = _sympy_process.run_bounded_process
 
         def spy(
-            script: str,
-            payload_json: str,
-            *,
-            wall_seconds: float,
-            stdout_limit: int,
-            stderr_limit: int,
-            deadline: float | None = None,
-        ) -> tuple[bool | str, str, bool]:
-            observed["timeout"] = wall_seconds
-            observed["deadline"] = deadline
+            *args: object,
+            **kwargs: object,
+        ) -> BoundedProcessResult:
+            observed["timeout"] = kwargs["timeout_seconds"]
+            observed["command"] = args[0]
             observed["child_is_process"] = True
-            return real_runner(
-                script,
-                payload_json,
-                wall_seconds=wall_seconds,
-                deadline=deadline,
-                stdout_limit=stdout_limit,
-                stderr_limit=stderr_limit,
-            )
+            return real_runner(*args, **kwargs)  # type: ignore[arg-type]
 
-        monkeypatch.setattr(operations, "run_bounded_stdin_python_kernel", spy)
+        monkeypatch.setattr(_sympy_process, "run_bounded_process", spy)
         g1 = _poly(("x", "y"), (1, 1, (2, 0)), (-1, 1, (0, 1)))
         g2 = _poly(("x", "y"), (1, 1, (1, 1)), (-1, 1, (0, 0)))
         result = _run_groebner(
@@ -453,7 +439,7 @@ class TestKillableWorkerContract:
         )
         assert observed["timeout"] is not None
         assert float(observed["timeout"]) <= 10
-        assert observed["deadline"] is not None
+        assert "-I" in observed["command"]
         assert result.basis is not None
 
     def test_timed_out_call_leaves_no_lingering_threads(
@@ -545,12 +531,18 @@ class TestBoundedResultConstruction:
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """A killed worker whose output exceeded its channel bound raises."""
-        from jacobian.math.polynomials.ideals import operations as ops
 
-        def fake_kernel(*args: object, **kwargs: object) -> tuple[bool, bytes, bool]:
-            return False, b"", True  # not timed out; empty output; limit hit
+        def fake_kernel(*args: object, **kwargs: object) -> BoundedProcessResult:
+            return BoundedProcessResult(
+                returncode=None,
+                stdout=b"",
+                stderr=b"",
+                stdout_exceeded=True,
+                stderr_exceeded=False,
+                timed_out=False,
+            )
 
-        monkeypatch.setattr(ops, "run_bounded_stdin_python_kernel", fake_kernel)
+        monkeypatch.setattr(_sympy_process, "run_bounded_process", fake_kernel)
         g = _poly(("x", "y"), (1, 1, (2, 0)), (-1, 1, (0, 1)))
         with pytest.raises(RuntimeError, match="exact-result limit"):
             _run_groebner(GroebnerBasisRequest(ideal=_ideal(("x", "y"), (g,))))

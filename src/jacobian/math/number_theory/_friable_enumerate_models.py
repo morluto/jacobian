@@ -151,23 +151,6 @@ class FriableEnumerateResult(StrictModel):
         return self
 
     @classmethod
-    def _from_kernel(
-        cls,
-        request: FriableEnumerateRequest,
-        *,
-        family: tuple[int, ...],
-    ) -> Self:
-        """Build one result after the admitted kernel established the family."""
-
-        return cls.model_construct(
-            x=request.x,
-            y=request.y,
-            family=FiniteIntegerSet(
-                elements=family,
-            ),
-        )
-
-    @classmethod
     def _from_kernel_values(
         cls,
         x: int,
@@ -186,51 +169,8 @@ class FriableEnumerateResult(StrictModel):
         )
 
 
-def _count_friable_bounded(x: int, y: int) -> int:
-    """Count y-friable integers in 1..x, stopping at the family-size limit + 1.
-
-    This is a result-sensitive admission aid for the materialized regime:
-    it uses the same sieve logic as the kernel but stops counting as soon as
-    the family exceeds the result-size budget, avoiding the coarse x upper bound.
-    """
-
-    if x == 0:
-        return 0
-    if y <= 1:
-        return 1 if x >= 1 else 0
-
-    is_friable = bytearray(b"\x01") * (x + 1)
-    is_friable[0] = 0
-    is_prime = bytearray(b"\x01") * (x + 1)
-    is_prime[0:2] = b"\x00\x00"
-
-    count = 0
-    limit = MAX_FRIABLE_ENUMERATE_FAMILY_SIZE + 1
-    for candidate in range(2, x + 1):
-        if not is_prime[candidate]:
-            continue
-        if candidate * candidate <= x:
-            first = candidate * candidate
-            is_prime[first : x + 1 : candidate] = b"\x00" * (
-                (x - first) // candidate + 1
-            )
-        if candidate > y:
-            is_friable[candidate : x + 1 : candidate] = b"\x00" * (x // candidate)
-
-    for value in range(1, x + 1):
-        if is_friable[value]:
-            count += 1
-            if count > limit:
-                return count
-    return count
-
-
 def _materialize_friable_bounded(x: int, y: int) -> tuple[int, ...]:
-    """Return the y-friable integers in 1..x, or an oversized tuple.
-
-    Reuses the same sieve as _count_friable_bounded but returns the family
-    so the kernel can skip the duplicate sieve pass.
-    """
+    """Materialize the y-friable integers in 1..x once for admission and output."""
 
     if x == 0:
         return ()
@@ -256,14 +196,8 @@ def _materialize_friable_bounded(x: int, y: int) -> tuple[int, ...]:
     return tuple(v for v in range(1, x + 1) if is_friable[v])
 
 
-def plan_friable_enumerate(
-    x: int, y: int
-) -> tuple[str, tuple[int, ...], tuple[int, ...]]:
-    """Validate and select one exact friable-enumerate execution regime.
-
-    Returns the regime name, generated prime tuple, and (for the generated
-    regime) the materialized family so execution can reuse the admission pass.
-    """
+def plan_friable_enumerate(x: int, y: int) -> tuple[int, ...]:
+    """Validate and materialize one exact friable family for execution."""
 
     if x < 0 or y < 0:
         raise _validation_error(
@@ -279,16 +213,16 @@ def plan_friable_enumerate(
     # Direct regime: x is 0 (empty family is handled by the kernel), or y is so
     # large that every integer 1..x is friable, or y <= 1 (only 1 is friable).
     if x == 0:
-        return "DIRECT", (), ()
+        return ()
     if y <= 1:
-        return "DIRECT", (), (1,)
+        return (1,)
     if y >= x:
         if x > MAX_FRIABLE_ENUMERATE_FAMILY_SIZE:
             raise _validation_error(
                 "friable_enumerate_family_exceeds_the_result_size_budget",
                 "friable-enumerate family exceeds the result-size budget",
             )
-        return "DIRECT", (), tuple(range(1, x + 1))
+        return tuple(range(1, x + 1))
 
     # Materialized regime: small enough to scan 1..x directly.
     # Count the actual friable family size instead of using the coarse x
@@ -301,7 +235,7 @@ def plan_friable_enumerate(
                 "friable_enumerate_family_exceeds_the_result_size_budget",
                 "friable-enumerate family exceeds the result-size budget",
             )
-        return "MATERIALIZED", (), family
+        return family
 
     # Generated regime: enumerate exponent vectors without materializing 1..x.
     if y > MAX_FRIABLE_ENUMERATE_GENERATED_CUTOFF:
@@ -318,7 +252,7 @@ def plan_friable_enumerate(
             "friable_enumerate_family_exceeds_the_result_size_budget",
             "friable-enumerate family exceeds the result-size budget",
         )
-    return "GENERATED", primes, family
+    return family
 
 
 __all__ = [

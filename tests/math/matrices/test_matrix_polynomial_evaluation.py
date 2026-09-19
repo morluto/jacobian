@@ -25,19 +25,21 @@ from jacobian.math.matrices._operation_models import (
     CharacteristicPolynomialRequest,
 )
 from jacobian.math.matrices._tools import compute_characteristic_polynomial
-from jacobian.math.matrices.canonical_forms._models import (
+from jacobian.math.matrices.canonical_forms._matrix_polynomial_bounds import (
     _MAX_WORK_BOUND,
-    MATRIX_POLYNOMIAL_EVALUATION_PASSES,
-    MAX_MATRIX_POLYNOMIAL_DIGIT_WORK,
-    MAX_MATRIX_POLYNOMIAL_SCALAR_PRODUCTS,
-    MatrixPolynomialEvaluationRequest,
-    MatrixPolynomialEvaluationResult,
     _coefficient_ratios,
     _general_result_component_bounds,
     _linear_result_component_bounds,
     _polynomial_degree,
     _require_matrix_polynomial_output_budget,
     _work_exact_quotient,
+)
+from jacobian.math.matrices.canonical_forms._models import (
+    MATRIX_POLYNOMIAL_EVALUATION_PASSES,
+    MAX_MATRIX_POLYNOMIAL_DIGIT_WORK,
+    MAX_MATRIX_POLYNOMIAL_SCALAR_PRODUCTS,
+    MatrixPolynomialEvaluationRequest,
+    MatrixPolynomialEvaluationResult,
 )
 from jacobian.math.matrices.canonical_forms._tools import (
     compute_matrix_polynomial_evaluation,

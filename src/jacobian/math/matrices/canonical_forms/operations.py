@@ -19,8 +19,15 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.math.matrices.canonical_forms._models import (
+from jacobian.math.matrices.canonical_forms._matrix_polynomial_bounds import (
     _MAX_RESULT_COMPONENT,
+    _capped_add,
+    _capped_lcm,
+    _capped_multiply,
+    _polynomial_degree,
+    _require_matrix_polynomial_output_budget,
+)
+from jacobian.math.matrices.canonical_forms._models import (
     MATRIX_POLYNOMIAL_EVALUATION_PASSES,
     MAX_CANONICAL_FORM_DIMENSION,
     MAX_CANONICAL_FORM_SCALAR_DIGITS,
@@ -37,11 +44,6 @@ from jacobian.math.matrices.canonical_forms._models import (
     PrimaryDecompositionResult,
     RationalCanonicalFormResult,
     SimilarityResult,
-    _capped_add,
-    _capped_lcm,
-    _capped_multiply,
-    _polynomial_degree,
-    _require_matrix_polynomial_output_budget,
     _validation_error,
 )
 from jacobian.math.matrices.values import (

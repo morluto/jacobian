@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.23.0](https://github.com/morluto/jacobian/compare/jacobian-v0.22.0...jacobian-v0.23.0) (2026-09-19)
+
+
+### Features
+
+* **groups:** add Cartan type constructor and Weyl element operations ([#3759](https://github.com/morluto/jacobian/issues/3759)) ([#3789](https://github.com/morluto/jacobian/issues/3789)) ([8169cfe](https://github.com/morluto/jacobian/commit/8169cfe324adc7af7922532c777267e2c9bcfa06))
+* **lie-algebras:** add Killing form, center, series, ideals, and quotients ([#3757](https://github.com/morluto/jacobian/issues/3757)) ([#3790](https://github.com/morluto/jacobian/issues/3790)) ([f1170bb](https://github.com/morluto/jacobian/commit/f1170bbc59c14ead58dcdf93a11e5ecab1dd0684))
+* **logic:** add relational homomorphism search, count, core, embedding ([#3759](https://github.com/morluto/jacobian/issues/3759)) ([#3791](https://github.com/morluto/jacobian/issues/3791)) ([09208d8](https://github.com/morluto/jacobian/commit/09208d8e77266518f0f95acf4875ced7f13124b3))
+
+
+### Bug Fixes
+
+* **polynomials:** fail closed early for factorization without memory containment ([#3792](https://github.com/morluto/jacobian/issues/3792)) ([e2abc00](https://github.com/morluto/jacobian/commit/e2abc00c634da4f7e3fe7926e6f22b1d374a305f))
+
 ## [0.22.0](https://github.com/morluto/jacobian/compare/jacobian-v0.21.0...jacobian-v0.22.0) (2026-09-17)
 
 

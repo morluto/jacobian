@@ -5,9 +5,12 @@ from __future__ import annotations
 from typing import Literal
 
 from jacobian.math.logic.term_rewriting.values import (
+    MAX_CRITICAL_PAIR_CANDIDATE_WORK,
     MAX_CRITICAL_PAIR_CANDIDATES,
     MAX_CRITICAL_PAIR_RESULT_NODES,
     MAX_CRITICAL_PAIR_RULES,
+    MAX_REWRITE_APPLICATIONS,
+    MAX_SUBSTITUTION_BINDINGS,
     MAX_TERM_DEPTH,
     CriticalOverlapCandidate,
     CriticalPair,
@@ -21,6 +24,7 @@ from jacobian.math.logic.term_rewriting.values import (
 )
 
 __all__ = [
+    "_variable_symbols",
     "apply_substitution",
     "critical_pairs",
     "match",
@@ -169,6 +173,8 @@ def _unify(
             if equation_left.symbol in _variable_symbols(equation_right):
                 return None
             if budget is not None:
+                budget.charge_binding()
+            if budget is not None:
                 budget.charge(equation_right)
             binding = {equation_left.symbol: equation_right}
             binding_size = _term_node_count(equation_right)
@@ -207,8 +213,15 @@ def _bounded_unify(left: Term, right: Term) -> dict[int, Term] | None:
         return _unify(
             left,
             right,
-            _MaterializationBudget(MAX_CRITICAL_PAIR_RESULT_NODES),
+            _MaterializationBudget(
+                MAX_CRITICAL_PAIR_RESULT_NODES,
+                max_bindings=MAX_SUBSTITUTION_BINDINGS,
+            ),
         )
+    except _BindingEnvelopeError as error:
+        raise ValueError(
+            "unification substitution bindings exceed the supported bound"
+        ) from error
     except _ResultEnvelopeError as error:
         raise ValueError(
             "unification result nodes exceed the supported bound"
@@ -306,6 +319,10 @@ class _ResultEnvelopeError(Exception):
     """Raised when admitted materialization would leave the node envelope."""
 
 
+class _BindingEnvelopeError(Exception):
+    """Raised when one result would retain too many substitution bindings."""
+
+
 class _MaterializationBudget:
     """Charge every materialized term against a remaining node allowance.
 
@@ -316,10 +333,12 @@ class _MaterializationBudget:
     detected before its allocation.
     """
 
-    __slots__ = ("remaining",)
+    __slots__ = ("binding_count", "max_bindings", "remaining")
 
-    def __init__(self, remaining: int) -> None:
+    def __init__(self, remaining: int, *, max_bindings: int | None = None) -> None:
         self.remaining = remaining
+        self.max_bindings = max_bindings
+        self.binding_count = 0
 
     def charge_nodes(self, count: int) -> None:
         self.remaining -= count
@@ -328,6 +347,11 @@ class _MaterializationBudget:
 
     def charge(self, term: Term) -> None:
         self.charge_nodes(_term_node_count(term))
+
+    def charge_binding(self) -> None:
+        self.binding_count += 1
+        if self.max_bindings is not None and self.binding_count > self.max_bindings:
+            raise _BindingEnvelopeError
 
 
 def _expanded_node_count(term: Term, binding_sizes: dict[int, int]) -> int:
@@ -385,6 +409,30 @@ def _retained_source_charge(rules: tuple[RewriteRule, ...]) -> int:
     )
 
 
+def _critical_pair_candidate_work(rules: tuple[RewriteRule, ...]) -> int:
+    """Estimate complete overlap-candidate work before path materialization.
+
+    Each candidate must inspect the outer source side and the inner overlap
+    side before it can establish either unifiability outcome.  Charging those
+    structural sizes keeps candidate enumeration bounded even when the
+    candidate count itself is small.
+    """
+    source_nodes = tuple(
+        _term_node_count(rule.lhs) + _term_node_count(rule.rhs) for rule in rules
+    )
+    positions = tuple(_nonvariable_position_count(rule.lhs) for rule in rules)
+    work = 0
+    for outer_index, count in enumerate(positions):
+        for inner_index in range(len(rules)):
+            candidate_count = count
+            if outer_index == inner_index:
+                candidate_count -= 1  # the identical root overlap is skipped
+            work += candidate_count * (
+                source_nodes[outer_index] + source_nodes[inner_index]
+            )
+    return work
+
+
 def _admit_critical_pair_result_envelope(rules: tuple[RewriteRule, ...]) -> int:
     """Charge every retained result object against the result envelope.
 
@@ -430,7 +478,9 @@ def _admit_critical_pair_result_envelope(rules: tuple[RewriteRule, ...]) -> int:
                     outer_renaming,
                     inner_renaming,
                 ) = _overlap_unification_terms(outer, inner, position)
-                budget = _MaterializationBudget(remaining)
+                budget = _MaterializationBudget(
+                    remaining, max_bindings=MAX_SUBSTITUTION_BINDINGS
+                )
                 try:
                     budget.charge_nodes(_term_node_count(renamed_inner_lhs))
                     budget.charge_nodes(_term_node_count(renamed_overlap))
@@ -439,7 +489,7 @@ def _admit_critical_pair_result_envelope(rules: tuple[RewriteRule, ...]) -> int:
                         renamed_overlap,
                         budget,
                     )
-                except _ResultEnvelopeError:
+                except (_ResultEnvelopeError, _BindingEnvelopeError):
                     raise ValueError(_RESULT_NODES_EXCEEDED) from None
                 remaining = budget.remaining
                 if substitution is None:
@@ -512,6 +562,8 @@ def _validate_critical_pair_source(
     ) - len(rules)
     if candidates > MAX_CRITICAL_PAIR_CANDIDATES:
         raise ValueError("critical-pair overlap candidates exceed the supported bound")
+    if _critical_pair_candidate_work(rules) > MAX_CRITICAL_PAIR_CANDIDATE_WORK:
+        raise ValueError("critical-pair candidate work exceeds the supported bound")
     _admit_critical_pair_result_envelope(rules)
 
 
@@ -694,11 +746,14 @@ def selected_rewrite_step(
     if substitution is None:
         return None
     replacement = apply_substitution(rules[rule_index].rhs, substitution)
+    rewritten = _replace_at_position(term, position, replacement)
+    if _term_depth(rewritten) > MAX_TERM_DEPTH:
+        raise ValueError("rewrite result term depth exceeds the supported bound")
     return RewriteApplication(
         position=position,
         rule_index=rule_index,
         substitution=Substitution(mapping=substitution),
-        term=_replace_at_position(term, position, replacement),
+        term=rewritten,
     )
 
 
@@ -716,7 +771,11 @@ def rewrite_steps(
 
 
 def normal_form(
-    term: Term, rules: tuple[RewriteRule, ...], max_steps: int = 1000
+    term: Term,
+    rules: tuple[RewriteRule, ...],
+    max_steps: int = 1000,
+    *,
+    cumulative_node_limit: int | None = None,
 ) -> tuple[
     Term,
     Literal["NORMAL_FORM", "STEP_LIMIT"],
@@ -732,13 +791,50 @@ def normal_form(
         raise ValueError("max_steps must be nonnegative")
     steps = 0
     current = term
+    cumulative_nodes = 0
+
+    def admit_iteration(source: Term) -> None:
+        nonlocal cumulative_nodes
+        if cumulative_node_limit is None:
+            return
+        source_nodes = _term_node_count(source)
+        candidate_work = source_nodes * len(rules)
+        if candidate_work > MAX_REWRITE_APPLICATIONS:
+            raise ValueError("rewrite position/rule work exceeds the supported bound")
+        cumulative_nodes += source_nodes + candidate_work
+        if cumulative_nodes > cumulative_node_limit:
+            raise ValueError(
+                "normal-form cumulative result nodes exceed the supported bound"
+            )
+
+    def charge_applications(applications: tuple[RewriteApplication, ...]) -> None:
+        nonlocal cumulative_nodes
+        if cumulative_node_limit is None:
+            return
+        cumulative_nodes += sum(
+            _term_node_count(application.term)
+            + sum(
+                _term_node_count(value)
+                for value in application.substitution.mapping.values()
+            )
+            for application in applications
+        )
+        if cumulative_nodes > cumulative_node_limit:
+            raise ValueError(
+                "normal-form cumulative result nodes exceed the supported bound"
+            )
+
     while steps < max_steps:
+        admit_iteration(current)
         applications = rewrite_steps(current, rules)
+        charge_applications(applications)
         if not applications:
             return (current, "NORMAL_FORM", steps, None)
         current = applications[0].term
         steps += 1
+    admit_iteration(current)
     applications = rewrite_steps(current, rules)
+    charge_applications(applications)
     if not applications:
         return (current, "NORMAL_FORM", steps, None)
     return (current, "STEP_LIMIT", steps, applications[0])

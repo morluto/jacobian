@@ -2,11 +2,17 @@
 
 from typing import Literal
 
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.logic.term_rewriting._kernel import (
     _bounded_unify,
     _critical_pairs,
+    _expanded_node_count,
+    _term_node_count,
     _validate_critical_pair_source,
+    _variable_symbols,
     apply_substitution,
     critical_pairs,
     match,
@@ -26,11 +32,18 @@ from jacobian.math.logic.term_rewriting._models import (
     UnificationResult,
 )
 from jacobian.math.logic.term_rewriting.values import (
+    MAX_NORMAL_FORM_RESULT_NODES,
+    MAX_REWRITE_APPLICATIONS,
+    MAX_REWRITE_RESULT_NODES,
+    MAX_SUBSTITUTION_BINDINGS,
+    MAX_TERM_NODES,
     RankedSignature,
+    RewriteApplication,
     RewriteRule,
     Substitution,
     Term,
     _require_term_depth,
+    _require_term_nodes,
 )
 
 __all__ = [
@@ -73,6 +86,7 @@ def _admit_terms(
     try:
         for term in terms:
             signature.validate_term(term)
+            _require_term_nodes(term, maximum=MAX_TERM_NODES)
         _require_term_depth(*terms)
     except ValueError as error:
         raise _domain_error(
@@ -84,6 +98,132 @@ def _rule_terms(rules: tuple[RewriteRule, ...]) -> tuple[Term, ...]:
     return tuple(side for rule in rules for side in (rule.lhs, rule.rhs))
 
 
+def _require_binding_count(count: int) -> None:
+    if count > MAX_SUBSTITUTION_BINDINGS:
+        raise OperationResourceAdmissionError(
+            location=("substitution", "mapping"),
+            code="term_rewriting.substitution_bindings",
+            message=(
+                "substitution binding count exceeds the supported bound of "
+                f"{MAX_SUBSTITUTION_BINDINGS}"
+            ),
+        )
+
+
+def _require_rewrite_result_nodes(
+    applications: tuple[RewriteApplication, ...],
+    *,
+    limit: int = MAX_REWRITE_RESULT_NODES,
+) -> None:
+    nodes = 0
+    for application in applications:
+        nodes += _term_node_count(application.term)
+        nodes += sum(
+            _term_node_count(value)
+            for value in application.substitution.mapping.values()
+        )
+    if nodes > limit:
+        raise OperationResourceAdmissionError(
+            location=("result",),
+            code="term_rewriting.result_nodes",
+            message=f"rewrite result nodes exceed the supported bound of {limit}",
+        )
+
+
+def _require_application_work(term: Term, rules: tuple[RewriteRule, ...]) -> None:
+    estimated = _term_node_count(term) * len(rules)
+    if estimated > MAX_REWRITE_APPLICATIONS:
+        raise OperationResourceAdmissionError(
+            location=("term", "rules"),
+            code="term_rewriting.application_work",
+            message=(
+                "rewrite position/rule work exceeds the supported bound of "
+                f"{MAX_REWRITE_APPLICATIONS}"
+            ),
+        )
+
+
+def _term_variable_occurrences(term: Term) -> int:
+    """Count variable occurrences without constructing a substituted term."""
+    count = 0
+    stack = [term]
+    while stack:
+        current = stack.pop()
+        if current.is_variable:
+            count += 1
+        else:
+            stack.extend(current.children)
+    return count
+
+
+def _rewrite_application_upper_bound(source_nodes: int, rule: RewriteRule) -> int:
+    """Bound one retained application before matching or rewriting it."""
+    expanded_rhs = _term_node_count(
+        rule.rhs
+    ) + source_nodes * _term_variable_occurrences(rule.rhs)
+    retained_bindings = len(_variable_symbols(rule.lhs)) * source_nodes
+    # The source term is charged conservatively in full; the exact redex
+    # subtraction is only knowable after matching and would weaken admission.
+    return source_nodes + expanded_rhs + retained_bindings
+
+
+def _require_rewrite_result_envelope(
+    term: Term,
+    rules: tuple[RewriteRule, ...],
+    selection: RewriteStepSelection | None,
+    *,
+    limit: int = MAX_REWRITE_RESULT_NODES,
+) -> None:
+    """Admit retained source/rules and every application before enumeration."""
+    source_nodes = _term_node_count(term)
+    retained_nodes = source_nodes + sum(
+        _term_node_count(rule.lhs) + _term_node_count(rule.rhs) for rule in rules
+    )
+    if selection is None:
+        application_count = source_nodes * len(rules)
+        application_cost = max(
+            (_rewrite_application_upper_bound(source_nodes, rule) for rule in rules),
+            default=0,
+        )
+    else:
+        application_count = 1
+        application_cost = _rewrite_application_upper_bound(
+            source_nodes, rules[selection.rule_index]
+        )
+    total = retained_nodes + application_count * application_cost
+    if total > limit:
+        raise OperationResourceAdmissionError(
+            location=("result",),
+            code="term_rewriting.result_nodes",
+            message=(
+                "retained rewrite source and applications exceed the supported "
+                f"node bound of {limit}"
+            ),
+        )
+
+
+def _require_substitution_result_envelope(
+    term: Term,
+    substitution: Substitution,
+    result_nodes: int,
+    *,
+    limit: int = MAX_REWRITE_RESULT_NODES,
+) -> None:
+    """Admit source, every retained mapping value, and result before applying."""
+    retained_nodes = _term_node_count(term) + sum(
+        _term_node_count(value) for value in substitution.mapping.values()
+    )
+    if retained_nodes + result_nodes > limit:
+        raise OperationResourceAdmissionError(
+            location=("result",),
+            code="term_rewriting.result_nodes",
+            message=(
+                "retained substitution source, bindings, and result exceed the "
+                f"supported node bound of {limit}"
+            ),
+        )
+
+
 def substitution_result(
     signature: RankedSignature,
     term: Term,
@@ -91,9 +231,16 @@ def substitution_result(
 ) -> SubstitutionResult:
     """Apply a substitution to a term after signature and depth admission."""
 
+    _require_binding_count(len(substitution.mapping))
     replacements = tuple(substitution.mapping.values())
     _admit_terms(signature, (term, *replacements), location=("term",))
+    estimated_nodes = _expanded_node_count(
+        term,
+        {key: _term_node_count(value) for key, value in substitution.mapping.items()},
+    )
+    _require_substitution_result_envelope(term, substitution, estimated_nodes)
     result = apply_substitution(term, substitution.mapping)
+    _require_term_nodes(result, maximum=MAX_REWRITE_RESULT_NODES)
     try:
         _require_term_depth(result)
     except ValueError as error:
@@ -116,6 +263,7 @@ def matching_result(
     """Match a canonical pattern and subject after signature admission."""
 
     _admit_terms(signature, (pattern, subject), location=("pattern",))
+    _require_binding_count(len(_variable_symbols(pattern)))
     result = match(pattern, subject)
     if result is None:
         return MatchingResult._from_kernel(
@@ -147,8 +295,13 @@ def unification_result(
         if result is not None:
             _require_term_depth(*result.values())
     except ValueError as error:
+        fallback_code = (
+            "substitution_bindings"
+            if "substitution bindings" in str(error)
+            else "unification_bound"
+        )
         raise _domain_error(
-            error, fallback_code="unification_bound", location=("left", "right")
+            error, fallback_code=fallback_code, location=("left", "right")
         ) from error
     if result is None:
         return UnificationResult._from_kernel(
@@ -180,6 +333,15 @@ def rewrite_step_result(
         (term, *_rule_terms(rules)),
         location=("term", "rules"),
     )
+    if selection is None:
+        _require_application_work(term, rules)
+    elif selection.rule_index >= len(rules):
+        # Preserve the existing typed selection error path below.
+        pass
+    else:
+        _require_rewrite_result_envelope(term, rules, selection)
+    if selection is None:
+        _require_rewrite_result_envelope(term, rules, selection)
     scope: Literal["ALL_APPLICABLE_STEPS", "SELECTED_STEP"]
     try:
         if selection is None:
@@ -198,9 +360,20 @@ def rewrite_step_result(
             applications = () if application is None else (application,)
             scope = "SELECTED_STEP"
         _require_term_depth(*(application.term for application in applications))
+        _require_binding_count(
+            max(
+                (len(application.substitution.mapping) for application in applications),
+                default=0,
+            )
+        )
+        _require_rewrite_result_nodes(applications)
+    except OperationResourceAdmissionError:
+        raise
     except ValueError as error:
         code = (
-            "selection_rule_index"
+            "term_depth"
+            if "term depth" in str(error)
+            else "selection_rule_index"
             if "rule_index" in str(error)
             else "selection_position"
         )
@@ -232,13 +405,39 @@ def normal_form_result(
         (term, *_rule_terms(rules)),
         location=("term", "rules"),
     )
+    _require_application_work(term, rules)
+    _require_rewrite_result_envelope(term, rules, None)
     try:
-        term, status, steps, next_step = normal_form(term, rules, max_steps)
+        term, status, steps, next_step = normal_form(
+            term,
+            rules,
+            max_steps,
+            cumulative_node_limit=MAX_NORMAL_FORM_RESULT_NODES,
+        )
         observed = (term,) if next_step is None else (term, next_step.term)
         _require_term_depth(*observed)
+        if next_step is not None:
+            _require_binding_count(len(next_step.substitution.mapping))
+            _require_rewrite_result_nodes(
+                (next_step,), limit=MAX_NORMAL_FORM_RESULT_NODES
+            )
+        if _term_node_count(term) > MAX_NORMAL_FORM_RESULT_NODES:
+            raise OperationResourceAdmissionError(
+                location=("result",),
+                code="term_rewriting.normal_form_nodes",
+                message=(
+                    "normal-form result nodes exceed the supported bound of "
+                    f"{MAX_NORMAL_FORM_RESULT_NODES}"
+                ),
+            )
+    except OperationResourceAdmissionError:
+        raise
     except ValueError as error:
+        fallback_code = (
+            "term_depth" if "term depth" in str(error) else "normal_form_bound"
+        )
         raise _domain_error(
-            error, fallback_code="normal_form_bound", location=("term", "rules")
+            error, fallback_code=fallback_code, location=("term", "rules")
         ) from error
     return NormalFormResult._from_kernel(
         signature=signature,

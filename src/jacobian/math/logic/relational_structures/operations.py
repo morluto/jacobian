@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from itertools import product
+from math import lcm
 
 from jacobian._execution import request_checkpoint
 from jacobian.catalog.models import OperationDomainValidationError
@@ -274,6 +275,51 @@ def _induced_substructure(
     )
 
 
+def _idempotent_retraction(
+    composed: tuple[int, ...],
+    inclusion: tuple[int, ...],
+    source_size: int,
+) -> tuple[int, ...]:
+    """Return the core-label retraction induced by an endomorphism onto the core.
+
+    ``composed`` is an endomorphism of the source whose image is exactly the
+    strictly increasing ``inclusion`` image. On that image it is a bijection,
+    so a power of it acts as the identity there while keeping the same image;
+    that power is an idempotent endomorphism, and reading its values as core
+    labels gives the retraction with ``retraction[inclusion[c]] == c``.
+    """
+
+    if not inclusion:
+        return ()
+    position = {label: index for index, label in enumerate(inclusion)}
+    permutation = tuple(position[composed[label]] for label in inclusion)
+    seen = [False] * len(inclusion)
+    order = 1
+    for start in range(len(inclusion)):
+        if seen[start]:
+            continue
+        length = 0
+        node = start
+        while not seen[node]:
+            seen[node] = True
+            node = permutation[node]
+            length += 1
+        order = lcm(order, length)
+
+    def compose(first: tuple[int, ...], second: tuple[int, ...]) -> tuple[int, ...]:
+        return tuple(first[second[label]] for label in range(source_size))
+
+    power = tuple(range(source_size))
+    base = composed
+    exponent = order
+    while exponent:
+        if exponent & 1:
+            power = compose(power, base)
+        base = compose(base, base)
+        exponent >>= 1
+    return tuple(position[power[label]] for label in range(source_size))
+
+
 def compute_core(
     source: FiniteRelationalStructure,
 ) -> HomomorphismCoreResult:
@@ -323,6 +369,11 @@ def compute_core(
     final = check_homomorphism(source, source, composed)
     assert final.status is HomomorphismStatus.HOMOMORPHISM
     assert tuple(sorted(set(composed))) == inclusion
+    retraction = _idempotent_retraction(composed, inclusion, source.carrier_size)
+    assert all(
+        retraction[inclusion[core_label]] == core_label
+        for core_label in range(len(inclusion))
+    )
     return HomomorphismCoreResult._from_kernel(
         source=source,
         core=current,

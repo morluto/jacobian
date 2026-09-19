@@ -98,6 +98,25 @@ class TestCoreDefiningInvariant:
             assert check.status is HomomorphismStatus.HOMOMORPHISM
             assert tuple(sorted(set(composed))) == result.inclusion
 
+    def test_mixed_retraction_is_idempotent_and_serializes(self) -> None:
+        """A core reached through a permuting level keeps a genuine
+        retraction: the composed map is idempotent, the section identity
+        holds, and the result round-trips through its own decoder."""
+        source = _structure(3, _EDGE, (((0, 1), (1, 2), (2, 1)),))
+        result = compute_core(source)
+        assert result.core == _structure(2, _EDGE, (((0, 1), (1, 0)),))
+        assert result.inclusion == (1, 2)
+        assert all(
+            result.retraction[result.inclusion[core_label]] == core_label
+            for core_label in range(len(result.inclusion))
+        )
+        composed = tuple(result.inclusion[label] for label in result.retraction)
+        assert all(composed[composed[label]] == composed[label] for label in range(3))
+        assert (
+            HomomorphismCoreResult.model_validate_json(result.model_dump_json())
+            == result
+        )
+
     def test_core_tables_are_induced(self) -> None:
         """Every core tuple lifts to a source tuple on the inclusion
         image and every covered source tuple descends."""

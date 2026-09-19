@@ -8,7 +8,10 @@ import pytest
 from sympy import Rational
 
 from jacobian._exact import CanonicalRational
-from jacobian.math.geometry.polytopes import Halfspace, _rational_geometry
+from jacobian.math.geometry.polytopes import (
+    Halfspace,
+    _polyhedral_conversion,
+)
 from jacobian.math.geometry.polytopes import operations as polytope_operations
 from jacobian.math.geometry.polytopes._rational_geometry import (
     RecessionConeComputationError,
@@ -23,14 +26,12 @@ def _rational(value: int) -> CanonicalRational:
 def test_recession_rank_failure_is_operational_for_both_polytope_owners(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    class FailedRankMatrix:
-        def __init__(self, _rows: object) -> None:
-            pass
+    def failed_rank(*_args: object, **_kwargs: object) -> int:
+        raise _polyhedral_conversion.PolyhedralConversionError(
+            "exact polyhedral rank computation failed"
+        )
 
-        def rank(self) -> int:
-            raise RuntimeError("backend rank failure")
-
-    monkeypatch.setattr(_rational_geometry, "Matrix", FailedRankMatrix)
+    monkeypatch.setattr(_polyhedral_conversion, "_rank", failed_rank)
     halfspaces = (
         Halfspace(coefficients=(_rational(1), _rational(0)), offset=_rational(1)),
         Halfspace(coefficients=(_rational(0), _rational(1)), offset=_rational(1)),
@@ -42,7 +43,7 @@ def test_recession_rank_failure_is_operational_for_both_polytope_owners(
         ([Rational(-1), Rational(-1)], Rational(0)),
     ]
 
-    with pytest.raises(RecessionConeComputationError, match="rank computation failed"):
+    with pytest.raises(RecessionConeComputationError, match="cone computation failed"):
         polytope_operations._is_bounded_h(halfspaces)
-    with pytest.raises(RecessionConeComputationError, match="rank computation failed"):
+    with pytest.raises(RecessionConeComputationError, match="cone computation failed"):
         lattice_operations._is_bounded_h(raw_halfspaces, 2)

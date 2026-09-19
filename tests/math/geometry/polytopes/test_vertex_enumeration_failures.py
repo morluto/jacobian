@@ -2,8 +2,11 @@
 
 import pytest
 from sympy import Rational
-from sympy.matrices.matrixbase import MatrixBase
 
+from jacobian.math.geometry.polytopes import _polyhedral_conversion
+from jacobian.math.geometry.polytopes._polyhedral_conversion import (
+    PolyhedralConversionError,
+)
 from jacobian.math.geometry.polytopes._rational_geometry import vertices_from_halfspaces
 
 
@@ -14,8 +17,8 @@ def test_vertex_enumeration_preserves_failed_solve(
     assert set(vertices_from_halfspaces(rows, 1)) == {(Rational(0),), (Rational(1),)}
 
     def fail(*args: object, **kwargs: object) -> None:
-        raise ValueError("backend solve failure")
+        raise PolyhedralConversionError("backend inverse failure")
 
-    monkeypatch.setattr(MatrixBase, "solve", fail)
+    monkeypatch.setattr(_polyhedral_conversion, "_inverse_columns", fail)
     with pytest.raises(RuntimeError, match=r"vertex.*computation failed"):
         vertices_from_halfspaces(rows, 1)

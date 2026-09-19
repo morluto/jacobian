@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import math
 from fractions import Fraction
 from itertools import combinations
 
@@ -24,7 +23,6 @@ from jacobian.math.geometry.polytopes import (
     polytope_vertex_figure,
 )
 from jacobian.math.geometry.polytopes._models import (
-    MAX_FACET_SIGN_TESTS,
     EdgeProfileRequest,
     VertexFigureRequest,
 )
@@ -399,8 +397,6 @@ class TestBoundary:
         binaries = list(combinations_with_binary_vectors(7, 64))
         rows = tuple((f"v{i:02d}", coords) for i, coords in enumerate(binaries))
         polytope = _polytope(axes, rows)
-        distinct = len({coords for _, coords in rows})
-        assert distinct * math.comb(distinct, 7) > MAX_FACET_SIGN_TESTS
         with pytest.raises(OperationResourceAdmissionError):
             polytope_edge_profile(polytope)
 

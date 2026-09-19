@@ -9,7 +9,10 @@ from typing import Any
 import networkx as nx
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.graphs.flows._models import (
     BipartiteDegreeRequirements,
     BipartiteFactorObstruction,
@@ -24,6 +27,7 @@ from jacobian.math.graphs.flows._models import (
     MinCostFlowResult,
     MinCutResult,
     _bounded_denominator_scale,
+    _bounded_flow_derived_height,
 )
 from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
 
@@ -278,7 +282,7 @@ def _admit_min_cost_flow(graph: CostedFlowGraph, demands: tuple[int, ...]) -> No
             tuple(edge.cost.as_integer_ratio()[1] for edge in graph.edges), "cost"
         )
     except ValueError as exc:
-        raise OperationDomainValidationError(
+        raise OperationResourceAdmissionError(
             location=("graph", "edges"),
             code="graph.flow.derived_scale_bound",
             message=str(exc),
@@ -303,6 +307,14 @@ def max_flow(
     """Return the exact maximum flow value and its edge decomposition."""
 
     _admit_terminals(graph, source, sink)
+    try:
+        _bounded_flow_derived_height(graph.edges)
+    except ValueError as exc:
+        raise OperationResourceAdmissionError(
+            location=("graph", "edges"),
+            code="graph.flow.derived_height_bound",
+            message=str(exc),
+        ) from exc
     flow_value, flow_dict = nx.maximum_flow(_build_digraph(graph), source, sink)
     if not isinstance(flow_value, (int, Fraction)):
         raise RuntimeError("NetworkX did not preserve the exact flow value")
@@ -321,6 +333,14 @@ def min_cut(
     """Return the exact minimum s-t cut value and its partition."""
 
     _admit_terminals(graph, source, sink)
+    try:
+        _bounded_flow_derived_height(graph.edges)
+    except ValueError as exc:
+        raise OperationResourceAdmissionError(
+            location=("graph", "edges"),
+            code="graph.flow.derived_height_bound",
+            message=str(exc),
+        ) from exc
     cut_value, partition = nx.minimum_cut(_build_digraph(graph), source, sink)
     if not isinstance(cut_value, (int, Fraction)):
         raise RuntimeError("NetworkX did not preserve the exact cut value")

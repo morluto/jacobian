@@ -8,7 +8,7 @@ from typing import Annotated, Self
 from pydantic import Field, StringConstraints, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian._models import StrictModel
 from jacobian.math.matrices.values import RationalMatrix
 
@@ -22,6 +22,12 @@ MAX_STRUCTURE_NONZEROS = 256
 MAX_STRUCTURE_COEFFICIENT_DIGITS = 64
 MAX_ELEMENT_COEFFICIENT_DIGITS = 64
 MAX_BRACKET_LEDGER_ROWS = MAX_LIE_DIMENSION * (MAX_LIE_DIMENSION - 1) // 2
+# A bracket pair performs two coordinate products and every retained ledger
+# term performs one scaling and one accumulation.  Keep this derived envelope
+# explicit so the native operation admits its complete ledger before doing
+# exact result construction.
+MAX_BRACKET_WORK = 2 * MAX_BRACKET_LEDGER_ROWS + 2 * MAX_STRUCTURE_NONZEROS
+MAX_BRACKET_RESULT_COEFFICIENT_DIGITS = MAX_CANONICAL_RATIONAL_DIGITS
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:

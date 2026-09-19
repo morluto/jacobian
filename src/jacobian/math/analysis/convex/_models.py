@@ -13,6 +13,10 @@ from jacobian._models import StrictModel
 MAX_DIMENSION = 100
 MAX_PIECES = 10_000
 _MAX_CONVEX_WORK_CELLS = 1_000_000
+# The operation retains the complete source function and point and, for
+# evaluation, one exact value per piece. This decimal-digit accounting unit
+# prevents a small cell count from hiding an enormous retained result.
+MAX_CONVEX_OUTPUT_DIGITS = 16_000_000
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -68,7 +72,11 @@ class RationalPoint(StrictModel):
 
 
 class MaxAffineEvalRequest(StrictModel):
-    """Evaluate a max-affine function at a point."""
+    """Evaluate a max-affine function at a point.
+
+    Native execution derives product, sum, and retained-result height before
+    constructing any exact affine values.
+    """
 
     function: MaxAffineFunction
     point: RationalPoint
@@ -85,7 +93,11 @@ class MaxAffineEvalResult(StrictModel):
 
 
 class MaxAffineSubdifferentialRequest(StrictModel):
-    """Compute the subdifferential at a point."""
+    """Compute the subdifferential at a point.
+
+    The active-piece scan still evaluates every affine piece, so it shares the
+    exact derived-height admission of evaluation.
+    """
 
     function: MaxAffineFunction
     point: RationalPoint
@@ -100,6 +112,7 @@ class MaxAffineSubdifferentialResult(StrictModel):
 
 
 __all__ = [
+    "MAX_CONVEX_OUTPUT_DIGITS",
     "AffinePiece",
     "MaxAffineEvalRequest",
     "MaxAffineEvalResult",

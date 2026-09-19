@@ -15,12 +15,16 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.groups.characters._cyclotomic import (
+    MAX_CYCLOTOMIC_REDUCTION_COEFFICIENT_DIGITS,
     add_values,
     conjugate_value,
+    cyclotomic_polynomial,
     value_from_power,
 )
 from jacobian.math.groups.characters._models import (
     MAX_CLASS_COUNT,
+    MAX_CYCLOTOMIC_ORDER,
+    MAX_VALUE_COEFFICIENT_DIGITS,
     ClassAxis,
     ClassFunctionInnerProductRequest,
     CyclotomicValue,
@@ -217,6 +221,16 @@ class TestBoundariesAndAdversarial:
 
 
 class TestEnvelope:
+    def test_cyclotomic_reduction_coefficients_fit_the_admission_bound(self) -> None:
+        for order in range(1, MAX_CYCLOTOMIC_ORDER + 1):
+            assert (
+                max(
+                    len(str(abs(int(coefficient))))
+                    for coefficient in cyclotomic_polynomial(order)
+                )
+                <= MAX_CYCLOTOMIC_REDUCTION_COEFFICIENT_DIGITS
+            )
+
     def test_class_count_above_envelope_is_a_resource_rejection(self) -> None:
         sizes = (1,) * (MAX_CLASS_COUNT + 1)
         axis = ClassAxis.model_construct(
@@ -231,6 +245,70 @@ class TestEnvelope:
         assert (
             exc_info.value.errors()[0]["type"]
             == "groups.characters.class_count_exceeds_envelope"
+        )
+
+    def test_derived_product_boundary_is_accepted(self) -> None:
+        # The trivial one-class rational pairing squares the input coefficient.
+        # A pair of 256-digit components produces exactly the 512-digit output
+        # admitted by the class-function value envelope.
+        digits = MAX_VALUE_COEFFICIENT_DIGITS // 2
+        coefficient = 10**digits - 1
+        function = _class_function(1, (1,), (_value(1, (coefficient,)),))
+
+        result = class_function_inner_product(function, function)
+
+        assert len(str(result.inner_product.coefficients[0].num)) == (
+            MAX_VALUE_COEFFICIENT_DIGITS
+        )
+
+    def test_derived_product_growth_is_rejected_before_execution(self) -> None:
+        digits = (MAX_VALUE_COEFFICIENT_DIGITS // 2) + 1
+        coefficient = 10**digits - 1
+        function = _class_function(1, (1,), (_value(1, (coefficient,)),))
+
+        with pytest.raises(OperationResourceAdmissionError) as exc_info:
+            class_function_inner_product(function, function)
+
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "groups.characters.inner_product_output_digits_exceed_envelope"
+        )
+
+    def test_derived_scaling_growth_is_rejected_before_execution(self) -> None:
+        # The first contribution is multiplied by a six-digit class size and
+        # would exceed the output envelope even though each input is admitted.
+        digits = (MAX_VALUE_COEFFICIENT_DIGITS // 2) - 2
+        coefficient = 10**digits - 1
+        function = _class_function(
+            1,
+            (999_999, 1),
+            (_value(1, (coefficient,)), _value(1, (0,))),
+        )
+
+        with pytest.raises(OperationResourceAdmissionError) as exc_info:
+            class_function_inner_product(function, function)
+
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "groups.characters.inner_product_output_digits_exceed_envelope"
+        )
+
+    def test_derived_group_order_division_growth_is_rejected(self) -> None:
+        # Repeated input denominators keep each contribution below the cap,
+        # while division by the seven-digit group order crosses it.
+        digits = (MAX_VALUE_COEFFICIENT_DIGITS // 2) - 2
+        denominator = 10**digits - 1
+        value = _value(1, (Fraction(1, denominator),))
+        function = _class_function(1, (999_999, 1), (value, value))
+
+        # The contribution denominator is 508 digits; |G| adds seven more
+        # digits to the conservative bound, so admission stops preflight.
+        with pytest.raises(OperationResourceAdmissionError) as exc_info:
+            class_function_inner_product(function, function)
+
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "groups.characters.inner_product_output_digits_exceed_envelope"
         )
 
 

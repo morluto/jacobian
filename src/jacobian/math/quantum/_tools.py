@@ -23,8 +23,9 @@ TOOLS = (
             "the canonical GF(2) RREF basis with rank and the isotropic "
             "decision, or an explicit non-commuting witness pair. Phase-free "
             "Paulis commute iff their symplectic pairing x.z' + z.x' is zero "
-            "mod 2; zero rows contribute no pivot. The canonical basis is "
-            "independent of input row order."
+            "mod 2; zero rows contribute no pivot. The canonical basis depends "
+            "only on the GF(2) row space, while input row IDs use one canonical "
+            "strictly ordered presentation."
         ),
         request_type=CheckSpaceCanonicalizeRequest,
         result_type=CheckSpaceCanonicalizeResult,

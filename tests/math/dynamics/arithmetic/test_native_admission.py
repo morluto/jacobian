@@ -25,6 +25,14 @@ def test_coefficients_length_is_admitted_before_conversion() -> None:
         native.polynomial_from_coefficients(OversizedCoefficients([1] * 32))
 
 
+@pytest.mark.parametrize("coefficients", [(1.0,), ("1",), (True,)])
+def test_polynomial_coefficients_reject_coercible_non_exact_types(
+    coefficients: tuple[Any, ...],
+) -> None:
+    with pytest.raises(ValueError, match="exact integers or Fractions"):
+        native.polynomial_from_coefficients(coefficients)
+
+
 def test_dynatomic_index_is_admitted_before_coefficient_work(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -129,6 +137,14 @@ def test_unadmitted_iterate_claim_is_not_refuted() -> None:
 def test_finite_field_coefficients_length_is_admitted_before_conversion() -> None:
     with pytest.raises(ValueError, match="coefficients"):
         native.finite_field_functional_graph(OversizedCoefficients([1] * 32), 5)
+
+
+@pytest.mark.parametrize("coefficients", [(Fraction(1, 2),), (1.0,), ("1",), (True,)])
+def test_finite_field_coefficients_reject_coercible_non_integer_types(
+    coefficients: tuple[Any, ...],
+) -> None:
+    with pytest.raises(ValueError, match="coefficients must be integers"):
+        native.finite_field_functional_graph(coefficients, 5)
 
 
 def test_source_degree_is_admitted_before_backend_conversion(

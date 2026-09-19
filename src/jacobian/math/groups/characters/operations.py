@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from fractions import Fraction
+from math import gcd
 
 from jacobian._exact import CanonicalRational, canonical_rational_component_digits
 from jacobian.catalog.models import (
@@ -11,6 +13,7 @@ from jacobian.catalog.models import (
 )
 from jacobian.math.groups.characters._cyclotomic import (
     MAX_ARITHMETIC_ORDER,
+    MAX_CYCLOTOMIC_REDUCTION_COEFFICIENT_DIGITS,
     add_values,
     conjugate_value,
     euler_phi,
@@ -42,6 +45,209 @@ def _make_value(order: int, coefficients: tuple[Fraction, ...]) -> CyclotomicVal
             CanonicalRational.from_fraction(coefficient) for coefficient in coefficients
         ),
     )
+
+
+@dataclass(frozen=True)
+class _CoefficientHeight:
+    """Conservative decimal widths for one generated coefficient."""
+
+    numerator_digits: int
+    denominator_digits: int
+
+    @property
+    def maximum_digits(self) -> int:
+        return max(self.numerator_digits, self.denominator_digits)
+
+
+@dataclass(frozen=True)
+class _InputHeight:
+    denominator: int | None
+    lifted_numerator_digits: int
+
+    @property
+    def denominator_digits(self) -> int:
+        return (
+            MAX_VALUE_COEFFICIENT_DIGITS + 1
+            if self.denominator is None
+            else len(str(self.denominator))
+        )
+
+
+def _bounded_lcm(values: tuple[int, ...]) -> int | None:
+    """Return an input common denominator, capped before it gets unwieldy."""
+
+    result = 1
+    for value in values:
+        result = (result // gcd(result, value)) * value
+        if len(str(result)) > MAX_VALUE_COEFFICIENT_DIGITS:
+            return None
+    return result
+
+
+def _bounded_product(left: int | None, right: int | None) -> int | None:
+    if left is None or right is None:
+        return None
+    result = left * right
+    if len(str(result)) > MAX_VALUE_COEFFICIENT_DIGITS:
+        return None
+    return result
+
+
+def _factor_digits(value: int) -> int:
+    """Digits contributed by multiplying by a positive integer factor."""
+
+    return 0 if value == 1 else len(str(value))
+
+
+def _input_height(value: CyclotomicValue) -> _InputHeight:
+    """Bound one value's coefficient numerators and common denominator."""
+
+    denominator = _bounded_lcm(
+        tuple(coefficient.den for coefficient in value.coefficients)
+    )
+    if denominator is None:
+        lifted_numerator_digits = MAX_VALUE_COEFFICIENT_DIGITS + 1
+    else:
+        lifted_numerator_digits = max(
+            len(str(abs(coefficient.num)))
+            + _factor_digits(denominator // coefficient.den)
+            for coefficient in value.coefficients
+        )
+    return _InputHeight(
+        denominator=denominator,
+        lifted_numerator_digits=lifted_numerator_digits,
+    )
+
+
+def _reduced_height(
+    *, order: int, numerator_digits: int, denominator_digits: int, raw_length: int
+) -> _CoefficientHeight:
+    """Bound coefficient growth from reduction modulo ``Phi_order``."""
+
+    degree = euler_phi(order)
+    reduction_steps = max(0, raw_length - degree)
+    return _CoefficientHeight(
+        numerator_digits=(
+            numerator_digits
+            + reduction_steps * MAX_CYCLOTOMIC_REDUCTION_COEFFICIENT_DIGITS
+        ),
+        denominator_digits=denominator_digits,
+    )
+
+
+def _derived_height(
+    *,
+    order: int,
+    class_sizes: tuple[int, ...],
+    group_order: int,
+    phi_values: tuple[CyclotomicValue, ...],
+    psi_values: tuple[CyclotomicValue, ...],
+) -> tuple[_CoefficientHeight, _CoefficientHeight, _CoefficientHeight]:
+    """Bound conjugate, weighted-product, and result coefficient heights.
+
+    The bound follows the actual kernel stages without evaluating them: input
+    denominators are placed in common least-common-multiple denominators;
+    multiplication contributes one coefficient-pair product per raw term,
+    cyclotomic
+    reduction contributes its fixed integer-coefficient growth, class sizes
+    scale numerators, class terms accumulate over a common denominator, and
+    division by ``|G|`` enlarges that denominator.  The returned heights cover
+    every generated value retained in the result, including contribution rows.
+    """
+
+    dimension = euler_phi(order)
+    phi_heights = tuple(_input_height(value) for value in phi_values)
+    psi_heights = tuple(_input_height(value) for value in psi_values)
+
+    conjugates = tuple(
+        _reduced_height(
+            order=order,
+            numerator_digits=height.lifted_numerator_digits,
+            denominator_digits=height.denominator_digits,
+            raw_length=order,
+        )
+        for height in psi_heights
+    )
+    weighted: list[_CoefficientHeight] = []
+    weighted_denominators: list[int | None] = []
+    for class_size, phi_height, psi_height, conjugate in zip(
+        class_sizes, phi_heights, psi_heights, conjugates, strict=True
+    ):
+        denominator = _bounded_product(phi_height.denominator, psi_height.denominator)
+        denominator_digits = (
+            MAX_VALUE_COEFFICIENT_DIGITS + 1
+            if denominator is None
+            else len(str(denominator))
+        )
+        product = _reduced_height(
+            order=order,
+            numerator_digits=(
+                phi_height.lifted_numerator_digits
+                + conjugate.numerator_digits
+                + (len(str(dimension)) if dimension > 1 else 0)
+            ),
+            denominator_digits=denominator_digits,
+            raw_length=(2 * dimension) - 1,
+        )
+        weighted.append(
+            _CoefficientHeight(
+                numerator_digits=product.numerator_digits
+                + (len(str(class_size)) if class_size != 1 else 0),
+                denominator_digits=product.denominator_digits,
+            )
+        )
+        weighted_denominators.append(denominator)
+
+    total_denominator = _bounded_lcm(
+        tuple(
+            denominator
+            for denominator in weighted_denominators
+            if denominator is not None
+        )
+    )
+    if total_denominator is None or any(
+        denominator is None for denominator in weighted_denominators
+    ):
+        total = _CoefficientHeight(
+            numerator_digits=MAX_VALUE_COEFFICIENT_DIGITS + 1,
+            denominator_digits=MAX_VALUE_COEFFICIENT_DIGITS + 1,
+        )
+    else:
+        total_numerator_digits = max(
+            height.numerator_digits + _factor_digits(total_denominator // denominator)
+            for height, denominator in zip(weighted, weighted_denominators, strict=True)
+            if denominator is not None
+        ) + (len(str(len(weighted))) if len(weighted) > 1 else 0)
+        total = _CoefficientHeight(
+            numerator_digits=total_numerator_digits,
+            denominator_digits=len(str(total_denominator)),
+        )
+    inner_denominator = _bounded_product(total_denominator, group_order)
+    inner = _CoefficientHeight(
+        numerator_digits=total.numerator_digits,
+        denominator_digits=(
+            MAX_VALUE_COEFFICIENT_DIGITS + 1
+            if inner_denominator is None
+            else len(str(inner_denominator))
+        ),
+    )
+    return (
+        max(conjugates, key=lambda value: value.maximum_digits),
+        max(weighted, key=lambda value: value.maximum_digits),
+        inner,
+    )
+
+
+def _reject_derived_height(stage: str, height: _CoefficientHeight) -> None:
+    if height.maximum_digits > MAX_VALUE_COEFFICIENT_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("phi", "values"),
+            code="groups.characters.inner_product_output_digits_exceed_envelope",
+            message=(
+                f"derived {stage} coefficients exceed the "
+                f"{MAX_VALUE_COEFFICIENT_DIGITS}-digit envelope"
+            ),
+        )
 
 
 def _admit_inner_product(phi: FiniteClassFunction, psi: FiniteClassFunction) -> None:
@@ -108,6 +314,16 @@ def _admit_inner_product(phi: FiniteClassFunction, psi: FiniteClassFunction) -> 
                 f"{MAX_INNER_PRODUCT_WORK} unit envelope"
             ),
         )
+    conjugate, weighted, inner = _derived_height(
+        order=axis.cyclotomic_order,
+        class_sizes=axis.class_sizes,
+        group_order=axis.group_order,
+        phi_values=phi.values,
+        psi_values=psi.values,
+    )
+    _reject_derived_height("conjugate", conjugate)
+    _reject_derived_height("weighted product", weighted)
+    _reject_derived_height("inner product", inner)
 
 
 def class_function_inner_product(

@@ -93,7 +93,7 @@ def standard_chart(
     """Dehomogenize at the given chart index (divide by that coordinate)."""
     coords = point.coordinates
     _admit_nonzero_point(coords)
-    if chart_index >= len(coords):
+    if chart_index < 0 or chart_index >= len(coords):
         _reject("chart_index_out_range", "chart_index out of range", ("chart_index",))
     if coords[chart_index].as_fraction() == 0:
         _reject(
@@ -120,7 +120,7 @@ def chart_transition(
     """Return the complete target-chart coordinates for the projective point."""
     coords = point.coordinates
     _admit_nonzero_point(coords)
-    if chart_i >= len(coords) or chart_j >= len(coords):
+    if chart_i < 0 or chart_j < 0 or chart_i >= len(coords) or chart_j >= len(coords):
         _reject(
             "chart_index_out_range", "chart index out of range", ("chart_i", "chart_j")
         )

@@ -72,8 +72,8 @@ class TestBoundary:
         result = canonicalize_check_space(
             ("q0", "q1", "q2"),
             (
-                _row("xxi", [1, 1, 0], [0, 0, 0]),
                 _row("ixx", [0, 1, 1], [0, 0, 0]),
+                _row("xxi", [1, 1, 0], [0, 0, 0]),
                 _row("zzz", [0, 0, 0], [1, 1, 1]),
             ),
         )
@@ -89,6 +89,43 @@ class TestAdversarial:
     def test_duplicate_qubits_rejected(self) -> None:
         with pytest.raises(OperationDomainValidationError):
             canonicalize_check_space(("q0", "q0"), (_row("x", [1, 0], [0, 0]),))
+
+    @pytest.mark.parametrize("qubit_ids", [(0,), ("",), ("q\ud800",), ("q" * 65,)])
+    def test_native_rejects_noncanonical_qubit_ids(
+        self, qubit_ids: tuple[object, ...]
+    ) -> None:
+        with pytest.raises(OperationDomainValidationError):
+            canonicalize_check_space(  # type: ignore[arg-type]
+                qubit_ids, (_row("x", [1], [0]),)
+            )
+
+    @pytest.mark.parametrize(
+        "rows",
+        [
+            (_row("z", [0], [1]), _row("a", [1], [0])),
+            (_row("a", [1], [0]), _row("a", [0], [1])),
+        ],
+    )
+    def test_catalog_and_native_reject_noncanonical_generator_ids(
+        self, rows: tuple[BinaryPauliRow, ...]
+    ) -> None:
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            CheckSpaceCanonicalizeRequest(qubit_ids=("q",), generators=rows)
+        with pytest.raises(OperationDomainValidationError):
+            canonicalize_check_space(("q",), rows)
+
+    def test_catalog_and_native_reject_non_string_qubit_ids(self) -> None:
+        from pydantic import ValidationError
+
+        row = _row("x", [1], [0])
+        with pytest.raises(ValidationError):
+            CheckSpaceCanonicalizeRequest(  # type: ignore[arg-type]
+                qubit_ids=(0,), generators=(row,)
+            )
+        with pytest.raises(OperationDomainValidationError):
+            canonicalize_check_space((0,), (row,))  # type: ignore[arg-type]
 
     def test_nonbinary_bits_rejected_at_value_boundary(self) -> None:
         from pydantic import ValidationError
@@ -110,13 +147,19 @@ class TestDefiningInvariant:
         )
         assert result.status == "NOT_ISOTROPIC"
 
-    def test_row_reordering_preserves_canonical_basis(self) -> None:
+    def test_generator_payload_assignment_preserves_canonical_basis(self) -> None:
         rows = (
-            _row("xx", [1, 1], [0, 0]),
-            _row("zz", [0, 0], [1, 1]),
+            _row("a", [1, 1], [0, 0]),
+            _row("b", [0, 0], [1, 1]),
         )
         first = canonicalize_check_space(("q0", "q1"), rows)
-        second = canonicalize_check_space(("q0", "q1"), rows[::-1])
+        second = canonicalize_check_space(
+            ("q0", "q1"),
+            (
+                _row("a", [0, 0], [1, 1]),
+                _row("b", [1, 1], [0, 0]),
+            ),
+        )
         assert first.status == second.status == "ISOTROPIC_CHECK_SPACE"
         assert [(r.pivot, r.x_bits, r.z_bits) for r in first.basis] == [
             (r.pivot, r.x_bits, r.z_bits) for r in second.basis

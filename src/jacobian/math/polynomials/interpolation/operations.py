@@ -90,6 +90,52 @@ def _admit_newton_evaluate(evaluation_point: CanonicalRational) -> None:
         )
 
 
+def _rational_component_digits(value: CanonicalRational) -> tuple[int, int]:
+    return (
+        len(format_canonical_integer(abs(value.num))),
+        len(format_canonical_integer(value.den)),
+    )
+
+
+def _add_digit_bound(left: tuple[int, int], right: tuple[int, int]) -> tuple[int, int]:
+    # For a/b + c/d, |ad+bc| has at most the larger cross-product width plus
+    # one decimal carry digit; the denominator has the product width.
+    return (
+        max(left[0] + right[1], right[0] + left[1]) + 1,
+        left[1] + right[1],
+    )
+
+
+def _multiply_digit_bound(
+    left: tuple[int, int], right: tuple[int, int]
+) -> tuple[int, int]:
+    return left[0] + right[0], left[1] + right[1]
+
+
+def _admit_newton_evaluation_growth(
+    form: NewtonForm, evaluation_point: CanonicalRational
+) -> None:
+    """Bound nested Newton intermediates before exact arithmetic starts."""
+
+    _admit_newton_evaluate(evaluation_point)
+    coefficient_digits = tuple(
+        _rational_component_digits(coefficient) for coefficient in form.coefficients
+    )
+    point_digits = _rational_component_digits(evaluation_point)
+    node_digits = tuple(_rational_component_digits(node) for node in form.nodes)
+    result = coefficient_digits[-1]
+    for index in range(len(coefficient_digits) - 2, -1, -1):
+        delta = _add_digit_bound(point_digits, node_digits[index])
+        result = _add_digit_bound(
+            coefficient_digits[index], _multiply_digit_bound(delta, result)
+        )
+        if max(result) > MAX_CANONICAL_RATIONAL_DIGITS:
+            raise _validation_error(
+                "Newton evaluation intermediate growth exceeds the canonical "
+                f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit bound"
+            )
+
+
 def divided_differences(samples: InterpolationSamples) -> DividedDifferencesResult:
     return DividedDifferencesResult(
         samples=samples,
@@ -108,7 +154,7 @@ def newton_form(samples: InterpolationSamples) -> NewtonForm:
 def evaluate_newton(
     form: NewtonForm, evaluation_point: CanonicalRational
 ) -> NewtonEvaluateResult:
-    _run_admission(lambda: _admit_newton_evaluate(evaluation_point))
+    _run_admission(lambda: _admit_newton_evaluation_growth(form, evaluation_point))
     return NewtonEvaluateResult(
         newton_form=form,
         evaluation_point=evaluation_point,

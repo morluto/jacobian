@@ -62,6 +62,12 @@ def test_standard_chart() -> None:
     assert result.affine_point[1].as_fraction() == 3
 
 
+@pytest.mark.parametrize("chart_index", [-1, -2])
+def test_standard_chart_rejects_negative_native_chart_index(chart_index: int) -> None:
+    with pytest.raises(OperationDomainValidationError, match="out of range"):
+        standard_chart(_point(_r(1), _r(2), _r(3)), chart_index)
+
+
 def test_chart_transition() -> None:
     request = ChartTransitionRequest(
         point=_point(_r(1), _r(2), _r(3)),
@@ -75,6 +81,17 @@ def test_chart_transition() -> None:
         Fraction(1, 2),
         Fraction(3, 2),
     )
+
+
+@pytest.mark.parametrize(
+    ("chart_i", "chart_j"),
+    [(-1, 0), (0, -1), (-1, -1)],
+)
+def test_chart_transition_rejects_negative_native_chart_indices(
+    chart_i: int, chart_j: int
+) -> None:
+    with pytest.raises(OperationDomainValidationError, match="out of range"):
+        chart_transition(_point(_r(1), _r(2), _r(3)), chart_i, chart_j)
 
 
 def test_chart_transition_is_invariant_under_homogeneous_rescaling() -> None:

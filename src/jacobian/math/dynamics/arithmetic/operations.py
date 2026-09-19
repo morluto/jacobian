@@ -88,6 +88,10 @@ def polynomial_from_coefficients(
         raise _ArithmeticInputError(
             f"polynomial must have between 1 and {MAX_DEGREE + 1} coefficients"
         )
+    if any(type(value) not in (int, Fraction) for value in coefficients):
+        raise _ArithmeticInputError(
+            "polynomial coefficients must be exact integers or Fractions"
+        )
     values = tuple(Fraction(value) for value in coefficients)
     if any(_fraction_digits(value) > MAX_COEFFICIENT_DIGITS for value in values):
         raise _ArithmeticInputError(
@@ -325,7 +329,9 @@ def finite_field_functional_graph(
         raise _ArithmeticInputError(
             f"polynomial must have between 1 and {MAX_DEGREE + 1} coefficients"
         )
-    values = tuple(int(value) for value in coefficients)
+    if any(type(value) is not int for value in coefficients):
+        raise _ArithmeticInputError("polynomial coefficients must be integers")
+    values = tuple(coefficients)
     if any(abs(value) >= 10**MAX_COEFFICIENT_DIGITS for value in values):
         raise _ArithmeticInputError(
             "polynomial coefficient exceeds the input digit bound"

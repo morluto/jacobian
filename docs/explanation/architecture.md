@@ -250,6 +250,14 @@ Catalog construction discovers packaged `_tools.py` modules under
 operation ID, and freezes the resulting inventory. There is no parallel
 decision ledger, central domain list, or external plugin discovery.
 
+`_models.py` is a declaration boundary, not a general home for computation. It
+owns request and result models, structural validation, schema metadata, and
+trusted construction helpers. Substantial pure estimators, admission plans, or
+backend preparation belong in an owner-local semantic module such as
+`_bounds.py` or `_admission.py`, even when models are their primary callers.
+Moving that logic is an ownership refactor, not permission to remove a bound or
+recompute mathematics during validation.
+
 Private wire request and response models may contain operation parameters and
 domain-owned mathematical values. They do not justify parallel native and wire
 classes for the same mathematical value. A shared value can retain exact

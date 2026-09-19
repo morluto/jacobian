@@ -18,12 +18,6 @@ from jacobian.math.logic.term_rewriting.operations import (
     unify,
 )
 from jacobian.math.logic.term_rewriting.values import (
-    MAX_CRITICAL_PAIR_CANDIDATE_WORK,
-    MAX_NORMAL_FORM_RESULT_NODES,
-    MAX_REWRITE_APPLICATIONS,
-    MAX_REWRITE_RESULT_NODES,
-    MAX_SUBSTITUTION_BINDINGS,
-    MAX_TERM_NODES,
     CriticalOverlapCandidate,
     CriticalPair,
     CriticalPairProfile,
@@ -35,12 +29,6 @@ from jacobian.math.logic.term_rewriting.values import (
 )
 
 __all__ = [
-    "MAX_CRITICAL_PAIR_CANDIDATE_WORK",
-    "MAX_NORMAL_FORM_RESULT_NODES",
-    "MAX_REWRITE_APPLICATIONS",
-    "MAX_REWRITE_RESULT_NODES",
-    "MAX_SUBSTITUTION_BINDINGS",
-    "MAX_TERM_NODES",
     "CriticalOverlapCandidate",
     "CriticalPair",
     "CriticalPairProfile",

@@ -1,7 +1,10 @@
 """Exact finite relational structures with homomorphism check and search."""
 
 from jacobian.math.logic.relational_structures._models import (
+    EmbeddingSearchResult,
     HomomorphismCheckResult,
+    HomomorphismCoreResult,
+    HomomorphismCountResult,
     HomomorphismSearchResult,
     HomomorphismSearchStatus,
     HomomorphismStatus,
@@ -24,10 +27,11 @@ from jacobian.math.logic.relational_structures.values import (
 # directly. Wire-envelope request handlers live in ``_tools.py`` and are not
 # part of this native API.
 __all__ = [
+    "EmbeddingSearchResult",
     "FiniteRelationSymbol",
     "FiniteRelationalStructure",
     "HomomorphismCheckResult",
-    "HomomorphismCountRequest",
+    "HomomorphismCoreResult",
     "HomomorphismCountResult",
     "HomomorphismSearchResult",
     "HomomorphismSearchStatus",

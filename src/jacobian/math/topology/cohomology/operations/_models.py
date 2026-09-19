@@ -524,6 +524,11 @@ class SimplicialMap(StrictModel):
         }
         for entry in self.source.faces_by_dimension:
             for face in entry.faces:
+                if any(vertex not in source_index for vertex in face):
+                    raise _validation_error(
+                        "simplicial_map_source_face_labels",
+                        "every source face vertex must be a declared source vertex",
+                    )
                 image = tuple(
                     sorted({self.vertex_map[source_index[vertex]] for vertex in face})
                 )

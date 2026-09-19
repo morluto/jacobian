@@ -591,6 +591,13 @@ class TestInducedMaps:
         with pytest.raises(ValidationError):
             SimplicialMap(source=_CIRCLE, target=target, vertex_map=("x", "y", "x"))
 
+    def test_source_face_with_undeclared_vertex_is_rejected(self) -> None:
+        payload = json.loads(self._identity(_CIRCLE).model_dump_json())
+        payload["source"]["faces_by_dimension"][0]["faces"][0][0] = "0"
+
+        with pytest.raises(ValidationError, match="declared source vertex"):
+            SimplicialMap.model_validate_json(json.dumps(payload))
+
     def test_native_and_catalog_paths_agree(self) -> None:
         tool = _tool("topology.simplicial_map.induced_cohomology.compute")
 

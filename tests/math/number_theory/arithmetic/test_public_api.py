@@ -36,6 +36,14 @@ def test_absolute_value_and_sign_compose_through_canonical_integer_value(
     assert arithmetic.sign(absolute) == arithmetic.sign(abs(value))
 
 
+def test_decimal_digit_sum_uses_limit_safe_integer_formatting() -> None:
+    value = arithmetic.IntegerValue(value=10**5000 + 2)
+
+    assert arithmetic_operations.decimal_digit_sum(value) == arithmetic.IntegerValue(
+        value=3
+    )
+
+
 def test_exact_rational_operations() -> None:
     assert arithmetic.sum_rationals(Fraction(1, 3), Fraction(1, 6)) == Fraction(1, 2)
     assert arithmetic.quotient(Fraction(2, 3), 4) == Fraction(1, 6)

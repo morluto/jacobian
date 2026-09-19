@@ -471,7 +471,8 @@ def sign(value: SupportsIndex | IntegerValue) -> int:
 
 def decimal_digit_sum(value: IntegerValue) -> IntegerValue:
     """Return the sum of the decimal digits of an exact integer."""
-    return IntegerValue(value=sum(int(digit) for digit in str(abs(value.value))))
+    magnitude = format_canonical_integer(abs(value.value))
+    return IntegerValue(value=sum(int(digit) for digit in magnitude))
 
 
 def decimal_digit_count(value: IntegerValue) -> IntegerValue:
@@ -487,7 +488,7 @@ def base_digits(value: IntegerValue, base: int) -> tuple[int, int, tuple[str, ..
             code="arithmetic.base_out_of_range",
             message="base must be between 2 and 10000",
         )
-    magnitude = str(abs(value.value))
+    magnitude = format_canonical_integer(abs(value.value))
     if len(magnitude) > MAX_BASE_DIGITS:
         raise OperationDomainValidationError(
             location=("value",),

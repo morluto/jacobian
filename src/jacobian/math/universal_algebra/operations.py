@@ -505,7 +505,7 @@ def generated_subalgebra(
         generators=generators,
         generated_carrier=tuple(sorted_carrier),
         rounds=rounds,
-        is_closed=set(generators) == carrier_set if generators else True,
+        is_closed=True,
     )
 
 

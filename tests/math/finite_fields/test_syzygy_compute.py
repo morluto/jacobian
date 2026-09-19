@@ -40,6 +40,7 @@ from jacobian.math.finite_fields._syzygy_compute_models import (
     FiniteFieldJacobianResult,
     QuotientReduceRequest,
     QuotientReduceResult,
+    ReduceStep,
     SyzygyGeneratorsRequest,
     SyzygyGeneratorsResult,
 )
@@ -273,6 +274,45 @@ class TestQuotientReduce:
         forged_step["steps"][0]["coefficient"] = 0
         with pytest.raises(ValidationError):
             QuotientReduceResult.model_validate_json(json.dumps(forged_step))
+
+    def test_verifier_requires_a_complete_reduction_ledger(self) -> None:
+        _, _, generator = _graf()
+
+        result = quotient_reduce(generator, (generator,), "z")
+        forged = result.model_copy(
+            update={"steps": (), "remainder": generator},
+        )
+
+        assert not verify_quotient_reduction(forged)
+
+    def test_verifier_rejects_a_nondivisible_step_and_laurent_remainder(self) -> None:
+        presentation = finite_field(2, (0, 1))
+        axis = Axis(name="vars", labels=("x", "z"))
+        generator = _poly(presentation, axis, {(0, 2): 1, (1, 0): 1})
+        source = _poly(presentation, axis, {(0, 1): 1})
+        honest = quotient_reduce(source, (generator,), "z")
+        forged = honest.model_copy(
+            update={
+                "steps": (ReduceStep(target=(0, 1), coefficient=1),),
+                "remainder": _poly(presentation, axis, {(1, -1): 1}),
+            }
+        )
+        decoded = QuotientReduceResult.model_validate_json(forged.model_dump_json())
+
+        assert not verify_quotient_reduction(decoded)
+
+    def test_verifier_preserves_remainder_resource_refusal(self) -> None:
+        presentation, axis, generator = _graf()
+        result = quotient_reduce(generator, (generator,), "z")
+        oversized = _poly(
+            presentation,
+            axis,
+            {(first, second, 0): 1 for first in range(9) for second in range(8)},
+        )
+        forged = result.model_copy(update={"remainder": oversized})
+
+        with pytest.raises(OperationResourceAdmissionError):
+            verify_quotient_reduction(forged)
 
     def test_non_monic_generator_is_rejected(self) -> None:
         presentation, axis, f = _graf()

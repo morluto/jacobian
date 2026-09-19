@@ -246,6 +246,26 @@ def test_identity_power_preserves_mixed_large_denominator_source() -> None:
     )
 
 
+@pytest.mark.parametrize("operation", [convolution_power, convolution_peak])
+def test_identity_operations_reject_an_unnormalized_distribution(operation) -> None:
+    source = _distribution(
+        (
+            (Fraction(0), Fraction(1, 2)),
+            (Fraction(1), Fraction(1, 4)),
+        )
+    )
+
+    with pytest.raises(OperationDomainValidationError, match="sum exactly to 1"):
+        operation(source, 1)
+
+
+def test_identity_peak_rejects_a_zero_mass_distribution() -> None:
+    source = _distribution(((Fraction(0), Fraction(0)),))
+
+    with pytest.raises(OperationDomainValidationError, match="sum exactly to 1"):
+        convolution_peak(source, 1)
+
+
 def test_wider_canonical_carrier_does_not_widen_binary_convolution() -> None:
     source = _distribution(
         tuple((Fraction(2**index), Fraction(1, 23)) for index in range(23))

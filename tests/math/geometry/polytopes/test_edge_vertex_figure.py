@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import json
-import math
+from collections.abc import Callable
 from fractions import Fraction
 from itertools import combinations
+from typing import Any
 
 import pytest
 from pydantic import ValidationError
@@ -24,9 +25,9 @@ from jacobian.math.geometry.polytopes import (
     polytope_vertex_figure,
 )
 from jacobian.math.geometry.polytopes._models import (
-    MAX_FACET_SIGN_TESTS,
     EdgeProfileRequest,
     VertexFigureRequest,
+    VertexFigureResult,
 )
 from jacobian.math.geometry.polytopes._rational_geometry import facets_from_points
 from jacobian.math.geometry.polytopes._tools import (
@@ -194,11 +195,11 @@ def _oracle_edge_set(polytope: RationalVPolytope) -> set[tuple[str, str]]:
         for second in range(first + 1, len(points)):
             if _oracle_is_edge(points, dim, first, second):
                 pair = (ids[first], ids[second])
-                found.add(tuple(sorted(pair)))
+                found.add((min(pair), max(pair)))
     return found
 
 
-def _figure_coords(result) -> dict[str, tuple[Fraction, ...]]:
+def _figure_coords(result: VertexFigureResult) -> dict[str, tuple[Fraction, ...]]:
     return {
         vertex.vertex_id: tuple(c.as_fraction() for c in vertex.coordinates)
         for vertex in result.figure.vertices
@@ -399,8 +400,6 @@ class TestBoundary:
         binaries = list(combinations_with_binary_vectors(7, 64))
         rows = tuple((f"v{i:02d}", coords) for i, coords in enumerate(binaries))
         polytope = _polytope(axes, rows)
-        distinct = len({coords for _, coords in rows})
-        assert distinct * math.comb(distinct, 7) > MAX_FACET_SIGN_TESTS
         with pytest.raises(OperationResourceAdmissionError):
             polytope_edge_profile(polytope)
 
@@ -543,7 +542,7 @@ class TestNativeVsCatalogParity:
         assert "polytope.rational.vertex_figure.compute" in ids
 
     def test_strict_json_examples_validate_and_run(self) -> None:
-        runners = {
+        runners: dict[str, Callable[[Any], object]] = {
             "polytope.rational.edge_profile.compute": compute_polytope_edge_profile,
             "polytope.rational.vertex_figure.compute": compute_polytope_vertex_figure,
         }

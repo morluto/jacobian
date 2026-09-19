@@ -1,24 +1,11 @@
-"""Domain-owned exact rational polytope volume operations.
+"""Domain-owned exact rational polytope operations.
 
-The volume of a bounded rational polytope is computed exactly by
-recursively triangulating its boundary and coning each boundary
-simplex to an interior reference point.
-
-For a V-representation the caller-supplied vertices are used directly.
-For an H-representation the vertices are first enumerated by solving
-every ``C(m, d)`` subsystem of half-spaces and retaining the feasible
-intersections.
-
-The convex hull (d-1)-facets are enumerated by a bounded brute-force
-test (every d-subset of points is a subfacet if all remaining points
-lie on one side of the hyperplane it spans), merged into maximal
-coplanar facets by a canonical hyperplane signature, and triangulated
-recursively: each (d-1)-facet is projected to (d-1)-dimensional
-coordinates, triangulated, and each boundary simplex is coned to an
-interior point to form a d-simplex whose exact SymPy determinant is
-summed. The recursion bottoms out at d=1 (an interval) and d=2 (a
-polygon fan). This is exact and bounded for the small dimensions
-(``d <= 6``) and vertex counts (``<= 128``) this operation admits.
+H/V conversion uses the private homogeneous primitive-integer
+double-description kernel.  Its exact incidence bitsets drive pulling
+triangulation, and FLINT supplies rank, nullspace, inverse, and determinant
+arithmetic.  Cartesian boxes and containing simplices have exact structured
+presolves; all other conversions use theorem-backed output-sensitive work
+bounds before expansion.
 """
 
 from __future__ import annotations
@@ -40,7 +27,6 @@ from jacobian.catalog.models import (
 )
 from jacobian.math.geometry.polytopes._models import (
     COORDINATE_DIGITS,
-    MAX_BOUNDEDNESS_COMBINATIONS,
     MAX_COMPUTED_FACETS,
     MAX_COORDINATE_LABEL_LENGTH,
     MAX_DIMENSION,
@@ -48,10 +34,6 @@ from jacobian.math.geometry.polytopes._models import (
     MAX_FACET_COORDINATE_DIGITS,
     MAX_FACET_DIMENSION,
     MAX_FACET_INCIDENCES,
-    MAX_FACET_SIGN_TESTS,
-    MAX_HULL_SUBFACETS,
-    MAX_SUPPORT_ORIENTATION_TESTS,
-    MAX_SUPPORT_VERTEX_SUBSETS,
     MAX_VERTICES,
     EdgeProfileResult,
     FacetIncidenceResult,
@@ -78,9 +60,12 @@ from jacobian.math.geometry.polytopes._models import (
     _validate_halfspaces,
     _validate_vertices,
 )
+from jacobian.math.geometry.polytopes._polyhedral_conversion import (
+    dd_work_bound,
+    points_to_facets,
+)
 from jacobian.math.geometry.polytopes._rational_geometry import (
     determinant_sign,
-    iter_facets_from_points,
     recession_cone_is_trivial,
     vertices_from_halfspaces,
 )
@@ -89,16 +74,6 @@ from jacobian.math.geometry.polytopes.values import (
     Halfspace,
     Vertex,
 )
-
-# Absolute combinatorial ceiling: reject vertex enumeration that would
-# attempt to solve more subsystems than this. With ``MAX_FACETS = 64``
-# and ``d = 6`` the worst case is ``C(64, 6) = 74,974,368``, so the bound
-# is the practical gate on budget exhaustion.
-MAX_SUBSYSTEM_SOLVES = 5_000_000
-
-# ``MAX_HULL_SUBFACETS`` (the C(n, d) hull-enumeration ceiling) is owned
-# by ``_models`` beside the other published request bounds, which quote it
-# in their schema-visible descriptions.
 
 
 def _deduplicate_source_rows(points: list[list[Rational]]) -> list[list[Rational]]:
@@ -139,27 +114,6 @@ def _require_facet_preflight(vertices: tuple[Vertex, ...], dim: int) -> None:
                 "V-representation is not full-dimensional; lower-dimensional hulls "
                 "require intrinsic affine coordinates"
             )
-    # Repeated source rows create neither candidate hyperplanes nor
-    # candidate side tests: ``iter_facets_from_points`` receives exactly the
-    # distinct rows below, so each of the ``C(m, d)`` candidates is
-    # side-tested against those ``m`` distinct rows and the sign-test
-    # budget is charged per distinct row actually tested. The final-facet
-    # incidence pass ranges over all source positions and is accounted
-    # separately -- its work is bounded by the facet and incidence result
-    # limits enforced exactly on the materialized profile this bounded
-    # enumeration produces (see ``_computed_facets_from_vertices``); row
-    # counts alone cannot derive those bounds because interior and other
-    # non-extreme rows inflate every vertex-count upper bound while
-    # contributing no facets.
-    distinct_points = _deduplicate_source_rows(points)
-    candidate_count = math.comb(len(distinct_points), dim)
-    side_tests = len(distinct_points) * candidate_count
-    if side_tests > MAX_FACET_SIGN_TESTS:
-        raise ValueError(
-            "facet enumeration exceeds the "
-            f"{MAX_FACET_SIGN_TESTS}-side-test bound "
-            f"({side_tests} > {MAX_FACET_SIGN_TESTS})"
-        )
 
 
 def _primitive_facet_key(
@@ -209,11 +163,10 @@ def _computed_facets_from_vertices(
         [Rational(*coordinate.as_integer_ratio()) for coordinate in vertex.coordinates]
         for vertex in vertices
     ]
+    distinct_points = _deduplicate_source_rows(points)
+    conversion = points_to_facets(distinct_points, dim, max_facets=MAX_COMPUTED_FACETS)
     canonical: dict[tuple[tuple[int, ...], int], PrimitiveFacet] = {}
-    for normal, offset in iter_facets_from_points(
-        _deduplicate_source_rows(points), dim
-    ):
-        coefficients, rhs = _primitive_facet_key(normal, offset, dim)
+    for coefficients, rhs in conversion.facets:
         incidence = tuple(
             index
             for index, point in enumerate(points)
@@ -297,15 +250,16 @@ def _deduplicate_halfspaces(
         fracs = [Fraction(*c.as_integer_ratio()) for c in hs.coefficients]
         offset = Fraction(*hs.offset.as_integer_ratio())
         lcm = 1
-        for frac in fracs:
+        for frac in (*fracs, offset):
             lcm = lcm * frac.denominator // math.gcd(lcm, frac.denominator)
         ints = [int(frac * lcm) for frac in fracs]
+        rhs = int(offset * lcm)
         g = 0
-        for value in ints:
+        for value in (*ints, rhs):
             g = math.gcd(g, abs(value))
         key = (
             tuple(value // g for value in ints),
-            ((offset * lcm / g).numerator, (offset * lcm / g).denominator),
+            (rhs // g, 1),
         )
         if key not in seen:
             seen.add(key)
@@ -328,34 +282,9 @@ def _is_bounded_h(halfspaces: tuple[Halfspace, ...]) -> bool:
 
     dim = len(halfspaces[0].coefficients)
     halfspaces = _deduplicate_halfspaces(halfspaces)
-    if dim == 1:
-        positive = any(
-            Rational(*hs.coefficients[0].as_integer_ratio()) > 0 for hs in halfspaces
-        )
-        negative = any(
-            Rational(*hs.coefficients[0].as_integer_ratio()) < 0 for hs in halfspaces
-        )
-        return positive and negative
     normals: list[list[Rational]] = [
         [Rational(*c.as_integer_ratio()) for c in hs.coefficients] for hs in halfspaces
     ]
-    # Positive spanning requires the normals' convex hull to be full-
-    # dimensional; otherwise the polyhedron is unbounded.
-    if len(normals) < dim + 1:
-        return False
-    # Guard the exact facet enumeration of the row normals: the budget
-    # applies to the distinct rows after duplicate removal, exactly as the
-    # enumeration below counts its own work.
-    try:
-        combo_count = math.comb(len(normals), dim)
-    except ValueError:
-        combo_count = 10**18
-    if combo_count > MAX_BOUNDEDNESS_COMBINATIONS:
-        raise ValueError(
-            "H-representation boundedness precheck exceeds the "
-            f"{MAX_BOUNDEDNESS_COMBINATIONS}-combination budget "
-            f"({combo_count} > {MAX_BOUNDEDNESS_COMBINATIONS})"
-        )
     return recession_cone_is_trivial(normals, dim)
 
 
@@ -373,12 +302,23 @@ def _simplex_abs_det(simplex_points: list[list[Rational]]) -> Rational:
     d = len(simplex_points) - 1
     if d == 0:
         return Rational(1)
+    from flint import fmpq, fmpq_mat
+
     v0 = simplex_points[0]
-    cols = [
-        Matrix([[simplex_points[i][k] - v0[k]] for k in range(d)])
-        for i in range(1, d + 1)
-    ]
-    return abs(Matrix.hstack(*cols).det())
+    matrix = fmpq_mat(
+        [
+            [
+                fmpq(
+                    int((simplex_points[row + 1][axis] - v0[axis]).p),
+                    int((simplex_points[row + 1][axis] - v0[axis]).q),
+                )
+                for axis in range(d)
+            ]
+            for row in range(d)
+        ]
+    )
+    determinant = abs(matrix.det())
+    return Rational(int(determinant.numerator), int(determinant.denominator))
 
 
 def _rank_of_diffs(points: list[list[Rational]], dim: int) -> int:
@@ -510,33 +450,23 @@ def _filter_redundant_vertices(
     degree >2 and cause triangulation to fail).
     """
 
-    if len(points) <= dim + 1:
+    if len(points) <= dim:
         return points
-    # Guard the facet enumeration that the filter itself requires.
-    subfacet_count = math.comb(len(points), dim)
-    if subfacet_count > MAX_HULL_SUBFACETS:
-        # Too many to enumerate exactly; fall back to no filtering and let
-        # the caller raise the budget error. Filtering is an optimization
-        # for the small, non-budget-exhausting cases that the operation
-        # admits.
-        return points
-    groups: dict[tuple[int, ...], set[int]] = {}
-    for subfacet in _hull_subfacets(points, dim):
-        sig = _plane_signature(subfacet, points)
-        if sig is None:
-            continue
-        groups.setdefault(sig, set()).update(subfacet)
-    if not groups:
-        return points
-    keep_indices, counts = _extreme_point_indices(groups, len(points), dim)
-    # If filtering would discard too much (e.g., degenerate or numeric
-    # failure), keep the hull boundary instead of collapsing.
+    hull = points_to_facets(points, dim)
+    active_normals: list[list[list[Rational]]] = [[] for _ in points]
+    for (normal, _offset), incidence in zip(
+        hull.facets, hull.facet_incidence, strict=True
+    ):
+        for index in range(len(points)):
+            if incidence & (1 << index):
+                active_normals[index].append([Rational(value) for value in normal])
+    keep_indices = [
+        index
+        for index, normals in enumerate(active_normals)
+        if normals and Matrix(normals).rank() == dim
+    ]
     if len(keep_indices) < dim + 1:
-        hull_indices = [i for i, c in enumerate(counts) if c > 0]
-        if len(hull_indices) >= dim + 1:
-            keep_indices = hull_indices
-        else:
-            return points
+        return points
     keep_set = set(keep_indices)
     return [pt for i, pt in enumerate(points) if i in keep_set]
 
@@ -555,38 +485,17 @@ def require_full_dimensional_extreme_vertices(polytope: RationalVPolytope) -> No
 
     The support operation uses a direct finite maximum only after the value
     has established that its labelled generators are exactly the polytope's
-    vertices.  The existing hull-facet code gives the latter proof by the
-    active-normal rank characterization of extreme vertices.  The published
-    budgets are enforced from typed counts and reduced-component digit
-    lengths before any canonical coordinate is converted or any exact linear
-    algebra runs: the subfacet and orientation-test bounds depend only on
-    the vertex count and dimension, and the height-work bound couples those
-    test counts with the operand heights because one orientation determinant
-    costs ``Theta(D^2)`` limb operations at reduced-component height ``D``
-    (see ``MAX_EXTREMALITY_HEIGHT_WORK``), so all three together bound the
-    proof's exact work across the whole canonical coordinate domain.
+    vertices. The shared DD facet conversion gives the latter proof by the
+    active-normal rank characterization of extreme vertices. Admission couples
+    the theorem-backed candidate-pair bound, ambient dimension, and reduced
+    component height before conversion; structured hull presolves then retain
+    exact incidences for the rank test.
     """
 
     dimension = len(polytope.space.axes)
     vertex_count = len(polytope.vertices)
-    subset_count = math.comb(vertex_count, dimension)
-    if subset_count > MAX_SUPPORT_VERTEX_SUBSETS:
-        raise ValueError(
-            "V-polytope extremality proof exceeds the subfacet bound "
-            f"({subset_count} > {MAX_SUPPORT_VERTEX_SUBSETS})"
-        )
-    orientation_tests = subset_count * (vertex_count - dimension)
-    # ``_extreme_point_indices`` also ranks the active facet normals once per
-    # source vertex.  Those exact linear-algebra calls are part of the same
-    # height-sensitive proof, so charge them alongside the side tests.
-    # The affine-span check below is a further exact rank computation.
-    rank_tests = vertex_count + 1
-    extremality_tests = orientation_tests + rank_tests
-    if extremality_tests > MAX_SUPPORT_ORIENTATION_TESTS:
-        raise ValueError(
-            "V-polytope extremality proof exceeds the orientation-test bound "
-            f"({extremality_tests} > {MAX_SUPPORT_ORIENTATION_TESTS})"
-        )
+    _ray_bound, pair_bound = dd_work_bound(vertex_count, dimension + 1)
+    extremality_tests = pair_bound + vertex_count + 1
     component_digits = max(
         max(
             len(format_canonical_integer(abs(coordinate.num))),
@@ -595,7 +504,7 @@ def require_full_dimensional_extreme_vertices(polytope: RationalVPolytope) -> No
         for vertex in polytope.vertices
         for coordinate in vertex.coordinates
     )
-    height_work = extremality_tests * component_digits**2
+    height_work = extremality_tests * (dimension + 1) * component_digits**2
     if height_work > MAX_EXTREMALITY_HEIGHT_WORK:
         raise ValueError(
             "V-polytope extremality proof exceeds the height-work bound "
@@ -742,25 +651,8 @@ def _extreme_vertex(points: list[list[Rational]], dim: int) -> int | None:
 
 def _polytope_volume(points: list[list[Rational]], dim: int) -> Rational:
     """Exact volume of the convex hull of ``points`` in ``dim`` dimensions."""
-    # Remove redundant boundary points before triangulating (P2): keeps
-    # only extreme hull vertices, avoiding double-counting and degenerate
-    # adjacency (e.g., 3x3 square with collinear edge points).
-    points = _filter_redundant_vertices(points, dim)
-    n = len(points)
-    if n < dim + 1:
-        return Rational(0)
-    # Guard the brute-force hull enumeration against combinatorial blow-up.
-    subfacet_count = math.comb(n, dim)
-    if subfacet_count > MAX_HULL_SUBFACETS:
-        raise ValueError(
-            "polytope hull enumeration exceeds the combinatorial bound "
-            f"({subfacet_count} > {MAX_HULL_SUBFACETS} d-subsets)"
-        )
-    if dim == 1:
-        coords = sorted({p[0] for p in points})
-        return coords[-1] - coords[0] if len(coords) >= 2 else Rational(0)
-    triangulation = _triangulate(points, dim)
-    return _polytope_volume_from_prepared(points, dim, triangulation)
+    prepared, triangulation = _prepare_volume_components(points, dim)
+    return _polytope_volume_from_prepared(prepared, dim, triangulation)
 
 
 def _polytope_volume_from_prepared(
@@ -834,15 +726,6 @@ def _vertices_from_h_representation(
     dim = len(halfspaces[0].coefficients)
     halfspaces = _deduplicate_halfspaces(halfspaces)
     rows = _halfspace_rows(halfspaces)
-    n = len(rows)
-    # Guard against combinatorial blow-up before materialising combinations.
-    subsystem_count = math.comb(n, dim)
-    if subsystem_count > MAX_SUBSYSTEM_SOLVES:
-        raise ValueError(
-            "polytope vertex enumeration exceeds the combinatorial bound "
-            f"({subsystem_count} > {MAX_SUBSYSTEM_SOLVES} subsystems)"
-        )
-
     result: tuple[list[tuple[Rational, ...]], int] = (
         vertices_from_halfspaces(rows, dim),
         dim,
@@ -1552,10 +1435,8 @@ def _admit_edge_profile(polytope: RationalVPolytope, dimension_bound: object) ->
 
     Returns the source ambient dimension. Structural violations raise
     ``OperationDomainValidationError``; envelope overflows raise
-    ``OperationResourceAdmissionError``. The side-test budget mirrors the
-    facet envelope exactly: distinct source rows create the candidate
-    hyperplanes, so ``m * C(m, d)`` with ``m`` distinct rows is charged
-    before any exact enumeration starts.
+    ``OperationResourceAdmissionError``. Facet conversion owns the shared
+    output-sensitive ray, pair, coefficient-growth, and result bounds.
     """
 
     if not isinstance(polytope, RationalVPolytope):
@@ -1631,18 +1512,6 @@ def _admit_edge_profile(polytope: RationalVPolytope, dimension_bound: object) ->
                 "hulls require intrinsic affine coordinates"
             ),
         )
-    distinct_points = _deduplicate_source_rows(points)
-    side_tests = len(distinct_points) * math.comb(len(distinct_points), ambient)
-    if side_tests > MAX_FACET_SIGN_TESTS:
-        raise OperationResourceAdmissionError(
-            location=("polytope",),
-            code="polytope.edge_profile.side_test_budget_exceeded",
-            message=(
-                "edge-profile enumeration exceeds the "
-                f"{MAX_FACET_SIGN_TESTS}-side-test bound "
-                f"({side_tests} > {MAX_FACET_SIGN_TESTS})"
-            ),
-        )
     return ambient
 
 
@@ -1712,7 +1581,11 @@ def _compute_edge_data(
         facets = _computed_facets_from_vertices(bare, ambient)
     except ValueError as exc:
         message = str(exc)
-        if "side-test" in message or "result bound" in message:
+        if (
+            "side-test" in message
+            or "result bound" in message
+            or "output bound" in message
+        ):
             raise OperationResourceAdmissionError(
                 location=("polytope",),
                 code="polytope.edge_profile.enumeration_over_envelope",

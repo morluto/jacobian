@@ -77,7 +77,9 @@ def _unit_4cube(shift: int) -> RationalVPolytope:
     return _cells(axes, tuple(rows))
 
 
-def _face_coordinates(result: PolytopalComplexClosureResult) -> set[frozenset]:
+def _face_coordinates(
+    result: PolytopalComplexClosureResult,
+) -> set[frozenset[tuple[Fraction, ...]]]:
     return {
         frozenset(
             tuple(coordinate.as_fraction() for coordinate in point.coordinates)
@@ -281,13 +283,13 @@ class TestDefiningInvariant:
         for row in result.pairwise_intersections:
             if row.status != "face":
                 continue
+            intersection_face_id = row.intersection_face_id
+            assert intersection_face_id is not None
             assert (
-                row.first_cell_id
-                in face_by_id[row.intersection_face_id].maximal_cell_ids
+                row.first_cell_id in face_by_id[intersection_face_id].maximal_cell_ids
             )
             assert (
-                row.second_cell_id
-                in face_by_id[row.intersection_face_id].maximal_cell_ids
+                row.second_cell_id in face_by_id[intersection_face_id].maximal_cell_ids
             )
         assert [row.source_index for row in result.source_cell_map] == [0, 1]
         assert [row.cell_id for row in result.source_cell_map] == ["M0", "M1"]

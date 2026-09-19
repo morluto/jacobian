@@ -181,7 +181,7 @@ def run_bounded_factorization(
     # child and reporting its refusal afterwards.
     if not factor_worker_containment_available():
         raise FactorBackendFailureError(
-            "no portable hard memory limit is available for the bounded "
+            "no portable hard address-space limit is available for the bounded "
             "factorization worker on this platform"
         )
     try:

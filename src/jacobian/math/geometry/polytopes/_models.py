@@ -25,6 +25,18 @@ from sympy import Matrix, Rational
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.canonical import format_canonical_integer
+from jacobian.math.geometry.polytopes._polyhedral_conversion import (
+    MAX_DD_COEFFICIENT_DIGITS,
+    MAX_DD_PAIR_BOUND,
+    MAX_DD_RAY_BOUND,
+    MAX_DD_WEIGHTED_HEIGHT_WORK,
+    MAX_PULLING_SIMPLEX_BOUND,
+    halfspaces_to_generators,
+    maximal_incidence_faces,
+    points_to_facets,
+    pulling_triangulation,
+    require_pulling_work_admissible,
+)
 from jacobian.math.geometry.polytopes._rational_geometry import (
     determinant_sign,
     recession_cone_is_trivial,
@@ -79,9 +91,6 @@ differences. This conservative height bounds those private intermediates and
 the digits in the primitive integer facet rows.
 """
 
-MAX_FACET_SIGN_TESTS = 5_000_000
-"""Maximum candidate-hyperplane/vertex side tests in one enumeration pass."""
-
 MAX_COMPUTED_FACETS = 256
 """Maximum number of canonical facets materialized by one result."""
 
@@ -91,10 +100,9 @@ MAX_FACET_INCIDENCES = 16_384
 MAX_VERTICES = 64
 """Absolute upper bound on the number of vertices in a V-representation.
 
-The exact convex-hull enumeration is ``O(C(n, d))``; this vertex bound
-together with the dimension bound keeps the bounded exact computation
-feasible. Polytopes whose hull enumeration exceeds the work bound are
-rejected as budget exhaustion.
+The private conversion kernel applies output-sensitive ray, candidate-pair,
+and coefficient-growth admission after exact deduplication. Structured box
+and simplex hulls have tighter direct bounds.
 """
 
 MAX_FACETS = 64
@@ -102,31 +110,6 @@ MAX_FACETS = 64
 
 MAX_COORDINATE_LABEL_LENGTH = 64
 """Maximum Unicode-scalar length of an axis or vertex identifier."""
-
-MAX_HULL_SUBFACETS = 200_000
-"""Ceiling on the d-subsets the exact hull enumeration may consider.
-
-The hull work couples vertex count with ambient dimension: after
-duplicate points are removed, enumerating the hull of ``n`` distinct
-vertices in dimension ``d`` considers ``C(n, d)`` d-subsets, so requests
-with ``C(n, d) > 200_000`` are rejected as budget exhaustion. The bound
-lives here so the published request-schema descriptions quote the same
-constant the admission check enforces.
-"""
-
-MAX_BOUNDEDNESS_COMBINATIONS = 700_000
-"""Ceiling on the row combinations the H-representation boundedness
-precheck may consider.
-
-Deciding boundedness exactly enumerates the facets of the convex hull of
-the row normals, which considers ``C(m, d)`` d-subsets of the ``m``
-distinct half-spaces in ambient dimension ``d``. Duplicate rows
-(identical up to a common positive factor) are removed first, so
-redundant copies neither change the decision nor inflate the estimate;
-requests with ``C(m, d) > 700_000`` distinct rows are rejected as budget
-exhaustion. The bound lives here so the published request-schema
-description quotes the same constant the admission check enforces.
-"""
 
 COORDINATE_DIGITS = 32_768
 """Per-component digit bound forwarded to the canonical rational validator."""
@@ -138,19 +121,6 @@ The volume is a canonical rational whose components cannot exceed the
 global ``CanonicalRational`` limit; requests whose exact volume can
 provably leave that domain are rejected at admission.
 """
-
-MAX_SUBSYSTEM_SOLVES = 5_000_000
-"""Absolute combinatorial ceiling for vertex enumeration from H-representations."""
-
-
-def _largest_combination_axis(*, ceiling: int, dimension: int, work: int) -> int:
-    """Largest axis size whose exact combination count fits ``work``."""
-
-    size = ceiling
-    while math.comb(size, dimension) > work:
-        size -= 1
-    return size
-
 
 MAX_SUPPORT_COMPONENT_DIGITS = 150
 """Per-component digit cap for rational polytope support inputs.
@@ -167,41 +137,15 @@ inputs and the exact construction work required by the public
 V-polytope value.
 """
 
-MAX_SUPPORT_VERTEX_SUBSETS = 100_000
-"""Maximum ``C(n, d)`` exact subfacets used to establish a V-polytope.
-
-The support kernel itself is a linear pass. Its canonical V-polytope value
-also proves that every declared generator is an extreme vertex, using the
-existing exact hull-facet kernel. This bound applies before that proof
-materializes its candidate subsets; its distinct orientation-test bound is
-declared separately.
-"""
-
-MAX_SUPPORT_ORIENTATION_TESTS = 500_000
-"""Maximum exact orientation determinants in the V-polytope hull proof.
-
-For every candidate ``d``-subset, the hull kernel tests each of the ``n-d``
-remaining vertices against its supporting hyperplane. Admission charges the
-complete product ``C(n,d) * (n-d)`` before materializing either family.
-"""
-
 MAX_EXTREMALITY_HEIGHT_WORK = 20_000_000_000
 """Ceiling coupling extremality-proof work with coordinate height.
 
-The V-polytope extremality proof evaluates ``T = C(n, d) * (n - d)``
-orientation determinants on ``(d+1) x (d+1)`` rational matrices. With ``D``
-the largest decimal digit count over every reduced numerator and denominator,
-clearing each row's denominators bounds matrix entries by ``(d + 2) * D``
-digits, Hadamard's bound bounds every fraction-free elimination intermediate
-by ``(d + 1) * (d + 2) * D`` digits, and the elimination performs
-``O((d + 1)^3)`` multiplications of such operands. With ``d <= MAX_FACET_DIMENSION``
-fixed, one orientation test therefore costs ``Theta(D^2)`` limb operations,
-and the complete proof ``T * D^2`` up to constants absorbed by this ceiling.
-The ceiling is calibrated above the worst work the published operation
-envelopes admit (the support regime: 500,000 tests at 150 digits gives
-1.125e10), so values inside those envelopes validate unchanged while larger
-heights grade the admitted test count down proportionally — 19,073 tests at
-1,024 digits, 18 at the 32,768-digit canonical limit.
+The DD upper bound supplies ``T`` candidate pairs and exact rank checks before
+conversion. With ``D`` the largest reduced component digit count, admission
+charges ``T * (d + 1) * D^2``: every pair combines ``d + 1`` coordinates and
+integer multiplication is at least quadratic under this conservative model.
+Structured hulls still pass this cheap count-height gate before their tighter
+box or simplex presolve runs.
 """
 
 
@@ -767,34 +711,30 @@ def _require_triangulated_volume_within_result_bound(
     triangulation: list[tuple[int, ...]],
     dim: int,
 ) -> None:
-    """Bound the summed simplex volumes against the canonical component limit.
+    """Bound the exact determinant sum using one global axis denominator.
 
-    With ``R_v`` the total denominator-digit count of vertex ``v``'s
-    coordinates, one simplex contributes a common denominator of at most
-    ``sum(R_v)`` digits and its scaled Hadamard determinant numerator at
-    most ``sum(max_k(n_vk + R_v) + 1)`` digits.  Each simplex's numerator
-    estimate dominates its denominator estimate, so the sum over all
-    simplices bounds both components of the combined fraction; summation
-    carries add a small slack.  The bound is conservative: it may reject
-    inputs whose concrete volume happens to be short, never accepts one
-    that cannot be represented.
+    For axis ``j``, the product of all authored coordinate denominators is a
+    common denominator ``L_j`` for every simplex entry on that axis.  Hence
+    every determinant shares ``prod(L_j)``: summing simplices adds only the
+    decimal length of the simplex count, not the product of every simplex's
+    denominators.  This remains conservative while avoiding the old false
+    exponential growth on integral cubes and other highly triangulated hulls.
     """
 
-    numerator_total = 0
-    denominator_total = 0
-    for simplex in triangulation:
-        det_digits = 0
-        for idx in simplex:
-            row = table[idx]
-            row_den = sum(q for _, q in row)
-            row_max = max(n + row_den for n, _ in row)
-            det_digits += row_max + 2
-        numerator_total += det_digits
-        denominator_total += sum(q for idx in simplex for _, q in table[idx])
-    carry = dim + len(str(len(triangulation))) + 4
+    axis_denominator_digits = [
+        sum(row[axis][1] for row in table) for axis in range(dim)
+    ]
+    determinant_numerator_digits = sum(
+        max(row[axis][0] for row in table) + axis_denominator_digits[axis] + 2
+        for axis in range(dim)
+    )
+    factorial_digits = len(str(math.factorial(dim)))
+    carry = len(str(len(triangulation))) + dim + 4
+    numerator_total = determinant_numerator_digits + carry
+    denominator_total = sum(axis_denominator_digits) + factorial_digits + carry
     if (
-        numerator_total + carry > MAX_RESULT_COMPONENT_DIGITS
-        or denominator_total + carry > MAX_RESULT_COMPONENT_DIGITS
+        numerator_total > MAX_RESULT_COMPONENT_DIGITS
+        or denominator_total > MAX_RESULT_COMPONENT_DIGITS
     ):
         raise PolytopeAdmissionError(
             "volume_result_bound",
@@ -918,26 +858,23 @@ def _filter_redundant_vertices(
 ) -> list[list[Rational]]:
     """Return extreme hull vertices, dropping redundant boundary points."""
 
-    if len(points) <= dim + 1:
+    if len(points) <= dim:
         return points
-    subfacet_count = math.comb(len(points), dim)
-    if subfacet_count > MAX_HULL_SUBFACETS:
-        return points
-    groups: dict[tuple[int, ...], set[int]] = {}
-    for subfacet in _hull_subfacets(points, dim):
-        sig = _plane_signature(subfacet, points)
-        if sig is None:
-            continue
-        groups.setdefault(sig, set()).update(subfacet)
-    if not groups:
-        return points
-    keep_indices, counts = _extreme_point_indices(groups, len(points), dim)
+    hull = points_to_facets(points, dim)
+    active_normals: list[list[list[Rational]]] = [[] for _ in points]
+    for (normal, _offset), incidence in zip(
+        hull.facets, hull.facet_incidence, strict=True
+    ):
+        for index in range(len(points)):
+            if incidence & (1 << index):
+                active_normals[index].append([Rational(value) for value in normal])
+    keep_indices = [
+        index
+        for index, normals in enumerate(active_normals)
+        if normals and Matrix(normals).rank() == dim
+    ]
     if len(keep_indices) < dim + 1:
-        hull_indices = [index for index, count in enumerate(counts) if count > 0]
-        if len(hull_indices) >= dim + 1:
-            keep_indices = hull_indices
-        else:
-            return points
+        return points
     keep_set = set(keep_indices)
     return [point for index, point in enumerate(points) if index in keep_set]
 
@@ -1058,15 +995,16 @@ def _deduplicate_halfspaces(halfspaces: tuple[Halfspace, ...]) -> tuple[Halfspac
         ]
         offset = Fraction(*halfspace.offset.as_integer_ratio())
         lcm = 1
-        for fraction in fractions:
+        for fraction in (*fractions, offset):
             lcm = lcm * fraction.denominator // math.gcd(lcm, fraction.denominator)
         ints = [int(fraction * lcm) for fraction in fractions]
+        rhs = int(offset * lcm)
         gcd = 0
-        for integer in ints:
+        for integer in (*ints, rhs):
             gcd = math.gcd(gcd, abs(integer))
         normalized = (
             tuple(integer // gcd for integer in ints),
-            ((offset * lcm / gcd).numerator, (offset * lcm / gcd).denominator),
+            (rhs // gcd, 1),
         )
         if normalized not in seen:
             seen.add(normalized)
@@ -1115,12 +1053,6 @@ def _vertices_from_h_representation(
     dimension = len(halfspaces[0].coefficients)
     reduced = _deduplicate_halfspaces(halfspaces)
     rows = _halfspace_rows(reduced)
-    subsystem_count = math.comb(len(rows), dimension)
-    if subsystem_count > MAX_SUBSYSTEM_SOLVES:
-        raise ValueError(
-            "polytope vertex enumeration exceeds the combinatorial bound "
-            f"({subsystem_count} > {MAX_SUBSYSTEM_SOLVES} subsystems)"
-        )
     return vertices_from_halfspaces(rows, dimension), dimension
 
 
@@ -1129,16 +1061,6 @@ def _is_bounded_h(halfspaces: tuple[Halfspace, ...]) -> bool:
 
     dimension = len(halfspaces[0].coefficients)
     halfspaces = _deduplicate_halfspaces(halfspaces)
-    if dimension == 1:
-        has_positive = any(
-            Rational(*halfspace.coefficients[0].as_integer_ratio()) > 0
-            for halfspace in halfspaces
-        )
-        has_negative = any(
-            Rational(*halfspace.coefficients[0].as_integer_ratio()) < 0
-            for halfspace in halfspaces
-        )
-        return has_positive and has_negative
     normals = [
         [
             Rational(*coefficient.as_integer_ratio())
@@ -1146,18 +1068,6 @@ def _is_bounded_h(halfspaces: tuple[Halfspace, ...]) -> bool:
         ]
         for halfspace in halfspaces
     ]
-    if len(normals) < dimension + 1:
-        return False
-    try:
-        subset_count = math.comb(len(normals), dimension)
-    except ValueError:
-        subset_count = 10**18
-    if subset_count > MAX_BOUNDEDNESS_COMBINATIONS:
-        raise ValueError(
-            "H-representation boundedness precheck exceeds the "
-            f"{MAX_BOUNDEDNESS_COMBINATIONS}-combination budget "
-            f"({subset_count} > {MAX_BOUNDEDNESS_COMBINATIONS})"
-        )
     return recession_cone_is_trivial(normals, dimension)
 
 
@@ -1170,15 +1080,10 @@ def _prepare_volume_components(
     The kernel sums simplex determinants over a whole triangulation, so
     admission must account for denominators contributed by *all* simplices,
     not only ``dim + 1`` vertices.  The guard mirrors the execution
-    pipeline — exact deduplication, redundant-vertex filtering,
-    triangulation — so an empty or failed triangulation here means the
-    kernel returns exact volume zero, which is always representable.  The
-    combinatorial hull-work bound applies to the *unique* points before
-    any enumeration runs, exactly as the kernel counts its own work after
-    deduplication, so repeated points neither inflate the budget nor let
-    unrepresentable inputs slip past; every caller of this guard (request
-    validation or the native wrapper) is protected from unguarded hull
-    work.
+    pipeline — exact deduplication, output-sensitive conversion, extremal
+    filtering, and incidence-driven pulling — so an empty triangulation means
+    exact volume zero. Repeated points neither inflate DD admission nor let an
+    unrepresentable result skip the retained triangulation growth bound.
     """
 
     if dim == 1:
@@ -1191,26 +1096,42 @@ def _prepare_volume_components(
         _require_interval_volume_within_result_bound(unique)
         return [list(point) for point in unique], []
 
-    # Deduplicate exactly as the kernel does before any admission work:
-    # the budget below measures the hull enumeration the kernel actually
-    # performs on unique points, and duplicate points would otherwise
-    # break the polygonal adjacency into an empty triangulation and let
-    # unrepresentable inputs skip admission entirely.
+    # Deduplicate before conversion so repeated generators cannot inflate
+    # incidence work or survive into the retained triangulation.
     pts = [list(point) for point in _deduplicate_exact_points(points)]
-    try:
-        subfacets = math.comb(len(pts), dim)
-    except ValueError:
-        subfacets = 10**18
-    if subfacets > MAX_HULL_SUBFACETS:
-        raise PolytopeAdmissionError(
-            "subfacet_bound",
-            "polytope hull enumeration exceeds the combinatorial bound "
-            f"({subfacets} > {MAX_HULL_SUBFACETS} d-subsets)",
-        )
-    pts = _filter_redundant_vertices(pts, dim)
-    triangulation = _triangulate(pts, dim)
     if len(pts) < dim + 1:
         return pts, []
+    if _rank_of_diffs(pts, dim) < dim:
+        return pts, []
+
+    hull = points_to_facets(pts, dim)
+    extreme_indices: list[int] = []
+    for point_index in range(len(pts)):
+        active_normals = [
+            list(normal)
+            for (normal, _offset), incidence in zip(
+                hull.facets, hull.facet_incidence, strict=True
+            )
+            if incidence & (1 << point_index)
+        ]
+        if active_normals and Matrix(active_normals).rank() == dim:
+            extreme_indices.append(point_index)
+    if len(extreme_indices) < dim + 1:
+        return pts, []
+
+    if len(extreme_indices) != len(pts):
+        remapped_incidence: list[int] = []
+        for incidence in hull.facet_incidence:
+            bits = 0
+            for new_index, old_index in enumerate(extreme_indices):
+                if incidence & (1 << old_index):
+                    bits |= 1 << new_index
+            remapped_incidence.append(bits)
+        pts = [pts[index] for index in extreme_indices]
+    else:
+        remapped_incidence = list(hull.facet_incidence)
+    require_pulling_work_admissible(len(remapped_incidence), dim)
+    triangulation = list(pulling_triangulation(len(pts), dim, remapped_incidence))
     if not triangulation:
         return pts, []
     table = [_point_digit_lengths(row) for row in pts]
@@ -1372,16 +1293,12 @@ class FacetIncidenceRequest(StrictModel):
             "affinely span their "
             "ambient dimension; lower-dimensional hulls are rejected because this "
             "operation returns ambient codimension-one facets. Repeated source rows "
-            "are retained for incidence binding but create no candidate hyperplanes "
-            "or candidate side tests, so admission requires m*C(m,d) <= "
-            f"{MAX_FACET_SIGN_TESTS} candidate-side tests, where m is the number of "
-            "distinct rows and every candidate hyperplane spanned by those distinct "
-            "rows is side-tested against exactly those distinct rows; the final-facet "
-            "incidence scans then range over all n source positions and are bounded "
-            "by the materialized-profile result limits below. Both charges apply "
-            "during the single owner-local execution. Execution materializes the "
-            "complete bounded enumeration, so its exact "
-            f"facet and incidence counts are proven to fit the "
+            "are retained for incidence binding but collapse to one homogeneous "
+            "generator for conversion. Admission uses the output-sensitive "
+            f"double-description ceilings of {MAX_DD_RAY_BOUND} rays, "
+            f"{MAX_DD_PAIR_BOUND} candidate pairs, and "
+            f"{MAX_DD_COEFFICIENT_DIGITS} primitive-minor digits. The exact "
+            "incidence profile is proven to fit the "
             f"{MAX_COMPUTED_FACETS}-facet and "
             f"{MAX_FACET_INCIDENCES}-incidence result limits."
         ),
@@ -1513,13 +1430,10 @@ class RationalVPolytope(StrictModel):
         max_length=MAX_VERTICES,
         description=(
             "Ordered distinct V-representation rows. The support operation's "
-            "exact extremality proof requires C(n,d) <= "
-            f"{MAX_SUPPORT_VERTEX_SUBSETS} candidate subfacets, C(n,d) * "
-            f"(n-d) <= {MAX_SUPPORT_ORIENTATION_TESTS} orientation tests, and "
-            f"C(n,d) * (n-d) * D^2 <= {MAX_EXTREMALITY_HEIGHT_WORK}, where D is "
-            "the largest reduced numerator/denominator digit count across all "
-            "vertex coordinates (exact determinant work grows quadratically "
-            "with coordinate height)."
+            "exact extremality proof uses the shared output-sensitive DD work "
+            f"bounds ({MAX_DD_RAY_BOUND} rays and {MAX_DD_PAIR_BOUND} pairs) "
+            "and a dimension-weighted coefficient-height budget of "
+            f"{MAX_EXTREMALITY_HEIGHT_WORK}."
         ),
     )
 
@@ -1868,12 +1782,10 @@ class PolytopeVolumeRequest(StrictModel):
     example the ``polytope`` of a support result), constructed or
     serialized; admission enforces the same work bound on both forms.
 
-    Admission enforces a work bound that couples vertex count with ambient
-    dimension: after duplicate points are removed, the exact hull
-    enumeration considers ``C(n, d)`` d-subsets of ``n`` distinct vertices.
-    The same named hull-work limit applies to a vertex set derived from an
-    H-representation, whose distinct rows have their own named boundedness
-    limit. The field descriptions publish both exact rules.
+    Admission uses output-sensitive upper bounds for the private exact
+    double-description conversion. Complete axis-aligned boxes use their
+    direct product structure. The field descriptions publish the ray and
+    candidate-pair ceilings used by both representations.
     """
 
     vertices: VertexTuple | RationalVPolytope | None = Field(
@@ -1885,16 +1797,14 @@ class PolytopeVolumeRequest(StrictModel):
             "``vertices`` shape is accepted too), such as the ``polytope`` "
             "of a support result. "
             "Mutually exclusive with ``halfspaces``. "
-            f"Coupled hull-work bound: after duplicate points are removed, "
-            f"admission requires C(n, d) <= {MAX_HULL_SUBFACETS} on the n "
-            "distinct vertices in ambient dimension d (the exact hull "
-            "enumeration considers every d-subset); larger requests are "
-            f"rejected. Within the {MAX_VERTICES}-vertex maximum this admits "
-            f"up to {_largest_combination_axis(ceiling=MAX_VERTICES, dimension=3, work=MAX_HULL_SUBFACETS)} "
-            "distinct vertices for d <= 3, "
-            f"{_largest_combination_axis(ceiling=MAX_VERTICES, dimension=4, work=MAX_HULL_SUBFACETS)} for d = 4, "
-            f"{_largest_combination_axis(ceiling=MAX_VERTICES, dimension=5, work=MAX_HULL_SUBFACETS)} for d = 5, and "
-            f"{_largest_combination_axis(ceiling=MAX_VERTICES, dimension=6, work=MAX_HULL_SUBFACETS)} for d = 6."
+            "After exact duplicate removal, admission applies McMullen's "
+            "output bound to every incremental double-description prefix: "
+            f"at most {MAX_DD_RAY_BOUND} rays, {MAX_DD_PAIR_BOUND} "
+            "positive/negative candidate pairs, and a primitive-minor height "
+            f"bound of {MAX_DD_COEFFICIENT_DIGITS} decimal digits, a pair-height "
+            f"work ceiling of {MAX_DD_WEIGHTED_HEIGHT_WORK}, and at most "
+            f"{MAX_PULLING_SIMPLEX_BOUND} incidence-driven pulling simplices. Complete two-level Cartesian "
+            "boxes use a direct exact product conversion."
         ),
     )
     halfspaces: tuple[Halfspace, ...] | None = Field(
@@ -1905,19 +1815,14 @@ class PolytopeVolumeRequest(StrictModel):
             "H-representation: the half-spaces ``<a_i, x> <= b_i``. "
             "Mutually exclusive with ``vertices``. Each half-space must "
             "have a nonzero normal: a row whose coefficients are all zero "
-            "is rejected. Coupled hull-work bound: duplicate rows "
-            "(identical up to a common positive factor) are removed, then "
-            f"admission requires C(m, d) <= {MAX_BOUNDEDNESS_COMBINATIONS} "
-            "on the m distinct half-spaces in ambient dimension d (the "
-            "boundedness precheck exactly enumerates the hull of the row "
-            f"normals); within the {MAX_FACETS}-row maximum this admits "
-            f"{_largest_combination_axis(ceiling=MAX_FACETS, dimension=4, work=MAX_BOUNDEDNESS_COMBINATIONS)} distinct "
-            "half-spaces for d <= 4, "
-            f"{_largest_combination_axis(ceiling=MAX_FACETS, dimension=5, work=MAX_BOUNDEDNESS_COMBINATIONS)} for d = 5, and "
-            f"{_largest_combination_axis(ceiling=MAX_FACETS, dimension=6, work=MAX_BOUNDEDNESS_COMBINATIONS)} for d = 6. The "
-            f"derived vertex set is then subject to the C(n, d) <= "
-            f"{MAX_HULL_SUBFACETS} hull-work bound published on the "
-            "vertices field."
+            "is rejected. Duplicate primitive rows are removed before the "
+            "same output-sensitive double-description admission used by the "
+            f"V form: at most {MAX_DD_RAY_BOUND} intermediate rays, "
+            f"{MAX_DD_PAIR_BOUND} candidate pairs, and "
+            f"{MAX_DD_COEFFICIENT_DIGITS} primitive-minor digits, "
+            f"{MAX_DD_WEIGHTED_HEIGHT_WORK} pair-height work, and "
+            f"{MAX_PULLING_SIMPLEX_BOUND} pulling simplices. Derived vertices reuse "
+            "their exact incidence description for pulling triangulation."
         ),
     )
     dimension_bound: int = Field(
@@ -2042,10 +1947,8 @@ def _validate_vertices(
                 "vertex_dimension_consistency", "all vertices must share one dimension"
             )
 
-    # Exact-volume growth is bounded over the whole triangulation, so the
-    # same admission runs on the rational points themselves; it applies
-    # the combinatorial hull-work bound after exact deduplication,
-    # mirroring the kernel pipeline.
+    # Run the same retained conversion/triangulation admission used by the
+    # native wrapper after exact deduplication.
     points, resolved_dim = _vertices_from_v_representation(vertices)
     prepared, triangulation = _prepare_volume_components(points, resolved_dim)
     return prepared, resolved_dim, triangulation
@@ -2056,35 +1959,46 @@ def _require_admissible_h_vertices(
 ) -> tuple[list[list[Any]], list[tuple[int, ...]]]:
     """Admit the derived vertex set of an H-representation.
 
-    Bounded-ness and non-emptiness must be decided before any exact
-    enumeration: an unbounded or empty H-polytope is not a valid request,
-    so it is rejected here as ``ValidationError`` rather than as a host
-    exception after acceptance.  The derived vertices then drive the same
-    brute-force hull enumeration and exact-volume growth bound as a
-    caller-supplied V-representation, so the identical combinatorial and
-    result-size admission applies before accepting the request.
+    One admitted homogeneous DD pass classifies emptiness, boundedness,
+    lineality, affine dimension, vertices, and incidence. The retained
+    incidences drive pulling triangulation without replaying conversion.
     """
 
-    if not _is_bounded_h(halfspaces):
+    reduced = _deduplicate_halfspaces(halfspaces)
+    rows = _halfspace_rows(reduced)
+    conversion = halfspaces_to_generators(rows, dim)
+    if conversion.empty:
+        raise _validation_error(
+            "h_representation", "the H-representation defines an empty polytope"
+        )
+    if not conversion.bounded:
         raise _validation_error(
             "halfspaces",
             "the H-representation is unbounded; polytope volume requires a bounded polytope",
         )
-    verts, _resolved_dim = _vertices_from_h_representation(halfspaces)
-    if not verts:
-        raise _validation_error(
-            "h_representation", "the H-representation defines an empty polytope"
-        )
-    subfacets = math.comb(len(verts), dim)
-    if subfacets > MAX_HULL_SUBFACETS:
-        raise _validation_error(
-            "halfspace_coefficients",
-            "polytope hull enumeration exceeds the combinatorial bound "
-            f"({subfacets} > {MAX_HULL_SUBFACETS} d-subsets)",
-        )
-    # Solved vertices can carry more digits than the declaring half-space
-    # coefficients, so measure them directly.
-    return _prepare_volume_components(verts, dim)
+    verts = [
+        [Rational(value.numerator, value.denominator) for value in point]
+        for point in conversion.vertices
+    ]
+    if conversion.affine_dimension < dim:
+        return verts, []
+    facet_incidence = []
+    for row_index in range(len(rows)):
+        bits = 0
+        for vertex_index, active in enumerate(conversion.vertex_incidence):
+            if active & (1 << row_index):
+                bits |= 1 << vertex_index
+        if bits:
+            facet_incidence.append(bits)
+    facet_incidence = list(maximal_incidence_faces(facet_incidence))
+    require_pulling_work_admissible(len(facet_incidence), dim)
+    triangulation = list(pulling_triangulation(len(verts), dim, facet_incidence))
+    if not triangulation:
+        return verts, []
+    _require_triangulated_volume_within_result_bound(
+        [_point_digit_lengths(row) for row in verts], triangulation, dim
+    )
+    return verts, triangulation
 
 
 def _validate_halfspaces(
@@ -2583,14 +2497,9 @@ class EdgeProfileRequest(StrictModel):
 
     The source must be full-dimensional: the points must affinely span
     their ambient dimension, exactly as the facet operation requires,
-    because the kernel reuses its bounded facet enumeration. Repeated
-    source rows are retained for incidence binding but create no
-    candidate hyperplanes or candidate side tests, so admission requires
-    ``m * C(m, d) <= MAX_FACET_SIGN_TESTS`` candidate-side tests, where
-    ``m`` is the number of distinct rows; the final edge pass ranges
-    over all source positions and is bounded by the materialized-profile
-    result limit. Both charges apply during the single owner-local
-    execution.
+    because the kernel reuses its output-sensitive DD conversion. Repeated
+    source rows are retained for incidence binding but collapse before
+    conversion; exact facet incidences then drive the bounded edge pass.
     """
 
     polytope: RationalVPolytope = Field(
@@ -2689,8 +2598,7 @@ class VertexFigureRequest(StrictModel):
     derived deterministically as ``sec_<neighbor_id>`` and must respect
     the label bound, so an over-long neighbor ID is rejected and the
     caller relabels first. The admitted envelope mirrors the edge
-    profile's: ``m * C(m, d) <= MAX_FACET_SIGN_TESTS`` candidate-side
-    tests on the distinct source rows.
+    profile's output-sensitive DD and result bounds.
     """
 
     polytope: RationalVPolytope = Field(
@@ -2827,7 +2735,6 @@ class VertexFigureResult(StrictModel):
 
 
 __all__ = [
-    "MAX_BOUNDEDNESS_COMBINATIONS",
     "MAX_COMPUTED_FACETS",
     "MAX_DIMENSION",
     "MAX_EDGE_PROFILE_EDGES",
@@ -2836,11 +2743,7 @@ __all__ = [
     "MAX_FACET_COORDINATE_DIGITS",
     "MAX_FACET_DIMENSION",
     "MAX_FACET_INCIDENCES",
-    "MAX_FACET_SIGN_TESTS",
-    "MAX_HULL_SUBFACETS",
     "MAX_SUPPORT_COMPONENT_DIGITS",
-    "MAX_SUPPORT_ORIENTATION_TESTS",
-    "MAX_SUPPORT_VERTEX_SUBSETS",
     "MAX_VERTICES",
     "EdgeProfileRequest",
     "EdgeProfileResult",

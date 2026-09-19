@@ -24,6 +24,10 @@ from jacobian.math.geometry.polytopes._models import (
     MAX_SUPPORT_COMPONENT_DIGITS,
     PolytopeSupportRequest,
 )
+from jacobian.math.geometry.polytopes._polyhedral_conversion import (
+    MAX_DD_PAIR_BOUND,
+    MAX_DD_RAY_BOUND,
+)
 from jacobian.math.geometry.polytopes._tools import (
     TOOLS,
     compute_polytope_support,
@@ -999,7 +1003,7 @@ def test_large_coordinate_canonical_values_construct_and_round_trip() -> None:
     assert RationalCovector.model_validate_json(covector.model_dump_json()) == covector
 
 
-def test_extremality_subfacet_bound_is_enforced_before_filtering() -> None:
+def test_extremality_dd_work_bound_is_enforced_before_filtering() -> None:
     axes = ("a", "b", "c", "d", "e")
     vertices = tuple(
         RationalPolytopeVertex(
@@ -1012,11 +1016,13 @@ def test_extremality_subfacet_bound_is_enforced_before_filtering() -> None:
     polytope = RationalVPolytope(
         space=RationalCoordinateSpace(axes=axes), vertices=vertices
     )
-    with pytest.raises(ValueError, match="subfacet"):
+    with pytest.raises(ValueError, match=r"height-work|output-sensitive work bound"):
         require_full_dimensional_extreme_vertices(polytope)
 
 
-def test_extremality_orientation_work_is_enforced_before_filtering() -> None:
+def test_cyclic_three_dimensional_family_above_old_orientation_cap_is_admitted() -> (
+    None
+):
     axes = ("x", "y", "z")
     vertices = tuple(
         RationalPolytopeVertex(
@@ -1029,8 +1035,7 @@ def test_extremality_orientation_work_is_enforced_before_filtering() -> None:
     polytope = RationalVPolytope(
         space=RationalCoordinateSpace(axes=axes), vertices=vertices
     )
-    with pytest.raises(ValueError, match="orientation"):
-        require_full_dimensional_extreme_vertices(polytope)
+    require_full_dimensional_extreme_vertices(polytope)
 
 
 def test_extremality_budget_bounds_are_enforced_before_exact_conversion(
@@ -1060,23 +1065,7 @@ def test_extremality_budget_bounds_are_enforced_before_exact_conversion(
         space=RationalCoordinateSpace(axes=six_axes),
         vertices=vertices_64_by_6,
     )
-    with pytest.raises(ValueError, match="subfacet"):
-        require_full_dimensional_extreme_vertices(polytope)
-
-    four_axes = ("w", "x", "y", "z")
-    vertices_40_by_4 = tuple(
-        RationalPolytopeVertex(
-            vertex_id=f"v{index:02d}",
-            coordinates=tuple(_rational(index ** (power + 1)) for power in range(4)),
-        )
-        for index in range(40)
-    )
-
-    polytope = RationalVPolytope(
-        space=RationalCoordinateSpace(axes=four_axes),
-        vertices=vertices_40_by_4,
-    )
-    with pytest.raises(ValueError, match="orientation"):
+    with pytest.raises(ValueError, match="height-work"):
         require_full_dimensional_extreme_vertices(polytope)
 
 
@@ -1123,7 +1112,7 @@ def test_extremality_height_work_grades_admission_by_coordinate_height() -> None
     the same near-threshold height admits a 3-vertex triangle and rejects a
     6-vertex dim-3 family just past ``MAX_EXTREMALITY_HEIGHT_WORK``."""
 
-    threshold_digits = 18_257  # 3 * 18_257^2 <= MAX < 60 * 18_258^2
+    threshold_digits = 18_257
     big = CanonicalRational(num=10**threshold_digits - 1, den=1)
     zero = CanonicalRational(num=0, den=1)
     triangle = RationalVPolytope(
@@ -1171,8 +1160,8 @@ def test_support_schema_publishes_component_and_hull_work_bounds() -> None:
     for field in ("polytope", "covector"):
         description = schema["properties"][field]["description"]
         assert str(MAX_SUPPORT_COMPONENT_DIGITS) in description
-    assert "C(n,d)" in vertex_description
-    assert "orientation tests" in vertex_description
+    assert str(MAX_DD_RAY_BOUND) in vertex_description
+    assert str(MAX_DD_PAIR_BOUND) in vertex_description
     assert str(MAX_EXTREMALITY_HEIGHT_WORK) in vertex_description
 
 

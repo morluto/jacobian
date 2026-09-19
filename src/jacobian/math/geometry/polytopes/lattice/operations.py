@@ -6,25 +6,22 @@ either V-representation (vertices) or H-representation (half-spaces):
 * ``enumerate`` returns every lattice (integer) point inside the polytope.
 * ``count`` returns the number of lattice points without listing them.
 
-Both are exact.  The implementation never uses floating point: it builds
-the facet half-spaces of the convex hull with SymPy's exact rational
-linear algebra, derives a finite integer bounding box, and tests each
+Both are exact. The implementation never uses floating point: it builds
+facet half-spaces through the shared homogeneous DD conversion, derives a
+finite integer bounding box, and tests each
 candidate integer point against the exact half-space inequalities.
 
-For a V-representation the facets are enumerated exactly: every
-``d``-subset of vertices defines a candidate hyperplane whose normal is
-the null space of the vertex differences (SymPy ``Matrix.nullspace``);
-the hyperplane is a facet when all vertices lie on one closed side.
-The convex hull of finitely many points is always bounded, so the
+For a V-representation the primitive facets and exact incidences come from
+the output-sensitive conversion kernel. The convex hull of finitely many
+points is always bounded, so the
 bounding box is the per-axis min/max of the vertices.
 
 For an H-representation ``{x : A x <= b}`` the polytope is bounded iff
 its recession cone ``{d : A d <= 0}`` is ``{0}``, which holds iff the
 origin lies strictly in the interior of the convex hull of the rows of
-``A``.  That interior test is itself an exact facet enumeration of the
-row normals.  Once boundedness is established the bounding box is the
-per-axis min/max of the enumerated vertices (every ``C(m, d)``
-subsystem of half-space boundaries that satisfies all half-spaces).
+``A``. The shared conversion classifies the recession cone and returns exact
+point rays. Once boundedness is established the bounding box is the per-axis
+min/max of those vertices.
 When that enumeration finds no vertex, the bounded polyhedron is
 empty and both operations return their exact empty value (count zero,
 no points).
@@ -143,11 +140,9 @@ def _vertices_from_h_representation(
 ) -> tuple[list[list[Rational]], int]:
     """Enumerate the vertices of ``{x : A x <= b}`` exactly.
 
-    Each vertex is the unique intersection of ``d`` affinely independent
-    half-space boundaries ``<a_i, x> = b_i``.  Every ``C(m, d)`` subsystem
-    is solved exactly with SymPy and retained when it satisfies all
-    half-spaces.  Bounded, exact vertex enumeration for the small
-    dimensions this operation admits.
+    The shared homogeneous DD kernel returns exact feasible point rays;
+    lineality and recession directions remain available to the boundedness
+    path.
     """
     dim = len(halfspaces[0][0])
 
@@ -353,20 +348,7 @@ def _facets_and_box(  # noqa: C901
                 f"dimension {d} exceeds the dimension bound {dimension_bound}"
             )
         verts = [[c.as_fraction() for c in v.coordinates] for v in vertex_models]
-        # Facet-combination budget: C(n,d) subsets of vertices define candidate
-        # hyperplanes. For n=64,d=4 this is 635k; larger would be unbounded work.
         if d > 1:
-            from math import comb as _comb
-
-            try:
-                facet_combinations = _comb(len(verts), d)
-            except ValueError:
-                facet_combinations = 10**18
-            if facet_combinations > MAX_FACET_COMBINATIONS:
-                raise LatticePointBudgetError(
-                    "vertex facet enumeration exceeds the "
-                    f"{MAX_FACET_COMBINATIONS}-combination budget"
-                )
             # Lower-dimensional hulls: if vertices do not span full dimension,
             # the facet enumeration would be empty and the scan would be wrong.
             # Detect affine rank regardless of vertex count and reject; this

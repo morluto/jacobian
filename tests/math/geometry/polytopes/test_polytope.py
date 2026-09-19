@@ -20,8 +20,6 @@ from jacobian.math.geometry.polytopes._models import (
     MAX_DIMENSION,
     MAX_FACET_COORDINATE_DIGITS,
     MAX_FACET_INCIDENCES,
-    MAX_FACET_SIGN_TESTS,
-    MAX_FACETS,
     MAX_VERTICES,
     FacetIncidenceRequest,
     FacetIncidenceResult,
@@ -34,6 +32,12 @@ from jacobian.math.geometry.polytopes._models import (
     RationalCovector,
     RationalPolytopeVertex,
     RationalVPolytope,
+)
+from jacobian.math.geometry.polytopes._polyhedral_conversion import (
+    MAX_DD_PAIR_BOUND,
+    MAX_DD_RAY_BOUND,
+    MAX_DD_WEIGHTED_HEIGHT_WORK,
+    MAX_PULLING_SIMPLEX_BOUND,
 )
 from jacobian.math.geometry.polytopes._tools import (
     compute_facet_incidence,
@@ -130,7 +134,8 @@ class TestFacetIncidence:
         schema = FacetIncidenceRequest.model_json_schema()
 
         description = schema["properties"]["vertices"]["description"]
-        assert str(MAX_FACET_SIGN_TESTS) in description
+        assert str(MAX_DD_RAY_BOUND) in description
+        assert str(MAX_DD_PAIR_BOUND) in description
 
     def test_schema_publishes_where_the_result_bounds_attach(self) -> None:
         """The facet and incidence caps are enforced exactly on the
@@ -334,7 +339,7 @@ class TestFacetIncidence:
             ),
             *(_v(*(((index, 1),) * 7)) for index in range(1, 57)),
         )
-        with pytest.raises(ValueError, match="side-test bound"):
+        with pytest.raises(ValueError, match="output bound"):
             compute_facet_incidence(FacetIncidenceRequest(vertices=vertices))
 
     @pytest.mark.scale
@@ -377,7 +382,7 @@ class TestFacetIncidence:
         failed only inside execution."""
         vertices = tuple(_v(*((t**k, 1) for k in range(1, 8))) for t in range(1, 16))
 
-        with pytest.raises(ValueError, match="facet result bound"):
+        with pytest.raises(ValueError, match="output bound"):
             compute_facet_incidence(FacetIncidenceRequest(vertices=vertices))
 
     def test_padded_seven_simplex_admits_distinct_candidates_and_binds_every_row(
@@ -434,27 +439,12 @@ class TestFacetIncidence:
         vertices = simplex + interior + (_v(*((0, 1) for _ in range(7))),) * 43
 
         assert len(vertices) == MAX_VERTICES == 64
-        candidate_count = math.comb(21, 7)
-        assert candidate_count * len(vertices) > MAX_FACET_SIGN_TESTS
-        assert candidate_count * 21 <= MAX_FACET_SIGN_TESTS
-
-        # Admission charges only the rows the enumeration actually
-        # side-tests; the padded request is no longer representation-
-        # rejected before its bounded enumeration starts.
+        # The containing-simplex presolve removes every strict interior row;
+        # duplicate source positions remain available for incidence binding.
         _require_facet_preflight(vertices, 7)
 
-    def test_padded_duplicates_admit_when_distinct_row_work_fits_the_budget(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """End-to-end flip of the same charging defect at a test-scale
-        budget: padding a hull with m = 10 distinct rows to n = 64 rows
-        pushes a per-raw-row charge of 64*C(10,2) = 2880 side tests over
-        the patched 450-test budget although the enumeration actually
-        executes exactly 10*C(10,2) = 450. The full request-validate ->
-        execute -> replay path must admit the padded request and bind
-        duplicate positions to their incident facets."""
-        import jacobian.math.geometry.polytopes.operations as operations
-
+    def test_padded_duplicates_bind_without_inflating_conversion_work(self) -> None:
+        """Primitive generator deduplication preserves source incidences."""
         square = (
             _v((0, 1), (0, 1)),
             _v((1, 1), (0, 1)),
@@ -465,9 +455,6 @@ class TestFacetIncidence:
         vertices = square + interior + (_v((0, 1), (0, 1)),) * 54
 
         assert len(vertices) == MAX_VERTICES
-        executed_side_tests = 10 * math.comb(10, 2)
-        monkeypatch.setattr(operations, "MAX_FACET_SIGN_TESTS", executed_side_tests)
-
         result = _facet_profile(vertices)
         unpadded = _facet_profile(square + interior)
 
@@ -644,6 +631,17 @@ class TestRationalVolume:
 
 
 class TestRejection:
+    def test_empty_system_is_classified_before_its_recession_cone(self) -> None:
+        """An infeasible strip is empty, not a nonempty unbounded polyhedron."""
+
+        with pytest.raises(ValueError, match="empty polytope"):
+            _volume_via_halfspaces(
+                (
+                    _h((1, 1), (0, 1), offset=(0, 1)),
+                    _h((-1, 1), (0, 1), offset=(-1, 1)),
+                )
+            )
+
     def test_unbounded_halfspace_representation(self) -> None:
         """An unbounded H-representation (no upper bounds) is rejected."""
         with pytest.raises(ValueError):
@@ -678,9 +676,8 @@ class TestRejection:
                 )
             )
 
-    def test_work_bound_rejection(self) -> None:
-        """A large polytope that exceeds the hull work bound is rejected."""
-        # 5-cube: 32 vertices, C(32, 5) = 201376 > 200000.
+    def test_five_cube_is_admitted_by_product_conversion(self) -> None:
+        """The product kernel admits a cube beyond the old subset ceiling."""
         vertices = tuple(
             _v(*((a, 1), (b, 1), (c, 1), (d, 1), (e, 1)))
             for a in (0, 1)
@@ -689,17 +686,10 @@ class TestRejection:
             for d in (0, 1)
             for e in (0, 1)
         )
-        with pytest.raises(ValueError, match="combinatorial bound"):
-            _volume_via_vertices(vertices)
+        assert _volume_via_vertices(vertices).volume == CanonicalRational(num=1, den=1)
 
-    def test_derived_vertex_work_bound_rejected_for_halfspaces(self) -> None:
-        """An H-representation whose derived vertex set exceeds the hull
-        work bound is rejected at request validation.
-
-        The 12 half-spaces of [0,1]^6 enumerate 64 vertices; executing
-        would need C(64, 6) = 74,974,368 d-subsets, far beyond the
-        combinatorial admission bound.
-        """
+    def test_six_cube_halfspaces_are_admitted_by_dd_and_product_hull(self) -> None:
+        """Twelve rows convert to 64 vertices without enumerating subsets."""
         halfspaces = []
         for axis in range(6):
             upper = [(0, 1)] * 6
@@ -708,8 +698,9 @@ class TestRejection:
             lower[axis] = (-1, 1)
             halfspaces.append(_h(*upper, offset=(1, 1)))
             halfspaces.append(_h(*lower, offset=(0, 1)))
-        with pytest.raises(ValueError, match="combinatorial bound"):
-            _volume_via_halfspaces(tuple(halfspaces))
+        assert _volume_via_halfspaces(tuple(halfspaces)).volume == CanonicalRational(
+            num=1, den=1
+        )
 
     def test_result_carries_only_the_exact_volume(self) -> None:
         """The result exposes no generic assurance field."""
@@ -780,7 +771,6 @@ class TestRejection:
 
     def test_request_schema_advertises_representation_size_bounds(self) -> None:
         """The generated schema exposes the vertex/half-space count bounds."""
-        import math
 
         schema = PolytopeVolumeRequest.model_json_schema()
         vertices_schema = schema["properties"]["vertices"]["anyOf"][0]
@@ -1033,12 +1023,8 @@ class TestNativeApi:
 
 class TestTriangulationWideDenominatorBound:
     @pytest.mark.scale
-    def test_eight_prime_polygon_denominator_sum_rejected(self) -> None:
-        """An eight-vertex convex polygon on distinct ~5000-digit prime
-        denominators passes any per-vertex estimate but its shoelace sum
-        accumulates a common denominator far beyond the canonical bound;
-        the triangulation-aware admission rejects it (review
-        counterexample shape)."""
+    def test_eight_prime_polygon_uses_one_global_denominator_bound(self) -> None:
+        """Shared axis denominators avoid multiplying bounds per simplex."""
 
         def prime_like(k: int) -> int:
             # Deterministic large denominators (primality not required: the
@@ -1064,8 +1050,9 @@ class TestTriangulationWideDenominatorBound:
                     )
                 )
             )
-        with pytest.raises(ValueError, match="result bound"):
-            _volume_via_vertices(tuple(vertices))
+        result = _volume_via_vertices(tuple(vertices))
+        assert result.volume.num > 0
+        assert len(format_canonical_integer(result.volume.den)) < 32_768
 
 
 class TestDuplicateVertexAdmission:
@@ -1129,13 +1116,12 @@ class TestDuplicateVertexAdmission:
         assert result.volume == CanonicalRational(num=0, den=1)
         assert result.dimension == 6
 
-    def test_distinct_points_still_exceed_the_hull_budget(self) -> None:
-        """64 distinct six-dimensional points remain rejected at C(64, 6)."""
+    def test_distinct_affinely_degenerate_points_return_zero(self) -> None:
+        """A cheap rank presolve accepts a large degenerate point family."""
         vertices = tuple(
             _v(*((i**k % 97 + i, 1) for k in range(6))) for i in range(1, 65)
         )
-        with pytest.raises(ValueError, match="combinatorial bound"):
-            _volume_via_vertices(vertices)
+        assert _volume_via_vertices(vertices).volume == CanonicalRational(num=0, den=1)
 
 
 class TestNativeApiAdmission:
@@ -1178,15 +1164,12 @@ class TestNativeApiAdmission:
         )
         assert len(format_canonical_integer(area.num)) == 20_000
 
-    def test_native_rejects_hull_work_overflow_before_enumeration(self) -> None:
-        """64 generic six-dimensional points exceed the hull-work bound at
-        C(64, 6) = 74,974,368 subsets; the native wrapper rejects exactly
-        like ``PolytopeVolumeRequest`` instead of enumerating unguarded."""
+    def test_native_accepts_large_affinely_degenerate_family(self) -> None:
+        """The leading constant coordinate makes this hull five-dimensional."""
         from jacobian.math.geometry.polytopes import convex_hull_volume
 
         points = tuple(tuple(Fraction(i**k) for k in range(6)) for i in range(1, 65))
-        with pytest.raises(ValueError, match="combinatorial bound"):
-            convex_hull_volume(points)
+        assert convex_hull_volume(points) == CanonicalRational(num=0, den=1)
 
     def test_native_admits_all_duplicate_points_with_zero_volume(self) -> None:
         """The native wrapper applies the hull budget to unique points: 64
@@ -1265,103 +1248,61 @@ class TestNonzeroNormalContractPublished:
 
 
 class TestHullWorkBoundPublished:
-    """The coupled C(n, d) hull-work bound must be schema-visible so
-    clients can size a V-representation per dimension without trial
-    execution (review thread: document the coupled hull-work limit)."""
-
-    @staticmethod
-    def _expected_max_distinct(dimension: int) -> int:
-        from math import comb
-
-        from jacobian.math.geometry.polytopes._models import MAX_HULL_SUBFACETS
-
-        n = MAX_VERTICES
-        while comb(n, dimension) > MAX_HULL_SUBFACETS:
-            n -= 1
-        return n
+    """The output-sensitive V-conversion ceiling is schema-visible."""
 
     def test_formula_and_threshold_are_schema_visible(self) -> None:
-        from jacobian.math.geometry.polytopes._models import MAX_HULL_SUBFACETS
+        from jacobian.math.geometry.polytopes._polyhedral_conversion import (
+            MAX_DD_PAIR_BOUND,
+            MAX_DD_RAY_BOUND,
+        )
 
         schema = PolytopeVolumeRequest.model_json_schema()
         vertices_description = schema["properties"]["vertices"]["description"]
-        assert f"C(n, d) <= {MAX_HULL_SUBFACETS}" in vertices_description
+        assert str(MAX_DD_RAY_BOUND) in vertices_description
+        assert str(MAX_DD_PAIR_BOUND) in vertices_description
+        assert str(MAX_DD_WEIGHTED_HEIGHT_WORK) in vertices_description
+        assert str(MAX_PULLING_SIMPLEX_BOUND) in vertices_description
+        assert "Cartesian boxes" in vertices_description
         model_description = schema["description"]
-        assert "C(n, d)" in model_description
+        assert "output-sensitive" in model_description
 
-    def test_documented_per_dimension_counts_match_the_bound(self) -> None:
-        """Every published usable-count figure is exactly the largest n
-        with C(n, d) <= the enforced hull-work ceiling."""
+    def test_old_subset_threshold_is_not_published(self) -> None:
         schema = PolytopeVolumeRequest.model_json_schema()
         description = schema["properties"]["vertices"]["description"]
-        for d in range(4, 7):
-            expected = self._expected_max_distinct(d)
-            assert f"{expected} for d = {d}" in description
-        flat = self._expected_max_distinct(3)
-        assert flat == MAX_VERTICES
-        assert f"up to {flat} distinct vertices for d <= 3" in description
+        assert "C(n, d)" not in description
 
-    def test_reviewer_boundary_count_is_rejected_with_typed_error(self) -> None:
-        """26 distinct six-dimensional points satisfy every visible field
-        bound yet exceed C(26, 6) = 230230; the rejection must say why."""
+    def test_reviewer_boundary_count_is_cheaply_classified_degenerate(self) -> None:
         points = tuple(_v(*((1000 * j + i, 1) for i in range(6))) for j in range(26))
-        with pytest.raises(
-            ValueError, match=rf"combinatorial bound \({math.comb(26, 6)}"
-        ):
-            _volume_via_vertices(points)
+        assert _volume_via_vertices(points).volume == CanonicalRational(num=0, den=1)
 
-    def test_just_above_the_four_dimensional_maximum_rejected(self) -> None:
+    def test_old_four_dimensional_threshold_no_longer_rejects_a_line(self) -> None:
         points = tuple(_v(*((1000 * j + i, 1) for i in range(4))) for j in range(49))
-        with pytest.raises(
-            ValueError, match=rf"combinatorial bound \({math.comb(49, 4)}"
-        ):
-            _volume_via_vertices(points)
+        assert _volume_via_vertices(points).volume == CanonicalRational(num=0, den=1)
 
 
 class TestHalfspaceWorkBoundPublished:
-    """The H-representation work ceiling must be schema-visible on the
-    distinct-row count so callers can size redundant-copy-laden requests
-    without trial execution (review thread: publish the coupled limit)."""
-
-    @staticmethod
-    def _expected_max_distinct(dimension: int) -> int:
-        from math import comb
-
-        from jacobian.math.geometry.polytopes._models import (
-            MAX_BOUNDEDNESS_COMBINATIONS,
-        )
-
-        m = MAX_FACETS
-        while comb(m, dimension) > MAX_BOUNDEDNESS_COMBINATIONS:
-            m -= 1
-        return m
+    """The H-representation publishes the same DD work contract."""
 
     def test_formula_and_threshold_are_schema_visible(self) -> None:
-        from jacobian.math.geometry.polytopes._models import (
-            MAX_BOUNDEDNESS_COMBINATIONS,
+        from jacobian.math.geometry.polytopes._polyhedral_conversion import (
+            MAX_DD_PAIR_BOUND,
+            MAX_DD_RAY_BOUND,
         )
 
         schema = PolytopeVolumeRequest.model_json_schema()
         description = schema["properties"]["halfspaces"]["description"]
-        assert f"C(m, d) <= {MAX_BOUNDEDNESS_COMBINATIONS}" in description
-        assert "duplicate rows" in description
+        assert str(MAX_DD_RAY_BOUND) in description
+        assert str(MAX_DD_PAIR_BOUND) in description
+        assert str(MAX_DD_WEIGHTED_HEIGHT_WORK) in description
+        assert str(MAX_PULLING_SIMPLEX_BOUND) in description
+        assert "Duplicate primitive rows" in description
 
-    def test_documented_per_dimension_counts_match_the_bound(self) -> None:
-        """Every published usable-count figure is exactly the largest m
-        with C(m, d) <= the enforced boundedness budget."""
+    def test_old_combination_formula_is_not_published(self) -> None:
         schema = PolytopeVolumeRequest.model_json_schema()
         description = schema["properties"]["halfspaces"]["description"]
-        for d in (5, 6):
-            expected = self._expected_max_distinct(d)
-            assert f"{expected} for d = {d}" in description
-        flat = self._expected_max_distinct(4)
-        assert flat == MAX_FACETS
-        assert f"{flat} distinct half-spaces for d <= 4" in description
+        assert "C(m, d)" not in description
 
-    def test_distinct_rows_still_exceed_the_deduplicated_budget(self) -> None:
-        """31 genuinely distinct six-dimensional rows satisfy every visible
-        field rule yet exceed C(31, 6) = 736281 > 700000 on distinct rows;
-        the typed budget error names the published ceiling."""
+    def test_distinct_redundant_rows_above_old_threshold_are_admitted(self) -> None:
         base = _six_simplex_rows()
         rows = list(base)
         for t in range(1, 25):
@@ -1370,8 +1311,8 @@ class TestHalfspaceWorkBoundPublished:
             coeffs[1] = (t, 1)
             rows.append(_h(*coeffs, offset=(t + 1, 1)))
         assert len(rows) == 31
-        with pytest.raises(ValueError, match=r"boundedness precheck exceeds"):
-            _volume_via_halfspaces(tuple(rows))
+        result = _volume_via_halfspaces(tuple(rows))
+        assert result.volume == CanonicalRational(num=1, den=720)
 
 
 class TestHalfspaceDuplicateRowAdmission:

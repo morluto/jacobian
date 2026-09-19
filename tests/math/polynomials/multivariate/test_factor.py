@@ -841,7 +841,7 @@ class TestExecutionInterruptionSeparation:
         monkeypatch.setattr(_shutil, "which", lambda name: None)
         monkeypatch.setattr(_os, "name", "nt")
         poly = _poly(("x", "y"), ((1, 1, (2, 1)), (-1, 1, (1, 0))))
-        with pytest.raises(FactorBackendFailureError):
+        with pytest.raises(FactorBackendFailureError, match="address-space limit"):
             run_bounded_factorization(poly)
 
     @requires_worker_containment

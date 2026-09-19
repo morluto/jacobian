@@ -44,10 +44,6 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.geometry.polytopes import _rational_geometry
-from jacobian.math.geometry.polytopes._rational_geometry import (
-    recession_cone_is_trivial,
-    vertices_from_halfspaces,
-)
 from jacobian.math.geometry.polytopes.lattice._models import (
     MAX_BOUND_SPAN,
     MAX_DIMENSION,
@@ -115,38 +111,6 @@ def _raise_projected_lattice_error(
         code=admission_code,
         message=str(exc),
     ) from exc
-
-
-def _is_bounded_h(halfspaces: list[tuple[list[Rational], Rational]], d: int) -> bool:
-    """Decide whether ``{x : A x <= b}`` is bounded.
-
-    The polytope is bounded iff its recession cone ``{d : A d <= 0}`` is
-    ``{0}``, which holds iff the origin lies strictly in the interior of
-    the convex hull of the rows of ``A``.  That interior test is an exact
-    facet enumeration of the row normals.  The rows must positively span
-    ``R^d``; equivalently their convex hull must be full-dimensional and
-    contain the origin strictly interior.  If the rows' hull is not
-    full-dimensional (e.g. normals ``(1,0)`` and ``(1,1)`` in 2D) the
-    polyhedron is unbounded even though the hull's single facet has
-    positive offset.
-    """
-    return recession_cone_is_trivial(
-        [coefficients for coefficients, _offset in halfspaces], d
-    )
-
-
-def _vertices_from_h_representation(
-    halfspaces: list[tuple[list[Rational], Rational]],
-) -> tuple[list[list[Rational]], int]:
-    """Enumerate the vertices of ``{x : A x <= b}`` exactly.
-
-    The shared homogeneous DD kernel returns exact feasible point rays;
-    lineality and recession directions remain available to the boundedness
-    path.
-    """
-    dim = len(halfspaces[0][0])
-
-    return [list(point) for point in vertices_from_halfspaces(halfspaces, dim)], dim
 
 
 def _floor(value: Rational) -> int:
@@ -224,35 +188,6 @@ def _to_integer_facet(
     return coeffs, rhs
 
 
-def _h_system_feasible(
-    halfspaces: list[tuple[list[Rational], Rational]],
-) -> bool:
-    """Decide exactly whether ``{x : A x <= b}`` contains any rational point.
-
-    Uses SymPy's exact simplex with a zero objective; infeasibility is the
-    distinguishing test between a bounded-but-empty H-polytope (admitted as
-    the canonical empty geometry) and an unbounded polyhedron without
-    vertices (rejected).
-    """
-    from sympy import Rational as _SRational
-    from sympy.solvers.simplex import InfeasibleLPError, linprog
-
-    matrix = [[_SRational(c) for c in coeffs] for coeffs, _ in halfspaces]
-    rhs = [_SRational(offset) for _, offset in halfspaces]
-    objective = [0] * len(matrix[0])
-    # SymPy's simplex constrains every variable nonnegative unless bounds
-    # are given; lattice coordinates are unrestricted integers, so the probe
-    # must pass explicit (None, None) bounds or systems like x <= -1 would
-    # be misread as infeasible and an unbounded polyhedron admitted as the
-    # empty geometry.
-    bounds = [(None, None)] * len(matrix[0])
-    try:
-        linprog(objective, matrix, rhs, bounds=bounds)
-        return True
-    except InfeasibleLPError:
-        return False
-
-
 def _facets_and_box(  # noqa: C901
     vertices: tuple[Vertex, ...] | None,
     halfspaces: tuple[Halfspace, ...] | None,
@@ -300,7 +235,11 @@ def _facets_and_box(  # noqa: C901
         deduped = [
             ([Fraction(a) for a in coeffs], Fraction(rhs)) for coeffs, rhs in facets
         ]
-        verts, _ = _vertices_from_h_representation(deduped)
+        conversion = _rational_geometry.polyhedron_from_halfspaces(deduped, d)
+        verts = [
+            [Rational(value.numerator, value.denominator) for value in point]
+            for point in conversion.vertices
+        ]
         # Solving the H-system can derive coordinates taller than every
         # input component (e.g. x <= 1/N with -x <= -1/N pins x = N);
         # each derived vertex coordinate must stay inside the canonical
@@ -325,17 +264,13 @@ def _facets_and_box(  # noqa: C901
                         f"canonical {MAX_CANONICAL_RATIONAL_DIGITS}-digit "
                         "representable bound; tighten the half-space heights"
                     )
-        bounded = _is_bounded_h(deduped, d)
-        # Infeasibility is checked BEFORE the recession-cone rejection: an
-        # infeasible system defines the empty - therefore bounded - polytope
-        # even when its normals do not positively span the ambient space.
-        if not bounded and (verts or _h_system_feasible(deduped)):
+        if not conversion.bounded and not conversion.empty:
             raise LatticePolytopeAdmissionError(
                 "the H-representation is unbounded whenever non-empty "
                 "(its recession cone is nontrivial); lattice-point "
                 "enumeration requires a bounded polytope"
             )
-        if not verts:
+        if conversion.empty:
             # Empty: its lattice-point set is empty, and the canonical
             # empty box scans no candidate at all.
             return [], [0] * d, [-1] * d, d

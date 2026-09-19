@@ -24,10 +24,14 @@ from jacobian.math.geometry.polytopes import (
     polytope_edge_profile,
     polytope_vertex_figure,
 )
+from jacobian.math.geometry.polytopes import operations as polytope_operations
 from jacobian.math.geometry.polytopes._models import (
     EdgeProfileRequest,
     VertexFigureRequest,
     VertexFigureResult,
+)
+from jacobian.math.geometry.polytopes._polyhedral_conversion import (
+    PolyhedralConversionAdmissionError,
 )
 from jacobian.math.geometry.polytopes._rational_geometry import facets_from_points
 from jacobian.math.geometry.polytopes._tools import (
@@ -410,6 +414,27 @@ class TestBoundary:
         polytope = _polytope(axes, rows)
         with pytest.raises(OperationResourceAdmissionError):
             polytope_vertex_figure(polytope, "v00")
+
+    @pytest.mark.parametrize(
+        "message",
+        (
+            "output-sensitive work bound",
+            "height-weighted work bound",
+            "coefficient-growth bound",
+        ),
+    )
+    def test_dd_envelope_failures_are_resource_errors(
+        self, monkeypatch: pytest.MonkeyPatch, message: str
+    ) -> None:
+        def reject(*_args: object, **_kwargs: object) -> object:
+            raise PolyhedralConversionAdmissionError(message)
+
+        monkeypatch.setattr(
+            polytope_operations, "_computed_facets_from_vertices", reject
+        )
+
+        with pytest.raises(OperationResourceAdmissionError, match=message):
+            polytope_edge_profile(_square())
 
     def test_dimension_zero_source_cannot_form(self) -> None:
         # A dimension-zero source (one vertex) violates the canonical

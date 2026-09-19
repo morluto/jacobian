@@ -15,6 +15,7 @@ from sympy import Matrix, Rational
 
 from jacobian.math.geometry.polytopes._polyhedral_conversion import (
     PolyhedralConversionError,
+    PolyhedronConversion,
     halfspaces_to_generators,
     points_to_facets,
 )
@@ -111,15 +112,23 @@ def recession_cone_is_trivial(
     return not conversion.recession_rays and not conversion.lineality_basis
 
 
+def polyhedron_from_halfspaces(
+    rows: Sequence[RationalRow], dimension: int
+) -> PolyhedronConversion:
+    """Return one exact H-conversion with generators and classification."""
+
+    try:
+        return halfspaces_to_generators(rows, dimension)
+    except PolyhedralConversionError as exc:
+        raise RuntimeError("exact vertex enumeration computation failed") from exc
+
+
 def vertices_from_halfspaces(
     rows: Sequence[RationalRow], dimension: int
 ) -> list[tuple[Rational, ...]]:
     """Enumerate feasible, distinct vertices of a bounded H-representation."""
 
-    try:
-        conversion = halfspaces_to_generators(rows, dimension)
-    except PolyhedralConversionError as exc:
-        raise RuntimeError("exact vertex enumeration computation failed") from exc
+    conversion = polyhedron_from_halfspaces(rows, dimension)
     return [
         tuple(Rational(value.numerator, value.denominator) for value in point)
         for point in conversion.vertices
@@ -133,6 +142,7 @@ __all__ = [
     "facets_from_points",
     "hyperplane_normal",
     "iter_facets_from_points",
+    "polyhedron_from_halfspaces",
     "recession_cone_is_trivial",
     "vertices_from_halfspaces",
 ]

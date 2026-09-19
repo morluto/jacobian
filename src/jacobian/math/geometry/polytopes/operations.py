@@ -61,6 +61,7 @@ from jacobian.math.geometry.polytopes._models import (
     _validate_vertices,
 )
 from jacobian.math.geometry.polytopes._polyhedral_conversion import (
+    PolyhedralConversionAdmissionError,
     dd_work_bound,
     points_to_facets,
 )
@@ -1579,22 +1580,17 @@ def _compute_edge_data(
     bare = tuple(Vertex(coordinates=vertex.coordinates) for vertex in polytope.vertices)
     try:
         facets = _computed_facets_from_vertices(bare, ambient)
+    except PolyhedralConversionAdmissionError as exc:
+        raise OperationResourceAdmissionError(
+            location=("polytope",),
+            code="polytope.edge_profile.enumeration_over_envelope",
+            message=str(exc),
+        ) from exc
     except ValueError as exc:
-        message = str(exc)
-        if (
-            "side-test" in message
-            or "result bound" in message
-            or "output bound" in message
-        ):
-            raise OperationResourceAdmissionError(
-                location=("polytope",),
-                code="polytope.edge_profile.enumeration_over_envelope",
-                message=message,
-            ) from exc
         raise OperationDomainValidationError(
             location=("polytope",),
             code="polytope.edge_profile.facet_profile_not_admitted",
-            message=message,
+            message=str(exc),
         ) from exc
     points = [
         [Rational(*coordinate.as_integer_ratio()) for coordinate in vertex.coordinates]

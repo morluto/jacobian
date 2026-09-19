@@ -37,6 +37,10 @@ class PolyhedralConversionError(RuntimeError):
     """An exact backend failure prevented a polyhedral conclusion."""
 
 
+class PolyhedralConversionAdmissionError(ValueError):
+    """A sound conversion work or output envelope rejected the request."""
+
+
 @dataclass(frozen=True)
 class QuotientMap:
     """Exact lineality quotient coordinates and a chosen reconstruction.
@@ -139,7 +143,7 @@ def require_dd_work_admissible(row_count: int, cone_dimension: int) -> None:
 
     rays, pairs = dd_work_bound(row_count, cone_dimension)
     if rays > MAX_DD_RAY_BOUND or pairs > MAX_DD_PAIR_BOUND:
-        raise ValueError(
+        raise PolyhedralConversionAdmissionError(
             "exact double-description conversion exceeds the output-sensitive "
             f"work bound (at most {rays} rays and {pairs} candidate pairs; "
             f"limits are {MAX_DD_RAY_BOUND} and {MAX_DD_PAIR_BOUND})"
@@ -154,7 +158,7 @@ def require_dd_weighted_work_admissible(
     _rays, pairs = dd_work_bound(row_count, cone_dimension)
     weighted = max(1, pairs) * minor_digits**2
     if weighted > MAX_DD_WEIGHTED_HEIGHT_WORK:
-        raise ValueError(
+        raise PolyhedralConversionAdmissionError(
             "exact double-description conversion exceeds the height-weighted "
             f"work bound ({weighted} > {MAX_DD_WEIGHTED_HEIGHT_WORK})"
         )
@@ -226,7 +230,7 @@ def require_pulling_work_admissible(facet_count: int, dimension: int) -> None:
 
     simplex_bound = max(1, facet_count) ** max(1, dimension)
     if simplex_bound > MAX_PULLING_SIMPLEX_BOUND:
-        raise ValueError(
+        raise PolyhedralConversionAdmissionError(
             "incidence-driven pulling triangulation exceeds the work bound "
             f"({simplex_bound} possible simplices > {MAX_PULLING_SIMPLEX_BOUND})"
         )
@@ -277,7 +281,7 @@ def require_dd_height_admissible(
     row_digits = (denominator_terms + 1) * component_digits + 2
     minor_digits = max(1, dimension) * row_digits + dimension + 2
     if minor_digits > MAX_DD_COEFFICIENT_DIGITS:
-        raise ValueError(
+        raise PolyhedralConversionAdmissionError(
             "exact double-description conversion exceeds the coefficient-growth "
             f"bound ({minor_digits} digits > {MAX_DD_COEFFICIENT_DIGITS})"
         )
@@ -602,7 +606,7 @@ def points_to_facets(
         return simplex
     facet_bound = upper_bound_facets(len(homogeneous), dimension)
     if max_facets is not None and facet_bound > max_facets:
-        raise ValueError(
+        raise PolyhedralConversionAdmissionError(
             "facet conversion exceeds the output bound "
             f"({facet_bound} possible facets > {max_facets})"
         )
@@ -717,6 +721,7 @@ __all__ = [
     "ConeConversion",
     "ConeRay",
     "HullConversion",
+    "PolyhedralConversionAdmissionError",
     "PolyhedralConversionError",
     "PolyhedronConversion",
     "QuotientMap",

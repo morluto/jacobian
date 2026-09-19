@@ -16,6 +16,9 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.geometry.polytopes import Halfspace, Vertex
+from jacobian.math.geometry.polytopes._polyhedral_conversion import (
+    PolyhedronConversion,
+)
 from jacobian.math.geometry.polytopes.lattice._models import (
     MAX_BOUND_SPAN,
     MAX_DIMENSION,
@@ -680,6 +683,30 @@ class TestFacetGeometryComputedOnce:
         monkeypatch.setattr(_rational_geometry, "facets_from_points", counting)
         return passes
 
+    def test_halfspace_execution_uses_one_conversion(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from jacobian.math.geometry.polytopes import _rational_geometry
+
+        conversions = 0
+        original = _rational_geometry.polyhedron_from_halfspaces
+
+        def counting(
+            rows: Sequence[tuple[Sequence[Rational], Rational]], dimension: int
+        ) -> PolyhedronConversion:
+            nonlocal conversions
+            conversions += 1
+            return original(rows, dimension)
+
+        monkeypatch.setattr(
+            _rational_geometry, "polyhedron_from_halfspaces", counting
+        )
+
+        assert count_lattice_points(
+            LatticePolytopeRequest(halfspaces=UNIT_SQUARE_H)
+        ).point_count == 4
+        assert conversions == 1
+
     def test_enumerate_execution_uses_one_facet_pass(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -1156,21 +1183,19 @@ class TestThirdWaveRegressions:
         """The reviewer's [0,1]^4 with every side repeated eight times:
         vertex enumeration and the recession-cone test see the 8 distinct
         primitive rows, not the 32 raw ones."""
-        from jacobian.math.geometry.polytopes.lattice import (
-            operations as native_operations,
-        )
+        from jacobian.math.geometry.polytopes import _rational_geometry
 
         seen_sizes: list[int] = []
-        original = native_operations._vertices_from_h_representation
+        original = _rational_geometry.polyhedron_from_halfspaces
 
         def counting(
-            halfspaces: list[tuple[list[Rational], Rational]],
-        ) -> tuple[list[list[Rational]], int]:
-            seen_sizes.append(len(halfspaces))
-            return original(halfspaces)
+            rows: Sequence[tuple[Sequence[Rational], Rational]], dimension: int
+        ) -> PolyhedronConversion:
+            seen_sizes.append(len(rows))
+            return original(rows, dimension)
 
         monkeypatch.setattr(
-            native_operations, "_vertices_from_h_representation", counting
+            _rational_geometry, "polyhedron_from_halfspaces", counting
         )
         request = LatticePolytopeRequest(halfspaces=UNIT_SQUARE_4D_SIDES * 4)
         assert request.halfspaces is not None
@@ -1184,21 +1209,19 @@ class TestThirdWaveRegressions:
     ) -> None:
         """Positive rescalings of the same inequality collapse onto the
         primitive row before any geometry routine runs."""
-        from jacobian.math.geometry.polytopes.lattice import (
-            operations as native_operations,
-        )
+        from jacobian.math.geometry.polytopes import _rational_geometry
 
         seen_sizes: list[int] = []
-        original = native_operations._vertices_from_h_representation
+        original = _rational_geometry.polyhedron_from_halfspaces
 
         def counting(
-            halfspaces: list[tuple[list[Rational], Rational]],
-        ) -> tuple[list[list[Rational]], int]:
-            seen_sizes.append(len(halfspaces))
-            return original(halfspaces)
+            rows: Sequence[tuple[Sequence[Rational], Rational]], dimension: int
+        ) -> PolyhedronConversion:
+            seen_sizes.append(len(rows))
+            return original(rows, dimension)
 
         monkeypatch.setattr(
-            native_operations, "_vertices_from_h_representation", counting
+            _rational_geometry, "polyhedron_from_halfspaces", counting
         )
         # Full square plus positive rescalings of two of its sides:
         # 6 raw rows collapse onto the 4 primitive constraints.

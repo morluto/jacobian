@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from math import comb
 from typing import Any
 from unittest.mock import patch
 
@@ -14,6 +13,12 @@ from jacobian.math.geometry.polytopes._models import (
     RationalCoordinateSpace,
     RationalPolytopeVertex,
     RationalVPolytope,
+)
+from jacobian.math.geometry.polytopes._polyhedral_conversion import (
+    dd_work_bound,
+)
+from jacobian.math.geometry.polytopes._polyhedral_conversion import (
+    points_to_facets as convert_points_to_facets,
 )
 from jacobian.math.geometry.polytopes.operations import (
     require_full_dimensional_extreme_vertices,
@@ -44,27 +49,40 @@ def _square() -> RationalVPolytope:
     )
 
 
-def test_extremality_charges_every_observed_orientation_determinant() -> None:
+def test_extremality_charges_dd_pairs_and_rank_tests() -> None:
     polytope = _square()
     dimension = len(polytope.space.axes)
     vertex_count = len(polytope.vertices)
-    charged_orientation_tests = (
-        comb(vertex_count, dimension) * (vertex_count - dimension) + vertex_count + 1
+    _ray_bound, charged_candidate_pairs = dd_work_bound(
+        vertex_count, dimension + 1
     )
+    charged_rank_tests = vertex_count + 1
 
-    original_determinant = MutableDenseMatrix.det
-    executions = {"orientation_determinant": 0}
+    original_rank = MutableDenseMatrix.rank
+    executions = {"candidate_pair": 0, "rank_test": 0}
 
-    def counted_determinant(*args: Any, **kwargs: Any) -> Any:
-        executions["orientation_determinant"] += 1
-        return original_determinant(*args, **kwargs)
+    def counted_rank(*args: Any, **kwargs: Any) -> Any:
+        executions["rank_test"] += 1
+        return original_rank(*args, **kwargs)
 
-    with patch.object(
-        MutableDenseMatrix, "det", autospec=True, side_effect=counted_determinant
+    def counted_conversion(*args: Any, **kwargs: Any) -> Any:
+        conversion = convert_points_to_facets(*args, **kwargs)
+        executions["candidate_pair"] += conversion.cone.candidate_pairs
+        return conversion
+
+    with (
+        patch.object(MutableDenseMatrix, "rank", autospec=True, side_effect=counted_rank),
+        patch(
+            "jacobian.math.geometry.polytopes.operations.points_to_facets",
+            side_effect=counted_conversion,
+        ),
     ):
         require_full_dimensional_extreme_vertices(polytope)
 
     assert_charged_work_parity(
-        charged={"orientation_determinant": charged_orientation_tests},
+        charged={
+            "candidate_pair": charged_candidate_pairs,
+            "rank_test": charged_rank_tests,
+        },
         executed=executions,
     )

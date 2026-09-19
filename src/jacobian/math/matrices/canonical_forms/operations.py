@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 from fractions import Fraction
+from math import lcm
 from typing import Any
 
 from pydantic_core import PydanticCustomError
@@ -23,6 +24,8 @@ from jacobian.math.matrices.canonical_forms._models import (
     MATRIX_POLYNOMIAL_EVALUATION_PASSES,
     MAX_CANONICAL_FORM_DIMENSION,
     MAX_CANONICAL_FORM_SCALAR_DIGITS,
+    MAX_CENTRALIZER_OUTPUT_DIGIT_WORK,
+    MAX_CENTRALIZER_RREF_WORK,
     MAX_MATRIX_POLYNOMIAL_DIGIT_WORK,
     MAX_MATRIX_POLYNOMIAL_REMAINDER_DIGIT_WORK,
     MAX_MATRIX_POLYNOMIAL_SCALAR_PRODUCTS,
@@ -1039,16 +1042,95 @@ def decide_similarity(left: RationalMatrix, right: RationalMatrix) -> Similarity
 def centralizer_basis(matrix: RationalMatrix) -> CentralizerResult:
     """Return a complete exact basis of the centralizer {X : AX = XA}."""
 
-    from fractions import Fraction
-
-    from jacobian._exact import CanonicalRational
-    from jacobian.math.matrices.operations import nullspace_result
-
     _admit_square(matrix)
     n = len(matrix.entries)
     entries = _matrix_entries(matrix)
+    diagonal = tuple(entries[index][index] for index in range(n))
+    is_diagonal = all(
+        entries[row][column] == 0
+        for row in range(n)
+        for column in range(n)
+        if row != column
+    )
+    is_scalar = is_diagonal and len(set(diagonal)) == 1
+    basis: tuple[RationalMatrix, ...]
+    if n == 2 and not is_scalar:
+        # Every nonscalar 2-by-2 matrix has centralizer QQ[I, A].  This
+        # algebraic path keeps a representable basis even when the entries of
+        # the derived commutator system would exceed its height budget.
+        basis = _centralizer_two_by_two_basis(matrix, entries)
+        return CentralizerResult._from_kernel(matrix=matrix, dimension=2, basis=basis)
+    if is_diagonal:
+        if is_scalar:
+            # A scalar matrix has the full matrix algebra as its centralizer.
+            basis = _centralizer_matrix_units(n)
+        else:
+            # For a diagonal matrix, X_ij is free exactly when the two
+            # diagonal entries agree.  Preserve row-major matrix-unit order.
+            basis = _centralizer_matrix_units(
+                n,
+                allowed={
+                    (row, column)
+                    for row in range(n)
+                    for column in range(n)
+                    if diagonal[row] == diagonal[column]
+                },
+            )
+        return CentralizerResult._from_kernel(
+            matrix=matrix, dimension=len(basis), basis=basis
+        )
+
+    rows = _centralizer_system(entries)
+    _admit_centralizer_system(rows, n)
+    vectors = _centralizer_nullspace(rows)
+    basis = _centralizer_matrices_from_vectors(vectors, n)
+    # The identity always commutes, so the centralizer is never empty.  The
+    # nullity assertion also protects the owner-local free-column convention.
+    assert basis, "centralizer must contain the identity"
+    assert len(basis) == len(vectors)
+    return CentralizerResult._from_kernel(
+        matrix=matrix, dimension=len(basis), basis=basis
+    )
+
+
+def _centralizer_two_by_two_basis(
+    matrix: RationalMatrix, entries: tuple[tuple[Fraction, ...], ...]
+) -> tuple[RationalMatrix, RationalMatrix]:
+    """Return the stable ``(I, A)`` basis for a nonscalar 2-by-2 matrix."""
+
+    assert entries[0][1] != 0 or entries[1][0] != 0 or entries[0][0] != entries[1][1]
+    identity = rational_matrix_from_fractions(
+        ((Fraction(1), Fraction(0)), (Fraction(0), Fraction(1)))
+    )
+    return identity, matrix
+
+
+def _centralizer_matrix_units(
+    dimension: int,
+    *,
+    allowed: set[tuple[int, int]] | None = None,
+) -> tuple[RationalMatrix, ...]:
+    """Return matrix units in the stable row-major centralizer order."""
+
+    units: list[RationalMatrix] = []
+    for row in range(dimension):
+        for column in range(dimension):
+            if allowed is not None and (row, column) not in allowed:
+                continue
+            unit = [[Fraction(0) for _ in range(dimension)] for _ in range(dimension)]
+            unit[row][column] = Fraction(1)
+            units.append(rational_matrix_from_fractions(unit))
+    return tuple(units)
+
+
+def _centralizer_system(
+    entries: tuple[tuple[Fraction, ...], ...],
+) -> tuple[tuple[CanonicalRational, ...], ...]:
+    """Build the row-major commutator system without invoking generic nullspace."""
+
+    n = len(entries)
+    rows: list[tuple[CanonicalRational, ...]] = []
     # Kronecker system (I(x)A - A^T(x)I) vec(X) = 0, row-major vec.
-    rows: list[list[CanonicalRational]] = []
     for i in range(n):
         for j in range(n):
             row: list[CanonicalRational] = []
@@ -1060,25 +1142,118 @@ def centralizer_basis(matrix: RationalMatrix) -> CentralizerResult:
                     if i == k:
                         value -= entries[ell][j]
                     row.append(CanonicalRational.from_fraction(value))
-            rows.append(row)
-    from jacobian.math.matrices.values import RationalMatrix as RationalMatrixValue
+            rows.append(tuple(row))
+    return tuple(rows)
 
-    system = RationalMatrixValue(
-        domain="QQ",
-        row_count=n * n,
-        column_count=n * n,
-        entries=tuple(tuple(row) for row in rows),
+
+def _decimal_digit_upper_bound(bits: int) -> int:
+    """Return a conservative decimal digit bound from a binary width."""
+
+    if bits <= 0:
+        return 1
+    return (bits * 30_103 + 99_999) // 100_000
+
+
+def _admit_centralizer_system(
+    rows: tuple[tuple[CanonicalRational, ...], ...], dimension: int
+) -> None:
+    """Admit derived RREF work and the exact basis height before FLINT."""
+
+    system_axis = dimension * dimension
+    scalar_digits = max(
+        (canonical_rational_component_digits(value) for row in rows for value in row),
+        default=1,
     )
-    null = nullspace_result(system)
-    basis: list[RationalMatrixValue] = []
-    for vector in null.basis_vectors:
-        cells = tuple(vector)
-        grid = tuple(tuple(cells[i * n + j] for j in range(n)) for i in range(n))
-        basis.append(
-            RationalMatrixValue(domain="QQ", row_count=n, column_count=n, entries=grid)
+    work = system_axis * system_axis * system_axis * scalar_digits
+    if work > MAX_CENTRALIZER_RREF_WORK:
+        raise OperationResourceAdmissionError(
+            location=("matrix",),
+            code="matrix.centralizer.work",
+            message=(
+                "centralizer exact RREF work exceeds the "
+                f"{MAX_CENTRALIZER_RREF_WORK:,}-unit owner-local bound"
+            ),
         )
-    # The identity always commutes, so the centralizer is never empty.
-    assert basis, "centralizer must contain the identity"
-    return CentralizerResult._from_kernel(
-        matrix=matrix, dimension=len(basis), basis=tuple(basis)
+
+    # Bound a minor with Hadamard's inequality after clearing each row's
+    # denominators.  The sparse row norm is materially tighter than charging
+    # every derived column, while remaining a sound bound for arbitrary input.
+    row_numerator_bits: list[int] = []
+    row_denominator_bits: list[int] = []
+    for row in rows:
+        fractions = tuple(value.as_fraction() for value in row)
+        denominator = lcm(*(value.denominator for value in fractions))
+        cleared = tuple(
+            abs(value.numerator) * (denominator // value.denominator)
+            for value in fractions
+        )
+        largest = max(cleared, default=0)
+        nonzero_count = sum(value != 0 for value in cleared)
+        norm_bits = (nonzero_count.bit_length() + 1) // 2 if nonzero_count else 0
+        row_numerator_bits.append(largest.bit_length() + norm_bits)
+        row_denominator_bits.append(denominator.bit_length())
+    rank_bound = system_axis
+    numerator_bits = sum(sorted(row_numerator_bits, reverse=True)[:rank_bound])
+    denominator_bits = sum(sorted(row_denominator_bits, reverse=True)[:rank_bound])
+    output_digits = _decimal_digit_upper_bound(numerator_bits + denominator_bits)
+    if output_digits > MAX_CANONICAL_FORM_SCALAR_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("matrix",),
+            code="matrix.centralizer.output",
+            message=(
+                "centralizer basis components exceed the canonical "
+                f"{MAX_CANONICAL_FORM_SCALAR_DIGITS}-digit result bound"
+            ),
+        )
+    output_digit_work = system_axis * system_axis * output_digits
+    if output_digit_work > MAX_CENTRALIZER_OUTPUT_DIGIT_WORK:
+        raise OperationResourceAdmissionError(
+            location=("matrix",),
+            code="matrix.centralizer.output",
+            message=(
+                "centralizer basis output exceeds the "
+                f"{MAX_CENTRALIZER_OUTPUT_DIGIT_WORK:,}-unit owner-local bound"
+            ),
+        )
+
+
+def _centralizer_nullspace(
+    rows: tuple[tuple[CanonicalRational, ...], ...],
+) -> tuple[tuple[Fraction, ...], ...]:
+    """Compute fundamental free-column nullspace vectors through FLINT."""
+
+    from jacobian.math.matrices._flint import rational_rref
+
+    rational_rows = tuple(tuple(value.as_fraction() for value in row) for row in rows)
+    reduced, rank = rational_rref(rational_rows)
+    pivots = tuple(
+        next(column for column, value in enumerate(row) if value)
+        for row in reduced[:rank]
+    )
+    pivot_set = set(pivots)
+    free_columns = tuple(
+        column for column in range(len(rows[0])) if column not in pivot_set
+    )
+    vectors: list[tuple[Fraction, ...]] = []
+    for free_column in free_columns:
+        vector = [Fraction(0) for _ in range(len(rows[0]))]
+        vector[free_column] = Fraction(1)
+        for pivot_row, pivot_column in enumerate(pivots):
+            vector[pivot_column] = -reduced[pivot_row][free_column]
+        vectors.append(tuple(vector))
+    assert len(vectors) + rank == len(rows[0])
+    return tuple(vectors)
+
+
+def _centralizer_matrices_from_vectors(
+    vectors: tuple[tuple[Fraction, ...], ...], dimension: int
+) -> tuple[RationalMatrix, ...]:
+    return tuple(
+        rational_matrix_from_fractions(
+            tuple(
+                tuple(vector[row * dimension + column] for column in range(dimension))
+                for row in range(dimension)
+            )
+        )
+        for vector in vectors
     )

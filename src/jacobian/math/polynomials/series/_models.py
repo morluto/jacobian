@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from bisect import bisect_left
-from math import lcm
+from math import comb, lcm
 from typing import Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
@@ -23,6 +23,8 @@ MAX_TRUNCATION_ORDER = 512
 MAX_MULTIPLY_INCIDENCES = MAX_TRUNCATION_ORDER * (MAX_TRUNCATION_ORDER + 1) // 2
 MAX_RATIONAL_DIGITS = 256
 MAX_RESULT_RATIONAL_DIGITS = 4_096
+MAX_REVERSION_INTERMEDIATE_DIGITS = 16_384
+MAX_REVERSION_BACKEND_WORK = 1_000_000_000
 MAX_POWER_EXPONENT = 1_000
 
 # Truncation sources are admitted through the widest carrier canonical
@@ -183,6 +185,307 @@ def _require_binary_height(numerator: int, denominator: int, operation: str) -> 
     # If |p| <= 2**b then p has at most floor(b / 3) + 1 decimal
     # digits, since 2**3 < 10. No large power or floating log is needed.
     _require_height(RationalHeight(numerator // 3 + 1, denominator // 3 + 1), operation)
+
+
+_REVERSION_BOUND_CAP: int = 10 ** (MAX_REVERSION_INTERMEDIATE_DIGITS + 1)
+
+
+def _bounded_integer_product(left: int, right: int) -> int:
+    if not left or not right:
+        return 0
+    if left >= _REVERSION_BOUND_CAP or right >= _REVERSION_BOUND_CAP:
+        return _REVERSION_BOUND_CAP
+    return min(_REVERSION_BOUND_CAP, left * right)
+
+
+def _bounded_integer_power(value: int, exponent: int) -> int:
+    result = 1
+    factor = min(_REVERSION_BOUND_CAP, abs(value))
+    while exponent:
+        if exponent & 1:
+            result = _bounded_integer_product(result, factor)
+        exponent >>= 1
+        if exponent:
+            factor = _bounded_integer_product(factor, factor)
+    return result
+
+
+def _bounded_integer_sum(values: tuple[int, ...]) -> int:
+    result = 0
+    for value in values:
+        result = min(_REVERSION_BOUND_CAP, result + value)
+        if result >= _REVERSION_BOUND_CAP:
+            return _REVERSION_BOUND_CAP
+    return result
+
+
+def _bounded_integer_digits(value: int) -> int:
+    if value >= _REVERSION_BOUND_CAP:
+        return MAX_REVERSION_INTERMEDIATE_DIGITS + 1
+    # 0.30103 is an upper decimal-logarithm bound for binary integers.  The
+    # resulting estimate is conservative and avoids converting an admitted
+    # bound to a string larger than Python's integer-string safety limit.
+    return (max(1, value).bit_length() * 30_103) // 100_000 + 1
+
+
+def _reversion_lagrange_height_vector(
+    series: TruncatedSeries,
+) -> tuple[tuple[CoefficientHeight, ...], int, int]:
+    """Bound reversion coefficients with the Lagrange majorant.
+
+    For ``F(x) = a_1*x*(1 + H(x))`` and ``G = F^(-1)``, Lagrange inversion
+    gives ``[x^k]G = [x^(k-1)](1 + H)^(-k) / (k*a_1**k)``.  If
+    ``H = B/E`` coefficientwise, the absolute value of the degree ``k-1``
+    coefficient is bounded by
+    ``sum_m binom(k+m-1,m) * B**m * E**(k-1-m)``.  This is a majorant only:
+    no result coefficients or backend arithmetic are evaluated during
+    admission.
+    """
+
+    linear = series.coefficients[1].as_fraction()
+    normalized = tuple(
+        coefficient.as_fraction() / linear for coefficient in series.coefficients[2:]
+    )
+    common_denominator = 1
+    for coefficient in normalized:
+        common_denominator = lcm(common_denominator, coefficient.denominator)
+    numerators = tuple(
+        int(coefficient * common_denominator) for coefficient in normalized
+    )
+    coefficient_sum = sum(abs(value) for value in numerators)
+    p = abs(linear.numerator)
+    q = linear.denominator
+    result: list[CoefficientHeight] = [
+        None,
+        RationalHeight(_bounded_integer_digits(q), _bounded_integer_digits(p)),
+    ]
+    denominator_bounds = [1, p]
+    for degree in range(2, series.truncation_order):
+        target_degree = degree - 1
+        # Every negative-binomial coefficient is at most the final one, so
+        # the composition sum is bounded without replaying its O(k) terms.
+        coefficient_bound = _bounded_integer_product(
+            comb(2 * degree - 2, target_degree),
+            _bounded_integer_power(
+                _bounded_integer_sum((coefficient_sum, common_denominator)),
+                target_degree,
+            ),
+        )
+        numerator_bound = _bounded_integer_product(
+            coefficient_bound, _bounded_integer_power(q, degree)
+        )
+        denominator_bound = _bounded_integer_product(
+            _bounded_integer_power(common_denominator, target_degree),
+            _bounded_integer_product(degree, _bounded_integer_power(p, degree)),
+        )
+        result.append(
+            RationalHeight(
+                _bounded_integer_digits(numerator_bound),
+                _bounded_integer_digits(denominator_bound),
+            )
+        )
+        denominator_bounds.append(denominator_bound)
+    # Each ``denominator_bound`` is the explicit common multiple
+    # ``E**(k-1) * k * p**k`` supplied by the Lagrange formula, not merely an
+    # upper bound on the actual denominator.  Its LCM is therefore a sound
+    # common denominator for all bounded result coefficients.
+    common_result_denominator = 1
+    for denominator in denominator_bounds:
+        common_result_denominator = lcm(common_result_denominator, denominator)
+        if common_result_denominator >= _REVERSION_BOUND_CAP:
+            common_result_denominator = _REVERSION_BOUND_CAP
+            break
+    common_result_numerator = _REVERSION_BOUND_CAP
+    if common_result_denominator < _REVERSION_BOUND_CAP:
+        common_result_numerator = 0
+        for _degree, height in enumerate(result):
+            if height is None:
+                continue
+            common_result_numerator = min(
+                _REVERSION_BOUND_CAP,
+                common_result_numerator
+                + _bounded_integer_product(
+                    _bounded_integer_power(10, height.numerator_digits),
+                    common_result_denominator,
+                ),
+            )
+    return (
+        tuple(result),
+        common_result_denominator,
+        common_result_numerator,
+    )
+
+
+def _common_series_bound(
+    coefficients: tuple[CanonicalRational, ...],
+) -> tuple[int, int, tuple[int, ...]]:
+    """Return a bounded common denominator, L1 numerator, and terms."""
+
+    denominator = 1
+    for coefficient in coefficients:
+        denominator = lcm(denominator, coefficient.den)
+        if denominator >= _REVERSION_BOUND_CAP:
+            return _REVERSION_BOUND_CAP, _REVERSION_BOUND_CAP, ()
+    terms = tuple(
+        abs(coefficient.num) * (denominator // coefficient.den)
+        for coefficient in coefficients
+    )
+    return denominator, _bounded_integer_sum(terms), terms
+
+
+def _result_series_bound(
+    heights: tuple[CoefficientHeight, ...], denominator: int
+) -> tuple[int, int, tuple[int, ...]]:
+    if denominator >= _REVERSION_BOUND_CAP:
+        return _REVERSION_BOUND_CAP, _REVERSION_BOUND_CAP, ()
+    terms = tuple(
+        0
+        if height is None
+        else _bounded_integer_product(
+            _bounded_integer_power(10, height.numerator_digits), denominator
+        )
+        for height in heights
+    )
+    return denominator, _bounded_integer_sum(terms), terms
+
+
+def _bound_product(left: tuple[int, int], right: tuple[int, int]) -> tuple[int, int]:
+    return (
+        _bounded_integer_product(left[0], right[0]),
+        _bounded_integer_product(left[1], right[1]),
+    )
+
+
+def _bound_composition(
+    outer_denominator: int,
+    outer_terms: tuple[int, ...],
+    inner_denominator: int,
+    inner_numerator: int,
+    order: int,
+) -> tuple[int, int]:
+    degree = min(
+        max((index for index, value in enumerate(outer_terms) if value), default=0),
+        order - 1,
+    )
+    denominator = _bounded_integer_product(
+        outer_denominator, _bounded_integer_power(inner_denominator, degree)
+    )
+    numerator = _bounded_integer_sum(
+        tuple(
+            _bounded_integer_product(
+                term,
+                _bounded_integer_product(
+                    _bounded_integer_power(inner_numerator, index),
+                    _bounded_integer_power(inner_denominator, degree - index),
+                ),
+            )
+            for index, term in enumerate(outer_terms[: degree + 1])
+        )
+    )
+    return denominator, numerator
+
+
+def _bound_derivative(
+    denominator: int, terms: tuple[int, ...]
+) -> tuple[int, tuple[int, ...]]:
+    return denominator, tuple(
+        _bounded_integer_product(index, value) for index, value in enumerate(terms)
+    )[1:]
+
+
+def _reversion_backend_bound(
+    series: TruncatedSeries,
+    result_vector: tuple[CoefficientHeight, ...],
+    result_denominator: int,
+) -> int:
+    """Bound non-cancelling FLINT intermediates independently of zero residuals."""
+
+    order = series.truncation_order
+    source_denominator, source_numerator, source_terms = _common_series_bound(
+        series.coefficients
+    )
+    result_denominator, result_numerator, result_terms = _result_series_bound(
+        result_vector, result_denominator
+    )
+    if _REVERSION_BOUND_CAP in (
+        source_denominator,
+        source_numerator,
+        result_denominator,
+        result_numerator,
+    ):
+        return MAX_REVERSION_INTERMEDIATE_DIGITS + 1
+
+    source_derivative_denominator, source_derivative_terms = _bound_derivative(
+        source_denominator, source_terms
+    )
+    result_derivative_denominator, result_derivative_terms = _bound_derivative(
+        result_denominator, result_terms
+    )
+    forward = _bound_composition(
+        source_denominator,
+        source_terms,
+        result_denominator,
+        result_numerator,
+        order,
+    )
+    reverse = _bound_composition(
+        result_denominator,
+        result_terms,
+        source_denominator,
+        source_numerator,
+        order,
+    )
+    derivative_forward = _bound_composition(
+        source_derivative_denominator,
+        source_derivative_terms,
+        result_denominator,
+        result_numerator,
+        order,
+    )
+    derivative_reverse = _bound_composition(
+        result_derivative_denominator,
+        result_derivative_terms,
+        source_denominator,
+        source_numerator,
+        order,
+    )
+    source_result = _bound_product(
+        (source_denominator, source_numerator),
+        (result_denominator, result_numerator),
+    )
+    derivative_product = _bound_product(derivative_forward, derivative_reverse)
+    correction = (
+        source_result[0],
+        _bounded_integer_sum(
+            (_bounded_integer_product(2, source_result[0]), source_result[1])
+        ),
+    )
+    newton_product = _bound_product((result_denominator, result_numerator), correction)
+    derivative_correction = (
+        derivative_product[0],
+        _bounded_integer_sum(
+            (_bounded_integer_product(2, derivative_product[0]), derivative_product[1])
+        ),
+    )
+    derivative_newton_product = _bound_product(
+        derivative_reverse, derivative_correction
+    )
+    residual_product = _bound_product(forward, derivative_reverse)
+    bounds = (
+        forward,
+        reverse,
+        derivative_forward,
+        derivative_reverse,
+        source_result,
+        derivative_product,
+        derivative_newton_product,
+        newton_product,
+        residual_product,
+    )
+    return max(
+        max(_bounded_integer_digits(denominator), _bounded_integer_digits(numerator))
+        for denominator, numerator in bounds
+    )
 
 
 def _cleared_series(
@@ -467,30 +770,33 @@ def admit_native_reversion(series: TruncatedSeries) -> None:
         )
     if linear_source:
         return
-    source = _height_vector(series.coefficients)
-    linear = _height(series.coefficients[1])
-    result: list[CoefficientHeight] = [None, RationalHeight(1, 1).quotient(linear)]
-    _require_height_vector(tuple(result), "reversion")
-    for degree in range(2, series.truncation_order):
-        padded = (*result, None)
-        power = padded
-        terms: list[RationalHeight] = []
-        for source_degree in range(2, degree + 1):
-            power = _convolve_height_vectors(power, padded, degree + 1, "reversion")
-            source_height = source[source_degree]
-            power_height = power[degree]
-            if source_height is not None and power_height is not None:
-                terms.append(source_height.product(power_height))
-        coefficient = sum_heights(terms).quotient(linear)
-        _require_height(coefficient, "reversion")
-        result.append(coefficient)
-    result_vector = tuple(result)
-    _composition_height_vector(
-        source, result_vector, series.truncation_order, "reversion residual"
+    result_vector, common_denominator, common_numerator = (
+        _reversion_lagrange_height_vector(series)
     )
-    _composition_height_vector(
-        result_vector, source, series.truncation_order, "reversion residual"
+    _require_height_vector(result_vector, "reversion")
+
+    # Residual ledgers are mathematically zero and are established by the
+    # exact backend.  Admission therefore bounds the backend's finite
+    # operand/intermediate arithmetic separately instead of charging a
+    # non-cancelling expansion of those zero residuals against the result
+    # carrier.
+    intermediate_digits = _reversion_backend_bound(
+        series, result_vector, common_denominator
     )
+    if common_numerator >= _REVERSION_BOUND_CAP:
+        intermediate_digits = MAX_REVERSION_INTERMEDIATE_DIGITS + 1
+    if intermediate_digits > MAX_REVERSION_INTERMEDIATE_DIGITS:
+        raise _resource_error(
+            "reversion_intermediate_growth",
+            "reversion backend intermediate growth exceeds the "
+            f"{MAX_REVERSION_INTERMEDIATE_DIGITS}-digit bound",
+        )
+    backend_work = series.truncation_order**2 * max(1, intermediate_digits)
+    if backend_work > MAX_REVERSION_BACKEND_WORK:
+        raise _resource_error(
+            "reversion_backend_work",
+            "reversion backend arithmetic exceeds the bounded work limit",
+        )
 
 
 def admit_native_integral(series: TruncatedSeries, output_order: int) -> None:

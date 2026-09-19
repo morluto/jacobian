@@ -100,12 +100,13 @@ def test_composition_propagates_inner_power_growth() -> None:
     )
 
 
-def test_reversion_propagates_linear_coefficient_division() -> None:
-    order = 8
+def test_reversion_propagates_nonlinear_coefficient_growth() -> None:
+    order = 24
     coefficients = [
         _coefficient("0"),
-        _coefficient(den=str(7**250)),
-        *[_coefficient()] * (order - 2),
+        _coefficient("1"),
+        _coefficient(num=str(10**255)),
+        *[_coefficient()] * (order - 3),
     ]
     request = SeriesReversionRequest.model_validate_json(
         json.dumps(_series(order, coefficients))

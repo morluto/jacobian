@@ -63,6 +63,17 @@ class GaussianRationalPolynomialTerm(StrictModel):
     coefficient: GaussianRational
     exponent: StrictInt = Field(ge=0, le=MAX_SUP_NORM_DEGREE)
 
+    @model_validator(mode="after")
+    def require_nonzero_coefficient(self) -> Self:
+        if (
+            self.coefficient.real.as_fraction() == 0
+            and self.coefficient.imaginary.as_fraction() == 0
+        ):
+            raise _validation_error(
+                "zero_term", "zero polynomial terms must be omitted"
+            )
+        return self
+
 
 class GaussianRationalPolynomial(StrictModel):
     """A bounded univariate polynomial over ``QQ(i)`` on the ``z`` axis.

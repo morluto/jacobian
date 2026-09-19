@@ -16,15 +16,19 @@ import math
 from fractions import Fraction
 
 import pytest
+import sympy
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
+from jacobian._execution import BackendFailureReason, OperationBackendError
 from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.number_theory.algebraic_numbers.real import RealAlgebraicValue
 from jacobian.math.number_theory.number_fields import GaussianRational
+from jacobian.math.polynomials.unit_circle import _sup_norm as sup_norm_kernel
 from jacobian.math.polynomials.unit_circle._sup_norm import (
+    _flint_resultant_and_factors,
     unit_circle_sup_norm_squared,
     verify_unit_circle_sup_norm_squared,
 )
@@ -462,3 +466,92 @@ def test_exact_value_respects_the_resultant_degree_carrier(
     assert len(exact.polynomial) - 1 <= 2 * result.degree
     assert exact.real_root_index < len(exact.polynomial) - 1
     assert verify_unit_circle_sup_norm_squared(result)
+
+
+def test_zero_gaussian_terms_are_rejected() -> None:
+    from jacobian.math.polynomials.unit_circle._sup_norm_models import (
+        GaussianRationalPolynomial,
+        GaussianRationalPolynomialTerm,
+    )
+
+    with pytest.raises(ValidationError, match="zero polynomial terms"):
+        GaussianRationalPolynomial(
+            terms=(
+                GaussianRationalPolynomialTerm(
+                    coefficient=GaussianRational.zero(), exponent=8
+                ),
+                GaussianRationalPolynomialTerm(
+                    coefficient=GaussianRational.one(), exponent=0
+                ),
+            )
+        )
+
+
+def test_flint_resultant_matches_an_independent_sylvester_determinant() -> None:
+    t = sympy.Symbol("t", real=True)
+    y = sympy.Symbol("y")
+    derivative = sympy.Poly(t**2 - t + 1, t, domain=sympy.QQ)
+    numerator = [Fraction(2), Fraction(-1), Fraction(3)]
+    got, factors = _flint_resultant_and_factors(derivative, numerator, 1, t)
+
+    left = derivative.all_coeffs()
+    level = sympy.Poly(
+        y * (1 + t**2) - (2 - t + 3 * t**2),
+        t,
+        domain=sympy.QQ.frac_field(y),
+    )
+    right = level.all_coeffs()
+    rows = []
+    width = (len(left) - 1) + (len(right) - 1)
+    for shift in range(len(right) - 1):
+        rows.append([0] * shift + left + [0] * (width - shift - len(left)))
+    for shift in range(len(left) - 1):
+        rows.append([0] * shift + right + [0] * (width - shift - len(right)))
+    expected = sympy.Poly(sympy.Matrix(rows).det(), y, domain=sympy.QQ)
+
+    assert sympy.expand(got.as_expr() - expected.as_expr()) == 0
+    reconstructed = sympy.Poly(1, y, domain=sympy.QQ)
+    for factor in factors:
+        reconstructed *= factor
+    # The FLINT factor list is primitive; compare factorization after making
+    # the independent determinant primitive as well.
+    _, expected_primitive = expected.primitive()
+    _, reconstructed_primitive = reconstructed.primitive()
+    assert reconstructed_primitive == expected_primitive
+
+
+def test_sup_norm_does_not_reenter_sympy_resultant(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def forbidden(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("unit-circle elimination must use the FLINT adapter")
+
+    monkeypatch.setattr(sympy, "resultant", forbidden)
+    result = _result({0: (1, 0), 1: (1, 0)})
+    assert result.sup_norm_squared_exact is not None
+    assert result.sup_norm_squared_exact.polynomial == (1, -4)
+
+
+def test_flint_initialization_failure_is_typed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import sys
+
+    monkeypatch.setitem(sys.modules, "flint", None)
+    with pytest.raises(OperationBackendError) as caught:
+        _result({0: (1, 0), 1: (1, 0)})
+    assert caught.value.reason is BackendFailureReason.INITIALIZATION
+
+
+def test_flint_malformed_output_is_typed_invalid_output(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def malformed_backend(*_args: object, **_kwargs: object) -> None:
+        raise ValueError("FLINT returned a non-reconstructing factorization")
+
+    monkeypatch.setattr(
+        sup_norm_kernel, "_flint_resultant_and_factors_impl", malformed_backend
+    )
+    with pytest.raises(OperationBackendError) as caught:
+        _result({0: (1, 0), 1: (1, 0)})
+    assert caught.value.reason is BackendFailureReason.INVALID_OUTPUT

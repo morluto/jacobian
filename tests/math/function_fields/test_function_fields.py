@@ -5,11 +5,17 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
+from jacobian._execution import BackendFailureReason, OperationBackendError
 from jacobian.canonical import encode_strict_json
 from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
+)
+from jacobian.math.function_fields._gfpx import (
+    _primitive_polynomial_terms,
+    is_irreducible_over_rational_function,
+    rf_normalize,
 )
 from jacobian.math.function_fields._models import (
     MAX_EXTENSION_DEGREE,
@@ -22,6 +28,7 @@ from jacobian.math.function_fields._models import (
 from jacobian.math.function_fields._tools import TOOLS
 from jacobian.math.function_fields.operations import (
     _element_inverse,
+    _to_internal_rational_function,
     function_field_element_multiply,
 )
 
@@ -94,6 +101,18 @@ GF3_FIELD = _field(
     ),
 )
 GF3_Y = _element(GF3_FIELD, (_zero(3), _one(3)))
+
+# Every GF(3)-point specializes this polynomial to y^2, while the rational
+# function x^3-x has odd valuations and is therefore not a square in GF(3)(x).
+GF3_FALLBACK_FIELD = _field(
+    3,
+    (
+        _rf(3, (0, 1, 0, 2), (1, 0, 1)),
+        _zero(3),
+        _one(3),
+    ),
+)
+GF3_FALLBACK_Y = _element(GF3_FALLBACK_FIELD, (_zero(3), _one(3)))
 
 
 def _multiply(
@@ -179,6 +198,13 @@ class TestDefiningInvariants:
         assert left == 2
         assert right == -1
         assert result == left + right
+
+    def test_irreducible_fallback_admits_a_polynomial_without_irreducible_specialization(
+        self,
+    ) -> None:
+        product = _multiply(GF3_FALLBACK_Y, GF3_FALLBACK_Y)
+        assert product.coordinates[0] == _rf(3, (0, 2, 0, 1), (1, 0, 1))
+        assert product.coordinates[1] == _zero(3)
 
 
 def _polynomial_order(coefficients: tuple[int, ...], characteristic: int) -> int | None:
@@ -282,6 +308,22 @@ class TestIndependentBackendCrossCheck:
             result.product
         )
 
+    def test_flint_primitive_factorization_reconstructs_the_source(self) -> None:
+        from flint import nmod_mpoly_ctx
+
+        kpoly = tuple(
+            _to_internal_rational_function(coefficient)
+            for coefficient in GF3_FALLBACK_FIELD.defining_polynomial
+        )
+        terms = _primitive_polynomial_terms(kpoly, 3)
+        context = nmod_mpoly_ctx.get(("x", "y"), 3, "lex")
+        source = context.from_dict(terms)
+        unit, factors = source.factor()
+        reconstructed = context.constant(unit)
+        for factor, exponent in factors:
+            reconstructed *= factor ** int(exponent)
+        assert reconstructed == source
+
 
 def _poly_expression(coefficients: tuple[int, ...], x_symbol) -> object:
     if coefficients == ():
@@ -304,6 +346,90 @@ class TestBoundariesAndAdversarial:
             exc_info.value.errors()[0]["type"]
             == "function_field.extension_not_admitted_irreducible"
         )
+
+    def test_rational_function_irreducibility_fallback_rejects_reducible_input(
+        self,
+    ) -> None:
+        reducible = _field(
+            3,
+            (_rf(3, (2,), (1,)), _zero(3), _one(3)),  # y^2 - 1
+        )
+        kpoly = tuple(
+            _to_internal_rational_function(coefficient)
+            for coefficient in reducible.defining_polynomial
+        )
+        assert not is_irreducible_over_rational_function(kpoly, 3)
+
+    def test_product_of_y_minus_x_and_y_plus_x_is_rejected(self) -> None:
+        reducible = _field(
+            3,
+            (_rf(3, (0, 0, 2), (1,)), _zero(3), _one(3)),
+        )
+        element = _element(reducible, (_zero(3), _one(3)))
+        with pytest.raises(OperationDomainValidationError) as exc_info:
+            _multiply(element, element)
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "function_field.extension_not_admitted_irreducible"
+        )
+
+    def test_primitive_lift_removes_x_content_without_changing_y_degree(self) -> None:
+        x = rf_normalize((0, 1), (1,), 3)
+        kpoly = (x, rf_normalize((), (1,), 3), x)
+
+        terms = _primitive_polynomial_terms(kpoly, 3)
+
+        assert terms == {(0, 0): 1, (0, 2): 1}
+
+    def test_exact_backend_unavailability_is_not_a_reducibility_claim(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import builtins
+
+        original_import = builtins.__import__
+
+        def deny_flint(name, *args, **kwargs):
+            if name == "flint":
+                raise ImportError("test backend unavailable")
+            return original_import(name, *args, **kwargs)
+
+        monkeypatch.setattr(builtins, "__import__", deny_flint)
+        with pytest.raises(OperationBackendError) as exc_info:
+            _multiply(GF3_FALLBACK_Y, GF3_FALLBACK_Y)
+        assert exc_info.value.reason == BackendFailureReason.INITIALIZATION
+
+    def test_invalid_backend_factorization_is_not_a_reducibility_claim(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import sys
+        from types import SimpleNamespace
+
+        class FakeSource:
+            def factor(self):
+                return 1, []
+
+            def __eq__(self, _other):
+                return False
+
+        class FakeContext:
+            def from_dict(self, _terms):
+                return FakeSource()
+
+            def constant(self, value):
+                return value
+
+        fake_flint = SimpleNamespace(
+            nmod_mpoly_ctx=SimpleNamespace(get=lambda *_args, **_kwargs: FakeContext())
+        )
+        monkeypatch.setitem(sys.modules, "flint", fake_flint)
+
+        kpoly = tuple(
+            _to_internal_rational_function(coefficient)
+            for coefficient in GF3_FALLBACK_FIELD.defining_polynomial
+        )
+        with pytest.raises(OperationBackendError) as exc_info:
+            is_irreducible_over_rational_function(kpoly, 3)
+        assert exc_info.value.reason == BackendFailureReason.INVALID_OUTPUT
 
     def test_inseparable_defining_polynomial_is_rejected(self) -> None:
         inseparable = _field(

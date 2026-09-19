@@ -286,12 +286,10 @@ class TestDefiningInvariant:
             intersection_face_id = row.intersection_face_id
             assert intersection_face_id is not None
             assert (
-                row.first_cell_id
-                in face_by_id[intersection_face_id].maximal_cell_ids
+                row.first_cell_id in face_by_id[intersection_face_id].maximal_cell_ids
             )
             assert (
-                row.second_cell_id
-                in face_by_id[intersection_face_id].maximal_cell_ids
+                row.second_cell_id in face_by_id[intersection_face_id].maximal_cell_ids
             )
         assert [row.source_index for row in result.source_cell_map] == [0, 1]
         assert [row.cell_id for row in result.source_cell_map] == ["M0", "M1"]

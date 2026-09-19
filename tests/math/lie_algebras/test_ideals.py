@@ -286,6 +286,13 @@ class TestDirectSum:
             lie_direct_sum(SL2, line, ("e", "f", "h", "e"))
         assert exc_info.value.errors()[0]["type"] == "lie_algebra.direct_sum_basis"
 
+    @pytest.mark.parametrize("basis", (None, 4, 1.5, object()))
+    def test_non_sequence_basis_is_typed_rejected(self, basis: object) -> None:
+        line = _algebra(("t",), ())
+        with pytest.raises(OperationDomainValidationError) as exc_info:
+            lie_direct_sum(SL2, line, basis)  # type: ignore[arg-type]
+        assert exc_info.value.errors()[0]["type"] == "lie_algebra.direct_sum_basis"
+
 
 class TestIdealQuotientComposition:
     def test_request_paths_agree(self) -> None:

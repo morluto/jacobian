@@ -622,10 +622,15 @@ def lie_direct_sum(
     _admit_lie_algebra(right_value)
     left_dimension = len(left_value.basis)
     total = left_dimension + len(right_value.basis)
+    if not isinstance(basis, (tuple, list)):
+        raise OperationDomainValidationError(
+            location=("basis",),
+            code="lie_algebra.direct_sum_basis",
+            message="direct-sum labels must be unique across both dimensions",
+        )
     labels = tuple(basis)
     if (
-        not isinstance(basis, (tuple, list))
-        or any(not isinstance(label, str) for label in labels)
+        any(not isinstance(label, str) for label in labels)
         or len(labels) != total
         or len(set(labels)) != total
         or total > MAX_LIE_DIMENSION

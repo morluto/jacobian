@@ -698,13 +698,14 @@ class TestFacetGeometryComputedOnce:
             conversions += 1
             return original(rows, dimension)
 
-        monkeypatch.setattr(
-            _rational_geometry, "polyhedron_from_halfspaces", counting
-        )
+        monkeypatch.setattr(_rational_geometry, "polyhedron_from_halfspaces", counting)
 
-        assert count_lattice_points(
-            LatticePolytopeRequest(halfspaces=UNIT_SQUARE_H)
-        ).point_count == 4
+        assert (
+            count_lattice_points(
+                LatticePolytopeRequest(halfspaces=UNIT_SQUARE_H)
+            ).point_count
+            == 4
+        )
         assert conversions == 1
 
     def test_enumerate_execution_uses_one_facet_pass(
@@ -1194,9 +1195,7 @@ class TestThirdWaveRegressions:
             seen_sizes.append(len(rows))
             return original(rows, dimension)
 
-        monkeypatch.setattr(
-            _rational_geometry, "polyhedron_from_halfspaces", counting
-        )
+        monkeypatch.setattr(_rational_geometry, "polyhedron_from_halfspaces", counting)
         request = LatticePolytopeRequest(halfspaces=UNIT_SQUARE_4D_SIDES * 4)
         assert request.halfspaces is not None
         assert len(request.halfspaces) == 32
@@ -1220,9 +1219,7 @@ class TestThirdWaveRegressions:
             seen_sizes.append(len(rows))
             return original(rows, dimension)
 
-        monkeypatch.setattr(
-            _rational_geometry, "polyhedron_from_halfspaces", counting
-        )
+        monkeypatch.setattr(_rational_geometry, "polyhedron_from_halfspaces", counting)
         # Full square plus positive rescalings of two of its sides:
         # 6 raw rows collapse onto the 4 primitive constraints.
         sides = (

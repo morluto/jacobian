@@ -53,9 +53,7 @@ def test_extremality_charges_dd_pairs_and_rank_tests() -> None:
     polytope = _square()
     dimension = len(polytope.space.axes)
     vertex_count = len(polytope.vertices)
-    _ray_bound, charged_candidate_pairs = dd_work_bound(
-        vertex_count, dimension + 1
-    )
+    _ray_bound, charged_candidate_pairs = dd_work_bound(vertex_count, dimension + 1)
     charged_rank_tests = vertex_count + 1
 
     original_rank = MutableDenseMatrix.rank
@@ -71,7 +69,9 @@ def test_extremality_charges_dd_pairs_and_rank_tests() -> None:
         return conversion
 
     with (
-        patch.object(MutableDenseMatrix, "rank", autospec=True, side_effect=counted_rank),
+        patch.object(
+            MutableDenseMatrix, "rank", autospec=True, side_effect=counted_rank
+        ),
         patch(
             "jacobian.math.geometry.polytopes.operations.points_to_facets",
             side_effect=counted_conversion,

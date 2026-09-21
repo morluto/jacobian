@@ -225,18 +225,14 @@ def _support_bound(
         )
         if projection_work > MAX_ENUMERATION_WORK:
             return count_vector_bound, transition_work, projection_work
-        minimum = maximum = None
+        first = fractions[0]
+        minimum = maximum = first.numerator * (common_denominator // first.denominator)
         lattice_step = 0
-        for value in fractions:
+        for value in fractions[1:]:
             scaled = value.numerator * (common_denominator // value.denominator)
-            if minimum is None:
-                minimum = maximum = scaled
-            else:
-                assert maximum is not None
-                lattice_step = gcd(lattice_step, abs(scaled - minimum))
-                minimum = min(minimum, scaled)
-                maximum = max(maximum, scaled)
-        assert minimum is not None and maximum is not None
+            lattice_step = gcd(lattice_step, abs(scaled - minimum))
+            minimum = min(minimum, scaled)
+            maximum = max(maximum, scaled)
         if lattice_step:
             span_bound = (arity * (maximum - minimum)) // lattice_step + 1
             return (

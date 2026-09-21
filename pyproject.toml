@@ -18,7 +18,7 @@ classifiers = [
 dependencies = [
     "anyio>=4.5,<5",
     "CyPari>=2.5,<3",
-    "mcp==2.1.0",
+    "mcp==2.2.0",
     "networkx==3.6.1",
     "pydantic>=2.12,<3",
     "pydantic-core>=2.0,<3",

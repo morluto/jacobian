@@ -10,7 +10,9 @@ from jacobian._execution import (
     BackendFailureReason,
     ExecutionResource,
     OperationBackendError,
+    OperationPhaseLease,
     OperationResourceExhaustedError,
+    lease_operation_phases,
 )
 from jacobian._worker_protocol import encode_worker_result_frame
 from jacobian.canonical import encode_strict_json
@@ -227,12 +229,15 @@ def test_reducible_polynomial_is_rejected_inside_isolation_admission() -> None:
         radix_prefix(_value((1, 0, -1), 0), 10, 2)
 
 
-def _spy_lease(monkeypatch: pytest.MonkeyPatch) -> list:
-    original = radix_module.lease_operation_phases
-    calls: list = []
+def _spy_lease(
+    monkeypatch: pytest.MonkeyPatch,
+) -> list[tuple[float, OperationPhaseLease]]:
+    calls: list[tuple[float, OperationPhaseLease]] = []
 
-    def capture(seconds: float, *, admitted_response_bytes: int, validation_work: int):
-        lease = original(
+    def capture(
+        seconds: float, *, admitted_response_bytes: int, validation_work: int
+    ) -> OperationPhaseLease:
+        lease = lease_operation_phases(
             seconds,
             admitted_response_bytes=admitted_response_bytes,
             validation_work=validation_work,
@@ -245,15 +250,15 @@ def _spy_lease(monkeypatch: pytest.MonkeyPatch) -> list:
 
 
 def _fake_worker(
-    seen: list,
+    seen: list[float],
     *,
-    polynomial,
-    real_root_index,
-    scale,
-    isolation_bits,
-    deadline,
-    scaled_floor_digit_bound,
-):
+    polynomial: tuple[int, ...],
+    real_root_index: int,
+    scale: int,
+    isolation_bits: int,
+    deadline: float,
+    scaled_floor_digit_bound: int,
+) -> int:
     seen.append(deadline)
     return radix_module._scaled_integer_part_in_process(
         _value(polynomial, real_root_index),
@@ -540,7 +545,7 @@ def test_production_floor_bound_is_derived_from_the_admitted_scale(
 def test_native_argument_type_errors_point_at_the_offending_field() -> None:
     """A bad base or places argument reports its own top-level location."""
     with pytest.raises(OperationDomainValidationError) as base_error:
-        radix_prefix(_value((1, 0, -2), 1), True, 1)  # type: ignore[arg-type]
+        radix_prefix(_value((1, 0, -2), 1), True, 1)
     assert base_error.value.errors()[0]["loc"] == ("base",)
     with pytest.raises(OperationDomainValidationError) as places_error:
         radix_prefix(_value((1, 0, -2), 1), 10, 1.0)  # type: ignore[arg-type]

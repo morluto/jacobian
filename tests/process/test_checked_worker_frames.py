@@ -106,16 +106,23 @@ def test_checked_worker_checks_deadline_after_result_decode(
         )
 
 
-def _run_real_checked_worker(script: str, **kwargs: object) -> object:
+def _run_real_checked_worker(
+    script: str,
+    *,
+    timeout_seconds: float = 2.0,
+    stdout_limit: int = 1024,
+    stderr_limit: int = 1024,
+    cancellation_event: threading.Event | None = None,
+) -> object:
     return run_checked_worker_process(
         [sys.executable, "-c", script],
         input_bytes=b"",
-        timeout_seconds=float(kwargs.pop("timeout_seconds", 2.0)),
+        timeout_seconds=timeout_seconds,
         environment=worker_environment(),
-        stdout_limit=int(kwargs.pop("stdout_limit", 1024)),
-        stderr_limit=int(kwargs.pop("stderr_limit", 1024)),
+        stdout_limit=stdout_limit,
+        stderr_limit=stderr_limit,
         decode_result=lambda value: value,
-        **kwargs,
+        cancellation_event=cancellation_event,
     )
 
 

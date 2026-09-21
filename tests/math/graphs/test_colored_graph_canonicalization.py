@@ -23,6 +23,9 @@ from jacobian.math.graphs.isomorphism import (
     ColoredGraphCanonicalizationResult,
     canonicalize_colored_graph,
 )
+from jacobian.math.graphs.isomorphism._canonicalization import (
+    canonicalize_colored_graph_data,
+)
 from jacobian.math.graphs.isomorphism._models import ColoredGraphCanonicalizationRequest
 from jacobian.math.graphs.isomorphism._vf2_process import (
     compute_colored_graph_canonicalization,
@@ -623,9 +626,7 @@ def test_promotion_rejects_permuted_source_transporter_order(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     graph = _graph(("a", "b", "c"), (("a", "b"), ("b", "c")))
-    canonical, relabeling = isomorphism_operations.canonicalize_colored_graph_data(
-        graph
-    )
+    canonical, relabeling = canonicalize_colored_graph_data(graph)
     monkeypatch.setattr(
         isomorphism_operations,
         "canonicalize_colored_graph_data",

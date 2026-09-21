@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import cast
-
 from pydantic import ValidationError
 from pydantic_core import PydanticCustomError
 
@@ -31,7 +29,7 @@ def _convert_canonicalization_output(  # noqa: C901
     try:
         if type(canonical_graph) is not ColoredUndirectedGraph:
             raise ValueError("canonicalization returned the wrong graph carrier")
-        target = cast(ColoredUndirectedGraph, canonical_graph)
+        target = canonical_graph
         source_vertices = source.graph.vertices
         target_vertices = target.graph.vertices
         expected_vertices = _canonical_vertex_labels(len(source_vertices))

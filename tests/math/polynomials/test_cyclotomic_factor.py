@@ -6,6 +6,7 @@ from fractions import Fraction
 
 import pytest
 
+from jacobian._exact import CanonicalRational
 from jacobian._execution import BackendFailureReason, OperationBackendError
 from jacobian.math.polynomials._cyclotomic_factor import (
     _convert_cyclotomic_candidate,
@@ -51,9 +52,10 @@ def test_complex_pair_squared_modulus_without_radicals() -> None:
     # x^2 + 1: modulus^2 = 1, ON_UNIT_CIRCLE, Mahler measure 1.
     profile = quadratic_root_profile(IntegerPolynomial(coefficients=(1, 0, 1)))
     assert profile.root_kind == "COMPLEX_CONJUGATE"
-    assert profile.complex_pair_squared_modulus is not None
+    assert isinstance(profile.complex_pair_squared_modulus, CanonicalRational)
     assert profile.complex_pair_squared_modulus.as_fraction() == Fraction(1)
     measure = mahler_measure(IntegerPolynomial(coefficients=(1, 0, 1)))
+    assert isinstance(measure.mahler_measure, CanonicalRational)
     assert measure.mahler_measure.as_fraction() == Fraction(1)
 
 
@@ -61,7 +63,9 @@ def test_reciprocal_quadratic_outside_contribution() -> None:
     # x^2 + 3: modulus^2 = 3, OUTSIDE, Mahler measure 3 via squared modulus.
     profile = quadratic_root_profile(IntegerPolynomial(coefficients=(1, 0, 3)))
     assert profile.root_kind == "COMPLEX_CONJUGATE"
+    assert isinstance(profile.complex_pair_squared_modulus, CanonicalRational)
     assert profile.complex_pair_squared_modulus.as_fraction() == Fraction(3)
     assert profile.root_locations == ("OUTSIDE_UNIT_DISK",)
     measure = mahler_measure(IntegerPolynomial(coefficients=(1, 0, 3)))
+    assert isinstance(measure.mahler_measure, CanonicalRational)
     assert measure.mahler_measure.as_fraction() == Fraction(3)

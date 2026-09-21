@@ -133,6 +133,8 @@ require("node:fs").writeFileSync(
       );
       assert.equal(result.status, 0, result.stderr);
       assert.deepEqual(JSON.parse(await readFile(log, "utf8")), [
+        "--python",
+        "3.12",
         "--from",
         `jacobian==${pythonVersionFromNpmVersion(packageMetadata.version)}`,
         "jacobian-mcp",
@@ -163,7 +165,7 @@ test("jacobian with no command prints help to stderr and exits zero", () => {
   );
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stderr, /jacobian mcp \[args\.\.\.\]/);
-  assert.match(result.stderr, /uvx --from jacobian==<version> jacobian-mcp/);
+  assert.match(result.stderr, /uvx --python 3\.12 --from jacobian==<version> jacobian-mcp/);
 });
 
 test("jacobian rejects an unknown command without forwarding to the Python CLI", async () => {
@@ -259,7 +261,7 @@ test("setup configures every supported client and preserves unrelated configurat
     const codex = await readFile(join(env.HOME, ".codex", "config.toml"), "utf8");
     assert.match(codex, /# Managed by Jacobian setup\./);
     assert.match(codex, /\[mcp_servers\.jacobian\]/);
-    assert.match(codex, /startup_timeout_sec = 30/);
+    assert.match(codex, /startup_timeout_sec = 120/);
     const opencode = JSON.parse(
       await readFile(join(env.HOME, ".config", "opencode", "opencode.json"), "utf8"),
     );

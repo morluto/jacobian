@@ -232,7 +232,7 @@ function planJsonEdit(client, filePath, original, runtime) {
 
 function tomlBlock(runtime) {
   const args = runtime.args.map((argument) => JSON.stringify(argument)).join(", ");
-  return `${TOML_MARKER}\n[mcp_servers.${SERVER_NAME}]\ncommand = ${JSON.stringify(runtime.command)}\nargs = [${args}]\nstartup_timeout_sec = 30\n`;
+  return `${TOML_MARKER}\n[mcp_servers.${SERVER_NAME}]\ncommand = ${JSON.stringify(runtime.command)}\nargs = [${args}]\nstartup_timeout_sec = 120\n`;
 }
 
 function managedTomlBlock(source) {

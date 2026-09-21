@@ -39,7 +39,7 @@ npx jacobian@latest setup
 不用全局安装，也可直接运行标准的 Python MCP 命令：
 
 ```sh
-uvx --from jacobian jacobian-mcp
+uvx --python 3.12 --from jacobian jacobian-mcp
 ```
 
 若 MCP 客户端只能通过 npm 命令启动，npm 包会原样转发到同一条命令：

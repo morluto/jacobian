@@ -61,7 +61,7 @@ launcher pins the exact release resolved by npm.
 Run the canonical Python MCP command without installing Jacobian globally:
 
 ```sh
-uvx --from jacobian jacobian-mcp
+uvx --python 3.12 --from jacobian jacobian-mcp
 ```
 
 Where an MCP host requires an npm command, the npm package is a deterministic

@@ -68,13 +68,14 @@ jacobian upgrade [options]
 `jacobian mcp` execs the exact canonical command:
 
 ```sh
-uvx --from jacobian==<version> jacobian-mcp [args...]
+uvx --python 3.12 --from jacobian==<version> jacobian-mcp [args...]
 ```
 
 The npm package version is the single release manifest. The carrier maps it to
 the matching Python package spec and pins it for `uvx`, so a reproducible
 deployment never floats `latest`. `uvx` owns the ephemeral Python environment;
-this carrier does not.
+this carrier does not. The explicit Python 3.12 request keeps startup on a
+supported interpreter with binary wheels for Jacobian's native dependencies.
 
 ## Environment
 

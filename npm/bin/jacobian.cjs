@@ -14,7 +14,7 @@ const { MANAGED_SETUP_ARGUMENT, SetupError, runSetup } = require("../lib/setup.c
  * CLI. It is a thin deterministic carrier that invokes the one canonical
  * Jacobian MCP command:
  *
- *   uvx --from jacobian==<exact-version> jacobian-mcp [args...]
+ *   uvx --python 3.12 --from jacobian==<exact-version> jacobian-mcp [args...]
  *
  * The npm package version is the single release manifest; the spelling below
  * maps it to the Python package spec. Install, upgrade, and remove this
@@ -32,7 +32,7 @@ Usage:
     Update selected agents to this exact Jacobian release (alias for setup).
 
 The carrier invokes the exact Python MCP command:
-  uvx --from jacobian==<version> jacobian-mcp [args...]
+  uvx --python 3.12 --from jacobian==<version> jacobian-mcp [args...]
 
 Requires uv on PATH (or set JACOBIAN_UV_BIN). Override the resolved Python
 package spec with JACOBIAN_PACKAGE. Install, upgrade, and remove this carrier
@@ -76,6 +76,8 @@ function launchMcp(extraArgs) {
   const child = spawn(
     uv,
     [
+      "--python",
+      "3.12",
       "--from",
       packageSpec(),
       "jacobian-mcp",

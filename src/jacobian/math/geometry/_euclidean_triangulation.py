@@ -73,19 +73,18 @@ def minimum_euclidean_weight_triangulation(
                 if is_hull_edge(start, end)
                 else (_euclidean_squared_length(points, start, end),)
             )
-            chosen: tuple[Fraction, ...] | None = None
-            chosen_pivot: int | None = None
-            for pivot in range(start + 1, end):
+            chosen_pivot = start + 1
+            chosen = tuple(
+                sorted(
+                    optimum[start, chosen_pivot] + optimum[chosen_pivot, end] + boundary
+                )
+            )
+            for pivot in range(start + 2, end):
                 candidate = tuple(
                     sorted(optimum[start, pivot] + optimum[pivot, end] + boundary)
                 )
-                if chosen is None:
-                    chosen = candidate
-                    chosen_pivot = pivot
-                    continue
                 order = _compare_euclidean_root_sums(candidate, chosen)
                 if order is None:
-                    assert chosen_pivot is not None
                     return EuclideanConvexPolygonTriangulationResult._from_kernel(
                         request,
                         status="COMPARISON_UNRESOLVED",
@@ -102,7 +101,6 @@ def minimum_euclidean_weight_triangulation(
                 if order < 0:
                     chosen = candidate
                     chosen_pivot = pivot
-            assert chosen is not None and chosen_pivot is not None
             optimum[start, end] = chosen
             split[start, end] = chosen_pivot
             ledger.append(

@@ -161,7 +161,8 @@ def _first_homomorphism(
         check = check_homomorphism(source, target, candidate)
         if check.status is HomomorphismStatus.HOMOMORPHISM:
             return check, examined
-    assert examined == total_candidates
+    if examined != total_candidates:
+        raise RuntimeError("homomorphism search did not scan its admitted space")
     return None
 
 
@@ -239,7 +240,8 @@ def count_homomorphisms(
             HomomorphismStatus.HOMOMORPHISM
         ):
             count += 1
-    assert examined == total_candidates
+    if examined != total_candidates:
+        raise RuntimeError("homomorphism count did not scan its admitted space")
     return HomomorphismCountResult._from_kernel(
         source=source,
         target=target,
@@ -367,13 +369,16 @@ def compute_core(
         current = _induced_substructure(current, image)
     composed = tuple(inclusion[label] for label in retraction)
     final = check_homomorphism(source, source, composed)
-    assert final.status is HomomorphismStatus.HOMOMORPHISM
-    assert tuple(sorted(set(composed))) == inclusion
+    if final.status is not HomomorphismStatus.HOMOMORPHISM:
+        raise RuntimeError("composed core retraction is not an endomorphism")
+    if tuple(sorted(set(composed))) != inclusion:
+        raise RuntimeError("composed core retraction has the wrong image")
     retraction = _idempotent_retraction(composed, inclusion, source.carrier_size)
-    assert all(
+    if not all(
         retraction[inclusion[core_label]] == core_label
         for core_label in range(len(inclusion))
-    )
+    ):
+        raise RuntimeError("core retraction does not split its inclusion")
     return HomomorphismCoreResult._from_kernel(
         source=source,
         core=current,

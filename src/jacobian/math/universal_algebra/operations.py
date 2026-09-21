@@ -317,7 +317,7 @@ def _evaluate_node(
         value = algebra.tables[node.operation][cell_index]
         memo[index] = value
         return value
-    raise AssertionError("closed term union admitted an unknown node")
+    raise RuntimeError("closed term union admitted an unknown node")
 
 
 def _evaluate_term_unchecked(
@@ -362,7 +362,13 @@ def verify_evaluate(claim: EvaluateResult) -> bool:
             evaluate_term(claim.algebra, claim.term, dict(enumerate(claim.assignment)))
             == claim.value
         )
-    except (OperationDomainValidationError, ValueError, TypeError, AssertionError):
+    except (
+        OperationDomainValidationError,
+        ValueError,
+        TypeError,
+        RuntimeError,
+        AssertionError,
+    ):
         return False
 
 
@@ -459,7 +465,8 @@ def _equation_profile_unchecked(
             status="HOLDS",
             satisfying_count=satisfying,
         )
-    assert first_counterassignment is not None
+    if first_counterassignment is None:
+        raise RuntimeError("failed equation has no counterassignment")
     return EquationProfileResult(
         algebra=algebra,
         left=left,
@@ -854,7 +861,13 @@ def verify_congruence(claim: CongruenceResult) -> bool:
 
     try:
         return congruence_check(claim.algebra, claim.partition) == claim
-    except (OperationDomainValidationError, ValueError, TypeError, AssertionError):
+    except (
+        OperationDomainValidationError,
+        ValueError,
+        TypeError,
+        RuntimeError,
+        AssertionError,
+    ):
         return False
 
 
@@ -867,7 +880,7 @@ def _congruence_check_unchecked(
         for elem in block:
             block_of[elem] = block_idx
     if len(block_of) != n:
-        raise AssertionError("admitted partition must cover the carrier")
+        raise RuntimeError("admitted partition must cover the carrier")
     result = _check_compatibility(algebra, partition, block_of, n)
     return (
         result

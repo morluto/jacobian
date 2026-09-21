@@ -536,6 +536,9 @@ def _decomposes_into(
     return bool(solver.check() == z3.sat)
 
 
+_dot_int = _dot
+
+
 _LOWER_DIMENSIONAL_CASES = (
     ("p2_ray", lambda: p2_fan(), (0,)),
     ("square_ray", lambda: square_fan(), (0,)),

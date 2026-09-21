@@ -20,7 +20,7 @@ def test_saturation_checks_authored_rank_once(
     def observe(matrix: list[list[int]]) -> int:
         nonlocal calls
         calls += 1
-        return original(matrix)
+        return int(original(matrix))
 
     monkeypatch.setattr(operations, "integer_rank", observe)
     lattice = IntegerLattice(ambient_dimension=2, basis=IntegerMatrix(entries=entries))

@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import os
+import subprocess
 import sys
 import time
 from pathlib import Path
 
+import pytest
+from tools import command_runner
 from tools.command_runner import (
     ToolCommandRequest,
     ToolCommandStatus,
@@ -15,6 +18,54 @@ from tools.command_runner import (
     ToolInteractiveStatus,
     run_tool_command,
 )
+
+
+def test_missing_process_pipe_is_rejected_and_child_is_reaped(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    child = subprocess.Popen(
+        [sys.executable, "-c", "import time; time.sleep(30)"],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        start_new_session=os.name == "posix",
+    )
+
+    class MissingStdout:
+        pid = child.pid
+        stdin = child.stdin
+        stdout = None
+        stderr = child.stderr
+        returncode: int | None = None
+
+        def poll(self) -> int | None:
+            return child.poll()
+
+        def kill(self) -> None:
+            child.kill()
+
+        def wait(self, timeout: float | None = None) -> int:
+            return child.wait(timeout=timeout)
+
+    monkeypatch.setattr(
+        command_runner.subprocess,
+        "Popen",
+        lambda *_args, **_kwargs: MissingStdout(),
+    )
+
+    request = ToolCommandRequest(
+        executable=str(Path(sys.executable).resolve()),
+        arguments=("-c", "raise SystemExit(0)"),
+        environment=dict(os.environ),
+        cwd=str(tmp_path),
+        timeout_seconds=1,
+        stdout_limit_bytes=4096,
+        stderr_limit_bytes=4096,
+    )
+    with pytest.raises(RuntimeError, match="stdout pipe was not created"):
+        run_tool_command(request)
+
+    assert child.poll() is not None
 
 
 def test_command_timeout_includes_launch_execution_and_reaping(tmp_path: Path) -> None:

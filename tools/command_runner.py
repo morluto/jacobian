@@ -22,6 +22,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
 from types import MappingProxyType
+from typing import Protocol, cast
 
 _OPERATOR_ENVIRONMENT_ALLOWLIST = frozenset(
     {
@@ -38,6 +39,12 @@ _OPERATOR_ENVIRONMENT_ALLOWLIST = frozenset(
 )
 _GIT_SHA = re.compile(r"^[0-9a-f]{40}$")
 _TOOL_CLEANUP_ALLOWANCE_SECONDS = 0.5
+
+
+class _BinaryInput(Protocol):
+    def write(self, value: bytes) -> object: ...
+
+    def close(self) -> object: ...
 
 
 def output_sink(stream: object) -> Callable[[bytes], None]:
@@ -250,7 +257,7 @@ def operator_environment(
 
 
 def _read_stream(
-    stream: object,
+    read: Callable[[int], bytes],
     target: bytearray,
     limit: int,
     exceeded: threading.Event,
@@ -258,8 +265,6 @@ def _read_stream(
     sink_name: str,
     sink_failure: queue.Queue[tuple[str, str]],
 ) -> None:
-    read = getattr(stream, "read1", None) or getattr(stream, "read", None)
-    assert read is not None
     while True:
         block = read(65_536)
         if not block:
@@ -366,10 +371,20 @@ def run_tool_command(
             stderr=b"",
             diagnostic=process[1],
         )
-    stdout, stderr, stdout_overflow, stderr_overflow, sink_failure, readers = (
-        _start_stream_readers(process, request)
-    )
-    _start_input_writer(process, request.stdin_bytes)
+    try:
+        stdin = _tool_process_stdin(process)
+        stdout, stderr, stdout_overflow, stderr_overflow, sink_failure, readers = (
+            _start_stream_readers(process, request)
+        )
+        _start_input_writer(stdin, request.stdin_bytes)
+    except RuntimeError:
+        _kill_tool_process_tree(process)
+        with suppress(subprocess.TimeoutExpired):
+            process.wait(timeout=max(0.0, absolute_deadline - time.monotonic()))
+        for stream in (process.stdin, process.stdout, process.stderr):
+            if stream is not None:
+                stream.close()
+        raise
     status = (
         ToolCommandStatus.TIMED_OUT
         if time.monotonic() >= execution_deadline
@@ -396,6 +411,17 @@ def run_tool_command(
     )
 
 
+def _binary_pipe_reader(stream: object, name: str) -> Callable[[int], bytes]:
+    """Return a binary pipe reader or reject a malformed process handle."""
+
+    if stream is None:
+        raise RuntimeError(f"tool process {name} pipe was not created")
+    read = getattr(stream, "read1", None) or getattr(stream, "read", None)
+    if not callable(read):
+        raise RuntimeError(f"tool process {name} pipe is not readable")
+    return cast(Callable[[int], bytes], read)
+
+
 def _start_stream_readers(
     process: subprocess.Popen[bytes], request: ToolCommandRequest
 ) -> tuple[
@@ -406,6 +432,8 @@ def _start_stream_readers(
     queue.Queue[tuple[str, str]],
     tuple[threading.Thread, threading.Thread],
 ]:
+    stdout_read = _binary_pipe_reader(process.stdout, "stdout")
+    stderr_read = _binary_pipe_reader(process.stderr, "stderr")
     stdout, stderr = bytearray(), bytearray()
     stdout_overflow, stderr_overflow = threading.Event(), threading.Event()
     sink_failure: queue.Queue[tuple[str, str]] = queue.Queue(maxsize=1)
@@ -413,7 +441,7 @@ def _start_stream_readers(
         threading.Thread(
             target=_read_stream,
             args=(
-                process.stdout,
+                stdout_read,
                 stdout,
                 request.stdout_limit_bytes,
                 stdout_overflow,
@@ -426,7 +454,7 @@ def _start_stream_readers(
         threading.Thread(
             target=_read_stream,
             args=(
-                process.stderr,
+                stderr_read,
                 stderr,
                 request.stderr_limit_bytes,
                 stderr_overflow,
@@ -442,12 +470,22 @@ def _start_stream_readers(
     return stdout, stderr, stdout_overflow, stderr_overflow, sink_failure, readers
 
 
-def _start_input_writer(process: subprocess.Popen[bytes], stdin_bytes: bytes) -> None:
+def _tool_process_stdin(process: subprocess.Popen[bytes]) -> _BinaryInput:
+    stdin = process.stdin
+    if (
+        stdin is None
+        or not callable(getattr(stdin, "write", None))
+        or not callable(getattr(stdin, "close", None))
+    ):
+        raise RuntimeError("tool process stdin pipe was not created")
+    return cast(_BinaryInput, stdin)
+
+
+def _start_input_writer(stdin: _BinaryInput, stdin_bytes: bytes) -> None:
     def write_input() -> None:
         try:
-            assert process.stdin is not None
-            process.stdin.write(stdin_bytes)
-            process.stdin.close()
+            stdin.write(stdin_bytes)
+            stdin.close()
         except (BrokenPipeError, OSError):
             pass
 
@@ -649,16 +687,49 @@ class ToolInteractiveCommand:
         except OSError:
             self._status = ToolInteractiveStatus.START_FAILED
             raise
+        process = self._process
+        try:
+            if process.stdin is None or not callable(
+                getattr(process.stdin, "write", None)
+            ):
+                raise RuntimeError("interactive process stdin pipe was not created")
+            stderr_read = self._text_pipe_reader(process.stderr, "stderr", "read")
+            stdout_readline = self._text_pipe_reader(
+                process.stdout, "stdout", "readline"
+            )
+        except RuntimeError:
+            self._status = ToolInteractiveStatus.START_FAILED
+            self._terminate_process(process)
+            with suppress(subprocess.TimeoutExpired):
+                process.wait(timeout=self._request.shutdown_timeout_seconds)
+            for stream in (process.stdin, process.stdout, process.stderr):
+                if stream is not None:
+                    stream.close()
+            raise
         self._status = ToolInteractiveStatus.STARTED
-        self._stderr_thread = threading.Thread(target=self._drain_stderr, daemon=True)
+        self._stderr_thread = threading.Thread(
+            target=self._drain_stderr, args=(stderr_read,), daemon=True
+        )
         self._stderr_thread.start()
-        self._stdout_thread = threading.Thread(target=self._drain_stdout, daemon=True)
+        self._stdout_thread = threading.Thread(
+            target=self._drain_stdout, args=(stdout_readline,), daemon=True
+        )
         self._stdout_thread.start()
 
-    def _drain_stderr(self) -> None:
-        assert self._process is not None and self._process.stderr is not None
+    @staticmethod
+    def _text_pipe_reader(
+        stream: object, pipe_name: str, method_name: str
+    ) -> Callable[[int], str]:
+        if stream is None:
+            raise RuntimeError(f"interactive process {pipe_name} pipe was not created")
+        reader = getattr(stream, method_name, None)
+        if not callable(reader):
+            raise RuntimeError(f"interactive process {pipe_name} pipe is not readable")
+        return cast(Callable[[int], str], reader)
+
+    def _drain_stderr(self, read: Callable[[int], str]) -> None:
         while True:
-            block = self._process.stderr.read(4096)
+            block = read(4096)
             if not block:
                 return
             encoded = block.encode("utf-8", "replace")
@@ -667,10 +738,9 @@ class ToolInteractiveCommand:
             if len(encoded) > remaining:
                 self._stderr_exceeded.set()
 
-    def _drain_stdout(self) -> None:
-        assert self._process is not None and self._process.stdout is not None
+    def _drain_stdout(self, readline: Callable[[int], str]) -> None:
         while True:
-            line = self._process.stdout.readline(self._request.stdout_limit_bytes + 1)
+            line = readline(self._request.stdout_limit_bytes + 1)
             if line == "":
                 self._stdout_closed.set()
                 self._stdout_queue.put(None)
@@ -817,15 +887,14 @@ class ToolInteractiveCommand:
         self._status = ToolInteractiveStatus.CLOSED
         return return_code if return_code is not None else -1
 
-    def _terminate_group(self) -> None:
-        assert self._process is not None
+    def _terminate_process(self, process: subprocess.Popen[str]) -> None:
         if os.name == "posix":
             with suppress(ProcessLookupError):
-                os.killpg(self._process.pid, signal.SIGKILL)
+                os.killpg(process.pid, signal.SIGKILL)
         else:  # pragma: no cover - exercised in remote Windows validation
             if _TASKKILL is not None:
                 cleanup = subprocess.Popen(
-                    [_TASKKILL, "/T", "/F", "/PID", str(self._process.pid)],
+                    [_TASKKILL, "/T", "/F", "/PID", str(process.pid)],
                     stdin=subprocess.DEVNULL,
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
@@ -836,4 +905,10 @@ class ToolInteractiveCommand:
                 except subprocess.TimeoutExpired:
                     cleanup.kill()
             else:
-                self._process.kill()
+                process.kill()
+
+    def _terminate_group(self) -> None:
+        process = self._process
+        if process is None:
+            return
+        self._terminate_process(process)

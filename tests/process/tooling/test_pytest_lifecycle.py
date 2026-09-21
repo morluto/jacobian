@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -21,6 +22,27 @@ def _command_result(
         stdout=b"",
         stderr=b"",
     )
+
+
+def test_real_pytest_child_succeeds_and_cleans_its_temp_tree(tmp_path: Path) -> None:
+    test_file = tmp_path / "test_probe.py"
+    test_file.write_text(
+        "def test_probe():\n    assert 2 + 2 == 4\n",
+        encoding="utf-8",
+    )
+
+    result = pytest_lifecycle.run_pytest(
+        [str(test_file), "-q"],
+        root=tmp_path,
+        name="real-child",
+        environment=dict(os.environ),
+        timeout_seconds=30,
+    )
+
+    assert result.status is ToolCommandStatus.EXITED
+    assert result.exit_code == 0
+    assert result.retained is False
+    assert not result.basetemp.parent.exists()
 
 
 def test_success_uses_unique_worktree_basetemp_and_cleans_it(

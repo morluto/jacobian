@@ -71,9 +71,9 @@ def run_pytest(
     basetemp = _unique_basetemp(root.resolve(), name)
     basetemp.mkdir(parents=True)
     run_root = basetemp.parent
-    result: PytestResult | None = None
+    retain_tree = False
+    started = time.monotonic()
     try:
-        started = time.monotonic()
         completed = run_tool_command(
             ToolCommandRequest(
                 # Keep the environment interpreter path: resolving its symlink can
@@ -90,8 +90,7 @@ def run_pytest(
             )
         )
         elapsed = time.monotonic() - started
-        timed_out = completed.status is ToolCommandStatus.TIMED_OUT
-        if timed_out:
+        if completed.status is ToolCommandStatus.TIMED_OUT:
             print(
                 f"[{name}] process tree timed out after {timeout_seconds}s",
                 file=sys.stderr,
@@ -102,21 +101,20 @@ def run_pytest(
             and completed.exit_code is not None
             else 1
         )
-        retained = bool(exit_code and retain_on_failure)
         result = PytestResult(
             exit_code=exit_code,
             status=completed.status,
             actual_seconds=elapsed,
             basetemp=basetemp,
-            retained=retained,
+            retained=bool(exit_code and retain_on_failure),
         )
-    finally:
-        if result is not None and result.retained:
+        retain_tree = result.retained
+        if retain_tree:
             print(f"[{name}] retained failed pytest tree: {run_root}", file=sys.stderr)
-        else:
+        return result
+    finally:
+        if not retain_tree:
             shutil.rmtree(run_root, ignore_errors=True)
-    assert result is not None
-    return result
 
 
 def _positive_float(value: str) -> float:

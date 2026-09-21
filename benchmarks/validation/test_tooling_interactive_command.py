@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import sys
 import textwrap
 import threading
@@ -9,6 +10,7 @@ import time
 from pathlib import Path
 
 import pytest
+from tools import command_runner
 from tools.command_runner import (
     ToolInteractiveCommand,
     ToolInteractiveRequest,
@@ -81,6 +83,55 @@ def test_interactive_request_rejects_nonfinite_read_timeout(tmp_path: Path) -> N
             startup_timeout_seconds=1.0,
             read_timeout_seconds=float("nan"),
         )
+
+
+def test_interactive_missing_pipe_is_rejected_before_threads_start(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    child = subprocess.Popen(
+        [sys.executable, "-c", "import time; time.sleep(30)"],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        start_new_session=os.name == "posix",
+    )
+
+    class MissingStdout:
+        pid = child.pid
+        stdin = child.stdin
+        stdout = None
+        stderr = child.stderr
+
+        def poll(self) -> int | None:
+            return child.poll()
+
+        def kill(self) -> None:
+            child.kill()
+
+        def wait(self, timeout: float | None = None) -> int:
+            return child.wait(timeout=timeout)
+
+    monkeypatch.setattr(
+        command_runner.subprocess,
+        "Popen",
+        lambda *_args, **_kwargs: MissingStdout(),
+    )
+    command = ToolInteractiveCommand(
+        ToolInteractiveRequest(
+            executable=_PYTHON,
+            environment=_ENV,
+            cwd=str(tmp_path),
+            startup_timeout_seconds=1.0,
+            read_timeout_seconds=1.0,
+        )
+    )
+
+    with pytest.raises(RuntimeError, match="stdout pipe was not created"):
+        command.start()
+
+    assert command.status is ToolInteractiveStatus.START_FAILED
+    assert child.poll() is not None
 
 
 @pytest.mark.skipif(os.name == "nt", reason="POSIX executable path fixture")

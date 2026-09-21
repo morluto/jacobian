@@ -251,7 +251,8 @@ def _smooth_magnitude(request: EndpointLogImproperIntegralRequest) -> Fraction:
                 "source interval"
             ),
         )
-    assert isinstance(preflight, _RationalBounds)
+    if not isinstance(preflight, _RationalBounds):
+        raise RuntimeError("smooth-factor preflight returned no recognized outcome")
     return max(abs(preflight.lower), abs(preflight.upper))
 
 

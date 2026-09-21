@@ -400,7 +400,7 @@ def _compare_nonnegative_fraction_to_dyadic(
     """Compare a bounded nonnegative Fraction with a nonnegative dyadic safely."""
 
     if value < 0 or int(dyadic.mantissa) < 0:
-        raise AssertionError("comparison operands must be nonnegative")
+        raise RuntimeError("comparison operands must be nonnegative")
     mantissa = int(dyadic.mantissa)
     if value == 0 or mantissa == 0:
         return (value > 0) - (mantissa > 0)
@@ -613,20 +613,18 @@ class _EvaluatedIntegralLeaf:
         if enclosed == unproven or (self.range_enclosure is None) != (
             self.contribution is None
         ):
-            raise AssertionError("one evaluated leaf must carry exactly one outcome")
+            raise RuntimeError("one evaluated leaf must carry exactly one outcome")
         if enclosed and not self.domain_proven:
-            raise AssertionError(
-                "an enclosed leaf requires inherited exact domain proof"
-            )
+            raise RuntimeError("an enclosed leaf requires inherited exact domain proof")
         source_width = _interval_width(self.interval)
         if source_width <= 0:
-            raise AssertionError(
-                "an evaluated integral leaf must have positive measure"
-            )
+            raise RuntimeError("an evaluated integral leaf must have positive measure")
         selection_width = source_width
         if enclosed:
-            assert self.range_enclosure is not None
-            selection_width *= _enclosure_width(self.range_enclosure)
+            range_enclosure = self.range_enclosure
+            if range_enclosure is None:
+                raise RuntimeError("enclosed integral leaf has no range enclosure")
+            selection_width *= _enclosure_width(range_enclosure)
         object.__setattr__(self, "selection_width", selection_width)
 
 
@@ -681,10 +679,10 @@ def _admit_definite_integral(
         )
     selection_comparisons = request.max_leaves * (request.max_leaves - 1) // 2
     if selection_comparisons > MAX_DEFINITE_INTEGRAL_SELECTION_COMPARISONS:
-        raise AssertionError("definite-integral selection accounting is inconsistent")
+        raise RuntimeError("definite-integral selection accounting is inconsistent")
     summation_units = request.max_leaves * (request.max_leaves + 1)
     if summation_units > MAX_DEFINITE_INTEGRAL_SUMMATION_UNITS:
-        raise AssertionError("definite-integral summation accounting is inconsistent")
+        raise RuntimeError("definite-integral summation accounting is inconsistent")
     accumulator_bits = (
         request.precision_bits
         + 2 * MAX_DEFINITE_INTEGRAL_DYADIC_EXPONENT
@@ -704,7 +702,7 @@ def _admit_definite_integral(
         midpoint_digits
         > 2 * MAX_RATIONAL_BOX_ENDPOINT_DIGITS + MAX_DEFINITE_INTEGRAL_DEPTH + 2
     ):
-        raise AssertionError("definite-integral midpoint accounting is inconsistent")
+        raise RuntimeError("definite-integral midpoint accounting is inconsistent")
     source = request.box.intervals[0]
     root_preflight: _BoxPreflight | None = None
     if _interval_width(source) > 0:
@@ -742,7 +740,7 @@ def _evaluate_integral_leaf(
 ) -> _EvaluatedIntegralLeaf:
     if not domain_proven:
         if domain_failure is None:
-            raise AssertionError("an unproved leaf requires domain-failure evidence")
+            raise RuntimeError("an unproved leaf requires domain-failure evidence")
         return _EvaluatedIntegralLeaf(
             path=path,
             interval=interval,
@@ -750,7 +748,7 @@ def _evaluate_integral_leaf(
             domain_failure=domain_failure,
         )
     if domain_failure is not None:
-        raise AssertionError("proved-domain input cannot carry failure evidence")
+        raise RuntimeError("proved-domain input cannot carry failure evidence")
 
     _require_deadline(deadline, "before an Arb leaf evaluation")
     try:
@@ -836,7 +834,8 @@ def _refine_unproven_integral_leaf(
             domain_proven=False,
             domain_failure=preflight,
         )
-    assert isinstance(preflight, _RationalBounds)
+    if not isinstance(preflight, _RationalBounds):
+        raise RuntimeError("integral leaf preflight returned no recognized outcome")
     return _evaluate_integral_leaf(
         request,
         path,
@@ -850,7 +849,7 @@ def _public_leaves(
     leaves: tuple[_EvaluatedIntegralLeaf, ...],
 ) -> tuple[DefiniteIntegralLeaf, ...]:
     if any(left.path >= right.path for left, right in pairwise(leaves)):
-        raise AssertionError("the kernel must retain lexicographic leaf order")
+        raise RuntimeError("the kernel must retain lexicographic leaf order")
     public: list[DefiniteIntegralLeaf] = []
     for leaf in leaves:
         if leaf.domain_failure is not None:
@@ -860,12 +859,15 @@ def _public_leaves(
                 )
             )
             continue
-        assert leaf.range_enclosure is not None and leaf.contribution is not None
+        range_enclosure = leaf.range_enclosure
+        contribution = leaf.contribution
+        if range_enclosure is None or contribution is None:
+            raise RuntimeError("integral leaf has neither enclosure nor domain failure")
         public.append(
             DefiniteIntegralEnclosedLeaf(
                 path=leaf.path,
-                range_enclosure=leaf.range_enclosure,
-                contribution=leaf.contribution,
+                range_enclosure=range_enclosure,
+                contribution=contribution,
             )
         )
     return tuple(public)
@@ -881,13 +883,15 @@ def _finish_result(
     if any(
         isinstance(leaf, DefiniteIntegralDomainUnprovenLeaf) for leaf in public_leaves
     ):
-        assert enclosure is None
+        if enclosure is not None:
+            raise RuntimeError("domain-unproved integral result carries an enclosure")
         result = DefiniteIntegralEnclosureResult._from_kernel(
             request,
             outcome=DefiniteIntegralDomainUnproven(leaves=public_leaves),
         )
     else:
-        assert enclosure is not None
+        if enclosure is None:
+            raise RuntimeError("concluded integral result has no enclosure")
         concluded_leaves = tuple(
             leaf
             for leaf in public_leaves
@@ -896,7 +900,8 @@ def _finish_result(
                 (DefiniteIntegralEnclosedLeaf, DefiniteIntegralZeroMeasureLeaf),
             )
         )
-        assert len(concluded_leaves) == len(public_leaves)
+        if len(concluded_leaves) != len(public_leaves):
+            raise RuntimeError("integral result contains an unrecognized leaf outcome")
         outcome: DefiniteIntegralTargetMet | DefiniteIntegralBudgetExhausted
         if _target_met(enclosure, request.target_width):
             outcome = DefiniteIntegralTargetMet(
@@ -936,7 +941,7 @@ def _select_leaf(leaves: tuple[_EvaluatedIntegralLeaf, ...]) -> int:
     """Return the deterministic highest-priority leaf index in one linear scan."""
 
     if not leaves:
-        raise AssertionError("leaf selection requires a nonempty partition")
+        raise RuntimeError("leaf selection requires a nonempty partition")
     selected_index = 0
     for candidate_index in range(1, len(leaves)):
         candidate = leaves[candidate_index]
@@ -966,7 +971,8 @@ def _compute_definite_integral_enclosure(
         return _finish_zero_measure_result(request, deadline=admission.deadline)
 
     root_preflight = admission.root_preflight
-    assert root_preflight is not None
+    if root_preflight is None:
+        raise RuntimeError("positive-measure integral has no root preflight outcome")
     leaves: tuple[_EvaluatedIntegralLeaf, ...] = (
         _evaluate_integral_leaf(
             request,
@@ -989,7 +995,8 @@ def _compute_definite_integral_enclosure(
             contributions = tuple(
                 leaf.contribution for leaf in leaves if leaf.contribution is not None
             )
-            assert len(contributions) == len(leaves)
+            if len(contributions) != len(leaves):
+                raise RuntimeError("proved integral leaf has no contribution")
             enclosure = _summed_enclosure(contributions, request.precision_bits)
             _require_deadline(admission.deadline, "after exact leaf summation")
             if _target_met(enclosure, request.target_width):
@@ -1023,12 +1030,14 @@ def _compute_definite_integral_enclosure(
                 domain_proven=True,
             )
         else:
-            assert selected.domain_failure is not None
+            inherited_failure = selected.domain_failure
+            if inherited_failure is None:
+                raise RuntimeError("unproved integral leaf has no failure evidence")
             lower = _refine_unproven_integral_leaf(
                 request,
                 (*selected.path, 0),
                 child_intervals[0],
-                inherited_failure=selected.domain_failure,
+                inherited_failure=inherited_failure,
                 deadline=admission.deadline,
             )
         _require_deadline(admission.deadline, "between child evaluations")
@@ -1041,12 +1050,14 @@ def _compute_definite_integral_enclosure(
                 domain_proven=True,
             )
         else:
-            assert selected.domain_failure is not None
+            inherited_failure = selected.domain_failure
+            if inherited_failure is None:
+                raise RuntimeError("unproved integral leaf has no failure evidence")
             upper = _refine_unproven_integral_leaf(
                 request,
                 (*selected.path, 1),
                 child_intervals[1],
-                inherited_failure=selected.domain_failure,
+                inherited_failure=inherited_failure,
                 deadline=admission.deadline,
             )
         leaves = (

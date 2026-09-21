@@ -126,10 +126,13 @@ def _shortest_avoiding_path(
             previous[neighbor] = current
             if neighbor == goal:
                 path = [goal]
-                while previous[path[-1]] is not None:
-                    previous_vertex = previous[path[-1]]
-                    assert previous_vertex is not None
+                cursor = goal
+                while True:
+                    previous_vertex = previous[cursor]
+                    if previous_vertex is None:
+                        break
                     path.append(previous_vertex)
+                    cursor = previous_vertex
                 return tuple(reversed(path))
             queue.append(neighbor)
     return None
@@ -174,7 +177,7 @@ def _induced_cycle(
                     continue
                 cycle = (center, *path)
                 return _canonical_cycle(tuple(labels[vertex] for vertex in cycle))
-    raise AssertionError("induced-cycle extraction exhausted all triples")
+    raise RuntimeError("non-chordal graph has no extracted induced cycle")
 
 
 def _admit_recognition(

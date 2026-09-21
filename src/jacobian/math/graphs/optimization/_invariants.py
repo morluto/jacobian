@@ -160,7 +160,7 @@ def _spanning_tree_count(
     graph: Any, source: SimpleUndirectedGraph
 ) -> GraphSpanningTreeCountResult:
     import networkx as nx
-    import sympy
+    from flint import fmpz_mat
 
     if not graph:
         return GraphSpanningTreeCountResult(
@@ -182,17 +182,19 @@ def _spanning_tree_count(
         )
     vertices = tuple(graph.nodes)
     index = {vertex: offset for offset, vertex in enumerate(vertices)}
-    laplacian = sympy.zeros(len(vertices), len(vertices))
+    laplacian = [[0] * len(vertices) for _ in vertices]
     for left, right in graph.edges:
         left_index = index[left]
         right_index = index[right]
-        laplacian[left_index, left_index] += 1
-        laplacian[right_index, right_index] += 1
-        laplacian[left_index, right_index] -= 1
-        laplacian[right_index, left_index] -= 1
+        laplacian[left_index][left_index] += 1
+        laplacian[right_index][right_index] += 1
+        laplacian[left_index][right_index] -= 1
+        laplacian[right_index][left_index] -= 1
     return GraphSpanningTreeCountResult(
         graph=source,
-        spanning_tree_count=int(laplacian[:-1, :-1].det()),
+        spanning_tree_count=int(
+            fmpz_mat([row[:-1] for row in laplacian[:-1]]).det()
+        ),
         connected=True,
     )
 

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from fractions import Fraction
-from typing import Any
 
 from jacobian.math.graphs.electrical_networks._models import (
     EffectiveResistanceResult,
@@ -21,38 +20,18 @@ __all__ = [
 ]
 
 
-def _laplacian(
-    vertex_count: int,
-    edges: tuple[tuple[int, int, Fraction], ...],
-) -> Any:
-    """Build the conductance-weighted Laplacian as a SymPy Matrix of rationals."""
-
-    from sympy import Matrix, Rational
-
-    matrix = Matrix.zeros(vertex_count, vertex_count)
-    for source, target, conductance in edges:
-        g = Rational(conductance.numerator, conductance.denominator)
-        matrix[source, source] += g
-        matrix[target, target] += g
-        matrix[source, target] -= g
-        matrix[target, source] -= g
-    return matrix
-
-
 def laplacian_matrix(
     vertex_count: int,
     edges: tuple[tuple[int, int, Fraction], ...],
 ) -> list[list[Fraction]]:
     """Return the exact Laplacian as a list-of-lists of Fractions."""
 
-    lap = _laplacian(vertex_count, edges)
-    rows: list[list[Fraction]] = []
-    for row in range(vertex_count):
-        entries: list[Fraction] = []
-        for col in range(vertex_count):
-            val = lap[row, col]
-            entries.append(Fraction(int(val.p), int(val.q)))
-        rows.append(entries)
+    rows = [[Fraction(0) for _ in range(vertex_count)] for _ in range(vertex_count)]
+    for source, target, conductance in edges:
+        rows[source][source] += conductance
+        rows[target][target] += conductance
+        rows[source][target] -= conductance
+        rows[target][source] -= conductance
     return rows
 
 

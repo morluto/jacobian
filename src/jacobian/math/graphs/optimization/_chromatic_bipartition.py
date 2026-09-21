@@ -454,6 +454,22 @@ def _find_chromatic_bipartition_kernel(
     started = time.monotonic()
     checked = 0
     order = len(source_vertices)
+    chromatic_cache: dict[int, int] = {}
+
+    def chromatic(mask: int) -> int | None:
+        cached = chromatic_cache.get(mask)
+        if cached is not None:
+            return cached
+        side = tuple(
+            vertex
+            for index, vertex in enumerate(source_vertices)
+            if mask & (1 << index)
+        )
+        value = _chromatic_number(_induced_graph(graph, side), request, started)
+        if value is not None:
+            chromatic_cache[mask] = value
+        return value
+
     for mask in range(1, 1 << order):
         complement = ((1 << order) - 1) ^ mask
         if complement == 0 or mask > complement:
@@ -470,10 +486,10 @@ def _find_chromatic_bipartition_kernel(
         )
         if remaining_ms(started, request.resource_budget.wall_seconds) <= 0:
             _chromatic_deadline_expired(request)
-        chromatic_a = _chromatic_number(_induced_graph(graph, side_a), request, started)
+        chromatic_a = chromatic(mask)
         if chromatic_a is None:
             _chromatic_deadline_expired(request)
-        chromatic_b = _chromatic_number(_induced_graph(graph, side_b), request, started)
+        chromatic_b = chromatic(complement)
         if chromatic_b is None:
             _chromatic_deadline_expired(request)
         checked += 1

@@ -154,6 +154,26 @@ def test_node_potentials_satisfy_kirchhoff_current() -> None:
     assert result.potentials[1].potential.as_fraction() == Fraction(0)
 
 
+def test_weighted_triangle_obeys_kirchhoff_and_parallel_path_formula() -> None:
+    # Conductances 2 on 0-1, 3 on 1-2, and 5 on 0-2. The indirect path has
+    # conductance 1/(1/2 + 1/3) = 6/5, in parallel with conductance 5.
+    net = _net(3, _edge(0, 1, 2, 1), _edge(1, 2, 3, 1), _edge(0, 2, 5, 1))
+    resistance = compute_effective_resistance(
+        EffectiveResistanceRequest(network=net, terminal_a=0, terminal_b=2)
+    )
+    potentials = compute_node_potentials(
+        NodePotentialRequest(network=net, source=0, sink=2)
+    )
+
+    assert resistance.effective_resistance.as_fraction() == Fraction(5, 31)
+    assert tuple(value.potential.as_fraction() for value in potentials.potentials) == (
+        Fraction(5, 31),
+        Fraction(2, 31),
+        Fraction(0),
+    )
+    assert verify_node_potentials(potentials)
+
+
 def test_flint_solves_a_path_above_the_previous_vertex_ceiling() -> None:
     vertex_count = 200
     net = _net(

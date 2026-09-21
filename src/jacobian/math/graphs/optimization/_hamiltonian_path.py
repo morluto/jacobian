@@ -42,30 +42,40 @@ def decide_hamiltonian_path(
         sum(1 << index[neighbor] for neighbor in graph.neighbors(vertex))
         for vertex in vertices
     )
-    predecessor: dict[tuple[int, int], int | None] = {
-        (1 << position, position): None for position in range(order)
-    }
+    # endpoints[mask] is a vertex bitset.  This avoids a hash-table lookup for
+    # every (mask, last) pair and scans only reachable endpoints.  Predecessors
+    # remain sparse because only the first witness for a reachable state is
+    # needed for exact reconstruction.
+    endpoints = [0] * (1 << order)
+    predecessor: dict[tuple[int, int], int | None] = {}
+    for position in range(order):
+        mask = 1 << position
+        endpoints[mask] |= mask
+        predecessor[(mask, position)] = None
     for mask in range(1, 1 << order):
-        endings = tuple(last for last in range(order) if (mask, last) in predecessor)
-        for last in endings:
+        endings = endpoints[mask]
+        while endings:
+            last_bit = endings & -endings
+            last = last_bit.bit_length() - 1
             available = adjacency_masks[last] & ~mask
             while available:
                 bit = available & -available
                 following = bit.bit_length() - 1
-                state = (mask | bit, following)
-                predecessor.setdefault(state, last)
+                next_mask = mask | bit
+                if not endpoints[next_mask] & bit:
+                    endpoints[next_mask] |= bit
+                    predecessor[(next_mask, following)] = last
                 available ^= bit
+            endings ^= last_bit
     full_mask = (1 << order) - 1
-    possible_endings = tuple(
-        last for last in range(order) if (full_mask, last) in predecessor
-    )
+    possible_endings = endpoints[full_mask]
     if not possible_endings:
         return GraphHamiltonianPathResult(
             decision="DOES_NOT_EXIST",
             order=order,
             path=(),
         )
-    last = possible_endings[0]
+    last = (possible_endings & -possible_endings).bit_length() - 1
     mask = full_mask
     reversed_path: list[str] = []
     while True:

@@ -9,6 +9,7 @@ catalog, dispatch, CLI, or MCP product layers.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from itertools import product
 
 import pytest
@@ -506,16 +507,6 @@ def test_known_counts_and_fixtures_are_retained() -> None:
     assert len(SQUARE_CONES) == 10
 
 
-def _dot_int(left: tuple[int, ...], right: tuple[int, ...]) -> int:
-    return sum(a * b for a, b in zip(left, right, strict=True))
-
-
-def _in_dual(
-    generator: tuple[int, ...], cone_rays: tuple[tuple[int, ...], ...]
-) -> bool:
-    return all(_dot_int(ray, generator) >= 0 for ray in cone_rays)
-
-
 def _decomposes_into(
     point: tuple[int, ...],
     generators: tuple[tuple[int, ...], ...],
@@ -542,7 +533,7 @@ def _decomposes_into(
             )
             == int(point[coordinate])
         )
-    return solver.check() == z3.sat
+    return bool(solver.check() == z3.sat)
 
 
 _LOWER_DIMENSIONAL_CASES = (
@@ -559,7 +550,9 @@ _LOWER_DIMENSIONAL_CASES = (
     [case[1:] for case in _LOWER_DIMENSIONAL_CASES],
     ids=[case[0] for case in _LOWER_DIMENSIONAL_CASES],
 )
-def test_lower_dimensional_chart_structural_oracles(presentation_factory, cone) -> None:
+def test_lower_dimensional_chart_structural_oracles(
+    presentation_factory: Callable[[], ToricFanPresentation], cone: tuple[int, ...]
+) -> None:
     presentation = presentation_factory()
     result = compute_affine_chart(presentation, cone)
     rank = result.lattice_rank

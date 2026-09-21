@@ -134,6 +134,51 @@ def test_nonfinite_timeout_is_rejected_before_process_launch(
         )
 
 
+def test_missing_process_output_pipe_fails_before_reader_threads_start(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import subprocess
+
+    child = subprocess.Popen(
+        [sys.executable, "-c", "import time; time.sleep(30)"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        start_new_session=os.name == "posix",
+    )
+
+    class MissingStdout:
+        pid = child.pid
+        stdin = None
+        stdout = None
+        stderr = child.stderr
+        returncode: int | None = None
+
+        def poll(self) -> int | None:
+            return child.poll()
+
+        def kill(self) -> None:
+            child.kill()
+
+        def wait(self, timeout: float | None = None) -> int:
+            return child.wait(timeout=timeout)
+
+    monkeypatch.setattr(
+        "jacobian.process.subprocess.Popen", lambda *_args, **_kwargs: MissingStdout()
+    )
+
+    with pytest.raises(RuntimeError, match="stdout pipe was not created"):
+        run_bounded_process(
+            [sys.executable, "-c", "raise SystemExit(0)"],
+            input_bytes=b"",
+            timeout_seconds=1,
+            environment=dict(os.environ),
+            stdout_limit=4096,
+            stderr_limit=4096,
+        )
+
+    assert child.poll() is not None
+
+
 @pytest.mark.skipif(
     os.name != "posix" or shutil.which("prlimit") is None,
     reason="pre-exec resource limits require util-linux prlimit",

@@ -138,6 +138,48 @@ def test_start_failure_is_typed() -> None:
     assert raised.value.stderr == b""
 
 
+def test_missing_process_pipe_is_a_typed_start_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import subprocess
+
+    child = subprocess.Popen(
+        [sys.executable, "-c", "import time; time.sleep(30)"],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+
+    class MissingStdin:
+        stdin = None
+        stdout = child.stdout
+        stderr = child.stderr
+
+        def kill(self) -> None:
+            child.kill()
+
+        def wait(self) -> int:
+            return child.wait()
+
+    monkeypatch.setattr(
+        "jacobian.process.subprocess.Popen", lambda *_args, **_kwargs: MissingStdin()
+    )
+
+    with pytest.raises(BoundedWorkerDialogueError) as raised:
+        run_bounded_worker_dialogue(
+            [sys.executable, "-c", "raise SystemExit(0)"],
+            lambda _dialogue: None,
+            absolute_deadline=time.monotonic() + 1,
+            environment=dict(os.environ),
+            stdout_limit=1,
+            stderr_limit=1,
+        )
+
+    assert raised.value.reason is BoundedWorkerDialogueErrorReason.START_FAILED
+    assert raised.value.stderr == b""
+    assert child.poll() is not None
+
+
 def test_nonzero_exit_reports_bounded_stderr() -> None:
     with pytest.raises(BoundedWorkerDialogueError) as raised:
         _run_dialogue(

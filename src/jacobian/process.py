@@ -222,18 +222,18 @@ class _BoundedWorkerDialogueState:
         self,
         process: subprocess.Popen[bytes],
         *,
+        stdin: BinaryIO,
+        stdout: BinaryIO,
+        stderr: BinaryIO,
         execution_deadline: float,
         absolute_deadline: float,
         stdout_limit: int,
         stderr_limit: int,
     ) -> None:
-        assert process.stdin is not None
-        assert process.stdout is not None
-        assert process.stderr is not None
         self._process = process
-        self._stdin = process.stdin
-        self._stdout = process.stdout
-        self._stderr = process.stderr
+        self._stdin = stdin
+        self._stdout = stdout
+        self._stderr = stderr
         self._execution_deadline = execution_deadline
         self._absolute_deadline = absolute_deadline
         self._stdout_limit = stdout_limit
@@ -448,10 +448,11 @@ class _BoundedWorkerDialogueState:
                     self._record_failure_locked(
                         BoundedWorkerDialogueErrorReason.STDOUT_LIMIT
                     )
-                assert self._failure is not None
-                reason = self._failure
+                recorded_failure = self._failure
+                if recorded_failure is None:  # pragma: no cover - defensive state guard
+                    raise RuntimeError("worker dialogue failed without a reason")
             self._kill_immediate_child()
-            raise _WorkerDialogueControlError(reason)
+            raise _WorkerDialogueControlError(recorded_failure)
 
     def finish(self) -> None:
         with self._condition:
@@ -678,6 +679,25 @@ def _kill_process_tree(
     process.kill()  # pragma: no cover - defensive fallback
 
 
+def _require_process_pipe(
+    process: subprocess.Popen[bytes],
+    name: str,
+) -> BinaryIO:
+    """Return a requested subprocess pipe or fail before background work starts."""
+
+    if name == "stdin":
+        stream = process.stdin
+    elif name == "stdout":
+        stream = process.stdout
+    elif name == "stderr":
+        stream = process.stderr
+    else:  # pragma: no cover - closed internal call set
+        raise ValueError(f"unknown subprocess pipe: {name}")
+    if stream is None:
+        raise RuntimeError(f"subprocess {name} pipe was not created")
+    return cast(BinaryIO, stream)
+
+
 def _capture_stream(
     stream: BinaryIO,
     *,
@@ -900,23 +920,24 @@ def run_bounded_process(
             _apply_post_start_limits(
                 process, resource_limits, limits_applied_before_exec, platform_tools
             )
-            assert process.stdout is not None
-            assert process.stderr is not None
+            process_stdout = _require_process_pipe(process, "stdout")
+            process_stderr = _require_process_pipe(process, "stderr")
         except BaseException:
-            # _apply_post_start_limits already killed and waited the
-            # process on failure, but the pipes were never closed.  Close
-            # them to avoid leaking file descriptors.
-            if process.stdout is not None:
-                process.stdout.close()
-            if process.stderr is not None:
-                process.stderr.close()
+            # A malformed process handle or post-start limit failure must not
+            # leave the child or any pipe descriptors behind.
+            _kill_process_tree(process, platform_tools)
+            with suppress(Exception):
+                process.wait()
+            for stream in (process.stdout, process.stderr):
+                if stream is not None:
+                    stream.close()
             raise
 
         readers = (
             threading.Thread(
                 target=_capture_stream,
                 kwargs={
-                    "stream": process.stdout,
+                    "stream": process_stdout,
                     "limit": stdout_limit,
                     "process": process,
                     "captured": stdout,
@@ -928,7 +949,7 @@ def run_bounded_process(
             threading.Thread(
                 target=_capture_stream,
                 kwargs={
-                    "stream": process.stderr,
+                    "stream": process_stderr,
                     "limit": stderr_limit,
                     "process": process,
                     "captured": stderr,
@@ -966,7 +987,7 @@ def run_bounded_process(
                 # an existing output-limit-exceeded signal with timed_out.
                 timed_out = True
             for reader, stream in zip(
-                readers, (process.stdout, process.stderr), strict=True
+                readers, (process_stdout, process_stderr), strict=True
             ):
                 if not reader.is_alive():
                     stream.close()
@@ -1053,8 +1074,26 @@ def run_bounded_worker_dialogue[ValueT](
             stderr=b"",
         ) from exc
 
+    try:
+        process_stdin = _require_process_pipe(process, "stdin")
+        process_stdout = _require_process_pipe(process, "stdout")
+        process_stderr = _require_process_pipe(process, "stderr")
+    except RuntimeError as exc:
+        process.kill()
+        process.wait()
+        for stream in (process.stdin, process.stdout, process.stderr):
+            if stream is not None:
+                stream.close()
+        raise BoundedWorkerDialogueError(
+            BoundedWorkerDialogueErrorReason.START_FAILED,
+            stderr=b"",
+        ) from exc
+
     state = _BoundedWorkerDialogueState(
         process,
+        stdin=process_stdin,
+        stdout=process_stdout,
+        stderr=process_stderr,
         execution_deadline=execution_deadline,
         absolute_deadline=absolute_deadline,
         stdout_limit=stdout_limit,

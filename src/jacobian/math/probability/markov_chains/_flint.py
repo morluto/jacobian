@@ -17,10 +17,7 @@ def mixing_time_search(
 
     dimension = len(matrix)
     transition = fmpq_mat(
-        [
-            [fmpq(value.numerator, value.denominator) for value in row]
-            for row in matrix
-        ]
+        [[fmpq(value.numerator, value.denominator) for value in row] for row in matrix]
     )
     power = fmpq_mat(dimension, dimension)
     for index in range(dimension):
@@ -31,7 +28,10 @@ def mixing_time_search(
     for step in range(max_steps + 1):
         terminal = max(
             sum(
-                (abs(power[source, target_index] - target[target_index]) for target_index in range(dimension)),
+                (
+                    abs(power[source, target_index] - target[target_index])
+                    for target_index in range(dimension)
+                ),
                 fmpq(0),
             )
             / 2

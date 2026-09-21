@@ -327,8 +327,7 @@ def _rank_of_diffs(points: list[list[Rational]], dim: int) -> int:
         return 0
     v0 = points[0]
     differences = [
-        [points[i][k] - v0[k] for k in range(dim)]
-        for i in range(1, len(points))
+        [points[i][k] - v0[k] for k in range(dim)] for i in range(1, len(points))
     ]
     return rational_rank(differences, dim)
 
@@ -918,8 +917,7 @@ def _affine_dimension(points: list[list[Rational]]) -> int:
     reference = points[0]
     dim = len(reference)
     differences = [
-        [point[axis] - reference[axis] for axis in range(dim)]
-        for point in points[1:]
+        [point[axis] - reference[axis] for axis in range(dim)] for point in points[1:]
     ]
     return rational_rank(differences, dim)
 
@@ -1502,13 +1500,16 @@ def _admit_edge_profile(polytope: RationalVPolytope, dimension_bound: object) ->
                     "hulls require intrinsic affine coordinates"
                 ),
             )
-    elif rational_rank(
-        [
-            [points[index][axis] - points[0][axis] for axis in range(ambient)]
-            for index in range(1, len(points))
-        ],
-        ambient,
-    ) < ambient:
+    elif (
+        rational_rank(
+            [
+                [points[index][axis] - points[0][axis] for axis in range(ambient)]
+                for index in range(1, len(points))
+            ],
+            ambient,
+        )
+        < ambient
+    ):
         raise OperationDomainValidationError(
             location=("polytope",),
             code="polytope.edge_profile.not_full_dimensional",

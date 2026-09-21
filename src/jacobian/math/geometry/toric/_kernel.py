@@ -695,7 +695,9 @@ def _unimodular_complement(
     if abs(int(str(determinant))) != 1 or completed[:rank, :] != source:
         raise ArithmeticError("Smith completion failed to reconstruct lineality")
     return tuple(
-        tuple(int(str(completed_entries[row][column])) for column in range(lattice_rank))
+        tuple(
+            int(str(completed_entries[row][column])) for column in range(lattice_rank)
+        )
         for row in range(rank, lattice_rank)
     )
 

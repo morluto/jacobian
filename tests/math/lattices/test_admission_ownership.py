@@ -23,9 +23,7 @@ def test_saturation_checks_authored_rank_once(
         return original(matrix)
 
     monkeypatch.setattr(operations, "integer_rank", observe)
-    lattice = IntegerLattice(
-        ambient_dimension=2, basis=IntegerMatrix(entries=entries)
-    )
+    lattice = IntegerLattice(ambient_dimension=2, basis=IntegerMatrix(entries=entries))
     lattice = IntegerLattice.model_validate_json(lattice.model_dump_json())
     assert calls == 0
     if dependent:

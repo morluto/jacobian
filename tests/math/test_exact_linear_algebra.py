@@ -19,19 +19,19 @@ def _principal_minor_sign_changes(
     zero = len(matrix) - int(Matrix(matrix).rank())
     squarefree_factors = polynomial.sqf_list()[1]
     negative = sum(
-        multiplicity
-        * (int(factor.count_roots(-oo, 0)) - int(factor.eval(0) == 0))
+        multiplicity * (int(factor.count_roots(-oo, 0)) - int(factor.eval(0) == 0))
         for factor, multiplicity in squarefree_factors
     )
     positive = sum(
-        multiplicity
-        * (int(factor.count_roots(0, oo)) - int(factor.eval(0) == 0))
+        multiplicity * (int(factor.count_roots(0, oo)) - int(factor.eval(0) == 0))
         for factor, multiplicity in squarefree_factors
     )
     return positive, negative, zero
 
 
-def test_symmetric_inertia_matches_exact_root_oracle_for_small_integer_matrices() -> None:
+def test_symmetric_inertia_matches_exact_root_oracle_for_small_integer_matrices() -> (
+    None
+):
     for dimension in range(1, 4):
         positions = tuple(
             (row, column)

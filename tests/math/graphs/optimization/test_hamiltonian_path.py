@@ -10,7 +10,9 @@ from jacobian.math.graphs.optimization._models import GraphHamiltonianPathReques
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 
-def _request(order: int, edges: tuple[tuple[str, str], ...]) -> GraphHamiltonianPathRequest:
+def _request(
+    order: int, edges: tuple[tuple[str, str], ...]
+) -> GraphHamiltonianPathRequest:
     vertices = tuple(str(index) for index in range(order))
     return GraphHamiltonianPathRequest(
         graph=SimpleUndirectedGraph(vertices=vertices, edges=edges)
@@ -21,12 +23,17 @@ def _brute_force_exists(request: GraphHamiltonianPathRequest) -> bool:
     graph = request.graph
     edge_set = {frozenset(edge) for edge in graph.edges}
     return any(
-        all(frozenset((order[index], order[index + 1])) in edge_set for index in range(len(order) - 1))
+        all(
+            frozenset((order[index], order[index + 1])) in edge_set
+            for index in range(len(order) - 1)
+        )
         for order in permutations(graph.vertices)
     )
 
 
-def test_bitset_dp_matches_exhaustive_oracle_on_every_graph_through_order_four() -> None:
+def test_bitset_dp_matches_exhaustive_oracle_on_every_graph_through_order_four() -> (
+    None
+):
     for order in range(5):
         vertices = tuple(str(index) for index in range(order))
         possible = tuple(
@@ -37,7 +44,9 @@ def test_bitset_dp_matches_exhaustive_oracle_on_every_graph_through_order_four()
         for mask in range(1 << len(possible)):
             request = _request(
                 order,
-                tuple(edge for index, edge in enumerate(possible) if mask & (1 << index)),
+                tuple(
+                    edge for index, edge in enumerate(possible) if mask & (1 << index)
+                ),
             )
             result = decide_hamiltonian_path(request)
             expected = _brute_force_exists(request)

@@ -48,9 +48,7 @@ def test_find_recurrence_recovers_a_minimal_order_two_rational_relation() -> Non
         right = values[-2].as_fraction()
         values.append(CanonicalRational.from_fraction(3 * left / 2 - right / 2))
 
-    result = compute_find_recurrence(
-        RecurrenceFindRequest(sequence=tuple(values))
-    )
+    result = compute_find_recurrence(RecurrenceFindRequest(sequence=tuple(values)))
     assert result.status == "FOUND"
     assert result.order == 2
     assert tuple(value.as_fraction() for value in result.coefficients) == (

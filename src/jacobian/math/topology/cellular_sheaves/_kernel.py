@@ -142,11 +142,17 @@ class _ExactField:
 
             if self.field is SheafField.RATIONAL:
                 rational_left = tuple(
-                    tuple(value if isinstance(value, Fraction) else Fraction(value) for value in row)
+                    tuple(
+                        value if isinstance(value, Fraction) else Fraction(value)
+                        for value in row
+                    )
                     for row in left
                 )
                 rational_right = tuple(
-                    tuple(value if isinstance(value, Fraction) else Fraction(value) for value in row)
+                    tuple(
+                        value if isinstance(value, Fraction) else Fraction(value)
+                        for value in row
+                    )
                     for row in right
                 )
                 return rational_product(rational_left, rational_right)

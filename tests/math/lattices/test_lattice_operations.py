@@ -569,10 +569,7 @@ def test_dual_pairing_identity_on_a_rectangular_rank_three_lattice() -> None:
     assert [
         [sum(dual[i][k] * basis[j][k] for k in range(4)) for j in range(3)]
         for i in range(3)
-    ] == [
-        [Fraction(int(i == j)) for j in range(3)]
-        for i in range(3)
-    ]
+    ] == [[Fraction(int(i == j)) for j in range(3)] for i in range(3)]
 
 
 def test_unimodular_dual_is_integral_and_involutive() -> None:

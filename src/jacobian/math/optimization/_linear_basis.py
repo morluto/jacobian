@@ -260,10 +260,7 @@ def search_bases(
             # candidate basis while still producing the primal vector and the
             # complete tableau needed for dual slacks and an unbounded ray.
             rhs = fmpq_mat(
-                [
-                    [b[i, 0], *(a[i, j] for j in range(columns))]
-                    for i in range(rows)
-                ]
+                [[b[i, 0], *(a[i, j] for j in range(columns))] for i in range(rows)]
             )
             solved = square.solve(rhs)
         except ZeroDivisionError:  # FLINT's documented singular-matrix outcome.

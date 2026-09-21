@@ -192,9 +192,7 @@ def _spanning_tree_count(
         laplacian[right_index][left_index] -= 1
     return GraphSpanningTreeCountResult(
         graph=source,
-        spanning_tree_count=int(
-            fmpz_mat([row[:-1] for row in laplacian[:-1]]).det()
-        ),
+        spanning_tree_count=int(fmpz_mat([row[:-1] for row in laplacian[:-1]]).det()),
         connected=True,
     )
 

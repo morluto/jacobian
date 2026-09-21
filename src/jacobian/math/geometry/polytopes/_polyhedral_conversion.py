@@ -342,7 +342,10 @@ def rational_rank(rows: Sequence[Sequence[object]], column_count: int) -> int:
         for value in fractions:
             denominator = lcm(denominator, value.denominator)
         integer_rows.append(
-            [value.numerator * (denominator // value.denominator) for value in fractions]
+            [
+                value.numerator * (denominator // value.denominator)
+                for value in fractions
+            ]
         )
     return _rank(integer_rows, column_count)
 
@@ -502,8 +505,7 @@ def cone_generators(rows: Sequence[Sequence[int]]) -> ConeConversion:
         next_ray_set = set(next_rays)
         zero_set = set(zero)
         next_active = [
-            active[i] | ((1 << row_index) if i in zero_set else 0)
-            for i in retained
+            active[i] | ((1 << row_index) if i in zero_set else 0) for i in retained
         ]
 
         for p_index in positive:

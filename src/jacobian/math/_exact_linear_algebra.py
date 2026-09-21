@@ -21,15 +21,17 @@ def symmetric_inertia(  # noqa: C901
     dimension = len(values)
     if any(len(row) != dimension for row in values):
         raise ValueError("symmetric inertia requires a square matrix")
-    if any(values[row][column] != values[column][row] for row in range(dimension) for column in range(row)):
+    if any(
+        values[row][column] != values[column][row]
+        for row in range(dimension)
+        for column in range(row)
+    ):
         raise ValueError("symmetric inertia requires a symmetric matrix")
 
     positive = negative = zero = 0
     index = 0
     while index < dimension:
-        pivot = next(
-            (row for row in range(index, dimension) if values[row][row]), None
-        )
+        pivot = next((row for row in range(index, dimension) if values[row][row]), None)
         if pivot is not None:
             if pivot != index:
                 values[index], values[pivot] = values[pivot], values[index]

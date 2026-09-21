@@ -193,9 +193,9 @@ def canonicalize_linear_code(
         elements = (
             _full_permutation_form(element, width) for element in backend.elements
         )
-    best: tuple[
-        tuple[tuple[int, ...], ...], tuple[int, ...], tuple[str, ...]
-    ] | None = None
+    best: (
+        tuple[tuple[tuple[int, ...], ...], tuple[int, ...], tuple[str, ...]] | None
+    ) = None
     distinct: set[tuple[tuple[int, ...], ...]] = set()
     for element in elements:
         permuted = tuple(
@@ -220,9 +220,7 @@ def canonicalize_linear_code(
         candidate = (
             reduced,
             tuple(element),
-            tuple(
-                encoder.coordinate_axis[element[column]] for column in range(width)
-            ),
+            tuple(encoder.coordinate_axis[element[column]] for column in range(width)),
         )
         if best is None or candidate < best:
             best = candidate

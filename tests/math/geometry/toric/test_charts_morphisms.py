@@ -113,6 +113,7 @@ def test_smith_completion_has_no_fixed_coordinate_box_restriction() -> None:
     left, right = lineality[0], complement[0]
     assert abs(left[0] * right[1] - left[1] * right[0]) == 1
 
+
 # ---------------------------------------------------------------------------
 
 

@@ -1014,6 +1014,30 @@ def _native_public_boundary_violations(root: Path) -> tuple[Violation, ...]:
     return tuple(violations)
 
 
+def _trusted_wire_construction_violations(
+    root: Path, relative: PurePosixPath, tree: ast.AST
+) -> tuple[Violation, ...]:
+    """Never bypass validation when constructing caller-facing wire inputs."""
+
+    module = _module_name(relative)
+    if module is None:
+        return ()
+    wire_names = _wire_model_names(root, tree, module)
+    return tuple(
+        _violation(
+            relative,
+            node,
+            "trusted-wire-construction",
+            "Request/Input wire models must be validated, not constructed as trusted values",
+        )
+        for node in _walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "model_construct"
+        and _is_wire_model_reference(node.func.value, wire_names)
+    )
+
+
 def _native_operations_wire_violations(
     root: Path, relative: PurePosixPath, tree: ast.AST
 ) -> tuple[Violation, ...]:
@@ -1292,6 +1316,7 @@ def _check_file(root: Path, path: Path) -> tuple[Violation, ...]:
         *_owner_operation_reentry_violations(relative, tree),
         *_validator_backend_import_violations(relative, tree),
         *_result_validator_replay_violations(relative, tree),
+        *_trusted_wire_construction_violations(root, relative, tree),
         *_native_operations_wire_violations(root, relative, tree),
         *_unsafe_wire_conversion_violations(relative, tree),
         *_rational_output_violations(relative, tree),

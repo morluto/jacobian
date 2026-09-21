@@ -496,6 +496,28 @@ def test_operations_modules_do_not_use_wire_models(tmp_path: Path) -> None:
     ]
 
 
+def test_wire_inputs_cannot_bypass_validation_with_model_construct(
+    tmp_path: Path,
+) -> None:
+    _write(
+        tmp_path,
+        "src/jacobian/math/example/_models.py",
+        "class ExampleRequest:\n"
+        "    @classmethod\n"
+        "    def model_construct(cls): return cls()\n"
+        "class ExampleResult:\n"
+        "    @classmethod\n"
+        "    def model_construct(cls): return cls()\n"
+        "def trusted():\n"
+        "    request = ExampleRequest.model_construct()\n"
+        "    result = ExampleResult.model_construct()\n",
+    )
+
+    assert _violations(tmp_path, "trusted-wire-construction") == [
+        "src/jacobian/math/example/_models.py"
+    ]
+
+
 def test_imported_native_domain_must_be_in_root_surface(tmp_path: Path) -> None:
     _write(
         tmp_path,

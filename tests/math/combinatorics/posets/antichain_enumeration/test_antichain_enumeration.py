@@ -123,6 +123,15 @@ def test_v_poset() -> None:
     assert ("1", "2") in result.antichains
 
 
+def test_top_cardinality_does_not_materialize_all_prefix_levels() -> None:
+    poset = _make_antichain_poset(MAX_ELEMENTS)
+
+    result = enumerate_antichains(poset, MAX_ELEMENTS, MAX_ELEMENTS)
+
+    assert result.count == 1
+    assert result.antichains == (poset.elements,)
+
+
 def test_exponential_candidate_family_is_rejected_before_enumeration() -> None:
     poset = _make_antichain_poset(24)
 

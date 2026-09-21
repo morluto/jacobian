@@ -55,24 +55,31 @@ def enumerate_antichains(
     if min_cardinality == 0:
         antichains.append(())
 
-    # Extend only valid prefixes.  This avoids revisiting every pair inside
-    # every candidate combination while retaining cardinality/lexicographic
-    # output order.
-    by_size: list[list[tuple[int, tuple[int, ...]]]] = [
-        [] for _ in range(max_cardinality + 1)
-    ]
-    by_size[0].append((0, ()))
-    for size in range(1, max_cardinality + 1):
-        for mask, prefix in by_size[size - 1]:
-            start = prefix[-1] + 1 if prefix else 0
-            for index in range(start, n):
-                if not comparable[index] & mask:
-                    by_size[size].append((mask | (1 << index), (*prefix, index)))
-        if size >= max(1, min_cardinality):
-            antichains.extend(
-                tuple(elements[index] for index in prefix)
-                for _mask, prefix in by_size[size]
-            )
+    # Enumerate only requested cardinality levels. Recursive extension keeps
+    # one prefix per depth instead of retaining every smaller antichain. The
+    # remaining-slot guard also prevents exploring prefixes that cannot reach
+    # the requested size.
+    def extend(
+        target_size: int,
+        start: int,
+        mask: int,
+        prefix: tuple[int, ...],
+    ) -> None:
+        if len(prefix) == target_size:
+            antichains.append(tuple(elements[index] for index in prefix))
+            return
+        needed = target_size - len(prefix)
+        for index in range(start, n - needed + 1):
+            if not comparable[index] & mask:
+                extend(
+                    target_size,
+                    index + 1,
+                    mask | (1 << index),
+                    (*prefix, index),
+                )
+
+    for size in range(max(1, min_cardinality), min(max_cardinality, n) + 1):
+        extend(size, 0, 0, ())
 
     return AntichainEnumerationResult(
         poset_digest=poset.poset_digest,

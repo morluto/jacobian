@@ -8,11 +8,7 @@ from itertools import combinations, pairwise
 
 import networkx as nx
 
-from jacobian._execution import (
-    BackendFailureReason,
-    OperationBackendError,
-    request_checkpoint,
-)
+from jacobian._execution import request_checkpoint
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -807,14 +803,23 @@ class _FixedCyclePlan:
     blocks: tuple[_FixedCycleBlock, ...]
 
 
-def _complete_multipartite_parts(
+@dataclass(frozen=True, slots=True)
+class _CompleteMultipartiteBlock:
+    parts: tuple[tuple[str, ...], ...]
+
+    @property
+    def part_sizes(self) -> tuple[int, ...]:
+        return tuple(len(part) for part in self.parts)
+
+
+def _recognize_complete_multipartite_block(
     core_vertices: tuple[str, ...],
     adjacency_sets: dict[str, set[str]],
-) -> tuple[tuple[str, ...], ...] | None:
-    """Return the independent-set parts when the 2-core is complete multipartite."""
+) -> _CompleteMultipartiteBlock | None:
+    """Return aligned parts and sizes for a complete multipartite 2-core."""
 
     if not core_vertices:
-        return ()
+        return _CompleteMultipartiteBlock(())
     vertex_set = set(core_vertices)
     parts: dict[frozenset[str], set[str]] = {}
     for vertex in core_vertices:
@@ -828,19 +833,7 @@ def _complete_multipartite_parts(
         if any(adjacency_sets[vertex] != expected_neighbors for vertex in part):
             return None
         result.append(tuple(sorted(part)))
-    return tuple(sorted(result))
-
-
-def _complete_multipartite_part_sizes(
-    core_vertices: tuple[str, ...],
-    adjacency_sets: dict[str, set[str]],
-) -> tuple[int, ...] | None:
-    """Return independent-set sizes when the 2-core is complete multipartite."""
-
-    parts = _complete_multipartite_parts(core_vertices, adjacency_sets)
-    if parts is None:
-        return None
-    return tuple(len(part) for part in parts)
+    return _CompleteMultipartiteBlock(tuple(sorted(result)))
 
 
 def _multipartite_cycle_exists(part_sizes: tuple[int, ...], cycle_length: int) -> bool:
@@ -983,11 +976,12 @@ def _chordless_multipartite_block_bound(
     block is not complete multipartite and needs the generic bound.
     """
 
-    part_sizes = _complete_multipartite_part_sizes(
+    multipartite = _recognize_complete_multipartite_block(
         block, _block_adjacency(block, adjacency_sets)
     )
-    if part_sizes is None:
+    if multipartite is None:
         return None
+    part_sizes = multipartite.part_sizes
     if not _multipartite_cycle_exists(part_sizes, cycle_length):
         return 0
     if cycle_length == 4:
@@ -1234,24 +1228,20 @@ def _admit_fixed_cycle_search_plan(
                     _FixedCycleBlock(adjacency=block_adjacency, core_vertices=block)
                 )
             continue
-        part_sizes = _complete_multipartite_part_sizes(
+        multipartite = _recognize_complete_multipartite_block(
             block, _block_adjacency(block, adjacency_sets)
         )
-        if part_sizes is not None and not _multipartite_cycle_exists(
-            part_sizes, cycle_length
+        if multipartite is not None and not _multipartite_cycle_exists(
+            multipartite.part_sizes, cycle_length
         ):
             # A recognized multipartite block with no cycle of this length
             # contributes nothing and must not pay the generic all-vertex bound.
             continue
-        if part_sizes is not None and cycle_length == 3:
+        if multipartite is not None and cycle_length == 3:
             # Every triangle selects one vertex from each of three distinct
             # parts, so its exact count is a bounded polynomial in the part
             # sizes rather than the generic all-vertex permutation bound.
-            parts = _complete_multipartite_parts(
-                block, _block_adjacency(block, adjacency_sets)
-            )
-            if parts is None:
-                raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+            part_sizes = multipartite.part_sizes
             block_work, block_adjacency = _multipartite_triangle_work(
                 block, adjacency_sets, part_sizes
             )
@@ -1261,11 +1251,11 @@ def _admit_fixed_cycle_search_plan(
                 _FixedCycleBlock(
                     adjacency=block_adjacency,
                     core_vertices=block,
-                    multipartite_parts=parts,
+                    multipartite_parts=multipartite.parts,
                 )
             )
             continue
-        if part_sizes is not None and cycle_length == 4 and not chordless:
+        if multipartite is not None and cycle_length == 4 and not chordless:
             # The simple four-cycles of a complete multipartite graph are the
             # induced family plus the three-part cycles that take two vertices
             # from one part and one from each of two others (which have a
@@ -1275,7 +1265,7 @@ def _admit_fixed_cycle_search_plan(
                 block, adjacency_sets
             )
             complete_work += block_work
-            cycle_upper_bound += _simple_four_cycle_count(part_sizes)
+            cycle_upper_bound += _simple_four_cycle_count(multipartite.part_sizes)
             search_blocks.append(
                 _FixedCycleBlock(adjacency=block_adjacency, core_vertices=block)
             )

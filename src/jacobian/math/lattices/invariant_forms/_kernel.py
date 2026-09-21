@@ -12,8 +12,6 @@ from typing import Any
 from unicodedata import normalize
 
 from jacobian._execution import (
-    BackendFailureReason,
-    OperationBackendError,
     OperationExecutionCancelledError,
     OperationExecutionTimeoutError,
     current_request_execution,
@@ -100,6 +98,25 @@ class _ConstraintPlan:
     constraints: tuple[IntegerConstraint, ...]
     expansion_digit_work: int = 0
     kernel_digit_work: int = 0
+
+
+type _GeneratorMatrix = tuple[tuple[Any, ...], ...]
+
+
+@dataclass(frozen=True, slots=True)
+class _RationalGeneratorMatrices:
+    matrices: tuple[_GeneratorMatrix, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class _NumberFieldGeneratorMatrices:
+    field: RecognizedRealSimpleNumberField
+    matrices: tuple[_GeneratorMatrix, ...]
+
+
+type _PreparedGeneratorMatrices = (
+    _RationalGeneratorMatrices | _NumberFieldGeneratorMatrices
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -456,12 +473,33 @@ def _recognize_action_field(
         raise _validation_error(exc.reason, str(exc)) from exc
 
 
-def _require_recognized_field(
-    recognized: RecognizedRealSimpleNumberField | None,
-) -> RecognizedRealSimpleNumberField:
-    if recognized is None:
-        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
-    return recognized
+def _prepare_generator_matrices(
+    action: MatrixAction,
+    recognized_field: RecognizedRealSimpleNumberField | None,
+) -> _PreparedGeneratorMatrices:
+    if isinstance(action, EmbeddedRealNumberFieldMatrixAction):
+        if not action.generators:
+            return _RationalGeneratorMatrices(())
+        field = recognized_field or _recognize_action_field(action)
+        return _NumberFieldGeneratorMatrices(
+            field=field,
+            matrices=tuple(
+                tuple(
+                    tuple(field_element_from_value(value, field) for value in row)
+                    for row in generator.matrix.entries
+                )
+                for generator in action.generators
+            ),
+        )
+    return _RationalGeneratorMatrices(
+        tuple(
+            tuple(
+                tuple(value.as_fraction() for value in row)
+                for row in generator.matrix.entries
+            )
+            for generator in action.generators
+        )
+    )
 
 
 def _build_constraint_plan(
@@ -526,33 +564,8 @@ def _build_constraint_plan(
     )
     constraints: set[IntegerConstraint] = set()
     stored_digits = 0
-    recognized = (
-        recognized_field or _recognize_action_field(action)
-        if isinstance(action, EmbeddedRealNumberFieldMatrixAction) and action.generators
-        else None
-    )
-    generator_matrices: tuple[tuple[tuple[Any, ...], ...], ...]
-    if isinstance(action, EmbeddedRealNumberFieldMatrixAction):
-        if action.generators:
-            recognized = _require_recognized_field(recognized)
-            generator_matrices = tuple(
-                tuple(
-                    tuple(field_element_from_value(value, recognized) for value in row)
-                    for row in generator.matrix.entries
-                )
-                for generator in action.generators
-            )
-        else:
-            generator_matrices = ()
-    else:
-        generator_matrices = tuple(
-            tuple(
-                tuple(value.as_fraction() for value in row)
-                for row in generator.matrix.entries
-            )
-            for generator in action.generators
-        )
-    for matrix in generator_matrices:
+    prepared_matrices = _prepare_generator_matrices(action, recognized_field)
+    for matrix in prepared_matrices.matrices:
         _require_active_request(
             "during exact invariant-form constraint expansion", deadline=deadline
         )
@@ -572,17 +585,17 @@ def _build_constraint_plan(
                     )
                     for position in positions
                 )
-                rational_rows = (
-                    tuple(
+                if isinstance(prepared_matrices, _NumberFieldGeneratorMatrices):
+                    field = prepared_matrices.field
+                    rational_rows = tuple(
                         tuple(
-                            field_element_coordinates(value, recognized)[coordinate]
+                            field_element_coordinates(value, field)[coordinate]
                             for value in exact_row
                         )
-                        for coordinate in range(recognized.degree)
+                        for coordinate in range(field.degree)
                     )
-                    if recognized is not None
-                    else (exact_row,)
-                )
+                else:
+                    rational_rows = (exact_row,)
                 for rational_row in rational_rows:
                     constraint, row_digits = _normalize_constraint(rational_row)
                     if constraint is None or constraint in constraints:

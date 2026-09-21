@@ -11,6 +11,7 @@ import sympy
 from jacobian._exact import CanonicalRational
 from jacobian._execution import (
     RequestCancellationSignal,
+    RequestExecutionEnvelope,
     bind_request_deadline,
     current_request_execution,
     request_checkpoint,
@@ -1880,9 +1881,9 @@ def _run_splitting_worker(
     return payload, profile
 
 
-def _splitting_deadline() -> tuple[float, RequestCancellationSignal | None]:
-    execution = current_request_execution()
-    assert execution is not None
+def _splitting_deadline(
+    execution: RequestExecutionEnvelope,
+) -> tuple[float, RequestCancellationSignal | None]:
     deadline = execution.started_at + ROOT_CRITICAL_WALL_SECONDS
     if execution.deadline is not None:
         deadline = min(deadline, execution.deadline)
@@ -1939,10 +1940,21 @@ def exact_splitting_field(
     """
 
     _require_splitting_polynomial(polynomial, embedding_index)
-    if current_request_execution() is None:
-        with request_execution(time.monotonic()):
-            return exact_splitting_field(polynomial, embedding_index=embedding_index)
-    deadline, cancellation_signal = _splitting_deadline()
+    execution = current_request_execution()
+    if execution is None:
+        with request_execution(time.monotonic()) as execution:
+            return _exact_splitting_field_with_execution(
+                polynomial, embedding_index, execution
+            )
+    return _exact_splitting_field_with_execution(polynomial, embedding_index, execution)
+
+
+def _exact_splitting_field_with_execution(
+    polynomial: RationalPolynomial,
+    embedding_index: int,
+    execution: RequestExecutionEnvelope,
+) -> ExactSplittingField:
+    deadline, cancellation_signal = _splitting_deadline(execution)
     payload, _profile = _run_splitting_worker(
         polynomial,
         mode="field",
@@ -1995,12 +2007,24 @@ def splitting_field_distance_profile(
             code="polynomial.root_critical.binding_source_mismatch",
             message="the splitting field must be bound to the exact source polynomial",
         )
-    if current_request_execution() is None:
-        with request_execution(time.monotonic()):
-            return splitting_field_distance_profile(
-                polynomial, splitting_field, max_pair_rows=max_pair_rows
+    execution = current_request_execution()
+    if execution is None:
+        with request_execution(time.monotonic()) as execution:
+            return _splitting_field_profile_with_execution(
+                polynomial, splitting_field, max_pair_rows, execution
             )
-    deadline, cancellation_signal = _splitting_deadline()
+    return _splitting_field_profile_with_execution(
+        polynomial, splitting_field, max_pair_rows, execution
+    )
+
+
+def _splitting_field_profile_with_execution(
+    polynomial: RationalPolynomial,
+    splitting_field: ExactSplittingField,
+    max_pair_rows: int,
+    execution: RequestExecutionEnvelope,
+) -> SplittingFieldDistanceProfile:
+    deadline, cancellation_signal = _splitting_deadline(execution)
     payload, profile = _run_splitting_worker(
         polynomial,
         mode="bind",

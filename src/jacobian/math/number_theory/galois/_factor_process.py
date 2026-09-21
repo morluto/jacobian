@@ -4,13 +4,13 @@ import json
 import math
 import sys
 import time
-from contextlib import nullcontext
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from jacobian._execution import (
     OperationExecutionCancelledError,
     OperationExecutionTimeoutError,
+    RequestExecutionEnvelope,
     bind_request_deadline,
     current_request_execution,
     request_checkpoint,
@@ -64,29 +64,35 @@ def factor_mod_prime(
             message=f"factor degree={degree}, prime={prime}, work={work}; limits: degree {MAX_FACTOR_DEGREE}, prime {MAX_FIELD_ORDER}, work {MAX_FACTOR_WORK}",
         )
     execution = current_request_execution()
-    with request_execution(time.monotonic()) if execution is None else nullcontext():
-        execution = current_request_execution()
-        assert execution is not None
-        deadline = execution.started_at + FACTOR_WALL_SECONDS
-        if execution.deadline is not None:
-            deadline = min(deadline, execution.deadline)
-        bind_request_deadline(deadline)
-        request_checkpoint("before finite-field factorization")
-        result = _factor_polynomial(prime, coefficients)
-        request_checkpoint("after finite-field factorization")
-        return result
+    if execution is None:
+        with request_execution(time.monotonic()) as execution:
+            return _factor_with_execution(prime, coefficients, execution)
+    return _factor_with_execution(prime, coefficients, execution)
+
+
+def _factor_with_execution(
+    prime: int,
+    coefficients: tuple[int, ...],
+    execution: RequestExecutionEnvelope,
+) -> tuple[int, tuple[tuple[tuple[int, ...], int], ...]]:
+    deadline = execution.started_at + FACTOR_WALL_SECONDS
+    if execution.deadline is not None:
+        deadline = min(deadline, execution.deadline)
+    bind_request_deadline(deadline)
+    request_checkpoint("before finite-field factorization")
+    result = _factor_polynomial(prime, coefficients, deadline=deadline)
+    request_checkpoint("after finite-field factorization")
+    return result
 
 
 def _factor_polynomial(
-    prime: int, coefficients: tuple[int, ...]
+    prime: int, coefficients: tuple[int, ...], *, deadline: float
 ) -> tuple[int, tuple[tuple[tuple[int, ...], int], ...]]:
-    execution = current_request_execution()
-    assert execution is not None and execution.deadline is not None
     input_bytes = json.dumps([prime, coefficients]).encode("utf-8")
     try:
         with TemporaryDirectory(prefix="jacobian-finite-field-") as directory:
             request_checkpoint("before finite-field worker startup")
-            remaining = execution.deadline - time.monotonic()
+            remaining = deadline - time.monotonic()
             if remaining <= 0:
                 raise OperationExecutionTimeoutError(
                     "finite-field factorization expired"

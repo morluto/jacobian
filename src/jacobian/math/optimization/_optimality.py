@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import time
 from collections.abc import Mapping
-from contextlib import nullcontext
 from fractions import Fraction
 from typing import Self
 
@@ -12,6 +11,7 @@ from pydantic import Field, model_validator
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian._execution import (
+    RequestExecutionEnvelope,
     bind_request_deadline,
     current_request_execution,
     request_checkpoint,
@@ -298,17 +298,25 @@ def check_linear_optimality(
     source = _general_source(candidate.program)
     _admit(candidate, source)
     execution = current_request_execution()
-    with request_execution(time.monotonic()) if execution is None else nullcontext():
-        execution = current_request_execution()
-        assert execution is not None
-        deadline = execution.started_at + 60.0
-        if execution.deadline is not None:
-            deadline = min(deadline, execution.deadline)
-        bind_request_deadline(deadline)
-        request_checkpoint("before rational primal-dual checking")
-        result = _check(candidate, source)
-        request_checkpoint("after rational primal-dual result construction")
-        return result
+    if execution is None:
+        with request_execution(time.monotonic()) as execution:
+            return _check_with_execution(candidate, source, execution)
+    return _check_with_execution(candidate, source, execution)
+
+
+def _check_with_execution(
+    candidate: RationalLinearOptimalityCandidate,
+    source: GeneralFormRationalLinearProgram,
+    execution: RequestExecutionEnvelope,
+) -> RationalLinearOptimalityResult:
+    deadline = execution.started_at + 60.0
+    if execution.deadline is not None:
+        deadline = min(deadline, execution.deadline)
+    bind_request_deadline(deadline)
+    request_checkpoint("before rational primal-dual checking")
+    result = _check(candidate, source)
+    request_checkpoint("after rational primal-dual result construction")
+    return result
 
 
 __all__ = [

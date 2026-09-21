@@ -45,11 +45,13 @@ def _preflight_box_expression(
     """Bound exact admission work and locate the first domain obstruction."""
 
     if node.op == "const":
-        assert node.value is not None
+        if node.value is None:
+            raise ValueError("constant expression node has no value")
         value = node.value.as_fraction()
         return _bounded_rational_bounds(value, value)
     if node.op == "var":
-        assert node.variable is not None
+        if node.variable is None:
+            raise ValueError("variable expression node has no axis name")
         return variables[node.variable]
 
     children: list[_BoxPreflight] = []
@@ -60,12 +62,14 @@ def _preflight_box_expression(
         children.append(child)
 
     left = children[0]
-    assert isinstance(left, _RationalBounds)
+    if not isinstance(left, _RationalBounds):
+        raise ValueError("expression child has no rational preflight bounds")
     if len(children) == 1:
         return _preflight_box_unary(node, left, path)
 
     right = children[1]
-    assert isinstance(right, _RationalBounds)
+    if not isinstance(right, _RationalBounds):
+        raise ValueError("expression child has no rational preflight bounds")
     return _preflight_box_binary(node, left, right, path)
 
 
@@ -100,7 +104,7 @@ def _box_domain_failure(
             operation="sqrt",
             reason="SQRT_ARGUMENT_NOT_NONNEGATIVE",
         )
-    raise AssertionError("only real-domain operations can produce a domain failure")
+    raise RuntimeError("non-domain expression operation produced a domain failure")
 
 
 def _evaluate_box_unary(
@@ -109,10 +113,12 @@ def _evaluate_box_unary(
     if node.op == "neg":
         return -value
     if node.op == "pow":
-        assert node.exponent is not None
-        if node.exponent < 0 and value.contains(0):
+        exponent = node.exponent
+        if exponent is None:
+            raise RuntimeError("power expression node has no exponent")
+        if exponent < 0 and value.contains(0):
             return _box_domain_failure(node, path)
-        return value**node.exponent
+        return value**exponent
     if node.op == "log":
         if not value > 0:
             return _box_domain_failure(node, path)
@@ -123,7 +129,7 @@ def _evaluate_box_unary(
         return value.sqrt()
     if node.op in ("exp", "sin", "cos"):
         return getattr(value, node.op)()
-    raise AssertionError(f"unsupported unary expression operation: {node.op}")
+    raise RuntimeError(f"unsupported unary expression operation: {node.op}")
 
 
 def _evaluate_box_binary(
@@ -142,7 +148,7 @@ def _evaluate_box_binary(
         if right.contains(0):
             return _box_domain_failure(node, path)
         return left / right
-    raise AssertionError(f"unsupported binary expression operation: {node.op}")
+    raise RuntimeError(f"unsupported binary expression operation: {node.op}")
 
 
 def _evaluate_box_expression(
@@ -153,10 +159,12 @@ def _evaluate_box_expression(
     from flint import arb, fmpq
 
     if node.op == "const":
-        assert node.value is not None
+        if node.value is None:
+            raise RuntimeError("constant expression node has no value")
         return arb(fmpq(*node.value.as_integer_ratio()))
     if node.op == "var":
-        assert node.variable is not None
+        if node.variable is None:
+            raise RuntimeError("variable expression node has no axis name")
         return variables[node.variable]
 
     values: list[Any] = []
@@ -198,8 +206,13 @@ class IntervalExpressionBoxEnclosureResult(IntervalExpressionBoxEnclosureRequest
                 "only an enclosed result may carry dyadic endpoints"
             )
         if enclosed:
-            assert self.lower is not None and self.upper is not None
-            if self.lower.compare(self.upper) > 0:
+            lower = self.lower
+            upper = self.upper
+            if lower is None or upper is None:
+                raise _validation_error(
+                    "an enclosed result must carry both dyadic endpoints"
+                )
+            if lower.compare(upper) > 0:
                 raise _validation_error(
                     "enclosure lower endpoint exceeds upper endpoint"
                 )

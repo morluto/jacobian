@@ -22,6 +22,7 @@ from jacobian.math.analysis._expression_enclosure import (
 )
 from jacobian.math.analysis._models import (
     MAX_RATIONAL_BOX_ENDPOINT_DIGITS,
+    IntervalExpressionNode,
     RationalIntervalBox,
 )
 from jacobian.math.analysis.operations import expression_enclosure
@@ -56,6 +57,35 @@ def _request(
                 "precision_bits": precision_bits,
             }
         )
+    )
+
+
+def test_trusted_malformed_expression_is_rejected_before_backend_execution() -> None:
+    request = _request(
+        _var("x"),
+        (("x", Fraction(0), Fraction(1)),),
+    )
+    malformed = request.model_copy(
+        update={
+            "expression": IntervalExpressionNode.model_construct(
+                op="const",
+                value=None,
+                variable=None,
+                exponent=None,
+                children=(),
+            )
+        }
+    )
+
+    with pytest.raises(OperationDomainValidationError) as raised:
+        _box_expression_enclosure(malformed)
+
+    assert raised.value.errors() == (
+        {
+            "type": "analysis.box.intermediate_bound",
+            "loc": ("expression",),
+            "msg": "constant expression node has no value",
+        },
     )
 
 

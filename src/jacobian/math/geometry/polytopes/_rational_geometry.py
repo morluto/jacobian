@@ -10,6 +10,7 @@ from __future__ import annotations
 from collections.abc import Iterator, Sequence
 from fractions import Fraction
 from math import lcm
+from typing import cast
 
 from sympy import Matrix, Rational
 
@@ -66,7 +67,10 @@ def hyperplane_normal(points: Sequence[Sequence[Rational]]) -> Matrix | None:
         ratios = [
             (value.numerator, value.denominator)
             if isinstance(value, Fraction)
-            else (int(value.p), int(value.q))
+            else (
+                int(cast(Rational, value).p),
+                int(cast(Rational, value).q),
+            )
             for value in differences
         ]
         denominator = lcm(*(ratio[1] for ratio in ratios))
@@ -86,7 +90,7 @@ def iter_facets_from_points(
 
     conversion = points_to_facets(vertices, dimension)
     for normal, offset in conversion.facets:
-        yield Matrix(normal), Rational(offset)
+        yield Matrix(normal), cast(Rational, Rational(offset))
 
 
 def facets_from_points(
@@ -130,7 +134,10 @@ def vertices_from_halfspaces(
 
     conversion = polyhedron_from_halfspaces(rows, dimension)
     return [
-        tuple(Rational(value.numerator, value.denominator) for value in point)
+        tuple(
+            cast(Rational, Rational(value.numerator, value.denominator))
+            for value in point
+        )
         for point in conversion.vertices
     ]
 

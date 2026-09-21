@@ -35,7 +35,11 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.geometry.toric import _kernel
-from jacobian.math.geometry.toric._kernel import _dual_cone_extreme_rays, _ray_in_cone
+from jacobian.math.geometry.toric._kernel import (
+    _dual_cone_extreme_rays,
+    _ray_in_cone,
+    _unimodular_complement,
+)
 from jacobian.math.geometry.toric._models import (
     MAX_TORIC_RAY_COUNT,
     ToricAffineChartRequest,
@@ -100,6 +104,15 @@ def _p2_two_cones() -> tuple[tuple[int, ...], ...]:
 
 # ---------------------------------------------------------------------------
 # Affine charts
+
+
+def test_smith_completion_has_no_fixed_coordinate_box_restriction() -> None:
+    lineality = ((1, 1_000),)
+    complement = _unimodular_complement(lineality, 2)
+    assert len(complement) == 1
+    left, right = lineality[0], complement[0]
+    assert abs(left[0] * right[1] - left[1] * right[0]) == 1
+
 # ---------------------------------------------------------------------------
 
 

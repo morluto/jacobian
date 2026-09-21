@@ -16,7 +16,7 @@ from math import factorial, floor
 
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.lattices._lattice_ops import hermite_basis
-from jacobian.math.matrices._flint import integer_smith_normal_form, rational_rref
+from jacobian.math.matrices._flint import integer_smith_normal_form
 
 # One exact row ``coefficients . x (rel) rhs`` with ``rel`` in ``eq``/``ge``/``gt``.
 _LpRow = tuple[tuple[Fraction, ...], str, Fraction]
@@ -172,39 +172,19 @@ def _feasible(
 
 
 def _determinant(matrix: list[list[int]]) -> int:
-    size = len(matrix)
-    if size == 0:
+    if not matrix:
         return 1
-    rows = [[Fraction(value) for value in row] for row in matrix]
-    determinant = Fraction(1)
-    for column in range(size):
-        pivot = next(
-            (row for row in range(column, size) if rows[row][column] != 0),
-            None,
-        )
-        if pivot is None:
-            return 0
-        if pivot != column:
-            rows[column], rows[pivot] = rows[pivot], rows[column]
-            determinant = -determinant
-        determinant *= rows[column][column]
-        inverse = Fraction(1, 1) / rows[column][column]
-        for row in range(column + 1, size):
-            factor = rows[row][column] * inverse
-            if factor == 0:
-                continue
-            for column_index in range(column, size):
-                rows[row][column_index] -= factor * rows[column][column_index]
-    return int(determinant)
+    from flint import fmpz_mat
+
+    return int(fmpz_mat(matrix).det())
 
 
 def _rank(matrix: list[list[int]]) -> int:
     if not matrix:
         return 0
-    _, rank = rational_rref(
-        tuple(tuple(Fraction(value) for value in row) for row in matrix)
-    )
-    return rank
+    from flint import fmpz_mat
+
+    return int(fmpz_mat(matrix).rank())
 
 
 def _inverse(matrix: list[list[int]]) -> list[list[Fraction]]:

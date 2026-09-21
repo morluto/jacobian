@@ -30,7 +30,7 @@ import math
 from collections.abc import Iterable, Sequence
 from fractions import Fraction
 
-from sympy import Matrix, Rational
+from sympy import Rational
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian.catalog.models import (
@@ -41,6 +41,7 @@ from jacobian.math.geometry.polytopes._models import (
     RationalCoordinateSpace,
     RationalVPolytope,
 )
+from jacobian.math.geometry.polytopes._polyhedral_conversion import rational_rank
 from jacobian.math.geometry.polytopes._rational_geometry import vertices_from_halfspaces
 from jacobian.math.geometry.polytopes.complexes._models import (
     MAX_COMPLEX_CELLS,
@@ -87,11 +88,11 @@ def _affine_dimension(points: Sequence[Point]) -> int:
         return 0
     ambient = len(points[0])
     reference = points[0]
-    columns = [
-        Matrix([[point[axis] - reference[axis]] for axis in range(ambient)])
+    differences = [
+        [point[axis] - reference[axis] for axis in range(ambient)]
         for point in points[1:]
     ]
-    return int(Matrix.hstack(*columns).rank())
+    return rational_rank(differences, ambient)
 
 
 def _cell_facets(vertices: tuple[Vertex, ...], dimension: int) -> list[FacetRows]:
@@ -135,7 +136,7 @@ def _extreme_points(
             if sum(coefficients[axis] * point[axis] for axis in range(dimension))
             == offset
         ]
-        if active and Matrix(active).rank() == dimension:
+        if active and rational_rank(active, dimension) == dimension:
             extreme.append(point)
     return extreme
 

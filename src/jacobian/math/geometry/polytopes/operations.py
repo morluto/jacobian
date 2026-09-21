@@ -64,6 +64,7 @@ from jacobian.math.geometry.polytopes._polyhedral_conversion import (
     PolyhedralConversionAdmissionError,
     dd_work_bound,
     points_to_facets,
+    rational_rank,
 )
 from jacobian.math.geometry.polytopes._rational_geometry import (
     determinant_sign,
@@ -104,13 +105,11 @@ def _require_facet_preflight(vertices: tuple[Vertex, ...], dim: int) -> None:
                 "require intrinsic affine coordinates"
             )
     else:
-        differences = Matrix(
-            [
-                [points[index][axis] - points[0][axis] for axis in range(dim)]
-                for index in range(1, len(points))
-            ]
-        )
-        if differences.rank() < dim:
+        differences = [
+            [points[index][axis] - points[0][axis] for axis in range(dim)]
+            for index in range(1, len(points))
+        ]
+        if rational_rank(differences, dim) < dim:
             raise ValueError(
                 "V-representation is not full-dimensional; lower-dimensional hulls "
                 "require intrinsic affine coordinates"
@@ -327,11 +326,11 @@ def _rank_of_diffs(points: list[list[Rational]], dim: int) -> int:
     if len(points) <= 1:
         return 0
     v0 = points[0]
-    cols = [
-        Matrix([[points[i][k] - v0[k]] for k in range(dim)])
+    differences = [
+        [points[i][k] - v0[k] for k in range(dim)]
         for i in range(1, len(points))
     ]
-    return Matrix.hstack(*cols).rank() if cols else 0
+    return rational_rank(differences, dim)
 
 
 def _hull_subfacets(points: list[list[Rational]], dim: int) -> list[tuple[int, ...]]:
@@ -429,7 +428,7 @@ def _extreme_point_indices(
     kept = [
         i
         for i in range(point_count)
-        if active_normals[i] and Matrix(active_normals[i]).rank() == dim
+        if active_normals[i] and rational_rank(active_normals[i], dim) == dim
     ]
     return kept, counts
 
@@ -464,7 +463,7 @@ def _filter_redundant_vertices(
     keep_indices = [
         index
         for index, normals in enumerate(active_normals)
-        if normals and Matrix(normals).rank() == dim
+        if normals and rational_rank(normals, dim) == dim
     ]
     if len(keep_indices) < dim + 1:
         return points
@@ -516,7 +515,7 @@ def require_full_dimensional_extreme_vertices(polytope: RationalVPolytope) -> No
         [point[coordinate] - points[0][coordinate] for coordinate in range(dimension)]
         for point in points[1:]
     ]
-    if Matrix(differences).rank() != dimension:
+    if rational_rank(differences, dimension) != dimension:
         raise ValueError("V-polytope vertices must affinely span the coordinate space")
     if len(_filter_redundant_vertices(points, dimension)) != len(points):
         raise ValueError("V-polytope vertices must all be exact extreme vertices")
@@ -918,11 +917,11 @@ def _affine_dimension(points: list[list[Rational]]) -> int:
         return 0
     reference = points[0]
     dim = len(reference)
-    columns = [
-        Matrix([[point[axis] - reference[axis]] for axis in range(dim)])
+    differences = [
+        [point[axis] - reference[axis] for axis in range(dim)]
         for point in points[1:]
     ]
-    return Matrix.hstack(*columns).rank() if columns else 0
+    return rational_rank(differences, dim)
 
 
 def _admit_pyramid(polytope: RationalVPolytope, height_axis: object) -> int:
@@ -1503,15 +1502,13 @@ def _admit_edge_profile(polytope: RationalVPolytope, dimension_bound: object) ->
                     "hulls require intrinsic affine coordinates"
                 ),
             )
-    elif (
-        Matrix(
-            [
-                [points[index][axis] - points[0][axis] for axis in range(ambient)]
-                for index in range(1, len(points))
-            ]
-        ).rank()
-        < ambient
-    ):
+    elif rational_rank(
+        [
+            [points[index][axis] - points[0][axis] for axis in range(ambient)]
+            for index in range(1, len(points))
+        ],
+        ambient,
+    ) < ambient:
         raise OperationDomainValidationError(
             location=("polytope",),
             code="polytope.edge_profile.not_full_dimensional",
@@ -1546,7 +1543,7 @@ def _extreme_positions_from_facets(
     return [
         index
         for index in range(point_count)
-        if active_normals[index] and Matrix(active_normals[index]).rank() == dim
+        if active_normals[index] and rational_rank(active_normals[index], dim) == dim
     ]
 
 

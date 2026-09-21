@@ -330,6 +330,23 @@ def _dot(left: Sequence[int], right: Sequence[int]) -> int:
     return sum(a * b for a, b in zip(left, right, strict=True))
 
 
+def rational_rank(rows: Sequence[Sequence[object]], column_count: int) -> int:
+    """Return exact rank after rowwise denominator clearing through FLINT."""
+
+    if not rows or column_count == 0:
+        return 0
+    integer_rows: list[list[int]] = []
+    for row in rows:
+        fractions = tuple(_fraction(value) for value in row)
+        denominator = 1
+        for value in fractions:
+            denominator = lcm(denominator, value.denominator)
+        integer_rows.append(
+            [value.numerator * (denominator // value.denominator) for value in fractions]
+        )
+    return _rank(integer_rows, column_count)
+
+
 def _rank(rows: Sequence[Sequence[int]], column_count: int) -> int:
     if not rows or column_count == 0:
         return 0
@@ -469,6 +486,10 @@ def cone_generators(rows: Sequence[Sequence[int]]) -> ConeConversion:
     candidate_pairs = 0
     rank_tests = 0
     active = [_active_bits(ordered_rows[:processed], ray) for ray in rays]
+    # Active-set intersections recur heavily in non-simplicial cones.  Their
+    # rank depends only on the processed prefix and bitset, so cache it across
+    # all positive/negative ray pairs in that DD stage.
+    rank_cache: dict[tuple[int, int], int] = {}
 
     for row_index in range(processed, len(ordered_rows)):
         row = ordered_rows[row_index]
@@ -476,10 +497,13 @@ def cone_generators(rows: Sequence[Sequence[int]]) -> ConeConversion:
         positive = [i for i, value in enumerate(evaluations) if value > 0]
         zero = [i for i, value in enumerate(evaluations) if value == 0]
         negative = [i for i, value in enumerate(evaluations) if value < 0]
-        next_rays = [rays[i] for i in (*positive, *zero)]
+        retained = (*positive, *zero)
+        next_rays = [rays[i] for i in retained]
+        next_ray_set = set(next_rays)
+        zero_set = set(zero)
         next_active = [
-            active[i] | ((1 << row_index) if i in zero else 0)
-            for i in (*positive, *zero)
+            active[i] | ((1 << row_index) if i in zero_set else 0)
+            for i in retained
         ]
 
         for p_index in positive:
@@ -488,11 +512,16 @@ def cone_generators(rows: Sequence[Sequence[int]]) -> ConeConversion:
                 common = active[p_index] & active[n_index]
                 if common.bit_count() < max(0, quotient_dimension - 2):
                     continue
-                rank_tests += 1
-                if _rank(
-                    _rows_from_bits(ordered_rows[:row_index], common),
-                    quotient_dimension,
-                ) != max(0, quotient_dimension - 2):
+                cache_key = (row_index, common)
+                common_rank = rank_cache.get(cache_key)
+                if common_rank is None:
+                    rank_tests += 1
+                    common_rank = _rank(
+                        _rows_from_bits(ordered_rows[:row_index], common),
+                        quotient_dimension,
+                    )
+                    rank_cache[cache_key] = common_rank
+                if common_rank != max(0, quotient_dimension - 2):
                     continue
                 p_value = evaluations[p_index]
                 n_value = evaluations[n_index]
@@ -502,9 +531,10 @@ def cone_generators(rows: Sequence[Sequence[int]]) -> ConeConversion:
                         for axis in range(quotient_dimension)
                     )
                 )
-                if candidate in next_rays:
+                if candidate in next_ray_set:
                     continue
                 next_rays.append(candidate)
+                next_ray_set.add(candidate)
                 next_active.append(
                     _active_bits(ordered_rows[: row_index + 1], candidate)
                 )
@@ -734,6 +764,7 @@ __all__ = [
     "primitive_homogeneous_point",
     "primitive_integer_vector",
     "pulling_triangulation",
+    "rational_rank",
     "require_dd_height_admissible",
     "require_dd_weighted_work_admissible",
     "require_dd_work_admissible",

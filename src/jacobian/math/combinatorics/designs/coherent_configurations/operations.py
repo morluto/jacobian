@@ -43,17 +43,35 @@ class IntersectionData:
 
 
 @dataclass(frozen=True)
-class ObstructionData:
-    kind: str
-    relation_id: str | None = None
-    transpose_relation_id: str | None = None
-    left_relation_id: str | None = None
-    right_relation_id: str | None = None
-    target_relation_id: str | None = None
-    first_pair: tuple[str, str] | None = None
-    second_pair: tuple[str, str] | None = None
-    first_count: int | None = None
-    second_count: int | None = None
+class DiagonalRelationMixedData:
+    relation_id: str
+    first_pair: tuple[str, str]
+    second_pair: tuple[str, str]
+
+
+@dataclass(frozen=True)
+class TransposeRelationMismatchData:
+    relation_id: str
+    transpose_relation_id: str
+    first_pair: tuple[str, str]
+
+
+@dataclass(frozen=True)
+class NonconstantIntersectionNumberData:
+    left_relation_id: str
+    right_relation_id: str
+    target_relation_id: str
+    first_pair: tuple[str, str]
+    second_pair: tuple[str, str]
+    first_count: int
+    second_count: int
+
+
+type ObstructionData = (
+    DiagonalRelationMixedData
+    | TransposeRelationMismatchData
+    | NonconstantIntersectionNumberData
+)
 
 
 @dataclass(frozen=True)
@@ -90,8 +108,7 @@ def _fiber_data(
             ((left, right) for left, right in relation_cells if left != right), None
         )
         if off_diagonal is not None:
-            return (), ObstructionData(
-                kind="DIAGONAL_RELATION_MIXED",
+            return (), DiagonalRelationMixedData(
                 relation_id=relation_id,
                 first_pair=(source.points[diagonal[0]], source.points[diagonal[0]]),
                 second_pair=(
@@ -121,8 +138,7 @@ def _transpose_data(
         partner_cells = set(cells[partner])
         if source_transpose != partner_cells:
             witness = min(source_transpose.symmetric_difference(partner_cells))
-            return (), ObstructionData(
-                kind="TRANSPOSE_RELATION_MISMATCH",
+            return (), TransposeRelationMismatchData(
                 relation_id=relation_id,
                 transpose_relation_id=partner,
                 first_pair=(source.points[witness[0]], source.points[witness[1]]),
@@ -161,8 +177,7 @@ def _intersection_data(
                         for middle in range(point_count)
                     )
                     if count != first_count:
-                        return (), ObstructionData(
-                            kind="NONCONSTANT_INTERSECTION_NUMBER",
+                        return (), NonconstantIntersectionNumberData(
                             left_relation_id=left_relation_id,
                             right_relation_id=right_relation_id,
                             target_relation_id=target_relation_id,
@@ -204,47 +219,29 @@ def _analyze(source: CoherentConfigurationInput) -> AnalysisData:
 
 
 def _obstruction_model(obstruction: ObstructionData) -> CoherenceObstruction:
-    if obstruction.kind == "DIAGONAL_RELATION_MIXED":
-        assert (
-            obstruction.relation_id is not None
-            and obstruction.first_pair is not None
-            and obstruction.second_pair is not None
-        )
+    if isinstance(obstruction, DiagonalRelationMixedData):
         return DiagonalRelationMixedObstruction(
             relation_id=obstruction.relation_id,
             first_pair=obstruction.first_pair,
             second_pair=obstruction.second_pair,
         )
-    if obstruction.kind == "TRANSPOSE_RELATION_MISMATCH":
-        assert (
-            obstruction.relation_id is not None
-            and obstruction.transpose_relation_id is not None
-            and obstruction.first_pair is not None
-        )
+    if isinstance(obstruction, TransposeRelationMismatchData):
         return TransposeRelationMismatchObstruction(
             relation_id=obstruction.relation_id,
             transpose_relation_id=obstruction.transpose_relation_id,
             first_pair=obstruction.first_pair,
         )
-    assert obstruction.kind == "NONCONSTANT_INTERSECTION_NUMBER"
-    assert (
-        obstruction.left_relation_id is not None
-        and obstruction.right_relation_id is not None
-        and obstruction.target_relation_id is not None
-        and obstruction.first_pair is not None
-        and obstruction.second_pair is not None
-        and obstruction.first_count is not None
-        and obstruction.second_count is not None
-    )
-    return NonconstantIntersectionNumberObstruction(
-        left_relation_id=obstruction.left_relation_id,
-        right_relation_id=obstruction.right_relation_id,
-        target_relation_id=obstruction.target_relation_id,
-        first_pair=obstruction.first_pair,
-        second_pair=obstruction.second_pair,
-        first_count=obstruction.first_count,
-        second_count=obstruction.second_count,
-    )
+    if isinstance(obstruction, NonconstantIntersectionNumberData):
+        return NonconstantIntersectionNumberObstruction(
+            left_relation_id=obstruction.left_relation_id,
+            right_relation_id=obstruction.right_relation_id,
+            target_relation_id=obstruction.target_relation_id,
+            first_pair=obstruction.first_pair,
+            second_pair=obstruction.second_pair,
+            first_count=obstruction.first_count,
+            second_count=obstruction.second_count,
+        )
+    raise RuntimeError("coherence analysis returned an unknown obstruction")
 
 
 def _computed_analysis_result(

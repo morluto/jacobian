@@ -134,49 +134,52 @@ def _parse_entry(entry: str, prime: int | None) -> Scalar:
     return Fraction(int(entry))
 
 
+def _modular_scalar(value: Scalar) -> int:
+    if not isinstance(value, int):
+        raise RuntimeError("finite-field chain arithmetic received a rational scalar")
+    return value
+
+
+def _rational_scalar(value: Scalar) -> Fraction:
+    if not isinstance(value, Fraction):
+        raise RuntimeError("rational chain arithmetic received a modular scalar")
+    return value
+
+
 def _serialize_scalar(value: Scalar, prime: int | None) -> str:
     if prime is not None:
-        assert isinstance(value, int)
-        return str(value % prime)
-    assert isinstance(value, Fraction)
-    if value.denominator == 1:
-        return format_canonical_integer(value.numerator)
+        return str(_modular_scalar(value) % prime)
+    rational = _rational_scalar(value)
+    if rational.denominator == 1:
+        return format_canonical_integer(rational.numerator)
     return (
-        f"{format_canonical_integer(value.numerator)}/"
-        f"{format_canonical_integer(value.denominator)}"
+        f"{format_canonical_integer(rational.numerator)}/"
+        f"{format_canonical_integer(rational.denominator)}"
     )
 
 
 def _add(left: Scalar, right: Scalar, prime: int | None) -> Scalar:
     if prime is not None:
-        assert isinstance(left, int) and isinstance(right, int)
-        return (left + right) % prime
-    assert isinstance(left, Fraction) and isinstance(right, Fraction)
-    return left + right
+        return (_modular_scalar(left) + _modular_scalar(right)) % prime
+    return _rational_scalar(left) + _rational_scalar(right)
 
 
 def _mul(left: Scalar, right: Scalar, prime: int | None) -> Scalar:
     if prime is not None:
-        assert isinstance(left, int) and isinstance(right, int)
-        return (left * right) % prime
-    assert isinstance(left, Fraction) and isinstance(right, Fraction)
-    return left * right
+        return (_modular_scalar(left) * _modular_scalar(right)) % prime
+    return _rational_scalar(left) * _rational_scalar(right)
 
 
 def _neg(value: Scalar, prime: int | None) -> Scalar:
     if prime is not None:
-        assert isinstance(value, int)
-        return (-value) % prime
-    assert isinstance(value, Fraction)
-    return -value
+        return (-_modular_scalar(value)) % prime
+    return -_rational_scalar(value)
 
 
 def _inv(value: Scalar, prime: int | None) -> Scalar:
     if prime is not None:
-        assert isinstance(value, int)
-        return pow(value % prime, -1, prime)
-    assert isinstance(value, Fraction)
-    return Fraction(1, 1) / value
+        return pow(_modular_scalar(value) % prime, -1, prime)
+    return Fraction(1, 1) / _rational_scalar(value)
 
 
 def _is_zero(value: Scalar) -> bool:

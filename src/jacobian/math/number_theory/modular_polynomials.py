@@ -69,9 +69,11 @@ def _identity_normalized_term_schema() -> JsonSchemaValue:
 
     schema = NormalizedModularPolynomialTerm.model_json_schema()
     exponents = schema["properties"]["exponents"]
-    assert isinstance(exponents, dict)
+    if not isinstance(exponents, dict):
+        raise RuntimeError("modular polynomial exponent schema is not an object")
     items = exponents["items"]
-    assert isinstance(items, dict)
+    if not isinstance(items, dict):
+        raise RuntimeError("modular polynomial exponent item schema is not an object")
     items["minimum"] = 0
     items["maximum"] = _MAX_EXPONENT
     return schema

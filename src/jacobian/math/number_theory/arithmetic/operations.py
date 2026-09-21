@@ -114,7 +114,8 @@ def perfect_power_profile(value: IntegerValue) -> PerfectPowerProfileResult:
 
     root, _ = integer_nthroot(abs(integer), exponent)
     base = -root if integer < 0 else root
-    assert base**exponent == integer
+    if base**exponent != integer:
+        raise RuntimeError("perfect-power reconstruction disagreed with factorization")
 
     return PerfectPowerProfileResult(
         kind="NONUNIT",
@@ -172,7 +173,8 @@ def k_free_decomposition(value: IntegerValue, k: int) -> KFreeDecompositionResul
         )
 
     cofactor = cofactor_sign * cofactor_abs
-    assert base_value**k * cofactor == integer
+    if base_value**k * cofactor != integer:
+        raise RuntimeError("k-free reconstruction disagreed with factorization")
 
     return KFreeDecompositionResult(
         kind="NONUNIT",
@@ -213,7 +215,8 @@ def squarefree_decomposition(value: IntegerValue) -> SquarefreeDecompositionResu
         )
 
     squarefree_part = squarefree_sign * squarefree_abs
-    assert square_factor**2 * squarefree_part == integer
+    if square_factor**2 * squarefree_part != integer:
+        raise RuntimeError("squarefree reconstruction disagreed with factorization")
 
     return SquarefreeDecompositionResult(
         kind="NONUNIT",
@@ -256,7 +259,10 @@ def normalized_quadratic_radical(
         if remainder > 0:
             radicand *= prime
 
-    assert coefficient**2 * radicand == integer
+    if coefficient**2 * radicand != integer:
+        raise RuntimeError(
+            "quadratic-radical reconstruction disagreed with factorization"
+        )
     return NormalizedQuadraticRadicalResult(
         kind="RATIONAL_INTEGER" if radicand == 1 else "IRRATIONAL_QUADRATIC",
         coefficient=coefficient,

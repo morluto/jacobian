@@ -51,7 +51,7 @@ def _perfect_power_witness(value: int) -> tuple[int, int] | None:
         base = int(integer.root(exponent))
         if base**exponent == value:
             return base, exponent
-    raise AssertionError("FLINT perfect-power result has no exact prime exponent")
+    raise RuntimeError("FLINT perfect-power result has no exact prime exponent")
 
 
 def decide_powerful_data(value: int) -> PowerfulDecisionData:
@@ -65,7 +65,8 @@ def decide_powerful_data(value: int) -> PowerfulDecisionData:
     """
 
     cutoff = _ceil_fifth_root(value)
-    assert cutoff <= MAX_POWERFUL_CUTOFF
+    if cutoff > MAX_POWERFUL_CUTOFF:
+        raise RuntimeError("admitted powerful-number cutoff exceeds its bound")
     residual = value
     stripped: list[tuple[int, int]] = []
 

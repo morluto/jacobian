@@ -129,9 +129,9 @@ def run_contiguous_sum_profile(
         counts = _segmented_odd_divisor_counts(admission)
     else:
         direct_counts: list[int] = []
-        assert admission.factorization_budget_seconds is not None
-        assert admission.execution_deadline is not None
         factorization_deadline = admission.execution_deadline
+        if factorization_deadline is None:
+            raise RuntimeError("direct factorization regime has no execution deadline")
         for n in range(admission.lower_bound, admission.upper_bound + 1):
             remaining = factorization_deadline - monotonic()
             failures: list[BoundedFactorizationFailure] = []
@@ -150,7 +150,10 @@ def run_contiguous_sum_profile(
                     n, timeout_seconds=remaining, failure=failures
                 )
             if count is None:
-                assert failures
+                if not failures:
+                    raise RuntimeError(
+                        "factorization failed without a classified reason"
+                    )
                 _raise_factorization_failure(failures[0])
             direct_counts.append(count)
         counts = tuple(direct_counts)

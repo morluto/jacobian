@@ -203,7 +203,7 @@ def k_colorability(
     outcome, coloring = run_coloring_worker("vertex", graph, colors, solver_conflicts)
     if outcome == "sat":
         if coloring is None:
-            raise AssertionError(
+            raise RuntimeError(
                 "the bounded solver returned a satisfying outcome without a witness"
             )
         return KColorabilityResult._from_kernel(
@@ -223,7 +223,7 @@ def k_colorability(
             colorable=False,
             coloring=None,
         )
-    raise AssertionError("checked coloring worker returned an impossible outcome")
+    raise RuntimeError("checked coloring worker returned an impossible outcome")
 
 
 def precoloring_edge_repair(
@@ -261,9 +261,7 @@ def precoloring_edge_repair(
         fixed_colors,
     )
     if outcome != "optimal" or solved_coloring is None:
-        raise AssertionError(
-            "checked edge-repair worker returned an impossible outcome"
-        )
+        raise RuntimeError("checked edge-repair worker returned an impossible outcome")
     coloring = solved_coloring
     repaired = tuple(
         index
@@ -410,7 +408,7 @@ def edge_k_colorability(
     outcome, coloring = run_coloring_worker("edge", graph, colors, solver_conflicts)
     if outcome == "sat":
         if coloring is None:
-            raise AssertionError(
+            raise RuntimeError(
                 "the bounded solver returned a satisfying outcome without a witness"
             )
         return _colorable_result(coloring)
@@ -423,7 +421,7 @@ def edge_k_colorability(
             colorable=False,
             coloring=None,
         )
-    raise AssertionError("checked coloring worker returned an impossible outcome")
+    raise RuntimeError("checked coloring worker returned an impossible outcome")
 
 
 def edge_coloring_check(

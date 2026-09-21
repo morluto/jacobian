@@ -357,7 +357,8 @@ def _min_bipartite_deletions(
         candidate = (len(deleted), deleted)
         if best is None or candidate < best:
             best = candidate
-    assert best is not None
+    if best is None:
+        raise RuntimeError("non-bipartite cut enumeration produced no candidate")
     return best
 
 
@@ -433,7 +434,7 @@ def _compute_min_deletions_for_subset(  # noqa: C901
                 partial[j] = True
             break
         if remaining_needed < 0 or remaining_needed > remaining_positions:
-            raise AssertionError("lexicographic remaining count infeasible")
+            raise RuntimeError("lexicographic remaining count infeasible")
         # try include idx
         test_partial = dict(partial)
         test_partial[idx] = True
@@ -457,14 +458,16 @@ def _compute_min_deletions_for_subset(  # noqa: C901
             # But we could verify for debugging
     deleted = tuple(induced_edges[i] for i, val in sorted(partial.items()) if val)
     # sanity: should be sorted already because induced_edges sorted and we iterate in order
-    assert deleted == tuple(sorted(deleted))
-    assert len(deleted) == k
+    if deleted != tuple(sorted(deleted)):
+        raise RuntimeError("canonical deletion set is not sorted")
+    if len(deleted) != k:
+        raise RuntimeError("canonical deletion set has the wrong cardinality")
     # verify that G[S]-F is indeed r-colourable (reconstruction)
     remaining_edges = [e for e in induced_edges if e not in set(deleted)]
     if not _is_r_colorable_without_deletion(
         list(subset_vertices), remaining_edges, r, solver_conflicts
     ):
-        raise AssertionError("canonical deletion set does not yield r-colourable graph")
+        raise RuntimeError("canonical deletion set does not yield r-colourable graph")
     return k, deleted
 
 

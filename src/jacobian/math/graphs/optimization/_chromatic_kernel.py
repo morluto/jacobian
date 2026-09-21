@@ -110,9 +110,32 @@ def solve_chromatic_number(
             detail="the empty graph requires zero colors",
         )
 
-    greedy = {vertex: color for color, vertex in enumerate(vertices)}
-    upper_bound = n
-    lower_bound = 2 if networkx_graph.number_of_edges() else 1
+    if _remaining_ms(started, wall_seconds) <= 0:
+        return _unknown_chromatic_result(
+            vertices=vertices,
+            lower_bound=2 if networkx_graph.number_of_edges() else 1,
+            upper_bound=n,
+            coloring={vertex: color for color, vertex in enumerate(vertices)},
+            tested=[],
+            detail="the chromatic-number wall-clock budget expired",
+        )
+
+    # DSATUR supplies a deterministic proper coloring and usually a much
+    # tighter starting upper bound than assigning every vertex its own color.
+    # A maximum-clique computation supplies an exact lower bound.  Both are
+    # private bounds only; exactness still comes from settling every remaining
+    # k-colorability decision.
+    import networkx as nx
+
+    greedy_raw = nx.coloring.greedy_color(
+        networkx_graph, strategy="saturation_largest_first"
+    )
+    greedy = {vertex: int(greedy_raw[vertex]) for vertex in vertices}
+    upper_bound = max(greedy.values(), default=-1) + 1
+    clique_number = max(
+        (len(clique) for clique in nx.find_cliques(networkx_graph)), default=1
+    )
+    lower_bound = clique_number if networkx_graph.number_of_edges() else 1
     if _remaining_ms(started, wall_seconds) <= 0:
         return _unknown_chromatic_result(
             vertices=vertices,

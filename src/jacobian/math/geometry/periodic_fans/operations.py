@@ -25,6 +25,7 @@ from jacobian.math.geometry.periodic_fans._models import (
     PeriodicFanPresentation,
     PeriodicFanValidationResult,
 )
+from jacobian.math.matrices._flint import rational_determinant
 
 
 def _reject_envelope(message: str) -> None:
@@ -121,7 +122,7 @@ def _admit_periodic_fan(fan: PeriodicFanPresentation) -> None:  # noqa: C901
             "geometry.periodic_fan.overlap_candidate_index_out_of_range",
             "overlap candidate cell indices must address declared cells",
         )
-    period_determinant = _determinant(
+    period_determinant = rational_determinant(
         tuple(tuple(value.as_fraction() for value in row) for row in fan.period_basis)
     )
     if _digit_weight(period_determinant) > MAX_PERIODIC_INDEX_DIGITS:
@@ -142,32 +143,6 @@ def _admit_periodic_fan(fan: PeriodicFanPresentation) -> None:  # noqa: C901
                     "periodic overlap candidate enumeration exceeds "
                     f"{MAX_PERIODIC_TRANSLATION_ENUMERATION} translations"
                 )
-
-
-def _determinant(matrix: tuple[tuple[Fraction, ...], ...]) -> Fraction:
-    size = len(matrix)
-    if size == 0:
-        return Fraction(1)
-    rows = [[Fraction(value) for value in row] for row in matrix]
-    determinant = Fraction(1)
-    for column in range(size):
-        pivot = next(
-            (row for row in range(column, size) if rows[row][column] != 0), None
-        )
-        if pivot is None:
-            return Fraction(0)
-        if pivot != column:
-            rows[column], rows[pivot] = rows[pivot], rows[column]
-            determinant = -determinant
-        determinant *= rows[column][column]
-        inverse = Fraction(1, 1) / rows[column][column]
-        for row in range(column + 1, size):
-            factor = rows[row][column] * inverse
-            if factor == 0:
-                continue
-            for column_index in range(column, size):
-                rows[row][column_index] -= factor * rows[column][column_index]
-    return determinant
 
 
 def validate_periodic_fan(

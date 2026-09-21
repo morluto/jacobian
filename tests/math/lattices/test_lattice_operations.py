@@ -288,6 +288,29 @@ def test_orthogonal_complement_of_line() -> None:
     assert result.complement_rank == 1
 
 
+def test_orthogonal_complement_vectors_have_expected_dimension_and_pairings() -> None:
+    basis = [[1, 2, 3, 4], [2, -1, 0, 1]]
+    result = compute_orthogonal_complement(_lattice(4, basis))
+    complement = [
+        [coordinate.as_fraction() for coordinate in vector]
+        for vector in result.complement_basis.vectors
+    ]
+
+    assert result.complement_rank == 2
+    assert all(
+        sum(left[axis] * right[axis] for axis in range(4)) == 0
+        for left in basis
+        for right in complement
+    )
+    # Independent rank-two witness: some 2x2 minor must be nonzero.
+    assert any(
+        complement[0][first] * complement[1][second]
+        != complement[0][second] * complement[1][first]
+        for first in range(4)
+        for second in range(first + 1, 4)
+    )
+
+
 def test_orthogonal_complement_of_full_rank_is_zero() -> None:
     result = compute_orthogonal_complement(_lattice(2, [[1, 0], [0, 1]]))
     assert result.complement_rank == 0
@@ -536,6 +559,17 @@ def test_dual_pairing_identity_on_a_skewed_lattice() -> None:
         [Fraction(gram[1][1], determinant), Fraction(-gram[0][1], determinant)],
         [Fraction(-gram[1][0], determinant), Fraction(gram[0][0], determinant)],
     ]
+
+
+def test_dual_pairing_identity_on_a_rectangular_rank_three_lattice() -> None:
+    basis = [[2, 1, 0, 3], [1, -1, 2, 0], [0, 2, 1, 1]]
+
+    dual = _rational_entries(compute_dual(_lattice(4, basis)).dual_basis)
+
+    assert [
+        [sum(dual[i][k] * basis[j][k] for k in range(4)) for j in range(3)]
+        for i in range(3)
+    ] == [[Fraction(int(i == j)) for j in range(3)] for i in range(3)]
 
 
 def test_unimodular_dual_is_integral_and_involutive() -> None:

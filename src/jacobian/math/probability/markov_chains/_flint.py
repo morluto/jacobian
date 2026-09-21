@@ -5,6 +5,46 @@ from fractions import Fraction
 from jacobian.math.probability.markov_chains.values import _TransitionMatrix
 
 
+def mixing_time_search(
+    matrix: _TransitionMatrix,
+    stationary: tuple[Fraction, ...],
+    epsilon: Fraction,
+    max_steps: int,
+) -> tuple[int | None, int, Fraction]:
+    """Search exact worst-case total-variation distance through FLINT."""
+
+    from flint import fmpq, fmpq_mat
+
+    dimension = len(matrix)
+    transition = fmpq_mat(
+        [[fmpq(value.numerator, value.denominator) for value in row] for row in matrix]
+    )
+    power = fmpq_mat(dimension, dimension)
+    for index in range(dimension):
+        power[index, index] = 1
+    target = tuple(fmpq(value.numerator, value.denominator) for value in stationary)
+    threshold = fmpq(epsilon.numerator, epsilon.denominator)
+    terminal = fmpq(1)
+    for step in range(max_steps + 1):
+        terminal = max(
+            sum(
+                (
+                    abs(power[source, target_index] - target[target_index])
+                    for target_index in range(dimension)
+                ),
+                fmpq(0),
+            )
+            / 2
+            for source in range(dimension)
+        )
+        distance = Fraction(int(terminal.p), int(terminal.q))
+        if terminal <= threshold:
+            return step, step + 1, distance
+        if step < max_steps:
+            power *= transition
+    return None, max_steps + 1, Fraction(int(terminal.p), int(terminal.q))
+
+
 def solve_stationary_class(
     matrix: _TransitionMatrix, closed_class: tuple[int, ...]
 ) -> tuple[Fraction, ...]:
@@ -69,4 +109,4 @@ def solve_linear_system(
     ]
 
 
-__all__ = ["solve_linear_system", "solve_stationary_class"]
+__all__ = ["mixing_time_search", "solve_linear_system", "solve_stationary_class"]

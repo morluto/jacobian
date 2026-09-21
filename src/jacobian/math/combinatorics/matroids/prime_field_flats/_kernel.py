@@ -65,7 +65,7 @@ class _SearchStoppedError(Exception):
         visited_count: int = 0,
         consumed_work: int = 0,
     ) -> None:
-        self.reason = reason
+        self.reason: PrimeFieldFlatIncompleteReason = reason
         self.visited_count = visited_count
         self.consumed_work = consumed_work
         super().__init__(reason)
@@ -347,6 +347,57 @@ def _rref_basis(
     # row.  Return the final first ``row_index`` rows, not snapshots taken
     # before later pivot columns clear earlier pivot coordinates.
     return reduced_rows[: len(pivot_columns)]
+
+
+def _extend_rref_basis(
+    basis: tuple[ResidueRow, ...],
+    row: ResidueRow,
+    *,
+    prime: int,
+    ambient_dimension: int,
+    ledger: _WorkLedger,
+) -> tuple[ResidueRow, ...]:
+    """Insert one row into an existing canonical RREF basis.
+
+    Search children differ from their parent by exactly one candidate.  Reduce
+    that candidate against the parent pivots and clear its new pivot from the
+    old rows, avoiding a complete backend RREF of the parent matrix.
+    """
+
+    _require_execution_active(ledger.deadline, "before incremental modular reduction")
+    ledger.charge(
+        "row_reduction",
+        max(ambient_dimension, 1) * (2 * max(len(basis), 1) + 3),
+    )
+    reduced = [value % prime for value in row]
+    pivots = _pivot_columns(basis)
+    for basis_row, pivot in zip(basis, pivots, strict=True):
+        factor = reduced[pivot]
+        if factor:
+            reduced = [
+                (value - factor * basis_row[column]) % prime
+                for column, value in enumerate(reduced)
+            ]
+    new_pivot = next((column for column, value in enumerate(reduced) if value), None)
+    if new_pivot is None:
+        return basis
+    inverse = pow(reduced[new_pivot], -1, prime)
+    reduced = [(value * inverse) % prime for value in reduced]
+    rows = []
+    for basis_row in basis:
+        factor = basis_row[new_pivot]
+        rows.append(
+            tuple(
+                (value - factor * reduced[column]) % prime
+                for column, value in enumerate(basis_row)
+            )
+            if factor
+            else basis_row
+        )
+    insertion = sum(pivot < new_pivot for pivot in pivots)
+    rows.insert(insertion, tuple(reduced))
+    _require_execution_active(ledger.deadline, "after incremental modular reduction")
+    return tuple(rows)
 
 
 def _pivot_columns(basis: tuple[ResidueRow, ...]) -> tuple[int, ...]:
@@ -691,8 +742,15 @@ def _search_satisfying_states(
             clause_membership_count=plan.clause_membership_count,
         ):
             ledger.charge("search_frontier", ambient_dimension + state.rank + 1)
+            child_basis = _extend_rref_basis(
+                state.row_space_basis,
+                plan.candidate_rows[index],
+                prime=prime,
+                ambient_dimension=ambient_dimension,
+                ledger=ledger,
+            )
             child = _canonical_closure(
-                (*state.row_space_basis, plan.candidate_rows[index]),
+                child_basis,
                 plan=plan,
                 prime=prime,
                 ambient_dimension=ambient_dimension,

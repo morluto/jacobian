@@ -396,35 +396,12 @@ def _is_vertex(point: tuple[int, ...], others: list[tuple[int, ...]]) -> bool:
 
 
 def _matrix_rank(matrix: list[list[int]]) -> int:
-    """Compute the rank of an integer matrix using Gaussian elimination."""
+    """Compute the exact rank of an integer matrix through FLINT."""
     if not matrix or not matrix[0]:
         return 0
-    mat = [list(row) for row in matrix]
-    rows = len(mat)
-    rank = 0
-    for col in range(len(mat[0])):
-        pivot = next((row for row in range(rank, rows) if mat[row][col] != 0), None)
-        if pivot is None:
-            continue
-        mat[rank], mat[pivot] = mat[pivot], mat[rank]
-        _eliminate_column(mat, rank, col)
-        rank += 1
-        if rank == rows:
-            break
-    return rank
+    from flint import fmpz_mat
 
-
-def _eliminate_column(mat: list[list[int]], rank: int, col: int) -> None:
-    """Clear ``col`` below and above the pivot row using integer pivoting."""
-    pivot_val = mat[rank][col]
-    for row in range(len(mat)):
-        if row == rank or mat[row][col] == 0:
-            continue
-        factor = mat[row][col]
-        mat[row] = [
-            value * pivot_val - mat[rank][j] * factor
-            for j, value in enumerate(mat[row])
-        ]
+    return int(fmpz_mat(matrix).rank())
 
 
 def support_from_polynomial(polynomial: RationalPolynomial) -> PolynomialSupport:

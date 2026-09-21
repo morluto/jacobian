@@ -44,6 +44,7 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.geometry.polytopes import _rational_geometry
+from jacobian.math.geometry.polytopes._polyhedral_conversion import rational_rank
 from jacobian.math.geometry.polytopes.lattice._models import (
     MAX_BOUND_SPAN,
     MAX_DIMENSION,
@@ -291,13 +292,11 @@ def _facets_and_box(  # noqa: C901
             # is exact: a lower-dimensional polytope's lattice points are
             # still well-defined, but our facet method assumes full
             # dimension. Rejecting is fail-closed.
-            diffs = Matrix(
-                [
-                    [verts[i][k] - verts[0][k] for k in range(d)]
-                    for i in range(1, len(verts))
-                ]
-            )
-            if diffs.rank() < d:
+            diffs = [
+                [verts[i][k] - verts[0][k] for k in range(d)]
+                for i in range(1, len(verts))
+            ]
+            if rational_rank(diffs, d) < d:
                 raise LatticePolytopeAdmissionError(
                     "V-representation is not full-dimensional; lower-dimensional hulls require exact handling"
                 )

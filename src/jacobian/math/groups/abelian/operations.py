@@ -22,12 +22,14 @@ from jacobian.math.groups.abelian._models import (
 def normalize_presentation(
     source: CyclicFactorPresentation,
 ) -> PresentationNormalizeResult:
-    from sympy import Matrix, diag
-    from sympy.matrices.normalforms import smith_normal_form
+    from flint import fmpz_mat
 
-    matrix = Matrix(diag(*source.invariant_factors))
-    smith = smith_normal_form(matrix, domain=None)
-    factors = tuple(int(smith[i, i]) for i in range(min(smith.rows, smith.cols)))
+    size = len(source.invariant_factors)
+    matrix = fmpz_mat(size, size)
+    for index, factor in enumerate(source.invariant_factors):
+        matrix[index, index] = factor
+    smith = matrix.snf()
+    factors = tuple(int(smith[index, index]) for index in range(size))
     cleaned = tuple(factor for factor in factors if factor > 1)
     return PresentationNormalizeResult(
         source=source,
@@ -153,11 +155,15 @@ def verify_element_order(claim: ElementOrderResult) -> bool:
 
 def _smith_diagonal(augmented_rows: list[list[int]]) -> list[int]:
     """Compute diagonal entries of the exact integer Smith normal form."""
-    from sympy import Matrix
-    from sympy.matrices.normalforms import smith_normal_form
+    if not augmented_rows:
+        return []
+    from flint import fmpz_mat
 
-    smith = smith_normal_form(Matrix(augmented_rows), domain=None)
-    return [abs(int(smith[i, i])) for i in range(min(smith.rows, smith.cols))]
+    smith = fmpz_mat(augmented_rows).snf()
+    return [
+        abs(int(smith[index, index]))
+        for index in range(min(smith.nrows(), smith.ncols()))
+    ]
 
 
 def generated_subgroup(

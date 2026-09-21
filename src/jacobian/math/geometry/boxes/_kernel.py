@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from fractions import Fraction
-from itertools import combinations
 
 from jacobian._exact import CanonicalRational
 from jacobian.math.analysis.intervals import ClosedRationalInterval
@@ -97,10 +96,23 @@ def complete_intersection_ledger(
             continue
         intersections[mask] = candidate
 
+    # Build lexicographically ordered mask families once while extending each
+    # prefix.  The same masks index the subset-DP intersections above, avoiding
+    # a second combinations traversal and sort.
+    masks_by_size: list[list[tuple[int, tuple[int, ...]]]] = [
+        [] for _ in range(active_count + 1)
+    ]
+    masks_by_size[0].append((0, ()))
+    for subset_size in range(1, active_count + 1):
+        for mask, prefix in masks_by_size[subset_size - 1]:
+            start = prefix[-1] + 1 if prefix else 0
+            for position in range(start, active_count):
+                masks_by_size[subset_size].append(
+                    (mask | (1 << position), (*prefix, position))
+                )
     for subset_size in range(1, active_count + 1):
         coefficient = 1 if subset_size % 2 else -1
-        for selected_positions in combinations(range(active_count), subset_size):
-            mask = sum(1 << position for position in selected_positions)
+        for mask, selected_positions in masks_by_size[subset_size]:
             intersection = intersections[mask]
             if intersection is None:
                 continue

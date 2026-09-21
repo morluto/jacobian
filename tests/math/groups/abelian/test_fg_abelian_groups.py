@@ -179,6 +179,44 @@ def test_quotient_z6_by_2z() -> None:
     assert result.quotient_order == 2
 
 
+def _enumerated_subgroup(
+    factors: tuple[int, ...], generators: tuple[tuple[int, ...], ...]
+) -> set[tuple[int, ...]]:
+    subgroup = {tuple(0 for _ in factors)}
+    frontier = list(subgroup)
+    while frontier:
+        element = frontier.pop()
+        for generator in generators:
+            candidate = tuple(
+                (coordinate + step) % factor
+                for coordinate, step, factor in zip(
+                    element, generator, factors, strict=True
+                )
+            )
+            if candidate not in subgroup:
+                subgroup.add(candidate)
+                frontier.append(candidate)
+    return subgroup
+
+
+def test_smith_quotients_match_explicit_finite_group_enumeration() -> None:
+    factors = (2, 4)
+    group = AbelianPresentation(invariant_factors=factors)
+    elements = tuple((left, right) for left in range(2) for right in range(4))
+    for first in elements:
+        for second in elements:
+            generators = (first, second)
+            subgroup = _enumerated_subgroup(factors, generators)
+            expected_index = 8 // len(subgroup)
+            assert generated_subgroup(group, generators).index == expected_index
+            quotient = quotient_group(group, generators)
+            assert quotient.quotient_order == expected_index
+            product = 1
+            for factor in quotient.quotient.invariant_factors:
+                product *= factor
+            assert product == expected_index
+
+
 def test_presentation_normalize_z6_z4() -> None:
     result = compute_presentation_normalize(
         PresentationNormalizeRequest(invariant_factors=(6, 4))

@@ -770,28 +770,36 @@ def antichain_profile(poset: FinitePoset) -> AntichainProfileResult:
     _admit_canonical_poset(poset)
     _admit_antichain_profile(poset)
     elements = poset.elements
-    comparable = {(p.lower, p.upper) for p in poset.strict_order_pairs}
-
-    def is_antichain(subset: tuple[str, ...]) -> bool:
-        for i, a in enumerate(subset):
-            for b in subset[i + 1 :]:
-                if (a, b) in comparable or (b, a) in comparable:
-                    return False
-        return True
-
     n = len(elements)
+    element_index = {element: index for index, element in enumerate(elements)}
+    comparable_masks = [0] * n
+    for pair in poset.strict_order_pairs:
+        lower = element_index[pair.lower]
+        upper = element_index[pair.upper]
+        comparable_masks[lower] |= 1 << upper
+        comparable_masks[upper] |= 1 << lower
+
     max_size = 0
     max_antichains: list[tuple[str, ...]] = [()]
     antichain_count = 1
+    antichain_masks = [True] * (1 << n)
     for mask in range(1, 1 << n):
-        subset = tuple(sorted(elements[i] for i in range(n) if mask & (1 << i)))
-        if is_antichain(subset):
+        bit = mask & -mask
+        index = bit.bit_length() - 1
+        parent = mask ^ bit
+        antichain_masks[mask] = antichain_masks[parent] and not (
+            comparable_masks[index] & parent
+        )
+        if antichain_masks[mask]:
             antichain_count += 1
-            if len(subset) > max_size:
-                max_size = len(subset)
-                max_antichains = [subset]
-            elif len(subset) == max_size:
-                max_antichains.append(subset)
+            size = mask.bit_count()
+            if size >= max_size:
+                subset = tuple(elements[i] for i in range(n) if mask & (1 << i))
+                if size > max_size:
+                    max_size = size
+                    max_antichains = [subset]
+                else:
+                    max_antichains.append(subset)
     return AntichainProfileResult(
         poset_digest=poset.poset_digest,
         maximum_antichain_size=max_size,

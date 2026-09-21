@@ -1,6 +1,17 @@
 """Private FLINT adapters for exact symbolic-dynamics matrices."""
 
 
+def characteristic_coefficients(
+    matrix: tuple[tuple[int, ...], ...],
+) -> tuple[int, ...]:
+    """Return coefficients of ``det(lambda I - A)`` in descending order."""
+
+    from flint import fmpz_mat
+
+    polynomial = fmpz_mat(matrix).charpoly()
+    return tuple(int(polynomial[index]) for index in range(len(matrix), -1, -1))
+
+
 def matrix_power_traces(
     matrix: tuple[tuple[int, ...], ...], max_period: int
 ) -> tuple[int, ...]:
@@ -19,4 +30,4 @@ def matrix_power_traces(
     return tuple(traces)
 
 
-__all__ = ["matrix_power_traces"]
+__all__ = ["characteristic_coefficients", "matrix_power_traces"]

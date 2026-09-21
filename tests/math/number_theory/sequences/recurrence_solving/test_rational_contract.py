@@ -40,6 +40,24 @@ def test_find_recurrence_accepts_exact_rational_sequence() -> None:
     assert not verify_recurrence(forged)
 
 
+def test_find_recurrence_recovers_a_minimal_order_two_rational_relation() -> None:
+    # a_n = (3/2)a_{n-1} - (1/2)a_{n-2}, generated independently.
+    values = [_q(1), _q(3)]
+    for _ in range(5):
+        left = values[-1].as_fraction()
+        right = values[-2].as_fraction()
+        values.append(CanonicalRational.from_fraction(3 * left / 2 - right / 2))
+
+    result = compute_find_recurrence(RecurrenceFindRequest(sequence=tuple(values)))
+    assert result.status == "FOUND"
+    assert result.order == 2
+    assert tuple(value.as_fraction() for value in result.coefficients) == (
+        _q(3, 2).as_fraction(),
+        _q(-1, 2).as_fraction(),
+    )
+    assert verify_recurrence(result)
+
+
 def test_find_recurrence_accepts_no_fitting_when_no_nonvacuous_order_exists() -> None:
     result = compute_find_recurrence(RecurrenceFindRequest(sequence=(_q(0), _q(1))))
     assert result.status == "NO_FITTING_RECURRENCE"

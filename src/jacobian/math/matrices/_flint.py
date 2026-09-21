@@ -24,24 +24,9 @@ def rational_matrix_product(
 ) -> tuple[tuple[Fraction, ...], ...]:
     """Return the exact dense rational matrix product through FLINT."""
 
-    from flint import fmpq, fmpq_mat
+    from jacobian.math.matrices._exact_backend import rational_product
 
-    left_rows = len(left)
-    right_columns = len(right[0])
-    left_backend = fmpq_mat(
-        [[fmpq(value.numerator, value.denominator) for value in row] for row in left]
-    )
-    right_backend = fmpq_mat(
-        [[fmpq(value.numerator, value.denominator) for value in row] for row in right]
-    )
-    product = left_backend * right_backend
-    return tuple(
-        tuple(
-            Fraction(int(product[row, column].p), int(product[row, column].q))
-            for column in range(right_columns)
-        )
-        for row in range(left_rows)
-    )
+    return rational_product(left, right)
 
 
 def rational_characteristic_polynomial(

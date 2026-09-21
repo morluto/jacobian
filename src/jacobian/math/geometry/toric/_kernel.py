@@ -23,10 +23,7 @@ from jacobian.math.geometry.toric._models import (
     MAX_TORIC_CHART_GENERATORS,
     MAX_TORIC_CHART_RELATIONS,
 )
-from jacobian.math.matrices._flint import (
-    integer_smith_normal_form,
-    rational_rref,
-)
+from jacobian.math.matrices._flint import integer_smith_normal_form
 
 MAX_TORIC_FM_TABLEAU_ROWS = 4_096
 
@@ -216,10 +213,9 @@ class RecognizedFan:
 def _matrix_rank(rows: tuple[tuple[int, ...], ...]) -> int:
     if not rows:
         return 0
-    _, rank = rational_rref(
-        tuple(tuple(Fraction(value) for value in row) for row in rows)
-    )
-    return rank
+    from flint import fmpz_mat
+
+    return int(fmpz_mat(rows).rank())
 
 
 def _cone_dimension(
@@ -418,34 +414,30 @@ def _dual_cone_extreme_rays(
 ) -> tuple[tuple[int, ...], ...]:
     """Extreme rays of ``{m : <m, v> >= 0 for every generator v}``.
 
-    Every one-dimensional face of the dual cone is the exact nullspace of a
-    rank ``dimension - 1`` facet subset; the double-description enumeration
-    orients each candidate primitive generator into the dual cone. This is the
-    shipped exact double description, reused unchanged for every chart.
+    Reuse the exact polyhedral double-description kernel rather than testing
+    every ``dimension - 1`` source subset independently.  The chart owner has
+    already admitted its ray and coefficient envelopes; the shared kernel adds
+    its own theorem-backed DD work bound and returns primitive integer rays.
     """
 
     if not rays:
         return ()
-    collected: dict[tuple[int, ...], None] = {}
-    for subset in combinations(range(len(rays)), dimension - 1):
-        candidate = _one_dimensional_kernel(
-            [rays[index] for index in subset], dimension
-        )
-        if candidate is None:
-            continue
-        oriented: tuple[int, ...] | None = None
-        if all(_dot(ray, candidate) >= 0 for ray in rays):
-            oriented = candidate
-        else:
-            negated = tuple(-value for value in candidate)
-            if all(_dot(ray, negated) >= 0 for ray in rays):
-                oriented = negated
-        if oriented is None:
-            continue
-        primitive = _primitive(oriented)
-        if primitive is not None:
-            collected.setdefault(primitive, None)
-    return tuple(collected)
+    from jacobian.math.geometry.polytopes._polyhedral_conversion import (
+        PolyhedralConversionAdmissionError,
+        PolyhedralConversionError,
+        cone_generators,
+    )
+
+    try:
+        conversion = cone_generators(rays)
+    except (PolyhedralConversionAdmissionError, PolyhedralConversionError) as exc:
+        _reject_budget(f"affine-chart dual-cone conversion failed: {exc}")
+    if conversion.quotient.lineality_basis:
+        # The affine-chart caller requires a pointed dual cone.  Preserve the
+        # earlier subset kernel's behavior: it produced no complete extreme-ray
+        # family when the inequalities had lineality.
+        return ()
+    return tuple(ray.vector for ray in conversion.rays)
 
 
 def _exact_feasible(
@@ -665,73 +657,49 @@ def _integer_kernel_basis(
     )
 
 
-def _column_determinant(columns: tuple[tuple[int, ...], ...]) -> int:
-    from flint import fmpz_mat
-
-    size = len(columns)
-    matrix = fmpz_mat(
-        [[columns[column][row] for column in range(size)] for row in range(size)]
-    )
-    return int(matrix.det())
-
-
-_CANDIDATE_BOX = 3
-_COMPLETION_BUDGET = 200_000
-
-
 def _unimodular_complement(
     lineality: tuple[tuple[int, ...], ...],
     lattice_rank: int,
 ) -> tuple[tuple[int, ...], ...]:
-    """Complement columns making ``lineality + complement`` a basis of ``Z^n``.
+    """Complete a saturated row lattice to a unimodular basis of ``Z^n``.
 
-    ``lineality`` is a saturated sublattice, so a completion exists; it is
-    found by bounded backtracking over small integer vectors and certified by
-    the ``+/-1`` determinant of the assembled square matrix. A completion
-    outside the admitted box is refused rather than approximated.
+    For a full-row-rank matrix ``L`` with saturated row lattice, the Smith
+    decomposition ``D = U L V`` has only unit invariant factors.  Therefore the
+    rows of ``V^{-1}`` are an ambient unimodular basis whose first rows are
+    transformed generators of ``L``; applying ``U^{-1}`` to those rows recovers
+    the exact supplied lineality basis while the remaining rows provide a
+    complement.  This removes the former fixed-box backtracking restriction.
     """
 
     needed = lattice_rank - len(lineality)
     if needed == 0:
         return ()
-    span = list(lineality)
-    candidates = sorted(
-        (
-            vector
-            for vector in product(
-                range(-_CANDIDATE_BOX, _CANDIDATE_BOX + 1), repeat=lattice_rank
-            )
-            if any(vector)
-        ),
-        key=lambda vector: (sum(abs(value) for value in vector), vector),
+    from sympy import ZZ, Matrix
+    from sympy.matrices.normalforms import smith_normal_decomp
+
+    source = Matrix(lineality)
+    diagonal, left, right = smith_normal_decomp(source, domain=ZZ)
+    rank = len(lineality)
+    diagonal_entries = diagonal.tolist()
+    if any(abs(int(diagonal_entries[index][index])) != 1 for index in range(rank)):
+        _reject_budget("affine-chart lineality lattice is not saturated")
+    ambient_basis = right.inv()
+    transformed = left.inv()
+    block = Matrix.vstack(
+        Matrix.hstack(transformed, Matrix.zeros(rank, needed)),
+        Matrix.hstack(Matrix.zeros(needed, rank), Matrix.eye(needed)),
     )
-    budget = [_COMPLETION_BUDGET]
-
-    def extend(remaining: int) -> tuple[tuple[int, ...], ...] | None:
-        if remaining == 0:
-            return () if abs(_column_determinant(tuple(span))) == 1 else None
-        for candidate in candidates:
-            budget[0] -= 1
-            if budget[0] < 0:
-                _reject_budget(
-                    "affine-chart unimodular completion exceeds its search budget"
-                )
-            trial = [*span, candidate]
-            if _matrix_rank(tuple(trial)) < len(trial):
-                continue
-            span.append(candidate)
-            found = extend(remaining - 1)
-            span.pop()
-            if found is not None:
-                return (candidate, *found)
-        return None
-
-    found = extend(needed)
-    if found is None:
-        _reject_budget(
-            "affine-chart lineality complement was not found in the admitted box"
+    completed = block * ambient_basis
+    completed_entries = completed.tolist()
+    determinant = completed.det()
+    if abs(int(str(determinant))) != 1 or completed[:rank, :] != source:
+        raise ArithmeticError("Smith completion failed to reconstruct lineality")
+    return tuple(
+        tuple(
+            int(str(completed_entries[row][column])) for column in range(lattice_rank)
         )
-    return found
+        for row in range(rank, lattice_rank)
+    )
 
 
 def _quotient_projection(

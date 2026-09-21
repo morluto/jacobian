@@ -255,27 +255,41 @@ def search_bases(
         ledger.charge(_basis_work(columns - int(artificial), rows))
         square = fmpq_mat([[a[i, j] for j in basis] for i in range(rows)])
         try:
-            inverse = square.inv()
+            # Solve for all required right-hand sides in one fraction-free
+            # elimination.  This avoids constructing a dense inverse for every
+            # candidate basis while still producing the primal vector and the
+            # complete tableau needed for dual slacks and an unbounded ray.
+            rhs = fmpq_mat(
+                [[b[i, 0], *(a[i, j] for j in range(columns))] for i in range(rows)]
+            )
+            solved = square.solve(rhs)
         except ZeroDivisionError:  # FLINT's documented singular-matrix outcome.
             continue
-        basic_point = inverse * b
+        basic_point = fmpq_mat([[solved[i, 0]] for i in range(rows)])
         if any(basic_point[i, 0] < 0 for i in range(rows)):
             continue
         point = fmpq_mat(columns, 1)
         for i, j in enumerate(basis):
             point[j, 0] = basic_point[i, 0]
-        dual = fmpq_mat([[c[0, j] for j in basis]]) * inverse
-        slacks = c - dual * a
+        tableau = fmpq_mat(
+            [[solved[i, j + 1] for j in range(columns)] for i in range(rows)]
+        )
+        basis_cost = fmpq_mat([[c[0, j] for j in basis]])
+        slacks = c - basis_cost * tableau
+        # ``dual`` is required only for a settled optimum.  Delay its solve so
+        # infeasible and nonoptimal bases avoid another exact elimination.
         if all(slacks[0, j] >= 0 for j in range(columns)):
-            return point, dual.transpose(), None
+            dual = square.transpose().solve(basis_cost.transpose())
+            return point, dual, None
         if artificial:
             continue  # min t >= 0 cannot be unbounded below.
-        tableau = inverse * a
         for j in range(columns):
             if slacks[0, j] < 0 and all(tableau[i, j] <= 0 for i in range(rows)):
                 ray = fmpq_mat(columns, 1)
                 ray[j, 0] = 1
                 for i, k in enumerate(basis):
                     ray[k, 0] = -tableau[i, j]
-                return point, dual.transpose(), ray
+                # The ray establishes unboundedness; the dual field is not
+                # consumed on this result branch.
+                return point, fmpq_mat(rows, 1), ray
     return None

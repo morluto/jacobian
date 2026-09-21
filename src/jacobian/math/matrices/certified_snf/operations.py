@@ -164,27 +164,13 @@ def matrix_columns(matrix: Matrix, start: int = 0) -> Matrix:
 
 
 def inverse_unimodular(matrix: Matrix) -> Matrix:
-    """Invert a unimodular integer matrix with SymPy ``DomainMatrix.inv_den``."""
+    """Invert a unimodular integer matrix through the shared exact primitive."""
 
-    size = len(matrix)
-    if any(len(row) != size for row in matrix):
-        raise ValueError("unimodular inverse requires a square matrix")
-    if size == 0:
-        return []
+    from jacobian.math.matrices._exact_backend import (
+        inverse_unimodular as backend_inverse,
+    )
 
-    from sympy import ZZ
-    from sympy.polys.matrices import DomainMatrix
-    from sympy.polys.matrices.exceptions import DMNonInvertibleMatrixError
-
-    domain = DomainMatrix.from_list_sympy(size, size, matrix).convert_to(ZZ)
-    try:
-        numerator, denominator = domain.inv_den()
-    except DMNonInvertibleMatrixError as exc:
-        raise ValueError("matrix is singular") from exc
-    numerator, denominator = numerator.cancel_denom(denominator)
-    if denominator != ZZ.one:
-        raise ValueError("matrix is not unimodular")
-    return [[int(value) for value in row] for row in numerator.to_Matrix().tolist()]
+    return backend_inverse(matrix)
 
 
 def matrix_determinant(matrix: Matrix) -> int:

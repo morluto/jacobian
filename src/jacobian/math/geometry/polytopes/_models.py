@@ -7,7 +7,7 @@ import math
 from collections.abc import Iterator, Sequence
 from fractions import Fraction
 from itertools import combinations
-from typing import Annotated, Any, Self
+from typing import Annotated, Any, Self, cast
 
 from pydantic import (
     AfterValidator,
@@ -35,6 +35,7 @@ from jacobian.math.geometry.polytopes._polyhedral_conversion import (
     maximal_incidence_faces,
     points_to_facets,
     pulling_triangulation,
+    rational_rank,
     require_pulling_work_admissible,
 )
 from jacobian.math.geometry.polytopes._rational_geometry import (
@@ -52,7 +53,12 @@ from jacobian.math.geometry.polytopes.values import (
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
     """Create a stable structured error for the polytope public contract."""
 
-    return PydanticCustomError(f"polytope.{reason}", message)
+    # Pydantic's stubs restrict these to literals for localization safety, but
+    # this domain intentionally constructs stable owner-prefixed error codes.
+    return PydanticCustomError(
+        f"polytope.{reason}",  # pyright: ignore[reportArgumentType]
+        message,  # pyright: ignore[reportArgumentType]
+    )
 
 
 class PolytopeAdmissionError(ValueError):
@@ -801,7 +807,7 @@ def _plane_signature(
     nullspace = mat.nullspace()
     if not nullspace:
         return None
-    vec = [Rational(nullspace[0][j]) for j in range(dim + 1)]
+    vec = [cast(Rational, Rational(nullspace[0][j])) for j in range(dim + 1)]
     first_nonzero = next(j for j in range(dim + 1) if vec[j] != 0)
     sign = 1 if vec[first_nonzero] > 0 else -1
     denominators = [v.denominator for v in vec]
@@ -838,7 +844,7 @@ def _extreme_point_indices(
     """Return (extreme indices, boundary counts) from grouped maximal facets."""
 
     counts = [0] * point_count
-    active_normals: list[list[list[Rational]]] = [[] for _ in range(point_count)]
+    active_normals: list[list[Sequence[object]]] = [[] for _ in range(point_count)]
     for normal, members in groups.items():
         normal_values = list(normal[:-1])
         for index in members:
@@ -848,7 +854,7 @@ def _extreme_point_indices(
     kept = [
         index
         for index in range(point_count)
-        if active_normals[index] and Matrix(active_normals[index]).rank() == dim
+        if active_normals[index] and rational_rank(active_normals[index], dim) == dim
     ]
     return kept, counts
 
@@ -861,17 +867,17 @@ def _filter_redundant_vertices(
     if len(points) <= dim:
         return points
     hull = points_to_facets(points, dim)
-    active_normals: list[list[list[Rational]]] = [[] for _ in points]
+    active_normals: list[list[Sequence[object]]] = [[] for _ in points]
     for (normal, _offset), incidence in zip(
         hull.facets, hull.facet_incidence, strict=True
     ):
         for index in range(len(points)):
             if incidence & (1 << index):
-                active_normals[index].append([Rational(value) for value in normal])
+                active_normals[index].append(list(normal))
     keep_indices = [
         index
         for index, normals in enumerate(active_normals)
-        if normals and Matrix(normals).rank() == dim
+        if normals and rational_rank(normals, dim) == dim
     ]
     if len(keep_indices) < dim + 1:
         return points
@@ -955,17 +961,17 @@ def _triangulate(points: list[list[Rational]], dim: int) -> list[tuple[int, ...]
     return triangulation
 
 
-def _rank_of_diffs(points: list[list[Rational]], dim: int) -> int:
+def _rank_of_diffs(points: Sequence[Sequence[Any]], dim: int) -> int:
     """Rank of the matrix of ``point - point[0]`` differences in ``dim`` dims."""
 
     if len(points) <= 1:
         return 0
     reference = points[0]
-    columns = [
-        Matrix([[points[index][axis] - reference[axis]] for axis in range(dim)])
+    differences = [
+        [points[index][axis] - reference[axis] for axis in range(dim)]
         for index in range(1, len(points))
     ]
-    return Matrix.hstack(*columns).rank() if columns else 0
+    return rational_rank(differences, dim)
 
 
 def _extreme_vertex(points: list[list[Rational]], dim: int) -> int | None:
@@ -1020,10 +1026,10 @@ def _halfspace_rows(
     return [
         (
             [
-                Rational(*coefficient.as_integer_ratio())
+                cast(Rational, Rational(*coefficient.as_integer_ratio()))
                 for coefficient in hs.coefficients
             ],
-            Rational(*hs.offset.as_integer_ratio()),
+            cast(Rational, Rational(*hs.offset.as_integer_ratio())),
         )
         for hs in halfspaces
     ]
@@ -1031,13 +1037,13 @@ def _halfspace_rows(
 
 def _vertices_from_v_representation(
     vertices: tuple[Vertex, ...],
-) -> tuple[tuple[Rational, ...], int]:
+) -> tuple[tuple[tuple[Rational, ...], ...], int]:
     """Return ambient dimension and exact rational coordinates from a V-rep."""
 
     dimension = len(vertices[0].coordinates)
-    points: tuple[tuple[Rational, ...], ...] = tuple(
+    points = tuple(
         tuple(
-            Rational(*coordinate.as_integer_ratio())
+            cast(Rational, Rational(*coordinate.as_integer_ratio()))
             for coordinate in vertex.coordinates
         )
         for vertex in vertices
@@ -1063,7 +1069,7 @@ def _is_bounded_h(halfspaces: tuple[Halfspace, ...]) -> bool:
     halfspaces = _deduplicate_halfspaces(halfspaces)
     normals = [
         [
-            Rational(*coefficient.as_integer_ratio())
+            cast(Rational, Rational(*coefficient.as_integer_ratio()))
             for coefficient in halfspace.coefficients
         ]
         for halfspace in halfspaces
@@ -1114,7 +1120,7 @@ def _prepare_volume_components(
             )
             if incidence & (1 << point_index)
         ]
-        if active_normals and Matrix(active_normals).rank() == dim:
+        if active_normals and rational_rank(active_normals, dim) == dim:
             extreme_indices.append(point_index)
     if len(extreme_indices) < dim + 1:
         return pts, []

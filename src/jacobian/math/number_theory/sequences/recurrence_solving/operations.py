@@ -87,7 +87,7 @@ class ClosedForm:
 
 
 def find_recurrence(sequence: tuple[CanonicalRational, ...]) -> Recurrence:
-    import sympy
+    from flint import fmpq, fmpq_mat
 
     if not 2 <= len(sequence) <= MAX_RATIONAL_SEQUENCE_LENGTH:
         raise ValueError(
@@ -95,21 +95,29 @@ def find_recurrence(sequence: tuple[CanonicalRational, ...]) -> Recurrence:
         )
     _validate_rationals(sequence, label="sequence value")
 
-    values = [sympy.Rational(*value.as_integer_ratio()) for value in sequence]
+    values = [fmpq(*value.as_integer_ratio()) for value in sequence]
     for order in range(1, len(values)):
-        coefficient_matrix = sympy.Matrix(
-            [
-                [values[index - offset] for offset in range(1, order + 1)]
-                for index in range(order, len(values))
-            ]
+        rows = [
+            [values[index - offset] for offset in range(1, order + 1)]
+            for index in range(order, len(values))
+        ]
+        targets = fmpq_mat([[value] for value in values[order:]])
+        augmented = fmpq_mat(
+            [[*row, targets[index, 0]] for index, row in enumerate(rows)]
         )
-        targets = sympy.Matrix(values[order:])
-        try:
-            solution, parameters = coefficient_matrix.gauss_jordan_solve(targets)
-        except ValueError:
+        reduced, rank = augmented.rref()
+        coefficient_rank = int(fmpq_mat(rows).rank())
+        if int(rank) != coefficient_rank:
             continue
-        if parameters:
-            solution = solution.subs(dict.fromkeys(parameters, 0))
+        # Free coordinates are canonically set to zero, matching the previous
+        # exact solver. RREF pivot rows then give one deterministic solution.
+        solution = [fmpq(0) for _ in range(order)]
+        for row in range(coefficient_rank):
+            pivot = next(
+                (column for column in range(order) if reduced[row, column]), None
+            )
+            if pivot is not None:
+                solution[pivot] = reduced[row, order]
         return Recurrence(
             coefficients=tuple(
                 CanonicalRational.from_integer_ratio(int(value.p), int(value.q))
@@ -150,7 +158,7 @@ def closed_form(
     char_poly = sum(
         c * x ** (len(char_poly_coeffs) - 1 - i) for i, c in enumerate(char_poly_coeffs)
     )
-    roots = sympy.Poly(char_poly, x).all_roots()
+    roots: list[object] = list(sympy.Poly(char_poly, x).all_roots())
     zero_root_multiplicity = sum(root == 0 for root in roots)
     nonzero_roots = list(dict.fromkeys(root for root in roots if root != 0))
     basis = [sympy.KroneckerDelta(index, n) for index in range(zero_root_multiplicity)]
@@ -163,8 +171,8 @@ def closed_form(
     a = sympy.Matrix([[term.subs(n, i) for term in basis] for i in range(len(basis))])
     b = sympy.Matrix(init)
     consts = a.solve(b)
-    expr = sum(c * term for c, term in zip(consts, basis, strict=True))
-    return ClosedForm(expression=str(sympy.simplify(expr)))
+    expr: object = sum(c * term for c, term in zip(consts, basis, strict=True))
+    return ClosedForm(expression=str(sympy.simplify(expr)))  # pyright: ignore[reportCallIssue, reportArgumentType]
 
 
 def verify_recurrence(claim: RecurrenceFindResult) -> bool:

@@ -864,10 +864,10 @@ def _product_denominator_scaling_bits(
 
 def _addends_are_disjoint(children: list[_ExpressionMetrics]) -> bool:
     known = [child.support_keys for child in children if not child.zero]
-    if known and all(keys is not None for keys in known):
+    concrete = [keys for keys in known if keys is not None]
+    if known and len(concrete) == len(known):
         seen: set[tuple[tuple[str, int], ...]] = set()
-        for keys in known:
-            assert keys is not None
+        for keys in concrete:
             for key in keys:
                 if key in seen:
                     return False
@@ -1400,16 +1400,18 @@ def _nary_expression_metrics(  # noqa: C901
             constant = Fraction(0)
         elif (
             child_metrics
-            and all(child.constant is not None for child in child_metrics)
             and denominator is not None
             and common_numerator_bits <= _MAX_EXPRESSION_COEFFICIENT_BITS
         ):
             product = Fraction(1)
             for child in child_metrics:
                 factor = child.constant
-                assert factor is not None
+                if factor is None:
+                    constant = None
+                    break
                 product *= factor
-            constant = product
+            else:
+                constant = product
         else:
             constant = None
         zero = (

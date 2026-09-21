@@ -379,7 +379,7 @@ a source digest, and successful structural parsing cannot replace those checks.
 
 ## MCP Python SDK v2
 
-The repository pins `mcp==2.1.0`. The official
+The repository pins `mcp==2.2.0`. The official
 [v2 documentation](https://py.sdk.modelcontextprotocol.io/v2/) and
 [structured-output guide](https://py.sdk.modelcontextprotocol.io/v2/servers/structured-output)
 describe typed data exchange and output validation. **Neither requires
@@ -387,7 +387,7 @@ mathematical certificates nor establishes mathematical truth.** SDK release
 numbers and date-based MCP protocol revisions are distinct.
 
 Use the typed result as structured content with a matching generated schema.
-Installed SDK 2.1.0's `FuncMetadata.convert_result` validates non-error
+Installed SDK 2.2.0's `FuncMetadata.convert_result` validates non-error
 `CallToolResult.structured_content` when an `output_model` is supplied.
 Jacobian's direct-tool adapter supplies one. Returning a `CallToolResult`
 therefore does not bypass model validation on this path. Keep those validators

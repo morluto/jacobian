@@ -57,7 +57,10 @@ def _construct_uniform_subset_intersection_graph_from_plan(
         if subset_cardinality == 0
         else tuple(combinations(range(ground_set_size), subset_cardinality))
     )
-    assert len(subsets) == plan.vertex_count
+    if len(subsets) != plan.vertex_count:
+        raise RuntimeError(
+            "uniform-subset admission disagrees with generated vertex count"
+        )
 
     if len(subsets) == 1:
         graph = SimpleUndirectedGraph(
@@ -94,7 +97,10 @@ def _construct_uniform_subset_intersection_graph_from_plan(
         vertices=tuple(vertices_labels),
         edges=tuple(edges),
     )
-    assert len(graph.edges) == plan.edge_count
+    if len(graph.edges) != plan.edge_count:
+        raise RuntimeError(
+            "uniform-subset construction disagrees with admitted edge count"
+        )
     return UniformSubsetIntersectionResult(
         ground_set_size=ground_set_size,
         subset_cardinality=subset_cardinality,

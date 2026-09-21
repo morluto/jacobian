@@ -104,7 +104,7 @@ class SquarefreeLocalFactorResult(StrictModel):
         for row in self.form_rows:
             expected = form_solution_profile(by_id[row.form_id], self.prime)
             if isinstance(expected, _NoSolutions):
-                expected_shape = (0, None, None)
+                expected_shape: tuple[int, int | None, int | None] = (0, None, None)
             else:
                 expected_shape = (expected.count, expected.root, expected.stride)
             if (row.bad_count, row.root, row.stride) != expected_shape:

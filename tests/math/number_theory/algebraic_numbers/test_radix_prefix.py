@@ -29,7 +29,7 @@ from jacobian.math.number_theory.algebraic_numbers._radix_prefix import (
     radix_prefix,
 )
 from jacobian.math.number_theory.algebraic_numbers.real import RealAlgebraicValue
-from jacobian.process import BoundedProcessResult
+from jacobian.process import decode_checked_worker_output
 
 
 def _value(polynomial: tuple[int, ...], root_index: int) -> RealAlgebraicValue:
@@ -352,21 +352,10 @@ def test_in_process_refinement_exhaustion_is_a_backend_failure(
 def test_worker_refinement_code_is_a_backend_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def fake_run_bounded_process(
-        *_args: object, **_kwargs: object
-    ) -> BoundedProcessResult:
-        return BoundedProcessResult(
-            returncode=0,
-            stdout=encode_worker_result_frame(
-                {"tag": "refinement", "message": "stuck"}
-            ),
-            stderr=b"",
-            stdout_exceeded=False,
-            stderr_exceeded=False,
-            timed_out=False,
-        )
-
-    monkeypatch.setattr(process, "run_bounded_process", fake_run_bounded_process)
+    _worker_result(
+        monkeypatch,
+        encode_worker_result_frame({"tag": "refinement", "message": "stuck"}),
+    )
     with pytest.raises(OperationBackendError) as exc_info:
         process.run_scaled_integer_part_worker(
             polynomial=(1, 0, -2),
@@ -379,34 +368,13 @@ def test_worker_refinement_code_is_a_backend_failure(
     assert exc_info.value.reason is BackendFailureReason.INVALID_OUTPUT
 
 
-def _worker_process_result(
-    *,
-    returncode: int = 0,
-    stdout: bytes = encode_worker_result_frame(
-        {"tag": "success", "scaled_floor": "1"}
-    ),
-    stdout_exceeded: bool = False,
-    stderr_exceeded: bool = False,
-    timed_out: bool = False,
-) -> BoundedProcessResult:
-    return BoundedProcessResult(
-        returncode=returncode,
-        stdout=stdout,
-        stderr=b"",
-        stdout_exceeded=stdout_exceeded,
-        stderr_exceeded=stderr_exceeded,
-        timed_out=timed_out,
-    )
-
-
 def test_worker_stdout_overflow_is_resource_exhausted(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(
-        process,
-        "run_bounded_process",
-        lambda *_args, **_kwargs: _worker_process_result(stdout_exceeded=True),
-    )
+    def fake_run_checked(*_args: object, **_kwargs: object) -> int:
+        raise OperationResourceExhaustedError(ExecutionResource.OUTPUT)
+
+    monkeypatch.setattr(process, "run_checked_worker_process", fake_run_checked)
     with pytest.raises(OperationResourceExhaustedError) as exc_info:
         process.run_scaled_integer_part_worker(
             polynomial=(1, 0, -2),
@@ -422,11 +390,10 @@ def test_worker_stdout_overflow_is_resource_exhausted(
 def test_worker_abnormal_exit_is_a_backend_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(
-        process,
-        "run_bounded_process",
-        lambda *_args, **_kwargs: _worker_process_result(returncode=1, stdout=b""),
-    )
+    def fake_run_checked(*_args: object, **_kwargs: object) -> int:
+        raise OperationBackendError(BackendFailureReason.ABNORMAL_EXIT)
+
+    monkeypatch.setattr(process, "run_checked_worker_process", fake_run_checked)
     with pytest.raises(OperationBackendError) as exc_info:
         process.run_scaled_integer_part_worker(
             polynomial=(1, 0, -2),
@@ -439,17 +406,22 @@ def test_worker_abnormal_exit_is_a_backend_failure(
     assert exc_info.value.reason is BackendFailureReason.ABNORMAL_EXIT
 
 
-class _Completed:
-    def __init__(self, stdout: bytes) -> None:
-        self.stdout = stdout
-        self.returncode = 0
-
-
 def _worker_result(monkeypatch: pytest.MonkeyPatch, payload: bytes) -> None:
-    monkeypatch.setattr(process, "check_bounded_process_result", lambda _: None)
-    monkeypatch.setattr(
-        process, "run_bounded_process", lambda *a, **k: _Completed(payload)
-    )
+    def fake_run_checked(
+        *_args: object,
+        decode_result: object,
+        max_frame_bytes: int | None = None,
+        **_kwargs: object,
+    ) -> object:
+        if not callable(decode_result):
+            raise TypeError("test decoder must be callable")
+        return decode_checked_worker_output(
+            payload,
+            decode_result=decode_result,
+            max_frame_bytes=max_frame_bytes or len(payload),
+        )
+
+    monkeypatch.setattr(process, "run_checked_worker_process", fake_run_checked)
 
 
 @pytest.mark.parametrize(

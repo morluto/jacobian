@@ -454,6 +454,16 @@ def _recognize_action_field(
         raise _validation_error(exc.reason, str(exc)) from exc
 
 
+def _require_recognized_field(
+    recognized: RecognizedRealSimpleNumberField | None,
+) -> RecognizedRealSimpleNumberField:
+    if recognized is None:
+        raise RuntimeError(
+            "embedded action generators require a recognized number field"
+        )
+    return recognized
+
+
 def _build_constraint_plan(
     action: MatrixAction,
     kind: FormKind,
@@ -524,7 +534,7 @@ def _build_constraint_plan(
     generator_matrices: tuple[tuple[tuple[Any, ...], ...], ...]
     if isinstance(action, EmbeddedRealNumberFieldMatrixAction):
         if action.generators:
-            assert recognized is not None
+            recognized = _require_recognized_field(recognized)
             generator_matrices = tuple(
                 tuple(
                     tuple(field_element_from_value(value, recognized) for value in row)

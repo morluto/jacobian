@@ -1246,6 +1246,29 @@ def _mathematical_transport_limit_violations(
     )
 
 
+def _production_assert_violations(
+    relative: PurePosixPath, tree: ast.AST
+) -> tuple[Violation, ...]:
+    """Keep executable assertions out of production mathematical code.
+
+    Assertions are disabled under ``python -O`` and therefore cannot establish
+    a stable operation boundary.  This AST rule intentionally ignores strings
+    and comments while covering every production module without path-local
+    exemptions.
+    """
+
+    return tuple(
+        _violation(
+            relative,
+            node,
+            "semantic-production-assert",
+            "production code must use an explicit stable failure, not assert",
+        )
+        for node in _walk(tree)
+        if isinstance(node, ast.Assert)
+    )
+
+
 def _check_file(root: Path, path: Path) -> tuple[Violation, ...]:
     relative = PurePosixPath(path.relative_to(root).as_posix())
     try:
@@ -1254,6 +1277,7 @@ def _check_file(root: Path, path: Path) -> tuple[Violation, ...]:
         return (Violation(str(relative), "parse-error", f"cannot parse file: {exc}"),)
     return (
         *_generic_operation_shadow_violations(relative),
+        *_production_assert_violations(relative, tree),
         *_mathematical_transport_limit_violations(relative, tree),
         *_process_violations(relative, tree),
         *_bounded_process_violations(relative, tree),

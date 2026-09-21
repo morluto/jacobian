@@ -772,7 +772,8 @@ def _witness_terminal(
         return True
     if not (first_final and second_final):
         return False
-    assert first is not None and second is not None
+    if first is None or second is None:
+        raise RuntimeError("terminal transducer pair lost a final state")
     first_output = finals[first]
     second_output = finals[second]
     if sign == 2:

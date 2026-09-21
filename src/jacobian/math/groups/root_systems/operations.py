@@ -363,7 +363,10 @@ def weyl_longest_element(
     word = _weyl_longest_word_kernel(rows)
     num_positive_roots = len(enumerate_positive_roots(rows))
     inversions = _weyl_word_inversions_kernel(rows, word)
-    assert len(word) == len(inversions) == num_positive_roots
+    if len(word) != len(inversions) or len(word) != num_positive_roots:
+        raise RuntimeError(
+            "Weyl longest-word kernel returned an incomplete reduced word"
+        )
     return WeylLongestElementResult._from_kernel(
         cartan, word, len(word), num_positive_roots
     )

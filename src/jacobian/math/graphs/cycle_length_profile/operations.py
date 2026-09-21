@@ -1246,7 +1246,10 @@ def _admit_fixed_cycle_search_plan(
             parts = _complete_multipartite_parts(
                 block, _block_adjacency(block, adjacency_sets)
             )
-            assert parts is not None
+            if parts is None:
+                raise RuntimeError(
+                    "recognized multipartite block has no part decomposition"
+                )
             block_work, block_adjacency = _multipartite_triangle_work(
                 block, adjacency_sets, part_sizes
             )

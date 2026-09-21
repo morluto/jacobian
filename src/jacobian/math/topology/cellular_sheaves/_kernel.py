@@ -156,7 +156,8 @@ class _ExactField:
                     for row in right
                 )
                 return rational_product(rational_left, rational_right)
-            assert self.prime is not None
+            if self.prime is None:
+                raise RuntimeError("prime-field multiplication has no modulus")
             integer_left = tuple(tuple(int(value) for value in row) for row in left)
             integer_right = tuple(tuple(int(value) for value in row) for row in right)
             return prime_field_product(integer_left, integer_right, self.prime)

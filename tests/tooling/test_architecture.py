@@ -26,6 +26,40 @@ def _violations(root: Path, code: str) -> list[str]:
     ]
 
 
+def test_production_asserts_are_rejected_but_text_is_ignored(tmp_path: Path) -> None:
+    _write(
+        tmp_path,
+        "src/jacobian/math/example.py",
+        "# assert this is documentation\n"
+        "message = 'assert this is data'\n"
+        "def compute(value):\n"
+        "    assert value > 0\n"
+        "    return value\n",
+    )
+
+    assert _violations(tmp_path, "semantic-production-assert") == [
+        "src/jacobian/math/example.py"
+    ]
+
+
+def test_production_assert_rule_has_no_path_allowlist(tmp_path: Path) -> None:
+    _write(
+        tmp_path,
+        "src/jacobian/math/example/_kernel.py",
+        "def compute(value):\n    assert value\n",
+    )
+    _write(
+        tmp_path,
+        "src/jacobian/process.py",
+        "def supervise(value):\n    assert value\n",
+    )
+
+    assert _violations(tmp_path, "semantic-production-assert") == [
+        "src/jacobian/math/example/_kernel.py",
+        "src/jacobian/process.py",
+    ]
+
+
 def test_generic_private_operation_shadows_are_rejected(tmp_path: Path) -> None:
     _write(tmp_path, "src/jacobian/math/example/_operations.py", "pass\n")
     _write(tmp_path, "src/jacobian/math/example/operations.py", "pass\n")

@@ -969,7 +969,8 @@ def _minimum_axis_origin(values: tuple[Fraction, ...]) -> Fraction:
         if best_key is None or key < best_key:
             best_key = key
             best = candidate
-    assert best is not None
+    if best is None:
+        raise RuntimeError("spanned-circle origin selection produced no candidate")
     return best
 
 

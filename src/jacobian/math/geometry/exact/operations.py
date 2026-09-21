@@ -210,7 +210,8 @@ def euclidean_orbit_profile(
             if best_form is None or form < best_form:
                 best_form = form
                 best_relabeling = permutation
-        assert best_form is not None and best_relabeling is not None
+        if best_form is None or best_relabeling is None:
+            raise RuntimeError("orbit canonicalization produced no permutation")
         # ``permutation`` indexes the source row for each canonical position;
         # the public relabeling maps each source index to its canonical position.
         inverse = [0] * size

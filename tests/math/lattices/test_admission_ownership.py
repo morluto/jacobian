@@ -15,7 +15,7 @@ def test_saturation_checks_authored_rank_once(
     from jacobian.math.lattices import operations
 
     calls = 0
-    original = operations.integer_rank
+    original = getattr(operations, "integer_rank")
 
     def observe(matrix: list[list[int]]) -> int:
         nonlocal calls

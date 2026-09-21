@@ -64,14 +64,16 @@ def _apply_unary(node: IntervalExpressionNode, value: Any) -> Any:
     if node.op == "neg":
         return -value
     if node.op == "pow":
-        assert node.exponent is not None
-        if node.exponent < 0 and value.contains(0):
+        exponent = node.exponent
+        if exponent is None:
+            raise RuntimeError("power expression node has no exponent")
+        if exponent < 0 and value.contains(0):
             return (
                 _EvaluationFailure.DOMAIN_ERROR
                 if value.is_exact()
                 else _EvaluationFailure.PRECISION_INSUFFICIENT
             )
-        return value**node.exponent
+        return value**exponent
     if node.op == "log" and not value > 0:
         return (
             _EvaluationFailure.DOMAIN_ERROR
@@ -91,7 +93,8 @@ def _evaluate_expression(node: IntervalExpressionNode, variable: Any) -> Any:
     from flint import arb, fmpq
 
     if node.op == "const":
-        assert node.value is not None
+        if node.value is None:
+            raise RuntimeError("constant expression node has no value")
         numerator, denominator = node.value.as_integer_ratio()
         return arb(fmpq(numerator, denominator))
     if node.op == "var":
@@ -126,15 +129,26 @@ def expression_enclosure(
             code="analysis.expression.argument_bound",
             message=str(exc),
         ) from exc
-    if any(
-        node.op == "var" and node.variable is not None
-        for node in _bounded_expression_nodes(expression)
-    ):
-        raise OperationDomainValidationError(
-            location=("expression",),
-            code="analysis.expression.named_variable",
-            message="point-enclosure variable nodes must remain anonymous",
-        )
+    expression_nodes = _bounded_expression_nodes(expression)
+    for node in expression_nodes:
+        if node.op == "const" and node.value is None:
+            raise OperationDomainValidationError(
+                location=("expression",),
+                code="analysis.expression.missing_value",
+                message="constant expression nodes must carry a rational value",
+            )
+        if node.op == "pow" and node.exponent is None:
+            raise OperationDomainValidationError(
+                location=("expression",),
+                code="analysis.expression.missing_exponent",
+                message="power expression nodes must carry an integer exponent",
+            )
+        if node.op == "var" and node.variable is not None:
+            raise OperationDomainValidationError(
+                location=("expression",),
+                code="analysis.expression.named_variable",
+                message="point-enclosure variable nodes must remain anonymous",
+            )
     from flint import arb, fmpq
 
     numerator, denominator = argument.as_integer_ratio()
@@ -311,10 +325,12 @@ def _unary_second_jet(
     if node.op == "neg":
         return _negate_second_jet(child)
     if node.op == "pow":
-        assert node.exponent is not None
-        if node.exponent < 0 and child.value.contains(0):
+        exponent = node.exponent
+        if exponent is None:
+            raise RuntimeError("power expression node has no exponent")
+        if exponent < 0 and child.value.contains(0):
             return _SecondJetEvaluationFailure.BACKEND_ERROR
-        return _power_second_jet(child, node.exponent)
+        return _power_second_jet(child, exponent)
     if node.op == "exp":
         value = child.value.exp()
         return _compose_second_jet_unary(value, value, value, child)
@@ -341,7 +357,7 @@ def _unary_second_jet(
     if node.op == "cos":
         value = child.value.cos()
         return _compose_second_jet_unary(value, -child.value.sin(), -value, child)
-    raise AssertionError(f"unsupported unary expression operation: {node.op}")
+    raise RuntimeError(f"unsupported unary expression operation: {node.op}")
 
 
 def _evaluate_second_jet(
@@ -350,12 +366,14 @@ def _evaluate_second_jet(
     from flint import arb, fmpq
 
     if node.op == "const":
-        assert node.value is not None
+        if node.value is None:
+            raise RuntimeError("constant expression node has no value")
         return _constant_second_jet(
             arb(fmpq(*node.value.as_integer_ratio())), dimension
         )
     if node.op == "var":
-        assert node.variable is not None
+        if node.variable is None:
+            raise RuntimeError("variable expression node has no axis name")
         zero = arb(0)
         one = arb(1)
         index = tuple(variables).index(node.variable)
@@ -380,7 +398,6 @@ def _evaluate_second_jet(
         result = _unary_second_jet(node, left)
     else:
         right = children[1]
-        assert isinstance(right, _SecondJet)
         if node.op == "add":
             result = _add_second_jets(left, right)
         elif node.op == "sub":
@@ -392,7 +409,7 @@ def _evaluate_second_jet(
                 return _SecondJetEvaluationFailure.BACKEND_ERROR
             result = _multiply_second_jets(left, _power_second_jet(right, -1))
         else:
-            raise AssertionError(f"unsupported binary expression operation: {node.op}")
+            raise RuntimeError(f"unsupported binary expression operation: {node.op}")
     if isinstance(result, _SecondJetEvaluationFailure) or not _second_jet_is_finite(
         result
     ):
@@ -444,7 +461,7 @@ def second_jet_enclosure(
     dimension = len(box.variables)
     result_intervals = 1 + dimension + dimension * (dimension + 1) // 2
     if result_intervals > MAX_SECOND_JET_RESULT_INTERVALS:
-        raise AssertionError("second-jet result interval accounting is inconsistent")
+        raise RuntimeError("second-jet result interval accounting is inconsistent")
     work_units = len(_bounded_expression_nodes(expression)) * (
         _second_jet_node_arithmetic_units(dimension)
     )
@@ -523,7 +540,8 @@ def second_jet_enclosure(
     for first_index, first in enumerate(box.variables):
         for second_index, second in enumerate(box.variables[first_index:], first_index):
             enclosure = hessian_intervals[first_index][second_index]
-            assert enclosure is not None
+            if enclosure is None:
+                raise RuntimeError("second-jet Hessian endpoint conversion failed")
             hessian_entries.append(
                 HessianEntryEnclosure(
                     first_variable=first,

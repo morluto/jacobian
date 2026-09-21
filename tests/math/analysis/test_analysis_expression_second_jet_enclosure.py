@@ -8,7 +8,10 @@ from typing import Any
 import pytest
 
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.analysis._models import DyadicClosedInterval
+from jacobian.math.analysis._models import (
+    DyadicClosedInterval,
+    IntervalExpressionNode,
+)
 from jacobian.math.analysis._second_jet import (
     IntervalExpressionSecondJetEnclosureRequest,
     IntervalExpressionSecondJetEnclosureResult,
@@ -52,6 +55,31 @@ def _request(
                 "precision_bits": precision_bits,
             }
         )
+    )
+
+
+def test_trusted_variable_without_axis_is_rejected_before_arb() -> None:
+    request = _request(
+        _var("x"),
+        (("x", Fraction(0), Fraction(1)),),
+    )
+    malformed = IntervalExpressionNode.model_construct(
+        op="var",
+        value=None,
+        variable=None,
+        exponent=None,
+        children=(),
+    )
+
+    with pytest.raises(OperationDomainValidationError) as raised:
+        second_jet_enclosure(malformed, request.box, request.precision_bits)
+
+    assert raised.value.errors() == (
+        {
+            "type": "analysis.second_jet.intermediate_bound",
+            "loc": ("expression",),
+            "msg": "variable expression node has no axis name",
+        },
     )
 
 

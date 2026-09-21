@@ -59,11 +59,13 @@ def _preflight_second_jet_expression(
     """Prove the source tree is twice differentiable on the complete box."""
 
     if node.op == "const":
-        assert node.value is not None
+        if node.value is None:
+            raise ValueError("constant expression node has no value")
         value = node.value.as_fraction()
         return _bounded_rational_bounds(value, value)
     if node.op == "var":
-        assert node.variable is not None
+        if node.variable is None:
+            raise ValueError("variable expression node has no axis name")
         return variables[node.variable]
 
     children: list[_BoxPreflight] = []
@@ -74,7 +76,8 @@ def _preflight_second_jet_expression(
         children.append(child)
 
     left = children[0]
-    assert isinstance(left, _RationalBounds)
+    if not isinstance(left, _RationalBounds):
+        raise ValueError("expression child has no rational preflight bounds")
     if len(children) == 1:
         if node.op == "sqrt" and left.lower <= 0:
             return IntervalExpressionDomainFailure(
@@ -85,7 +88,8 @@ def _preflight_second_jet_expression(
         return _preflight_box_unary(node, left, path)
 
     right = children[1]
-    assert isinstance(right, _RationalBounds)
+    if not isinstance(right, _RationalBounds):
+        raise ValueError("expression child has no rational preflight bounds")
     return _preflight_box_binary(node, left, right, path)
 
 

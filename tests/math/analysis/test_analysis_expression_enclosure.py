@@ -9,6 +9,7 @@ from jsonschema import Draft202012Validator
 from pydantic import ValidationError
 from tests.math.analysis._analysis_support import analysis_validation_error
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.analysis._arb import dyadic_endpoints
 from jacobian.math.analysis._expression_enclosure import (
     IntervalExpressionEnclosureRequest,
@@ -18,6 +19,7 @@ from jacobian.math.analysis._models import (
     MAX_DYADIC_EXPONENT,
     MAX_DYADIC_MANTISSA_DIGITS,
     ExactDyadic,
+    IntervalExpressionNode,
 )
 from jacobian.math.analysis.operations import expression_enclosure
 
@@ -56,6 +58,34 @@ def _run(
     )
     return expression_enclosure(
         request.expression, request.argument, request.precision_bits
+    )
+
+
+def test_trusted_constant_without_value_is_rejected_before_arb() -> None:
+    malformed = IntervalExpressionNode.model_construct(
+        op="const",
+        value=None,
+        variable=None,
+        exponent=None,
+        children=(),
+    )
+
+    request = IntervalExpressionEnclosureRequest.model_validate(
+        {
+            "expression": {"op": "var"},
+            "argument": {"num": 0, "den": 1},
+            "precision_bits": 128,
+        }
+    )
+    with pytest.raises(OperationDomainValidationError) as raised:
+        expression_enclosure(malformed, request.argument, request.precision_bits)
+
+    assert raised.value.errors() == (
+        {
+            "type": "analysis.expression.missing_value",
+            "loc": ("expression",),
+            "msg": "constant expression nodes must carry a rational value",
+        },
     )
 
 

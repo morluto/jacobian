@@ -15,6 +15,7 @@ from jacobian._execution import (
     bind_request_deadline,
     request_execution,
 )
+from jacobian._worker_protocol import encode_worker_result_frame
 from jacobian.math.polynomials._conversions import (
     rational_function_from_sympy,
     sparse_rational_polynomial_to_sympy,
@@ -161,13 +162,12 @@ def test_normalization_reuses_the_admitted_derivative_factor(
     def fake(*args: Any, **kwargs: Any) -> BoundedProcessResult:
         captured["payload"] = json.loads(kwargs["input_bytes"])
         return _completed(
-            stdout=json.dumps(
+            stdout=encode_worker_result_frame(
                 {
                     "numerator": [[0, "-33", "1"]],
                     "denominator": [[34, "1", "1"], [0, "1", "1"]],
-                },
-                separators=(",", ":"),
-            ).encode()
+                }
+            )
         )
 
     monkeypatch.setattr(process, "run_bounded_process", fake)

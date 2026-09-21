@@ -350,9 +350,7 @@ def _add_polynomials(
     left_multiplier = left.rational_content / common_content
     right_multiplier = right.rational_content / common_content
     if left_multiplier.denominator != 1 or right_multiplier.denominator != 1:
-        raise AssertionError(
-            "rational polynomial content gcd did not divide both inputs"
-        )
+        raise RuntimeError("rational polynomial content gcd did not divide both inputs")
 
     def scaled_digits(coefficient_digits: int, multiplier: int) -> int:
         if abs(multiplier) <= 1:

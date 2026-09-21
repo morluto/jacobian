@@ -424,7 +424,7 @@ def _monic_guard(value: RationalFunction) -> RationalPolynomial | None:
 
 def _constant_fraction(value: RationalFunction) -> Fraction:
     if value.variables:
-        raise AssertionError("constant evaluator requires an empty source axis")
+        raise RuntimeError("constant evaluator requires an empty source axis")
     if not value.numerator.terms:
         return Fraction(0)
     return value.numerator.terms[0].coefficient.as_fraction()
@@ -814,20 +814,23 @@ def compose_maps(  # noqa: C901
             composites.append(cached)
             continue
         if use_monomial_path:
-            assert (
-                prepared_component.numerator is not None
-                and prepared_component.numerator_denominator is not None
-                and prepared_component.denominator is not None
-                and prepared_component.denominator_denominator is not None
+            prepared_numerator = prepared_component.numerator
+            prepared_numerator_denominator = prepared_component.numerator_denominator
+            prepared_denominator = prepared_component.denominator
+            prepared_denominator_denominator = (
+                prepared_component.denominator_denominator
             )
-            p_num = _prepared_poly_to_sympy(prepared_component.numerator, xvars)
-            p_den = _prepared_poly_to_sympy(
-                prepared_component.numerator_denominator, xvars
-            )
-            q_num = _prepared_poly_to_sympy(prepared_component.denominator, xvars)
-            q_den = _prepared_poly_to_sympy(
-                prepared_component.denominator_denominator, xvars
-            )
+            if (
+                prepared_numerator is None
+                or prepared_numerator_denominator is None
+                or prepared_denominator is None
+                or prepared_denominator_denominator is None
+            ):
+                raise RuntimeError("monomial composition preparation is incomplete")
+            p_num = _prepared_poly_to_sympy(prepared_numerator, xvars)
+            p_den = _prepared_poly_to_sympy(prepared_numerator_denominator, xvars)
+            q_num = _prepared_poly_to_sympy(prepared_denominator, xvars)
+            q_den = _prepared_poly_to_sympy(prepared_denominator_denominator, xvars)
         else:
             p_num, p_den = substitute(outer_component.numerator)
             q_num, q_den = substitute(outer_component.denominator)

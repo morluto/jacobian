@@ -476,7 +476,7 @@ def _run_request(
                 attempt=RootBoxInconclusiveKrawczykAttempt(evidence=evidence)
             )
     else:
-        raise AssertionError("unknown root-box kernel outcome")
+        raise RuntimeError("unknown root-box kernel outcome")
     return PolynomialSystemRootBoxResult._from_kernel(
         polynomial_map=polynomial_map,
         box=box,

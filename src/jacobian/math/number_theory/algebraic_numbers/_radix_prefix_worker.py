@@ -6,6 +6,8 @@ import json
 import sys
 from fractions import Fraction
 
+from jacobian._worker_protocol import encode_worker_result_frame
+
 
 def _unique_floor_of_open_interval(lower: Fraction, upper: Fraction) -> int | None:
     floor_lower = lower.numerator // lower.denominator
@@ -67,12 +69,24 @@ def main() -> int:
     except ValueError as exc:
         message = str(exc)
         code = "not_irreducible" if "irreducible" in message else "root_index"
-        json.dump({"ok": False, "code": code, "message": message}, sys.stdout)
+        sys.stdout.buffer.write(
+            encode_worker_result_frame(
+                {"tag": "domain_error", "code": code, "message": message}
+            )
+        )
         return 0
     except TimeoutError as exc:
-        json.dump({"ok": False, "code": "refinement", "message": str(exc)}, sys.stdout)
+        sys.stdout.buffer.write(
+            encode_worker_result_frame(
+                {"tag": "refinement", "message": str(exc)}
+            )
+        )
         return 0
-    json.dump({"ok": True, "scaled_floor": str(int(scaled_floor))}, sys.stdout)
+    sys.stdout.buffer.write(
+        encode_worker_result_frame(
+            {"tag": "success", "scaled_floor": str(int(scaled_floor))}
+        )
+    )
     return 0
 
 

@@ -57,6 +57,16 @@ def test_checked_worker_rejects_malformed_or_nonterminal_frames(output: bytes) -
     assert caught.value.reason == BackendFailureReason.MALFORMED_RESPONSE
 
 
+def test_checked_worker_accepts_owner_frame_limit_above_default() -> None:
+    payload = {"answer": "x" * (16 * 1024 * 1024)}
+    output = encode_worker_result_frame(payload)
+    assert decode_checked_worker_output(
+        output,
+        decode_result=lambda value: value,
+        max_frame_bytes=17 * 1024 * 1024,
+    ) == payload
+
+
 def test_checked_worker_preserves_classified_backend_error() -> None:
     with pytest.raises(OperationBackendError) as caught:
         decode_checked_worker_output(

@@ -12,6 +12,7 @@ from jacobian._execution import (
     OperationBackendError,
     OperationResourceExhaustedError,
 )
+from jacobian._worker_protocol import encode_worker_result_frame
 from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -356,7 +357,9 @@ def test_worker_refinement_code_is_a_backend_failure(
     ) -> BoundedProcessResult:
         return BoundedProcessResult(
             returncode=0,
-            stdout=b'{"ok": false, "code": "refinement", "message": "stuck"}',
+            stdout=encode_worker_result_frame(
+                {"tag": "refinement", "message": "stuck"}
+            ),
             stderr=b"",
             stdout_exceeded=False,
             stderr_exceeded=False,
@@ -379,7 +382,9 @@ def test_worker_refinement_code_is_a_backend_failure(
 def _worker_process_result(
     *,
     returncode: int = 0,
-    stdout: bytes = b'{"ok": true, "scaled_floor": "1"}',
+    stdout: bytes = encode_worker_result_frame(
+        {"tag": "success", "scaled_floor": "1"}
+    ),
     stdout_exceeded: bool = False,
     stderr_exceeded: bool = False,
     timed_out: bool = False,
@@ -475,7 +480,10 @@ def test_malformed_worker_payloads_are_typed_backend_failures(
 
 
 def test_valid_worker_payload_is_decoded(monkeypatch: pytest.MonkeyPatch) -> None:
-    _worker_result(monkeypatch, b'{"ok": true, "scaled_floor": "141"}')
+    _worker_result(
+        monkeypatch,
+        encode_worker_result_frame({"tag": "success", "scaled_floor": "141"}),
+    )
     assert (
         process.run_scaled_integer_part_worker(
             polynomial=(1, 0, -2),
@@ -510,7 +518,8 @@ def test_oversized_worker_floor_is_a_malformed_response(
     """A canonical but over-envelope floor is refused before decoding."""
     oversized = "1" + "0" * 4_999
     _worker_result(
-        monkeypatch, f'{{"ok": true, "scaled_floor": "{oversized}"}}'.encode()
+        monkeypatch,
+        encode_worker_result_frame({"tag": "success", "scaled_floor": oversized}),
     )
     with pytest.raises(OperationBackendError) as error:
         process.run_scaled_integer_part_worker(
@@ -583,7 +592,8 @@ def test_worker_floor_bound_has_no_extra_slack(
     bound = 5
     oversized = "1" * (bound + 1)
     _worker_result(
-        monkeypatch, f'{{"ok": true, "scaled_floor": "{oversized}"}}'.encode()
+        monkeypatch,
+        encode_worker_result_frame({"tag": "success", "scaled_floor": oversized}),
     )
     with pytest.raises(OperationBackendError) as error:
         process.run_scaled_integer_part_worker(

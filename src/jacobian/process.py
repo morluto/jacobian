@@ -61,6 +61,7 @@ __all__ = [
     "decode_checked_worker_output",
     "run_bounded_process",
     "run_bounded_worker_dialogue",
+    "run_checked_worker_process",
     "worker_environment",
 ]
 
@@ -101,17 +102,25 @@ def decode_checked_worker_output[CheckedResultT](
     *,
     decode_result: Callable[[Any], CheckedResultT],
     checkpoint: Callable[[], None] | None = None,
+    max_frame_bytes: int = _CHECKED_WORKER_FRAME_BYTES,
 ) -> CheckedResultT:
-    """Decode bounded private frames and require exactly one terminal result."""
+    """Decode bounded private frames and require exactly one terminal result.
 
-    if not output or len(output) > _CHECKED_WORKER_FRAME_BYTES:
+    ``max_frame_bytes`` is an owner-supplied bound for the complete framed
+    channel and each individual frame.  It must not exceed the supervisor's
+    stdout limit; the supervisor remains responsible for enforcing that limit.
+    """
+
+    if max_frame_bytes <= 0:
+        raise ValueError("checked worker frame limit must be positive")
+    if not output or len(output) > max_frame_bytes:
         raise OperationBackendError(BackendFailureReason.MALFORMED_RESPONSE)
     result: CheckedResultT | None = None
     terminal = False
     last_progress = -1
     try:
         for raw_frame in output.splitlines():
-            if not raw_frame or len(raw_frame) > _CHECKED_WORKER_FRAME_BYTES:
+            if not raw_frame or len(raw_frame) > max_frame_bytes:
                 raise ValueError
             frame = json.loads(raw_frame)
             if checkpoint is None:
@@ -165,6 +174,60 @@ def decode_checked_worker_output[CheckedResultT](
     if not terminal or result is None:
         raise OperationBackendError(BackendFailureReason.MALFORMED_RESPONSE)
     return result
+
+
+def run_checked_worker_process[CheckedResultT](
+    command: Sequence[str],
+    *,
+    input_bytes: bytes,
+    timeout_seconds: float,
+    environment: Mapping[str, str],
+    stdout_limit: int,
+    stderr_limit: int,
+    decode_result: Callable[[Any], CheckedResultT],
+    max_frame_bytes: int | None = None,
+    checkpoint: Callable[[], None] | None = None,
+    resource_limits: ProcessResourceLimits | None = None,
+    cwd: str | None = None,
+    platform_tools: ProcessPlatformTools | None = None,
+    cancellation_event: RequestCancellationSignal | None = None,
+) -> CheckedResultT:
+    """Run and decode one newline-framed worker under one supervisor.
+
+    Classification is deliberately performed before decoding, preserving the
+    supervisor precedence of cancellation, timeout, output exhaustion, and
+    abnormal exit.  Owners retain control of the result decoder and its
+    mathematical/domain taxonomy.
+    """
+
+    frame_limit = stdout_limit if max_frame_bytes is None else max_frame_bytes
+    if frame_limit <= 0 or frame_limit > stdout_limit:
+        raise ValueError("checked worker frame limit must fit stdout limit")
+    completed = run_bounded_process(
+        command,
+        input_bytes=input_bytes,
+        timeout_seconds=timeout_seconds,
+        environment=environment,
+        stdout_limit=stdout_limit,
+        stderr_limit=stderr_limit,
+        resource_limits=resource_limits,
+        cwd=cwd,
+        platform_tools=platform_tools,
+        cancellation_event=cancellation_event,
+    )
+    check_bounded_process_result(completed)
+    # This checkpoint is intentionally before any owner decoder runs: a
+    # successful child must not authorize decoding after the shared deadline.
+    if checkpoint is None:
+        request_checkpoint("before checked worker result decode")
+    else:
+        checkpoint()
+    return decode_checked_worker_output(
+        completed.stdout,
+        decode_result=decode_result,
+        checkpoint=checkpoint,
+        max_frame_bytes=frame_limit,
+    )
 
 
 class BoundedWorkerDialogueErrorReason(StrEnum):

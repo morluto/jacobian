@@ -29,6 +29,7 @@ from __future__ import annotations
 import math
 from collections.abc import Iterable, Sequence
 from fractions import Fraction
+from typing import TypedDict
 
 from sympy import Rational
 
@@ -67,6 +68,15 @@ __all__ = ["polytopal_complex_closure"]
 Point = tuple[Fraction, ...]
 FaceKey = tuple[Point, ...]
 FacetRows = tuple[tuple[Fraction, ...], Fraction]
+
+
+class _CanonicalCellRecord(TypedDict):
+    sources: list[int]
+    facets: list[FacetRows]
+    faces: set[FaceKey]
+
+
+type _CanonicalCells = dict[FaceKey, _CanonicalCellRecord]
 
 
 def _point(coordinates: tuple[CanonicalRational, ...]) -> Point:
@@ -318,10 +328,10 @@ def _complex_point(point: Point) -> ComplexPoint:
 
 def _collect_canonical_cells(
     cells: Sequence[RationalVPolytope], dimension: int
-) -> tuple[dict[FaceKey, dict[str, object]], list[int]]:
+) -> tuple[_CanonicalCells, list[int]]:
     """Deduplicate maximal cells and enumerate each cell's face closure."""
 
-    canonical_cells: dict[FaceKey, dict[str, object]] = {}
+    canonical_cells: _CanonicalCells = {}
     facet_counts: list[int] = []
     estimated_work = 0
     for index, cell in enumerate(cells):
@@ -360,22 +370,18 @@ def _collect_canonical_cells(
             }
             facet_counts.append(len(facets))
         else:
-            sources = record["sources"]
-            assert isinstance(sources, list)
-            sources.append(index)
+            record["sources"].append(index)
     return canonical_cells, facet_counts
 
 
 def _union_global_faces(
-    canonical_cells: dict[FaceKey, dict[str, object]],
+    canonical_cells: _CanonicalCells,
 ) -> set[FaceKey]:
     """Union every cell face into the canonical global face family."""
 
     global_faces: set[FaceKey] = {()}
     for record in canonical_cells.values():
-        faces = record["faces"]
-        assert isinstance(faces, set)
-        global_faces |= faces
+        global_faces |= record["faces"]
         if len(global_faces) > MAX_COMPLEX_TOTAL_FACES:
             raise OperationResourceAdmissionError(
                 location=("cells",),
@@ -389,7 +395,7 @@ def _union_global_faces(
 
 
 def _build_pairwise_rows(
-    canonical_cells: dict[FaceKey, dict[str, object]],
+    canonical_cells: _CanonicalCells,
     ordered_cell_keys: list[FaceKey],
     faces_of_cell: dict[str, set[FaceKey]],
     face_id_of: dict[FaceKey, str],
@@ -406,13 +412,9 @@ def _build_pairwise_rows(
             second_key = ordered_cell_keys[second]
             first_facets = canonical_cells[first_key]["facets"]
             second_facets = canonical_cells[second_key]["facets"]
-            assert isinstance(first_facets, list)
-            assert isinstance(second_facets, list)
             intersection = _intersection_key(first_facets, second_facets, dimension)
             first_sources = canonical_cells[first_key]["sources"]
             second_sources = canonical_cells[second_key]["sources"]
-            assert isinstance(first_sources, list)
-            assert isinstance(second_sources, list)
             first_source = min(first_sources)
             second_source = min(second_sources)
             first_id = cell_id_of[first_key]
@@ -506,7 +508,7 @@ def _build_face_models(
 
 
 def _build_cell_models(
-    canonical_cells: dict[FaceKey, dict[str, object]],
+    canonical_cells: _CanonicalCells,
     ordered_cell_keys: list[FaceKey],
     cell_id_of: dict[FaceKey, str],
     face_id_of: dict[FaceKey, str],
@@ -521,8 +523,6 @@ def _build_cell_models(
         record = canonical_cells[cell_key]
         sources = record["sources"]
         cell_faces = record["faces"]
-        assert isinstance(sources, list)
-        assert isinstance(cell_faces, set)
         facet_keys = sorted(
             (face for face in cell_faces if _affine_dimension(face) == dimension - 1),
             key=lambda key: face_index_of[key],
@@ -540,7 +540,7 @@ def _build_cell_models(
 
 
 def _build_source_rows(
-    canonical_cells: dict[FaceKey, dict[str, object]],
+    canonical_cells: _CanonicalCells,
     ordered_cell_keys: list[FaceKey],
     cell_id_of: dict[FaceKey, str],
     source_count: int,
@@ -550,7 +550,6 @@ def _build_source_rows(
     source_to_cell: dict[int, str] = {}
     for cell_key in ordered_cell_keys:
         sources = canonical_cells[cell_key]["sources"]
-        assert isinstance(sources, list)
         for source in sources:
             source_to_cell[source] = cell_id_of[cell_key]
     return tuple(
@@ -590,7 +589,6 @@ def polytopal_complex_closure(
     faces_of_cell: dict[str, set[FaceKey]] = {}
     for cell_key in ordered_cell_keys:
         cell_faces = canonical_cells[cell_key]["faces"]
-        assert isinstance(cell_faces, set)
         cell_id = cell_id_of[cell_key]
         faces_of_cell[cell_id] = set(cell_faces)
         for face_key in cell_faces:

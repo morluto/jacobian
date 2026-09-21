@@ -79,7 +79,8 @@ def _divide_by_nodal_factor(
     quotient[-1] = polynomial[-1]
     for degree in range(len(quotient) - 2, -1, -1):
         quotient[degree] = polynomial[degree + 1] + root * quotient[degree + 1]
-    assert polynomial[0] + root * quotient[0] == 0
+    if polynomial[0] + root * quotient[0] != 0:
+        raise RuntimeError("nodal polynomial division left a nonzero remainder")
     return quotient
 
 

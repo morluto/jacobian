@@ -263,7 +263,8 @@ class ArbPointEnclosureResult(ArbPointEnclosureRequest):
             )
         if enclosed:
             enclosure = self.enclosure
-            assert enclosure is not None
+            if enclosure is None:
+                raise _validation_error("an enclosed result must carry its enclosure")
             if (
                 enclosure.function,
                 enclosure.argument,

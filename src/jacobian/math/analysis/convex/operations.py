@@ -163,7 +163,8 @@ def max_affine_evaluation(
             active_pieces.append(piece.piece_id)
 
     all_values = tuple((pid, CanonicalRational.from_fraction(v)) for pid, v in values)
-    assert max_value is not None
+    if max_value is None:
+        raise RuntimeError("admitted max-affine function has no pieces")
     return MaxAffineEvalResult(
         function=function,
         point=point,

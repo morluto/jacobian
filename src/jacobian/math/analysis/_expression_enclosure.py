@@ -61,8 +61,13 @@ class IntervalExpressionEnclosureResult(StrictModel):
                 "a non-enclosure cannot claim accuracy or exactness"
             )
         if enclosed:
-            assert self.lower is not None and self.upper is not None
-            if self.lower.compare(self.upper) > 0:
+            lower = self.lower
+            upper = self.upper
+            if lower is None or upper is None:
+                raise _validation_error(
+                    "an enclosed result must carry both dyadic endpoints"
+                )
+            if lower.compare(upper) > 0:
                 raise _validation_error(
                     "enclosure lower endpoint exceeds upper endpoint"
                 )

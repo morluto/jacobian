@@ -51,7 +51,7 @@ def _integer_matrix(
     rows: int, columns: int, entries: tuple[tuple[int, ...], ...]
 ) -> fmpz_mat:
     if len(entries) != rows or any(len(row) != columns for row in entries):
-        raise AssertionError("integer matrix entries disagree with their shape")
+        raise RuntimeError("integer matrix entries disagree with their shape")
     return fmpz_mat(rows, columns, [value for row in entries for value in row])
 
 
@@ -190,7 +190,7 @@ def _solve_integral_character_system(
     ambient_dimension = kernel.transpose_hnf.nrows()
     equation_count = kernel.transpose_hnf.ncols()
     if len(right_hand_side) != equation_count:
-        raise AssertionError("character right-hand side has the wrong dimension")
+        raise RuntimeError("character right-hand side has the wrong dimension")
     if equation_count == 0:
         return (0,) * ambient_dimension
     if any(
@@ -239,7 +239,7 @@ def compute_fixed_locus_kernel(
         or any(len(row) != dimension for row in source.linear_part)
         or len(source.translation) != dimension
     ):
-        raise AssertionError("affine-torus kernel source has inconsistent dimensions")
+        raise RuntimeError("affine-torus kernel source has inconsistent dimensions")
     linear = _integer_matrix(
         dimension,
         dimension,

@@ -96,7 +96,7 @@ class AffineTorusFixedLocusPlan:
         for bounds in self.rank_bounds:
             if bounds.rank == rank:
                 return bounds
-        raise AssertionError("affine-torus rank is outside its admitted plan")
+        raise RuntimeError("affine-torus rank is outside its admitted plan")
 
 
 def _reject(reason: str, message: str) -> NoReturn:
@@ -243,7 +243,7 @@ def _first_rank_minor(
             if current_rank == rank:
                 break
     if len(rows) != rank or len(columns) != rank:
-        raise AssertionError("rank-minor selection did not reach the matrix rank")
+        raise RuntimeError("rank-minor selection did not reach the matrix rank")
     return tuple(rows), tuple(columns)
 
 
@@ -266,7 +266,7 @@ def _selected_rank_minor_inverse(
             None,
         )
         if pivot is None:
-            raise AssertionError("selected rank minor is singular")
+            raise RuntimeError("selected rank minor is singular")
         augmented[column], augmented[pivot] = augmented[pivot], augmented[column]
         pivot_value = augmented[column][column]
         augmented[column] = [value / pivot_value for value in augmented[column]]
@@ -334,13 +334,13 @@ def _congruence_kernel_basis(
     """
 
     if modulus <= 0:
-        raise AssertionError("congruence modulus must be positive")
+        raise RuntimeError("congruence modulus must be positive")
     basis = [
         [int(row == column) for column in range(dimension)] for row in range(dimension)
     ]
     for constraint in constraints:
         if len(constraint) != dimension:
-            raise AssertionError("congruence constraint has the wrong dimension")
+            raise RuntimeError("congruence constraint has the wrong dimension")
         transformed = [
             sum(constraint[row] * basis[row][column] for row in range(dimension))
             for column in range(dimension)
@@ -444,9 +444,7 @@ def _modular_obstruction_pairing_height(
                 Fraction(0),
             )
         if any(value.denominator != 1 for value in character):
-            raise AssertionError(
-                "congruence basis did not produce an integer character"
-            )
+            raise RuntimeError("congruence basis did not produce an integer character")
         pairings.append(
             sum(
                 (character[index] * translation[index] for index in range(dimension)),
@@ -487,7 +485,7 @@ def _selected_zero_lift_base_point_height(
         rows, columns, inverse = _selected_rank_minor_inverse(displacement, rank)
     else:
         if selected_rows is None or selected_columns is None:
-            raise AssertionError("selected minor coordinates are required")
+            raise RuntimeError("selected minor coordinates are required")
         rows, columns, inverse = selected_rows, selected_columns, selected_inverse
     solution = [
         sum(inverse[column][row] * -translation[rows[column]] for column in range(rank))

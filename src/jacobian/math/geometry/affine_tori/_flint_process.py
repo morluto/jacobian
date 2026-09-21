@@ -781,7 +781,7 @@ def compute_fixed_locus_kernel(
         len(input_bytes) > plan.worker_input_bytes_upper_bound
         or len(input_bytes) > _WORKER_STDIN_LIMIT
     ):
-        raise AssertionError("admitted affine-torus worker request exceeded its bound")
+        raise RuntimeError("admitted affine-torus worker request exceeded its bound")
     request_digest = hashlib.sha256(input_bytes).hexdigest()
     require_affine_torus_deadline(plan.deadline, "before FLINT worker setup")
     try:

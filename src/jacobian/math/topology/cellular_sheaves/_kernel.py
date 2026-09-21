@@ -90,6 +90,11 @@ class _ExactField:
         self.field = field
         self.prime = prime
 
+    def prime_modulus(self) -> int:
+        if self.prime is None:
+            raise RuntimeError("prime-field arithmetic has no modulus")
+        return self.prime
+
     def parse(self, text: str) -> Scalar:
         stripped = text.strip()
         if self.field is SheafField.RATIONAL:
@@ -98,12 +103,13 @@ class _ExactField:
             return Fraction(stripped)
         if not stripped or any(char not in "-+0123456789" for char in stripped):
             raise ValueError(f"{text!r} is not an exact integer scalar")
-        assert self.prime is not None
-        return int(stripped) % self.prime
+        prime = self.prime_modulus()
+        return int(stripped) % prime
 
     def text(self, value: Scalar) -> str:
         if self.field is SheafField.RATIONAL:
-            assert isinstance(value, Fraction)
+            if not isinstance(value, Fraction):
+                raise RuntimeError("rational sheaf field received a modular scalar")
             if value.denominator == 1:
                 return format_canonical_integer(value.numerator)
             return (
@@ -136,8 +142,7 @@ class _ExactField:
                 for k in range(inner):
                     total = total + left[i][k] * right[k][j]
                 if self.field is SheafField.PRIME_FIELD:
-                    assert self.prime is not None
-                    total = int(total) % self.prime
+                    total = int(total) % self.prime_modulus()
                 row.append(total)
             product.append(tuple(row))
         return tuple(product)
@@ -516,33 +521,31 @@ def _negative(obstruction: SheafObstruction) -> FromCoverMapsResult:
 
 def _cochain_neg(field: _ExactField, value: Scalar) -> Scalar:
     if field.field is SheafField.RATIONAL:
-        assert isinstance(value, Fraction)
+        if not isinstance(value, Fraction):
+            raise RuntimeError("rational cochain received a modular scalar")
         return -value
-    assert field.prime is not None
-    return (-int(value)) % field.prime
+    return (-int(value)) % field.prime_modulus()
 
 
 def _cochain_inv(field: _ExactField, value: Scalar) -> Scalar:
     if field.field is SheafField.RATIONAL:
-        assert isinstance(value, Fraction)
+        if not isinstance(value, Fraction):
+            raise RuntimeError("rational cochain received a modular scalar")
         return Fraction(1, 1) / value
-    assert field.prime is not None
-    return pow(int(value), -1, field.prime)
+    return pow(int(value), -1, field.prime_modulus())
 
 
 def _cochain_add(field: _ExactField, left: Scalar, right: Scalar) -> Scalar:
     total = left + right
     if field.field is SheafField.PRIME_FIELD:
-        assert field.prime is not None
-        return int(total) % field.prime
+        return int(total) % field.prime_modulus()
     return total
 
 
 def _cochain_mul(field: _ExactField, left: Scalar, right: Scalar) -> Scalar:
     product = left * right
     if field.field is SheafField.PRIME_FIELD:
-        assert field.prime is not None
-        return int(product) % field.prime
+        return int(product) % field.prime_modulus()
     return product
 
 
@@ -672,7 +675,12 @@ def _cohomology_admission(sheaf: FiniteCellularSheaf) -> _ExactField:
     """Admit the sheaf field and the cochain work envelope exactly once."""
     field = _admit_field(sheaf.coefficient_field, sheaf.prime)
     if sheaf.coefficient_field is SheafField.PRIME_FIELD:
-        assert sheaf.prime is not None
+        if sheaf.prime is None:
+            raise _domain(
+                "prime_required",
+                "prime-field cellular cohomology needs a modulus",
+                ("sheaf", "prime"),
+            )
         if not _is_prime(sheaf.prime):
             raise _domain(
                 "prime_not_admitted",

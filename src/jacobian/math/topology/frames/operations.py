@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from fractions import Fraction
 from math import gcd
+from typing import cast
 
 from jacobian._exact import (
     MAX_CANONICAL_RATIONAL_DIGITS,
@@ -97,9 +98,9 @@ def _admit_canonical_component(
             code="frames.complex_scalar_component_type",
             message="Gaussian-rational components must be canonical rationals",
         )
-    assert isinstance(component, CanonicalRational)
-    numerator = getattr(component, "num", None)
-    denominator = getattr(component, "den", None)
+    canonical_component = component
+    numerator = getattr(canonical_component, "num", None)
+    denominator = getattr(canonical_component, "den", None)
     if type(numerator) is not int or type(denominator) is not int or denominator <= 0:
         raise OperationDomainValidationError(
             location=location,
@@ -108,7 +109,7 @@ def _admit_canonical_component(
         )
     try:
         require_bounded_rational(
-            component,
+            canonical_component,
             max_digits=MAX_GAUSSIAN_RATIONAL_COMPONENT_DIGITS,
             label="Gaussian-rational component",
         )
@@ -257,7 +258,6 @@ def _admit_vector_family(
                     code="frames.vector_entry_out_of_range",
                     message="vector entries must be bounded",
                 )
-    assert isinstance(value, VectorFamily)
     return value
 
 
@@ -289,16 +289,17 @@ def _admit_mub(
         )
     for basis_index, basis in enumerate(bases):
         _admit_complex_frame(basis, location=("bases", basis_index))
-        assert type(basis) is ComplexFrame
-        if basis.dimension != dimension or len(basis.vectors) != dimension:
+        admitted_basis = cast(ComplexFrame, basis)
+        if (
+            admitted_basis.dimension != dimension
+            or len(admitted_basis.vectors) != dimension
+        ):
             raise OperationDomainValidationError(
                 location=("bases", basis_index),
                 code="frames.mub_basis_shape",
                 message="every basis must have exactly dimension vectors of that dimension",
             )
-    assert type(dimension) is int
-    assert type(bases) is tuple
-    return dimension, bases
+    return dimension, cast(tuple[ComplexFrame, ...], bases)
 
 
 def _complex_parts(value: GaussianRational) -> tuple[Fraction, Fraction]:
@@ -706,7 +707,8 @@ def _tight_complex_frame(
     for index, vector in enumerate(frame.vectors):
         scale = Fraction(1)
         if normalized_projectors:
-            assert norms is not None
+            if norms is None:
+                raise RuntimeError("normalized frame operator has no source norms")
             scale = Fraction(1, 1) / norms[index]
         for row in range(frame.dimension):
             first_real, first_imaginary = _complex_parts(vector[row])
@@ -869,7 +871,8 @@ def coherence(value: VectorFamily) -> CoherenceResult:
     _admit_frame_shape(value)
     rank, matrix = integer_gram_and_rank(value.vectors, dimension=value.dimension)
     _admit_frame(value, rank=rank)
-    assert matrix is not None
+    if matrix is None:
+        raise RuntimeError("admitted coherence computation has no Gram matrix")
     maximum_numerator = 0
     maximum_denominator = 1
     pair: tuple[int, int] | None = None
@@ -905,7 +908,8 @@ def frame_potential(value: VectorFamily) -> FramePotentialResult:
     _admit_frame_shape(value)
     rank, matrix = integer_gram_and_rank(value.vectors, dimension=value.dimension)
     _admit_frame(value, rank=rank)
-    assert matrix is not None
+    if matrix is None:
+        raise RuntimeError("admitted frame-potential computation has no Gram matrix")
     total = sum(entry**2 for row in matrix for entry in row)
     return FramePotentialResult._from_kernel(
         vectors=value.vectors, dimension=value.dimension, potential=total
@@ -926,7 +930,8 @@ def tight_equiangular_profile(value: VectorFamily) -> TightEquiangularProfileRes
     _admit_frame_shape(value)
     rank, matrix = integer_gram_and_rank(value.vectors, dimension=value.dimension)
     _admit_frame(value, rank=rank)
-    assert matrix is not None
+    if matrix is None:
+        raise RuntimeError("admitted frame-profile computation has no Gram matrix")
     dimension = value.dimension
     frame_operator = [
         [

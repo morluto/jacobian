@@ -168,7 +168,7 @@ def _constant_weight_profile_data(
             distance = (left ^ right).bit_count()
             intersection = (left & right).bit_count()
             if distance != 2 * (weight - intersection):
-                raise AssertionError(
+                raise RuntimeError(
                     "constant-weight Hamming and support-intersection identities differ"
                 )
             distance_histogram[distance] += 1

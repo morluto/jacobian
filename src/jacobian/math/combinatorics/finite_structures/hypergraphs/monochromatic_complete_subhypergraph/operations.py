@@ -299,9 +299,7 @@ def construct(
                 witness.append(edge_id)
             else:
                 if candidate_color is None:
-                    raise AssertionError(
-                        "positive source uniformity requires a witness"
-                    )
+                    raise RuntimeError("positive source uniformity requires a witness")
                 target_edges_list.append((f"c{len(target_edges_list)}", target))
                 candidate_colors_list.append(candidate_color)
                 source_witnesses_list.append(tuple(witness))

@@ -741,7 +741,7 @@ def _minimum_component_transversal(
             if all(candidate & edge for edge in edge_sets):
                 return combo
     # Unreachable: the component vertex set hits every component edge.
-    raise AssertionError("minimum transversal search exhausted all vertices")
+    raise RuntimeError("minimum transversal search exhausted all vertices")
 
 
 def _minimum_transversal_data(

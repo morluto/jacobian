@@ -142,7 +142,7 @@ def _validation_error(message: str) -> PydanticCustomError:
     for fragment, reason in reason_fragments:
         if fragment in message:
             return PydanticCustomError(f"hypergraph.{reason}", message)
-    raise AssertionError(f"unmapped hypergraph validation reason: {message}")
+    return PydanticCustomError("hypergraph.validation", message)
 
 
 def _encoded_utf8_label(label: str) -> bytes:

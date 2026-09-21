@@ -544,7 +544,7 @@ def _compute_residue_profile(
             if next_witness_masks is not None and witness_masks is not None:
                 prior_mask = witness_masks[prior_residue]
                 if prior_mask is None:
-                    raise AssertionError("positive multiplicity must have a witness")
+                    raise RuntimeError("positive multiplicity has no subset witness")
                 candidate = prior_mask | bit
                 current = next_witness_masks[target]
                 if current is None or candidate < current:

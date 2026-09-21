@@ -134,6 +134,26 @@ class _ExactField:
         rows = len(left)
         inner = len(right)
         columns = len(right[0]) if inner else 0
+        if rows and inner and columns and rows * inner * columns >= 64:
+            from jacobian.math.matrices._exact_backend import (
+                prime_field_product,
+                rational_product,
+            )
+
+            if self.field is SheafField.RATIONAL:
+                rational_left = tuple(
+                    tuple(value if isinstance(value, Fraction) else Fraction(value) for value in row)
+                    for row in left
+                )
+                rational_right = tuple(
+                    tuple(value if isinstance(value, Fraction) else Fraction(value) for value in row)
+                    for row in right
+                )
+                return rational_product(rational_left, rational_right)
+            assert self.prime is not None
+            integer_left = tuple(tuple(int(value) for value in row) for row in left)
+            integer_right = tuple(tuple(int(value) for value in row) for row in right)
+            return prime_field_product(integer_left, integer_right, self.prime)
         product: list[tuple[Scalar, ...]] = []
         for i in range(rows):
             row: list[Scalar] = []

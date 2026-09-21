@@ -43,24 +43,12 @@ def _encode_matrix(matrix: list[list[int]]) -> list[list[str]]:
 def _inverse_unimodular(matrix: list[list[int]]) -> list[list[int]]:
     """Compute the inverse needed by homology coordinates without rechecking it."""
 
-    size = len(matrix)
-    if size == 0:
-        return []
+    from jacobian.math.matrices._exact_backend import inverse_unimodular
 
-    from sympy import ZZ
-    from sympy.polys.matrices import DomainMatrix
-
-    domain = DomainMatrix(
-        [[ZZ(value) for value in row] for row in matrix],
-        (size, size),
-        ZZ,
-    )
-    numerator, denominator = domain.inv_den(method="rref")
-    if denominator == -ZZ.one:
-        numerator = -numerator
-    elif denominator != ZZ.one:
-        raise ArithmeticError("Smith transformation inverse is not integral")
-    return [[int(value) for value in row] for row in numerator.to_list()]
+    try:
+        return inverse_unimodular(matrix)
+    except ValueError as exc:
+        raise ArithmeticError("Smith transformation inverse is not integral") from exc
 
 
 def _smith_projection(

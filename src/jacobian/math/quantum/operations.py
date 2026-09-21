@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import NoReturn
+
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -17,7 +19,7 @@ from jacobian.math.quantum._models import (
 )
 
 
-def _reject(location: str, code: str, message: str) -> None:
+def _reject(location: str, code: str, message: str) -> NoReturn:
     raise OperationDomainValidationError(
         location=(location,),
         code=code,
@@ -70,14 +72,13 @@ def _admit_canonicalize(
             "stabilizer.check_space.register_not_a_qubit_family",
             "check-space register must be a nonempty qubit family",
         )
-    assert isinstance(qubit_ids, (tuple, list))
     if not isinstance(generators, (tuple, list)) or not generators:
         _reject(
             "generators",
             "stabilizer.check_space.generators_not_a_row_family",
             "check-space generators must be a nonempty Pauli row family",
         )
-    assert isinstance(generators, (tuple, list))
+    validated_rows: list[BinaryPauliRow] = []
     for row in generators:
         if not isinstance(row, BinaryPauliRow):
             _reject(
@@ -85,7 +86,8 @@ def _admit_canonicalize(
                 "stabilizer.check_space.generator_not_a_pauli_row",
                 "every check-space generator must be a phase-free Pauli row",
             )
-    rows = tuple(generators)
+        validated_rows.append(row)
+    rows = tuple(validated_rows)
     ids = tuple(qubit_ids)
     if any(
         not isinstance(qubit_id, str)
@@ -138,7 +140,6 @@ def _admit_canonicalize(
             message=f"generator rows exceed the {MAX_CHECK_ROWS}-row envelope",
         )
     for row in rows:
-        assert isinstance(row, BinaryPauliRow)
         if len(row.x_bits) != width or len(row.z_bits) != width:
             _reject(
                 "generators",
@@ -185,10 +186,11 @@ def canonicalize_check_space(
     # Replay isotropy independently of the witness search above.
     for i in range(len(table_rows)):
         for j in range(i + 1, len(table_rows)):
-            assert (
+            if (
                 _symplectic_pairing(tuple(table_rows[i]), tuple(table_rows[j]), qubits)
-                == 0
-            )
+                != 0
+            ):
+                raise RuntimeError("isotropic check-space replay disagreed with search")
     basis_rows, pivots = _gf2_rref(table_rows, 2 * qubits)
     basis = tuple(
         CanonicalCheckRow(

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import NoReturn
+
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -14,7 +16,7 @@ from jacobian.math.topology.links._models import (
 )
 
 
-def _reject(location: str, code: str, message: str) -> None:
+def _reject(location: str, code: str, message: str) -> NoReturn:
     raise OperationDomainValidationError(
         location=(location,),
         code=code,
@@ -31,7 +33,6 @@ def _admit_components(diagram: OrientedLinkDiagram) -> None:
             "link_diagram.components.diagram_not_a_link_diagram",
             "component source must be a well-formed oriented link diagram value",
         )
-    assert isinstance(diagram, OrientedLinkDiagram)
     if len(diagram.crossings) > 64:
         raise OperationResourceAdmissionError(
             location=("diagram",),
@@ -53,7 +54,6 @@ def link_components(diagram: OrientedLinkDiagram) -> LinkComponentsResult:
     """
 
     _admit_components(diagram)
-    assert isinstance(diagram, OrientedLinkDiagram)
     strand_partner: dict[str, str] = {}
     dart_role: dict[str, str] = {}
     for crossing in diagram.crossings:

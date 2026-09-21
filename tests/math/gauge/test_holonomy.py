@@ -75,6 +75,14 @@ class TestKnownAnswer:
 
 
 class TestBoundary:
+    def test_trusted_empty_path_is_rejected_before_kernel_construction(self) -> None:
+        empty = OrientedGaugePath.model_construct(steps=())
+
+        with pytest.raises(OperationDomainValidationError) as raised:
+            path_holonomy(_triangle_field(), empty)
+
+        assert raised.value.errors()[0]["type"] == "lattice_gauge.holonomy.empty_path"
+
     def test_trivial_two_edge_identity_field(self) -> None:
         lattice = GaugeLattice(
             vertices=("a", "b"),

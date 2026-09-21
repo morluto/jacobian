@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from fractions import Fraction
-from typing import Literal, Self
+from typing import Literal, NoReturn, Self
 
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
@@ -116,7 +116,7 @@ class PlaneCurveJetResult(StrictModel):
         )
 
 
-def _reject(location: str, code: str, message: str) -> None:
+def _reject(location: str, code: str, message: str) -> NoReturn:
     raise OperationDomainValidationError(
         location=(location,),
         code=code,
@@ -124,7 +124,7 @@ def _reject(location: str, code: str, message: str) -> None:
     )
 
 
-def _refuse(code: str, message: str) -> None:
+def _refuse(code: str, message: str) -> NoReturn:
     raise OperationResourceAdmissionError(
         location=("polynomial",),
         code=code,
@@ -149,8 +149,6 @@ def _admit_plane_curve_jet(
             "projective_geometry.plane_curve.point_not_projective",
             "plane-curve point must be a rational projective point value",
         )
-    assert isinstance(polynomial, RationalPolynomial)
-    assert isinstance(point, RationalProjectivePoint)
     if polynomial.domain != "QQ":
         _reject(
             "polynomial",
@@ -242,8 +240,6 @@ def plane_curve_first_jet(
     """
 
     degree = _admit_plane_curve_jet(polynomial, point)
-    assert isinstance(polynomial, RationalPolynomial)
-    assert isinstance(point, RationalProjectivePoint)
     coords = [c.as_fraction() for c in point.coordinates]
     monomials = [
         (term.coefficient.as_fraction(), tuple(term.exponents))

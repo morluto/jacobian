@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fractions import Fraction
+from typing import NoReturn
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian.catalog.models import (
@@ -20,7 +21,7 @@ from jacobian.math.geometry.convex._models import (
 )
 
 
-def _reject(location: str, code: str, message: str) -> None:
+def _reject(location: str, code: str, message: str) -> NoReturn:
     raise OperationDomainValidationError(
         location=(location,),
         code=code,
@@ -28,7 +29,7 @@ def _reject(location: str, code: str, message: str) -> None:
     )
 
 
-def _refuse(code: str, message: str) -> None:
+def _refuse(code: str, message: str) -> NoReturn:
     raise OperationResourceAdmissionError(
         location=("polytope",),
         code=code,
@@ -106,9 +107,6 @@ def direction_local_motion(
     """
 
     _admit_local_motion(polytope, point, direction)
-    assert isinstance(polytope, ConvexHPolytope)
-    assert isinstance(point, RationalConvexPoint)
-    assert isinstance(direction, RationalConvexDirection)
     coords = [c.as_fraction() for c in point.coordinates]
     steps = [c.as_fraction() for c in direction.components]
     if all(step == 0 for step in steps):

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import NoReturn
+
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -15,7 +17,7 @@ from jacobian.math.gauge._models import (
 )
 
 
-def _reject(location: str, code: str, message: str) -> None:
+def _reject(location: str, code: str, message: str) -> NoReturn:
     raise OperationDomainValidationError(
         location=(location,),
         code=code,
@@ -51,8 +53,12 @@ def _admit_holonomy(field: GaugeField, path: OrientedGaugePath) -> None:
             "lattice_gauge.holonomy.path_not_a_gauge_path",
             "holonomy path must be an oriented lattice edge path",
         )
-    assert isinstance(field, GaugeField)
-    assert isinstance(path, OrientedGaugePath)
+    if not path.steps:
+        _reject(
+            "path",
+            "lattice_gauge.holonomy.empty_path",
+            "holonomy path must contain at least one oriented edge step",
+        )
     if len(path.steps) > 256:
         raise OperationResourceAdmissionError(
             location=("path",),
@@ -70,7 +76,6 @@ def _admit_holonomy(field: GaugeField, path: OrientedGaugePath) -> None:
                 "lattice_gauge.holonomy.unknown_edge_step",
                 f"path step references unknown lattice edge {step.edge_id!r}",
             )
-        assert edge is not None
         tail, head = (edge.tail, edge.head) if step.forward else (edge.head, edge.tail)
         if cursor is not None and tail != cursor:
             _reject(
@@ -92,8 +97,6 @@ def path_holonomy(field: GaugeField, path: OrientedGaugePath) -> HolonomyResult:
     """
 
     _admit_holonomy(field, path)
-    assert isinstance(field, GaugeField)
-    assert isinstance(path, OrientedGaugePath)
     by_edge = {edge.edge_id: edge for edge in field.lattice.edges}
     labels = {label.edge_id: label.label for label in field.edge_labels}
     degree = field.degree
@@ -115,7 +118,8 @@ def path_holonomy(field: GaugeField, path: OrientedGaugePath) -> HolonomyResult:
         if start is None:
             start = tail
         cursor = head
-    assert start is not None and cursor is not None
+    if start is None or cursor is None:
+        raise RuntimeError("admitted holonomy path produced no endpoints")
     product = tuple(range(degree))
     for contribution in contributions:
         product = _compose(product, tuple(contribution.value.image))
@@ -144,7 +148,8 @@ def path_holonomy(field: GaugeField, path: OrientedGaugePath) -> HolonomyResult:
 def _run_path_holonomy(request: object) -> HolonomyResult:
     from jacobian.math.gauge._models import HolonomyRequest as _Request
 
-    assert isinstance(request, _Request)
+    if not isinstance(request, _Request):
+        raise TypeError("path holonomy expects HolonomyRequest")
     return path_holonomy(request.field, request.path)
 
 

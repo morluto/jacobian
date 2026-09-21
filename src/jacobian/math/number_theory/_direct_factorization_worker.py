@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import sys
 
+from jacobian._worker_protocol import encode_worker_result_frame
 from jacobian.canonical import (
-    encode_strict_json,
     format_canonical_integer,
     loads_strict_json,
     parse_canonical_integer,
@@ -22,7 +22,7 @@ def main() -> int:
 
         factors = sorted(factorint(abs(value)).items())
         sys.stdout.buffer.write(
-            encode_strict_json(
+            encode_worker_result_frame(
                 {
                     "factors": [
                         [format_canonical_integer(int(prime)), int(power)]

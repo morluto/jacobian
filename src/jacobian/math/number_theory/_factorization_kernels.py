@@ -12,6 +12,7 @@ from time import monotonic
 from typing import Literal
 
 from jacobian._execution import (
+    OperationBackendError,
     OperationExecutionCancelledError,
     OperationExecutionTimeoutError,
     bind_request_deadline,
@@ -21,10 +22,8 @@ from jacobian._execution import (
 )
 from jacobian.canonical import (
     CanonicalizationError,
-    CanonicalLimits,
     encode_strict_json,
     format_canonical_integer,
-    loads_strict_json,
 )
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory._certification_models import (
@@ -378,6 +377,7 @@ def _bounded_direct_factorization(  # noqa: C901
 
     from jacobian.process import (
         ProcessResourceLimits,
+        decode_checked_worker_output,
         run_bounded_process,
         worker_environment,
     )
@@ -475,10 +475,13 @@ def _bounded_direct_factorization(  # noqa: C901
             raise RuntimeError("bounded factorization worker failed")
         return None
     try:
-        response = loads_strict_json(
+        response = decode_checked_worker_output(
             completed.stdout,
-            limits=CanonicalLimits(max_input_bytes=64 * 1024),
+            decode_result=lambda value: value,
+            max_frame_bytes=64 * 1024,
         )
+        if not isinstance(response, dict):
+            raise ValueError("factorization response must be an object")
         raw_factors = response["factors"]
         if not isinstance(raw_factors, list):
             raise ValueError("factors must be a list")
@@ -515,6 +518,7 @@ def _bounded_direct_factorization(  # noqa: C901
         TypeError,
         ValueError,
         CanonicalizationError,
+        OperationBackendError,
     ) as exc:
         failed("MALFORMED_OUTPUT", "RESULT_VALIDATION", completed.returncode)
         if failure is None:

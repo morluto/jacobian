@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import sys
 
-from jacobian.canonical import encode_strict_json
+from jacobian._worker_protocol import encode_worker_result_frame
 from jacobian.math.number_theory._certification_models import (
     CertifiedFactorizationRequest,
 )
@@ -24,7 +24,7 @@ def main() -> int:
         "result": _factorize_certified_in_process(request).model_dump(mode="json"),
         "request_digest": hashlib.sha256(input_bytes).hexdigest(),
     }
-    sys.stdout.buffer.write(encode_strict_json(response))
+    sys.stdout.buffer.write(encode_worker_result_frame(response))
     return 0
 
 

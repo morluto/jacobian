@@ -289,7 +289,7 @@ def factorize_certified(
 
     from jacobian.process import (
         ProcessResourceLimits,
-        run_bounded_process,
+        run_checked_worker_process,
         worker_environment,
     )
 
@@ -304,7 +304,7 @@ def factorize_certified(
             worker_timeout = deadline - monotonic()
             if worker_timeout <= 0:
                 request_checkpoint("before certified factorization worker startup")
-            completed = run_bounded_process(
+            response = run_checked_worker_process(
                 [sys.executable, str(_CERTIFIED_FACTORIZATION_WORKER)],
                 input_bytes=input_bytes,
                 timeout_seconds=worker_timeout,
@@ -317,26 +317,19 @@ def factorize_certified(
                     file_size_bytes=_FACTORIZATION_WORKER_FILE_SIZE_BYTES,
                 ),
                 cwd=worker_directory,
+                decode_result=lambda value: value,
             )
+    except OperationExecutionCancelledError as exc:
+        raise OperationExecutionCancelledError(
+            "factorization worker was cancelled"
+        ) from exc
+    except OperationExecutionTimeoutError as exc:
+        raise OperationExecutionTimeoutError("factorization worker timed out") from exc
     except OSError as exc:
         request_checkpoint("during certified factorization worker startup")
         raise RuntimeError("bounded factorization worker could not be started") from exc
     request_checkpoint("after certified factorization worker")
-    if completed.cancelled:
-        raise OperationExecutionCancelledError("factorization worker was cancelled")
-    if completed.timed_out:
-        raise OperationExecutionTimeoutError("factorization worker timed out")
-    if (
-        completed.stdout_exceeded
-        or completed.stderr_exceeded
-        or completed.returncode != 0
-    ):
-        raise RuntimeError("bounded factorization worker failed")
     try:
-        response = loads_strict_json(
-            completed.stdout,
-            limits=CanonicalLimits(max_input_bytes=1024 * 1024),
-        )
         if (
             not isinstance(response, dict)
             or set(response) != {"ok", "result", "request_digest"}

@@ -51,7 +51,7 @@ def test_success_preserves_fraction_and_determinant_order() -> None:
 def test_parent_rejects_unbound_worker_response() -> None:
     with pytest.raises(RuntimeError, match="unbound result"):
         _dag_process._decode_response(
-            b'{"protocol_version":1,"request_digest":"wrong","status":"ok"}',
+            {"protocol_version": 1, "request_digest": "wrong", "status": "ok"},
             expected_digest="expected",
             owner="test DAG",
             deadline=time.monotonic() + 1,
@@ -61,7 +61,7 @@ def test_parent_rejects_unbound_worker_response() -> None:
 def test_parent_rejects_unknown_protocol() -> None:
     with pytest.raises(RuntimeError, match="unknown protocol"):
         _dag_process._decode_response(
-            b'{"protocol_version":2,"request_digest":"expected","status":"ok"}',
+            {"protocol_version": 2, "request_digest": "expected", "status": "ok"},
             expected_digest="expected",
             owner="test DAG",
             deadline=time.monotonic() + 1,

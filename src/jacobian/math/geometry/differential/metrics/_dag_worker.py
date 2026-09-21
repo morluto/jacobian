@@ -246,7 +246,12 @@ def main() -> int:
     except Exception:
         return 1
     sys.stdout.buffer.write(
-        json.dumps(response, sort_keys=True, separators=(",", ":")).encode("ascii")
+        json.dumps(
+            {"kind": "result", "result": response},
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("ascii")
+        + b"\n"
     )
     return 0
 

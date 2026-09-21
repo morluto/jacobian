@@ -19,13 +19,7 @@ from jacobian._execution import (
     current_request_execution,
     request_checkpoint,
 )
-from jacobian.canonical import (
-    CanonicalizationError,
-    CanonicalLimits,
-    encode_strict_json,
-    format_canonical_integer,
-    loads_strict_json,
-)
+from jacobian.canonical import encode_strict_json, format_canonical_integer
 from jacobian.math.polynomials.rational_functions._bounds import (
     PolynomialBound,
     _one_polynomial,
@@ -180,7 +174,7 @@ def _run_kernel_worker(payload: dict[str, Any], *, stage: str) -> dict[str, Any]
                 raise OperationExecutionTimeoutError(
                     f"rational gradient deadline expired before {stage}"
                 )
-            completed = process.run_bounded_process(
+            response = process.run_checked_worker_process(
                 [sys.executable, str(_WORKER_PATH)],
                 input_bytes=encoded,
                 timeout_seconds=remaining,
@@ -193,40 +187,22 @@ def _run_kernel_worker(payload: dict[str, Any], *, stage: str) -> dict[str, Any]
                     file_size_bytes=_GCD_STDOUT_BYTES,
                 ),
                 cwd=worker_dir,
+                decode_result=lambda value: value,
+                checkpoint=lambda: request_checkpoint(f"during {stage} decoding"),
             )
+    except OperationExecutionCancelledError as exc:
+        raise OperationExecutionCancelledError(
+            f"rational gradient cancelled during {stage}"
+        ) from exc
+    except OperationExecutionTimeoutError as exc:
+        raise OperationExecutionTimeoutError(
+            f"rational gradient deadline expired during {stage}"
+        ) from exc
     except OSError as exc:
         raise RuntimeError(
             f"bounded rational-gradient {stage} worker could not be started"
         ) from exc
-    if completed.cancelled:
-        raise OperationExecutionCancelledError(
-            f"rational gradient cancelled during {stage}"
-        )
-    if completed.timed_out:
-        raise OperationExecutionTimeoutError(
-            f"rational gradient deadline expired during {stage}"
-        )
-    if (
-        completed.stdout_exceeded
-        or completed.stderr_exceeded
-        or completed.returncode != 0
-    ):
-        raise RuntimeError(
-            f"bounded rational-gradient {stage} worker did not establish a result"
-        )
     request_checkpoint(f"after {stage}")
-    try:
-        response = loads_strict_json(
-            completed.stdout,
-            limits=CanonicalLimits(
-                max_input_bytes=_GCD_STDOUT_BYTES,
-                max_output_bytes=_GCD_STDOUT_BYTES,
-            ),
-        )
-    except CanonicalizationError as exc:
-        raise RuntimeError(
-            f"bounded rational-gradient {stage} worker returned malformed output"
-        ) from exc
     if not isinstance(response, dict):
         raise RuntimeError(
             f"bounded rational-gradient {stage} worker returned malformed output"

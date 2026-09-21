@@ -7,6 +7,7 @@ import json
 import sys
 from math import gcd
 
+from jacobian._worker_protocol import encode_worker_result_frame
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.polynomials.real_algebra._common_interlacing import (
@@ -158,8 +159,10 @@ def main() -> int:
             source_factors.append(factors)
             source_factor_root_counts.append(root_counts)
     except OperationDomainValidationError as exc:
-        sys.stdout.write(
-            json.dumps({"ok": False, "kind": "domain", "errors": exc.errors()})
+        sys.stdout.buffer.write(
+            encode_worker_result_frame(
+                {"ok": False, "kind": "domain", "errors": exc.errors()}
+            )
         )
         return 0
     except Exception:
@@ -167,8 +170,8 @@ def main() -> int:
             f"common-interlacing worker failed: {type(sys.exc_info()[1]).__name__}\n"
         )
         return 1
-    sys.stdout.write(
-        json.dumps(
+    sys.stdout.buffer.write(
+        encode_worker_result_frame(
             {
                 "ok": True,
                 "request_digest": hashlib.sha256(input_bytes).hexdigest(),
@@ -178,8 +181,7 @@ def main() -> int:
                     profile.model_dump(mode="json") for profile in result.root_profiles
                 ],
                 "outcome": result.outcome.model_dump(mode="json"),
-            },
-            separators=(",", ":"),
+            }
         )
     )
     return 0

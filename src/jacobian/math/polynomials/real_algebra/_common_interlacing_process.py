@@ -28,7 +28,6 @@ from jacobian.canonical import (
     CanonicalizationError,
     encode_strict_json,
     format_canonical_integer,
-    loads_strict_json,
     parse_canonical_integer,
 )
 from jacobian.catalog.models import OperationDomainValidationError
@@ -459,7 +458,7 @@ def run_common_interlacing_profile(
 
     from jacobian.process import (
         ProcessResourceLimits,
-        run_bounded_process,
+        run_checked_worker_process,
         worker_environment,
     )
 
@@ -507,6 +506,14 @@ def run_common_interlacing_profile(
         separators=(",", ":"),
     ).encode("utf-8")
     request_digest = hashlib.sha256(request_bytes).hexdigest()
+
+    def checkpoint() -> None:
+        request_checkpoint("during common-interlacing worker result decode")
+        if time.monotonic() >= deadline:
+            raise OperationExecutionTimeoutError(
+                "request deadline expired during common-interlacing execution"
+            )
+
     try:
         with TemporaryDirectory(prefix="jacobian-common-interlacing-") as directory:
             remaining = deadline - time.monotonic()
@@ -514,7 +521,7 @@ def run_common_interlacing_profile(
                 raise OperationExecutionTimeoutError(
                     "request deadline expired before common-interlacing backend launch"
                 )
-            completed = run_bounded_process(
+            payload = run_checked_worker_process(
                 [sys.executable, str(_WORKER)],
                 input_bytes=request_bytes,
                 timeout_seconds=remaining,
@@ -530,41 +537,23 @@ def run_common_interlacing_profile(
                     file_size_bytes=1024 * 1024,
                 ),
                 cwd=directory,
+                decode_result=lambda value: value,
+                checkpoint=checkpoint,
             )
+    except (OperationExecutionCancelledError, OperationExecutionTimeoutError):
+        raise
     except OSError as exc:
         raise RuntimeError(
             "bounded common-interlacing worker could not be started"
         ) from exc
 
-    if completed.cancelled:
-        raise OperationExecutionCancelledError(
-            "request cancelled during common-interlacing execution"
-        )
-    if completed.timed_out or time.monotonic() >= deadline:
-        raise OperationExecutionTimeoutError(
-            "request deadline expired during common-interlacing execution"
-        )
-    if completed.stdout_exceeded or completed.stderr_exceeded:
-        raise RuntimeError(
-            "bounded common-interlacing worker exceeded its output limit"
-        )
-    try:
-        payload = loads_strict_json(completed.stdout)
-    except (CanonicalizationError, ValueError) as exc:
-        raise RuntimeError(
-            "bounded common-interlacing worker returned malformed output"
-        ) from exc
     if not isinstance(payload, dict):
         raise RuntimeError(
             "bounded common-interlacing worker returned malformed output"
         )
-    if (
-        completed.returncode == 0
-        and payload.get("ok") is False
-        and payload.get("kind") == "domain"
-    ):
+    if payload.get("ok") is False and payload.get("kind") == "domain":
         raise _domain_error(payload)
-    if completed.returncode != 0 or payload.get("ok") is not True:
+    if payload.get("ok") is not True:
         raise RuntimeError(
             "bounded common-interlacing worker did not establish a profile"
         )

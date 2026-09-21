@@ -20,11 +20,8 @@ from jacobian._execution import (
     request_checkpoint,
 )
 from jacobian.canonical import (
-    CanonicalizationError,
-    CanonicalLimits,
     encode_strict_json,
     format_canonical_integer,
-    loads_strict_json,
     parse_canonical_integer,
 )
 from jacobian.math.geometry.differential.metrics._dag import Node
@@ -35,7 +32,7 @@ from jacobian.math.polynomials._conversions import (
 from jacobian.math.polynomials.values import RationalFunction, SparseRationalPolynomial
 from jacobian.process import (
     ProcessResourceLimits,
-    run_bounded_process,
+    run_checked_worker_process,
     worker_environment,
 )
 
@@ -106,13 +103,17 @@ def _require_deadline(deadline: float, owner: str, stage: str) -> float:
     return remaining
 
 
-def _run_worker(payload: bytes, *, deadline: float, owner: str) -> bytes:
+def _run_worker(payload: bytes, *, deadline: float, owner: str) -> object:
     remaining = _require_deadline(deadline, owner, "before DAG execution")
+
+    def checkpoint() -> None:
+        _require_deadline(deadline, owner, "during worker output decode")
+
     try:
         with TemporaryDirectory(
             prefix=f"jacobian-{owner.replace(' ', '-')}-"
         ) as worker_directory:
-            completed = run_bounded_process(
+            return run_checked_worker_process(
                 [sys.executable, "-I", str(_WORKER_PATH)],
                 input_bytes=payload,
                 timeout_seconds=remaining,
@@ -125,47 +126,22 @@ def _run_worker(payload: bytes, *, deadline: float, owner: str) -> bytes:
                     file_size_bytes=_STDOUT_BYTES,
                 ),
                 cwd=worker_directory,
+                decode_result=lambda value: value,
+                checkpoint=checkpoint,
             )
+    except (OperationExecutionCancelledError, OperationExecutionTimeoutError):
+        raise
     except OSError as exc:
         raise RuntimeError(f"bounded {owner} worker could not be started") from exc
-    if completed.cancelled:
-        raise OperationExecutionCancelledError(
-            f"{owner} cancelled during polynomial DAG execution"
-        )
-    if completed.timed_out:
-        raise OperationExecutionTimeoutError(
-            f"{owner} deadline expired during polynomial DAG execution"
-        )
-    if completed.stdout_exceeded:
-        raise RuntimeError(f"bounded {owner} worker exceeded its result channel")
-    if completed.stderr_exceeded:
-        raise RuntimeError(f"bounded {owner} worker exceeded its diagnostic channel")
-    if completed.returncode != 0:
-        raise RuntimeError(f"bounded {owner} worker exited abnormally")
-    if completed.stderr:
-        raise RuntimeError(f"bounded {owner} worker emitted unexpected diagnostics")
-    return completed.stdout
 
 
 def _decode_response(
-    stdout: bytes,
+    response: object,
     *,
     expected_digest: str,
     owner: str,
     deadline: float,
 ) -> dict[str, object]:
-    request_checkpoint(f"before {owner} worker output decode")
-    _require_deadline(deadline, owner, "during worker output decode")
-    try:
-        response = loads_strict_json(
-            stdout,
-            limits=CanonicalLimits(
-                max_input_bytes=_STDOUT_BYTES,
-                max_output_bytes=_STDOUT_BYTES,
-            ),
-        )
-    except CanonicalizationError as exc:
-        raise RuntimeError(f"bounded {owner} worker returned malformed output") from exc
     request_checkpoint(f"after {owner} worker output decode")
     _require_deadline(deadline, owner, "during worker output decode")
     if not isinstance(response, dict):

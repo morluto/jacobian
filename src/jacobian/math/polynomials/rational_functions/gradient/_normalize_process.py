@@ -14,13 +14,7 @@ from jacobian._execution import (
     OperationExecutionCancelledError,
     OperationExecutionTimeoutError,
 )
-from jacobian.canonical import (
-    CanonicalizationError,
-    CanonicalLimits,
-    encode_strict_json,
-    format_canonical_integer,
-    loads_strict_json,
-)
+from jacobian.canonical import encode_strict_json, format_canonical_integer
 from jacobian.math.polynomials.values import (
     RationalFunction,
     RationalPolynomialTerm,
@@ -28,7 +22,7 @@ from jacobian.math.polynomials.values import (
 )
 from jacobian.process import (
     ProcessResourceLimits,
-    run_bounded_process,
+    run_checked_worker_process,
     worker_environment,
 )
 
@@ -96,9 +90,16 @@ def normalize_partial(
             "denominator": _poly_payload(source.denominator),
         }
     )
+
+    def checkpoint() -> None:
+        if monotonic() >= deadline:
+            raise OperationExecutionTimeoutError(
+                "rational gradient deadline expired during result decoding"
+            )
+
     try:
         with TemporaryDirectory(prefix="jacobian-gradient-cancel-") as worker_directory:
-            completed = run_bounded_process(
+            response = run_checked_worker_process(
                 [sys.executable, str(_WORKER_PATH)],
                 input_bytes=payload,
                 timeout_seconds=remaining,
@@ -111,38 +112,20 @@ def normalize_partial(
                     file_size_bytes=_STDOUT_BYTES,
                 ),
                 cwd=worker_directory,
+                decode_result=lambda value: value,
+                checkpoint=checkpoint,
             )
+    except OperationExecutionCancelledError as exc:
+        raise OperationExecutionCancelledError(
+            "rational gradient cancelled during the gradient kernel"
+        ) from exc
+    except OperationExecutionTimeoutError as exc:
+        raise OperationExecutionTimeoutError(
+            "rational gradient deadline expired during the gradient kernel"
+        ) from exc
     except OSError as exc:
         raise RuntimeError(
             "bounded rational-gradient kernel worker could not be started"
-        ) from exc
-    if completed.cancelled:
-        raise OperationExecutionCancelledError(
-            "rational gradient cancelled during the gradient kernel"
-        )
-    if completed.timed_out:
-        raise OperationExecutionTimeoutError(
-            "rational gradient deadline expired during the gradient kernel"
-        )
-    if (
-        completed.stdout_exceeded
-        or completed.stderr_exceeded
-        or completed.returncode != 0
-    ):
-        raise RuntimeError(
-            "bounded rational-gradient kernel worker did not return a fraction"
-        )
-    try:
-        response = loads_strict_json(
-            completed.stdout,
-            limits=CanonicalLimits(
-                max_input_bytes=_STDOUT_BYTES,
-                max_output_bytes=_STDOUT_BYTES,
-            ),
-        )
-    except CanonicalizationError as exc:
-        raise RuntimeError(
-            "bounded rational-gradient kernel worker returned malformed output"
         ) from exc
     if (
         not isinstance(response, dict)

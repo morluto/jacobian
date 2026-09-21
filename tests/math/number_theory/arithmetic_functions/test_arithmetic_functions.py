@@ -27,10 +27,10 @@ from jacobian.math.number_theory.arithmetic_functions._tools import (
 )
 from jacobian.math.number_theory.arithmetic_functions.operations import (
     MAX_DIVISOR_INCIDENCES,
-    _SlotLCMHeightSums,
     _divisor_incidence_count,
     _divisor_incidences,
     _shared_denominator_lcm,
+    _SlotLCMHeightSums,
 )
 
 # ---------------------------------------------------------------------------

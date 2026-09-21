@@ -135,11 +135,13 @@ def _coordinate_numerator(
         root_squared = ellipse.a2
         # ``a`` is needed only for clipping.  The caller checks it is rational.
         a = _square_root_rational(root_squared)
-        assert a is not None
+        if a is None:
+            raise RuntimeError("rational x radius is required for clipping")
         return (ellipse.h + a - boundary, Fraction(), ellipse.h - a - boundary)
     root_squared = ellipse.b2
     b = _square_root_rational(root_squared)
-    assert b is not None
+    if b is None:
+        raise RuntimeError("rational y radius is required for clipping")
     return (ellipse.k - boundary, 2 * b, ellipse.k - boundary)
 
 
@@ -183,7 +185,7 @@ def _parameter_coordinates(ellipse: _Ellipse, t: Fraction) -> tuple[Fraction, Fr
     a = _square_root_rational(ellipse.a2)
     b = _square_root_rational(ellipse.b2)
     if a is None or b is None:
-        raise AssertionError("rational coordinates are required for clipping")
+        raise RuntimeError("rational coordinates are required for clipping")
     return (
         ellipse.h + a * (1 - t * t) / denominator,
         ellipse.k + b * 2 * t / denominator,
@@ -398,10 +400,10 @@ def _cells_from_boundaries(
     right_edges: tuple[Fraction | None, ...] = (*parameter_roots, None)
     for lower, upper in zip(left_edges, right_edges, strict=True):
         if lower is None:
-            assert upper is not None
+            if upper is None:
+                raise RuntimeError("parameter partition has two infinite ends")
             sample = upper - Fraction(1)
         elif upper is None:
-            assert lower is not None
             sample = lower + Fraction(1)
         else:
             sample = (lower + upper) / 2
@@ -425,14 +427,14 @@ def _sample_in_box(
         if axis == "x":
             a = _square_root_rational(ellipse.a2)
             if a is None:
-                raise AssertionError("rational x coordinate is required")
+                raise RuntimeError("rational x coordinate is required")
             x = ellipse.h + a * (1 - sample * sample) / denominator
             if not (box_x.lower.as_fraction() <= x <= box_x.upper.as_fraction()):  # type: ignore[attr-defined]
                 return False
         else:
             b = _square_root_rational(ellipse.b2)
             if b is None:
-                raise AssertionError("rational y coordinate is required")
+                raise RuntimeError("rational y coordinate is required")
             y = ellipse.k + b * 2 * sample / denominator
             if not (box_y.lower.as_fraction() <= y <= box_y.upper.as_fraction()):  # type: ignore[attr-defined]
                 return False
@@ -533,15 +535,17 @@ def _integrate_cell(
     target: Fraction,
 ) -> tuple[Fraction, Fraction] | None:
     if cell.lower is None and cell.upper is None:
-        raise AssertionError("projective parameter cell cannot have two infinite ends")
+        raise RuntimeError("projective parameter cell cannot have two infinite ends")
     if cell.lower is not None and cell.upper is not None:
         intervals = ((cell.lower, cell.upper, ellipse.a2, ellipse.b2),)
     elif cell.lower is None:
-        assert cell.upper is not None and cell.upper < 0
+        if cell.upper is None or cell.upper >= 0:
+            raise RuntimeError("left-infinite parameter cell has an invalid upper end")
         endpoint = -Fraction(1, 1) / cell.upper
         intervals = ((Fraction(0), endpoint, ellipse.a2, ellipse.b2),)
     else:
-        assert cell.lower is not None and cell.lower > 0
+        if cell.lower is None or cell.lower <= 0:
+            raise RuntimeError("right-infinite parameter cell has an invalid lower end")
         endpoint = Fraction(1, 1) / cell.lower
         intervals = ((Fraction(0), endpoint, ellipse.a2, ellipse.b2),)
     lower_total = Fraction()

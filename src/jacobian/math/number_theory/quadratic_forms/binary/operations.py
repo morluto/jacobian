@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from jacobian._execution import BackendFailureReason, OperationBackendError
 from jacobian.math.number_theory.quadratic_forms.binary._kernel import (
     compose as _compose,
 )
@@ -40,6 +41,54 @@ def _admit_form(form: PrimitivePositiveDefiniteBinaryQuadraticForm) -> None:
     _require_positive_primitive_form((form.a, form.b, form.c))
 
 
+def _convert_reduction_output(
+    source_form: PrimitivePositiveDefiniteBinaryQuadraticForm,
+    raw_reduction: object,
+) -> tuple[int, int, int, int, int, int, int]:
+    """Admit a reduction tuple before promoting its target or witness."""
+    try:
+        if type(raw_reduction) is not tuple or len(raw_reduction) != 7:
+            raise ValueError("reduction backend returned the wrong tuple shape")
+        if any(type(value) is not int for value in raw_reduction):
+            raise ValueError("reduction output must contain exact integers")
+        ra, rb, rc, p, q, r, s = raw_reduction
+        if any(len(str(abs(value))) > 256 for value in raw_reduction):
+            raise ValueError("reduction output exceeds the integer bound")
+        if any(abs(value) > MAX_COEFFICIENT for value in (ra, rb, rc)):
+            raise ValueError("reduced coefficients exceed the supported bound")
+        if p * s - q * r != 1:
+            raise ValueError("reduction matrix is not unimodular")
+        a, b, c = source_form.a, source_form.b, source_form.c
+        substituted = (
+            a * p * p + b * p * r + c * r * r,
+            2 * a * p * q + b * (p * s + q * r) + 2 * c * r * s,
+            a * q * q + b * q * s + c * s * s,
+        )
+        if substituted != (ra, rb, rc):
+            raise ValueError("reduction matrix does not produce its target")
+        if rb * rb - 4 * ra * rc != source_form.discriminant:
+            raise ValueError("reduction changed the discriminant")
+        if not _check_reduced(ra, rb, rc):
+            raise ValueError("reduction target is not reduced")
+        _require_positive_primitive_form((ra, rb, rc))
+        return raw_reduction
+    except OperationBackendError:
+        raise
+    except Exception as exc:
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT) from exc
+
+
+def _reduce_checked(
+    form: PrimitivePositiveDefiniteBinaryQuadraticForm,
+) -> tuple[int, int, int, int, int, int, int]:
+    try:
+        return _convert_reduction_output(form, _reduce(form.a, form.b, form.c))
+    except OperationBackendError:
+        raise
+    except Exception as exc:
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT) from exc
+
+
 def _admit_reduced_class(form_class: ProperBinaryQuadraticFormClass) -> None:
     form = form_class.representative
     _admit_form(form)
@@ -60,7 +109,7 @@ def reduced_form(
 ) -> PrimitivePositiveDefiniteBinaryQuadraticForm:
     """Return the canonical Gauss-reduced representative of ``form``."""
     _admit_form(form)
-    a, b, c, _p, _q, _r, _s = _reduce(form.a, form.b, form.c)
+    a, b, c, _p, _q, _r, _s = _reduce_checked(form)
     return PrimitivePositiveDefiniteBinaryQuadraticForm(a=a, b=b, c=c)
 
 
@@ -72,7 +121,7 @@ def reduction(
 ]:
     """Return the reduced form and its certifying unimodular matrix."""
     _admit_form(form)
-    a, b, c, p, q, r, s = _reduce(form.a, form.b, form.c)
+    a, b, c, p, q, r, s = _reduce_checked(form)
     return PrimitivePositiveDefiniteBinaryQuadraticForm(a=a, b=b, c=c), (
         (p, q),
         (r, s),
@@ -134,8 +183,8 @@ def proper_equivalence(
         return ProperEquivalenceResult._from_kernel(
             first=first, second=second, status="NOT_PROPERLY_EQUIVALENT"
         )
-    ra1, rb1, rc1, p1, q1, r1, s1 = _reduce(first.a, first.b, first.c)
-    ra2, rb2, rc2, p2, q2, r2, s2 = _reduce(second.a, second.b, second.c)
+    ra1, rb1, rc1, p1, q1, r1, s1 = _reduce_checked(first)
+    ra2, rb2, rc2, p2, q2, r2, s2 = _reduce_checked(second)
     if (ra1, rb1, rc1) != (ra2, rb2, rc2):
         return ProperEquivalenceResult._from_kernel(
             first=first, second=second, status="NOT_PROPERLY_EQUIVALENT"

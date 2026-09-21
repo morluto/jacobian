@@ -10,7 +10,11 @@ from time import monotonic
 from typing import Literal, SupportsIndex, cast
 
 from jacobian._exact import CanonicalRational
-from jacobian._execution import current_request_execution
+from jacobian._execution import (
+    BackendFailureReason,
+    OperationBackendError,
+    current_request_execution,
+)
 from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.values import SimpleUndirectedGraph
@@ -574,6 +578,42 @@ def _require_crt_admission(residues: tuple[int, ...], moduli: tuple[int, ...]) -
                 )
 
 
+def _convert_crt_result(
+    result: object,
+    residues: tuple[int, ...],
+    moduli: tuple[int, ...],
+) -> tuple[int, int]:
+    """Admit the generalized CRT backend result against the source system."""
+    try:
+        if type(result) is not tuple or len(result) != 2:
+            raise ValueError("CRT backend returned a malformed result")
+        residue, modulus = result
+        if not (
+            type(residue) is int
+            or getattr(residue, "is_Integer", None) is True
+            or callable(getattr(residue, "__index__", None))
+        ) or not (
+            type(modulus) is int
+            or getattr(modulus, "is_Integer", None) is True
+            or callable(getattr(modulus, "__index__", None))
+        ):
+            raise ValueError("CRT result must contain exact integers")
+        residue, modulus = int(residue), int(modulus)
+        expected_modulus = math.lcm(*moduli)
+        if modulus != expected_modulus or not 0 <= residue < modulus:
+            raise ValueError("CRT result has the wrong canonical modulus or residue")
+        if any(
+            residue % input_modulus != input_residue
+            for input_residue, input_modulus in zip(residues, moduli, strict=True)
+        ):
+            raise ValueError("CRT result does not satisfy every input congruence")
+        return residue, modulus
+    except OperationBackendError:
+        raise
+    except Exception as exc:
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT) from exc
+
+
 def chinese_remainder(
     residues: tuple[int, ...],
     moduli: tuple[int, ...],
@@ -587,16 +627,18 @@ def chinese_remainder(
     if not isinstance(moduli, tuple) or not all(type(item) is int for item in moduli):
         raise TypeError("moduli must be a tuple of integers")
     _require_crt_admission(residues, moduli)
-    from sympy.ntheory.modular import solve_congruence
-
-    result = solve_congruence(*zip(residues, moduli, strict=True), check=True)
-    if result is None or result[0] is None:
-        raise AssertionError("admitted congruence system was not solved")
-    residue, modulus = result
-    return ChineseRemainderResult(
-        residue=int(residue),
-        modulus=int(modulus),
-    )
+    try:
+        from sympy.ntheory.modular import solve_congruence
+    except Exception as exc:
+        raise OperationBackendError(BackendFailureReason.INITIALIZATION) from exc
+    try:
+        result = solve_congruence(*zip(residues, moduli, strict=True), check=True)
+    except OperationBackendError:
+        raise
+    except Exception as exc:
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT) from exc
+    residue, modulus = _convert_crt_result(result, residues, moduli)
+    return ChineseRemainderResult(residue=residue, modulus=modulus)
 
 
 def _require_residue_image_admission(

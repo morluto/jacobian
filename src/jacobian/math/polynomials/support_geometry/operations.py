@@ -10,6 +10,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
 from jacobian._execution import (
+    BackendFailureReason,
     OperationBackendError,
     OperationExecutionCancelledError,
     OperationExecutionTimeoutError,
@@ -288,7 +289,7 @@ def _solve_convex_membership(
             break
         leaving_row = _bland_leaving_row(tableau, basis, entering)
         if leaving_row is None:
-            raise AssertionError("Phase-1 objective is bounded below by zero")
+            raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
         _pivot_at(tableau, objective, basis, leaving_row, entering)
 
     # Phase-1 optimum: zero iff the original system is feasible.
@@ -376,6 +377,35 @@ def _extract_solution(
     return solution
 
 
+def _require_convex_membership_result(
+    point: tuple[int, ...],
+    others: list[tuple[int, ...]],
+    lambdas: object,
+) -> tuple[Fraction, ...]:
+    """Admit the exact witness returned by the Phase-1 membership kernel."""
+    try:
+        if type(lambdas) is not tuple or len(lambdas) != len(others):
+            raise ValueError("convex membership result has the wrong length")
+        if any(type(value) is not Fraction or value < 0 for value in lambdas):
+            raise ValueError("convex membership coefficients must be nonnegative")
+        if sum(lambdas, Fraction(0)) != 1:
+            raise ValueError("convex membership coefficients must sum to one")
+        if any(
+            sum(
+                coefficient * other[axis]
+                for coefficient, other in zip(lambdas, others, strict=True)
+            )
+            != point[axis]
+            for axis in range(len(point))
+        ):
+            raise ValueError("convex membership does not reconstruct the point")
+        return lambdas
+    except OperationBackendError:
+        raise
+    except Exception as exc:
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT) from exc
+
+
 def _is_vertex(point: tuple[int, ...], others: list[tuple[int, ...]]) -> bool:
     """Decide exactly whether ``point`` is a vertex of the convex hull.
 
@@ -392,16 +422,33 @@ def _is_vertex(point: tuple[int, ...], others: list[tuple[int, ...]]) -> bool:
         values = [other[axis] for other in others]
         if point[axis] > max(values) or point[axis] < min(values):
             return True
-    return _solve_convex_membership(point, others) is None
+    membership = _solve_convex_membership(point, others)
+    if membership is None:
+        return True
+    _require_convex_membership_result(point, others, membership)
+    return False
 
 
 def _matrix_rank(matrix: list[list[int]]) -> int:
     """Compute the exact rank of an integer matrix through FLINT."""
     if not matrix or not matrix[0]:
         return 0
-    from flint import fmpz_mat
-
-    return int(fmpz_mat(matrix).rank())
+    try:
+        from flint import fmpz_mat
+    except Exception as exc:
+        raise OperationBackendError(BackendFailureReason.INITIALIZATION) from exc
+    try:
+        raw_rank = fmpz_mat(matrix).rank()
+        if type(raw_rank) is not int:
+            raw_rank = int(raw_rank)
+        rank = raw_rank
+        if not 0 <= rank <= min(len(matrix), len(matrix[0])):
+            raise ValueError("FLINT returned an impossible matrix rank")
+        return rank
+    except OperationBackendError:
+        raise
+    except Exception as exc:
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT) from exc
 
 
 def support_from_polynomial(polynomial: RationalPolynomial) -> PolynomialSupport:

@@ -14,6 +14,13 @@ from typing import Literal, Self
 from pydantic import Field
 from pydantic_core import PydanticCustomError
 
+from jacobian._execution import (
+    BackendFailureReason,
+    OperationBackendError,
+    OperationExecutionCancelledError,
+    OperationExecutionTimeoutError,
+    OperationResourceExhaustedError,
+)
 from jacobian._models import StrictModel
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.polynomials._models import IntegerPolynomial
@@ -101,6 +108,37 @@ def _require_factor_envelope(polynomial: IntegerPolynomial) -> int:
     return degree
 
 
+def _convert_cyclotomic_candidate(
+    index: int,
+    expected_degree: int,
+    candidate: object,
+) -> IntegerPolynomial:
+    """Admit one backend polynomial before it can establish a match."""
+    try:
+        if type(candidate) is not IntegerPolynomial:
+            raise ValueError("cyclotomic backend returned the wrong carrier")
+        coefficients = candidate.coefficients
+        if type(coefficients) is not tuple or len(coefficients) != expected_degree + 1:
+            raise ValueError("cyclotomic backend returned the wrong degree")
+        if any(type(coefficient) is not int for coefficient in coefficients):
+            raise ValueError("cyclotomic coefficients must be exact integers")
+        if coefficients[0] != 1:
+            raise ValueError("cyclotomic polynomial must be monic")
+        expected_constant = -1 if index == 1 else 1
+        if coefficients[-1] != expected_constant:
+            raise ValueError("cyclotomic polynomial has the wrong constant term")
+        if any(
+            len(str(abs(coefficient))) > MAX_FACTOR_COEFFICIENT_DIGITS
+            for coefficient in coefficients
+        ):
+            raise ValueError("cyclotomic coefficient exceeds the admitted digit bound")
+        return candidate
+    except OperationBackendError:
+        raise
+    except Exception as exc:
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT) from exc
+
+
 def cyclotomic_factor_profile(
     polynomial: IntegerPolynomial,
 ) -> CyclotomicFactorProfileResult:
@@ -123,13 +161,21 @@ def cyclotomic_factor_profile(
         if _euler_phi(index) != degree:
             continue
         try:
-            _, candidate = _compute(index)
-        except Exception:
-            continue
-        if tuple(int(c) for c in candidate.coefficients) == wanted:
-            # Exact reconstruction: recompute and compare (defining invariant).
-            _, check = _compute(index)
-            assert tuple(int(c) for c in check.coefficients) == wanted
+            _, raw_candidate = _compute(index)
+            candidate = _convert_cyclotomic_candidate(
+                index, degree, raw_candidate
+            )
+        except (
+            OperationExecutionTimeoutError,
+            OperationExecutionCancelledError,
+            OperationResourceExhaustedError,
+            OperationResourceAdmissionError,
+            OperationBackendError,
+        ):
+            raise
+        except Exception as exc:
+            raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT) from exc
+        if candidate.coefficients == wanted:
             return CyclotomicFactorProfileResult._from_kernel(
                 polynomial=polynomial,
                 degree=degree,

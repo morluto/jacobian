@@ -6,6 +6,7 @@ import math
 from dataclasses import dataclass
 from typing import Literal
 
+from jacobian._execution import BackendFailureReason, OperationBackendError
 from jacobian.canonical import (
     format_canonical_integer,
 )
@@ -176,31 +177,62 @@ def _sparse_union(source: PeriodicCongruenceUnionSource, period: int) -> set[int
     return occupied
 
 
+def _merge_congruences_checked(
+    left: tuple[int, int], right: tuple[int, int]
+) -> tuple[int, int] | None:
+    """Merge two classes, preserving ``None`` only for proven incompatibility."""
+    compatible = (left[0] - right[0]) % math.gcd(left[1], right[1]) == 0
+    try:
+        from sympy.ntheory.modular import solve_congruence
+    except Exception as exc:
+        raise OperationBackendError(BackendFailureReason.INITIALIZATION) from exc
+    try:
+        result = solve_congruence(left, right, check=False)
+    except OperationBackendError:
+        raise
+    except Exception as exc:
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT) from exc
+    if result is None:
+        if compatible:
+            raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+        return None
+    try:
+        if type(result) is not tuple or len(result) != 2:
+            raise ValueError("generalized CRT returned a malformed result")
+        residue, modulus = result
+        if not (
+            type(residue) is int
+            or getattr(residue, "is_Integer", None) is True
+            or callable(getattr(residue, "__index__", None))
+        ) or not (
+            type(modulus) is int
+            or getattr(modulus, "is_Integer", None) is True
+            or callable(getattr(modulus, "__index__", None))
+        ):
+            raise ValueError("generalized CRT returned non-integer output")
+        residue, modulus = int(residue), int(modulus)
+        expected_modulus = math.lcm(left[1], right[1])
+        if (
+            not compatible
+            or modulus != expected_modulus
+            or not 0 <= residue < modulus
+            or residue % left[1] != left[0]
+            or residue % right[1] != right[0]
+        ):
+            raise ValueError("generalized CRT violated its defining invariant")
+        return residue, modulus
+    except OperationBackendError:
+        raise
+    except Exception as exc:
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT) from exc
+
+
 def _merge_congruences(
     left: tuple[int, int], right: tuple[int, int]
 ) -> tuple[int, int] | None:
-    """Merge two congruences through SymPy's maintained generalized CRT."""
+    """Backward-compatible private alias for the checked merge."""
+    return _merge_congruences_checked(left, right)
 
-    from sympy.ntheory.modular import solve_congruence
-
-    result = solve_congruence(left, right, check=False)
-    compatible = (left[0] - right[0]) % math.gcd(left[1], right[1]) == 0
-    if result is None:
-        if compatible:
-            raise RuntimeError("generalized CRT omitted a compatible intersection")
-        return None
-    residue, modulus = result
-    merged = int(residue), int(modulus)
-    expected_modulus = math.lcm(left[1], right[1])
-    if (
-        not compatible
-        or merged[1] != expected_modulus
-        or not 0 <= merged[0] < merged[1]
-        or merged[0] % left[1] != left[0]
-        or merged[0] % right[1] != right[0]
-    ):
-        raise RuntimeError("generalized CRT result violated its defining invariant")
-    return merged
 
 
 def _inclusion_exclusion_terms(
@@ -234,7 +266,7 @@ def _measure_by_inclusion_exclusion(
         for (_residue, modulus), coefficient in terms.items()
     )
     if not 0 <= count <= period:
-        raise RuntimeError("generalized-CRT union count violated its cardinality bound")
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
     return count
 
 

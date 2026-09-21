@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from math import isqrt
 
+from jacobian._execution import BackendFailureReason, OperationBackendError
 from jacobian.math.number_theory.quadratic_forms.binary._models import (
     MAX_REPRESENTATION_TARGET,
     BinaryQuadraticFormRepresentation,
@@ -220,11 +221,12 @@ def reduce(a: int, b: int, c: int) -> tuple[int, int, int, int, int, int, int]:
         matrix = compose(matrix, ((p, q), (r, s)))
         cur_a, cur_b, cur_c = na, nb, nc
     else:
-        raise RuntimeError("reduction did not converge")
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
 
     p, q = matrix[0]
     r, s = matrix[1]
-    assert p * s - q * r == 1, "reduction matrix must have det 1"
+    if p * s - q * r != 1:
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
     return cur_a, cur_b, cur_c, p, q, r, s
 
 

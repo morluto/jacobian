@@ -5,7 +5,9 @@ from __future__ import annotations
 from pydantic import ValidationError
 from pydantic_core import PydanticCustomError
 
+from jacobian._execution import BackendFailureReason, OperationBackendError
 from jacobian.math.graphs.isomorphism._canonicalization import (
+    _canonical_vertex_labels,
     canonicalize_colored_graph_data,
 )
 from jacobian.math.graphs.isomorphism._canonicalization_bounds import (
@@ -18,6 +20,87 @@ from jacobian.math.graphs.isomorphism._models import (
 from jacobian.math.graphs.values import ColoredUndirectedGraph
 
 
+def _convert_canonicalization_output(  # noqa: C901
+    source: ColoredUndirectedGraph,
+    canonical_graph: object,
+    relabeling: object,
+) -> ColoredGraphCanonicalizationResult:
+    """Admit the kernel's canonical graph and transporter before promotion."""
+    try:
+        if type(canonical_graph) is not ColoredUndirectedGraph:
+            raise ValueError("canonicalization returned the wrong graph carrier")
+        target = canonical_graph
+        source_vertices = source.graph.vertices
+        target_vertices = target.graph.vertices
+        expected_vertices = _canonical_vertex_labels(len(source_vertices))
+        if target_vertices != expected_vertices:
+            raise ValueError("canonicalization returned the wrong canonical axis")
+        if len(target.graph.edges) != len(source.graph.edges):
+            raise ValueError("canonicalization changed the edge cardinality")
+        if target.vertex_colors and len(target.vertex_colors) != len(target_vertices):
+            raise ValueError("canonicalization returned partial vertex colors")
+        if target.edge_colors and len(target.edge_colors) != len(target.graph.edges):
+            raise ValueError("canonicalization returned partial edge colors")
+        if type(relabeling) is not tuple or len(relabeling) != len(source_vertices):
+            raise ValueError("canonicalization returned the wrong transporter shape")
+        pairs: list[GraphRelabelingPair] = []
+        mapping: dict[str, str] = {}
+        for item in relabeling:
+            if type(item) is not tuple or len(item) != 2:
+                raise ValueError("canonicalization returned a malformed pair")
+            source_vertex, canonical_vertex = item
+            if type(source_vertex) is not str or type(canonical_vertex) is not str:
+                raise ValueError("canonicalization labels must be exact strings")
+            if source_vertex in mapping:
+                raise ValueError("canonicalization source labels are not unique")
+            mapping[source_vertex] = canonical_vertex
+            pairs.append(
+                GraphRelabelingPair(
+                    source_vertex=source_vertex, canonical_vertex=canonical_vertex
+                )
+            )
+        if set(mapping) != set(source_vertices) or set(mapping.values()) != set(
+            target_vertices
+        ):
+            raise ValueError("canonicalization transporter is not bijective")
+        if bool(source.vertex_colors) != bool(target.vertex_colors):
+            raise ValueError("canonicalization changed vertex-color presence")
+        if source.vertex_colors:
+            source_colors = dict(zip(source_vertices, source.vertex_colors, strict=True))
+            target_colors = dict(zip(target_vertices, target.vertex_colors, strict=True))
+            if any(
+                target_colors[mapping[vertex]] != source_colors[vertex]
+                for vertex in source_vertices
+            ):
+                raise ValueError("canonicalization changed a vertex color")
+        if bool(source.edge_colors) != bool(target.edge_colors):
+            raise ValueError("canonicalization changed edge-color presence")
+        target_edges = {edge: index for index, edge in enumerate(target.graph.edges)}
+        source_edges = {edge: index for index, edge in enumerate(source.graph.edges)}
+        mapped_edges: set[tuple[str, str]] = set()
+        for edge, index in source_edges.items():
+            left, right = (mapping[edge[0]], mapping[edge[1]])
+            image = (left, right) if left < right else (right, left)
+            if image not in target_edges or image in mapped_edges:
+                raise ValueError("canonicalization changed an edge")
+            mapped_edges.add(image)
+            if source.edge_colors and (
+                target.edge_colors[target_edges[image]] != source.edge_colors[index]
+            ):
+                raise ValueError("canonicalization changed an edge color")
+        if mapped_edges != set(target.graph.edges):
+            raise ValueError("canonicalization dropped or added an edge")
+        return ColoredGraphCanonicalizationResult._from_kernel(
+            source_graph=source,
+            canonical_graph=target,
+            relabeling=tuple(pairs),
+        )
+    except OperationBackendError:
+        raise
+    except Exception as exc:
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT) from exc
+
+
 def _canonicalize_colored_graph(
     graph: ColoredUndirectedGraph,
 ) -> ColoredGraphCanonicalizationResult:
@@ -25,14 +108,7 @@ def _canonicalize_colored_graph(
 
     require_admitted_colored_graph_canonicalization(graph)
     canonical_graph, relabeling = canonicalize_colored_graph_data(graph)
-    return ColoredGraphCanonicalizationResult._from_kernel(
-        source_graph=graph,
-        canonical_graph=canonical_graph,
-        relabeling=tuple(
-            GraphRelabelingPair(source_vertex=source, canonical_vertex=target)
-            for source, target in relabeling
-        ),
-    )
+    return _convert_canonicalization_output(graph, canonical_graph, relabeling)
 
 
 def canonicalize_colored_graph(

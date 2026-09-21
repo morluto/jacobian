@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 import unicodedata
+from dataclasses import dataclass
 from hashlib import sha256
 from typing import Literal, Self
 
@@ -800,6 +801,12 @@ def combine_generalized_exact_cover_shard_results(
     )
 
 
+@dataclass(frozen=True, slots=True)
+class _MinimumCoverIncumbent:
+    row_indices: tuple[int, ...]
+    row_ids: tuple[str, ...]
+
+
 def minimum_generalized_exact_cover(  # noqa: C901
     instance: GeneralizedExactCoverInstance,
     *,
@@ -1112,8 +1119,7 @@ def minimum_generalized_exact_cover(  # noqa: C901
         else 0
     )
     stack: list[tuple[int, int, tuple[int, ...]]] = [(all_primary, all_rows, ())]
-    incumbent: tuple[int, ...] | None = None
-    incumbent_ids: tuple[str, ...] | None = None
+    incumbent: _MinimumCoverIncumbent | None = None
     visited = 0
     while stack and visited < search_node_limit:
         uncovered, available, selected_indices = stack.pop()
@@ -1125,21 +1131,25 @@ def minimum_generalized_exact_cover(  # noqa: C901
             )
             if (
                 incumbent is None
-                or len(selected_indices) < len(incumbent)
+                or len(selected_indices) < len(incumbent.row_indices)
                 or (
-                    len(selected_indices) == len(incumbent)
-                    and (incumbent_ids is None or selected_ids < incumbent_ids)
+                    len(selected_indices) == len(incumbent.row_indices)
+                    and selected_ids < incumbent.row_ids
                 )
             ):
-                incumbent = selected_indices
-                incumbent_ids = selected_ids
+                incumbent = _MinimumCoverIncumbent(
+                    row_indices=selected_indices,
+                    row_ids=selected_ids,
+                )
             continue
         # A partial family with fewer than the incumbent's rows can still tie
         # the incumbent. Prune only families that already have the incumbent's
         # cardinality: they cannot reach a cover of equal or smaller size while
         # primary items remain uncovered. Keeping the equal-size frontier is
         # necessary for the canonical lexicographic tie witness.
-        if incumbent is not None and len(selected_indices) >= len(incumbent):
+        if incumbent is not None and len(selected_indices) >= len(
+            incumbent.row_indices
+        ):
             continue
         chosen_rows = 0
         fewest = row_count + 1
@@ -1184,8 +1194,7 @@ def minimum_generalized_exact_cover(  # noqa: C901
         )
         request_checkpoint("after minimum exact-cover result construction")
         return result
-    assert incumbent_ids is not None
-    selected_ids = incumbent_ids
+    selected_ids = incumbent.row_ids
     upper_bound = len(selected_ids)
     result = MinimumGeneralizedExactCoverResult._from_kernel(
         instance=instance,

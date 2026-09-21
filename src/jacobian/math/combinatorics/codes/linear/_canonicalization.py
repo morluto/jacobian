@@ -193,39 +193,40 @@ def canonicalize_linear_code(
         elements = (
             _full_permutation_form(element, width) for element in backend.elements
         )
-    best: (
-        tuple[tuple[tuple[int, ...], ...], tuple[int, ...], tuple[str, ...]] | None
-    ) = None
-    distinct: set[tuple[tuple[int, ...], ...]] = set()
-    for element in elements:
+    type Candidate = tuple[
+        tuple[tuple[int, ...], ...], tuple[int, ...], tuple[str, ...]
+    ]
+
+    def candidate_for(element: tuple[int, ...]) -> Candidate:
         permuted = tuple(
             tuple(row[element[column]] for column in range(width))
             for row in encoder.generator_matrix
         )
-        reduced, pivots = _rref(
-            permuted,
-            encoder.field_order,
-            width,
-        )
-        # Coordinate permutations preserve rank. Keep the assertion local to
-        # the producer so a future action adapter cannot silently emit a
-        # malformed canonical encoder.
+        reduced, pivots = _rref(permuted, encoder.field_order, width)
         if len(pivots) != len(encoder.generator_matrix):
             raise OperationDomainValidationError(
                 location=("encoder", "generator_matrix"),
                 code="code.canonicalization.transported_rank",
                 message="a coordinate action must preserve generator rank",
             )
-        distinct.add(reduced)
-        candidate = (
+        return (
             reduced,
-            tuple(element),
+            element,
             tuple(encoder.coordinate_axis[element[column]] for column in range(width)),
         )
-        if best is None or candidate < best:
+
+    element_iterator = iter(elements)
+    try:
+        first_element = tuple(next(element_iterator))
+    except StopIteration as exc:
+        raise RuntimeError("admitted coordinate action contains no identity") from exc
+    best = candidate_for(first_element)
+    distinct = {best[0]}
+    for raw_element in element_iterator:
+        candidate = candidate_for(tuple(raw_element))
+        distinct.add(candidate[0])
+        if candidate < best:
             best = candidate
-    # Every admitted finite action contains its identity, including width zero.
-    assert best is not None
     matrix, transporter, transported_axis = best
     orbit_size = len(distinct)
     return LinearCodeCanonicalizationResult(

@@ -36,26 +36,27 @@ def connected_components(
 def positive_symmetrizer(
     matrix: tuple[tuple[int, ...], ...],
 ) -> tuple[Fraction, ...]:
-    values: list[Fraction | None] = [None] * len(matrix)
+    values: dict[int, Fraction] = {}
     for component in connected_components(matrix):
         values[component[0]] = Fraction(1)
         queue = deque([component[0]])
         while queue:
             left = queue.popleft()
             left_value = values[left]
-            assert left_value is not None
             for right in component:
                 if matrix[left][right] == 0:
                     continue
                 candidate = left_value * Fraction(
                     matrix[left][right], matrix[right][left]
                 )
-                if values[right] is None:
+                if right not in values:
                     values[right] = candidate
                     queue.append(right)
                 elif values[right] != candidate:
                     raise ValueError("Cartan matrix is not symmetrizable")
-    return tuple(value for value in values if value is not None)
+    if len(values) != len(matrix):
+        raise RuntimeError("Cartan symmetrizer did not cover every matrix index")
+    return tuple(values[index] for index in range(len(matrix)))
 
 
 def require_finite_type(matrix: tuple[tuple[int, ...], ...]) -> None:

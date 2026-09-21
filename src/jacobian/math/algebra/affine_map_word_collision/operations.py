@@ -111,19 +111,17 @@ def _coefficient_height(
         tuple(_fraction_height(intercept) for intercept in zero), RationalHeight(1, 1)
     )
     for _ in range(depth):
-        next_nonzero_slope: RationalHeight | None = None
-        next_nonzero_intercept: RationalHeight | None = None
-        if nonzero and identity_only_nonzero:
-            next_nonzero_slope = nonzero_slope
-            next_nonzero_intercept = nonzero_intercept
-        elif nonzero:
-            next_nonzero_slope = nonzero_slope.product(max_nonzero_slope)
-            next_nonzero_intercept = sum_heights(
-                (
-                    max_nonzero_slope.product(nonzero_intercept),
-                    max_nonzero_intercept,
-                )
+        if nonzero and not identity_only_nonzero:
+            next_nonzero = (
+                nonzero_slope.product(max_nonzero_slope),
+                sum_heights(
+                    (
+                        max_nonzero_slope.product(nonzero_intercept),
+                        max_nonzero_intercept,
+                    )
+                ),
             )
+            nonzero_slope, nonzero_intercept = next_nonzero
         next_constant = max_zero_intercept if zero else None
         if constant_intercept is not None and nonzero and identity_only_nonzero:
             grown_constant = constant_intercept
@@ -144,10 +142,6 @@ def _coefficient_height(
                 if next_constant is None
                 else _max_height((next_constant, grown_constant), next_constant)
             )
-        if next_nonzero_slope is not None:
-            assert next_nonzero_intercept is not None
-            nonzero_slope = next_nonzero_slope
-            nonzero_intercept = next_nonzero_intercept
         constant_intercept = next_constant
     return _max_height(
         tuple(

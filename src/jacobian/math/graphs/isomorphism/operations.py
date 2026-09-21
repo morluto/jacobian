@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import cast
+
 from pydantic import ValidationError
 from pydantic_core import PydanticCustomError
 
@@ -29,7 +31,7 @@ def _convert_canonicalization_output(  # noqa: C901
     try:
         if type(canonical_graph) is not ColoredUndirectedGraph:
             raise ValueError("canonicalization returned the wrong graph carrier")
-        target = canonical_graph
+        target = cast(ColoredUndirectedGraph, canonical_graph)
         source_vertices = source.graph.vertices
         target_vertices = target.graph.vertices
         expected_vertices = _canonical_vertex_labels(len(source_vertices))
@@ -59,6 +61,8 @@ def _convert_canonicalization_output(  # noqa: C901
                     source_vertex=source_vertex, canonical_vertex=canonical_vertex
                 )
             )
+        if tuple(pair.source_vertex for pair in pairs) != source_vertices:
+            raise ValueError("canonicalization transporter has the wrong source order")
         if set(mapping) != set(source_vertices) or set(mapping.values()) != set(
             target_vertices
         ):
@@ -111,7 +115,12 @@ def _canonicalize_colored_graph(
     """Construct the exact canonical value from one admitted graph value."""
 
     require_admitted_colored_graph_canonicalization(graph)
-    canonical_graph, relabeling = canonicalize_colored_graph_data(graph)
+    try:
+        canonical_graph, relabeling = canonicalize_colored_graph_data(graph)
+    except OperationBackendError:
+        raise
+    except Exception as exc:
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT) from exc
     return _convert_canonicalization_output(graph, canonical_graph, relabeling)
 
 
@@ -150,6 +159,10 @@ def verify_colored_graph_canonicalization(
         if pair.source_vertex in forward:
             return False
         forward[pair.source_vertex] = pair.canonical_vertex
+    if tuple(pair.source_vertex for pair in claim.relabeling) != (
+        source.graph.vertices
+    ):
+        return False
     if set(forward) != set(source.graph.vertices):
         return False
     if set(forward.values()) != set(canonical.graph.vertices):

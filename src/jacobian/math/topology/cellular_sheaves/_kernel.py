@@ -15,6 +15,7 @@ from __future__ import annotations
 from fractions import Fraction
 from itertools import pairwise
 
+from jacobian._execution import BackendFailureReason, OperationBackendError
 from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -157,7 +158,7 @@ class _ExactField:
                 )
                 return rational_product(rational_left, rational_right)
             if self.prime is None:
-                raise RuntimeError("prime-field multiplication has no modulus")
+                raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
             integer_left = tuple(tuple(int(value) for value in row) for row in left)
             integer_right = tuple(tuple(int(value) for value in row) for row in right)
             return prime_field_product(integer_left, integer_right, self.prime)

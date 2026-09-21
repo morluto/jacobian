@@ -3,6 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
+from jacobian._execution import BackendFailureReason, OperationBackendError
 from jacobian.canonical import canonicalize_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.quadratic_forms.binary._models import (
@@ -31,6 +32,7 @@ from jacobian.math.number_theory.quadratic_forms.binary._tools import (
     compute_representations,
 )
 from jacobian.math.number_theory.quadratic_forms.binary.operations import (
+    _convert_reduction_output,
     compose_classes,
     reduced_form,
 )
@@ -51,6 +53,13 @@ def _assert_error_type(
     code: str,
 ) -> None:
     assert any(error["type"] == code for error in exc_info.value.errors())
+
+
+def test_malformed_reduction_output_is_typed_backend_failure() -> None:
+    form = _positive_form(1, 1, 1)
+    with pytest.raises(OperationBackendError) as caught:
+        _convert_reduction_output(form, (1, 1, 1, 1, 0, 0, 0))
+    assert caught.value.reason is BackendFailureReason.INVALID_OUTPUT
 
 
 class TestCheck:

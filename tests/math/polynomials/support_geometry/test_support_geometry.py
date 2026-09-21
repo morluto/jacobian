@@ -1,14 +1,18 @@
 """Tests for polynomial support geometry operations."""
 
 import json
+import sys
 from collections.abc import Iterator
 from contextlib import contextmanager
 from fractions import Fraction
+from types import SimpleNamespace
 from typing import TypedDict
 
 import pytest
 from pydantic import ValidationError
 
+import jacobian.math.polynomials.support_geometry.operations as support_operations
+from jacobian._execution import BackendFailureReason, OperationBackendError
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.polynomials.support_geometry._models import (
     InitialFormRequest,
@@ -32,6 +36,30 @@ from jacobian.math.polynomials.support_geometry.values import (
     PolynomialWeightProfile,
 )
 from jacobian.math.polynomials.values import RationalPolynomial
+
+
+def test_malformed_convex_membership_is_typed_backend_failure() -> None:
+    with pytest.raises(OperationBackendError) as caught:
+        support_operations._require_convex_membership_result(
+            (0, 0), [(1, 0)], (Fraction(-1),)
+        )
+    assert caught.value.reason is BackendFailureReason.INVALID_OUTPUT
+
+
+def test_impossible_flint_rank_is_typed_backend_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeMatrix:
+        def __init__(self, _matrix: object) -> None:
+            pass
+
+        def rank(self) -> int:
+            return -1
+
+    monkeypatch.setitem(sys.modules, "flint", SimpleNamespace(fmpz_mat=FakeMatrix))
+    with pytest.raises(OperationBackendError) as caught:
+        support_operations._matrix_rank([[1]])
+    assert caught.value.reason is BackendFailureReason.INVALID_OUTPUT
 
 
 def compute_support(request: SupportRequest) -> PolynomialSupport:

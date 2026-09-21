@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from itertools import combinations
 
+from jacobian._execution import BackendFailureReason, OperationBackendError
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.uniform_subset_intersection._models import (
     IntersectionRelation,
@@ -58,9 +59,7 @@ def _construct_uniform_subset_intersection_graph_from_plan(
         else tuple(combinations(range(ground_set_size), subset_cardinality))
     )
     if len(subsets) != plan.vertex_count:
-        raise RuntimeError(
-            "uniform-subset admission disagrees with generated vertex count"
-        )
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
 
     if len(subsets) == 1:
         graph = SimpleUndirectedGraph(
@@ -98,9 +97,7 @@ def _construct_uniform_subset_intersection_graph_from_plan(
         edges=tuple(edges),
     )
     if len(graph.edges) != plan.edge_count:
-        raise RuntimeError(
-            "uniform-subset construction disagrees with admitted edge count"
-        )
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
     return UniformSubsetIntersectionResult(
         ground_set_size=ground_set_size,
         subset_cardinality=subset_cardinality,

@@ -239,6 +239,11 @@ def _bounded_process_violations(
             _is_nested_worker_dialogue_owner,
             ("run_bounded_worker_dialogue requires an already supervised worker owner"),
         ),
+        (
+            "run_checked_worker_process",
+            _is_external_operation_owner,
+            "run_checked_worker_process requires a concrete external-tool owner",
+        ),
     )
     for node in _walk(tree):
         for gateway, owner_predicate, message in gateways:

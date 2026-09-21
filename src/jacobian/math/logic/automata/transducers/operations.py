@@ -6,6 +6,7 @@ from collections import deque
 from dataclasses import dataclass
 from typing import Literal
 
+from jacobian._execution import BackendFailureReason, OperationBackendError
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -773,7 +774,7 @@ def _witness_terminal(
     if not (first_final and second_final):
         return False
     if first is None or second is None:
-        raise RuntimeError("terminal transducer pair lost a final state")
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
     first_output = finals[first]
     second_output = finals[second]
     if sign == 2:

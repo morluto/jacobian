@@ -8,7 +8,11 @@ from itertools import combinations, pairwise
 
 import networkx as nx
 
-from jacobian._execution import request_checkpoint
+from jacobian._execution import (
+    BackendFailureReason,
+    OperationBackendError,
+    request_checkpoint,
+)
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -1247,9 +1251,7 @@ def _admit_fixed_cycle_search_plan(
                 block, _block_adjacency(block, adjacency_sets)
             )
             if parts is None:
-                raise RuntimeError(
-                    "recognized multipartite block has no part decomposition"
-                )
+                raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
             block_work, block_adjacency = _multipartite_triangle_work(
                 block, adjacency_sets, part_sizes
             )

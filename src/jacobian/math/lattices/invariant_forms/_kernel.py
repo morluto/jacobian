@@ -12,6 +12,8 @@ from typing import Any
 from unicodedata import normalize
 
 from jacobian._execution import (
+    BackendFailureReason,
+    OperationBackendError,
     OperationExecutionCancelledError,
     OperationExecutionTimeoutError,
     current_request_execution,
@@ -458,9 +460,7 @@ def _require_recognized_field(
     recognized: RecognizedRealSimpleNumberField | None,
 ) -> RecognizedRealSimpleNumberField:
     if recognized is None:
-        raise RuntimeError(
-            "embedded action generators require a recognized number field"
-        )
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
     return recognized
 
 

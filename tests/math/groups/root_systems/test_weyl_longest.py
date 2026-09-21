@@ -4,6 +4,8 @@ from collections.abc import Callable
 
 import pytest
 
+import jacobian.math.groups.root_systems.operations as root_operations
+from jacobian._execution import BackendFailureReason, OperationBackendError
 from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.groups.root_systems._models import (
@@ -25,6 +27,19 @@ Matrix = tuple[tuple[int, ...], ...]
 A1: Matrix = ((2,),)
 A2: Matrix = ((2, -1), (-1, 2))
 A2_AFFINE: Matrix = ((2, -1, -1), (-1, 2, -1), (-1, -1, 2))
+
+
+def test_incomplete_longest_word_is_typed_backend_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(root_operations, "_weyl_longest_word_kernel", lambda _rows: ())
+    monkeypatch.setattr(
+        root_operations, "_weyl_word_inversions_kernel", lambda *_args: ()
+    )
+    with pytest.raises(OperationBackendError) as caught:
+        weyl_longest_element(A2)
+    assert caught.value.reason is BackendFailureReason.INVALID_OUTPUT
+
 
 EXPECTED_LENGTHS: dict[str, Callable[[int], int]] = {
     "A": lambda rank: rank * (rank + 1) // 2,

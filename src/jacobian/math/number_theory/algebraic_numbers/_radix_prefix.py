@@ -29,6 +29,7 @@ from jacobian._execution import (
     OperationBackendError,
     current_request_execution,
     lease_operation_phases,
+    request_checkpoint,
     request_execution,
 )
 from jacobian._models import StrictModel
@@ -431,13 +432,15 @@ def radix_prefix(
         integer_part, digits = _rational_prefix(
             rational, request.base, request.fractional_places
         )
-        return RadixPrefixResult(
+        result = RadixPrefixResult(
             value=request.value,
             base=request.base,
             fractional_places=request.fractional_places,
             integer_part=integer_part,
             fractional_digits=digits,
         )
+        request_checkpoint("after radix prefix result construction")
+        return result
     scaled = _scaled_integer_part(
         request.value,
         scale=admission.scale,
@@ -451,10 +454,12 @@ def radix_prefix(
         remainder *= request.base
         digit, remainder = divmod(remainder, scale)
         fractional_digits.append(int(digit))
-    return RadixPrefixResult(
+    result = RadixPrefixResult(
         value=request.value,
         base=request.base,
         fractional_places=request.fractional_places,
         integer_part=integer_part,
         fractional_digits=tuple(fractional_digits),
     )
+    request_checkpoint("after radix prefix result construction")
+    return result

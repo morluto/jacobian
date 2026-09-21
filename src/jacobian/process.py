@@ -71,6 +71,19 @@ _DEFAULT_LOCALE = "C.UTF-8"
 _CHECKED_WORKER_FRAME_BYTES = 16 * 1024 * 1024
 
 
+def _strict_object_pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("duplicate worker frame key")
+        result[key] = value
+    return result
+
+
+def _reject_json_constant(value: str) -> Never:
+    raise ValueError(f"non-standard JSON constant {value!r}")
+
+
 @dataclass(frozen=True, slots=True)
 class BoundedProcessResult:
     returncode: int | None
@@ -97,6 +110,42 @@ def check_bounded_process_result(result: BoundedProcessResult) -> None:
         raise error
 
 
+def _decode_checked_worker_frame[CheckedResultT](
+    frame: object,
+    *,
+    terminal: bool,
+    last_progress: int,
+    decode_result: Callable[[Any], CheckedResultT],
+) -> tuple[bool, int, CheckedResultT | None, bool]:
+    if not isinstance(frame, dict) or terminal:
+        raise ValueError
+    kind = frame.get("kind")
+    if kind == "progress":
+        progress = frame.get("progress")
+        total = frame.get("total")
+        message = frame.get("message")
+        if (
+            not isinstance(progress, int)
+            or isinstance(progress, bool)
+            or progress < last_progress
+            or (total is not None and (not isinstance(total, int) or total < progress))
+            or (message is not None and not isinstance(message, str))
+        ):
+            raise ValueError
+        report_request_progress(progress, total=total, message=message)
+        return False, progress, None, False
+    if kind == "error":
+        raise OperationBackendError(BackendFailureReason(frame["reason"]))
+    if kind == "execution_error":
+        from jacobian._worker_errors import decode_worker_execution_error
+
+        decode_worker_execution_error(frame)
+        raise ValueError
+    if kind == "result":
+        return True, last_progress, decode_result(frame["result"]), True
+    raise ValueError
+
+
 def decode_checked_worker_output[CheckedResultT](
     output: bytes,
     *,
@@ -113,67 +162,56 @@ def decode_checked_worker_output[CheckedResultT](
 
     if max_frame_bytes <= 0:
         raise ValueError("checked worker frame limit must be positive")
-    if not output or len(output) > max_frame_bytes:
+    if not output or len(output) > max_frame_bytes or not output.endswith(b"\n"):
         raise OperationBackendError(BackendFailureReason.MALFORMED_RESPONSE)
     result: CheckedResultT | None = None
+    result_present = False
     terminal = False
     last_progress = -1
     try:
-        for raw_frame in output.splitlines():
-            if not raw_frame or len(raw_frame) > max_frame_bytes:
+        raw_frames = output.split(b"\n")
+        if raw_frames[-1] != b"":
+            raise ValueError
+        for raw_frame in raw_frames[:-1]:
+            if not raw_frame or b"\r" in raw_frame or len(raw_frame) > max_frame_bytes:
                 raise ValueError
-            frame = json.loads(raw_frame)
+            frame = json.loads(
+                raw_frame,
+                object_pairs_hook=_strict_object_pairs,
+                parse_constant=_reject_json_constant,
+            )
             if checkpoint is None:
                 request_checkpoint("during checked worker frame validation")
             else:
                 checkpoint()
-            if not isinstance(frame, dict) or terminal:
-                raise ValueError
-            kind = frame.get("kind")
-            if kind == "progress":
-                progress = frame.get("progress")
-                total = frame.get("total")
-                message = frame.get("message")
-                if (
-                    not isinstance(progress, int)
-                    or isinstance(progress, bool)
-                    or progress < last_progress
-                    or (
-                        total is not None
-                        and (not isinstance(total, int) or total < progress)
-                    )
-                    or (message is not None and not isinstance(message, str))
-                ):
-                    raise ValueError
-                last_progress = progress
-                report_request_progress(progress, total=total, message=message)
-            elif kind == "error":
-                terminal = True
-                raise OperationBackendError(BackendFailureReason(frame["reason"]))
-            elif kind == "execution_error":
-                terminal = True
-                from jacobian._worker_errors import decode_worker_execution_error
-
-                decode_worker_execution_error(frame)
-                raise ValueError
-            elif kind == "result":
-                terminal = True
-                result = decode_result(frame["result"])
-            else:
-                raise ValueError
+            terminal, last_progress, decoded, decoded_present = (
+                _decode_checked_worker_frame(
+                    frame,
+                    terminal=terminal,
+                    last_progress=last_progress,
+                    decode_result=decode_result,
+                )
+            )
+            if decoded_present:
+                result = decoded
+                result_present = True
     except OperationBackendError:
         raise
     except (
-        KeyError,
-        TypeError,
-        ValueError,
-        UnicodeDecodeError,
-        json.JSONDecodeError,
-    ) as exc:
+        OperationExecutionCancelledError,
+        OperationExecutionTimeoutError,
+        OperationResourceExhaustedError,
+    ):
+        raise
+    except Exception as exc:
         raise OperationBackendError(BackendFailureReason.MALFORMED_RESPONSE) from exc
-    if not terminal or result is None:
+    if checkpoint is None:
+        request_checkpoint("after checked worker result decode")
+    else:
+        checkpoint()
+    if not terminal or not result_present:
         raise OperationBackendError(BackendFailureReason.MALFORMED_RESPONSE)
-    return result
+    return cast(CheckedResultT, result)
 
 
 def run_checked_worker_process[CheckedResultT](

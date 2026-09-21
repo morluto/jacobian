@@ -9,6 +9,7 @@ from typing import overload
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
+from jacobian._execution import BackendFailureReason, OperationBackendError
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -211,7 +212,7 @@ def euclidean_orbit_profile(
                 best_form = form
                 best_relabeling = permutation
         if best_form is None or best_relabeling is None:
-            raise RuntimeError("orbit canonicalization produced no permutation")
+            raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
         # ``permutation`` indexes the source row for each canonical position;
         # the public relabeling maps each source index to its canonical position.
         inverse = [0] * size

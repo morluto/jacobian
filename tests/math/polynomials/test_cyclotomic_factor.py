@@ -4,12 +4,24 @@ from __future__ import annotations
 
 from fractions import Fraction
 
-from jacobian.math.polynomials._cyclotomic_factor import cyclotomic_factor_profile
+import pytest
+
+from jacobian._execution import BackendFailureReason, OperationBackendError
+from jacobian.math.polynomials._cyclotomic_factor import (
+    _convert_cyclotomic_candidate,
+    cyclotomic_factor_profile,
+)
 from jacobian.math.polynomials._mahler_kernel import (
     mahler_measure,
     quadratic_root_profile,
 )
 from jacobian.math.polynomials._models import IntegerPolynomial
+
+
+def test_malformed_cyclotomic_candidate_is_typed_backend_failure() -> None:
+    with pytest.raises(OperationBackendError) as caught:
+        _convert_cyclotomic_candidate(3, 2, object())
+    assert caught.value.reason is BackendFailureReason.INVALID_OUTPUT
 
 
 def test_phi3_identified() -> None:

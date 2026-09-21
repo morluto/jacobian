@@ -15,6 +15,8 @@ from pydantic import ValidationError
 from pydantic_core import PydanticCustomError
 
 import jacobian.math.graphs.isomorphism._canonicalization_bounds as isomorphism_bounds
+import jacobian.math.graphs.isomorphism.operations as isomorphism_operations
+from jacobian._execution import BackendFailureReason, OperationBackendError
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs import ColoredUndirectedGraph, explicit_graph
 from jacobian.math.graphs.isomorphism import (
@@ -597,6 +599,51 @@ def test_catalog_execution_admits_the_parsed_request_once(
 
     assert result == expected
     assert admissions == [parsed.colored_graph]
+
+
+def test_backend_canonicalization_contradiction_is_typed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    graph = _graph(("a", "b"), (("a", "b"),))
+
+    def contradict(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("contradictory backend state")
+
+    monkeypatch.setattr(
+        isomorphism_operations,
+        "canonicalize_colored_graph_data",
+        contradict,
+    )
+    with pytest.raises(OperationBackendError) as caught:
+        canonicalize_colored_graph(graph)
+    assert caught.value.reason is BackendFailureReason.INVALID_OUTPUT
+
+
+def test_promotion_rejects_permuted_source_transporter_order(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    graph = _graph(("a", "b", "c"), (("a", "b"), ("b", "c")))
+    canonical, relabeling = isomorphism_operations.canonicalize_colored_graph_data(
+        graph
+    )
+    monkeypatch.setattr(
+        isomorphism_operations,
+        "canonicalize_colored_graph_data",
+        lambda _graph: (canonical, tuple(reversed(relabeling))),
+    )
+    with pytest.raises(OperationBackendError) as caught:
+        canonicalize_colored_graph(graph)
+    assert caught.value.reason is BackendFailureReason.INVALID_OUTPUT
+
+
+def test_verifier_rejects_permuted_source_transporter_order() -> None:
+    from jacobian.math.graphs.isomorphism import verify_colored_graph_canonicalization
+
+    result = _canonicalize(_graph(("a", "b", "c"), (("a", "b"), ("b", "c"))))
+    forged = result.model_copy(
+        update={"relabeling": tuple(reversed(result.relabeling))}
+    )
+    assert not verify_colored_graph_canonicalization(forged)
 
 
 def test_serialized_relabeling_claim_is_verified_without_enumeration() -> None:

@@ -13,6 +13,8 @@ from pydantic import ValidationError
 
 from jacobian._exact import MAX_CANONICAL_INTEGER_DIGITS, CanonicalRational
 from jacobian._execution import (
+    BackendFailureReason,
+    OperationBackendError,
     bind_request_deadline,
     current_request_execution,
     request_checkpoint,
@@ -970,7 +972,7 @@ def _minimum_axis_origin(values: tuple[Fraction, ...]) -> Fraction:
             best_key = key
             best = candidate
     if best is None:
-        raise RuntimeError("spanned-circle origin selection produced no candidate")
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
     return best
 
 

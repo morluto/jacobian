@@ -5,12 +5,15 @@ from typing import Literal
 
 import pytest
 
+import jacobian.math.graphs.uniform_subset_intersection.operations as uniform_operations
+from jacobian._execution import BackendFailureReason, OperationBackendError
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.chip_firing._models import LaplacianRequest
 from jacobian.math.graphs.chip_firing.operations import laplacian
 from jacobian.math.graphs.uniform_subset_intersection._models import (
     UniformSubsetIntersectionRequest,
     UniformSubsetIntersectionResult,
+    _UniformSubsetIntersectionPlan,
 )
 from jacobian.math.graphs.uniform_subset_intersection._tools import (
     compute_uniform_subset_intersection_graph,
@@ -34,6 +37,21 @@ def _construct(
         request.threshold,
         request.relation,
     )
+
+
+def test_inconsistent_admitted_counts_are_typed_backend_failures(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        uniform_operations,
+        "_admit_uniform_subset_intersection",
+        lambda *_args: _UniformSubsetIntersectionPlan(vertex_count=99, edge_count=0),
+    )
+    with pytest.raises(OperationBackendError) as caught:
+        construct_uniform_subset_intersection_graph(
+            2, 1, 1, "INTERSECTION_LT_THRESHOLD"
+        )
+    assert caught.value.reason is BackendFailureReason.INVALID_OUTPUT
 
 
 def test_kneser_kg42() -> None:

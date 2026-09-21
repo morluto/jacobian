@@ -5,6 +5,7 @@ import math
 import pytest
 from tests.math.number_theory._validation import expect_validation
 
+from jacobian._execution import BackendFailureReason, OperationBackendError
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory._derived import (
     compute_binomial_prime_valuation,
@@ -43,7 +44,16 @@ from jacobian.math.number_theory._prime_models import (
     PrimalityRequest,
 )
 from jacobian.math.number_theory._primes import compute_previous_prime
-from jacobian.math.number_theory.operations import chinese_remainder
+from jacobian.math.number_theory.operations import (
+    _convert_crt_result,
+    chinese_remainder,
+)
+
+
+def test_malformed_crt_backend_result_is_typed_backend_failure() -> None:
+    with pytest.raises(OperationBackendError) as caught:
+        _convert_crt_result((0, 3), (1, 2), (3, 5))
+    assert caught.value.reason is BackendFailureReason.INVALID_OUTPUT
 
 
 @pytest.mark.parametrize("residue", [-1, 3])

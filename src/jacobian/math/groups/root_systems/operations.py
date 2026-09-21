@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import cast
 
+from jacobian._execution import BackendFailureReason, OperationBackendError
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.groups.root_systems._cartan import (
     VALID_CARTAN_TYPE_RANKS,
@@ -364,9 +365,7 @@ def weyl_longest_element(
     num_positive_roots = len(enumerate_positive_roots(rows))
     inversions = _weyl_word_inversions_kernel(rows, word)
     if len(word) != len(inversions) or len(word) != num_positive_roots:
-        raise RuntimeError(
-            "Weyl longest-word kernel returned an incomplete reduced word"
-        )
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
     return WeylLongestElementResult._from_kernel(
         cartan, word, len(word), num_positive_roots
     )

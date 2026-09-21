@@ -170,7 +170,7 @@ class FiniteCosetCrossedProductPresentation(StrictModel):
         index: dict[str, int],
         actions: tuple[tuple[tuple[int, ...], ...], ...],
     ) -> None:
-        from sympy import Matrix
+        from flint import fmpz_mat
 
         coset_count = len(self.cosets)
         dimension = self.lattice_rank
@@ -183,7 +183,7 @@ class FiniteCosetCrossedProductPresentation(StrictModel):
             raise ValueError("the identity coset action must be the identity matrix")
 
         for matrix in actions:
-            determinant = 1 if dimension == 0 else int(Matrix(matrix).det())
+            determinant = 1 if dimension == 0 else int(fmpz_mat(matrix).det())
             if determinant not in {-1, 1}:
                 raise ValueError("every action matrix must be unimodular over Z")
 

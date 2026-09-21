@@ -605,12 +605,11 @@ def periodic_point_profile(
 def _determinant_coefficients(shift: AdjacencyShift) -> tuple[int, ...]:
     """Return ascending coefficients of ``det(I - t A)``."""
 
-    from sympy import Matrix
+    from jacobian.math.dynamics.symbolic._flint import characteristic_coefficients
 
-    characteristic = Matrix(shift.matrix).charpoly()
     # det(lambda I - A) = sum(c_k lambda^(n-k)), so the same coefficient
     # sequence in ascending powers of t is det(I - t A).
-    return tuple(int(coefficient) for coefficient in characteristic.all_coeffs())
+    return characteristic_coefficients(shift.matrix)
 
 
 def artin_mazur_zeta(

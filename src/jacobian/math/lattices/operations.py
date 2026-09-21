@@ -215,20 +215,18 @@ def compute_dual(lattice: IntegerLattice) -> DualResult:
 
     basis = _admit_lattice(lattice)
     dual = _dual_basis(basis)
-    from sympy import Matrix
-
-    gram = Matrix(basis) * Matrix(basis).T
-    dual_gram = gram.inv()
-    dual_gram_fractions: list[list[Fraction]] = []
-    for i in range(dual_gram.rows):
-        row: list[Fraction] = []
-        for j in range(dual_gram.cols):
-            entry = dual_gram[i, j]
-            if hasattr(entry, "p") and hasattr(entry, "q"):
-                row.append(Fraction(int(entry.p), int(entry.q)))
-            else:
-                row.append(Fraction(int(entry), 1))
-        dual_gram_fractions.append(row)
+    # Since D B^T = I, the Gram matrix of the dual rows is D D^T = G^{-1}.
+    # Derive it from the already-computed dual instead of repeating an inverse.
+    dual_gram_fractions = [
+        [
+            sum(
+                (dual[left][axis] * dual[right][axis] for axis in range(len(basis[0]))),
+                Fraction(0),
+            )
+            for right in range(len(dual))
+        ]
+        for left in range(len(dual))
+    ]
     return DualResult(
         lattice=lattice,
         dual_basis=rational_matrix_from_fractions(

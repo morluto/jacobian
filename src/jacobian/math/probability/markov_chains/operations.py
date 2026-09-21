@@ -96,32 +96,12 @@ def _mixing_time(
             "mixing_not_ergodic",
             "mixing time requires an irreducible aperiodic chain",
         )
-    import sympy
+    from jacobian.math.probability.markov_chains._flint import mixing_time_search
 
-    transition = sympy.Matrix(
-        [[sympy.Rational(v.numerator, v.denominator) for v in row] for row in matrix]
+    mixing_time, steps_examined, distance = mixing_time_search(
+        matrix, stationary, epsilon, max_steps
     )
-    target = tuple(sympy.Rational(v.numerator, v.denominator) for v in stationary)
-    threshold = sympy.Rational(epsilon.numerator, epsilon.denominator)
-    power = sympy.eye(len(matrix))
-    terminal = sympy.S.One
-    for step in range(max_steps + 1):
-        terminal = max(
-            sum(
-                abs(power[source, target_index] - target[target_index])
-                for target_index in range(len(matrix))
-            )
-            / 2
-            for source in range(len(matrix))
-        )
-        distance = Fraction(int(terminal.p), int(terminal.q))
-        if terminal <= threshold:
-            return MixingTimeSearchResult(step, step + 1, distance)
-        if step < max_steps:
-            power *= transition
-    return MixingTimeSearchResult(
-        None, max_steps + 1, Fraction(int(terminal.p), int(terminal.q))
-    )
+    return MixingTimeSearchResult(mixing_time, steps_examined, distance)
 
 
 def mixing_time(
@@ -259,6 +239,7 @@ def _admit_transition_matrix(matrix: _TransitionMatrix) -> None:
 
 
 def _admit_stationary(matrix: _TransitionMatrix) -> tuple[tuple[int, ...], ...]:
+    closed_classes: tuple[tuple[int, ...], ...] = ()
     try:
         require_transition_matrix(matrix, maximum_states=MAX_STATIONARY_STATES)
         if any(

@@ -34,23 +34,17 @@ __all__ = [
 # ---------------------------------------------------------------------------
 
 
-def _sympy_integer_matrix(entries: list[list[int]]) -> Any:
-    from sympy import Matrix
-
-    return Matrix(entries)
-
-
 def integer_rank(entries: list[list[int]]) -> int:
     """Return the exact rank over ``QQ`` of an integer entry matrix."""
-    from sympy import Matrix
+    from flint import fmpz_mat
 
-    return int(Matrix(entries).rank())
+    return int(fmpz_mat(entries).rank())
 
 
 def integer_determinant(entries: list[list[int]]) -> int:
-    from sympy import Matrix
+    from flint import fmpz_mat
 
-    return int(Matrix(entries).det())
+    return int(fmpz_mat(entries).det())
 
 
 def gram_matrix(entries: list[list[int]]) -> list[list[int]]:
@@ -92,10 +86,10 @@ def smith_invariant_factors(entries: list[list[int]]) -> list[int]:
     from sympy.matrices.normalforms import smith_normal_form
 
     matrix = Matrix(entries)
-    snf = smith_normal_form(matrix)
+    snf: Any = smith_normal_form(matrix)
     factors: list[int] = []
     for index in range(min(snf.rows, snf.cols)):
-        value = snf[index, index]
+        value: Any = snf[index, index]
         if value != 0:
             factors.append(abs(int(value)))
     return factors
@@ -113,26 +107,22 @@ def dual_basis(entries: list[list[int]]) -> list[list[Fraction]]:
     ``B^* = (B B^T)^{-1} B`` so that
     ``B^* B^T = I_r``.
     """
-    from sympy import Matrix, Rational
+    if not entries:
+        return []
+    from flint import fmpq_mat, fmpz_mat
 
-    basis = Matrix(entries)
-    gram = basis * basis.T
-    inverse = gram.inv()
-    dual = inverse * basis
-    rows, cols = dual.rows, dual.cols
-    result: list[list[Fraction]] = []
-    for i in range(rows):
-        row: list[Fraction] = []
-        for j in range(cols):
-            entry = dual[i, j]
-            if isinstance(entry, Rational):
-                row.append(Fraction(int(entry.p), int(entry.q)))
-            elif isinstance(entry, int):
-                row.append(Fraction(entry, 1))
-            else:
-                row.append(Fraction(int(entry.p), int(entry.q)))
-        result.append(row)
-    return result
+    basis = fmpz_mat(entries)
+    gram = basis * basis.transpose()
+    # Solve G X = B directly: this avoids materializing G^{-1} and then
+    # multiplying, while retaining exact rational arithmetic.
+    dual = fmpq_mat(gram).solve(fmpq_mat(basis))
+    return [
+        [
+            Fraction(int(dual[row, column].p), int(dual[row, column].q))
+            for column in range(dual.ncols())
+        ]
+        for row in range(dual.nrows())
+    ]
 
 
 def saturate_lattice(
@@ -160,8 +150,8 @@ def saturate_lattice(
     # that basis canonical without changing its lattice.
     domain_basis = DomainMatrix.from_Matrix(basis).convert_to(ZZ)
     _, _, right = smith_normal_decomp(domain_basis)
-    primitive_rows = right.to_Matrix().inv()[:rows, :]
-    sat = hermite_normal_form(primitive_rows.T).T
+    primitive_rows: Any = right.to_Matrix().inv()[:rows, :]
+    sat: Any = hermite_normal_form(primitive_rows.T).T
 
     # Inclusion L -> sat(L): each basis row of L is an integer combination
     # of the sat basis rows.  Solve basis = C @ sat_basis for the r x r
@@ -226,8 +216,7 @@ def discriminant_group(entries: list[list[int]]) -> tuple[int, list[int]]:
     ``G``.
     """
     gram = gram_matrix(entries)
-    gram_sympy = _sympy_integer_matrix(gram)
-    det = abs(int(gram_sympy.det()))
+    det = abs(integer_determinant(gram))
     if det == 0:
         raise ValueError("discriminant group requires a nondegenerate lattice")
     factors = smith_invariant_factors(gram)
@@ -250,23 +239,16 @@ def orthogonal_complement(
             for i in range(ambient_dimension)
         ]
 
-    from sympy import Matrix
+    from flint import fmpz_mat
 
-    basis = Matrix(entries)
-    nullspace = basis.nullspace()
-    if not nullspace:
-        return []
-    rows: list[list[Fraction]] = []
-    for vec in nullspace:
-        row: list[Fraction] = []
-        for j in range(vec.rows):
-            entry = vec[j]
-            if hasattr(entry, "p") and hasattr(entry, "q"):
-                row.append(Fraction(int(entry.p), int(entry.q)))
-            else:
-                row.append(Fraction(int(entry), 1))
-        rows.append(row)
-    return rows
+    # FLINT returns a column basis K with B K = 0. Its integer vectors span
+    # the same rational nullspace as a rational basis and compose directly
+    # with the canonical rational result type.
+    kernel, nullity = fmpz_mat(entries).nullspace()
+    return [
+        [Fraction(int(kernel[column, basis])) for column in range(ambient_dimension)]
+        for basis in range(int(nullity))
+    ]
 
 
 def direct_sum(

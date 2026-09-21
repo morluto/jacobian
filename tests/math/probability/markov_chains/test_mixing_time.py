@@ -45,6 +45,31 @@ def test_exact_two_state_mixing_time_and_distance() -> None:
     assert result.steps_examined == 5
 
 
+def test_three_state_lazy_complete_chain_matches_closed_form_distances() -> None:
+    # P = (I + J/3)/2 has stationary uniform distribution and contracts every
+    # zero-sum row vector by 1/2. Starting from a point mass, TV distance is
+    # therefore (2/3) * 2^-t, independently of the matrix backend.
+    request = MixingTimeRequest.model_validate_json(
+        json.dumps(
+            {
+                "matrix": _wire_matrix(
+                    [
+                        [_r(2, 3), _r(1, 6), _r(1, 6)],
+                        [_r(1, 6), _r(2, 3), _r(1, 6)],
+                        [_r(1, 6), _r(1, 6), _r(2, 3)],
+                    ]
+                ),
+                "epsilon": _r(1, 20),
+                "max_steps": 8,
+            }
+        )
+    )
+    result = compute_mixing_time(request)
+    assert result.mixing_time == 4
+    assert result.max_total_variation_distance is not None
+    assert result.max_total_variation_distance.as_fraction() == Fraction(1, 24)
+
+
 def test_search_checks_time_zero_and_boundary_equality() -> None:
     time_zero = compute_mixing_time(_request(epsilon=(1, 1)))
     assert time_zero.mixing_time == 0

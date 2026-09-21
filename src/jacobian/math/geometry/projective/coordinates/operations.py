@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fractions import Fraction
+from typing import NoReturn
 
 from pydantic_core import PydanticCustomError
 
@@ -56,7 +57,7 @@ def _admit_nonzero_point(coordinates: tuple[CanonicalRational, ...]) -> None:
         )
 
 
-def _reject(reason: str, message: str, location: tuple[str, ...]) -> None:
+def _reject(reason: str, message: str, location: tuple[str, ...]) -> NoReturn:
     raise OperationDomainValidationError(
         location=location, code=f"geometry.{reason}", message=message
     )
@@ -84,7 +85,11 @@ def rational_projective_point(
                 point=RationalProjectivePoint(coordinates=canonical),
                 scale=scale,
             )
-    raise AssertionError("admission accepted all-zero projective coordinates")
+    _reject(
+        "projective_point_nonzero",
+        "projective coordinates must not all be zero",
+        ("coordinates",),
+    )
 
 
 def standard_chart(

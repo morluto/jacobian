@@ -23,7 +23,7 @@ def _monochromatic_graph_schema() -> JsonSchemaValue:
     )
     definition = schema.get("$defs", {}).get("SimpleUndirectedGraph")
     if definition is None:
-        raise AssertionError("colored graph schema lost its simple-graph definition")
+        raise RuntimeError("colored graph schema lost its simple-graph definition")
     definition["properties"]["vertices"]["maxItems"] = MAX_VERTICES
     definition["properties"]["edges"]["maxItems"] = (
         MAX_VERTICES * (MAX_VERTICES - 1) // 2

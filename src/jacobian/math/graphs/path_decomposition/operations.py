@@ -111,7 +111,7 @@ def compute_minimum_path_decomposition(
     )
 
     if best is None:
-        raise AssertionError("single-edge paths must realize every admitted graph")
+        raise RuntimeError("single-edge paths did not realize an admitted graph")
 
     path_vertices = []
     for path_edges in best:

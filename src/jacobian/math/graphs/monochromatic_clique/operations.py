@@ -165,7 +165,7 @@ def construct_monochromatic_clique_hypergraph(
     )
 
     if len(hyper_edges) != admission.clique_count:
-        raise AssertionError("kernel produced more clique edges than admitted")
+        raise RuntimeError("kernel produced a clique count different from admission")
     hypergraph = FiniteHypergraph(
         vertices=colored_graph.graph.vertices,
         edges=hyper_edges,

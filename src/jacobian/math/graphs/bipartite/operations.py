@@ -3,6 +3,7 @@
 import time
 
 from jacobian._execution import (
+    RequestExecutionEnvelope,
     bind_request_deadline,
     current_request_execution,
     request_checkpoint,
@@ -38,17 +39,18 @@ def dulmage_mendelsohn(graph: FixedBipartiteGraph) -> DulmageMendelsohnDecomposi
     """
     if not isinstance(graph, FixedBipartiteGraph):
         raise TypeError("dulmage_mendelsohn expects FixedBipartiteGraph")
-    if current_request_execution() is None:
-        with request_execution(time.monotonic()):
-            return _decompose(graph)
-    return _decompose(graph)
+    execution = current_request_execution()
+    if execution is None:
+        with request_execution(time.monotonic()) as execution:
+            return _decompose(graph, execution)
+    return _decompose(graph, execution)
 
 
-def _decompose(source: FixedBipartiteGraph) -> DulmageMendelsohnDecomposition:
+def _decompose(
+    source: FixedBipartiteGraph, execution: RequestExecutionEnvelope
+) -> DulmageMendelsohnDecomposition:
     import networkx as nx
 
-    execution = current_request_execution()
-    assert execution is not None
     deadline = execution.started_at + 30.0
     bind_request_deadline(
         min(deadline, execution.deadline)

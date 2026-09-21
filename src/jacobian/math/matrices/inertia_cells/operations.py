@@ -14,6 +14,7 @@ from typing import Any, TypedDict
 
 from jacobian._exact import CanonicalRational
 from jacobian._execution import (
+    RequestExecutionEnvelope,
     bind_request_deadline,
     current_request_execution,
     request_checkpoint,
@@ -232,8 +233,16 @@ def compute_inertia_cells(
     """
     execution = current_request_execution()
     if execution is None:
-        with request_execution(time.monotonic()):
-            return compute_inertia_cells(matrix, interval)
+        with request_execution(time.monotonic()) as execution:
+            return _compute_validated(matrix, interval, execution)
+    return _compute_validated(matrix, interval, execution)
+
+
+def _compute_validated(
+    matrix: RationalPolynomialMatrix,
+    interval: ClosedRationalInterval,
+    execution: RequestExecutionEnvelope,
+) -> InertiaCellsResult:
     deadline = execution.started_at + 60.0
     if execution.deadline is not None:
         deadline = min(deadline, execution.deadline)
@@ -244,18 +253,11 @@ def compute_inertia_cells(
 
 
 def _compute(
-    matrix: RationalPolynomialMatrix, interval: ClosedRationalInterval
+    matrix: RationalPolynomialMatrix,
+    interval: ClosedRationalInterval,
 ) -> InertiaCellsResult:
     from sympy import Rational
 
-    execution = current_request_execution()
-    assert execution is not None
-    deadline = execution.started_at + 60.0
-    bind_request_deadline(
-        min(deadline, execution.deadline)
-        if execution.deadline is not None
-        else deadline
-    )
     plans = admit(matrix, interval)
     coefficients = []
     for plan in plans:

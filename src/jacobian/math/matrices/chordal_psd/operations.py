@@ -12,6 +12,7 @@ from fractions import Fraction
 from math import lcm
 
 from jacobian._execution import (
+    RequestExecutionEnvelope,
     bind_request_deadline,
     current_request_execution,
     request_checkpoint,
@@ -74,17 +75,18 @@ def decompose_chordal_psd(
         graph, IndexedSimpleUndirectedGraph
     ):
         raise TypeError("expected RationalMatrix and IndexedSimpleUndirectedGraph")
-    if current_request_execution() is None:
-        with request_execution(time.monotonic()):
-            return _decompose(matrix, graph)
-    return _decompose(matrix, graph)
+    execution = current_request_execution()
+    if execution is None:
+        with request_execution(time.monotonic()) as execution:
+            return _decompose(matrix, graph, execution)
+    return _decompose(matrix, graph, execution)
 
 
 def _decompose(
-    matrix: RationalMatrix, graph: IndexedSimpleUndirectedGraph
+    matrix: RationalMatrix,
+    graph: IndexedSimpleUndirectedGraph,
+    execution: RequestExecutionEnvelope,
 ) -> ChordalPSDDecomposition:
-    execution = current_request_execution()
-    assert execution is not None
     deadline = execution.started_at + _WALL_SECONDS
     bind_request_deadline(
         min(deadline, execution.deadline)

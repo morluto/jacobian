@@ -315,7 +315,6 @@ class FiringSequenceReplayResult(StrictModel):
             )
 
     def _require_fires_payload(self) -> None:
-        assert self.status == "FIRES"
         if (
             self.final_marking is None
             or self.blocked_index is not None
@@ -347,7 +346,6 @@ class FiringSequenceReplayResult(StrictModel):
             )
 
     def _require_blocked_payload(self) -> None:
-        assert self.status == "BLOCKED"
         if (
             self.final_marking is not None
             or self.blocked_index is None

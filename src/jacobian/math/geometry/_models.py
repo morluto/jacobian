@@ -1184,7 +1184,12 @@ class EuclideanConvexPolygonTriangulationResult(StrictModel):
                 "an unresolved comparison must not claim a triangulation",
             )
         if certified:
-            assert self.optimum is not None
+            optimum = self.optimum
+            if optimum is None:
+                raise _validation_error(
+                    "a_certified_optimum_carries_an_exact",
+                    "a certified optimum must carry its exact cost expression",
+                )
             if len(self.diagonals) != self.vertex_count - 3:
                 raise _validation_error(
                     "a_triangulation_contain_vertex_count_diagonals",
@@ -1203,14 +1208,18 @@ class EuclideanConvexPolygonTriangulationResult(StrictModel):
                 )
             if tuple(
                 sorted(edge.squared_length.as_fraction() for edge in self.diagonals)
-            ) != tuple(term.as_fraction() for term in self.optimum.squared_lengths):
+            ) != tuple(term.as_fraction() for term in optimum.squared_lengths):
                 raise _validation_error(
                     "optimum_expression_list_selected_diagonal_lengths",
                     "optimum expression must list the selected diagonal lengths",
                 )
         else:
-            assert self.unresolved_comparison is not None
             comparison = self.unresolved_comparison
+            if comparison is None:
+                raise _validation_error(
+                    "an_unresolved_result_carries_an_ambiguous",
+                    "an unresolved result must carry its ambiguous comparison",
+                )
             if (
                 comparison.end >= self.vertex_count
                 or comparison.end - comparison.start < 2

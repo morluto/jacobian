@@ -99,9 +99,10 @@ class InertiaCellsResult(StrictModel):
                         "open boundaries must agree with adjacent point cells"
                     )
         first, last = self.cells[0], self.cells[-1]
-        assert isinstance(first, InertiaPointCell) and isinstance(
+        if not isinstance(first, InertiaPointCell) or not isinstance(
             last, InertiaPointCell
-        )
+        ):
+            raise ValueError("cells must begin and end at POINT cells")
         if (
             first.parameter.value != self.interval.lower
             or last.parameter.value != self.interval.upper

@@ -41,7 +41,8 @@ def _max_admitted_interval() -> int:
 
 
 MAX_INTERVAL_SIZE: int = _max_admitted_interval()
-assert MAX_INTERVAL_SIZE > 0, "no admitted interval size found"
+if MAX_INTERVAL_SIZE <= 0:  # pragma: no cover - dependency-bound invariant
+    raise RuntimeError("no admitted interval size found")
 
 
 def _admission_error(lower: int, upper: int, k: int) -> tuple[str, str, str] | None:

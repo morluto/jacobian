@@ -93,41 +93,37 @@ class EquivalenceResult(StrictModel):
                     "equivalent DFAs cannot carry a distinguishing word or traces",
                 )
             return self
-        if any(field is None for field in fields):
+        distinguishing_word = self.distinguishing_word
+        left_state_trace = self.left_state_trace
+        right_state_trace = self.right_state_trace
+        if (
+            distinguishing_word is None
+            or left_state_trace is None
+            or right_state_trace is None
+        ):
             raise _validation_error(
                 "missing_counterexample",
                 "inequivalent DFAs require a distinguishing word and both traces",
             )
-        assert self.distinguishing_word is not None
-        assert self.left_state_trace is not None
-        assert self.right_state_trace is not None
-        expected = len(self.distinguishing_word) + 1
-        if (
-            len(self.left_state_trace) != expected
-            or len(self.right_state_trace) != expected
-        ):
+        expected = len(distinguishing_word) + 1
+        if len(left_state_trace) != expected or len(right_state_trace) != expected:
             raise _validation_error(
                 "counterexample_trace_length",
                 "each counterexample trace must contain one state per word prefix",
             )
-        if self.distinguishing_word is not None and any(
-            not 0 <= symbol < self.left.alphabet_size
-            for symbol in self.distinguishing_word
+        if any(
+            not 0 <= symbol < self.left.alphabet_size for symbol in distinguishing_word
         ):
             raise _validation_error(
                 "counterexample_symbol_out_of_range",
                 "distinguishing word contains a symbol outside the common alphabet",
             )
         if (
-            self.left_state_trace[0] != self.left.initial_state
-            or self.right_state_trace[0] != self.right.initial_state
+            left_state_trace[0] != self.left.initial_state
+            or right_state_trace[0] != self.right.initial_state
+            or any(not 0 <= state < self.left.state_count for state in left_state_trace)
             or any(
-                not 0 <= state < self.left.state_count
-                for state in self.left_state_trace
-            )
-            or any(
-                not 0 <= state < self.right.state_count
-                for state in self.right_state_trace
+                not 0 <= state < self.right.state_count for state in right_state_trace
             )
         ):
             raise _validation_error(

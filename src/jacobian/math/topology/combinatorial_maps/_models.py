@@ -354,7 +354,11 @@ class SignedEmbeddingCheckResult(StrictModel):
                 "nonorientable genus requires chi <= 1 and h = 2 - chi",
             )
         witness = self.witness_dart_walk
-        assert witness is not None
+        if witness is None:
+            raise _validation_error(
+                "signed_embedding_witness_shape",
+                "a nonorientable embedding must carry its witness dart walk",
+            )
         dart_count = len(self.darts)
         if not witness or any(not 0 <= dart < dart_count for dart in witness):
             raise _validation_error(
@@ -573,7 +577,11 @@ class RotationSystemFindResult(StrictModel):
         if self.status != "FOUND":
             return self
         certificate = self.certificate
-        assert certificate is not None
+        if certificate is None:
+            raise _validation_error(
+                "genus_search_found_payload",
+                "a found search carries its rotation system and certificate",
+            )
         if certificate.graph != self.graph:
             raise _validation_error(
                 "genus_search_certificate_graph",

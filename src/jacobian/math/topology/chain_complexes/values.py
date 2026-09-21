@@ -192,7 +192,8 @@ def require_prime_field_admission(
     if coefficient_ring is CoefficientRing.PRIME_FIELD:
         from flint import fmpz
 
-        assert prime is not None
+        if prime is None:  # defensive after structural ring/modulus validation
+            raise ValueError("GF_p requires a prime modulus")
         if not fmpz(prime).is_prime():
             raise ValueError(f"prime {prime} is not prime")
 

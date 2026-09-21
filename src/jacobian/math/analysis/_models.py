@@ -427,14 +427,16 @@ def _preflight_box_unary(
     if node.op == "neg":
         return _bounded_rational_bounds(-bounds.upper, -bounds.lower)
     if node.op == "pow":
-        assert node.exponent is not None
-        if node.exponent < 0 and bounds.lower <= 0 <= bounds.upper:
+        exponent = node.exponent
+        if exponent is None:
+            raise _validation_error("power expression requires an integer exponent")
+        if exponent < 0 and bounds.lower <= 0 <= bounds.upper:
             return IntervalExpressionDomainFailure(
                 node_path=path,
                 operation="pow",
                 reason="NEGATIVE_POWER_BASE_CONTAINS_ZERO",
             )
-        return _power_bounds(bounds, node.exponent)
+        return _power_bounds(bounds, exponent)
     if node.op == "exp":
         # Since 1 < e < 4, integral powers of four give exact rational
         # magnitude bounds without evaluating a transcendental during admission.

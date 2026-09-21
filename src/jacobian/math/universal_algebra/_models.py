@@ -606,7 +606,11 @@ class CountermodelFindResult(StrictModel):
         if self.status != "FOUND":
             return self
         certificate = self.certificate
-        assert certificate is not None
+        if certificate is None:
+            raise _validation_error(
+                "countermodel_find_found_payload",
+                "a found search carries its order and certificate",
+            )
         if not certificate.is_countermodel:
             raise _validation_error(
                 "countermodel_find_certificate_status",

@@ -1005,21 +1005,23 @@ class IdealMembershipCertificateResult(StrictModel):
             )
         if not produced:
             return self
-        assert self.multiplier is not None
-        assert self.cofactors is not None
-        if int(self.multiplier) <= 0:
+        multiplier = self.multiplier
+        cofactors = self.cofactors
+        if multiplier is None or cofactors is None:
+            raise _validation_error(
+                "a certificate result must carry its multiplier and cofactors"
+            )
+        if int(multiplier) <= 0:
             raise _validation_error("certificate multiplier must be positive")
-        if len(self.cofactors) != len(self.ideal.generators):
+        if len(cofactors) != len(self.ideal.generators):
             raise _validation_error(
                 "certificate must carry one cofactor per ordered source generator"
             )
-        if any(
-            cofactor.variables != self.ideal.variables for cofactor in self.cofactors
-        ):
+        if any(cofactor.variables != self.ideal.variables for cofactor in cofactors):
             raise _validation_error("certificate cofactors must use the source ring")
         if any(
             term.coefficient.den != 1
-            for cofactor in self.cofactors
+            for cofactor in cofactors
             for term in cofactor.polynomial.terms
         ):
             raise _validation_error("certificate cofactors must be integral")

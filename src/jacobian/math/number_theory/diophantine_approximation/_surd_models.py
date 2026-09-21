@@ -680,11 +680,13 @@ class RecordMinimaResult(StrictModel):
                 "finite_argmin must lie in the declared range",
             )
         if self.outcome == "UNRESOLVED":
-            assert self.unresolved_incumbent_enclosure is not None
-            if (
-                self.unresolved_incumbent_enclosure
-                != self.records[-1].product_enclosure
-            ):
+            incumbent = self.unresolved_incumbent_enclosure
+            if incumbent is None:
+                raise _validation_error(
+                    "diophantine.unresolved_incumbent_missing",
+                    "an unresolved result must retain its incumbent enclosure",
+                )
+            if incumbent != self.records[-1].product_enclosure:
                 raise _validation_error(
                     "diophantine.unresolved_record_incumbent_mismatch",
                     "the unresolved incumbent must equal the last retained product",

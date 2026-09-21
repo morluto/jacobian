@@ -462,13 +462,19 @@ class PolarizationSearchResult(StrictModel):
     def require_polarization_certificate(self) -> Self:
         if self.status != "FOUND":
             return self
-        assert self.form is not None and self.profile is not None
-        if self.profile.form != self.form or self.profile.torus != self.torus:
+        form = self.form
+        profile = self.profile
+        if form is None or profile is None:
+            raise _validation_error(
+                "polarization_found_payload",
+                "a found search carries its class and profile",
+            )
+        if profile.form != form or profile.torus != self.torus:
             raise _validation_error(
                 "polarization_certificate_binding",
                 "the profile must classify the found class on the searched torus",
             )
-        if self.profile.outcome.status != "RIEMANN_FORM":
+        if profile.outcome.status != "RIEMANN_FORM":
             raise _validation_error(
                 "polarization_certificate_status",
                 "the found class must profile as a Riemann form",

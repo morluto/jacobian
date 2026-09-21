@@ -1014,12 +1014,14 @@ def _public_leaves(
                 )
             )
             continue
-        assert leaf.enclosure is not None
+        enclosure = leaf.enclosure
+        if enclosure is None:
+            raise RuntimeError("adaptive leaf has neither enclosure nor domain failure")
         public.append(
             AdaptiveRangeLeaf(
                 path=leaf.path,
                 box=leaf.box,
-                enclosure=leaf.enclosure,
+                enclosure=enclosure,
             )
         )
     return tuple(public)
@@ -1029,7 +1031,7 @@ def _evaluated_hull(
     leaves: tuple[_EvaluatedAdaptiveRangeLeaf, ...],
 ) -> DyadicClosedInterval:
     if any(leaf.enclosure is None for leaf in leaves):
-        raise AssertionError("a global adaptive hull requires every leaf enclosure")
+        raise RuntimeError("a global adaptive hull requires every leaf enclosure")
     lower_leaf = min(
         leaves,
         key=lambda leaf: (
@@ -1042,11 +1044,13 @@ def _evaluated_hull(
             leaf.enclosure_upper if leaf.enclosure_upper is not None else Fraction()
         ),
     )
-    assert lower_leaf.enclosure is not None
-    assert upper_leaf.enclosure is not None
+    lower_enclosure = lower_leaf.enclosure
+    upper_enclosure = upper_leaf.enclosure
+    if lower_enclosure is None or upper_enclosure is None:
+        raise RuntimeError("adaptive hull extrema have no enclosure")
     return DyadicClosedInterval(
-        lower=lower_leaf.enclosure.lower,
-        upper=upper_leaf.enclosure.upper,
+        lower=lower_enclosure.lower,
+        upper=upper_enclosure.upper,
     )
 
 
@@ -1064,7 +1068,8 @@ def _result(
     disposition: AdaptiveRangeDisposition
     enclosure: DyadicClosedInterval | None
     if has_unproven:
-        assert reason is not None
+        if reason is None:
+            raise RuntimeError("unproved adaptive range result has no budget reason")
         enclosure = None
         disposition = AdaptiveRangeDomainUnproven(reason=reason)
     else:
@@ -1072,7 +1077,10 @@ def _result(
         if _enclosure_width(enclosure) <= target_width:
             disposition = AdaptiveRangeTargetMet()
         else:
-            assert reason is not None
+            if reason is None:
+                raise RuntimeError(
+                    "unfinished adaptive range result has no budget reason"
+                )
             disposition = AdaptiveRangeBudgetExhausted(reason=reason)
     return AdaptiveRangeEnclosureResult._from_kernel(
         problem,
@@ -1118,8 +1126,10 @@ def _leaf_selection_key(
 ) -> tuple[int, Fraction, tuple[int, ...]]:
     if leaf.domain_failure is not None:
         return (0, Fraction(), leaf.path)
-    assert leaf.enclosure_width is not None
-    return (1, -leaf.enclosure_width, leaf.path)
+    width = leaf.enclosure_width
+    if width is None:
+        raise RuntimeError("adaptive leaf has neither width nor domain failure")
+    return (1, -width, leaf.path)
 
 
 class _AdaptiveLeafFrontier:
@@ -1144,10 +1154,12 @@ class _AdaptiveLeafFrontier:
         if leaf.domain_failure is not None:
             self._unproven_count += 1
             return
-        assert leaf.enclosure_lower is not None
-        assert leaf.enclosure_upper is not None
-        heappush(self._lower, (leaf.enclosure_lower, leaf.path))
-        heappush(self._upper, (-leaf.enclosure_upper, leaf.path))
+        lower = leaf.enclosure_lower
+        upper = leaf.enclosure_upper
+        if lower is None or upper is None:
+            raise RuntimeError("adaptive leaf has no enclosure extrema")
+        heappush(self._lower, (lower, leaf.path))
+        heappush(self._upper, (-upper, leaf.path))
 
     def replace(
         self,
@@ -1291,7 +1303,8 @@ def _run_adaptive_range_enclosure(
             reason = "MAX_EVALUATIONS"
             break
         coordinate = selected.split_coordinate
-        assert coordinate is not None
+        if coordinate is None:
+            raise RuntimeError("selected adaptive leaf has no split coordinate")
         child_boxes = _split_box(selected.box, coordinate)
         children = tuple(
             _evaluate_leaf(
@@ -1303,7 +1316,8 @@ def _run_adaptive_range_enclosure(
             )
             for bit, child_box in enumerate(child_boxes)
         )
-        assert len(children) == 2
+        if len(children) != 2:
+            raise RuntimeError("adaptive bisection did not produce two children")
         evaluations += 2
         frontier.replace(selected, children)
         if frontier.target_met(admission.target_width):

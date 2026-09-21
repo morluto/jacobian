@@ -234,7 +234,6 @@ def _merge_congruences(
     return _merge_congruences_checked(left, right)
 
 
-
 def _inclusion_exclusion_terms(
     source: PeriodicCongruenceUnionSource,
 ) -> dict[tuple[int, int], int]:

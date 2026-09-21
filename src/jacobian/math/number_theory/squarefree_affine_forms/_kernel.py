@@ -42,9 +42,7 @@ class _SolutionCoset:
 _SolutionProfile = _NoSolutions | _SolutionCoset
 
 
-def form_solution_profile(
-    form: SquarefreeAffineForm, prime: int
-) -> _SolutionProfile:
+def form_solution_profile(form: SquarefreeAffineForm, prime: int) -> _SolutionProfile:
     """Return the empty set or one concrete solution coset modulo ``p²``.
 
     The solution set of one affine congruence modulo ``m=p²`` is empty or a

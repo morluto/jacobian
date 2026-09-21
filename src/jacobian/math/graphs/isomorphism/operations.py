@@ -66,8 +66,12 @@ def _convert_canonicalization_output(  # noqa: C901
         if bool(source.vertex_colors) != bool(target.vertex_colors):
             raise ValueError("canonicalization changed vertex-color presence")
         if source.vertex_colors:
-            source_colors = dict(zip(source_vertices, source.vertex_colors, strict=True))
-            target_colors = dict(zip(target_vertices, target.vertex_colors, strict=True))
+            source_colors = dict(
+                zip(source_vertices, source.vertex_colors, strict=True)
+            )
+            target_colors = dict(
+                zip(target_vertices, target.vertex_colors, strict=True)
+            )
             if any(
                 target_colors[mapping[vertex]] != source_colors[vertex]
                 for vertex in source_vertices

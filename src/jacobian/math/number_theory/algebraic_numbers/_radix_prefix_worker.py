@@ -77,9 +77,7 @@ def main() -> int:
         return 0
     except TimeoutError as exc:
         sys.stdout.buffer.write(
-            encode_worker_result_frame(
-                {"tag": "refinement", "message": str(exc)}
-            )
+            encode_worker_result_frame({"tag": "refinement", "message": str(exc)})
         )
         return 0
     sys.stdout.buffer.write(

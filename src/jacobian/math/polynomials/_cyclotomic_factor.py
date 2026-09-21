@@ -162,9 +162,7 @@ def cyclotomic_factor_profile(
             continue
         try:
             _, raw_candidate = _compute(index)
-            candidate = _convert_cyclotomic_candidate(
-                index, degree, raw_candidate
-            )
+            candidate = _convert_cyclotomic_candidate(index, degree, raw_candidate)
         except (
             OperationExecutionTimeoutError,
             OperationExecutionCancelledError,

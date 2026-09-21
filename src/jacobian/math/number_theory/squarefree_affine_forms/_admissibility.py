@@ -29,6 +29,7 @@ from jacobian.math.number_theory.squarefree_affine_forms._euler_product import (
     SquarefreeLocalFactorRow,
 )
 from jacobian.math.number_theory.squarefree_affine_forms._kernel import (
+    _SolutionCoset,
     closed_form_ledger,
     form_solution_profile,
 )
@@ -142,12 +143,15 @@ class LocalAdmissibilityResult(StrictModel):
             modulus = row.prime * row.prime
             bad: set[int] = set()
             for form in self.source.forms:
-                count, root, stride = form_solution_profile(form, row.prime)
-                if count == modulus:
+                profile = form_solution_profile(form, row.prime)
+                if isinstance(profile, _SolutionCoset) and profile.count == modulus:
                     bad = set(range(modulus))
                     break
-                if root is not None and stride is not None:
-                    bad.update(root + offset * stride for offset in range(count))
+                if isinstance(profile, _SolutionCoset):
+                    bad.update(
+                        profile.root + offset * profile.stride
+                        for offset in range(profile.count)
+                    )
             if len(bad) != row.bad_count or modulus - len(bad) != row.valid_count:
                 raise _invariant_error("every row must replay its residue partition")
             if row.has_local_obstruction != (row.valid_count == 0):

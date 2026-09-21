@@ -27,6 +27,7 @@ from jacobian.math.number_theory.arithmetic_functions._tools import (
 )
 from jacobian.math.number_theory.arithmetic_functions.operations import (
     MAX_DIVISOR_INCIDENCES,
+    _SlotLCMHeightSums,
     _divisor_incidence_count,
     _divisor_incidences,
     _shared_denominator_lcm,
@@ -483,6 +484,13 @@ def test_mobius_admission_uses_rational_height_not_encoded_size() -> None:
 
     assert len(result.values) == len(values)
     assert max(len(str(value.den)) for value in result.values) <= len(str(common))
+
+
+def test_slot_lcm_height_sums_require_concrete_length_checked_slots() -> None:
+    with pytest.raises(ValueError):
+        _SlotLCMHeightSums(2, (1,))
+    with pytest.raises(ValueError):
+        _SlotLCMHeightSums(1, (0,))
 
 
 def test_convolution_admission_preserves_shared_denominators() -> None:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import deque
+from dataclasses import dataclass
 from typing import Literal
 
 from jacobian.catalog.models import (
@@ -25,6 +26,27 @@ from jacobian.math.logic.automata.transducers.values import (
     SubseqTransition,
     SubsequentialTransducer,
 )
+
+
+@dataclass(frozen=True, slots=True)
+class _EquivalentStatePair:
+    """Private outcome for a pair whose final-output behavior agrees."""
+
+    first_state: int
+    second_state: int
+
+
+@dataclass(frozen=True, slots=True)
+class _SeparatedStatePair:
+    """Private outcome for a pair with a valid separating input word."""
+
+    first_state: int
+    second_state: int
+    witness_word: tuple[int, ...]
+
+
+_StatePairOutcome = _EquivalentStatePair | _SeparatedStatePair
+
 
 __all__ = [
     "coaccessible_states",
@@ -1141,25 +1163,41 @@ def minimize_subsequential(
         tuple(sorted(trim_new_to_old[state] for state in block)) for block in ordered
     )
     original_of = {new: trim_new_to_old[new] for new in range(trimmed.state_count)}
-    table_rows: list[StatePairDistinguishability] = []
+    outcomes: list[_StatePairOutcome] = []
     for first in range(trimmed.state_count):
         for second in range(first + 1, trimmed.state_count):
-            equivalent = block_of[first] == block_of[second]
-            witness: tuple[int, ...] = ()
-            if not equivalent:
+            if block_of[first] == block_of[second]:
+                outcomes.append(
+                    _EquivalentStatePair(
+                        first_state=original_of[first],
+                        second_state=original_of[second],
+                    )
+                )
+            else:
                 if (first, second) not in witnesses:
                     raise RuntimeError(
                         "partition refinement split a pair without a witness"
                     )
-                witness = witnesses[(first, second)]
-            table_rows.append(
-                StatePairDistinguishability(
-                    first_state=original_of[first],
-                    second_state=original_of[second],
-                    equivalent=equivalent,
-                    witness_word=witness,
+                outcomes.append(
+                    _SeparatedStatePair(
+                        first_state=original_of[first],
+                        second_state=original_of[second],
+                        witness_word=witnesses[(first, second)],
+                    )
                 )
-            )
+    table_rows = [
+        StatePairDistinguishability(
+            first_state=outcome.first_state,
+            second_state=outcome.second_state,
+            equivalent=isinstance(outcome, _EquivalentStatePair),
+            witness_word=(
+                ()
+                if isinstance(outcome, _EquivalentStatePair)
+                else outcome.witness_word
+            ),
+        )
+        for outcome in outcomes
+    ]
     table_rows.sort(key=lambda row: (row.first_state, row.second_state))
     distinguishability = tuple(table_rows)
     return MinimizeResult._from_kernel(

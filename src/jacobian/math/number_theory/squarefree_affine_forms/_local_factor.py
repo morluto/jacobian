@@ -12,6 +12,8 @@ from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
 from jacobian.math.number_theory.affine_forms.values import AffineFormId
 from jacobian.math.number_theory.squarefree_affine_forms._kernel import (
+    _NoSolutions,
+    _SolutionCoset,
     form_solution_profile,
     profile_residues,
 )
@@ -101,12 +103,16 @@ class SquarefreeLocalFactorResult(StrictModel):
         covers_all = False
         for row in self.form_rows:
             expected = form_solution_profile(by_id[row.form_id], self.prime)
-            if (row.bad_count, row.root, row.stride) != expected:
+            if isinstance(expected, _NoSolutions):
+                expected_shape = (0, None, None)
+            else:
+                expected_shape = (expected.count, expected.root, expected.stride)
+            if (row.bad_count, row.root, row.stride) != expected_shape:
                 raise _invariant_error(
                     "form bad-residue coset does not replay its defining "
                     "congruence modulo p^2"
                 )
-            if row.bad_count == modulus:
+            if isinstance(expected, _SolutionCoset) and expected.count == modulus:
                 covers_all = True
             for residue in profile_residues(expected):
                 expected_union.setdefault(residue, []).append(row.form_id)
@@ -159,7 +165,7 @@ class SquarefreeLocalFactorResult(StrictModel):
         *,
         source: SquarefreeAffineFamily,
         prime: int,
-        profiles: tuple[tuple[int, int | None, int | None], ...],
+        profiles: tuple[_NoSolutions | _SolutionCoset, ...],
         ledger: tuple[tuple[int, tuple[str, ...]], ...],
         covers_all: bool,
     ) -> Self:
@@ -173,13 +179,17 @@ class SquarefreeLocalFactorResult(StrictModel):
             form_rows=tuple(
                 SquarefreeFormBadRow(
                     form_id=form.form_id,
-                    bad_count=count,
-                    root=root,
-                    stride=stride,
+                    bad_count=(
+                        profile.count if isinstance(profile, _SolutionCoset) else 0
+                    ),
+                    root=(
+                        profile.root if isinstance(profile, _SolutionCoset) else None
+                    ),
+                    stride=(
+                        profile.stride if isinstance(profile, _SolutionCoset) else None
+                    ),
                 )
-                for form, (count, root, stride) in zip(
-                    source.forms, profiles, strict=True
-                )
+                for form, profile in zip(source.forms, profiles, strict=True)
             ),
             covers_all_residues=covers_all,
             bad_residues=tuple(

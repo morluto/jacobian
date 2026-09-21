@@ -37,6 +37,11 @@ from jacobian.math.number_theory.squarefree_affine_forms._interval_count import 
     IntervalCountRequest,
     IntervalCountResult,
 )
+from jacobian.math.number_theory.squarefree_affine_forms._kernel import (
+    _NoSolutions,
+    _SolutionCoset,
+    form_solution_profile,
+)
 from jacobian.math.number_theory.squarefree_affine_forms._local_factor import (
     SquarefreeLocalFactorRequest,
     SquarefreeLocalFactorResult,
@@ -138,6 +143,19 @@ def test_known_answer_base_ten_dead_end_family() -> None:
     assert product.product.as_integer_ratio() == (2, 3)
     assert not product.has_local_obstruction
     assert product.first_obstructing_prime is None
+
+
+def test_solution_profiles_are_tagged_and_nonnullable() -> None:
+    empty = form_solution_profile(_form("empty", 6, 5), 3)
+    assert isinstance(empty, _NoSolutions)
+
+    coset = form_solution_profile(_form("progression", 6, 3), 3)
+    assert isinstance(coset, _SolutionCoset)
+    assert (coset.count, coset.root, coset.stride) == (3, 1, 3)
+    with pytest.raises(ValueError):
+        _SolutionCoset(0, 0, 1)
+    with pytest.raises(ValueError):
+        _SolutionCoset(1, 3, 3)
 
 
 def test_constant_forms_are_handled_explicitly() -> None:

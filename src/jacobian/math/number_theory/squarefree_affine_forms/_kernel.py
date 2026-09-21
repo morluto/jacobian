@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from math import gcd
 
 from jacobian.math.number_theory.squarefree_affine_forms._models import (
@@ -13,12 +14,40 @@ from jacobian.math.number_theory.squarefree_affine_forms.values import (
 )
 
 
+@dataclass(frozen=True, slots=True)
+class _NoSolutions:
+    """The empty solution set of one affine congruence."""
+
+
+@dataclass(frozen=True, slots=True)
+class _SolutionCoset:
+    """A nonempty affine coset of solutions modulo ``p²``.
+
+    ``count`` and ``stride`` are concrete, rather than nullable, so callers
+    cannot accidentally treat an empty profile as a partially specified coset.
+    The kernel additionally establishes ``count * stride == p²``.
+    """
+
+    count: int
+    root: int
+    stride: int
+
+    def __post_init__(self) -> None:
+        if self.count < 1 or self.stride < 1:
+            raise ValueError("a solution coset must be nonempty")
+        if not 0 <= self.root < self.stride:
+            raise ValueError("a coset root must be canonical modulo its stride")
+
+
+_SolutionProfile = _NoSolutions | _SolutionCoset
+
+
 def form_solution_profile(
     form: SquarefreeAffineForm, prime: int
-) -> tuple[int, int | None, int | None]:
-    """Return ``(count, root, stride)`` for ``{r mod p^2 : p^2 | a*r+b}``.
+) -> _SolutionProfile:
+    """Return the empty set or one concrete solution coset modulo ``p²``.
 
-    The solution set of one affine congruence modulo ``m=p^2`` is empty or a
+    The solution set of one affine congruence modulo ``m=p²`` is empty or a
     single coset ``{root + t*stride : 0 <= t < count}`` with
     ``count*stride = m`` and ``count = gcd(a, m)`` (or ``count = m`` when
     ``a = b = 0 mod m``). No residue enumeration is required.
@@ -28,36 +57,35 @@ def form_solution_profile(
     coefficient = form.coefficient % modulus
     constant = form.constant % modulus
     if coefficient == 0:
-        return (modulus, 0, 1) if constant == 0 else (0, None, None)
+        return _SolutionCoset(modulus, 0, 1) if constant == 0 else _NoSolutions()
     divisor = gcd(coefficient, modulus)
     if constant % divisor != 0:
-        return (0, None, None)
+        return _NoSolutions()
     stride = modulus // divisor
     root = (-(constant // divisor) * pow(coefficient // divisor, -1, stride)) % stride
-    return (divisor, root, stride)
+    return _SolutionCoset(divisor, root, stride)
 
 
-def profile_residues(profile: tuple[int, int | None, int | None]) -> tuple[int, ...]:
+def profile_residues(profile: _SolutionProfile) -> tuple[int, ...]:
     """Expand one closed-form solution profile into canonical residues."""
 
-    count, root, stride = profile
-    if count == 0 or root is None or stride is None:
+    if isinstance(profile, _NoSolutions):
         return ()
-    return tuple(root + offset * stride for offset in range(count))
+    return tuple(
+        profile.root + offset * profile.stride for offset in range(profile.count)
+    )
 
 
 def replay_profile(
-    form: SquarefreeAffineForm, prime: int, profile: tuple[int, int | None, int | None]
+    form: SquarefreeAffineForm, prime: int, profile: _SolutionProfile
 ) -> None:
     """Replay every congruence of one profile exactly."""
 
-    modulus = prime * prime
-    count, root, stride = profile
-    if count == 0:
+    if isinstance(profile, _NoSolutions):
         return
-    assert root is not None and stride is not None
-    for offset in range(count):
-        residue = root + offset * stride
+    modulus = prime * prime
+    for offset in range(profile.count):
+        residue = profile.root + offset * profile.stride
         value = form.coefficient * residue + form.constant
         if not (0 <= residue < modulus and value % modulus == 0):
             raise RuntimeError("closed-form bad residue failed its defining congruence")
@@ -86,7 +114,7 @@ def enumerated_ledger(
 def closed_form_ledger(
     source: SquarefreeAffineFamily, prime: int
 ) -> tuple[
-    tuple[tuple[int, int | None, int | None], ...],
+    tuple[_SolutionProfile, ...],
     tuple[tuple[int, tuple[str, ...]], ...],
     bool,
 ]:
@@ -96,7 +124,10 @@ def closed_form_ledger(
     profiles = tuple(form_solution_profile(form, prime) for form in source.forms)
     for form, profile in zip(source.forms, profiles, strict=True):
         replay_profile(form, prime, profile)
-    covers_all = any(count == modulus for count, _, _ in profiles)
+    covers_all = any(
+        isinstance(profile, _SolutionCoset) and profile.count == modulus
+        for profile in profiles
+    )
     if covers_all:
         return profiles, (), True
     by_residue: dict[int, list[str]] = {}

@@ -77,23 +77,14 @@ def _require_divisor_incidences(
     return _divisor_incidences(length, minimum_divisor=minimum_divisor)
 
 
-class _HeightSums:
-    """Incremental form of ``sum_heights`` for one dense result vector."""
+class _HeightSumsBase:
+    """Shared accumulation mechanics for one concrete height mode."""
 
-    def __init__(
-        self,
-        length: int,
-        *,
-        shared_lcm: int | None = None,
-        slot_lcms: tuple[int | None, ...] | None = None,
-    ) -> None:
+    def __init__(self, length: int) -> None:
         self.denominator_digits = [0] * length
         self.maximum_adjusted_numerator = [0] * length
         self.maximum_numerator = [0] * length
         self.term_counts = [0] * length
-        self.shared_lcm = shared_lcm
-        self.slot_lcms = slot_lcms
-        self._shared_lift_digits: dict[int, int] = {}
 
     def add(
         self,
@@ -120,7 +111,7 @@ class _HeightSums:
         self._add_digits(
             index,
             numerator_digits=left.numerator_digits + right.numerator_digits,
-            denominator_digits=(left.denominator_digits + right.denominator_digits),
+            denominator_digits=left.denominator_digits + right.denominator_digits,
             denominator=denominator,
         )
 
@@ -137,51 +128,29 @@ class _HeightSums:
             self.maximum_adjusted_numerator[index],
             numerator_digits - denominator_digits,
         )
-        lifted_numerator = numerator_digits
-        if self.slot_lcms is not None:
-            slot_lcm = self.slot_lcms[index]
-            if slot_lcm is None:
-                return
-            if slot_lcm != 1:
-                if denominator is None:
-                    raise ValueError(
-                        "slot-LCM height sums require a source denominator"
-                    )
-                common = gcd(slot_lcm, denominator)
-                lift = max(1, slot_lcm // common)
-                lifted_numerator += _decimal_digits_from_bits(lift.bit_length())
-        elif self.shared_lcm is not None:
-            if denominator is None:
-                raise ValueError("shared-LCM height sums require a source denominator")
-            lift_digits = self._shared_lift_digits.get(denominator)
-            if lift_digits is None:
-                common = gcd(self.shared_lcm, denominator)
-                lift = max(1, self.shared_lcm // common)
-                lift_digits = _decimal_digits_from_bits(lift.bit_length())
-                self._shared_lift_digits[denominator] = lift_digits
-            lifted_numerator += lift_digits
         self.maximum_numerator[index] = max(
-            self.maximum_numerator[index], lifted_numerator
+            self.maximum_numerator[index],
+            self._lifted_numerator(numerator_digits, denominator),
         )
         self.term_counts[index] += 1
+
+    def heights(self) -> tuple[RationalHeight, ...]:
+        return tuple(self.height(index) for index in range(len(self.term_counts)))
+
+    def _lifted_numerator(self, numerator: int, denominator: int | None) -> int:
+        return numerator
+
+    def height(self, index: int) -> RationalHeight:
+        raise NotImplementedError
+
+
+class _DirectHeightSums(_HeightSumsBase):
+    """Height accumulator using the exact per-term ``Fraction`` fallback."""
 
     def height(self, index: int) -> RationalHeight:
         count = self.term_counts[index]
         if count == 0:
             return RationalHeight(1, 1)
-        if self.slot_lcms is not None:
-            slot_lcm = self.slot_lcms[index]
-            if slot_lcm is None:
-                return RationalHeight(MAX_CANONICAL_RATIONAL_DIGITS + 1, 1)
-            return RationalHeight(
-                self.maximum_numerator[index] + len(str(count)),
-                _decimal_digits_from_bits(slot_lcm.bit_length()),
-            )
-        if self.shared_lcm is not None:
-            return RationalHeight(
-                self.maximum_numerator[index] + len(str(count)),
-                _decimal_digits_from_bits(self.shared_lcm.bit_length()),
-            )
         denominator_digits = self.denominator_digits[index]
         return RationalHeight(
             self.maximum_adjusted_numerator[index]
@@ -190,8 +159,80 @@ class _HeightSums:
             denominator_digits,
         )
 
-    def heights(self) -> tuple[RationalHeight, ...]:
-        return tuple(self.height(index) for index in range(len(self.term_counts)))
+
+class _SharedLCMHeightSums(_HeightSumsBase):
+    """Height accumulator for a proven common denominator LCM."""
+
+    def __init__(self, length: int, shared_lcm: int) -> None:
+        super().__init__(length)
+        self.shared_lcm = shared_lcm
+        self._lift_digits: dict[int, int] = {}
+
+    def _lifted_numerator(self, numerator: int, denominator: int | None) -> int:
+        if denominator is None:
+            raise ValueError("shared-LCM height sums require a source denominator")
+        lift_digits = self._lift_digits.get(denominator)
+        if lift_digits is None:
+            common = gcd(self.shared_lcm, denominator)
+            lift = max(1, self.shared_lcm // common)
+            lift_digits = _decimal_digits_from_bits(lift.bit_length())
+            self._lift_digits[denominator] = lift_digits
+        return numerator + lift_digits
+
+    def height(self, index: int) -> RationalHeight:
+        count = self.term_counts[index]
+        if count == 0:
+            return RationalHeight(1, 1)
+        return RationalHeight(
+            self.maximum_numerator[index] + len(str(count)),
+            _decimal_digits_from_bits(self.shared_lcm.bit_length()),
+        )
+
+
+class _SlotLCMHeightSums(_HeightSumsBase):
+    """Height accumulator for concrete, length-checked per-slot LCMs."""
+
+    def __init__(self, length: int, slot_lcms: tuple[int, ...]) -> None:
+        if len(slot_lcms) != length or any(lcm < 1 for lcm in slot_lcms):
+            raise ValueError("slot LCMs must be positive and match the result length")
+        super().__init__(length)
+        self.slot_lcms = slot_lcms
+
+    def _lifted_numerator(self, numerator: int, denominator: int | None) -> int:
+        # The slot LCM 1 needs no source denominator; every other slot does.
+        # The caller supplies the denominator exactly in those slots.
+        return numerator
+
+    def _add_digits(
+        self,
+        index: int,
+        *,
+        numerator_digits: int,
+        denominator_digits: int,
+        denominator: int | None,
+    ) -> None:
+        slot_lcm = self.slot_lcms[index]
+        if slot_lcm != 1:
+            if denominator is None:
+                raise ValueError("slot-LCM height sums require a source denominator")
+            common = gcd(slot_lcm, denominator)
+            lift = max(1, slot_lcm // common)
+            numerator_digits += _decimal_digits_from_bits(lift.bit_length())
+        super()._add_digits(
+            index,
+            numerator_digits=numerator_digits,
+            denominator_digits=denominator_digits,
+            denominator=denominator,
+        )
+
+    def height(self, index: int) -> RationalHeight:
+        count = self.term_counts[index]
+        if count == 0:
+            return RationalHeight(1, 1)
+        return RationalHeight(
+            self.maximum_numerator[index] + len(str(count)),
+            _decimal_digits_from_bits(self.slot_lcms[index].bit_length()),
+        )
 
 
 def _heights(values: tuple[CanonicalRational, ...]) -> tuple[RationalHeight, ...]:
@@ -267,28 +308,38 @@ def _convolution_slot_lcms(
     incidences: tuple[tuple[int, int], ...],
     left_dens: tuple[int, ...],
     right_dens: tuple[int, ...],
-) -> tuple[int | None, ...]:
-    """Bound the denominator LCM independently for each output position."""
+) -> tuple[int, ...]:
+    """Return concrete per-output denominator LCMs within the result bound."""
 
     cached_product = lru_cache(maxsize=4_096)(_bounded_product)
     cached_lcm = lru_cache(maxsize=4_096)(_bounded_lcm)
-    lcms: list[int | None] = [1] * length
+    lcms = [1] * length
     interned_lcms: dict[int, int] = {1: 1}
     for divisor, multiple in incidences:
         index = multiple - 1
-        current = lcms[index]
-        if current is None:
-            continue
         term_denominator = cached_product(
             left_dens[divisor - 1], right_dens[multiple // divisor - 1]
         )
         if term_denominator is None:
-            lcms[index] = None
-            continue
-        merged = cached_lcm(current, term_denominator)
-        if merged is not None:
-            merged = interned_lcms.setdefault(merged, merged)
-        lcms[index] = merged
+            raise OperationDomainValidationError(
+                location=("values",),
+                code="arithmetic_functions.result_height_exceeded",
+                message=(
+                    "Dirichlet convolution denominator height exceeds the "
+                    f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit result bound"
+                ),
+            )
+        merged = cached_lcm(lcms[index], term_denominator)
+        if merged is None:
+            raise OperationDomainValidationError(
+                location=("values",),
+                code="arithmetic_functions.result_height_exceeded",
+                message=(
+                    "Dirichlet convolution denominator height exceeds the "
+                    f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit result bound"
+                ),
+            )
+        lcms[index] = interned_lcms.setdefault(merged, merged)
     return tuple(lcms)
 
 
@@ -315,7 +366,7 @@ def _admit_convolution(
     right_nums = tuple(numerator for numerator, _ in right_ratios)
     right_dens = tuple(denominator for _, denominator in right_ratios)
     slot_lcms = _convolution_slot_lcms(len(left), incidences, left_dens, right_dens)
-    sums = _HeightSums(len(left), slot_lcms=slot_lcms)
+    sums = _SlotLCMHeightSums(len(left), slot_lcms)
     for divisor, multiple in incidences:
         left_index = divisor - 1
         right_index = multiple // divisor - 1
@@ -326,19 +377,18 @@ def _admit_convolution(
             right[right_index],
             denominator=(
                 left_dens[left_index] * right_dens[right_index]
-                if slot_lcm not in (None, 1)
+                if slot_lcm != 1
                 else None
             ),
         )
     _require_result_envelope(sums.heights(), "Dirichlet convolution")
-    assert all(slot_lcm is not None for slot_lcm in slot_lcms)
     return _ConvolutionPlan(
         incidences=incidences,
         left_nums=left_nums,
         left_dens=left_dens,
         right_nums=right_nums,
         right_dens=right_dens,
-        slot_lcms=tuple(slot_lcm for slot_lcm in slot_lcms if slot_lcm is not None),
+        slot_lcms=slot_lcms,
     )
 
 
@@ -351,9 +401,10 @@ def _admit_mobius(
     ratios = tuple((value.num, value.den) for value in values)
     dens = tuple(denominator for _, denominator in ratios)
     shared_lcm = _shared_denominator_lcm(values)
-    sums = _HeightSums(
-        len(heights),
-        shared_lcm=shared_lcm,
+    sums = (
+        _SharedLCMHeightSums(len(heights), shared_lcm)
+        if shared_lcm is not None
+        else _DirectHeightSums(len(heights))
     )
     for divisor, multiple in incidences:
         source = multiple // divisor - 1
@@ -396,7 +447,7 @@ def _admit_inverse(values: tuple[CanonicalRational, ...]) -> None:
         return
     inverse = [RationalHeight(1, 1)] * len(source)
     inverse[0] = RationalHeight(1, 1).quotient(source[0])
-    sums = _HeightSums(len(source))
+    sums = _DirectHeightSums(len(source))
     for quotient in range(1, len(source) + 1):
         if quotient > 1:
             height = sums.height(quotient - 1).quotient(source[0])
@@ -524,7 +575,11 @@ def summatory_function(
     else:
         # The absolute sum over all lifted numerators bounds every prefix,
         # including intermediate sums; no cancellation is assumed.
-        sums = _HeightSums(1, shared_lcm=shared_lcm)
+        sums = (
+            _SharedLCMHeightSums(1, shared_lcm)
+            if shared_lcm is not None
+            else _DirectHeightSums(1)
+        )
         for value in values:
             sums.add(0, RationalHeight.from_canonical(value), denominator=value.den)
         height = sums.height(0)

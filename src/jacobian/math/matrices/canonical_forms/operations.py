@@ -1088,8 +1088,10 @@ def centralizer_basis(matrix: RationalMatrix) -> CentralizerResult:
     basis = _centralizer_matrices_from_vectors(vectors, n)
     # The identity always commutes, so the centralizer is never empty.  The
     # nullity assertion also protects the owner-local free-column convention.
-    assert basis, "centralizer must contain the identity"
-    assert len(basis) == len(vectors)
+    if not basis:
+        raise RuntimeError("centralizer basis does not contain the identity")
+    if len(basis) != len(vectors):
+        raise RuntimeError("centralizer basis cardinality disagrees with nullity")
     return CentralizerResult._from_kernel(
         matrix=matrix, dimension=len(basis), basis=basis
     )
@@ -1100,7 +1102,8 @@ def _centralizer_two_by_two_basis(
 ) -> tuple[RationalMatrix, RationalMatrix]:
     """Return the stable ``(I, A)`` basis for a nonscalar 2-by-2 matrix."""
 
-    assert entries[0][1] != 0 or entries[1][0] != 0 or entries[0][0] != entries[1][1]
+    if not (entries[0][1] != 0 or entries[1][0] != 0 or entries[0][0] != entries[1][1]):
+        raise RuntimeError("nonscalar two-by-two centralizer received a scalar matrix")
     identity = rational_matrix_from_fractions(
         ((Fraction(1), Fraction(0)), (Fraction(0), Fraction(1)))
     )
@@ -1243,7 +1246,8 @@ def _centralizer_nullspace(
         for pivot_row, pivot_column in enumerate(pivots):
             vector[pivot_column] = -reduced[pivot_row][free_column]
         vectors.append(tuple(vector))
-    assert len(vectors) + rank == len(rows[0])
+    if len(vectors) + rank != len(rows[0]):
+        raise RuntimeError("centralizer nullity disagrees with backend rank")
     return tuple(vectors)
 
 

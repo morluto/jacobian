@@ -219,7 +219,12 @@ def _math_find_sync(
         )
         return OperationFindResponse(root=match_response)
 
-    assert operation_id is not None
+    if operation_id is None:
+        raise _find_invalid_request_error(
+            "Provide exactly one of query or operation_id.",
+            hint="Use query to search, or operation_id to inspect one operation.",
+            locations=("query", "operation_id"),
+        )
     descriptor = active_catalog.inspect(operation_id)
     if descriptor is None:
         hint = (

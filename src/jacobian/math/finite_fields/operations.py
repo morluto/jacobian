@@ -670,7 +670,8 @@ def homogeneous_fixed_subspace(
         checkpoint("after result construction")
         return result
     monomial_basis = _homogeneous_monomial_basis(variable_count, degree)
-    assert len(monomial_basis) == monomial_count
+    if len(monomial_basis) != monomial_count:
+        raise RuntimeError("homogeneous monomial count disagreed with its basis")
     equations: list[tuple[int, ...]] = []
     for generator in action.generator_matrices:
         induced = _induced_action_matrix(

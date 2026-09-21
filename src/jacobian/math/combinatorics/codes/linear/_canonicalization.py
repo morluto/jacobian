@@ -156,8 +156,14 @@ def canonicalize_linear_code(
             )
         backend = None
     else:
-        assert request.permutation_group is not None
-        backend = _backend_group(request.permutation_group)
+        permutation_group = request.permutation_group
+        if permutation_group is None:
+            raise OperationDomainValidationError(
+                location=("permutation_group",),
+                code="code.canonicalization.permutation_group_required",
+                message="generated coordinate action requires a permutation group",
+            )
+        backend = _backend_group(permutation_group)
         order = int(backend.order())
         if order > MAX_CODE_CANONICALIZATION_ACTION_ORDER:
             raise OperationResourceAdmissionError(
@@ -178,7 +184,8 @@ def canonicalize_linear_code(
     if request.action == "FULL_SYMMETRIC":
         elements = tuple(permutations(range(width)))
     else:
-        assert backend is not None
+        if backend is None:
+            raise RuntimeError("generated coordinate action has no backend group")
         elements = tuple(
             sorted(
                 _full_permutation_form(element, width) for element in backend.elements

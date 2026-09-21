@@ -3,7 +3,10 @@
 import pytest
 from pydantic import ValidationError
 
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.combinatorics.codes.linear import _canonicalization
 from jacobian.math.combinatorics.codes.linear._canonicalization import (
     LinearCodeCanonicalizationRequest,
@@ -34,6 +37,23 @@ def test_full_symmetric_action_returns_least_rref_and_orbit_stabilizer() -> None
     assert result.stabilizer_size == 2
     assert result.transported_axis == tuple(
         _encoder().coordinate_axis[index] for index in result.transporter
+    )
+
+
+def test_trusted_supplied_action_without_group_is_rejected() -> None:
+    malformed = LinearCodeCanonicalizationRequest(encoder=_encoder()).model_copy(
+        update={"action": "SUPPLIED_GROUP", "permutation_group": None}
+    )
+
+    with pytest.raises(OperationDomainValidationError) as raised:
+        canonicalize_linear_code(malformed)
+
+    assert raised.value.errors() == (
+        {
+            "type": "code.canonicalization.permutation_group_required",
+            "loc": ("permutation_group",),
+            "msg": "generated coordinate action requires a permutation group",
+        },
     )
 
 

@@ -8,13 +8,16 @@ import pytest
 
 from jacobian._exact import CanonicalRational
 from jacobian.math.optimization import general_linear_program
+from jacobian.math.optimization import operations as standard_solver
 from jacobian.math.optimization._general_models import (
     MAX_GENERAL_LINEAR_PROGRAM_VARIABLES,
     MAX_GENERAL_RATIONAL_INPUT_DIGITS,
     GeneralFormRationalLinearProgram,
     GeneralRationalLinearProgramResult,
+    RationalLinearConstraint,
     RationalObjectiveSense,
 )
+from jacobian.math.optimization._models import RationalLinearProgramResult
 
 
 def _program(
@@ -45,6 +48,46 @@ def _program(
             "constraints": [],
         }
     )
+
+
+def test_malformed_trusted_standard_result_fails_without_claiming_mathematics(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    program = _program(
+        [(Fraction(), Fraction(1)), (Fraction(), Fraction(1))],
+        [Fraction(1), Fraction(1)],
+    ).model_copy(
+        update={
+            "constraints": (
+                RationalLinearConstraint.model_validate(
+                    {
+                        "label": "fix_x",
+                        "coefficients": (
+                            CanonicalRational(num=1, den=1),
+                            CanonicalRational(num=1, den=1),
+                        ),
+                        "relation": "EQ",
+                        "rhs": CanonicalRational(num=0, den=1),
+                    }
+                ),
+            )
+        }
+    )
+
+    def malformed(*_args: object, **_kwargs: object) -> RationalLinearProgramResult:
+        return RationalLinearProgramResult.model_construct(
+            program=program,
+            status="INFEASIBLE",
+            farkas_candidate=None,
+        )
+
+    monkeypatch.setattr(standard_solver, "_linear_program_admitted", malformed)
+
+    with pytest.raises(
+        RuntimeError,
+        match="exact linear-program execution produced no mathematical result",
+    ):
+        general_linear_program(program)
 
 
 @pytest.mark.parametrize("size", [4, MAX_GENERAL_LINEAR_PROGRAM_VARIABLES])

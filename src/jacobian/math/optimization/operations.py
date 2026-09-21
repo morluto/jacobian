@@ -152,29 +152,37 @@ def _component_programs(
             ledger=ledger,
         )
         if result.status == "INFEASIBLE":
-            assert result.farkas_candidate is not None
+            farkas_candidate = result.farkas_candidate
+            if farkas_candidate is None:
+                _execution_failure()
             return _certify_infeasible(
                 program,
                 _expand_vector(
                     rows,
-                    tuple(v.as_fraction() for v in result.farkas_candidate),
+                    tuple(v.as_fraction() for v in farkas_candidate),
                     height,
                 ),
                 admission.result_digits,
             )
-        assert result.primal_candidate is not None
-        for j, value in zip(columns, result.primal_candidate, strict=True):
+        primal_candidate = result.primal_candidate
+        if primal_candidate is None:
+            _execution_failure()
+        for j, value in zip(columns, primal_candidate, strict=True):
             point[j] = value.as_fraction()
         if result.status == "UNBOUNDED":
-            assert result.recession_direction is not None
+            recession_direction = result.recession_direction
+            if recession_direction is None:
+                _execution_failure()
             ray = _expand_vector(
                 columns,
-                tuple(v.as_fraction() for v in result.recession_direction),
+                tuple(v.as_fraction() for v in recession_direction),
                 width,
             )
         else:
-            assert result.dual_candidate is not None
-            for i, value in zip(rows, result.dual_candidate, strict=True):
+            dual_candidate = result.dual_candidate
+            if result.status != "OPTIMAL" or dual_candidate is None:
+                _execution_failure()
+            for i, value in zip(rows, dual_candidate, strict=True):
                 dual[i] = value.as_fraction()
     for j, cost in enumerate(program.objective):
         if j not in admission.columns and cost.as_fraction() < 0:

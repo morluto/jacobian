@@ -177,7 +177,8 @@ def _effective_bound_values(
         )
         if variable.lower_bound is not None and variable.upper_bound is not None:
             row = normalization.upper_rows[index]
-            assert row is not None
+            if row is None:
+                _execution_failure(program)
             upper_value = standard[row]
             lower_value = effective_objective[index] - gradient - upper_value
         elif variable.lower_bound is not None:
@@ -214,7 +215,8 @@ def _effective_farkas_bounds(
         )
         if variable.lower_bound is not None and variable.upper_bound is not None:
             row = normalization.upper_rows[index]
-            assert row is not None
+            if row is None:
+                _execution_failure(program)
             upper_value = standard[row]
             lower_value = -gradient - upper_value
         elif variable.lower_bound is not None:
@@ -375,7 +377,8 @@ def _one_variable_interval_result(
     if active is not None:
         _, kind, active_index = active
         if kind == "constraint":
-            assert active_index is not None
+            if active_index is None:
+                _execution_failure(program)
             coefficient = (
                 program.constraints[active_index].coefficients[0].as_fraction()
             )
@@ -491,28 +494,25 @@ def _map_standard_result(
     certificate_max_digits: int,
 ) -> GeneralRationalLinearProgramResult:
     if standard_result.status == "INFEASIBLE":
-        assert standard_result.farkas_candidate is not None
+        farkas_candidate = standard_result.farkas_candidate
+        if farkas_candidate is None:
+            _execution_failure(program)
         constraints = _effective_constraint_values(
-            program, normalization, standard_result.farkas_candidate, farkas=True
+            program, normalization, farkas_candidate, farkas=True
         )
         lower, upper = _effective_farkas_bounds(
             program,
             normalization,
             constraints,
-            standard_result.farkas_candidate,
+            farkas_candidate,
         )
         wires = tuple(
             _wire_vector(values, max_digits=certificate_max_digits)
             for values in (constraints, lower, upper)
         )
-        if any(value is None for value in wires):
-            return _execution_failure(program)
         constraint_wire, lower_wire, upper_wire = wires
-        assert (
-            constraint_wire is not None
-            and lower_wire is not None
-            and upper_wire is not None
-        )
+        if constraint_wire is None or lower_wire is None or upper_wire is None:
+            _execution_failure(program)
         return GeneralRationalLinearProgramResult._from_kernel(
             program=program,
             status="INFEASIBLE",
@@ -521,11 +521,13 @@ def _map_standard_result(
             farkas_upper_bounds=upper_wire,
         )
 
-    assert standard_result.primal_candidate is not None
+    primal_candidate = standard_result.primal_candidate
+    if primal_candidate is None:
+        _execution_failure(program)
     primal = _mapped_primal_fields(
         program,
         normalization,
-        standard_result.primal_candidate,
+        primal_candidate,
         point_max_digits=point_max_digits,
         residual_max_digits=residual_max_digits,
     )
@@ -533,10 +535,10 @@ def _map_standard_result(
         return _execution_failure(program)
     point, objective, residuals, constraint_slacks, lower_slacks, upper_slacks = primal
     if standard_result.status == "UNBOUNDED":
-        assert standard_result.recession_direction is not None
-        direction = _source_direction(
-            normalization, standard_result.recession_direction
-        )
+        recession_direction = standard_result.recession_direction
+        if recession_direction is None:
+            _execution_failure(program)
+        direction = _source_direction(normalization, recession_direction)
         wire_direction = _wire_vector(direction, max_digits=point_max_digits)
         if wire_direction is None:
             return _execution_failure(program)
@@ -562,16 +564,17 @@ def _map_standard_result(
             upper_slacks,
         )
 
-    assert standard_result.status == "OPTIMAL"
-    assert standard_result.dual_candidate is not None
+    dual_candidate = standard_result.dual_candidate
+    if standard_result.status != "OPTIMAL" or dual_candidate is None:
+        _execution_failure(program)
     effective_constraints = _effective_constraint_values(
-        program, normalization, standard_result.dual_candidate
+        program, normalization, dual_candidate
     )
     effective_lower, effective_upper = _effective_bound_values(
         program,
         normalization,
         effective_constraints,
-        standard_result.dual_candidate,
+        dual_candidate,
     )
     sense = Fraction(1 if program.objective.sense == "MINIMIZE" else -1)
     constraints = tuple(sense * value for value in effective_constraints)
@@ -616,7 +619,14 @@ def _map_standard_result(
         for values in (constraints, lower, upper, stationarity)
     )
     wire_dual_objective = _wire(dual_objective, max_digits=certificate_max_digits)
-    if any(value is None for value in wires) or wire_dual_objective is None:
+    constraint_wire, lower_wire, upper_wire, stationarity_wire = wires
+    if (
+        constraint_wire is None
+        or lower_wire is None
+        or upper_wire is None
+        or stationarity_wire is None
+        or wire_dual_objective is None
+    ):
         return _primal_feasible(
             program,
             point,
@@ -626,13 +636,6 @@ def _map_standard_result(
             lower_slacks,
             upper_slacks,
         )
-    constraint_wire, lower_wire, upper_wire, stationarity_wire = wires
-    assert (
-        constraint_wire is not None
-        and lower_wire is not None
-        and upper_wire is not None
-        and stationarity_wire is not None
-    )
     return GeneralRationalLinearProgramResult._from_kernel(
         program=program,
         status="OPTIMAL",

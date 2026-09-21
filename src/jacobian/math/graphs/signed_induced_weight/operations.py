@@ -25,7 +25,6 @@ def _gray_min_max(
     *,
     bias: tuple[int, ...] | None = None,
     base: int = 0,
-    track_witness: bool = False,
     labels: tuple[str, ...] | None = None,
 ) -> tuple[int, int, tuple[int, ...], tuple[int, ...]]:
     """Gray-code min/max over subsets with incremental scaled-integer updates.
@@ -33,9 +32,8 @@ def _gray_min_max(
     ``bias[x]`` is an extra linear term collected when ``x`` is selected, so
     constrained searches fix vertices by folding them into ``base``/``bias``.
     Returns ``(min_value, max_value, min_set, max_set)`` as local positions;
-    the sets are meaningful only with ``track_witness``, breaking value ties
-    by the lexicographically least label tuple exactly like the legacy
-    monolithic kernel.
+    Supplying ``labels`` requests witness tracking and lexicographic tie
+    breaking; without labels the returned sets are empty.
     """
 
     selected = [False] * size
@@ -70,10 +68,9 @@ def _gray_min_max(
         tied_minimum = tied_maximum = False
         witness: tuple[int, ...] = ()
         key: tuple[str, ...] = ()
-        if track_witness and (
+        if labels is not None and (
             new_minimum or new_maximum or current in (minimum_value, maximum_value)
         ):
-            assert labels is not None
             witness = tuple(
                 local for local, is_selected in enumerate(selected) if is_selected
             )
@@ -82,11 +79,11 @@ def _gray_min_max(
             tied_maximum = current == maximum_value and key < max_key
         if new_minimum or tied_minimum:
             minimum_value = current
-            if track_witness:
+            if labels is not None:
                 min_set, min_key = witness, key
         if new_maximum or tied_maximum:
             maximum_value = current
-            if track_witness:
+            if labels is not None:
                 max_set, max_key = witness, key
     return minimum_value, maximum_value, min_set, max_set
 
@@ -226,7 +223,6 @@ def _lex_least_achiever(
             for index in range(last_position + 1, order)
             if index not in chosen
         )
-        picked: int | None = None
         for label in candidates:
             index = graph.vertices.index(label)
             if (
@@ -238,12 +234,11 @@ def _lex_least_achiever(
                 )
                 == target
             ):
-                picked = index
+                chosen.add(index)
+                last_position = index
                 break
-        if picked is None:  # pragma: no cover - admission keeps a pick available
-            raise AssertionError("lexicographic witness search exhausted candidates")
-        chosen.add(picked)
-        last_position = picked
+        else:  # pragma: no cover - admission keeps a pick available
+            raise RuntimeError("lexicographic witness search exhausted candidates")
 
 
 def _with_free_isolates(
@@ -286,7 +281,6 @@ def _extremum_witnesses(
         _, _, min_local, max_local = _gray_min_max(
             len(component.vertices),
             component.adjacency,
-            track_witness=True,
             labels=labels,
         )
         min_witness = _with_free_isolates(

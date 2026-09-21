@@ -101,6 +101,19 @@ def _six_simplex_rows() -> tuple[Halfspace, ...]:
     return tuple(rows)
 
 
+def test_native_volume_rejects_missing_representation() -> None:
+    with pytest.raises(OperationDomainValidationError) as raised:
+        polytope_operations.polytope_volume(None, None, MAX_DIMENSION)
+
+    assert raised.value.errors() == (
+        {
+            "type": "polytope.volume.exactly_one_representation",
+            "loc": ("vertices", "halfspaces"),
+            "msg": "provide exactly one of vertices or halfspaces",
+        },
+    )
+
+
 def _volume_via_vertices(vertices: tuple[Vertex, ...]) -> PolytopeVolumeResult:
     return compute_polytope_volume(PolytopeVolumeRequest(vertices=vertices))
 

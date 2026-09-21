@@ -275,7 +275,8 @@ def _facets_and_box(  # noqa: C901
             # empty box scans no candidate at all.
             return [], [0] * d, [-1] * d, d
     else:
-        assert vertices is not None
+        if vertices is None:
+            raise RuntimeError("lattice polytope has no source representation")
         vertex_models = vertices
         d = len(vertex_models[0].coordinates)
         if d > dimension_bound:

@@ -95,7 +95,8 @@ def _source_coordinate_map(
 
     if chain:
         lower = program.variables[chain[0]].lower_bound
-        assert lower is not None
+        if lower is None:
+            raise RuntimeError("normalized variable chain has no finite lower bound")
         positions = {source: position for position, source in enumerate(chain)}
         return (
             [lower.as_fraction()] * len(chain),

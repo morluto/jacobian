@@ -786,13 +786,20 @@ def polytope_volume(
     """
     representation: Literal["vertices", "halfspaces"]
     location: tuple[str, ...]
+    if (vertices is None) == (halfspaces is None):
+        raise OperationDomainValidationError(
+            location=("vertices", "halfspaces"),
+            code="polytope.volume.exactly_one_representation",
+            message="provide exactly one of vertices or halfspaces",
+        )
     try:
         if vertices is not None:
             representation = "vertices"
             location = ("vertices",)
             prepared, dim, triangulation = _validate_vertices(vertices, dimension_bound)
         else:
-            assert halfspaces is not None
+            if halfspaces is None:
+                raise RuntimeError("polytope volume has no source representation")
             representation = "halfspaces"
             location = ("halfspaces",)
             prepared, dim, triangulation = _validate_halfspaces(

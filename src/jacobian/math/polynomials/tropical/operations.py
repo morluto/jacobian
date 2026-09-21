@@ -89,7 +89,8 @@ def _order_key(
     """
 
     if scalar.kind == "FINITE":
-        assert scalar.value is not None
+        if scalar.value is None:
+            raise RuntimeError("finite tropical scalar has no rational value")
         return (0, scalar.value.as_fraction())
     if semiring.convention == "MIN_PLUS":
         return (1, Fraction(0))

@@ -10,6 +10,7 @@ a topological order.  Validators never replay this mathematics.
 from __future__ import annotations
 
 from collections import Counter
+from dataclasses import dataclass
 
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -191,10 +192,23 @@ def _check_pairs(
     return canonical_pairs, matched, used
 
 
+@dataclass(frozen=True, slots=True)
+class _DirectedCycle:
+    nodes: tuple[int, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class _TopologicalOrder:
+    nodes: tuple[int, ...]
+
+
+type _DirectedTraversal = _DirectedCycle | _TopologicalOrder
+
+
 def _iterative_cycle_or_order(
     node_count: int, adjacency: tuple[list[int], ...]
-) -> tuple[list[int] | None, list[int] | None]:
-    """Return one directed cycle, or ``None`` and a topological order.
+) -> _DirectedTraversal:
+    """Return one directed cycle or a topological order.
 
     A cycle is returned as the ordered list of distinct nodes whose
     consecutive edges close back to the first node.
@@ -220,7 +234,7 @@ def _iterative_cycle_or_order(
                         cycle.append(walker)
                         walker = parent[walker]
                     cycle.reverse()
-                    return cycle, None
+                    return _DirectedCycle(nodes=tuple(cycle))
                 if color[successor] == _WHITE:
                     color[successor] = _GRAY
                     parent[successor] = node
@@ -230,7 +244,7 @@ def _iterative_cycle_or_order(
                 postorder.append(node)
                 stack.pop()
     postorder.reverse()
-    return None, postorder
+    return _TopologicalOrder(nodes=tuple(postorder))
 
 
 def _critical_profile(
@@ -285,8 +299,8 @@ def construct_matching(
         else:
             adjacency[index_of[coface]].append(index_of[face])
 
-    cycle, order = _iterative_cycle_or_order(cell_count, tuple(adjacency))
-    if cycle is not None:
+    traversal = _iterative_cycle_or_order(cell_count, tuple(adjacency))
+    if isinstance(traversal, _DirectedCycle):
         return DiscreteMorseMatchingResult._from_kernel(
             outcome=MorseMatchingOutcome.CYCLIC_MATCHING,
             complex=complex_,
@@ -294,18 +308,17 @@ def construct_matching(
             critical_profile=None,
             topological_order=(),
             hasse_edges=None,
-            closed_v_path=tuple(flat[node] for node in cycle),
+            closed_v_path=tuple(flat[node] for node in traversal.nodes),
             fault=None,
             fault_message=None,
             fault_pair_index=None,
         )
-    assert order is not None
     return DiscreteMorseMatchingResult._from_kernel(
         outcome=MorseMatchingOutcome.ACYCLIC_MATCHING,
         complex=complex_,
         pairs=canonical_pairs,
         critical_profile=_critical_profile(complex_, cells, used),
-        topological_order=tuple(flat[node] for node in order),
+        topological_order=tuple(flat[node] for node in traversal.nodes),
         hasse_edges=len(covers),
         closed_v_path=(),
         fault=None,
@@ -342,15 +355,24 @@ def _matching_maps(
     return matched, upper
 
 
+@dataclass(frozen=True, slots=True)
+class _AdmittedAcyclicMatching:
+    result: DiscreteMorseMatchingResult
+    critical_profile: CriticalCellProfile
+
+
 def _admit_acyclic_matching(
     complex_: FiniteSimplicialComplex,
     pairs: tuple[MatchingPair, ...],
-) -> DiscreteMorseMatchingResult:
+) -> _AdmittedAcyclicMatching:
     """Establish the supplied matching is acyclic before Morse reduction."""
 
     matching = construct_matching(complex_, pairs)
     if matching.outcome is MorseMatchingOutcome.ACYCLIC_MATCHING:
-        return matching
+        profile = matching.critical_profile
+        if profile is None:
+            raise RuntimeError("acyclic matching has no critical-cell profile")
+        return _AdmittedAcyclicMatching(result=matching, critical_profile=profile)
     if matching.outcome is MorseMatchingOutcome.CYCLIC_MATCHING:
         detail = (
             "the supplied matching contains the closed V-path "
@@ -456,9 +478,9 @@ def compute_gradient_paths(
 ) -> GradientPathsResult:
     """Enumerate the complete bounded gradient-path family from one critical cell."""
 
-    matching = _admit_acyclic_matching(complex_, pairs)
-    profile = matching.critical_profile
-    assert profile is not None
+    admitted = _admit_acyclic_matching(complex_, pairs)
+    matching = admitted.result
+    profile = admitted.critical_profile
     critical = set(profile.critical_cells)
     canonical_start = tuple(sorted(start))
     if canonical_start not in critical:
@@ -549,9 +571,9 @@ def compute_morse_complex(
 ) -> MorseComplexResult:
     """Compute the graded GF(2) Morse complex of one acyclic matching."""
 
-    matching = _admit_acyclic_matching(complex_, pairs)
-    profile = matching.critical_profile
-    assert profile is not None
+    admitted = _admit_acyclic_matching(complex_, pairs)
+    matching = admitted.result
+    profile = admitted.critical_profile
     if len(profile.critical_cells) > MAX_MORSE_CRITICAL_CELLS:
         raise _resource(
             "admission.critical_cells",

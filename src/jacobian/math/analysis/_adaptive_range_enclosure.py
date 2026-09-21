@@ -701,7 +701,7 @@ class _EvaluatedAdaptiveRangeLeaf:
 
     def __post_init__(self) -> None:
         if (self.enclosure is None) == (self.domain_failure is None):
-            raise AssertionError("one adaptive leaf must carry exactly one outcome")
+            raise RuntimeError("one adaptive leaf must carry exactly one outcome")
         object.__setattr__(self, "split_coordinate", _widest_coordinate(self.box))
         if self.enclosure is None:
             lower = upper = width = None

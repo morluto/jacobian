@@ -372,7 +372,7 @@ def _require_bounded_rational_components(*values: Fraction) -> None:
 def _bounded_rational_bounds(lower: Fraction, upper: Fraction) -> _RationalBounds:
     _require_bounded_rational_components(lower, upper)
     if lower > upper:
-        raise AssertionError("internal rational interval endpoints are reversed")
+        raise RuntimeError("internal rational interval endpoints are reversed")
     return _RationalBounds(lower, upper)
 
 
@@ -480,7 +480,7 @@ def _preflight_box_unary(
         return result
     if node.op in ("sin", "cos"):
         return _bounded_rational_bounds(Fraction(-1), Fraction(1))
-    raise AssertionError(f"unsupported unary expression operation: {node.op}")
+    raise RuntimeError(f"unsupported unary expression operation: {node.op}")
 
 
 def _preflight_box_binary(
@@ -522,7 +522,7 @@ def _preflight_box_binary(
         _require_bounded_rational_components(*quotients)
         bounds = _bounded_rational_bounds(min(quotients), max(quotients))
     else:
-        raise AssertionError(f"unsupported binary expression operation: {node.op}")
+        raise RuntimeError(f"unsupported binary expression operation: {node.op}")
     return bounds
 
 

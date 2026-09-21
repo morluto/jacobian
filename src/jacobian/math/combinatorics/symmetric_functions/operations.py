@@ -140,7 +140,7 @@ def schur_evaluation(
 
 
 def _determinant(matrix: list[list[int]]) -> int:
-    """Compute the determinant of a square integer matrix via SymPy."""
+    """Compute the determinant of a square integer matrix exactly."""
 
     n = len(matrix)
     if n == 0:
@@ -149,9 +149,9 @@ def _determinant(matrix: list[list[int]]) -> int:
         return matrix[0][0]
     if n == 2:
         return matrix[0][0] * matrix[1][1] - matrix[0][1] * matrix[1][0]
-    from sympy import Matrix
+    from flint import fmpz_mat
 
-    return int(Matrix(matrix).det())
+    return int(fmpz_mat(matrix).det())
 
 
 def verify_schur_evaluation(claim: object) -> bool:

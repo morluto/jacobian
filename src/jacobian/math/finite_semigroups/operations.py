@@ -636,28 +636,41 @@ def ideal_enumeration(semigroup: FiniteSemigroup) -> IdealEnumerationResult:
             message="ideal/subsemigroup enumeration requires at most 12 elements",
         )
     elements = semigroup.elements
-    multiplication = semigroup.multiplication
-    idx = {label: i for i, label in enumerate(elements)}
+    index = {label: position for position, label in enumerate(elements)}
+    table = tuple(
+        tuple(index[value] for value in row) for row in semigroup.multiplication
+    )
+    # Work entirely in the subset lattice.  The result is still necessarily
+    # exponential, but accepted subsets no longer allocate labels and sets or
+    # perform dictionary lookups inside their quadratic closure tests.
+    product_bits = tuple(
+        tuple(1 << table[left][right] for right in range(n)) for left in range(n)
+    )
+    left_ideal_bits = tuple(
+        sum(1 << table[left][member] for left in range(n)) for member in range(n)
+    )
+    right_ideal_bits = tuple(
+        sum(1 << table[member][right] for right in range(n)) for member in range(n)
+    )
     ideals: list[tuple[str, ...]] = []
     subsemigroups: list[tuple[str, ...]] = []
     for mask in range(1, 1 << n):
-        subset = tuple(elements[i] for i in range(n) if mask & (1 << i))
-        subset_set = set(subset)
-        # Subsemigroup: closed under multiplication.
+        members = tuple(index for index in range(n) if mask & (1 << index))
+        closed = True
+        for left in members:
+            products = 0
+            for right in members:
+                products |= product_bits[left][right]
+            if products & ~mask:
+                closed = False
+                break
+        if closed:
+            subsemigroups.append(tuple(elements[index] for index in members))
         if all(
-            multiplication[idx[a]][idx[b]] in subset_set for a in subset for b in subset
+            not ((left_ideal_bits[member] | right_ideal_bits[member]) & ~mask)
+            for member in members
         ):
-            subsemigroups.append(subset)
-        if not subset:
-            continue
-        # Two-sided ideal: S*I ⊆ I and I*S ⊆ I.
-        if all(
-            multiplication[idx[s]][idx[a]] in subset_set
-            and multiplication[idx[a]][idx[s]] in subset_set
-            for s in elements
-            for a in subset
-        ):
-            ideals.append(subset)
+            ideals.append(tuple(elements[index] for index in members))
     return IdealEnumerationResult._from_kernel(
         semigroup, tuple(ideals), tuple(subsemigroups)
     )

@@ -79,7 +79,7 @@ class _SearchStoppedError(Exception):
         visited_count: int = 0,
         consumed_work: int = 0,
     ) -> None:
-        self.reason = reason
+        self.reason: RationalFlatIncompleteReason = reason
         self.visited_count = visited_count
         self.consumed_work = consumed_work
         super().__init__(reason)
@@ -547,6 +547,50 @@ def _rref_basis(
     )
 
 
+def _extend_rref_basis(
+    basis: tuple[RationalRow, ...],
+    row: IntegerRow,
+    *,
+    ambient_dimension: int,
+    ledger: _WorkLedger,
+) -> tuple[RationalRow, ...]:
+    """Insert one integer row into an existing canonical rational RREF basis."""
+
+    _require_execution_active(ledger.deadline, "before incremental rational reduction")
+    ledger.charge_linear_algebra(
+        "row_reduction",
+        max(ambient_dimension, 1) * (2 * max(len(basis), 1) + 3),
+    )
+    reduced = [Fraction(value) for value in row]
+    pivots = _pivot_columns(basis)
+    for basis_row, pivot in zip(basis, pivots, strict=True):
+        factor = reduced[pivot]
+        if factor:
+            reduced = [
+                value - factor * basis_row[column]
+                for column, value in enumerate(reduced)
+            ]
+    new_pivot = next((column for column, value in enumerate(reduced) if value), None)
+    if new_pivot is None:
+        return basis
+    scale = reduced[new_pivot]
+    reduced = [value / scale for value in reduced]
+    rows = []
+    for basis_row in basis:
+        factor = basis_row[new_pivot]
+        rows.append(
+            tuple(
+                value - factor * reduced[column]
+                for column, value in enumerate(basis_row)
+            )
+            if factor
+            else basis_row
+        )
+    rows.insert(sum(pivot < new_pivot for pivot in pivots), tuple(reduced))
+    _require_execution_active(ledger.deadline, "after incremental rational reduction")
+    return tuple(rows)
+
+
 def _pivot_columns(basis: tuple[RationalRow, ...]) -> tuple[int, ...]:
     return tuple(
         next(index for index, value in enumerate(row) if value) for row in basis
@@ -889,8 +933,14 @@ def _search_satisfying_states(
             clause_membership_count=plan.clause_membership_count,
         ):
             ledger.charge("search_frontier", ambient_dimension + state.rank + 1)
+            child_basis = _extend_rref_basis(
+                state.row_space_basis,
+                plan.candidate_rows[index],
+                ambient_dimension=ambient_dimension,
+                ledger=ledger,
+            )
             child = _canonical_closure(
-                (*state.row_space_basis, plan.candidate_rows[index]),
+                child_basis,
                 plan=plan,
                 ambient_dimension=ambient_dimension,
                 ledger=ledger,

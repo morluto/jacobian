@@ -1,5 +1,6 @@
 """Prime-field linear-code canonicalization under coordinate actions."""
 
+from collections.abc import Iterable
 from itertools import permutations
 from math import factorial
 from typing import Literal, Self
@@ -181,19 +182,20 @@ def canonicalize_linear_code(
     # Do not materialize an action orbit until the complete traversal has been
     # admitted. In particular, S_10 has 3.6M elements but is rejected by the
     # RREF-work bound for every nontrivial encoder before tuple construction.
+    elements: Iterable[tuple[int, ...]]
     if request.action == "FULL_SYMMETRIC":
-        elements = tuple(permutations(range(width)))
+        elements = permutations(range(width))
     else:
         if backend is None:
             raise RuntimeError("generated coordinate action has no backend group")
-        elements = tuple(
-            sorted(
-                _full_permutation_form(element, width) for element in backend.elements
-            )
+        # Canonicality comes from comparing every image, not from retaining or
+        # sorting the orbit. The backend iterator is consumed only once.
+        elements = (
+            _full_permutation_form(element, width) for element in backend.elements
         )
-    candidates: list[
-        tuple[tuple[tuple[int, ...], ...], tuple[int, ...], tuple[str, ...]]
-    ] = []
+    best: tuple[
+        tuple[tuple[int, ...], ...], tuple[int, ...], tuple[str, ...]
+    ] | None = None
     distinct: set[tuple[tuple[int, ...], ...]] = set()
     for element in elements:
         permuted = tuple(
@@ -215,16 +217,18 @@ def canonicalize_linear_code(
                 message="a coordinate action must preserve generator rank",
             )
         distinct.add(reduced)
-        candidates.append(
-            (
-                reduced,
-                tuple(element),
-                tuple(
-                    encoder.coordinate_axis[element[column]] for column in range(width)
-                ),
-            )
+        candidate = (
+            reduced,
+            tuple(element),
+            tuple(
+                encoder.coordinate_axis[element[column]] for column in range(width)
+            ),
         )
-    matrix, transporter, transported_axis = min(candidates)
+        if best is None or candidate < best:
+            best = candidate
+    # Every admitted finite action contains its identity, including width zero.
+    assert best is not None
+    matrix, transporter, transported_axis = best
     orbit_size = len(distinct)
     return LinearCodeCanonicalizationResult(
         source=request,

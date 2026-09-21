@@ -568,6 +568,49 @@ class TestNewtonPolytope:
         assert result.nonextreme == ((0, 1),)
         assert result.affine_dimension == 2
 
+    def test_newton_vertices_match_planar_cross_product_oracle(self) -> None:
+        # Every subset of this small grid is checked against a backend-free
+        # planar convex-hull oracle. Collinear boundary points are nonextreme.
+        from itertools import combinations
+
+        grid = ((0, 0), (0, 1), (0, 2), (1, 0), (1, 1), (2, 0))
+
+        def cross(
+            origin: tuple[int, int],
+            left: tuple[int, int],
+            right: tuple[int, int],
+        ) -> int:
+            return (left[0] - origin[0]) * (right[1] - origin[1]) - (
+                left[1] - origin[1]
+            ) * (right[0] - origin[0])
+
+        def hull(points: tuple[tuple[int, int], ...]) -> set[tuple[int, int]]:
+            ordered = sorted(set(points))
+            if len(ordered) <= 1:
+                return set(ordered)
+            lower: list[tuple[int, int]] = []
+            for point in ordered:
+                while len(lower) >= 2 and cross(lower[-2], lower[-1], point) <= 0:
+                    lower.pop()
+                lower.append(point)
+            upper: list[tuple[int, int]] = []
+            for point in reversed(ordered):
+                while len(upper) >= 2 and cross(upper[-2], upper[-1], point) <= 0:
+                    upper.pop()
+                upper.append(point)
+            return set(lower[:-1] + upper[:-1])
+
+        for size in range(1, len(grid) + 1):
+            for points in combinations(grid, size):
+                terms = tuple(
+                    _term(1, list(point)) for point in sorted(points, reverse=True)
+                )
+                result = compute_newton_polytope(
+                    NewtonPolytopeRequest(polynomial=_polynomial(terms, VARS))
+                )
+                assert set(result.vertices) == hull(points)
+                assert set(result.nonextreme) == set(points) - hull(points)
+
     def test_term_bound_rejects_infeasible_scan(self) -> None:
         """The Newton operation's term budget is narrower than the canonical one."""
         pairs = sorted(((i % 11, i // 11) for i in range(97)), reverse=True)

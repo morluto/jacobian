@@ -164,6 +164,33 @@ def test_full_symmetric_action_is_admitted_before_orbit_materialization(
         canonicalize_linear_code(LinearCodeCanonicalizationRequest(encoder=source))
 
 
+def test_full_symmetric_action_streams_the_orbit_without_retaining_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    real_permutations = _canonicalization.permutations
+
+    class OneShotOrbit:
+        def __init__(self, width: int) -> None:
+            self._width = width
+            self._iterated = False
+
+        def __iter__(self):  # type: ignore[no-untyped-def]
+            assert not self._iterated
+            self._iterated = True
+            yield from real_permutations(range(self._width))
+
+    monkeypatch.setattr(
+        _canonicalization,
+        "permutations",
+        lambda values: OneShotOrbit(len(values)),
+    )
+    result = canonicalize_linear_code(
+        LinearCodeCanonicalizationRequest(encoder=_encoder())
+    )
+    assert result.canonical_encoder.generator_matrix == ((0, 1, 1),)
+    assert result.orbit_size == 3
+
+
 def test_supplied_action_is_admitted_before_orbit_materialization(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

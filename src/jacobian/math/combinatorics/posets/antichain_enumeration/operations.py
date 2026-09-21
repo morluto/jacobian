@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from itertools import combinations
-
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.posets.antichain_enumeration._models import (
     AntichainEnumerationResult,
@@ -57,21 +55,24 @@ def enumerate_antichains(
     if min_cardinality == 0:
         antichains.append(())
 
-    for size in range(max(1, min_cardinality), max_cardinality + 1):
-        if size > n:
-            break
-        for combo in combinations(range(n), size):
-            # Check if all pairs are incomparable
-            is_antichain = True
-            for idx in range(len(combo)):
-                for jdx in range(idx + 1, len(combo)):
-                    if comparable[combo[idx]] & (1 << combo[jdx]):
-                        is_antichain = False
-                        break
-                if not is_antichain:
-                    break
-            if is_antichain:
-                antichains.append(tuple(elements[i] for i in combo))
+    # Extend only valid prefixes.  This avoids revisiting every pair inside
+    # every candidate combination while retaining cardinality/lexicographic
+    # output order.
+    by_size: list[list[tuple[int, tuple[int, ...]]]] = [
+        [] for _ in range(max_cardinality + 1)
+    ]
+    by_size[0].append((0, ()))
+    for size in range(1, max_cardinality + 1):
+        for mask, prefix in by_size[size - 1]:
+            start = prefix[-1] + 1 if prefix else 0
+            for index in range(start, n):
+                if not comparable[index] & mask:
+                    by_size[size].append((mask | (1 << index), (*prefix, index)))
+        if size >= max(1, min_cardinality):
+            antichains.extend(
+                tuple(elements[index] for index in prefix)
+                for _mask, prefix in by_size[size]
+            )
 
     return AntichainEnumerationResult(
         poset_digest=poset.poset_digest,

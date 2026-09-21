@@ -102,13 +102,13 @@ def test_startup_failure_raises(
         ({"timed_out": True, "stdout_exceeded": True}, OperationExecutionTimeoutError),
         (
             {
-                "stdout": b'{"kind":"execution_error","stage":"operation_execution","resource":"memory"}'
+                "stdout": b'{"kind":"execution_error","stage":"operation_execution","resource":"memory"}\n'
             },
             OperationResourceExhaustedError,
         ),
         (
             {
-                "stdout": b'{"kind":"execution_error","stage":"operation_execution","resource":"forged"}'
+                "stdout": b'{"kind":"execution_error","stage":"operation_execution","resource":"forged"}\n'
             },
             OperationBackendError,
         ),
@@ -277,7 +277,7 @@ def test_hypergraph_error_decoding_preserves_parent_deadline(
 
     completed = _completed(
         stdout=(
-            b'{"kind":"execution_error","stage":"operation_execution","resource":"work"}'
+            b'{"kind":"execution_error","stage":"operation_execution","resource":"work"}\n'
         )
     )
     monkeypatch.setattr(owner, "run_bounded_process", lambda *args, **kwargs: completed)

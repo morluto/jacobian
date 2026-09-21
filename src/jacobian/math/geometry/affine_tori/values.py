@@ -52,13 +52,16 @@ def _integer_digits(value: int | str) -> int:
     return len(text.lstrip("-"))
 
 
-def _preflight_sequence(value: object, *, label: str, maximum: int) -> None:
+def _preflight_sequence(
+    value: object, *, label: str, maximum: int
+) -> list[object] | tuple[object, ...]:
     if not isinstance(value, (list, tuple)):
         raise _validation_error("raw_type", f"{label} must be a JSON array")
     if len(value) > maximum:
         raise _validation_error(
             "raw_size", f"{label} exceeds the raw length bound of {maximum}"
         )
+    return value
 
 
 def _preflight_fields(
@@ -130,20 +133,17 @@ def _preflight_affine_linear_part(value: object) -> None:
         and rows != columns
     ):
         raise _validation_error("matrix_shape", "affine linear part must be square")
-    entries = value.get("entries")
-    _preflight_sequence(
-        entries,
+    entries = _preflight_sequence(
+        value.get("entries"),
         label="integer matrix rows",
         maximum=MAX_AFFINE_TORUS_DIMENSION,
     )
-    assert isinstance(entries, (list, tuple))
-    for row in entries:
-        _preflight_sequence(
-            row,
+    for raw_row in entries:
+        row = _preflight_sequence(
+            raw_row,
             label="integer matrix columns",
             maximum=MAX_AFFINE_TORUS_DIMENSION,
         )
-        assert isinstance(row, (list, tuple))
         for entry in row:
             if not (
                 isinstance(entry, str)
@@ -162,9 +162,10 @@ def _preflight_affine_linear_part(value: object) -> None:
 def _preflight_rational_coordinates(
     value: object, *, maximum_length: int, maximum_digits: int
 ) -> None:
-    _preflight_sequence(value, label="torus point coordinates", maximum=maximum_length)
-    assert isinstance(value, (list, tuple))
-    for coordinate in value:
+    coordinates = _preflight_sequence(
+        value, label="torus point coordinates", maximum=maximum_length
+    )
+    for coordinate in coordinates:
         if isinstance(coordinate, CanonicalRational):
             continue
         if not isinstance(coordinate, dict):

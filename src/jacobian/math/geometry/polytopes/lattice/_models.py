@@ -152,22 +152,21 @@ class LatticePolytopeRequest(StrictModel):
                 "representation_not_exclusive",
                 "exactly one of `vertices` or `halfspaces` must be provided",
             )
-        if has_v:
-            self._validate_vertices()
-        else:
-            self._validate_halfspaces()
+        if self.vertices is not None:
+            self._validate_vertices(self.vertices)
+        elif self.halfspaces is not None:
+            self._validate_halfspaces(self.halfspaces)
         return self
 
-    def _validate_vertices(self) -> None:
-        assert self.vertices is not None  # for type checkers
-        if len(self.vertices) < 1:
+    def _validate_vertices(self, vertices: tuple[RationalVertex, ...]) -> None:
+        if len(vertices) < 1:
             raise _validation_error("vertices_empty", "`vertices` must be non-empty")
-        if len(self.vertices) > MAX_VERTICES:
+        if len(vertices) > MAX_VERTICES:
             raise _validation_error(
                 "vertices_too_many",
                 f"`vertices` exceeds the {MAX_VERTICES}-vertex bound",
             )
-        for vertex in self.vertices:
+        for vertex in vertices:
             for coord in vertex.coordinates:
                 try:
                     require_bounded_rational(
@@ -177,31 +176,30 @@ class LatticePolytopeRequest(StrictModel):
                     raise _validation_error(
                         "coordinate_out_of_bounds", str(exc)
                     ) from exc
-        dim = len(self.vertices[0].coordinates)
+        dim = len(vertices[0].coordinates)
         if dim > self.dimension_bound:
             raise _validation_error(
                 "dimension_exceeds_bound",
                 f"dimension {dim} exceeds the dimension bound {self.dimension_bound}",
             )
-        for vertex in self.vertices:
+        for vertex in vertices:
             if len(vertex.coordinates) != dim:
                 raise _validation_error(
                     "vertices_dimension_mismatch",
                     "all vertices must share one dimension",
                 )
 
-    def _validate_halfspaces(self) -> None:
-        assert self.halfspaces is not None  # for type checkers
-        if len(self.halfspaces) < 1:
+    def _validate_halfspaces(self, halfspaces: tuple[RationalHalfspace, ...]) -> None:
+        if len(halfspaces) < 1:
             raise _validation_error(
                 "halfspaces_empty", "`halfspaces` must be non-empty"
             )
-        if len(self.halfspaces) > MAX_HALFSPACES:
+        if len(halfspaces) > MAX_HALFSPACES:
             raise _validation_error(
                 "halfspaces_too_many",
                 f"`halfspaces` exceeds the {MAX_HALFSPACES}-half-space bound",
             )
-        for halfspace in self.halfspaces:
+        for halfspace in halfspaces:
             for coeff in halfspace.coefficients:
                 try:
                     require_bounded_rational(
@@ -221,13 +219,13 @@ class LatticePolytopeRequest(StrictModel):
                 )
             except ValueError as exc:
                 raise _validation_error("coordinate_out_of_bounds", str(exc)) from exc
-        dim = len(self.halfspaces[0].coefficients)
+        dim = len(halfspaces[0].coefficients)
         if dim > self.dimension_bound:
             raise _validation_error(
                 "dimension_exceeds_bound",
                 f"dimension {dim} exceeds the dimension bound {self.dimension_bound}",
             )
-        for halfspace in self.halfspaces:
+        for halfspace in halfspaces:
             if len(halfspace.coefficients) != dim:
                 raise _validation_error(
                     "halfspaces_dimension_mismatch",
@@ -238,8 +236,9 @@ class LatticePolytopeRequest(StrictModel):
         """Return the ambient dimension implied by the chosen representation."""
         if self.vertices is not None:
             return len(self.vertices[0].coordinates)
-        assert self.halfspaces is not None
-        return len(self.halfspaces[0].coefficients)
+        if self.halfspaces is not None:
+            return len(self.halfspaces[0].coefficients)
+        raise RuntimeError("lattice polytope request has no representation")
 
 
 class LatticePoint(StrictModel):

@@ -4,16 +4,31 @@ from typing import Any
 
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.groups.characters._models import (
+    CharacterTableRequest,
+    CharacterTableResult,
     ClassFunctionInnerProductRequest,
     ClassFunctionInnerProductResult,
 )
-from jacobian.math.groups.characters.operations import class_function_inner_product
+from jacobian.math.groups.characters.operations import (
+    character_table,
+    class_function_inner_product,
+)
 
 
 def _run_inner_product(
     request: ClassFunctionInnerProductRequest,
 ) -> ClassFunctionInnerProductResult:
     return class_function_inner_product(request.phi, request.psi)
+
+
+def _run_character_table(request: CharacterTableRequest) -> CharacterTableResult:
+    return character_table(request.partition)
+
+
+def _character_partition(
+    group: dict[str, Any], classes: list[list[list[int]]]
+) -> dict[str, Any]:
+    return {"source": group, "classes": classes}
 
 
 def _rational_value(numerator: int) -> dict[str, Any]:
@@ -49,7 +64,47 @@ _S3_SIGN = {
     ],
 }
 
+_TRIVIAL_PARTITION = _character_partition({"degree": 1, "generators": [[0]]}, [[[0]]])
+_S3_PARTITION = _character_partition(
+    {"degree": 3, "generators": [[1, 2, 0], [1, 0, 2]]},
+    [
+        [[0, 1, 2]],
+        [[0, 2, 1], [1, 0, 2], [2, 1, 0]],
+        [[1, 2, 0], [2, 0, 1]],
+    ],
+)
+
 TOOLS: tuple[MathTool[Any, Any], ...] = (
+    MathTool(
+        operation_id="finite_group.character_table.compute",
+        title="Compute a complete character table for a bounded finite group",
+        description=(
+            "Compute the complete exact irreducible character table of a concrete "
+            "permutation group class partition. This bounded release supports the "
+            "trivial, cyclic, and S3 groups; the returned rows retain the complete "
+            "source group and ordered class partition, and satisfy row orthogonality "
+            "and the degree-square identity."
+        ),
+        request_type=CharacterTableRequest,
+        result_type=CharacterTableResult,
+        run=_run_character_table,
+        tags=("group", "character", "character-table", "exact"),
+        discovery_terms=(
+            "finite group character table",
+            "irreducible character rows",
+            "character orthogonality",
+        ),
+        examples=(
+            OperationExample(
+                name="s3_character_table",
+                description=(
+                    "Compute the complete three-row character table of S3; the "
+                    "partition must be a complete canonical conjugacy-class partition."
+                ),
+                input={"partition": _S3_PARTITION},
+            ),
+        ),
+    ),
     MathTool(
         operation_id="class_function.inner_product.compute",
         title="Compute the exact Hermitian inner product of two class functions",

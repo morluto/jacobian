@@ -12,6 +12,9 @@ from jacobian.math.topology.discrete_morse._models import (
     MorseComplexRequest,
     MorseComplexResult,
 )
+from jacobian.math.topology.discrete_morse.extensions_tools import (
+    TOOLS as EXTENSION_TOOLS,
+)
 from jacobian.math.topology.discrete_morse.operations import (
     compute_gradient_paths,
     compute_morse_complex,
@@ -61,6 +64,7 @@ _CIRCLE_MATCHING_PAIRS = [
 ]
 
 TOOLS: MathTools = (
+    *EXTENSION_TOOLS,
     MathTool(
         operation_id="topology.discrete_morse.matching.construct",
         title="Construct and classify a discrete Morse matching",

@@ -28,6 +28,9 @@ from jacobian.math.topology.chain_complexes._models import (
     VerifyChainMapRequest,
     VerifyDifferentialRequest,
 )
+from jacobian.math.topology.chain_complexes.filtered_extensions_tools import (
+    TOOLS as FILTERED_EXTENSION_TOOLS,
+)
 from jacobian.math.topology.chain_complexes.operations import (
     chain_map_commutes,
     construct_chain_complex,
@@ -132,6 +135,7 @@ _MULTIPLICATION_BY_SIX_COMPLEX = {
 
 
 TOOLS: MathTools = (
+    *FILTERED_EXTENSION_TOOLS,
     MathTool(
         operation_id="chain_complex.construct.compute",
         title="Construct a finite based chain complex",

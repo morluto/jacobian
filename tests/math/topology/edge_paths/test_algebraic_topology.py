@@ -33,6 +33,7 @@ def test_catalog_contains_only_audited_operations() -> None:
         "topology.simplicial.edge_path.word.compute",
         "topology.simplicial.edge_path.concatenate.compute",
         "topology.simplicial.fundamental_group.presentation.compute",
+        "topology.group_presentation.direct_relator_match.compute",
     }
 
 

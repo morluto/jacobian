@@ -15,6 +15,7 @@ from jacobian.math.polynomials.local_series.operations import (
     change_scale,
     deramify,
     derivative,
+    divide,
     integral,
     inverse,
     multiply,
@@ -110,6 +111,57 @@ def test_deramify_does_not_invent_unknown_lower_tail() -> None:
 
 def test_power_one_preserves_the_known_source_window() -> None:
     assert power(_s(), 1) == _s()
+
+
+def test_division_offsets_reciprocal_precision_by_numerator_valuation() -> None:
+    numerator = TruncatedLaurentWindow(
+        valuation_lower=-1,
+        precision=4,
+        coefficients=tuple(
+            CanonicalRational(num=value, den=1) for value in (1, 0, 0, 0, 0)
+        ),
+    )
+    denominator = TruncatedLaurentWindow(
+        valuation_lower=0,
+        precision=4,
+        coefficients=tuple(
+            CanonicalRational(num=value, den=1) for value in (1, 1, 0, 0)
+        ),
+    )
+
+    quotient = divide(numerator, denominator, output_precision=3)
+
+    assert (quotient.valuation_lower, quotient.precision) == (-1, 3)
+    assert tuple(value.num for value in quotient.coefficients) == (1, -1, 1, -1)
+
+
+def test_positive_power_uses_only_the_precision_needed_at_each_stage() -> None:
+    source = TruncatedLaurentWindow(
+        valuation_lower=1,
+        precision=3,
+        coefficients=(
+            CanonicalRational(num=1, den=1),
+            CanonicalRational(num=0, den=1),
+        ),
+    )
+
+    result = power(source, 3, output_precision=5)
+
+    assert (result.valuation_lower, result.precision) == (3, 5)
+    assert tuple(value.num for value in result.coefficients) == (1, 0)
+
+
+def test_negative_power_requests_enough_reciprocal_precision() -> None:
+    source = TruncatedLaurentWindow(
+        valuation_lower=1,
+        precision=4,
+        coefficients=tuple(CanonicalRational(num=value, den=1) for value in (1, 1, 0)),
+    )
+
+    result = power(source, -2, output_precision=1)
+
+    assert (result.valuation_lower, result.precision) == (-2, 1)
+    assert tuple(value.num for value in result.coefficients) == (1, -2, 3)
 
 
 def test_deramify_native_admission_rejects_zero() -> None:

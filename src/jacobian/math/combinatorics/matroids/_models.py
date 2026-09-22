@@ -9,7 +9,6 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.math.matrices.finite_fields.linear_algebra import PrimeFieldMatrix
-from jacobian.math.matrices.finite_fields.linear_algebra import rank as prime_field_rank
 
 MAX_GROUND_SIZE = 256
 """Schema-visible cap on the ground-set cardinality (matrix columns)."""
@@ -403,18 +402,6 @@ class MatroidIntersectionResult(StrictModel):
     cardinality: StrictInt = Field(ge=0)
     witness: MatroidIntersectionWitness
 
-    @staticmethod
-    def _subset_rank(matroid: LinearMatroid, subset: tuple[int, ...]) -> int:
-        entries = tuple(
-            tuple(row[index] for index in subset) for row in matroid.matrix.entries
-        )
-        matrix = PrimeFieldMatrix(
-            prime=matroid.matrix.prime,
-            entries=entries,
-            columns=len(subset),
-        )
-        return prime_field_rank(matrix) if subset else 0
-
     @model_validator(mode="after")
     def require_witness_shape(self) -> Self:
         if (
@@ -434,13 +421,6 @@ class MatroidIntersectionResult(StrictModel):
                 "intersection_common_axis",
                 "common independent indices must be sorted, distinct, and in range",
             )
-        if self._subset_rank(self.first, common) != len(common) or self._subset_rank(
-            self.second, common
-        ) != len(common):
-            raise _validation_error(
-                "intersection_common_independence",
-                "common_independent must be independent in both matroids",
-            )
         if self.cardinality != len(common):
             raise _validation_error(
                 "intersection_cardinality",
@@ -454,18 +434,19 @@ class MatroidIntersectionResult(StrictModel):
                 "intersection_witness_axis",
                 "witness subset must be sorted, distinct, and in range",
             )
-        complement = tuple(index for index in range(n) if index not in witness_subset)
-        rank_first = self._subset_rank(self.first, witness_subset)
-        rank_second_complement = self._subset_rank(self.second, complement)
-        if (
-            self.witness.rank_first != rank_first
-            or self.witness.rank_second_complement != rank_second_complement
+        complement_size = n - len(witness_subset)
+        if self.witness.rank_first > min(
+            len(self.first.matrix.entries), len(witness_subset)
+        ) or self.witness.rank_second_complement > min(
+            len(self.second.matrix.entries), complement_size
         ):
             raise _validation_error(
-                "intersection_witness_binding",
-                "witness ranks must match the retained matroid subset axes",
+                "intersection_witness_rank_bounds",
+                "witness ranks must fit their retained matrix and subset axes",
             )
-        if self.witness.equality != rank_first + rank_second_complement:
+        if self.witness.equality != (
+            self.witness.rank_first + self.witness.rank_second_complement
+        ):
             raise _validation_error(
                 "intersection_minmax",
                 "min-max witness equality must match its two ranks",

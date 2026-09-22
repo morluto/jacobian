@@ -215,7 +215,8 @@ def _admit_hecke_work(
     expansion: ModularQExpansion, index: int, output_precision: int
 ) -> None:
     source_order = expansion.q_expansion.truncation_order
-    if index > source_order // output_precision:
+    required_source_order = index * (output_precision - 1) + 1
+    if required_source_order > source_order:
         raise OperationDomainValidationError(
             location=("expansion", "q_expansion"),
             code="modular_form.insufficient_precision",
@@ -421,9 +422,10 @@ def _require_source_precision(
 ) -> None:
     _strict_positive_int(required, ("output_precision",), "modular_form.precision")
     _strict_positive_int(scale, ("scale",), "modular_form.precision_scale")
+    required_source_order = scale * (required - 1) + 1
     if (
         required > MAX_Q_TRANSFORM_SOURCE_ORDER
-        or scale * required > exp.q_expansion.truncation_order
+        or required_source_order > exp.q_expansion.truncation_order
     ):
         raise OperationDomainValidationError(
             location=("expansion", "q_expansion"),

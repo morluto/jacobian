@@ -465,7 +465,13 @@ def divide(
     output_precision: int | None = None,
 ) -> TruncatedLaurentWindow:
     _pair(numerator, denominator)
-    return multiply(numerator, inverse(denominator, output_precision), output_precision)
+    reciprocal_precision = (
+        None
+        if output_precision is None
+        else output_precision - numerator.valuation_lower
+    )
+    reciprocal = inverse(denominator, reciprocal_precision)
+    return multiply(numerator, reciprocal, output_precision)
 
 
 def power(
@@ -512,7 +518,12 @@ def power(
             )
         return _window(series, 0, hi, {0: Fraction(1)})
     if exponent < 0:
-        return power(inverse(series, output_precision), -exponent, output_precision)
+        reciprocal_precision = output_precision
+        if output_precision is not None:
+            valuation = _nonzero(series)
+            if valuation is not None:
+                reciprocal_precision = output_precision + (-exponent - 1) * valuation
+        return power(inverse(series, reciprocal_precision), -exponent, output_precision)
     if exponent == 1:
         if output_precision is None:
             return series
@@ -530,8 +541,13 @@ def power(
             message="Laurent powering exceeds the bounded arithmetic work limit",
         )
     result = series
-    for _ in range(exponent - 1):
-        result = multiply(result, series, output_precision)
+    for factor_count in range(2, exponent + 1):
+        intermediate_precision = (
+            None
+            if output_precision is None
+            else output_precision - (exponent - factor_count) * series.valuation_lower
+        )
+        result = multiply(result, series, intermediate_precision)
     return result
 
 

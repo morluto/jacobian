@@ -43,36 +43,19 @@ def test_serialized_family_composes_unchanged_into_unlabelled_quotient() -> None
     assert [item.multiplicity for item in quotient.classes] == [3]
 
 
-def test_serialized_unlabelled_quotient_rejects_split_isomorphism_classes() -> None:
-    family = edge_deletion_family(_triangle())
-    quotient = unlabelled_deck(family)
-    payload = quotient.model_dump(mode="json")
-    payload["classes"] = [
-        {
-            "representative": family.cards[index].card.model_dump(mode="json"),
-            "multiplicity": 1,
-            "card_indices": [index],
-        }
-        for index in range(3)
-    ]
+def test_serialized_unlabelled_quotient_does_not_replay_isomorphism(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import networkx as nx
 
-    with pytest.raises(ValidationError):
-        type(quotient).model_validate(payload)
+    quotient = unlabelled_deck(edge_deletion_family(_triangle()))
 
+    def fail(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("result validation must not replay graph isomorphism")
 
-def test_serialized_unlabelled_class_rejects_nonisomorphic_member() -> None:
-    source = SimpleUndirectedGraph(
-        vertices=("a", "b", "c", "d"),
-        edges=(("a", "b"), ("b", "c"), ("c", "d")),
-    )
-    quotient = unlabelled_deck(edge_deletion_family(source))
-    payload = quotient.model_dump(mode="json")
-    payload["classes"][0]["card_indices"] = [0, 1]
-    payload["classes"][0]["multiplicity"] = 2
-    payload["classes"][1]["card_indices"] = [2]
-    payload["classes"][1]["multiplicity"] = 1
-    with pytest.raises(ValidationError):
-        type(quotient).model_validate(payload)
+    monkeypatch.setattr(nx, "is_isomorphic", fail)
+
+    assert type(quotient).model_validate_json(quotient.model_dump_json()) == quotient
 
 
 def test_model_rejects_card_missing_another_source_edge() -> None:

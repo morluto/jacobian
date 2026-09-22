@@ -89,6 +89,20 @@ def test_groebner_shirshov_checks_reverse_ordered_overlap_and_reaches_fixed_poin
     )
 
 
+def test_koszul_cycle_and_boundary_dimensions_follow_chain_degrees() -> None:
+    algebra = FiniteCommutativeAlgebra(basis=("1",), multiplication=(((_q(1),),),))
+    module = BasedFiniteModule(algebra=algebra, basis=("m",), action=(((_q(1),),),))
+    complex_value = module_koszul_complex(
+        ModuleKoszulRequest(algebra=algebra, module=module, sequence=((_q(1),),))
+    )
+
+    homology = module_koszul_homology(complex_value)
+
+    assert homology.cycle_dimensions == (1, 0)
+    assert homology.boundary_dimensions == (1, 0)
+    assert homology.dimensions == (0, 0)
+
+
 def test_koszul_homology_rejects_forged_differential_axes() -> None:
     algebra = FiniteCommutativeAlgebra(basis=("1",), multiplication=(((_q(1),),),))
     module = BasedFiniteModule(algebra=algebra, basis=("m",), action=(((_q(1),),),))

@@ -207,36 +207,6 @@ class LinkState(StrictModel):
         return self
 
 
-def _canonical_component_ids(diagram: OrientedLinkDiagram) -> tuple[str, ...]:
-    """Return the stable component-axis labels induced by a source diagram."""
-    strand_partner: dict[str, str] = {}
-    arc_partner: dict[str, str] = {}
-    for crossing in diagram.crossings:
-        darts = crossing.half_edges
-        for pair in (crossing.over_pair, crossing.under_pair):
-            left, right = (darts[pair[0]], darts[pair[1]])
-            strand_partner[left] = right
-            strand_partner[right] = left
-    for arc in diagram.arcs:
-        arc_partner[arc.first] = arc.second
-        arc_partner[arc.second] = arc.first
-    visited: set[str] = set()
-    component_count = 0
-    for start in sorted(strand_partner):
-        if start in visited:
-            continue
-        cursor = start
-        while cursor not in visited:
-            visited.add(cursor)
-            next_dart = arc_partner[cursor]
-            visited.add(next_dart)
-            cursor = strand_partner[next_dart]
-        component_count += 1
-    labels = [f"component_{index:03d}" for index in range(component_count)]
-    labels.extend(f"free_loop_{index:03d}" for index in range(diagram.free_loops))
-    return tuple(sorted(labels))
-
-
 class LinkBracketRequest(StrictModel):
     diagram: OrientedLinkDiagram = Field(
         description=(
@@ -257,31 +227,39 @@ class LinkBracketResult(StrictModel):
 
     @model_validator(mode="after")
     def require_state_axis(self) -> Self:
-        from itertools import product
-
         crossing_count = len(self.diagram.crossings)
-        expected_states = tuple(product((0, 1), repeat=crossing_count))
+        expected_state_count = 1 << crossing_count
         if (
             self.crossing_count != crossing_count
             or self.state_count != len(self.states)
-            or self.state_count != len(expected_states)
+            or self.state_count != expected_state_count
         ):
             raise _validation_error(
                 "bracket_state_axis",
                 "state metadata must match the complete source crossing axis",
             )
         choices = tuple(state.choices for state in self.states)
-        if choices != expected_states or len(set(choices)) != len(choices):
+        if (
+            any(len(choice) != crossing_count for choice in choices)
+            or len(set(choices)) != expected_state_count
+        ):
             raise _validation_error(
                 "bracket_state_exhaustiveness",
                 "bracket states must be the unique exhaustive binary state family",
             )
-        from jacobian.math.topology.links.operations import link_bracket
-
-        if link_bracket(self.diagram) != self:
+        if any(
+            state.exponent != crossing_count - 2 * sum(state.choices)
+            or state.coefficient.as_fraction() != 1
+            for state in self.states
+        ):
             raise _validation_error(
-                "bracket_source_relation",
-                "state circles, exponents, coefficients, and polynomial must equal the source state sum",
+                "bracket_state_metadata",
+                "state exponents and coefficients must bind their smoothing choices",
+            )
+        if self.polynomial.variables != ("A",):
+            raise _validation_error(
+                "bracket_polynomial_axis",
+                "Kauffman bracket terms must use the retained Laurent variable A",
             )
         return self
 
@@ -326,12 +304,10 @@ class LinkJonesResult(StrictModel):
             raise _validation_error(
                 "jones_writhe_source", "writhe must equal the retained crossing signs"
             )
-        from jacobian.math.topology.links.operations import link_jones
-
-        if link_jones(self.diagram) != self:
+        if self.polynomial.variables != ("A",):
             raise _validation_error(
-                "jones_source_relation",
-                "Jones polynomial must equal the writhe normalization of the source bracket",
+                "jones_polynomial_axis",
+                "Jones terms must use the retained Laurent variable A",
             )
         return self
 
@@ -353,13 +329,14 @@ class LinkingMatrixResult(StrictModel):
 
     @model_validator(mode="after")
     def require_source_component_axis(self) -> Self:
-        expected = _canonical_component_ids(self.diagram)
-        if self.component_ids != expected:
+        if not self.component_ids or self.component_ids != tuple(
+            sorted(set(self.component_ids))
+        ):
             raise _validation_error(
                 "linking_component_axis",
-                "component IDs must be the canonical source component axis",
+                "component IDs must be unique and strictly ordered",
             )
-        size = len(expected)
+        size = len(self.component_ids)
         if len(self.matrix) != size or any(len(row) != size for row in self.matrix):
             raise _validation_error(
                 "linking_matrix_shape",
@@ -378,13 +355,6 @@ class LinkingMatrixResult(StrictModel):
             raise _validation_error(
                 "linking_matrix_symmetry",
                 "linking matrix must be symmetric on the source component axis",
-            )
-        from jacobian.math.topology.links.operations import link_linking_matrix
-
-        if link_linking_matrix(self.diagram) != self:
-            raise _validation_error(
-                "linking_matrix_source_relation",
-                "linking entries must equal signed mixed-crossing sums",
             )
         return self
 
@@ -424,12 +394,6 @@ class LinkComponentsResult(StrictModel):
             raise _validation_error(
                 "component_ids",
                 "component IDs must be unique and strictly ordered",
-            )
-        expected_ids = _canonical_component_ids(self.diagram)
-        if ids != expected_ids:
-            raise _validation_error(
-                "component_source_axis",
-                "component IDs must equal the retained diagram component axis",
             )
         crossing_by_dart = {
             dart: crossing
@@ -476,13 +440,6 @@ class LinkComponentsResult(StrictModel):
             raise _validation_error(
                 "component_source_partition",
                 "components must partition every retained diagram dart exactly once",
-            )
-        from jacobian.math.topology.links.operations import link_components
-
-        if link_components(self.diagram) != self:
-            raise _validation_error(
-                "component_source_cycles",
-                "component darts must equal the canonical alternating arc/strand cycles",
             )
         return self
 

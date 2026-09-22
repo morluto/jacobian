@@ -330,8 +330,8 @@ def module_koszul_homology(
         ) from exc
     value = _admit_complex(value)
     _require_square_zero(value)
-    incoming = [None, *value.differentials]
-    outgoing = [*value.differentials, None]
+    outgoing = [None, *value.differentials]
+    incoming = [*value.differentials, None]
     cycles: list[int] = []
     boundaries: list[int] = []
     dimensions: list[int] = []

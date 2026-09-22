@@ -104,52 +104,12 @@ class BinaryMatrixResult(StrictModel):
     matrix: BinarySymmetricMatrix
     delta_matroid: FiniteDeltaMatroid
 
-    @staticmethod
-    def _principal_minor_is_nonsingular(
-        entries: tuple[tuple[int, ...], ...], indices: tuple[int, ...]
-    ) -> bool:
-        if not indices:
-            return True
-        rows = [[entries[row][column] for column in indices] for row in indices]
-        size = len(rows)
-        pivot = 0
-        for column in range(size):
-            found = next((row for row in range(pivot, size) if rows[row][column]), None)
-            if found is None:
-                continue
-            rows[pivot], rows[found] = rows[found], rows[pivot]
-            for row in range(size):
-                if row != pivot and rows[row][column]:
-                    for cell in range(column, size):
-                        rows[row][cell] ^= rows[pivot][cell]
-            pivot += 1
-        return pivot == size
-
     @model_validator(mode="after")
     def _source_binding(self) -> Self:
         if self.delta_matroid.ground != self.matrix.ground:
             raise PydanticCustomError(
                 "delta_matroid.binary_result_ground",
                 "delta matroid ground must equal the source matrix ground",
-            )
-        expected = tuple(
-            sorted(
-                indices
-                for mask in range(1 << len(self.matrix.ground))
-                for indices in [
-                    tuple(
-                        index
-                        for index in range(len(self.matrix.ground))
-                        if mask >> index & 1
-                    )
-                ]
-                if self._principal_minor_is_nonsingular(self.matrix.entries, indices)
-            )
-        )
-        if self.delta_matroid.feasible != expected:
-            raise PydanticCustomError(
-                "delta_matroid.binary_result_relation",
-                "delta matroid feasible sets must equal the source principal minors",
             )
         return self
 

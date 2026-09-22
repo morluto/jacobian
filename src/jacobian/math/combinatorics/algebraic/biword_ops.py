@@ -374,9 +374,17 @@ def greene(word: Any, requested_k: int | None = None) -> GreeneResult:
     shape = IntegerPartition(parts=tuple(len(r) for r in p))
     k = requested_k if requested_k is not None else min(20, max(1, len(shape.parts)))
     inc = tuple(sum(shape.parts[:i]) for i in range(1, min(k, len(shape.parts)) + 1))
+    column_lengths = (
+        tuple(
+            sum(1 for row_length in shape.parts if row_length >= column)
+            for column in range(1, shape.parts[0] + 1)
+        )
+        if shape.parts
+        else ()
+    )
     dec = tuple(
-        sum(1 for r in shape.parts if r >= i)
-        for i in range(1, min(k, shape.parts[0] if shape.parts else 0) + 1)
+        sum(column_lengths[:column_count])
+        for column_count in range(1, min(k, len(column_lengths)) + 1)
     )
     inc += (sum(shape.parts),) * (k - len(inc))
     dec += (sum(shape.parts),) * (k - len(dec))

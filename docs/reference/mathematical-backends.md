@@ -369,60 +369,6 @@ degree and coefficient envelope. Missing CyPari is a typed resource refusal,
 and worker timeout, malformed output, or execution failure remain operational
 non-completions that never become a class-number or unit conclusion.
 
-## Implemented-slice ledger and deferred families
-
-This ledger records the release boundary for the current issue consolidation. It
-is documentation, not a second catalog manifest: each operation remains owned
-by the domain-local `_tools.py` declaration and keeps its existing canonical
-value and admission path. Umbrella issue **#3756** is routed to batch **B1**
-and its exact function-field and Galois owners (**#1807** and **#1811**); no
-combined function-field/Galois operation is published.
-
-| Issue | Implemented owner slice | Public operation surface | Boundary |
-| --- | --- | --- | --- |
-| #2274 | Existing bounded QF_BV extension of `smt.solve` | `smt.solve` | No second bit-vector operation; the display model is not a reusable typed assignment. |
-| #2450 | Exact cyclic-holonomy Bieberbach mapping-torus cellular complexes | `crystallographic.mapping_torus.chain_complex.compute` | Verifies a finite-order exponent for an integral automorphism and constructs the mapping cone of `Λ* A - I`; arbitrary crystallographic presentations and fundamental-domain search remain outside this slice. |
-| #1884 | Complete prime-field GL/SL generator families, exact orders, and bounded natural vector actions | `finite_matrix_group.general_linear.construct`, `finite_matrix_group.special_linear.construct`, and their `nonzero_vector_action.compute` consumers | Symplectic, orthogonal, unitary, projective-quotient, and complete-element-enumeration families remain separate future contracts. |
-| #2448 | Exact rational-`J` complex-torus lattice and form profiles | `complex_torus.neron_severi_lattice.compute`, `complex_torus.riemann_form.profile.compute`, `complex_torus.polarization.find`, and `lattice.invariant_bilinear_form_lattice.compute` | Symbolic/numerical periods and unrestricted polarization-cone decisions remain outside this slice. |
-| #1705 | Finite square-free affine-form arithmetic | `number_theory.squarefree_affine_forms.local_factor.compute`, `number_theory.squarefree_affine_forms.euler_product.compute`, `number_theory.squarefree_affine_forms.local_admissibility.decide`, and `number_theory.squarefree_affine_forms.interval_count.compute` | Finite products and finite-cutoff local admissibility do not establish density or infinitude. |
-| #1686 | Finite binary-magma terms, equations, implications, and bounded search | `universal_algebra.term.evaluate.compute`, `universal_algebra.equation.profile.compute`, `universal_algebra.implication.countermodel.check`, and `universal_algebra.magma_implication.countermodel.find` (plus the established finite-algebra leaves) | `UNKNOWN` and finite exhaustion stay distinct from a global theorem. |
-| #964 | Prime-field Jacobian/syzygy and principal-quotient slices | `finite_field.polynomial.jacobian.compute`, `finite_field.quotient.reduce.compute`, `finite_field.jacobian_syzygy.check`, and `finite_field.jacobian_syzygy.generators.compute` | Arbitrary ideals, full module resolutions, and arbitrary characteristic extensions are not implied. |
-| #974 | Polygon visibility kernels and exact measure profiles | `geometry.polygon.visibility_kernel.compute` and `geometry.polygon.measure_certificate.compute` | The native measure verifier is semantic support; no duplicate public generic verifier is added. |
-
-The corresponding native/catalog parity and serialized producer-consumer
-regressions remain in the owner suites. In particular, the finite-field
-Jacobian feeds quotient reduction and syzygy leaves, the torus lattice feeds
-Riemann-form and polarization operations, and polygon kernels feed measure
-profiles without reconstructing parent or axis context.
-
-### Remaining broader backend families
-
-The implemented #2450 slice needs no process backend: a finite-order integral
-matrix defines the flat mapping torus directly, and bounded exterior powers plus
-the maintained mapping-cone operation construct its integral cellular complex.
-Circle, torus, Klein-bottle, and nontrivial cyclic-holonomy fixtures replay that
-contract. General crystallographic presentations remain deferred: promotion
-requires a checked source-bound fundamental-domain carrier with lattice,
-holonomy, side-pairing, cell bases, and integer boundary matrices. An optional
-HAPcryst/Polymake producer would require a pinned killable adapter; its summary
-could not replace the finite domain and replayable `d^2 = 0` relation.
-
-The implemented #1884 slice also needs no CAS backend. Over a prime field,
-adjacent elementary transvections generate the full special linear group; a
-least primitive determinant generator extends that kernel to the full general
-linear group. Small exhaustive GL(1,p), GL(2,p), and SL(2,p) fixtures compare
-the generated matrices with independent determinant-defined sets, while larger
-admitted parameters return the same theorem-backed canonical family and exact
-ordered-basis count. Natural nonzero-vector actions re-admit authored group
-values before materialization. Symplectic, orthogonal, unitary, projective
-quotients, centers, and complete element enumeration remain separate future
-contracts rather than nullable variants of this GL/SL value.
-
-These retained boundaries are mathematical scope boundaries, not
-unavailable-runtime aliases: operational failure must remain distinct from a
-mathematical negative, and no partial or arbitrary generator set is promoted as
-a complete named group.
-
 ## Runtime availability and installation
 
 System-runtime requirements belong to operation declarations as

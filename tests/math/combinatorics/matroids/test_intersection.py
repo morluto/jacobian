@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import pytest
-from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.matroids import LinearMatroid
@@ -32,24 +31,22 @@ def test_intersection_schema_discloses_derived_work_envelope() -> None:
     assert "50,000,000" in description
 
 
-def test_serialized_result_rejects_dependent_common_set() -> None:
-    matroid = LinearMatroid(
-        matrix=PrimeFieldMatrix(prime=2, entries=((1, 0, 1), (0, 1, 1)), columns=3)
+def test_serialized_result_does_not_replay_finite_field_rank(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import jacobian.math.matrices.finite_fields.linear_algebra as linear_algebra
+
+    result = matroid_intersection(_zero_matroid(3), _zero_matroid(3))
+
+    def fail(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("result validation must not replay matrix rank")
+
+    monkeypatch.setattr(linear_algebra, "rank", fail)
+
+    assert (
+        MatroidIntersectionResult.model_validate_json(result.model_dump_json())
+        == result
     )
-    payload = {
-        "first": matroid.model_dump(mode="json"),
-        "second": matroid.model_dump(mode="json"),
-        "common_independent": [0, 1, 2],
-        "cardinality": 3,
-        "witness": {
-            "subset": [0, 1],
-            "rank_first": 2,
-            "rank_second_complement": 0,
-            "equality": 3,
-        },
-    }
-    with pytest.raises(ValidationError):
-        MatroidIntersectionResult.model_validate(payload)
 
 
 def test_intersection_native_rejects_non_carriers() -> None:

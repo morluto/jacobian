@@ -45,6 +45,20 @@ def test_native_algebraic_boundaries_reject_raw_invalid_values() -> None:
         greene(FiniteWord.model_construct(alphabet=("a",), letters=("b",)))
 
 
+def test_greene_decreasing_invariants_are_cumulative_column_totals() -> None:
+    result = greene(
+        FiniteWord(
+            alphabet=("1", "2", "3"),
+            letters=("2", "1", "3"),
+        ),
+        requested_k=2,
+    )
+
+    assert result.shape.parts == (2, 1)
+    assert result.increasing_totals == (2, 3)
+    assert result.decreasing_totals == (2, 3)
+
+
 def test_inverse_rejects_forged_pair_content_at_native_boundary() -> None:
     pair = BiwordRSKPair.model_construct(
         top_alphabet=(),

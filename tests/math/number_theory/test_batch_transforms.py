@@ -43,6 +43,15 @@ def test_gamma0_sturm_and_hecke_metadata() -> None:
     assert transformed.q_expansion.truncation_order == 4
 
 
+def test_q_transforms_accept_the_exact_last_source_index_boundary() -> None:
+    space = ModularFormSpace(level=1, weight=4, kind="M")
+    short = named_q_expansion(space, "E4", 3)
+    longer = named_q_expansion(space, "E4", 4)
+
+    assert u_operator(short, 2, 2) == u_operator(longer, 2, 2)
+    assert hecke(short, 2, 2) == hecke(longer, 2, 2)
+
+
 def test_u_and_v_bind_their_gamma0_prime_codomain() -> None:
     source_space = ModularFormSpace(level=1, weight=4, kind="M")
     source = named_q_expansion(source_space, "E4", 8)

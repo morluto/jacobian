@@ -69,6 +69,45 @@ def _unknot_curl() -> OrientedLinkDiagram:
 
 
 class TestKnownAnswer:
+    def test_mirror_swaps_smoothings_and_inverts_bracket_variable(self) -> None:
+        diagram = _unknot_curl()
+        mirror = diagram.model_copy(
+            update={
+                "crossings": tuple(
+                    crossing.model_copy(
+                        update={
+                            "over_pair": crossing.under_pair,
+                            "under_pair": crossing.over_pair,
+                            "sign": -crossing.sign,
+                        }
+                    )
+                    for crossing in diagram.crossings
+                )
+            }
+        )
+
+        bracket = {
+            term.exponents[0]: term.coefficient.as_fraction()
+            for term in link_bracket(diagram).polynomial.terms
+        }
+        mirrored_bracket = {
+            term.exponents[0]: term.coefficient.as_fraction()
+            for term in link_bracket(mirror).polynomial.terms
+        }
+        jones = {
+            term.exponents[0]: term.coefficient.as_fraction()
+            for term in link_jones(diagram).polynomial.terms
+        }
+        mirrored_jones = {
+            term.exponents[0]: term.coefficient.as_fraction()
+            for term in link_jones(mirror).polynomial.terms
+        }
+
+        assert mirrored_bracket == {
+            -exponent: value for exponent, value in bracket.items()
+        }
+        assert mirrored_jones == {-exponent: value for exponent, value in jones.items()}
+
     def test_free_loop_multiplies_a_crossing_bracket(self) -> None:
         crossing = _unknot_curl()
         without_loop = link_bracket(crossing)
@@ -112,32 +151,38 @@ class TestKnownAnswer:
         with pytest.raises(ValidationError):
             LinkingMatrixResult.model_validate(payload)
 
-    def test_serialized_exact_results_reject_forged_mathematics(self) -> None:
+    def test_result_decoding_does_not_replay_link_operations(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import jacobian.math.topology.links.operations as link_operations
+
         bracket = link_bracket(_unknot_curl())
-        payload = bracket.model_dump(mode="json")
-        payload["states"][0]["circle_count"] += 1
-        with pytest.raises(ValidationError):
-            LinkBracketResult.model_validate(payload)
-        payload = bracket.model_dump(mode="json")
-        payload["polynomial"]["terms"] = []
-        with pytest.raises(ValidationError):
-            LinkBracketResult.model_validate(payload)
-
         jones = link_jones(_unknot_curl())
-        payload = jones.model_dump(mode="json")
-        payload["polynomial"]["terms"] = []
-        with pytest.raises(ValidationError):
-            LinkJonesResult.model_validate(payload)
-
         linking = link_linking_matrix(_hopf())
-        payload = linking.model_dump(mode="json")
-        forged_value = {"num": "7", "den": "1"}
-        payload["matrix"][0][1] = forged_value
-        payload["matrix"][1][0] = forged_value
-        with pytest.raises(ValidationError):
-            LinkingMatrixResult.model_validate(payload)
+        components = link_components(_hopf())
 
-    def test_serialized_components_reject_noncycle_partitions(self) -> None:
+        def fail(*_args: object, **_kwargs: object) -> None:
+            raise AssertionError("result validation must not replay mathematics")
+
+        monkeypatch.setattr(link_operations, "link_bracket", fail)
+        monkeypatch.setattr(link_operations, "link_jones", fail)
+        monkeypatch.setattr(link_operations, "link_linking_matrix", fail)
+        monkeypatch.setattr(link_operations, "link_components", fail)
+
+        assert (
+            LinkBracketResult.model_validate_json(bracket.model_dump_json()) == bracket
+        )
+        assert LinkJonesResult.model_validate_json(jones.model_dump_json()) == jones
+        assert (
+            LinkingMatrixResult.model_validate_json(linking.model_dump_json())
+            == linking
+        )
+        assert (
+            LinkComponentsResult.model_validate_json(components.model_dump_json())
+            == components
+        )
+
+    def test_serialized_components_keep_structure_without_cycle_replay(self) -> None:
         result = link_components(_hopf())
         payload = result.model_dump(mode="json")
         first = payload["components"][0]["darts"]
@@ -160,8 +205,8 @@ class TestKnownAnswer:
                 (dart_roles[dart] for dart in component["darts"]),
                 key=lambda visit: visit["crossing_id"],
             )
-        with pytest.raises(ValidationError):
-            LinkComponentsResult.model_validate(payload)
+        decoded = LinkComponentsResult.model_validate(payload)
+        assert decoded.component_count == result.component_count
 
     def test_serialized_components_retain_source_diagram(self) -> None:
         result = link_components(_hopf())

@@ -66,6 +66,21 @@ def test_composition_base_locus_uses_owner_error() -> None:
     )
 
 
+def test_criticality_rejects_a_common_factor_base_locus() -> None:
+    presentation = HomogeneousProjectiveMap(
+        degree=2,
+        numerator=(_r(0), _r(0), _r(1)),
+        denominator=(_r(0), _r(1), _r(0)),
+    )
+
+    with pytest.raises(OperationDomainValidationError) as error:
+        is_critical_point(presentation, ProjectivePoint.infinity())
+
+    assert error.value.errors()[0]["type"] == (
+        "arithmetic_dynamics.projective_base_locus"
+    )
+
+
 def test_critical_derivative_admission_precedes_large_fraction_arithmetic() -> None:
     height = 10**8_191
     map_value = HomogeneousProjectiveMap(

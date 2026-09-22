@@ -139,7 +139,9 @@ def link_bracket(diagram: OrientedLinkDiagram) -> LinkBracketResult:
             union(left, right)
         for crossing, choice in zip(crossings, choices, strict=True):
             h = [index[item] for item in crossing.half_edges]
-            pairs = ((0, 1, 2, 3), (1, 2, 3, 0))[choice]
+            over_uses_even_positions = set(crossing.over_pair) == {0, 2}
+            smoothing_index = choice if over_uses_even_positions else 1 - choice
+            pairs = ((0, 1, 2, 3), (1, 2, 3, 0))[smoothing_index]
             union(h[pairs[0]], h[pairs[1]])
             union(h[pairs[2]], h[pairs[3]])
         circles = (

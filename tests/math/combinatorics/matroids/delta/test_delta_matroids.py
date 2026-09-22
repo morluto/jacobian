@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-from pydantic import ValidationError
 
 from jacobian.math.combinatorics.greedoids import FiniteFeasibleSetSystem
 from jacobian.math.combinatorics.matroids import delta as delta_matroids
@@ -445,11 +444,19 @@ def test_minor_rejects_model_constructed_missing_axes() -> None:
         minor(forged)
 
 
-def test_binary_result_rejects_foreign_delta_matroid() -> None:
-    matrix = BinarySymmetricMatrix(ground=("a", "b"), entries=((0, 0), (0, 0)))
-    foreign = FiniteDeltaMatroid(ground=("a", "b"), feasible=((), (0, 1)))
-    with pytest.raises(ValidationError):
-        BinaryMatrixResult.model_validate({"matrix": matrix, "delta_matroid": foreign})
+def test_binary_result_decoding_does_not_replay_principal_minors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import jacobian.math.combinatorics.matroids.delta.extra_ops as extra_ops
+
+    result = binary(BinarySymmetricMatrix(ground=("a", "b"), entries=((0, 0), (0, 0))))
+
+    def fail(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("result validation must not replay principal minors")
+
+    monkeypatch.setattr(extra_ops, "_det2", fail)
+
+    assert BinaryMatrixResult.model_validate_json(result.model_dump_json()) == result
 
 
 def test_extra_operation_rejects_forged_non_delta_source() -> None:

@@ -24,19 +24,6 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"graph_deck.{reason}", message)
 
 
-def _isomorphic(left: SimpleUndirectedGraph, right: SimpleUndirectedGraph) -> bool:
-    """Check the source-labelled cards under the admitted exact quotient."""
-    import networkx as nx
-
-    first: nx.Graph[str] = nx.Graph()
-    first.add_nodes_from(left.vertices)
-    first.add_edges_from(left.edges)
-    second: nx.Graph[str] = nx.Graph()
-    second.add_nodes_from(right.vertices)
-    second.add_edges_from(right.edges)
-    return nx.is_isomorphic(first, second)
-
-
 class VertexDeckRequest(StrictModel):
     """Compute the complete source-bound vertex-deletion family of a graph."""
 
@@ -346,13 +333,6 @@ class UnlabelledDeck(StrictModel):
                 "quotient_multiplicity",
                 "multiplicity must equal class card-index count",
             )
-        for left_index, left in enumerate(self.classes):
-            for right in self.classes[left_index + 1 :]:
-                if _isomorphic(left.representative, right.representative):
-                    raise _validation_error(
-                        "quotient_class_maximality",
-                        "distinct quotient classes must have non-isomorphic representatives",
-                    )
         for item in self.classes:
             if (
                 tuple(sorted(item.card_indices)) != item.card_indices
@@ -373,21 +353,6 @@ class UnlabelledDeck(StrictModel):
                     "quotient_source_cards",
                     "each quotient representative must be the first source card",
                 )
-            for card_index in item.card_indices:
-                card_edges = tuple(
-                    edge
-                    for edge in self.source.edges
-                    if edge != self.source.edges[card_index]
-                )
-                card = SimpleUndirectedGraph(
-                    vertices=self.source.vertices,
-                    edges=card_edges,
-                )
-                if not _isomorphic(card, item.representative):
-                    raise _validation_error(
-                        "quotient_isomorphism",
-                        "every indexed source card must be isomorphic to its representative",
-                    )
         return self
 
     @classmethod

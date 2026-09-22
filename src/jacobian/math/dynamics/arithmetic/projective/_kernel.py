@@ -582,7 +582,15 @@ def is_critical_point(
     point = _require_point(point, ("point",))
     if map_value.degree < 2:
         return False
+    _preflight_apply(map_value, point, location=("critical",))
     _preflight_critical_point(map_value, point)
+    image_numerator, image_denominator = map_value.eval_homogeneous(point)
+    if image_numerator == 0 and image_denominator == 0:
+        raise OperationDomainValidationError(
+            location=("point",),
+            code="arithmetic_dynamics.projective_base_locus",
+            message="criticality is undefined at a presentation base-locus point",
+        )
     x, y = point.x.as_fraction(), point.y.as_fraction()
 
     def dx(coefficients: tuple[CanonicalRational, ...]) -> Fraction:

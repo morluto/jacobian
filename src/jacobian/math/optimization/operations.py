@@ -1,4 +1,4 @@
-"""Bounded exact LP outcomes from FLINT basis linear algebra."""
+"""Bounded exact LP outcomes from exact polyhedral optimization."""
 
 from fractions import Fraction
 from typing import Any, NoReturn
@@ -7,13 +7,10 @@ from jacobian._exact import CanonicalRational
 from jacobian._execution import request_checkpoint
 from jacobian.canonical import format_canonical_integer
 from jacobian.math.optimization._arithmetic import rational_dot
-from jacobian.math.optimization._linear_basis import (
+from jacobian.math.optimization._linear_admission import (
     LinearAdmission,
-    _LinearWorkLedger,
     admit_linear_program,
-    independent_rows,
     linear_execution,
-    search_bases,
 )
 from jacobian.math.optimization._models import (
     RationalLinearProgramResult,
@@ -22,6 +19,7 @@ from jacobian.math.optimization._models import (
     _primal_diagnostics,
     _program_fractions,
 )
+from jacobian.math.optimization._ppl_process import solve_standard_form_process
 
 
 def _execution_failure() -> NoReturn:
@@ -118,16 +116,9 @@ def _expand_vector(
     return tuple(expanded)
 
 
-def _work_ledger(
-    admission: LinearAdmission, ledger: _LinearWorkLedger | None
-) -> _LinearWorkLedger:
-    return ledger if ledger is not None else _LinearWorkLedger(admission.initial_work)
-
-
 def _component_programs(
     program: StandardFormRationalLinearProgram,
     admission: LinearAdmission,
-    ledger: _LinearWorkLedger,
 ) -> RationalLinearProgramResult:
     width, height = len(program.variables), len(program.rhs)
     point, dual = [Fraction()] * width, [Fraction()] * height
@@ -147,46 +138,40 @@ def _component_programs(
             LinearAdmission(
                 columns=tuple(range(len(columns))),
                 result_digits=admission.result_digits,
-                initial_work=0,
             ),
-            ledger=ledger,
         )
         if result.status == "INFEASIBLE":
-            farkas_candidate = result.farkas_candidate
-            if farkas_candidate is None:
+            if result.farkas_candidate is None:
                 _execution_failure()
             return _certify_infeasible(
                 program,
                 _expand_vector(
                     rows,
-                    tuple(v.as_fraction() for v in farkas_candidate),
+                    tuple(value.as_fraction() for value in result.farkas_candidate),
                     height,
                 ),
                 admission.result_digits,
             )
-        primal_candidate = result.primal_candidate
-        if primal_candidate is None:
+        if result.primal_candidate is None:
             _execution_failure()
-        for j, value in zip(columns, primal_candidate, strict=True):
-            point[j] = value.as_fraction()
+        for column, value in zip(columns, result.primal_candidate, strict=True):
+            point[column] = value.as_fraction()
         if result.status == "UNBOUNDED":
-            recession_direction = result.recession_direction
-            if recession_direction is None:
+            if result.recession_direction is None:
                 _execution_failure()
             ray = _expand_vector(
                 columns,
-                tuple(v.as_fraction() for v in recession_direction),
+                tuple(value.as_fraction() for value in result.recession_direction),
                 width,
             )
         else:
-            dual_candidate = result.dual_candidate
-            if result.status != "OPTIMAL" or dual_candidate is None:
+            if result.status != "OPTIMAL" or result.dual_candidate is None:
                 _execution_failure()
-            for i, value in zip(rows, dual_candidate, strict=True):
-                dual[i] = value.as_fraction()
-    for j, cost in enumerate(program.objective):
-        if j not in admission.columns and cost.as_fraction() < 0:
-            ray = _expand_vector((j,), (Fraction(1),), width)
+            for row, value in zip(rows, result.dual_candidate, strict=True):
+                dual[row] = value.as_fraction()
+    for column, cost in enumerate(program.objective):
+        if column not in admission.columns and cost.as_fraction() < 0:
+            ray = _expand_vector((column,), (Fraction(1),), width)
             break
     return _certify_point(
         program, tuple(point), tuple(dual), ray, admission.result_digits
@@ -196,13 +181,8 @@ def _component_programs(
 def _linear_program_admitted(
     program: StandardFormRationalLinearProgram,
     admission: LinearAdmission,
-    *,
-    ledger: _LinearWorkLedger | None = None,
 ) -> RationalLinearProgramResult:
-    from flint import fmpq, fmpq_mat
-
     digits = admission.result_digits
-    ledger = _work_ledger(admission, ledger)
     width, height = len(program.variables), len(program.rhs)
     zero = Fraction()
     for i, (row, rhs) in enumerate(zip(program.coefficients, program.rhs, strict=True)):
@@ -211,7 +191,7 @@ def _linear_program_admitted(
             witness[i] = Fraction(1 if rhs.num < 0 else -1)
             return _certify_infeasible(program, tuple(witness), digits)
     if len(admission.components) > 1:
-        return _component_programs(program, admission, ledger)
+        return _component_programs(program, admission)
     columns = admission.columns
     active_rows = tuple(
         i for i, row in enumerate(program.coefficients) if any(v.num != 0 for v in row)
@@ -228,60 +208,36 @@ def _linear_program_admitted(
             ray = tuple(ray_values)
         return _certify_point(program, (zero,) * width, (zero,) * height, ray, digits)
 
-    def scalar(v: CanonicalRational) -> Any:
-        return fmpq(*v.as_integer_ratio())
-
-    a = fmpq_mat(
-        [[scalar(program.coefficients[i][j]) for j in columns] for i in active_rows]
+    outcome = solve_standard_form_process(
+        tuple(program.objective[j].as_fraction() for j in columns),
+        tuple(
+            tuple(program.coefficients[i][j].as_fraction() for j in columns)
+            for i in active_rows
+        ),
+        tuple(program.rhs[i].as_fraction() for i in active_rows),
     )
-    b = fmpq_mat([[scalar(program.rhs[i])] for i in active_rows])
-    row_indices, inconsistent = independent_rows(a, b)
-    if inconsistent is not None:
-        witness = [zero] * height
-        for i, v in zip(active_rows, _fractions(inconsistent), strict=True):
-            witness[i] = v
-        return _certify_infeasible(program, tuple(witness), digits)
-    reduced_a = fmpq_mat([[a[i, j] for j in range(len(columns))] for i in row_indices])
-    reduced_b = fmpq_mat([[b[i, 0]] for i in row_indices])
-    c = fmpq_mat([[scalar(program.objective[j]) for j in columns]])
-    solved = search_bases(reduced_a, reduced_b, c, ledger=ledger)
-    if solved is None:
-        augmented = fmpq_mat(
-            [
-                [reduced_a[i, j] for j in range(len(columns))] + [reduced_b[i, 0]]
-                for i in range(len(row_indices))
-            ]
-        )
-        phase_one = search_bases(
-            augmented,
-            reduced_b,
-            fmpq_mat([[0] * len(columns) + [1]]),
-            ledger=ledger,
-            artificial=True,
-        )
-        if phase_one is None:
-            _execution_failure()
-        witness = [zero] * height
-        for i, v in zip(row_indices, _fractions(phase_one[1]), strict=True):
-            witness[active_rows[i]] = -v
-        return _certify_infeasible(program, tuple(witness), digits)
+    request_checkpoint("linear-program backend result")
+    if outcome.status == "INFEASIBLE":
+        backend_witness = _expand_vector(active_rows, outcome.witness, height)
+        return _certify_infeasible(program, backend_witness, digits)
 
-    basic_point, basic_dual, basic_ray = solved
-    point = _expand_vector(columns, _fractions(basic_point), width)
-    dual = _expand_vector(
-        tuple(active_rows[i] for i in row_indices), _fractions(basic_dual), height
+    point = _expand_vector(columns, outcome.point, width)
+    dual = (
+        _expand_vector(active_rows, outcome.dual, height)
+        if outcome.status == "OPTIMAL"
+        else (zero,) * height
     )
     ray = None
-    if zero_ray is not None or basic_ray is not None:
+    if zero_ray is not None or outcome.status == "UNBOUNDED":
         ray_values = [zero] * width
         if zero_ray is not None:
             ray_values[zero_ray] = Fraction(1)
         else:
-            for j, v in zip(columns, _fractions(basic_ray), strict=True):
-                ray_values[j] = v
+            for j, value in zip(columns, outcome.ray, strict=True):
+                ray_values[j] = value
         ray = tuple(ray_values)
     request_checkpoint("linear-program certificate construction")
-    return _certify_point(program, tuple(point), tuple(dual), ray, digits)
+    return _certify_point(program, point, dual, ray, digits)
 
 
 def linear_program(

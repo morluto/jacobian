@@ -2,6 +2,7 @@
 
 from collections.abc import Iterator
 from contextlib import contextmanager
+from itertools import product
 
 import pytest
 import sympy
@@ -383,14 +384,62 @@ def test_code_equal_same_matrices() -> None:
     assert result.witness_word is None
 
 
-def test_code_equal_different_codes() -> None:
-    request = CodeEqualRequest(
-        encoder_a=_encoder(((1, 0),)),
-        encoder_b=_encoder(((0, 1),)),
+@pytest.mark.parametrize("field_order", [2, 3, 5])
+def test_code_equal_matches_bruteforce_small_field_oracle(field_order: int) -> None:
+    left = _encoder(((1, 0, 1), (0, 1, 1)), field_order=field_order)
+    right = _encoder(((1, 0, 1), (1, 1, 1)), field_order=field_order)
+    left_words = {
+        tuple(
+            (a * row_a + b * row_b) % field_order
+            for row_a, row_b in zip(
+                left.generator_matrix[0], left.generator_matrix[1], strict=True
+            )
+        )
+        for a, b in product(range(field_order), repeat=2)
+    }
+    right_words = {
+        tuple(
+            (a * row_a + b * row_b) % field_order
+            for row_a, row_b in zip(
+                right.generator_matrix[0], right.generator_matrix[1], strict=True
+            )
+        )
+        for a, b in product(range(field_order), repeat=2)
+    }
+    result = compute_code_equal(CodeEqualRequest(encoder_a=left, encoder_b=right))
+    assert result.equal is (left_words == right_words)
+    if result.witness_word is not None:
+        assert (result.witness_word in left_words) != (
+            result.witness_word in right_words
+        )
+
+
+def test_code_equal_accepts_binary_64_20_without_codeword_materialization() -> None:
+    generator = tuple(
+        tuple(int(row == column) for column in range(64)) for row in range(20)
     )
-    result = compute_code_equal(request)
+    encoder = _encoder(
+        generator,
+        coordinate_axis=tuple(f"x{index}" for index in range(64)),
+    )
+    result = compute_code_equal(CodeEqualRequest(encoder_a=encoder, encoder_b=encoder))
+    assert result.equal
+    assert result.witness_word is None
+
+
+def test_code_equal_different_codes_returns_one_sided_witness() -> None:
+    left = _encoder(((1, 0),))
+    right = _encoder(((0, 1),))
+    result = compute_code_equal(CodeEqualRequest(encoder_a=left, encoder_b=right))
     assert result.equal is False
     assert result.witness_word is not None
+    left_membership = compute_codeword_check(
+        CodewordCheckRequest(encoder=left, word=result.witness_word)
+    )
+    right_membership = compute_codeword_check(
+        CodewordCheckRequest(encoder=right, word=result.witness_word)
+    )
+    assert left_membership.is_member != right_membership.is_member
 
 
 def test_macwilliams_self_dual_repetition_code() -> None:
@@ -731,9 +780,9 @@ def test_equal_request_rejects_incomparable_encoders() -> None:
         generator_matrix=((1, 1), (1, 0)),
     )
     request = CodeEqualRequest(encoder_a=oversized, encoder_b=oversized)
-    with pytest.raises(OperationDomainValidationError) as exc_info:
-        compute_code_equal(request)
-    assert "enumeration_bound" in exc_info.value.errors()[0]["type"]
+    result = compute_code_equal(request)
+    assert result.equal
+    assert result.witness_word is None
 
 
 def test_puncture_and_shorten_requests_reject_unselectable_coordinates() -> None:

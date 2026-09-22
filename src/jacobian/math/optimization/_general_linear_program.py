@@ -22,7 +22,7 @@ from jacobian.math.optimization._general_normalization import (
     admit_general_normalization,
     chain_mapped_digit_bounds,
 )
-from jacobian.math.optimization._linear_basis import (
+from jacobian.math.optimization._linear_admission import (
     admit_linear_program,
     linear_execution,
 )

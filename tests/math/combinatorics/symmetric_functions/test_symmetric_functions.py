@@ -6,6 +6,9 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.combinatorics.symmetric_functions import (
+    operations as symmetric_operations,
+)
 from jacobian.math.combinatorics.symmetric_functions._models import (
     _MAX_SCHUR_PARTITION_LENGTH,
     _MAX_SCHUR_VARIABLE_NAME_LENGTH,
@@ -38,7 +41,8 @@ def test_operations_in_catalog() -> None:
     tools = {tool.operation_id: tool for tool in TOOLS}
     assert "symmetric_function.schur.evaluate.compute" in tools
     # The narrowed request envelope (50 parts) is a versioned contract change.
-    # conjugate is NATIVE_ONLY via algebraic_combinatorics; not a distinct public operation
+    # Conjugate is NATIVE_ONLY via algebraic_combinatorics; it is not a
+    # distinct public operation.
     assert "symmetric_function.partition.conjugate.compute" not in tools
 
 
@@ -248,6 +252,33 @@ def test_schur_elementary_at_ones() -> None:
         )
     )
     assert result.value == 1
+
+
+def test_schur_vanishing_shape_skips_determinant(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail(*args: object, **kwargs: object) -> int:
+        raise AssertionError("vanishing Schur shape entered determinant")
+
+    monkeypatch.setattr(symmetric_operations, "_determinant", fail)
+    result = schur_evaluation(IntegerPartition(parts=(1, 1, 1)), (2, 3))
+    assert result.value == 0
+
+
+def test_schur_reuses_one_homogeneous_dynamic_program(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = 0
+    original = symmetric_operations._complete_homogeneous_values
+
+    def counted(variables: tuple[int, ...], maximum_degree: int) -> tuple[int, ...]:
+        nonlocal calls
+        calls += 1
+        return original(variables, maximum_degree)
+
+    monkeypatch.setattr(symmetric_operations, "_complete_homogeneous_values", counted)
+    assert schur_evaluation(IntegerPartition(parts=(3, 2, 1)), (1, 2, 3)).value == 360
+    assert calls == 1
 
 
 def test_schur_at_origin() -> None:

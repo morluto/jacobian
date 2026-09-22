@@ -30,23 +30,27 @@ def partition_conjugate(partition: IntegerPartition) -> IntegerPartition:
     return IntegerPartition(parts=conjugate)
 
 
+def _complete_homogeneous_values(
+    variables: Sequence[int], maximum_degree: int
+) -> tuple[int, ...]:
+    """Compute all complete homogeneous values through ``maximum_degree`` once."""
+
+    if maximum_degree < 0:
+        return ()
+    dp = [0] * (maximum_degree + 1)
+    dp[0] = 1
+    for value in variables:
+        for degree in range(1, maximum_degree + 1):
+            dp[degree] += value * dp[degree - 1]
+    return tuple(dp)
+
+
 def _complete_homogeneous(variables: Sequence[int], k: int) -> int:
-    """Compute the complete homogeneous symmetric polynomial h_k at a point.
+    """Compute one complete homogeneous symmetric polynomial exactly."""
 
-    Uses the recurrence h_k(x_1,...,x_n) = h_k(x_1,...,x_{n-1}) + x_n * h_{k-1}(x_1,...,x_n),
-    which requires forward iteration in the DP.
-    """
-
-    if k == 0:
-        return 1
     if k < 0:
         return 0
-    dp: list[int] = [0] * (k + 1)
-    dp[0] = 1
-    for v in variables:
-        for j in range(1, k + 1):
-            dp[j] = dp[j] + v * dp[j - 1]
-    return dp[k]
+    return _complete_homogeneous_values(variables, k)[k]
 
 
 def schur_evaluation(
@@ -121,17 +125,19 @@ def schur_evaluation(
         return SchurExpansionResult(
             partition=partition, variables=variables, point=point, value=1
         )
+    if n > len(point):
+        return SchurExpansionResult(
+            partition=partition, variables=variables, point=point, value=0
+        )
 
-    def h(k: int) -> int:
-        if k < 0:
-            return 0
-        return _complete_homogeneous(point, k)
-
+    maximum_degree = parts[0] + n - 1
+    homogeneous = _complete_homogeneous_values(point, maximum_degree)
     size = n
     matrix: list[list[int]] = [[0] * size for _ in range(size)]
     for i in range(size):
         for j in range(size):
-            matrix[i][j] = h(parts[i] - (i + 1) + (j + 1))
+            degree = parts[i] - i + j
+            matrix[i][j] = 0 if degree < 0 else homogeneous[degree]
 
     result = _determinant(matrix)
     return SchurExpansionResult(

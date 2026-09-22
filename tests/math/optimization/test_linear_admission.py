@@ -8,20 +8,16 @@ from pydantic import ValidationError
 from tests.support.rationals import rational_payload as q
 
 from jacobian._execution import (
-    ExecutionResource,
     OperationExecutionTimeoutError,
-    OperationResourceExhaustedError,
     bind_request_deadline,
     current_request_execution,
     request_execution,
 )
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.optimization import general_linear_program, linear_program
+from jacobian.math.optimization import operations as linear_operations
 from jacobian.math.optimization._general_models import GeneralFormRationalLinearProgram
-from jacobian.math.optimization._linear_basis import (
-    LINEAR_PROGRAM_WALL_SECONDS,
-    basis_bounds,
-)
+from jacobian.math.optimization._linear_admission import LINEAR_PROGRAM_WALL_SECONDS
 from jacobian.math.optimization._models import (
     MAX_RATIONAL_DIGITS,
     StandardFormRationalLinearProgram,
@@ -75,20 +71,44 @@ def test_exhaustive_work_estimate_does_not_prevent_short_certificate() -> None:
     assert result.primal_objective.as_fraction().as_integer_ratio() == (6, 7)
 
 
-def test_standard_basis_admission_reports_measured_costs() -> None:
-    n, m = 24, 12
-    program = _dense_program(n, m)
+def test_exact_backend_rejects_excessive_combinatorial_state_before_launch() -> None:
     with pytest.raises(OperationResourceAdmissionError) as caught:
-        linear_program(program)
-    assert caught.value.errors()[0]["type"] == "optimization.linear.basis_bound"
-    count, work = basis_bounds(n, m)
-    work += 16 * (m + 1) * (n + 1)
-    assert f"basis_estimate={count}" in str(caught.value)
-    assert f"work_estimate={work}" in str(caught.value)
-    assert "input_value" not in str(caught.value)
+        linear_program(_dense_program(24, 12))
+    assert caught.value.errors()[0]["type"] == (
+        "optimization.linear.backend_state_bound"
+    )
+    assert "backend_state_estimate=" in str(caught.value)
 
 
-def test_search_exhaustion_is_an_execution_error() -> None:
+def test_trivial_contradiction_precedes_backend_state_admission(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    n, m = 24, 12
+    program = StandardFormRationalLinearProgram.model_validate_json(
+        json.dumps(
+            {
+                "variables": [f"x{i}" for i in range(n)],
+                "objective": [q(1)] * n,
+                "coefficients": [[q(1)] * n, *([[q(0)] * n] * (m - 1))],
+                "rhs": [q(1)] * m,
+            }
+        )
+    )
+
+    def unexpected(*args: object, **kwargs: object) -> None:
+        pytest.fail("a trivial contradiction must not launch PPL")
+
+    monkeypatch.setattr(
+        linear_operations,
+        "solve_standard_form_process",
+        unexpected,
+    )
+    result = linear_program(program)
+    assert result.status == "INFEASIBLE"
+    assert result.farkas_candidate is not None
+
+
+def test_exact_backend_proves_infeasibility_beyond_old_search_allowance() -> None:
     n, m = 18, 6
     program = StandardFormRationalLinearProgram.model_validate_json(
         json.dumps(
@@ -100,9 +120,9 @@ def test_search_exhaustion_is_an_execution_error() -> None:
             }
         )
     )
-    with pytest.raises(OperationResourceExhaustedError) as caught:
-        linear_program(program)
-    assert caught.value.resource is ExecutionResource.WORK
+    result = linear_program(program)
+    assert result.status == "INFEASIBLE"
+    assert result.farkas_candidate is not None
 
 
 def test_native_general_deadline_covers_normalization_and_respects_outer_deadline() -> (

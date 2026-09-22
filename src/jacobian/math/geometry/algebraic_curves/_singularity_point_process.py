@@ -14,6 +14,7 @@ from jacobian._execution import (
     OperationExecutionCancelledError,
     OperationExecutionTimeoutError,
 )
+from jacobian.canonical import encode_strict_json
 from jacobian.math.geometry.algebraic_curves._singularity_point_worker import (
     ProjectiveSingularityPointWorkerComplete,
     ProjectiveSingularityPointWorkerRequest,
@@ -82,9 +83,8 @@ def run_point_construction_worker(
         ) from exc
 
     try:
-        return ProjectiveSingularityPointWorkerComplete.model_validate(
-            response,
-            strict=True,
+        return ProjectiveSingularityPointWorkerComplete.model_validate_json(
+            encode_strict_json(response)
         )
     except ValidationError as exc:
         raise RuntimeError(

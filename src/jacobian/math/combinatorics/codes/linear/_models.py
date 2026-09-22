@@ -17,7 +17,7 @@ from jacobian.math.combinatorics.codes.linear.values import (
     PrimeFieldLinearEncoder,
 )
 
-MAX_CODEWORDS = 16384  # binary k=14 (2^14), ternary k=8 (3^8=6561); mainly for equal.decide witness enumeration
+MAX_CODE_EQUAL_WORK = 20_000_000
 MAX_RECEIVED_PROFILE_EXECUTION_WORK = 3_000_000
 MAX_RECEIVED_PROFILE_WITNESS_CELLS = 65_536
 

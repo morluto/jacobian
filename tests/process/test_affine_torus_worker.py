@@ -98,7 +98,7 @@ def test_deadline_kills_the_affine_torus_worker(
 
     with (
         request_execution(started),
-        pytest.raises(OperationExecutionTimeoutError, match="execution allowance"),
+        pytest.raises(OperationExecutionTimeoutError, match="worker deadline expired"),
     ):
         affine_torus_fixed_locus(_source())
 

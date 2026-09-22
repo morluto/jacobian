@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import random
 from collections.abc import Callable
 from fractions import Fraction
+from functools import reduce
+from itertools import combinations, pairwise, permutations
+from math import gcd
 
 import pytest
 from pydantic import ValidationError
@@ -11,6 +15,7 @@ from pydantic import ValidationError
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.lattices._hnf import compute_hermite_normal_form
 from jacobian.math.lattices._lattice import reduce_lattice_basis
+from jacobian.math.lattices._lattice_ops import smith_invariant_factors
 from jacobian.math.lattices._models import (
     HermiteNormalFormRequest,
     IntegerLattice,
@@ -250,6 +255,72 @@ def test_sublattice_index_rejects_dimension_mismatch() -> None:
             }
         )
     assert exc_info.value.errors()[0]["type"] == "lattice.ambient_dimensions_mismatch"
+
+
+# ---------------------------------------------------------------------------
+# Integer Smith invariant factors
+# ---------------------------------------------------------------------------
+
+
+def _minor_determinant(
+    matrix: list[list[int]], rows: tuple[int, ...], columns: tuple[int, ...]
+) -> int:
+    total = 0
+    for ordering in permutations(range(len(rows))):
+        inversions = sum(
+            ordering[left] > ordering[right]
+            for left in range(len(ordering))
+            for right in range(left + 1, len(ordering))
+        )
+        total += (-1) ** inversions * reduce(
+            lambda product, index: (
+                product * matrix[rows[index]][columns[ordering[index]]]
+            ),
+            range(len(rows)),
+            1,
+        )
+    return total
+
+
+def _independent_invariant_factors(matrix: list[list[int]]) -> list[int]:
+    row_count = len(matrix)
+    column_count = len(matrix[0]) if row_count else 0
+    previous = 1
+    factors: list[int] = []
+    for order in range(1, min(row_count, column_count) + 1):
+        divisor = 0
+        for rows in combinations(range(row_count), order):
+            for columns in combinations(range(column_count), order):
+                divisor = gcd(divisor, abs(_minor_determinant(matrix, rows, columns)))
+        if divisor == 0:
+            break
+        factors.append(divisor // previous)
+        previous = divisor
+    return factors
+
+
+def test_smith_invariants_match_independent_determinantal_divisors() -> None:
+    rng = random.Random(1739)
+    for _ in range(24):
+        rows = rng.randrange(1, 5)
+        columns = rng.randrange(1, 5)
+        matrix = [[rng.randrange(-4, 5) for _ in range(columns)] for _ in range(rows)]
+        expected = _independent_invariant_factors(matrix)
+        actual = smith_invariant_factors(matrix)
+        assert actual == expected
+        assert all(right % left == 0 for left, right in pairwise(actual))
+        rank = len(actual)
+        if rank:
+            product = 1
+            for factor in actual:
+                product *= factor
+            assert product == gcd(
+                *(
+                    abs(_minor_determinant(matrix, r, c))
+                    for r in combinations(range(rows), rank)
+                    for c in combinations(range(columns), rank)
+                )
+            )
 
 
 # ---------------------------------------------------------------------------

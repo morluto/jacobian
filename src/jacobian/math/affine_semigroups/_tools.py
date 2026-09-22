@@ -1,18 +1,19 @@
 """Public declaration for exact integer relation lattices."""
 
-from jacobian.catalog.models import MathTool, OperationExample
+from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.affine_semigroups._models import (
     RelationLatticeRequest,
     RelationLatticeResult,
 )
 from jacobian.math.affine_semigroups.operations import relation_lattice
+from jacobian.math.affine_semigroups.semigroup_tools import TOOLS as _SEMIGROUP_TOOLS
 
 
 def _run_relation_lattice(request: RelationLatticeRequest) -> RelationLatticeResult:
     return relation_lattice(request.configuration)
 
 
-TOOLS = (
+_RELATION_TOOLS = (
     MathTool(
         operation_id="integer_configuration.relation_lattice.compute",
         title="Compute the exact integer relation lattice of a configuration",
@@ -56,5 +57,7 @@ TOOLS = (
         ),
     ),
 )
+
+TOOLS: MathTools = _RELATION_TOOLS + _SEMIGROUP_TOOLS
 
 __all__ = ["TOOLS"]

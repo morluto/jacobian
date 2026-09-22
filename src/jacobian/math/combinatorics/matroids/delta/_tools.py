@@ -14,6 +14,13 @@ from jacobian.math.combinatorics.matroids.delta._models import (
     DeltaMatroidWidthRequest,
     DeltaMatroidWidthResult,
 )
+from jacobian.math.combinatorics.matroids.delta.extra import (
+    BinaryMatrixRequest,
+    BinaryMatrixResult,
+    DeltaMatroidDualRequest,
+    DeltaMatroidMinorRequest,
+)
+from jacobian.math.combinatorics.matroids.delta.extra_ops import binary, dual, minor
 from jacobian.math.combinatorics.matroids.delta.operations import (
     from_feasible_sets,
     twist,
@@ -23,6 +30,18 @@ from jacobian.math.combinatorics.matroids.delta.values import (
     DeltaMatroidAdmissionError,
     FiniteDeltaMatroid,
 )
+
+
+def _dual(request: DeltaMatroidDualRequest) -> FiniteDeltaMatroid:
+    return dual(request.delta_matroid)
+
+
+def _minor(request: DeltaMatroidMinorRequest) -> FiniteDeltaMatroid:
+    return minor(request.delta_matroid, request.delete, request.contract)
+
+
+def _binary(request: BinaryMatrixRequest) -> BinaryMatrixResult:
+    return binary(request.matrix)
 
 
 def _from_feasible_sets(
@@ -76,7 +95,7 @@ def _width(request: DeltaMatroidWidthRequest) -> DeltaMatroidWidthResult:
         ) from exc
 
 
-TOOLS: MathTools = (
+TOOLS: MathTools = (  # noqa: RUF005
     MathTool(
         operation_id="delta_matroid.from_feasible_sets.compute",
         title="Recognize a finite delta-matroid from a complete feasible family",
@@ -157,6 +176,66 @@ TOOLS: MathTools = (
                     },
                     "subset": [0],
                 },
+            ),
+        ),
+    ),
+) + (
+    MathTool(
+        operation_id="delta_matroid.dual.compute",
+        title="Compute the dual of a finite delta-matroid",
+        description="Return the complete feasible family obtained by complementing every feasible set on the retained ground axis.",
+        request_type=DeltaMatroidDualRequest,
+        result_type=FiniteDeltaMatroid,
+        run=_dual,
+        tags=("delta-matroid", "dual", "exact"),
+        examples=(
+            OperationExample(
+                name="dual_uniform",
+                description="Compute the dual by complementing feasible sets on the labelled ground.",
+                input={
+                    "delta_matroid": {
+                        "ground": ["a", "b"],
+                        "feasible": [[], [0], [0, 1], [1]],
+                    }
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="delta_matroid.minor.compute",
+        title="Compute a delta-matroid deletion/contraction minor",
+        description="Return the exact feasible family after deleting and contracting disjoint ground-index sets.",
+        request_type=DeltaMatroidMinorRequest,
+        result_type=FiniteDeltaMatroid,
+        run=_minor,
+        tags=("delta-matroid", "minor", "exact"),
+        examples=(
+            OperationExample(
+                name="delete_b",
+                description="Delete ground element b; deletion indices must be disjoint from contractions.",
+                input={
+                    "delta_matroid": {
+                        "ground": ["a", "b"],
+                        "feasible": [[], [0], [0, 1], [1]],
+                    },
+                    "delete": [1],
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="delta_matroid.from_binary_matrix.compute",
+        title="Reconstruct a delta-matroid from binary principal minors",
+        description="Compute every principal minor over GF(2) of a labelled symmetric binary matrix and return the resulting feasible-set delta-matroid.",
+        request_type=BinaryMatrixRequest,
+        result_type=BinaryMatrixResult,
+        run=_binary,
+        tags=("delta-matroid", "binary", "principal-minor", "exact"),
+        examples=(
+            OperationExample(
+                name="binary_zero",
+                description="Reconstruct the principal-minor delta-matroid of the zero 2-by-2 symmetric matrix.",
+                input={"matrix": {"ground": ["a", "b"], "entries": [[0, 0], [0, 0]]}},
             ),
         ),
     ),

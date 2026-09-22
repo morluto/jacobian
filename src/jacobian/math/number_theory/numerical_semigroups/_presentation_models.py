@@ -97,6 +97,30 @@ class MinimalPresentationResult(StrictModel):
         return self
 
 
+class PresentationDegreeProfileRequest(StrictModel):
+    """Compute the semigroup degree of every supplied presentation relation."""
+
+    generators: tuple[ExactInteger, ...] = Field(
+        min_length=1, max_length=MAX_GENERATORS
+    )
+
+
+class PresentationDegreeProfileResult(StrictModel):
+    minimal_generators: tuple[ExactInteger, ...] = Field(
+        min_length=1, max_length=MAX_GENERATORS
+    )
+    betti_elements: tuple[ExactInteger, ...]
+    relation_degrees: tuple[ExactInteger, ...]
+    relation_count: int = Field(ge=0)
+
+    @model_validator(mode="after")
+    def require_profile(self) -> Self:
+        _require_canonical_generator_axis(self.minimal_generators)
+        if self.relation_count != len(self.relation_degrees):
+            raise _validation_error("presentation degree count mismatch")
+        return self
+
+
 class PresentationBinomialsRequest(StrictModel):
     """Convert a minimal presentation to sparse binomial form."""
 

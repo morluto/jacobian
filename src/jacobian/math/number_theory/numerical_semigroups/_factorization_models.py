@@ -154,6 +154,36 @@ class FactorizationDistanceResult(StrictModel):
     second_length: ExactInteger = Field(ge=0)
 
 
+class FactorizationDistanceMatrixRequest(StrictModel):
+    """Complete pairwise distance matrix on one complete factorization fiber."""
+
+    generators: tuple[ExactInteger, ...] = Field(
+        min_length=1, max_length=MAX_GENERATORS
+    )
+    value: ExactInteger
+
+
+class FactorizationDistanceMatrixResult(StrictModel):
+    value: ExactInteger
+    minimal_generators: tuple[ExactInteger, ...] = Field(
+        min_length=1, max_length=MAX_GENERATORS
+    )
+    in_semigroup: bool
+    factorizations: tuple[tuple[ExactInteger, ...], ...]
+    distances: tuple[tuple[int, ...], ...]
+
+    @model_validator(mode="after")
+    def require_matrix(self) -> Self:
+        _require_canonical_generator_axis(self.minimal_generators)
+        if len(self.distances) != len(self.factorizations) or any(
+            len(row) != len(self.factorizations) for row in self.distances
+        ):
+            raise _validation_error("distance matrix shape mismatch")
+        if self.in_semigroup != bool(self.factorizations):
+            raise _validation_error("membership must agree with distance matrix")
+        return self
+
+
 class FactorizationGraphComputeRequest(StrictModel):
     """Compute the standard factorization graph of one element."""
 

@@ -6,6 +6,19 @@ from jacobian.math.combinatorics.algebraic._models import (
     SemistandardYoungTableauCountResult,
     StandardTableauCheckResult,
 )
+from jacobian.math.combinatorics.algebraic.biword import (
+    Biword,
+    BiwordRSKPair,
+    NonnegativeIntegerMatrix,
+)
+from jacobian.math.combinatorics.algebraic.biword_ops import (
+    greene,
+    inverse_biword,
+    inverse_matrix,
+    matrix_biword,
+    normalize_biword,
+    rsk_biword,
+)
 from jacobian.math.combinatorics.algebraic.operations import (
     check_semistandard_tableau,
     check_standard_tableau,
@@ -30,8 +43,11 @@ from jacobian.math.combinatorics.algebraic.weighted_monotone.operations import (
 )
 
 __all__ = [
+    "Biword",
+    "BiwordRSKPair",
     "EndpointProfileEntry",
     "EndpointProfileResult",
+    "NonnegativeIntegerMatrix",
     "PartitionDominanceResult",
     "RSKTableauPair",
     "SemistandardTableauCheckResult",
@@ -42,11 +58,17 @@ __all__ = [
     "check_standard_tableau",
     "compute_endpoint_profile",
     "conjugate_partition",
+    "greene",
     "hook_lengths",
+    "inverse_biword",
+    "inverse_matrix",
     "inverse_row_insertion_rsk",
     "knuth_moves",
+    "matrix_biword",
+    "normalize_biword",
     "partition_dominance",
     "row_insertion_rsk",
+    "rsk_biword",
     "semistandard_young_tableaux_count",
     "standard_young_tableaux_count",
     "verify_rsk",

@@ -191,6 +191,16 @@ def test_negative_cutoff_rejected() -> None:
         enclose_kempner_series(digit_set, -1)
 
 
+def test_dense_prefix_height_refuses_before_exact_carrier_overflow() -> None:
+    # The old count-only estimate admitted this family and overflowed while
+    # constructing CanonicalRational after the recurrence had run.
+    digit_set = KempnerDigitSet(base=3, allowed_digits=(1, 2))
+    with pytest.raises(OperationResourceAdmissionError):
+        require_series_admission(digit_set, 13)
+    with pytest.raises(OperationResourceAdmissionError):
+        enclose_kempner_series(digit_set, 13)
+
+
 def test_envelope_refuses_before_enumeration() -> None:
     # Base-2 {1} with a huge cutoff: one numeral per length, so the rational
     # height (not the count) forces refusal before any enumeration runs.

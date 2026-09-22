@@ -11,6 +11,23 @@ from jacobian.math.polynomials.local_series._models import (
     ValuationProfileResult,
     ZeroValuation,
 )
+from jacobian.math.polynomials.local_series.arithmetic import (
+    add,
+    change_scale,
+    deramify,
+    derivative,
+    divide,
+    integral,
+    inverse,
+    multiply,
+    power,
+    principal_part,
+    ramify,
+    residue,
+    shift,
+    subtract,
+    truncate,
+)
 from jacobian.math.polynomials.local_series.values import (
     MAX_LOCAL_SERIES_TERMS,
     TruncatedLaurentWindow,
@@ -55,4 +72,21 @@ def laurent_valuation_profile(
     )
 
 
-__all__ = ["laurent_valuation_profile"]
+__all__ = [
+    "add",
+    "change_scale",
+    "deramify",
+    "derivative",
+    "divide",
+    "integral",
+    "inverse",
+    "laurent_valuation_profile",
+    "multiply",
+    "power",
+    "principal_part",
+    "ramify",
+    "residue",
+    "shift",
+    "subtract",
+    "truncate",
+]

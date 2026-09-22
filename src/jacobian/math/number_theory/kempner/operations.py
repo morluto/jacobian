@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from fractions import Fraction
-from itertools import product
+
+from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
 from jacobian._execution import request_checkpoint
@@ -100,11 +101,41 @@ def require_series_admission(digit_set: KempnerDigitSet, cutoff: int) -> int:
                 f"{MAX_KEMPNER_SERIES_NUMERALS}-term enumeration envelope"
             ),
         )
-    height_digits = (
-        count * max(cutoff, 1) * len(str(base)) + len(str(max(count, 1)))
-        if count
-        else 1
-    )
+    # Every prefix denominator divides lcm(1, ..., base**cutoff - 1).
+    # The elementary bound lcm(1, ..., N) <= 4**(N - 1) gives a sound,
+    # cheap admission bound without enumerating the family.  The tail is
+    # then added with its own denominator; numerator addition costs one more
+    # small digit term.  Cap the power before constructing an enormous N.
+    if count:
+        tail_digits = cutoff * len(str(base)) + len(str(base)) + 1
+        power_cap = (MAX_KEMPNER_SERIES_DIGITS * 8) // 5 + 16
+        bounded_power = 1
+        factor = base
+        exponent = cutoff
+        while exponent:
+            if exponent & 1:
+                bounded_power *= factor
+                if bounded_power > power_cap:
+                    break
+            exponent >>= 1
+            if exponent:
+                factor *= factor
+                if factor > power_cap:
+                    factor = power_cap + 1
+        if bounded_power > power_cap:
+            raise OperationResourceAdmissionError(
+                location=("digit_set", "cutoff"),
+                code="number_theory.kempner_series.rational_height",
+                message=(
+                    "the exact-rational height through the cutoff exceeds the "
+                    f"{MAX_KEMPNER_SERIES_DIGITS}-digit result envelope"
+                ),
+            )
+        max_n = bounded_power - 1
+        lcm_digits = (5 * max_n) // 8 + 1
+        height_digits = lcm_digits + tail_digits + len(str(count)) + 2
+    else:
+        height_digits = 1
     if height_digits > MAX_KEMPNER_SERIES_DIGITS:
         raise OperationResourceAdmissionError(
             location=("digit_set", "cutoff"),
@@ -145,29 +176,52 @@ def enclose_kempner_series(
     base = digit_set.base
     allowed = digit_set.allowed_digits
     nonzero = tuple(digit for digit in allowed if digit != 0)
+    # Prefix recurrence: each accepted numeral is reached exactly once by
+    # extending an admitted prefix.  No dense product/list is materialised,
+    # which keeps the formerly rejected dense family within the bounded
+    # request envelope while preserving the exact partial sum.
     partial = Fraction(0)
     enumerated = 0
+
+    def extend(prefix: int, remaining: int) -> None:
+        nonlocal partial, enumerated
+        if remaining == 0:
+            partial += Fraction(1, prefix)
+            enumerated += 1
+            if enumerated % 4_096 == 0:
+                request_checkpoint("during Kempner prefix recurrence")
+            return
+        for digit in allowed:
+            extend(prefix * base + digit, remaining - 1)
+
     for length in range(1, cutoff + 1):
         for first in nonzero:
-            for rest in product(allowed, repeat=length - 1):
-                value = first
-                for digit in rest:
-                    value = value * base + digit
-                partial += Fraction(1, value)
-                enumerated += 1
-                if enumerated % 4_096 == 0:
-                    request_checkpoint("during Kempner series enumeration")
+            extend(first, length - 1)
     if enumerated != count:
         raise RuntimeError("Kempner enumeration missed its admitted numeral count")
     tail = _tail_bound(base, len(allowed), len(nonzero), cutoff)
     upper = partial + tail
+
+    def canonical(value: Fraction, label: str) -> CanonicalRational:
+        try:
+            return CanonicalRational.from_fraction(value)
+        except (ValidationError, ValueError, OverflowError) as error:
+            raise OperationResourceAdmissionError(
+                location=(label,),
+                code="number_theory.kempner_series.rational_height",
+                message=(
+                    "the exact-rational result exceeds the "
+                    f"{MAX_KEMPNER_SERIES_DIGITS}-digit result envelope"
+                ),
+            ) from error
+
     return KempnerSeriesEnclosure._from_kernel(
         digit_set,
         cutoff,
-        partial_sum=CanonicalRational.from_fraction(partial),
-        tail_upper_bound=CanonicalRational.from_fraction(tail),
-        lower=CanonicalRational.from_fraction(partial),
-        upper=CanonicalRational.from_fraction(upper),
+        partial_sum=canonical(partial, "partial_sum"),
+        tail_upper_bound=canonical(tail, "tail_upper_bound"),
+        lower=canonical(partial, "lower"),
+        upper=canonical(upper, "upper"),
     )
 
 

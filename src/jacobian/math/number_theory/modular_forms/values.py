@@ -17,6 +17,14 @@ from jacobian.math.polynomials.series._models import TruncatedSeries
 MAX_MODULAR_FORM_LEVEL = 100_000
 MAX_MODULAR_FORM_WEIGHT = 1_000_000
 
+# Operation owners keep the reusable q-prefix carrier broader than any one
+# transform.  Transform admission below uses this source envelope before it
+# indexes coefficients or allocates a result.
+MAX_Q_TRANSFORM_SOURCE_ORDER = 25_280
+MAX_Q_TRANSFORM_OUTPUT_PRECISION = 4_096
+MAX_Q_TRANSFORM_COEFFICIENT_DIGITS = 4_096
+MAX_GAMMA0_OPERATION_LEVEL = 10_000
+
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"modular_forms.{reason}", message)
@@ -78,6 +86,30 @@ class LevelOneModularQExpansion(StrictModel):
         )
 
 
+class ModularQExpansion(StrictModel):
+    """A finite q-prefix bound to a concrete trivial-character space."""
+
+    space: ModularFormSpace | None = None
+    weight: StrictInt = Field(ge=0)
+    q_expansion: TruncatedSeries
+    basis_id: str = Field(default="canonical", min_length=1, max_length=96)
+
+    @model_validator(mode="after")
+    def require_q_parent(self) -> Self:
+        if self.q_expansion.variable != "q":
+            raise _validation_error("q_variable", "modular q-expansions use q")
+        if self.q_expansion.truncation_order > MAX_Q_TRANSFORM_SOURCE_ORDER:
+            raise _validation_error(
+                "q_prefix_bound",
+                "modular q-expansion exceeds the bounded source-prefix envelope",
+            )
+        if self.space is not None and self.space.weight != self.weight:
+            raise _validation_error(
+                "weight_parent", "space and q-expansion weight differ"
+            )
+        return self
+
+
 class ModularFormSpace(StrictModel):
     """One supported exact holomorphic or cuspidal modular-form space.
 
@@ -115,4 +147,5 @@ __all__ = [
     "MAX_MODULAR_FORM_WEIGHT",
     "LevelOneModularQExpansion",
     "ModularFormSpace",
+    "ModularQExpansion",
 ]

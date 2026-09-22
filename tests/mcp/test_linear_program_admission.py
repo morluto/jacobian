@@ -84,6 +84,8 @@ def test_lp_inspection_explains_derived_admission(
             for variable in variables:
                 variable["upper_bound"] = q(1)
         rows = [[int(i == j % m) for j in range(n)] for i in range(m)]
+        if code == "backend_state_bound":
+            rows = [[1 + int(i == j % m) for j in range(n)] for i in range(m)]
         if code == "normalized_columns":
             pairs = list(combinations(range(8), 2))
             triples = [

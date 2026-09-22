@@ -45,6 +45,46 @@ def linear_execution() -> Iterator[None]:
 class LinearAdmission:
     columns: tuple[int, ...]
     result_digits: int
+    components: tuple[tuple[tuple[int, ...], tuple[int, ...]], ...] = ()
+
+
+def _constraint_components(
+    program: StandardFormRationalLinearProgram,
+) -> tuple[tuple[tuple[int, ...], tuple[int, ...]], ...]:
+    row_columns = [
+        tuple(j for j, value in enumerate(row) if value.num != 0)
+        for row in program.coefficients
+    ]
+    column_rows: dict[int, list[int]] = {}
+    for row_index, source_columns in enumerate(row_columns):
+        for column in source_columns:
+            column_rows.setdefault(column, []).append(row_index)
+    remaining = set(column_rows)
+    components = []
+    while remaining:
+        pending = [min(remaining)]
+        rows: set[int] = set()
+        columns: set[int] = set()
+        while pending:
+            column = pending.pop()
+            if column not in remaining:
+                continue
+            remaining.remove(column)
+            columns.add(column)
+            for row_index in column_rows[column]:
+                if row_index not in rows:
+                    rows.add(row_index)
+                    pending.extend(row_columns[row_index])
+        components.append((tuple(sorted(rows)), tuple(sorted(columns))))
+    return tuple(components)
+
+
+def _component_state_bound(rows: int, columns: int) -> int:
+    maximum_rank = min(columns, rows)
+    return max(
+        (comb(columns + 1, rank) for rank in range(maximum_rank + 1)),
+        default=1,
+    )
 
 
 def admit_linear_program(program: StandardFormRationalLinearProgram) -> LinearAdmission:
@@ -63,10 +103,10 @@ def admit_linear_program(program: StandardFormRationalLinearProgram) -> LinearAd
     )
     digits = _result_digit_bound(program)
     rows = len(_active_equations(program))
-    maximum_rank = min(len(columns), rows)
-    backend_states = max(
-        (comb(len(columns) + 1, rank) for rank in range(maximum_rank + 1)),
-        default=1,
+    components = _constraint_components(program)
+    backend_states = sum(
+        _component_state_bound(len(component_rows), len(component_columns))
+        for component_rows, component_columns in components
     )
     quantities = (
         f"normalized_columns={len(program.variables)}, "
@@ -87,4 +127,8 @@ def admit_linear_program(program: StandardFormRationalLinearProgram) -> LinearAd
                 code=f"optimization.linear.{reason}",
                 message=f"Exact LP {reason} exceeded: {quantities}.",
             )
-    return LinearAdmission(columns=columns, result_digits=digits)
+    return LinearAdmission(
+        columns=columns,
+        result_digits=digits,
+        components=components,
+    )

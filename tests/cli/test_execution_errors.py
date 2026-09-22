@@ -43,7 +43,7 @@ def test_cli_execution_failure_has_no_mathematical_output(
     assert str(error) in result.stderr
 
 
-def test_cli_lp_work_exhaustion_has_no_mathematical_output() -> None:
+def test_cli_lp_beyond_old_basis_allowance_returns_exact_result() -> None:
     n, m = 18, 6
     payload = {
         "program": {
@@ -62,6 +62,7 @@ def test_cli_lp_work_exhaustion_has_no_mathematical_output() -> None:
             json.dumps(payload),
         ],
     )
-    assert result.exit_code != 0
-    assert not result.stdout.strip()
-    assert "operation exhausted its work allowance" in result.stderr
+    assert result.exit_code == 0
+    output = json.loads(result.stdout)
+    assert output["output"]["status"] == "INFEASIBLE"
+    assert not result.stderr

@@ -71,7 +71,7 @@ def test_recognition_worker_timeout_uses_the_remaining_request_deadline(
         request_execution(started),
         pytest.raises(
             OperationExecutionTimeoutError,
-            match="during coprimality recognition",
+            match="worker deadline expired",
         ),
     ):
         recognize_canonical_rational_functions((_candidate(),), deadline=deadline)

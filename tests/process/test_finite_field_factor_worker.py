@@ -90,7 +90,7 @@ def test_cancellation_during_directory_setup_does_not_start_a_worker(
         pytest.fail("an expired request must not start the factorization worker")
 
     monkeypatch.setattr(_factor_process, "TemporaryDirectory", expired_directory)
-    monkeypatch.setattr(_factor_process, "run_bounded_process", unexpected)
+    monkeypatch.setattr(_factor_process, "run_checked_worker_process", unexpected)
     with (
         request_cancellation(cancellation),
         pytest.raises(OperationExecutionCancelledError),

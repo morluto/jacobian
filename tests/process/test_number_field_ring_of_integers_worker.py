@@ -14,7 +14,8 @@ from jacobian._execution import (
     OperationExecutionTimeoutError,
     request_execution,
 )
-from jacobian.canonical import encode_strict_json, loads_strict_json
+from jacobian._worker_protocol import encode_worker_result_frame
+from jacobian.canonical import loads_strict_json
 from jacobian.math.number_theory.number_fields._models import (
     NumberFieldRingOfIntegersRequest,
 )
@@ -132,7 +133,7 @@ def test_ring_worker_uses_private_cwd_and_os_resource_limits(
             "kind": "complete",
             "request_digest": hashlib.sha256(input_bytes).hexdigest(),
         }
-        return _completed(stdout=encode_strict_json(response))
+        return _completed(stdout=encode_worker_result_frame(response))
 
     monkeypatch.setattr(process_runtime, "run_bounded_process", complete_worker)
 

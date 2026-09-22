@@ -7,6 +7,7 @@ import pytest
 
 from jacobian import process as process_runtime
 from jacobian._execution import OperationExecutionTimeoutError, request_execution
+from jacobian._worker_protocol import encode_worker_result_frame
 from jacobian.math.number_theory.number_fields import (
     SimpleNumberFieldPresentation,
 )
@@ -66,10 +67,12 @@ def test_number_field_worker_has_private_cwd_and_os_resource_limits(
         assert isinstance(input_bytes, bytes)
         return BoundedProcessResult(
             returncode=0,
-            stdout=(
-                b'{"discriminant":"8","kind":"complete","request_digest":"'
-                + hashlib.sha256(input_bytes).hexdigest().encode()
-                + b'"}'
+            stdout=encode_worker_result_frame(
+                {
+                    "discriminant": "8",
+                    "kind": "complete",
+                    "request_digest": hashlib.sha256(input_bytes).hexdigest(),
+                }
             ),
             stderr=b"",
             stdout_exceeded=False,

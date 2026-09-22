@@ -7,7 +7,12 @@ import time
 import pytest
 
 from jacobian import process as process_runtime
-from jacobian._execution import OperationExecutionTimeoutError, request_execution
+from jacobian._execution import (
+    BackendFailureReason,
+    OperationBackendError,
+    OperationExecutionTimeoutError,
+    request_execution,
+)
 from jacobian.math.number_theory.number_fields import (
     SimpleNumberFieldPresentation,
     embeddings,
@@ -35,7 +40,7 @@ def test_embedding_worker_timeout_is_an_operational_failure(
         ),
     )
 
-    with pytest.raises(OperationExecutionTimeoutError, match="during"):
+    with pytest.raises(OperationExecutionTimeoutError, match="worker deadline expired"):
         embeddings(_gaussian_field())
 
 
@@ -80,5 +85,6 @@ def test_embedding_worker_rejects_malformed_protocol_output(
         ),
     )
 
-    with pytest.raises(RuntimeError, match="malformed output"):
+    with pytest.raises(OperationBackendError) as caught:
         embeddings(_gaussian_field())
+    assert caught.value.reason is BackendFailureReason.MALFORMED_RESPONSE

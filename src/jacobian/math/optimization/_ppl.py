@@ -116,7 +116,26 @@ def solve_standard_form(
                     return ExactLinearOutcome(status="UNBOUNDED", point=point, ray=ray)
         raise RuntimeError("PPL reported unboundedness without an improving ray")
 
+    # Select a deterministic optimum compatible with the former ordered-basis
+    # contract: among optimal points, maximize coordinates from left to right.
+    # Unbounded zero-cost directions are skipped; they do not alter optimality.
+    objective_expression = _expression(objective_integers)
+    primal.add_constraint(
+        int(optimized["inf_d"]) * objective_expression == int(optimized["inf_n"])
+    )
     point = _point(optimized["generator"], variables)
+    for index in range(variables):
+        coordinate_expression = _expression(
+            tuple(int(column == index) for column in range(variables))
+        )
+        coordinate = primal.maximize(coordinate_expression)
+        if not coordinate["bounded"]:
+            continue
+        primal.add_constraint(
+            int(coordinate["sup_d"]) * coordinate_expression == int(coordinate["sup_n"])
+        )
+        point = _point(coordinate["generator"], variables)
+
     # Solve the exact dual max b^T y subject to A^T y <= c.  Strong duality
     # supplies a checkable optimality witness in source equation coordinates.
     dual = C_Polyhedron(equations, "universe")

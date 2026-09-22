@@ -68,7 +68,7 @@ def test_recognition_worker_timeout_uses_remaining_request_deadline(
         request_execution(started),
         pytest.raises(
             OperationExecutionTimeoutError,
-            match="during coprimality recognition",
+            match="worker deadline expired",
         ),
     ):
         bind_request_deadline(started + 5.0)

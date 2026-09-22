@@ -13,6 +13,7 @@ from jacobian.catalog.catalog import Catalog
 from jacobian.math.optimization._general_models import (
     GeneralRationalLinearProgramResult,
 )
+from jacobian.math.optimization._models import RationalLinearProgramResult
 from jacobian.math.optimization._tools import TOOLS
 from jacobian.mcp.direct_tools import direct_operation_tools
 from jacobian.mcp.runtime import AppState
@@ -69,8 +70,8 @@ async def _invoke_lp(payload: dict[str, object], *, direct: bool) -> Any:
     [
         (28, 24, "GE", "normalized_columns", True),
         (2, 64, "EQ", "normalized_rows", True),
-        (18, 6, "EQ", "work_bound", False),
-        (24, 12, "EQ", "basis_bound", False),
+        (18, 6, "EQ", "exact_backend", False),
+        (24, 12, "EQ", "exact_backend", False),
     ],
 )
 def test_lp_inspection_explains_derived_admission(
@@ -114,7 +115,8 @@ def test_lp_inspection_explains_derived_admission(
             )
             text = json.dumps(inspection.structured_content)
             assert "Normalized limits are 32 columns and 64 rows" in text
-            assert "C(n+1,r)" in text and "50000000" in text
+            assert "Parma Polyhedra Library" in text
+            assert "independently checks" in text
             if expect_rejection:
                 caught = await client.call_tool(
                     "math.run", {"operation_id": OPERATION, "payload": payload}
@@ -153,7 +155,7 @@ def test_lp_inspection_explains_derived_admission(
 
 
 @pytest.mark.parametrize("direct", [False, True])
-def test_lp_entry_points_distinguish_short_certificates_from_work_exhaustion(
+def test_lp_entry_points_solve_beyond_the_old_basis_allowance(
     direct: bool,
 ) -> None:
     supports = [
@@ -205,13 +207,12 @@ def test_lp_entry_points_distinguish_short_certificates_from_work_exhaustion(
                 else {"operation_id": standard_operation, "payload": payload},
             )
 
-    failed = asyncio.run(invoke_exhaustion())
-    assert failed.is_error
-    assert failed.structured_content is None
-    diagnostic = json.loads(
-        _content_text(failed.content[0])[_content_text(failed.content[0]).index("{") :]
+    solved = asyncio.run(invoke_exhaustion())
+    assert not solved.is_error
+    assert solved.structured_content is not None
+    output = (
+        solved.structured_content if direct else solved.structured_content["output"]
     )
-    assert diagnostic["code"] == "RESOURCE_EXHAUSTED"
-    assert diagnostic["resource"] == "work"
-    assert diagnostic["operation_id"] == standard_operation
-    assert "fixed scalar-update allowance" in diagnostic["hint"]
+    result = RationalLinearProgramResult.model_validate_json(json.dumps(output))
+    assert result.status == "INFEASIBLE"
+    assert result.farkas_candidate is not None

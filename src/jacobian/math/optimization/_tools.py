@@ -7,9 +7,7 @@ from jacobian.math.optimization._general_models import (
     GeneralRationalLinearProgramResult,
 )
 from jacobian.math.optimization._models import (
-    MAX_LINEAR_PROGRAM_BASES,
     MAX_LINEAR_PROGRAM_CONSTRAINTS,
-    MAX_LINEAR_PROGRAM_SCALAR_UPDATES,
     MAX_LINEAR_PROGRAM_VARIABLES,
     RationalLinearProgramRequest,
     RationalLinearProgramResult,
@@ -22,20 +20,13 @@ from jacobian.math.optimization._optimality import (
 )
 from jacobian.math.optimization.operations import linear_program
 
-_BASIS_ENVELOPE = (
-    "Resource admission removes zero columns and zero equalities for work estimates. "
-    "For n remaining columns and m remaining rows, the basis estimate is "
-    "max C(n+1,r) over 0<=r<=min(n,m); the work estimate is "
-    "8(m+1)^2(n+m+2) + max C(n+1,r)[4r^3+2r^2(n+2)+4r(n+2)]. "
-    f"The complete family must contain at most {MAX_LINEAR_PROGRAM_BASES} bases. "
-    "Execution tries bases in deterministic order and returns as soon as an exact "
-    f"certificate is found, charging at most {MAX_LINEAR_PROGRAM_SCALAR_UPDATES} "
-    "scalar updates across preprocessing, components, and both basis families. "
-    "Exhausting that execution allowance is an operational error, not a mathematical "
-    "conclusion. Source-derived rational-minor height must remain within the canonical "
-    "rational digit limit. Inspection reports the derived estimates and limits; shape "
-    "bounds alone do not guarantee completion. Execution has one 600-second cooperative "
-    "safety deadline; expiration yields an execution error."
+_LINEAR_ENVELOPE = (
+    "Resource admission bounds canonical source dimensions, coefficient height, "
+    "matrix cardinality, and the source-derived rational certificate height. Exact "
+    "optimization uses Parma Polyhedra Library over GMP integers; Jacobian independently "
+    "checks the returned primal, dual, Farkas, or recession witness before constructing "
+    "the result. Execution has one 600-second safety deadline; expiration or malformed "
+    "backend output is an operational error, never a mathematical conclusion."
 )
 
 
@@ -57,10 +48,10 @@ RATIONAL_LINEAR_OPERATIONS: MathTools = (
         title="Solve a rational linear program",
         description=(
             "Return a source-bound standard-form rational LP outcome using exact "
-            "basis linear algebra. Optimal and feasible outcomes retain checked "
+            "polyhedral optimization. Optimal and feasible outcomes retain checked "
             "points; infeasible outcomes carry a Farkas witness; unbounded outcomes "
             "carry a feasible point and recession direction. Operational failure "
-            "uses the execution-error path. " + _BASIS_ENVELOPE
+            "uses the execution-error path. " + _LINEAR_ENVELOPE
         ),
         request_type=RationalLinearProgramRequest,
         result_type=RationalLinearProgramResult,
@@ -104,7 +95,7 @@ RATIONAL_LINEAR_OPERATIONS = (
             "one-sided variable to one, plus one slack per inequality and one "
             "row/slack per two-sided variable bound. Normalized limits are "
             f"{MAX_LINEAR_PROGRAM_VARIABLES} columns and {MAX_LINEAR_PROGRAM_CONSTRAINTS} rows. "
-            + _BASIS_ENVELOPE
+            + _LINEAR_ENVELOPE
         ),
         request_type=GeneralRationalLinearProgramRequest,
         result_type=GeneralRationalLinearProgramResult,

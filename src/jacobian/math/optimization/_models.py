@@ -22,8 +22,6 @@ MAX_RATIONAL_DIGITS = 128
 MAX_LINEAR_PROGRAM_VARIABLES = 32
 MAX_LINEAR_PROGRAM_CONSTRAINTS = 64
 MAX_LINEAR_PROGRAM_VARIABLE_NAME_LENGTH = 64
-MAX_LINEAR_PROGRAM_BASES = 1_000_000
-MAX_LINEAR_PROGRAM_SCALAR_UPDATES = 50_000_000
 _INTERMEDIATE_SCALAR_DIGITS = "standard_intermediate_scalar_digits"
 
 
@@ -581,8 +579,6 @@ def _require_result_shape(result: RationalLinearProgramResult) -> None:
 
 
 __all__ = [
-    "MAX_LINEAR_PROGRAM_BASES",
-    "MAX_LINEAR_PROGRAM_SCALAR_UPDATES",
     "RationalLinearProgramRequest",
     "RationalLinearProgramResult",
     "RationalLinearProgramStatus",

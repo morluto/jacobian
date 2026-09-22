@@ -119,12 +119,7 @@ def admit_filtered(
                             entry,
                             prime=complex_value.prime,
                         )
-                    except (
-                        AttributeError,
-                        TypeError,
-                        ValidationError,
-                        ValueError,
-                    ) as exc:
+                    except (AttributeError, TypeError, ValidationError, ValueError) as exc:
                         raise _fail(
                             ("filtration", level_index, degree_index),
                             "filtered_chain_complex.entry_grammar_invalid",

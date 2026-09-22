@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from fractions import Fraction
 
+from pydantic import ValidationError
+
 from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -117,7 +119,7 @@ def admit_filtered(
                             entry,
                             prime=complex_value.prime,
                         )
-                    except Exception as exc:
+                    except (AttributeError, TypeError, ValidationError, ValueError) as exc:
                         raise _fail(
                             ("filtration", level_index, degree_index),
                             "filtered_chain_complex.entry_grammar_invalid",

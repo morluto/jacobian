@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from fractions import Fraction
 from typing import Any, Self
 
-from pydantic import model_validator
+from pydantic import ValidationError, model_validator
 
 from jacobian._exact import CanonicalRational
 from jacobian._execution import (
@@ -428,7 +428,7 @@ def _require_polynomial_matrix(matrix: object) -> RationalPolynomialMatrix:
         return RationalPolynomialMatrix.model_validate(
             matrix.model_dump(warnings="none")
         )
-    except Exception as exc:
+    except (AttributeError, TypeError, ValidationError, ValueError) as exc:
         raise OperationDomainValidationError(
             location=("matrix",),
             code="matrix.polynomial_smith_domain",

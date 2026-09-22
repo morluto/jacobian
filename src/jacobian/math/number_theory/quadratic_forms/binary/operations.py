@@ -74,7 +74,7 @@ def _convert_reduction_output(
         return raw_reduction
     except OperationBackendError:
         raise
-    except Exception as exc:
+    except (ArithmeticError, AttributeError, TypeError, ValueError) as exc:
         raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT) from exc
 
 
@@ -85,7 +85,7 @@ def _reduce_checked(
         return _convert_reduction_output(form, _reduce(form.a, form.b, form.c))
     except OperationBackendError:
         raise
-    except Exception as exc:
+    except (ArithmeticError, AttributeError, TypeError, ValueError) as exc:
         raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT) from exc
 
 

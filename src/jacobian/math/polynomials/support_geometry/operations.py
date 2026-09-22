@@ -402,7 +402,7 @@ def _require_convex_membership_result(
         return lambdas
     except OperationBackendError:
         raise
-    except Exception as exc:
+    except (ArithmeticError, AttributeError, TypeError, ValueError) as exc:
         raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT) from exc
 
 
@@ -435,7 +435,7 @@ def _matrix_rank(matrix: list[list[int]]) -> int:
         return 0
     try:
         from flint import fmpz_mat
-    except Exception as exc:
+    except (ImportError, ModuleNotFoundError) as exc:
         raise OperationBackendError(BackendFailureReason.INITIALIZATION) from exc
     try:
         raw_rank = fmpz_mat(matrix).rank()
@@ -447,7 +447,7 @@ def _matrix_rank(matrix: list[list[int]]) -> int:
         return rank
     except OperationBackendError:
         raise
-    except Exception as exc:
+    except (ArithmeticError, AttributeError, TypeError, ValueError) as exc:
         raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT) from exc
 
 

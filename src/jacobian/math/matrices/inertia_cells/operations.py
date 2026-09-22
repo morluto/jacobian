@@ -12,6 +12,8 @@ from dataclasses import dataclass
 from itertools import pairwise
 from typing import Any, TypedDict
 
+from pydantic import ValidationError
+
 from jacobian._exact import CanonicalRational
 from jacobian._execution import (
     RequestExecutionEnvelope,
@@ -212,7 +214,7 @@ def _require_inertia_inputs(
         validated_interval = ClosedRationalInterval.model_validate(
             interval.model_dump(warnings="none")
         )
-    except Exception as exc:
+    except (AttributeError, TypeError, ValidationError, ValueError) as exc:
         raise OperationDomainValidationError(
             location=(),
             code="matrix.inertia_cells_domain",

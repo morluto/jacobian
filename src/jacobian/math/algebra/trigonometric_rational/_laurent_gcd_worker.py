@@ -6,6 +6,8 @@ import json
 import sys
 from typing import Any
 
+from jacobian._worker_protocol import encode_worker_result_frame
+
 
 def _load_polynomial(ring: Any, payload: dict[str, list[Any]]) -> Any:
     from sympy import I, Rational
@@ -377,9 +379,9 @@ def main() -> int:
     if int(payload["axis"]) == 1:
         cancelled = _flint_cancel(payload["left"], payload["right"])
         if cancelled is not None:
-            json.dump(cancelled, sys.stdout, separators=(",", ":"))
+            sys.stdout.buffer.write(encode_worker_result_frame(cancelled))
             return 0
-    json.dump(_sympy_cancel(payload), sys.stdout, separators=(",", ":"))
+    sys.stdout.buffer.write(encode_worker_result_frame(_sympy_cancel(payload)))
     return 0
 
 

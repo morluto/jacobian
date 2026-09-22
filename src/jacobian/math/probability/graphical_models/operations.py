@@ -8,6 +8,8 @@ from fractions import Fraction
 from itertools import combinations, pairwise
 from math import gcd
 
+from pydantic import ValidationError
+
 from jacobian._exact import (
     CanonicalRational,
     require_bounded_rational,
@@ -673,7 +675,7 @@ def construct_bayes_net(
     # malformed caller values raise typed domain errors, not pydantic errors.
     try:
         network = BayesianNetwork.model_validate(network.model_dump())
-    except Exception as error:
+    except (AttributeError, TypeError, ValidationError, ValueError) as error:
         _reject("network_binding", f"network binding failed: {error}", "tables")
     for table in network.tables:
         _admit_factor_source(table.as_factor(), "cpt")

@@ -610,7 +610,7 @@ def _convert_crt_result(
         return residue, modulus
     except OperationBackendError:
         raise
-    except Exception as exc:
+    except (ArithmeticError, AttributeError, TypeError, ValueError) as exc:
         raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT) from exc
 
 
@@ -629,13 +629,13 @@ def chinese_remainder(
     _require_crt_admission(residues, moduli)
     try:
         from sympy.ntheory.modular import solve_congruence
-    except Exception as exc:
+    except (ImportError, ModuleNotFoundError) as exc:
         raise OperationBackendError(BackendFailureReason.INITIALIZATION) from exc
     try:
         result = solve_congruence(*zip(residues, moduli, strict=True), check=True)
     except OperationBackendError:
         raise
-    except Exception as exc:
+    except (ArithmeticError, AttributeError, TypeError, ValueError) as exc:
         raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT) from exc
     residue, modulus = _convert_crt_result(result, residues, moduli)
     return ChineseRemainderResult(residue=residue, modulus=modulus)

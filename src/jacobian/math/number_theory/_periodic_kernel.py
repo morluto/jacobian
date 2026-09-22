@@ -184,13 +184,13 @@ def _merge_congruences_checked(
     compatible = (left[0] - right[0]) % math.gcd(left[1], right[1]) == 0
     try:
         from sympy.ntheory.modular import solve_congruence
-    except Exception as exc:
+    except (ImportError, ModuleNotFoundError) as exc:
         raise OperationBackendError(BackendFailureReason.INITIALIZATION) from exc
     try:
         result = solve_congruence(left, right, check=False)
     except OperationBackendError:
         raise
-    except Exception as exc:
+    except (ArithmeticError, AttributeError, TypeError, ValueError) as exc:
         raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT) from exc
     if result is None:
         if compatible:
@@ -223,7 +223,7 @@ def _merge_congruences_checked(
         return residue, modulus
     except OperationBackendError:
         raise
-    except Exception as exc:
+    except (ArithmeticError, AttributeError, TypeError, ValueError) as exc:
         raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT) from exc
 
 

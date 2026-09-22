@@ -103,7 +103,7 @@ def _convert_canonicalization_output(  # noqa: C901
         )
     except OperationBackendError:
         raise
-    except Exception as exc:
+    except (AttributeError, KeyError, TypeError, ValueError) as exc:
         raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT) from exc
 
 
@@ -118,6 +118,8 @@ def _canonicalize_colored_graph(
     except OperationBackendError:
         raise
     except Exception as exc:
+        # The backend is an untrusted mathematical boundary: contradictory
+        # output must never escape as a caller-visible exception.
         raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT) from exc
     return _convert_canonicalization_output(graph, canonical_graph, relabeling)
 

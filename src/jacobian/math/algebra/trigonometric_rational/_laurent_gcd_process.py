@@ -18,7 +18,7 @@ from jacobian._execution import (
     request_checkpoint,
     request_execution,
 )
-from jacobian.canonical import CanonicalLimits, encode_strict_json, loads_strict_json
+from jacobian.canonical import encode_strict_json
 
 _WORKER_PATH = Path(__file__).resolve().with_name("_laurent_gcd_worker.py")
 # Admitted GCD output: 4,096 Laurent terms with 4,096-digit Gaussian
@@ -51,7 +51,7 @@ def cancel_common_factor(payload: dict[str, Any]) -> dict[str, Any]:
         )
     try:
         with TemporaryDirectory(prefix="jacobian-trig-laurent-gcd-") as worker_dir:
-            completed = process.run_bounded_process(
+            response = process.run_checked_worker_process(
                 [sys.executable, str(_WORKER_PATH)],
                 input_bytes=encoded,
                 timeout_seconds=remaining,
@@ -64,35 +64,21 @@ def cancel_common_factor(payload: dict[str, Any]) -> dict[str, Any]:
                     file_size_bytes=_STDOUT_BYTES,
                 ),
                 cwd=worker_dir,
+                decode_result=lambda value: value,
             )
+    except OperationExecutionCancelledError as exc:
+        raise OperationExecutionCancelledError(
+            "trigonometric Laurent GCD cancelled during the worker"
+        ) from exc
+    except OperationExecutionTimeoutError as exc:
+        raise OperationExecutionTimeoutError(
+            "trigonometric Laurent GCD deadline expired during the worker"
+        ) from exc
     except OSError as exc:
         raise RuntimeError(
             "bounded trigonometric Laurent GCD worker could not start"
         ) from exc
-    if completed.cancelled:
-        raise OperationExecutionCancelledError(
-            "trigonometric Laurent GCD cancelled during the worker"
-        )
-    if completed.timed_out:
-        raise OperationExecutionTimeoutError(
-            "trigonometric Laurent GCD deadline expired during the worker"
-        )
-    if (
-        completed.stdout_exceeded
-        or completed.stderr_exceeded
-        or completed.returncode != 0
-    ):
-        raise RuntimeError(
-            "bounded trigonometric Laurent GCD worker did not establish a result"
-        )
     request_checkpoint("after trigonometric Laurent GCD")
-    response = loads_strict_json(
-        completed.stdout,
-        limits=CanonicalLimits(
-            max_input_bytes=_STDOUT_BYTES,
-            max_output_bytes=_STDOUT_BYTES,
-        ),
-    )
     request_checkpoint("after trigonometric Laurent GCD decoding")
     if not isinstance(response, dict):
         raise RuntimeError(

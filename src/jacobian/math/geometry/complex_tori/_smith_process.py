@@ -10,16 +10,12 @@ from tempfile import TemporaryDirectory
 from time import monotonic
 
 from jacobian._execution import (
-    OperationExecutionCancelledError,
     OperationExecutionTimeoutError,
     request_checkpoint,
 )
 from jacobian.canonical import (
-    CanonicalizationError,
-    CanonicalLimits,
     encode_strict_json,
     format_canonical_integer,
-    loads_strict_json,
     parse_canonical_integer,
 )
 from jacobian.math.matrices.values import IntegerMatrix, SmithNormalForm
@@ -48,13 +44,21 @@ def _smith_stdout_limit(matrix: IntegerMatrix) -> int:
     scalar_characters = factor_digits + 1  # optional sign
     matrix_bytes = 2 + max(rows - 1, 0)
     matrix_bytes += rows * (2 + max(columns - 1, 0) + columns * (scalar_characters + 2))
-    return len(b'{"normal_form":,"request_digest":""}') + matrix_bytes + 64
+    # Checked framing adds a result envelope and newline to the canonical
+    # projection; retain generous punctuation headroom for that private edge.
+    return len(b'{"normal_form":,"request_digest":""}') + matrix_bytes + 4096
 
 
 def _require_active(deadline: float, phase: str) -> None:
     request_checkpoint(phase)
     if monotonic() >= deadline:
         raise OperationExecutionTimeoutError(f"complex-torus deadline expired {phase}")
+
+
+def _decode_smith_result(value: object) -> dict[str, object]:
+    if not isinstance(value, dict):
+        raise ValueError("complex-torus Smith result must be an object")
+    return value
 
 
 def smith_normal_form_killable(
@@ -66,7 +70,7 @@ def smith_normal_form_killable(
 
     from jacobian.process import (
         ProcessResourceLimits,
-        run_bounded_process,
+        run_checked_worker_process,
         worker_environment,
     )
 
@@ -86,7 +90,7 @@ def smith_normal_form_killable(
             "complex-torus deadline expired before alternating Smith kernel"
         )
     with TemporaryDirectory(prefix="jacobian-riemann-smith-") as directory:
-        completed = run_bounded_process(
+        response = run_checked_worker_process(
             [sys.executable, str(_SMITH_WORKER)],
             input_bytes=payload,
             timeout_seconds=remaining,
@@ -99,26 +103,9 @@ def smith_normal_form_killable(
                 file_size_bytes=1024 * 1024,
             ),
             cwd=directory,
+            decode_result=_decode_smith_result,
         )
-    if completed.cancelled:
-        raise OperationExecutionCancelledError(
-            "complex-torus request cancelled during alternating Smith kernel"
-        )
-    if completed.timed_out:
-        raise OperationExecutionTimeoutError(
-            "complex-torus deadline expired during alternating Smith kernel"
-        )
-    if (
-        completed.stdout_exceeded
-        or completed.stderr_exceeded
-        or completed.returncode != 0
-    ):
-        raise RuntimeError("bounded alternating Smith worker did not return a form")
     try:
-        response = loads_strict_json(
-            completed.stdout,
-            limits=CanonicalLimits(max_input_bytes=stdout_limit),
-        )
         if response["request_digest"] != hashlib.sha256(payload).hexdigest():
             raise ValueError("worker request digest mismatch")
         raw_normal_form = response["normal_form"]
@@ -137,7 +124,7 @@ def smith_normal_form_killable(
                     raise ValueError("worker integer is not canonical")
                 decoded_row.append(decoded)
             normal_form.append(decoded_row)
-    except (KeyError, TypeError, ValueError, CanonicalizationError) as exc:
+    except (KeyError, TypeError, ValueError) as exc:
         raise RuntimeError(
             "bounded alternating Smith worker returned malformed data"
         ) from exc

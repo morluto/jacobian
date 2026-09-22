@@ -5,9 +5,9 @@ from __future__ import annotations
 import hashlib
 import sys
 
+from jacobian._worker_protocol import encode_worker_result_frame
 from jacobian.canonical import (
     CanonicalLimits,
-    encode_strict_json,
     format_canonical_integer,
     loads_strict_json,
     parse_canonical_integer,
@@ -34,7 +34,7 @@ def main() -> None:
     matrix = tuple(tuple(_decode_integer(value) for value in row) for row in entries)
     normal_form = integer_smith_normal_form(matrix)
     sys.stdout.buffer.write(
-        encode_strict_json(
+        encode_worker_result_frame(
             {
                 "request_digest": hashlib.sha256(input_bytes).hexdigest(),
                 "normal_form": [

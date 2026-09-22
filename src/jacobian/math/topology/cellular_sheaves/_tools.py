@@ -9,6 +9,9 @@ from jacobian.math.topology.cellular_sheaves._models import (
     SheafCohomologyRequest,
     SheafCohomologyResult,
 )
+from jacobian.math.topology.cellular_sheaves.extensions_tools import (
+    TOOLS as EXTENSION_TOOLS,
+)
 from jacobian.math.topology.cellular_sheaves.operations import (
     from_cover_maps,
     sheaf_cohomology,
@@ -94,7 +97,7 @@ def _identity_cover_maps() -> list[dict[str, object]]:
     ]
 
 
-TOOLS: MathTools = (
+TOOLS: MathTools = (*EXTENSION_TOOLS,
     MathTool(
         operation_id="cellular_sheaf.cohomology.compute",
         title="Compute cellular sheaf cohomology with representative cocycles",

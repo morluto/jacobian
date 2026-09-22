@@ -89,6 +89,38 @@ def test_groebner_shirshov_checks_reverse_ordered_overlap_and_reaches_fixed_poin
     )
 
 
+def test_groebner_shirshov_preflights_composition_coefficient_growth() -> None:
+    large = 10**63
+    first = FreeAlgebraPolynomial(
+        alphabet=("a", "b", "c"),
+        terms=(
+            FreeAlgebraTerm(coefficient=_q(large), word=("a", "b")),
+            FreeAlgebraTerm(coefficient=_q(1), word=("a",)),
+        ),
+    )
+    second = FreeAlgebraPolynomial(
+        alphabet=("a", "b", "c"),
+        terms=(
+            FreeAlgebraTerm(
+                coefficient=CanonicalRational(num=1, den=large),
+                word=("b", "c"),
+            ),
+            FreeAlgebraTerm(coefficient=_q(1), word=("b",)),
+        ),
+    )
+    ideal = FreeAlgebraIdeal(
+        alphabet=("a", "b", "c"),
+        generators=(first, second),
+        side="two-sided",
+    )
+
+    with pytest.raises(
+        OperationResourceAdmissionError,
+        match="coefficient multiplication exceeds",
+    ):
+        groebner_shirshov_through_degree(ideal, 3)
+
+
 def test_koszul_cycle_and_boundary_dimensions_follow_chain_degrees() -> None:
     algebra = FiniteCommutativeAlgebra(basis=("1",), multiplication=(((_q(1),),),))
     module = BasedFiniteModule(algebra=algebra, basis=("m",), action=(((_q(1),),),))

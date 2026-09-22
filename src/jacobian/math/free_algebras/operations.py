@@ -13,6 +13,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from fractions import Fraction
 from itertools import product
+from math import gcd
 from typing import Any
 
 from jacobian._exact import CanonicalRational, canonical_rational_component_digits
@@ -355,6 +356,69 @@ def _leading(value: FreeAlgebraPolynomial) -> tuple[tuple[str, ...], Fraction] |
     return term.word, term.coefficient.as_fraction()
 
 
+_MAX_GS_COEFFICIENT_COMPONENT = 10**MAX_FREE_ALGEBRA_COEFFICIENT_DIGITS - 1
+
+
+def _component_product_fits(left: int, right: int) -> bool:
+    left = abs(left)
+    right = abs(right)
+    return not left or not right or left <= _MAX_GS_COEFFICIENT_COMPONENT // right
+
+
+def _require_product_fits(left: Fraction, right: Fraction) -> None:
+    if not left or not right:
+        return
+    left_num = abs(left.numerator)
+    right_num = abs(right.numerator)
+    left_den = left.denominator
+    right_den = right.denominator
+    cancel_left = gcd(left_num, right_den)
+    cancel_right = gcd(right_num, left_den)
+    if not (
+        _component_product_fits(left_num // cancel_left, right_num // cancel_right)
+        and _component_product_fits(left_den // cancel_right, right_den // cancel_left)
+    ):
+        _reject_resource(
+            ("ideal", "generators"),
+            "gs_coefficient_growth_budget",
+            "GS coefficient multiplication exceeds the admitted exact-digit envelope",
+        )
+
+
+def _require_difference_fits(left: Fraction, right: Fraction) -> None:
+    if left == right:
+        return
+    common = gcd(left.denominator, right.denominator)
+    left_multiplier = right.denominator // common
+    right_multiplier = left.denominator // common
+    if not (
+        _component_product_fits(left.numerator, left_multiplier)
+        and _component_product_fits(right.numerator, right_multiplier)
+        and _component_product_fits(left.denominator, left_multiplier)
+    ):
+        _reject_resource(
+            ("ideal", "generators"),
+            "gs_coefficient_growth_budget",
+            "GS coefficient subtraction exceeds the admitted exact-digit envelope",
+        )
+    left_component = left.numerator * left_multiplier
+    right_component = right.numerator * right_multiplier
+    if (left_component < 0) != (right_component < 0) and abs(
+        left_component
+    ) > _MAX_GS_COEFFICIENT_COMPONENT - abs(right_component):
+        _reject_resource(
+            ("ideal", "generators"),
+            "gs_coefficient_growth_budget",
+            "GS coefficient subtraction exceeds the admitted exact-digit envelope",
+        )
+
+
+def _admitted_quotient(numerator: Fraction, denominator: Fraction) -> Fraction:
+    reciprocal = Fraction(denominator.denominator, denominator.numerator)
+    _require_product_fits(numerator, reciprocal)
+    return numerator * reciprocal
+
+
 def _subtract(
     left: Mapping[tuple[str, ...], Fraction],
     right: Mapping[tuple[str, ...], Fraction],
@@ -362,7 +426,11 @@ def _subtract(
 ) -> dict[tuple[str, ...], Fraction]:
     result = dict(left)
     for word, coefficient in right.items():
-        result[word] = result.get(word, Fraction(0)) - scale * coefficient
+        _require_product_fits(scale, coefficient)
+        scaled = scale * coefficient
+        existing = result.get(word, Fraction(0))
+        _require_difference_fits(existing, scaled)
+        result[word] = existing - scaled
         if not result[word]:
             del result[word]
     return result
@@ -399,7 +467,7 @@ def _normal_form(
                 for start in range(len(word) - len(leading_word) + 1):
                     if word[start : start + len(leading_word)] != leading_word:
                         continue
-                    factor = current[word] / leading_coefficient
+                    factor = _admitted_quotient(current[word], leading_coefficient)
                     replacement = _multiply_monomial(
                         reducer, word[:start], word[start + len(leading_word) :]
                     )
@@ -435,8 +503,9 @@ def _compositions(
         if lw[-overlap:] == rw[:overlap]:
             first = _multiply_monomial(left, (), rw[overlap:])
             second = _multiply_monomial(right, lw[:-overlap], ())
+            scale = _admitted_quotient(lc, rc)
             candidate = _encode(
-                left.alphabet, _subtract(_map(first), _map(second), lc / rc)
+                left.alphabet, _subtract(_map(first), _map(second), scale)
             )
             if max((len(term.word) for term in candidate.terms), default=0) <= degree:
                 values.append(candidate)
@@ -450,8 +519,9 @@ def _compositions(
         )
         first = left
         second = _multiply_monomial(right, lw[:start], lw[start + len(rw) :])
+        scale = _admitted_quotient(lc, rc)
         values.append(
-            _encode(left.alphabet, _subtract(_map(first), _map(second), lc / rc))
+            _encode(left.alphabet, _subtract(_map(first), _map(second), scale))
         )
     return tuple(values)
 

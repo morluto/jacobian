@@ -37,6 +37,7 @@ from jacobian.math.topology.cubical_complexes._models import CubicalCell
 from jacobian.math.topology.cubical_complexes.extensions import (
     CubicalTriangulationRequest,
     RelativeCubicalHomologyRequest,
+    boundary,
     relative_homology,
     triangulate,
 )
@@ -144,6 +145,21 @@ def test_homology_manifold_rejects_impure_empty_links_and_composite_fields() -> 
                 prime=4,
             )
         )
+
+
+def test_boundary_includes_lower_dimensional_maximal_cells() -> None:
+    square = CubicalCell(intervals=((0, 1), (0, 1)))
+    disjoint_edge = CubicalCell(intervals=((3, 4), (0, 0)))
+
+    result = boundary((square, disjoint_edge))
+
+    assert result.maximal_cells == (square, disjoint_edge)
+    edge_terms = tuple(term for term in result.terms if term.source == disjoint_edge)
+    assert tuple((term.face, term.coefficient) for term in edge_terms) == (
+        (CubicalCell(intervals=((4, 4), (0, 0))), 1),
+        (CubicalCell(intervals=((3, 3), (0, 0))), -1),
+    )
+    assert {term.face for term in edge_terms}.issubset(result.boundary_cells)
 
 
 def test_relative_homology_rejects_composite_modulus_before_rank() -> None:

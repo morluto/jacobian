@@ -94,14 +94,27 @@ class CubicalTriangulationResult(StrictModel):
         return self
 
 
+def _strictly_contains(container: CubicalCell, cell: CubicalCell) -> bool:
+    return container != cell and all(
+        outer_start <= inner_start and inner_end <= outer_end
+        for (outer_start, outer_end), (inner_start, inner_end) in zip(
+            container.intervals, cell.intervals, strict=True
+        )
+    )
+
+
 def boundary(cells: tuple[CubicalCell, ...]) -> CubicalBoundaryResult:
     complex_, source = _canonical_complex(cells)
     maximal = tuple(
         cell
         for cell in source
-        if cell.dimension == max(item.dimension for item in source)
+        if not any(
+            candidate.dimension > cell.dimension and _strictly_contains(candidate, cell)
+            for candidate in source
+        )
     )
-    # use the canonical top-dimensional source cells; incidence cancellation is exact
+    # Use every inclusion-maximal source cell.  A non-pure complex can have
+    # maximal cells in several dimensions; incidence cancellation remains exact.
     coefficients: dict[CubicalCell, int] = {}
     terms = []
     for cell in maximal:

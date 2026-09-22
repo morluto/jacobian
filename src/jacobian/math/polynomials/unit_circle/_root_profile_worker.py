@@ -7,6 +7,8 @@ import sys
 from itertools import pairwise
 from typing import Any
 
+from jacobian._worker_protocol import encode_worker_result_frame
+
 
 def _signature(matrix: list[list[int]]) -> int:
     from sympy.polys.domains import ZZ
@@ -116,9 +118,7 @@ def main() -> int:
         response = _run(payload)
     except Exception:
         return 1
-    sys.stdout.buffer.write(
-        json.dumps(response, sort_keys=True, separators=(",", ":")).encode("utf-8")
-    )
+    sys.stdout.buffer.write(encode_worker_result_frame(response))
     return 0
 
 

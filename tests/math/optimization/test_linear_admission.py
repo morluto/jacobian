@@ -22,6 +22,11 @@ from jacobian.math.optimization._models import (
     MAX_RATIONAL_DIGITS,
     StandardFormRationalLinearProgram,
 )
+from jacobian.math.optimization._ppl import ExactLinearOutcome
+from jacobian.math.optimization._ppl_process import (
+    _StandardFormData,
+    solve_standard_form_batch_process,
+)
 
 
 @pytest.mark.parametrize("sign", [-1, 1])
@@ -159,6 +164,48 @@ def test_native_general_deadline_covers_normalization_and_respects_outer_deadlin
         bind_request_deadline(start - 1)
         with pytest.raises(OperationExecutionTimeoutError):
             general_linear_program(program)
+
+
+def test_disconnected_components_share_one_worker_launch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    order = 8
+    program = StandardFormRationalLinearProgram.model_validate_json(
+        json.dumps(
+            {
+                "variables": [f"x{i}" for i in range(order)],
+                "objective": [q(1)] * order,
+                "coefficients": [
+                    [q(int(row == column)) for column in range(order)]
+                    for row in range(order)
+                ],
+                "rhs": [q(1)] * order,
+            }
+        )
+    )
+    original = solve_standard_form_batch_process
+    launches: list[int] = []
+
+    def counted(
+        programs: tuple[_StandardFormData, ...],
+        *,
+        maximum_result_digits: int,
+    ) -> tuple[ExactLinearOutcome, ...]:
+        launches.append(len(programs))
+        return original(programs, maximum_result_digits=maximum_result_digits)
+
+    monkeypatch.setattr(
+        linear_operations,
+        "solve_standard_form_batch_process",
+        counted,
+    )
+
+    result = linear_program(program)
+
+    assert result.status == "OPTIMAL"
+    assert result.primal_objective is not None
+    assert result.primal_objective.as_fraction() == order
+    assert launches == [order]
 
 
 def test_rank_zero_maximum_shape_executes_without_empty_matrix_backend() -> None:

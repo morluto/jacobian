@@ -562,7 +562,7 @@ def isolate_backend_real_value(
     )
 
     raw = run_selected_image_worker(request, deadline=deadline)
-    response = SELECTED_IMAGE_WORKER_RESPONSE_ADAPTER.validate_json(raw, strict=True)
+    response = SELECTED_IMAGE_WORKER_RESPONSE_ADAPTER.validate_python(raw, strict=True)
     if response.kind == "error":
         raise RuntimeError(response.message)
     return response.order, response.isolating_interval

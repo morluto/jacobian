@@ -6,6 +6,7 @@ from fractions import Fraction
 from typing import Any, Literal
 
 from jacobian._exact import CanonicalRational
+from jacobian._worker_protocol import encode_worker_result_frame
 from jacobian.canonical import parse_canonical_integer
 from jacobian.math.number_theory.algebraic_numbers.real import RationalIsolatingInterval
 from jacobian.math.number_theory.number_fields._real_embedding_order_protocol import (
@@ -166,7 +167,9 @@ def main() -> int:
         strict=True,
     )
     response = compute_selected_image_isolation(request)
-    __import__("sys").stdout.write(response.model_dump_json())
+    __import__("sys").stdout.buffer.write(
+        encode_worker_result_frame(response.model_dump(mode="json"))
+    )
     return 0
 
 

@@ -24,16 +24,22 @@ _WORKER_STDOUT_BYTES = 128 * 1024
 _WORKER_STDERR_BYTES = 64 * 1024
 
 
+def _decode_selected_image_result(value: object) -> dict[str, object]:
+    if not isinstance(value, dict):
+        raise ValueError("selected-image worker result must be an object")
+    return value
+
+
 def run_selected_image_worker(
     request: SelectedImageWorkerRequest,
     *,
     deadline: float,
-) -> bytes:
+) -> dict[str, object]:
     """Run one isolated selected-image isolation computation."""
 
     from jacobian.process import (
         ProcessResourceLimits,
-        run_bounded_process,
+        run_checked_worker_process,
         worker_environment,
     )
 
@@ -45,7 +51,7 @@ def run_selected_image_worker(
 
     try:
         with TemporaryDirectory(prefix="jacobian-selected-image-") as worker_directory:
-            completed = run_bounded_process(
+            response = run_checked_worker_process(
                 [sys.executable, str(_WORKER)],
                 input_bytes=request.model_dump_json().encode("utf-8"),
                 timeout_seconds=timeout_seconds,
@@ -58,28 +64,16 @@ def run_selected_image_worker(
                     file_size_bytes=_WORKER_FILE_SIZE_BYTES,
                 ),
                 cwd=worker_directory,
+                decode_result=_decode_selected_image_result,
             )
+    except (OperationExecutionCancelledError, OperationExecutionTimeoutError):
+        raise
     except OSError as exc:
         raise RuntimeError(
             "bounded selected-image worker could not be started"
         ) from exc
 
-    if completed.cancelled:
-        raise OperationExecutionCancelledError(
-            "request cancelled during selected-image isolation"
-        )
-    if completed.timed_out:
-        raise OperationExecutionTimeoutError(
-            "request deadline expired during selected-image isolation"
-        )
-    if (
-        completed.stdout_exceeded
-        or completed.stderr_exceeded
-        or completed.returncode != 0
-    ):
-        raise RuntimeError("bounded selected-image worker did not establish a result")
-
-    return completed.stdout
+    return response
 
 
 __all__ = [

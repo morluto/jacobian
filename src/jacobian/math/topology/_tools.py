@@ -72,6 +72,7 @@ from jacobian.math.topology.operations import (
 from jacobian.math.topology.operations import (
     shelling_check as _shelling_check,
 )
+from jacobian.math.topology.release_tools import TOOLS as RELEASE_TOOLS
 
 __all__ = ["TOOLS"]
 
@@ -638,6 +639,7 @@ _boundary_tool = MathTool(
 
 TOOLS: MathTools = (
     *TOPOLOGY_OPERATIONS,
+    *RELEASE_TOOLS,
     _cone_tool,
     _boundary_tool,
     _f_vector_tool,

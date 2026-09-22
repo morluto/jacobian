@@ -1,0 +1,268 @@
+"""Sections, restriction queries, and natural morphisms of finite sheaves."""
+
+from __future__ import annotations
+
+from typing import Any
+
+from pydantic import Field
+
+from jacobian._models import StrictModel
+from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.topology.cellular_sheaves._models import (
+    FiniteCellularSheaf,
+    SheafRestriction,
+)
+from jacobian.math.topology.cellular_sheaves.operations import sheaf_cohomology
+
+
+class SheafSectionsRequest(StrictModel):
+    sheaf: FiniteCellularSheaf
+
+
+class SheafSectionsResult(StrictModel):
+    sheaf: FiniteCellularSheaf
+    dimension: int
+    basis_coordinates: tuple[tuple[str, ...], ...]
+    cochain_dimension: int
+
+
+class SheafRestrictionRequest(StrictModel):
+    sheaf: FiniteCellularSheaf
+    source: tuple[str, ...]
+    target: tuple[str, ...]
+
+
+class SheafRestrictionResult(StrictModel):
+    sheaf: FiniteCellularSheaf
+    restriction: SheafRestriction
+
+
+ComponentKey = str | tuple[str, ...]
+Component = tuple[ComponentKey, tuple[tuple[str, ...], ...]]
+
+
+class SheafMorphismRequest(StrictModel):
+    source: FiniteCellularSheaf
+    target: FiniteCellularSheaf
+    # Tuple keys are the unambiguous canonical simplex axis.  A dotted string
+    # remains accepted for legacy, unambiguous axes only.
+    components: tuple[Component, ...] = Field(
+        default=(),
+        description=(
+            "Components in canonical stalk order; use simplex tuple keys when "
+            "vertex labels contain dots, because dotted string keys are ambiguous."
+        ),
+    )
+
+
+class SheafMorphismResult(StrictModel):
+    source: FiniteCellularSheaf
+    target: FiniteCellularSheaf
+    components: tuple[Component, ...]
+    natural: bool
+    obstruction: str | None = None
+
+
+def sections(sheaf: FiniteCellularSheaf) -> SheafSectionsResult:
+    cohomology = sheaf_cohomology(sheaf)
+    group = cohomology.groups[0]
+    return SheafSectionsResult(
+        sheaf=sheaf,
+        dimension=group.betti_number,
+        basis_coordinates=group.cocycle_representatives,
+        cochain_dimension=group.cochain_dimension,
+    )
+
+
+def restriction(
+    sheaf: FiniteCellularSheaf, source: tuple[str, ...], target: tuple[str, ...]
+) -> SheafRestrictionResult:
+    source = tuple(sorted(source))
+    target = tuple(sorted(target))
+    for item in (*sheaf.cover_restrictions, *sheaf.derived_restrictions):
+        if item.source == source and item.target == target:
+            return SheafRestrictionResult(sheaf=sheaf, restriction=item)
+    raise OperationDomainValidationError(
+        location=("source", "target"),
+        code="cellular_sheaf.restriction_missing",
+        message="the requested comparable restriction is not present",
+    )
+
+
+def _complete_diagram(sheaf: FiniteCellularSheaf, *, role: str) -> None:
+    faces = sheaf.canonical_face_order
+    expected = {
+        (source, target)
+        for source in faces
+        for target in faces
+        if len(target) > len(source) and set(source).issubset(target)
+    }
+    actual = {
+        (restriction.source, restriction.target)
+        for restriction in (*sheaf.cover_restrictions, *sheaf.derived_restrictions)
+    }
+    if actual != expected:
+        raise OperationDomainValidationError(
+            location=(role,),
+            code="cellular_sheaf.morphism_incomplete_diagram",
+            message="both sheaves must carry every canonical comparable restriction",
+        )
+
+
+def _mat(entry: str, prime: int | None) -> Any:
+    if prime is not None:
+        return int(entry) % prime
+    if "/" in entry:
+        a, b = entry.split("/", 1)
+        from fractions import Fraction
+
+        return Fraction(int(a), int(b))
+    from fractions import Fraction
+
+    return Fraction(int(entry))
+
+
+def _mul(a: Any, b: Any, p: int | None) -> Any:
+    if not a:
+        return []
+    if not b:
+        return [[] for _ in a]
+    cols = list(zip(*b, strict=False))
+    result = []
+    for row in a:
+        result_row = []
+        for col in cols:
+            value = sum(x * y for x, y in zip(row, col, strict=False))
+            result_row.append(value % p if p is not None else value)
+        result.append(result_row)
+    return result
+
+
+def _resolve_component_key(
+    key: ComponentKey, simplices: tuple[tuple[str, ...], ...]
+) -> tuple[str, ...]:
+    if isinstance(key, tuple):
+        return key
+    matches = tuple(simplex for simplex in simplices if ".".join(simplex) == key)
+    if len(matches) != 1:
+        raise OperationDomainValidationError(
+            location=("components",),
+            code="cellular_sheaf.morphism_component_axis",
+            message=(
+                "dotted component keys must identify exactly one stalk; use "
+                "canonical simplex tuple keys when labels contain dots"
+            ),
+        )
+    return matches[0]
+
+
+def _transpose(a: Any) -> Any:
+    return list(map(list, zip(*a, strict=False))) if a else []
+
+
+def morphism(
+    source: FiniteCellularSheaf,
+    target: FiniteCellularSheaf,
+    components: tuple[Component, ...],
+) -> SheafMorphismResult:
+    _complete_diagram(source, role="source")
+    _complete_diagram(target, role="target")
+    if (
+        source.complex != target.complex
+        or source.coefficient_field != target.coefficient_field
+        or source.prime != target.prime
+    ):
+        raise OperationDomainValidationError(
+            location=("target",),
+            code="cellular_sheaf.morphism.parent_mismatch",
+            message="sheaf morphisms require one complex and coefficient field",
+        )
+    p = source.prime
+    source_axis = source.canonical_face_order
+    normalized_keys = tuple(
+        _resolve_component_key(key, source_axis) for key, _matrix in components
+    )
+    expected = source_axis
+    if normalized_keys != expected:
+        raise OperationDomainValidationError(
+            location=("components",),
+            code="cellular_sheaf.morphism_component_axis",
+            message="one component in canonical stalk order is required",
+        )
+    given = {
+        key: matrix
+        for key, (_raw_key, matrix) in zip(normalized_keys, components, strict=True)
+    }
+    stalk = {s.simplex: s for s in source.stalks}
+    target_stalk = {s.simplex: s for s in target.stalks}
+    for key in expected:
+        matrix = given[key]
+        rows = len(target_stalk[key].basis)
+        cols = len(stalk[key].basis)
+        if len(matrix) != rows or any(len(row) != cols for row in matrix):
+            raise OperationDomainValidationError(
+                location=("components", ".".join(key)),
+                code="cellular_sheaf.morphism_shape",
+                message="component axes do not match stalk ranks",
+            )
+
+    # Admit every component before inspecting the diagram.  In particular, a
+    # sheaf on a point has no restriction loop in which to discover a bad
+    # scalar, but its component is still part of the exact morphism contract.
+    try:
+        admitted_components = {
+            key: [[_mat(value, p) for value in row] for row in given[key]]
+            for key in expected
+        }
+        source_restrictions = (
+            *source.cover_restrictions,
+            *source.derived_restrictions,
+        )
+        target_restrictions = {
+            (item.source, item.target): item
+            for item in (*target.cover_restrictions, *target.derived_restrictions)
+        }
+        for restriction in source_restrictions:
+            a = restriction.source
+            b = restriction.target
+            left = _mul(
+                admitted_components[b],
+                [[_mat(x, p) for x in row] for row in restriction.entries],
+                p,
+            )
+            tr = target_restrictions[(restriction.source, restriction.target)]
+            right = _mul(
+                [[_mat(x, p) for x in row] for row in tr.entries],
+                admitted_components[a],
+                p,
+            )
+            if left != right:
+                return SheafMorphismResult(
+                    source=source,
+                    target=target,
+                    components=components,
+                    natural=False,
+                    obstruction=f"naturality fails on {a} < {b}",
+                )
+    except (KeyError, TypeError, ValueError, ZeroDivisionError, OverflowError) as error:
+        raise OperationDomainValidationError(
+            location=("components",),
+            code="cellular_sheaf.morphism_scalar_invalid",
+            message="sheaf components and restrictions must contain valid exact scalars",
+        ) from error
+    return SheafMorphismResult(
+        source=source, target=target, components=components, natural=True
+    )
+
+
+__all__ = [
+    "SheafMorphismRequest",
+    "SheafMorphismResult",
+    "SheafRestrictionRequest",
+    "SheafRestrictionResult",
+    "SheafSectionsRequest",
+    "SheafSectionsResult",
+    "morphism",
+    "restriction",
+    "sections",
+]

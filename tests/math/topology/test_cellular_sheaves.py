@@ -23,6 +23,7 @@ from jacobian.math.topology.cellular_sheaves._models import (
     CoverRestrictionMatrix,
     FromCoverMapsRequest,
 )
+from jacobian.math.topology.cellular_sheaves.extensions import morphism
 
 OPERATION_ID = "cellular_sheaf.from_cover_maps.compute"
 
@@ -346,6 +347,35 @@ class TestDefiningInvariant:
             assert derived[(source, target)] == composites[0]
             replayed += 1
         assert replayed == 3
+
+
+class TestMorphismNaturality:
+    def test_derived_restriction_is_checked_for_native_and_json_values(self) -> None:
+        result = _native(_rank_one_request(_TRIANGLE))
+        sheaf = result.sheaf
+        assert sheaf is not None
+        components = tuple((face, (("1",),)) for face in sheaf.canonical_face_order)
+        forged_derived = tuple(
+            restriction.model_copy(update={"entries": (("2",),)})
+            if index == 0
+            else restriction
+            for index, restriction in enumerate(sheaf.derived_restrictions)
+        )
+        native_forged = sheaf.model_copy(
+            update={"derived_restrictions": forged_derived}
+        )
+        assert morphism(sheaf, native_forged, components).natural is False
+
+        payload = sheaf.model_dump(mode="json")
+        payload["derived_restrictions"][0]["entries"] = [["2"]]
+        json_forged = FiniteCellularSheaf.model_validate(payload)
+        assert morphism(sheaf, json_forged, components).natural is False
+
+    def test_bad_component_scalar_is_rejected_on_a_point(self) -> None:
+        point = _native(_rank_one_request(canonical_complex(("a",), (("a",),)))).sheaf
+        assert point is not None
+        with pytest.raises(OperationDomainValidationError, match="exact scalars"):
+            morphism(point, point, ((("a",), (("bad",),)),))
 
 
 class TestNativeCatalogParity:

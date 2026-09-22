@@ -215,6 +215,7 @@ def _linear_program_admitted(
             for i in active_rows
         ),
         tuple(program.rhs[i].as_fraction() for i in active_rows),
+        maximum_result_digits=digits,
     )
     request_checkpoint("linear-program backend result")
     if outcome.status == "INFEASIBLE":

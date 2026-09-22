@@ -44,11 +44,12 @@ def _encode_fraction(value: Fraction) -> list[str]:
     ]
 
 
-def _decode_fraction(value: Any) -> Fraction:
+def _decode_fraction(value: Any, *, maximum_digits: int) -> Fraction:
     if (
         not isinstance(value, list)
         or len(value) != 2
         or not all(isinstance(item, str) for item in value)
+        or any(len(item.lstrip("-")) > maximum_digits for item in value)
     ):
         raise ValueError("PPL worker returned a malformed rational")
     result = Fraction(
@@ -62,13 +63,19 @@ def _decode_fraction(value: Any) -> Fraction:
     return result
 
 
-def _decode_vector(value: Any, *, length: int) -> tuple[Fraction, ...]:
+def _decode_vector(
+    value: Any, *, length: int, maximum_digits: int
+) -> tuple[Fraction, ...]:
     if not isinstance(value, list) or len(value) != length:
         raise ValueError("PPL worker returned a malformed vector")
-    return tuple(_decode_fraction(item) for item in value)
+    return tuple(
+        _decode_fraction(item, maximum_digits=maximum_digits) for item in value
+    )
 
 
-def _decoder(variables: int, equations: int) -> Callable[[object], ExactLinearOutcome]:
+def _decoder(
+    variables: int, equations: int, maximum_digits: int
+) -> Callable[[object], ExactLinearOutcome]:
     def decode(value: object) -> ExactLinearOutcome:
         if not isinstance(value, dict) or set(value) != {
             "protocol_version",
@@ -85,19 +92,29 @@ def _decoder(variables: int, equations: int) -> Callable[[object], ExactLinearOu
         if status == "OPTIMAL":
             return ExactLinearOutcome(
                 status=status,
-                point=_decode_vector(value["point"], length=variables),
-                dual=_decode_vector(value["dual"], length=equations),
+                point=_decode_vector(
+                    value["point"], length=variables, maximum_digits=maximum_digits
+                ),
+                dual=_decode_vector(
+                    value["dual"], length=equations, maximum_digits=maximum_digits
+                ),
             )
         if status == "INFEASIBLE":
             return ExactLinearOutcome(
                 status=status,
-                witness=_decode_vector(value["witness"], length=equations),
+                witness=_decode_vector(
+                    value["witness"], length=equations, maximum_digits=maximum_digits
+                ),
             )
         if status == "UNBOUNDED":
             return ExactLinearOutcome(
                 status=status,
-                point=_decode_vector(value["point"], length=variables),
-                ray=_decode_vector(value["ray"], length=variables),
+                point=_decode_vector(
+                    value["point"], length=variables, maximum_digits=maximum_digits
+                ),
+                ray=_decode_vector(
+                    value["ray"], length=variables, maximum_digits=maximum_digits
+                ),
             )
         raise ValueError("PPL worker returned an invalid status")
 
@@ -108,15 +125,12 @@ def solve_standard_form_process(
     objective: tuple[Fraction, ...],
     coefficients: tuple[tuple[Fraction, ...], ...],
     rhs: tuple[Fraction, ...],
+    *,
+    maximum_result_digits: int,
 ) -> ExactLinearOutcome:
     execution = current_request_execution()
     if execution is None or execution.deadline is None:
         raise RuntimeError("exact LP worker requires an owner-bound request deadline")
-    remaining = execution.deadline - monotonic()
-    if remaining <= 0:
-        raise OperationExecutionTimeoutError(
-            "linear-program deadline expired before PPL execution"
-        )
     payload = encode_strict_json(
         {
             "protocol_version": _PROTOCOL_VERSION,
@@ -129,6 +143,11 @@ def solve_standard_form_process(
     )
     try:
         with TemporaryDirectory(prefix="jacobian-ppl-") as worker_directory:
+            remaining = execution.deadline - monotonic()
+            if remaining <= 0:
+                raise OperationExecutionTimeoutError(
+                    "linear-program deadline expired before PPL execution"
+                )
             result = run_checked_worker_process(
                 [sys.executable, str(_WORKER)],
                 input_bytes=payload,
@@ -142,7 +161,7 @@ def solve_standard_form_process(
                     file_size_bytes=_FILE_SIZE_BYTES,
                 ),
                 cwd=worker_directory,
-                decode_result=_decoder(len(objective), len(rhs)),
+                decode_result=_decoder(len(objective), len(rhs), maximum_result_digits),
             )
     except (OperationExecutionCancelledError, OperationExecutionTimeoutError):
         raise

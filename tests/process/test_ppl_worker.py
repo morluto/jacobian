@@ -23,7 +23,9 @@ def test_ppl_worker_returns_exact_optimal_witness() -> None:
     objective, coefficients, rhs = _source()
     with request_execution(monotonic()):
         bind_request_deadline(monotonic() + 10)
-        result = _ppl_process.solve_standard_form_process(objective, coefficients, rhs)
+        result = _ppl_process.solve_standard_form_process(
+            objective, coefficients, rhs, maximum_result_digits=128
+        )
     assert result.status == "OPTIMAL"
     assert result.point == (Fraction(1),)
     assert result.dual == (Fraction(1),)
@@ -50,4 +52,68 @@ def test_ppl_worker_rejects_malformed_protocol_output(
     with request_execution(monotonic()):
         bind_request_deadline(monotonic() + 10)
         with pytest.raises(ValueError, match="malformed vector"):
-            _ppl_process.solve_standard_form_process(objective, coefficients, rhs)
+            _ppl_process.solve_standard_form_process(
+                objective, coefficients, rhs, maximum_result_digits=128
+            )
+
+
+def test_ppl_worker_bounds_rationals_before_integer_parsing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def oversized(*args: object, **kwargs: object) -> object:
+        decoder = cast(Callable[[object], object], kwargs["decode_result"])
+        return decoder(
+            {
+                "protocol_version": 1,
+                "status": "OPTIMAL",
+                "point": [["1" * 129, "1"]],
+                "dual": [["1", "1"]],
+                "witness": [],
+                "ray": [],
+            }
+        )
+
+    def unexpected_parse(value: str) -> int:
+        pytest.fail("an oversized rational must be rejected before integer parsing")
+
+    monkeypatch.setattr(_ppl_process, "run_checked_worker_process", oversized)
+    monkeypatch.setattr(_ppl_process, "parse_canonical_integer", unexpected_parse)
+    objective, coefficients, rhs = _source()
+    with request_execution(monotonic()):
+        bind_request_deadline(monotonic() + 10)
+        with pytest.raises(ValueError, match="malformed rational"):
+            _ppl_process.solve_standard_form_process(
+                objective, coefficients, rhs, maximum_result_digits=128
+            )
+
+
+def test_ppl_worker_recomputes_deadline_after_payload_encoding(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian._execution import OperationExecutionTimeoutError
+
+    encoded = False
+
+    def encode(value: object) -> bytes:
+        nonlocal encoded
+        encoded = True
+        return b"{}"
+
+    def unexpected_worker(*args: object, **kwargs: object) -> None:
+        pytest.fail("an expired request must not launch PPL")
+
+    objective, coefficients, rhs = _source()
+    started = monotonic()
+    deadline = started + 10
+    with request_execution(started):
+        bind_request_deadline(deadline)
+        monkeypatch.setattr(_ppl_process, "encode_strict_json", encode)
+        monkeypatch.setattr(_ppl_process, "monotonic", lambda: deadline + 1)
+        monkeypatch.setattr(
+            _ppl_process, "run_checked_worker_process", unexpected_worker
+        )
+        with pytest.raises(OperationExecutionTimeoutError, match="before PPL"):
+            _ppl_process.solve_standard_form_process(
+                objective, coefficients, rhs, maximum_result_digits=128
+            )
+    assert encoded

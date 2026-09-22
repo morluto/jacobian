@@ -179,10 +179,11 @@ def test_gl_natural_action_is_faithful_on_nonzero_vectors() -> None:
         group.generators, result.action.generators, strict=True
     ):
         for index, vector in enumerate(result.vectors):
-            image = tuple(
-                sum(matrix.entries[row][column] * vector[column] for column in range(2))
-                % 2
-                for row in range(2)
+            image = (
+                sum(matrix.entries[0][column] * vector[column] for column in range(2))
+                % 2,
+                sum(matrix.entries[1][column] * vector[column] for column in range(2))
+                % 2,
             )
             assert permutation[index] == positions[image]
 

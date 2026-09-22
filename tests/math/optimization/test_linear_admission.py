@@ -208,6 +208,25 @@ def test_disconnected_components_share_one_worker_launch(
     assert launches == [order]
 
 
+def test_first_infeasible_component_short_circuits_disconnected_batch() -> None:
+    program = StandardFormRationalLinearProgram.model_validate_json(
+        json.dumps(
+            {
+                "variables": ["x0", "x1"],
+                "objective": [q(1), q(1)],
+                "coefficients": [[q(1), q(0)], [q(0), q(1)]],
+                "rhs": [q(-1), q(1)],
+            }
+        )
+    )
+
+    result = linear_program(program)
+
+    assert result.status == "INFEASIBLE"
+    assert result.farkas_candidate is not None
+    assert result.farkas_candidate[0].as_fraction() > 0
+
+
 def test_rank_zero_maximum_shape_executes_without_empty_matrix_backend() -> None:
     program = StandardFormRationalLinearProgram.model_validate_json(
         json.dumps(

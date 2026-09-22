@@ -138,17 +138,26 @@ def _decoder(
         if value["protocol_version"] != _PROTOCOL_VERSION:
             raise ValueError("PPL worker returned an unsupported protocol version")
         outcomes = value["outcomes"]
-        if not isinstance(outcomes, list) or len(outcomes) != len(shapes):
+        if (
+            not isinstance(outcomes, list)
+            or not outcomes
+            or len(outcomes) > len(shapes)
+        ):
             raise ValueError("PPL worker returned a malformed outcome batch")
-        return tuple(
+        decoded = tuple(
             _decode_outcome(
                 outcome,
                 variables=variables,
                 equations=equations,
                 maximum_digits=maximum_digits,
             )
-            for outcome, (variables, equations) in zip(outcomes, shapes, strict=True)
+            for outcome, (variables, equations) in zip(outcomes, shapes, strict=False)
         )
+        if any(outcome.status == "INFEASIBLE" for outcome in decoded[:-1]) or (
+            len(decoded) < len(shapes) and decoded[-1].status != "INFEASIBLE"
+        ):
+            raise ValueError("PPL worker returned an invalid outcome batch prefix")
+        return decoded
 
     return decode
 
@@ -158,7 +167,7 @@ def solve_standard_form_batch_process(
     *,
     maximum_result_digits: int,
 ) -> tuple[ExactLinearOutcome, ...]:
-    """Solve admitted independent programs in one killable worker request."""
+    """Solve an admitted prefix, stopping after the first infeasible program."""
 
     if not programs:
         return ()

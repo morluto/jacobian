@@ -8,7 +8,8 @@ from typing import cast
 import pytest
 
 from jacobian._execution import bind_request_deadline, request_execution
-from jacobian.math.optimization import _ppl_process
+from jacobian.math.optimization import _ppl_process, _ppl_worker
+from jacobian.math.optimization._ppl import ExactLinearOutcome
 
 
 def _source() -> tuple[
@@ -46,6 +47,76 @@ def test_ppl_worker_batches_independent_exact_programs_in_one_process() -> None:
     assert results[0].point == results[1].point == (Fraction(1),)
     assert results[0].dual == (Fraction(1),)
     assert results[1].dual == (Fraction(-1),)
+
+
+def test_ppl_worker_stops_before_later_program_after_infeasibility(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = 0
+
+    def first_is_infeasible(
+        _objective: tuple[Fraction, ...],
+        _coefficients: tuple[tuple[Fraction, ...], ...],
+        _rhs: tuple[Fraction, ...],
+    ) -> ExactLinearOutcome:
+        nonlocal calls
+        calls += 1
+        if calls > 1:
+            pytest.fail("the worker must not solve after an infeasibility witness")
+        return ExactLinearOutcome(status="INFEASIBLE", witness=(Fraction(1),))
+
+    monkeypatch.setattr(_ppl_worker, "solve_standard_form", first_is_infeasible)
+    encoded = _ppl_worker._solve_program_batch((_source(), _source()))
+
+    assert calls == 1
+    assert [outcome["status"] for outcome in encoded] == ["INFEASIBLE"]
+
+
+def test_ppl_worker_accepts_infeasible_batch_prefix() -> None:
+    objective, coefficients, _rhs = _source()
+    with request_execution(monotonic()):
+        bind_request_deadline(monotonic() + 10)
+        results = _ppl_process.solve_standard_form_batch_process(
+            (
+                (objective, coefficients, (Fraction(-1),)),
+                (objective, coefficients, (Fraction(1),)),
+            ),
+            maximum_result_digits=128,
+        )
+
+    assert len(results) == 1
+    assert results[0].status == "INFEASIBLE"
+    assert results[0].witness
+
+
+def test_ppl_worker_rejects_incomplete_nonterminal_batch_prefix(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def incomplete(*args: object, **kwargs: object) -> object:
+        decoder = cast(Callable[[object], object], kwargs["decode_result"])
+        return decoder(
+            {
+                "protocol_version": 1,
+                "outcomes": [
+                    {
+                        "status": "OPTIMAL",
+                        "point": [["1", "1"]],
+                        "dual": [["1", "1"]],
+                        "witness": [],
+                        "ray": [],
+                    }
+                ],
+            }
+        )
+
+    monkeypatch.setattr(_ppl_process, "run_checked_worker_process", incomplete)
+    source = _source()
+    with request_execution(monotonic()):
+        bind_request_deadline(monotonic() + 10)
+        with pytest.raises(ValueError, match="invalid outcome batch prefix"):
+            _ppl_process.solve_standard_form_batch_process(
+                (source, source), maximum_result_digits=128
+            )
 
 
 def test_ppl_worker_rejects_malformed_protocol_output(

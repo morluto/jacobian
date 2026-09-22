@@ -144,7 +144,8 @@ def _component_programs(
         maximum_result_digits=admission.result_digits,
     )
     request_checkpoint("linear-program component batch result")
-    for (rows, columns), outcome in zip(admission.components, outcomes, strict=True):
+    for component_index, outcome in enumerate(outcomes):
+        rows, columns = admission.components[component_index]
         if outcome.status == "INFEASIBLE":
             return _certify_infeasible(
                 program,
@@ -160,6 +161,8 @@ def _component_programs(
                 dual[row] = value
         else:
             _execution_failure()
+    if len(outcomes) != len(admission.components):
+        _execution_failure()
     for column, cost in enumerate(program.objective):
         if column not in admission.columns and cost.as_fraction() < 0:
             ray = _expand_vector((column,), (Fraction(1),), width)

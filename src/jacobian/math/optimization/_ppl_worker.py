@@ -143,6 +143,20 @@ def _encode(outcome: ExactLinearOutcome) -> dict[str, Any]:
     }
 
 
+def _solve_program_batch(
+    programs: tuple[_StandardFormData, ...],
+) -> list[dict[str, Any]]:
+    """Return the solved prefix, stopping at a definitive infeasibility witness."""
+
+    outcomes: list[dict[str, Any]] = []
+    for objective, coefficients, rhs in programs:
+        outcome = solve_standard_form(objective, coefficients, rhs)
+        outcomes.append(_encode(outcome))
+        if outcome.status == "INFEASIBLE":
+            break
+    return outcomes
+
+
 def main() -> int:
     if version("pplpy") != _SUPPORTED_PPLPY_VERSION:
         raise RuntimeError("unsupported pplpy worker version")
@@ -158,10 +172,7 @@ def main() -> int:
         encode_worker_result_frame(
             {
                 "protocol_version": _PROTOCOL_VERSION,
-                "outcomes": [
-                    _encode(solve_standard_form(objective, coefficients, rhs))
-                    for objective, coefficients, rhs in programs
-                ],
+                "outcomes": _solve_program_batch(programs),
             }
         )
     )

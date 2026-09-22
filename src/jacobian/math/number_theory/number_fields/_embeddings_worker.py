@@ -9,6 +9,7 @@ from functools import cmp_to_key
 from typing import Any
 
 from jacobian._exact import CanonicalRational
+from jacobian._worker_protocol import encode_worker_result_frame
 from jacobian.math.number_theory.algebraic_numbers.complex import (
     RationalComplexIsolatingRectangle,
     algebraic_real_part_separation_denominator_bound,
@@ -255,7 +256,9 @@ def main() -> int:
         strict=True,
     )
     response = compute_embeddings_worker_response(request)
-    sys.stdout.write(response.model_dump_json())
+    sys.stdout.buffer.write(
+        encode_worker_result_frame(response.model_dump(mode="json"))
+    )
     return 0
 
 

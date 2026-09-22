@@ -15,6 +15,7 @@ from jacobian._execution import (
     OperationExecutionTimeoutError,
     request_cancelled,
 )
+from jacobian.canonical import encode_strict_json
 from jacobian.math.number_theory.number_fields._embedding_protocol import (
     NUMBER_FIELD_EMBEDDING_WORKER_RESPONSE_ADAPTER,
     NumberFieldEmbeddingWorkerRequest,
@@ -31,6 +32,12 @@ _EMBEDDINGS_WORKER_FILE_SIZE_BYTES = 1024 * 1024
 _EMBEDDINGS_WORKER_STDERR_BYTES = 64 * 1024
 
 
+def _decode_embeddings_result(value: object) -> dict[str, object]:
+    if not isinstance(value, dict):
+        raise ValueError("number-field embedding result must be an object")
+    return value
+
+
 def run_embeddings_worker(
     field: SimpleNumberFieldPresentation,
     *,
@@ -43,7 +50,7 @@ def run_embeddings_worker(
 
     from jacobian.process import (
         ProcessResourceLimits,
-        run_bounded_process,
+        run_checked_worker_process,
         worker_environment,
     )
 
@@ -62,7 +69,7 @@ def run_embeddings_worker(
         with TemporaryDirectory(
             prefix="jacobian-number-field-embeddings-"
         ) as worker_directory:
-            completed = run_bounded_process(
+            response = run_checked_worker_process(
                 [sys.executable, str(_EMBEDDINGS_WORKER)],
                 input_bytes=request.model_dump_json().encode("utf-8"),
                 timeout_seconds=timeout_seconds,
@@ -75,32 +82,18 @@ def run_embeddings_worker(
                     file_size_bytes=_EMBEDDINGS_WORKER_FILE_SIZE_BYTES,
                 ),
                 cwd=worker_directory,
+                decode_result=_decode_embeddings_result,
             )
+    except (OperationExecutionCancelledError, OperationExecutionTimeoutError):
+        raise
     except OSError as exc:
         raise RuntimeError(
             "bounded number-field embedding worker could not be started"
         ) from exc
 
-    if completed.cancelled:
-        raise OperationExecutionCancelledError(
-            "request cancelled during number-field embedding computation"
-        )
-    if completed.timed_out:
-        raise OperationExecutionTimeoutError(
-            "request deadline expired during number-field embedding computation"
-        )
-    if (
-        completed.stdout_exceeded
-        or completed.stderr_exceeded
-        or completed.returncode != 0
-    ):
-        raise RuntimeError(
-            "bounded number-field embedding worker did not establish a profile"
-        )
-
     try:
         return NUMBER_FIELD_EMBEDDING_WORKER_RESPONSE_ADAPTER.validate_json(
-            completed.stdout,
+            encode_strict_json(response),
             strict=True,
         )
     except ValidationError as exc:

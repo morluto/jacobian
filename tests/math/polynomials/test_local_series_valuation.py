@@ -121,15 +121,15 @@ def test_native_and_catalog_results_agree() -> None:
     )
 
 
-def test_empty_window_is_rejected_structurally() -> None:
-    with pytest.raises(ValidationError):
-        TruncatedLaurentWindow(
-            variable="t",
-            center=_rational(0),
-            valuation_lower=2,
-            precision=2,
-            coefficients=(),
-        )
+def test_empty_window_is_valid_for_structural_splits() -> None:
+    empty = TruncatedLaurentWindow(
+        variable="t",
+        center=_rational(0),
+        valuation_lower=2,
+        precision=2,
+        coefficients=(),
+    )
+    assert empty.coefficients == ()
 
 
 def test_ragged_window_is_rejected_structurally() -> None:

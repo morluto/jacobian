@@ -26,9 +26,11 @@ class TruncatedLaurentWindow(StrictModel):
     The window holds ``f(t) = sum_{k=v}^{N-1} a_k t^k`` with explicit dense
     coefficients ``a_v, ..., a_{N-1}`` in ascending-exponent order, where
     ``t`` is the local parameter at ``center`` (``t = x - center``). The
-    omitted tail beyond ``N`` is unknown, not zero. The zero window
-    (every coefficient zero) is the canonical ``ZERO_AT_PRECISION`` value;
-    nonzero windows normalize their valuation by dropping leading zeros.
+    omitted tail beyond ``N`` is unknown, not zero. A zero window (every
+    coefficient zero) is the canonical ``ZERO_AT_PRECISION`` value; arithmetic
+    splits may additionally use an explicit empty window with equal lower and
+    upper exponents. Nonzero windows normalize their valuation by dropping
+    leading zeros.
     """
 
     variable: PolynomialVariable = Field(
@@ -50,10 +52,10 @@ class TruncatedLaurentWindow(StrictModel):
 
     @model_validator(mode="after")
     def require_dense_window(self) -> Self:
-        if not self.precision > self.valuation_lower:
+        if self.precision < self.valuation_lower:
             raise _validation_error(
                 "empty_window",
-                "a Laurent window needs valuation_lower < precision",
+                "a Laurent window needs valuation_lower <= precision",
             )
         if len(self.coefficients) != self.precision - self.valuation_lower:
             raise _validation_error(
@@ -79,6 +81,9 @@ class TruncatedLaurentWindow(StrictModel):
                 raise _validation_error("coefficient_bound", str(error)) from error
         return self
 
+
+# The Laurent window is also the canonical carrier for the first arithmetic
+# slice.  Arithmetic never treats the omitted tail as zero.
 
 __all__ = [
     "MAX_LOCAL_SERIES_COEFFICIENT_DIGITS",

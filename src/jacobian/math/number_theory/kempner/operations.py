@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from fractions import Fraction
-from itertools import product
 
 from jacobian._exact import CanonicalRational
 from jacobian._execution import request_checkpoint
@@ -56,15 +55,42 @@ def _require_canonical_digit_set(digit_set: KempnerDigitSet) -> None:
         )
 
 
-def _numeral_count(digit_count: int, nonzero_count: int, cutoff: int) -> int:
-    """Return ``r * sum_{m<cutoff} s^m``, the finite family size through D."""
+def _numeral_count(
+    digit_count: int, nonzero_count: int, cutoff: int, *, limit: int
+) -> int:
+    """Return the family size, stopping as soon as its admission limit is met.
+
+    This deliberately never evaluates ``digit_count ** cutoff`` for an
+    untrusted native cutoff.  The returned ``limit + 1`` is an exact
+    sentinel, not an estimate, and is sufficient for the resource decision.
+    """
 
     if nonzero_count == 0 or cutoff == 0:
         return 0
     if digit_count == 1:
-        return nonzero_count * cutoff
-    geometric = (pow(digit_count, cutoff) - 1) // (digit_count - 1)
-    return int(nonzero_count * geometric)
+        return min(nonzero_count * cutoff, limit + 1)
+    total = 0
+    power = 1
+    for _ in range(cutoff):
+        term = nonzero_count * power
+        if total > limit - term:
+            return limit + 1
+        total += term
+        if power > limit // digit_count:
+            return limit + 1
+        power *= digit_count
+    return total
+
+
+def _capped_power(base: int, exponent: int, cap: int) -> int:
+    """Return ``base**exponent`` or ``cap + 1`` without large intermediates."""
+
+    value = 1
+    for _ in range(exponent):
+        if value > cap // base:
+            return cap + 1
+        value *= base
+    return value
 
 
 def require_series_admission(digit_set: KempnerDigitSet, cutoff: int) -> int:
@@ -90,7 +116,12 @@ def require_series_admission(digit_set: KempnerDigitSet, cutoff: int) -> int:
     base = digit_set.base
     digit_count = len(digit_set.allowed_digits)
     nonzero_count = sum(1 for digit in digit_set.allowed_digits if digit != 0)
-    count = _numeral_count(digit_count, nonzero_count, cutoff)
+    count = _numeral_count(
+        digit_count,
+        nonzero_count,
+        cutoff,
+        limit=MAX_KEMPNER_SERIES_NUMERALS,
+    )
     if count > MAX_KEMPNER_SERIES_NUMERALS:
         raise OperationResourceAdmissionError(
             location=("cutoff",),
@@ -100,11 +131,35 @@ def require_series_admission(digit_set: KempnerDigitSet, cutoff: int) -> int:
                 f"{MAX_KEMPNER_SERIES_NUMERALS}-term enumeration envelope"
             ),
         )
-    height_digits = (
-        count * max(cutoff, 1) * len(str(base)) + len(str(max(count, 1)))
-        if count
-        else 1
-    )
+    # A common denominator for the prefix divides lcm(1, ..., b**D - 1).
+    # The elementary bound lcm(1, ..., N) <= 4**N < 10**N therefore gives
+    # a sound (deliberately conservative) carrier bound without enumerating
+    # the family.  The separate work bound prevents a long sparse family from
+    # passing merely because its LCM happens to be small.
+    if count:
+        work_digits = count * cutoff * len(str(base - 1)) + len(str(count))
+        if work_digits > MAX_KEMPNER_SERIES_DIGITS:
+            raise OperationResourceAdmissionError(
+                location=("digit_set", "cutoff"),
+                code="number_theory.kempner_series.rational_work",
+                message=(
+                    "the exact-rational prefix work exceeds the "
+                    f"{MAX_KEMPNER_SERIES_DIGITS}-digit envelope"
+                ),
+            )
+        largest = _capped_power(base, cutoff, MAX_KEMPNER_SERIES_DIGITS)
+        if largest > MAX_KEMPNER_SERIES_DIGITS:
+            raise OperationResourceAdmissionError(
+                location=("cutoff",),
+                code="number_theory.kempner_series.rational_height",
+                message=(
+                    "the common-denominator bound exceeds the "
+                    f"{MAX_KEMPNER_SERIES_DIGITS}-digit result envelope"
+                ),
+            )
+        height_digits = largest + len(str(count)) + 1
+    else:
+        height_digits = 1
     if height_digits > MAX_KEMPNER_SERIES_DIGITS:
         raise OperationResourceAdmissionError(
             location=("digit_set", "cutoff"),
@@ -145,18 +200,27 @@ def enclose_kempner_series(
     base = digit_set.base
     allowed = digit_set.allowed_digits
     nonzero = tuple(digit for digit in allowed if digit != 0)
+    # Prefix recurrence: each accepted numeral is reached exactly once by
+    # extending an admitted prefix.  No dense product/list is materialised,
+    # which keeps the formerly rejected dense family within the bounded
+    # request envelope while preserving the exact partial sum.
     partial = Fraction(0)
     enumerated = 0
+
+    def extend(prefix: int, remaining: int) -> None:
+        nonlocal partial, enumerated
+        if remaining == 0:
+            partial += Fraction(1, prefix)
+            enumerated += 1
+            if enumerated % 4_096 == 0:
+                request_checkpoint("during Kempner prefix recurrence")
+            return
+        for digit in allowed:
+            extend(prefix * base + digit, remaining - 1)
+
     for length in range(1, cutoff + 1):
         for first in nonzero:
-            for rest in product(allowed, repeat=length - 1):
-                value = first
-                for digit in rest:
-                    value = value * base + digit
-                partial += Fraction(1, value)
-                enumerated += 1
-                if enumerated % 4_096 == 0:
-                    request_checkpoint("during Kempner series enumeration")
+            extend(first, length - 1)
     if enumerated != count:
         raise RuntimeError("Kempner enumeration missed its admitted numeral count")
     tail = _tail_bound(base, len(allowed), len(nonzero), cutoff)

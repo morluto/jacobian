@@ -16,10 +16,14 @@ from jacobian.math.number_theory.modular_forms.kernel import (
     require_level_one_admission,
 )
 from jacobian.math.number_theory.modular_forms.values import (
+    MAX_MODULAR_FORM_LEVEL,
+    MAX_MODULAR_FORM_WEIGHT,
     LevelOneModularQExpansion,
     ModularFormSpace,
 )
 from jacobian.math.polynomials.series._models import TruncatedSeries
+
+from .transforms import hecke, named_q_expansion, sturm_bound, u_operator, v_operator
 
 
 def _series(coefficients: tuple[Fraction, ...]) -> TruncatedSeries:
@@ -84,7 +88,22 @@ def require_space_dimension_admission(space: ModularFormSpace) -> None:
             code="modular_form.space_dimension_space_type",
             message="space must be a modular-form space value",
         )
-    if space.group != "GAMMA0" or space.character != "TRIVIAL":
+    if (
+        type(space.group) is not str
+        or space.group != "GAMMA0"
+        or type(space.character) is not str
+        or space.character != "TRIVIAL"
+        or type(space.coefficient_domain) is not str
+        or space.coefficient_domain != "QQ"
+        or type(space.kind) is not str
+        or space.kind not in {"M", "S"}
+        or type(space.level) is not int
+        or isinstance(space.level, bool)
+        or not 1 <= space.level <= MAX_MODULAR_FORM_LEVEL
+        or type(space.weight) is not int
+        or isinstance(space.weight, bool)
+        or not 0 <= space.weight <= MAX_MODULAR_FORM_WEIGHT
+    ):
         raise OperationDomainValidationError(
             location=("space",),
             code="modular_form.space_dimension_unsupported_space",
@@ -96,11 +115,17 @@ def require_space_dimension_admission(space: ModularFormSpace) -> None:
             code="modular_form.space_dimension_unsupported_domain",
             message="only QQ coefficient domains are supported",
         )
+    if type(space.level) is not int or space.level < 1 or space.level > 10_000:
+        raise OperationDomainValidationError(
+            location=("space", "level"),
+            code="modular_form.space_dimension_level_bound",
+            message="Gamma0 level is outside the bounded exact dimension envelope",
+        )
     if space.level != 1:
         raise OperationDomainValidationError(
             location=("space", "level"),
             code="modular_form.space_dimension_unsupported_level",
-            message="only level-one space dimensions are supported",
+            message="space dimensions are currently admitted only at level one",
         )
 
 
@@ -115,16 +140,23 @@ def space_dimension(space: ModularFormSpace) -> SpaceDimensionResult:
 
     require_space_dimension_admission(space)
     weight = space.weight
-    if weight % 2 == 1:
-        holomorphic, cusp, eisenstein = 0, 0, 0
-    elif weight == 0:
-        holomorphic, cusp, eisenstein = 1, 0, 1
-    elif weight == 2:
-        holomorphic, cusp, eisenstein = 0, 0, 0
+    if space.level == 1:
+        if weight % 2 == 1:
+            holomorphic, cusp, eisenstein = 0, 0, 0
+        elif weight == 0:
+            holomorphic, cusp, eisenstein = 1, 0, 1
+        elif weight == 2:
+            holomorphic, cusp, eisenstein = 0, 0, 0
+        else:
+            holomorphic = weight // 12 if weight % 12 == 2 else weight // 12 + 1
+            eisenstein = 1
+            cusp = holomorphic - 1
     else:
-        holomorphic = weight // 12 if weight % 12 == 2 else weight // 12 + 1
-        eisenstein = 1
-        cusp = holomorphic - 1
+        raise OperationDomainValidationError(
+            location=("space", "level"),
+            code="modular_form.space_dimension_unsupported_level",
+            message="space dimensions are currently admitted only at level one",
+        )
     dimension = holomorphic if space.kind == "M" else cusp
     return SpaceDimensionResult._from_kernel(
         space,
@@ -134,4 +166,12 @@ def space_dimension(space: ModularFormSpace) -> SpaceDimensionResult:
     )
 
 
-__all__ = ["level_one_named_q_expansion", "space_dimension"]
+__all__ = [
+    "hecke",
+    "level_one_named_q_expansion",
+    "named_q_expansion",
+    "space_dimension",
+    "sturm_bound",
+    "u_operator",
+    "v_operator",
+]

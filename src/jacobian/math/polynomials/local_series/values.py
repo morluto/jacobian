@@ -80,6 +80,9 @@ class TruncatedLaurentWindow(StrictModel):
         return self
 
 
+# The Laurent window is also the canonical carrier for the first arithmetic
+# slice.  Arithmetic never treats the omitted tail as zero.
+
 __all__ = [
     "MAX_LOCAL_SERIES_COEFFICIENT_DIGITS",
     "MAX_LOCAL_SERIES_EXPONENT",

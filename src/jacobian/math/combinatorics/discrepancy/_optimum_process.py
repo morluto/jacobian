@@ -12,6 +12,10 @@ from tempfile import TemporaryDirectory
 from jacobian._execution import (
     OperationExecutionCancelledError,
     OperationExecutionTimeoutError,
+    current_request_execution,
+    lease_operation_phases,
+    request_checkpoint,
+    request_execution,
 )
 from jacobian.math.combinatorics.discrepancy._models import (
     MAX_OPTIMUM_PROOF_MILLISECONDS,
@@ -52,16 +56,29 @@ def _optimum_worker_stdout_limit(set_system: FiniteSetSystem) -> int:
 def compute_optimal_discrepancy_isolated(
     set_system: FiniteSetSystem,
 ) -> DiscrepancyOptimumResult:
-    """Run the complete HiGHS/Z3 transaction in a bounded owner worker."""
+    """Run the complete HiGHS/Z3 transaction under one request deadline."""
 
-    deadline = time.monotonic() + _OPTIMUM_WORKER_WALL_SECONDS
+    execution = current_request_execution()
+    if execution is None:
+        with request_execution(time.monotonic()):
+            return compute_optimal_discrepancy_isolated(set_system)
+    stdout_limit = _optimum_worker_stdout_limit(set_system)
+    lease = lease_operation_phases(
+        _OPTIMUM_WORKER_WALL_SECONDS,
+        admitted_response_bytes=stdout_limit,
+        validation_work=set_system.ground_set_size + len(set_system.sets),
+    )
+    deadline = lease.operation_deadline
     try:
         with TemporaryDirectory(prefix="jacobian-discrepancy-optimum-") as directory:
             payload = json.dumps(
-                set_system.model_dump(mode="json"),
+                {
+                    "_deadline": lease.backend_deadline,
+                    **set_system.model_dump(mode="json"),
+                },
                 separators=(",", ":"),
             ).encode("utf-8")
-            remaining_seconds = deadline - time.monotonic()
+            remaining_seconds = lease.backend_deadline - time.monotonic()
             if remaining_seconds <= 0:
                 raise OperationExecutionTimeoutError(
                     "discrepancy optimization deadline expired before worker startup"
@@ -71,7 +88,7 @@ def compute_optimal_discrepancy_isolated(
                 input_bytes=payload,
                 timeout_seconds=remaining_seconds,
                 environment=worker_environment(locale="C.UTF-8"),
-                stdout_limit=_optimum_worker_stdout_limit(set_system),
+                stdout_limit=stdout_limit,
                 stderr_limit=_WORKER_ERROR_BYTES,
                 resource_limits=ProcessResourceLimits(
                     cpu_seconds=math.ceil(_OPTIMUM_WORKER_WALL_SECONDS),
@@ -81,6 +98,7 @@ def compute_optimal_discrepancy_isolated(
             )
     except OSError as exc:
         raise RuntimeError("bounded discrepancy worker could not be started") from exc
+    request_checkpoint("after discrepancy worker")
     if completed.timed_out or time.monotonic() >= deadline:
         raise OperationExecutionTimeoutError(
             "discrepancy optimization deadline expired during worker execution"

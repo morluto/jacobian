@@ -43,7 +43,7 @@ from jacobian.math.polynomials.rational_functions.gradient._gcd_process import (
     forced_denominator_derivative_gcds,
 )
 from jacobian.math.polynomials.rational_functions.gradient._kernel import (
-    _differentiate_fraction,
+    _differentiate_fractions,
 )
 from jacobian.math.polynomials.rational_functions.gradient._models import (
     RationalFunctionGradient,
@@ -317,14 +317,16 @@ def _general_gradient_admitted(
 ) -> tuple[RationalFunction, ...]:
     """Recognize and differentiate after the caller's whole-profile admission."""
     request_checkpoint("after rational gradient source recognition")
+    active_axes = tuple(axis for axis, bound in enumerate(bounds) if not bound.is_zero)
+    active_derivatives = _differentiate_fractions(
+        function,
+        tuple((axis, factors[axis].records) for axis in active_axes),
+    )
+    derivatives_by_axis = dict(zip(active_axes, active_derivatives, strict=True))
     return tuple(
         _canonical_zero(function.variables)
         if bounds[axis].is_zero
-        else _differentiate_fraction(
-            function,
-            axis,
-            factors[axis].records,
-        )
+        else derivatives_by_axis[axis]
         for axis in range(len(function.variables))
     )
 

@@ -1105,16 +1105,16 @@ def _denominator_digits(denominator: int) -> int:
 
 
 def _product_cell_digit_bound(
-    left_row: tuple[CanonicalRational, ...],
-    right_column: tuple[CanonicalRational, ...],
+    left_row: tuple[Fraction, ...],
+    right_column: tuple[Fraction, ...],
 ) -> int:
     """Bound one output cell after combining equal-denominator terms."""
 
     combined_numerators: dict[int, int] = {}
     for left_value, right_value in zip(left_row, right_column, strict=True):
-        if left_value.num == 0 or right_value.num == 0:
+        if not left_value or not right_value:
             continue
-        product = left_value.as_fraction() * right_value.as_fraction()
+        product = left_value * right_value
         key = product.denominator
         combined_numerators[key] = combined_numerators.get(key, 0) + product.numerator
     remaining = tuple(
@@ -1138,7 +1138,12 @@ def _product_cell_digit_bound(
     )
 
 
-def _admit_product(left: RationalMatrix, right: RationalMatrix) -> None:
+def _admit_product(
+    left: RationalMatrix, right: RationalMatrix
+) -> tuple[
+    tuple[tuple[Fraction, ...], ...],
+    tuple[tuple[Fraction, ...], ...],
+]:
     if left.column_count != len(right.entries):
         raise _validation_error(
             "budget_exceeded",
@@ -1171,12 +1176,21 @@ def _admit_product(left: RationalMatrix, right: RationalMatrix) -> None:
             "budget_exceeded",
             "matrix product exceeds the exact multiply-add work budget",
         )
+    # Admission and FLINT consume the same exact fractions. Convert each source
+    # scalar once instead of reconstructing it for every output-cell product
+    # and then repeating the conversion at the backend boundary.
+    left_fractions = tuple(
+        tuple(value.as_fraction() for value in row) for row in left.entries
+    )
+    right_fractions = tuple(
+        tuple(value.as_fraction() for value in row) for row in right.entries
+    )
     right_columns_entries = tuple(
-        tuple(right.entries[row][column] for row in range(inner_dimension))
+        tuple(right_fractions[row][column] for row in range(inner_dimension))
         for column in range(right_columns)
     )
     output_digit_work = 0
-    for left_row in left.entries:
+    for left_row in left_fractions:
         for right_column in right_columns_entries:
             cell_digits = _product_cell_digit_bound(left_row, right_column)
             if cell_digits > MAX_CANONICAL_RATIONAL_DIGITS:
@@ -1190,6 +1204,7 @@ def _admit_product(left: RationalMatrix, right: RationalMatrix) -> None:
             "budget_exceeded",
             "matrix product exceeds the exact dense-output digit budget",
         )
+    return left_fractions, right_fractions
 
 
 def _admit_kronecker(left: RationalMatrix, right: RationalMatrix) -> None:
@@ -1709,7 +1724,9 @@ def trace_result(matrix: IntegerMatrix) -> MatrixTraceResult:
 
 
 def product_result(left: RationalMatrix, right: RationalMatrix) -> MatrixProductResult:
-    _admit(_admit_product, left, right, location=("left", "right"))
+    left_fractions, right_fractions = _admit(
+        _admit_product, left, right, location=("left", "right")
+    )
     from jacobian.math.matrices._flint import rational_matrix_product
 
     left_rows = len(left.entries)
@@ -1720,10 +1737,7 @@ def product_result(left: RationalMatrix, right: RationalMatrix) -> MatrixProduct
             tuple(Fraction() for _ in range(right_columns)) for _ in range(left_rows)
         )
     else:
-        product = rational_matrix_product(
-            tuple(tuple(value.as_fraction() for value in row) for row in left.entries),
-            tuple(tuple(value.as_fraction() for value in row) for row in right.entries),
-        )
+        product = rational_matrix_product(left_fractions, right_fractions)
     return MatrixProductResult(
         left=left,
         right=right,

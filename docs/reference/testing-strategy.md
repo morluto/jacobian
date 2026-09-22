@@ -42,8 +42,9 @@ crosses its real boundary:
 | MCP tool schema or transport | `make test-mcp` |
 | Focused mathematical edit loop | `make handoff LANE=math TESTS=tests/math/logic/test_tools.py` |
 | Cross-owner behavior | `make test-integration` |
+| Advertised invocation examples | `make test-catalog-examples`; Singular-owned examples use `make test-singular` |
 | Child-process behavior | `make test-process` |
-| Singular-backed ideals, polynomial maps, or projective singularity profiles | `make test-singular` |
+| Singular-backed ideals, polynomial maps, projective singularity profiles, or marked catalog examples | `make test-singular` |
 | QEPCAD plane-component backend | `make test-qepcad` |
 | Shared process runner (`src/jacobian/process.py`) | `make test-process`, `make test-singular`, and `make test-qepcad` |
 | Documentation | `make docs-linkcheck` |
@@ -98,8 +99,10 @@ Use `make affected` for normal branch-local validation and
 Use `make check` on a frozen tree when broad ordinary evidence is requested or
 the changed scope needs it. A completed affected plan does not automatically
 require another broad run. `make check-all` adds ordinary integration tests;
-`make test-full` includes the named process, MCP, and external-backend lanes.
-Neither reproduces hosted packaging, coverage, or all CI jobs.
+`make test-full` includes all advertised invocation examples plus the named
+process, MCP, and external-backend lanes. It routes non-Singular examples through
+`test-catalog-examples` and Singular-owned examples through `test-singular`.
+Neither command reproduces hosted packaging, coverage, or all CI jobs.
 
 `make check` and `make check-all` take a worktree-local non-blocking validation
 lease. `make validation-status` identifies a competing broad run immediately;
@@ -167,6 +170,18 @@ Markers are execution tiers, not synonyms for slow tests:
 
 Keep a small ordinary regression for the same public behavior when moving a
 near-envelope case to `scale`.
+
+The marker-lane Make recipes derive their default collection roots with
+`tools/marker_test_roots.py` and then retain pytest's `-m` selection inside those
+files. Marker ownership must therefore use direct `pytest.mark.property`,
+`pytest.mark.exhaustive`, or `pytest.mark.scale` syntax; aliases and dynamically
+constructed marks are not collection owners. This narrows collection without
+replacing markers as the evidence-tier source of truth. Explicit `TESTS=...`
+overrides remain available for focused reproduction.
+
+`singular_catalog_example` is a runtime-ownership selector, not an evidence-tier
+marker. `test-catalog-examples` excludes it, while `test-singular` selects it so
+those advertised examples execute with the required system backend.
 
 ## Adversarial closure
 
@@ -582,10 +597,13 @@ contract makes that choice canonical.
 Singular testing follows the same ownership split as other child-process
 backends. The shared bounded-process supervisor owns process-group termination,
 including descendants that ignore termination or retain inherited pipes. The
-Singular lane includes mathematical consumer tests and adapter-specific behavior:
-timeout and execution-outcome projection, supported-version enforcement, strict
-codec behavior, output limits, and request-scoped cleanup. Do not duplicate the
-supervisor's termination suite for each mathematical backend.
+Singular lane includes mathematical consumer tests, its marked advertised
+catalog examples, and adapter-specific behavior: timeout and execution-outcome
+projection, supported-version enforcement, strict codec behavior, output limits,
+and request-scoped cleanup. The remaining advertised examples belong to
+`test-catalog-examples`; this keeps them in `test-full` without serializing them
+behind the Singular runtime. Do not duplicate the supervisor's termination suite
+for each mathematical backend.
 
 The commutative-algebra domain checks Singular's mathematical results against an
 independent combinatorial oracle on bounded monomial ideals, in addition to

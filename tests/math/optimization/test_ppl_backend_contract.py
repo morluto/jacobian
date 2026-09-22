@@ -48,6 +48,8 @@ def test_invalid_backend_claim_never_becomes_a_mathematical_result(
     monkeypatch: pytest.MonkeyPatch,
     outcome: ExactLinearOutcome,
 ) -> None:
-    monkeypatch.setattr(solver, "solve_standard_form_process", lambda *args: outcome)
+    monkeypatch.setattr(
+        solver, "solve_standard_form_process", lambda *args, **kwargs: outcome
+    )
     with pytest.raises(RuntimeError, match="produced no mathematical result"):
         linear_program(_program())

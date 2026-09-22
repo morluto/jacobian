@@ -19,7 +19,10 @@ from jacobian.math.optimization._models import (
     _primal_diagnostics,
     _program_fractions,
 )
-from jacobian.math.optimization._ppl_process import solve_standard_form_process
+from jacobian.math.optimization._ppl_process import (
+    solve_standard_form_batch_process,
+    solve_standard_form_process,
+)
 
 
 def _execution_failure() -> NoReturn:
@@ -123,52 +126,43 @@ def _component_programs(
     width, height = len(program.variables), len(program.rhs)
     point, dual = [Fraction()] * width, [Fraction()] * height
     ray: tuple[Fraction, ...] | None = None
+    worker_programs = []
     for rows, columns in admission.components:
-        request_checkpoint("linear-program component")
-        component = StandardFormRationalLinearProgram.model_construct(
-            variables=tuple(program.variables[j] for j in columns),
-            objective=tuple(program.objective[j] for j in columns),
-            coefficients=tuple(
-                tuple(program.coefficients[i][j] for j in columns) for i in rows
-            ),
-            rhs=tuple(program.rhs[i] for i in rows),
+        request_checkpoint("linear-program component batch construction")
+        worker_programs.append(
+            (
+                tuple(program.objective[j].as_fraction() for j in columns),
+                tuple(
+                    tuple(program.coefficients[i][j].as_fraction() for j in columns)
+                    for i in rows
+                ),
+                tuple(program.rhs[i].as_fraction() for i in rows),
+            )
         )
-        result = _linear_program_admitted(
-            component,
-            LinearAdmission(
-                columns=tuple(range(len(columns))),
-                result_digits=admission.result_digits,
-            ),
-        )
-        if result.status == "INFEASIBLE":
-            if result.farkas_candidate is None:
-                _execution_failure()
+    outcomes = solve_standard_form_batch_process(
+        tuple(worker_programs),
+        maximum_result_digits=admission.result_digits,
+    )
+    request_checkpoint("linear-program component batch result")
+    for component_index, outcome in enumerate(outcomes):
+        rows, columns = admission.components[component_index]
+        if outcome.status == "INFEASIBLE":
             return _certify_infeasible(
                 program,
-                _expand_vector(
-                    rows,
-                    tuple(value.as_fraction() for value in result.farkas_candidate),
-                    height,
-                ),
+                _expand_vector(rows, outcome.witness, height),
                 admission.result_digits,
             )
-        if result.primal_candidate is None:
-            _execution_failure()
-        for column, value in zip(columns, result.primal_candidate, strict=True):
-            point[column] = value.as_fraction()
-        if result.status == "UNBOUNDED":
-            if result.recession_direction is None:
-                _execution_failure()
-            ray = _expand_vector(
-                columns,
-                tuple(value.as_fraction() for value in result.recession_direction),
-                width,
-            )
+        for column, value in zip(columns, outcome.point, strict=True):
+            point[column] = value
+        if outcome.status == "UNBOUNDED":
+            ray = _expand_vector(columns, outcome.ray, width)
+        elif outcome.status == "OPTIMAL":
+            for row, value in zip(rows, outcome.dual, strict=True):
+                dual[row] = value
         else:
-            if result.status != "OPTIMAL" or result.dual_candidate is None:
-                _execution_failure()
-            for row, value in zip(rows, result.dual_candidate, strict=True):
-                dual[row] = value.as_fraction()
+            _execution_failure()
+    if len(outcomes) != len(admission.components):
+        _execution_failure()
     for column, cost in enumerate(program.objective):
         if column not in admission.columns and cost.as_fraction() < 0:
             ray = _expand_vector((column,), (Fraction(1),), width)
@@ -215,6 +209,7 @@ def _linear_program_admitted(
             for i in active_rows
         ),
         tuple(program.rhs[i].as_fraction() for i in active_rows),
+        maximum_result_digits=digits,
     )
     request_checkpoint("linear-program backend result")
     if outcome.status == "INFEASIBLE":

@@ -848,6 +848,25 @@ def test_admission_records_the_maintained_backend_structure() -> None:
     assert plan.worker_input_bytes_upper_bound > 0
 
 
+def test_kernel_reuses_converted_flint_solve_operands(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = _kernel_source(_source(((3, 0), (0, 4)), (Fraction(0), Fraction(0))))
+    original = affine_flint._rational_solve
+    operands: list[tuple[Any, Any]] = []
+
+    def observe(left: Any, right: Any) -> Any:
+        operands.append((left, right))
+        return original(left, right)
+
+    monkeypatch.setattr(affine_flint, "_rational_solve", observe)
+    _compute_fixed_locus_kernel(source)
+
+    assert len(operands) == 3
+    assert operands[0][0] is operands[2][0]
+    assert operands[0][1] is operands[1][0]
+
+
 def test_near_envelope_kernel_fits_the_observed_backend_structure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

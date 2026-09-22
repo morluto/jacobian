@@ -50,20 +50,20 @@ def _fraction(value: Any) -> Fraction:
     return result
 
 
-def _decode(
-    payload: Any,
-) -> tuple[
-    tuple[Fraction, ...], tuple[tuple[Fraction, ...], ...], tuple[Fraction, ...]
-]:
+type _StandardFormData = tuple[
+    tuple[Fraction, ...],
+    tuple[tuple[Fraction, ...], ...],
+    tuple[Fraction, ...],
+]
+
+
+def _decode_program(payload: Any) -> _StandardFormData:
     if not isinstance(payload, dict) or set(payload) != {
-        "protocol_version",
         "objective",
         "coefficients",
         "rhs",
     }:
-        raise ValueError("PPL worker request has invalid fields")
-    if payload["protocol_version"] != _PROTOCOL_VERSION:
-        raise ValueError("PPL worker protocol version is unsupported")
+        raise ValueError("PPL worker program has invalid fields")
     objective_value, coefficients_value, rhs_value = (
         payload["objective"],
         payload["coefficients"],
@@ -95,6 +95,34 @@ def _decode(
     )
 
 
+def _decode(payload: Any) -> tuple[_StandardFormData, ...]:
+    if not isinstance(payload, dict) or set(payload) != {
+        "protocol_version",
+        "programs",
+    }:
+        raise ValueError("PPL worker request has invalid fields")
+    if payload["protocol_version"] != _PROTOCOL_VERSION:
+        raise ValueError("PPL worker protocol version is unsupported")
+    programs_value = payload["programs"]
+    if (
+        not isinstance(programs_value, list)
+        or not programs_value
+        or len(programs_value) > MAX_LINEAR_PROGRAM_VARIABLES
+    ):
+        raise ValueError("PPL worker program batch has invalid size")
+    programs = tuple(_decode_program(program) for program in programs_value)
+    variables = sum(len(objective) for objective, _coefficients, _rhs in programs)
+    equations = sum(len(rhs) for _objective, _coefficients, rhs in programs)
+    cells = sum(len(objective) * len(rhs) for objective, _coefficients, rhs in programs)
+    if (
+        variables > MAX_LINEAR_PROGRAM_VARIABLES
+        or equations > MAX_LINEAR_PROGRAM_CONSTRAINTS
+        or cells > MAX_LINEAR_PROGRAM_VARIABLES * MAX_LINEAR_PROGRAM_CONSTRAINTS
+    ):
+        raise ValueError("PPL worker aggregate batch dimensions are invalid")
+    return programs
+
+
 def _encode_vector(values: tuple[Fraction, ...]) -> list[list[str]]:
     return [
         [
@@ -107,7 +135,6 @@ def _encode_vector(values: tuple[Fraction, ...]) -> list[list[str]]:
 
 def _encode(outcome: ExactLinearOutcome) -> dict[str, Any]:
     return {
-        "protocol_version": _PROTOCOL_VERSION,
         "status": outcome.status,
         "point": _encode_vector(outcome.point),
         "dual": _encode_vector(outcome.dual),
@@ -116,20 +143,37 @@ def _encode(outcome: ExactLinearOutcome) -> dict[str, Any]:
     }
 
 
+def _solve_program_batch(
+    programs: tuple[_StandardFormData, ...],
+) -> list[dict[str, Any]]:
+    """Return the solved prefix, stopping at a definitive infeasibility witness."""
+
+    outcomes: list[dict[str, Any]] = []
+    for objective, coefficients, rhs in programs:
+        outcome = solve_standard_form(objective, coefficients, rhs)
+        outcomes.append(_encode(outcome))
+        if outcome.status == "INFEASIBLE":
+            break
+    return outcomes
+
+
 def main() -> int:
     if version("pplpy") != _SUPPORTED_PPLPY_VERSION:
         raise RuntimeError("unsupported pplpy worker version")
     input_bytes = sys.stdin.buffer.read(_MAX_INPUT_BYTES + 1)
     if len(input_bytes) > _MAX_INPUT_BYTES:
         return 2
-    objective, coefficients, rhs = _decode(
+    programs = _decode(
         loads_strict_json(
             input_bytes, limits=CanonicalLimits(max_input_bytes=_MAX_INPUT_BYTES)
         )
     )
     sys.stdout.buffer.write(
         encode_worker_result_frame(
-            _encode(solve_standard_form(objective, coefficients, rhs))
+            {
+                "protocol_version": _PROTOCOL_VERSION,
+                "outcomes": _solve_program_batch(programs),
+            }
         )
     )
     return 0

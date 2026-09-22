@@ -132,6 +132,79 @@ def _normalize_pair(
     }
 
 
+def _differentiate_requests(
+    payload: dict[str, Any], variable_count: int, *, batch: bool
+) -> tuple[list[Any], list[Any], list[dict[str, Any]]]:
+    common_fields = {"task", "variable_count", "numerator", "denominator"}
+    expected_fields = (
+        common_fields | {"derivatives"} if batch else common_fields | {"axis", "factor"}
+    )
+    if set(payload) != expected_fields:
+        raise ValueError("malformed kernel request")
+    numerator_records = payload["numerator"]
+    denominator_records = payload["denominator"]
+    if not isinstance(numerator_records, list) or not isinstance(
+        denominator_records, list
+    ):
+        raise ValueError("malformed kernel request")
+    requests = (
+        payload["derivatives"]
+        if batch
+        else [{"axis": payload["axis"], "factor": payload["factor"]}]
+    )
+    if not isinstance(requests, list) or len(requests) > variable_count:
+        raise ValueError("malformed kernel request")
+    for request in requests:
+        if (
+            not isinstance(request, dict)
+            or set(request) != {"axis", "factor"}
+            or type(request["axis"]) is not int
+            or not 0 <= request["axis"] < variable_count
+            or not isinstance(request["factor"], list)
+        ):
+            raise ValueError("malformed kernel request")
+    if len({request["axis"] for request in requests}) != len(requests):
+        raise ValueError("malformed kernel request")
+    return numerator_records, denominator_records, requests
+
+
+def _differentiate(
+    payload: dict[str, Any],
+    variable_count: int,
+    generators: tuple[Any, ...],
+    *,
+    batch: bool,
+) -> dict[str, Any]:
+    numerator_records, denominator_records, requests = _differentiate_requests(
+        payload, variable_count, batch=batch
+    )
+    numerator = _polynomial(numerator_records, variable_count, generators)
+    denominator = _polynomial(denominator_records, variable_count, generators)
+    derivative_denominator = denominator * denominator
+    derivatives = []
+    for request in requests:
+        axis = request["axis"]
+        factor_records = request["factor"]
+        factor = (
+            _polynomial(factor_records, variable_count, generators)
+            if factor_records
+            else None
+        )
+        generator = generators[axis]
+        derivative_numerator = numerator.diff(
+            generator
+        ) * denominator - numerator * denominator.diff(generator)
+        derivatives.append(
+            _normalize_pair(
+                derivative_numerator,
+                derivative_denominator,
+                factor,
+                variable_count,
+            )
+        )
+    return {"derivatives": derivatives} if batch else derivatives[0]
+
+
 def _run(payload: dict[str, Any]) -> dict[str, Any]:
     from sympy import symbols
 
@@ -204,45 +277,12 @@ def _run(payload: dict[str, Any]) -> dict[str, Any]:
             else None
         )
         return _normalize_pair(numerator, denominator, factor, variable_count)
-    if task == "differentiate":
-        if set(payload) != {
-            "task",
-            "variable_count",
-            "axis",
-            "numerator",
-            "denominator",
-            "factor",
-        }:
-            raise ValueError("malformed kernel request")
-        axis = payload["axis"]
-        numerator_records = payload["numerator"]
-        denominator_records = payload["denominator"]
-        factor_records = payload["factor"]
-        if (
-            type(axis) is not int
-            or not 0 <= axis < variable_count
-            or not isinstance(numerator_records, list)
-            or not isinstance(denominator_records, list)
-            or not isinstance(factor_records, list)
-        ):
-            raise ValueError("malformed kernel request")
-        numerator = _polynomial(numerator_records, variable_count, generators)
-        denominator = _polynomial(denominator_records, variable_count, generators)
-        factor = (
-            _polynomial(factor_records, variable_count, generators)
-            if factor_records
-            else None
-        )
-        generator = generators[axis]
-        derivative_numerator = numerator.diff(
-            generator
-        ) * denominator - numerator * denominator.diff(generator)
-        derivative_denominator = denominator * denominator
-        return _normalize_pair(
-            derivative_numerator,
-            derivative_denominator,
-            factor,
+    if task in {"differentiate", "differentiate_batch"}:
+        return _differentiate(
+            payload,
             variable_count,
+            generators,
+            batch=task == "differentiate_batch",
         )
     raise ValueError("malformed kernel request")
 

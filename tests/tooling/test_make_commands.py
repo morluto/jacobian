@@ -22,8 +22,19 @@ def test_exhaustive_local_reproduction_includes_exhaustive_marker_lane() -> None
     assert "$(MAKE) test-property" in all_ci
     assert "$(MAKE) _test-exhaustive" in all_ci
     assert "$(MAKE) _test-scale" in all_ci
+    assert "$(MAKE) test-catalog-examples" in all_ci
     assert "$(VALIDATION_LOCK) run --target test-full" in all_ci
     assert all_ci.index("$(MAKE) test-math") < all_ci.index("$(MAKE) _test-exhaustive")
+
+
+def test_full_catalog_examples_split_singular_backend_ownership() -> None:
+    makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
+    examples = makefile.split("test-catalog-examples:", 1)[1].split("test-focused:", 1)[
+        0
+    ]
+
+    assert "tests/integration/catalog/test_builtin_examples.py" in examples
+    assert "not singular_catalog_example" in examples
 
 
 def test_focused_math_lane_skips_validation_lock() -> None:

@@ -13,6 +13,7 @@ from jsonschema import Draft202012Validator
 
 from jacobian._exact import CanonicalRational
 from jacobian._execution import (
+    OperationBackendError,
     OperationExecutionCancelledError,
     OperationExecutionTimeoutError,
     bind_request_deadline,
@@ -161,6 +162,20 @@ def test_profile_verifier_propagates_expired_request() -> None:
         bind_request_deadline(started - 1)
         with pytest.raises(OperationExecutionTimeoutError, match="deadline expired"):
             verify_cyclic_rational_rank_kernel_profile(claim)
+
+
+def test_forged_worker_kernel_certificate_is_rejected(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian.math.matrices.cyclic_linear import _kernel_process
+
+    def forged_kernel(*args: Any, **kwargs: Any) -> tuple[tuple[Any, ...], ...]:
+        return ((0, 1, None, (((Fraction(0),),),)),)
+
+    monkeypatch.setattr(_kernel_process, "run_cyclotomic_kernels", forged_kernel)
+    with pytest.raises(OperationBackendError) as error:
+        cyclic_rational_rank_kernel_profile(_symbol(period=1, entries=((0, 0, 0, 1),)))
+    assert error.value.reason.value == "invalid_output"
 
 
 def test_profile_verifier_propagates_backend_failure(

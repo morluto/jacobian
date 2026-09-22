@@ -9,7 +9,14 @@ import time
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from jacobian._execution import OperationExecutionCancelledError, request_checkpoint
+from jacobian._execution import (
+    OperationExecutionCancelledError,
+    OperationExecutionTimeoutError,
+    current_request_execution,
+    lease_operation_phases,
+    request_checkpoint,
+    request_execution,
+)
 from jacobian.math.graphs.optimization._maximum_cut import (
     GraphMaximumCutRequest,
     GraphMaximumCutResult,
@@ -51,9 +58,18 @@ def _maximum_cut_worker_stdout_limit(request: GraphMaximumCutRequest) -> int:
 def compute_maximum_cut_isolated(
     request: GraphMaximumCutRequest,
 ) -> GraphMaximumCutResult:
-    """Run Z3 outside the host and retain the admitted exact fallback."""
+    """Run Z3 and the exact fallback under one request-owned deadline."""
 
-    deadline = time.monotonic() + _MAXIMUM_CUT_WORKER_WALL_SECONDS
+    execution = current_request_execution()
+    if execution is None:
+        with request_execution(time.monotonic()):
+            return compute_maximum_cut_isolated(request)
+    stdout_limit = _maximum_cut_worker_stdout_limit(request)
+    lease = lease_operation_phases(
+        _MAXIMUM_CUT_WORKER_WALL_SECONDS,
+        admitted_response_bytes=stdout_limit,
+        validation_work=len(request.graph.vertices) + len(request.graph.edges),
+    )
     request_checkpoint("before maximum-cut acceleration")
     try:
         with TemporaryDirectory(prefix="jacobian-maximum-cut-") as directory:
@@ -62,15 +78,17 @@ def compute_maximum_cut_isolated(
                 separators=(",", ":"),
                 ensure_ascii=False,
             ).encode("utf-8")
-            remaining_seconds = deadline - time.monotonic()
+            remaining_seconds = lease.backend_deadline - time.monotonic()
             if remaining_seconds <= 0:
-                return _compute_maximum_cut_without_z3(request)
+                raise OperationExecutionTimeoutError(
+                    "maximum-cut deadline expired before worker startup"
+                )
             completed = run_bounded_process(
                 [sys.executable, str(_MAXIMUM_CUT_WORKER)],
                 input_bytes=payload,
                 timeout_seconds=remaining_seconds,
                 environment=worker_environment(locale="C.UTF-8"),
-                stdout_limit=_maximum_cut_worker_stdout_limit(request),
+                stdout_limit=stdout_limit,
                 stderr_limit=_WORKER_ERROR_BYTES,
                 resource_limits=ProcessResourceLimits(
                     cpu_seconds=math.ceil(_MAXIMUM_CUT_WORKER_WALL_SECONDS),
@@ -80,18 +98,28 @@ def compute_maximum_cut_isolated(
                 cwd=directory,
             )
     except OSError:
-        return _compute_maximum_cut_without_z3(request)
+        request_checkpoint("after maximum-cut worker startup failure")
+        result = _compute_maximum_cut_without_z3(request)
+        request_checkpoint("after maximum-cut exhaustive fallback")
+        return result
     request_checkpoint("after maximum-cut acceleration")
     if completed.cancelled:
         raise OperationExecutionCancelledError("maximum-cut worker cancelled")
+    if completed.timed_out:
+        request_checkpoint("after maximum-cut worker timeout")
+        result = _compute_maximum_cut_without_z3(request)
+        request_checkpoint("after maximum-cut exhaustive fallback")
+        return result
     if (
-        completed.timed_out
-        or completed.stdout_exceeded
+        completed.stdout_exceeded
         or completed.stderr_exceeded
         or completed.returncode != 0
-        or time.monotonic() >= deadline
     ):
-        return _compute_maximum_cut_without_z3(request)
+        request_checkpoint("before maximum-cut exhaustive fallback")
+        result = _compute_maximum_cut_without_z3(request)
+        request_checkpoint("after maximum-cut exhaustive fallback")
+        return result
+    request_checkpoint("before maximum-cut response decoding")
     try:
         result = GraphMaximumCutResult.model_validate(
             json.loads(completed.stdout.decode("utf-8"))
@@ -102,4 +130,6 @@ def compute_maximum_cut_isolated(
         return result
     except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError):
         request_checkpoint("during maximum-cut response validation")
-        return _compute_maximum_cut_without_z3(request)
+        result = _compute_maximum_cut_without_z3(request)
+        request_checkpoint("after maximum-cut exhaustive fallback")
+        return result

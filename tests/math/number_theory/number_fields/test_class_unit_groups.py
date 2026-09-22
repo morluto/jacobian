@@ -63,6 +63,16 @@ def test_real_quadratic_trivial_class_group() -> None:
     assert (result.real_embedding_count, result.complex_embedding_pair_count) == (2, 0)
 
 
+def test_nonmonic_unit_coordinates_remain_bound_to_caller_basis() -> None:
+    field = _field(2, 1, -2)
+    result = unit_group(field)
+    assert len(result.fundamental_units) == 1
+    assert _field_norm(field, result.fundamental_units[0]) in (
+        Fraction(1),
+        Fraction(-1),
+    )
+
+
 def test_real_quadratic_fundamental_unit() -> None:
     """QQ(sqrt(2)) has rank 1 and fundamental unit up to sign 1 + sqrt(2)."""
     result = unit_group(_field(1, 0, -2))

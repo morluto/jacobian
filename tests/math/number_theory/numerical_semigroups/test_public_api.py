@@ -1,9 +1,13 @@
 from fractions import Fraction
 
 import pytest
+from pydantic import ValidationError
 
 from jacobian.math.number_theory import numerical_semigroups
 from jacobian.math.number_theory import numerical_semigroups as ns
+from jacobian.math.number_theory.numerical_semigroups._factorization_models import (
+    FactorizationDistanceMatrixResult,
+)
 from jacobian.math.number_theory.numerical_semigroups._tools import TOOLS
 
 
@@ -14,14 +18,29 @@ def test_catalog_contains_only_audited_agent_outcomes() -> None:
         "number_theory.numerical_semigroup.factorizations.compute",
         "number_theory.numerical_semigroup.factorization_lengths.compute",
         "number_theory.numerical_semigroup.factorization_graph.compute",
+        "number_theory.numerical_semigroup.factorization_distance_matrix.compute",
         "number_theory.numerical_semigroup.betti_elements.compute",
         "number_theory.numerical_semigroup.minimal_presentation.compute",
         "number_theory.numerical_semigroup.presentation_binomials.compute",
+        "number_theory.numerical_semigroup.presentation_degree_profile.compute",
         "number_theory.numerical_semigroup.delta_set.compute",
         "number_theory.numerical_semigroup.catenary_degree.compute",
         "number_theory.numerical_semigroup.elasticity.compute",
         "number_theory.numerical_semigroup.elasticity.global_compute",
     }
+
+
+def test_distance_matrix_rejects_negative_forged_entries() -> None:
+    with pytest.raises(ValidationError):
+        FactorizationDistanceMatrixResult.model_validate(
+            {
+                "value": 1,
+                "minimal_generators": [1],
+                "in_semigroup": True,
+                "factorizations": [[1]],
+                "distances": [[-1]],
+            }
+        )
 
 
 def test_exploratory_factorization_operations_remain_native() -> None:

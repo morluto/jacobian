@@ -6,6 +6,7 @@ import json
 import math
 import sys
 
+from jacobian._worker_protocol import encode_worker_result_frame
 from jacobian.canonical import format_canonical_integer
 
 
@@ -21,7 +22,9 @@ def main() -> int:
             value = math.perm(n, k)
         else:
             return 2
-        sys.stdout.write(format_canonical_integer(value))
+        sys.stdout.buffer.write(
+            encode_worker_result_frame(format_canonical_integer(value))
+        )
         return 0
     except (KeyError, TypeError, ValueError, json.JSONDecodeError):
         return 2

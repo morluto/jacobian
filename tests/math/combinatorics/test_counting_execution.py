@@ -15,7 +15,6 @@ from jacobian._execution import (
 )
 from jacobian.math.combinatorics import _counting_process
 from jacobian.math.combinatorics.operations import canonical_binomial
-from jacobian.process import BoundedProcessResult
 
 
 @pytest.mark.parametrize(
@@ -31,18 +30,15 @@ def test_counting_worker_control_outcomes(
     timed_out: bool,
     error: type[Exception],
 ) -> None:
+    assert cancelled != timed_out
+
+    def fail_checked_worker(*_args: object, **_kwargs: object) -> object:
+        raise error("counting worker control outcome")
+
     monkeypatch.setattr(
         _counting_process,
-        "run_bounded_process",
-        lambda *a, **_kwargs: BoundedProcessResult(
-            returncode=-1,
-            stdout=b"",
-            stderr=b"",
-            stdout_exceeded=False,
-            stderr_exceeded=False,
-            cancelled=cancelled,
-            timed_out=timed_out,
-        ),
+        "run_checked_worker_process",
+        fail_checked_worker,
     )
     with pytest.raises(error) as raised:
         _counting_process.evaluate_count("comb", 4, 2)

@@ -18,7 +18,7 @@ from jacobian._execution import (
 )
 from jacobian.process import (
     ProcessResourceLimits,
-    run_bounded_process,
+    run_checked_worker_process,
     worker_environment,
 )
 
@@ -29,12 +29,24 @@ _COUNTING_ADDRESS_SPACE_BYTES = 1024 * 1024 * 1024
 _COUNTING_FILE_SIZE_BYTES = 1024 * 1024
 
 
+def _decode_count_result(value: object) -> str:
+    if (
+        type(value) is not str
+        or not value
+        or not value.isascii()
+        or not value.isdigit()
+    ):
+        raise ValueError("counting worker returned a malformed exact count")
+    return value
+
+
 def _counting_stdout_limit(n: int, k: int) -> int:
     """Bound one decimal count from its admitted operands."""
 
     # Both nCk and nPk are at most n**k. The extra byte covers the inclusive
     # power-of-ten boundary; zero and empty products still need one digit.
-    return max(1, k * len(str(n)) + 1)
+    # Checked worker framing adds a fixed JSON envelope and trailing newline.
+    return max(1, k * len(str(n)) + 1) + 64
 
 
 def evaluate_count(operation: str, n: int, k: int) -> str:
@@ -57,7 +69,7 @@ def evaluate_count(operation: str, n: int, k: int) -> str:
 
     try:
         with TemporaryDirectory(prefix="jacobian-counting-") as worker_directory:
-            completed = run_bounded_process(
+            result = run_checked_worker_process(
                 [sys.executable, str(_COUNTING_WORKER)],
                 input_bytes=json.dumps(
                     {"op": operation, "n": n, "k": k},
@@ -73,38 +85,19 @@ def evaluate_count(operation: str, n: int, k: int) -> str:
                     file_size_bytes=_COUNTING_FILE_SIZE_BYTES,
                 ),
                 cwd=worker_directory,
+                decode_result=_decode_count_result,
             )
+    except (OperationExecutionCancelledError, OperationExecutionTimeoutError):
+        raise
     except OSError as exc:
         raise RuntimeError("bounded counting worker could not be started") from exc
 
     request_checkpoint("after exact counting worker")
-    if completed.cancelled:
-        raise OperationExecutionCancelledError(
-            "request cancelled during exact counting"
-        )
-    if completed.timed_out:
-        raise OperationExecutionTimeoutError(
-            "request deadline expired during exact counting"
-        )
-    if (
-        completed.stdout_exceeded
-        or completed.stderr_exceeded
-        or completed.returncode != 0
-    ):
-        raise RuntimeError("bounded counting worker did not establish an exact count")
-
-    try:
-        text = completed.stdout.decode("utf-8")
-    except UnicodeDecodeError as exc:
-        raise RuntimeError("bounded counting worker returned malformed output") from exc
-    if not text or not text.isdigit():
-        raise RuntimeError("bounded counting worker returned malformed output")
-    request_checkpoint("after exact counting")
     if time.monotonic() >= deadline:
         raise OperationExecutionTimeoutError(
             "request deadline expired during exact counting"
         )
-    return text
+    return result
 
 
 __all__ = ["evaluate_count"]

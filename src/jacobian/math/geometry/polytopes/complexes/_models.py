@@ -33,6 +33,8 @@ from jacobian.math.geometry.polytopes._models import (
     RationalVPolytope,
 )
 from jacobian.math.geometry.polytopes.values import MAX_RATIONAL_POLYTOPE_DIMENSION
+from jacobian.math.matrices.values import RationalMatrix
+from jacobian.math.polynomials.values import RationalPolynomial
 
 MAX_COMPLEX_CELLS = 16
 """Maximum number of maximal-cell presentations accepted by one closure."""
@@ -288,6 +290,107 @@ class PolytopalComplexClosureResult(StrictModel):
         )
 
 
+class PieceAssignment(StrictModel):
+    cell_id: str = Field(min_length=1, max_length=64)
+    polynomial: RationalPolynomial
+
+
+class PieceCompatibilityRow(StrictModel):
+    first_cell_id: str
+    second_cell_id: str
+    face_id: str
+    reduced_difference: RationalPolynomial
+    compatible: bool
+
+
+class PiecewisePolynomialRequest(StrictModel):
+    complex: PolytopalComplexClosureResult
+    pieces: tuple[PieceAssignment, ...] = Field(
+        min_length=1, max_length=MAX_COMPLEX_CELLS
+    )
+
+
+class PiecewisePolynomialResult(StrictModel):
+    complex: PolytopalComplexClosureResult
+    pieces: tuple[PieceAssignment, ...]
+    compatibility: tuple[PieceCompatibilityRow, ...]
+    status: Literal["COMPATIBLE", "INCOMPATIBLE"] = "COMPATIBLE"
+    obstruction_face_id: str | None = None
+    obstruction_difference: RationalPolynomial | None = None
+
+    @model_validator(mode="after")
+    def require_obstruction_shape(self) -> Self:
+        if self.status == "INCOMPATIBLE" and (
+            self.obstruction_face_id is None or self.obstruction_difference is None
+        ):
+            raise _validation_error(
+                "piece_obstruction",
+                "incompatible pieces require a face and reduced difference",
+            )
+        if self.status == "COMPATIBLE" and (
+            self.obstruction_face_id is not None
+            or self.obstruction_difference is not None
+        ):
+            raise _validation_error(
+                "piece_obstruction", "compatible pieces must not carry an obstruction"
+            )
+        return self
+
+
+class PiecewiseEvaluationRequest(StrictModel):
+    function: PiecewisePolynomialResult
+    point: ComplexPoint
+
+
+class PiecewiseEvaluationResult(StrictModel):
+    """An evaluation bound to the complete function that was evaluated.
+
+    Retaining the function (rather than only cell IDs and a scalar) keeps the
+    result a closed mathematical value after JSON transport: cell labels are
+    local to a complex and do not identify a polynomial or its coordinate
+    axes on their own.  The same source is retained for both exact states,
+    including ``OUTSIDE_SUPPORT``.
+    """
+
+    function: PiecewisePolynomialResult
+    status: Literal["EVALUATED", "OUTSIDE_SUPPORT"]
+    point: ComplexPoint
+    containing_cell_ids: tuple[str, ...]
+    value: CanonicalRational | None = None
+
+    @model_validator(mode="after")
+    def require_status_shape(self) -> Self:
+        if self.status == "EVALUATED":
+            if not self.containing_cell_ids or self.value is None:
+                raise _validation_error(
+                    "evaluation_success_shape",
+                    "EVALUATED requires containing cells and an exact value",
+                )
+        elif self.containing_cell_ids or self.value is not None:
+            raise _validation_error(
+                "evaluation_outside_shape",
+                "OUTSIDE_SUPPORT must not carry containing cells or a value",
+            )
+        return self
+
+
+class SplineSpaceRequest(StrictModel):
+    complex: PolytopalComplexClosureResult
+    degree: int = Field(ge=0, le=12)
+    smoothness: int = Field(ge=-1, le=4)
+
+
+class SplineSpaceResult(StrictModel):
+    complex: PolytopalComplexClosureResult
+    degree: int
+    smoothness: int
+    coefficient_axis: tuple[tuple[str, tuple[int, ...]], ...]
+    compatibility_matrix: RationalMatrix
+    rank: int
+    nullity: int
+    nullspace_basis: RationalMatrix
+
+
 class PolytopalComplexClosureRequest(StrictModel):
     """Compute the canonical face closure of a finite family of maximal cells.
 
@@ -324,7 +427,15 @@ __all__ = [
     "FaceCoverRelation",
     "MaximalCellRecord",
     "PairwiseIntersectionRecord",
+    "PieceAssignment",
+    "PieceCompatibilityRow",
+    "PiecewiseEvaluationRequest",
+    "PiecewiseEvaluationResult",
+    "PiecewisePolynomialRequest",
+    "PiecewisePolynomialResult",
     "PolytopalComplexClosureRequest",
     "PolytopalComplexClosureResult",
     "SourceCellTransport",
+    "SplineSpaceRequest",
+    "SplineSpaceResult",
 ]

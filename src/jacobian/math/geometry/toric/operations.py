@@ -5,7 +5,7 @@ from __future__ import annotations
 from math import gcd
 from typing import NoReturn
 
-from jacobian._execution import execution_deadline
+from jacobian._execution import execution_deadline, require_execution_deadline
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -24,6 +24,11 @@ from jacobian.math.geometry.toric._kernel import (
     recognize_fan,
 )
 from jacobian.math.geometry.toric._models import (
+    MAX_TORIC_CHART_BOX,
+    MAX_TORIC_CHART_CANDIDATES,
+    MAX_TORIC_CHART_DUAL_RAYS,
+    MAX_TORIC_CHART_GENERATORS,
+    MAX_TORIC_CHART_RELATIONS,
     MAX_TORIC_CONE_COUNT,
     MAX_TORIC_CONE_GENERATORS,
     MAX_TORIC_COORDINATE_DIGITS,
@@ -33,9 +38,13 @@ from jacobian.math.geometry.toric._models import (
     CharacterDivisorResult,
     CharacterVector,
     FanValidationResult,
+    NormalToricMorphismResult,
+    NormalToricVariety,
     OrbitConeProfileResult,
     ToricAffineChartResult,
+    ToricChartGluing,
     ToricChartLocalization,
+    ToricCoefficientField,
     ToricConeAssignment,
     ToricFanPresentation,
     ToricMorphismObstruction,
@@ -51,6 +60,8 @@ MAX_TORIC_RECOGNITION_WORK = 5_000_000
 # evidence.
 MAX_TORIC_CHART_SECONDS = 30.0
 MAX_TORIC_MORPHISM_SECONDS = 30.0
+MAX_TORIC_VARIETY_CHART_WORK = 8_000_000
+MAX_TORIC_VARIETY_OUTPUT_ROWS = 200_000
 
 
 def _reject_envelope(message: str) -> NoReturn:
@@ -67,7 +78,7 @@ def _reject_domain(
     raise OperationDomainValidationError(location=location, code=code, message=message)
 
 
-def _admit_fan(fan: ToricFanPresentation) -> None:
+def _admit_fan(fan: ToricFanPresentation) -> None:  # noqa: C901
     """Enforce the published envelope and preflight the recognition work.
 
     Catalog requests are bounded by the presentation model; native callers can
@@ -76,14 +87,82 @@ def _admit_fan(fan: ToricFanPresentation) -> None:
     and result rows, before any recognition arithmetic starts.
     """
 
+    if not isinstance(fan, ToricFanPresentation):
+        _reject_domain(
+            ("fan",),
+            "toric.fan_presentation_type",
+            "fan must be a canonical ToricFanPresentation",
+        )
+    # Resource envelope checks intentionally precede reparsing: native forged
+    # carriers that are merely oversized remain resource refusals, matching the
+    # wire contract rather than being relabelled malformed.
+    if type(fan.lattice_rank) is not int:
+        _reject_domain(
+            ("fan",),
+            "toric.fan_presentation_malformed",
+            "lattice rank must be an exact integer",
+        )
     if not 1 <= fan.lattice_rank <= MAX_TORIC_LATTICE_RANK:
         _reject_envelope(f"lattice rank is limited to {MAX_TORIC_LATTICE_RANK}")
+    if not isinstance(fan.rays, tuple) or not isinstance(fan.cones, tuple):
+        _reject_domain(
+            ("fan",),
+            "toric.fan_presentation_malformed",
+            "fan axes and presentations must be canonical tuples",
+        )
     if len(fan.rays) > MAX_TORIC_RAY_COUNT:
         _reject_envelope(f"fans are limited to {MAX_TORIC_RAY_COUNT} rays")
     if len(fan.cones) > MAX_TORIC_CONE_COUNT:
         _reject_envelope(f"fans are limited to {MAX_TORIC_CONE_COUNT} cones")
     limit = 10**MAX_TORIC_COORDINATE_DIGITS
     for ray in fan.rays:
+        if (
+            isinstance(ray, tuple)
+            and all(type(value) is int for value in ray)
+            and any(abs(value) >= limit for value in ray)
+        ):
+            _reject_envelope(
+                "ray coordinates are limited to "
+                f"{MAX_TORIC_COORDINATE_DIGITS} decimal digits"
+            )
+    for cone in fan.cones:
+        if isinstance(cone, tuple) and len(cone) > MAX_TORIC_CONE_GENERATORS:
+            _reject_envelope(
+                f"cones are limited to {MAX_TORIC_CONE_GENERATORS} generators"
+            )
+    try:
+        payload = fan.model_dump(mode="python")
+        canonical = ToricFanPresentation.model_validate(payload)
+    except Exception:
+        _reject_domain(
+            ("fan",),
+            "toric.fan_presentation_malformed",
+            "fan axes and presentations must be canonical tuples",
+        )
+    if canonical.model_dump(mode="python") != payload:
+        _reject_domain(
+            ("fan",),
+            "toric.fan_presentation_malformed",
+            "fan must use canonical ray and cone presentations",
+        )
+    if (
+        type(fan.lattice_rank) is not int
+        or not isinstance(fan.rays, tuple)
+        or not isinstance(fan.cones, tuple)
+    ):
+        _reject_domain(
+            ("fan",),
+            "toric.fan_presentation_malformed",
+            "fan axes and presentations must be canonical tuples",
+        )
+    limit = 10**MAX_TORIC_COORDINATE_DIGITS
+    for ray in fan.rays:
+        if not isinstance(ray, tuple) or any(type(value) is not int for value in ray):
+            _reject_domain(
+                ("fan", "rays"),
+                "toric.fan_presentation_malformed",
+                "ray coordinates must be exact integer tuples",
+            )
         if len(ray) != fan.lattice_rank:
             _reject_domain(
                 ("fan", "rays"),
@@ -98,6 +177,12 @@ def _admit_fan(fan: ToricFanPresentation) -> None:
     face_subsets = 0
     membership_problems = 0
     for cone in fan.cones:
+        if not isinstance(cone, tuple) or any(type(index) is not int for index in cone):
+            _reject_domain(
+                ("fan", "cones"),
+                "toric.fan_presentation_malformed",
+                "cone indices must be exact integer tuples",
+            )
         if len(cone) > MAX_TORIC_CONE_GENERATORS:
             _reject_envelope(
                 f"cones are limited to {MAX_TORIC_CONE_GENERATORS} generators"
@@ -283,22 +368,14 @@ def _chart_localizations(
     return tuple(localizations)
 
 
-def compute_affine_chart(
-    fan: ToricFanPresentation, cone: tuple[int, ...]
+def _compute_affine_chart_recognized(
+    fan: ToricFanPresentation,
+    recognized: RecognizedFan,
+    cone: tuple[int, ...],
+    deadline: float,
 ) -> ToricAffineChartResult:
-    """Return the affine chart ``Spec k[sigma^vee cap M]`` of one fan cone.
-
-    The cone is resolved exactly.  A full-dimensional cone uses the shipped
-    double description; a lower-dimensional cone is decomposed into its free
-    torus lineality factor and the pointed quotient semigroup, and its facet
-    localizations are computed on that quotient.  The complete Hilbert basis
-    is reduced from the fundamental-parallelepiped candidates and the relation
-    lattice is replayed against the generators.
-    """
-
-    recognized = _recognize_or_reject(fan)
     recognized_cone = _locate_cone(recognized, cone)
-    deadline = execution_deadline(MAX_TORIC_CHART_SECONDS)
+    require_execution_deadline(deadline)
     data = compute_affine_chart_data(
         tuple(recognized.rays[index] for index in recognized_cone.ray_indices),
         fan.lattice_rank,
@@ -307,6 +384,7 @@ def compute_affine_chart(
     localizations = _chart_localizations(
         recognized, recognized_cone.cone_id, fan.lattice_rank
     )
+    require_execution_deadline(deadline)
     return ToricAffineChartResult._from_components(
         fan=fan,
         cone_id=recognized_cone.cone_id,
@@ -321,12 +399,44 @@ def compute_affine_chart(
     )
 
 
+def compute_affine_chart(
+    fan: ToricFanPresentation, cone: tuple[int, ...]
+) -> ToricAffineChartResult:
+    """Return the affine chart ``Spec k[sigma^vee cap M]`` of one fan cone.
+
+    The cone is resolved exactly.  A full-dimensional cone uses the shipped
+    double description; a lower-dimensional cone is decomposed into its free
+    torus lineality factor and the pointed quotient semigroup, and its facet
+    localizations are computed on that quotient.  The complete Hilbert basis
+    is reduced from the fundamental-parallelepiped candidates and the relation
+    lattice is replayed against the generators.
+    """
+
+    recognized = _recognize_or_reject(fan)
+    deadline = execution_deadline(MAX_TORIC_CHART_SECONDS)
+    return _compute_affine_chart_recognized(fan, recognized, cone, deadline)
+
+
 def _admit_morphism_matrix(
     source: ToricFanPresentation,
     target: ToricFanPresentation,
     matrix: IntegerMatrix,
 ) -> None:
+    if not isinstance(matrix, IntegerMatrix):
+        _reject_domain(
+            ("matrix",),
+            "toric.morphism_matrix_type",
+            "the lattice map must be a canonical integer matrix",
+        )
     entries = matrix.entries
+    if not isinstance(entries, tuple) or any(
+        not isinstance(row, tuple) for row in entries
+    ):
+        _reject_domain(
+            ("matrix",),
+            "toric.morphism_matrix_malformed",
+            "the lattice map entries must be canonical tuples",
+        )
     if len(entries) != target.lattice_rank or any(
         len(row) != source.lattice_rank for row in entries
     ):
@@ -336,6 +446,21 @@ def _admit_morphism_matrix(
             "the matrix must have target lattice rank rows and source lattice "
             "rank columns",
         )
+    try:
+        payload = matrix.model_dump(mode="python")
+        canonical = IntegerMatrix.model_validate(payload)
+    except Exception:
+        _reject_domain(
+            ("matrix",),
+            "toric.morphism_matrix_malformed",
+            "the lattice map must be a canonical integer matrix",
+        )
+    if canonical.model_dump(mode="python") != payload:
+        _reject_domain(
+            ("matrix",),
+            "toric.morphism_matrix_malformed",
+            "the lattice map must be canonical",
+        )
     limit = 10**MAX_TORIC_COORDINATE_DIGITS
     if any(abs(int(value)) >= limit for row in entries for value in row):
         _reject_envelope(
@@ -344,22 +469,16 @@ def _admit_morphism_matrix(
         )
 
 
-def check_toric_morphism(
+def _check_toric_morphism_recognized(
     source: ToricFanPresentation,
     target: ToricFanPresentation,
     matrix: IntegerMatrix,
+    recognized_source: RecognizedFan,
+    recognized_target: RecognizedFan,
+    deadline: float,
 ) -> ToricMorphismResult:
-    """Decide whether one integer lattice map is a toric morphism.
+    """Run the morphism kernel from request-scoped recognized fan facts."""
 
-    Every source cone must map into a single target cone. The verdict returns
-    the induced fan-compatible cone assignment, or the first source cone whose
-    image leaves every target cone together with the witnessing ray images. Each
-    assignment is replayed with exact cone-membership checks.
-    """
-
-    recognized_source = _recognize_or_reject(source)
-    recognized_target = _recognize_or_reject(target)
-    _admit_morphism_matrix(source, target, matrix)
     source_cones = tuple(cone.ray_indices for cone in recognized_source.cones)
     target_cones = tuple(cone.ray_indices for cone in recognized_target.cones)
     work = sum(len(cone) + 1 for cone in source_cones) * len(target_cones)
@@ -367,7 +486,7 @@ def check_toric_morphism(
         _reject_envelope(
             f"morphism cone-membership work exceeds {MAX_TORIC_MORPHISM_WORK}"
         )
-    execution_deadline(MAX_TORIC_MORPHISM_SECONDS)
+    require_execution_deadline(deadline)
     data = compute_toric_morphism_data(
         recognized_source.rays,
         source_cones,
@@ -433,13 +552,301 @@ def check_toric_morphism(
     )
 
 
+def check_toric_morphism(
+    source: ToricFanPresentation,
+    target: ToricFanPresentation,
+    matrix: IntegerMatrix,
+    *,
+    _deadline: float | None = None,
+) -> ToricMorphismResult:
+    """Decide whether one integer lattice map is a toric morphism.
+
+    Every source cone must map into a single target cone. The verdict returns
+    the induced fan-compatible cone assignment, or the first source cone whose
+    image leaves every target cone together with the witnessing ray images. Each
+    assignment is replayed with exact cone-membership checks.
+    """
+
+    # Shape and coefficient admission precede exact fan recognition so a
+    # malformed map cannot trigger expensive recognition work.
+    if not isinstance(source, ToricFanPresentation) or not isinstance(
+        target, ToricFanPresentation
+    ):
+        _reject_domain(
+            ("fan",),
+            "toric.fan_presentation_type",
+            "source and target must be canonical fan presentations",
+        )
+    _admit_fan(source)
+    _admit_fan(target)
+    _admit_morphism_matrix(source, target, matrix)
+    recognized_source = _recognize_or_reject(source)
+    recognized_target = _recognize_or_reject(target)
+    deadline = (
+        _deadline
+        if _deadline is not None
+        else execution_deadline(MAX_TORIC_MORPHISM_SECONDS)
+    )
+    return _check_toric_morphism_recognized(
+        source,
+        target,
+        matrix,
+        recognized_source,
+        recognized_target,
+        deadline,
+    )
+
+
+def _construct_normal_toric_variety_recognized(
+    fan: ToricFanPresentation,
+    field: ToricCoefficientField,
+    recognized: RecognizedFan,
+    deadline: float,
+) -> NormalToricVariety:
+    """Derive one carrier from already admitted and recognized fan facts."""
+
+    require_execution_deadline(deadline)
+    chart_count = len(recognized.cones)
+    per_chart_work = (
+        MAX_TORIC_CHART_BOX
+        + MAX_TORIC_CHART_CANDIDATES
+        + MAX_TORIC_CHART_GENERATORS
+        + MAX_TORIC_CHART_RELATIONS
+    ) * (fan.lattice_rank + 1)
+    chart_work = chart_count * per_chart_work
+    output_rows = (
+        chart_count
+        * (
+            MAX_TORIC_CHART_DUAL_RAYS
+            + MAX_TORIC_CHART_GENERATORS
+            + MAX_TORIC_CHART_RELATIONS
+            + MAX_TORIC_LATTICE_RANK
+            + MAX_TORIC_CONE_COUNT
+        )
+        + chart_count * chart_count
+    )
+    if chart_work > MAX_TORIC_VARIETY_CHART_WORK:
+        _reject_envelope("normal-toric chart work exceeds the aggregate envelope")
+    if output_rows > MAX_TORIC_VARIETY_OUTPUT_ROWS:
+        _reject_envelope(
+            "normal-toric serialized output exceeds the aggregate envelope"
+        )
+    charts = tuple(
+        _compute_affine_chart_recognized(fan, recognized, cone.ray_indices, deadline)
+        for cone in recognized.cones
+    )
+    gluing = tuple(
+        ToricChartGluing(
+            source_cone_id=chart.cone_id,
+            face_cone_id=row.face_cone_id,
+            localizing_character=row.localizing_character,
+        )
+        for chart in charts
+        for row in chart.localizations
+    )
+    return NormalToricVariety(
+        field=field,
+        fan=fan,
+        orbit_profile=OrbitConeProfileResult._from_recognition(
+            fan, recognized=recognized
+        ),
+        charts=charts,
+        gluing=gluing,
+    )
+
+
+def construct_normal_toric_variety(
+    fan: ToricFanPresentation,
+    field: object | None = None,
+    *,
+    _deadline: float | None = None,
+) -> NormalToricVariety:
+    """Construct the finite normal-toric carrier over the explicit QQ field."""
+    from jacobian.math.geometry.toric._models import ToricCoefficientField
+
+    # Native callers bypass the request model.  Check both typed parents before
+    # any fan recognition or chart expansion so malformed calls have the same
+    # owner error as catalog dispatch.
+    if not isinstance(fan, ToricFanPresentation):
+        _reject_domain(
+            ("fan",),
+            "toric.fan_presentation_type",
+            "fan must be a canonical ToricFanPresentation",
+        )
+    coefficient_field = field if field is not None else ToricCoefficientField()
+    if not isinstance(coefficient_field, ToricCoefficientField):
+        _reject_domain(
+            ("field",),
+            "toric.field_invalid",
+            "the coefficient field must be the canonical QQ field",
+        )
+    try:
+        field_payload = coefficient_field.model_dump(mode="python")
+        canonical_field = ToricCoefficientField.model_validate(field_payload)
+    except Exception:
+        _reject_domain(
+            ("field",),
+            "toric.field_invalid",
+            "the coefficient field must be the canonical QQ field",
+        )
+    if canonical_field.model_dump(mode="python") != field_payload:
+        _reject_domain(
+            ("field",),
+            "toric.field_invalid",
+            "the coefficient field must be canonical",
+        )
+    coefficient_field = canonical_field
+    # Recognition, aggregate chart work/output admission, and all chart kernels
+    # share one operation deadline.  Do not dispatch through the public chart
+    # operation here: that would re-recognize the fan and create a fresh lease
+    # for every chart.
+    deadline = (
+        _deadline
+        if _deadline is not None
+        else execution_deadline(MAX_TORIC_CHART_SECONDS)
+    )
+    recognized = _recognize_or_reject(fan)
+    return _construct_normal_toric_variety_recognized(
+        fan, coefficient_field, recognized, deadline
+    )
+
+
+def _admit_normal_toric_variety(
+    value: NormalToricVariety, *, location: str, deadline: float
+) -> tuple[NormalToricVariety, RecognizedFan]:
+    """Re-establish every source-bound claim in a normal-toric carrier."""
+
+    if not isinstance(value, NormalToricVariety):
+        _reject_domain(
+            (location,),
+            "toric.variety_invalid",
+            "the variety must be a canonical normal-toric carrier",
+        )
+    if not isinstance(value.field, ToricCoefficientField):
+        _reject_domain(
+            (location, "field"),
+            "toric.field_invalid",
+            "the coefficient field must be the canonical QQ field",
+        )
+    try:
+        field_payload = value.field.model_dump(mode="python")
+        field = ToricCoefficientField.model_validate(field_payload)
+    except Exception:
+        _reject_domain(
+            (location, "field"),
+            "toric.field_invalid",
+            "the coefficient field must be the canonical QQ field",
+        )
+    if field.model_dump(mode="python") != field_payload:
+        _reject_domain(
+            (location, "field"),
+            "toric.field_invalid",
+            "the coefficient field must be canonical",
+        )
+    try:
+        payload = value.model_dump(mode="python")
+    except Exception:
+        _reject_domain(
+            (location,),
+            "toric.variety_malformed",
+            "normal-toric carrier fields must be structurally valid",
+        )
+    # Reconstructing the canonical carrier re-recognizes the fan and derives
+    # the orbit profile, every affine chart, and the gluing ledger.  Comparing
+    # the serialized structures rejects forged model_construct claims before
+    # the morphism kernel can rely on their source binding.
+    try:
+        recognized = _recognize_or_reject(value.fan)
+        canonical = _construct_normal_toric_variety_recognized(
+            value.fan, field, recognized, deadline
+        )
+        canonical_payload = canonical.model_dump(mode="python")
+    except (OperationDomainValidationError, OperationResourceAdmissionError):
+        raise
+    except Exception:
+        _reject_domain(
+            (location,),
+            "toric.variety_malformed",
+            "normal-toric carrier claims could not be re-established",
+        )
+    if payload != canonical_payload:
+        _reject_domain(
+            (location,),
+            "toric.variety_source_mismatch",
+            "fan, orbit profile, charts, and gluing must describe one carrier",
+        )
+    return canonical, recognized
+
+
+def check_normal_toric_morphism(
+    source: NormalToricVariety, target: NormalToricVariety, matrix: IntegerMatrix
+) -> NormalToricMorphismResult:
+    # Refuse a malformed map before reconstructing either source-bound variety.
+    if not isinstance(matrix, IntegerMatrix):
+        _reject_domain(
+            ("matrix",),
+            "toric.morphism_matrix_type",
+            "the lattice map must be a canonical integer matrix",
+        )
+    if not isinstance(source, NormalToricVariety) or not isinstance(
+        target, NormalToricVariety
+    ):
+        _reject_domain(
+            ("variety",),
+            "toric.variety_invalid",
+            "source and target must be canonical normal-toric carriers",
+        )
+    if not isinstance(source.fan, ToricFanPresentation) or not isinstance(
+        target.fan, ToricFanPresentation
+    ):
+        _reject_domain(
+            ("fan",),
+            "toric.fan_presentation_type",
+            "varieties must retain canonical fan presentations",
+        )
+    _admit_fan(source.fan)
+    _admit_fan(target.fan)
+    _admit_morphism_matrix(source.fan, target.fan, matrix)
+    deadline = execution_deadline(MAX_TORIC_MORPHISM_SECONDS)
+    source, recognized_source = _admit_normal_toric_variety(
+        source, location="source", deadline=deadline
+    )
+    target, recognized_target = _admit_normal_toric_variety(
+        target, location="target", deadline=deadline
+    )
+    if source.field != target.field:
+        _reject_domain(
+            ("field",),
+            "toric.field_mismatch",
+            "toric morphisms require identical coefficient fields",
+        )
+    if not isinstance(matrix, IntegerMatrix):
+        _reject_domain(
+            ("matrix",),
+            "toric.morphism_matrix_type",
+            "the lattice map must be a canonical integer matrix",
+        )
+    require_execution_deadline(deadline)
+    result = _check_toric_morphism_recognized(
+        source.fan,
+        target.fan,
+        matrix,
+        recognized_source,
+        recognized_target,
+        deadline,
+    )
+    return NormalToricMorphismResult(source=source, target=target, map=result)
+
+
 __all__ = [
     "MAX_TORIC_CHART_SECONDS",
     "MAX_TORIC_MORPHISM_SECONDS",
     "MAX_TORIC_RECOGNITION_WORK",
+    "check_normal_toric_morphism",
     "check_toric_morphism",
     "compute_affine_chart",
     "compute_character_divisor",
     "compute_orbit_cone_profile",
+    "construct_normal_toric_variety",
     "validate_fan",
 ]

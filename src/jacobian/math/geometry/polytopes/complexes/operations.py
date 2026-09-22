@@ -60,10 +60,20 @@ from jacobian.math.geometry.polytopes.complexes._models import (
     PolytopalComplexClosureResult,
     SourceCellTransport,
 )
+from jacobian.math.geometry.polytopes.complexes._spline import (
+    piecewise_polynomial_evaluate,
+    piecewise_polynomial_from_maximal_pieces,
+    spline_space,
+)
 from jacobian.math.geometry.polytopes.operations import facet_incidence
 from jacobian.math.geometry.polytopes.values import Vertex
 
-__all__ = ["polytopal_complex_closure"]
+__all__ = [
+    "piecewise_polynomial_evaluate",
+    "piecewise_polynomial_from_maximal_pieces",
+    "polytopal_complex_closure",
+    "spline_space",
+]
 
 Point = tuple[Fraction, ...]
 FaceKey = tuple[Point, ...]
@@ -533,7 +543,7 @@ def _build_cell_models(
                 source_indices=tuple(sorted(sources)),
                 dimension=dimension,
                 vertices=tuple(_complex_point(point) for point in cell_key),
-                facet_face_ids=tuple(face_id_of[key] for key in facet_keys),
+                facet_face_ids=tuple(sorted(face_id_of[key] for key in facet_keys)),
             )
         )
     return tuple(cell_models)

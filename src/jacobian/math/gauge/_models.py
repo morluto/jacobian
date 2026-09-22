@@ -180,6 +180,177 @@ class EdgeContribution(StrictModel):
     value: PermutationLabel
 
 
+class GaugeVertexValue(StrictModel):
+    """One exact gauge-frame element at a lattice vertex."""
+
+    vertex: GaugeLabel
+    value: PermutationLabel
+
+
+class GaugeTransformRequest(StrictModel):
+    """A finite gauge transform bound to one lattice and group degree."""
+
+    field: GaugeField
+    vertex_values: tuple[GaugeVertexValue, ...] = Field(
+        min_length=1, max_length=MAX_GAUGE_VERTICES
+    )
+
+    @model_validator(mode="after")
+    def require_complete_vertex_values(self) -> Self:
+        vertices = self.field.lattice.vertices
+        labels = {entry.vertex: entry.value for entry in self.vertex_values}
+        if set(labels) != set(vertices) or len(labels) != len(self.vertex_values):
+            raise _validation_error(
+                "transform_vertices",
+                "gauge transform must label every lattice vertex exactly once",
+            )
+        if any(value.degree != self.field.degree for value in labels.values()):
+            raise _validation_error(
+                "transform_degree", "gauge-frame elements must use the field degree"
+            )
+        return self
+
+
+class GaugeTransformResult(StrictModel):
+    """The transformed edge field and retained vertex-frame map."""
+
+    source: GaugeField
+    transformed: GaugeField
+    vertex_values: tuple[GaugeVertexValue, ...]
+
+    @model_validator(mode="after")
+    def require_parent_binding(self) -> Self:
+        if (
+            not isinstance(self.source, GaugeField)
+            or not isinstance(self.transformed, GaugeField)
+            or not isinstance(self.source.lattice, GaugeLattice)
+            or not isinstance(self.transformed.lattice, GaugeLattice)
+        ):
+            raise _validation_error(
+                "transform_parent", "source and transformed values must be gauge fields"
+            )
+        if self.source.lattice != self.transformed.lattice:
+            raise _validation_error(
+                "transform_parent",
+                "source and transformed fields must share one lattice",
+            )
+        if self.source.degree != self.transformed.degree:
+            raise _validation_error(
+                "transform_degree",
+                "source and transformed fields must share one group degree",
+            )
+        vertices = self.source.lattice.vertices
+        if not isinstance(self.vertex_values, tuple) or any(
+            not isinstance(entry, GaugeVertexValue) for entry in self.vertex_values
+        ):
+            raise _validation_error(
+                "transform_vertices", "vertex frames must be typed gauge values"
+            )
+        if any(
+            not isinstance(entry.value, PermutationLabel)
+            or type(entry.value.degree) is not int
+            or not isinstance(entry.value.image, tuple)
+            or len(entry.value.image) != entry.value.degree
+            or any(type(value) is not int for value in entry.value.image)
+            or sorted(entry.value.image) != list(range(entry.value.degree))
+            for entry in self.vertex_values
+        ):
+            raise _validation_error(
+                "transform_vertices", "vertex frames must be valid permutation values"
+            )
+        labels = tuple(entry.vertex for entry in self.vertex_values)
+        if tuple(sorted(labels)) != tuple(sorted(vertices)) or len(set(labels)) != len(
+            labels
+        ):
+            raise _validation_error(
+                "transform_vertices",
+                "vertex frames must cover the source lattice exactly once",
+            )
+        if any(
+            entry.value.degree != self.source.degree for entry in self.vertex_values
+        ):
+            raise _validation_error(
+                "transform_degree",
+                "every vertex frame must use the source group degree",
+            )
+        return self
+
+
+class PlaquetteRequest(StrictModel):
+    """A closed oriented lattice path whose holonomy is curvature."""
+
+    field: GaugeField
+    path: OrientedGaugePath
+
+
+class PlaquetteResult(StrictModel):
+    """Exact oriented plaquette curvature bound to field and path."""
+
+    field: GaugeField
+    path: OrientedGaugePath
+    curvature: PermutationLabel
+    start: GaugeLabel
+
+    @model_validator(mode="after")
+    def require_path_and_field_binding(self) -> Self:
+        if (
+            not isinstance(self.field, GaugeField)
+            or not isinstance(self.field.lattice, GaugeLattice)
+            or not isinstance(self.path, OrientedGaugePath)
+            or not isinstance(self.curvature, PermutationLabel)
+            or type(self.field.degree) is not int
+            or type(self.curvature.degree) is not int
+            or any(not isinstance(edge, GaugeEdge) for edge in self.field.lattice.edges)
+        ):
+            raise _validation_error(
+                "plaquette_parent", "plaquette source and path are malformed"
+            )
+        if (
+            not isinstance(self.curvature.image, tuple)
+            or len(self.curvature.image) != self.curvature.degree
+            or any(type(value) is not int for value in self.curvature.image)
+            or sorted(self.curvature.image) != list(range(self.curvature.degree))
+        ):
+            raise _validation_error(
+                "plaquette_parent", "plaquette curvature is not a permutation value"
+            )
+        if self.curvature.degree != self.field.degree:
+            raise _validation_error(
+                "plaquette_degree", "curvature must use the field's group degree"
+            )
+        by_id = {edge.edge_id: edge for edge in self.field.lattice.edges}
+        if not isinstance(self.path.steps, tuple) or not self.path.steps:
+            raise _validation_error("plaquette_path", "plaquette path must be nonempty")
+        cursor: str | None = None
+        first: str | None = None
+        for step in self.path.steps:
+            if not isinstance(step, GaugePathStep) or type(step.forward) is not bool:
+                raise _validation_error(
+                    "plaquette_path", "plaquette steps must be typed lattice traversals"
+                )
+            edge = by_id.get(step.edge_id)
+            if edge is None:
+                raise _validation_error(
+                    "plaquette_path", "plaquette path must use source-lattice edges"
+                )
+            tail, head = (
+                (edge.tail, edge.head) if step.forward else (edge.head, edge.tail)
+            )
+            if cursor is not None and tail != cursor:
+                raise _validation_error(
+                    "plaquette_path", "plaquette steps must chain head-to-tail"
+                )
+            if first is None:
+                first = tail
+            cursor = head
+        if first != cursor or self.start != first:
+            raise _validation_error(
+                "plaquette_path",
+                "plaquette start must bind to a closed source-lattice path",
+            )
+        return self
+
+
 class HolonomyRequest(StrictModel):
     """Compute the ordered exact group product along an oriented edge path.
 
@@ -247,8 +418,13 @@ __all__ = [
     "GaugeLabel",
     "GaugeLattice",
     "GaugePathStep",
+    "GaugeTransformRequest",
+    "GaugeTransformResult",
+    "GaugeVertexValue",
     "HolonomyRequest",
     "HolonomyResult",
     "OrientedGaugePath",
     "PermutationLabel",
+    "PlaquetteRequest",
+    "PlaquetteResult",
 ]

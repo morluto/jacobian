@@ -7,6 +7,7 @@ from typing import Annotated, Literal, Self
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
+from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.math.matrices.values import IntegerMatrix
 
@@ -84,6 +85,56 @@ class CartanMatrix(StrictModel):
                 tuple(int(value) for value in row) for row in other
             )
         return NotImplemented
+
+
+class FiniteCartanDatum(StrictModel):
+    """Finite Cartan data with explicit root/coroot and weight bases."""
+
+    cartan_matrix: CartanMatrix
+    symmetrizer: tuple[CanonicalRational, ...] = Field(
+        min_length=1, max_length=MAX_RANK
+    )
+    root_to_weight: IntegerMatrix
+    coroot_to_coweight: IntegerMatrix
+
+    @model_validator(mode="after")
+    def require_basis_shapes(self) -> Self:
+        rank = len(self.cartan_matrix)
+        if len(self.symmetrizer) != rank:
+            raise _validation_error(
+                "datum_symmetrizer", "symmetrizer must match Cartan rank"
+            )
+        for name in ("root_to_weight", "coroot_to_coweight"):
+            value = getattr(self, name)
+            if value.row_count != rank or value.column_count != rank:
+                raise _validation_error(
+                    "datum_basis", f"{name} must be a square Cartan-rank map"
+                )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        cartan_matrix: CartanMatrix,
+        symmetrizer: tuple[CanonicalRational, ...],
+        root_to_weight: IntegerMatrix,
+        coroot_to_coweight: IntegerMatrix,
+    ) -> Self:
+        return cls.model_construct(
+            cartan_matrix=cartan_matrix,
+            symmetrizer=symmetrizer,
+            root_to_weight=root_to_weight,
+            coroot_to_coweight=coroot_to_coweight,
+        )
+
+
+class CartanDatumRequest(StrictModel):
+    """Request a complete finite Cartan datum from a canonical matrix."""
+
+    matrix: CartanMatrix = Field(
+        description="A finite-type Cartan matrix with its simple-root axis."
+    )
 
 
 class CartanMatrixRequest(StrictModel):

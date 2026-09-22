@@ -21,6 +21,8 @@ from jacobian.math.number_theory.modular_forms.values import (
 )
 from jacobian.math.polynomials.series._models import TruncatedSeries
 
+from .transforms import hecke, named_q_expansion, sturm_bound, u_operator, v_operator
+
 
 def _series(coefficients: tuple[Fraction, ...]) -> TruncatedSeries:
     return TruncatedSeries(
@@ -96,11 +98,17 @@ def require_space_dimension_admission(space: ModularFormSpace) -> None:
             code="modular_form.space_dimension_unsupported_domain",
             message="only QQ coefficient domains are supported",
         )
+    if type(space.level) is not int or space.level < 1 or space.level > 10_000:
+        raise OperationDomainValidationError(
+            location=("space", "level"),
+            code="modular_form.space_dimension_level_bound",
+            message="Gamma0 level is outside the bounded exact dimension envelope",
+        )
     if space.level != 1:
         raise OperationDomainValidationError(
             location=("space", "level"),
             code="modular_form.space_dimension_unsupported_level",
-            message="only level-one space dimensions are supported",
+            message="space dimensions are currently admitted only at level one",
         )
 
 
@@ -115,16 +123,23 @@ def space_dimension(space: ModularFormSpace) -> SpaceDimensionResult:
 
     require_space_dimension_admission(space)
     weight = space.weight
-    if weight % 2 == 1:
-        holomorphic, cusp, eisenstein = 0, 0, 0
-    elif weight == 0:
-        holomorphic, cusp, eisenstein = 1, 0, 1
-    elif weight == 2:
-        holomorphic, cusp, eisenstein = 0, 0, 0
+    if space.level == 1:
+        if weight % 2 == 1:
+            holomorphic, cusp, eisenstein = 0, 0, 0
+        elif weight == 0:
+            holomorphic, cusp, eisenstein = 1, 0, 1
+        elif weight == 2:
+            holomorphic, cusp, eisenstein = 0, 0, 0
+        else:
+            holomorphic = weight // 12 if weight % 12 == 2 else weight // 12 + 1
+            eisenstein = 1
+            cusp = holomorphic - 1
     else:
-        holomorphic = weight // 12 if weight % 12 == 2 else weight // 12 + 1
-        eisenstein = 1
-        cusp = holomorphic - 1
+        raise OperationDomainValidationError(
+            location=("space", "level"),
+            code="modular_form.space_dimension_unsupported_level",
+            message="space dimensions are currently admitted only at level one",
+        )
     dimension = holomorphic if space.kind == "M" else cusp
     return SpaceDimensionResult._from_kernel(
         space,
@@ -134,4 +149,12 @@ def space_dimension(space: ModularFormSpace) -> SpaceDimensionResult:
     )
 
 
-__all__ = ["level_one_named_q_expansion", "space_dimension"]
+__all__ = [
+    "hecke",
+    "level_one_named_q_expansion",
+    "named_q_expansion",
+    "space_dimension",
+    "sturm_bound",
+    "u_operator",
+    "v_operator",
+]

@@ -110,7 +110,7 @@ def require_level_one_admission(
     form: NamedLevelOneModularForm, truncation_order: int
 ) -> None:
     """Prove finite scan, series work, coefficient, and output envelopes."""
-    if form not in NAMED_LEVEL_ONE_FORMS:
+    if type(form) is not str or form not in NAMED_LEVEL_ONE_FORMS:
         raise OperationDomainValidationError(
             location=("form",),
             code="modular_form.form_out_of_range",

@@ -152,3 +152,8 @@ def test_forged_decomposition_rejected() -> None:
 def test_native_rejects_a_non_space_value() -> None:
     with pytest.raises(OperationDomainValidationError):
         space_dimension("not-a-space")  # type: ignore[arg-type]
+
+
+def test_higher_level_rejection_preserves_level_one_result_metadata() -> None:
+    with pytest.raises(OperationDomainValidationError):
+        space_dimension(_space(2, "S", level=2))

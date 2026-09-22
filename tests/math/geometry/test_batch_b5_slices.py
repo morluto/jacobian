@@ -24,7 +24,6 @@ from jacobian.math.geometry.convex._models import (
     ConvexSpace,
     CoverageDirection,
     CoveragePoint,
-    DirectionCoverageRequest,
     RationalConvexDirection,
     RationalConvexPoint,
 )
@@ -98,11 +97,9 @@ def test_active_facets_and_complete_coverage_matrix() -> None:
     profile = active_facet_profile(polytope, point)
     assert profile.active_inequality_ids == ("bottom", "left")
     coverage = direction_set_coverage(
-        DirectionCoverageRequest(
-            polytope=polytope,
-            points=(CoveragePoint(point_id="p", point=point),),
-            directions=(CoverageDirection(direction_id="d", direction=direction),),
-        )
+        polytope,
+        (CoveragePoint(point_id="p", point=point),),
+        (CoverageDirection(direction_id="d", direction=direction),),
     )
     assert len(coverage.cells) == 1
     assert coverage.strictly_illuminated_point_ids == ("p",)

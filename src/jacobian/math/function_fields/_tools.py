@@ -82,7 +82,7 @@ def _run_place_valuation(
 def _run_principal(
     request: FunctionFieldPrincipalDivisorRequest,
 ) -> FunctionFieldPrincipalDivisorResult:
-    return function_field_principal_divisor(request)
+    return function_field_principal_divisor(request.field, request.element)
 
 
 _GF2_Y = {

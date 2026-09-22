@@ -473,12 +473,13 @@ class TestInvalidCandidates:
 
         assert not verify_signed_embedding(forged)
 
-    def test_serialized_invalid_result_rejects_forged_obstruction(self) -> None:
+    def test_serialized_invalid_result_defers_semantics_to_verifier(self) -> None:
         result = check_signed_embedding(_k4(), _K4_SPHERE, twisted_edges=(6,))
         payload = result.model_dump(mode="json")
         payload["obstruction_detail"] = "twisted_edges repeats edge 6"
-        with pytest.raises(ValidationError):
-            SignedEmbeddingCheckResult.model_validate(payload)
+        forged = SignedEmbeddingCheckResult.model_validate(payload)
+
+        assert not verify_signed_embedding(forged)
 
     def test_request_rejects_both_sign_encodings(self) -> None:
         with pytest.raises(ValidationError):

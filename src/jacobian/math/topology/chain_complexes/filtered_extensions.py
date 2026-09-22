@@ -7,6 +7,7 @@ from typing import Any
 from pydantic import Field
 
 from jacobian._models import StrictModel
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.topology.chain_complexes._filtered_models import (
     MAX_SPECTRAL_PAGE,
@@ -157,10 +158,13 @@ def filtered_map(request: FilteredChainMapRequest) -> FilteredChainMapResult:
 
 def _serialize_entry(value: Any, prime: int | None) -> str:
     if prime is not None:
-        return str(int(value) % prime)
+        return format_canonical_integer(int(value) % prime)
     if hasattr(value, "denominator") and value.denominator != 1:
-        return f"{value.numerator}/{value.denominator}"
-    return str(value)
+        return (
+            f"{format_canonical_integer(int(value.numerator))}/"
+            f"{format_canonical_integer(int(value.denominator))}"
+        )
+    return format_canonical_integer(int(value))
 
 
 def _mul(left: Any, right: Any, prime: int | None) -> Any:

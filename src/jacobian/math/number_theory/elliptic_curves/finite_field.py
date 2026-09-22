@@ -657,7 +657,12 @@ def _negate_point(
     curve = point.curve
     if point.at_infinity:
         return FiniteFieldEllipticPoint.infinity(curve)
-    assert point.x is not None and point.y is not None
+    if point.x is None or point.y is None:
+        raise OperationDomainValidationError(
+            location=("point",),
+            code="elliptic_curve.finite_field.point_coordinates",
+            message="a finite elliptic-curve point requires both coordinates",
+        )
     p = curve.field.characteristic
     return FiniteFieldEllipticPoint.affine(
         curve,
@@ -678,12 +683,12 @@ def _add_points(
         return second
     if second.at_infinity:
         return first
-    assert (
-        first.x is not None
-        and first.y is not None
-        and second.x is not None
-        and second.y is not None
-    )
+    if first.x is None or first.y is None or second.x is None or second.y is None:
+        raise OperationDomainValidationError(
+            location=("point",),
+            code="elliptic_curve.finite_field.point_coordinates",
+            message="finite elliptic-curve points require both coordinates",
+        )
     p = curve.field.characteristic
     f = curve.field
     x1, y1, x2, y2 = (

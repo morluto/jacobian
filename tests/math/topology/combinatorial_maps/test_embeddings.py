@@ -336,18 +336,18 @@ class TestInvalidCandidates:
         assert result.status == "INVALID_EMBEDDING"
         assert result.obstruction_code == "GRAPH_DISCONNECTED"
 
-    def test_serialized_invalid_result_binds_actual_first_obstruction(self) -> None:
+    def test_serialized_invalid_result_defers_semantics_to_verifier(self) -> None:
         result = check_orientable_embedding(_k4(), _K4_SPHERE[:3])
         payload = result.model_dump(mode="json")
         payload["obstruction_code"] = "GRAPH_DISCONNECTED"
         payload["obstruction_detail"] = "the supplied graph is not connected"
-        with pytest.raises(ValidationError):
-            OrientableEmbeddingCheckResult.model_validate(payload)
+        forged_obstruction = OrientableEmbeddingCheckResult.model_validate(payload)
+        assert not verify_orientable_embedding(forged_obstruction)
 
         payload = result.model_dump(mode="json")
         payload["rotations"] = _K4_SPHERE
-        with pytest.raises(ValidationError):
-            OrientableEmbeddingCheckResult.model_validate(payload)
+        forged_source = OrientableEmbeddingCheckResult.model_validate(payload)
+        assert not verify_orientable_embedding(forged_source)
 
     def test_corrupted_rotation_changes_the_face_partition(self) -> None:
         rotations = ((0, 2, 1), (0, 4, 3), (1, 3, 5), (2, 5, 4))

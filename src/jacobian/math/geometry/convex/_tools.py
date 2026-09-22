@@ -72,7 +72,7 @@ TOOLS = (
         description="Return the complete point-by-direction local-motion matrix, strict coverage, uncovered points, and deterministic witnesses for a finite supplied boundary-point and direction family.",
         request_type=DirectionCoverageRequest,
         result_type=DirectionCoverageResult,
-        run=direction_set_coverage,
+        run=lambda r: direction_set_coverage(r.polytope, r.points, r.directions),
         tags=("convex-geometry", "illumination", "coverage"),
         discovery_terms=(
             "strict illumination coverage matrix",

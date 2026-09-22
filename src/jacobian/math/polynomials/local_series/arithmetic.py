@@ -6,6 +6,7 @@ from fractions import Fraction
 from math import gcd
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -349,8 +350,10 @@ def _admit_single_product_growth(
         left_value = left.coefficients[left_index - left.valuation_lower]
         right_value = right.coefficients[right_index - right.valuation_lower]
         digits = max(
-            len(str(abs(left_value.num))) + len(str(abs(right_value.num))),
-            len(str(left_value.den)) + len(str(right_value.den)),
+            len(format_canonical_integer(abs(left_value.num)))
+            + len(format_canonical_integer(abs(right_value.num))),
+            len(format_canonical_integer(left_value.den))
+            + len(format_canonical_integer(right_value.den)),
         )
         if digits > MAX_LOCAL_SERIES_COEFFICIENT_DIGITS:
             raise OperationResourceAdmissionError(
@@ -648,13 +651,19 @@ def change_scale(
             code="local_series.zero_scale",
             message="scale must be nonzero",
         )
-    scale_digits = max(len(str(abs(c.numerator))), len(str(c.denominator)))
+    scale_digits = max(
+        len(format_canonical_integer(abs(c.numerator))),
+        len(format_canonical_integer(c.denominator)),
+    )
     # Exponentiation can otherwise create an enormous temporary before the
     # result carrier gets a chance to reject it.  Reduction can only decrease
     # component widths, so this is a sound pre-admission bound.
     max_source_digits = max(
         (
-            max(len(str(abs(value.num))), len(str(value.den)))
+            max(
+                len(format_canonical_integer(abs(value.num))),
+                len(format_canonical_integer(value.den)),
+            )
             for value in series.coefficients
         ),
         default=1,

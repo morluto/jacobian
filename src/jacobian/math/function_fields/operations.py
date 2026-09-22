@@ -38,7 +38,6 @@ from jacobian.math.function_fields._models import (
     FunctionFieldDivisorTerm,
     FunctionFieldElementMultiplyResult,
     FunctionFieldPlace,
-    FunctionFieldPrincipalDivisorRequest,
     FunctionFieldPrincipalDivisorResult,
     FunctionFieldProductTerm,
     FunctionFieldReductionStep,
@@ -535,7 +534,12 @@ def _admit_place(place: FunctionFieldPlace) -> FunctionFieldPlace:
     field = _admit_rational_place_field(place.field)
     prime_polynomial = place.prime_polynomial
     if place.kind == "FINITE":
-        assert prime_polynomial is not None
+        if prime_polynomial is None:
+            raise OperationDomainValidationError(
+                location=("place", "prime_polynomial"),
+                code="function_field.finite_place_polynomial",
+                message="a finite place requires its prime polynomial",
+            )
         # Polynomial associates define the same prime ideal/place.  The public
         # carrier permits either spelling, while valuation and factorization use
         # the canonical monic representative.
@@ -549,9 +553,15 @@ def _admit_place(place: FunctionFieldPlace) -> FunctionFieldPlace:
         degree=place.degree,
     )
     if place.kind == "FINITE":
-        assert place.prime_polynomial is not None
-        factors = _factor_polynomial(place.prime_polynomial)
-        if factors != ((place.prime_polynomial, 1),):
+        admitted_polynomial = place.prime_polynomial
+        if admitted_polynomial is None:
+            raise OperationDomainValidationError(
+                location=("place", "prime_polynomial"),
+                code="function_field.finite_place_polynomial",
+                message="a finite place requires its prime polynomial",
+            )
+        factors = _factor_polynomial(admitted_polynomial)
+        if factors != ((admitted_polynomial, 1),):
             raise OperationDomainValidationError(
                 location=("place",),
                 code="function_field.place_not_prime",
@@ -566,8 +576,14 @@ def _rf_valuation(value: PrimeFieldRationalFunction, place: FunctionFieldPlace) 
     den = list(value.denominator.coefficients)
     if place.kind == "INFINITE":
         return (len(den) - 1) - (len(num) - 1)
-    assert place.prime_polynomial is not None
-    divisor = list(place.prime_polynomial.coefficients)
+    place_polynomial = place.prime_polynomial
+    if place_polynomial is None:
+        raise OperationDomainValidationError(
+            location=("place", "prime_polynomial"),
+            code="function_field.finite_place_polynomial",
+            message="a finite place requires its prime polynomial",
+        )
+    divisor = list(place_polynomial.coefficients)
 
     def order(poly: list[int]) -> int:
         count = 0
@@ -676,35 +692,18 @@ def _factor_polynomial(
 
 
 def function_field_principal_divisor(
-    request: FunctionFieldPrincipalDivisorRequest,
+    field: FiniteFunctionField,
+    element: FiniteFunctionFieldElement,
 ) -> FunctionFieldPrincipalDivisorResult:
-    if not isinstance(request, FunctionFieldPrincipalDivisorRequest):
-        raise OperationDomainValidationError(
-            location=("request",),
-            code="function_field.principal_divisor_request_type",
-            message="request must contain a function field and one of its elements",
-        )
-    try:
-        request = FunctionFieldPrincipalDivisorRequest.model_validate(
-            request.model_dump()
-        )
-    except (ValidationError, AttributeError, KeyError, TypeError, ValueError) as exc:
-        raise OperationDomainValidationError(
-            location=("request",),
-            code="function_field.invalid_principal_divisor_request",
-            message="principal-divisor request has malformed field or element data",
-        ) from exc
-    field = _admit_rational_place_field(request.field)
-    if not isinstance(request.element, FiniteFunctionFieldElement):
+    field = _admit_rational_place_field(field)
+    if not isinstance(element, FiniteFunctionFieldElement):
         raise OperationDomainValidationError(
             location=("element",),
             code="function_field.element_type",
             message="element must be a finite function-field element value",
         )
     try:
-        element = FiniteFunctionFieldElement.model_validate(
-            request.element.model_dump()
-        )
+        element = FiniteFunctionFieldElement.model_validate(element.model_dump())
     except (ValidationError, AttributeError, KeyError, TypeError, ValueError) as exc:
         raise OperationDomainValidationError(
             location=("element",),

@@ -7,6 +7,7 @@ from math import gcd, isqrt
 from typing import Literal, cast
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -233,7 +234,10 @@ def _admit_hecke_work(
         )
     max_source_digits = max(
         (
-            max(len(str(abs(c.num))), len(str(c.den)))
+            max(
+                len(format_canonical_integer(abs(c.num))),
+                len(format_canonical_integer(c.den)),
+            )
             for c in expansion.q_expansion.coefficients
         ),
         default=1,

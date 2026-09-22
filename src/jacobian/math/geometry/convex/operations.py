@@ -22,8 +22,9 @@ from jacobian.math.geometry.convex._models import (
     ConvexHPolytope,
     ConvexInequality,
     ConvexSpace,
+    CoverageDirection,
+    CoveragePoint,
     DirectionCoverageCell,
-    DirectionCoverageRequest,
     DirectionCoverageResult,
     DirectionLocalMotionResult,
     RationalConvexDirection,
@@ -398,39 +399,44 @@ def active_facet_profile(
 
 
 def direction_set_coverage(
-    request: DirectionCoverageRequest,
+    polytope: ConvexHPolytope,
+    points: tuple[CoveragePoint, ...],
+    directions: tuple[CoverageDirection, ...],
 ) -> DirectionCoverageResult:
-    if not isinstance(request, DirectionCoverageRequest):
+    _admit_bounded_polytope(polytope)
+    if (
+        not isinstance(points, tuple)
+        or not points
+        or not isinstance(directions, tuple)
+        or not directions
+    ):
         _reject(
-            "request",
-            "convex_geometry.coverage.request_type",
-            "coverage requires its canonical request value",
+            "points",
+            "convex_geometry.coverage.family_type",
+            "coverage requires nonempty canonical point and direction tuples",
         )
     try:
-        payload = request.model_dump(mode="python")
-        canonical_request = DirectionCoverageRequest.model_validate(payload)
+        points = tuple(
+            CoveragePoint.model_validate(row.model_dump(mode="python"))
+            for row in points
+        )
+        directions = tuple(
+            CoverageDirection.model_validate(row.model_dump(mode="python"))
+            for row in directions
+        )
     except Exception:
         _reject(
-            "request",
+            "points",
             "convex_geometry.coverage.malformed",
-            "coverage request contains malformed nested carriers",
+            "coverage families contain malformed nested carriers",
         )
-    if canonical_request.model_dump(mode="python") != payload:
-        _reject(
-            "request",
-            "convex_geometry.coverage.malformed",
-            "coverage request must use canonical nested carriers",
-        )
-    request = canonical_request
-    polytope = request.polytope
-    _admit_bounded_polytope(polytope)
-    if len(request.points) * len(request.directions) > 4096:
+    if len(points) * len(directions) > 4096:
         _refuse(
             "convex_geometry.coverage.matrix_size",
             "point-direction matrix exceeds the admitted envelope",
         )
-    points = tuple(sorted(request.points, key=lambda row: row.point_id))
-    directions = tuple(sorted(request.directions, key=lambda row: row.direction_id))
+    points = tuple(sorted(points, key=lambda row: row.point_id))
+    directions = tuple(sorted(directions, key=lambda row: row.direction_id))
     if len({row.point_id for row in points}) != len(points) or len(
         {row.direction_id for row in directions}
     ) != len(directions):

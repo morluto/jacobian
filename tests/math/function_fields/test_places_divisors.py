@@ -7,7 +7,6 @@ from jacobian.math.function_fields._models import (
     FunctionFieldDivisor,
     FunctionFieldDivisorTerm,
     FunctionFieldPlace,
-    FunctionFieldPrincipalDivisorRequest,
     PrimeFieldPolynomial,
     PrimeFieldRationalFunction,
 )
@@ -41,9 +40,7 @@ def test_rational_places_and_principal_degree_zero() -> None:
         degree=1,
     )
     assert function_field_place_valuation(place, x) == 1
-    result = function_field_principal_divisor(
-        FunctionFieldPrincipalDivisorRequest(field=field, element=x)
-    )
+    result = function_field_principal_divisor(field, x)
     assert result.degree == 0
     assert sorted(term.multiplicity for term in result.divisor.terms) == [-1, 1]
 
@@ -73,9 +70,7 @@ def test_quadratic_numerator_over_gf5_uses_stable_factorization() -> None:
     field = _field()
     value = FiniteFunctionFieldElement(field=field, coordinates=(_rf((1, 0, 1)),))
 
-    result = function_field_principal_divisor(
-        FunctionFieldPrincipalDivisorRequest(field=field, element=value)
-    )
+    result = function_field_principal_divisor(field, value)
 
     finite = {
         term.place.prime_polynomial.coefficients: term.multiplicity
@@ -89,16 +84,14 @@ def test_quadratic_numerator_over_gf5_uses_stable_factorization() -> None:
 def test_constant_has_empty_principal_divisor() -> None:
     field = _field()
     one = FiniteFunctionFieldElement(field=field, coordinates=(_rf((1,)),))
-    result = function_field_principal_divisor(
-        FunctionFieldPrincipalDivisorRequest(field=field, element=one)
-    )
+    result = function_field_principal_divisor(field, one)
     assert result.divisor.terms == () and result.degree == 0
 
 
 def test_native_divisor_consumers_reject_missing_authored_fields() -> None:
-    request = FunctionFieldPrincipalDivisorRequest.model_construct(field=_field())
+    forged_element = FiniteFunctionFieldElement.model_construct(field=_field())
     with pytest.raises(OperationDomainValidationError):
-        function_field_principal_divisor(request)
+        function_field_principal_divisor(_field(), forged_element)
 
     divisor = FunctionFieldDivisor.model_construct(terms=())
     with pytest.raises(OperationDomainValidationError):
@@ -140,15 +133,11 @@ def test_principal_divisor_cancels_and_canonicalizes_rational_presentations() ->
     x_over_x = FiniteFunctionFieldElement(
         field=field, coordinates=(_rf((0, 1), (0, 1)),)
     )
-    cancelled = function_field_principal_divisor(
-        FunctionFieldPrincipalDivisorRequest(field=field, element=x_over_x)
-    )
+    cancelled = function_field_principal_divisor(field, x_over_x)
     assert cancelled.divisor.terms == ()
     x_squared_over_x = FiniteFunctionFieldElement(
         field=field, coordinates=(_rf((0, 0, 1), (0, 1)),)
     )
-    reduced = function_field_principal_divisor(
-        FunctionFieldPrincipalDivisorRequest(field=field, element=x_squared_over_x)
-    )
+    reduced = function_field_principal_divisor(field, x_squared_over_x)
     assert sorted(term.multiplicity for term in reduced.divisor.terms) == [-1, 1]
     assert reduced.element.coordinates[0].denominator.is_one()

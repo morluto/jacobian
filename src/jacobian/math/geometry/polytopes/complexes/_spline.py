@@ -191,8 +191,8 @@ def _affine_ideal(face: Any, symbols: tuple[Any, ...]) -> list[Any]:
 
 
 MAX_PIECE_COMPATIBILITY_WORK = 50_000_000
-MAX_PIECE_RESULT_BYTES = 64 * 1024 * 1024
-MAX_RATIONAL_SCALAR_BYTES = 2 * 32_768 + 32
+MAX_PIECE_RESULT_DIGITS = 64 * 1024 * 1024
+MAX_RATIONAL_SCALAR_DIGITS = 2 * 32_768
 
 
 def _admit_pieces(
@@ -273,9 +273,9 @@ def _admit_pieces(
             code="polytopal_complex.compatibility_work",
             message="piece compatibility reduction exceeds the admitted envelope",
         )
-    row_bytes = (2 * reduced_term_bound + 8) * MAX_RATIONAL_SCALAR_BYTES
-    estimated_bytes = pair_count * row_bytes
-    if estimated_bytes > MAX_PIECE_RESULT_BYTES:
+    row_digits = (2 * reduced_term_bound + 8) * MAX_RATIONAL_SCALAR_DIGITS
+    estimated_digits = pair_count * row_digits
+    if estimated_digits > MAX_PIECE_RESULT_DIGITS:
         raise OperationResourceAdmissionError(
             location=("complex",),
             code="polytopal_complex.compatibility_output",
@@ -485,8 +485,8 @@ def _linear_form(face: Any, symbols: tuple[Any, ...]) -> Any:
 
 MAX_SPLINE_CONSTRAINT_CELLS = 1_048_576
 MAX_SPLINE_RESULT_CELLS = 1_000_000
-MAX_SPLINE_RESULT_BYTES = 64 * 1024 * 1024
-MAX_SPLINE_SCALAR_BYTES = 2 * 32_768 + 32
+MAX_SPLINE_RESULT_DIGITS = 64 * 1024 * 1024
+MAX_SPLINE_SCALAR_DIGITS = 2 * 32_768
 
 
 def _admit_spline(
@@ -536,22 +536,21 @@ def _admit_spline(
             message="spline compatibility matrix exceeds the admitted envelope",
         )
     # The unconstrained case has a width-by-width nullspace basis.  Admit the
-    # complete exact result (both matrices and its serialized scalar payload)
-    # before SymPy materializes a dense basis.
+    # complete exact result (both matrices and all rational components) before
+    # SymPy materializes a dense basis.
     result_cells = constraint_cells + width * width
-    metadata_bytes = width * 96 + len(complex_value.faces) * 64
-    estimated_bytes = result_cells * MAX_SPLINE_SCALAR_BYTES + metadata_bytes
+    estimated_digits = result_cells * MAX_SPLINE_SCALAR_DIGITS
     if result_cells > MAX_SPLINE_RESULT_CELLS:
         raise OperationResourceAdmissionError(
             location=("degree",),
             code="polytopal_complex.spline_result_cells",
             message="spline exact result has too many matrix cells",
         )
-    if estimated_bytes > MAX_SPLINE_RESULT_BYTES:
+    if estimated_digits > MAX_SPLINE_RESULT_DIGITS:
         raise OperationResourceAdmissionError(
             location=("degree",),
             code="polytopal_complex.spline_result_output",
-            message="spline exact result exceeds the admitted serialized envelope",
+            message="spline exact result exceeds the admitted digit envelope",
         )
     return complex_value, cells, width
 

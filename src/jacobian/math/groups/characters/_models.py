@@ -104,8 +104,13 @@ class ClassAxis(StrictModel):
                 "a concrete class axis must carry both its group and representatives",
             )
         if self.group is not None:
-            assert self.class_representatives is not None
-            if len(self.class_representatives) != len(self.class_sizes):
+            representatives = self.class_representatives
+            if representatives is None:
+                raise _validation_error(
+                    "group_parent",
+                    "a concrete class axis requires class representatives",
+                )
+            if len(representatives) != len(self.class_sizes):
                 raise _validation_error(
                     "representative_count", "one representative is required per class"
                 )

@@ -219,16 +219,6 @@ class OrientableEmbeddingCheckResult(StrictModel):
                     "embedding_invalid_ledger",
                     "an invalid embedding carries no derived cell ledger",
                 )
-            from jacobian.math.topology.combinatorial_maps.operations import (
-                check_orientable_embedding,
-            )
-
-            expected = check_orientable_embedding(self.graph, self.rotations)
-            if expected != self:
-                raise _validation_error(
-                    "embedding_invalid_obstruction",
-                    "invalid status must carry the actual first source obstruction",
-                )
             return self
         if self.obstruction_code is not None:
             raise _validation_error(
@@ -426,21 +416,6 @@ class SignedEmbeddingCheckResult(StrictModel):
                 raise _validation_error(
                     "signed_embedding_invalid_ledger",
                     "an invalid embedding carries no derived cell ledger",
-                )
-            from jacobian.math.topology.combinatorial_maps.operations import (
-                check_signed_embedding,
-            )
-
-            expected = check_signed_embedding(
-                self.graph,
-                self.rotations,
-                signs=self.signs,
-                twisted_edges=self.twisted_edges,
-            )
-            if expected != self:
-                raise _validation_error(
-                    "signed_embedding_invalid_obstruction",
-                    "invalid status must carry the actual first source obstruction",
                 )
             return self
         if self.obstruction_code is not None:

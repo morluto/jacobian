@@ -170,6 +170,15 @@ def test_native_and_catalog_results_agree() -> None:
     )
 
 
+def test_native_admission_rejects_missing_digit_set_fields() -> None:
+    for forged in (
+        KempnerDigitSet.model_construct(base=10),
+        KempnerDigitSet.model_construct(allowed_digits=(1,)),
+    ):
+        with pytest.raises(OperationDomainValidationError):
+            require_series_admission(forged, 1)
+
+
 def test_noncanonical_digit_set_rejected() -> None:
     forged = KempnerDigitSet.model_construct(base=10, allowed_digits=(2, 1))
 
@@ -189,6 +198,16 @@ def test_negative_cutoff_rejected() -> None:
 
     with pytest.raises(OperationDomainValidationError):
         enclose_kempner_series(digit_set, -1)
+
+
+def test_dense_prefix_height_refuses_before_exact_carrier_overflow() -> None:
+    # The old count-only estimate admitted this family and overflowed while
+    # constructing CanonicalRational after the recurrence had run.
+    digit_set = KempnerDigitSet(base=3, allowed_digits=(1, 2))
+    with pytest.raises(OperationResourceAdmissionError):
+        require_series_admission(digit_set, 13)
+    with pytest.raises(OperationResourceAdmissionError):
+        enclose_kempner_series(digit_set, 13)
 
 
 def test_envelope_refuses_before_enumeration() -> None:

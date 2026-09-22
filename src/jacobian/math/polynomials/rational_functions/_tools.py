@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from jacobian.catalog.models import (
     MathTool,
+    MathTools,
     OperationExample,
 )
 from jacobian.math.polynomials.rational_functions import operations as native
@@ -12,6 +13,9 @@ from jacobian.math.polynomials.rational_functions._models import (
     HermiteReductionResult,
     PartialFractionsRequest,
     PartialFractionsResult,
+)
+from jacobian.math.polynomials.rational_functions.structured_tools import (
+    TOOLS as STRUCTURED_TOOLS,
 )
 
 
@@ -50,7 +54,7 @@ _PARTIAL_FRACTION_FUNCTION: dict[str, object] = {
 }
 
 
-TOOLS = (
+TOOLS: MathTools = (
     MathTool(
         operation_id="rational_function.hermite_reduction.compute",
         title="Reduce a rational function modulo exact derivatives",
@@ -140,5 +144,7 @@ TOOLS = (
         ),
     ),
 )
+
+TOOLS = TOOLS + STRUCTURED_TOOLS
 
 __all__ = ["TOOLS"]

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 
+import pytest
+from pydantic import ValidationError
 from sympy import Poly, Rational, Symbol, cancel
 
 from jacobian.math.polynomials._conversions import (
@@ -13,6 +15,7 @@ from jacobian.math.polynomials._conversions import (
 from jacobian.math.polynomials.rational_functions._models import (
     PartialFractionsRequest,
     PartialFractionsResult,
+    PartialFractionTerm,
 )
 from jacobian.math.polynomials.rational_functions._tools import (
     TOOLS,
@@ -21,6 +24,9 @@ from jacobian.math.polynomials.rational_functions._tools import (
 from jacobian.math.polynomials.rational_functions.operations import (
     partial_fractions,
     verify_partial_fractions,
+)
+from jacobian.math.polynomials.rational_functions.structured_models import (
+    RationalPrimitiveResult,
 )
 
 x = Symbol("x")
@@ -31,7 +37,7 @@ def _decompose(expression: object) -> PartialFractionsResult:
     return partial_fractions(function)
 
 
-def _term_key(term: object) -> tuple[str, int]:
+def _term_key(term: PartialFractionTerm) -> tuple[str, int]:
     return (str(rational_polynomial_to_sympy(term.factor).as_expr()), term.exponent)
 
 
@@ -122,6 +128,25 @@ def test_native_and_catalog_paths_agree() -> None:
     request = PartialFractionsRequest(function=function)
 
     assert compute_partial_fractions(request) == partial_fractions(function)
+
+
+def test_contradictory_rational_primitive_state_is_rejected() -> None:
+    function = rational_function_from_sympy(1 / (x - 1), ("x",))
+    with pytest.raises(ValidationError):
+        RationalPrimitiveResult(
+            source=function,
+            status="RATIONAL_PRIMITIVE",
+            rational_part=function,
+            remainder=function,
+        )
+    payload = {
+        "source": function.model_dump(mode="json"),
+        "status": "RATIONAL_PRIMITIVE",
+        "rational_part": function.model_dump(mode="json"),
+        "remainder": function.model_dump(mode="json"),
+    }
+    with pytest.raises(ValidationError):
+        RationalPrimitiveResult.model_validate_json(json.dumps(payload))
 
 
 def test_declaration_is_published_with_one_executable_example() -> None:

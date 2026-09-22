@@ -32,6 +32,14 @@ from jacobian.math.polynomials.values import (
     SparseRationalPolynomial,
 )
 
+from .structured_operations import (
+    formal_antiderivative,
+    global_residues,
+    logarithmic_differential,
+    rational_primitive,
+    residue_at_infinity,
+)
+
 
 def _hermite_parts(function: RationalFunction) -> tuple[Any, Any]:
     """Return the zero-constant rational part and square-free remainder."""
@@ -255,8 +263,13 @@ def verify_partial_fractions(claim: PartialFractionsResult) -> bool:
 
 
 __all__ = [
+    "formal_antiderivative",
+    "global_residues",
     "hermite_reduction",
+    "logarithmic_differential",
     "partial_fractions",
+    "rational_primitive",
+    "residue_at_infinity",
     "verify_hermite_reduction",
     "verify_partial_fractions",
 ]

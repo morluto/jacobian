@@ -28,6 +28,25 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"petri_net.{reason}", message)
 
 
+def _require_marking_parent(net: PetriNet, marking: Marking) -> None:
+    if not isinstance(marking, Marking):
+        raise _validation_error("marking_type", "marking must be a Marking value")
+    if marking.net is not None and marking.net != net:
+        raise _validation_error(
+            "marking_parent", "marking belongs to a different Petri net place axis"
+        )
+
+
+def _require_result_marking(
+    net: PetriNet, marking: Marking, *, reason: str = "marking_length"
+) -> None:
+    _require_marking_parent(net, marking)
+    if len(marking.tokens) != net.place_count:
+        raise _validation_error(
+            reason, "marking length must match the declared net place axis"
+        )
+
+
 class EnabledTransitionsRequest(StrictModel):
     """Find all enabled transitions at a marking."""
 
@@ -36,6 +55,7 @@ class EnabledTransitionsRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_valid_marking_size(self) -> Self:
+        _require_marking_parent(self.net, self.marking)
         if len(self.marking.tokens) != self.net.place_count:
             raise _validation_error(
                 "marking_length", "marking length must match place_count"
@@ -52,6 +72,7 @@ class EnabledTransitionsResult(StrictModel):
 
     @model_validator(mode="after")
     def require_source_shape(self) -> Self:
+        _require_marking_parent(self.net, self.marking)
         if len(self.marking.tokens) != self.net.place_count:
             raise _validation_error(
                 "marking_length", "marking length must match place_count"
@@ -73,6 +94,7 @@ class FireTransitionRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_valid_marking_size(self) -> Self:
+        _require_marking_parent(self.net, self.marking)
         if len(self.marking.tokens) != self.net.place_count:
             raise _validation_error(
                 "marking_length", "marking length must match place_count"
@@ -94,10 +116,7 @@ class FireTransitionResult(StrictModel):
 
     @model_validator(mode="after")
     def require_consistent_outcome(self) -> Self:
-        if len(self.marking.tokens) != self.net.place_count:
-            raise _validation_error(
-                "marking_length", "marking length must match place_count"
-            )
+        _require_result_marking(self.net, self.marking)
         if not 0 <= self.transition < self.net.transition_count:
             raise _validation_error("transition_index", "transition index out of range")
         if self.status == "ESCAPES_DECLARED_ENVELOPE":
@@ -113,12 +132,9 @@ class FireTransitionResult(StrictModel):
             raise _validation_error(
                 "ordinary_payload", "ordinary firing outcomes must carry only a marking"
             )
-        if (
-            self.new_marking is not None
-            and len(self.new_marking.tokens) != self.net.place_count
-        ):
-            raise _validation_error(
-                "new_marking_length", "new marking length must match place_count"
+        if self.new_marking is not None:
+            _require_result_marking(
+                self.net, self.new_marking, reason="new_marking_length"
             )
         if (
             self.envelope_escape is not None
@@ -166,6 +182,7 @@ class ReachabilityRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_valid_marking_size(self) -> Self:
+        _require_marking_parent(self.net, self.initial_marking)
         if len(self.initial_marking.tokens) != self.net.place_count:
             raise _validation_error(
                 "marking_length", "marking length must match place_count"
@@ -189,9 +206,10 @@ class ReachabilityResult(StrictModel):
 
     @model_validator(mode="after")
     def require_source_axes(self) -> Self:
-        if len(self.initial_marking.tokens) != self.net.place_count:
-            raise _validation_error(
-                "marking_length", "marking length must match place_count"
+        _require_result_marking(self.net, self.initial_marking)
+        for state in self.states:
+            _require_result_marking(
+                self.net, state.marking, reason="state_marking_parent"
             )
         if tuple(state.state_index for state in self.states) != tuple(
             range(len(self.states))
@@ -201,7 +219,6 @@ class ReachabilityResult(StrictModel):
             )
         if any(
             state.place_axis != tuple(range(self.net.place_count))
-            or len(state.marking.tokens) != self.net.place_count
             for state in self.states
         ):
             raise _validation_error(
@@ -262,6 +279,7 @@ class FiringSequenceReplayRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_valid_sequence_axes(self) -> Self:
+        _require_marking_parent(self.net, self.marking)
         if len(self.marking.tokens) != self.net.place_count:
             raise _validation_error(
                 "marking_length", "marking length must match place_count"
@@ -292,9 +310,12 @@ class FiringSequenceReplayResult(StrictModel):
     first_deficient_place: int | None = None
 
     def _require_shared_axes(self) -> None:
-        if len(self.marking.tokens) != self.net.place_count:
-            raise _validation_error(
-                "marking_length", "marking length must match place_count"
+        _require_result_marking(self.net, self.marking)
+        for prefix in self.prefix_markings:
+            _require_result_marking(self.net, prefix, reason="prefix_marking_parent")
+        if self.final_marking is not None:
+            _require_result_marking(
+                self.net, self.final_marking, reason="final_marking_parent"
             )
         if any(
             not 0 <= transition < self.net.transition_count

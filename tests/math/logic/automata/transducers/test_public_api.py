@@ -8,6 +8,7 @@ from jacobian.math.logic.automata import transducers as finite_state_transducers
 def test_exact_public_api_symbols() -> None:
     """Exact owner-local contract for the finite_state_transducers public API."""
     expected = (
+        "FiniteAlphabet",
         "RationalEdge",
         "RationalTransducer",
         "SubseqFinalOutput",

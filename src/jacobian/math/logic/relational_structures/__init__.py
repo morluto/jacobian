@@ -9,6 +9,8 @@ from jacobian.math.logic.relational_structures._models import (
     HomomorphismSearchStatus,
     HomomorphismStatus,
     HomomorphismViolationWitness,
+    InducedEmbeddingCheckResult,
+    InducedRelationProfile,
     SymbolTransportProfile,
 )
 from jacobian.math.logic.relational_structures.operations import (
@@ -37,6 +39,8 @@ __all__ = [
     "HomomorphismSearchStatus",
     "HomomorphismStatus",
     "HomomorphismViolationWitness",
+    "InducedEmbeddingCheckResult",
+    "InducedRelationProfile",
     "SymbolTransportProfile",
     "check_homomorphism",
     "compute_core",

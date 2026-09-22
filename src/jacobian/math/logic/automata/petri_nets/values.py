@@ -37,11 +37,34 @@ class PetriNet(StrictModel):
 
     place_count: int = Field(ge=0, le=MAX_PETRI_PLACES)
     transition_count: int = Field(ge=0, le=MAX_PETRI_TRANSITIONS)
+    place_ids: tuple[str, ...] | None = Field(
+        default=None,
+        description="Optional canonical place labels; equal-shaped foreign axes remain distinct.",
+    )
+    transition_ids: tuple[str, ...] | None = Field(
+        default=None,
+        description="Optional canonical transition labels; equal-shaped foreign axes remain distinct.",
+    )
     pre: tuple[tuple[int, ...], ...]
     post: tuple[tuple[int, ...], ...]
 
     @model_validator(mode="after")
     def require_valid_matrices(self) -> Self:
+        if self.place_ids is not None and (
+            len(self.place_ids) != self.place_count
+            or len(set(self.place_ids)) != len(self.place_ids)
+        ):
+            raise _validation_error(
+                "place_axis", "place_ids must be unique and match place_count"
+            )
+        if self.transition_ids is not None and (
+            len(self.transition_ids) != self.transition_count
+            or len(set(self.transition_ids)) != len(self.transition_ids)
+        ):
+            raise _validation_error(
+                "transition_axis",
+                "transition_ids must be unique and match transition_count",
+            )
         if len(self.pre) != self.place_count:
             raise _validation_error("pre_row_count", "pre must have place_count rows")
         if len(self.post) != self.place_count:
@@ -78,9 +101,16 @@ class PetriNet(StrictModel):
 
 
 class Marking(StrictModel):
-    """A marking (token assignment) of a Petri net."""
+    """A marking on one exact Petri-net place axis.
+
+    ``net`` is optional for backwards-compatible construction of a raw token
+    vector; operations bind and check it when supplied.  A bound marking from
+    another net is never accepted merely because its token tuple has the same
+    length.
+    """
 
     tokens: tuple[int, ...]
+    net: PetriNet | None = None
 
     @model_validator(mode="after")
     def require_valid_marking(self) -> Self:
@@ -154,8 +184,15 @@ def require_reachability_bounds(net: PetriNet, max_states: int) -> None:
             code="petri_net.reachability_states",
             message="max_states must be within 1..100000",
         )
-    state_cells = max_states * net.place_count
-    firing_records = max_states * net.transition_count
+    # With either axis empty, every marking has one canonical empty/zero
+    # successor shape; the requested frontier cannot create more than one
+    # distinct state.  Do not reject this degenerate net using a dense
+    # max_states product that the kernel never materializes.
+    effective_states = (
+        1 if net.place_count == 0 or net.transition_count == 0 else max_states
+    )
+    state_cells = effective_states * net.place_count
+    firing_records = effective_states * net.transition_count
     exploration_work = 2 * firing_records * net.place_count
     if state_cells > MAX_REACHABILITY_STATE_TOKEN_CELLS:
         raise OperationResourceAdmissionError(

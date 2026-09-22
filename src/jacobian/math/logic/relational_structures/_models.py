@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from enum import StrEnum
+from itertools import product
 from typing import Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
@@ -106,6 +107,7 @@ class HomomorphismCheckResult(StrictModel):
         ),
     )
     witness: HomomorphismViolationWitness | None = None
+    witness_kind: Literal["PRESERVATION", "REFLECTION"] = "PRESERVATION"
     symbol_profiles: tuple[SymbolTransportProfile, ...]
     preservation_invariant: Literal[
         "EVERY_SOURCE_RELATION_TUPLE_TRANSPORTS_INTO_THE_TARGET_RELATION"
@@ -149,11 +151,15 @@ class HomomorphismCheckResult(StrictModel):
                 "a NOT_HOMOMORPHISM result must retain its first violating "
                 "witness and a HOMOMORPHISM result must retain none",
             )
-        if self.witness is not None and not any(
-            profile.symbol_id == self.witness.symbol_id
-            and profile.arity == self.witness.arity
-            and profile.preserved_tuples < profile.source_tuples
-            for profile in self.symbol_profiles
+        if (
+            self.witness is not None
+            and self.witness_kind == "PRESERVATION"
+            and not any(
+                profile.symbol_id == self.witness.symbol_id
+                and profile.arity == self.witness.arity
+                and profile.preserved_tuples < profile.source_tuples
+                for profile in self.symbol_profiles
+            )
         ):
             raise _validation_error(
                 "witness_symbol_binding",
@@ -180,6 +186,7 @@ class HomomorphismCheckResult(StrictModel):
         carrier_map: tuple[int, ...],
         witness: HomomorphismViolationWitness | None,
         symbol_profiles: tuple[SymbolTransportProfile, ...],
+        witness_kind: Literal["PRESERVATION", "REFLECTION"] = "PRESERVATION",
     ) -> Self:
         """Build the result after the admitted kernel replayed the invariant.
 
@@ -193,10 +200,112 @@ class HomomorphismCheckResult(StrictModel):
             target=target,
             carrier_map=carrier_map,
             witness=witness,
+            witness_kind=witness_kind,
             symbol_profiles=symbol_profiles,
             preservation_invariant=(
                 "EVERY_SOURCE_RELATION_TUPLE_TRANSPORTS_INTO_THE_TARGET_RELATION"
             ),
+        )
+
+
+class InducedRelationProfile(StrictModel):
+    symbol_id: RelationSymbolId
+    arity: StrictInt = Field(ge=0, le=MAX_RELATIONAL_ARITY)
+    relation_cells: StrictInt = Field(ge=0)
+    matching_cells: StrictInt = Field(ge=0)
+
+    @model_validator(mode="after")
+    def require_bounded_counts(self) -> Self:
+        if self.matching_cells > self.relation_cells:
+            raise _validation_error(
+                "reflection_count",
+                "matching cells cannot exceed relation domain",
+            )
+        return self
+
+
+class InducedEmbeddingCheckResult(HomomorphismCheckResult):
+    reflection_profiles: tuple[InducedRelationProfile, ...]
+    induced_invariant: Literal[
+        "EVERY_SOURCE_RELATION_TUPLE_REFLECTS_INTO_THE_TARGET"
+    ] = "EVERY_SOURCE_RELATION_TUPLE_REFLECTS_INTO_THE_TARGET"
+
+    @model_validator(mode="after")
+    def require_injective_carrier_map(self) -> Self:
+        if len(set(self.carrier_map)) != len(self.carrier_map):
+            raise _validation_error(
+                "carrier_map_not_injective",
+                "an induced embedding check requires distinct target images",
+            )
+        return self
+
+    @model_validator(mode="after")
+    def require_reflection_invariant(self) -> Self:
+        expected = tuple((s.symbol_id, s.arity) for s in self.source.signature)
+        if tuple((p.symbol_id, p.arity) for p in self.reflection_profiles) != expected:
+            raise _validation_error(
+                "reflection_profile_axis",
+                "reflection profiles must cover the signature",
+            )
+        for profile in self.reflection_profiles:
+            cells = 1 if profile.arity == 0 else self.source.carrier_size**profile.arity
+            if profile.relation_cells != cells:
+                raise _validation_error(
+                    "reflection_domain",
+                    "reflection profile must cover every Cartesian cell",
+                )
+        if self.status is HomomorphismStatus.HOMOMORPHISM and any(
+            p.matching_cells != p.relation_cells for p in self.reflection_profiles
+        ):
+            raise _validation_error(
+                "reflection_invariant",
+                "an induced embedding must reflect every relation cell",
+            )
+        target_tables = tuple(set(table) for table in self.target.relation_tables)
+        source_tables = tuple(set(table) for table in self.source.relation_tables)
+        for symbol_index, profile in enumerate(self.reflection_profiles):
+            matching = 0
+            for coordinates in product(
+                range(self.source.carrier_size), repeat=profile.arity
+            ):
+                image = tuple(self.carrier_map[index] for index in coordinates)
+                if (coordinates in source_tables[symbol_index]) == (
+                    image in target_tables[symbol_index]
+                ):
+                    matching += 1
+            if matching != profile.matching_cells:
+                raise _validation_error(
+                    "reflection_truth",
+                    "reflection profiles must match the retained structures and map",
+                )
+        return self
+
+    @classmethod
+    def _from_induced_kernel(
+        cls,
+        *,
+        status: HomomorphismStatus,
+        source: FiniteRelationalStructure,
+        target: FiniteRelationalStructure,
+        carrier_map: tuple[int, ...],
+        witness: HomomorphismViolationWitness | None,
+        symbol_profiles: tuple[SymbolTransportProfile, ...],
+        reflection_profiles: tuple[InducedRelationProfile, ...],
+        witness_kind: Literal["PRESERVATION", "REFLECTION"] = "PRESERVATION",
+    ) -> Self:
+        return cls.model_construct(
+            status=status,
+            source=source,
+            target=target,
+            carrier_map=carrier_map,
+            witness=witness,
+            witness_kind=witness_kind,
+            symbol_profiles=symbol_profiles,
+            preservation_invariant=(
+                "EVERY_SOURCE_RELATION_TUPLE_TRANSPORTS_INTO_THE_TARGET_RELATION"
+            ),
+            reflection_profiles=reflection_profiles,
+            induced_invariant="EVERY_SOURCE_RELATION_TUPLE_REFLECTS_INTO_THE_TARGET",
         )
 
 
@@ -589,15 +698,14 @@ class EmbeddingSearchResult(StrictModel):
 
     ``FOUND`` retains the first injective transporting map in
     lexicographic carrier-map order as a complete
-    ``HomomorphismCheckResult``; ``EXHAUSTED`` retains the receipt that
-    every one of the ``total_candidates`` carrier maps was examined and
-    none both injects and transports.
+    ``InducedEmbeddingCheckResult``; ``EXHAUSTED`` retains the receipt that
+    every one of the ``total_candidates`` carrier maps was examined.
     """
 
     status: HomomorphismSearchStatus
     source: FiniteRelationalStructure
     target: FiniteRelationalStructure
-    check: HomomorphismCheckResult | None = None
+    check: InducedEmbeddingCheckResult | None = None
     candidates_examined: StrictInt = Field(
         ge=0,
         description="Carrier maps replayed before the outcome was reached.",
@@ -634,6 +742,7 @@ class EmbeddingSearchResult(StrictModel):
         if self.status is HomomorphismSearchStatus.FOUND:
             if (
                 self.check is None
+                or not isinstance(self.check, InducedEmbeddingCheckResult)
                 or self.check.status is not HomomorphismStatus.HOMOMORPHISM
                 or self.check.source != self.source
                 or self.check.target != self.target
@@ -662,7 +771,7 @@ class EmbeddingSearchResult(StrictModel):
         status: HomomorphismSearchStatus,
         source: FiniteRelationalStructure,
         target: FiniteRelationalStructure,
-        check: HomomorphismCheckResult | None,
+        check: InducedEmbeddingCheckResult | None,
         candidates_examined: int,
         total_candidates: int,
     ) -> Self:
@@ -697,5 +806,7 @@ __all__ = [
     "HomomorphismSearchStatus",
     "HomomorphismStatus",
     "HomomorphismViolationWitness",
+    "InducedEmbeddingCheckResult",
+    "InducedRelationProfile",
     "SymbolTransportProfile",
 ]

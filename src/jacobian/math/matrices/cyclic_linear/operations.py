@@ -11,6 +11,8 @@ from typing import Any
 
 from jacobian._exact import CanonicalRational
 from jacobian._execution import (
+    BackendFailureReason,
+    OperationBackendError,
     bind_request_deadline,
     current_request_execution,
     request_checkpoint,
@@ -776,6 +778,103 @@ def _cyclotomic_kernel_child(
     return result
 
 
+def _validate_kernel_certificate(
+    admission: _ComponentAdmission,
+    *,
+    rank: int,
+    source_dimension: int,
+    nonzero_minor_data: tuple[Any, ...] | None,
+    kernel_coords: tuple[tuple[FieldCoordinates, ...], ...],
+    field: Any,
+    generator: Any,
+) -> None:
+    """Check the worker's rank, minor, and kernel certificates once."""
+
+    from sympy.polys.matrices import DomainMatrix
+
+    matrix_coordinates = admission.matrix_coordinates
+    target_dimension = len(matrix_coordinates)
+    expected_source_dimension = len(matrix_coordinates[0])
+    if source_dimension != expected_source_dimension:
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+    if rank < 0 or rank > min(target_dimension, source_dimension):
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+    if len(kernel_coords) != source_dimension - rank:
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+
+    backend_matrix = [
+        [_backend_element(field, generator, coordinates) for coordinates in row]
+        for row in matrix_coordinates
+    ]
+    backend_vectors: list[list[Any]] = []
+    for vector_coords in kernel_coords:
+        _require_execution_active("during cyclotomic kernel certificate validation")
+        if len(vector_coords) != source_dimension or any(
+            len(coordinates) != admission.degree for coordinates in vector_coords
+        ):
+            raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+        vector = [
+            _backend_element(field, generator, coordinates)
+            for coordinates in vector_coords
+        ]
+        backend_vectors.append(vector)
+        for row in backend_matrix:
+            if (
+                sum(
+                    (
+                        entry * coordinate
+                        for entry, coordinate in zip(row, vector, strict=True)
+                    ),
+                    field.zero,
+                )
+                != field.zero
+            ):
+                raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+
+    if backend_vectors:
+        vector_rank = int(
+            DomainMatrix(
+                backend_vectors,
+                (len(backend_vectors), source_dimension),
+                field,
+            ).rank()
+        )
+    else:
+        vector_rank = 0
+    if vector_rank != len(backend_vectors):
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+
+    if rank == 0:
+        if nonzero_minor_data is not None:
+            raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+        return
+    if nonzero_minor_data is None:
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+    row_indices, pivot_columns, determinant_coordinates = nonzero_minor_data
+    if (
+        len(row_indices) != rank
+        or len(pivot_columns) != rank
+        or tuple(row_indices) != tuple(sorted(set(row_indices)))
+        or tuple(pivot_columns) != tuple(sorted(set(pivot_columns)))
+        or any(index < 0 or index >= target_dimension for index in row_indices)
+        or any(index < 0 or index >= source_dimension for index in pivot_columns)
+        or len(determinant_coordinates) != admission.degree
+    ):
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+    minor = DomainMatrix(
+        [
+            [backend_matrix[row][column] for column in pivot_columns]
+            for row in row_indices
+        ],
+        (rank, rank),
+        field,
+    )
+    expected_determinant = minor.det()
+    supplied_determinant = _backend_element(field, generator, determinant_coordinates)
+    if not expected_determinant or expected_determinant != supplied_determinant:
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+
+
 def _compute_component(
     admission: _ComponentAdmission, kernel_result: tuple[Any, ...]
 ) -> _ComputedComponent:
@@ -790,6 +889,15 @@ def _compute_component(
 
     field = QQ.cyclotomic_field(order)
     generator = field.convert(field.ext)
+    _validate_kernel_certificate(
+        admission,
+        rank=rank,
+        source_dimension=source_dimension,
+        nonzero_minor_data=nonzero_minor_data,
+        kernel_coords=tuple(kernel_coords),
+        field=field,
+        generator=generator,
+    )
 
     nonzero_minor: CyclotomicNonzeroMinor | None = None
     if nonzero_minor_data is not None:

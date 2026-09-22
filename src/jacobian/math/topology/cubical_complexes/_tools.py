@@ -14,6 +14,9 @@ from jacobian.math.topology.cubical_complexes._models import (
     FaceClosureResult,
     FVectorResult,
 )
+from jacobian.math.topology.cubical_complexes.extensions_tools import (
+    TOOLS as EXTENSION_TOOLS,
+)
 from jacobian.math.topology.cubical_complexes.operations import (
     chain_complex,
     f_vector,
@@ -44,6 +47,7 @@ _CELLS = {
 }
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
+    *EXTENSION_TOOLS,
     MathTool(
         operation_id="cubical.f_vector.compute",
         title="Compute the f-vector of a cubical complex",

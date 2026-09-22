@@ -26,6 +26,9 @@ from jacobian.math.topology.edge_paths.operations import (
     edge_path_word,
     fundamental_group_presentation,
 )
+from jacobian.math.topology.edge_paths.presentation_maps_tools import (
+    TOOLS as PRESENTATION_MAP_TOOLS,
+)
 
 
 def _word(request: EdgePathWordRequest) -> EdgePathWordResult:
@@ -55,6 +58,7 @@ def _fundamental_group(
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
+    *PRESENTATION_MAP_TOOLS,
     MathTool(
         operation_id="topology.simplicial.edge_path.word.compute",
         title="Compute the free group word for an edge path",

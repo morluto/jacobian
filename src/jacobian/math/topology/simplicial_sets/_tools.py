@@ -5,7 +5,11 @@ from jacobian.math.topology.simplicial_sets._models import (
     SimplicialSetTablesRequest,
     SimplicialSetTablesResult,
 )
+from jacobian.math.topology.simplicial_sets.maps_tools import TOOLS as MAP_TOOLS
 from jacobian.math.topology.simplicial_sets.operations import from_tables
+from jacobian.math.topology.simplicial_sets.standard_tools import (
+    TOOLS as STANDARD_TOOLS,
+)
 
 
 def _run_from_tables(request: SimplicialSetTablesRequest) -> SimplicialSetTablesResult:
@@ -24,6 +28,8 @@ _DELTA_ONE_PREFIX = {
 }
 
 TOOLS = (
+    *STANDARD_TOOLS,
+    *MAP_TOOLS,
     MathTool(
         operation_id="topology.simplicial_set.from_tables.compute",
         title="Check finite simplicial-set tables against every simplicial identity",

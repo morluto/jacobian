@@ -15,6 +15,10 @@ from jacobian.math.topology.discrete_morse._models import (
     MorseMatchingFault,
     MorseMatchingOutcome,
 )
+from jacobian.math.topology.discrete_morse.extensions import (
+    collapse_sequence,
+    greedy_matching,
+)
 from jacobian.math.topology.discrete_morse.operations import (
     compute_gradient_paths,
     compute_morse_complex,
@@ -35,7 +39,9 @@ __all__ = [
     "MorseGradientStepKind",
     "MorseMatchingFault",
     "MorseMatchingOutcome",
+    "collapse_sequence",
     "compute_gradient_paths",
     "compute_morse_complex",
     "construct_matching",
+    "greedy_matching",
 ]

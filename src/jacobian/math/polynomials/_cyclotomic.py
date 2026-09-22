@@ -577,7 +577,7 @@ def _backend_cyclotomic_coefficients(
 ) -> tuple[int, ...]:
     try:
         from sympy import Symbol, cyclotomic_poly
-    except Exception as exc:
+    except (ImportError, ModuleNotFoundError) as exc:
         _backend_error(BackendFailureReason.INITIALIZATION, exc)
     request_checkpoint("before cyclotomic backend")
     try:

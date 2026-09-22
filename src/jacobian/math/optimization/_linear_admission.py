@@ -18,6 +18,7 @@ from jacobian.math.optimization._models import (
     MAX_LINEAR_PROGRAM_BACKEND_STATES,
     StandardFormRationalLinearProgram,
     _active_equations,
+    _has_trivial_inconsistent_row,
     _result_digit_bound,
 )
 
@@ -103,7 +104,8 @@ def admit_linear_program(program: StandardFormRationalLinearProgram) -> LinearAd
     )
     digits = _result_digit_bound(program)
     rows = len(_active_equations(program))
-    components = _constraint_components(program)
+    trivial_contradiction = _has_trivial_inconsistent_row(program)
+    components = () if trivial_contradiction else _constraint_components(program)
     backend_states = sum(
         _component_state_bound(len(component_rows), len(component_columns))
         for component_rows, component_columns in components

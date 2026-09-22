@@ -15,6 +15,7 @@ from jacobian._execution import (
 )
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.optimization import general_linear_program, linear_program
+from jacobian.math.optimization import operations as linear_operations
 from jacobian.math.optimization._general_models import GeneralFormRationalLinearProgram
 from jacobian.math.optimization._linear_admission import LINEAR_PROGRAM_WALL_SECONDS
 from jacobian.math.optimization._models import (
@@ -77,6 +78,34 @@ def test_exact_backend_rejects_excessive_combinatorial_state_before_launch() -> 
         "optimization.linear.backend_state_bound"
     )
     assert "backend_state_estimate=" in str(caught.value)
+
+
+def test_trivial_contradiction_precedes_backend_state_admission(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    n, m = 24, 12
+    program = StandardFormRationalLinearProgram.model_validate_json(
+        json.dumps(
+            {
+                "variables": [f"x{i}" for i in range(n)],
+                "objective": [q(1)] * n,
+                "coefficients": [[q(1)] * n, *([[q(0)] * n] * (m - 1))],
+                "rhs": [q(1)] * m,
+            }
+        )
+    )
+
+    def unexpected(*args: object, **kwargs: object) -> None:
+        pytest.fail("a trivial contradiction must not launch PPL")
+
+    monkeypatch.setattr(
+        linear_operations,
+        "solve_standard_form_process",
+        unexpected,
+    )
+    result = linear_program(program)
+    assert result.status == "INFEASIBLE"
+    assert result.farkas_candidate is not None
 
 
 def test_exact_backend_proves_infeasibility_beyond_old_search_allowance() -> None:

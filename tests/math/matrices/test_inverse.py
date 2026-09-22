@@ -344,7 +344,7 @@ def test_integer_requests_keep_operation_specific_envelopes() -> None:
     assert _entry_axis_limit(square_schema, "matrix") == 32
     assert _entry_axis_limit(integer_schema, "matrix") == MAX_EXACT_LINEAR_MATRIX_AXIS
     assert _entry_axis_limit(lattice_schema, "basis") == 32
-    assert _entry_axis_limit(hermite_schema, "matrix") == 128
+    assert _entry_axis_limit(hermite_schema, "matrix") == 256
     assert (
         IntegerMatrix.model_json_schema()["properties"]["entries"]["maxItems"]
         == MAX_INTEGER_MATRIX_ORDER

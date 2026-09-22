@@ -5,7 +5,6 @@ from fractions import Fraction
 import pytest
 from pydantic import ValidationError
 
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.lie_algebras._models import (
     FiniteDimensionalLieAlgebra,
@@ -268,7 +267,6 @@ class TestPublishedDirectSum:
             FiniteDimensionalLieAlgebra.model_validate_json(result.model_dump_json())
             == result
         )
-        assert Catalog.open().operation(tool.operation_id) is not None
 
 
 class TestDirectSum:

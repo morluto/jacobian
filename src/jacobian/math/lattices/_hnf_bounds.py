@@ -1,8 +1,10 @@
-"""Bounds for fraction-free elimination, modular HNF, and exact lifting.
+"""Conservative deterministic admission for exact row HNF.
 
-The bounds follow the explicitly selected SymPy 1.14 algorithms documented
-in ``_hnf_backend``. Arithmetic counts and operand heights are independent;
-no time measurement or output-height proxy stands in for intermediate work.
+The runtime adapter uses FLINT's maintained exact HNF kernel.  Admission keeps
+an algorithm-independent public boundary by bounding a deterministic modular
+construction of the same ``(H, U)`` result together with its intermediate and
+output heights.  FLINT's private algorithm selection does not widen that
+accepted domain.
 """
 
 from dataclasses import dataclass
@@ -39,7 +41,11 @@ def _reject(message: str) -> None:
 
 
 def admit_hermite_normal_form(entries: list[list[int]]) -> HNFAdmission:
-    """Bound every phase before constructing the augmented backend matrix.
+    """Bound deterministic exact completion before entering the FLINT adapter.
+
+    The work and intermediate estimates use a fraction-free elimination,
+    modular HNF, and exact-lift reference construction.  This keeps admission
+    independent of FLINT's private choice among equivalent exact algorithms.
 
     Let P=2**b bound all minors of [A|I]. Each is a minor of A, so
     Hadamard bounds it by the product of the largest min(m,n) row norms

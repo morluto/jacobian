@@ -206,7 +206,7 @@ def _worker_stdout_limit(field: SimpleNumberFieldPresentation) -> int:
     response: dict[str, object] = {
         "kind": "complete",
         "class_number": "9" * 64,
-        "abelian_invariants": [9] * degree,
+        "abelian_invariants": ["9"] * degree,
         "field_discriminant": "-" + "9" * 64,
         "real_embedding_count": degree,
         "complex_embedding_pair_count": degree,
@@ -293,7 +293,10 @@ def _decode_worker_response(
         discriminant = parse_canonical_integer(
             _require_canonical(response["field_discriminant"])
         )
-        invariants = tuple(int(value) for value in response["abelian_invariants"])
+        invariants = tuple(
+            parse_canonical_integer(_require_canonical(value))
+            for value in response["abelian_invariants"]
+        )
         representatives = tuple(
             _decode_matrix(matrix, degree=degree)
             for matrix in response["ideal_representatives"]

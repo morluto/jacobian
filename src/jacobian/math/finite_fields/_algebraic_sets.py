@@ -276,22 +276,35 @@ def _admit_enumeration(system: PolynomialSystem, *, projective: bool) -> int:
     return int(ambient)
 
 
-def _evaluate_at(
-    equation: AlgebraicPolynomial,
-    point: tuple[Any, ...],
-    *,
-    active_context: Any,
-    zero: Any,
-) -> Any:
+def _prepare_equations(
+    system: PolynomialSystem, *, active_context: Any
+) -> tuple[tuple[tuple[Any, tuple[int, ...]], ...], ...]:
+    """Convert equation coefficients once for one bounded enumeration."""
+
     from jacobian.math.finite_fields import _flint as flint
 
-    total: Any = zero
-    for term in equation.terms:
-        backend_coeff = flint.to_backend(
-            term.coefficient, active_context=active_context
+    return tuple(
+        tuple(
+            (
+                flint.to_backend(term.coefficient, active_context=active_context),
+                term.exponents,
+            )
+            for term in equation.terms
         )
+        for equation in system.equations
+    )
+
+
+def _evaluate_at(
+    equation: tuple[tuple[Any, tuple[int, ...]], ...],
+    point: tuple[Any, ...],
+    *,
+    zero: Any,
+) -> Any:
+    total: Any = zero
+    for backend_coeff, exponents in equation:
         monomial: Any | None = None
-        for coordinate, exponent in zip(point, term.exponents, strict=True):
+        for coordinate, exponent in zip(point, exponents, strict=True):
             if exponent:
                 power = coordinate**exponent
                 monomial = power if monomial is None else monomial * power
@@ -301,34 +314,43 @@ def _evaluate_at(
     return total
 
 
-def affine_zero_set(system: PolynomialSystem) -> tuple[AffinePoint, ...]:
-    """Return all and only simultaneous zeros in canonical coordinate order."""
+def _iter_zero_coordinates(system: PolynomialSystem, *, projective: bool) -> Any:
+    """Yield matching coordinates without constructing public point values."""
 
-    _admit_enumeration(system, projective=False)
+    _admit_enumeration(system, projective=projective)
+    if projective:
+        _require_homogeneous(system)
     from jacobian.math.finite_fields import _flint as flint
     from jacobian.math.finite_fields.operations import _field_elements
 
     active_context = flint.context(system.presentation)
     zero = active_context(0)
+    prepared = _prepare_equations(system, active_context=active_context)
     field_elements = _field_elements(system.presentation)
-    points: list[AffinePoint] = []
     for coordinates in product(field_elements, repeat=system.nvars):
+        if projective and all(value.is_zero for value in coordinates):
+            continue
         backends = tuple(
             flint.to_backend(value, active_context=active_context)
             for value in coordinates
         )
         if all(
-            _evaluate_at(equation, backends, active_context=active_context, zero=zero)
-            == zero
-            for equation in system.equations
+            _evaluate_at(equation, backends, zero=zero) == zero for equation in prepared
         ):
-            points.append(
-                AffinePoint._from_kernel(
-                    presentation=system.presentation,
-                    variable_axis=system.variable_axis,
-                    coordinates=coordinates,
-                )
-            )
+            yield coordinates
+
+
+def affine_zero_set(system: PolynomialSystem) -> tuple[AffinePoint, ...]:
+    """Return all and only simultaneous zeros in canonical coordinate order."""
+
+    points = [
+        AffinePoint._from_kernel(
+            presentation=system.presentation,
+            variable_axis=system.variable_axis,
+            coordinates=coordinates,
+        )
+        for coordinates in _iter_zero_coordinates(system, projective=False)
+    ]
     # Canonical order: lexicographic by encoded coordinates.
     points.sort(
         key=lambda point: tuple(_encoded_coordinates(c) for c in point.coordinates)
@@ -337,9 +359,9 @@ def affine_zero_set(system: PolynomialSystem) -> tuple[AffinePoint, ...]:
 
 
 def affine_zero_count(system: PolynomialSystem) -> int:
-    """Compact count agreeing exactly with the complete enumeration."""
+    """Count affine zeros without retaining or sorting public point values."""
 
-    return len(affine_zero_set(system))
+    return sum(1 for _ in _iter_zero_coordinates(system, projective=False))
 
 
 def _require_homogeneous(system: PolynomialSystem) -> None:
@@ -355,30 +377,11 @@ def _require_homogeneous(system: PolynomialSystem) -> None:
 def projective_zero_set(system: PolynomialSystem) -> tuple[ProjectivePoint, ...]:
     """Return canonical scalar-class representatives of the projective zeros."""
 
-    _admit_enumeration(system, projective=True)
-    _require_homogeneous(system)
-    from jacobian.math.finite_fields import _flint as flint
     from jacobian.math.finite_fields import _sympy as sympy
-    from jacobian.math.finite_fields.operations import _field_elements
 
-    active_context = flint.context(system.presentation)
-    zero = active_context(0)
-    field_elements = _field_elements(system.presentation)
     seen: set[tuple[tuple[int, ...], ...]] = set()
     representatives: list[ProjectivePoint] = []
-    for coordinates in product(field_elements, repeat=system.nvars):
-        if all(value.is_zero for value in coordinates):
-            continue
-        backends = tuple(
-            flint.to_backend(value, active_context=active_context)
-            for value in coordinates
-        )
-        if not all(
-            _evaluate_at(equation, backends, active_context=active_context, zero=zero)
-            == zero
-            for equation in system.equations
-        ):
-            continue
+    for coordinates in _iter_zero_coordinates(system, projective=True):
         normalized = sympy.normalize_projective_coordinates(
             system.presentation, coordinates
         )
@@ -405,9 +408,17 @@ def projective_zero_set(system: PolynomialSystem) -> tuple[ProjectivePoint, ...]
 
 
 def projective_zero_count(system: PolynomialSystem) -> int:
-    """Compact projective count agreeing exactly with the enumeration."""
+    """Count projective scalar classes without retaining public point values."""
 
-    return len(projective_zero_set(system))
+    from jacobian.math.finite_fields import _sympy as sympy
+
+    seen: set[tuple[tuple[int, ...], ...]] = set()
+    for coordinates in _iter_zero_coordinates(system, projective=True):
+        key = tuple(
+            sympy.normalize_projective_coordinates(system.presentation, coordinates)
+        )
+        seen.add(key)
+    return len(seen)
 
 
 def _require_embedding_shape(embedding: FieldEmbedding) -> None:

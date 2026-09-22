@@ -10,7 +10,10 @@ from sympy import ZZ
 from sympy.polys.matrices import DomainMatrix
 
 from jacobian._exact import CanonicalRational
-from jacobian._execution import OperationExecutionTimeoutError
+from jacobian._execution import (
+    OperationExecutionTimeoutError,
+    current_request_execution,
+)
 from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.discrepancy import _models as discrepancy_models
@@ -315,6 +318,14 @@ def compute_optimal_discrepancy(
                 np.array(bounds_upper),
             )
 
+        execution = current_request_execution()
+        remaining_seconds = MAX_OPTIMUM_SOLVER_MILLISECONDS / 1000
+        if execution is not None and execution.deadline is not None:
+            import time
+
+            remaining_seconds = min(
+                remaining_seconds, max(0.001, execution.deadline - time.monotonic())
+            )
         result = milp(
             c=objective,
             constraints=constraints,
@@ -322,7 +333,7 @@ def compute_optimal_discrepancy(
             bounds=Bounds(lower, upper),
             options={
                 "mip_rel_gap": 0,
-                "time_limit": MAX_OPTIMUM_SOLVER_MILLISECONDS / 1000,
+                "time_limit": remaining_seconds,
                 "node_limit": MAX_OPTIMUM_SOLVER_NODES,
             },
         )

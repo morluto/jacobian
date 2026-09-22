@@ -9,6 +9,7 @@ from pydantic import Field, StrictInt, WithJsonSchema, model_validator
 from pydantic.json_schema import JsonSchemaValue
 from pydantic_core import PydanticCustomError
 
+from jacobian._execution import request_checkpoint
 from jacobian._models import StrictModel
 from jacobian.catalog.models import (
     MathTool,
@@ -406,6 +407,8 @@ def _solve_component_by_enumeration(
     current_value = 0
     best_value = 0
     for step in range(1, component.candidate_partitions):
+        if step % 1024 == 0:
+            request_checkpoint("during maximum-cut exhaustive fallback")
         changed_position = (step & -step).bit_length() - 1
         changed_class = component.variable_order[changed_position]
         changed = local_index[changed_class]

@@ -105,6 +105,51 @@ def test_affine_split_zeros_known_answer() -> None:
     assert counted.point_count == enumerated.point_count == 2
 
 
+def test_affine_count_does_not_construct_points(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    system = _split_system()
+
+    def unexpected_point(*args: object, **kwargs: object) -> object:
+        raise AssertionError("count-only enumeration constructed a point")
+
+    monkeypatch.setattr(AffinePoint, "_from_kernel", unexpected_point)
+    assert affine_zero_count(system) == 2
+
+
+def test_affine_count_retains_near_envelope_case() -> None:
+    presentation = _gf4()
+    axis = Axis(name="vars", labels=tuple("xyzwuvpq"))
+    zero = element(presentation, (0, 0))
+    polynomial = AlgebraicPolynomial._from_kernel(
+        presentation=presentation,
+        variable_axis=axis,
+        terms=(
+            AlgebraicMonomial._from_kernel(
+                coefficient=zero, exponents=(0,) * len(axis.labels)
+            ),
+        ),
+    )
+    system = PolynomialSystem._from_kernel(
+        presentation=presentation, variable_axis=axis, equations=(polynomial,)
+    )
+    assert affine_zero_count(system) == 65_536
+
+
+def test_projective_count_does_not_construct_points(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian.math.finite_fields import _algebraic_sets as algebraic_sets
+
+    system = _projective_system()
+
+    def unexpected_point(*args: object, **kwargs: object) -> object:
+        raise AssertionError("count-only enumeration constructed a point")
+
+    monkeypatch.setattr(algebraic_sets, "ProjectivePoint", unexpected_point)
+    assert projective_zero_count(system) == 1
+
+
 def test_projective_single_class_known_answer() -> None:
     system = _projective_system()
     points = projective_zero_set(system)

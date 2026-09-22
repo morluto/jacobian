@@ -132,8 +132,22 @@ def solve_chromatic_number(
     )
     greedy = {vertex: int(greedy_raw[vertex]) for vertex in vertices}
     upper_bound = max(greedy.values(), default=-1) + 1
-    clique_number = max(
-        (len(clique) for clique in nx.find_cliques(networkx_graph)), default=1
+    if _remaining_ms(started, wall_seconds) <= 0:
+        return _unknown_chromatic_result(
+            vertices=vertices,
+            lower_bound=2 if networkx_graph.number_of_edges() else 1,
+            upper_bound=upper_bound,
+            coloring=greedy,
+            tested=[],
+            detail="the chromatic-number wall-clock budget expired",
+        )
+    # This is only a lower-bound seed; exactness comes from the k-colorability
+    # checks below. Enumerating every maximal clique can be exponential even
+    # though a single valid clique gives the required bound.
+    clique_number = (
+        len(nx.approximation.max_clique(networkx_graph))
+        if networkx_graph.number_of_edges()
+        else 1
     )
     lower_bound = clique_number if networkx_graph.number_of_edges() else 1
     if _remaining_ms(started, wall_seconds) <= 0:

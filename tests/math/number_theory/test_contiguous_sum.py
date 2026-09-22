@@ -1,5 +1,7 @@
 """Tests for contiguous-sum representation profiles."""
 
+from math import isqrt
+
 import pytest
 from pydantic import ValidationError
 
@@ -12,6 +14,7 @@ from jacobian.math.number_theory._contiguous_sum_admission import (
     require_contiguous_sum_profile_admission,
 )
 from jacobian.math.number_theory._contiguous_sum_kernel import (
+    _odd_primes_up_to,
     run_contiguous_sum_profile,
 )
 from jacobian.math.number_theory._contiguous_sum_models import (
@@ -37,6 +40,16 @@ def test_segmented_profile_strips_even_residual_before_counting_odd_divisors() -
     )
 
     assert result.rows[0].representation_count == 2
+
+
+def test_odd_prime_sieve_matches_trial_division_oracle() -> None:
+    expected = tuple(
+        candidate
+        for candidate in range(3, 500, 2)
+        if all(candidate % divisor for divisor in range(3, isqrt(candidate) + 1, 2))
+    )
+
+    assert tuple(_odd_primes_up_to(499)) == expected
 
 
 def test_primes() -> None:

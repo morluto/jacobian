@@ -17,6 +17,7 @@ from jacobian.math.graphs.independence import (
     IndependenceNumberRequest,
 )
 from jacobian.math.graphs.optimization import (
+    _chromatic_kernel,
     _chromatic_number,
     _exact_search,
     _finite_optimization,
@@ -114,6 +115,59 @@ def test_chromatic_budget_starts_before_graph_preparation(
     assert result.solver_status == "UNKNOWN"
     assert "wall-clock budget expired" in result.detail
     assert result.tested == ()
+
+
+def test_chromatic_search_skips_clique_bound_after_deadline(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request = GraphChromaticNumberRequest.model_validate(
+        {"graph": _graph().model_dump(), "resource_budget": {"wall_seconds": 1}}
+    )
+    remaining = iter((1_000, 0))
+    monkeypatch.setattr(
+        _chromatic_kernel, "_remaining_ms", lambda *_args: next(remaining)
+    )
+    monkeypatch.setattr(
+        nx.approximation,
+        "max_clique",
+        lambda *_args: (_ for _ in ()).throw(
+            AssertionError("clique lower-bound work must not start after deadline")
+        ),
+    )
+
+    result = _chromatic_number._search_chromatic_number_kernel(request)
+
+    assert result.status == "UNKNOWN"
+    assert result.tested == ()
+
+
+def test_chromatic_search_handles_many_maximal_cliques_exactly() -> None:
+    # Choosing one vertex from each of eight independent parts gives 4**8
+    # distinct maximal cliques in this complete multipartite graph.
+    parts = tuple(
+        tuple(f"p{part:02d}v{vertex:02d}" for vertex in range(4)) for part in range(8)
+    )
+    vertices = tuple(vertex for part in parts for vertex in part)
+    edges = tuple(
+        (left, right)
+        for part_index, part in enumerate(parts)
+        for later_part in parts[part_index + 1 :]
+        for left in part
+        for right in later_part
+    )
+    request = GraphChromaticNumberRequest.model_validate(
+        {
+            "graph": {"vertices": vertices, "edges": edges},
+            "resource_budget": {"wall_seconds": 3},
+        }
+    )
+
+    result = _chromatic_number._search_chromatic_number_kernel(request)
+
+    assert result.status == "EXACT"
+    assert result.chromatic_number == 8
+    assert result.coloring is not None
+    assert all(result.coloring[left] != result.coloring[right] for left, right in edges)
 
 
 def test_chromatic_worker_projection_is_bound_to_the_submitted_vertices(

@@ -72,50 +72,26 @@ def complete_intersection_ledger(
     the public ledger order identical to the combinations-based definition.
     """
 
-    records: list[IntersectionRecord] = []
-    union_volume = Fraction()
     indexed_nonempty = tuple(
         (index, box) for index, box in enumerate(boxes) if not box.is_empty
     )
     active_count = len(indexed_nonempty)
-    intersections: list[RationalAxisAlignedBox | None] = [None] * (1 << active_count)
-    for mask in range(1, 1 << active_count):
-        bit = mask & -mask
-        position = bit.bit_length() - 1
-        parent = mask ^ bit
-        if parent == 0:
-            candidate = indexed_nonempty[position][1]
-        else:
-            parent_intersection = intersections[parent]
-            if parent_intersection is None:
-                continue
-            candidate = intersect_boxes(
-                (parent_intersection, indexed_nonempty[position][1])
-            )
-        if candidate.is_empty:
-            continue
-        intersections[mask] = candidate
+    if not active_count:
+        return (), Fraction()
 
-    # Build lexicographically ordered mask families once while extending each
-    # prefix.  The same masks index the subset-DP intersections above, avoiding
-    # a second combinations traversal and sort.
-    masks_by_size: list[list[tuple[int, tuple[int, ...]]]] = [
-        [] for _ in range(active_count + 1)
+    records: list[IntersectionRecord] = []
+    union_volume = Fraction()
+    # Keep only nonempty intersections at the current subset size. Every
+    # larger subset containing an empty intersection is empty too, so its
+    # branches need no masks, prefixes, or intersection candidates.
+    frontier: list[tuple[tuple[int, ...], RationalAxisAlignedBox]] = [
+        ((position,), box)
+        for position, (_source_index, box) in enumerate(indexed_nonempty)
     ]
-    masks_by_size[0].append((0, ()))
-    for subset_size in range(1, active_count + 1):
-        for mask, prefix in masks_by_size[subset_size - 1]:
-            start = prefix[-1] + 1 if prefix else 0
-            for position in range(start, active_count):
-                masks_by_size[subset_size].append(
-                    (mask | (1 << position), (*prefix, position))
-                )
-    for subset_size in range(1, active_count + 1):
+    subset_size = 1
+    while frontier:
         coefficient = 1 if subset_size % 2 else -1
-        for mask, selected_positions in masks_by_size[subset_size]:
-            intersection = intersections[mask]
-            if intersection is None:
-                continue
+        for selected_positions, intersection in frontier:
             box_indices = tuple(
                 indexed_nonempty[position][0] for position in selected_positions
             )
@@ -128,6 +104,16 @@ def complete_intersection_ledger(
                 )
             )
             union_volume += coefficient * volume
+        next_frontier: list[tuple[tuple[int, ...], RationalAxisAlignedBox]] = []
+        for prefix, parent_intersection in frontier:
+            for position in range(prefix[-1] + 1, active_count):
+                candidate = intersect_boxes(
+                    (parent_intersection, indexed_nonempty[position][1])
+                )
+                if not candidate.is_empty:
+                    next_frontier.append(((*prefix, position), candidate))
+        frontier = next_frontier
+        subset_size += 1
     return tuple(records), union_volume
 
 

@@ -19,15 +19,15 @@ def _count_materialized(x: int, y: int) -> int:
     is_friable[0] = 0
     square_root = isqrt(x)
 
-    for prime in range(2, x + 1):
-        if not is_prime[prime]:
-            continue
+    prime = is_prime.find(b"\x01", 2)
+    while prime != -1:
         if prime <= square_root:
             first_composite = prime * prime
             composite_count = (x - first_composite) // prime + 1
             is_prime[first_composite : x + 1 : prime] = b"\x00" * composite_count
         if prime > y:
             is_friable[prime : x + 1 : prime] = b"\x00" * (x // prime)
+        prime = is_prime.find(b"\x01", prime + 1)
 
     return sum(is_friable)
 

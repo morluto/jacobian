@@ -55,11 +55,24 @@ def _odd_primes_up_to(limit: int) -> list[int]:
         sieve[0] = 0
     if limit >= 1:
         sieve[1] = 0
-    for candidate in range(3, isqrt(limit) + 1, 2):
-        if sieve[candidate]:
-            for composite in range(candidate * candidate, limit + 1, 2 * candidate):
-                sieve[composite] = 0
-    return [candidate for candidate in range(3, limit + 1, 2) if sieve[candidate]]
+    if limit >= 4:
+        even_composites = (limit - 4) // 2 + 1
+        sieve[4 : limit + 1 : 2] = b"\x00" * even_composites
+
+    candidate = sieve.find(b"\x01", 3)
+    square_root = isqrt(limit)
+    while candidate != -1 and candidate <= square_root:
+        first_composite = candidate * candidate
+        composite_count = (limit - first_composite) // (2 * candidate) + 1
+        sieve[first_composite : limit + 1 : 2 * candidate] = b"\x00" * composite_count
+        candidate = sieve.find(b"\x01", candidate + 1)
+
+    primes: list[int] = []
+    candidate = sieve.find(b"\x01", 3)
+    while candidate != -1:
+        primes.append(candidate)
+        candidate = sieve.find(b"\x01", candidate + 1)
+    return primes
 
 
 def _segmented_odd_divisor_counts(

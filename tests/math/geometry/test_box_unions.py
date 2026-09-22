@@ -164,6 +164,17 @@ def test_disjoint_intersections_are_omitted() -> None:
     assert tuple(entry.box_indices for entry in result.intersections) == ((0,), (1,))
 
 
+def test_disjoint_maximum_family_prunes_empty_subset_branches() -> None:
+    boxes = tuple(_box((2 * index, 2 * index + 1)) for index in range(15))
+
+    result = compute_box_union_volume(boxes)
+
+    assert result.union_volume.as_fraction() == 15
+    assert tuple(entry.box_indices for entry in result.intersections) == tuple(
+        (index,) for index in range(15)
+    )
+
+
 def test_duplicate_boxes_remain_distinct_by_source_index() -> None:
     box = _box((0, 2), (0, 1))
     result = compute_box_union_volume((box, box))

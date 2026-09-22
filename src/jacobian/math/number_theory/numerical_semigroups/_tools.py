@@ -19,6 +19,8 @@ from jacobian.math.number_theory.numerical_semigroups._element_invariant_models 
 from jacobian.math.number_theory.numerical_semigroups._factorization_models import (
     FactorizationComputeRequest,
     FactorizationComputeResult,
+    FactorizationDistanceMatrixRequest,
+    FactorizationDistanceMatrixResult,
     FactorizationDistanceRequest,
     FactorizationDistanceResult,
     FactorizationGraphComputeRequest,
@@ -45,6 +47,8 @@ from jacobian.math.number_theory.numerical_semigroups._presentation_models impor
     MinimalPresentationResult,
     PresentationBinomialsRequest,
     PresentationBinomialsResult,
+    PresentationDegreeProfileRequest,
+    PresentationDegreeProfileResult,
 )
 from jacobian.math.number_theory.numerical_semigroups._summary_models import (
     NumericalSemigroupSummaryRequest,
@@ -58,6 +62,7 @@ from jacobian.math.number_theory.numerical_semigroups.operations import (
     element_catenary_degree_profile,
     element_delta_set_profile,
     element_elasticity_profile,
+    factorization_distance_matrix_profile,
     factorization_distance_profile,
     factorization_graph_profile,
     factorization_lengths_profile,
@@ -67,6 +72,7 @@ from jacobian.math.number_theory.numerical_semigroups.operations import (
     membership,
     minimal_presentation,
     presentation_binomials,
+    presentation_degree_profile,
     summary,
 )
 
@@ -129,6 +135,18 @@ def compute_factorization_lengths(
         "factorization_lengths",
         ("generators", "value"),
         lambda: factorization_lengths_profile(
+            _generators(request.generators), request.value
+        ),
+    )
+
+
+def compute_factorization_distance_matrix(
+    request: FactorizationDistanceMatrixRequest,
+) -> FactorizationDistanceMatrixResult:
+    return _run_native(
+        "factorization_distance_matrix",
+        ("generators", "value"),
+        lambda: factorization_distance_matrix_profile(
             _generators(request.generators), request.value
         ),
     )
@@ -224,6 +242,16 @@ def compute_catenary_degree(request: CatenaryDegreeRequest) -> CatenaryDegreeRes
         "catenary_degree",
         ("generators",),
         lambda: global_catenary_degree(_generators(request.generators)),
+    )
+
+
+def compute_presentation_degree_profile(
+    request: PresentationDegreeProfileRequest,
+) -> PresentationDegreeProfileResult:
+    return _run_native(
+        "presentation_degree_profile",
+        ("generators",),
+        lambda: presentation_degree_profile(_generators(request.generators)),
     )
 
 
@@ -332,6 +360,28 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
     ),
     MathTool(
+        operation_id="number_theory.numerical_semigroup.factorization_distance_matrix.compute",
+        title="Compute the complete factorization-distance matrix",
+        description="Return the exact distance between every ordered pair in the complete factorization fiber; nonmembers and zero have their exact empty or singleton fibers.",
+        request_type=FactorizationDistanceMatrixRequest,
+        result_type=FactorizationDistanceMatrixResult,
+        run=compute_factorization_distance_matrix,
+        tags=(
+            "number-theory",
+            "numerical-semigroup",
+            "factorization",
+            "distance",
+            "exact",
+        ),
+        examples=(
+            OperationExample(
+                name="distance_matrix_15",
+                description="Compute all pairwise factorization distances of 15 in <3,5>; the fiber is complete.",
+                input={"generators": ["3", "5"], "value": "15"},
+            ),
+        ),
+    ),
+    MathTool(
         operation_id="number_theory.numerical_semigroup.factorization_graph.compute",
         title="Compute factorization graph with connected components",
         description="Build the standard factorization graph where two factorizations "
@@ -380,6 +430,22 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             OperationExample(
                 name="presentation_3_5",
                 description="Minimal presentation of <3,5>.",
+                input={"generators": ["3", "5"]},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="number_theory.numerical_semigroup.presentation_degree_profile.compute",
+        title="Compute numerical-semigroup presentation degrees",
+        description="Return the exact semigroup degree of every relation in one deterministic minimal presentation, retaining the canonical generator axis.",
+        request_type=PresentationDegreeProfileRequest,
+        result_type=PresentationDegreeProfileResult,
+        run=compute_presentation_degree_profile,
+        tags=("number-theory", "numerical-semigroup", "presentation", "exact"),
+        examples=(
+            OperationExample(
+                name="presentation_degrees_3_5",
+                description="Compute presentation degrees for <3,5>; the minimal axis is positive and gcd one.",
                 input={"generators": ["3", "5"]},
             ),
         ),

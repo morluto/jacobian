@@ -33,7 +33,7 @@ def enumerate_powerful(cutoff: int) -> list[int]:
     with b squarefree. The uniqueness of this representation guarantees
     each powerful integer is generated exactly once.
     """
-    family: set[int] = set()
+    family: list[int] = []
 
     # b iterates over squarefree integers with b^3 <= cutoff.
     b = 0
@@ -50,7 +50,7 @@ def enumerate_powerful(cutoff: int) -> list[int]:
             a2 = a * a
             if a2 * b3 > cutoff:
                 break
-            family.add(a2 * b3)
+            family.append(a2 * b3)
             a += 1
 
     return sorted(family)

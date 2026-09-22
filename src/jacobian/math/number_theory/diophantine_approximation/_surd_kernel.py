@@ -159,7 +159,6 @@ def _distance_value(
     irrational.
     """
 
-    row = _scaled_floor_row(multiplier, radicand)
     scaled_square: int = radicand * multiplier * multiplier * 4**scale_bits
     scaled_floor: int = isqrt(scaled_square)
     if scaled_floor * scaled_floor == scaled_square:
@@ -169,30 +168,34 @@ def _distance_value(
             message="a scaled quadratic-surd floor requires a nonsquare radicand",
         )
     scale: int = 2**scale_bits
+    # Dividing floor(2**s * sqrt(N)) by 2**s gives floor(sqrt(N)); avoid a
+    # second integer square root and the discarded ScaledFloorValue allocation.
+    floor = scaled_floor // scale
+    ceiling = floor + 1
     radical_lower = Fraction(scaled_floor, scale)
     radical_upper = Fraction(scaled_floor + 1, scale)
 
-    floor_distance_lower = radical_lower - row.floor
+    floor_distance_lower = radical_lower - floor
     # The floor-branch distance stays strictly positive because the radical
     # exceeds its integer floor; the upper bound is a strict over-estimate.
-    floor_distance_upper = radical_upper - row.floor
-    ceiling_distance_lower = Fraction(row.ceiling) - radical_upper
-    ceiling_distance_upper = Fraction(row.ceiling) - radical_lower
+    floor_distance_upper = radical_upper - floor
+    ceiling_distance_lower = Fraction(ceiling) - radical_upper
+    ceiling_distance_upper = Fraction(ceiling) - radical_lower
 
     # The midpoint comparison is exact.  The radical cannot equal this
     # rational midpoint because the radicand is nonsquare, so even a coarse
     # dyadic bracket can choose the nearest branch without guessing.
     side: Literal["FLOOR", "CEILING"]
     radical_square_twice = 4 * radicand * multiplier * multiplier
-    midpoint_square = (2 * row.floor + 1) * (2 * row.floor + 1)
+    midpoint_square = (2 * floor + 1) * (2 * floor + 1)
     if radical_square_twice < midpoint_square:
         side = "FLOOR"
         lower, upper = floor_distance_lower, floor_distance_upper
-        upper_scaled = scaled_floor + 1 - row.floor * scale
+        upper_scaled = scaled_floor + 1 - floor * scale
     elif radical_square_twice > midpoint_square:
         side = "CEILING"
         lower, upper = ceiling_distance_lower, ceiling_distance_upper
-        upper_scaled = row.ceiling * scale - scaled_floor
+        upper_scaled = ceiling * scale - scaled_floor
     else:
         raise AssertionError("a nonsquare quadratic radical cannot equal a midpoint")
 
@@ -204,9 +207,9 @@ def _distance_value(
     return NearestIntegerDistanceValue._from_kernel(
         multiplier=multiplier,
         radicand=radicand,
-        floor=row.floor,
-        ceiling=row.ceiling,
-        nearest_integer=row.floor if side == "FLOOR" else row.ceiling,
+        floor=floor,
+        ceiling=ceiling,
+        nearest_integer=floor if side == "FLOOR" else ceiling,
         side=side,
         scale_bits=scale_bits,
         distance_enclosure=interval,

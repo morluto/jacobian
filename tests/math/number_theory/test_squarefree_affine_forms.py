@@ -222,6 +222,16 @@ def test_divisible_coefficient_and_overlap_shapes() -> None:
     assert (overlap.bad_count, overlap.valid_count) == (1, 8)
 
 
+def test_full_residue_coset_at_admitted_prime_bound() -> None:
+    prime = 997
+    result = local_factor(_family(_form("constant", 0, prime * prime)), prime)
+
+    assert result.covers_all_residues
+    assert result.bad_residues == ()
+    assert result.bad_count == prime * prime
+    assert result.valid_count == 0
+
+
 def test_obstructed_family_covers_every_residue() -> None:
     family = _family(
         _form("r0", 1, 0),

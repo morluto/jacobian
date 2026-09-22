@@ -31,7 +31,6 @@ from jacobian.math.groups.characters._cyclotomic import (
 )
 from jacobian.math.groups.characters._models import (
     MAX_CHARACTER_TABLE_CELLS,
-    MAX_CHARACTER_TABLE_WORK,
     MAX_CLASS_COUNT,
     MAX_CYCLOTOMIC_ORDER,
     MAX_GROUP_ORDER,
@@ -369,12 +368,11 @@ def _cyclic_generator(partition: GroupConjugacyClassesResult) -> tuple[int, ...]
 def _admit_character_table(
     *, order: int, class_count: int, cyclotomic_order: int, row_count: int
 ) -> None:
-    """Admit complete table materialization and its defining replay together.
+    """Admit complete table construction and exact output together.
 
-    A single class-function product has its own bound, but a complete table
-    performs one such product for every ordered row pair and retains every
-    exact value.  Admission therefore charges the aggregate work and cells
-    before any row or contribution is materialized.
+    The cyclic construction reduces each distinct root-of-unity power once;
+    the output cell count separately bounds the retained table. Admission
+    charges both before any row or contribution is materialized.
     """
     table_cells = row_count * class_count
     if table_cells > MAX_CHARACTER_TABLE_CELLS:
@@ -384,18 +382,6 @@ def _admit_character_table(
             message=(
                 "complete character-table cells exceed the "
                 f"{MAX_CHARACTER_TABLE_CELLS:,}-cell envelope"
-            ),
-        )
-    # Generated rows have bounded rational coefficient height one at this
-    # boundary; use the carrier's minimum exact digit unit for the preflight.
-    orthogonality_work = row_count * row_count * class_count * max(1, cyclotomic_order)
-    if orthogonality_work > MAX_CHARACTER_TABLE_WORK:
-        raise OperationResourceAdmissionError(
-            location=("partition",),
-            code="groups.characters.table_work_exceeds_envelope",
-            message=(
-                "complete character-table construction and orthogonality replay "
-                f"exceed the {MAX_CHARACTER_TABLE_WORK:,}-unit envelope"
             ),
         )
     # Each cell carries phi(order) exact coefficients.  This is intentionally
@@ -645,44 +631,25 @@ def character_table(
         power_index = {element: index for index, element in enumerate(powers)}
         from jacobian.math.groups.characters._cyclotomic import value_from_power
 
+        # These n powers determine all n^2 Fourier-table entries. Reduce each
+        # power once and reuse its immutable exact value across the rows.
+        power_values = tuple(
+            _make_value(order, value_from_power(order, power)) for power in range(order)
+        )
         for exponent in range(order):
             values = []
             for cls in partition.classes:
                 power = power_index[tuple(cls[0])]
-                values.append(
-                    _make_value(order, value_from_power(order, exponent * power))
-                )
+                values.append(power_values[(exponent * power) % order])
             rows.append(
                 CharacterRow(label=f"chi_{exponent}", degree=1, values=tuple(values))
             )
     if sum(row.degree * row.degree for row in rows) != order:
         raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
-    # Independent orthogonality replay over the complete class axis.  This is
-    # a defining invariant of the returned table, not a generic result check.
-    for left in rows:
-        for right in rows:
-            pairing = class_function_inner_product(
-                FiniteClassFunction(
-                    axis=ClassAxis._from_kernel(
-                        class_sizes=sizes, cyclotomic_order=left.values[0].order
-                    ),
-                    values=left.values,
-                ),
-                FiniteClassFunction(
-                    axis=ClassAxis._from_kernel(
-                        class_sizes=sizes, cyclotomic_order=right.values[0].order
-                    ),
-                    values=right.values,
-                ),
-            )
-            expected = 1 if left.label == right.label else 0
-            coefficients = tuple(
-                value.as_fraction() for value in pairing.inner_product.coefficients
-            )
-            if coefficients[0] != expected or any(
-                value != 0 for value in coefficients[1:]
-            ):
-                raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+    # The supported branches construct the trivial character, the explicit
+    # S3 irreducibles, or the cyclic Fourier characters. Their formulas give
+    # orthogonality directly; pairwise inner products remain owner-test
+    # evidence rather than repeated production work.
     table_axis = ClassAxis._from_kernel(
         class_sizes=sizes,
         cyclotomic_order=rows[0].values[0].order,

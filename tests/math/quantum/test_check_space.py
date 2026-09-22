@@ -2,14 +2,19 @@
 
 from __future__ import annotations
 
+from typing import cast
+
 import pytest
 
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import MathTool, OperationDomainValidationError
 from jacobian.math.quantum import (
     BinaryPauliRow,
     canonicalize_check_space,
 )
-from jacobian.math.quantum._models import CheckSpaceCanonicalizeRequest
+from jacobian.math.quantum._models import (
+    CheckSpaceCanonicalizeRequest,
+    CheckSpaceCanonicalizeResult,
+)
 from jacobian.math.quantum._tools import TOOLS
 
 
@@ -95,8 +100,9 @@ class TestAdversarial:
         self, qubit_ids: tuple[object, ...]
     ) -> None:
         with pytest.raises(OperationDomainValidationError):
-            canonicalize_check_space(  # type: ignore[arg-type]
-                qubit_ids, (_row("x", [1], [0]),)
+            canonicalize_check_space(
+                qubit_ids,  # type: ignore[arg-type]
+                (_row("x", [1], [0]),),
             )
 
     @pytest.mark.parametrize(
@@ -121,8 +127,9 @@ class TestAdversarial:
 
         row = _row("x", [1], [0])
         with pytest.raises(ValidationError):
-            CheckSpaceCanonicalizeRequest(  # type: ignore[arg-type]
-                qubit_ids=(0,), generators=(row,)
+            CheckSpaceCanonicalizeRequest(
+                qubit_ids=(0,),  # type: ignore[arg-type]
+                generators=(row,),
             )
         with pytest.raises(OperationDomainValidationError):
             canonicalize_check_space((0,), (row,))  # type: ignore[arg-type]
@@ -146,6 +153,36 @@ class TestDefiningInvariant:
             (_row("x", [1], [0]), _row("y", [1], [1])),
         )
         assert result.status == "NOT_ISOTROPIC"
+
+    @pytest.mark.parametrize(
+        ("first", "second"),
+        [
+            ((x, z), (x2, z2))
+            for x in (0, 1)
+            for z in (0, 1)
+            for x2 in (0, 1)
+            for z2 in (0, 1)
+        ],
+    )
+    def test_one_qubit_pairing_matches_binary_symplectic_formula(
+        self,
+        first: tuple[int, int],
+        second: tuple[int, int],
+    ) -> None:
+        expected = (first[0] * second[1] + first[1] * second[0]) % 2
+        result = canonicalize_check_space(
+            ("q",),
+            (
+                _row("a", [first[0]], [first[1]]),
+                _row("b", [second[0]], [second[1]]),
+            ),
+        )
+        if expected:
+            assert result.status == "NOT_ISOTROPIC"
+            assert result.witness is not None and result.witness.pairing == 1
+        else:
+            assert result.status == "ISOTROPIC_CHECK_SPACE"
+            assert result.witness is None
 
     def test_generator_payload_assignment_preserves_canonical_basis(self) -> None:
         rows = (
@@ -196,10 +233,13 @@ class TestNativeVsCatalogParity:
                 _row("zz", [0, 0], [1, 1]),
             ),
         )
-        tool = next(
-            tool
-            for tool in TOOLS
-            if tool.operation_id == "stabilizer.check_space.canonicalize"
+        tool = cast(
+            MathTool[CheckSpaceCanonicalizeRequest, CheckSpaceCanonicalizeResult],
+            next(
+                tool
+                for tool in TOOLS
+                if tool.operation_id == "stabilizer.check_space.canonicalize"
+            ),
         )
         assert tool.run(request) == canonicalize_check_space(
             ("q0", "q1"),

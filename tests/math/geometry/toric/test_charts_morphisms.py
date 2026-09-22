@@ -406,7 +406,7 @@ def test_unbounded_hilbert_work_is_refused_not_truncated(
 # ---------------------------------------------------------------------------
 
 
-def test_identity_is_a_toric_morphism_and_assignments_replay() -> None:
+def test_identity_is_a_toric_morphism_and_assignments_map_every_ray() -> None:
     matrix = _matrix(((1, 0), (0, 1)))
     result = check_toric_morphism(p2_fan(), p2_fan(), matrix)
     assert result.is_toric_morphism is True

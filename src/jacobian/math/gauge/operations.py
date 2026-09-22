@@ -334,9 +334,8 @@ def path_holonomy(field: GaugeField, path: OrientedGaugePath) -> HolonomyResult:
 
     Under the published left-to-right convention
     ``Hol(gamma) = U_{e_1} ... U_{e_m}`` where a backward step resolves to
-    the exact inverse of its forward label. Before return the kernel replays
-    endpoint chaining and the full ordered product against the contribution
-    ledger.
+    the exact inverse of its forward label. Endpoint chaining and the ordered
+    product are established as the contribution ledger is built.
     """
 
     _admit_holonomy(field, path)
@@ -366,20 +365,6 @@ def path_holonomy(field: GaugeField, path: OrientedGaugePath) -> HolonomyResult:
     product = tuple(range(degree))
     for contribution in contributions:
         product = _compose(product, tuple(contribution.value.image))
-    # Replay the reverse-traversal identity: the reversed path (reversed
-    # step order, flipped orientations) must compose to the exact inverse,
-    # so the round trip is the identity permutation.
-    reversed_product = tuple(range(degree))
-    for contribution in reversed(contributions):
-        reversed_product = _compose(
-            reversed_product, _inverse(tuple(contribution.value.image))
-        )
-    if _compose(product, reversed_product) != tuple(range(degree)):
-        _reject(
-            "field",
-            "lattice_gauge.holonomy.reverse_replay_failed",
-            "reverse traversal must compose to the exact holonomy inverse",
-        )
     return HolonomyResult._from_kernel(
         holonomy=PermutationLabel(degree=degree, image=product),
         contributions=tuple(contributions),

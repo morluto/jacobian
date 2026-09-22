@@ -1038,8 +1038,8 @@ def compute_toric_morphism_data(
     """Decide the fan map condition and retain the first exact obstruction.
 
     A lattice map is a toric morphism exactly when every source cone maps into
-    a single target cone. Each assigned target cone is replayed by exact
-    cone-membership of every source-ray image before it is returned.
+    a single target cone. Exact ray-in-cone results are intersected to find
+    assignments and retained as candidate lists for obstructions.
     """
 
     source_rank = len(source_rays[0]) if source_rays else 0

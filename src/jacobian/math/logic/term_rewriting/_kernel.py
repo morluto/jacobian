@@ -467,6 +467,7 @@ def _admit_critical_pair_result_envelope(rules: tuple[RewriteRule, ...]) -> int:
     )
     if remaining < 0:
         raise ValueError(_RESULT_NODES_EXCEEDED)
+    rule_variables = tuple(_preorder_variables(rule.lhs) for rule in rules)
     for outer_index, outer in enumerate(rules):
         for position in _nonvariable_positions(outer.lhs):
             for inner_index, inner in enumerate(rules):
@@ -477,7 +478,13 @@ def _admit_critical_pair_result_envelope(rules: tuple[RewriteRule, ...]) -> int:
                     renamed_inner_lhs,
                     outer_renaming,
                     inner_renaming,
-                ) = _overlap_unification_terms(outer, inner, position)
+                ) = _overlap_unification_terms(
+                    outer,
+                    inner,
+                    position,
+                    outer_variables=rule_variables[outer_index],
+                    inner_variables=rule_variables[inner_index],
+                )
                 budget = _MaterializationBudget(
                     remaining, max_bindings=MAX_SUBSTITUTION_BINDINGS
                 )
@@ -646,7 +653,12 @@ def _renamed_rule(rule: RewriteRule, renaming: dict[int, int]) -> RewriteRule:
 
 
 def _overlap_unification_terms(
-    outer: RewriteRule, inner: RewriteRule, position: tuple[int, ...]
+    outer: RewriteRule,
+    inner: RewriteRule,
+    position: tuple[int, ...],
+    *,
+    outer_variables: tuple[int, ...] | None = None,
+    inner_variables: tuple[int, ...] | None = None,
 ) -> tuple[Term, Term, dict[int, int], dict[int, int]]:
     """Rename only the two terms one overlap unification inspects.
 
@@ -655,9 +667,12 @@ def _overlap_unification_terms(
     overlap actually unifies; only the renamed inner left side and the
     renamed subterm at ``position`` are constructed here.
     """
-    outer_variables = _preorder_variables(outer.lhs)
+    if outer_variables is None:
+        outer_variables = _preorder_variables(outer.lhs)
+    if inner_variables is None:
+        inner_variables = _preorder_variables(inner.lhs)
     outer_renaming = _renaming_for(outer_variables, 0)
-    inner_renaming = _renaming_for(_preorder_variables(inner.lhs), len(outer_variables))
+    inner_renaming = _renaming_for(inner_variables, len(outer_variables))
     return (
         _rename_variables(term_at_position(outer.lhs, position), outer_renaming),
         _rename_variables(inner.lhs, inner_renaming),
@@ -686,6 +701,7 @@ def _critical_pairs(
     """
     candidates: list[CriticalOverlapCandidate] = []
     pairs: list[CriticalPair] = []
+    rule_variables = tuple(_preorder_variables(rule.lhs) for rule in rules)
     for outer_index, outer in enumerate(rules):
         for position in _nonvariable_positions(outer.lhs):
             for inner_index, inner in enumerate(rules):
@@ -696,7 +712,13 @@ def _critical_pairs(
                     renamed_inner_lhs,
                     outer_renaming,
                     inner_renaming,
-                ) = _overlap_unification_terms(outer, inner, position)
+                ) = _overlap_unification_terms(
+                    outer,
+                    inner,
+                    position,
+                    outer_variables=rule_variables[outer_index],
+                    inner_variables=rule_variables[inner_index],
+                )
                 substitution = unify(renamed_inner_lhs, renamed_overlap)
                 candidate_index = len(candidates)
                 candidates.append(

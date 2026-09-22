@@ -276,7 +276,7 @@ MORPHISM_CHECK_OPERATION = MathTool(
         "source-cone to target-cone assignment with the source ray images, or the "
         "first obstructing source cone with its image vectors and, when a single "
         "ray image already leaves every target cone, that ray and image as the "
-        "witness. Every assignment is replayed by exact cone-membership of the "
+        "witness. Assignments are established by exact cone-membership of the "
         "ray images. Admission bounds the fan recognition for both fans and the "
         f"exact cone-membership work (at most {MAX_TORIC_MORPHISM_WORK} "
         "source-cone/ray/target-cone tests). " + _ENVELOPE_SENTENCE

@@ -24,7 +24,6 @@ MAX_ADMISSIBILITY_WORK = 64_000_000
 MAX_INTERVAL_LENGTH = 20_000
 MAX_INTERVAL_VALUE = 10**12
 MAX_INTERVAL_SIEVE_RESIDUES = 4_000_000
-CROSSCHECK_MAX_PRIME = 31
 
 _CODE_PREFIX = "number_theory.squarefree_affine"
 
@@ -210,7 +209,6 @@ def admit_interval_sieve_residues(work: int) -> None:
 
 
 __all__ = [
-    "CROSSCHECK_MAX_PRIME",
     "MAX_ADMISSIBILITY_CUTOFF",
     "MAX_ADMISSIBILITY_WORK",
     "MAX_EULER_PRIMES",

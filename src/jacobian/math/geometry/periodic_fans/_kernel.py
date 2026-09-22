@@ -653,6 +653,8 @@ def recognize_periodic_fan(  # noqa: C901
     enumeration = 0
     for first in range(len(cells)):
         for second in range(first, len(cells)):
+            # _translations_between returns precisely the inclusive ranges in
+            # which the translated bounding boxes overlap on every axis.
             ranges = _translations_between(
                 cell_coordinates[first], cell_coordinates[second]
             )
@@ -670,8 +672,6 @@ def recognize_periodic_fan(  # noqa: C901
                     )
                     for point in cell_coordinates[second]
                 )
-                if not _bounding_boxes_overlap(cell_coordinates[first], shifted):
-                    continue
                 if not _intersection_nonempty(cell_coordinates[first], shifted):
                     continue
                 key = _canonical_overlap_key(first, second, translation)
@@ -715,17 +715,6 @@ def _canonical_overlap_key(
     if first <= second:
         return (first, second, translation)
     return (second, first, tuple(-value for value in translation))
-
-
-def _bounding_boxes_overlap(
-    first: tuple[tuple[int, ...], ...], second: tuple[tuple[int, ...], ...]
-) -> bool:
-    first_min, first_max = _bounding_box(first)
-    second_min, second_max = _bounding_box(second)
-    return all(
-        first_min[index] <= second_max[index] and second_min[index] <= first_max[index]
-        for index in range(len(first_min))
-    )
 
 
 def _build_quotient(

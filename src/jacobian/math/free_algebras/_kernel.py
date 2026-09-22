@@ -32,14 +32,15 @@ def multiply_sparse(
 
     alphabet = left.alphabet
     accumulated: dict[tuple[str, ...], Fraction] = {}
+    left_terms = tuple((term, term.coefficient.as_fraction()) for term in left.terms)
+    right_terms = tuple((term, term.coefficient.as_fraction()) for term in right.terms)
     term_pair_count = 0
     collected_pair_count = 0
-    for left_term in left.terms:
-        left_coefficient = left_term.coefficient.as_fraction()
-        for right_term in right.terms:
+    for left_term, left_coefficient in left_terms:
+        for right_term, right_coefficient in right_terms:
             term_pair_count += 1
             word = left_term.word + right_term.word
-            contribution = right_term.coefficient.as_fraction() * left_coefficient
+            contribution = right_coefficient * left_coefficient
             if word in accumulated:
                 collected_pair_count += 1
                 accumulated[word] += contribution

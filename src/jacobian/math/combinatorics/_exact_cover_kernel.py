@@ -64,8 +64,11 @@ def _children(
         bit = remaining & -remaining
         item = bit.bit_length() - 1
         candidates = item_rows[item] & state.available_rows
-        if candidates.bit_count() < fewest:
-            fewest = candidates.bit_count()
+        candidate_count = candidates.bit_count()
+        if candidate_count == 0:
+            return ()
+        if candidate_count < fewest:
+            fewest = candidate_count
             chosen_rows = candidates
         remaining ^= bit
     children = []

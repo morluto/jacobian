@@ -797,11 +797,14 @@ def sheaf_cohomology(  # noqa: C901
                 ("sheaf",),
             ) from exc
     cells = _cells(sheaf.complex)
+    cell_sets = {cell: frozenset(cell) for cell in cells}
     for source in cells:
+        source_set = cell_sets[source]
         for target in cells:
+            target_set = cell_sets[target]
             if (
                 source != target
-                and set(source) < set(target)
+                and source_set < target_set
                 and (
                     source,
                     target,

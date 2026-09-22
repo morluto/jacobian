@@ -89,8 +89,10 @@ class TestFound:
         assert verify_polarization_search(result)
 
     def test_search_is_deterministic(self) -> None:
-        first = polarization_search(_square_torus(), 1, 100)
-        second = polarization_search(_square_torus(), 1, 100)
+        # Determinism needs two identical runs, not the expensive rank-four
+        # search already covered by test_square_torus_finds_a_polarization.
+        first = polarization_search(_elliptic_torus(), 2, 100)
+        second = polarization_search(_elliptic_torus(), 2, 100)
 
         assert first == second
 

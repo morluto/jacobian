@@ -66,8 +66,9 @@ def profile_components(
         for commodity_id in commodity_ids
         for vertex in range(flow.network.vertex_count)
     )
-    expected_divergences = {
-        (commodity.commodity_id, vertex): (
+    mismatched_divergence_cells = sum(
+        divergences[(commodity.commodity_id, vertex)]
+        != (
             demand
             if vertex == commodity.source
             else -demand
@@ -77,9 +78,6 @@ def profile_components(
         for commodity in flow.commodities
         for demand in (commodity.demand.as_fraction(),)
         for vertex in range(flow.network.vertex_count)
-    }
-    mismatched_divergence_cells = sum(
-        divergences[key] != expected for key, expected in expected_divergences.items()
     )
     all_demands_routed = mismatched_divergence_cells == 0
 

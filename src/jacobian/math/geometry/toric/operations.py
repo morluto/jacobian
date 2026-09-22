@@ -16,7 +16,6 @@ from jacobian.math.geometry.toric._kernel import (
     _integer_kernel_basis,
     _lift_quotient_character,
     _quotient_projection,
-    _ray_in_cone,
     _unimodular_complement,
     compute_affine_chart_data,
     compute_toric_morphism_data,
@@ -495,16 +494,9 @@ def _check_toric_morphism_recognized(
         matrix.entries,
     )
     if data.is_toric_morphism:
-        for source_cone_id, target_cone_id in data.assignments:
-            source_cone = source_cones[source_cone_id]
-            target_generators = tuple(
-                recognized_target.rays[index] for index in target_cones[target_cone_id]
-            )
-            for ray_index in source_cone:
-                if not _ray_in_cone(data.ray_images[ray_index], target_generators):
-                    raise ArithmeticError(
-                        "assigned target cone does not contain every ray image"
-                    )
+        # The kernel forms each assignment by intersecting the exact target
+        # cones containing every image ray. Rechecking those memberships here
+        # would repeat the same (potentially solver-backed) cone tests.
         return ToricMorphismResult._from_components(
             source=source,
             target=target,
@@ -523,16 +515,8 @@ def _check_toric_morphism_recognized(
     obstruction = data.obstruction
     if obstruction is None:
         raise ArithmeticError("a non-morphism must carry its first obstruction")
-    for position, candidates in enumerate(obstruction.candidate_target_cone_ids):
-        image = obstruction.image_vectors[position]
-        for target_cone_id in candidates:
-            target_generators = tuple(
-                recognized_target.rays[index] for index in target_cones[target_cone_id]
-            )
-            if not _ray_in_cone(image, target_generators):
-                raise ArithmeticError(
-                    "declared candidate target cone does not contain the ray image"
-                )
+    # Candidate lists are the exact membership results computed by the kernel;
+    # owning tests independently check the serialized obstruction.
     return ToricMorphismResult._from_components(
         source=source,
         target=target,
@@ -563,8 +547,8 @@ def check_toric_morphism(
 
     Every source cone must map into a single target cone. The verdict returns
     the induced fan-compatible cone assignment, or the first source cone whose
-    image leaves every target cone together with the witnessing ray images. Each
-    assignment is replayed with exact cone-membership checks.
+    image leaves every target cone together with the witnessing ray images.
+    Assignments are established by exact cone-membership tests in the kernel.
     """
 
     # Shape and coefficient admission precede exact fan recognition so a

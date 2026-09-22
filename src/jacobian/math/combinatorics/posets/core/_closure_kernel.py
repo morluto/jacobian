@@ -23,11 +23,8 @@ def _build_comparable_map(
 ) -> dict[str, set[str]]:
     """Return {element: {elements <= it}} for x <= y."""
     below: dict[str, set[str]] = {e: {e} for e in elements}
-    pair_set = {(p.lower, p.upper) for p in strict_pairs}
-    for e in elements:
-        for p in elements:
-            if (p, e) in pair_set:
-                below[e].add(p)
+    for pair in strict_pairs:
+        below[pair.upper].add(pair.lower)
     return below
 
 
@@ -37,11 +34,8 @@ def _build_above_map(
 ) -> dict[str, set[str]]:
     """Return {element: {elements >= it}} for x >= y."""
     above: dict[str, set[str]] = {e: {e} for e in elements}
-    pair_set = {(p.lower, p.upper) for p in strict_pairs}
-    for e in elements:
-        for p in elements:
-            if (e, p) in pair_set:
-                above[e].add(p)
+    for pair in strict_pairs:
+        above[pair.lower].add(pair.upper)
     return above
 
 

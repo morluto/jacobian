@@ -487,21 +487,22 @@ def compose_projective_maps(
                 out[i + j] += ai * bj
         return out
 
-    def power(a: Sequence[Fraction], n: int) -> list[Fraction]:
-        out = [Fraction(1)]
-        for _ in range(n):
-            out = mul(out, a)
-        return out
+    inner_numerator = tuple(value.as_fraction() for value in inner.numerator)
+    inner_denominator = tuple(value.as_fraction() for value in inner.denominator)
+
+    def powers(a: Sequence[Fraction]) -> tuple[list[Fraction], ...]:
+        result = [[Fraction(1)]]
+        for _ in range(outer.degree):
+            result.append(mul(result[-1], a))
+        return tuple(result)
+
+    numerator_powers = powers(inner_numerator)
+    denominator_powers = powers(inner_denominator)
 
     def subst(coeff: tuple[CanonicalRational, ...]) -> tuple[CanonicalRational, ...]:
         out = [Fraction(0)] * (degree + 1)
         for i, c in enumerate(coeff):
-            term = mul(
-                power(tuple(v.as_fraction() for v in inner.numerator), i),
-                power(
-                    tuple(v.as_fraction() for v in inner.denominator), outer.degree - i
-                ),
-            )
+            term = mul(numerator_powers[i], denominator_powers[outer.degree - i])
             for j, v in enumerate(term):
                 out[j] += c.as_fraction() * v
         return tuple(CanonicalRational.from_fraction(v) for v in out)

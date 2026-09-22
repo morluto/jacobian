@@ -405,11 +405,10 @@ def canonicalize_check_space(
 
     ids, rows = _admit_canonicalize(qubit_ids, generators)
     qubits = len(ids)
-    flat = [(*row.x_bits, *row.z_bits) for row in rows]
-    table_rows = [[int(bit) for bit in row] for row in flat]
-    for i in range(len(table_rows)):
-        for j in range(i + 1, len(table_rows)):
-            if _symplectic_pairing(tuple(table_rows[i]), tuple(table_rows[j]), qubits):
+    flat_rows = tuple((*row.x_bits, *row.z_bits) for row in rows)
+    for i in range(len(flat_rows)):
+        for j in range(i + 1, len(flat_rows)):
+            if _symplectic_pairing(flat_rows[i], flat_rows[j], qubits):
                 first, second = rows[i].row_id, rows[j].row_id
                 ordered = (min(first, second), max(first, second))
                 return CheckSpaceCanonicalizeResult._from_kernel(
@@ -423,15 +422,7 @@ def canonicalize_check_space(
                         pairing=1,
                     ),
                 )
-    # Replay isotropy independently of the witness search above.
-    for i in range(len(table_rows)):
-        for j in range(i + 1, len(table_rows)):
-            if (
-                _symplectic_pairing(tuple(table_rows[i]), tuple(table_rows[j]), qubits)
-                != 0
-            ):
-                raise RuntimeError("isotropic check-space replay disagreed with search")
-    basis_rows, pivots = _gf2_rref(table_rows, 2 * qubits)
+    basis_rows, pivots = _gf2_rref([list(row) for row in flat_rows], 2 * qubits)
     basis = tuple(
         CanonicalCheckRow(
             pivot=pivot,

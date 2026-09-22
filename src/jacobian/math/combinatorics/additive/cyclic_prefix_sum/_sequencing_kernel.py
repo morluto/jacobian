@@ -55,7 +55,7 @@ def search_forbidden_prefix_sequencing(
 
     def visit(
         current_sum: tuple[int, ...],
-        used: frozenset[int],
+        used_mask: int,
     ) -> SequencingKernelResult:
         nonlocal visited
         if visited >= search_node_limit:
@@ -73,7 +73,8 @@ def search_forbidden_prefix_sequencing(
 
         remaining = element_count - len(ordering) - 1
         for index in initial_indices if not ordering else range(element_count):
-            if index in used:
+            index_bit = 1 << index
+            if used_mask & index_bit:
                 continue
             next_sum = add(current_sum, elements[index])
             # Only proper prefixes carry sequencing constraints; a terminal
@@ -85,7 +86,7 @@ def search_forbidden_prefix_sequencing(
             ordering.append(index)
             if remaining > 0:
                 seen_prefixes.add(next_sum)
-            result = visit(next_sum, used | {index})
+            result = visit(next_sum, used_mask | index_bit)
             if remaining > 0:
                 seen_prefixes.remove(next_sum)
             ordering.pop()
@@ -93,7 +94,7 @@ def search_forbidden_prefix_sequencing(
                 return result
         return SequencingKernelResult(status="EXHAUSTED", states_explored=visited)
 
-    return visit(zero, frozenset())
+    return visit(zero, 0)
 
 
 __all__ = ["SequencingKernelResult", "search_forbidden_prefix_sequencing"]

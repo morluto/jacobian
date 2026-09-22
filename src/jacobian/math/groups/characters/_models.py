@@ -17,11 +17,6 @@ MAX_GROUP_ORDER = 1_000_000
 MAX_CYCLOTOMIC_ORDER = 60
 MAX_VALUE_COEFFICIENT_DIGITS = 512
 MAX_INNER_PRODUCT_WORK = 250_000
-# Complete tables replay every ordered pair of rows.  This separate envelope
-# is deliberately much smaller than the single-inner-product envelope: a
-# table must admit construction, all defining orthogonality products, and its
-# retained exact cells as one request.
-MAX_CHARACTER_TABLE_WORK = 1_000_000
 MAX_CHARACTER_TABLE_CELLS = 100_000
 
 
@@ -265,8 +260,7 @@ class CharacterTableRequest(StrictModel):
             "Complete conjugacy-class partition returned by "
             "group.conjugacy_classes.compute; its source group is retained. "
             "The complete-table envelope admits at most "
-            f"{MAX_CHARACTER_TABLE_WORK:,} orthogonality-work units and "
-            f"{MAX_CHARACTER_TABLE_CELLS:,} exact table cells."
+            f"{MAX_CHARACTER_TABLE_CELLS:,} exact coefficient cells."
         )
     )
 
@@ -348,7 +342,6 @@ class CharacterTableResult(StrictModel):
 
 __all__ = [
     "MAX_CHARACTER_TABLE_CELLS",
-    "MAX_CHARACTER_TABLE_WORK",
     "MAX_CLASS_COUNT",
     "MAX_CYCLOTOMIC_ORDER",
     "MAX_GROUP_ORDER",

@@ -99,7 +99,9 @@ Use `make check` on a frozen tree when broad ordinary evidence is requested or
 the changed scope needs it. A completed affected plan does not automatically
 require another broad run. `make check-all` adds ordinary integration tests;
 `make test-full` includes the named process, MCP, and external-backend lanes.
-Neither reproduces hosted packaging, coverage, or all CI jobs.
+It runs non-Singular advertised catalog examples separately before the Singular
+lane runs its five backend-owned examples. Neither command reproduces hosted
+packaging, coverage, or all CI jobs.
 
 `make check` and `make check-all` take a worktree-local non-blocking validation
 lease. `make validation-status` identifies a competing broad run immediately;
@@ -167,6 +169,13 @@ Markers are execution tiers, not synonyms for slow tests:
 
 Keep a small ordinary regression for the same public behavior when moving a
 near-envelope case to `scale`.
+
+The marker-lane Make recipes derive their default collection roots with
+`tools/marker_test_roots.py` and then retain pytest's `-m` selection inside those
+files. Marker ownership must therefore use an explicit `pytest.mark.property`,
+`pytest.mark.exhaustive`, or `pytest.mark.scale` expression. This narrows
+collection without replacing markers as the evidence-tier source of truth;
+explicit `TESTS=...` overrides remain available for focused reproduction.
 
 ## Adversarial closure
 

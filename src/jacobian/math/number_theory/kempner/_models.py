@@ -14,6 +14,9 @@ from jacobian.math.number_theory._kempner_models import (
     KempnerSmallInteger,
 )
 
+# Dense families use a prefix recurrence rather than materialising a numeral
+# list.  The carrier remains finite and exact; this is an execution envelope,
+# not evidence of convergence of the infinite series.
 MAX_KEMPNER_SERIES_NUMERALS = 50_000
 MAX_KEMPNER_SERIES_DIGITS = 32_768
 

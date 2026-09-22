@@ -53,6 +53,10 @@ class LinearMatroid(StrictModel):
     )
 
     matrix: PrimeFieldMatrix
+    ground_labels: tuple[str, ...] | None = Field(
+        default=None,
+        description="Optional canonical labels for the matrix-column ground axis; omitted means positional labels.",
+    )
 
     @model_validator(mode="before")
     @classmethod
@@ -90,9 +94,25 @@ class LinearMatroid(StrictModel):
             )
         return self
 
+    @model_validator(mode="after")
+    def require_ground_axis(self) -> Self:
+        if self.ground_labels is not None and (
+            len(self.ground_labels) != self.matrix.columns
+            or len(set(self.ground_labels)) != len(self.ground_labels)
+        ):
+            raise _validation_error(
+                "ground_axis",
+                "ground labels must cover the matrix columns exactly once",
+            )
+        return self
+
     @property
     def ground_size(self) -> int:
         return self.matrix.columns
+
+    @property
+    def ground_axis(self) -> tuple[str, ...]:
+        return self.ground_labels or tuple(str(i) for i in range(self.matrix.columns))
 
 
 def validate_subset_indices(matroid: LinearMatroid, subset: Any) -> None:
@@ -338,6 +358,105 @@ class MaximumWeightBasisResult(StrictModel):
             greedy_order=greedy_order,
             exchange_ledger=exchange_ledger,
         )
+
+
+class MatroidIntersectionRequest(StrictModel):
+    model_config = ConfigDict(
+        json_schema_extra={
+            "description": (
+                "Compute a maximum common independent set for two linear "
+                "matroids on one labelled ground. The exact exchange kernel "
+                "admits at most 256 ground elements and a derived "
+                "50,000,000-unit bound covering rank probes, min-max witness "
+                "work, representation rows, and O(n) result materialization "
+                "for the returned independent set and rank partition."
+            ),
+            "admission_limits": {
+                "max_ground_elements": 256,
+                "max_work_units": 50_000_000,
+                "work_includes": [
+                    "exchange rank probes",
+                    "representation rows",
+                    "min-max witness ranks",
+                    "result indices",
+                ],
+            },
+        }
+    )
+
+    first: LinearMatroid
+    second: LinearMatroid
+
+
+class MatroidIntersectionWitness(StrictModel):
+    subset: tuple[StrictInt, ...]
+    rank_first: StrictInt = Field(ge=0)
+    rank_second_complement: StrictInt = Field(ge=0)
+    equality: StrictInt = Field(ge=0)
+
+
+class MatroidIntersectionResult(StrictModel):
+    first: LinearMatroid
+    second: LinearMatroid
+    common_independent: tuple[StrictInt, ...]
+    cardinality: StrictInt = Field(ge=0)
+    witness: MatroidIntersectionWitness
+
+    @model_validator(mode="after")
+    def require_witness_shape(self) -> Self:
+        if (
+            self.first.matrix.prime != self.second.matrix.prime
+            or self.first.ground_axis != self.second.ground_axis
+        ):
+            raise _validation_error(
+                "intersection_ground",
+                "intersection result operands must share one labelled ground and field",
+            )
+        n = self.first.ground_size
+        common = self.common_independent
+        if common != tuple(sorted(set(common))) or any(
+            index < 0 or index >= n for index in common
+        ):
+            raise _validation_error(
+                "intersection_common_axis",
+                "common independent indices must be sorted, distinct, and in range",
+            )
+        if self.cardinality != len(common):
+            raise _validation_error(
+                "intersection_cardinality",
+                "cardinality must equal the common independent set size",
+            )
+        witness_subset = self.witness.subset
+        if witness_subset != tuple(sorted(set(witness_subset))) or any(
+            index < 0 or index >= n for index in witness_subset
+        ):
+            raise _validation_error(
+                "intersection_witness_axis",
+                "witness subset must be sorted, distinct, and in range",
+            )
+        complement_size = n - len(witness_subset)
+        if self.witness.rank_first > min(
+            len(self.first.matrix.entries), len(witness_subset)
+        ) or self.witness.rank_second_complement > min(
+            len(self.second.matrix.entries), complement_size
+        ):
+            raise _validation_error(
+                "intersection_witness_rank_bounds",
+                "witness ranks must fit their retained matrix and subset axes",
+            )
+        if self.witness.equality != (
+            self.witness.rank_first + self.witness.rank_second_complement
+        ):
+            raise _validation_error(
+                "intersection_minmax",
+                "min-max witness equality must match its two ranks",
+            )
+        if self.witness.equality != self.cardinality:
+            raise _validation_error(
+                "intersection_minmax",
+                "min-max witness must equal the intersection cardinality",
+            )
+        return self
 
 
 __all__ = [

@@ -4,10 +4,21 @@ from typing import Any
 
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.function_fields._models import (
+    FunctionFieldDivisorDegreeResult,
+    FunctionFieldDivisorRequest,
     FunctionFieldElementMultiplyRequest,
     FunctionFieldElementMultiplyResult,
+    FunctionFieldPlaceValuationRequest,
+    FunctionFieldPlaceValuationResult,
+    FunctionFieldPrincipalDivisorRequest,
+    FunctionFieldPrincipalDivisorResult,
 )
-from jacobian.math.function_fields.operations import function_field_element_multiply
+from jacobian.math.function_fields.operations import (
+    function_field_divisor_degree,
+    function_field_element_multiply,
+    function_field_place_valuation,
+    function_field_principal_divisor,
+)
 
 
 def _run_element_multiply(
@@ -36,6 +47,44 @@ def _gf2_elliptic_field() -> dict[str, Any]:
     }
 
 
+_RATIONAL_FIELD = {
+    "characteristic": 5,
+    "variable": "x",
+    "generator": "y",
+    "defining_polynomial": [
+        {
+            "numerator": {"characteristic": 5, "coefficients": [1]},
+            "denominator": {"characteristic": 5, "coefficients": [1]},
+        }
+    ],
+}
+_RATIONAL_X = {
+    "field": _RATIONAL_FIELD,
+    "coordinates": [
+        {
+            "numerator": {"characteristic": 5, "coefficients": [0, 1]},
+            "denominator": {"characteristic": 5, "coefficients": [1]},
+        }
+    ],
+}
+
+
+def _run_place_valuation(
+    request: FunctionFieldPlaceValuationRequest,
+) -> FunctionFieldPlaceValuationResult:
+    return FunctionFieldPlaceValuationResult(
+        place=request.place,
+        element=request.element,
+        valuation=function_field_place_valuation(request.place, request.element),
+    )
+
+
+def _run_principal(
+    request: FunctionFieldPrincipalDivisorRequest,
+) -> FunctionFieldPrincipalDivisorResult:
+    return function_field_principal_divisor(request.field, request.element)
+
+
 _GF2_Y = {
     "field": _gf2_elliptic_field(),
     "coordinates": [
@@ -45,6 +94,91 @@ _GF2_Y = {
 }
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
+    MathTool(
+        operation_id="function_field.place.valuation.compute",
+        title="Compute a function-field valuation",
+        description="Compute the exact discrete valuation of a rational-function element at a finite or infinite place; the place and element must share the same rational function field.",
+        request_type=FunctionFieldPlaceValuationRequest,
+        result_type=FunctionFieldPlaceValuationResult,
+        run=_run_place_valuation,
+        tags=("function-field", "place", "valuation", "exact"),
+        examples=(
+            OperationExample(
+                name="valuation_of_x_at_zero",
+                description="Compute v_(x)(x); the finite place must be the irreducible polynomial x in the rational field GF(5)(x).",
+                input={
+                    "place": {
+                        "field": _RATIONAL_FIELD,
+                        "kind": "FINITE",
+                        "prime_polynomial": {
+                            "characteristic": 5,
+                            "coefficients": [0, 1],
+                        },
+                        "degree": 1,
+                    },
+                    "element": _RATIONAL_X,
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="function_field.element.principal_divisor.compute",
+        title="Compute a principal divisor",
+        description="Compute the complete finite zero/pole divisor of a nonzero rational-function element, retaining every place and exact degree-zero parent identity.",
+        request_type=FunctionFieldPrincipalDivisorRequest,
+        result_type=FunctionFieldPrincipalDivisorResult,
+        run=_run_principal,
+        tags=("function-field", "divisor", "exact"),
+        examples=(
+            OperationExample(
+                name="principal_divisor_of_x",
+                description="Compute div(x); the element must be nonzero in the rational function field GF(5)(x).",
+                input={"field": _RATIONAL_FIELD, "element": _RATIONAL_X},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="function_field.divisor.degree.compute",
+        title="Compute a divisor degree",
+        description="Compute the exact degree of a finite function-field divisor from its place degrees and multiplicities; every place must belong to its declared field.",
+        request_type=FunctionFieldDivisorRequest,
+        result_type=FunctionFieldDivisorDegreeResult,
+        run=lambda request: function_field_divisor_degree(request.divisor),
+        tags=("function-field", "divisor", "degree", "exact"),
+        examples=(
+            OperationExample(
+                name="degree_of_principal_x",
+                description="Compute the degree of div(x); every place must retain the rational-field parent.",
+                input={
+                    "divisor": {
+                        "field": _RATIONAL_FIELD,
+                        "terms": [
+                            {
+                                "place": {
+                                    "field": _RATIONAL_FIELD,
+                                    "kind": "FINITE",
+                                    "prime_polynomial": {
+                                        "characteristic": 5,
+                                        "coefficients": [0, 1],
+                                    },
+                                    "degree": 1,
+                                },
+                                "multiplicity": 1,
+                            },
+                            {
+                                "place": {
+                                    "field": _RATIONAL_FIELD,
+                                    "kind": "INFINITE",
+                                    "degree": 1,
+                                },
+                                "multiplicity": -1,
+                            },
+                        ],
+                    }
+                },
+            ),
+        ),
+    ),
     MathTool(
         operation_id="function_field.element.multiply.compute",
         title="Multiply two elements of a finite function field",

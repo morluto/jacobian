@@ -8,11 +8,17 @@ from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.number_theory.characters import operations as native
 from jacobian.math.number_theory.characters._models import (
     CharacterGroupRequest,
+    DirichletCharacterProductRequest,
+    DirichletCharacterRequest,
+    DirichletCharacterTableResult,
+    DirichletCharacterValueRequest,
+    DirichletCharacterValueResult,
     PrincipalDirichletCharacterRequest,
     PrincipalDirichletCharacterValueRequest,
     PrincipalDirichletCharacterValueResult,
 )
 from jacobian.math.number_theory.characters.values import (
+    DirichletCharacter,
     DirichletCharacterGroup,
     PrincipalDirichletCharacter,
 )
@@ -50,7 +56,113 @@ def compute_character_group(request: CharacterGroupRequest) -> DirichletCharacte
     return native.character_group(request.modulus)
 
 
+_GROUP_MOD3 = {
+    "modulus": 3,
+    "unit_residues": [1, 2],
+    "character_count": 2,
+    "invariant_factors": [2],
+    "generators": [2],
+    "generator_orders": [2],
+    "unit_coordinates": [[0], [1]],
+    "exponent": 2,
+}
+
+
+def _compute_character(request: DirichletCharacterRequest) -> DirichletCharacter:
+    return native.dirichlet_character(request.group, request.coordinates)
+
+
+def _compute_character_value(
+    request: DirichletCharacterValueRequest,
+) -> DirichletCharacterValueResult:
+    return native.dirichlet_character_value(request.character, int(request.integer))
+
+
+def _compute_character_product(
+    request: DirichletCharacterProductRequest,
+) -> DirichletCharacter:
+    return native.dirichlet_character_product(request.left, request.right)
+
+
+def _compute_character_table(
+    request: DirichletCharacterRequest,
+) -> DirichletCharacterTableResult:
+    return native.dirichlet_character_table(
+        native.dirichlet_character(request.group, request.coordinates)
+    )
+
+
 TOOLS: MathTools = (
+    MathTool(
+        operation_id="dirichlet_character.compute",
+        title="Construct an exact Dirichlet character",
+        description="Construct one character from exact dual coordinates bound to a finite unit-group parent; coordinates must fit every generator order.",
+        request_type=DirichletCharacterRequest,
+        result_type=DirichletCharacter,
+        run=_compute_character,
+        tags=("number-theory", "dirichlet-character", "exact"),
+        examples=(
+            OperationExample(
+                name="quadratic_mod3",
+                description="Construct the nonprincipal character modulo 3; coordinates must use the supplied group's dual axis.",
+                input={"group": _GROUP_MOD3, "coordinates": [1]},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="dirichlet_character.value.compute",
+        title="Evaluate an exact Dirichlet character",
+        description="Evaluate a character exactly at an integer, returning zero off the unit group and a cyclotomic root with its modulus parent on units.",
+        request_type=DirichletCharacterValueRequest,
+        result_type=DirichletCharacterValueResult,
+        run=_compute_character_value,
+        tags=("number-theory", "dirichlet-character", "cyclotomic", "exact"),
+        examples=(
+            OperationExample(
+                name="quadratic_value_mod3",
+                description="Evaluate the quadratic character modulo 3 at 2; the character must retain the exact modulus and group parent.",
+                input={
+                    "character": {"group": _GROUP_MOD3, "coordinates": [1]},
+                    "integer": "2",
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="dirichlet_character.table.compute",
+        title="Materialize an exact Dirichlet character table",
+        description="Materialize the complete extension-by-zero table of one exact character, retaining modulus and cyclotomic parent identity.",
+        request_type=DirichletCharacterRequest,
+        result_type=DirichletCharacterTableResult,
+        run=_compute_character_table,
+        tags=("number-theory", "dirichlet-character", "cyclotomic", "exact"),
+        examples=(
+            OperationExample(
+                name="table_mod3",
+                description="Materialize the character table modulo 3; the character coordinates must belong to the supplied exact group.",
+                input={"group": _GROUP_MOD3, "coordinates": [1]},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="dirichlet_character.multiply.compute",
+        title="Multiply exact Dirichlet characters",
+        description="Multiply two characters pointwise through their common finite dual-group coordinates; both operands must have the identical group parent.",
+        request_type=DirichletCharacterProductRequest,
+        result_type=DirichletCharacter,
+        run=_compute_character_product,
+        tags=("number-theory", "dirichlet-character", "exact"),
+        examples=(
+            OperationExample(
+                name="quadratic_square_mod3",
+                description="Multiply the quadratic character modulo 3 by itself; both operands must use the identical group parent.",
+                input={
+                    "left": {"group": _GROUP_MOD3, "coordinates": [1]},
+                    "right": {"group": _GROUP_MOD3, "coordinates": [1]},
+                },
+            ),
+        ),
+    ),
     MathTool(
         operation_id="dirichlet_character.principal.compute",
         title="Compute an exact principal Dirichlet character",

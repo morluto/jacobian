@@ -2,10 +2,15 @@
 
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.graphs.flows.multicommodity._models import (
+    MAX_DECOMPOSITION_INTERMEDIATE_DIGITS,
+    MAX_DECOMPOSITION_TRAVERSAL_STEPS,
+    MAX_DECOMPOSITION_VERTEX_CELLS,
     MinimumCongestionRequest,
     MinimumCongestionResult,
     MulticommodityFeasibilityRequest,
     MulticommodityFeasibilityResult,
+    MulticommodityFlowDecompositionRequest,
+    MulticommodityFlowDecompositionResult,
     MulticommodityFlowProfileRequest,
     MulticommodityFlowProfileResult,
     MulticommodityFlowWitnessCheckRequest,
@@ -19,6 +24,7 @@ from jacobian.math.graphs.flows.multicommodity.operations import (
     check_multicommodity_flow_witness,
     check_unsplittable_routing,
     compute_multicommodity_flow_profile,
+    decompose_multicommodity_flow,
     find_unsplittable_routing,
     solve_minimum_congestion,
     solve_multicommodity_feasibility,
@@ -35,6 +41,12 @@ def _run_multicommodity_flow_witness_check(
     request: MulticommodityFlowWitnessCheckRequest,
 ) -> MulticommodityFlowWitnessCheckResult:
     return check_multicommodity_flow_witness(request.flow)
+
+
+def _run_multicommodity_flow_decomposition(
+    request: MulticommodityFlowDecompositionRequest,
+) -> MulticommodityFlowDecompositionResult:
+    return decompose_multicommodity_flow(request.flow)
 
 
 def _run_multicommodity_feasibility(
@@ -278,6 +290,112 @@ TOOLS: MathTools = (
                                 "source": 2,
                                 "target": 3,
                                 "amount": {"num": "2", "den": "1"},
+                            },
+                        ],
+                    }
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="network.multicommodity_flow.decomposition.compute",
+        title="Decompose an exact multicommodity flow into paths and cycles",
+        description=(
+            "Decompose each nonnegative commodity-edge tensor into deterministic "
+            "simple directed path and cycle terms. The terms retain the source "
+            "network and commodities and reconstruct every tensor entry exactly; "
+            "circulation is returned as cycles and empty support as empty tuples. "
+            "Admission requires nonzero_entries * (vertex_count + 1) <= "
+            f"{MAX_DECOMPOSITION_VERTEX_CELLS} output vertex cells, bounds "
+            f"residual rational intermediates to {MAX_DECOMPOSITION_INTERMEDIATE_DIGITS} "
+            f"decimal digits, and admits residual traversal within the "
+            f"{MAX_DECOMPOSITION_TRAVERSAL_STEPS}-step envelope before any "
+            "decomposition arithmetic."
+        ),
+        request_type=MulticommodityFlowDecompositionRequest,
+        result_type=MulticommodityFlowDecompositionResult,
+        run=_run_multicommodity_flow_decomposition,
+        tags=(
+            "network",
+            "multicommodity-flow",
+            "decomposition",
+            "paths",
+            "cycles",
+            "exact",
+            "bounded",
+        ),
+        discovery_terms=(
+            "multicommodity flow decomposition",
+            "path cycle decomposition",
+            "flow tensor reconstruction",
+        ),
+        examples=(
+            OperationExample(
+                name="path_and_circulation",
+                description=(
+                    "Decompose one exact path plus a directed circulation; the "
+                    "flow tensor is nonnegative and all network edges and entries "
+                    "use canonical source order."
+                ),
+                input={
+                    "flow": {
+                        "network": {
+                            "vertex_count": 4,
+                            "edges": [
+                                {
+                                    "source": 0,
+                                    "target": 1,
+                                    "capacity": {"num": "2", "den": "1"},
+                                },
+                                {
+                                    "source": 1,
+                                    "target": 2,
+                                    "capacity": {"num": "2", "den": "1"},
+                                },
+                                {
+                                    "source": 1,
+                                    "target": 3,
+                                    "capacity": {"num": "2", "den": "1"},
+                                },
+                                {
+                                    "source": 2,
+                                    "target": 1,
+                                    "capacity": {"num": "2", "den": "1"},
+                                },
+                            ],
+                        },
+                        "commodities": [
+                            {
+                                "commodity_id": "a",
+                                "source": 0,
+                                "sink": 3,
+                                "demand": {"num": "1", "den": "1"},
+                            }
+                        ],
+                        "entries": [
+                            {
+                                "commodity_id": "a",
+                                "source": 0,
+                                "target": 1,
+                                "amount": {"num": "1", "den": "1"},
+                            },
+                            {
+                                "commodity_id": "a",
+                                "source": 1,
+                                "target": 2,
+                                "amount": {"num": "1", "den": "2"},
+                            },
+                            {
+                                "commodity_id": "a",
+                                "source": 1,
+                                "target": 3,
+                                "amount": {"num": "1", "den": "1"},
+                            },
+                            {
+                                "commodity_id": "a",
+                                "source": 2,
+                                "target": 1,
+                                "amount": {"num": "1", "den": "2"},
                             },
                         ],
                     }

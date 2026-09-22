@@ -6,9 +6,12 @@ from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.combinatorics.matroids._models import (
     MatroidClosureRequest,
     MatroidClosureResult,
+    MatroidIntersectionRequest,
+    MatroidIntersectionResult,
     MaximumWeightBasisRequest,
     MaximumWeightBasisResult,
 )
+from jacobian.math.combinatorics.matroids.intersection import matroid_intersection
 from jacobian.math.combinatorics.matroids.operations import (
     closure_result,
     maximum_weight_basis_result,
@@ -94,6 +97,41 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 name="triangle_weights_3_2_5",
                 description="Maximum-weight basis of a rank-2 matroid picks {0, 2}.",
                 input=_MAXIMUM_WEIGHT_BASIS_EXAMPLE,
+            ),
+        ),
+    ),
+)
+TOOLS = TOOLS + (  # noqa: RUF005
+    MathTool(
+        operation_id="matroid.intersection.compute",
+        title="Compute a maximum common independent set",
+        description="Compute an exact maximum-cardinality common independent set of two represented matroids on one labelled ground and return an Edmonds min-max rank witness.",
+        request_type=MatroidIntersectionRequest,
+        result_type=MatroidIntersectionResult,
+        run=lambda request: matroid_intersection(request.first, request.second),
+        tags=("matroid", "intersection", "exact"),
+        examples=(
+            OperationExample(
+                name="same_triangle",
+                description="Intersect two identical rank-two triangle matroids on the same labelled ground.",
+                input={
+                    "first": {
+                        "matrix": {
+                            "prime": 5,
+                            "entries": [[1, 0, 1], [0, 1, 1]],
+                            "columns": 3,
+                        },
+                        "ground_labels": ["a", "b", "c"],
+                    },
+                    "second": {
+                        "matrix": {
+                            "prime": 5,
+                            "entries": [[1, 0, 1], [0, 1, 1]],
+                            "columns": 3,
+                        },
+                        "ground_labels": ["a", "b", "c"],
+                    },
+                },
             ),
         ),
     ),

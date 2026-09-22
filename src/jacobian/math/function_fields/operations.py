@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pydantic import ValidationError
+
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -31,7 +33,12 @@ from jacobian.math.function_fields._models import (
     MAX_POLYNOMIAL_X_DEGREE,
     FiniteFunctionField,
     FiniteFunctionFieldElement,
+    FunctionFieldDivisor,
+    FunctionFieldDivisorDegreeResult,
+    FunctionFieldDivisorTerm,
     FunctionFieldElementMultiplyResult,
+    FunctionFieldPlace,
+    FunctionFieldPrincipalDivisorResult,
     FunctionFieldProductTerm,
     FunctionFieldReductionStep,
     PrimeFieldPolynomial,
@@ -208,8 +215,53 @@ def _admit_field(field: FiniteFunctionField) -> None:
 def _admit_elements(
     left: FiniteFunctionFieldElement, right: FiniteFunctionFieldElement
 ) -> tuple[FiniteFunctionField, FiniteFunctionFieldElement, FiniteFunctionFieldElement]:
-    left_field = _canonical_field(left.field)
-    right_field = _canonical_field(right.field)
+    # Native model_construct values bypass Pydantic's coordinate-count and
+    # nested rational-function checks.  Re-run that structural boundary before
+    # canonicalization or any irreducibility/backend work.
+    validated: list[FiniteFunctionFieldElement] = []
+    for label, element in (("left", left), ("right", right)):
+        if not isinstance(element, FiniteFunctionFieldElement):
+            raise OperationDomainValidationError(
+                location=(label,),
+                code="function_field.element_type",
+                message="element must be a finite function-field element value",
+            )
+        # Preserve the public resource boundary for an authored field whose
+        # degree is intentionally above the wire model's representability cap.
+        # It is admitted as a resource rejection before nested element shape is
+        # inspected; malformed in-envelope carriers still take the owner error.
+        defining_polynomial = getattr(
+            getattr(element, "field", None), "defining_polynomial", None
+        )
+        if type(defining_polynomial) is tuple and len(defining_polynomial) > (
+            MAX_EXTENSION_DEGREE + 1
+        ):
+            raise OperationResourceAdmissionError(
+                location=(label, "field", "defining_polynomial"),
+                code="function_field.extension_degree_exceeds_envelope",
+                message=(
+                    f"function fields admit extension degree at most {MAX_EXTENSION_DEGREE}"
+                ),
+            )
+        try:
+            validated.append(
+                FiniteFunctionFieldElement.model_validate(element.model_dump())
+            )
+        except (
+            ValidationError,
+            AttributeError,
+            KeyError,
+            TypeError,
+            ValueError,
+        ) as exc:
+            raise OperationDomainValidationError(
+                location=(label,),
+                code="function_field.invalid_element",
+                message="element has malformed field or coordinate data",
+            ) from exc
+    left, right = validated
+    left_field = _validated_field(left.field)
+    right_field = _validated_field(right.field)
     if left_field != right_field:
         raise OperationDomainValidationError(
             location=("right", "field"),
@@ -405,7 +457,387 @@ def _element_inverse(
     )
 
 
+def _validated_field(field: FiniteFunctionField) -> FiniteFunctionField:
+    """Re-admit a native/model_construct field without doing backend work."""
+
+    if not isinstance(field, FiniteFunctionField):
+        raise OperationDomainValidationError(
+            location=("field",),
+            code="function_field.field_type",
+            message="field must be a finite function-field value",
+        )
+    try:
+        return FiniteFunctionField.model_validate(field.model_dump())
+    except (ValidationError, AttributeError, KeyError, TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("field",),
+            code="function_field.invalid_field",
+            message="field has malformed defining-polynomial data",
+        ) from exc
+
+
+def _canonical_place(place: FunctionFieldPlace) -> FunctionFieldPlace:
+    """Re-admit place shape before factoring or any other backend call."""
+
+    if not isinstance(place, FunctionFieldPlace):
+        raise OperationDomainValidationError(
+            location=("place",),
+            code="function_field.place_type",
+            message="place must be a function-field place value",
+        )
+    try:
+        return FunctionFieldPlace.model_validate(place.model_dump())
+    except (ValidationError, AttributeError, KeyError, TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("place",),
+            code="function_field.invalid_place",
+            message="place has malformed field or place-shape data",
+        ) from exc
+
+
+def _admit_rational_place_field(field: FiniteFunctionField) -> FiniteFunctionField:
+    field = _validated_field(field)
+    if not _is_prime(field.characteristic):
+        raise OperationDomainValidationError(
+            location=("field",),
+            code="function_field.characteristic_not_prime",
+            message="constant characteristic must be prime",
+        )
+    if len(field.defining_polynomial) != 1 or not (
+        field.defining_polynomial[0].numerator.is_one()
+        and field.defining_polynomial[0].denominator.is_one()
+    ):
+        raise OperationDomainValidationError(
+            location=("field",),
+            code="function_field.place_extension_unsupported",
+            message="places in this exact slice require the rational field GF(p)(x)",
+        )
+    return field
+
+
+def _monic_polynomial(poly: PrimeFieldPolynomial) -> PrimeFieldPolynomial:
+    """Return the monic associate defining the same finite place."""
+
+    leading = poly.coefficients[-1] % poly.characteristic
+    inverse = pow(leading, -1, poly.characteristic)
+    return PrimeFieldPolynomial(
+        characteristic=poly.characteristic,
+        coefficients=tuple(
+            (coefficient * inverse) % poly.characteristic
+            for coefficient in poly.coefficients
+        ),
+    )
+
+
+def _admit_place(place: FunctionFieldPlace) -> FunctionFieldPlace:
+    place = _canonical_place(place)
+    field = _admit_rational_place_field(place.field)
+    prime_polynomial = place.prime_polynomial
+    if place.kind == "FINITE":
+        if prime_polynomial is None:
+            raise OperationDomainValidationError(
+                location=("place", "prime_polynomial"),
+                code="function_field.finite_place_polynomial",
+                message="a finite place requires its prime polynomial",
+            )
+        # Polynomial associates define the same prime ideal/place.  The public
+        # carrier permits either spelling, while valuation and factorization use
+        # the canonical monic representative.
+        prime_polynomial = _monic_polynomial(prime_polynomial)
+    # Preserve the canonical field and monic place polynomial through the
+    # returned value so parent and valuation operations see one representation.
+    place = FunctionFieldPlace.model_construct(
+        field=field,
+        kind=place.kind,
+        prime_polynomial=prime_polynomial,
+        degree=place.degree,
+    )
+    if place.kind == "FINITE":
+        admitted_polynomial = place.prime_polynomial
+        if admitted_polynomial is None:
+            raise OperationDomainValidationError(
+                location=("place", "prime_polynomial"),
+                code="function_field.finite_place_polynomial",
+                message="a finite place requires its prime polynomial",
+            )
+        factors = _factor_polynomial(admitted_polynomial)
+        if factors != ((admitted_polynomial, 1),):
+            raise OperationDomainValidationError(
+                location=("place",),
+                code="function_field.place_not_prime",
+                message="finite place polynomial must be irreducible",
+            )
+    return place
+
+
+def _rf_valuation(value: PrimeFieldRationalFunction, place: FunctionFieldPlace) -> int:
+    prime = value.characteristic
+    num = list(value.numerator.coefficients)
+    den = list(value.denominator.coefficients)
+    if place.kind == "INFINITE":
+        return (len(den) - 1) - (len(num) - 1)
+    place_polynomial = place.prime_polynomial
+    if place_polynomial is None:
+        raise OperationDomainValidationError(
+            location=("place", "prime_polynomial"),
+            code="function_field.finite_place_polynomial",
+            message="a finite place requires its prime polynomial",
+        )
+    divisor = list(place_polynomial.coefficients)
+
+    def order(poly: list[int]) -> int:
+        count = 0
+        while len(poly) >= len(divisor):
+            quotient, remainder = _poly_divmod_local(poly, divisor, prime)
+            if any(remainder):
+                break
+            count += 1
+            poly = quotient
+        return count
+
+    return order(num) - order(den)
+
+
+def _poly_divmod_local(
+    dividend: list[int], divisor: list[int], prime: int
+) -> tuple[list[int], list[int]]:
+    dividend = [x % prime for x in dividend]
+    while len(dividend) > 1 and dividend[-1] == 0:
+        dividend.pop()
+    divisor = [x % prime for x in divisor]
+    while len(divisor) > 1 and divisor[-1] == 0:
+        divisor.pop()
+    if len(dividend) < len(divisor):
+        return [0], dividend
+    quotient = [0] * (len(dividend) - len(divisor) + 1)
+    inv = pow(divisor[-1], -1, prime)
+    while len(dividend) >= len(divisor) and any(dividend):
+        shift = len(dividend) - len(divisor)
+        factor = dividend[-1] * inv % prime
+        quotient[shift] = factor
+        for i, c in enumerate(divisor):
+            dividend[shift + i] = (dividend[shift + i] - factor * c) % prime
+        while len(dividend) > 1 and dividend[-1] == 0:
+            dividend.pop()
+    return quotient, dividend
+
+
+def function_field_place_valuation(
+    place: FunctionFieldPlace, element: FiniteFunctionFieldElement
+) -> int | None:
+    place = _admit_place(place)
+    if not isinstance(element, FiniteFunctionFieldElement):
+        raise OperationDomainValidationError(
+            location=("element",),
+            code="function_field.element_type",
+            message="element must be a finite function-field element value",
+        )
+    try:
+        element = FiniteFunctionFieldElement.model_validate(element.model_dump())
+    except (ValidationError, AttributeError, KeyError, TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("element",),
+            code="function_field.invalid_element",
+            message="element has malformed coordinate data",
+        ) from exc
+    if element.field != place.field:
+        raise OperationDomainValidationError(
+            location=("element", "field"),
+            code="function_field.parent_mismatch",
+            message="place and element must share the exact function field",
+        )
+    coordinate = element.coordinates[0]
+    if coordinate.numerator.is_zero():
+        return None
+    return _rf_valuation(coordinate, place)
+
+
+def _factor_polynomial(
+    poly: PrimeFieldPolynomial,
+) -> tuple[tuple[PrimeFieldPolynomial, int], ...]:
+    """Factor one bounded GF(p)[x] polynomial through the stable Poly API.
+
+    ``sympy.factor_list(Poly(...))`` delegates to the installed flint domain in
+    some environments and can raise ``nmods cannot be ordered``.  The owning
+    adapter uses ``Poly.factor_list`` instead, which keeps the finite-field
+    domain explicit and returns ordinary coefficient data before any public
+    value is constructed.
+    """
+
+    from sympy import Poly, symbols
+
+    x = symbols("x")
+    expression = sum(c * x**i for i, c in enumerate(poly.coefficients))
+    try:
+        _unit, factors = Poly(expression, x, modulus=poly.characteristic).factor_list()
+    except (ArithmeticError, TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("polynomial",),
+            code="function_field.factorization_backend_failure",
+            message="finite-place factorization failed in the admitted GF(p) domain",
+        ) from exc
+    return tuple(
+        (
+            PrimeFieldPolynomial(
+                characteristic=poly.characteristic,
+                coefficients=tuple(
+                    int(value) % poly.characteristic
+                    for value in reversed(f.all_coeffs())
+                ),
+            ),
+            int(multiplicity),
+        )
+        for f, multiplicity in factors
+    )
+
+
+def function_field_principal_divisor(
+    field: FiniteFunctionField,
+    element: FiniteFunctionFieldElement,
+) -> FunctionFieldPrincipalDivisorResult:
+    field = _admit_rational_place_field(field)
+    if not isinstance(element, FiniteFunctionFieldElement):
+        raise OperationDomainValidationError(
+            location=("element",),
+            code="function_field.element_type",
+            message="element must be a finite function-field element value",
+        )
+    try:
+        element = FiniteFunctionFieldElement.model_validate(element.model_dump())
+    except (ValidationError, AttributeError, KeyError, TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("element",),
+            code="function_field.invalid_element",
+            message="element has malformed coordinate data",
+        ) from exc
+    if element.field != field:
+        raise OperationDomainValidationError(
+            location=("element", "field"),
+            code="function_field.parent_mismatch",
+            message="element must belong to the supplied field",
+        )
+    # Canonicalize once before factoring.  This performs numerator/denominator
+    # cancellation and makes scalar denominators monic, so equal finite places
+    # cannot be emitted twice by a merely different presentation of the same
+    # rational function.
+    canonical_value = _to_internal_rational_function(element.coordinates[0])
+    value = _from_internal_rational_function(canonical_value, field.characteristic)
+    canonical_element = FiniteFunctionFieldElement.model_construct(
+        field=field, coordinates=(value,)
+    )
+    if value.numerator.is_zero():
+        raise OperationDomainValidationError(
+            location=("element",),
+            code="function_field.zero_principal_divisor",
+            message="zero has no principal divisor",
+        )
+    support: dict[str, tuple[FunctionFieldPlace, int]] = {}
+    for polynomial, sign in ((value.numerator, 1), (value.denominator, -1)):
+        for factor, multiplicity in _factor_polynomial(polynomial):
+            place = FunctionFieldPlace(
+                field=field,
+                kind="FINITE",
+                prime_polynomial=factor,
+                degree=factor.degree,
+            )
+            key = place.model_dump_json()
+            previous = support.get(key)
+            support[key] = (
+                place,
+                (previous[1] if previous else 0) + sign * multiplicity,
+            )
+    infinity_place = FunctionFieldPlace(field=field, kind="INFINITE", degree=1)
+    infinity = _rf_valuation(value, infinity_place)
+    if infinity:
+        key = infinity_place.model_dump_json()
+        support[key] = (infinity_place, infinity)
+    terms = tuple(
+        FunctionFieldDivisorTerm(place=place, multiplicity=multiplicity)
+        for place, multiplicity in support.values()
+        if multiplicity
+    )
+    divisor = FunctionFieldDivisor(field=field, terms=terms)
+    return FunctionFieldPrincipalDivisorResult(
+        field=field, element=canonical_element, divisor=divisor, degree=divisor.degree
+    )
+
+
+def _admit_divisor(divisor: FunctionFieldDivisor) -> FunctionFieldDivisor:
+    """Bind every place to the divisor parent before place factorization."""
+
+    if not isinstance(divisor, FunctionFieldDivisor):
+        raise OperationDomainValidationError(
+            location=("divisor",),
+            code="function_field.divisor_type",
+            message="divisor must be a function-field divisor value",
+        )
+    try:
+        field_value = divisor.field
+        terms = divisor.terms
+    except AttributeError as exc:
+        raise OperationDomainValidationError(
+            location=("divisor",),
+            code="function_field.invalid_divisor",
+            message="divisor has malformed field or support data",
+        ) from exc
+    field = _validated_field(field_value)
+    if type(terms) is not tuple or len(terms) > 256:
+        raise OperationDomainValidationError(
+            location=("divisor", "terms"),
+            code="function_field.divisor_shape",
+            message="divisor terms must be a bounded canonical tuple",
+        )
+    admitted_terms: list[FunctionFieldDivisorTerm] = []
+    for index, term in enumerate(terms):
+        location = ("divisor", "terms", index)
+        if not isinstance(term, FunctionFieldDivisorTerm):
+            raise OperationDomainValidationError(
+                location=location,
+                code="function_field.divisor_term_type",
+                message="divisor terms must be typed place/multiplicity values",
+            )
+        if type(term.multiplicity) is not int or term.multiplicity == 0:
+            raise OperationDomainValidationError(
+                location=(*location, "multiplicity"),
+                code="function_field.divisor_multiplicity",
+                message="divisor multiplicities must be nonzero strict integers",
+            )
+        # Check the parent using only structural admission.  In particular, a
+        # mismatched place must not reach finite-place factorization first.
+        place = _canonical_place(term.place)
+        if place.field != field:
+            raise OperationDomainValidationError(
+                location=(*location, "place", "field"),
+                code="function_field.divisor_parent",
+                message="every divisor place must belong to divisor.field",
+            )
+        admitted_place = _admit_place(place)
+        admitted_terms.append(
+            FunctionFieldDivisorTerm(
+                place=admitted_place, multiplicity=term.multiplicity
+            )
+        )
+    try:
+        return FunctionFieldDivisor(field=field, terms=tuple(admitted_terms))
+    except ValidationError as exc:
+        raise OperationDomainValidationError(
+            location=("divisor",),
+            code="function_field.invalid_divisor",
+            message="divisor support must be canonical and parent-bound",
+        ) from exc
+
+
+def function_field_divisor_degree(
+    divisor: FunctionFieldDivisor,
+) -> FunctionFieldDivisorDegreeResult:
+    divisor = _admit_divisor(divisor)
+    return FunctionFieldDivisorDegreeResult(divisor=divisor, degree=divisor.degree)
+
+
 __all__ = [
     "_element_inverse",
+    "function_field_divisor_degree",
     "function_field_element_multiply",
+    "function_field_place_valuation",
+    "function_field_principal_divisor",
 ]

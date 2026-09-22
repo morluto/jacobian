@@ -1,6 +1,7 @@
 """Supported native combinatorial-map API."""
 
 from jacobian.math.topology.combinatorial_maps.operations import (
+    check_multigraph_embedding,
     check_orientable_embedding,
     check_signed_embedding,
     connected_components,
@@ -9,10 +10,13 @@ from jacobian.math.topology.combinatorial_maps.operations import (
     euler_characteristic,
     face_orbits,
     find_rotation_system,
+    minimum_orientable_genus,
     orientable_genus,
     orientation_reverse,
     rotation_successor,
     verify_dual,
+    verify_minimum_orientable_genus,
+    verify_multigraph_embedding,
     verify_orientable_embedding,
     verify_orientation_reverse,
     verify_rotation_system_find,
@@ -28,6 +32,7 @@ from jacobian.math.topology.combinatorial_maps.values import (
 __all__ = [
     "FacialWalk",
     "FiniteCombinatorialMap",
+    "check_multigraph_embedding",
     "check_orientable_embedding",
     "check_signed_embedding",
     "connected_components",
@@ -36,10 +41,13 @@ __all__ = [
     "euler_characteristic",
     "face_orbits",
     "find_rotation_system",
+    "minimum_orientable_genus",
     "orientable_genus",
     "orientation_reverse",
     "rotation_successor",
     "verify_dual",
+    "verify_minimum_orientable_genus",
+    "verify_multigraph_embedding",
     "verify_orientable_embedding",
     "verify_orientation_reverse",
     "verify_rotation_system_find",

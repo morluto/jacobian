@@ -15,6 +15,7 @@ from jacobian.math.logic.automata.transducers.operations import (
     verify_subsequential_run,
 )
 from jacobian.math.logic.automata.transducers.values import (
+    FiniteAlphabet,
     RationalEdge,
     RationalTransducer,
     SubseqFinalOutput,
@@ -23,6 +24,7 @@ from jacobian.math.logic.automata.transducers.values import (
 )
 
 __all__ = [
+    "FiniteAlphabet",
     "RationalEdge",
     "RationalTransducer",
     "SubseqFinalOutput",

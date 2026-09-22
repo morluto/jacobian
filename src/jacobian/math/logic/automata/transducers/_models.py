@@ -14,6 +14,7 @@ from jacobian.math.logic.automata.transducers.values import (
     MAX_FST_WORD_LENGTH,
     RationalTransducer,
     SubsequentialTransducer,
+    alphabet_parent_mismatch,
 )
 
 
@@ -101,6 +102,23 @@ class ComposeRequest(StrictModel):
     first: SubsequentialTransducer
     second: SubsequentialTransducer
 
+    @model_validator(mode="after")
+    def require_composable_alphabets(self) -> Self:
+        mismatch = alphabet_parent_mismatch(
+            self.first.output_alphabet_id,
+            self.first.output_alphabet,
+            self.second.input_alphabet_id,
+            self.second.input_alphabet,
+        )
+        if mismatch is not None:
+            raise _validation_error(*mismatch)
+        if self.first.output_alphabet_size != self.second.input_alphabet_size:
+            raise _validation_error(
+                "composition_alphabet_mismatch",
+                "first output alphabet must match second input alphabet",
+            )
+        return self
+
 
 class ComposeResult(ComposeRequest):
     transducer: SubsequentialTransducer
@@ -110,6 +128,10 @@ class ComposeResult(ComposeRequest):
         if (
             self.transducer.input_alphabet_size != self.first.input_alphabet_size
             or self.transducer.output_alphabet_size != self.second.output_alphabet_size
+            or self.transducer.input_alphabet_id != self.first.input_alphabet_id
+            or self.transducer.output_alphabet_id != self.second.output_alphabet_id
+            or self.transducer.input_alphabet != self.first.input_alphabet
+            or self.transducer.output_alphabet != self.second.output_alphabet
             or self.transducer.state_count
             > self.first.state_count * self.second.state_count
         ):
@@ -187,6 +209,10 @@ class TrimResult(TrimRequest):
         if (
             self.trimmed.input_alphabet_size != self.transducer.input_alphabet_size
             or self.trimmed.output_alphabet_size != self.transducer.output_alphabet_size
+            or self.trimmed.input_alphabet_id != self.transducer.input_alphabet_id
+            or self.trimmed.output_alphabet_id != self.transducer.output_alphabet_id
+            or self.trimmed.input_alphabet != self.transducer.input_alphabet
+            or self.trimmed.output_alphabet != self.transducer.output_alphabet
         ):
             raise _validation_error(
                 "trim_alphabet_mismatch",
@@ -319,6 +345,10 @@ class MinimizeResult(MinimizeRequest):
             self.minimized.input_alphabet_size != self.transducer.input_alphabet_size
             or self.minimized.output_alphabet_size
             != self.transducer.output_alphabet_size
+            or self.minimized.input_alphabet_id != self.transducer.input_alphabet_id
+            or self.minimized.output_alphabet_id != self.transducer.output_alphabet_id
+            or self.minimized.input_alphabet != self.transducer.input_alphabet
+            or self.minimized.output_alphabet != self.transducer.output_alphabet
         ):
             raise _validation_error(
                 "minimize_alphabet_mismatch",

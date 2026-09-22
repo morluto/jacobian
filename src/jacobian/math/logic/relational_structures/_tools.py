@@ -2,6 +2,7 @@
 
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.logic.relational_structures._admission import (
+    MAX_EMBEDDING_REFLECTION_CELLS,
     MAX_SEARCH_CANDIDATES,
     MAX_SEARCH_TUPLE_REPLAYS,
 )
@@ -320,20 +321,18 @@ TOOLS: MathTools = (
         operation_id="relational.embedding.search.compute",
         title="Search two finite relational structures for an embedding",
         description=(
-            "Decide injective-homomorphism existence between two finite "
+            "Decide induced-substructure embedding existence between two finite "
             "relational structures over one shared signature by replaying "
             "every distinct-image carrier map in lexicographic order "
-            "(source label 0 varying slowest) through the reused "
-            "exhaustive check. FOUND retains the first embedding with its "
-            "complete check; EXHAUSTED retains the receipt that every one "
-            "of the complete |B|^|A| carrier maps was examined, a proved "
-            "negative. Supply 'source' and 'target' as structures with "
-            "canonical carriers 0..n-1 over one shared ranked signature "
-            "with complete tuple tables where an omitted tuple is exactly "
-            "NOT in the relation. The candidate space is admitted up front "
-            f"(at most {MAX_SEARCH_CANDIDATES} maps, at most "
-            f"{MAX_SEARCH_TUPLE_REPLAYS} joint tuple replays); a larger "
-            "space is a typed resource refusal, never a negative."
+            "(source label 0 varying slowest) through the complete "
+            "positive-and-negative relation check. FOUND retains the first "
+            "embedding with its complete check; EXHAUSTED retains the receipt "
+            "that every one of the complete |B|^|A| carrier maps was examined, "
+            "a proved negative. The candidate space is admitted up front "
+            f"(at most {MAX_SEARCH_CANDIDATES} maps and "
+            f"{MAX_SEARCH_TUPLE_REPLAYS} replay units, including at most "
+            f"{MAX_EMBEDDING_REFLECTION_CELLS} Cartesian reflection cells per candidate); "
+            "a larger space is a typed resource refusal, never a negative."
         ),
         request_type=EmbeddingSearchRequest,
         result_type=EmbeddingSearchResult,
@@ -357,7 +356,8 @@ TOOLS: MathTools = (
                 name="bare_pair_embeds_past_constant",
                 description=(
                     "Two bare vertices embed into the directed edge plus "
-                    "isolate at (0, 1), skipping the constant map that the "
+                    "isolate at (0, 2), whose induced image has no edge; this "
+                    "skips the constant map that the "
                     "plain search returns; both structures share the single "
                     "binary edge symbol, so the status is FOUND."
                 ),

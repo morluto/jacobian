@@ -7,7 +7,12 @@ def test_exact_public_api_symbols() -> None:
     assert tuple(modular_forms.__all__) == (
         "LevelOneModularQExpansion",
         "ModularFormSpace",
+        "hecke",
         "level_one_named_q_expansion",
+        "named_q_expansion",
         "space_dimension",
+        "sturm_bound",
+        "u_operator",
+        "v_operator",
     )
     assert all(hasattr(modular_forms, name) for name in modular_forms.__all__)

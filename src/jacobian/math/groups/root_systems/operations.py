@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import cast
 
+from pydantic import ValidationError
+
 from jacobian._execution import BackendFailureReason, OperationBackendError
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.groups.root_systems._cartan import (
@@ -34,6 +36,7 @@ from jacobian.math.groups.root_systems._models import (
     CartanMatrix,
     CartanType,
     CartanTypeResult,
+    FiniteCartanDatum,
     PositiveRootsResult,
     RootComponentData,
     RootSystemDataResult,
@@ -48,12 +51,94 @@ from jacobian.math.groups.root_systems._models import (
 MAX_SIGNED_ROOT_ACTION_DEGREE = 2 * MAX_POSITIVE_ROOTS
 
 
-def _as_cartan(matrix: CartanMatrix | tuple[tuple[int, ...], ...]) -> CartanMatrix:
-    return (
-        matrix
-        if isinstance(matrix, CartanMatrix)
-        else CartanMatrix.model_validate(matrix)
+def cartan_datum(matrix: CartanMatrix) -> FiniteCartanDatum:
+    """Construct root/coroot/weight basis data for a finite Cartan matrix."""
+    from fractions import Fraction
+    from math import gcd, lcm
+
+    from jacobian._exact import CanonicalRational
+    from jacobian.math.groups.root_systems._cartan import positive_symmetrizer
+    from jacobian.math.matrices.values import IntegerMatrix
+
+    cartan = _as_cartan(matrix)
+    rows = cartan.entries
+    _admit_cartan_finite_type(rows)
+    rational = positive_symmetrizer(rows)
+    denominator: int = 1
+    for value in rational:
+        denominator = lcm(denominator, value.denominator)
+    scaled: list[int] = [int(value * denominator) for value in rational]
+    common: int = 0
+    for scaled_value in scaled:
+        common = gcd(common, abs(int(scaled_value)))
+    normalized: list[int] = [scaled_value // common for scaled_value in scaled]
+    # alpha_j = sum_i A[i,j] omega_i; coroot_j = sum_i A[j,i] omega_i^vee.
+    root_to_weight = tuple(
+        tuple(rows[row][column] for column in range(len(rows)))
+        for row in range(len(rows))
     )
+    coroot_to_coweight = tuple(
+        tuple(rows[column][row] for column in range(len(rows)))
+        for row in range(len(rows))
+    )
+    return FiniteCartanDatum._from_kernel(
+        cartan_matrix=cartan,
+        symmetrizer=tuple(
+            CanonicalRational.from_fraction(Fraction(value, denominator // common))
+            for value in normalized
+        ),
+        root_to_weight=IntegerMatrix(
+            row_count=len(rows), column_count=len(rows), entries=root_to_weight
+        ),
+        coroot_to_coweight=IntegerMatrix(
+            row_count=len(rows), column_count=len(rows), entries=coroot_to_coweight
+        ),
+    )
+
+
+def _as_cartan(matrix: CartanMatrix | tuple[tuple[int, ...], ...]) -> CartanMatrix:
+    """Establish a safe Cartan carrier before finite-type arithmetic.
+
+    Native callers can pass model-constructed values that bypass Pydantic.
+    Inspect the nested matrix and axis here so malformed claims become the
+    root-system owner error rather than leaking AttributeError/ValidationError.
+    """
+    try:
+        if isinstance(matrix, CartanMatrix):
+            cartan = CartanMatrix.model_validate(matrix.model_dump(mode="python"))
+        else:
+            cartan = CartanMatrix.model_validate(matrix)
+        nested = cartan.matrix
+        rows = nested.entries
+        rank = len(rows)
+        axis = cartan.simple_root_axis
+        if (
+            type(nested.row_count) is not int
+            or type(nested.column_count) is not int
+            or nested.row_count != rank
+            or nested.column_count != rank
+        ):
+            raise ValueError("nested integer-matrix dimensions are inconsistent")
+        if not isinstance(rows, tuple) or not 1 <= rank <= MAX_RANK:
+            raise ValueError("Cartan matrix rank is outside the admitted envelope")
+        if not isinstance(axis, tuple) or axis != tuple(range(rank)):
+            raise ValueError("Cartan matrix axis is not canonical")
+        if any(
+            not isinstance(row, tuple)
+            or len(row) != rank
+            or any(type(entry) is not int for entry in row)
+            for row in rows
+        ):
+            raise ValueError(
+                "Cartan matrix entries are not a rectangular integer matrix"
+            )
+        return cartan
+    except (ValidationError, TypeError, ValueError, AttributeError, KeyError) as error:
+        raise OperationDomainValidationError(
+            location=("matrix",),
+            code="root_system.invalid_cartan_carrier",
+            message="matrix must be a canonical bounded integer Cartan carrier",
+        ) from error
 
 
 def _admit_cartan_finite_type(matrix: tuple[tuple[int, ...], ...]) -> None:

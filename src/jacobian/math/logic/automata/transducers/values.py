@@ -22,6 +22,57 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"finite_state_transducer.{reason}", message)
 
 
+class FiniteAlphabet(StrictModel):
+    """An ordered finite symbol axis used as an explicit transducer parent."""
+
+    symbols: tuple[str, ...] = Field(min_length=1, max_length=MAX_FST_ALPHABET)
+
+    @model_validator(mode="after")
+    def require_unique_symbols(self) -> Self:
+        if len(set(self.symbols)) != len(self.symbols):
+            raise _validation_error(
+                "alphabet_symbols_not_unique", "alphabet symbols must be unique"
+            )
+        return self
+
+
+def alphabet_parent_mismatch(
+    left_id: str | None,
+    left_alphabet: FiniteAlphabet | None,
+    right_id: str | None,
+    right_alphabet: FiniteAlphabet | None,
+) -> tuple[str, str] | None:
+    """Return a stable diagnostic when two alphabet parents are not identical.
+
+    An omitted parent is intentionally not a wildcard: composing a bound side
+    with an unbound side would otherwise lose the context that gives symbols
+    their meaning.  Both identity fields and explicit contexts are therefore
+    compared independently.
+    """
+
+    if (left_id is None) != (right_id is None):
+        return (
+            "composition_alphabet_identity_missing",
+            "both intermediate alphabets must provide the same identity or neither may provide one",
+        )
+    if left_id is not None and left_id != right_id:
+        return (
+            "composition_alphabet_identity_mismatch",
+            "first output and second input alphabet identities must be equal",
+        )
+    if (left_alphabet is None) != (right_alphabet is None):
+        return (
+            "composition_alphabet_context_missing",
+            "both intermediate alphabets must provide the same context or neither may provide one",
+        )
+    if left_alphabet is not None and left_alphabet != right_alphabet:
+        return (
+            "composition_alphabet_context_mismatch",
+            "first output and second input alphabet contexts must be equal",
+        )
+    return None
+
+
 class SubseqTransition(StrictModel):
     """One deterministic transition of a subsequential transducer.
 
@@ -116,6 +167,10 @@ class SubsequentialTransducer(StrictModel):
 
     input_alphabet_size: int = Field(ge=1, le=MAX_FST_ALPHABET)
     output_alphabet_size: int = Field(ge=1, le=MAX_FST_ALPHABET)
+    input_alphabet_id: str | None = Field(default=None)
+    output_alphabet_id: str | None = Field(default=None)
+    input_alphabet: FiniteAlphabet | None = None
+    output_alphabet: FiniteAlphabet | None = None
     state_count: int = Field(ge=1, le=MAX_FST_STATES)
     initial_state: int = Field(ge=0)
     transitions: tuple[SubseqTransition, ...] = Field(
@@ -127,6 +182,22 @@ class SubsequentialTransducer(StrictModel):
 
     @model_validator(mode="after")
     def require_valid_transducer(self) -> Self:
+        if (
+            self.input_alphabet is not None
+            and len(self.input_alphabet.symbols) != self.input_alphabet_size
+        ):
+            raise _validation_error(
+                "input_alphabet_size",
+                "input alphabet symbols must match input_alphabet_size",
+            )
+        if (
+            self.output_alphabet is not None
+            and len(self.output_alphabet.symbols) != self.output_alphabet_size
+        ):
+            raise _validation_error(
+                "output_alphabet_size",
+                "output alphabet symbols must match output_alphabet_size",
+            )
         if not 0 <= self.initial_state < self.state_count:
             raise _validation_error(
                 "initial_state_out_of_range",
@@ -204,6 +275,10 @@ class RationalTransducer(StrictModel):
 
     input_alphabet_size: int = Field(ge=1, le=MAX_FST_ALPHABET)
     output_alphabet_size: int = Field(ge=1, le=MAX_FST_ALPHABET)
+    input_alphabet_id: str | None = Field(default=None)
+    output_alphabet_id: str | None = Field(default=None)
+    input_alphabet: FiniteAlphabet | None = None
+    output_alphabet: FiniteAlphabet | None = None
     state_count: int = Field(ge=1, le=MAX_FST_STATES)
     initial_states: tuple[int, ...] = Field(min_length=1)
     accepting_states: tuple[int, ...] = Field(min_length=0)
@@ -211,6 +286,22 @@ class RationalTransducer(StrictModel):
 
     @model_validator(mode="after")
     def require_valid_relation(self) -> Self:
+        if (
+            self.input_alphabet is not None
+            and len(self.input_alphabet.symbols) != self.input_alphabet_size
+        ):
+            raise _validation_error(
+                "input_alphabet_size",
+                "input alphabet symbols must match input_alphabet_size",
+            )
+        if (
+            self.output_alphabet is not None
+            and len(self.output_alphabet.symbols) != self.output_alphabet_size
+        ):
+            raise _validation_error(
+                "output_alphabet_size",
+                "output alphabet symbols must match output_alphabet_size",
+            )
         if len(self.initial_states) > MAX_FST_STATES:
             raise _validation_error(
                 "too_many_initial_states", "too many initial states"
@@ -246,6 +337,7 @@ __all__ = [
     "MAX_FST_RESULT_WORD_LENGTH",
     "MAX_FST_STATES",
     "MAX_FST_WORD_LENGTH",
+    "FiniteAlphabet",
     "RationalEdge",
     "RationalTransducer",
     "SubseqFinalOutput",

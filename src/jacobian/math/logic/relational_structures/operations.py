@@ -5,11 +5,13 @@ from __future__ import annotations
 from collections.abc import Sequence
 from itertools import product
 from math import lcm
+from typing import Literal
 
 from jacobian._execution import request_checkpoint
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.logic.relational_structures._admission import (
     admit_core_computation,
+    admit_embedding_search,
     admit_homomorphism_check,
     admit_homomorphism_search,
 )
@@ -22,11 +24,30 @@ from jacobian.math.logic.relational_structures._models import (
     HomomorphismSearchStatus,
     HomomorphismStatus,
     HomomorphismViolationWitness,
+    InducedEmbeddingCheckResult,
+    InducedRelationProfile,
     SymbolTransportProfile,
 )
 from jacobian.math.logic.relational_structures.values import (
     FiniteRelationalStructure,
 )
+
+
+def _admit_structure(value: object, field: str) -> FiniteRelationalStructure:
+    if not isinstance(value, FiniteRelationalStructure):
+        raise OperationDomainValidationError(
+            location=(field,),
+            code="relational.homomorphism.structure_type",
+            message=f"{field} must be a finite relational structure",
+        )
+    try:
+        return FiniteRelationalStructure.model_validate(value.model_dump(), strict=True)
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=(field,),
+            code="relational.homomorphism.structure_shape",
+            message=f"{field} must satisfy its complete canonical relation tables",
+        ) from exc
 
 
 def check_homomorphism(
@@ -46,6 +67,16 @@ def check_homomorphism(
     homomorphisms is again checked as a homomorphism by this same replay.
     """
 
+    source = _admit_structure(source, "source")
+    target = _admit_structure(target, "target")
+    if not isinstance(carrier_map, Sequence) or isinstance(
+        carrier_map, (str, bytes, bytearray)
+    ):
+        raise OperationDomainValidationError(
+            location=("carrier_map",),
+            code="relational.homomorphism.carrier_map_shape",
+            message="carrier_map must be a finite sequence of exact integers",
+        )
     admit_homomorphism_check(source, target, carrier_map)
     checked_map = tuple(carrier_map)
     target_tables = tuple(set(table) for table in target.relation_tables)
@@ -104,14 +135,8 @@ def search_homomorphism(
     a proved negative: every map was examined and none transports.
     """
 
-    if not isinstance(source, FiniteRelationalStructure) or not isinstance(
-        target, FiniteRelationalStructure
-    ):
-        raise OperationDomainValidationError(
-            location=("source",),
-            code="relational.homomorphism.structure_type",
-            message="homomorphism search consumes finite relational structures",
-        )
+    source = _admit_structure(source, "source")
+    target = _admit_structure(target, "target")
     total_candidates, _transport_tuples = admit_homomorphism_search(source, target)
     found = _first_homomorphism(
         source, target, total_candidates, require_injective=False
@@ -166,30 +191,105 @@ def _first_homomorphism(
     return None
 
 
+def _check_embedding(
+    source: FiniteRelationalStructure,
+    target: FiniteRelationalStructure,
+    carrier_map: tuple[int, ...],
+    *,
+    target_tables: tuple[set[tuple[int, ...]], ...] | None = None,
+    source_tables: tuple[set[tuple[int, ...]], ...] | None = None,
+) -> InducedEmbeddingCheckResult:
+    """Replay the induced-substructure invariant for one injective map.
+
+    Unlike homomorphism checking, this scans the complete Cartesian domain of
+    every relation.  With an injective map, membership of a target tuple in
+    the image has a unique source preimage, so the two truth values must agree.
+    """
+
+    admit_homomorphism_check(source, target, carrier_map)
+    if len(set(carrier_map)) != len(carrier_map):
+        raise OperationDomainValidationError(
+            location=("carrier_map",),
+            code="relational.embedding.injectivity",
+            message="an induced embedding must be injective",
+        )
+    target_tables = target_tables or tuple(
+        set(table) for table in target.relation_tables
+    )
+    source_sets = source_tables or tuple(set(table) for table in source.relation_tables)
+    witness: HomomorphismViolationWitness | None = None
+    witness_kind: Literal["PRESERVATION", "REFLECTION"] = "PRESERVATION"
+    profiles: list[SymbolTransportProfile] = []
+    reflection_profiles: list[InducedRelationProfile] = []
+    for symbol_index, symbol in enumerate(source.signature):
+        source_table = source_sets[symbol_index]
+        target_table = target_tables[symbol_index]
+        preserved = 0
+        matching = 0
+        for coordinates in product(range(source.carrier_size), repeat=symbol.arity):
+            source_member = coordinates in source_table
+            image = tuple(carrier_map[index] for index in coordinates)
+            target_member = image in target_table
+            if source_member and target_member:
+                preserved += 1
+            if source_member == target_member:
+                matching += 1
+            elif witness is None and source_member != target_member:
+                witness = HomomorphismViolationWitness(
+                    symbol_id=symbol.symbol_id,
+                    arity=symbol.arity,
+                    source_tuple=tuple(coordinates),
+                    image_tuple=image,
+                )
+                if target_member and not source_member:
+                    witness_kind = "REFLECTION"
+        profiles.append(
+            SymbolTransportProfile(
+                symbol_id=symbol.symbol_id,
+                arity=symbol.arity,
+                source_tuples=len(source_table),
+                preserved_tuples=preserved,
+            )
+        )
+        reflection_profiles.append(
+            InducedRelationProfile(
+                symbol_id=symbol.symbol_id,
+                arity=symbol.arity,
+                relation_cells=(
+                    1 if symbol.arity == 0 else source.carrier_size**symbol.arity
+                ),
+                matching_cells=matching,
+            )
+        )
+    status = (
+        HomomorphismStatus.NOT_HOMOMORPHISM
+        if witness is not None
+        else HomomorphismStatus.HOMOMORPHISM
+    )
+    return InducedEmbeddingCheckResult._from_induced_kernel(
+        status=status,
+        source=source,
+        target=target,
+        carrier_map=carrier_map,
+        witness=witness,
+        witness_kind=witness_kind,
+        symbol_profiles=tuple(profiles),
+        reflection_profiles=tuple(reflection_profiles),
+    )
+
+
 def search_embedding(
     source: FiniteRelationalStructure,
     target: FiniteRelationalStructure,
 ) -> EmbeddingSearchResult:
-    """Search two structures for an injective homomorphism.
+    """Search for an induced (reflecting) injective embedding."""
 
-    The same admitted space the homomorphism search scans is replayed
-    in the same order, but only maps with distinct images are decided:
-    FOUND retains the first embedding with its complete check and
-    EXHAUSTED proves no injective map transports.
-    """
-
-    if not isinstance(source, FiniteRelationalStructure) or not isinstance(
-        target, FiniteRelationalStructure
-    ):
-        raise OperationDomainValidationError(
-            location=("source",),
-            code="relational.homomorphism.structure_type",
-            message="embedding search consumes finite relational structures",
-        )
-    total_candidates, _transport_tuples = admit_homomorphism_search(source, target)
-    found = _first_homomorphism(
-        source, target, total_candidates, require_injective=True
+    source = _admit_structure(source, "source")
+    target = _admit_structure(target, "target")
+    total_candidates, _transport_tuples, _reflection_cells = admit_embedding_search(
+        source, target
     )
+    found = _first_embedding(source, target, total_candidates)
     if found is not None:
         check, examined = found
         return EmbeddingSearchResult._from_kernel(
@@ -210,6 +310,34 @@ def search_embedding(
     )
 
 
+def _first_embedding(
+    source: FiniteRelationalStructure,
+    target: FiniteRelationalStructure,
+    total_candidates: int,
+) -> tuple[InducedEmbeddingCheckResult, int] | None:
+    target_tables = tuple(set(table) for table in target.relation_tables)
+    source_tables = tuple(set(table) for table in source.relation_tables)
+    examined = 0
+    for candidate in product(range(target.carrier_size), repeat=source.carrier_size):
+        examined += 1
+        if examined % 4_096 == 0:
+            request_checkpoint("during induced embedding search enumeration")
+        if len(set(candidate)) != source.carrier_size:
+            continue
+        check = _check_embedding(
+            source,
+            target,
+            tuple(candidate),
+            target_tables=target_tables,
+            source_tables=source_tables,
+        )
+        if check.status is HomomorphismStatus.HOMOMORPHISM:
+            return check, examined
+    if examined != total_candidates:
+        raise RuntimeError("embedding search did not scan its admitted space")
+    return None
+
+
 def count_homomorphisms(
     source: FiniteRelationalStructure,
     target: FiniteRelationalStructure,
@@ -221,14 +349,8 @@ def count_homomorphisms(
     transporting maps are counted. The count is exact and complete.
     """
 
-    if not isinstance(source, FiniteRelationalStructure) or not isinstance(
-        target, FiniteRelationalStructure
-    ):
-        raise OperationDomainValidationError(
-            location=("source",),
-            code="relational.homomorphism.structure_type",
-            message="homomorphism counting consumes finite relational structures",
-        )
+    source = _admit_structure(source, "source")
+    target = _admit_structure(target, "target")
     total_candidates, _transport_tuples = admit_homomorphism_search(source, target)
     count = 0
     examined = 0
@@ -335,12 +457,7 @@ def compute_core(
     replayed once through the reused check before construction.
     """
 
-    if not isinstance(source, FiniteRelationalStructure):
-        raise OperationDomainValidationError(
-            location=("source",),
-            code="relational.homomorphism.structure_type",
-            message="core computation consumes a finite relational structure",
-        )
+    source = _admit_structure(source, "source")
     admit_core_computation(source)
     current = source
     inclusion = tuple(range(source.carrier_size))

@@ -4,6 +4,16 @@ from typing import Any
 
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.koszul._models import KoszulComplexRequest
+from jacobian.math.koszul.module_models import (
+    ModuleKoszulComplex,
+    ModuleKoszulHomology,
+    ModuleKoszulHomologyRequest,
+    ModuleKoszulRequest,
+)
+from jacobian.math.koszul.module_operations import (
+    module_koszul_complex,
+    module_koszul_homology,
+)
 from jacobian.math.koszul.operations import koszul_complex
 from jacobian.math.koszul.values import (
     MAX_KOSZUL_DEGREE,
@@ -45,6 +55,24 @@ _KOSZUL_XY_EXAMPLE = {
     ],
 }
 
+
+_MODULE_EXAMPLE = {
+    "algebra": {
+        "basis": ["1"],
+        "multiplication": [[[{"num": "1", "den": "1"}]]],
+        "unit": [{"num": "1", "den": "1"}],
+    },
+    "module": {
+        "algebra": {
+            "basis": ["1"],
+            "multiplication": [[[{"num": "1", "den": "1"}]]],
+            "unit": [{"num": "1", "den": "1"}],
+        },
+        "basis": ["m"],
+        "action": [[[{"num": "1", "den": "1"}]]],
+    },
+    "sequence": [[{"num": "1", "den": "1"}]],
+}
 
 TOOLS: MathTools = (
     MathTool(
@@ -101,7 +129,46 @@ TOOLS: MathTools = (
             ),
         ),
     ),
+    MathTool(
+        operation_id="homological.koszul.complex.compute",
+        title="Construct a finite-module Koszul complex",
+        description="Construct the exact Koszul complex of a finite based module over a finite commutative algebra, retaining algebra/module axes and checking d²=0.",
+        request_type=ModuleKoszulRequest,
+        result_type=ModuleKoszulComplex,
+        run=module_koszul_complex,
+        tags=("koszul", "module", "homological-algebra", "exact"),
+        examples=(
+            OperationExample(
+                name="unit_module",
+                description="Construct the one-term Koszul complex of the unit in a one-dimensional algebra/module; the module action must respect multiplication.",
+                input=_MODULE_EXAMPLE,
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="homological.koszul.homology.compute",
+        title="Compute finite-module Koszul homology",
+        description="Compute exact homology dimensions of a retained finite-module Koszul complex from its source-bound differentials.",
+        request_type=ModuleKoszulHomologyRequest,
+        result_type=ModuleKoszulHomology,
+        run=lambda request: module_koszul_homology(request.complex),
+        tags=("koszul", "homology", "exact"),
+        examples=(
+            OperationExample(
+                name="empty_sequence",
+                description="Compute homology of the empty finite-module Koszul complex; the source complex retains its module axis.",
+                input={
+                    "complex": {
+                        "algebra": _MODULE_EXAMPLE["algebra"],
+                        "module": _MODULE_EXAMPLE["module"],
+                        "sequence": [],
+                        "basis_sizes": [1],
+                        "differentials": [],
+                    }
+                },
+            ),
+        ),
+    ),
 )
-
 
 __all__ = ["TOOLS"]

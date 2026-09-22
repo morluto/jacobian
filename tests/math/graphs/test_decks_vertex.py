@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
+from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.graphs.decks._models import (
@@ -17,7 +20,9 @@ from jacobian.math.graphs.decks.operations import (
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 
-def _graph(vertices: tuple[str, ...], edges: tuple[tuple[str, str], ...]):
+def _graph(
+    vertices: tuple[str, ...], edges: tuple[tuple[str, str], ...]
+) -> SimpleUndirectedGraph:
     return SimpleUndirectedGraph(vertices=vertices, edges=edges)
 
 
@@ -92,6 +97,19 @@ def test_boundary_edgeless_graph() -> None:
     assert result.vertex_appearances == (2, 2, 2)
     for card in result.cards:
         assert card.card.edges == ()
+
+
+def test_serialized_family_rejects_forged_card_and_receipt() -> None:
+    result = vertex_deletion_family(_path_3())
+    payload = json.loads(result.model_dump_json())
+    payload["cards"][0]["card"]["edges"] = []
+    with pytest.raises(ValidationError):
+        VertexDeletionFamily.model_validate(payload)
+
+    payload = json.loads(result.model_dump_json())
+    payload["edge_appearances"][0] = 0
+    with pytest.raises(ValidationError):
+        VertexDeletionFamily.model_validate(payload)
 
 
 def test_adversarial_dropped_card_fails_verify() -> None:

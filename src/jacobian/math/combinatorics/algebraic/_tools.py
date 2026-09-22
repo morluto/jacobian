@@ -32,6 +32,27 @@ from jacobian.math.combinatorics.algebraic._models import (
     StandardYoungTableauCountRequest,
     StandardYoungTableauCountResult,
 )
+from jacobian.math.combinatorics.algebraic.biword import (
+    Biword,
+    BiwordNormalizeRequest,
+    BiwordNormalizeResult,
+    BiwordRSKPair,
+    BiwordRSKRequest,
+    GreeneRequest,
+    GreeneResult,
+    InverseBiwordRSKRequest,
+    InverseMatrixRSKRequest,
+    MatrixRSKRequest,
+    NonnegativeIntegerMatrix,
+)
+from jacobian.math.combinatorics.algebraic.biword_ops import (
+    greene,
+    inverse_biword,
+    inverse_matrix,
+    matrix_biword,
+    normalize_biword,
+    rsk_biword,
+)
 from jacobian.math.combinatorics.algebraic.values import RSKTableauPair
 from jacobian.math.logic.languages.words.values import FiniteWord
 
@@ -407,5 +428,223 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     ),
 )
 
+
+def _inverse_biword_run(request: InverseBiwordRSKRequest) -> Biword:
+    try:
+        return inverse_biword(request.pair)
+    except OperationDomainValidationError:
+        raise
+    except (TypeError, ValueError, IndexError) as exc:
+        raise OperationDomainValidationError(
+            location=("pair",),
+            code="algebraic_combinatorics.rsk_inverse",
+            message="incompatible biword RSK pair",
+        ) from exc
+
+
+def _inverse_matrix_run(request: InverseMatrixRSKRequest) -> NonnegativeIntegerMatrix:
+    try:
+        return inverse_matrix(request.pair, request.row_labels, request.column_labels)
+    except OperationDomainValidationError:
+        raise
+    except (TypeError, ValueError, IndexError) as exc:
+        raise OperationDomainValidationError(
+            location=("pair",),
+            code="algebraic_combinatorics.rsk_inverse",
+            message="incompatible matrix RSK pair",
+        ) from exc
+
+
+def _normalize_run(request: BiwordNormalizeRequest) -> BiwordNormalizeResult:
+    try:
+        return normalize_biword(request)
+    except OperationDomainValidationError:
+        raise
+    except (TypeError, ValueError, IndexError) as exc:
+        raise OperationDomainValidationError(
+            location=("biword",),
+            code="algebraic_combinatorics.biword_invalid",
+            message=str(exc),
+        ) from exc
+
+
+def _rsk_biword_run(request: BiwordRSKRequest) -> BiwordRSKPair:
+    try:
+        return rsk_biword(request.biword)
+    except OperationDomainValidationError:
+        raise
+    except (TypeError, ValueError, IndexError) as exc:
+        raise OperationDomainValidationError(
+            location=("biword",),
+            code="algebraic_combinatorics.biword_invalid",
+            message=str(exc),
+        ) from exc
+
+
+def _matrix_rsk_run(request: MatrixRSKRequest) -> BiwordRSKPair:
+    try:
+        return matrix_biword(request.matrix)
+    except OperationDomainValidationError:
+        raise
+    except (TypeError, ValueError, IndexError) as exc:
+        raise OperationDomainValidationError(
+            location=("matrix",),
+            code="algebraic_combinatorics.matrix_invalid",
+            message=str(exc),
+        ) from exc
+
+
+def _greene_run(request: GreeneRequest) -> GreeneResult:
+    try:
+        return greene(request.word, request.k)
+    except OperationDomainValidationError:
+        raise
+    except (TypeError, ValueError, IndexError) as exc:
+        raise OperationDomainValidationError(
+            location=("word",),
+            code="algebraic_combinatorics.word_invalid",
+            message=str(exc),
+        ) from exc
+
+
+TOOLS = TOOLS + (  # noqa: RUF005
+    MathTool(
+        operation_id="tableau.biword.normalize.compute",
+        title="Normalize a labelled biword",
+        description="Sort a finite biword by its explicit top and bottom alphabet order and return the exact stable source permutation.",
+        request_type=BiwordNormalizeRequest,
+        result_type=BiwordNormalizeResult,
+        run=_normalize_run,
+        tags=("combinatorics", "biword", "sorting", "exact"),
+        examples=(
+            OperationExample(
+                name="normalize_pairs",
+                description="Sort pairs (b,a),(a,b) by the explicit top then bottom alphabet order.",
+                input={
+                    "top_alphabet": ["a", "b"],
+                    "bottom_alphabet": ["a", "b"],
+                    "top": ["b", "a"],
+                    "bottom": ["a", "b"],
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="tableau.rsk.biword.compute",
+        title="Compute row-insertion RSK for a canonical biword",
+        description="Insert the bottom row of a lexicographically sorted labelled biword and record the top row, returning semistandard tableaux with exact alphabets, shape, and content context.",
+        request_type=BiwordRSKRequest,
+        result_type=BiwordRSKPair,
+        run=_rsk_biword_run,
+        tags=("combinatorics", "rsk", "biword", "exact"),
+        examples=(
+            OperationExample(
+                name="biword_basic",
+                description="Compute RSK of the sorted biword (a,b),(b,a); pairs must be sorted by top then bottom.",
+                input={
+                    "biword": {
+                        "top_alphabet": ["a", "b"],
+                        "bottom_alphabet": ["a", "b"],
+                        "top": ["a", "b"],
+                        "bottom": ["b", "a"],
+                    }
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="tableau.rsk.matrix.compute",
+        title="Compute matrix RSK",
+        description="Expand a labelled nonnegative integer matrix into its canonical row/column biword and compute exact row-insertion RSK.",
+        request_type=MatrixRSKRequest,
+        result_type=BiwordRSKPair,
+        run=_matrix_rsk_run,
+        tags=("combinatorics", "rsk", "matrix", "exact"),
+        examples=(
+            OperationExample(
+                name="matrix_two_by_two",
+                description="Compute matrix RSK for [[1,0],[0,1]]; entries are nonnegative on the labelled axes.",
+                input={
+                    "matrix": {
+                        "row_labels": ["a", "b"],
+                        "column_labels": ["x", "y"],
+                        "entries": [["1", "0"], ["0", "1"]],
+                    }
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="tableau.rsk.inverse_biword.compute",
+        title="Invert biword RSK",
+        description="Reconstruct the unique canonical sorted biword from a compatible semistandard RSK pair.",
+        request_type=InverseBiwordRSKRequest,
+        result_type=Biword,
+        run=_inverse_biword_run,
+        tags=("combinatorics", "rsk", "inverse", "biword", "exact"),
+        examples=(
+            OperationExample(
+                name="inverse_empty_biword",
+                description="Invert the empty biword RSK pair; both alphabets remain explicit.",
+                input={
+                    "pair": {
+                        "top_alphabet": [],
+                        "bottom_alphabet": [],
+                        "insertion_tableau": {"rows": []},
+                        "recording_tableau": {"rows": []},
+                        "shape": {"parts": []},
+                        "source_kind": "BIWORD",
+                    }
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="tableau.rsk.inverse_matrix.compute",
+        title="Invert matrix RSK",
+        description="Reconstruct the unique labelled nonnegative matrix from a compatible matrix-RSK pair and explicit row and column axes.",
+        request_type=InverseMatrixRSKRequest,
+        result_type=NonnegativeIntegerMatrix,
+        run=_inverse_matrix_run,
+        tags=("combinatorics", "rsk", "inverse", "matrix", "exact"),
+        examples=(
+            OperationExample(
+                name="inverse_identity_matrix",
+                description="Invert matrix RSK on the empty pair over explicit empty axes.",
+                input={
+                    "pair": {
+                        "top_alphabet": [],
+                        "bottom_alphabet": [],
+                        "insertion_tableau": {"rows": []},
+                        "recording_tableau": {"rows": []},
+                        "shape": {"parts": []},
+                        "source_kind": "MATRIX",
+                    },
+                    "row_labels": [],
+                    "column_labels": [],
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="word.greene_invariants.compute",
+        title="Compute Greene shape invariants",
+        description="Return exact increasing and decreasing Greene totals from row-insertion RSK shape for a bounded ordered word.",
+        request_type=GreeneRequest,
+        result_type=GreeneResult,
+        run=_greene_run,
+        tags=("combinatorics", "greene", "rsk", "exact"),
+        examples=(
+            OperationExample(
+                name="greene_word",
+                description="Compute Greene invariants of (c,a,b) over a<b<c; the word alphabet supplies the order.",
+                input={
+                    "word": {"alphabet": ["a", "b", "c"], "letters": ["c", "a", "b"]},
+                    "k": 2,
+                },
+            ),
+        ),
+    ),
+)
 
 __all__ = ["TOOLS"]

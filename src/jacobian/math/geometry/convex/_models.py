@@ -92,6 +92,14 @@ class ConvexHPolytope(StrictModel):
                 "inequality_dimension",
                 "every inequality normal must use the polytope coordinate axis",
             )
+        if any(
+            all(component.num == 0 for component in inequality.normal)
+            for inequality in self.inequalities
+        ):
+            raise _validation_error(
+                "zero_normal",
+                "inequality normals must be nonzero",
+            )
         return self
 
 
@@ -152,6 +160,138 @@ class SlackRow(StrictModel):
     active: bool
 
 
+class ActiveFacetProfileRequest(StrictModel):
+    polytope: ConvexHPolytope
+    point: RationalConvexPoint
+
+
+class ActiveFacetProfileResult(StrictModel):
+    polytope: ConvexHPolytope
+    point: RationalConvexPoint
+    slacks: tuple[SlackRow, ...] = Field(
+        min_length=1, max_length=MAX_CONVEX_INEQUALITIES
+    )
+    active_inequality_ids: tuple[str, ...]
+    active_normal_rank: int = Field(ge=1, le=MAX_CONVEX_DIMENSION)
+
+
+class CoveragePoint(StrictModel):
+    point_id: str = Field(min_length=1, max_length=MAX_CONVEX_LABEL_LENGTH)
+    point: RationalConvexPoint
+
+
+class CoverageDirection(StrictModel):
+    direction_id: str = Field(min_length=1, max_length=MAX_CONVEX_LABEL_LENGTH)
+    direction: RationalConvexDirection
+
+
+class DirectionCoverageRequest(StrictModel):
+    polytope: ConvexHPolytope
+    points: tuple[CoveragePoint, ...] = Field(
+        min_length=1, max_length=MAX_CONVEX_INEQUALITIES
+    )
+    directions: tuple[CoverageDirection, ...] = Field(
+        min_length=1, max_length=MAX_CONVEX_INEQUALITIES
+    )
+
+
+class DirectionCoverageCell(StrictModel):
+    point_id: str
+    direction_id: str
+    aggregate: AggregateMotion
+
+
+class DirectionCoverageResult(StrictModel):
+    """Complete coverage matrix retaining its source point/direction families."""
+
+    polytope: ConvexHPolytope
+    points: tuple[CoveragePoint, ...]
+    directions: tuple[CoverageDirection, ...]
+    point_ids: tuple[str, ...]
+    direction_ids: tuple[str, ...]
+    cells: tuple[DirectionCoverageCell, ...]
+    strictly_illuminated_point_ids: tuple[str, ...]
+    uncovered_point_ids: tuple[str, ...]
+    witness_direction_by_point: tuple[tuple[str, str], ...]
+
+    @model_validator(mode="after")
+    def require_complete_source_bound_matrix(self) -> Self:
+        if self.point_ids != tuple(
+            sorted(set(self.point_ids))
+        ) or self.direction_ids != tuple(sorted(set(self.direction_ids))):
+            raise _validation_error(
+                "coverage_id_order", "point and direction IDs must be unique and sorted"
+            )
+        if any(row.point.space.axes != self.polytope.space.axes for row in self.points):
+            raise _validation_error(
+                "coverage_point_space", "retained points must use the polytope space"
+            )
+        if any(
+            row.direction.space.axes != self.polytope.space.axes
+            for row in self.directions
+        ):
+            raise _validation_error(
+                "coverage_direction_space",
+                "retained directions must use the polytope space",
+            )
+        if tuple(row.point_id for row in self.points) != self.point_ids:
+            raise _validation_error(
+                "coverage_point_binding",
+                "point IDs must bind the retained point family",
+            )
+        if tuple(row.direction_id for row in self.directions) != self.direction_ids:
+            raise _validation_error(
+                "coverage_direction_binding",
+                "direction IDs must bind the retained direction family",
+            )
+        expected = tuple(
+            (point_id, direction_id)
+            for point_id in self.point_ids
+            for direction_id in self.direction_ids
+        )
+        actual = tuple((cell.point_id, cell.direction_id) for cell in self.cells)
+        if actual != expected:
+            raise _validation_error(
+                "coverage_matrix_complete",
+                "coverage cells must contain the complete ordered Cartesian matrix",
+            )
+        strict = set(self.strictly_illuminated_point_ids)
+        uncovered = set(self.uncovered_point_ids)
+        if len(strict) != len(self.strictly_illuminated_point_ids) or len(
+            uncovered
+        ) != len(self.uncovered_point_ids):
+            raise _validation_error(
+                "coverage_partition", "coverage point classifications must be unique"
+            )
+        if strict & uncovered or strict | uncovered != set(self.point_ids):
+            raise _validation_error(
+                "coverage_partition",
+                "strict and uncovered point IDs must partition points",
+            )
+        if len(self.witness_direction_by_point) != len(
+            set(self.witness_direction_by_point)
+        ):
+            raise _validation_error(
+                "coverage_witness", "coverage witnesses must be unique"
+            )
+        for point_id, direction_id in self.witness_direction_by_point:
+            if point_id not in strict or direction_id not in self.direction_ids:
+                raise _validation_error(
+                    "coverage_witness",
+                    "coverage witnesses must name strict points and directions",
+                )
+            if not any(
+                cell.point_id == point_id
+                and cell.direction_id == direction_id
+                and cell.aggregate == "ILLUMINATES_STRICTLY"
+                for cell in self.cells
+            ):
+                raise _validation_error(
+                    "coverage_witness", "coverage witnesses must identify strict cells"
+                )
+        return self
+
+
 class DirectionLocalMotionRequest(StrictModel):
     """Decide strict local motion of a boundary point along a direction.
 
@@ -184,8 +324,11 @@ class DirectionLocalMotionRequest(StrictModel):
 
 
 class DirectionLocalMotionResult(StrictModel):
-    """Complete exact slack ledger and per-active-inequality motion profile."""
+    """Complete motion profile bound to its polytope, point, and direction."""
 
+    polytope: ConvexHPolytope
+    point: RationalConvexPoint
+    direction: RationalConvexDirection
     point_state: PointState
     slacks: tuple[SlackRow, ...] = Field(
         min_length=1, max_length=MAX_CONVEX_INEQUALITIES
@@ -249,6 +392,9 @@ class DirectionLocalMotionResult(StrictModel):
     def _from_kernel(
         cls,
         *,
+        polytope: ConvexHPolytope,
+        point: RationalConvexPoint,
+        direction: RationalConvexDirection,
         slacks: tuple[SlackRow, ...],
         motions: tuple[ActiveMotionRow, ...],
         aggregate: AggregateMotion,
@@ -256,6 +402,9 @@ class DirectionLocalMotionResult(StrictModel):
         """Build a trusted kernel outcome without replaying its ledger."""
 
         return cls.model_construct(
+            polytope=polytope,
+            point=point,
+            direction=direction,
             point_state="BOUNDARY",
             slacks=slacks,
             motions=motions,
@@ -268,11 +417,18 @@ __all__ = [
     "MAX_CONVEX_DIMENSION",
     "MAX_CONVEX_INEQUALITIES",
     "MAX_CONVEX_LABEL_LENGTH",
+    "ActiveFacetProfileRequest",
+    "ActiveFacetProfileResult",
     "ActiveMotionRow",
     "AggregateMotion",
     "ConvexHPolytope",
     "ConvexInequality",
     "ConvexSpace",
+    "CoverageDirection",
+    "CoveragePoint",
+    "DirectionCoverageCell",
+    "DirectionCoverageRequest",
+    "DirectionCoverageResult",
     "DirectionLocalMotionRequest",
     "DirectionLocalMotionResult",
     "MotionKind",

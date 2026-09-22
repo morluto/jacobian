@@ -9,6 +9,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
+from jacobian.math.groups._models import GroupConjugacyClassesResult, PermutationGroup
 from jacobian.math.groups.characters._cyclotomic import euler_phi
 
 MAX_CLASS_COUNT = 128
@@ -16,6 +17,12 @@ MAX_GROUP_ORDER = 1_000_000
 MAX_CYCLOTOMIC_ORDER = 60
 MAX_VALUE_COEFFICIENT_DIGITS = 512
 MAX_INNER_PRODUCT_WORK = 250_000
+# Complete tables replay every ordered pair of rows.  This separate envelope
+# is deliberately much smaller than the single-inner-product envelope: a
+# table must admit construction, all defining orthogonality products, and its
+# retained exact cells as one request.
+MAX_CHARACTER_TABLE_WORK = 1_000_000
+MAX_CHARACTER_TABLE_CELLS = 100_000
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -54,6 +61,14 @@ class CyclotomicValue(StrictModel):
         return cls.model_construct(order=order, coefficients=coefficients)
 
 
+class ConjugacyClassPartition(GroupConjugacyClassesResult):
+    """A canonical conjugacy partition retaining its concrete group parent."""
+
+    @classmethod
+    def _from_group_result(cls, value: GroupConjugacyClassesResult) -> Self:
+        return cls.model_construct(source=value.source, classes=value.classes)
+
+
 class ClassAxis(StrictModel):
     """The shared conjugacy-class axis of one finite group.
 
@@ -65,6 +80,11 @@ class ClassAxis(StrictModel):
     class_sizes: tuple[int, ...] = Field(min_length=1, max_length=MAX_CLASS_COUNT)
     group_order: int = Field(ge=1, le=MAX_GROUP_ORDER)
     cyclotomic_order: int = Field(ge=1, le=MAX_CYCLOTOMIC_ORDER)
+    # Legacy synthetic axes remain useful for class-function arithmetic.  A
+    # concrete group-bound axis carries both fields, making equal-sized axes
+    # from different groups impossible to confuse.
+    group: PermutationGroup | None = None
+    class_representatives: tuple[tuple[int, ...], ...] | None = None
 
     @model_validator(mode="after")
     def require_complete_partition(self) -> Self:
@@ -78,16 +98,39 @@ class ClassAxis(StrictModel):
                 "group_order",
                 "group_order must equal the sum of the class sizes",
             )
+        if (self.group is None) != (self.class_representatives is None):
+            raise _validation_error(
+                "group_parent",
+                "a concrete class axis must carry both its group and representatives",
+            )
+        if self.group is not None:
+            representatives = self.class_representatives
+            if representatives is None:
+                raise _validation_error(
+                    "group_parent",
+                    "a concrete class axis requires class representatives",
+                )
+            if len(representatives) != len(self.class_sizes):
+                raise _validation_error(
+                    "representative_count", "one representative is required per class"
+                )
         return self
 
     @classmethod
     def _from_kernel(
-        cls, *, class_sizes: tuple[int, ...], cyclotomic_order: int
+        cls,
+        *,
+        class_sizes: tuple[int, ...],
+        cyclotomic_order: int,
+        group: PermutationGroup | None = None,
+        class_representatives: tuple[tuple[int, ...], ...] | None = None,
     ) -> ClassAxis:
         return cls.model_construct(
             class_sizes=class_sizes,
             group_order=sum(class_sizes),
             cyclotomic_order=cyclotomic_order,
+            group=group,
+            class_representatives=class_representatives,
         )
 
 
@@ -204,16 +247,121 @@ class ClassFunctionInnerProductResult(StrictModel):
         )
 
 
+class CharacterRow(StrictModel):
+    """One irreducible character row on a retained class partition."""
+
+    label: str = Field(min_length=1, max_length=64)
+    degree: int = Field(ge=1, le=MAX_GROUP_ORDER)
+    values: tuple[CyclotomicValue, ...] = Field(
+        min_length=1, max_length=MAX_CLASS_COUNT
+    )
+
+
+class CharacterTableRequest(StrictModel):
+    """Construct a complete table for a supported concrete finite group."""
+
+    partition: GroupConjugacyClassesResult = Field(
+        description=(
+            "Complete conjugacy-class partition returned by "
+            "group.conjugacy_classes.compute; its source group is retained. "
+            "The complete-table envelope admits at most "
+            f"{MAX_CHARACTER_TABLE_WORK:,} orthogonality-work units and "
+            f"{MAX_CHARACTER_TABLE_CELLS:,} exact table cells."
+        )
+    )
+
+
+class CharacterTableResult(StrictModel):
+    """Complete irreducible character table bound to one group partition."""
+
+    partition: ConjugacyClassPartition
+    # The axis is retained independently of the source partition so every
+    # exact cell has an explicit class ordering and ambient cyclotomic field.
+    axis: ClassAxis
+    rows: tuple[CharacterRow, ...] = Field(min_length=1, max_length=MAX_CLASS_COUNT)
+    degree_square_sum: int = Field(ge=1)
+
+    @model_validator(mode="after")
+    def require_table_shape(self) -> Self:
+        classes = self.partition.classes
+        if (
+            self.axis.class_sizes != tuple(len(cls) for cls in classes)
+            or self.axis.group_order != sum(len(cls) for cls in classes)
+            or self.axis.group != self.partition.source
+            or self.axis.class_representatives != tuple(cls[0] for cls in classes)
+        ):
+            raise _validation_error(
+                "table_axis", "character-table axis must bind to the retained partition"
+            )
+        if len(self.rows) != len(classes):
+            raise _validation_error(
+                "table_row_count", "a complete character table needs one row per class"
+            )
+        if len({row.label for row in self.rows}) != len(self.rows):
+            raise _validation_error(
+                "table_row_labels", "character-table row labels must be unique"
+            )
+        if any(len(row.values) != len(classes) for row in self.rows):
+            raise _validation_error(
+                "table_shape", "every character row must cover every class"
+            )
+        if any(
+            not isinstance(row, CharacterRow)
+            or not isinstance(row.values, tuple)
+            or any(
+                not isinstance(value, CyclotomicValue)
+                or value.order != self.axis.cyclotomic_order
+                for value in row.values
+            )
+            for row in self.rows
+        ):
+            raise _validation_error(
+                "table_cyclotomic_axis",
+                "every character-table value must use the declared cyclotomic order",
+            )
+        if self.degree_square_sum != sum(row.degree * row.degree for row in self.rows):
+            raise _validation_error(
+                "degree_square_sum", "degree squares must sum to the row degrees"
+            )
+        if self.degree_square_sum != sum(len(cls) for cls in classes):
+            raise _validation_error(
+                "degree_square_sum",
+                "degree squares must sum to the concrete group order",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        partition: ConjugacyClassPartition,
+        rows: tuple[CharacterRow, ...],
+        axis: ClassAxis,
+    ) -> Self:
+        return cls.model_construct(
+            partition=partition,
+            axis=axis,
+            rows=rows,
+            degree_square_sum=sum(row.degree * row.degree for row in rows),
+        )
+
+
 __all__ = [
+    "MAX_CHARACTER_TABLE_CELLS",
+    "MAX_CHARACTER_TABLE_WORK",
     "MAX_CLASS_COUNT",
     "MAX_CYCLOTOMIC_ORDER",
     "MAX_GROUP_ORDER",
     "MAX_INNER_PRODUCT_WORK",
     "MAX_VALUE_COEFFICIENT_DIGITS",
+    "CharacterRow",
+    "CharacterTableRequest",
+    "CharacterTableResult",
     "ClassAxis",
     "ClassContribution",
     "ClassFunctionInnerProductRequest",
     "ClassFunctionInnerProductResult",
+    "ConjugacyClassPartition",
     "CyclotomicValue",
     "FiniteClassFunction",
 ]

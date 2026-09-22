@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import deque
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, cast
 
 from jacobian._execution import BackendFailureReason, OperationBackendError
 from jacobian.catalog.models import (
@@ -26,6 +26,7 @@ from jacobian.math.logic.automata.transducers.values import (
     SubseqFinalOutput,
     SubseqTransition,
     SubsequentialTransducer,
+    alphabet_parent_mismatch,
 )
 
 
@@ -76,6 +77,50 @@ def _reject(code: str, message: str, *location: str) -> None:
     )
 
 
+def _admit_transducer(
+    transducer: object, *, field: str = "transducer"
+) -> SubsequentialTransducer:
+    if not isinstance(transducer, SubsequentialTransducer):
+        _reject(
+            "transducer_type",
+            "transducer must be a SubsequentialTransducer value",
+            field,
+        )
+    value = cast(SubsequentialTransducer, transducer)
+    try:
+        return SubsequentialTransducer.model_validate(value.model_dump(), strict=True)
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=(field,),
+            code="finite_state_transducer.carrier_shape",
+            message="transducer must satisfy its complete canonical carrier shape",
+        ) from exc
+
+
+def _admit_rational_transducer(transducer: object) -> RationalTransducer:
+    if not isinstance(transducer, RationalTransducer):
+        _reject(
+            "rational_transducer_type",
+            "transducer must be a RationalTransducer value",
+            "transducer",
+        )
+    value = cast(RationalTransducer, transducer)
+    try:
+        return RationalTransducer.model_validate(value.model_dump(), strict=True)
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("transducer",),
+            code="finite_state_transducer.carrier_shape",
+            message="transducer must satisfy its complete canonical carrier shape",
+        ) from exc
+
+
+def _admit_word(word: object, *, field: str) -> tuple[int, ...]:
+    if type(word) is not tuple or any(type(symbol) is not int for symbol in word):
+        _reject("word_shape", "word must be a tuple of exact integers", field)
+    return cast(tuple[int, ...], word)
+
+
 def _transition_map(
     transducer: SubsequentialTransducer,
 ) -> dict[tuple[int, int], tuple[int, tuple[int, ...]]]:
@@ -108,6 +153,8 @@ def run_subsequential(
     ``status`` is one of ``"OUTPUT"``, ``"UNDEFINED_TRANSITION"``, or
     ``"NONFINAL_DOMAIN_STATE"``.
     """
+    transducer = _admit_transducer(transducer)
+    word = _admit_word(word, field="word")
     if any(not 0 <= symbol < transducer.input_alphabet_size for symbol in word):
         _reject(
             "word_symbol_out_of_range",
@@ -190,6 +237,7 @@ def reachable_states(
 ) -> set[int]:
     """Return states reachable from the initial state by defined transitions."""
 
+    transducer = _admit_transducer(transducer)
     visited: set[int] = set()
     queue: deque[int] = deque([transducer.initial_state])
     visited.add(transducer.initial_state)
@@ -210,6 +258,7 @@ def coaccessible_states(
 ) -> set[int]:
     """Return states from which some final-output state is reachable."""
 
+    transducer = _admit_transducer(transducer)
     finals = {fo.state for fo in transducer.final_outputs}
     reverse_adj: dict[int, list[int]] = {}
     for tr in transducer.transitions:
@@ -226,13 +275,8 @@ def coaccessible_states(
     return visited
 
 
-def _admit_trim(transducer: SubsequentialTransducer) -> None:
-    if not isinstance(transducer, SubsequentialTransducer):
-        _reject(
-            "transducer_type",
-            "transducer must be a SubsequentialTransducer value",
-            "transducer",
-        )
+def _admit_trim(transducer: object) -> SubsequentialTransducer:
+    return _admit_transducer(transducer)
 
 
 def trim_subsequential(
@@ -242,7 +286,7 @@ def trim_subsequential(
 
     Returns the trimmed transducer and an old-state -> new-state map.
     """
-    _admit_trim(transducer)
+    transducer = _admit_trim(transducer)
     reachable = reachable_states(transducer)
     coaccessible = coaccessible_states(transducer)
     keep = reachable & coaccessible
@@ -251,6 +295,10 @@ def trim_subsequential(
             SubsequentialTransducer(
                 input_alphabet_size=transducer.input_alphabet_size,
                 output_alphabet_size=transducer.output_alphabet_size,
+                input_alphabet_id=transducer.input_alphabet_id,
+                output_alphabet_id=transducer.output_alphabet_id,
+                input_alphabet=transducer.input_alphabet,
+                output_alphabet=transducer.output_alphabet,
                 state_count=1,
                 initial_state=0,
                 transitions=(),
@@ -281,6 +329,10 @@ def trim_subsequential(
         SubsequentialTransducer(
             input_alphabet_size=transducer.input_alphabet_size,
             output_alphabet_size=transducer.output_alphabet_size,
+            input_alphabet_id=transducer.input_alphabet_id,
+            output_alphabet_id=transducer.output_alphabet_id,
+            input_alphabet=transducer.input_alphabet,
+            output_alphabet=transducer.output_alphabet,
             state_count=len(keep),
             initial_state=old_to_new[transducer.initial_state],
             transitions=new_transitions,
@@ -322,6 +374,8 @@ def compose_subsequential(
     symbols and 512 intermediate symbols. Unreachable Cartesian pairs need
     neither storage nor transition work.
     """
+    first = _admit_transducer(first, field="first")
+    second = _admit_transducer(second, field="second")
     _validate_composition_bounds(first, second)
     t_map = {
         (tr.source, tr.input_symbol): (tr.target, tr.output) for tr in first.transitions
@@ -377,6 +431,10 @@ def compose_subsequential(
     return SubsequentialTransducer(
         input_alphabet_size=first.input_alphabet_size,
         output_alphabet_size=second.output_alphabet_size,
+        input_alphabet_id=first.input_alphabet_id,
+        output_alphabet_id=second.output_alphabet_id,
+        input_alphabet=first.input_alphabet,
+        output_alphabet=second.output_alphabet,
         state_count=len(state_pairs),
         initial_state=0,
         transitions=tuple(new_transitions),
@@ -412,6 +470,14 @@ def _composite_finals(
 def _validate_composition_bounds(
     first: SubsequentialTransducer, second: SubsequentialTransducer
 ) -> None:
+    mismatch = alphabet_parent_mismatch(
+        first.output_alphabet_id,
+        first.output_alphabet,
+        second.input_alphabet_id,
+        second.input_alphabet,
+    )
+    if mismatch is not None:
+        _reject(mismatch[0], mismatch[1], "first", "second")
     if first.output_alphabet_size != second.input_alphabet_size:
         _reject(
             "composition_alphabet_mismatch",
@@ -455,9 +521,14 @@ def invert_rational(
 ) -> RationalTransducer:
     """Invert a rational transducer by swapping input/output labels and alphabets."""
 
+    transducer = _admit_rational_transducer(transducer)
     return RationalTransducer(
         input_alphabet_size=transducer.output_alphabet_size,
         output_alphabet_size=transducer.input_alphabet_size,
+        input_alphabet_id=transducer.output_alphabet_id,
+        output_alphabet_id=transducer.input_alphabet_id,
+        input_alphabet=transducer.output_alphabet,
+        output_alphabet=transducer.input_alphabet,
         state_count=transducer.state_count,
         initial_states=transducer.initial_states,
         accepting_states=transducer.accepting_states,
@@ -488,6 +559,14 @@ def replay_rational_path(
 
     Returns ``(status, input_word, output_word, state_trace, error)``.
     """
+    transducer = _admit_rational_transducer(transducer)
+    if type(initial_state) is not int:
+        _reject(
+            "initial_state_type",
+            "initial_state must be an exact integer",
+            "initial_state",
+        )
+    edge_path = _admit_word(edge_path, field="edge_path")
     if initial_state not in transducer.initial_states:
         _reject(
             "initial_state_not_declared",
@@ -632,14 +711,9 @@ def _minimize_sample_word_count(alphabet_size: int, max_length: int) -> int:
 
 
 def _admit_minimize(
-    transducer: SubsequentialTransducer, sample_max_length: int
-) -> None:
-    if not isinstance(transducer, SubsequentialTransducer):
-        _reject(
-            "transducer_type",
-            "transducer must be a SubsequentialTransducer value",
-            "transducer",
-        )
+    transducer: object, sample_max_length: int
+) -> SubsequentialTransducer:
+    transducer = _admit_transducer(transducer)
     if type(sample_max_length) is not int or sample_max_length < 0:
         _reject(
             "sample_length",
@@ -658,6 +732,7 @@ def _admit_minimize(
                 "shrink sample_max_length"
             ),
         )
+    return transducer
 
 
 def _refine_subsequential_partition(
@@ -1061,7 +1136,7 @@ def minimize_subsequential(
     for this value model.
     """
 
-    _admit_minimize(transducer, sample_max_length)
+    transducer = _admit_minimize(transducer, sample_max_length)
     trimmed, trim_map = trim_subsequential(transducer)
     trim_new_to_old = {new: old for old, new in trim_map.items()}
     transitions = _transition_map(trimmed)
@@ -1138,6 +1213,10 @@ def minimize_subsequential(
     minimized = SubsequentialTransducer(
         input_alphabet_size=trimmed.input_alphabet_size,
         output_alphabet_size=trimmed.output_alphabet_size,
+        input_alphabet_id=trimmed.input_alphabet_id,
+        output_alphabet_id=trimmed.output_alphabet_id,
+        input_alphabet=trimmed.input_alphabet,
+        output_alphabet=trimmed.output_alphabet,
         state_count=len(ordered),
         initial_state=state_to_block[trim_map[transducer.initial_state]],
         transitions=minimized_transitions,

@@ -14,9 +14,23 @@ from jacobian.math.number_theory.elliptic_curves._models import (
     ScalarMultiplicationResult,
 )
 from jacobian.math.number_theory.elliptic_curves.finite_field import (
+    FiniteFieldCardinalityResult,
+    FiniteFieldCurveRequest,
     FiniteFieldDiscriminantRequest,
     FiniteFieldDiscriminantResult,
+    FiniteFieldPointAdditionRequest,
+    FiniteFieldPointCheckResult,
+    FiniteFieldPointRequest,
+    FiniteFieldPointResult,
+    FiniteFieldPointSet,
+    FiniteFieldScalarRequest,
+    finite_field_cardinality,
     finite_field_discriminant,
+    finite_field_point_add,
+    finite_field_point_check,
+    finite_field_point_negate,
+    finite_field_point_scalar,
+    finite_field_points,
 )
 from jacobian.math.number_theory.elliptic_curves.operations import (
     add_points,
@@ -140,6 +154,16 @@ def _finite_field_element(coordinate: int) -> dict[str, Any]:
     }
 
 
+def _finite_curve() -> dict[str, Any]:
+    return {
+        "field": _F5_PRESENTATION,
+        "coefficient_a": _finite_field_element(1),
+        "coefficient_b": _finite_field_element(1),
+    }
+
+
+_FINITE_INFINITY = {"curve": _finite_curve(), "at_infinity": True, "x": None, "y": None}
+
 _FINITE_FIELD_DISCRIMINANT_EXAMPLE: dict[str, Any] = {
     "field": _F5_PRESENTATION,
     "coefficient_a": _finite_field_element(1),
@@ -148,6 +172,114 @@ _FINITE_FIELD_DISCRIMINANT_EXAMPLE: dict[str, Any] = {
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
+    MathTool(
+        operation_id="elliptic_curve.finite_field.point.check",
+        title="Check a finite-field elliptic-curve point",
+        description="Check whether an infinity or affine point lies on its exact nonsingular short-Weierstrass curve; a well-formed off-curve point is a mathematical negative.",
+        request_type=FiniteFieldPointRequest,
+        result_type=FiniteFieldPointCheckResult,
+        run=lambda request: finite_field_point_check(request.curve, request.point),
+        tags=("elliptic-curve", "finite-field", "point", "exact"),
+        examples=(
+            OperationExample(
+                name="check_infinity",
+                description="Check the identity point; it must retain the exact nonsingular curve parent.",
+                input={"curve": _finite_curve(), "point": _FINITE_INFINITY},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="elliptic_curve.finite_field.point.negate.compute",
+        title="Negate a finite-field elliptic-curve point",
+        description="Negate a projective point on a nonsingular short-Weierstrass curve over an exact finite field; the point and curve must share one field presentation.",
+        request_type=FiniteFieldPointRequest,
+        result_type=FiniteFieldPointResult,
+        run=lambda request: finite_field_point_negate(request.curve, request.point),
+        tags=("elliptic-curve", "finite-field", "point", "exact"),
+        examples=(
+            OperationExample(
+                name="negate_infinity",
+                description="Negate the identity point; the curve must be nonsingular over an odd finite field.",
+                input={"curve": _finite_curve(), "point": _FINITE_INFINITY},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="elliptic_curve.finite_field.point.add.compute",
+        title="Add finite-field elliptic-curve points",
+        description="Compute the exact group sum of two projective points on one nonsingular short-Weierstrass curve; operands must retain the identical curve parent.",
+        request_type=FiniteFieldPointAdditionRequest,
+        result_type=FiniteFieldPointResult,
+        run=lambda request: finite_field_point_add(
+            request.curve, request.first, request.second
+        ),
+        tags=("elliptic-curve", "finite-field", "group-law", "exact"),
+        examples=(
+            OperationExample(
+                name="identity_addition",
+                description="Add the identity to itself; both points must be bound to the same nonsingular curve.",
+                input={
+                    "curve": _finite_curve(),
+                    "first": _FINITE_INFINITY,
+                    "second": _FINITE_INFINITY,
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="elliptic_curve.finite_field.point.scalar_multiply.compute",
+        title="Multiply a finite-field elliptic-curve point",
+        description="Compute an exact signed scalar multiple by double-and-add; the point must be on the supplied nonsingular curve.",
+        request_type=FiniteFieldScalarRequest,
+        result_type=FiniteFieldPointResult,
+        run=lambda request: finite_field_point_scalar(
+            request.curve, request.point, request.scalar
+        ),
+        tags=("elliptic-curve", "finite-field", "scalar", "exact"),
+        examples=(
+            OperationExample(
+                name="zero_times_identity",
+                description="Compute zero times the identity; the point must use the curve's exact field presentation.",
+                input={
+                    "curve": _finite_curve(),
+                    "point": _FINITE_INFINITY,
+                    "scalar": 0,
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="elliptic_curve.finite_field.points.enumerate",
+        title="Enumerate finite-field elliptic-curve points",
+        description="Return every projective point on a nonsingular short-Weierstrass curve by exhaustive exact field enumeration; the field order must fit the bounded enumeration envelope.",
+        request_type=FiniteFieldCurveRequest,
+        result_type=FiniteFieldPointSet,
+        run=lambda request: finite_field_points(request.curve),
+        tags=("elliptic-curve", "finite-field", "enumeration", "exact"),
+        examples=(
+            OperationExample(
+                name="enumerate_five_field",
+                description="Enumerate all points over F5; the curve must be nonsingular and the field order must fit the exhaustive bound.",
+                input={"curve": _finite_curve()},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="elliptic_curve.finite_field.cardinality.exhaustive.compute",
+        title="Count finite-field elliptic-curve points",
+        description="Compute the exact cardinality and Frobenius trace from exhaustive projective point enumeration, retaining the field and curve model.",
+        request_type=FiniteFieldCurveRequest,
+        result_type=FiniteFieldCardinalityResult,
+        run=lambda request: finite_field_cardinality(request.curve),
+        tags=("elliptic-curve", "finite-field", "cardinality", "exact"),
+        examples=(
+            OperationExample(
+                name="count_five_field",
+                description="Count the points over F5; exhaustive enumeration requires a nonsingular curve over a bounded finite field.",
+                input={"curve": _finite_curve()},
+            ),
+        ),
+    ),
     MathTool(
         operation_id="number_theory.elliptic_curve.short_weierstrass.discriminant.compute",
         title="Compute the discriminant of a short Weierstrass elliptic curve",

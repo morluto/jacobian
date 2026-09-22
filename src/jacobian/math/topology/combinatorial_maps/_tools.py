@@ -12,6 +12,10 @@ from jacobian.math.topology.combinatorial_maps._models import (
     EulerCharacteristicResult,
     FacesRequest,
     FacesResult,
+    MinimumGenusRequest,
+    MinimumGenusResult,
+    MultigraphEmbeddingRequest,
+    MultigraphEmbeddingResult,
     OrientableEmbeddingCheckRequest,
     OrientableEmbeddingCheckResult,
     OrientableGenusRequest,
@@ -26,6 +30,7 @@ from jacobian.math.topology.combinatorial_maps._models import (
     VertexFaceIncidenceResult,
 )
 from jacobian.math.topology.combinatorial_maps.operations import (
+    check_multigraph_embedding,
     check_orientable_embedding,
     check_signed_embedding,
     connected_components,
@@ -33,6 +38,7 @@ from jacobian.math.topology.combinatorial_maps.operations import (
     euler_characteristic,
     face_orbits,
     find_rotation_system,
+    minimum_orientable_genus,
     orientable_genus,
     orientation_reverse,
     vertex_face_incidence,
@@ -89,6 +95,16 @@ def compute_rotation_system_find(
     return find_rotation_system(
         request.graph, request.max_genus, request.max_candidates
     )
+
+
+def compute_minimum_genus(request: MinimumGenusRequest) -> MinimumGenusResult:
+    return minimum_orientable_genus(request.graph, request.max_candidates)
+
+
+def compute_multigraph_embedding(
+    request: MultigraphEmbeddingRequest,
+) -> MultigraphEmbeddingResult:
+    return check_multigraph_embedding(request.graph, request.rotations)
 
 
 def compute_signed_embedding_check(
@@ -449,6 +465,75 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                     },
                     "max_genus": 0,
                     "max_candidates": 1000,
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="graph.genus.orientable.exact.compute",
+        title="Compute the exact minimum orientable genus of a graph",
+        description=(
+            "Exhaustively enumerate the finite rotation-system family of a connected "
+            "simple graph and return its minimum orientable cellular genus with a "
+            "source-bound embedding certificate. UNKNOWN means the declared candidate "
+            "budget or connected-surface convention prevented exhaustion."
+        ),
+        request_type=MinimumGenusRequest,
+        result_type=MinimumGenusResult,
+        run=compute_minimum_genus,
+        tags=("graph", "embedding", "minimum-genus", "exact"),
+        discovery_terms=(
+            "minimum orientable genus",
+            "graph genus",
+            "genus minimization",
+        ),
+        examples=(
+            OperationExample(
+                name="k4_exact_genus",
+                description="Compute K4's exact minimum orientable genus; the graph is connected and the candidate budget covers all rotations.",
+                input={
+                    "graph": {
+                        "vertices": ["a", "b", "c", "d"],
+                        "edges": [
+                            ["a", "b"],
+                            ["a", "c"],
+                            ["a", "d"],
+                            ["b", "c"],
+                            ["b", "d"],
+                            ["c", "d"],
+                        ],
+                    },
+                    "max_candidates": 1000,
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="graph.multigraph.embedding.check",
+        title="Check an edge-ID-bound multigraph embedding",
+        description="Check a rotation system on a connected loopless multigraph while retaining edge IDs for every source and dual edge occurrence.",
+        request_type=MultigraphEmbeddingRequest,
+        result_type=MultigraphEmbeddingResult,
+        run=compute_multigraph_embedding,
+        tags=("graph", "multigraph", "embedding", "dual", "exact"),
+        discovery_terms=(
+            "multigraph embedding",
+            "embedded multigraph",
+            "dual multiedges",
+        ),
+        examples=(
+            OperationExample(
+                name="parallel_edge_embedding",
+                description="Check two parallel edge IDs between two vertices; edge identities are retained in the face ledger.",
+                input={
+                    "graph": {
+                        "vertex_count": 2,
+                        "edges": [
+                            {"edge_id": "e0", "left": 0, "right": 1},
+                            {"edge_id": "e1", "left": 0, "right": 1},
+                        ],
+                    },
+                    "rotations": [["e0", "e1"], ["e1", "e0"]],
                 },
             ),
         ),

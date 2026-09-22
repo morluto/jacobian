@@ -2,18 +2,33 @@
 
 from __future__ import annotations
 
+from fractions import Fraction
+from typing import cast
+
 import pytest
 from pydantic import ValidationError
 
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import MathTool, OperationDomainValidationError
 from jacobian.math.topology.links import (
     ArcPairing,
     LinkCrossing,
     OrientedLinkDiagram,
 )
-from jacobian.math.topology.links._models import LinkComponentsRequest
-from jacobian.math.topology.links._tools import TOOLS
-from jacobian.math.topology.links.operations import link_components
+from jacobian.math.topology.links._models import (
+    LinkBracketRequest,
+    LinkBracketResult,
+    LinkComponentsRequest,
+    LinkComponentsResult,
+    LinkingMatrixResult,
+    LinkJonesResult,
+)
+from jacobian.math.topology.links._tools import TOOLS, _run_bracket
+from jacobian.math.topology.links.operations import (
+    link_bracket,
+    link_components,
+    link_jones,
+    link_linking_matrix,
+)
 
 
 def _crossing(
@@ -54,6 +69,184 @@ def _unknot_curl() -> OrientedLinkDiagram:
 
 
 class TestKnownAnswer:
+    def test_mirror_swaps_smoothings_and_inverts_bracket_variable(self) -> None:
+        diagram = _unknot_curl()
+        mirror = diagram.model_copy(
+            update={
+                "crossings": tuple(
+                    crossing.model_copy(
+                        update={
+                            "over_pair": crossing.under_pair,
+                            "under_pair": crossing.over_pair,
+                            "sign": -crossing.sign,
+                        }
+                    )
+                    for crossing in diagram.crossings
+                )
+            }
+        )
+
+        bracket = {
+            term.exponents[0]: term.coefficient.as_fraction()
+            for term in link_bracket(diagram).polynomial.terms
+        }
+        mirrored_bracket = {
+            term.exponents[0]: term.coefficient.as_fraction()
+            for term in link_bracket(mirror).polynomial.terms
+        }
+        jones = {
+            term.exponents[0]: term.coefficient.as_fraction()
+            for term in link_jones(diagram).polynomial.terms
+        }
+        mirrored_jones = {
+            term.exponents[0]: term.coefficient.as_fraction()
+            for term in link_jones(mirror).polynomial.terms
+        }
+
+        assert mirrored_bracket == {
+            -exponent: value for exponent, value in bracket.items()
+        }
+        assert mirrored_jones == {-exponent: value for exponent, value in jones.items()}
+
+    def test_free_loop_multiplies_a_crossing_bracket(self) -> None:
+        crossing = _unknot_curl()
+        without_loop = link_bracket(crossing)
+        with_loop = link_bracket(crossing.model_copy(update={"free_loops": 1}))
+
+        # A disjoint unknot contributes delta = -A^2 - A^-2 to every state.
+        expected = {-1: 1, -5: 1}
+        assert {
+            term.exponents[0]: term.coefficient.as_fraction()
+            for term in with_loop.polynomial.terms
+        } == expected
+        assert {
+            term.exponents[0]: term.coefficient.as_fraction()
+            for term in without_loop.polynomial.terms
+        } == {-3: -1}
+        assert all(
+            state.circle_count == base.circle_count + 1
+            for state, base in zip(with_loop.states, without_loop.states, strict=True)
+        )
+
+    def test_serialized_result_axes_are_source_bound(self) -> None:
+        bracket = link_bracket(_unknot_curl())
+        payload = bracket.model_dump(mode="json")
+        payload["states"][0]["choices"] = []
+        with pytest.raises(ValidationError):
+            LinkBracketResult.model_validate(payload)
+        payload = bracket.model_dump(mode="json")
+        payload["states"][1]["choices"] = payload["states"][0]["choices"]
+        with pytest.raises(ValidationError):
+            LinkBracketResult.model_validate(payload)
+
+        jones = link_jones(_unknot_curl())
+        payload = jones.model_dump(mode="json")
+        payload["diagram"] = {"free_loops": 1}
+        with pytest.raises(ValidationError):
+            LinkJonesResult.model_validate(payload)
+
+        linking = link_linking_matrix(_hopf())
+        payload = linking.model_dump(mode="json")
+        payload["component_ids"] = ["wrong", "axis"]
+        with pytest.raises(ValidationError):
+            LinkingMatrixResult.model_validate(payload)
+
+    def test_result_decoding_does_not_replay_link_operations(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import jacobian.math.topology.links.operations as link_operations
+
+        bracket = link_bracket(_unknot_curl())
+        jones = link_jones(_unknot_curl())
+        linking = link_linking_matrix(_hopf())
+        components = link_components(_hopf())
+
+        def fail(*_args: object, **_kwargs: object) -> None:
+            raise AssertionError("result validation must not replay mathematics")
+
+        monkeypatch.setattr(link_operations, "link_bracket", fail)
+        monkeypatch.setattr(link_operations, "link_jones", fail)
+        monkeypatch.setattr(link_operations, "link_linking_matrix", fail)
+        monkeypatch.setattr(link_operations, "link_components", fail)
+
+        assert (
+            LinkBracketResult.model_validate_json(bracket.model_dump_json()) == bracket
+        )
+        assert LinkJonesResult.model_validate_json(jones.model_dump_json()) == jones
+        assert (
+            LinkingMatrixResult.model_validate_json(linking.model_dump_json())
+            == linking
+        )
+        assert (
+            LinkComponentsResult.model_validate_json(components.model_dump_json())
+            == components
+        )
+
+    def test_serialized_components_keep_structure_without_cycle_replay(self) -> None:
+        result = link_components(_hopf())
+        payload = result.model_dump(mode="json")
+        first = payload["components"][0]["darts"]
+        second = payload["components"][1]["darts"]
+        first[0], second[0] = second[0], first[0]
+        dart_roles = {
+            dart: {
+                "crossing_id": crossing.crossing_id,
+                "role": (
+                    "OVER"
+                    if dart in {crossing.half_edges[i] for i in crossing.over_pair}
+                    else "UNDER"
+                ),
+            }
+            for crossing in result.diagram.crossings
+            for dart in crossing.half_edges
+        }
+        for component in payload["components"]:
+            component["visits"] = sorted(
+                (dart_roles[dart] for dart in component["darts"]),
+                key=lambda visit: visit["crossing_id"],
+            )
+        decoded = LinkComponentsResult.model_validate(payload)
+        assert decoded.component_count == result.component_count
+
+    def test_serialized_components_retain_source_diagram(self) -> None:
+        result = link_components(_hopf())
+        payload = result.model_dump(mode="json")
+        payload["diagram"] = {"free_loops": 1}
+        with pytest.raises(ValidationError):
+            LinkComponentsResult.model_validate(payload)
+
+    def test_free_loop_also_multiplies_writhe_normalized_jones(self) -> None:
+        crossing = _unknot_curl()
+        without_loop = link_jones(crossing)
+        with_loop = link_jones(crossing.model_copy(update={"free_loops": 1}))
+
+        expected: dict[int, Fraction] = {}
+        for term in without_loop.polynomial.terms:
+            coefficient = -term.coefficient.as_fraction()
+            expected[term.exponents[0] + 2] = coefficient
+            expected[term.exponents[0] - 2] = coefficient
+        actual = {
+            term.exponents[0]: term.coefficient.as_fraction()
+            for term in with_loop.polynomial.terms
+        }
+        assert actual == expected
+        assert (
+            with_loop.bracket.polynomial
+            == link_bracket(crossing.model_copy(update={"free_loops": 1})).polynomial
+        )
+
+    def test_disjoint_union_regression_through_catalog_wrapper(self) -> None:
+        diagram = _unknot_curl().model_copy(update={"free_loops": 1})
+        request = LinkBracketRequest.model_validate_json(
+            LinkBracketRequest(diagram=diagram).model_dump_json()
+        )
+        next(
+            tool
+            for tool in TOOLS
+            if tool.operation_id == "link_diagram.bracket.compute"
+        )
+        assert _run_bracket(request) == link_bracket(diagram)
+
     def test_hopf_link_has_two_components(self) -> None:
         result = link_components(_hopf())
         assert result.component_count == 2
@@ -151,7 +344,10 @@ class TestNativeVsCatalogParity:
             for tool in TOOLS
             if tool.operation_id == "link_diagram.components.compute"
         )
-        assert tool.run(request) == link_components(_hopf())
+        component_tool = cast(
+            MathTool[LinkComponentsRequest, LinkComponentsResult], tool
+        )
+        assert component_tool.run(request) == link_components(_hopf())
 
     def test_operation_is_published(self) -> None:
         assert "link_diagram.components.compute" in {

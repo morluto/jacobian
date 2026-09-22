@@ -9,11 +9,14 @@ from __future__ import annotations
 
 from typing import Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, ValidationError, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.finite_fields._admission import require_field
 from jacobian.math.finite_fields.values import (
     FiniteFieldElement,
@@ -303,7 +306,7 @@ def require_discriminant_admission(
     field: FiniteFieldPresentation,
     coefficient_a: FiniteFieldElement,
     coefficient_b: FiniteFieldElement,
-) -> None:
+) -> tuple[FiniteFieldPresentation, FiniteFieldElement, FiniteFieldElement]:
     """Admit the finite-field discriminant domain once per call."""
 
     if not isinstance(field, FiniteFieldPresentation):
@@ -312,6 +315,15 @@ def require_discriminant_admission(
             code="elliptic_curve.finite_field.field_type",
             message="field must be a finite-field presentation value",
         )
+    try:
+        field = FiniteFieldPresentation.model_validate(field.model_dump())
+    except (ValidationError, AttributeError, KeyError, TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("field",),
+            code="elliptic_curve.finite_field.invalid_field",
+            message="field has malformed finite-field presentation data",
+        ) from exc
+    canonical_coefficients: list[FiniteFieldElement] = []
     for label, coefficient in (
         ("coefficient_a", coefficient_a),
         ("coefficient_b", coefficient_b),
@@ -322,12 +334,41 @@ def require_discriminant_admission(
                 code="elliptic_curve.finite_field.coefficient_type",
                 message="curve coefficients must be finite-field element values",
             )
+        try:
+            coefficient = FiniteFieldElement.model_validate(coefficient.model_dump())
+        except (
+            ValidationError,
+            AttributeError,
+            KeyError,
+            TypeError,
+            ValueError,
+        ) as exc:
+            raise OperationDomainValidationError(
+                location=(label,),
+                code="elliptic_curve.finite_field.invalid_coefficient",
+                message="curve coefficient has malformed presentation or coordinates",
+            ) from exc
         if coefficient.presentation != field:
             raise OperationDomainValidationError(
                 location=(label,),
                 code="elliptic_curve.finite_field.coefficient_presentation_mismatch",
                 message="curve coefficients must use the declared field presentation",
             )
+        coordinates = getattr(coefficient, "coordinates", None)
+        if (
+            type(coordinates) is not tuple
+            or len(coordinates) != field.degree
+            or any(
+                type(value) is not int or not 0 <= value < field.characteristic
+                for value in coordinates
+            )
+        ):
+            raise OperationDomainValidationError(
+                location=(label, "coordinates"),
+                code="elliptic_curve.finite_field.coefficient_coordinates",
+                message="coefficient coordinates must be canonical field residues",
+            )
+        canonical_coefficients.append(coefficient)
     if field.characteristic <= 3:
         raise OperationDomainValidationError(
             location=("field", "characteristic"),
@@ -340,6 +381,7 @@ def require_discriminant_admission(
     # Establish the caller-authored field claim (prime characteristic and
     # irreducible modulus) before any quotient-ring arithmetic relies on it.
     require_field(field)
+    return field, canonical_coefficients[0], canonical_coefficients[1]
 
 
 def finite_field_discriminant(
@@ -349,7 +391,9 @@ def finite_field_discriminant(
 ) -> FiniteFieldDiscriminantResult:
     """Compute 4A^3, 27B^2, Delta, singularity, and j over one finite field."""
 
-    require_discriminant_admission(field, coefficient_a, coefficient_b)
+    field, coefficient_a, coefficient_b = require_discriminant_admission(
+        field, coefficient_a, coefficient_b
+    )
     modulus = field.characteristic
     a = _coordinates(coefficient_a)
     b = _coordinates(coefficient_b)
@@ -376,10 +420,468 @@ def finite_field_discriminant(
     )
 
 
+class FiniteFieldEllipticPoint(StrictModel):
+    """A projective point bound to one nonsingular short-Weierstrass curve."""
+
+    curve: FiniteFieldShortWeierstrassCurve
+    at_infinity: bool = False
+    x: FiniteFieldElement | None = None
+    y: FiniteFieldElement | None = None
+
+    @model_validator(mode="after")
+    def require_point_shape(self) -> Self:
+        if self.at_infinity:
+            if self.x is not None or self.y is not None:
+                raise _validation_error(
+                    "infinity_coordinates", "infinity has no affine coordinates"
+                )
+        elif self.x is None or self.y is None:
+            raise _validation_error(
+                "affine_coordinates", "an affine point requires x and y"
+            )
+        elif (
+            self.x.presentation != self.curve.field
+            or self.y.presentation != self.curve.field
+        ):
+            raise _validation_error(
+                "point_presentation_mismatch",
+                "point coordinates must use the curve field",
+            )
+        return self
+
+    @classmethod
+    def infinity(cls, curve: FiniteFieldShortWeierstrassCurve) -> Self:
+        return cls.model_construct(curve=curve, at_infinity=True, x=None, y=None)
+
+    @classmethod
+    def affine(
+        cls,
+        curve: FiniteFieldShortWeierstrassCurve,
+        x: FiniteFieldElement,
+        y: FiniteFieldElement,
+    ) -> Self:
+        return cls.model_construct(curve=curve, at_infinity=False, x=x, y=y)
+
+
+class FiniteFieldCurveRequest(StrictModel):
+    curve: FiniteFieldShortWeierstrassCurve
+
+
+class FiniteFieldPointRequest(StrictModel):
+    curve: FiniteFieldShortWeierstrassCurve
+    point: FiniteFieldEllipticPoint
+
+
+class FiniteFieldPointAdditionRequest(StrictModel):
+    curve: FiniteFieldShortWeierstrassCurve
+    first: FiniteFieldEllipticPoint
+    second: FiniteFieldEllipticPoint
+
+
+class FiniteFieldScalarRequest(StrictModel):
+    curve: FiniteFieldShortWeierstrassCurve
+    point: FiniteFieldEllipticPoint
+    scalar: int = Field(ge=-1_000_000, le=1_000_000)
+
+
+class FiniteFieldPointResult(StrictModel):
+    point: FiniteFieldEllipticPoint
+
+
+class FiniteFieldPointCheckResult(StrictModel):
+    curve: FiniteFieldShortWeierstrassCurve
+    point: FiniteFieldEllipticPoint
+    on_curve: bool
+
+
+class FiniteFieldPointSet(StrictModel):
+    curve: FiniteFieldShortWeierstrassCurve
+    points: tuple[FiniteFieldEllipticPoint, ...]
+    complete: Literal["EXHAUSTIVE_OVER_F_Q"] = "EXHAUSTIVE_OVER_F_Q"
+
+
+class FiniteFieldCardinalityResult(StrictModel):
+    curve: FiniteFieldShortWeierstrassCurve
+    cardinality: int = Field(ge=1)
+    trace: int
+    frobenius_polynomial: tuple[int, int, int]
+
+
+def _curve_admit(
+    curve: FiniteFieldShortWeierstrassCurve,
+) -> FiniteFieldShortWeierstrassCurve:
+    if not isinstance(curve, FiniteFieldShortWeierstrassCurve):
+        raise OperationDomainValidationError(
+            location=("curve",),
+            code="elliptic_curve.finite_field.curve_type",
+            message="curve must be a finite-field short-Weierstrass value",
+        )
+    try:
+        curve = FiniteFieldShortWeierstrassCurve.model_validate(curve.model_dump())
+    except (ValidationError, AttributeError, KeyError, TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("curve",),
+            code="elliptic_curve.finite_field.invalid_curve",
+            message="curve has malformed field or coefficient data",
+        ) from exc
+    require_discriminant_admission(
+        curve.field, curve.coefficient_a, curve.coefficient_b
+    )
+    data = finite_field_discriminant(
+        curve.field, curve.coefficient_a, curve.coefficient_b
+    )
+    if not data.is_nonsingular:
+        raise OperationDomainValidationError(
+            location=("curve",),
+            code="elliptic_curve.finite_field.singular_curve",
+            message="point arithmetic requires a nonsingular curve",
+        )
+    return curve
+
+
+def _canonical_point(
+    curve: FiniteFieldShortWeierstrassCurve, point: FiniteFieldEllipticPoint
+) -> FiniteFieldEllipticPoint:
+    """Re-admit a point carrier before inspecting its infinity branch."""
+
+    if not isinstance(point, FiniteFieldEllipticPoint):
+        raise OperationDomainValidationError(
+            location=("point",),
+            code="elliptic_curve.finite_field.point_type",
+            message="point must be a finite-field elliptic point value",
+        )
+    # bool is intentionally checked separately: Pydantic's ordinary bool field
+    # accepts values such as ``"yes"``, while native authored values must retain
+    # the same strict contract as serialized values.
+    if type(getattr(point, "at_infinity", None)) is not bool:
+        raise OperationDomainValidationError(
+            location=("point", "at_infinity"),
+            code="elliptic_curve.finite_field.point_infinity_type",
+            message="point at_infinity must be a strict boolean",
+        )
+    try:
+        validated = FiniteFieldEllipticPoint.model_validate(point.model_dump())
+    except (ValidationError, AttributeError, KeyError, TypeError, ValueError) as exc:
+        affine_shape = point.at_infinity is False and (
+            getattr(point, "x", None) is not None
+            or getattr(point, "y", None) is not None
+        )
+        raise OperationDomainValidationError(
+            location=("point", "coordinates") if affine_shape else ("point",),
+            code=(
+                "elliptic_curve.finite_field.point_coordinates"
+                if affine_shape
+                else "elliptic_curve.finite_field.invalid_point"
+            ),
+            message=(
+                "point coordinates must be canonical elements of the curve field"
+                if affine_shape
+                else "point has malformed curve, infinity, or coordinate data"
+            ),
+        ) from exc
+    if validated.curve != curve:
+        raise OperationDomainValidationError(
+            location=("point",),
+            code="elliptic_curve.finite_field.parent_curve_mismatch",
+            message="point must carry the supplied curve",
+        )
+    # Rebind the validated coordinates to the exact curve object supplied by the
+    # consumer.  Results therefore never retain a nested forged parent carrier.
+    return FiniteFieldEllipticPoint.model_construct(
+        curve=curve,
+        at_infinity=validated.at_infinity,
+        x=validated.x,
+        y=validated.y,
+    )
+
+
+def _point_admit(
+    curve: FiniteFieldShortWeierstrassCurve, point: FiniteFieldEllipticPoint
+) -> FiniteFieldEllipticPoint:
+    curve = _curve_admit(curve)
+    point = _canonical_point(curve, point)
+    if point.at_infinity:
+        return point
+    if point.x is None or point.y is None:
+        raise OperationDomainValidationError(
+            location=("point",),
+            code="elliptic_curve.finite_field.point_coordinates",
+            message="an affine point must carry both field coordinates",
+        )
+    if (
+        point.x.presentation != curve.field
+        or point.y.presentation != curve.field
+        or type(point.x.coordinates) is not tuple
+        or type(point.y.coordinates) is not tuple
+        or len(point.x.coordinates) != curve.field.degree
+        or len(point.y.coordinates) != curve.field.degree
+        or any(
+            type(value) is not int or not 0 <= value < curve.field.characteristic
+            for value in (*point.x.coordinates, *point.y.coordinates)
+        )
+    ):
+        raise OperationDomainValidationError(
+            location=("point", "coordinates"),
+            code="elliptic_curve.finite_field.point_coordinates",
+            message="point coordinates must be canonical elements of the curve field",
+        )
+    lhs = _multiply(curve.field, _coordinates(point.y), _coordinates(point.y))
+    rhs = _add(
+        curve.field.characteristic,
+        _multiply(
+            curve.field,
+            _multiply(curve.field, _coordinates(point.x), _coordinates(point.x)),
+            _coordinates(point.x),
+        ),
+        _add(
+            curve.field.characteristic,
+            _multiply(
+                curve.field, _coordinates(curve.coefficient_a), _coordinates(point.x)
+            ),
+            _coordinates(curve.coefficient_b),
+        ),
+    )
+    if lhs != rhs:
+        raise OperationDomainValidationError(
+            location=("point",),
+            code="elliptic_curve.finite_field.point_off_curve",
+            message="point must lie on the curve",
+        )
+    return point
+
+
+def _negate_point(
+    curve: FiniteFieldShortWeierstrassCurve, point: FiniteFieldEllipticPoint
+) -> FiniteFieldEllipticPoint:
+    point = _point_admit(curve, point)
+    curve = point.curve
+    if point.at_infinity:
+        return FiniteFieldEllipticPoint.infinity(curve)
+    if point.x is None or point.y is None:
+        raise OperationDomainValidationError(
+            location=("point",),
+            code="elliptic_curve.finite_field.point_coordinates",
+            message="a finite elliptic-curve point requires both coordinates",
+        )
+    p = curve.field.characteristic
+    return FiniteFieldEllipticPoint.affine(
+        curve,
+        point.x,
+        _element(curve.field, tuple((-v) % p for v in point.y.coordinates)),
+    )
+
+
+def _add_points(
+    curve: FiniteFieldShortWeierstrassCurve,
+    first: FiniteFieldEllipticPoint,
+    second: FiniteFieldEllipticPoint,
+) -> FiniteFieldEllipticPoint:
+    first = _point_admit(curve, first)
+    second = _point_admit(first.curve, second)
+    curve = first.curve
+    if first.at_infinity:
+        return second
+    if second.at_infinity:
+        return first
+    if first.x is None or first.y is None or second.x is None or second.y is None:
+        raise OperationDomainValidationError(
+            location=("point",),
+            code="elliptic_curve.finite_field.point_coordinates",
+            message="finite elliptic-curve points require both coordinates",
+        )
+    p = curve.field.characteristic
+    f = curve.field
+    x1, y1, x2, y2 = (
+        first.x.coordinates,
+        first.y.coordinates,
+        second.x.coordinates,
+        second.y.coordinates,
+    )
+    if (
+        x1 == x2
+        and tuple((a + b) % p for a, b in zip(y1, y2, strict=True)) == (0,) * f.degree
+    ):
+        return FiniteFieldEllipticPoint.infinity(curve)
+    if first == second:
+        numerator = _add(
+            p,
+            _scale(p, 3, _multiply(f, _coordinates(first.x), _coordinates(first.x))),
+            _coordinates(curve.coefficient_a),
+        )
+        denominator = _scale(p, 2, _coordinates(first.y))
+    else:
+        numerator = _add(
+            p, _coordinates(second.y), tuple(-v % p for v in _coordinates(first.y))
+        )
+        denominator = _add(
+            p, _coordinates(second.x), tuple(-v % p for v in _coordinates(first.x))
+        )
+    slope = _multiply(f, numerator, _inverse(f, denominator))
+    x3 = _add(
+        p,
+        _add(
+            p, _multiply(f, slope, slope), tuple(-v % p for v in _coordinates(first.x))
+        ),
+        tuple(-v % p for v in _coordinates(second.x)),
+    )
+    y3 = _add(
+        p,
+        _multiply(f, slope, _add(p, _coordinates(first.x), tuple(-v % p for v in x3))),
+        tuple(-v % p for v in _coordinates(first.y)),
+    )
+    return FiniteFieldEllipticPoint.affine(curve, _element(f, x3), _element(f, y3))
+
+
+def finite_field_point_check(
+    curve: FiniteFieldShortWeierstrassCurve, point: FiniteFieldEllipticPoint
+) -> FiniteFieldPointCheckResult:
+    curve = _curve_admit(curve)
+    canonical_point = _canonical_point(curve, point)
+    if canonical_point.at_infinity:
+        return FiniteFieldPointCheckResult(
+            curve=curve, point=canonical_point, on_curve=True
+        )
+    try:
+        _point_admit(curve, canonical_point)
+    except OperationDomainValidationError as exc:
+        if exc.errors()[0]["type"] == "elliptic_curve.finite_field.point_off_curve":
+            return FiniteFieldPointCheckResult(
+                curve=curve, point=canonical_point, on_curve=False
+            )
+        raise
+    return FiniteFieldPointCheckResult(
+        curve=curve, point=canonical_point, on_curve=True
+    )
+
+
+def finite_field_point_negate(
+    curve: FiniteFieldShortWeierstrassCurve, point: FiniteFieldEllipticPoint
+) -> FiniteFieldPointResult:
+    return FiniteFieldPointResult(point=_negate_point(curve, point))
+
+
+def finite_field_point_add(
+    curve: FiniteFieldShortWeierstrassCurve,
+    first: FiniteFieldEllipticPoint,
+    second: FiniteFieldEllipticPoint,
+) -> FiniteFieldPointResult:
+    return FiniteFieldPointResult(point=_add_points(curve, first, second))
+
+
+def finite_field_point_scalar(
+    curve: FiniteFieldShortWeierstrassCurve,
+    point: FiniteFieldEllipticPoint,
+    scalar: int,
+) -> FiniteFieldPointResult:
+    if type(scalar) is not int:
+        raise OperationDomainValidationError(
+            location=("scalar",),
+            code="elliptic_curve.finite_field.scalar_type",
+            message="scalar must be an integer",
+        )
+    if abs(scalar) > 1_000_000:
+        raise OperationResourceAdmissionError(
+            location=("scalar",),
+            code="elliptic_curve.finite_field.scalar_bound",
+            message="scalar magnitude exceeds the admitted double-and-add envelope",
+        )
+    point = _point_admit(curve, point)
+    curve = point.curve
+    if scalar < 0:
+        return finite_field_point_scalar(curve, _negate_point(curve, point), -scalar)
+    result = FiniteFieldEllipticPoint.infinity(curve)
+    addend = point
+    n = scalar
+    while n:
+        if n & 1:
+            result = _add_points(curve, result, addend)
+        n >>= 1
+        if n:
+            addend = _add_points(curve, addend, addend)
+    return FiniteFieldPointResult(point=result)
+
+
+def finite_field_points(curve: FiniteFieldShortWeierstrassCurve) -> FiniteFieldPointSet:
+    curve = _curve_admit(curve)
+    q = curve.field.characteristic**curve.field.degree
+    if q > 4096:
+        raise OperationResourceAdmissionError(
+            location=("curve", "field"),
+            code="elliptic_curve.finite_field.enumeration_bound",
+            message="exhaustive point enumeration admits field order at most 4096",
+        )
+    points = [FiniteFieldEllipticPoint.infinity(curve)]
+    # Exact enumeration is intentionally the first bounded cardinality regime.
+    for encoded in range(q):
+        coords = []
+        value = encoded
+        for _ in range(curve.field.degree):
+            coords.append(value % curve.field.characteristic)
+            value //= curve.field.characteristic
+        x = _element(curve.field, tuple(coords))
+        rhs = _add(
+            curve.field.characteristic,
+            _add(
+                curve.field.characteristic,
+                _multiply(
+                    curve.field,
+                    _multiply(curve.field, tuple(coords), tuple(coords)),
+                    tuple(coords),
+                ),
+                _multiply(
+                    curve.field, _coordinates(curve.coefficient_a), tuple(coords)
+                ),
+            ),
+            _coordinates(curve.coefficient_b),
+        )
+        for y_encoded in range(q):
+            ycoords = []
+            value = y_encoded
+            for _ in range(curve.field.degree):
+                ycoords.append(value % curve.field.characteristic)
+                value //= curve.field.characteristic
+            if _multiply(curve.field, tuple(ycoords), tuple(ycoords)) == rhs:
+                points.append(
+                    FiniteFieldEllipticPoint.affine(
+                        curve, x, _element(curve.field, tuple(ycoords))
+                    )
+                )
+    return FiniteFieldPointSet(curve=curve, points=tuple(points))
+
+
+def finite_field_cardinality(
+    curve: FiniteFieldShortWeierstrassCurve,
+) -> FiniteFieldCardinalityResult:
+    points = finite_field_points(curve)
+    q = curve.field.characteristic**curve.field.degree
+    n = len(points.points)
+    trace = q + 1 - n
+    if trace * trace > 4 * q:
+        raise RuntimeError("Hasse identity failed")
+    return FiniteFieldCardinalityResult(
+        curve=curve, cardinality=n, trace=trace, frobenius_polynomial=(q, -trace, 1)
+    )
+
+
 __all__ = [
+    "FiniteFieldCardinalityResult",
+    "FiniteFieldCurveRequest",
     "FiniteFieldDiscriminantRequest",
     "FiniteFieldDiscriminantResult",
+    "FiniteFieldEllipticPoint",
+    "FiniteFieldPointAdditionRequest",
+    "FiniteFieldPointCheckResult",
+    "FiniteFieldPointRequest",
+    "FiniteFieldPointResult",
+    "FiniteFieldPointSet",
+    "FiniteFieldScalarRequest",
     "FiniteFieldShortWeierstrassCurve",
+    "finite_field_cardinality",
     "finite_field_discriminant",
+    "finite_field_point_add",
+    "finite_field_point_check",
+    "finite_field_point_negate",
+    "finite_field_point_scalar",
+    "finite_field_points",
     "require_discriminant_admission",
 ]

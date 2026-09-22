@@ -8,10 +8,15 @@ from pydantic import ConfigDict, Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+from jacobian.math.graphs.multigraph._models import LooplessMultigraph
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 from jacobian.math.matrices.values import SparseRationalMatrix
 from jacobian.math.topology.combinatorial_maps.values import (
     FiniteCombinatorialMap,
+    _build_outgoing,
+    _validate_facial_budgets,
+    _validate_involution,
+    _validate_rotation,
 )
 
 MAX_EMBEDDING_VERTICES = 64
@@ -19,6 +24,9 @@ MAX_EMBEDDING_EDGES = 256
 MAX_EMBEDDING_DEGREE = 64
 MAX_EMBEDDING_ROTATION_ENTRIES = 4 * MAX_EMBEDDING_EDGES
 MAX_ROTATION_SYSTEM_CANDIDATES = 100_000
+MAX_MINIMUM_GENUS_CANDIDATES = 100_000
+MAX_MULTIGRAPH_EMBEDDING_VERTICES = 64
+MAX_MULTIGRAPH_EMBEDDING_EDGES = 256
 
 EmbeddingCheckStatus = Literal["ORIENTABLE_CELLULAR_EMBEDDING", "INVALID_EMBEDDING"]
 
@@ -50,6 +58,93 @@ SignedEmbeddingObstructionCode = Literal[
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"combinatorial_map.{reason}", message)
+
+
+def _graph_is_connected(graph: SimpleUndirectedGraph) -> bool:
+    if not graph.vertices:
+        return False
+    index = {label: position for position, label in enumerate(graph.vertices)}
+    reached = {0}
+    changed = True
+    while changed:
+        changed = False
+        for left, right in graph.edges:
+            if index[left] in reached or index[right] in reached:
+                before = len(reached)
+                reached.update((index[left], index[right]))
+                changed |= len(reached) != before
+    return len(reached) == len(graph.vertices)
+
+
+def _rotation_system_total(graph: SimpleUndirectedGraph) -> int:
+    from math import factorial
+
+    index = {label: position for position, label in enumerate(graph.vertices)}
+    degrees = [0] * len(graph.vertices)
+    for left, right in graph.edges:
+        degrees[index[left]] += 1
+        degrees[index[right]] += 1
+    total = 1
+    for degree in degrees:
+        if degree:
+            total *= factorial(degree - 1)
+    return total
+
+
+def _canonical_cycle(row: tuple[int, ...]) -> tuple[int, ...]:
+    if not row:
+        return ()
+    pivot = row.index(min(row))
+    return row[pivot:] + row[:pivot]
+
+
+def _source_edge_rotations(
+    graph: SimpleUndirectedGraph, rotations: tuple[tuple[int, ...], ...]
+) -> tuple[tuple[int, ...], ...] | None:
+    """Return the canonical edge-index rows, or ``None`` for bad incidence."""
+    index = {label: position for position, label in enumerate(graph.vertices)}
+    incident: list[set[int]] = [set() for _ in graph.vertices]
+    for edge_index, (left, right) in enumerate(graph.edges):
+        incident[index[left]].add(edge_index)
+        incident[index[right]].add(edge_index)
+    if len(rotations) != len(graph.vertices):
+        return None
+    if any(
+        len(row) != len(incident[vertex]) or set(row) != incident[vertex]
+        for vertex, row in enumerate(rotations)
+    ):
+        return None
+    canonical = tuple(_canonical_cycle(tuple(row)) for row in rotations)
+    return canonical if canonical == rotations else None
+
+
+def _face_ledger(
+    darts: tuple[tuple[int, int, int], ...],
+    dart_rotations: tuple[tuple[int, ...], ...],
+) -> tuple[tuple[tuple[int, ...], ...], tuple[int, ...]]:
+    """Derive the deterministic ``alpha . sigma`` face ledger."""
+    dart_count = len(darts)
+    alpha = tuple(dart[2] for dart in darts)
+    sigma = [0] * dart_count
+    for row in dart_rotations:
+        for offset, dart in enumerate(row):
+            sigma[dart] = row[(offset + 1) % len(row)]
+    phi = tuple(alpha[sigma[dart]] for dart in range(dart_count))
+    walks: list[tuple[int, ...]] = []
+    face_of = [0] * dart_count
+    seen: set[int] = set()
+    for start in range(dart_count):
+        if start in seen:
+            continue
+        current = start
+        walk: list[int] = []
+        while current not in seen:
+            seen.add(current)
+            face_of[current] = len(walks)
+            walk.append(current)
+            current = phi[current]
+        walks.append(tuple(walk))
+    return tuple(walks), tuple(face_of)
 
 
 class OrientableEmbeddingCheckRequest(StrictModel):
@@ -94,7 +189,7 @@ class OrientableEmbeddingCheckResult(StrictModel):
     obstruction_detail: str | None = None
 
     @model_validator(mode="after")
-    def require_checked_embedding(self) -> Self:
+    def require_checked_embedding(self) -> Self:  # noqa: C901
         if (self.obstruction_code is None) != (self.obstruction_detail is None):
             raise _validation_error(
                 "embedding_obstruction_payload",
@@ -106,50 +201,115 @@ class OrientableEmbeddingCheckResult(StrictModel):
                     "embedding_invalid_payload",
                     "an invalid embedding carries its first obstruction",
                 )
+            if (
+                self.vertices != len(self.graph.vertices)
+                or self.edges != len(self.graph.edges)
+                or self.darts
+                or self.dart_rotations
+                or self.alpha
+                or self.sigma
+                or self.phi
+                or self.face_walks
+                or self.face_of_dart
+                or self.faces
+                or self.euler_characteristic
+                or self.genus
+            ):
+                raise _validation_error(
+                    "embedding_invalid_ledger",
+                    "an invalid embedding carries no derived cell ledger",
+                )
             return self
         if self.obstruction_code is not None:
             raise _validation_error(
                 "embedding_valid_payload",
                 "a checked embedding carries no obstruction",
             )
+        if not _graph_is_connected(self.graph):
+            raise _validation_error(
+                "embedding_source_connectivity",
+                "a checked embedding must bind a connected source graph",
+            )
         dart_count = len(self.darts)
         if not (
             len(self.alpha) == len(self.sigma) == len(self.phi) == dart_count
             and len(self.face_of_dart) == dart_count
+            and self.vertices == len(self.graph.vertices)
+            and self.edges == len(self.graph.edges)
         ):
             raise _validation_error(
-                "embedding_permutation_axes",
-                "alpha, sigma, phi, and the face assignment must cover every dart",
+                "embedding_ledger_axes",
+                "embedding ledgers must cover the retained source cell axes",
             )
-        if dart_count == 0:
-            if self.faces != 1 or self.face_walks:
-                raise _validation_error(
-                    "embedding_edgeless_faces",
-                    "the edgeless single-vertex embedding has one empty face",
-                )
-        else:
-            if any(not walk for walk in self.face_walks):
-                raise _validation_error(
-                    "embedding_face_walk_shape",
-                    "face walks must be nonempty for a map with darts",
-                )
-            covered = [dart for walk in self.face_walks for dart in walk]
-            if sorted(covered) != list(range(dart_count)):
-                raise _validation_error(
-                    "embedding_face_partition",
-                    "face walks must partition every dart exactly once",
-                )
-        if self.vertices != len(self.graph.vertices) or self.edges != len(
-            self.graph.edges
+        index = {label: position for position, label in enumerate(self.graph.vertices)}
+        expected_darts = tuple(
+            dart
+            for edge_index, (left, right) in enumerate(self.graph.edges)
+            for dart in (
+                (index[left], index[right], 2 * edge_index + 1),
+                (index[right], index[left], 2 * edge_index),
+            )
+        )
+        if self.darts != expected_darts:
+            raise _validation_error(
+                "embedding_dart_source",
+                "dart endpoints and reversals must bind the retained source edges",
+            )
+        if self.alpha != tuple(dart[2] for dart in self.darts):
+            raise _validation_error(
+                "embedding_alpha_source",
+                "alpha must be the source edge-reversal permutation",
+            )
+        canonical = _source_edge_rotations(self.graph, self.rotations)
+        if canonical is None:
+            raise _validation_error(
+                "embedding_rotation_source",
+                "rotations must be the canonical source edge rotations",
+            )
+        expected_dart_rotations = tuple(
+            tuple(
+                2 * edge_index
+                if self.graph.edges[edge_index][0] == self.graph.vertices[vertex]
+                else 2 * edge_index + 1
+                for edge_index in row
+            )
+            for vertex, row in enumerate(canonical)
+        )
+        if self.dart_rotations != expected_dart_rotations:
+            raise _validation_error(
+                "embedding_rotation_source",
+                "dart rotations must bind the canonical source rotations",
+            )
+        outgoing = {dart for row in self.dart_rotations for dart in row}
+        if outgoing != set(range(dart_count)):
+            raise _validation_error(
+                "embedding_rotation_source",
+                "dart rotations must partition source outgoing darts by vertex",
+            )
+        sigma = [0] * dart_count
+        for row in self.dart_rotations:
+            for offset, dart in enumerate(row):
+                sigma[dart] = row[(offset + 1) % len(row)]
+        expected_phi = tuple(self.alpha[sigma[dart]] for dart in range(dart_count))
+        if self.sigma != tuple(sigma) or self.phi != expected_phi:
+            raise _validation_error(
+                "embedding_permutation_source",
+                "sigma and phi must bind the source rotation permutation",
+            )
+        expected_faces, expected_face_of = _face_ledger(self.darts, self.dart_rotations)
+        expected_count = len(expected_faces) if dart_count else 1
+        if self.face_walks != expected_faces or self.face_of_dart != expected_face_of:
+            raise _validation_error(
+                "embedding_face_source",
+                "face walks and assignments must equal the source face permutation",
+            )
+        if (
+            self.faces != expected_count
+            or self.euler_characteristic != self.vertices - self.edges + self.faces
         ):
             raise _validation_error(
-                "embedding_cell_counts",
-                "vertex and edge counts must match the bound graph",
-            )
-        if self.euler_characteristic != self.vertices - self.edges + self.faces:
-            raise _validation_error(
-                "embedding_euler_characteristic",
-                "characteristic must equal vertices - edges + faces",
+                "embedding_face_count",
+                "face count and Euler characteristic must bind the source ledger",
             )
         excess = 2 - self.euler_characteristic
         if excess < 0 or excess % 2 != 0 or self.genus != excess // 2:
@@ -239,6 +399,24 @@ class SignedEmbeddingCheckResult(StrictModel):
                     "signed_embedding_invalid_payload",
                     "an invalid embedding carries its first obstruction",
                 )
+            if (
+                self.vertices != len(self.graph.vertices)
+                or self.edges != len(self.graph.edges)
+                or self.dart_rotations
+                or self.darts
+                or self.alpha
+                or self.sigma
+                or self.face_walks
+                or self.faces
+                or self.euler_characteristic
+                or self.genus
+                or self.orientable
+                or self.witness_dart_walk is not None
+            ):
+                raise _validation_error(
+                    "signed_embedding_invalid_ledger",
+                    "an invalid embedding carries no derived cell ledger",
+                )
             return self
         if self.obstruction_code is not None:
             raise _validation_error(
@@ -262,6 +440,11 @@ class SignedEmbeddingCheckResult(StrictModel):
     def require_signed_embedding_cells(self) -> Self:
         if self.status == "INVALID_EMBEDDING":
             return self
+        if not _graph_is_connected(self.graph):
+            raise _validation_error(
+                "signed_embedding_source_connectivity",
+                "a checked embedding must bind a connected source graph",
+            )
         dart_count = len(self.darts)
         if not (len(self.alpha) == len(self.sigma) == dart_count) or any(
             len(dart) != 3
@@ -284,6 +467,57 @@ class SignedEmbeddingCheckResult(StrictModel):
                 "signed_embedding_cell_counts",
                 "signs must carry one 0/1 entry per edge of the bound graph",
             )
+        index = {label: position for position, label in enumerate(self.graph.vertices)}
+        expected_darts = tuple(
+            dart
+            for edge_index, (left, right) in enumerate(self.graph.edges)
+            for dart in (
+                (index[left], index[right], 2 * edge_index + 1),
+                (index[right], index[left], 2 * edge_index),
+            )
+        )
+        if self.darts != expected_darts or self.alpha != tuple(
+            dart[2] for dart in self.darts
+        ):
+            raise _validation_error(
+                "signed_embedding_dart_source",
+                "darts and alpha must bind the retained source edges",
+            )
+        canonical = _source_edge_rotations(self.graph, self.rotations)
+        if canonical is None:
+            raise _validation_error(
+                "signed_embedding_rotation_source",
+                "rotations must be the canonical source edge rotations",
+            )
+        expected_dart_rotations = tuple(
+            tuple(
+                2 * edge_index
+                if self.graph.edges[edge_index][0] == self.graph.vertices[vertex]
+                else 2 * edge_index + 1
+                for edge_index in row
+            )
+            for vertex, row in enumerate(canonical)
+        )
+        if self.dart_rotations != expected_dart_rotations:
+            raise _validation_error(
+                "signed_embedding_rotation_source",
+                "dart rotations must bind the canonical source rotations",
+            )
+        outgoing = {dart for row in self.dart_rotations for dart in row}
+        if outgoing != set(range(dart_count)):
+            raise _validation_error(
+                "signed_embedding_rotation_source",
+                "dart rotations must partition source outgoing darts by vertex",
+            )
+        sigma = [0] * dart_count
+        for row in self.dart_rotations:
+            for offset, dart in enumerate(row):
+                sigma[dart] = row[(offset + 1) % len(row)]
+        if self.sigma != tuple(sigma):
+            raise _validation_error(
+                "signed_embedding_sigma_source",
+                "sigma must bind the retained source rotation permutation",
+            )
         if self.vertices != len(self.graph.vertices) or self.edges != len(
             self.graph.edges
         ):
@@ -296,6 +530,35 @@ class SignedEmbeddingCheckResult(StrictModel):
                 "signed_embedding_euler_characteristic",
                 "characteristic must equal vertices - edges + faces",
             )
+        return self
+
+    @model_validator(mode="after")
+    def require_signed_embedding_source_ledger(self) -> Self:
+        if self.status == "INVALID_EMBEDDING":
+            return self
+        if self.twisted_edges is not None:
+            if tuple(sorted(set(self.twisted_edges))) != self.twisted_edges:
+                raise _validation_error(
+                    "signed_embedding_twisted_axis",
+                    "twisted edge indices must be unique and sorted",
+                )
+            if any(
+                index < 0 or index >= len(self.graph.edges)
+                for index in self.twisted_edges
+            ):
+                raise _validation_error(
+                    "signed_embedding_twisted_axis",
+                    "twisted edge indices must lie on the source edge axis",
+                )
+            expected = tuple(
+                0 if index in self.twisted_edges else 1
+                for index in range(len(self.graph.edges))
+            )
+            if self.signs != expected:
+                raise _validation_error(
+                    "signed_embedding_sign_axis",
+                    "resolved signs must agree with the retained twisted-edge encoding",
+                )
         return self
 
     @model_validator(mode="after")
@@ -333,6 +596,36 @@ class SignedEmbeddingCheckResult(StrictModel):
             raise _validation_error(
                 "signed_embedding_face_count",
                 "the face ledger must carry one walk per face",
+            )
+        # Signed faces are the deterministic projection of the orientable
+        # double-cover ledger, not merely any edge-counting partition.  Keep
+        # this replay local to the value boundary so serialized claims cannot
+        # replace the retained rotation/sign source with a forged face family.
+        from ._signed_faces import signed_face_walks
+
+        canonical = _source_edge_rotations(self.graph, self.rotations)
+        if canonical is None or self.signs is None:
+            raise _validation_error(
+                "signed_embedding_face_source",
+                "signed face derivation requires canonical rotations and signs",
+            )
+        index = {label: position for position, label in enumerate(self.graph.vertices)}
+        endpoints = [(index[left], index[right]) for left, right in self.graph.edges]
+        expected_faces = (
+            signed_face_walks(endpoints, canonical, self.signs) if dart_count else ()
+        )
+        if self.face_walks != expected_faces:
+            raise _validation_error(
+                "signed_embedding_face_source",
+                "face walks must equal the deterministic signed face ledger",
+            )
+        if (
+            self.faces != (len(expected_faces) if dart_count else 1)
+            or self.euler_characteristic != self.vertices - self.edges + self.faces
+        ):
+            raise _validation_error(
+                "signed_embedding_face_count",
+                "face count and Euler characteristic must bind the signed ledger",
             )
         return self
 
@@ -526,7 +819,7 @@ class RotationSystemFindResult(StrictModel):
 
     graph: SimpleUndirectedGraph
     max_genus: int = Field(default=0, ge=0)
-    max_candidates: int = Field(default=1, ge=1)
+    max_candidates: int = Field(default=1, ge=1, le=MAX_ROTATION_SYSTEM_CANDIDATES)
     status: RotationSystemFindStatus
     rotations: tuple[tuple[int, ...], ...] = ()
     certificate: OrientableEmbeddingCheckResult | None = None
@@ -606,26 +899,47 @@ class RotationSystemFindResult(StrictModel):
 
     @model_validator(mode="after")
     def require_find_receipt(self) -> Self:
-        if self.total_candidates < 1:
+        if (
+            type(self.max_genus) is not int
+            or self.max_genus < 0
+            or type(self.max_candidates) is not int
+            or not 1 <= self.max_candidates <= MAX_ROTATION_SYSTEM_CANDIDATES
+        ):
+            raise _validation_error(
+                "genus_search_bounds",
+                "search genus and candidate limits must be admitted integers",
+            )
+        expected_total = _rotation_system_total(self.graph)
+        if self.total_candidates != expected_total or expected_total < 1:
             raise _validation_error(
                 "genus_search_total_candidates",
-                "the total rotation-system count is at least one",
+                "the receipt total must equal the source rotation-system count",
             )
         if not 0 <= self.candidates_examined <= self.total_candidates:
             raise _validation_error(
                 "genus_search_examined_bounds",
                 "examined systems must lie between zero and the total",
             )
+        if self.candidates_examined > self.max_candidates:
+            raise _validation_error(
+                "genus_search_budget_receipt",
+                "examined systems cannot exceed the declared candidate budget",
+            )
         if self.status == "EXHAUSTED":
-            if self.candidates_examined != self.total_candidates:
+            if not _graph_is_connected(self.graph):
                 raise _validation_error(
-                    "genus_search_exhaustion_receipt",
-                    "an exhausted search examined every rotation system",
+                    "genus_search_status",
+                    "an exhausted search must bind a connected source graph",
                 )
             if self.total_candidates > self.max_candidates:
                 raise _validation_error(
                     "genus_search_exhaustion_budget",
-                    "an exhausted search fit its candidate budget",
+                    "an exhausted search must fit its candidate budget",
+                )
+            if self.candidates_examined != self.total_candidates:
+                raise _validation_error(
+                    "genus_search_exhaustion_receipt",
+                    "an exhausted search examined every rotation system",
                 )
         elif self.status == "FOUND":
             if self.candidates_examined < 1:
@@ -634,19 +948,379 @@ class RotationSystemFindResult(StrictModel):
                     "a found search examined at least its witness",
                 )
         elif self.reason == "CANDIDATE_BUDGET_EXCEEDED":
-            if self.candidates_examined != min(
-                self.total_candidates, self.max_candidates
+            if (
+                not _graph_is_connected(self.graph)
+                or self.total_candidates <= self.max_candidates
+                or self.candidates_examined != self.max_candidates
             ):
                 raise _validation_error(
                     "genus_search_budget_receipt",
-                    "a budget-exhausted search spent its full budget",
+                    "a budget-exhausted search spent its full budget before exhaustion",
                 )
-        elif self.candidates_examined != 0:
+        elif self.candidates_examined != 0 or _graph_is_connected(self.graph):
             raise _validation_error(
                 "genus_search_disconnected_receipt",
                 "a disconnected search examined no rotation system",
             )
         return self
+
+    @classmethod
+    def _from_kernel(cls, **values: Any) -> Self:
+        return cls.model_construct(**values)
+
+
+class MinimumGenusRequest(StrictModel):
+    """Search all admitted rotation systems for the exact minimum genus."""
+
+    graph: SimpleUndirectedGraph = Field(
+        description=(
+            "Connected simple graph; the exact search envelope admits at most "
+            f"{MAX_EMBEDDING_VERTICES} vertices and {MAX_EMBEDDING_EDGES} edges."
+        )
+    )
+    max_candidates: int = Field(
+        default=MAX_MINIMUM_GENUS_CANDIDATES,
+        ge=1,
+        le=MAX_MINIMUM_GENUS_CANDIDATES,
+        description=(
+            "Maximum complete rotation systems examined before UNKNOWN; at most "
+            f"{MAX_MINIMUM_GENUS_CANDIDATES} candidates are admitted."
+        ),
+    )
+
+
+class MinimumGenusResult(StrictModel):
+    """Exact minimum genus, or UNKNOWN when exhaustive search was bounded."""
+
+    graph: SimpleUndirectedGraph
+    status: Literal["EXACT", "UNKNOWN"]
+    minimum_genus: int | None = Field(default=None, ge=0)
+    rotations: tuple[tuple[int, ...], ...] = ()
+    certificate: OrientableEmbeddingCheckResult | None = None
+    candidates_examined: int = Field(default=0, ge=0)
+    total_candidates: int = Field(default=1, ge=1)
+    max_candidates: int = Field(
+        default=MAX_MINIMUM_GENUS_CANDIDATES, ge=1, le=MAX_MINIMUM_GENUS_CANDIDATES
+    )
+    reason: Literal["CANDIDATE_BUDGET_EXCEEDED", "GRAPH_DISCONNECTED"] | None = None
+
+    @model_validator(mode="after")
+    def require_minimum_payload(self) -> Self:
+        if (
+            type(self.max_candidates) is not int
+            or not 1 <= self.max_candidates <= MAX_MINIMUM_GENUS_CANDIDATES
+        ):
+            raise _validation_error(
+                "minimum_genus_bounds",
+                "candidate limits must be admitted integers",
+            )
+        expected_total = _rotation_system_total(self.graph)
+        if self.total_candidates != expected_total:
+            raise _validation_error(
+                "minimum_genus_total_candidates",
+                "the receipt total must equal the source rotation-system count",
+            )
+        if not 0 <= self.candidates_examined <= self.total_candidates:
+            raise _validation_error(
+                "minimum_genus_examined_bounds",
+                "examined systems must lie between zero and the total",
+            )
+        if self.candidates_examined > self.max_candidates:
+            raise _validation_error(
+                "minimum_genus_budget_receipt",
+                "examined systems cannot exceed the declared candidate budget",
+            )
+        if self.status == "EXACT":
+            if not _graph_is_connected(self.graph):
+                raise _validation_error(
+                    "minimum_genus_status",
+                    "EXACT must bind a connected source graph",
+                )
+            if (
+                self.reason is not None
+                or self.minimum_genus is None
+                or self.certificate is None
+            ):
+                raise _validation_error(
+                    "minimum_genus_exact_payload",
+                    "EXACT requires a genus and certificate",
+                )
+            if (
+                self.certificate.graph != self.graph
+                or self.certificate.genus != self.minimum_genus
+            ):
+                raise _validation_error(
+                    "minimum_genus_certificate",
+                    "certificate must realize the reported minimum",
+                )
+            if self.certificate.rotations != self.rotations:
+                raise _validation_error(
+                    "minimum_genus_rotations",
+                    "certificate rotations must match the result",
+                )
+            if self.candidates_examined != self.total_candidates:
+                raise _validation_error(
+                    "minimum_genus_receipt", "EXACT examines every candidate"
+                )
+        else:
+            if (
+                self.reason is None
+                or self.minimum_genus is not None
+                or self.certificate is not None
+                or self.rotations
+            ):
+                raise _validation_error(
+                    "minimum_genus_unknown_payload",
+                    "UNKNOWN carries no minimum witness",
+                )
+            if self.reason == "CANDIDATE_BUDGET_EXCEEDED":
+                if (
+                    not _graph_is_connected(self.graph)
+                    or self.total_candidates <= self.max_candidates
+                    or self.candidates_examined != self.max_candidates
+                ):
+                    raise _validation_error(
+                        "minimum_genus_budget_receipt",
+                        "UNKNOWN spent the declared candidate budget before exhaustion",
+                    )
+            elif self.reason == "GRAPH_DISCONNECTED" and (
+                self.candidates_examined != 0 or _graph_is_connected(self.graph)
+            ):
+                raise _validation_error(
+                    "minimum_genus_disconnected_receipt",
+                    "a disconnected search examined no rotation system",
+                )
+        return self
+
+    @property
+    def genus(self) -> int | None:
+        return self.minimum_genus
+
+    @classmethod
+    def _from_kernel(cls, **values: Any) -> Self:
+        return cls.model_construct(**values)
+
+
+class MultigraphEmbeddingRequest(StrictModel):
+    """Check a rotation system on an edge-ID-bound loopless multigraph."""
+
+    graph: LooplessMultigraph = Field(
+        description=(
+            "Connected loopless multigraph with at most "
+            f"{MAX_MULTIGRAPH_EMBEDDING_VERTICES} vertices and "
+            f"{MAX_MULTIGRAPH_EMBEDDING_EDGES} edges for this exact checker."
+        )
+    )
+    rotations: tuple[tuple[str, ...], ...] = Field(
+        description=(
+            "Exactly one tuple of edge IDs per source vertex; each row must list "
+            "that vertex's incident edge IDs exactly once."
+        )
+    )
+
+
+class MultigraphEmbeddingResult(StrictModel):
+    """Source-bound embedding ledger retaining edge IDs and dual incidence."""
+
+    graph: LooplessMultigraph
+    status: Literal["EMBEDDED", "INVALID"]
+    rotations: tuple[tuple[str, ...], ...] = ()
+    darts: tuple[tuple[int, int, int], ...] = ()
+    edge_dart_ids: tuple[str, ...] = ()
+    face_walks: tuple[tuple[int, ...], ...] = ()
+    dual_edge_ids: tuple[str, ...] = ()
+    embedding_map: FiniteCombinatorialMap | None = None
+    dual_map: FiniteCombinatorialMap | None = None
+    obstruction: str | None = None
+
+    @model_validator(mode="after")
+    def require_embedding_ledger(self) -> Self:  # noqa: C901
+        edge_count = len(self.graph.edges)
+        dart_count = 2 * edge_count
+        if self.status == "INVALID":
+            if self.obstruction is None:
+                raise _validation_error(
+                    "multigraph_invalid_obstruction", "INVALID requires an obstruction"
+                )
+            if self.darts or self.edge_dart_ids or self.face_walks:
+                raise _validation_error(
+                    "multigraph_invalid_ledger", "INVALID carries no embedding ledger"
+                )
+            if self.embedding_map is not None or self.dual_map is not None:
+                raise _validation_error(
+                    "multigraph_invalid_maps", "INVALID carries no embedding maps"
+                )
+            return self
+        if self.obstruction is not None:
+            raise _validation_error(
+                "multigraph_embedded_obstruction", "EMBEDDED carries no obstruction"
+            )
+        if self.graph.vertex_count == 0:
+            raise _validation_error(
+                "multigraph_zero_vertices", "a multigraph embedding needs a vertex"
+            )
+        expected_ids = tuple(edge.edge_id for edge in self.graph.edges)
+        if edge_count == 0:
+            if self.rotations != tuple(() for _ in range(self.graph.vertex_count)):
+                raise _validation_error(
+                    "multigraph_edgeless_rotations",
+                    "edgeless rotations must be empty rows",
+                )
+            if any(
+                (self.darts, self.edge_dart_ids, self.face_walks, self.dual_edge_ids)
+            ):
+                raise _validation_error(
+                    "multigraph_edgeless_ledger",
+                    "the sphere-point ledger has no darts or faces",
+                )
+            if self.embedding_map is not None or self.dual_map is not None:
+                raise _validation_error(
+                    "multigraph_edgeless_maps", "the sphere-point ledger has no maps"
+                )
+            return self
+        if len(self.rotations) != self.graph.vertex_count:
+            raise _validation_error(
+                "multigraph_rotation_axis", "rotations must cover every source vertex"
+            )
+        incidence = [
+            {
+                edge.edge_id
+                for edge in self.graph.edges
+                if vertex in (edge.left, edge.right)
+            }
+            for vertex in range(self.graph.vertex_count)
+        ]
+        if any(
+            set(row) != expected or len(row) != len(expected)
+            for row, expected in zip(self.rotations, incidence, strict=True)
+        ):
+            raise _validation_error(
+                "multigraph_rotation_incidence",
+                "rotations must match source edge incidences",
+            )
+        if len(self.darts) != dart_count or len(self.edge_dart_ids) != dart_count:
+            raise _validation_error(
+                "multigraph_dart_axis",
+                "dart and edge-ID ledgers must contain two entries per edge",
+            )
+        expected_darts = tuple(
+            dart
+            for edge_index, edge in enumerate(self.graph.edges)
+            for dart in (
+                (edge.left, edge.right, 2 * edge_index + 1),
+                (edge.right, edge.left, 2 * edge_index),
+            )
+        )
+        edge_index = {
+            edge.edge_id: index for index, edge in enumerate(self.graph.edges)
+        }
+        expected_dart_rotations = tuple(
+            tuple(
+                2 * edge_index[edge_id]
+                + (0 if self.graph.edges[edge_index[edge_id]].left == vertex else 1)
+                for edge_id in row
+            )
+            for vertex, row in enumerate(self.rotations)
+        )
+        if self.darts != expected_darts:
+            raise _validation_error(
+                "multigraph_dart_source",
+                "dart endpoints and reversals must bind source edge order",
+            )
+        if tuple(self.edge_dart_ids) != tuple(
+            edge_id for edge_id in expected_ids for _ in (0, 1)
+        ):
+            raise _validation_error(
+                "multigraph_edge_axis",
+                "edge dart IDs must retain source edge order twice",
+            )
+        if len(self.face_walks) < 1 or sorted(
+            dart for walk in self.face_walks for dart in walk
+        ) != list(range(dart_count)):
+            raise _validation_error(
+                "multigraph_face_partition", "face walks must partition every dart"
+            )
+        if (
+            self.embedding_map is not None
+            and self.embedding_map.rotations != expected_dart_rotations
+        ):
+            raise _validation_error(
+                "multigraph_embedding_rotation",
+                "the embedding map rotations must bind every source rotation row",
+            )
+        sigma = [0] * dart_count
+        for row in expected_dart_rotations:
+            for offset, dart in enumerate(row):
+                sigma[dart] = row[(offset + 1) % len(row)]
+        alpha = tuple(dart[2] for dart in expected_darts)
+        phi = tuple(alpha[sigma[dart]] for dart in range(dart_count))
+        expected_faces: list[tuple[int, ...]] = []
+        seen: set[int] = set()
+        for start in range(dart_count):
+            if start in seen:
+                continue
+            walk: list[int] = []
+            current = start
+            while current not in seen:
+                seen.add(current)
+                walk.append(current)
+                current = phi[current]
+            expected_faces.append(tuple(walk))
+        if self.face_walks != tuple(expected_faces):
+            raise _validation_error(
+                "multigraph_face_ledger",
+                "face walks must equal the source rotation face permutation",
+            )
+        if tuple(self.dual_edge_ids) != expected_ids:
+            raise _validation_error(
+                "multigraph_dual_edge_axis",
+                "dual edge IDs must retain the source edge axis",
+            )
+        if self.embedding_map is None or self.dual_map is None:
+            raise _validation_error(
+                "multigraph_maps",
+                "an edge-bearing embedding carries primal and dual maps",
+            )
+        if (
+            self.embedding_map.vertex_count != self.graph.vertex_count
+            or self.embedding_map.darts != self.darts
+            or len(self.embedding_map.rotations) != self.graph.vertex_count
+            or any(
+                set(row)
+                != {
+                    dart
+                    for dart, (tail, _head, _reverse) in enumerate(self.darts)
+                    if tail == vertex
+                }
+                for vertex, row in enumerate(self.embedding_map.rotations)
+            )
+        ):
+            raise _validation_error(
+                "multigraph_embedding_map",
+                "the embedding map must bind source vertices, darts, and rotations",
+            )
+        face_of_dart = {
+            dart: face_index
+            for face_index, walk in enumerate(self.face_walks)
+            for dart in walk
+        }
+        expected_dual_darts = tuple(
+            (face_of_dart[dart], face_of_dart[reverse], reverse)
+            for dart, (_tail, _head, reverse) in enumerate(self.darts)
+        )
+        if (
+            self.dual_map.vertex_count != len(self.face_walks)
+            or self.dual_map.darts != expected_dual_darts
+            or self.dual_map.rotations != self.face_walks
+        ):
+            raise _validation_error(
+                "multigraph_dual_map", "the dual map must bind the complete face ledger"
+            )
+        return self
+
+    @property
+    def map(self) -> FiniteCombinatorialMap | None:
+        return self.embedding_map
 
     @classmethod
     def _from_kernel(cls, **values: Any) -> Self:
@@ -673,6 +1347,12 @@ class FacesResult(StrictModel):
 
     @model_validator(mode="after")
     def require_face_result_shape(self) -> Self:
+        _validate_involution(self.map.darts)
+        _validate_rotation(
+            self.map.rotations,
+            _build_outgoing(self.map.darts, self.map.vertex_count),
+            self.map.darts,
+        )
         dart_count = len(self.map.darts)
         if len(self.face_of_dart) != dart_count or len(self.successor) != dart_count:
             raise _validation_error(
@@ -700,6 +1380,32 @@ class FacesResult(StrictModel):
             raise _validation_error(
                 "successor_out_of_range",
                 "successor entries must be dart indices",
+            )
+        outgoing = {dart for row in self.map.rotations for dart in row}
+        if outgoing != set(range(dart_count)):
+            raise _validation_error(
+                "face_result_map_shape",
+                "the retained map rotations must cover every dart exactly once",
+            )
+        alpha = tuple(dart[2] for dart in self.map.darts)
+        sigma = [0] * dart_count
+        for row in self.map.rotations:
+            for offset, dart in enumerate(row):
+                sigma[dart] = row[(offset + 1) % len(row)]
+        expected_successor = tuple(alpha[sigma[dart]] for dart in range(dart_count))
+        if tuple(self.successor) != expected_successor:
+            raise _validation_error(
+                "face_result_successor_binding",
+                "the face successor must equal reverse after rotation",
+            )
+        expected_faces, expected_face_of = _face_ledger(
+            self.map.darts, self.map.rotations
+        )
+        _validate_facial_budgets([list(walk) for walk in expected_faces])
+        if self.face_walks != expected_faces or self.face_of_dart != expected_face_of:
+            raise _validation_error(
+                "face_result_ledger_binding",
+                "face walks and assignments must equal the deterministic face orbits",
             )
         return self
 
@@ -902,6 +1608,10 @@ __all__ = [
     "EulerCharacteristicResult",
     "FacesRequest",
     "FacesResult",
+    "MinimumGenusRequest",
+    "MinimumGenusResult",
+    "MultigraphEmbeddingRequest",
+    "MultigraphEmbeddingResult",
     "OrientableEmbeddingCheckRequest",
     "OrientableEmbeddingCheckResult",
     "OrientableGenusRequest",

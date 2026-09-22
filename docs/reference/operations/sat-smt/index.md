@@ -8,8 +8,8 @@ The logic tools take and return bounded inline values.
 - `sat.assignment.check` checks one complete Boolean assignment against that
   value.
 - `sat.solve` solves one canonical CNF with the maintained Z3 Python binding.
-- `smt.solve` solves one bounded QF_UF, QF_LIA, or QF_LRA SMT-LIB query with
-  the same binding.
+- `smt.solve` solves one bounded QF_UF, QF_LIA, QF_LRA, QF_NRA, or QF_BV
+  SMT-LIB query with the same binding.
 - `smt.unsat_core` returns SAT, UNKNOWN, or an indexed UNSAT core of its source
   assertions.
 
@@ -18,10 +18,23 @@ returns an assignment and `smt.solve` returns a bounded model projection;
 `smt.unsat_core` returns no core. `UNKNOWN` makes no mathematical conclusion.
 There are no CNF, model, proof, or solver-result URIs.
 
+`QF_NRA` carries an exact source-bound model only when every component fits the
+canonical rational or real-algebraic carrier. `QF_BV` uses fixed-width modular
+semantics and returns Z3's bounded SMT-LIB display projection; that projection
+is for inspection, not a reusable typed bit-vector assignment. A caller needing
+word-level composition must retain the original query until a future
+source-bound assignment carrier is admitted.
+
 ## Solver budgets
 
 `smt.solve` admission bounds the source before Z3 parses it: ASCII bytes,
 nesting depth, compound terms, declared symbols, and decimal numeral width.
+For `QF_BV`, it additionally bounds each sort to 1,024 bits and the aggregate
+bit-width of distinct parsed terms to 65,536 bits. The admitted operators cover
+fixed-width arithmetic, shifts, bitwise logic, concatenation, extraction, and
+signed/unsigned comparisons; quantifiers, conversions, floating-point terms,
+and uninterpreted functions are rejected. Thus modular overflow and signedness
+remain explicit source semantics rather than an implicit conversion to integers.
 Each budget names the quantity that controls parser work, solver
 preprocessing, symbol-table size, or big-integer expansion. Both solvers give
 Z3 a complete request-scoped budget: wall-clock time, a deterministic work

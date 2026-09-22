@@ -16,6 +16,8 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.ore_algebras._models import (
+    MAX_DIFFERENTIAL_ORDER,
+    MAX_DIFFERENTIAL_TERMS,
     MAX_SHIFT_COEFFICIENT_DEGREE,
     MAX_SHIFT_COEFFICIENT_DIGITS,
     MAX_SHIFT_COEFFICIENT_TERMS,
@@ -23,12 +25,16 @@ from jacobian.math.ore_algebras._models import (
     MAX_SHIFT_RESULT_DEGREE,
     MAX_SHIFT_RESULT_DIGITS,
     MAX_SHIFT_RESULT_ORDER,
+    DifferentialOperatorApplyResult,
+    DifferentialOperatorMultiplyResult,
+    DifferentialOreOperator,
     ShiftMultiplyLedgerRow,
     ShiftOperatorMultiplyResult,
     ShiftOreOperator,
 )
 from jacobian.math.polynomials.values import (
     MAX_RATIONAL_FUNCTION_COEFFICIENT_DIGITS,
+    MAX_RATIONAL_FUNCTION_REPRESENTATION_EXPONENT,
     MAX_RATIONAL_FUNCTION_TERMS,
     RationalFunction,
     RationalPolynomialTerm,
@@ -48,11 +54,18 @@ class _ShiftProductCell:
 
 
 def _as_operator(value: ShiftOreOperator | Mapping[str, Any]) -> ShiftOreOperator:
-    return (
-        value
-        if isinstance(value, ShiftOreOperator)
-        else ShiftOreOperator.model_validate(value)
-    )
+    try:
+        return (
+            value
+            if isinstance(value, ShiftOreOperator)
+            else ShiftOreOperator.model_validate(value)
+        )
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("operator",),
+            code="ore_algebra.shift_operator",
+            message="the shift operator must be a valid typed value over QQ(n)",
+        ) from exc
 
 
 def _run_admission(admission: Any, *, location: tuple[str | int, ...]) -> None:
@@ -103,8 +116,18 @@ def _require_rf_carrier_height(
             )
 
 
-def _admit_shift_operator(operator: ShiftOreOperator, *, label: str) -> None:
-    for index, term in enumerate(operator.terms):
+def _admit_shift_operator(
+    operator: ShiftOreOperator, *, label: str
+) -> ShiftOreOperator:
+    try:
+        value = ShiftOreOperator.model_validate(operator.model_dump())
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=(label,),
+            code="ore_algebra.shift_operator",
+            message="the shift operator must be canonical over QQ(n)",
+        ) from exc
+    for index, term in enumerate(value.terms):
         _run_admission(
             lambda term=term: require_canonical_rational_function(
                 term.coefficient,
@@ -115,11 +138,14 @@ def _admit_shift_operator(operator: ShiftOreOperator, *, label: str) -> None:
             ),
             location=(label, "terms", index),
         )
+    return value
 
 
-def _admit_shift_multiply(left: ShiftOreOperator, right: ShiftOreOperator) -> None:
-    _admit_shift_operator(left, label="left")
-    _admit_shift_operator(right, label="right")
+def _admit_shift_multiply(
+    left: ShiftOreOperator, right: ShiftOreOperator
+) -> tuple[ShiftOreOperator, ShiftOreOperator]:
+    left = _admit_shift_operator(left, label="left")
+    right = _admit_shift_operator(right, label="right")
     rows = len(left.terms) * len(right.terms)
     if rows > MAX_SHIFT_LEDGER_ROWS:
         raise OperationResourceAdmissionError(
@@ -138,6 +164,7 @@ def _admit_shift_multiply(left: ShiftOreOperator, right: ShiftOreOperator) -> No
             message="shift-operator product exceeds the result-order budget",
         )
     _admit_shift_product_degree_bounds(left, right)
+    return left, right
 
 
 def _admit_shift_product_degree_bounds(
@@ -368,14 +395,26 @@ def _encode_poly(poly: _Poly) -> SparseRationalPolynomial:
     )
 
 
-def _encode_rf(value: tuple[_Poly, _Poly]) -> RationalFunction:
+def _encode_rf(value: tuple[_Poly, _Poly], variable: str = "n") -> RationalFunction:
     numerator, denominator = value
     return RationalFunction(
         domain="QQ",
-        variables=("n",),
+        variables=(variable,),
         numerator=_encode_poly(numerator),
         denominator=_encode_poly(denominator),
     )
+
+
+def _encode_differential_rf(value: tuple[_Poly, _Poly]) -> RationalFunction:
+    """Encode an admitted differential result without leaking carrier errors."""
+    try:
+        return _encode_rf(value, "x")
+    except Exception as exc:
+        raise OperationResourceAdmissionError(
+            location=("result",),
+            code="ore_algebra.differential_result_carrier",
+            message="differential Ore output exceeds the rational-function carrier budget",
+        ) from exc
 
 
 def _plan_shift_product_cells(
@@ -415,7 +454,7 @@ def shift_operator_multiply(
     """Multiply two shift operators via S^i a(n) = a(n+i) S^i."""
     left_value = _as_operator(left)
     right_value = _as_operator(right)
-    _admit_shift_multiply(left_value, right_value)
+    left_value, right_value = _admit_shift_multiply(left_value, right_value)
     cells = _plan_shift_product_cells(left_value, right_value)
     accumulated: dict[int, tuple[_Poly, _Poly]] = {}
     for cell in cells:
@@ -468,4 +507,313 @@ def shift_operator_multiply(
     )
 
 
-__all__ = ["shift_operator_multiply"]
+def _rf_derivative(value: tuple[_Poly, _Poly]) -> tuple[_Poly, _Poly]:
+    numerator, denominator = value
+    numerator_derivative = {e - 1: c * e for e, c in numerator.items() if e}
+    denominator_derivative = {e - 1: c * e for e, c in denominator.items() if e}
+    return _normalize(
+        _poly_add(
+            _poly_mul(numerator_derivative, denominator),
+            {e: -c for e, c in _poly_mul(numerator, denominator_derivative).items()},
+        ),
+        _poly_mul(denominator, denominator),
+    )
+
+
+def _rf_bound(value: RationalFunction) -> tuple[int, int, int]:
+    """Return numerator degree, denominator degree, and coefficient digits."""
+    numerator, denominator = _decode_rf(value)
+    digits = max(
+        (
+            max(
+                len(str(abs(term.coefficient.as_fraction().numerator))),
+                len(str(term.coefficient.as_fraction().denominator)),
+            )
+            for polynomial in (value.numerator, value.denominator)
+            for term in polynomial.terms
+        ),
+        default=1,
+    )
+    return _poly_degree(numerator), _poly_degree(denominator), digits
+
+
+def _derivative_rf_bound(
+    bound: tuple[int, int, int], order: int
+) -> tuple[int, int, int]:
+    """Bound every rational-function carrier reached by ``D**order``."""
+    numerator_degree, denominator_degree, digits = bound
+    if numerator_degree < 0:
+        return -1, 0, digits
+    # N'/Q - N Q'/Q**2 raises the denominator degree by Q's degree and
+    # the numerator degree by at most deg(Q)-1 on each step.
+    growth_steps = 1 << order
+    return (
+        numerator_degree + order * max(denominator_degree - 1, 0),
+        denominator_degree * (order + 1),
+        # Fraction additions can multiply the active denominator at every
+        # derivative stage.  Exponential accounting is conservative but keeps
+        # the admission independent of the eventual cancellation pattern.
+        (digits + 4) * growth_steps,
+    )
+
+
+def _admit_differential_result_bounds(
+    contributions: list[tuple[int, tuple[int, int, int], tuple[int, int, int], int]],
+) -> None:
+    """Admit the final RF carrier before any differential expansion.
+
+    Each item is ``(output order, left coefficient bound, derivative bound,
+    binomial-digit bound)``.  The common-denominator construction is a sound
+    upper bound for both the intermediate sums and the normalized result.
+    """
+    if not contributions:
+        return
+    groups: dict[int, list[tuple[int, int, int]]] = {}
+    for exponent, left, derivative, binomial_digits in contributions:
+        left_num, left_den, left_digits = left
+        derivative_num, derivative_den, derivative_digits = derivative
+        contribution_num = (
+            -1 if left_num < 0 or derivative_num < 0 else left_num + derivative_num
+        )
+        contribution_den = left_den + derivative_den
+        contribution_digits = left_digits + derivative_digits + binomial_digits
+        groups.setdefault(exponent, []).append(
+            (contribution_num, contribution_den, contribution_digits)
+        )
+    for exponent, values in groups.items():
+        denominator_degree = sum(value[1] for value in values)
+        numerator_degree = (
+            max(
+                value[0] + denominator_degree - value[1]
+                for value in values
+                if value[0] >= 0
+            )
+            if any(value[0] >= 0 for value in values)
+            else -1
+        )
+        # Common-denominator lifting and final monic normalization can each
+        # combine one active coefficient with the other contributions.
+        coefficient_digits = 2 * sum(value[2] for value in values) + 8 * len(values)
+        if (
+            max(numerator_degree, denominator_degree)
+            > MAX_RATIONAL_FUNCTION_REPRESENTATION_EXPONENT
+            or max(numerator_degree, denominator_degree) + 1
+            > MAX_RATIONAL_FUNCTION_TERMS
+            or coefficient_digits > MAX_RATIONAL_FUNCTION_COEFFICIENT_DIGITS
+        ):
+            raise OperationResourceAdmissionError(
+                location=("result", exponent),
+                code="ore_algebra.differential_result_carrier",
+                message="differential Ore output exceeds the rational-function carrier budget",
+            )
+
+
+def _as_differential_operator(
+    value: DifferentialOreOperator | Mapping[str, Any],
+) -> DifferentialOreOperator:
+    try:
+        return (
+            value
+            if isinstance(value, DifferentialOreOperator)
+            else DifferentialOreOperator.model_validate(value)
+        )
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("operator",),
+            code="ore_algebra.differential_operator",
+            message="the differential operator must be a valid typed value",
+        ) from exc
+
+
+def _as_rational_function(
+    value: RationalFunction | Mapping[str, Any],
+) -> RationalFunction:
+    try:
+        return (
+            value
+            if isinstance(value, RationalFunction)
+            else RationalFunction.model_validate(value)
+        )
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("function",),
+            code="ore_algebra.differential_function",
+            message="the applied function must be a valid typed value",
+        ) from exc
+
+
+def _admit_differential_operator(
+    operator: DifferentialOreOperator,
+) -> DifferentialOreOperator:
+    """Revalidate typed operators, including their QQ(x) parent axis."""
+    try:
+        value = DifferentialOreOperator.model_validate(operator.model_dump())
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("operator",),
+            code="ore_algebra.differential_operator",
+            message="the differential operator must be canonical over QQ(x)",
+        ) from exc
+    for index, term in enumerate(value.terms):
+        try:
+            require_canonical_rational_function(
+                term.coefficient,
+                maximum_terms=MAX_SHIFT_COEFFICIENT_TERMS,
+                maximum_exponent=MAX_SHIFT_COEFFICIENT_DEGREE,
+                maximum_coefficient_digits=MAX_SHIFT_COEFFICIENT_DIGITS,
+                label=f"differential coefficient {index}",
+            )
+        except Exception as exc:
+            raise OperationDomainValidationError(
+                location=("terms", index),
+                code="ore_algebra.differential_coefficient",
+                message=str(exc),
+            ) from exc
+    return value
+
+
+def _admit_differential_function(value: RationalFunction) -> RationalFunction:
+    """Re-admit the relied-on QQ(x) carrier and its operation envelope."""
+    try:
+        canonical = RationalFunction.model_validate(value.model_dump())
+        if canonical.variables != ("x",):
+            raise ValueError("the function must use the QQ(x) axis")
+        require_canonical_rational_function(
+            canonical,
+            maximum_terms=MAX_SHIFT_COEFFICIENT_TERMS,
+            maximum_exponent=MAX_SHIFT_COEFFICIENT_DEGREE,
+            maximum_coefficient_digits=MAX_SHIFT_COEFFICIENT_DIGITS,
+            label="differential function",
+        )
+        return canonical
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("function",),
+            code="ore_algebra.differential_function",
+            message="the applied function must be canonical over QQ(x)",
+        ) from exc
+
+
+def differential_operator_apply(
+    operator: DifferentialOreOperator | Mapping[str, Any],
+    function: RationalFunction | Mapping[str, Any],
+) -> DifferentialOperatorApplyResult:
+    """Apply a left-coefficient differential Ore operator to a QQ(x) function."""
+    operator_value = _as_differential_operator(operator)
+    function_value = _as_rational_function(function)
+    operator_value = _admit_differential_operator(operator_value)
+    function_value = _admit_differential_function(function_value)
+    if function_value.variables != ("x",):
+        raise OperationDomainValidationError(
+            location=("function",),
+            code="ore_algebra.differential_function",
+            message="the applied function must use the QQ(x) axis",
+        )
+    function_bound = _rf_bound(function_value)
+    _admit_differential_result_bounds(
+        [
+            (
+                0,
+                _rf_bound(term.coefficient),
+                _derivative_rf_bound(function_bound, term.order),
+                0,
+            )
+            for term in operator_value.terms
+        ]
+    )
+    current = _decode_rf(function_value)
+    total: tuple[_Poly, _Poly] = ({}, {0: Fraction(1)})
+    for term in operator_value.terms:
+        derivative = current
+        for _ in range(term.order):
+            derivative = _rf_derivative(derivative)
+        contribution = _rf_mul(_decode_rf(term.coefficient), derivative)
+        total = _rf_add(total, contribution)
+    return DifferentialOperatorApplyResult._from_kernel(
+        operator_value, function_value, _encode_differential_rf(total)
+    )
+
+
+def differential_operator_multiply(
+    left: DifferentialOreOperator | Mapping[str, Any],
+    right: DifferentialOreOperator | Mapping[str, Any],
+) -> DifferentialOperatorMultiplyResult:
+    """Multiply left-coefficient differential Ore operators, D a=aD+a'."""
+    left_value = _as_differential_operator(left)
+    right_value = _as_differential_operator(right)
+    left_value = _admit_differential_operator(left_value)
+    right_value = _admit_differential_operator(right_value)
+    if left_value.order + right_value.order > MAX_DIFFERENTIAL_ORDER:
+        raise OperationResourceAdmissionError(
+            location=("left",),
+            code="ore_algebra.differential_order",
+            message="differential product order exceeds the admitted envelope",
+        )
+    right_bounds = {
+        term.order: _rf_bound(term.coefficient) for term in right_value.terms
+    }
+    _admit_differential_result_bounds(
+        [
+            (
+                first.order - k + second.order,
+                _rf_bound(first.coefficient),
+                _derivative_rf_bound(right_bounds[second.order], k),
+                len(str(comb(first.order, k))),
+            )
+            for first in left_value.terms
+            for second in right_value.terms
+            for k in range(first.order + 1)
+        ]
+    )
+    accumulated: dict[int, tuple[_Poly, _Poly]] = {}
+    for first in left_value.terms:
+        coefficient = _decode_rf(first.coefficient)
+        for second in right_value.terms:
+            derivative = _decode_rf(second.coefficient)
+            for k in range(first.order + 1):
+                if k:
+                    derivative = _rf_derivative(derivative)
+                if not derivative[0]:
+                    continue
+                contribution = _rf_mul(coefficient, derivative)
+                exponent = first.order - k + second.order
+                if exponent > MAX_DIFFERENTIAL_ORDER:
+                    raise OperationResourceAdmissionError(
+                        location=("product",),
+                        code="ore_algebra.differential_order",
+                        message="differential product order exceeds the admitted envelope",
+                    )
+                scaled = (
+                    {
+                        e: value * comb(first.order, k)
+                        for e, value in contribution[0].items()
+                    },
+                    contribution[1],
+                )
+                if exponent in accumulated:
+                    accumulated[exponent] = _rf_add(accumulated[exponent], scaled)
+                else:
+                    accumulated[exponent] = scaled
+    terms = []
+    for exponent, value in sorted(accumulated.items()):
+        if value[0]:
+            terms.append(
+                {"order": exponent, "coefficient": _encode_differential_rf(value)}
+            )
+    if len(terms) > MAX_DIFFERENTIAL_TERMS:
+        raise OperationResourceAdmissionError(
+            location=("product",),
+            code="ore_algebra.differential_terms",
+            message="differential product has too many terms",
+        )
+    product = DifferentialOreOperator.model_validate({"variable": "x", "terms": terms})
+    return DifferentialOperatorMultiplyResult._from_kernel(
+        left_value, right_value, product
+    )
+
+
+__all__ = [
+    "differential_operator_apply",
+    "differential_operator_multiply",
+    "shift_operator_multiply",
+]

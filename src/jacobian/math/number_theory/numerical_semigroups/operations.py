@@ -29,6 +29,7 @@ from jacobian.math.number_theory.numerical_semigroups._element_invariant_models 
 )
 from jacobian.math.number_theory.numerical_semigroups._factorization_models import (
     FactorizationComputeResult,
+    FactorizationDistanceMatrixResult,
     FactorizationDistanceResult,
     FactorizationGraphComputeResult,
     FactorizationLengthsComputeResult,
@@ -53,6 +54,7 @@ from jacobian.math.number_theory.numerical_semigroups._presentation_models impor
     MinimalPresentationResult,
     PresentationBinomial,
     PresentationBinomialsResult,
+    PresentationDegreeProfileResult,
 )
 from jacobian.math.number_theory.numerical_semigroups._summary_models import (
     NumericalSemigroupSummaryResult,
@@ -321,6 +323,27 @@ def factorization_distance_profile(
     )
 
 
+def factorization_distance_matrix_profile(
+    generators: tuple[int, ...], value: int
+) -> FactorizationDistanceMatrixResult:
+    """Return the complete pairwise distance matrix of a finite fiber."""
+    values = _generators(generators)
+    target = _bounded_value(values, value)
+    _require_materializable(values, target, MAX_GRAPH_FACTORIZATIONS)
+    family = factorizations(values, target)
+    matrix = tuple(
+        tuple(factorization_distance(left, right) for right in family)
+        for left in family
+    )
+    return FactorizationDistanceMatrixResult(
+        value=target,
+        minimal_generators=values,
+        in_semigroup=bool(family),
+        factorizations=family,
+        distances=matrix,
+    )
+
+
 def factorization_graph_profile(
     generators: tuple[int, ...], value: int
 ) -> FactorizationGraphComputeResult:
@@ -513,6 +536,24 @@ def minimal_presentation(
     )
 
 
+def presentation_degree_profile(
+    generators: tuple[int, ...],
+) -> PresentationDegreeProfileResult:
+    """Return the exact degree profile of one deterministic presentation."""
+    values = _generators(generators)
+    presentation = minimal_presentation(values)
+    degrees = tuple(
+        sum(a * g for a, g in zip(relation.first, values, strict=True))
+        for relation in presentation.relations
+    )
+    return PresentationDegreeProfileResult(
+        minimal_generators=values,
+        betti_elements=presentation.betti_elements,
+        relation_degrees=degrees,
+        relation_count=len(degrees),
+    )
+
+
 def presentation_binomials(
     generators: tuple[int, ...],
     relations: tuple[MinimalPresentationRelation, ...],
@@ -597,6 +638,7 @@ __all__ = [
     "element_elasticity_profile",
     "factorization_count",
     "factorization_distance",
+    "factorization_distance_matrix_profile",
     "factorization_distance_profile",
     "factorization_graph",
     "factorization_graph_profile",
@@ -611,6 +653,7 @@ __all__ = [
     "minimal_generating_system",
     "minimal_presentation",
     "presentation_binomials",
+    "presentation_degree_profile",
     "summary",
     "verify_elasticity",
     "verify_element_elasticity",

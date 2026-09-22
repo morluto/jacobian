@@ -17,6 +17,10 @@ from jacobian.math.geometry.toric._models import (
     CharacterDivisorResult,
     FanValidationRequest,
     FanValidationResult,
+    NormalToricMorphismRequest,
+    NormalToricMorphismResult,
+    NormalToricVariety,
+    NormalToricVarietyRequest,
     OrbitConeProfileRequest,
     OrbitConeProfileResult,
     ToricAffineChartRequest,
@@ -25,10 +29,12 @@ from jacobian.math.geometry.toric._models import (
     ToricMorphismResult,
 )
 from jacobian.math.geometry.toric.operations import (
+    check_normal_toric_morphism,
     check_toric_morphism,
     compute_affine_chart,
     compute_character_divisor,
     compute_orbit_cone_profile,
+    construct_normal_toric_variety,
     validate_fan,
 )
 
@@ -314,12 +320,118 @@ MORPHISM_CHECK_OPERATION = MathTool(
     ),
 )
 
+_NORMAL_ZERO_CARRIER = {
+    "field": {"name": "QQ", "characteristic": 0},
+    "fan": {"lattice_rank": 1, "rays": [], "cones": [[]]},
+    "orbit_profile": {
+        "fan": {"lattice_rank": 1, "rays": [], "cones": [[]]},
+        "lattice_rank": 1,
+        "cones": [
+            {
+                "cone_id": 0,
+                "ray_indices": [],
+                "dimension": 0,
+                "orbit_dimension": 1,
+                "is_simplicial": True,
+                "is_smooth": True,
+            }
+        ],
+        "face_relations": [{"tau_cone_id": 0, "sigma_cone_id": 0}],
+        "ray_incidence": [],
+    },
+    "charts": [
+        {
+            "fan": {"lattice_rank": 1, "rays": [], "cones": [[]]},
+            "cone_id": 0,
+            "cone_ray_indices": [],
+            "lattice_rank": 1,
+            "dimension": 0,
+            "dual_cone_rays": [],
+            "hilbert_basis": [],
+            "torus_basis": [["1"]],
+            "relations": [],
+            "is_smooth": True,
+            "localizations": [],
+        }
+    ],
+    "gluing": [],
+    "normal": True,
+}
+
+_P2_FAN = {
+    "lattice_rank": 2,
+    "rays": [["1", "0"], ["0", "1"], ["-1", "-1"]],
+    "cones": [[], [0], [1], [2], [0, 1], [0, 2], [1, 2]],
+}
+
+NORMAL_TORIC_MORPHISM_OPERATION = MathTool(
+    operation_id="toric.normal_variety.morphism.check",
+    title="Check a morphism of normal toric carriers",
+    description=(
+        "Decide whether an integer lattice map between two retained normal "
+        "toric carriers is induced by a fan-compatible lattice map, returning "
+        "the source-bound toric morphism result. The carriers must use the "
+        "same explicit QQ coefficient field. " + _ENVELOPE_SENTENCE
+    ),
+    request_type=NormalToricMorphismRequest,
+    result_type=NormalToricMorphismResult,
+    run=lambda request: check_normal_toric_morphism(
+        request.source, request.target, request.matrix
+    ),
+    tags=("geometry", "toric", "normal-variety", "morphism", "exact"),
+    discovery_terms=(
+        "normal toric variety morphism",
+        "morphism of toric varieties",
+        "variety-level toric map",
+    ),
+    examples=(
+        OperationExample(
+            name="zero_cone_identity_carriers",
+            description=(
+                "Check the identity map between two one-dimensional torus carriers "
+                "with the zero fan cone; both carriers must be over identical QQ."
+            ),
+            input={
+                "source": _NORMAL_ZERO_CARRIER,
+                "target": _NORMAL_ZERO_CARRIER,
+                "matrix": {
+                    "row_count": 1,
+                    "column_count": 1,
+                    "entries": [["1"]],
+                },
+            },
+        ),
+    ),
+)
+
 TOOLS: MathTools = (
     FAN_VALIDATE_OPERATION,
     ORBIT_CONE_PROFILE_OPERATION,
     CHARACTER_DIVISOR_OPERATION,
     AFFINE_CHART_OPERATION,
     MORPHISM_CHECK_OPERATION,
+    MathTool(
+        operation_id="toric.normal_variety.construct",
+        title="Construct a field-bound normal toric carrier",
+        description="Build the canonical finite normal-toric carrier over QQ, including every exact affine chart, orbit-cone profile, and face-chart gluing row from one recognized fan. "
+        + _ENVELOPE_SENTENCE,
+        request_type=NormalToricVarietyRequest,
+        result_type=NormalToricVariety,
+        run=lambda request: construct_normal_toric_variety(request.fan, request.field),
+        tags=("geometry", "toric", "normal-variety"),
+        discovery_terms=(
+            "normal toric variety",
+            "toric affine charts and orbit gluing",
+        ),
+        examples=(
+            OperationExample(
+                name="projective_plane_carrier",
+                description="Construct the QQ-bound normal toric carrier of the projective-plane fan; the fan must pass exact recognition.",
+                input={"fan": _P2_FAN, "field": {"name": "QQ", "characteristic": 0}},
+            ),
+        ),
+    ),
+    NORMAL_TORIC_MORPHISM_OPERATION,
 )
 
 __all__ = ["TOOLS"]

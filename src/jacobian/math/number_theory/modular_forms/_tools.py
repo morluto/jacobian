@@ -7,6 +7,9 @@ from jacobian.math.number_theory.modular_forms._models import (
     SpaceDimensionRequest,
     SpaceDimensionResult,
 )
+from jacobian.math.number_theory.modular_forms.transform_tools import (
+    TOOLS as TRANSFORM_TOOLS,
+)
 from jacobian.math.number_theory.modular_forms.values import LevelOneModularQExpansion
 
 
@@ -94,5 +97,7 @@ TOOLS: MathTools = (
         ),
     ),
 )
+
+TOOLS = TOOLS + TRANSFORM_TOOLS
 
 __all__ = ["TOOLS"]

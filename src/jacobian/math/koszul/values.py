@@ -22,6 +22,12 @@ from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+from jacobian.math.koszul.module_models import (
+    BasedFiniteModule,
+    FiniteCommutativeAlgebra,
+    ModuleKoszulComplex,
+    ModuleKoszulHomology,
+)
 from jacobian.math.polynomials.values import (
     MAX_POLYNOMIAL_VARIABLES,
     PolynomialVariable,
@@ -290,6 +296,11 @@ class KoszulComplexValue(StrictModel):
         )
 
 
+# Finite-module carriers are defined separately to keep the polynomial-ring
+# value implementation independent; re-export their canonical names here.
+FiniteAlgebra = FiniteCommutativeAlgebra
+FiniteModule = BasedFiniteModule
+
 __all__ = [
     "MAX_KOSZUL_COEFFICIENT_DIGITS",
     "MAX_KOSZUL_DEGREE",
@@ -300,7 +311,13 @@ __all__ = [
     "MAX_KOSZUL_TERMS",
     "MAX_KOSZUL_TOTAL_BASIS",
     "MAX_KOSZUL_VARIABLES",
+    "BasedFiniteModule",
+    "FiniteAlgebra",
+    "FiniteCommutativeAlgebra",
+    "FiniteModule",
     "KoszulComplexValue",
     "KoszulDifferentialEntry",
     "KoszulDifferentialMatrix",
+    "ModuleKoszulComplex",
+    "ModuleKoszulHomology",
 ]

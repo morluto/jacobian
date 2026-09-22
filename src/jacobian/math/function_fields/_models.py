@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Self
+from typing import Annotated, Literal, Self
 
 from pydantic import Field, StringConstraints, model_validator
 from pydantic_core import PydanticCustomError
@@ -108,7 +108,7 @@ class FiniteFunctionField(StrictModel):
         default="y", description="Name of the extension generator y."
     )
     defining_polynomial: tuple[PrimeFieldRationalFunction, ...] = Field(
-        min_length=2, max_length=MAX_EXTENSION_DEGREE + 1
+        min_length=1, max_length=MAX_EXTENSION_DEGREE + 1
     )
 
     @model_validator(mode="after")
@@ -126,7 +126,16 @@ class FiniteFunctionField(StrictModel):
                 "extension_characteristic",
                 "every defining-polynomial coefficient must share the characteristic",
             )
-        if not self.defining_polynomial[-1].numerator.is_one() or not (
+        if len(self.defining_polynomial) == 1:
+            if not (
+                self.defining_polynomial[0].numerator.is_one()
+                and self.defining_polynomial[0].denominator.is_one()
+            ):
+                raise _validation_error(
+                    "rational_field_polynomial",
+                    "the rational-field defining polynomial is 1",
+                )
+        elif not self.defining_polynomial[-1].numerator.is_one() or not (
             self.defining_polynomial[-1].denominator.is_one()
         ):
             raise _validation_error(
@@ -142,7 +151,104 @@ class FiniteFunctionField(StrictModel):
 
     @property
     def degree(self) -> int:
-        return len(self.defining_polynomial) - 1
+        return max(1, len(self.defining_polynomial) - 1)
+
+
+class FunctionFieldPlace(StrictModel):
+    """A rational/infinite place bound to one exact function field."""
+
+    field: FiniteFunctionField
+    kind: Literal["FINITE", "INFINITE"]
+    prime_polynomial: PrimeFieldPolynomial | None = None
+    degree: int = Field(ge=1)
+
+    @model_validator(mode="after")
+    def require_place_shape(self) -> Self:
+        if self.kind == "FINITE":
+            if (
+                self.prime_polynomial is None
+                or self.prime_polynomial.characteristic != self.field.characteristic
+                or self.prime_polynomial.is_zero()
+                or self.prime_polynomial.degree < 1
+            ):
+                raise _validation_error(
+                    "place_prime",
+                    "a finite place requires a nonconstant prime polynomial of the field characteristic",
+                )
+            if self.degree != self.prime_polynomial.degree:
+                raise _validation_error(
+                    "place_degree", "place degree must match its prime polynomial"
+                )
+        elif self.prime_polynomial is not None or self.degree != 1:
+            raise _validation_error(
+                "infinite_place_shape",
+                "the infinite place has degree one and no prime polynomial",
+            )
+        return self
+
+
+class FunctionFieldDivisorTerm(StrictModel):
+    place: FunctionFieldPlace
+    multiplicity: int
+
+
+class FunctionFieldDivisor(StrictModel):
+    field: FiniteFunctionField
+    terms: tuple[FunctionFieldDivisorTerm, ...] = Field(max_length=256)
+
+    @model_validator(mode="after")
+    def require_divisor_parent(self) -> Self:
+        if any(
+            term.place.field != self.field or term.multiplicity == 0
+            for term in self.terms
+        ):
+            raise _validation_error(
+                "divisor_parent",
+                "divisor places must belong to the field and have nonzero multiplicity",
+            )
+        if len({term.place.model_dump_json() for term in self.terms}) != len(
+            self.terms
+        ):
+            raise _validation_error(
+                "divisor_duplicate", "divisor support must be unique"
+            )
+        return self
+
+    @property
+    def degree(self) -> int:
+        return sum(term.multiplicity * term.place.degree for term in self.terms)
+
+
+class FunctionFieldPlaceValuationRequest(StrictModel):
+    place: FunctionFieldPlace
+    element: FiniteFunctionFieldElement
+
+
+class FunctionFieldPlaceValuationResult(StrictModel):
+    place: FunctionFieldPlace
+    element: FiniteFunctionFieldElement
+    valuation: int | None
+
+
+class FunctionFieldPrincipalDivisorRequest(StrictModel):
+    field: FiniteFunctionField
+    element: FiniteFunctionFieldElement
+
+
+class FunctionFieldDivisorRequest(StrictModel):
+    divisor: FunctionFieldDivisor
+
+
+class FunctionFieldDivisorDegreeResult(StrictModel):
+    divisor: FunctionFieldDivisor
+    degree: int
+
+
+class FunctionFieldPrincipalDivisorResult(StrictModel):
+    field: FiniteFunctionField
+    element: FiniteFunctionFieldElement
+    divisor: FunctionFieldDivisor
+    degree: int
 
 
 class FiniteFunctionFieldElement(StrictModel):
@@ -260,8 +366,17 @@ __all__ = [
     "MAX_POLYNOMIAL_X_DEGREE",
     "FiniteFunctionField",
     "FiniteFunctionFieldElement",
+    "FunctionFieldDivisor",
+    "FunctionFieldDivisorDegreeResult",
+    "FunctionFieldDivisorRequest",
+    "FunctionFieldDivisorTerm",
     "FunctionFieldElementMultiplyRequest",
     "FunctionFieldElementMultiplyResult",
+    "FunctionFieldPlace",
+    "FunctionFieldPlaceValuationRequest",
+    "FunctionFieldPlaceValuationResult",
+    "FunctionFieldPrincipalDivisorRequest",
+    "FunctionFieldPrincipalDivisorResult",
     "FunctionFieldProductTerm",
     "FunctionFieldReductionStep",
     "PrimeFieldPolynomial",

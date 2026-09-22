@@ -4,14 +4,19 @@
 # convention; Petri production modules are type-checked.
 # mypy: disable-error-code=no-untyped-def
 
+import json
+
 import pytest
 from pydantic import ValidationError
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.logic.automata import petri_nets
 from jacobian.math.logic.automata.petri_nets._models import (
     MAX_SIPHON_TRAP_PLACES,
     EnabledTransitionsRequest,
     FireTransitionRequest,
+    FireTransitionResult,
+    FiringSequenceReplayResult,
     IncidenceMatrixRequest,
     ReachabilityRequest,
     SiphonTrapRequest,
@@ -48,6 +53,23 @@ def _token_passing_net() -> PetriNet:
         pre=((1, 0), (0, 1)),
         post=((0, 1), (1, 0)),
     )
+
+
+@pytest.mark.parametrize(
+    "operation",
+    [
+        petri_nets.compute_incidence_matrix,
+        petri_nets.find_minimal_siphons,
+        petri_nets.find_minimal_traps,
+        petri_nets.petri_invariants,
+    ],
+)
+def test_native_operations_reject_model_constructed_net(operation) -> None:
+    forged = PetriNet.model_construct(
+        place_count=1, transition_count=1, pre=None, post=None
+    )
+    with pytest.raises(OperationDomainValidationError):
+        operation(forged)
 
 
 def test_native_operations_return_canonical_results() -> None:
@@ -88,6 +110,39 @@ def test_empty_net_preserves_empty_axes_across_json() -> None:
     decoded = type(reachability).model_validate_json(reachability.model_dump_json())
     assert decoded == reachability
     assert petri_nets.verify_reachability_graph(decoded)
+
+
+def test_every_result_marking_retains_the_declared_net_parent() -> None:
+    net = _token_passing_net()
+    foreign = PetriNet(
+        place_count=2,
+        transition_count=2,
+        pre=((0, 1), (1, 0)),
+        post=((1, 0), (0, 1)),
+    )
+    foreign_marking = Marking(tokens=(0, 1), net=foreign)
+    with pytest.raises(ValidationError):
+        FireTransitionResult(
+            net=net,
+            marking=Marking(tokens=(1, 0), net=net),
+            transition=0,
+            status="FIRED",
+            new_marking=foreign_marking,
+        )
+    replay = petri_nets.replay_firing_sequence(
+        net, Marking(tokens=(1, 0), net=net), (0,)
+    )
+    payload = replay.model_dump(mode="json")
+    payload["prefix_markings"][0] = foreign_marking.model_dump(mode="json")
+    with pytest.raises(ValidationError):
+        FiringSequenceReplayResult.model_validate_json(json.dumps(payload))
+    reachability = petri_nets.reachability_graph(
+        net, Marking(tokens=(1, 0), net=net), max_states=10
+    )
+    payload = reachability.model_dump(mode="json")
+    payload["states"][0]["marking"] = foreign_marking.model_dump(mode="json")
+    with pytest.raises(ValidationError):
+        type(reachability).model_validate_json(json.dumps(payload))
 
 
 def test_typed_petri_state_axes_reject_forged_serialized_claim() -> None:

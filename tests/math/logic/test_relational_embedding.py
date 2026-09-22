@@ -24,6 +24,7 @@ from jacobian.math.logic.relational_structures import (
 from jacobian.math.logic.relational_structures._models import (
     EmbeddingSearchRequest,
     EmbeddingSearchResult,
+    InducedEmbeddingCheckResult,
 )
 
 OPERATION_ID = "relational.embedding.search.compute"
@@ -60,15 +61,19 @@ def _edge_plus_isolate() -> FiniteRelationalStructure:
 class TestEmbeddingKnownAnswers:
     def test_bare_pair_skips_constant_map(self) -> None:
         """Plain search returns the constant (0, 0); embedding search
-        must skip it for the first distinct-image map (0, 1)."""
+        must reject (0, 1), whose image contains an absent source edge."""
         plain = search_homomorphism(_bare_pair(), _edge_plus_isolate())
         assert plain.check is not None
         assert plain.check.carrier_map == (0, 0)
         result = search_embedding(_bare_pair(), _edge_plus_isolate())
         assert result.status is HomomorphismSearchStatus.FOUND
         assert result.check is not None
-        assert result.check.carrier_map == (0, 1)
-        assert (result.candidates_examined, result.total_candidates) == (2, 9)
+        assert result.check.carrier_map == (0, 2)
+        assert (result.candidates_examined, result.total_candidates) == (3, 9)
+        assert (
+            result.check.induced_invariant
+            == "EVERY_SOURCE_RELATION_TUPLE_REFLECTS_INTO_THE_TARGET"
+        )
 
     def test_edge_into_loop_is_exhausted(self) -> None:
         """The edge homomorphically maps onto the loop point, but no
@@ -107,15 +112,18 @@ class TestEmbeddingKnownAnswers:
 
 
 class TestEmbeddingDefiningInvariant:
-    def test_found_map_is_injective_homomorphism(self) -> None:
-        """The retained map replays HOMOMORPHISM with distinct images:
-        producer-consumer composition with the check operation."""
+    def test_found_map_is_an_induced_embedding(self) -> None:
         source, target = _bare_pair(), _edge_plus_isolate()
         result = search_embedding(source, target)
         assert result.check is not None
         assert len(set(result.check.carrier_map)) == source.carrier_size
+        assert all(
+            p.matching_cells == p.relation_cells
+            for p in result.check.reflection_profiles
+        )
         assert (
-            check_homomorphism(source, target, result.check.carrier_map) == result.check
+            check_homomorphism(source, target, result.check.carrier_map).status
+            is HomomorphismStatus.HOMOMORPHISM
         )
 
     def test_found_map_is_lexicographically_first_embedding(self) -> None:
@@ -207,6 +215,15 @@ class TestEmbeddingComposition:
             == exhausted
         )
 
+    def test_plain_homomorphism_claim_cannot_be_used_as_embedding(self) -> None:
+        source, target = _bare_pair(), _edge_plus_isolate()
+        plain = check_homomorphism(source, target, (0, 1))
+        assert plain.status is HomomorphismStatus.HOMOMORPHISM
+        payload = json.loads(search_embedding(source, target).model_dump_json())
+        payload["check"] = json.loads(plain.model_dump_json())
+        with pytest.raises(ValidationError):
+            EmbeddingSearchResult.model_validate_json(json.dumps(payload))
+
     def test_forged_noninjective_found_is_rejected(self) -> None:
         result = search_embedding(_bare_pair(), _edge_plus_isolate())
         payload = json.loads(result.model_dump_json())
@@ -215,7 +232,19 @@ class TestEmbeddingComposition:
             EmbeddingSearchResult.model_validate_json(json.dumps(payload))
         assert (
             exc_info.value.errors(include_url=False)[0]["type"]
-            == "relational.homomorphism.found_witness_binding"
+            == "relational.homomorphism.carrier_map_not_injective"
+        )
+
+    def test_canonical_induced_check_rejects_noninjective_map(self) -> None:
+        result = search_embedding(_bare_pair(), _edge_plus_isolate())
+        assert result.check is not None
+        payload = json.loads(result.check.model_dump_json())
+        payload["carrier_map"] = [0, 0]
+        with pytest.raises(ValidationError) as exc_info:
+            InducedEmbeddingCheckResult.model_validate_json(json.dumps(payload))
+        assert (
+            exc_info.value.errors(include_url=False)[0]["type"]
+            == "relational.homomorphism.carrier_map_not_injective"
         )
 
     def test_catalog_declares_the_operation_with_a_valid_example(self) -> None:

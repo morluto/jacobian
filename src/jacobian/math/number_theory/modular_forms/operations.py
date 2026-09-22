@@ -21,6 +21,8 @@ from jacobian.math.number_theory.modular_forms.values import (
 )
 from jacobian.math.polynomials.series._models import TruncatedSeries
 
+from .transforms import hecke, named_q_expansion, sturm_bound, u_operator, v_operator
+
 
 def _series(coefficients: tuple[Fraction, ...]) -> TruncatedSeries:
     return TruncatedSeries(
@@ -115,16 +117,17 @@ def space_dimension(space: ModularFormSpace) -> SpaceDimensionResult:
 
     require_space_dimension_admission(space)
     weight = space.weight
-    if weight % 2 == 1:
-        holomorphic, cusp, eisenstein = 0, 0, 0
-    elif weight == 0:
-        holomorphic, cusp, eisenstein = 1, 0, 1
-    elif weight == 2:
-        holomorphic, cusp, eisenstein = 0, 0, 0
-    else:
-        holomorphic = weight // 12 if weight % 12 == 2 else weight // 12 + 1
-        eisenstein = 1
-        cusp = holomorphic - 1
+    if space.level == 1:
+        if weight % 2 == 1:
+            holomorphic, cusp, eisenstein = 0, 0, 0
+        elif weight == 0:
+            holomorphic, cusp, eisenstein = 1, 0, 1
+        elif weight == 2:
+            holomorphic, cusp, eisenstein = 0, 0, 0
+        else:
+            holomorphic = weight // 12 if weight % 12 == 2 else weight // 12 + 1
+            eisenstein = 1
+            cusp = holomorphic - 1
     dimension = holomorphic if space.kind == "M" else cusp
     return SpaceDimensionResult._from_kernel(
         space,
@@ -134,4 +137,12 @@ def space_dimension(space: ModularFormSpace) -> SpaceDimensionResult:
     )
 
 
-__all__ = ["level_one_named_q_expansion", "space_dimension"]
+__all__ = [
+    "hecke",
+    "level_one_named_q_expansion",
+    "named_q_expansion",
+    "space_dimension",
+    "sturm_bound",
+    "u_operator",
+    "v_operator",
+]

@@ -154,6 +154,86 @@ class FactorizationDistanceResult(StrictModel):
     second_length: ExactInteger = Field(ge=0)
 
 
+class FactorizationDistanceMatrixRequest(StrictModel):
+    """Complete pairwise distance matrix on one complete factorization fiber."""
+
+    generators: tuple[ExactInteger, ...] = Field(
+        min_length=1, max_length=MAX_GENERATORS
+    )
+    value: ExactInteger
+
+
+class FactorizationDistanceMatrixResult(StrictModel):
+    value: ExactInteger
+    minimal_generators: tuple[ExactInteger, ...] = Field(
+        min_length=1, max_length=MAX_GENERATORS
+    )
+    in_semigroup: bool
+    factorizations: tuple[tuple[ExactInteger, ...], ...]
+    distances: tuple[tuple[int, ...], ...]
+
+    @model_validator(mode="after")
+    def require_matrix(self) -> Self:
+        _require_canonical_generator_axis(self.minimal_generators)
+        dimension = len(self.minimal_generators)
+        if any(
+            len(factorization) != dimension
+            or any(value < 0 for value in factorization)
+            or sum(
+                value * generator
+                for value, generator in zip(
+                    factorization, self.minimal_generators, strict=True
+                )
+            )
+            != self.value
+            for factorization in self.factorizations
+        ):
+            raise _validation_error(
+                "factorizations must use the retained generator axis and value"
+            )
+        if len(self.distances) != len(self.factorizations) or any(
+            len(row) != len(self.factorizations) for row in self.distances
+        ):
+            raise _validation_error("distance matrix shape mismatch")
+        if self.in_semigroup != bool(self.factorizations):
+            raise _validation_error("membership must agree with distance matrix")
+        for left, row in enumerate(self.distances):
+            for right, distance in enumerate(row):
+                if distance < 0:
+                    raise _validation_error(
+                        "distance matrix entries must be nonnegative"
+                    )
+                if distance != self.distances[right][left]:
+                    raise _validation_error("distance matrix must be symmetric")
+                if left == right and distance != 0:
+                    raise _validation_error("distance matrix diagonal must be zero")
+                expected = max(
+                    sum(self.factorizations[left])
+                    - sum(
+                        min(a, b)
+                        for a, b in zip(
+                            self.factorizations[left],
+                            self.factorizations[right],
+                            strict=True,
+                        )
+                    ),
+                    sum(self.factorizations[right])
+                    - sum(
+                        min(a, b)
+                        for a, b in zip(
+                            self.factorizations[left],
+                            self.factorizations[right],
+                            strict=True,
+                        )
+                    ),
+                )
+                if distance != expected:
+                    raise _validation_error(
+                        "distance entries must match their factorization pairs"
+                    )
+        return self
+
+
 class FactorizationGraphComputeRequest(StrictModel):
     """Compute the standard factorization graph of one element."""
 

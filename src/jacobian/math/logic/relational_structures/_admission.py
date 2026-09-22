@@ -28,6 +28,9 @@ from jacobian.math.logic.relational_structures.values import (
 # work cap bounds tuple replays, the dominant cost.
 MAX_SEARCH_CANDIDATES = 65_536
 MAX_SEARCH_TUPLE_REPLAYS = 1_048_576
+# An induced embedding must decide membership for every tuple in every
+# Cartesian relation domain, not only the sparse positive rows.
+MAX_EMBEDDING_REFLECTION_CELLS = 1_048_576
 
 
 def candidate_space(source_size: int, target_size: int) -> int:
@@ -123,6 +126,78 @@ def admit_homomorphism_check(
     return transport_tuples
 
 
+def embedding_reflection_cells(source: FiniteRelationalStructure) -> int:
+    """Return the complete Cartesian cells replayed by an embedding."""
+
+    return sum(
+        1 if symbol.arity == 0 else source.carrier_size**symbol.arity
+        for symbol in source.signature
+    )
+
+
+def admit_embedding_search(
+    source: FiniteRelationalStructure,
+    target: FiniteRelationalStructure,
+) -> tuple[int, int, int]:
+    """Admit a complete induced-embedding search.
+
+    In addition to positive homomorphism rows, every candidate pays for the
+    full source Cartesian relation domains.  This is what distinguishes an
+    induced embedding from an injective homomorphism.
+    """
+
+    if source.signature != target.signature:
+        raise OperationDomainValidationError(
+            location=("target",),
+            code="relational.homomorphism.signature_mismatch",
+            message=(
+                "source and target structures must be declared over one "
+                "shared signature; signature transport is a separate "
+                "explicit map, not an implicit coercion"
+            ),
+        )
+    space = candidate_space(source.carrier_size, target.carrier_size)
+    if space > MAX_SEARCH_CANDIDATES:
+        raise OperationResourceAdmissionError(
+            location=("source",),
+            code="relational.homomorphism.search_space",
+            message=(
+                f"the exhaustive search spans {space} carrier maps from a "
+                f"{source.carrier_size}-element source into a "
+                f"{target.carrier_size}-element target, exceeding the "
+                f"{MAX_SEARCH_CANDIDATES}-candidate envelope"
+            ),
+        )
+    transport_tuples = sum(len(table) for table in source.relation_tables)
+    reflection_cells = embedding_reflection_cells(source)
+    target_materialization = sum(len(table) for table in target.relation_tables)
+    work = target_materialization + space * (
+        max(transport_tuples, 1) + reflection_cells
+    )
+    if reflection_cells > MAX_EMBEDDING_REFLECTION_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("source",),
+            code="relational.embedding.reflection_bound",
+            message=(
+                f"induced embedding reflection inspects {reflection_cells} "
+                f"Cartesian cells, exceeding the "
+                f"{MAX_EMBEDDING_REFLECTION_CELLS}-cell envelope"
+            ),
+        )
+    if work > MAX_SEARCH_TUPLE_REPLAYS:
+        raise OperationResourceAdmissionError(
+            location=("source",),
+            code="relational.embedding.search_work",
+            message=(
+                f"the induced embedding search materializes {target_materialization} "
+                f"target rows and replays {reflection_cells} reflection cells and "
+                f"{transport_tuples} positive rows across {space} maps, exceeding "
+                f"the {MAX_SEARCH_TUPLE_REPLAYS}-unit envelope"
+            ),
+        )
+    return space, transport_tuples, reflection_cells
+
+
 def admit_homomorphism_search(
     source: FiniteRelationalStructure,
     target: FiniteRelationalStructure,
@@ -197,12 +272,15 @@ def admit_core_computation(source: FiniteRelationalStructure) -> int:
 
 
 __all__ = [
+    "MAX_EMBEDDING_REFLECTION_CELLS",
     "MAX_RELATIONAL_TRANSPORT_TUPLES",
     "MAX_SEARCH_CANDIDATES",
     "MAX_SEARCH_TUPLE_REPLAYS",
     "admit_core_computation",
+    "admit_embedding_search",
     "admit_homomorphism_check",
     "admit_homomorphism_search",
     "candidate_space",
     "core_search_work",
+    "embedding_reflection_cells",
 ]

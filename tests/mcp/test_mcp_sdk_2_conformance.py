@@ -235,6 +235,87 @@ def test_math_run_projects_forged_character_as_invalid_request() -> None:
     asyncio.run(scenario())
 
 
+def test_math_run_accepts_the_degree_six_full_symmetric_group() -> None:
+    async def scenario() -> None:
+        from mcp import Client
+
+        async with Client(create_server(), raise_exceptions=True) as client:
+            result = await client.call_tool(
+                "math.run",
+                {
+                    "operation_id": "number_field.polynomial.splitting_field.compute",
+                    "payload": {
+                        "polynomial": {
+                            "variables": ["x"],
+                            "polynomial": {
+                                "terms": [
+                                    {
+                                        "coefficient": {"num": "1", "den": "1"},
+                                        "exponents": [6],
+                                    },
+                                    {
+                                        "coefficient": {"num": "-1", "den": "1"},
+                                        "exponents": [1],
+                                    },
+                                    {
+                                        "coefficient": {"num": "-1", "den": "1"},
+                                        "exponents": [0],
+                                    },
+                                ]
+                            },
+                        }
+                    },
+                },
+            )
+
+        assert result.structured_content is not None
+        assert result.structured_content["output"]["field"]["degree"] == 720
+
+    asyncio.run(scenario())
+
+
+def test_math_run_rejects_overbound_character_values_as_invalid_request() -> None:
+    async def scenario() -> None:
+        from mcp import Client
+
+        async with Client(create_server(), raise_exceptions=False) as client:
+            error = await client.call_tool(
+                "math.run",
+                {
+                    "operation_id": "dirichlet_character.value.compute",
+                    "payload": {
+                        "character": {
+                            "group": {
+                                "modulus": 3,
+                                "unit_residues": [1, 2],
+                                "character_count": 2,
+                                "invariant_factors": [2],
+                                "generators": [2],
+                                "generator_orders": [2],
+                                "unit_coordinates": [[0], [1]],
+                                "exponent": 2,
+                            },
+                            "coordinates": [0],
+                        },
+                        "integer": "1" * 257,
+                    },
+                },
+            )
+
+        assert error.is_error is True
+        diagnostic = json.loads(
+            _content_text(error.content[0]).removeprefix(
+                "Error executing tool math.run: "
+            )
+        )
+        assert diagnostic["code"] == "INVALID_REQUEST"
+        assert (
+            diagnostic["errors"][0]["code"] == "dirichlet_character.integer_digit_bound"
+        )
+
+    asyncio.run(scenario())
+
+
 def test_mcp_v2_uses_sdk_typed_tools_lifespan_and_structured_resources() -> None:
     async def scenario() -> None:
         from mcp import Client

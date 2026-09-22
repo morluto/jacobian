@@ -574,6 +574,45 @@ class ToricAffineChartResult(StrictModel):
         )
 
 
+class ToricCoefficientField(StrictModel):
+    """The exact coefficient field admitted by the first normal-toric slice."""
+
+    name: Literal["QQ"] = "QQ"
+    characteristic: Literal[0] = 0
+
+
+class NormalToricVarietyRequest(StrictModel):
+    fan: ToricFanPresentation
+    field: ToricCoefficientField = Field(default_factory=ToricCoefficientField)
+
+
+class ToricChartGluing(StrictModel):
+    source_cone_id: ToricRayIndex
+    face_cone_id: ToricRayIndex
+    localizing_character: tuple[ExactInteger, ...]
+
+
+class NormalToricVariety(StrictModel):
+    field: ToricCoefficientField
+    fan: ToricFanPresentation
+    orbit_profile: OrbitConeProfileResult
+    charts: tuple[ToricAffineChartResult, ...]
+    gluing: tuple[ToricChartGluing, ...]
+    normal: Literal[True] = True
+
+
+class NormalToricMorphismRequest(StrictModel):
+    source: NormalToricVariety
+    target: NormalToricVariety
+    matrix: IntegerMatrix
+
+
+class NormalToricMorphismResult(StrictModel):
+    source: NormalToricVariety
+    target: NormalToricVariety
+    map: ToricMorphismResult
+
+
 class ToricMorphismRequest(StrictModel):
     """Decide whether one integer lattice map is a toric morphism."""
 
@@ -746,13 +785,19 @@ __all__ = [
     "FaceRelation",
     "FanValidationRequest",
     "FanValidationResult",
+    "NormalToricMorphismRequest",
+    "NormalToricMorphismResult",
+    "NormalToricVariety",
+    "NormalToricVarietyRequest",
     "OrbitConeProfileRequest",
     "OrbitConeProfileResult",
     "OrbitConeRow",
     "RayConeIncidence",
     "ToricAffineChartRequest",
     "ToricAffineChartResult",
+    "ToricChartGluing",
     "ToricChartLocalization",
+    "ToricCoefficientField",
     "ToricConeAssignment",
     "ToricFanPresentation",
     "ToricMorphismObstruction",

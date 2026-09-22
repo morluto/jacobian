@@ -1,11 +1,14 @@
 """Known-answer and adversarial tests for finite-state transducers."""
 
+import json
+
 import pytest
 from pydantic import ValidationError
 
 from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.logic.automata.transducers import (
+    FiniteAlphabet,
     RationalEdge,
     RationalTransducer,
     SubseqFinalOutput,
@@ -22,6 +25,8 @@ from jacobian.math.logic.automata.transducers import (
 )
 from jacobian.math.logic.automata.transducers._models import (
     ComposeRequest,
+    MinimizeRequest,
+    MinimizeResult,
     RelationPathReplayRequest,
     SubseqRunRequest,
     TrimRequest,
@@ -30,6 +35,7 @@ from jacobian.math.logic.automata.transducers._models import (
 from jacobian.math.logic.automata.transducers._tools import (
     TOOLS,
     compute_compose,
+    compute_minimize,
     compute_relation_path_replay,
     compute_run,
     compute_trim,
@@ -62,6 +68,18 @@ def _relation(*, initial_states: tuple[int, ...] = (0,)) -> RationalTransducer:
             RationalEdge(source=1, target=1, input_label=(1,), output_label=(0,)),
         ),
     )
+
+
+def test_native_boundaries_reject_model_constructed_carriers() -> None:
+    forged_subsequential = SubsequentialTransducer.model_construct()
+    with pytest.raises(OperationDomainValidationError):
+        run_subsequential(forged_subsequential, ())
+    with pytest.raises(OperationDomainValidationError):
+        compose_subsequential(forged_subsequential, _flip())
+
+    forged_rational = RationalTransducer.model_construct()
+    with pytest.raises(OperationDomainValidationError):
+        replay_rational_path(forged_rational, 0, ())
 
 
 class TestSubsequentialRun:
@@ -126,6 +144,31 @@ class TestSubsequentialRun:
 
 
 class TestComposition:
+    def test_one_sided_intermediate_parent_is_rejected_on_both_paths(self) -> None:
+        first = _flip().model_copy(update={"output_alphabet_id": "shared"})
+        second = _flip()
+        with pytest.raises(ValidationError):
+            ComposeRequest(first=first, second=second)
+        with pytest.raises(OperationDomainValidationError):
+            compose_subsequential(first, second)
+
+    def test_bound_intermediate_parent_requires_equal_identity_and_context(
+        self,
+    ) -> None:
+        parent = FiniteAlphabet(symbols=("zero", "one"))
+        first = _flip().model_copy(
+            update={"output_alphabet_id": "shared", "output_alphabet": parent}
+        )
+        second = _flip().model_copy(
+            update={"input_alphabet_id": "shared", "input_alphabet": parent}
+        )
+        assert ComposeRequest(first=first, second=second).first == first
+        foreign = second.model_copy(
+            update={"input_alphabet": FiniteAlphabet(symbols=("x", "y"))}
+        )
+        with pytest.raises(ValidationError):
+            ComposeRequest(first=first, second=foreign)
+
     def test_flip_after_flip_is_identity(self) -> None:
         composite = compose_subsequential(_flip(), _flip())
 
@@ -340,6 +383,32 @@ class TestNativeTransformations:
         payload["old_to_new"] = [[0, 1]]
         with pytest.raises(ValidationError, match="new-state range"):
             TrimResult.model_validate(payload)
+
+    def test_trim_result_rejects_forged_alphabet_parent(self) -> None:
+        source = _flip().model_copy(
+            update={
+                "input_alphabet_id": "input",
+                "input_alphabet": FiniteAlphabet(symbols=("zero", "one")),
+            }
+        )
+        result = compute_trim(TrimRequest(transducer=source))
+        payload = result.model_dump(mode="json")
+        payload["trimmed"]["input_alphabet_id"] = "foreign"
+        with pytest.raises(ValidationError):
+            TrimResult.model_validate_json(json.dumps(payload))
+
+    def test_minimize_result_rejects_forged_alphabet_parent(self) -> None:
+        source = _flip().model_copy(
+            update={
+                "output_alphabet_id": "output",
+                "output_alphabet": FiniteAlphabet(symbols=("zero", "one")),
+            }
+        )
+        result = compute_minimize(MinimizeRequest(transducer=source))
+        payload = result.model_dump(mode="json")
+        payload["minimized"]["output_alphabet_id"] = "foreign"
+        with pytest.raises(ValidationError):
+            MinimizeResult.model_validate_json(json.dumps(payload))
 
     def test_trim_declared_example_executes_through_the_owner_adapter(self) -> None:
         operation = next(

@@ -219,6 +219,21 @@ def _canonical_chain(source: Simplex, target: Simplex) -> list[Simplex]:
 
 
 def _admit_field(coefficient_field: SheafField, prime: int | None) -> _ExactField:
+    # Native callers and model_construct can bypass Pydantic's enum/strict
+    # scalar checks.  Establish the declared field and modulus here before any
+    # owner arithmetic consumes them.
+    if not isinstance(coefficient_field, SheafField):
+        raise _domain(
+            "field_not_admitted",
+            "cellular sheaf arithmetic requires a supported exact coefficient field",
+            ("coefficient_field",),
+        )
+    if prime is not None and type(prime) is not int:
+        raise _domain(
+            "prime_not_admitted",
+            "the declared modulus must be an exact integer",
+            ("prime",),
+        )
     if coefficient_field is SheafField.PRIME_FIELD:
         if prime is None:
             raise _domain(
@@ -702,19 +717,6 @@ def _cochain_mat_mul(
 def _cohomology_admission(sheaf: FiniteCellularSheaf) -> _ExactField:
     """Admit the sheaf field and the cochain work envelope exactly once."""
     field = _admit_field(sheaf.coefficient_field, sheaf.prime)
-    if sheaf.coefficient_field is SheafField.PRIME_FIELD:
-        if sheaf.prime is None:
-            raise _domain(
-                "prime_required",
-                "prime-field cellular cohomology needs a modulus",
-                ("sheaf", "prime"),
-            )
-        if not _is_prime(sheaf.prime):
-            raise _domain(
-                "prime_not_admitted",
-                "cellular cohomology needs a prime modulus",
-                ("sheaf", "prime"),
-            )
     cells = _cells(sheaf.complex)
     if len(cells) > MAX_SHEAF_SIMPLICES:
         raise _resource(

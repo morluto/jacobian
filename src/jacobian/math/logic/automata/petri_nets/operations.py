@@ -58,20 +58,69 @@ __all__ = [
 ]
 
 
-def _require_marking_size(net: PetriNet, marking: Marking) -> None:
-    """Require one token count for each place in the net."""
+def _admit_net(net: object) -> PetriNet:
+    if not isinstance(net, PetriNet):
+        raise OperationDomainValidationError(
+            location=("net",),
+            code="petri_net.net_type",
+            message="net must be a PetriNet value",
+        )
+    try:
+        return PetriNet.model_validate(net.model_dump(), strict=True)
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("net",),
+            code="petri_net.net_shape",
+            message="net must satisfy its complete canonical matrix and axis shape",
+        ) from exc
 
-    if len(marking.tokens) != net.place_count:
+
+def _admit_marking(marking: object, net: PetriNet) -> Marking:
+    if not isinstance(marking, Marking):
+        raise OperationDomainValidationError(
+            location=("marking",),
+            code="petri_net.marking_type",
+            message="marking must be a Marking value",
+        )
+    try:
+        admitted = Marking.model_validate(marking.model_dump(), strict=True)
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("marking",),
+            code="petri_net.marking_shape",
+            message="marking must satisfy its complete canonical token shape",
+        ) from exc
+    if admitted.net is not None and admitted.net != net:
+        raise OperationDomainValidationError(
+            location=("marking", "net"),
+            code="petri_net.marking_parent",
+            message="marking belongs to a different Petri net place axis",
+        )
+    return admitted
+
+
+def _require_marking_size(net: PetriNet, marking: object) -> Marking:
+    """Require one token count for each exact net place axis."""
+
+    admitted = _admit_marking(marking, net)
+    if len(admitted.tokens) != net.place_count:
         raise OperationDomainValidationError(
             location=("marking",),
             code="petri_net.marking_axis",
             message="marking length must match place_count",
         )
+    return admitted
+
+
+def _bound_marking(net: PetriNet, marking: Marking, tokens: tuple[int, ...]) -> Marking:
+    """Retain an explicitly supplied net parent through derived markings."""
+
+    return Marking(tokens=tokens, net=net if marking.net is not None else None)
 
 
 def _enabled_transition_indices(net: PetriNet, marking: Marking) -> list[int]:
     """Return indices of all transitions enabled at the given marking."""
-    _require_marking_size(net, marking)
+    marking = _require_marking_size(net, marking)
     result: list[int] = []
     for t in range(net.transition_count):
         enabled = True
@@ -87,6 +136,8 @@ def _enabled_transition_indices(net: PetriNet, marking: Marking) -> list[int]:
 def enabled_transitions(net: PetriNet, marking: Marking) -> EnabledTransitionsResult:
     """Return all transitions enabled at the given marking."""
 
+    net = _admit_net(net)
+    marking = _require_marking_size(net, marking)
     return EnabledTransitionsResult(
         net=net,
         marking=marking,
@@ -125,6 +176,8 @@ def fire_transition(
 ) -> FireTransitionResult:
     """Fire one transition and return its canonical bounded outcome."""
 
+    net = _admit_net(net)
+    marking = _require_marking_size(net, marking)
     success, new_tokens = _fire_transition_tokens(net, marking, transition)
     if any(token > MAX_PETRI_MARKING for token in new_tokens):
         return FireTransitionResult(
@@ -139,7 +192,7 @@ def fire_transition(
         marking=marking,
         transition=transition,
         status="FIRED" if success else "NOT_ENABLED",
-        new_marking=Marking(tokens=new_tokens),
+        new_marking=_bound_marking(net, marking, new_tokens),
     )
 
 
@@ -166,7 +219,8 @@ def replay_firing_sequence(
 ) -> FiringSequenceReplayResult:
     """Replay a bounded transition sequence step by step from a marking."""
 
-    _require_marking_size(net, marking)
+    net = _admit_net(net)
+    marking = _require_marking_size(net, marking)
     _require_sequence_axes(net, sequence)
     current = list(marking.tokens)
     prefix: list[Marking] = []
@@ -210,9 +264,9 @@ def replay_firing_sequence(
                 code="petri_net.firing_sequence_token_bound",
                 message="a replayed marking escapes the declared token envelope",
             )
-        prefix.append(Marking(tokens=tuple(current)))
+        prefix.append(_bound_marking(net, marking, tuple(current)))
         parikh[transition] += 1
-    final = Marking(tokens=tuple(current))
+    final = _bound_marking(net, marking, tuple(current))
     residual = tuple(
         final.tokens[place]
         - marking.tokens[place]
@@ -256,6 +310,7 @@ def verify_firing_sequence_replay(claim: FiringSequenceReplayResult) -> bool:
 
 def compute_incidence_matrix(net: PetriNet) -> IncidenceMatrixResult:
     """Compute C = Post - Pre."""
+    net = _admit_net(net)
     return IncidenceMatrixResult(
         net=net,
         incidence=IntegerMatrix(
@@ -281,7 +336,8 @@ def reachability_graph(
     Returns (states, edges, truncated).
     Each edge is (source_index, transition, target_index).
     """
-    _require_marking_size(net, initial_marking)
+    net = _admit_net(net)
+    initial_marking = _require_marking_size(net, initial_marking)
     require_reachability_bounds(net, max_states)
     initial = tuple(initial_marking.tokens)
     state_list: list[tuple[int, ...]] = [initial]
@@ -291,7 +347,7 @@ def reachability_graph(
     truncated = False
     while queue:
         idx = queue.popleft()
-        marking = Marking(tokens=state_list[idx])
+        marking = _bound_marking(net, initial_marking, state_list[idx])
         enabled = _enabled_transition_indices(net, marking)
         for t in enabled:
             success, new_tokens = _fire_transition_tokens(net, marking, t)
@@ -316,7 +372,7 @@ def reachability_graph(
             PetriMarkingState(
                 state_index=index,
                 place_axis=tuple(range(net.place_count)),
-                marking=Marking(tokens=tokens),
+                marking=_bound_marking(net, initial_marking, tokens),
             )
             for index, tokens in enumerate(state_list)
         ),
@@ -467,16 +523,19 @@ def _minimal_place_families(
 
 def find_minimal_siphons(net: PetriNet) -> list[frozenset[int]]:
     """Return all inclusion-minimal nonempty siphons within the exact envelope."""
+    net = _admit_net(net)
     return _minimal_place_families(net)[0]
 
 
 def find_minimal_traps(net: PetriNet) -> list[frozenset[int]]:
     """Return all inclusion-minimal nonempty traps within the exact envelope."""
+    net = _admit_net(net)
     return _minimal_place_families(net)[1]
 
 
 def siphon_trap(net: PetriNet) -> SiphonTrapResult:
     """Return minimal families by independent place-transition components."""
+    net = _admit_net(net)
     siphons, traps = _minimal_place_families(net)
     return SiphonTrapResult(
         net=net,
@@ -648,6 +707,7 @@ def petri_invariants(net: PetriNet) -> PetriInvariantsResult:
     every returned vector is replayed against ``C`` inside this kernel.
     """
 
+    net = _admit_net(net)
     incidence_matrix = compute_incidence_matrix(net).incidence
     incidence = [[int(value) for value in row] for row in incidence_matrix.entries]
     places = net.place_count

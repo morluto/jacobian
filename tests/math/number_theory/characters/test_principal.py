@@ -7,7 +7,10 @@ import json
 import pytest
 from pydantic import ValidationError
 
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.number_theory.characters import (
     principal_dirichlet_character,
     principal_dirichlet_character_value,
@@ -235,6 +238,14 @@ def test_value_request_rejects_integers_beyond_the_digit_bound(integer: int) -> 
     assert error.value.errors()[0]["type"] == "dirichlet_character.integer_digit_bound"
 
 
+def test_native_principal_value_rejects_the_smallest_overbound_integer() -> None:
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        principal_dirichlet_character_value(
+            principal_dirichlet_character(12), int("1" * 257)
+        )
+    assert error.value.errors()[0]["type"] == "dirichlet_character.integer_digit_bound"
+
+
 def test_modulus_boundary_is_complete_and_next_value_is_rejected() -> None:
     character = principal_dirichlet_character(MAX_PRINCIPAL_CHARACTER_MODULUS)
 
@@ -245,14 +256,24 @@ def test_modulus_boundary_is_complete_and_next_value_is_rejected() -> None:
 
 
 def test_native_api_rejects_boolean_modulus_and_integer() -> None:
-    with pytest.raises(TypeError, match="modulus"):
+    with pytest.raises(OperationDomainValidationError) as modulus_error:
         principal_dirichlet_character(True)
-    with pytest.raises(TypeError, match="input"):
+    assert modulus_error.value.errors()[0]["type"] == (
+        "dirichlet_character.principal.modulus_type"
+    )
+    with pytest.raises(OperationDomainValidationError) as integer_error:
         principal_dirichlet_character_value(principal_dirichlet_character(3), True)
+    assert integer_error.value.errors()[0]["type"] == (
+        "dirichlet_character.principal.integer_type"
+    )
 
 
 def test_catalog_declares_the_composable_principal_operations() -> None:
     assert tuple(tool.operation_id for tool in TOOLS) == (
+        "dirichlet_character.compute",
+        "dirichlet_character.value.compute",
+        "dirichlet_character.table.compute",
+        "dirichlet_character.multiply.compute",
         "dirichlet_character.principal.compute",
         "dirichlet_character.principal.value.compute",
         "dirichlet_character.group.compute",
@@ -263,6 +284,10 @@ def test_published_catalog_includes_table_and_value_operations() -> None:
     published = tuple(tool.operation_id for tool in TOOLS)
 
     assert published == (
+        "dirichlet_character.compute",
+        "dirichlet_character.value.compute",
+        "dirichlet_character.table.compute",
+        "dirichlet_character.multiply.compute",
         "dirichlet_character.principal.compute",
         "dirichlet_character.principal.value.compute",
         "dirichlet_character.group.compute",

@@ -473,6 +473,14 @@ class TestInvalidCandidates:
 
         assert not verify_signed_embedding(forged)
 
+    def test_serialized_invalid_result_defers_semantics_to_verifier(self) -> None:
+        result = check_signed_embedding(_k4(), _K4_SPHERE, twisted_edges=(6,))
+        payload = result.model_dump(mode="json")
+        payload["obstruction_detail"] = "twisted_edges repeats edge 6"
+        forged = SignedEmbeddingCheckResult.model_validate(payload)
+
+        assert not verify_signed_embedding(forged)
+
     def test_request_rejects_both_sign_encodings(self) -> None:
         with pytest.raises(ValidationError):
             SignedEmbeddingCheckRequest(
@@ -512,10 +520,14 @@ class TestAdmissionAndParity:
             SignedEmbeddingCheckResult.model_validate_json(json.dumps(forged_witness))
         forged_rotations = json.loads(restored.model_dump_json())
         forged_rotations["rotations"][0] = [0, 1]
-        forged_claim = SignedEmbeddingCheckResult.model_validate_json(
-            json.dumps(forged_rotations)
-        )
-        assert not verify_signed_embedding(forged_claim)
+        with pytest.raises(ValidationError):
+            SignedEmbeddingCheckResult.model_validate_json(json.dumps(forged_rotations))
+        forged_faces = json.loads(restored.model_dump_json())
+        forged_faces["face_walks"] = [
+            list(reversed(walk)) for walk in forged_faces["face_walks"]
+        ]
+        with pytest.raises(ValidationError):
+            SignedEmbeddingCheckResult.model_validate_json(json.dumps(forged_faces))
 
     def test_orientable_round_trip_and_verify(self) -> None:
         result = check_signed_embedding(_k4(), _K4_SPHERE)

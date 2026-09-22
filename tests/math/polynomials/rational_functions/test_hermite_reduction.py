@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 
 import pytest
+from pydantic import ValidationError
 from sympy import Symbol, cancel, diff
 
 from jacobian.catalog.models import OperationDomainValidationError
@@ -23,6 +24,9 @@ from jacobian.math.polynomials.rational_functions._tools import (
 )
 from jacobian.math.polynomials.rational_functions.operations import (
     verify_hermite_reduction,
+)
+from jacobian.math.polynomials.rational_functions.structured_models import (
+    RationalPrimitiveResult,
 )
 from jacobian.math.polynomials.values import (
     RationalFunction,
@@ -252,3 +256,22 @@ def test_degree_six_polynomial_primitive_round_trips(expression: object) -> None
     assert primitive.subs(x, 0) == 0
     assert cancel(diff(primitive, x) - expression) == 0
     assert verify_hermite_reduction(parsed)
+
+
+def test_rational_primitive_result_rejects_contradictory_status() -> None:
+    source = rational_function_from_sympy(1 / (x - 1), ("x",))
+    zero = rational_function_from_sympy(0, ("x",))
+    with pytest.raises(ValidationError):
+        RationalPrimitiveResult(
+            source=source,
+            status="RATIONAL_PRIMITIVE",
+            rational_part=zero,
+            remainder=source,
+        )
+    with pytest.raises(ValidationError):
+        RationalPrimitiveResult(
+            source=source,
+            status="NO_RATIONAL_PRIMITIVE",
+            rational_part=zero,
+            remainder=zero,
+        )

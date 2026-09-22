@@ -123,11 +123,16 @@ def test_native_and_catalog_results_agree() -> None:
     )
 
 
-def test_higher_level_rejected_as_unsupported() -> None:
+@pytest.mark.parametrize("level", [2, 3, 11])
+def test_higher_level_rejected_as_unsupported(level: int) -> None:
+    # Gamma0(N) requires level-dependent elliptic and weight-two corrections;
+    # the level-one result carrier must not publish a guessed formula.
     with pytest.raises(OperationDomainValidationError):
-        space_dimension(_space(12, "M", level=2))
+        space_dimension(_space(12, "M", level=level))
     with pytest.raises(OperationDomainValidationError):
-        compute_space_dimension(SpaceDimensionRequest(space=_space(4, "S", level=11)))
+        compute_space_dimension(
+            SpaceDimensionRequest(space=_space(4, "S", level=level))
+        )
 
 
 def test_negative_weight_rejected_structurally() -> None:

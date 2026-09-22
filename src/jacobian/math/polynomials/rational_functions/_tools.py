@@ -13,6 +13,9 @@ from jacobian.math.polynomials.rational_functions._models import (
     PartialFractionsRequest,
     PartialFractionsResult,
 )
+from jacobian.math.polynomials.rational_functions.structured_tools import (
+    TOOLS as STRUCTURED_TOOLS,
+)
 
 
 def compute_hermite_reduction(
@@ -140,5 +143,7 @@ TOOLS = (
         ),
     ),
 )
+
+TOOLS = TOOLS + STRUCTURED_TOOLS
 
 __all__ = ["TOOLS"]

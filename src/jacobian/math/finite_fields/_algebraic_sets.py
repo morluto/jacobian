@@ -246,9 +246,13 @@ def _require_system(system: PolynomialSystem) -> None:
 
 
 def _admit_enumeration(
-    system: PolynomialSystem, *, projective: bool, materialize: bool
-) -> int:
-    """Return the exact candidate count after work and output admission."""
+    system: PolynomialSystem,
+    *,
+    projective: bool,
+    materialize: bool,
+    count_only: bool = False,
+) -> int | None:
+    """Admit enumeration, or return an exact count for a zero system."""
 
     _require_system(system)
     order = system.presentation.order
@@ -263,6 +267,17 @@ def _admit_enumeration(
             code="finite_field.algebraic_set_ambient_bound",
             message="ambient enumeration has no admitted candidates",
         )
+    if count_only and all(
+        not equation.terms or all(term.coefficient.is_zero for term in equation.terms)
+        for equation in system.equations
+    ):
+        if projective:
+            _require_homogeneous(system)
+        # Every affine point or projective scalar class is a zero. The count
+        # fits comfortably in a native integer under the carrier's q <= 2^16
+        # and n <= 8 bounds, so no candidate traversal or point materialization
+        # is needed.
+        return int(candidate_count)
     if materialize and candidate_count > MAX_ALGEBRAIC_SET_POINTS:
         raise OperationResourceAdmissionError(
             location=("presentation", "variable_axis"),
@@ -285,7 +300,7 @@ def _admit_enumeration(
             code="finite_field.algebraic_set_work_bound",
             message="zero-set evaluation exceeds the admitted work bound",
         )
-    return int(candidate_count)
+    return None
 
 
 def _prepare_equations(
@@ -366,11 +381,16 @@ def _coordinate_candidates(
 
 
 def _iter_zero_coordinates(
-    system: PolynomialSystem, *, projective: bool, materialize: bool
+    system: PolynomialSystem,
+    *,
+    projective: bool,
+    materialize: bool,
+    admitted: bool = False,
 ) -> Any:
     """Yield matching coordinates without constructing public point values."""
 
-    _admit_enumeration(system, projective=projective, materialize=materialize)
+    if not admitted:
+        _admit_enumeration(system, projective=projective, materialize=materialize)
     if projective:
         _require_homogeneous(system)
     from jacobian.math.finite_fields import _flint as flint
@@ -410,8 +430,16 @@ def affine_zero_set(system: PolynomialSystem) -> tuple[AffinePoint, ...]:
 def affine_zero_count(system: PolynomialSystem) -> int:
     """Count affine zeros without retaining or sorting public point values."""
 
+    count = _admit_enumeration(
+        system, projective=False, materialize=False, count_only=True
+    )
+    if count is not None:
+        return count
     return sum(
-        1 for _ in _iter_zero_coordinates(system, projective=False, materialize=False)
+        1
+        for _ in _iter_zero_coordinates(
+            system, projective=False, materialize=False, admitted=True
+        )
     )
 
 
@@ -443,8 +471,16 @@ def projective_zero_set(system: PolynomialSystem) -> tuple[ProjectivePoint, ...]
 def projective_zero_count(system: PolynomialSystem) -> int:
     """Count projective scalar classes without retaining public point values."""
 
+    count = _admit_enumeration(
+        system, projective=True, materialize=False, count_only=True
+    )
+    if count is not None:
+        return count
     return sum(
-        1 for _ in _iter_zero_coordinates(system, projective=True, materialize=False)
+        1
+        for _ in _iter_zero_coordinates(
+            system, projective=True, materialize=False, admitted=True
+        )
     )
 
 

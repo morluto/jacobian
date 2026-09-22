@@ -173,6 +173,24 @@ def test_projective_count_enumerates_one_representative_per_class() -> None:
     assert projective_zero_count(system) == (5**7 - 1) // (5 - 1)
 
 
+def test_zero_counts_use_closed_form_beyond_enumeration_work(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian.math.finite_fields import _algebraic_sets as algebraic_sets
+
+    system = _zero_system(finite_field(7, (0, 1)), tuple(f"x{i}" for i in range(8)))
+
+    def unexpected_enumeration(*args: object, **kwargs: object) -> object:
+        raise AssertionError("an identically zero system needs no candidate traversal")
+
+    monkeypatch.setattr(
+        algebraic_sets, "_coordinate_candidates", unexpected_enumeration
+    )
+
+    assert affine_zero_count(system) == 7**8
+    assert projective_zero_count(system) == (7**8 - 1) // (7 - 1)
+
+
 @pytest.mark.scale
 def test_projective_count_retains_near_work_envelope_case() -> None:
     presentation = finite_field(7, (0, 1))

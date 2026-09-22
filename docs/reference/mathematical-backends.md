@@ -369,6 +369,55 @@ degree and coefficient envelope. Missing CyPari is a typed resource refusal,
 and worker timeout, malformed output, or execution failure remain operational
 non-completions that never become a class-number or unit conclusion.
 
+## Implemented-slice ledger and deferred families
+
+This ledger records the release boundary for the current issue consolidation. It
+is documentation, not a second catalog manifest: each operation remains owned
+by the domain-local `_tools.py` declaration and keeps its existing canonical
+value and admission path. Umbrella issue **#3756** is routed to batch **B1**
+and its exact function-field and Galois owners (**#1807** and **#1811**); no
+combined function-field/Galois operation is published.
+
+| Issue | Implemented owner slice | Public operation surface | Boundary |
+| --- | --- | --- | --- |
+| #2274 | Existing bounded QF_BV extension of `smt.solve` | `smt.solve` | No second bit-vector operation; the display model is not a reusable typed assignment. |
+| #2448 | Exact rational-`J` complex-torus lattice and form profiles | `complex_torus.neron_severi_lattice.compute`, `complex_torus.riemann_form.profile.compute`, `complex_torus.polarization.find`, and `lattice.invariant_bilinear_form_lattice.compute` | Symbolic/numerical periods and unrestricted polarization-cone decisions remain outside this slice. |
+| #1705 | Finite square-free affine-form arithmetic | `number_theory.squarefree_affine_forms.local_factor.compute`, `number_theory.squarefree_affine_forms.euler_product.compute`, `number_theory.squarefree_affine_forms.local_admissibility.decide`, and `number_theory.squarefree_affine_forms.interval_count.compute` | Finite products and finite-cutoff local admissibility do not establish density or infinitude. |
+| #1686 | Finite binary-magma terms, equations, implications, and bounded search | `universal_algebra.term.evaluate.compute`, `universal_algebra.equation.profile.compute`, `universal_algebra.implication.countermodel.check`, and `universal_algebra.magma_implication.countermodel.find` (plus the established finite-algebra leaves) | `UNKNOWN` and finite exhaustion stay distinct from a global theorem. |
+| #964 | Prime-field Jacobian/syzygy and principal-quotient slices | `finite_field.polynomial.jacobian.compute`, `finite_field.quotient.reduce.compute`, `finite_field.jacobian_syzygy.check`, and `finite_field.jacobian_syzygy.generators.compute` | Arbitrary ideals, full module resolutions, and arbitrary characteristic extensions are not implied. |
+| #974 | Polygon visibility kernels and exact measure profiles | `geometry.polygon.visibility_kernel.compute` and `geometry.polygon.measure_certificate.compute` | The native measure verifier is semantic support; no duplicate public generic verifier is added. |
+
+The corresponding native/catalog parity and serialized producer-consumer
+regressions remain in the owner suites. In particular, the finite-field
+Jacobian feeds quotient reduction and syzygy leaves, the torus lattice feeds
+Riemann-form and polarization operations, and polygon kernels feed measure
+profiles without reconstructing parent or axis context.
+
+### Explicitly deferred backend families
+
+**#2450 (Bieberbach/crystallographic resolutions)** remains deferred. A backend
+summary is not an integral homology result. Promotion requires a checked,
+source-bound finite fundamental-domain or resolution carrier with lattice,
+holonomy, side-pairing, cell bases, integer boundary matrices, and replayable
+`d^2 = 0` evidence. It also requires a pinned HAPcryst/Polymake choice behind a
+killable adapter and independent circle, Klein-bottle, trivial-holonomy, bad
+side-pairing, torsion, and non-cocompact fixtures. No public operation is
+reserved or declared for this family.
+
+**#1884 (classical finite matrix groups)** remains deferred. Promotion first
+requires one canonical finite-field vector-space/matrix-group carrier and a
+pinned backend or an independent owner kernel, beginning with exact GL/SL
+rather than a broad classical-group union. The admission and evidence must
+separately cover generator completeness, determinant kernels, exact order, and
+natural vector/projective actions, with independent GL(1,q), GL(2,q), and
+SL(2,2/3) fixtures (including center and projectivization checks). GAP and
+Sage are not Jacobian runtime dependencies, so backend names alone cannot
+establish a group or its order. No classical-group operation is published.
+
+These deferrals are intentional contract boundaries, not unavailable-runtime
+aliases: operational backend failure must remain distinct from a mathematical
+negative, and no partial resolution or incomplete generator set is promoted.
+
 ## Runtime availability and installation
 
 System-runtime requirements belong to operation declarations as

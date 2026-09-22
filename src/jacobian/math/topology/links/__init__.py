@@ -1,5 +1,21 @@
 """Exact classical oriented link-diagram values and native operations."""
 
+from jacobian.math.topology.links._extensions_models import (
+    AlexanderPolynomialResult,
+    BraidClosureResult,
+    BraidLetter,
+    BraidPermutationResult,
+    BraidWord,
+    GoeritzCrossingContribution,
+    GoeritzDataResult,
+    GoeritzRegion,
+    LinkDeterminantResult,
+    SeifertCircle,
+    SeifertCircleResult,
+    WirtingerArc,
+    WirtingerCrossingRelator,
+    WirtingerPresentationResult,
+)
 from jacobian.math.topology.links._models import (
     ArcPairing,
     CrossingVisit,
@@ -12,6 +28,17 @@ from jacobian.math.topology.links._models import (
     LinkState,
     OrientedLinkDiagram,
 )
+from jacobian.math.topology.links.extensions import (
+    braid_closure,
+    braid_inverse,
+    braid_multiply,
+    braid_permutation,
+    link_alexander_polynomial,
+    link_determinant,
+    link_goeritz_data,
+    link_seifert_circles,
+    wirtinger_presentation,
+)
 from jacobian.math.topology.links.operations import (
     link_bracket,
     link_components,
@@ -20,18 +47,41 @@ from jacobian.math.topology.links.operations import (
 )
 
 __all__ = [
+    "AlexanderPolynomialResult",
     "ArcPairing",
+    "BraidClosureResult",
+    "BraidLetter",
+    "BraidPermutationResult",
+    "BraidWord",
     "CrossingVisit",
+    "GoeritzCrossingContribution",
+    "GoeritzDataResult",
+    "GoeritzRegion",
     "LinkBracketResult",
     "LinkComponent",
     "LinkComponentsResult",
     "LinkCrossing",
+    "LinkDeterminantResult",
     "LinkJonesResult",
     "LinkState",
     "LinkingMatrixResult",
     "OrientedLinkDiagram",
+    "SeifertCircle",
+    "SeifertCircleResult",
+    "WirtingerArc",
+    "WirtingerCrossingRelator",
+    "WirtingerPresentationResult",
+    "braid_closure",
+    "braid_inverse",
+    "braid_multiply",
+    "braid_permutation",
+    "link_alexander_polynomial",
     "link_bracket",
     "link_components",
+    "link_determinant",
+    "link_goeritz_data",
     "link_jones",
     "link_linking_matrix",
+    "link_seifert_circles",
+    "wirtinger_presentation",
 ]

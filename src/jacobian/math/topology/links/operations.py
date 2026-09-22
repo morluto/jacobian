@@ -7,6 +7,8 @@ from fractions import Fraction
 from itertools import product
 from typing import NoReturn
 
+from pydantic import ValidationError
+
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -33,8 +35,8 @@ def _reject(location: str, code: str, message: str) -> NoReturn:
     )
 
 
-def _admit_components(diagram: OrientedLinkDiagram) -> None:
-    """Enforce the shared envelope for native and catalog calls."""
+def _admit_components(diagram: OrientedLinkDiagram) -> OrientedLinkDiagram:
+    """Canonicalize and enforce the shared envelope for every call path."""
 
     if not isinstance(diagram, OrientedLinkDiagram):
         _reject(
@@ -42,12 +44,23 @@ def _admit_components(diagram: OrientedLinkDiagram) -> None:
             "link_diagram.components.diagram_not_a_link_diagram",
             "component source must be a well-formed oriented link diagram value",
         )
-    if len(diagram.crossings) > 64:
+    try:
+        admitted = OrientedLinkDiagram.model_validate_json(
+            diagram.model_dump_json(warnings=False)
+        )
+    except (AttributeError, TypeError, ValidationError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("diagram",),
+            code="link_diagram.components.diagram_shape",
+            message="diagram must satisfy the complete oriented-link value contract",
+        ) from exc
+    if len(admitted.crossings) > 64:
         raise OperationResourceAdmissionError(
             location=("diagram",),
             code="link_diagram.components.crossings_over_envelope",
             message="link diagram exceeds the 64-crossing envelope",
         )
+    return admitted
 
 
 def _add_term(
@@ -99,19 +112,20 @@ def _union_find(
     return parent, find, union
 
 
-def _admit_bracket(diagram: OrientedLinkDiagram) -> None:
-    _admit_components(diagram)
-    if len(diagram.crossings) > 12:
+def _admit_bracket(diagram: OrientedLinkDiagram) -> OrientedLinkDiagram:
+    admitted = _admit_components(diagram)
+    if len(admitted.crossings) > 12:
         raise OperationResourceAdmissionError(
             location=("diagram",),
             code="link_diagram.bracket.state_bound",
             message="the exact bracket state family exceeds 2^12 admitted states",
         )
+    return admitted
 
 
 def link_bracket(diagram: OrientedLinkDiagram) -> LinkBracketResult:
     """Compute the complete Kauffman bracket state sum in Laurent A."""
-    _admit_bracket(diagram)
+    diagram = _admit_bracket(diagram)
     crossings = diagram.crossings
     darts = [dart for crossing in crossings for dart in crossing.half_edges]
     index = {dart: i for i, dart in enumerate(darts)}
@@ -188,6 +202,7 @@ def link_bracket(diagram: OrientedLinkDiagram) -> LinkBracketResult:
 def link_jones(diagram: OrientedLinkDiagram) -> LinkJonesResult:
     """Return the writhe-normalized Jones polynomial, represented in A."""
     bracket = link_bracket(diagram)
+    diagram = bracket.diagram
     writhe = sum(crossing.sign for crossing in diagram.crossings)
     sign_factor = Fraction(-1 if writhe % 2 else 1, 1)
     terms = {
@@ -205,6 +220,7 @@ def link_jones(diagram: OrientedLinkDiagram) -> LinkJonesResult:
 def link_linking_matrix(diagram: OrientedLinkDiagram) -> LinkingMatrixResult:
     """Compute the exact oriented linking matrix from signed mixed crossings."""
     components = link_components(diagram)
+    diagram = components.diagram
     dart_component = {
         dart: component.component_id
         for component in components.components
@@ -245,7 +261,7 @@ def link_components(diagram: OrientedLinkDiagram) -> LinkComponentsResult:
     (zero-crossing components) return as empty-dart components.
     """
 
-    _admit_components(diagram)
+    diagram = _admit_components(diagram)
     strand_partner: dict[str, str] = {}
     dart_role: dict[str, str] = {}
     for crossing in diagram.crossings:

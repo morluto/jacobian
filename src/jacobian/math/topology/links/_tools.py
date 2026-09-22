@@ -10,6 +10,7 @@ from jacobian.math.topology.links._models import (
     LinkJonesRequest,
     LinkJonesResult,
 )
+from jacobian.math.topology.links.extensions_tools import TOOLS as EXTENSION_TOOLS
 from jacobian.math.topology.links.operations import (
     link_bracket,
     link_components,
@@ -35,6 +36,7 @@ def _run_linking(request: LinkComponentsRequest) -> LinkingMatrixResult:
 
 
 TOOLS = (
+    *EXTENSION_TOOLS,
     MathTool(
         operation_id="link_diagram.components.compute",
         title="Partition a classical oriented link diagram into components",

@@ -85,6 +85,27 @@ def _non_greedoid_exchange() -> FiniteFeasibleSetSystem:
     )
 
 
+def _reference_greedoid_obstruction(
+    feasible_rows: tuple[tuple[int, ...], ...],
+) -> str | None:
+    """Check the three defining axioms directly on a tiny finite family."""
+    feasible = {frozenset(row) for row in feasible_rows}
+    if frozenset() not in feasible:
+        return "missing_empty_set"
+    for candidate in feasible:
+        if candidate and not any(
+            candidate - {element} in feasible for element in candidate
+        ):
+            return "inaccessible_feasible_set"
+    for larger in feasible:
+        for smaller in feasible:
+            if len(larger) > len(smaller) and not any(
+                smaller | {element} in feasible for element in larger - smaller
+            ):
+                return "exchange_violation"
+    return None
+
+
 @pytest.mark.parametrize(
     "result",
     (
@@ -135,6 +156,34 @@ def test_recognition_rejects_a_ground_label_outside_utf8_budget() -> None:
 
 
 class TestRecognize:
+    def test_all_three_element_families_match_the_axiom_oracle(self) -> None:
+        subsets = tuple(
+            tuple(index for index in range(3) if mask & (1 << index))
+            for mask in range(1 << 3)
+        )
+        for family_mask in range(1 << len(subsets)):
+            feasible_rows = tuple(
+                row for index, row in enumerate(subsets) if family_mask & (1 << index)
+            )
+            system = FiniteFeasibleSetSystem(
+                ground=("a", "b", "c"), feasible=feasible_rows
+            )
+
+            result = greedoids.recognize(system)
+            expected_obstruction = _reference_greedoid_obstruction(feasible_rows)
+
+            if expected_obstruction is None:
+                expected_rank = max(map(len, feasible_rows))
+                assert result.status == "GREEDOID"
+                assert result.obstruction is None
+                assert result.rank == expected_rank
+                assert {frozenset(row) for row in result.bases} == {
+                    frozenset(row) for row in feasible_rows if len(row) == expected_rank
+                }
+            else:
+                assert result.status == "NOT_A_GREEDOID"
+                assert result.obstruction == expected_obstruction
+
     def test_empty_ground_with_its_empty_feasible_set_is_a_greedoid(self) -> None:
         result = _recognize(
             RecognizeRequest(system=FiniteFeasibleSetSystem(ground=(), feasible=((),)))

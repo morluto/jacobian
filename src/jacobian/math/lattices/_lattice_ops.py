@@ -1,8 +1,8 @@
 """Exact integer-lattice structural kernels.
 
-These functions are pure computation kernels backed by SymPy (for rank,
-determinant, Smith normal form, and rational nullspace) and Python-FLINT (for
-Hermite normal form).  They accept plain integer lists-of-lists and return
+These functions are pure computation kernels backed by Python-FLINT for
+integer rank, determinant, Smith and Hermite normal forms, plus exact rational
+nullspace operations.  They accept plain integer lists-of-lists and return
 plain Python values (ints, lists-of-lists of ints, lists-of-lists of
 ``Fraction``).  The public ``_models`` layer converts the returned values into
 canonical wire types.
@@ -82,14 +82,16 @@ def hermite_basis(entries: list[list[int]]) -> tuple[list[list[int]], list[list[
 
 def smith_invariant_factors(entries: list[list[int]]) -> list[int]:
     """Return the nonzero invariant factors of the integer Smith normal form."""
-    from sympy import Matrix
-    from sympy.matrices.normalforms import smith_normal_form
+    if not entries:
+        return []
+    from jacobian.math.matrices._flint import integer_smith_normal_form
 
-    matrix = Matrix(entries)
-    snf: Any = smith_normal_form(matrix)
+    snf = integer_smith_normal_form(
+        tuple(tuple(int(value) for value in row) for row in entries)
+    )
     factors: list[int] = []
-    for index in range(min(snf.rows, snf.cols)):
-        value: Any = snf[index, index]
+    for index in range(min(len(snf), len(snf[0]))):
+        value = snf[index][index]
         if value != 0:
             factors.append(abs(int(value)))
     return factors

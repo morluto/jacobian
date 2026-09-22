@@ -10,6 +10,7 @@ from pydantic import ConfigDict, Field, StringConstraints, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
+from jacobian._execution import current_request_execution
 from jacobian._models import StrictModel
 from jacobian.canonical import format_canonical_integer
 
@@ -474,7 +475,16 @@ def _feasibility_outcome(
         return "unknown"
     try:
         solver = z3.Solver()
-        solver.set(timeout=max(1, MAX_OPTIMUM_PROOF_MILLISECONDS))
+        proof_milliseconds = MAX_OPTIMUM_PROOF_MILLISECONDS
+        execution = current_request_execution()
+        if execution is not None and execution.deadline is not None:
+            import time
+
+            proof_milliseconds = min(
+                proof_milliseconds,
+                max(1, int(1000 * (execution.deadline - time.monotonic()))),
+            )
+        solver.set(timeout=max(1, proof_milliseconds))
         bits = [z3.Bool(f"b_{index}") for index in range(n)]
         signed_sums = [
             z3.Sum([z3.If(bits[element], 1, -1) for element in subset])

@@ -63,10 +63,12 @@ def test_petri_firing_reports_successor_outside_marking_envelope() -> None:
         "net": {
             "place_count": 1,
             "transition_count": 1,
+            "place_ids": None,
+            "transition_ids": None,
             "pre": [[0]],
             "post": [[MAX_PETRI_ARC_WEIGHT]],
         },
-        "marking": {"tokens": [MAX_PETRI_MARKING]},
+        "marking": {"tokens": [MAX_PETRI_MARKING], "net": None},
         "transition": 0,
         "status": "ESCAPES_DECLARED_ENVELOPE",
         "new_marking": None,

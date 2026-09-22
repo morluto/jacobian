@@ -34,6 +34,7 @@ from jacobian.math.groups.root_systems._models import (
     CartanMatrix,
     CartanType,
     CartanTypeResult,
+    FiniteCartanDatum,
     PositiveRootsResult,
     RootComponentData,
     RootSystemDataResult,
@@ -48,12 +49,81 @@ from jacobian.math.groups.root_systems._models import (
 MAX_SIGNED_ROOT_ACTION_DEGREE = 2 * MAX_POSITIVE_ROOTS
 
 
-def _as_cartan(matrix: CartanMatrix | tuple[tuple[int, ...], ...]) -> CartanMatrix:
-    return (
-        matrix
-        if isinstance(matrix, CartanMatrix)
-        else CartanMatrix.model_validate(matrix)
+def cartan_datum(matrix: CartanMatrix) -> FiniteCartanDatum:
+    """Construct root/coroot/weight basis data for a finite Cartan matrix."""
+    from fractions import Fraction
+    from math import gcd, lcm
+
+    from jacobian._exact import CanonicalRational
+    from jacobian.math.groups.root_systems._cartan import positive_symmetrizer
+    from jacobian.math.matrices.values import IntegerMatrix
+
+    cartan = _as_cartan(matrix)
+    rows = cartan.entries
+    _admit_cartan_finite_type(rows)
+    rational = positive_symmetrizer(rows)
+    denominator: int = 1
+    for value in rational:
+        denominator = lcm(denominator, value.denominator)
+    scaled: list[int] = [int(value * denominator) for value in rational]
+    common: int = 0
+    for scaled_value in scaled:
+        common = gcd(common, abs(int(scaled_value)))
+    normalized: list[int] = [scaled_value // common for scaled_value in scaled]
+    # alpha_j = sum_i A[i,j] omega_i; coroot_j = sum_i A[j,i] omega_i^vee.
+    root_to_weight = tuple(
+        tuple(rows[row][column] for column in range(len(rows)))
+        for row in range(len(rows))
     )
+    coroot_to_coweight = tuple(
+        tuple(rows[column][row] for column in range(len(rows)))
+        for row in range(len(rows))
+    )
+    return FiniteCartanDatum._from_kernel(
+        cartan_matrix=cartan,
+        symmetrizer=tuple(
+            CanonicalRational.from_fraction(Fraction(value, denominator // common))
+            for value in normalized
+        ),
+        root_to_weight=IntegerMatrix(
+            row_count=len(rows), column_count=len(rows), entries=root_to_weight
+        ),
+        coroot_to_coweight=IntegerMatrix(
+            row_count=len(rows), column_count=len(rows), entries=coroot_to_coweight
+        ),
+    )
+
+
+def _as_cartan(matrix: CartanMatrix | tuple[tuple[int, ...], ...]) -> CartanMatrix:
+    """Re-establish the cheap Cartan carrier boundary for native callers.
+
+    Native callers can supply ``model_construct`` values, so merely checking
+    ``isinstance`` is not sufficient. Reparse the structural payload before
+    any indexing or finite-type recognition and translate malformed values to
+    the owner error taxonomy rather than leaking Pydantic/attribute errors.
+    """
+    from pydantic import ValidationError
+
+    payload: object
+    if isinstance(matrix, CartanMatrix):
+        try:
+            payload = matrix.model_dump()
+        except (AttributeError, TypeError, ValueError) as error:
+            raise OperationDomainValidationError(
+                location=("matrix",),
+                code="root_system.cartan_matrix_payload",
+                message="matrix must be a structurally valid Cartan matrix",
+            ) from error
+    else:
+        payload = matrix
+    try:
+        return CartanMatrix.model_validate(payload)
+    except (ValidationError, TypeError, ValueError, AttributeError) as error:
+        raise OperationDomainValidationError(
+            location=("matrix",),
+            code="root_system.cartan_matrix_payload",
+            message="matrix must be a structurally valid Cartan matrix",
+        ) from error
 
 
 def _admit_cartan_finite_type(matrix: tuple[tuple[int, ...], ...]) -> None:

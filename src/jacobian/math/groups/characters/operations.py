@@ -7,10 +7,12 @@ from fractions import Fraction
 from math import gcd
 
 from jacobian._exact import CanonicalRational, canonical_rational_component_digits
+from jacobian._execution import BackendFailureReason, OperationBackendError
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
+from jacobian.math.groups._models import GroupConjugacyClassesResult
 from jacobian.math.groups.characters._cyclotomic import (
     MAX_ARITHMETIC_ORDER,
     MAX_CYCLOTOMIC_REDUCTION_COEFFICIENT_DIGITS,
@@ -22,13 +24,19 @@ from jacobian.math.groups.characters._cyclotomic import (
     zero_value,
 )
 from jacobian.math.groups.characters._models import (
+    MAX_CHARACTER_TABLE_CELLS,
+    MAX_CHARACTER_TABLE_WORK,
     MAX_CLASS_COUNT,
     MAX_CYCLOTOMIC_ORDER,
     MAX_GROUP_ORDER,
     MAX_INNER_PRODUCT_WORK,
     MAX_VALUE_COEFFICIENT_DIGITS,
+    CharacterRow,
+    CharacterTableResult,
+    ClassAxis,
     ClassContribution,
     ClassFunctionInnerProductResult,
+    ConjugacyClassPartition,
     CyclotomicValue,
     FiniteClassFunction,
 )
@@ -326,13 +334,286 @@ def _admit_inner_product(phi: FiniteClassFunction, psi: FiniteClassFunction) -> 
     _reject_derived_height("inner product", inner)
 
 
-def class_function_inner_product(
+def _permutation_compose(
+    first: tuple[int, ...], second: tuple[int, ...]
+) -> tuple[int, ...]:
+    return tuple(second[first[index]] for index in range(len(first)))
+
+
+def _cyclic_generator(partition: GroupConjugacyClassesResult) -> tuple[int, ...] | None:
+    elements = [
+        tuple(element)
+        for conjugacy_class in partition.classes
+        for element in conjugacy_class
+    ]
+    identity = tuple(range(partition.source.degree))
+    for candidate in elements:
+        powers = {identity}
+        current = identity
+        for _ in range(len(elements)):
+            current = _permutation_compose(current, candidate)
+            powers.add(current)
+            if current == identity:
+                break
+        if len(powers) == len(elements):
+            return candidate
+    return None
+
+
+def _cyclotomic_reduction_work(raw_length: int, degree: int) -> int:
+    """Count coefficient updates in the exact reducer's bounded loop."""
+
+    return max(0, raw_length - degree) * (degree + 1)
+
+
+def _character_table_work_bound(
+    *, order: int, class_count: int, row_count: int, max_class_size: int
+) -> tuple[int, int]:
+    """Bound exact coefficient work and materialized coefficient cells.
+
+    The orthogonality pass is not a scalar ``rows² * classes`` operation.  It
+    conjugates, multiplies, reduces, scales, adds, and constructs contribution
+    values in ``Q(zeta_order)`` for every class and ordered row pair.  Count
+    those vector operations before generating any rows.  The second returned
+    quantity accounts for all retained and temporary coefficient vectors,
+    including the contribution table that is constructed and immediately
+    discarded by the table operation.
+    """
+
+    degree = euler_phi(order)
+    reduction = _cyclotomic_reduction_work
+    conjugate = order + degree + reduction(order, degree)
+    product = degree * degree + reduction(2 * degree - 1, degree)
+    vector_cells = 3 * degree  # conjugate, product, and weighted product
+    pair_class_work = conjugate + product + 2 * degree + vector_cells
+    pair_count = row_count * row_count * class_count
+
+    # Rational coefficient height is part of the exact work envelope: reduction
+    # can enlarge integer numerators even when the vector length is bounded.
+    def reduction_height(raw_length: int) -> int:
+        # One reduction update sums up to ``degree + 1`` coefficient terms;
+        # account for both the fixed polynomial coefficient width and that
+        # accumulation height rather than charging vector length alone.
+        per_step_digits = MAX_CYCLOTOMIC_REDUCTION_COEFFICIENT_DIGITS + len(
+            str(degree + 1)
+        )
+        return max(0, raw_length - degree) * per_step_digits
+
+    generated_height = 1 + reduction_height(order)
+    conjugate_height = generated_height + reduction_height(order)
+    product_height = (
+        2 * generated_height
+        + (len(str(degree)) if degree > 1 else 0)
+        + reduction_height(2 * degree - 1)
+    )
+    weighted_height = product_height + len(str(max_class_size))
+    intermediate_height = max(
+        1,
+        generated_height,
+        conjugate_height,
+        product_height,
+        weighted_height + len(str(class_count)),
+        len(str(order)) + weighted_height,
+    )
+    work = pair_count * pair_class_work * intermediate_height
+    # Final division/addition and the generated character rows are mandatory
+    # coefficient work too; output_cells includes every constructed vector.
+    work += (
+        row_count * row_count * degree * intermediate_height
+        + row_count * class_count * degree * generated_height
+    )
+    output_cells = (
+        row_count * class_count * degree
+        + pair_count * (vector_cells + degree)  # contribution + inner vectors
+    )
+    # Decimal serialization of exact coefficient vectors is itself admitted
+    # work; do not let a cheap arithmetic estimate hide a large wire result.
+    work = max(work, output_cells * intermediate_height)
+    return work, output_cells
+
+
+def _admit_character_table(*, order: int, sizes: tuple[int, ...]) -> int:
+    """Admit the complete table, including its aggregate orthogonality pass."""
+    class_count = len(sizes)
+    if order > MAX_GROUP_ORDER or class_count > MAX_CLASS_COUNT:
+        raise OperationResourceAdmissionError(
+            location=("partition",),
+            code="groups.characters.table_shape_envelope",
+            message="character-table classes or group order exceed the bounded envelope",
+        )
+    if order == 1:
+        row_count = 1
+    elif order == 6 and sizes == (1, 3, 2):
+        row_count = 3
+    elif any(size != 1 for size in sizes):
+        raise OperationDomainValidationError(
+            location=("partition",),
+            code="groups.characters.unsupported_group",
+            message=(
+                "complete tables are admitted for the trivial, cyclic, and S3 "
+                "permutation groups"
+            ),
+        )
+    else:
+        row_count = order
+    # This is a pre-computation bound for the actual coefficient-vector kernel,
+    # not a per-pair admission.  It includes reduction and temporary/output
+    # coefficient cells, so C31 is refused before row generation.
+    work, output_cells = _character_table_work_bound(
+        order=order,
+        class_count=class_count,
+        row_count=row_count,
+        max_class_size=max(sizes, default=1),
+    )
+    if work > MAX_CHARACTER_TABLE_WORK:
+        raise OperationResourceAdmissionError(
+            location=("partition",),
+            code="groups.characters.table_work_exceeds_envelope",
+            message=(
+                "complete character-table coefficient work exceeds the "
+                f"{MAX_CHARACTER_TABLE_WORK}-unit envelope"
+            ),
+        )
+    if output_cells > MAX_CHARACTER_TABLE_CELLS * MAX_CYCLOTOMIC_ORDER:
+        raise OperationResourceAdmissionError(
+            location=("partition",),
+            code="groups.characters.table_output_exceeds_envelope",
+            message=(
+                "complete character-table coefficient output exceeds the "
+                f"{MAX_CHARACTER_TABLE_CELLS * MAX_CYCLOTOMIC_ORDER}-cell envelope"
+            ),
+        )
+    table_cells = row_count * class_count
+    if table_cells > MAX_CHARACTER_TABLE_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("partition",),
+            code="groups.characters.table_output_exceeds_envelope",
+            message=(
+                "character-table cells exceed the "
+                f"{MAX_CHARACTER_TABLE_CELLS}-cell envelope"
+            ),
+        )
+    return row_count
+
+
+def character_table(
+    partition: GroupConjugacyClassesResult,
+) -> CharacterTableResult:
+    """Return a complete exact table for the bounded cyclic/S3 slice.
+
+    The source partition is complete, so the result remains bound to the
+    concrete permutation group and class ordering.  The supported family is
+    intentionally explicit: trivial groups, cyclic groups, and S3.  Other
+    groups are domain-invalid rather than receiving a guessed partial table.
+    """
+    if not isinstance(partition, GroupConjugacyClassesResult):
+        raise OperationDomainValidationError(
+            location=("partition",),
+            code="groups.characters.partition_type",
+            message="partition must be a complete group class partition",
+        )
+    from jacobian.math.groups.operations import verify_group_conjugacy_classes
+
+    if not verify_group_conjugacy_classes(partition):
+        raise OperationDomainValidationError(
+            location=("partition",),
+            code="groups.characters.partition_not_group_bound",
+            message="class rows must be the complete conjugacy partition of their source group",
+        )
+    order = sum(len(cls) for cls in partition.classes)
+    if order > MAX_CYCLOTOMIC_ORDER:
+        raise OperationResourceAdmissionError(
+            location=("partition",),
+            code="groups.characters.cyclotomic_order_exceeds_envelope",
+            message=(
+                f"complete character tables admit cyclotomic order at most "
+                f"{MAX_CYCLOTOMIC_ORDER}"
+            ),
+        )
+    sizes = tuple(len(cls) for cls in partition.classes)
+    _admit_character_table(order=order, sizes=sizes)
+    parent = ConjugacyClassPartition._from_group_result(partition)
+    rows: list[CharacterRow] = []
+    if order == 1:
+        rows.append(
+            CharacterRow(
+                label="trivial", degree=1, values=(_make_value(1, (Fraction(1),)),)
+            )
+        )
+    elif order == 6 and sizes == (1, 3, 2):
+        # The class order is identity, transpositions, 3-cycles for the
+        # canonical permutation-class ordering.
+        rows = [
+            CharacterRow(
+                label="trivial",
+                degree=1,
+                values=tuple(_make_value(1, (Fraction(v),)) for v in (1, 1, 1)),
+            ),
+            CharacterRow(
+                label="sign",
+                degree=1,
+                values=tuple(_make_value(1, (Fraction(v),)) for v in (1, -1, 1)),
+            ),
+            CharacterRow(
+                label="standard",
+                degree=2,
+                values=tuple(_make_value(1, (Fraction(v),)) for v in (2, 0, -1)),
+            ),
+        ]
+    else:
+        generator = _cyclic_generator(partition)
+        if generator is None or any(len(cls) != 1 for cls in partition.classes):
+            raise OperationDomainValidationError(
+                location=("partition",),
+                code="groups.characters.unsupported_group",
+                message="complete tables are admitted for the trivial, cyclic, and S3 permutation groups",
+            )
+        # Match each canonical singleton class to a unique generator power.
+        powers: list[tuple[int, ...]] = []
+        current = tuple(range(partition.source.degree))
+        for _ in range(order):
+            powers.append(current)
+            current = _permutation_compose(current, generator)
+        power_index = {element: index for index, element in enumerate(powers)}
+        from jacobian.math.groups.characters._cyclotomic import value_from_power
+
+        for exponent in range(order):
+            values = []
+            for cls in partition.classes:
+                power = power_index[tuple(cls[0])]
+                values.append(
+                    _make_value(order, value_from_power(order, exponent * power))
+                )
+            rows.append(
+                CharacterRow(label=f"chi_{exponent}", degree=1, values=tuple(values))
+            )
+    if sum(row.degree * row.degree for row in rows) != order:
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+    # Independent orthogonality replay over the complete class axis. This is
+    # a defining invariant of the returned table, not a generic result check.
+    axis = ClassAxis._from_kernel(
+        class_sizes=sizes, cyclotomic_order=rows[0].values[0].order
+    )
+    functions = tuple(FiniteClassFunction(axis=axis, values=row.values) for row in rows)
+    for left_index, left in enumerate(functions):
+        for right_index, right in enumerate(functions):
+            pairing = _class_function_inner_product_kernel(left, right)
+            expected = 1 if left_index == right_index else 0
+            coefficients = tuple(
+                value.as_fraction() for value in pairing.inner_product.coefficients
+            )
+            if coefficients[0] != expected or any(
+                value != 0 for value in coefficients[1:]
+            ):
+                raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+    return CharacterTableResult._from_kernel(partition=parent, rows=tuple(rows))
+
+
+def _class_function_inner_product_kernel(
     phi: FiniteClassFunction,
     psi: FiniteClassFunction,
 ) -> ClassFunctionInnerProductResult:
-    """Exact Hermitian inner product with a complete class contribution table."""
-
-    _admit_inner_product(phi, psi)
+    """Compute one already-admitted inner product without replaying admission."""
     axis = phi.axis
     order = axis.cyclotomic_order
     if order > MAX_ARITHMETIC_ORDER:
@@ -382,4 +663,13 @@ def class_function_inner_product(
     )
 
 
-__all__ = ["class_function_inner_product"]
+def class_function_inner_product(
+    phi: FiniteClassFunction,
+    psi: FiniteClassFunction,
+) -> ClassFunctionInnerProductResult:
+    """Exact Hermitian inner product with a complete class contribution table."""
+    _admit_inner_product(phi, psi)
+    return _class_function_inner_product_kernel(phi, psi)
+
+
+__all__ = ["character_table", "class_function_inner_product"]

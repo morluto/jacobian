@@ -4,16 +4,24 @@ from __future__ import annotations
 
 from typing import NoReturn
 
+from pydantic import ValidationError
+
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
 from jacobian.math.gauge._models import (
+    MAX_GAUGE_VERTICES,
     EdgeContribution,
     GaugeField,
+    GaugeFieldEdgeLabel,
+    GaugeTransformRequest,
+    GaugeTransformResult,
+    GaugeVertexValue,
     HolonomyResult,
     OrientedGaugePath,
     PermutationLabel,
+    PlaquetteResult,
 )
 
 
@@ -86,6 +94,135 @@ def _admit_holonomy(field: GaugeField, path: OrientedGaugePath) -> None:
         cursor = head
 
 
+def _reparse_field(field: GaugeField) -> GaugeField:
+    """Re-establish the complete field boundary for direct native callers."""
+
+    try:
+        return GaugeField.model_validate(field.model_dump(mode="python"))
+    except Exception:
+        _reject(
+            "field",
+            "lattice_gauge.transform.field_malformed",
+            "transform source must be a complete bounded gauge field",
+        )
+
+
+def _admit_transform(
+    field: object, vertex_values: object
+) -> tuple[GaugeField, tuple[GaugeVertexValue, ...]]:
+    """Shared strict admission for native and catalog gauge transforms."""
+
+    if not isinstance(field, GaugeField):
+        _reject(
+            "field",
+            "lattice_gauge.transform.field_not_a_gauge_field",
+            "transform source must be a gauge field",
+        )
+    canonical_field = _reparse_field(field)
+    if not isinstance(vertex_values, (tuple, list)):
+        _reject(
+            "vertex_values",
+            "lattice_gauge.transform.vertex_values_type",
+            "vertex values must be a finite labelled family",
+        )
+    if not vertex_values or len(vertex_values) > MAX_GAUGE_VERTICES:
+        _reject(
+            "vertex_values",
+            "lattice_gauge.transform.vertex_values_shape",
+            "vertex values must be a bounded nonempty labelled family",
+        )
+    canonical_values: list[GaugeVertexValue] = []
+    for entry in vertex_values:
+        if not isinstance(entry, GaugeVertexValue):
+            _reject(
+                "vertex_values",
+                "lattice_gauge.transform.vertex_value_type",
+                "every frame entry must be a gauge vertex value",
+            )
+        # Check scalar/hashable identity before serializing a forged
+        # model_construct value; otherwise Pydantic itself may emit a warning
+        # or a raw unhashable-value failure before owner admission runs.
+        if type(getattr(entry, "vertex", None)) is not str:
+            _reject(
+                "vertex_values",
+                "lattice_gauge.transform.vertex_value_malformed",
+                "vertex identifiers must be bounded strings",
+            )
+        try:
+            canonical_values.append(
+                GaugeVertexValue.model_validate(entry.model_dump(mode="python"))
+            )
+        except Exception:
+            _reject(
+                "vertex_values",
+                "lattice_gauge.transform.vertex_value_malformed",
+                "every frame entry must carry a bounded permutation label",
+            )
+    values = tuple(canonical_values)
+    # Reuse the request model's complete coverage and degree rules after the
+    # native values have been reparsed.  This is structural validation only;
+    # the operation's actual admission remains here.
+    try:
+        request = GaugeTransformRequest.model_validate(
+            {"field": canonical_field, "vertex_values": values}
+        )
+    except (ValidationError, TypeError, ValueError):
+        _reject(
+            "vertex_values",
+            "lattice_gauge.transform.vertex_coverage",
+            "transform must label every lattice vertex exactly once with the field degree",
+        )
+    return request.field, request.vertex_values
+
+
+def gauge_transform(
+    field: GaugeField,
+    vertex_values: tuple[GaugeVertexValue, ...] | list[GaugeVertexValue],
+) -> GaugeTransformResult:
+    """Apply ``U'_e = h_tail^-1 U_e h_head`` on one finite lattice."""
+    field, vertex_values = _admit_transform(field, vertex_values)
+    by_vertex = {entry.vertex: entry.value for entry in vertex_values}
+    labels = {entry.edge_id: entry.label for entry in field.edge_labels}
+    transformed_labels: list[GaugeFieldEdgeLabel] = []
+    for edge in field.lattice.edges:
+        value = _compose(
+            _compose(_inverse(by_vertex[edge.tail].image), labels[edge.edge_id].image),
+            by_vertex[edge.head].image,
+        )
+        transformed_labels.append(
+            GaugeFieldEdgeLabel(
+                edge_id=edge.edge_id,
+                label=PermutationLabel(degree=field.degree, image=value),
+            )
+        )
+    transformed = GaugeField(
+        lattice=field.lattice,
+        degree=field.degree,
+        edge_labels=tuple(transformed_labels),
+    )
+    canonical_values = tuple(
+        GaugeVertexValue(vertex=vertex, value=by_vertex[vertex])
+        for vertex in field.lattice.vertices
+    )
+    return GaugeTransformResult(
+        source=field, transformed=transformed, vertex_values=canonical_values
+    )
+
+
+def plaquette_curvature(field: GaugeField, path: OrientedGaugePath) -> PlaquetteResult:
+    """Return exact curvature for a closed oriented plaquette path."""
+    result = path_holonomy(field, path)
+    if result.start != result.end:
+        _reject(
+            "path",
+            "lattice_gauge.plaquette.open_path",
+            "a plaquette path must be closed",
+        )
+    return PlaquetteResult(
+        field=field, path=path, curvature=result.holonomy, start=result.start
+    )
+
+
 def path_holonomy(field: GaugeField, path: OrientedGaugePath) -> HolonomyResult:
     """Compute the ordered exact group product along an oriented edge path.
 
@@ -153,4 +290,4 @@ def _run_path_holonomy(request: object) -> HolonomyResult:
     return path_holonomy(request.field, request.path)
 
 
-__all__ = ["path_holonomy"]
+__all__ = ["gauge_transform", "path_holonomy", "plaquette_curvature"]

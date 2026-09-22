@@ -21,6 +21,8 @@ from jacobian.math.number_theory.modular_forms.values import (
 )
 from jacobian.math.polynomials.series._models import TruncatedSeries
 
+from .transforms import hecke, named_q_expansion, sturm_bound, u_operator, v_operator
+
 
 def _series(coefficients: tuple[Fraction, ...]) -> TruncatedSeries:
     return TruncatedSeries(
@@ -53,6 +55,12 @@ def level_one_named_q_expansion(
     form: NamedLevelOneModularForm, truncation_order: int
 ) -> LevelOneModularQExpansion:
     """Construct E4, E6, or Delta through one declared q-precision."""
+    if type(form) is not str:
+        raise OperationDomainValidationError(
+            location=("form",),
+            code="modular_form.form_type",
+            message="form must be a named modular-form string",
+        )
     require_level_one_admission(form, truncation_order)
     if form == "DELTA":
         q_expansion = _delta_series(truncation_order)
@@ -84,23 +92,42 @@ def require_space_dimension_admission(space: ModularFormSpace) -> None:
             code="modular_form.space_dimension_space_type",
             message="space must be a modular-form space value",
         )
-    if space.group != "GAMMA0" or space.character != "TRIVIAL":
+    try:
+        group = space.group
+        character = space.character
+        kind = space.kind
+        level = space.level
+        weight = space.weight
+        coefficient_domain = space.coefficient_domain
+    except AttributeError as exc:
+        raise OperationDomainValidationError(
+            location=("space",),
+            code="modular_form.space_dimension_shape",
+            message="space must carry a canonical Gamma0 parent",
+        ) from exc
+    if (
+        group != "GAMMA0"
+        or character != "TRIVIAL"
+        or kind not in {"M", "S"}
+        or type(level) is not int
+        or type(weight) is not int
+    ):
         raise OperationDomainValidationError(
             location=("space",),
             code="modular_form.space_dimension_unsupported_space",
             message="only trivial-character Gamma0 spaces are supported",
         )
-    if space.coefficient_domain != "QQ":
+    if coefficient_domain != "QQ":
         raise OperationDomainValidationError(
             location=("space",),
             code="modular_form.space_dimension_unsupported_domain",
             message="only QQ coefficient domains are supported",
         )
-    if space.level != 1:
+    if level != 1:
         raise OperationDomainValidationError(
             location=("space", "level"),
-            code="modular_form.space_dimension_unsupported_level",
-            message="only level-one space dimensions are supported",
+            code="modular_form.space_dimension_level",
+            message="exact dimension is currently admitted only for Gamma0(1)",
         )
 
 
@@ -115,16 +142,23 @@ def space_dimension(space: ModularFormSpace) -> SpaceDimensionResult:
 
     require_space_dimension_admission(space)
     weight = space.weight
-    if weight % 2 == 1:
-        holomorphic, cusp, eisenstein = 0, 0, 0
-    elif weight == 0:
-        holomorphic, cusp, eisenstein = 1, 0, 1
-    elif weight == 2:
-        holomorphic, cusp, eisenstein = 0, 0, 0
+    if space.level == 1:
+        if weight % 2 == 1:
+            holomorphic, cusp, eisenstein = 0, 0, 0
+        elif weight == 0:
+            holomorphic, cusp, eisenstein = 1, 0, 1
+        elif weight == 2:
+            holomorphic, cusp, eisenstein = 0, 0, 0
+        else:
+            holomorphic = weight // 12 if weight % 12 == 2 else weight // 12 + 1
+            eisenstein = 1
+            cusp = holomorphic - 1
     else:
-        holomorphic = weight // 12 if weight % 12 == 2 else weight // 12 + 1
-        eisenstein = 1
-        cusp = holomorphic - 1
+        # The admission above deliberately excludes higher levels. Their
+        # elliptic-point and weight-two correction terms need a complete
+        # Gamma0(N) dimension carrier; a level-one formula must not be
+        # presented as a higher-level answer.
+        raise AssertionError("unreachable higher-level dimension branch")
     dimension = holomorphic if space.kind == "M" else cusp
     return SpaceDimensionResult._from_kernel(
         space,
@@ -134,4 +168,12 @@ def space_dimension(space: ModularFormSpace) -> SpaceDimensionResult:
     )
 
 
-__all__ = ["level_one_named_q_expansion", "space_dimension"]
+__all__ = [
+    "hecke",
+    "level_one_named_q_expansion",
+    "named_q_expansion",
+    "space_dimension",
+    "sturm_bound",
+    "u_operator",
+    "v_operator",
+]

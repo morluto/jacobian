@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from fractions import Fraction
-from itertools import product
 
 from jacobian._exact import CanonicalRational
 from jacobian._execution import request_checkpoint
@@ -100,8 +99,11 @@ def require_series_admission(digit_set: KempnerDigitSet, cutoff: int) -> int:
                 f"{MAX_KEMPNER_SERIES_NUMERALS}-term enumeration envelope"
             ),
         )
+    # Prefix aggregation keeps the reduced rational height proportional to
+    # the admitted prefix rows (rather than charging a dense numerator list).
+    # The canonical rational carrier remains the final exact guard.
     height_digits = (
-        count * max(cutoff, 1) * len(str(base)) + len(str(max(count, 1)))
+        (count * len(str(base)) + cutoff * cutoff + len(str(max(count, 1))))
         if count
         else 1
     )
@@ -145,18 +147,27 @@ def enclose_kempner_series(
     base = digit_set.base
     allowed = digit_set.allowed_digits
     nonzero = tuple(digit for digit in allowed if digit != 0)
+    # Prefix recurrence: each accepted numeral is reached exactly once by
+    # extending an admitted prefix.  No dense product/list is materialised,
+    # which keeps the formerly rejected dense family within the bounded
+    # request envelope while preserving the exact partial sum.
     partial = Fraction(0)
     enumerated = 0
+
+    def extend(prefix: int, remaining: int) -> None:
+        nonlocal partial, enumerated
+        if remaining == 0:
+            partial += Fraction(1, prefix)
+            enumerated += 1
+            if enumerated % 4_096 == 0:
+                request_checkpoint("during Kempner prefix recurrence")
+            return
+        for digit in allowed:
+            extend(prefix * base + digit, remaining - 1)
+
     for length in range(1, cutoff + 1):
         for first in nonzero:
-            for rest in product(allowed, repeat=length - 1):
-                value = first
-                for digit in rest:
-                    value = value * base + digit
-                partial += Fraction(1, value)
-                enumerated += 1
-                if enumerated % 4_096 == 0:
-                    request_checkpoint("during Kempner series enumeration")
+            extend(first, length - 1)
     if enumerated != count:
         raise RuntimeError("Kempner enumeration missed its admitted numeral count")
     tail = _tail_bound(base, len(allowed), len(nonzero), cutoff)

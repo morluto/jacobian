@@ -78,6 +78,25 @@ class LevelOneModularQExpansion(StrictModel):
         )
 
 
+class ModularQExpansion(StrictModel):
+    """A finite q-prefix bound to a concrete trivial-character space."""
+
+    space: ModularFormSpace
+    weight: StrictInt = Field(ge=0)
+    q_expansion: TruncatedSeries
+    basis_id: str = Field(default="canonical", min_length=1, max_length=96)
+
+    @model_validator(mode="after")
+    def require_q_parent(self) -> Self:
+        if self.q_expansion.variable != "q":
+            raise _validation_error("q_variable", "modular q-expansions use q")
+        if self.space.weight != self.weight:
+            raise _validation_error(
+                "weight_parent", "space and q-expansion weight differ"
+            )
+        return self
+
+
 class ModularFormSpace(StrictModel):
     """One supported exact holomorphic or cuspidal modular-form space.
 
@@ -115,4 +134,5 @@ __all__ = [
     "MAX_MODULAR_FORM_WEIGHT",
     "LevelOneModularQExpansion",
     "ModularFormSpace",
+    "ModularQExpansion",
 ]

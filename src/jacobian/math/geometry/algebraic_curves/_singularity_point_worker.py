@@ -12,6 +12,7 @@ from pydantic import Field, StrictBool, StrictInt, model_validator
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
+from jacobian._worker_protocol import encode_worker_result_frame
 from jacobian.canonical import format_canonical_integer
 from jacobian.math.geometry.algebraic_curves._singularity_models import (
     MAX_PROJECTIVE_SINGULAR_FIELD_DEGREE,
@@ -391,7 +392,9 @@ def main() -> int:
         strict=True,
     )
     response = compute_point_worker_response(request)
-    sys.stdout.write(response.model_dump_json())
+    sys.stdout.buffer.write(
+        encode_worker_result_frame(response.model_dump(mode="json"))
+    )
     return 0
 
 

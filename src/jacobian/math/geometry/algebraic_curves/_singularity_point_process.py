@@ -30,6 +30,12 @@ class PointConstructionLimitError(RuntimeError):
     """The isolated point result exceeded its proved exact-output envelope."""
 
 
+def _decode_point_result(value: object) -> object:
+    if not isinstance(value, dict):
+        raise ValueError("projective singular-point result must be an object")
+    return value
+
+
 def run_point_construction_worker(
     request: ProjectiveSingularityPointWorkerRequest,
     *,
@@ -39,7 +45,7 @@ def run_point_construction_worker(
 
     from jacobian.process import (
         ProcessResourceLimits,
-        run_bounded_process,
+        run_checked_worker_process,
         worker_environment,
     )
 
@@ -53,7 +59,7 @@ def run_point_construction_worker(
                 raise OperationExecutionTimeoutError(
                     "request deadline expired before projective point construction"
                 )
-            completed = run_bounded_process(
+            response = run_checked_worker_process(
                 [sys.executable, str(_POINT_WORKER)],
                 input_bytes=payload,
                 timeout_seconds=remaining,
@@ -66,33 +72,18 @@ def run_point_construction_worker(
                     file_size_bytes=_POINT_WORKER_FILE_SIZE_BYTES,
                 ),
                 cwd=worker_directory,
+                decode_result=_decode_point_result,
             )
-    except OperationExecutionTimeoutError:
+    except (OperationExecutionCancelledError, OperationExecutionTimeoutError):
         raise
     except OSError as exc:
         raise RuntimeError(
             "bounded projective singular-point worker could not be started"
         ) from exc
 
-    if completed.cancelled:
-        raise OperationExecutionCancelledError(
-            "request cancelled during projective singular-point construction"
-        )
-    if completed.timed_out:
-        raise OperationExecutionTimeoutError(
-            "request deadline expired during projective singular-point construction"
-        )
-    if completed.stdout_exceeded:
-        raise PointConstructionLimitError(
-            "projective singular-point result exceeded its exact-output bound"
-        )
-    if completed.stderr_exceeded or completed.returncode != 0:
-        raise RuntimeError(
-            "bounded projective singular-point worker did not establish a complete result"
-        )
     try:
-        return ProjectiveSingularityPointWorkerComplete.model_validate_json(
-            completed.stdout,
+        return ProjectiveSingularityPointWorkerComplete.model_validate(
+            response,
             strict=True,
         )
     except ValidationError as exc:

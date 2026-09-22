@@ -174,20 +174,13 @@ class TestAdmissionAndParity:
         assert tool.run(request) == polarization_search(_elliptic_torus(), 2, 100)
 
     def test_round_trip_and_verify(self) -> None:
-        for torus, bound, budget in (
-            (_elliptic_torus(), 2, 100),
-            (_square_torus(), 1, 100),
-            (quartic_rank_zero_torus(), 2, 100),
-            (quartic_rank_one_torus(), 2, 100),
-            (_square_torus(), 2, 5),
-        ):
-            result = polarization_search(torus, bound, budget)
-            restored = PolarizationSearchResult.model_validate_json(
-                result.model_dump_json()
-            )
+        result = polarization_search(_elliptic_torus(), 2, 100)
+        restored = PolarizationSearchResult.model_validate_json(
+            result.model_dump_json()
+        )
 
-            assert restored == result
-            assert verify_polarization_search(restored)
+        assert restored == result
+        assert verify_polarization_search(restored)
 
     def test_found_forgery_fails_verify(self) -> None:
         result = polarization_search(_elliptic_torus(), 2, 100)

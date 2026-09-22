@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from collections.abc import Iterator
 
 import pytest
@@ -192,22 +191,6 @@ def test_producer_executes_the_friable_kernel_once(
 
     assert result.count == 34
     assert calls == 1
-
-
-def test_operation_is_discoverable_with_one_executable_example() -> None:
-    from jacobian.catalog.builtins import BUILTIN_TOOLS
-
-    operation = next(
-        tool
-        for tool in BUILTIN_TOOLS
-        if tool.operation_id == "number_theory.friable.count.compute"
-    )
-    assert len(operation.examples) == 1
-    example = operation.examples[0]
-    request = operation.request_type.model_validate_json(
-        json.dumps(example.input), strict=True
-    )
-    assert operation.run(request).count == 34
 
 
 def test_number_theory_native_api_is_explicit() -> None:

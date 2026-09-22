@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import types
 
 import pytest
@@ -25,6 +26,21 @@ def test_tool_manifest_discovery_is_deterministic_and_owner_local() -> None:
 def test_public_catalog_is_sorted_and_unique() -> None:
     operation_ids = tuple(tool.operation_id for tool in BUILTIN_TOOLS)
     assert operation_ids == tuple(sorted(set(operation_ids)))
+
+
+def test_friable_count_manifest_has_one_executable_example() -> None:
+    operation = next(
+        tool
+        for tool in BUILTIN_TOOLS
+        if tool.operation_id == "number_theory.friable.count.compute"
+    )
+
+    assert len(operation.examples) == 1
+    example = operation.examples[0]
+    request = operation.request_type.model_validate_json(
+        json.dumps(example.input), strict=True
+    )
+    assert operation.run(request).count == 34
 
 
 def test_tool_loading_rejects_a_malformed_manifest(

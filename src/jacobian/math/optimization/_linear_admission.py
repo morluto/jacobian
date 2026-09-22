@@ -3,6 +3,7 @@
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
+from math import comb
 from time import monotonic
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS
@@ -14,6 +15,7 @@ from jacobian._execution import (
 )
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.optimization._models import (
+    MAX_LINEAR_PROGRAM_BACKEND_STATES,
     StandardFormRationalLinearProgram,
     _active_equations,
     _result_digit_bound,
@@ -49,8 +51,10 @@ def admit_linear_program(program: StandardFormRationalLinearProgram) -> LinearAd
     """Admit canonical input and complete exact certificate representation.
 
     The model owns fixed dimension, source-height, and matrix-cardinality limits.
-    PPL replaces combinatorial basis enumeration, so basis-family cardinality is
-    no longer a measure of executed work or a valid reason to reject a request.
+    PPL does not enumerate bases, but its primal, dual, and Farkas polyhedra still
+    have a finite combinatorial state envelope. Admission bounds that envelope
+    before constructing backend polyhedra; the worker deadline is only a safety
+    limit inside already-admitted work.
     """
     columns = tuple(
         j
@@ -58,18 +62,29 @@ def admit_linear_program(program: StandardFormRationalLinearProgram) -> LinearAd
         if any(row[j].num != 0 for row in program.coefficients)
     )
     digits = _result_digit_bound(program)
-    if digits > MAX_CANONICAL_RATIONAL_DIGITS:
-        rows = len(_active_equations(program))
-        quantities = (
-            f"normalized_columns={len(program.variables)}, "
-            f"active_columns={len(columns)}, "
-            f"normalized_rows={len(program.rhs)}, active_rows={rows}, "
-            f"result_digits={digits}, "
-            f"result_digit_limit={MAX_CANONICAL_RATIONAL_DIGITS}"
-        )
-        raise OperationResourceAdmissionError(
-            location=("program",),
-            code="optimization.linear.result_height",
-            message=f"Exact LP result_height exceeded: {quantities}.",
-        )
+    rows = len(_active_equations(program))
+    maximum_rank = min(len(columns), rows)
+    backend_states = max(
+        (comb(len(columns) + 1, rank) for rank in range(maximum_rank + 1)),
+        default=1,
+    )
+    quantities = (
+        f"normalized_columns={len(program.variables)}, "
+        f"active_columns={len(columns)}, "
+        f"normalized_rows={len(program.rhs)}, active_rows={rows}, "
+        f"backend_state_estimate={backend_states}, "
+        f"backend_state_limit={MAX_LINEAR_PROGRAM_BACKEND_STATES}, "
+        f"result_digits={digits}, "
+        f"result_digit_limit={MAX_CANONICAL_RATIONAL_DIGITS}"
+    )
+    for reason, measured, limit in (
+        ("result_height", digits, MAX_CANONICAL_RATIONAL_DIGITS),
+        ("backend_state_bound", backend_states, MAX_LINEAR_PROGRAM_BACKEND_STATES),
+    ):
+        if measured > limit:
+            raise OperationResourceAdmissionError(
+                location=("program",),
+                code=f"optimization.linear.{reason}",
+                message=f"Exact LP {reason} exceeded: {quantities}.",
+            )
     return LinearAdmission(columns=columns, result_digits=digits)

@@ -13,6 +13,7 @@ from jacobian._execution import (
     current_request_execution,
     request_execution,
 )
+from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.optimization import general_linear_program, linear_program
 from jacobian.math.optimization._general_models import GeneralFormRationalLinearProgram
 from jacobian.math.optimization._linear_admission import LINEAR_PROGRAM_WALL_SECONDS
@@ -69,11 +70,13 @@ def test_exhaustive_work_estimate_does_not_prevent_short_certificate() -> None:
     assert result.primal_objective.as_fraction().as_integer_ratio() == (6, 7)
 
 
-def test_exact_backend_accepts_shape_beyond_old_basis_envelope() -> None:
-    result = linear_program(_dense_program(24, 12))
-    assert result.status == "OPTIMAL"
-    assert result.primal_objective is not None
-    assert result.dual_objective == result.primal_objective
+def test_exact_backend_rejects_excessive_combinatorial_state_before_launch() -> None:
+    with pytest.raises(OperationResourceAdmissionError) as caught:
+        linear_program(_dense_program(24, 12))
+    assert caught.value.errors()[0]["type"] == (
+        "optimization.linear.backend_state_bound"
+    )
+    assert "backend_state_estimate=" in str(caught.value)
 
 
 def test_exact_backend_proves_infeasibility_beyond_old_search_allowance() -> None:

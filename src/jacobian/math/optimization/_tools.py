@@ -7,6 +7,7 @@ from jacobian.math.optimization._general_models import (
     GeneralRationalLinearProgramResult,
 )
 from jacobian.math.optimization._models import (
+    MAX_LINEAR_PROGRAM_BACKEND_STATES,
     MAX_LINEAR_PROGRAM_CONSTRAINTS,
     MAX_LINEAR_PROGRAM_VARIABLES,
     RationalLinearProgramRequest,
@@ -22,8 +23,10 @@ from jacobian.math.optimization.operations import linear_program
 
 _LINEAR_ENVELOPE = (
     "Resource admission bounds canonical source dimensions, coefficient height, "
-    "matrix cardinality, and the source-derived rational certificate height. Exact "
-    "optimization uses Parma Polyhedra Library over GMP integers; Jacobian independently "
+    "matrix cardinality, source-derived rational certificate height, and the finite "
+    "primal/dual/Farkas combinatorial state envelope to at most "
+    f"{MAX_LINEAR_PROGRAM_BACKEND_STATES} states. Exact optimization uses Parma "
+    "Polyhedra Library over GMP integers; Jacobian independently "
     "checks the returned primal, dual, Farkas, or recession witness before constructing "
     "the result. Execution has one 600-second safety deadline; expiration or malformed "
     "backend output is an operational error, never a mathematical conclusion."

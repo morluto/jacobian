@@ -71,7 +71,7 @@ async def _invoke_lp(payload: dict[str, object], *, direct: bool) -> Any:
         (28, 24, "GE", "normalized_columns", True),
         (2, 64, "EQ", "normalized_rows", True),
         (18, 6, "EQ", "exact_backend", False),
-        (24, 12, "EQ", "exact_backend", False),
+        (24, 12, "EQ", "backend_state_bound", True),
     ],
 )
 def test_lp_inspection_explains_derived_admission(
@@ -116,6 +116,7 @@ def test_lp_inspection_explains_derived_admission(
             text = json.dumps(inspection.structured_content)
             assert "Normalized limits are 32 columns and 64 rows" in text
             assert "Parma Polyhedra Library" in text
+            assert "1000000 states" in text
             assert "independently checks" in text
             if expect_rejection:
                 caught = await client.call_tool(

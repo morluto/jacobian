@@ -33,6 +33,8 @@ MAX_ALGEBRAIC_SET_VARS = 8
 MAX_ALGEBRAIC_SET_EQUATIONS = 32
 MAX_ALGEBRAIC_SET_TERMS = 256
 MAX_ALGEBRAIC_SET_DEGREE = 32
+# Set-valued operations retain public points; count-only operations stream and
+# are bounded by evaluation work instead of this materialization ceiling.
 MAX_ALGEBRAIC_SET_POINTS = 65_536
 MAX_ALGEBRAIC_SET_WORK = 1_000_000
 
@@ -243,37 +245,47 @@ def _require_system(system: PolynomialSystem) -> None:
         _require_canonical_polynomial(equation)
 
 
-def _admit_enumeration(system: PolynomialSystem, *, projective: bool) -> int:
+def _admit_enumeration(
+    system: PolynomialSystem, *, projective: bool, materialize: bool
+) -> int:
+    """Return the exact candidate count after work and output admission."""
+
     _require_system(system)
     order = system.presentation.order
     nvars = system.nvars
-    ambient = order**nvars
-    if ambient > MAX_ALGEBRAIC_SET_POINTS or ambient < 1:
+    affine_ambient = order**nvars
+    candidate_count = (
+        (affine_ambient - 1) // (order - 1) if projective else affine_ambient
+    )
+    if candidate_count < 1:
         raise OperationResourceAdmissionError(
             location=("presentation", "variable_axis"),
             code="finite_field.algebraic_set_ambient_bound",
-            message="ambient enumeration exceeds the admitted point bound",
+            message="ambient enumeration has no admitted candidates",
+        )
+    if materialize and candidate_count > MAX_ALGEBRAIC_SET_POINTS:
+        raise OperationResourceAdmissionError(
+            location=("presentation", "variable_axis"),
+            code=(
+                "finite_field.algebraic_set_projective_bound"
+                if projective
+                else "finite_field.algebraic_set_ambient_bound"
+            ),
+            message=(
+                "projective zero-set materialization exceeds the admitted point bound"
+                if projective
+                else "ambient zero-set materialization exceeds the admitted point bound"
+            ),
         )
     term_count = sum(len(equation.terms) for equation in system.equations)
-    work = ambient * max(1, term_count) * max(1, nvars)
+    work = candidate_count * max(1, term_count) * max(1, nvars)
     if work > MAX_ALGEBRAIC_SET_WORK:
         raise OperationResourceAdmissionError(
             location=("equations",),
             code="finite_field.algebraic_set_work_bound",
             message="zero-set evaluation exceeds the admitted work bound",
         )
-    if (
-        projective
-        # Projective enumeration reuses the same affine ambient pass; the
-        # canonical-class quotient only reduces retained output.
-        and (ambient - 1) // max(1, order - 1) > MAX_ALGEBRAIC_SET_POINTS
-    ):
-        raise OperationResourceAdmissionError(
-            location=("presentation", "variable_axis"),
-            code="finite_field.algebraic_set_projective_bound",
-            message="projective enumeration exceeds the admitted point bound",
-        )
-    return int(ambient)
+    return int(candidate_count)
 
 
 def _prepare_equations(
@@ -314,26 +326,61 @@ def _evaluate_at(
     return total
 
 
-def _iter_zero_coordinates(system: PolynomialSystem, *, projective: bool) -> Any:
+def _coordinate_candidates(
+    system: PolynomialSystem,
+    *,
+    projective: bool,
+    active_context: Any,
+) -> Any:
+    """Yield public/backend coordinate pairs exactly once per candidate."""
+
+    from jacobian.math.finite_fields import _flint as flint
+    from jacobian.math.finite_fields.operations import _field_elements
+
+    field_elements = _field_elements(system.presentation)
+    pairs = tuple(
+        (value, flint.to_backend(value, active_context=active_context))
+        for value in field_elements
+    )
+    if not projective:
+        for selected in product(pairs, repeat=system.nvars):
+            yield (
+                tuple(value for value, _ in selected),
+                tuple(backend for _, backend in selected),
+            )
+        return
+
+    zero_pair = pairs[0]
+    one_pair = next(pair for pair in pairs if pair[0].is_one)
+    # A projective class has one unique representative whose first nonzero
+    # coordinate is one. Descending pivot positions and encoded field-element
+    # order produce the same canonical lexicographic order as result sorting.
+    for pivot in range(system.nvars - 1, -1, -1):
+        prefix = (zero_pair,) * pivot + (one_pair,)
+        for tail in product(pairs, repeat=system.nvars - pivot - 1):
+            selected = prefix + tail
+            yield (
+                tuple(value for value, _ in selected),
+                tuple(backend for _, backend in selected),
+            )
+
+
+def _iter_zero_coordinates(
+    system: PolynomialSystem, *, projective: bool, materialize: bool
+) -> Any:
     """Yield matching coordinates without constructing public point values."""
 
-    _admit_enumeration(system, projective=projective)
+    _admit_enumeration(system, projective=projective, materialize=materialize)
     if projective:
         _require_homogeneous(system)
     from jacobian.math.finite_fields import _flint as flint
-    from jacobian.math.finite_fields.operations import _field_elements
 
     active_context = flint.context(system.presentation)
     zero = active_context(0)
     prepared = _prepare_equations(system, active_context=active_context)
-    field_elements = _field_elements(system.presentation)
-    for coordinates in product(field_elements, repeat=system.nvars):
-        if projective and all(value.is_zero for value in coordinates):
-            continue
-        backends = tuple(
-            flint.to_backend(value, active_context=active_context)
-            for value in coordinates
-        )
+    for coordinates, backends in _coordinate_candidates(
+        system, projective=projective, active_context=active_context
+    ):
         if all(
             _evaluate_at(equation, backends, zero=zero) == zero for equation in prepared
         ):
@@ -349,7 +396,9 @@ def affine_zero_set(system: PolynomialSystem) -> tuple[AffinePoint, ...]:
             variable_axis=system.variable_axis,
             coordinates=coordinates,
         )
-        for coordinates in _iter_zero_coordinates(system, projective=False)
+        for coordinates in _iter_zero_coordinates(
+            system, projective=False, materialize=True
+        )
     ]
     # Canonical order: lexicographic by encoded coordinates.
     points.sort(
@@ -361,7 +410,9 @@ def affine_zero_set(system: PolynomialSystem) -> tuple[AffinePoint, ...]:
 def affine_zero_count(system: PolynomialSystem) -> int:
     """Count affine zeros without retaining or sorting public point values."""
 
-    return sum(1 for _ in _iter_zero_coordinates(system, projective=False))
+    return sum(
+        1 for _ in _iter_zero_coordinates(system, projective=False, materialize=False)
+    )
 
 
 def _require_homogeneous(system: PolynomialSystem) -> None:
@@ -377,48 +428,24 @@ def _require_homogeneous(system: PolynomialSystem) -> None:
 def projective_zero_set(system: PolynomialSystem) -> tuple[ProjectivePoint, ...]:
     """Return canonical scalar-class representatives of the projective zeros."""
 
-    from jacobian.math.finite_fields import _sympy as sympy
-
-    seen: set[tuple[tuple[int, ...], ...]] = set()
-    representatives: list[ProjectivePoint] = []
-    for coordinates in _iter_zero_coordinates(system, projective=True):
-        normalized = sympy.normalize_projective_coordinates(
-            system.presentation, coordinates
+    return tuple(
+        ProjectivePoint(
+            presentation=system.presentation,
+            axis=system.variable_axis,
+            coordinates=coordinates,
         )
-        key = tuple(normalized)
-        if key in seen:
-            continue
-        seen.add(key)
-        representatives.append(
-            ProjectivePoint(
-                presentation=system.presentation,
-                axis=system.variable_axis,
-                coordinates=tuple(
-                    FiniteFieldElement(
-                        presentation=system.presentation, coordinates=coords
-                    )
-                    for coords in normalized
-                ),
-            )
+        for coordinates in _iter_zero_coordinates(
+            system, projective=True, materialize=True
         )
-    representatives.sort(
-        key=lambda point: tuple(_encoded_coordinates(c) for c in point.coordinates)
     )
-    return tuple(representatives)
 
 
 def projective_zero_count(system: PolynomialSystem) -> int:
     """Count projective scalar classes without retaining public point values."""
 
-    from jacobian.math.finite_fields import _sympy as sympy
-
-    seen: set[tuple[tuple[int, ...], ...]] = set()
-    for coordinates in _iter_zero_coordinates(system, projective=True):
-        key = tuple(
-            sympy.normalize_projective_coordinates(system.presentation, coordinates)
-        )
-        seen.add(key)
-    return len(seen)
+    return sum(
+        1 for _ in _iter_zero_coordinates(system, projective=True, materialize=False)
+    )
 
 
 def _require_embedding_shape(embedding: FieldEmbedding) -> None:

@@ -135,7 +135,7 @@ def _convert_cyclotomic_candidate(
         return candidate
     except OperationBackendError:
         raise
-    except Exception as exc:
+    except (AttributeError, TypeError, ValueError) as exc:
         raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT) from exc
 
 

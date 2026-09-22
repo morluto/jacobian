@@ -337,12 +337,18 @@ def _admit_single_product_growth(
     """
 
     for exponent in range(lo, hi):
+        lower = max(
+            left.valuation_lower,
+            exponent - right.precision + 1,
+        )
+        upper = min(
+            left.precision - 1,
+            exponent - right.valuation_lower,
+        )
         pairs = [
             (left_index, exponent - left_index)
-            for left_index in range(left.valuation_lower, left.precision)
-            if right.valuation_lower <= exponent - left_index < right.precision
-            and _coeff(left, left_index)
-            and _coeff(right, exponent - left_index)
+            for left_index in range(lower, upper + 1)
+            if _coeff(left, left_index) and _coeff(right, exponent - left_index)
         ]
         if len(pairs) != 1:
             continue

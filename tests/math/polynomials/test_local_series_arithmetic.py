@@ -151,6 +151,27 @@ def test_positive_power_uses_only_the_precision_needed_at_each_stage() -> None:
     assert tuple(value.num for value in result.coefficients) == (1, 0)
 
 
+def test_rectangular_product_uses_the_known_prefix_exactly() -> None:
+    left = TruncatedLaurentWindow(
+        valuation_lower=0,
+        precision=512,
+        coefficients=tuple(CanonicalRational(num=1, den=1) for _ in range(512)),
+    )
+    right = TruncatedLaurentWindow(
+        valuation_lower=0,
+        precision=128,
+        coefficients=tuple(CanonicalRational(num=1, den=1) for _ in range(128)),
+    )
+
+    result = multiply(left, right)
+
+    # The shorter known prefix limits the output; every coefficient in it is
+    # the exact number of contributing pairs, even though the left window is
+    # much wider.
+    assert (result.valuation_lower, result.precision) == (0, 128)
+    assert tuple(value.num for value in result.coefficients) == tuple(range(1, 129))
+
+
 def test_negative_power_requests_enough_reciprocal_precision() -> None:
     source = TruncatedLaurentWindow(
         valuation_lower=1,

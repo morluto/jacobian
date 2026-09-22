@@ -33,6 +33,7 @@ from jacobian.math.polynomials.values import (
 
 _WORKER_PATH = Path(__file__).resolve().with_name("_gcd_worker.py")
 _GCD_STDOUT_BYTES = 256 * 1024
+_GRADIENT_BATCH_STDOUT_BYTES = 8 * _GCD_STDOUT_BYTES
 _GCD_STDERR_BYTES = 64 * 1024
 _GCD_ADDRESS_SPACE_BYTES = 1024 * 1024 * 1024
 
@@ -162,7 +163,12 @@ def _request_deadline(*, stage: str) -> float:
     return execution.deadline
 
 
-def _run_kernel_worker(payload: dict[str, Any], *, stage: str) -> dict[str, Any]:
+def _run_kernel_worker(
+    payload: dict[str, Any],
+    *,
+    stage: str,
+    stdout_limit: int = _GCD_STDOUT_BYTES,
+) -> dict[str, Any]:
     deadline = _request_deadline(stage=stage)
     request_checkpoint(f"before {stage} encoding")
     encoded = encode_strict_json(payload)
@@ -179,12 +185,12 @@ def _run_kernel_worker(payload: dict[str, Any], *, stage: str) -> dict[str, Any]
                 input_bytes=encoded,
                 timeout_seconds=remaining,
                 environment=process.worker_environment(locale="C.UTF-8"),
-                stdout_limit=_GCD_STDOUT_BYTES,
+                stdout_limit=stdout_limit,
                 stderr_limit=_GCD_STDERR_BYTES,
                 resource_limits=process.ProcessResourceLimits(
                     cpu_seconds=max(1, math.ceil(remaining)),
                     address_space_bytes=_GCD_ADDRESS_SPACE_BYTES,
-                    file_size_bytes=_GCD_STDOUT_BYTES,
+                    file_size_bytes=stdout_limit,
                 ),
                 cwd=worker_dir,
                 decode_result=lambda value: value,
@@ -309,6 +315,63 @@ def normalize_admitted_fraction(
     )
 
 
+def differentiate_admitted_fractions(
+    source: RationalFunction,
+    derivatives: tuple[tuple[int, tuple[list[Any], ...]], ...],
+) -> tuple[RationalFunction, ...]:
+    """Differentiate admitted axes together in one killable worker."""
+
+    variable_count = len(source.variables)
+    if (
+        len(derivatives) > variable_count
+        or len({axis for axis, _factor in derivatives}) != len(derivatives)
+        or any(axis < 0 or axis >= variable_count for axis, _factor in derivatives)
+    ):
+        raise RuntimeError("rational-gradient batch has invalid derivative axes")
+    if not derivatives:
+        return ()
+    response = _run_kernel_worker(
+        {
+            "task": "differentiate_batch",
+            "variable_count": variable_count,
+            "numerator": _polynomial_payload(source.numerator),
+            "denominator": _polynomial_payload(source.denominator),
+            "derivatives": [
+                {
+                    "axis": axis,
+                    "factor": [list(record) for record in factor_records],
+                }
+                for axis, factor_records in derivatives
+            ],
+        },
+        stage="gradient kernel",
+        stdout_limit=_GRADIENT_BATCH_STDOUT_BYTES,
+    )
+    values = response.get("derivatives")
+    if (
+        set(response) != {"derivatives"}
+        or not isinstance(values, list)
+        or len(values) != len(derivatives)
+    ):
+        raise RuntimeError(
+            "bounded rational-gradient kernel worker returned malformed output"
+        )
+    results: list[RationalFunction] = []
+    for value in values:
+        if not isinstance(value, dict) or set(value) != {"numerator", "denominator"}:
+            raise RuntimeError(
+                "bounded rational-gradient kernel worker returned malformed output"
+            )
+        results.append(
+            RationalFunction._from_kernel(
+                variables=source.variables,
+                numerator=_sparse_from_records(value["numerator"], variable_count),
+                denominator=_sparse_from_records(value["denominator"], variable_count),
+            )
+        )
+    return tuple(results)
+
+
 def differentiate_admitted_fraction(
     source: RationalFunction,
     axis: int,
@@ -341,6 +404,7 @@ def differentiate_admitted_fraction(
 __all__ = [
     "DerivativeGcdFactor",
     "differentiate_admitted_fraction",
+    "differentiate_admitted_fractions",
     "forced_denominator_derivative_gcds",
     "normalize_admitted_fraction",
     "source_is_coprime",

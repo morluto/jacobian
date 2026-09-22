@@ -5,6 +5,7 @@ from typing import Any
 from jacobian._execution import request_checkpoint
 from jacobian.math.polynomials.rational_functions.gradient._gcd_process import (
     differentiate_admitted_fraction,
+    differentiate_admitted_fractions,
     normalize_admitted_fraction,
 )
 from jacobian.math.polynomials.values import RationalFunction
@@ -18,6 +19,17 @@ def _differentiate_fraction(
     """Differentiate an admitted fraction in the killable GCD worker."""
     request_checkpoint("before rational gradient differentiation")
     result = differentiate_admitted_fraction(source, axis, factor_records)
+    request_checkpoint("after rational gradient differentiation")
+    return result
+
+
+def _differentiate_fractions(
+    source: RationalFunction,
+    derivatives: tuple[tuple[int, tuple[list[Any], ...]], ...],
+) -> tuple[RationalFunction, ...]:
+    """Differentiate admitted axes in one killable request-local worker."""
+    request_checkpoint("before rational gradient differentiation")
+    result = differentiate_admitted_fractions(source, derivatives)
     request_checkpoint("after rational gradient differentiation")
     return result
 

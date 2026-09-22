@@ -8,9 +8,12 @@ from typing import Literal, NamedTuple
 
 from pydantic_core import PydanticCustomError
 
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.combinatorics.codes.linear._models import (
-    MAX_CODEWORDS,
+    MAX_CODE_EQUAL_WORK,
     MAX_RECEIVED_PROFILE_EXECUTION_WORK,
     MAX_RECEIVED_PROFILE_WITNESS_CELLS,
     CodeEqualResult,
@@ -644,74 +647,69 @@ def syndrome(
     )
 
 
-def _rowspace_contains(
-    g: list[list[int]],
-    g_rank: int,
-    target_rref: list[list[int]],
-    target_rank: int,
-    q: int,
-) -> bool:
-    """Check whether the row space of g contains the target row space."""
-    augmented = [list(row) for row in g]
-    for row in target_rref[:target_rank]:
-        augmented.append(list(row))
-    _, aug_rank = _rref(augmented, q)
-    return aug_rank == g_rank
+def _reduce_against_rref(
+    row: list[int], target_rref: list[list[int]], target_rank: int, q: int
+) -> tuple[int, ...]:
+    """Reduce one word by the pivot rows of a canonical RREF."""
+    remainder = [value % q for value in row]
+    for target_row in target_rref[:target_rank]:
+        pivot = next(index for index, value in enumerate(target_row) if value)
+        coefficient = remainder[pivot]
+        if coefficient:
+            for index, value in enumerate(target_row):
+                remainder[index] = (remainder[index] - coefficient * value) % q
+    return tuple(remainder)
 
 
-def _enumerate_code(
-    rref: list[list[int]], rank: int, n: int, q: int
-) -> set[tuple[int, ...]]:
-    """Enumerate all codewords from a RREF basis."""
-    from itertools import product
-
-    code = set()
-    for coeffs in product(range(q), repeat=rank):
-        codeword = [0] * n
-        for ci, c in enumerate(coeffs):
-            for j in range(n):
-                codeword[j] = (codeword[j] + c * rref[ci][j]) % q
-        code.add(tuple(codeword))
-    return code
+def _code_equal_work(
+    encoder_a: PrimeFieldLinearEncoder, encoder_b: PrimeFieldLinearEncoder
+) -> int:
+    """Reserve both RREF eliminations and all possible witness reductions."""
+    width = len(encoder_a.coordinate_axis)
+    rows_a = len(encoder_a.generator_matrix)
+    rows_b = len(encoder_b.generator_matrix)
+    elimination = sum(
+        rows * width * max(1, min(rows, width)) for rows in (rows_a, rows_b)
+    )
+    reduction = (rows_a + rows_b) * width * max(rows_a, rows_b)
+    return elimination + reduction
 
 
 def code_equal(
     encoder_a: PrimeFieldLinearEncoder, encoder_b: PrimeFieldLinearEncoder
 ) -> CodeEqualResult:
-    rref_a, encoder_a_rank = _admit_encoder(encoder_a)
-    rref_b, encoder_b_rank = _admit_encoder(encoder_b)
-    if (
-        encoder_a.codeword_count > MAX_CODEWORDS
-        or encoder_b.codeword_count > MAX_CODEWORDS
-    ):
-        raise OperationDomainValidationError(
-            location=("encoder",),
-            code="code_linear.code_cardinality_exceeds_exact_enumeration_bound",
-            message="code cardinality exceeds exact enumeration bound",
-        )
     _admit_comparable_encoders(encoder_a, encoder_b)
+    work = _code_equal_work(encoder_a, encoder_b)
+    if work > MAX_CODE_EQUAL_WORK:
+        raise OperationResourceAdmissionError(
+            location=("encoder",),
+            code="code_linear.equal_work_bound",
+            message=(
+                "linear-code equality elimination and witness-reduction work "
+                f"exceeds its bound: work={work}, limit={MAX_CODE_EQUAL_WORK}"
+            ),
+        )
+
+    # Admission above is deliberately completed before either backend RREF.
+    # The two canonical RREFs are then sufficient for both equality and a
+    # deterministic word in exactly one of the spaces.
+    rref_a, rank_a = _admit_encoder(encoder_a)
+    rref_b, rank_b = _admit_encoder(encoder_b)
     q = encoder_a.field_order
-    mat_a = [list(row) for row in encoder_a.generator_matrix]
-    mat_b = [list(row) for row in encoder_b.generator_matrix]
 
-    rank_a = encoder_a_rank
-    rank_b = encoder_b_rank
-
-    contain_ab = _rowspace_contains(mat_a, rank_a, rref_b, rank_b, q)
-    contain_ba = _rowspace_contains(mat_b, rank_b, rref_a, rank_a, q)
-    equal = contain_ab and contain_ba
-
-    witness = None
-    if not equal:
-        n = len(encoder_a.coordinate_axis)
-        code_a = _enumerate_code(rref_a, rank_a, n, q)
-        code_b = _enumerate_code(rref_b, rank_b, n, q)
-        diff = code_a.symmetric_difference(code_b)
-        if diff:
-            witness = sorted(diff)[0]
+    witness_candidates: list[tuple[int, ...]] = []
+    for row in rref_a[:rank_a]:
+        if _reduce_against_rref(list(row), rref_b, rank_b, q) != (0,) * len(row):
+            witness_candidates.append(tuple(row))
+    for row in rref_b[:rank_b]:
+        if _reduce_against_rref(list(row), rref_a, rank_a, q) != (0,) * len(row):
+            witness_candidates.append(tuple(row))
+    # Preserve the operation's stable lexicographic witness choice without
+    # enumerating the exponentially large codeword sets.
+    witness = min(witness_candidates) if witness_candidates else None
 
     return CodeEqualResult(
-        equal=equal,
+        equal=witness is None,
         dimension_a=rank_a,
         dimension_b=rank_b,
         witness_word=witness,

@@ -7,9 +7,9 @@ import sys
 from fractions import Fraction
 from typing import Any
 
+from jacobian._worker_protocol import encode_worker_result_frame
 from jacobian.canonical import (
     CanonicalLimits,
-    encode_strict_json,
     format_canonical_integer,
     loads_strict_json,
     parse_canonical_integer,
@@ -170,7 +170,7 @@ def main() -> int:
         "request_digest": hashlib.sha256(input_bytes).hexdigest(),
         **_kernel_payload(compute_fixed_locus_kernel(source)),
     }
-    sys.stdout.buffer.write(encode_strict_json(response))
+    sys.stdout.buffer.write(encode_worker_result_frame(response))
     return 0
 
 

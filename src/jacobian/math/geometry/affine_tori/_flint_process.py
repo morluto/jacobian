@@ -40,7 +40,7 @@ from jacobian.math.geometry.affine_tori.values import (
 )
 from jacobian.process import (
     ProcessResourceLimits,
-    run_bounded_process,
+    run_checked_worker_process,
     worker_environment,
 )
 
@@ -768,6 +768,12 @@ def _decode_worker_projection(
     )
 
 
+def _decode_fixed_locus_result(value: object) -> dict[str, object]:
+    if not isinstance(value, dict):
+        raise ValueError("affine-torus worker result must be an object")
+    return value
+
+
 def compute_fixed_locus_kernel(
     source: RationalAffineTorusMap,
     plan: AffineTorusFixedLocusPlan,
@@ -787,7 +793,7 @@ def compute_fixed_locus_kernel(
     try:
         with TemporaryDirectory(prefix="jacobian-affine-torus-flint-") as directory:
             allowance = _positive_worker_allowance(plan.deadline)
-            completed = run_bounded_process(
+            response = run_checked_worker_process(
                 [sys.executable, str(_AFFINE_TORUS_WORKER)],
                 input_bytes=input_bytes,
                 timeout_seconds=allowance,
@@ -802,31 +808,16 @@ def compute_fixed_locus_kernel(
                     file_size_bytes=_WORKER_FILE_SIZE_BYTES,
                 ),
                 cwd=directory,
+                decode_result=_decode_fixed_locus_result,
             )
     except (OperationExecutionCancelledError, OperationExecutionTimeoutError):
         raise
     except OSError as exc:
         raise RuntimeError("bounded affine-torus FLINT worker could not start") from exc
-    if completed.cancelled:
-        raise OperationExecutionCancelledError(
-            "affine-torus fixed-locus computation cancelled during the FLINT worker"
-        )
-    if completed.timed_out:
-        raise OperationExecutionTimeoutError(
-            "affine-torus FLINT worker exhausted its execution allowance"
-        )
     require_affine_torus_deadline(plan.deadline, "after cleaning up the FLINT worker")
-    if (
-        completed.stdout_exceeded
-        or completed.stderr_exceeded
-        or completed.returncode != 0
-    ):
-        raise RuntimeError(
-            "bounded affine-torus FLINT worker did not establish a fixed locus"
-        )
     try:
         decoded = loads_strict_json(
-            completed.stdout,
+            encode_strict_json(response),
             limits=CanonicalLimits(
                 max_input_bytes=plan.worker_stdout_bytes_upper_bound
             ),

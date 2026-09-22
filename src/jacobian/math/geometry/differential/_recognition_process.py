@@ -13,13 +13,7 @@ from jacobian._execution import (
     OperationExecutionCancelledError,
     OperationExecutionTimeoutError,
 )
-from jacobian.canonical import (
-    CanonicalizationError,
-    CanonicalLimits,
-    encode_strict_json,
-    format_canonical_integer,
-    loads_strict_json,
-)
+from jacobian.canonical import encode_strict_json, format_canonical_integer
 from jacobian.math.geometry.differential._execution import (
     require_lie_derivative_deadline,
 )
@@ -148,6 +142,12 @@ def _worker_payload(
     )
 
 
+def _decode_recognition_result(value: object) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise ValueError("recognition worker result must be an object")
+    return value
+
+
 def recognize_canonical_rational_functions(
     candidates: tuple[RationalFunctionRecognitionCandidate, ...],
     *,
@@ -162,7 +162,7 @@ def recognize_canonical_rational_functions(
 
     from jacobian.process import (
         ProcessResourceLimits,
-        run_bounded_process,
+        run_checked_worker_process,
         worker_environment,
     )
 
@@ -177,7 +177,7 @@ def recognize_canonical_rational_functions(
                     "rational Lie derivative deadline expired before "
                     "coprimality recognition"
                 )
-            completed = run_bounded_process(
+            response = run_checked_worker_process(
                 [sys.executable, str(_WORKER_PATH)],
                 input_bytes=payload,
                 timeout_seconds=remaining,
@@ -190,40 +190,15 @@ def recognize_canonical_rational_functions(
                     file_size_bytes=_RECOGNITION_STDOUT_BYTES,
                 ),
                 cwd=worker_directory,
+                decode_result=_decode_recognition_result,
             )
+    except (OperationExecutionCancelledError, OperationExecutionTimeoutError):
+        raise
     except OSError as exc:
         raise RuntimeError(
             "bounded rational-function recognition worker could not be started"
         ) from exc
-    if completed.cancelled:
-        raise OperationExecutionCancelledError(
-            "rational Lie derivative cancelled during coprimality recognition"
-        )
-    if completed.timed_out:
-        raise OperationExecutionTimeoutError(
-            "rational Lie derivative deadline expired during coprimality recognition"
-        )
-    if (
-        completed.stdout_exceeded
-        or completed.stderr_exceeded
-        or completed.returncode != 0
-    ):
-        raise RuntimeError(
-            "bounded rational-function recognition worker did not establish coprimality"
-        )
     require_lie_derivative_deadline(deadline, "after coprimality recognition")
-    try:
-        response = loads_strict_json(
-            completed.stdout,
-            limits=CanonicalLimits(
-                max_input_bytes=_RECOGNITION_STDOUT_BYTES,
-                max_output_bytes=_RECOGNITION_STDOUT_BYTES,
-            ),
-        )
-    except CanonicalizationError as exc:
-        raise RuntimeError(
-            "bounded rational-function recognition worker returned malformed output"
-        ) from exc
     if not isinstance(response, dict) or set(response) not in (
         {"status", "recognized_candidates"},
         {"status", "recognized_candidates", "owner", "component"},

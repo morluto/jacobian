@@ -11,9 +11,12 @@ from jacobian.catalog.models import (
 from jacobian.math.gauge._models import (
     EdgeContribution,
     GaugeField,
+    GaugeTransformResult,
+    GaugeVertexValue,
     HolonomyResult,
     OrientedGaugePath,
     PermutationLabel,
+    PlaquetteResult,
 )
 
 
@@ -86,6 +89,83 @@ def _admit_holonomy(field: GaugeField, path: OrientedGaugePath) -> None:
         cursor = head
 
 
+def gauge_transform(
+    field: GaugeField,
+    vertex_values: tuple[GaugeVertexValue, ...] | list[GaugeVertexValue],
+) -> GaugeTransformResult:
+    """Apply ``U'_e = h_tail^-1 U_e h_head`` on one finite lattice."""
+    if not isinstance(field, GaugeField):
+        _reject(
+            "field",
+            "lattice_gauge.transform.field_not_a_gauge_field",
+            "transform source must be a gauge field",
+        )
+    if not isinstance(vertex_values, (tuple, list)):
+        _reject(
+            "vertex_values",
+            "lattice_gauge.transform.vertex_values_type",
+            "vertex values must be a finite labelled family",
+        )
+    by_vertex = {
+        entry.vertex: entry.value
+        for entry in vertex_values
+        if isinstance(entry, GaugeVertexValue)
+    }
+    if len(by_vertex) != len(vertex_values) or set(by_vertex) != set(
+        field.lattice.vertices
+    ):
+        _reject(
+            "vertex_values",
+            "lattice_gauge.transform.vertex_coverage",
+            "transform must label every lattice vertex exactly once",
+        )
+    if any(value.degree != field.degree for value in by_vertex.values()):
+        _reject(
+            "vertex_values",
+            "lattice_gauge.transform.degree_mismatch",
+            "all frame elements must use the field degree",
+        )
+    labels = {entry.edge_id: entry.label for entry in field.edge_labels}
+    transformed_labels = []
+    for edge in field.lattice.edges:
+        value = _compose(
+            _compose(_inverse(by_vertex[edge.tail].image), labels[edge.edge_id].image),
+            by_vertex[edge.head].image,
+        )
+        transformed_labels.append(
+            type(field.edge_labels[0])(
+                edge_id=edge.edge_id,
+                label=PermutationLabel(degree=field.degree, image=value),
+            )
+        )
+    transformed = GaugeField(
+        lattice=field.lattice,
+        degree=field.degree,
+        edge_labels=tuple(transformed_labels),
+    )
+    canonical_values = tuple(
+        GaugeVertexValue(vertex=vertex, value=by_vertex[vertex])
+        for vertex in field.lattice.vertices
+    )
+    return GaugeTransformResult(
+        source=field, transformed=transformed, vertex_values=canonical_values
+    )
+
+
+def plaquette_curvature(field: GaugeField, path: OrientedGaugePath) -> PlaquetteResult:
+    """Return exact curvature for a closed oriented plaquette path."""
+    result = path_holonomy(field, path)
+    if result.start != result.end:
+        _reject(
+            "path",
+            "lattice_gauge.plaquette.open_path",
+            "a plaquette path must be closed",
+        )
+    return PlaquetteResult(
+        field=field, path=path, curvature=result.holonomy, start=result.start
+    )
+
+
 def path_holonomy(field: GaugeField, path: OrientedGaugePath) -> HolonomyResult:
     """Compute the ordered exact group product along an oriented edge path.
 
@@ -153,4 +233,4 @@ def _run_path_holonomy(request: object) -> HolonomyResult:
     return path_holonomy(request.field, request.path)
 
 
-__all__ = ["path_holonomy"]
+__all__ = ["gauge_transform", "path_holonomy", "plaquette_curvature"]

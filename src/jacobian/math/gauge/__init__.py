@@ -6,11 +6,20 @@ from jacobian.math.gauge._models import (
     GaugeFieldEdgeLabel,
     GaugeLattice,
     GaugePathStep,
+    GaugeTransformRequest,
+    GaugeTransformResult,
+    GaugeVertexValue,
     HolonomyResult,
     OrientedGaugePath,
     PermutationLabel,
+    PlaquetteRequest,
+    PlaquetteResult,
 )
-from jacobian.math.gauge.operations import path_holonomy
+from jacobian.math.gauge.operations import (
+    gauge_transform,
+    path_holonomy,
+    plaquette_curvature,
+)
 
 __all__ = [
     "GaugeEdge",
@@ -18,8 +27,15 @@ __all__ = [
     "GaugeFieldEdgeLabel",
     "GaugeLattice",
     "GaugePathStep",
+    "GaugeTransformRequest",
+    "GaugeTransformResult",
+    "GaugeVertexValue",
     "HolonomyResult",
     "OrientedGaugePath",
     "PermutationLabel",
+    "PlaquetteRequest",
+    "PlaquetteResult",
+    "gauge_transform",
     "path_holonomy",
+    "plaquette_curvature",
 ]

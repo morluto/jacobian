@@ -125,6 +125,18 @@ def test_nested_math_owner_selects_its_top_level_test_root() -> None:
     assert plan.math_tests == ("tests/math/matrices",)
 
 
+def test_overlapping_math_owner_roots_are_selected_once() -> None:
+    plan = _plan(
+        [
+            "src/jacobian/math/combinatorics/_exact_cover_kernel.py",
+            "src/jacobian/math/combinatorics/additive/cyclic_prefix_sum/_sequencing_kernel.py",
+        ]
+    )
+
+    assert plan.math_tests == ("tests/math/combinatorics",)
+    assert plan.reasons == ("selected mathematical owners: tests/math/combinatorics",)
+
+
 def test_math_test_change_runs_only_the_changed_test() -> None:
     path = "tests/math/combinatorics/codes/general/test_exact_code_enumeration.py"
     plan = _plan([path])

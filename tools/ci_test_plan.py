@@ -149,6 +149,18 @@ def _includes_scale_tests(paths: tuple[str, ...]) -> bool:
     )
 
 
+def _minimal_test_roots(paths: Iterable[str]) -> tuple[str, ...]:
+    """Drop selectors already covered by a selected parent directory."""
+
+    ordered = sorted(set(paths), key=lambda path: (path.count("/"), path))
+    selected: list[str] = []
+    for path in ordered:
+        if any(path.startswith(parent.rstrip("/") + "/") for parent in selected):
+            continue
+        selected.append(path)
+    return tuple(sorted(selected))
+
+
 def _math_test_change(path: str) -> tuple[str, ...] | None:
     relative = PurePosixPath(path).relative_to("tests/math")
     if relative.name.startswith("_") or relative.name == "conftest.py":
@@ -356,6 +368,9 @@ def _pull_request_plan(
         if decision.full_math_reason:
             full_math_reason = decision.full_math_reason
             break
+
+    if full_math_reason is None:
+        math_tests = set(_minimal_test_roots(math_tests))
 
     if full_math_reason:
         reasons.append(full_math_reason)

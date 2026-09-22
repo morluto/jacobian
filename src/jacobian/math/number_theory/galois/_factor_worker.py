@@ -3,6 +3,8 @@
 import json
 import sys
 
+from jacobian._worker_protocol import encode_worker_result_frame
+
 
 def main() -> int:
     from sympy.polys.domains import ZZ
@@ -15,7 +17,9 @@ def main() -> int:
         for factor in gf_berlekamp(polynomial, prime, ZZ):
             factors.append((tuple(int(c) for c in reversed(factor)), int(multiplicity)))
     factors.sort(key=lambda item: (len(item[0]), item[0]))
-    sys.stdout.write(json.dumps([int(unit), factors], separators=(",", ":")))
+    sys.stdout.buffer.write(
+        encode_worker_result_frame([int(unit), factors])
+    )
     return 0
 
 

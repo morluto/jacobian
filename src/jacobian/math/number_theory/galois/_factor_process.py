@@ -6,6 +6,7 @@ import sys
 import time
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from typing import Any
 
 from jacobian._execution import (
     OperationExecutionCancelledError,
@@ -23,7 +24,7 @@ from jacobian.math.number_theory.galois._models import (
 )
 from jacobian.process import (
     ProcessResourceLimits,
-    run_bounded_process,
+    run_checked_worker_process,
     worker_environment,
 )
 
@@ -85,6 +86,12 @@ def _factor_with_execution(
     return result
 
 
+def _decode_factor_result(value: object) -> list[Any]:
+    if not isinstance(value, list):
+        raise ValueError("finite-field factorization result must be a list")
+    return value
+
+
 def _factor_polynomial(
     prime: int, coefficients: tuple[int, ...], *, deadline: float
 ) -> tuple[int, tuple[tuple[tuple[int, ...], int], ...]]:
@@ -97,7 +104,7 @@ def _factor_polynomial(
                 raise OperationExecutionTimeoutError(
                     "finite-field factorization expired"
                 )
-            completed = run_bounded_process(
+            payload = run_checked_worker_process(
                 [sys.executable, str(_FACTOR_WORKER)],
                 input_bytes=input_bytes,
                 timeout_seconds=remaining,
@@ -111,6 +118,7 @@ def _factor_polynomial(
                     file_size_bytes=1024 * 1024,
                 ),
                 cwd=directory,
+                decode_result=_decode_factor_result,
             )
     except (OperationExecutionTimeoutError, OperationExecutionCancelledError):
         raise
@@ -119,20 +127,7 @@ def _factor_polynomial(
             "finite-field factorization worker could not start"
         ) from error
     request_checkpoint("after finite-field factorization worker")
-    if completed.cancelled:
-        raise OperationExecutionCancelledError("finite-field factorization cancelled")
-    if completed.timed_out:
-        raise OperationExecutionTimeoutError("finite-field factorization expired")
-    if (
-        completed.returncode != 0
-        or completed.stdout_exceeded
-        or completed.stderr_exceeded
-    ):
-        raise RuntimeError(
-            "finite-field factorization worker did not establish an outcome"
-        )
     try:
-        payload = json.loads(completed.stdout)
         if not isinstance(payload, list) or len(payload) != 2:
             raise ValueError("expected unit and factors")
         unit, entries = payload

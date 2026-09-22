@@ -31,6 +31,9 @@ def test_catalog_contains_only_audited_agent_outcome() -> None:
         "delta_matroid.from_feasible_sets.compute",
         "delta_matroid.twist.compute",
         "delta_matroid.width.compute",
+        "delta_matroid.dual.compute",
+        "delta_matroid.minor.compute",
+        "delta_matroid.from_binary_matrix.compute",
     }
 
 
@@ -411,3 +414,23 @@ def test_width_rejects_an_empty_forged_source() -> None:
         width(forged)
     assert error.value.errors()[0]["type"] == "delta_matroid.source_not_valid"
     assert "at least one feasible set" in str(error.value)
+
+
+def test_minor_compacts_axes_and_applies_deletion_semantics() -> None:
+    source = FiniteDeltaMatroid(ground=("a", "b"), feasible=((), (0,), (0, 1), (1,)))
+    from jacobian.math.combinatorics.matroids.delta.extra_ops import minor
+
+    assert minor(source, delete=(0,)) == FiniteDeltaMatroid(
+        ground=("b",), feasible=((), (0,))
+    )
+
+
+def test_extra_operation_rejects_forged_non_delta_source() -> None:
+    from jacobian.catalog.models import OperationDomainValidationError
+    from jacobian.math.combinatorics.matroids.delta._tools import _run_dual
+
+    forged = FiniteDeltaMatroid.model_construct(
+        ground=("a", "b", "c"), feasible=((), (0, 1), (2,))
+    )
+    with pytest.raises(OperationDomainValidationError):
+        _run_dual(type("Request", (), {"delta_matroid": forged})())

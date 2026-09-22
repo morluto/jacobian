@@ -14,6 +14,13 @@ from jacobian.math.combinatorics.matroids.delta._models import (
     DeltaMatroidWidthRequest,
     DeltaMatroidWidthResult,
 )
+from jacobian.math.combinatorics.matroids.delta.extra import (
+    BinaryMatrixRequest,
+    BinaryMatrixResult,
+    DeltaMatroidDualRequest,
+    DeltaMatroidMinorRequest,
+)
+from jacobian.math.combinatorics.matroids.delta.extra_ops import binary, dual, minor
 from jacobian.math.combinatorics.matroids.delta.operations import (
     from_feasible_sets,
     twist,
@@ -57,6 +64,49 @@ def _twist(request: DeltaMatroidTwistRequest) -> FiniteDeltaMatroid:
         ) from exc
 
 
+def _extra_domain(
+    location: tuple[str, ...], code: str, exc: Exception
+) -> OperationDomainValidationError:
+    return OperationDomainValidationError(
+        location=location, code=code, message=str(exc)
+    )
+
+
+def _run_dual(request: DeltaMatroidDualRequest) -> FiniteDeltaMatroid:
+    try:
+        return dual(request.delta_matroid)
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
+        raise
+    except (TypeError, ValueError, IndexError) as exc:
+        raise _extra_domain(
+            ("delta_matroid",), "delta_matroid.source_not_valid", exc
+        ) from exc
+
+
+def _run_minor(request: DeltaMatroidMinorRequest) -> FiniteDeltaMatroid:
+    try:
+        return minor(request.delta_matroid, request.delete, request.contract)
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
+        raise
+    except (TypeError, ValueError, IndexError) as exc:
+        raise _extra_domain(
+            ("delta_matroid",), "delta_matroid.source_not_valid", exc
+        ) from exc
+
+
+def _run_binary(request: BinaryMatrixRequest) -> BinaryMatrixResult:
+    try:
+        return binary(request.matrix)
+    except OperationResourceAdmissionError:
+        raise
+    except (TypeError, ValueError, IndexError) as exc:
+        raise _extra_domain(("matrix",), "delta_matroid.binary_invalid", exc) from exc
+
+
 def _width(request: DeltaMatroidWidthRequest) -> DeltaMatroidWidthResult:
     try:
         return DeltaMatroidWidthResult._from_kernel(
@@ -76,7 +126,7 @@ def _width(request: DeltaMatroidWidthRequest) -> DeltaMatroidWidthResult:
         ) from exc
 
 
-TOOLS: MathTools = (
+TOOLS: MathTools = (  # noqa: RUF005
     MathTool(
         operation_id="delta_matroid.from_feasible_sets.compute",
         title="Recognize a finite delta-matroid from a complete feasible family",
@@ -157,6 +207,68 @@ TOOLS: MathTools = (
                     },
                     "subset": [0],
                 },
+            ),
+        ),
+    ),
+) + (
+    MathTool(
+        operation_id="delta_matroid.dual.compute",
+        title="Compute the dual of a finite delta-matroid",
+        description="Return the complete feasible family obtained by complementing every feasible set on the retained ground axis.",
+        request_type=DeltaMatroidDualRequest,
+        result_type=FiniteDeltaMatroid,
+        run=_run_dual,
+        tags=("delta-matroid", "dual", "exact"),
+        examples=(
+            OperationExample(
+                name="dual_uniform",
+                description="Compute the dual by complementing feasible sets on the labelled ground.",
+                input={
+                    "delta_matroid": {
+                        "ground": ["a", "b"],
+                        "feasible": [[], [0], [0, 1], [1]],
+                    }
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="delta_matroid.minor.compute",
+        title="Compute a delta-matroid deletion/contraction minor",
+        description="Return the exact feasible family after deleting and contracting disjoint ground-index sets.",
+        request_type=DeltaMatroidMinorRequest,
+        result_type=FiniteDeltaMatroid,
+        run=_run_minor,
+        tags=("delta-matroid", "minor", "exact"),
+        examples=(
+            OperationExample(
+                name="delete_b",
+                description="Delete ground element b; deletion indices must be disjoint from contractions.",
+                input={
+                    "delta_matroid": {
+                        "ground": ["a", "b"],
+                        "feasible": [[], [0], [0, 1], [1]],
+                    },
+                    "delete": [1],
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="delta_matroid.from_binary_matrix.compute",
+        title="Reconstruct a delta-matroid from binary principal minors",
+        description=(
+            "Compute every principal minor over GF(2) of a labelled symmetric binary matrix (at most 8 ground labels and 250,000 principal-elimination work units) and return the resulting feasible-set delta-matroid."
+        ),
+        request_type=BinaryMatrixRequest,
+        result_type=BinaryMatrixResult,
+        run=_run_binary,
+        tags=("delta-matroid", "binary", "principal-minor", "exact"),
+        examples=(
+            OperationExample(
+                name="binary_zero",
+                description="Reconstruct the principal-minor delta-matroid of the zero 2-by-2 symmetric matrix.",
+                input={"matrix": {"ground": ["a", "b"], "entries": [[0, 0], [0, 0]]}},
             ),
         ),
     ),

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from fractions import Fraction
 
 from pydantic import ValidationError
@@ -48,11 +49,11 @@ def _fail(
     return OperationDomainValidationError(location=location, code=code, message=message)
 
 
-def admit_filtered(
+def _admit_filtered_structure(
     complex_value: ChainComplexValue,
     filtration: tuple[FiltrationLevel, ...],
 ) -> None:
-    """Shared native+catalog admission for filtered complexes."""
+    """Admit the bounded wire shape before semantic filtered checks."""
     if complex_value.coefficient_ring is CoefficientRing.INTEGER:
         raise _fail(
             ("complex",),
@@ -130,6 +131,87 @@ def admit_filtered(
                             "filtered_chain_complex.entry_grammar_invalid",
                             f"filtration entry '{entry}' is not canonical",
                         ) from exc
+
+
+@dataclass
+class _FilteredAdmission:
+    differentials: list[Matrix]
+    parsed_levels: list[list[Matrix]]
+    bases: list[list[Matrix]]
+
+
+def _admit_filtered_semantics(
+    complex_value: ChainComplexValue,
+    filtration: tuple[FiltrationLevel, ...],
+) -> _FilteredAdmission:
+    """Establish all filtered-complex invariants once for one consumer."""
+    _admit_filtered_structure(complex_value, filtration)
+    prime = complex_value.prime
+    degree_count = len(complex_value.basis_sizes)
+    differentials = [
+        [[_parse_entry(entry, prime) for entry in row] for row in matrix]
+        for matrix in complex_value.differential_matrices
+    ]
+    for index in range(len(differentials) - 1):
+        product = _mat_mul(differentials[index], differentials[index + 1], prime)
+        if any(not _is_zero(value) for row in product for value in row):
+            raise _fail(
+                ("complex",),
+                "filtered_chain_complex.source_not_a_complex",
+                "the source differentials must satisfy d^2 = 0",
+            )
+    parsed_levels: list[list[Matrix]] = [
+        [
+            [
+                [_parse_entry(entry, prime) for entry in vector]
+                for vector in level.subspaces[degree].vectors
+            ]
+            for degree in range(degree_count)
+        ]
+        for level in filtration
+    ]
+    bases: list[list[Matrix]] = [
+        [_row_basis(level[degree], prime) for degree in range(degree_count)]
+        for level in parsed_levels
+    ]
+    for level_index in range(1, len(filtration)):
+        for degree in range(degree_count):
+            for vector in parsed_levels[level_index - 1][degree]:
+                if not _in_span(bases[level_index][degree], vector, prime):
+                    raise _fail(
+                        ("filtration", level_index),
+                        "filtered_chain_complex.not_nested",
+                        f"level {level_index - 1} is not contained in level "
+                        f"{level_index} in degree {degree}",
+                    )
+    top = len(filtration) - 1
+    for degree in range(degree_count):
+        if len(bases[top][degree]) != complex_value.basis_sizes[degree]:
+            raise _fail(
+                ("filtration", top),
+                "filtered_chain_complex.not_exhaustive",
+                f"the top filtration level must span chain group {degree}",
+            )
+    for level_index in range(len(filtration)):
+        for degree in range(1, degree_count):
+            for vector in parsed_levels[level_index][degree]:
+                image = _mat_vec(differentials[degree - 1], vector, prime)
+                if not _in_span(bases[level_index][degree - 1], image, prime):
+                    raise _fail(
+                        ("filtration", level_index),
+                        "filtered_chain_complex.differential_not_preserving",
+                        f"the differential does not preserve filtration level "
+                        f"{level_index} in degree {degree}",
+                    )
+    return _FilteredAdmission(differentials, parsed_levels, bases)
+
+
+def admit_filtered(
+    complex_value: ChainComplexValue,
+    filtration: tuple[FiltrationLevel, ...],
+) -> None:
+    """Shared native+catalog admission for a semantically valid filtration."""
+    _admit_filtered_semantics(complex_value, filtration)
 
 
 def _parse_entry(entry: str, prime: int | None) -> Scalar:
@@ -623,72 +705,16 @@ def _spectral_bidegree_page(  # noqa: C901
     )
 
 
-def associated_graded(  # noqa: C901
+def associated_graded(
     complex_value: ChainComplexValue,
     filtration: tuple[FiltrationLevel, ...],
 ) -> AssociatedGradedResult:
     """Compute Gr_p C with induced differentials for an admitted filtration."""
-    admit_filtered(complex_value, filtration)
+    admission = _admit_filtered_semantics(complex_value, filtration)
     prime = complex_value.prime
     degree_count = len(complex_value.basis_sizes)
-
-    differentials = [
-        [[_parse_entry(entry, prime) for entry in row] for row in matrix]
-        for matrix in complex_value.differential_matrices
-    ]
-    for index in range(len(differentials) - 1):
-        product = _mat_mul(differentials[index], differentials[index + 1], prime)
-        if any(not _is_zero(value) for row in product for value in row):
-            raise _fail(
-                ("complex",),
-                "filtered_chain_complex.source_not_a_complex",
-                "the source differentials must satisfy d^2 = 0",
-            )
-
-    parsed_levels: list[list[Matrix]] = [
-        [
-            [
-                [_parse_entry(entry, prime) for entry in vector]
-                for vector in level.subspaces[degree].vectors
-            ]
-            for degree in range(degree_count)
-        ]
-        for level in filtration
-    ]
-    bases: list[list[Matrix]] = [
-        [_row_basis(level[degree], prime) for degree in range(degree_count)]
-        for level in parsed_levels
-    ]
-
-    for level_index in range(1, len(filtration)):
-        for degree in range(degree_count):
-            for vector in parsed_levels[level_index - 1][degree]:
-                if not _in_span(bases[level_index][degree], vector, prime):
-                    raise _fail(
-                        ("filtration", level_index),
-                        "filtered_chain_complex.not_nested",
-                        f"level {level_index - 1} is not contained in level "
-                        f"{level_index} in degree {degree}",
-                    )
-    top = len(filtration) - 1
-    for degree in range(degree_count):
-        if len(bases[top][degree]) != complex_value.basis_sizes[degree]:
-            raise _fail(
-                ("filtration", top),
-                "filtered_chain_complex.not_exhaustive",
-                f"the top filtration level must span chain group {degree}",
-            )
-    for level_index in range(len(filtration)):
-        for degree in range(1, degree_count):
-            for vector in parsed_levels[level_index][degree]:
-                image = _mat_vec(differentials[degree - 1], vector, prime)
-                if not _in_span(bases[level_index][degree - 1], image, prime):
-                    raise _fail(
-                        ("filtration", level_index),
-                        "filtered_chain_complex.differential_not_preserving",
-                        f"the differential does not preserve filtration level "
-                        f"{level_index} in degree {degree}",
-                    )
+    differentials = admission.differentials
+    bases = admission.bases
 
     graded_dimensions: list[tuple[int, ...]] = []
     representatives: list[list[list[tuple[str, ...]]]] = []

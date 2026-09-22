@@ -10,10 +10,17 @@ accepted domain.
 from dataclasses import dataclass
 
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.matrices.values import MAX_MATRIX_SCALAR_DIGITS
+from jacobian.math.matrices.values import (
+    MAX_INTEGER_MATRIX_ORDER,
+    MAX_MATRIX_SCALAR_DIGITS,
+)
 
 MAX_HNF_INPUT_DIGITS = 256
-MAX_HNF_MATRIX_ORDER = 128
+# Rows own the square transformation; columns only enlarge the retained source
+# and normal form. Keep their structural ceilings distinct, then let the
+# source-derived work and coefficient bounds admit useful rectangular shapes.
+MAX_HNF_ROWS = 256
+MAX_HNF_COLUMNS = MAX_INTEGER_MATRIX_ORDER
 MAX_HNF_WORK_UNITS = 250_000_000
 # W has two non-modular transformation passes, each with bounded coefficient
 # growth. These ceilings reserve both passes while retaining the established
@@ -84,13 +91,13 @@ def admit_hermite_normal_form(entries: list[list[int]]) -> HNFAdmission:
     rows = len(entries)
     columns = len(entries[0]) if rows else 0
     if (
-        not 1 <= rows <= MAX_HNF_MATRIX_ORDER
-        or not 1 <= columns <= MAX_HNF_MATRIX_ORDER
+        not 1 <= rows <= MAX_HNF_ROWS
+        or not 1 <= columns <= MAX_HNF_COLUMNS
         or any(len(row) != columns for row in entries)
     ):
         _reject(
-            "HNF requires a nonempty rectangular matrix with axes at most "
-            f"{MAX_HNF_MATRIX_ORDER}"
+            "HNF requires a nonempty rectangular matrix with at most "
+            f"{MAX_HNF_ROWS} rows and {MAX_HNF_COLUMNS} columns"
         )
     if any(type(value) is not int for row in entries for value in row):
         raise TypeError("Hermite normal form entries must be integers")

@@ -6,12 +6,19 @@ from collections.abc import Callable
 from typing import Annotated, Literal, Self
 
 from pydantic import Field, WithJsonSchema, model_validator
+from pydantic.json_schema import JsonSchemaValue
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import ExactInteger
 from jacobian._models import StrictModel
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.lattices._hnf_bounds import MAX_HNF_MATRIX_ORDER
+from jacobian.math.lattices._hnf_bounds import (
+    MAX_HNF_COEFFICIENT_BITS,
+    MAX_HNF_COLUMNS,
+    MAX_HNF_INTERMEDIATE_BITS,
+    MAX_HNF_ROWS,
+    MAX_HNF_WORK_UNITS,
+)
 from jacobian.math.matrices.values import (
     MAX_MATRIX_DIMENSION,
     IntegerMatrix,
@@ -63,6 +70,15 @@ def _run_admission(admission: Callable[[], None], *, location: tuple[str, ...]) 
         ) from exc
 
 
+def _hnf_matrix_schema() -> JsonSchemaValue:
+    """Expose the distinct source and square-transformation axis bounds."""
+
+    schema = integer_matrix_axis_schema(MAX_HNF_COLUMNS)
+    schema["properties"]["row_count"]["maximum"] = MAX_HNF_ROWS
+    schema["properties"]["entries"]["maxItems"] = MAX_HNF_ROWS
+    return schema
+
+
 class HermiteNormalFormRequest(StrictModel):
     """An integer matrix for row HNF, with H = U A and unimodular U.
 
@@ -72,15 +88,17 @@ class HermiteNormalFormRequest(StrictModel):
 
     matrix: Annotated[
         IntegerMatrix,
-        WithJsonSchema(integer_matrix_axis_schema(MAX_HNF_MATRIX_ORDER)),
+        WithJsonSchema(_hnf_matrix_schema()),
     ] = Field(
         description=(
-            f"Nonempty integer matrix with axes at most {MAX_HNF_MATRIX_ORDER} "
-            "and at most 256 digits per scalar. HNF admission bounds the "
-            "fraction-free elimination, modular reduction and the square "
-            "transformation using row-norm minor bounds. At most 250,000,000 "
-            "scalar-operation units, 262,144 bits per intermediate and "
-            "12,000,000,000 retained coefficient bits are admitted."
+            f"Nonempty integer matrix with at most {MAX_HNF_ROWS} rows, "
+            f"{MAX_HNF_COLUMNS} columns, and 256 digits per scalar. HNF admission "
+            "is shape-sensitive "
+            "and bounds a deterministic fraction-free elimination, modular "
+            "reduction, square transformation, and exact output using row-norm "
+            f"minor bounds. At most {MAX_HNF_WORK_UNITS:,} scalar-operation "
+            f"units, {MAX_HNF_INTERMEDIATE_BITS:,} bits per intermediate, and "
+            f"{MAX_HNF_COEFFICIENT_BITS:,} retained coefficient bits are admitted."
         ),
     )
 

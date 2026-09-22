@@ -39,6 +39,8 @@ def _determinant(entries: tuple[tuple[int, ...], ...]) -> Fraction:
         (64, 64),
         pytest.param((128, 25), marks=pytest.mark.scale),
         pytest.param((128, 128), marks=pytest.mark.scale),
+        pytest.param((8, 512), marks=pytest.mark.scale),
+        pytest.param((128, 256), marks=pytest.mark.scale),
         (3, 5),
         (5, 3),
     ],
@@ -137,6 +139,16 @@ def test_hnf_specific_excessive_envelopes(
         hermite_normal_form(entries)
 
 
+def test_hnf_schema_publishes_shape_sensitive_axis_bounds() -> None:
+    schema = HERMITE_NORMAL_FORM_OPERATION.request_type.model_json_schema()
+    matrix = schema["properties"]["matrix"]
+
+    assert matrix["properties"]["row_count"]["maximum"] == 256
+    assert matrix["properties"]["column_count"]["maximum"] == 2_048
+    assert matrix["properties"]["entries"]["maxItems"] == 256
+    assert matrix["properties"]["entries"]["items"]["maxItems"] == 2_048
+
+
 def test_hnf_admission_bounds_both_nonmodular_transformation_passes() -> None:
     admission = admit_hermite_normal_form([[1, 0], [0, 1]])
 
@@ -144,6 +156,27 @@ def test_hnf_admission_bounds_both_nonmodular_transformation_passes() -> None:
     # reduction. Both height-growth passes belong in the preflight bound.
     assert admission.minor_bits == 2
     assert admission.intermediate_bits == 20
+
+
+@pytest.mark.scale
+def test_tall_hnf_retains_transformation_beyond_previous_axis_limit() -> None:
+    from flint import fmpz_mat
+
+    rows = 192
+    entries = [[index - rows // 2] for index in range(rows)]
+    tool = HERMITE_NORMAL_FORM_OPERATION
+    result = tool.run(
+        tool.request_type.model_validate({"matrix": {"entries": entries}})
+    )
+    h = result.normal_form.entries
+    u = result.transformation.entries
+
+    assert all(
+        sum(int(u[i][k]) * entries[k][0] for k in range(rows)) == int(h[i][0])
+        for i in range(rows)
+    )
+    assert abs(int(fmpz_mat(u).det())) == 1
+    assert type(result).model_validate_json(result.model_dump_json()) == result
 
 
 @pytest.mark.parametrize("order", [2, 5, 9])

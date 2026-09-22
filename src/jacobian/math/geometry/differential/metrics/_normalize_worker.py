@@ -6,6 +6,8 @@ import json
 import sys
 from typing import Any
 
+from jacobian._worker_protocol import encode_worker_result_frame
+
 
 def _polynomial(records: list[Any], symbols: tuple[Any, ...]) -> Any:
     from sympy import QQ, Poly, Rational
@@ -100,9 +102,7 @@ def main() -> int:
         response = _run(payload)
     except Exception:
         return 1
-    sys.stdout.buffer.write(
-        json.dumps(response, sort_keys=True, separators=(",", ":")).encode("utf-8")
-    )
+    sys.stdout.buffer.write(encode_worker_result_frame(response))
     return 0
 
 

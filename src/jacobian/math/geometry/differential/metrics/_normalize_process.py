@@ -14,15 +14,10 @@ from jacobian._execution import (
     OperationExecutionTimeoutError,
     request_checkpoint,
 )
-from jacobian.canonical import (
-    CanonicalizationError,
-    CanonicalLimits,
-    encode_strict_json,
-    loads_strict_json,
-)
+from jacobian.canonical import encode_strict_json
 from jacobian.process import (
     ProcessResourceLimits,
-    run_bounded_process,
+    run_checked_worker_process,
     worker_environment,
 )
 
@@ -60,6 +55,12 @@ def _poly_from_payload(records: object, symbols: tuple[Any, ...]) -> Any:
     return Poly.from_dict(coefficients, *symbols, domain=QQ)
 
 
+def _decode_normalization_result(value: object) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise ValueError("normalization worker result must be an object")
+    return value
+
+
 def cancel_fraction(
     numerator: Any,
     denominator: Any,
@@ -90,7 +91,7 @@ def cancel_fraction(
         )
     try:
         with TemporaryDirectory(prefix="jacobian-metric-cancel-") as worker_directory:
-            completed = run_bounded_process(
+            response = run_checked_worker_process(
                 [sys.executable, str(_WORKER_PATH)],
                 input_bytes=payload,
                 timeout_seconds=remaining,
@@ -103,38 +104,13 @@ def cancel_fraction(
                     file_size_bytes=_STDOUT_BYTES,
                 ),
                 cwd=worker_directory,
+                decode_result=_decode_normalization_result,
             )
+    except (OperationExecutionCancelledError, OperationExecutionTimeoutError):
+        raise
     except OSError as exc:
         raise RuntimeError(
             f"bounded {owner} cancellation worker could not be started"
-        ) from exc
-    if completed.cancelled:
-        raise OperationExecutionCancelledError(
-            f"{owner} cancelled during fraction cancellation"
-        )
-    if completed.timed_out:
-        raise OperationExecutionTimeoutError(
-            f"{owner} deadline expired during fraction cancellation"
-        )
-    if (
-        completed.stdout_exceeded
-        or completed.stderr_exceeded
-        or completed.returncode != 0
-    ):
-        raise RuntimeError(
-            f"bounded {owner} cancellation worker did not return a fraction"
-        )
-    try:
-        response = loads_strict_json(
-            completed.stdout,
-            limits=CanonicalLimits(
-                max_input_bytes=_STDOUT_BYTES,
-                max_output_bytes=_STDOUT_BYTES,
-            ),
-        )
-    except CanonicalizationError as exc:
-        raise RuntimeError(
-            f"bounded {owner} cancellation worker returned malformed output"
         ) from exc
     if (
         not isinstance(response, dict)

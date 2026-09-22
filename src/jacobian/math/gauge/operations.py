@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import NoReturn
+from typing import NoReturn, cast
 
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -10,10 +10,17 @@ from jacobian.catalog.models import (
 )
 from jacobian.math.gauge._models import (
     EdgeContribution,
+    GaugeEdge,
     GaugeField,
+    GaugeFieldEdgeLabel,
+    GaugeLattice,
+    GaugePathStep,
+    GaugeTransformResult,
+    GaugeVertexValue,
     HolonomyResult,
     OrientedGaugePath,
     PermutationLabel,
+    PlaquetteResult,
 )
 
 
@@ -41,42 +48,55 @@ def _inverse(image: tuple[int, ...]) -> tuple[int, ...]:
 def _admit_holonomy(field: GaugeField, path: OrientedGaugePath) -> None:
     """Enforce the shared envelope for native and catalog calls."""
 
-    if not isinstance(field, GaugeField):
-        _reject(
-            "field",
-            "lattice_gauge.holonomy.field_not_a_gauge_field",
-            "holonomy source must be an exact permutation-valued gauge field",
-        )
+    # Re-admit the complete nested field before path lookup or permutation
+    # arithmetic. ``model_construct`` is a supported native escape hatch for
+    # trusted producers, so merely checking the outer GaugeField type is not a
+    # sufficient public boundary.
+    lattice, labels = _admit_transform_field(field)
     if not isinstance(path, OrientedGaugePath):
         _reject(
             "path",
             "lattice_gauge.holonomy.path_not_a_gauge_path",
             "holonomy path must be an oriented lattice edge path",
         )
-    if not path.steps:
+    steps = getattr(path, "steps", _MISSING)
+    if not isinstance(steps, tuple) or not steps:
         _reject(
             "path",
             "lattice_gauge.holonomy.empty_path",
             "holonomy path must contain at least one oriented edge step",
         )
-    if len(path.steps) > 256:
+    if len(steps) > 256:
         raise OperationResourceAdmissionError(
             location=("path",),
             code="lattice_gauge.holonomy.path_over_envelope",
             message="oriented path exceeds the 256-step envelope",
         )
-    by_id = {edge.edge_id: edge for edge in field.lattice.edges}
-    labels = {label.edge_id: label.label for label in field.edge_labels}
+    by_id = {edge.edge_id: edge for edge in lattice.edges}
     cursor: str | None = None
-    for step in path.steps:
-        edge = by_id.get(step.edge_id)
-        if edge is None or step.edge_id not in labels:
+    for step in steps:
+        if not isinstance(step, GaugePathStep):
+            _reject(
+                "path",
+                "lattice_gauge.holonomy.step_shape",
+                "every path step must be a typed lattice traversal",
+            )
+        edge_id = getattr(step, "edge_id", _MISSING)
+        forward = getattr(step, "forward", _MISSING)
+        if not _gauge_label_is_valid(edge_id) or type(forward) is not bool:
+            _reject(
+                "path",
+                "lattice_gauge.holonomy.step_shape",
+                "path steps require a strict edge label and boolean orientation",
+            )
+        edge = by_id.get(cast(str, edge_id))
+        if edge is None or edge_id not in labels:
             _reject(
                 "path",
                 "lattice_gauge.holonomy.unknown_edge_step",
-                f"path step references unknown lattice edge {step.edge_id!r}",
+                f"path step references unknown lattice edge {edge_id!r}",
             )
-        tail, head = (edge.tail, edge.head) if step.forward else (edge.head, edge.tail)
+        tail, head = (edge.tail, edge.head) if forward else (edge.head, edge.tail)
         if cursor is not None and tail != cursor:
             _reject(
                 "path",
@@ -84,6 +104,229 @@ def _admit_holonomy(field: GaugeField, path: OrientedGaugePath) -> None:
                 "oriented path steps must chain head-to-tail",
             )
         cursor = head
+
+
+_MISSING = object()
+
+
+def _gauge_label_is_valid(value: object) -> bool:
+    return (
+        type(value) is str
+        and 1 <= len(value) <= 64
+        and not any(0xD800 <= ord(character) <= 0xDFFF for character in value)
+    )
+
+
+def _permutation_is_valid(value: object, degree: int) -> bool:
+    if not isinstance(value, PermutationLabel):
+        return False
+    value_degree = getattr(value, "degree", _MISSING)
+    image = getattr(value, "image", _MISSING)
+    return (
+        type(value_degree) is int
+        and value_degree == degree
+        and 2 <= value_degree <= 8
+        and type(image) is tuple
+        and len(image) == degree
+        and all(type(entry) is int for entry in image)
+        and sorted(image) == list(range(degree))
+    )
+
+
+def _admit_transform_field(
+    field: object,
+) -> tuple[GaugeLattice, dict[str, PermutationLabel]]:
+    """Re-admit every nested carrier before the transform indexes it.
+
+    Native callers can use ``model_construct`` and therefore bypass all model
+    validators.  Keep this admission local to the owner so malformed nested
+    carriers cannot turn dictionary lookups or permutation arithmetic into
+    incidental ``AttributeError``/``KeyError`` failures.
+    """
+    if not isinstance(field, GaugeField):
+        _reject(
+            "field",
+            "lattice_gauge.transform.field_not_a_gauge_field",
+            "transform source must be a gauge field",
+        )
+    lattice = getattr(field, "lattice", _MISSING)
+    degree = getattr(field, "degree", _MISSING)
+    edge_labels = getattr(field, "edge_labels", _MISSING)
+    if not isinstance(lattice, GaugeLattice):
+        _reject(
+            "field", "lattice_gauge.transform.field_shape", "field lattice is malformed"
+        )
+    if type(degree) is not int or not 2 <= degree <= 8:
+        _reject(
+            "field", "lattice_gauge.transform.field_degree", "field degree is malformed"
+        )
+    vertices = getattr(lattice, "vertices", _MISSING)
+    edges = getattr(lattice, "edges", _MISSING)
+    if (
+        type(vertices) is not tuple
+        or not 1 <= len(vertices) <= 64
+        or any(not _gauge_label_is_valid(vertex) for vertex in vertices)
+        or len(set(vertices)) != len(vertices)
+    ):
+        _reject(
+            "field",
+            "lattice_gauge.transform.lattice_shape",
+            "lattice vertices are malformed",
+        )
+    if type(edges) is not tuple or not 1 <= len(edges) <= 128:
+        _reject(
+            "field",
+            "lattice_gauge.transform.lattice_shape",
+            "lattice edges are malformed",
+        )
+    edge_ids: list[str] = []
+    for edge in edges:
+        if not isinstance(edge, GaugeEdge):
+            _reject(
+                "field",
+                "lattice_gauge.transform.lattice_shape",
+                "lattice edge is malformed",
+            )
+        edge_id = cast(str, getattr(edge, "edge_id", _MISSING))
+        tail = cast(str, getattr(edge, "tail", _MISSING))
+        head = cast(str, getattr(edge, "head", _MISSING))
+        if (
+            not _gauge_label_is_valid(edge_id)
+            or not _gauge_label_is_valid(tail)
+            or not _gauge_label_is_valid(head)
+            or tail not in vertices
+            or head not in vertices
+        ):
+            _reject(
+                "field",
+                "lattice_gauge.transform.lattice_shape",
+                "lattice edge is malformed",
+            )
+        edge_ids.append(edge_id)
+    if tuple(sorted(edge_ids)) != tuple(edge_ids) or len(set(edge_ids)) != len(
+        edge_ids
+    ):
+        _reject(
+            "field",
+            "lattice_gauge.transform.lattice_shape",
+            "lattice edge IDs are malformed",
+        )
+    if type(edge_labels) is not tuple or len(edge_labels) != len(edges):
+        _reject(
+            "field",
+            "lattice_gauge.transform.field_coverage",
+            "edge labels are incomplete",
+        )
+    labels: dict[str, PermutationLabel] = {}
+    for entry in edge_labels:
+        if not isinstance(entry, GaugeFieldEdgeLabel):
+            _reject(
+                "field",
+                "lattice_gauge.transform.field_shape",
+                "edge label is malformed",
+            )
+        edge_id = cast(str, getattr(entry, "edge_id", _MISSING))
+        label = getattr(entry, "label", _MISSING)
+        if (
+            not _gauge_label_is_valid(edge_id)
+            or edge_id in labels
+            or edge_id not in edge_ids
+            or not _permutation_is_valid(label, degree)
+        ):
+            _reject(
+                "field",
+                "lattice_gauge.transform.field_coverage",
+                "edge labels are malformed",
+            )
+        labels[edge_id] = cast(PermutationLabel, label)
+    if set(labels) != set(edge_ids):
+        _reject(
+            "field",
+            "lattice_gauge.transform.field_coverage",
+            "edge labels are incomplete",
+        )
+    return lattice, labels
+
+
+def gauge_transform(
+    field: GaugeField,
+    vertex_values: tuple[GaugeVertexValue, ...] | list[GaugeVertexValue],
+) -> GaugeTransformResult:
+    """Apply ``U'_e = h_tail^-1 U_e h_head`` on one finite lattice."""
+    lattice, labels = _admit_transform_field(field)
+    if not isinstance(vertex_values, (tuple, list)) or len(vertex_values) > 64:
+        _reject(
+            "vertex_values",
+            "lattice_gauge.transform.vertex_values_type",
+            "vertex values must be a finite labelled family",
+        )
+    by_vertex: dict[str, PermutationLabel] = {}
+    for entry in vertex_values:
+        if not isinstance(entry, GaugeVertexValue):
+            _reject(
+                "vertex_values",
+                "lattice_gauge.transform.vertex_values_type",
+                "vertex value is malformed",
+            )
+        vertex = cast(str, getattr(entry, "vertex", _MISSING))
+        frame_value = cast(PermutationLabel, getattr(entry, "value", _MISSING))
+        if not _gauge_label_is_valid(vertex) or vertex in by_vertex:
+            _reject(
+                "vertex_values",
+                "lattice_gauge.transform.vertex_coverage",
+                "transform vertex coverage is malformed",
+            )
+        if not _permutation_is_valid(frame_value, field.degree):
+            _reject(
+                "vertex_values",
+                "lattice_gauge.transform.degree_mismatch",
+                "frame element is malformed",
+            )
+        by_vertex[vertex] = frame_value
+    if set(by_vertex) != set(lattice.vertices):
+        _reject(
+            "vertex_values",
+            "lattice_gauge.transform.vertex_coverage",
+            "transform must label every lattice vertex exactly once",
+        )
+    transformed_labels = []
+    for edge in lattice.edges:
+        value = _compose(
+            _compose(_inverse(by_vertex[edge.tail].image), labels[edge.edge_id].image),
+            by_vertex[edge.head].image,
+        )
+        transformed_labels.append(
+            GaugeFieldEdgeLabel(
+                edge_id=edge.edge_id,
+                label=PermutationLabel(degree=field.degree, image=value),
+            )
+        )
+    transformed = GaugeField(
+        lattice=lattice,
+        degree=field.degree,
+        edge_labels=tuple(transformed_labels),
+    )
+    canonical_values = tuple(
+        GaugeVertexValue(vertex=vertex, value=by_vertex[vertex])
+        for vertex in lattice.vertices
+    )
+    return GaugeTransformResult(
+        source=field, transformed=transformed, vertex_values=canonical_values
+    )
+
+
+def plaquette_curvature(field: GaugeField, path: OrientedGaugePath) -> PlaquetteResult:
+    """Return exact curvature for a closed oriented plaquette path."""
+    result = path_holonomy(field, path)
+    if result.start != result.end:
+        _reject(
+            "path",
+            "lattice_gauge.plaquette.open_path",
+            "a plaquette path must be closed",
+        )
+    return PlaquetteResult(
+        field=field, path=path, curvature=result.holonomy, start=result.start
+    )
 
 
 def path_holonomy(field: GaugeField, path: OrientedGaugePath) -> HolonomyResult:
@@ -153,4 +396,4 @@ def _run_path_holonomy(request: object) -> HolonomyResult:
     return path_holonomy(request.field, request.path)
 
 
-__all__ = ["path_holonomy"]
+__all__ = ["gauge_transform", "path_holonomy", "plaquette_curvature"]

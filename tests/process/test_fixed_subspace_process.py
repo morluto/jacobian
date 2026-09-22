@@ -53,21 +53,14 @@ def test_fixed_subspace_rejects_an_unbound_worker_projection(
         columns=2,
     )
 
-    def unbound_projection(
-        *args: object, **kwargs: object
-    ) -> process.BoundedProcessResult:
-        return process.BoundedProcessResult(
-            returncode=0,
-            stdout=(
-                b'{"source_digest":"bad","generators_invertible":true,"basis_rows":[]}'
-            ),
-            stderr=b"",
-            stdout_exceeded=False,
-            stderr_exceeded=False,
-            timed_out=False,
-        )
+    def unbound_projection(*args: object, **kwargs: object) -> dict[str, object]:
+        return {
+            "source_digest": "bad",
+            "generators_invertible": True,
+            "basis_rows": [],
+        }
 
-    monkeypatch.setattr(process, "run_bounded_process", unbound_projection)
+    monkeypatch.setattr(process, "run_checked_worker_process", unbound_projection)
 
     with pytest.raises(RuntimeError, match="malformed basis"):
         run_fixed_subspace_computation((matrix,), matrix, deadline=monotonic() + 10)

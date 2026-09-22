@@ -31,15 +31,21 @@ def _require_active(deadline: float, stage: str) -> None:
         )
 
 
+def _decode_fixed_subspace_result(value: object) -> dict[str, object]:
+    if not isinstance(value, dict):
+        raise ValueError("fixed-subspace worker result must be an object")
+    return value
+
+
 def _run_fixed_subspace_worker(
     input_bytes: bytes,
     *,
     deadline: float,
     stdout_limit: int,
-) -> bytes:
+) -> dict[str, object]:
     from jacobian.process import (
         ProcessResourceLimits,
-        run_bounded_process,
+        run_checked_worker_process,
         worker_environment,
     )
 
@@ -47,7 +53,7 @@ def _run_fixed_subspace_worker(
     remaining = deadline - time.monotonic()
     try:
         with TemporaryDirectory(prefix="jacobian-fixed-subspace-") as directory:
-            completed = run_bounded_process(
+            result = run_checked_worker_process(
                 [sys.executable, str(_FIXED_SUBSPACE_WORKER)],
                 input_bytes=input_bytes,
                 timeout_seconds=remaining,
@@ -60,28 +66,15 @@ def _run_fixed_subspace_worker(
                     file_size_bytes=_FIXED_SUBSPACE_FILE_SIZE_BYTES,
                 ),
                 cwd=directory,
+                decode_result=_decode_fixed_subspace_result,
             )
+    except (OperationExecutionCancelledError, OperationExecutionTimeoutError):
+        raise
     except OSError as exc:
         raise RuntimeError(
             "bounded finite-field fixed-subspace worker could not start"
         ) from exc
-    if completed.cancelled:
-        raise OperationExecutionCancelledError(
-            "finite-field fixed-subspace computation cancelled during linear algebra"
-        )
-    if completed.timed_out:
-        raise OperationExecutionTimeoutError(
-            "finite-field fixed-subspace deadline expired during linear algebra"
-        )
-    if (
-        completed.stdout_exceeded
-        or completed.stderr_exceeded
-        or completed.returncode != 0
-    ):
-        raise RuntimeError(
-            "bounded finite-field fixed-subspace worker did not establish a result"
-        )
-    return completed.stdout
+    return result
 
 
 def run_fixed_subspace_computation(
@@ -102,13 +95,12 @@ def run_fixed_subspace_computation(
         4_096,
         128 + monomial_count * monomial_count * (scalar_bytes + 4),
     )
-    stdout = _run_fixed_subspace_worker(
+    decoded = _run_fixed_subspace_worker(
         input_bytes,
         deadline=deadline,
         stdout_limit=stdout_limit,
     )
     try:
-        decoded = json.loads(stdout.decode("utf-8"))
         if decoded["source_digest"] != source_digest:
             raise ValueError("fixed-subspace result is not bound to its source")
         generators_invertible = decoded["generators_invertible"]

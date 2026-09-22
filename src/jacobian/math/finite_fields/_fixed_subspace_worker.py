@@ -6,6 +6,7 @@ import json
 import sys
 from hashlib import sha256
 
+from jacobian._worker_protocol import encode_worker_result_frame
 from jacobian.math.matrices.finite_fields.linear_algebra import (
     PrimeFieldMatrix,
     nullspace,
@@ -30,14 +31,14 @@ def main() -> None:
             )
         )
     if any(value != payload["generator_columns"] for value in generator_ranks):
-        json.dump(
-            {
-                "source_digest": source_digest,
-                "generators_invertible": False,
-                "basis_rows": [],
-            },
-            sys.stdout,
-            separators=(",", ":"),
+        sys.stdout.buffer.write(
+            encode_worker_result_frame(
+                {
+                    "source_digest": source_digest,
+                    "generators_invertible": False,
+                    "basis_rows": [],
+                }
+            )
         )
         return
     matrix = PrimeFieldMatrix(
@@ -57,14 +58,14 @@ def main() -> None:
         basis_rows = reduced[: len(pivots)]
     else:
         basis_rows = ()
-    json.dump(
-        {
-            "source_digest": source_digest,
-            "generators_invertible": True,
-            "basis_rows": basis_rows,
-        },
-        sys.stdout,
-        separators=(",", ":"),
+    sys.stdout.buffer.write(
+        encode_worker_result_frame(
+            {
+                "source_digest": source_digest,
+                "generators_invertible": True,
+                "basis_rows": basis_rows,
+            }
+        )
     )
 
 

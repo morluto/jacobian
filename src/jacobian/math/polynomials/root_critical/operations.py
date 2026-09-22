@@ -1723,7 +1723,9 @@ def _run_profile_worker(
         cancellation_signal=cancellation_signal,
     )
     response = loads_strict_json(
-        worker_stdout,
+        worker_stdout
+        if isinstance(worker_stdout, bytes)
+        else encode_strict_json(worker_stdout),
         limits=CanonicalLimits(
             max_input_bytes=PROFILE_STDOUT_BYTES,
             max_output_bytes=PROFILE_STDOUT_BYTES,
@@ -1844,7 +1846,9 @@ def _run_splitting_worker(
         cancellation_signal=cancellation_signal,
     )
     response = loads_strict_json(
-        encode_strict_json(worker_stdout),
+        worker_stdout
+        if isinstance(worker_stdout, bytes)
+        else encode_strict_json(worker_stdout),
         limits=CanonicalLimits(
             max_input_bytes=SPLITTING_STDOUT_BYTES,
             max_output_bytes=SPLITTING_STDOUT_BYTES,

@@ -22,7 +22,7 @@ from jacobian.canonical import encode_strict_json
 from jacobian.math.polynomials.values import RationalPolynomial
 from jacobian.process import (
     ProcessResourceLimits,
-    run_bounded_process,
+    run_checked_worker_process,
     worker_environment,
 )
 
@@ -34,13 +34,19 @@ PROFILE_ADDRESS_SPACE_BYTES = 4 * 1024 * 1024 * 1024
 __all__ = ["PROFILE_STDOUT_BYTES", "run_profile_worker_process"]
 
 
+def _decode_profile_result(value: object) -> dict[str, object]:
+    if not isinstance(value, dict):
+        raise ValueError("root-critical profile result must be an object")
+    return value
+
+
 def run_profile_worker_process(
     polynomial: RationalPolynomial,
     *,
     max_pair_rows: object,
     remaining_seconds: float,
     cancellation_signal: RequestCancellationSignal | None,
-) -> bytes:
+) -> dict[str, object]:
     """Run the kernel worker once and return its validated stdout bytes.
 
     The caller owns the deadline arithmetic; this owner refuses a
@@ -60,7 +66,7 @@ def run_profile_worker_process(
         }
     )
     try:
-        completed = run_bounded_process(
+        response = run_checked_worker_process(
             [sys.executable, str(PROFILE_WORKER_PATH)],
             input_bytes=payload,
             timeout_seconds=remaining_seconds,
@@ -73,25 +79,12 @@ def run_profile_worker_process(
                 file_size_bytes=PROFILE_STDOUT_BYTES,
             ),
             cancellation_event=cancellation_signal,
+            decode_result=_decode_profile_result,
         )
+    except (OperationExecutionCancelledError, OperationExecutionTimeoutError):
+        raise
     except OSError as exc:
         raise RuntimeError(
             "bounded root-critical kernel worker could not be started"
         ) from exc
-    if completed.cancelled:
-        raise OperationExecutionCancelledError(
-            "root-critical profile cancelled during the kernel worker"
-        )
-    if completed.timed_out:
-        raise OperationExecutionTimeoutError(
-            "root-critical profile deadline expired during the kernel worker"
-        )
-    if (
-        completed.stdout_exceeded
-        or completed.stderr_exceeded
-        or completed.returncode != 0
-    ):
-        raise RuntimeError(
-            "bounded root-critical kernel worker did not establish a profile"
-        )
-    return completed.stdout
+    return response

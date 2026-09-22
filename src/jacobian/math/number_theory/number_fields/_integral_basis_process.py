@@ -63,6 +63,12 @@ class IntegralBasisWorkerResult:
     basis: tuple[tuple[CanonicalRational, ...], ...] | None
 
 
+def _decode_integral_basis_result(value: object) -> dict[str, object]:
+    if not isinstance(value, dict):
+        raise ValueError("integral-basis worker result must be an object")
+    return value
+
+
 def run_integral_basis_worker(
     request: NumberFieldRequest,
     *,
@@ -115,11 +121,11 @@ def run_integral_basis_worker(
                 )
             from jacobian.process import (
                 ProcessResourceLimits,
-                run_bounded_process,
+                run_checked_worker_process,
                 worker_environment,
             )
 
-            completed = run_bounded_process(
+            response = run_checked_worker_process(
                 command,
                 input_bytes=input_bytes,
                 timeout_seconds=remaining,
@@ -132,40 +138,24 @@ def run_integral_basis_worker(
                     file_size_bytes=_WORKER_FILE_SIZE_BYTES,
                 ),
                 cwd=worker_directory,
+                decode_result=_decode_integral_basis_result,
             )
-    except OperationExecutionTimeoutError:
+    except (OperationExecutionCancelledError, OperationExecutionTimeoutError):
         raise
     except OSError as exc:
         request_checkpoint("during number-field worker startup")
         raise RuntimeError("bounded number-field worker could not be started") from exc
 
     request_checkpoint("after number-field integral-basis worker")
-    if completed.cancelled:
-        raise OperationExecutionCancelledError(
-            "number-field integral-basis computation cancelled"
-        )
-    if completed.timed_out:
-        raise OperationExecutionTimeoutError(
-            "number-field integral-basis computation timed out"
-        )
-    if (
-        completed.stdout_exceeded
-        or completed.stderr_exceeded
-        or completed.returncode != 0
-    ):
-        raise RuntimeError(
-            "bounded number-field worker did not establish an integral basis"
-        )
-
-    response = _decode_worker_response(
-        completed.stdout,
+    decoded_response = _decode_worker_response(
+        encode_strict_json(response),
         request=request,
         input_bytes=input_bytes,
         include_basis=include_basis,
         stdout_limit=stdout_limit,
     )
     request_checkpoint("after number-field integral-basis result construction")
-    return response
+    return decoded_response
 
 
 def bounded_rejection_text(value: str, *, limit: int) -> str:

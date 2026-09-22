@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import sys
 
+from jacobian._worker_protocol import encode_worker_result_frame
 from jacobian.canonical import (
     encode_strict_json,
     format_canonical_integer,
@@ -47,7 +48,7 @@ def main() -> int:
             exc,
             request_digest=hashlib.sha256(input_bytes).hexdigest(),
         )
-        sys.stdout.buffer.write(encode_strict_json(rejected))
+        sys.stdout.buffer.write(encode_worker_result_frame(rejected))
         return 0
     admitted_irreducible = admitted_discriminant is not None
     integral_basis = recognized_integral_basis(
@@ -74,7 +75,7 @@ def main() -> int:
                     exc,
                     request_digest=hashlib.sha256(input_bytes).hexdigest(),
                 )
-                sys.stdout.buffer.write(encode_strict_json(rejected))
+                sys.stdout.buffer.write(encode_worker_result_frame(rejected))
                 return 0
             if basis is None:
                 raise RuntimeError(
@@ -91,7 +92,7 @@ def main() -> int:
                 for vector in basis
             ]
     response["request_digest"] = hashlib.sha256(input_bytes).hexdigest()
-    sys.stdout.buffer.write(encode_strict_json(response))
+    sys.stdout.buffer.write(encode_worker_result_frame(response))
     return 0
 
 

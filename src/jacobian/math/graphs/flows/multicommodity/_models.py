@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fractions import Fraction
+from itertools import pairwise
 from typing import Literal, NamedTuple, Self
 
 from pydantic import Field, StrictStr, model_validator
@@ -78,6 +79,23 @@ MAX_PROFILE_LOGICAL_STEPS = (
     + MAX_PROFILE_COMPARISONS_PER_PASS
 )
 
+# A simple path or cycle removes at least one positive tensor edge.  The
+# decomposition therefore has no more terms than the sparse source support;
+# each term has at most one entry per source vertex (plus the repeated closing
+# vertex for a cycle).  The operation owns a separate output envelope rather
+# than silently inheriting a transport byte limit.
+MAX_DECOMPOSITION_TERMS = MAX_SPARSE_FLOW_ENTRIES
+MAX_DECOMPOSITION_VERTEX_CELLS = 262_144
+MAX_DECOMPOSITION_INTERMEDIATE_DIGITS = 2 * MAX_CANONICAL_RATIONAL_DIGITS + 8
+# Each residual path or cycle search visits each vertex and scans each edge at
+# most once.  Admission charges the search, its residual update, the per-term
+# remaining/start scan, and bounded per-commodity setup/final scans.  This
+# envelope is deliberately derived from the largest canonical carrier rather
+# than from a wall-clock timeout, so every mandatory phase has a fixed bound.
+MAX_DECOMPOSITION_TRAVERSAL_STEPS = (
+    2 * MAX_DECOMPOSITION_VERTEX_CELLS * (MAX_MULTICOMMODITY_EDGES + 64)
+)
+
 
 class CommodityDemand(StrictModel):
     """One labelled source-to-sink demand in a directed capacitated network."""
@@ -128,6 +146,61 @@ class CommodityEdgeFlow(StrictModel):
             raise PydanticCustomError(
                 "graph.sparse_flow_entries_must_have_strictly_positive_",
                 "sparse flow entries must have strictly positive amounts",
+            )
+        return self
+
+
+class FlowPathTerm(StrictModel):
+    """One positive exact directed path term of a commodity tensor.
+
+    Paths are simple and open.  For a flow satisfying its declared demand
+    conservation, their endpoints are that commodity's source and sink; for a
+    merely nonnegative tensor they are the positive- and negative-divergence
+    endpoints needed by the general path/cycle identity.
+    """
+
+    commodity_id: StrictStr = Field(min_length=1, max_length=64)
+    vertices: tuple[int, ...] = Field(min_length=2, max_length=64)
+    amount: CanonicalRational
+
+    @model_validator(mode="after")
+    def require_positive_simple_path(self) -> Self:
+        if self.amount.as_fraction() <= 0:
+            raise PydanticCustomError(
+                "graph.flow_path_amount_must_be_positive",
+                "flow path amounts must be strictly positive",
+            )
+        if len(set(self.vertices)) != len(self.vertices):
+            raise PydanticCustomError(
+                "graph.flow_path_must_be_simple",
+                "flow path terms must have distinct vertices",
+            )
+        return self
+
+
+class FlowCycleTerm(StrictModel):
+    """One positive exact directed simple cycle term of a commodity tensor."""
+
+    commodity_id: StrictStr = Field(min_length=1, max_length=64)
+    vertices: tuple[int, ...] = Field(min_length=2, max_length=65)
+    amount: CanonicalRational
+
+    @model_validator(mode="after")
+    def require_positive_closed_cycle(self) -> Self:
+        if self.amount.as_fraction() <= 0:
+            raise PydanticCustomError(
+                "graph.flow_cycle_amount_must_be_positive",
+                "flow cycle amounts must be strictly positive",
+            )
+        if self.vertices[0] != self.vertices[-1]:
+            raise PydanticCustomError(
+                "graph.flow_cycle_must_be_closed",
+                "flow cycle terms must repeat their first vertex at the end",
+            )
+        if len(set(self.vertices[:-1])) != len(self.vertices) - 1:
+            raise PydanticCustomError(
+                "graph.flow_cycle_must_have_distinct_interior_vertices",
+                "flow cycle terms must not repeat an interior vertex",
             )
         return self
 
@@ -533,6 +606,131 @@ class MulticommodityFlow(StrictModel):
             commodity_ids=commodity_ids,
         )
         return self
+
+
+class MulticommodityFlowDecompositionRequest(StrictModel):
+    """Decompose one nonnegative tensor into exact paths and cycles."""
+
+    flow: MulticommodityFlow = Field(
+        description=(
+            "Canonical sparse nonnegative commodity-by-edge tensor. Every "
+            "omitted entry is exact zero; the returned path and cycle terms "
+            "reconstruct this tensor without changing its network or axes. "
+            "Before decomposition, the exact output admission requires "
+            "nonzero_entries * (network.vertex_count + 1) <= "
+            f"{MAX_DECOMPOSITION_VERTEX_CELLS} vertex cells, bounds every "
+            f"residual rational intermediate to {MAX_DECOMPOSITION_INTERMEDIATE_DIGITS} "
+            "decimal digits, and admits residual traversal work within the "
+            f"{MAX_DECOMPOSITION_TRAVERSAL_STEPS}-step envelope."
+        )
+    )
+
+
+class MulticommodityFlowDecompositionResult(StrictModel):
+    """Canonical exact path-and-cycle decomposition of a flow tensor.
+
+    The defining identity is, for every commodity-edge cell,
+    ``flow = sum(path amounts on the edge) + sum(cycle amounts on the edge)``.
+    Paths and cycles are retained separately so circulation is never discarded;
+    empty source support is represented by two empty term tuples.
+    """
+
+    flow: MulticommodityFlow
+    paths: tuple[FlowPathTerm, ...] = Field(
+        default=(),
+        max_length=MAX_DECOMPOSITION_TERMS,
+        description=(
+            "At most one simple path term per positive source tensor edge; "
+            f"the operation admits at most {MAX_DECOMPOSITION_TERMS} terms."
+        ),
+    )
+    cycles: tuple[FlowCycleTerm, ...] = Field(
+        default=(),
+        max_length=MAX_DECOMPOSITION_TERMS,
+        description=(
+            "At most one simple cycle term per positive source tensor edge; "
+            f"the operation admits at most {MAX_DECOMPOSITION_TERMS} terms."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_source_bound_terms(self) -> Self:
+        commodity_ids = {commodity.commodity_id for commodity in self.flow.commodities}
+        edge_keys = {(edge.source, edge.target) for edge in self.flow.network.edges}
+        vertex_count = self.flow.network.vertex_count
+
+        def validate_term(term: FlowPathTerm | FlowCycleTerm) -> None:
+            if term.commodity_id not in commodity_ids:
+                raise PydanticCustomError(
+                    "graph.decomposition_term_references_undeclared_commodity",
+                    "decomposition terms must reference a source commodity",
+                )
+            if any(not 0 <= vertex < vertex_count for vertex in term.vertices):
+                raise PydanticCustomError(
+                    "graph.decomposition_term_vertex_out_of_range",
+                    "decomposition terms must use the source vertex axis",
+                )
+            if any(
+                (source, target) not in edge_keys
+                for source, target in pairwise(term.vertices)
+            ):
+                raise PydanticCustomError(
+                    "graph.decomposition_term_uses_undeclared_edge",
+                    "decomposition terms must use source network edges",
+                )
+
+        for path_term in self.paths:
+            validate_term(path_term)
+        for cycle_term in self.cycles:
+            validate_term(cycle_term)
+        for path in self.paths:
+            if path.vertices[0] == path.vertices[-1]:
+                raise PydanticCustomError(
+                    "graph.decomposition_path_must_be_open",
+                    "path terms must be open; circulation belongs in cycles",
+                )
+
+        # The result's mathematical purpose is the source-bound reconstruction
+        # identity.  Establish it at construction/consumer boundaries so a
+        # serialized result cannot silently drop a path or alter an amount.
+        expected = {
+            (entry.commodity_id, entry.source, entry.target): entry.amount.as_fraction()
+            for entry in self.flow.entries
+        }
+        reconstructed = {key: Fraction(0) for key in expected}
+
+        def add_reconstructed_term(term: FlowPathTerm | FlowCycleTerm) -> None:
+            for source, target in pairwise(term.vertices):
+                key = (term.commodity_id, source, target)
+                if key not in reconstructed:
+                    raise PydanticCustomError(
+                        "graph.decomposition_term_uses_undeclared_edge",
+                        "decomposition terms must use source tensor edges",
+                    )
+                reconstructed[key] += term.amount.as_fraction()
+
+        for path_term in self.paths:
+            add_reconstructed_term(path_term)
+        for cycle_term in self.cycles:
+            add_reconstructed_term(cycle_term)
+        if any(reconstructed[key] != value for key, value in expected.items()):
+            raise PydanticCustomError(
+                "graph.decomposition_reconstruction_mismatch",
+                "path and cycle terms must reconstruct every source flow entry",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        flow: MulticommodityFlow,
+        *,
+        paths: tuple[FlowPathTerm, ...],
+        cycles: tuple[FlowCycleTerm, ...],
+    ) -> Self:
+        """Build the source-bound result after exact decomposition."""
+
+        return cls.model_construct(flow=flow, paths=paths, cycles=cycles)
 
 
 class MulticommodityFlowProfileRequest(StrictModel):
@@ -1378,6 +1576,10 @@ class UnsplittableRoutingFindResult(StrictModel):
 
 __all__ = [
     "MAX_COMMODITY_VERTEX_CELLS",
+    "MAX_DECOMPOSITION_INTERMEDIATE_DIGITS",
+    "MAX_DECOMPOSITION_TERMS",
+    "MAX_DECOMPOSITION_TRAVERSAL_STEPS",
+    "MAX_DECOMPOSITION_VERTEX_CELLS",
     "MAX_MULTICOMMODITY_EDGES",
     "MAX_PROFILE_ADDITIONS_PER_PASS",
     "MAX_PROFILE_COMPARISONS_PER_PASS",
@@ -1392,11 +1594,15 @@ __all__ = [
     "CommodityVertexViolation",
     "EdgeCapacityViolation",
     "EdgeLoadProfile",
+    "FlowCycleTerm",
+    "FlowPathTerm",
     "MinimumCongestionRequest",
     "MinimumCongestionResult",
     "MulticommodityFeasibilityRequest",
     "MulticommodityFeasibilityResult",
     "MulticommodityFlow",
+    "MulticommodityFlowDecompositionRequest",
+    "MulticommodityFlowDecompositionResult",
     "MulticommodityFlowProfileRequest",
     "MulticommodityFlowProfileResult",
     "MulticommodityFlowProfileWork",

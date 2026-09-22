@@ -8,8 +8,12 @@ from itertools import pairwise, product
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.graphs.flows._models import FlowGraph
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
+from jacobian.math.graphs.flows._models import CapacitatedEdge, FlowGraph
+from jacobian.math.graphs.flows.multicommodity._decomposition import decompose_flow
 from jacobian.math.graphs.flows.multicommodity._kernel import profile_components
 from jacobian.math.graphs.flows.multicommodity._lp_solve import (
     LPExecutionExceededError,
@@ -23,13 +27,20 @@ from jacobian.math.graphs.flows.multicommodity._lp_solve import (
     tensor_from_primal,
 )
 from jacobian.math.graphs.flows.multicommodity._models import (
+    MAX_COMMODITY_VERTEX_CELLS,
+    MAX_DECOMPOSITION_INTERMEDIATE_DIGITS,
+    MAX_DECOMPOSITION_TRAVERSAL_STEPS,
+    MAX_DECOMPOSITION_VERTEX_CELLS,
+    MAX_SPARSE_FLOW_ENTRIES,
     AdmittedProfileScan,
     CommodityDemand,
+    CommodityEdgeFlow,
     CommodityVertexViolation,
     EdgeCapacityViolation,
     MinimumCongestionResult,
     MulticommodityFeasibilityResult,
     MulticommodityFlow,
+    MulticommodityFlowDecompositionResult,
     MulticommodityFlowProfileResult,
     MulticommodityFlowWitnessCheckResult,
     UnsplittablePath,
@@ -41,6 +52,125 @@ from jacobian.math.graphs.flows.multicommodity._models import (
     _require_canonical_network,
     _require_profile_output_admission,
 )
+
+
+def _admit_decomposition_flow(flow: object) -> MulticommodityFlow:
+    """Re-establish the canonical flow contract at the native boundary.
+
+    ``model_construct`` and ``model_copy(update=...)`` deliberately bypass
+    Pydantic validators.  Revalidating a bounded structural dump prevents a
+    forged commodity, edge axis, ordering, or scalar from reaching the
+    decomposition kernel, while keeping semantic decomposition out of model
+    validation.
+    """
+
+    if not isinstance(flow, MulticommodityFlow):
+        raise OperationDomainValidationError(
+            location=("flow",),
+            code="graph.multicommodity_decomposition_requires_canonical_flow",
+            message="flow must be a canonical MulticommodityFlow value",
+        )
+    # Check container representation and cardinality before copying a native
+    # model that may have been forged with ``model_construct``.  The nested
+    # model revalidation below owns all axis, ordering, and scalar checks.
+    try:
+        network = flow.network
+        commodities = flow.commodities
+        entries = flow.entries
+        if (
+            not isinstance(network, FlowGraph)
+            or type(network.edges) is not tuple
+            or len(network.edges) > 512
+            or type(commodities) is not tuple
+            or not 1 <= len(commodities) <= MAX_COMMODITY_VERTEX_CELLS
+            or type(entries) is not tuple
+            or len(entries) > MAX_SPARSE_FLOW_ENTRIES
+            or any(not isinstance(edge, CapacitatedEdge) for edge in network.edges)
+            or any(not isinstance(item, CommodityDemand) for item in commodities)
+            or any(not isinstance(item, CommodityEdgeFlow) for item in entries)
+        ):
+            raise ValueError("invalid canonical flow container")
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("flow",),
+            code="graph.multicommodity_decomposition_invalid_canonical_flow",
+            message="flow does not satisfy its canonical container contract",
+        ) from exc
+    try:
+        payload = flow.model_dump(mode="python")
+        return MulticommodityFlow.model_validate(payload, strict=True)
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("flow",),
+            code="graph.multicommodity_decomposition_invalid_canonical_flow",
+            message="flow does not satisfy its canonical network, axis, and scalar contract",
+        ) from exc
+
+
+def decompose_multicommodity_flow(
+    flow: MulticommodityFlow,
+) -> MulticommodityFlowDecompositionResult:
+    """Return a deterministic exact path-and-cycle decomposition.
+
+    Each commodity's nonnegative sparse edge tensor is decomposed into simple
+    open paths between its positive and negative divergence vertices, followed
+    by simple directed cycles in the balanced residual.  The returned terms
+    reconstruct every source commodity-edge amount exactly; an empty support
+    therefore returns empty path and cycle tuples rather than a special case.
+    """
+
+    flow = _admit_decomposition_flow(flow)
+    # A simple term removes at least one positive edge.  A term contains at
+    # most one visit per source vertex (and one closing vertex for a cycle), so
+    # this preflight bounds both term cardinality and unavoidable exact output
+    # before any residual walk is materialized.
+    upper_bound_cells = len(flow.entries) * (flow.network.vertex_count + 1)
+    if upper_bound_cells > MAX_DECOMPOSITION_VERTEX_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("flow", "entries"),
+            code="graph.multicommodity_decomposition_output_envelope",
+            message=(
+                "the path-and-cycle decomposition exceeds its exact output "
+                f"envelope of {MAX_DECOMPOSITION_VERTEX_CELLS} vertex cells"
+            ),
+        )
+    # Each residual BFS visits each vertex and examines each network edge at
+    # most once.  Charge the search, its residual update, the per-term
+    # remaining/start scan, and bounded setup/final scans; there can be at
+    # most one search per emitted term plus one terminating scan per
+    # commodity.  Admit this mandatory phase before constructing a result.
+    traversal_steps = (2 * len(flow.entries) + 4 * len(flow.commodities)) * (
+        flow.network.vertex_count + len(flow.network.edges)
+    )
+    if traversal_steps > MAX_DECOMPOSITION_TRAVERSAL_STEPS:
+        raise OperationResourceAdmissionError(
+            location=("flow", "entries"),
+            code="graph.multicommodity_decomposition_traversal_envelope",
+            message=(
+                "the path-and-cycle decomposition exceeds its residual traversal "
+                f"envelope of {MAX_DECOMPOSITION_TRAVERSAL_STEPS} steps"
+            ),
+        )
+    try:
+        paths, cycles = decompose_flow(flow)
+    except OverflowError as exc:
+        raise OperationResourceAdmissionError(
+            location=("flow",),
+            code="graph.multicommodity_decomposition_rational_envelope",
+            message=(
+                "path-and-cycle residual arithmetic exceeds the "
+                f"{MAX_DECOMPOSITION_INTERMEDIATE_DIGITS}-digit intermediate envelope"
+            ),
+        ) from exc
+    except ValueError as exc:
+        raise OperationDomainValidationError(
+            location=("flow",),
+            code="graph.multicommodity_decomposition_not_decomposable",
+            message=str(exc),
+        ) from exc
+    return MulticommodityFlowDecompositionResult._from_kernel(
+        flow, paths=paths, cycles=cycles
+    )
 
 
 def compute_multicommodity_flow_profile(
@@ -579,6 +709,7 @@ __all__ = [
     "check_multicommodity_flow_witness",
     "check_unsplittable_routing",
     "compute_multicommodity_flow_profile",
+    "decompose_multicommodity_flow",
     "find_unsplittable_routing",
     "solve_minimum_congestion",
     "solve_multicommodity_feasibility",

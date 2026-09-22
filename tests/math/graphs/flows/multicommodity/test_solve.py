@@ -127,6 +127,7 @@ class TestCatalogRegistry:
         assert {tool.operation_id for tool in TOOLS} == {
             "network.multicommodity_flow.profile.compute",
             "network.multicommodity_flow.witness.check",
+            "network.multicommodity_flow.decomposition.compute",
             "network.multicommodity_flow.feasibility.compute",
             "network.multicommodity_flow.minimum_congestion.compute",
             "network.multicommodity_flow.unsplittable_routing.check",

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from fractions import Fraction
+from typing import Any
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
@@ -84,6 +85,8 @@ def _mixing_time(
     stationary: tuple[Fraction, ...],
     epsilon: Fraction,
     max_steps: int,
+    *,
+    transition: Any | None = None,
 ) -> MixingTimeSearchResult:
     """Return the first exact worst-case epsilon-mixing step within the bound."""
     _admit_transition_matrix(matrix)
@@ -99,7 +102,11 @@ def _mixing_time(
     from jacobian.math.probability.markov_chains._flint import mixing_time_search
 
     mixing_time, steps_examined, distance = mixing_time_search(
-        matrix, stationary, epsilon, max_steps
+        matrix,
+        stationary,
+        epsilon,
+        max_steps,
+        transition=transition,
     )
     return MixingTimeSearchResult(mixing_time, steps_examined, distance)
 
@@ -147,7 +154,10 @@ def _closed_communicating_classes(
 
 
 def _stationary_distribution_extremes(
-    matrix: _TransitionMatrix, closed_classes: tuple[tuple[int, ...], ...]
+    matrix: _TransitionMatrix,
+    closed_classes: tuple[tuple[int, ...], ...],
+    *,
+    transition: Any | None = None,
 ) -> list[tuple[tuple[int, ...], tuple[Fraction, ...]]]:
     """Solve the admitted classes and embed their vectors in source order."""
 
@@ -156,7 +166,7 @@ def _stationary_distribution_extremes(
     from jacobian.math.probability.markov_chains._flint import solve_stationary_class
 
     for closed_class in closed_classes:
-        local = solve_stationary_class(matrix, closed_class)
+        local = solve_stationary_class(matrix, closed_class, transition=transition)
         distribution = [Fraction(0)] * n
         for index, state in enumerate(closed_class):
             distribution[state] = local[index]
@@ -357,11 +367,24 @@ def mixing_time_result(
             max_steps=max_steps,
             steps_examined=0,
         )
+    from jacobian.math.probability.markov_chains._flint import (
+        transition_matrix_to_flint,
+    )
+
+    transition = transition_matrix_to_flint(native)
     extremes = _stationary_distribution_extremes(
-        native, _closed_communicating_classes(native)
+        native,
+        _closed_communicating_classes(native),
+        transition=transition,
     )
     stationary = extremes[0][1]
-    outcome = _mixing_time(native, stationary, epsilon, max_steps)
+    outcome = _mixing_time(
+        native,
+        stationary,
+        epsilon,
+        max_steps,
+        transition=transition,
+    )
     distance = CanonicalRational.from_integer_ratio(
         outcome.max_total_variation_distance.numerator,
         outcome.max_total_variation_distance.denominator,

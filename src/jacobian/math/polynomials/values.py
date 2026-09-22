@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Literal, Self
+from typing import Annotated, Any, Literal, Self
 
 from pydantic import Field, StrictInt, StringConstraints, model_validator
 from pydantic_core import PydanticCustomError
@@ -355,6 +355,9 @@ def require_canonical_rational_function(
     maximum_exponent: int = MAX_RATIONAL_FUNCTION_EXPONENT,
     maximum_coefficient_digits: int = MAX_RATIONAL_FUNCTION_COEFFICIENT_DIGITS,
     label: str = "rational function",
+    symbols: tuple[Any, ...] | None = None,
+    polynomial_cache: dict[tuple[tuple[str, ...], SparseRationalPolynomial], Any]
+    | None = None,
 ) -> RationalFunction:
     """Recognize one exact reduced rational-function presentation.
 
@@ -402,9 +405,17 @@ def require_canonical_rational_function(
         sparse_rational_polynomial_to_sympy,
     )
 
-    numerator = sparse_rational_polynomial_to_sympy(value.numerator, value.variables)
+    numerator = sparse_rational_polynomial_to_sympy(
+        value.numerator,
+        value.variables,
+        symbols=symbols,
+        cache=polynomial_cache,
+    )
     denominator = sparse_rational_polynomial_to_sympy(
-        value.denominator, value.variables
+        value.denominator,
+        value.variables,
+        symbols=symbols,
+        cache=polynomial_cache,
     )
     if not numerator.gcd(denominator).is_one:
         raise _validation_error(

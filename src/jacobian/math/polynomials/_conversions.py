@@ -61,21 +61,37 @@ def rational_polynomial_to_sympy(polynomial: RationalPolynomial) -> Any:
 def sparse_rational_polynomial_to_sympy(
     polynomial: SparseRationalPolynomial,
     variables: tuple[str, ...],
+    *,
+    symbols: tuple[Any, ...] | None = None,
+    cache: dict[tuple[tuple[str, ...], SparseRationalPolynomial], Any] | None = None,
 ) -> Any:
-    """Construct a QQ ``Poly`` from validated sparse data."""
+    """Construct a QQ ``Poly`` from validated sparse data.
+
+    Callers doing several conversions in one request may supply their local
+    generators and conversion dictionary. Nothing is retained across requests.
+    """
 
     from sympy import QQ, Poly, Rational
 
     if not variables:
         raise ValueError("SymPy Poly requires at least one generator")
-    return Poly.from_dict(
+    key = (variables, polynomial)
+    if cache is not None and key in cache:
+        return cache[key]
+    generators = symbols_for_variables(variables) if symbols is None else symbols
+    if len(generators) != len(variables) or tuple(map(str, generators)) != variables:
+        raise ValueError("SymPy generators do not match the declared order")
+    result = Poly.from_dict(
         {
             term.exponents: Rational(*term.coefficient.as_integer_ratio())
             for term in polynomial.terms
         },
-        *symbols_for_variables(variables),
+        *generators,
         domain=QQ,
     )
+    if cache is not None:
+        cache[key] = result
+    return result
 
 
 def sparse_rational_polynomial_from_sympy(
@@ -112,20 +128,47 @@ def sparse_rational_polynomial_from_sympy(
     )
 
 
-def rational_function_to_sympy(value: RationalFunction) -> Any:
-    """Construct an exact SymPy expression from a canonical rational function."""
+def rational_function_to_sympy(
+    value: RationalFunction,
+    *,
+    symbols: tuple[Any, ...] | None = None,
+    polynomial_cache: dict[tuple[tuple[str, ...], SparseRationalPolynomial], Any]
+    | None = None,
+    value_cache: dict[RationalFunction, Any] | None = None,
+) -> Any:
+    """Construct an exact SymPy expression from a canonical rational function.
+
+    Optional dictionaries are request-local reuse points for matrix and tensor
+    kernels that encounter the same canonical value more than once.
+    """
 
     from sympy import Rational
 
+    if value_cache is not None and value in value_cache:
+        return value_cache[value]
     if not value.variables:
-        if not value.numerator.terms:
-            return Rational(0)
-        return Rational(*value.numerator.terms[0].coefficient.as_integer_ratio())
-    numerator = sparse_rational_polynomial_to_sympy(value.numerator, value.variables)
-    denominator = sparse_rational_polynomial_to_sympy(
-        value.denominator, value.variables
-    )
-    return numerator.as_expr() / denominator.as_expr()
+        result = (
+            Rational(0)
+            if not value.numerator.terms
+            else Rational(*value.numerator.terms[0].coefficient.as_integer_ratio())
+        )
+    else:
+        numerator = sparse_rational_polynomial_to_sympy(
+            value.numerator,
+            value.variables,
+            symbols=symbols,
+            cache=polynomial_cache,
+        )
+        denominator = sparse_rational_polynomial_to_sympy(
+            value.denominator,
+            value.variables,
+            symbols=symbols,
+            cache=polynomial_cache,
+        )
+        result = numerator.as_expr() / denominator.as_expr()
+    if value_cache is not None:
+        value_cache[value] = result
+    return result
 
 
 def rational_function_from_sympy(
@@ -134,6 +177,7 @@ def rational_function_from_sympy(
     *,
     maximum_terms: int = 256,
     deadline_check: Any = None,
+    symbols: tuple[Any, ...] | None = None,
 ) -> RationalFunction:
     """Canonicalize an exact rational-function expression into wire data.
 
@@ -173,14 +217,16 @@ def rational_function_from_sympy(
                 )
             ),
         )
-    symbols = symbols_for_variables(variables)
+    generators = symbols_for_variables(variables) if symbols is None else symbols
+    if len(generators) != len(variables) or tuple(map(str, generators)) != variables:
+        raise ValueError("SymPy generators do not match the declared order")
     if deadline_check is not None:
         deadline_check()
     numerator_expression, denominator_expression = fraction(cancel(expression))
     if deadline_check is not None:
         deadline_check()
-    numerator = Poly(numerator_expression, *symbols, domain=QQ)
-    denominator = Poly(denominator_expression, *symbols, domain=QQ)
+    numerator = Poly(numerator_expression, *generators, domain=QQ)
+    denominator = Poly(denominator_expression, *generators, domain=QQ)
     leading = denominator.LC()
     numerator = (
         numerator.monic() * (numerator.LC() / leading)

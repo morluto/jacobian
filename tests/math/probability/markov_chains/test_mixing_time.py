@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from fractions import Fraction
+from typing import Any
 
 import pytest
 
@@ -43,6 +44,44 @@ def test_exact_two_state_mixing_time_and_distance() -> None:
     assert result.max_total_variation_distance is not None
     assert result.max_total_variation_distance.as_fraction() == Fraction(1, 384)
     assert result.steps_examined == 5
+
+
+def test_mixing_reuses_one_request_local_flint_transition(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian.math.probability.markov_chains import _flint
+
+    original_convert = _flint.transition_matrix_to_flint
+    original_solve = _flint.solve_stationary_class
+    original_search = _flint.mixing_time_search
+    converted: list[Any] = []
+    stationary_backends: list[Any] = []
+    search_backends: list[Any] = []
+
+    def convert(matrix: Any) -> Any:
+        result = original_convert(matrix)
+        converted.append(result)
+        return result
+
+    def solve(*args: Any, **kwargs: Any) -> Any:
+        stationary_backends.append(kwargs.get("transition"))
+        return original_solve(*args, **kwargs)
+
+    def search(*args: Any, **kwargs: Any) -> Any:
+        search_backends.append(kwargs.get("transition"))
+        return original_search(*args, **kwargs)
+
+    monkeypatch.setattr(_flint, "transition_matrix_to_flint", convert)
+    monkeypatch.setattr(_flint, "solve_stationary_class", solve)
+    monkeypatch.setattr(_flint, "mixing_time_search", search)
+
+    compute_mixing_time(_request())
+
+    assert len(converted) == 1
+    assert len(stationary_backends) == 1
+    assert len(search_backends) == 1
+    assert stationary_backends[0] is converted[0]
+    assert search_backends[0] is converted[0]
 
 
 def test_three_state_lazy_complete_chain_matches_closed_form_distances() -> None:

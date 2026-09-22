@@ -736,6 +736,56 @@ def test_symbolic_matrix_product_admits_shared_denominator_sums() -> None:
     )
 
 
+def test_symbolic_matrix_product_reuses_request_local_sympy_values(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Admission and multiplication share one bounded conversion dictionary."""
+
+    from jacobian.math.polynomials import _conversions
+
+    variables = ("x",)
+    inverse_successor = _rf(
+        variables,
+        (1, 1, (0,)),
+        denominator=((1, 1, (1,)), (1, 1, (0,))),
+    )
+    one = _rf(variables, (1, 1, (0,)))
+    original = _conversions.sparse_rational_polynomial_to_sympy
+    cache_ids: set[int] = set()
+    symbol_ids: set[int] = set()
+    converted: dict[SparseRationalPolynomial, list[Any]] = {}
+
+    def observe(
+        polynomial: SparseRationalPolynomial,
+        field: tuple[str, ...],
+        **kwargs: Any,
+    ) -> Any:
+        cache = kwargs.get("cache")
+        symbols = kwargs.get("symbols")
+        assert isinstance(cache, dict)
+        assert isinstance(symbols, tuple)
+        result = original(polynomial, field, **kwargs)
+        cache_ids.add(id(cache))
+        symbol_ids.add(id(symbols))
+        converted.setdefault(polynomial, []).append(result)
+        return result
+
+    monkeypatch.setattr(_conversions, "sparse_rational_polynomial_to_sympy", observe)
+    _run_product(
+        _product_request(
+            ((inverse_successor, inverse_successor),),
+            ((one,), (one,)),
+            variables,
+        )
+    )
+
+    assert len(cache_ids) == 1
+    assert len(symbol_ids) == 1
+    assert all(
+        len({id(value) for value in values}) == 1 for values in converted.values()
+    )
+
+
 def test_symbolic_matrix_product_admits_single_pair_over_shared_denominator() -> None:
     """One non-scalar pair with a multi-term denominator gets exact bounds."""
 
@@ -917,12 +967,12 @@ def test_symbolic_matrix_product_rejects_shared_denominators_without_result_budg
 def test_symbolic_matrix_product_rejects_aggregate_expansion_before_exact_fallback(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Dense shared-denominator overflow is rejected without SymPy work.
+    """Dense shared-denominator overflow skips the exact fallback.
 
     Every cell of this 8x8 product reuses one identical product denominator,
-    so each cell is eligible for the exact shared-denominator fallback; the
-    projection pass must still charge all 64 cells' raw expansion totals and
-    reject before any cell invokes SymPy conversion.
+    so each cell is eligible for the exact shared-denominator fallback; after
+    canonical input recognition, projection must still charge all 64 cells'
+    raw expansion totals and reject before any cell invokes that fallback.
     """
 
     import jacobian.math.matrices.symbolic._models as symbolic_models
@@ -969,7 +1019,7 @@ def test_symbolic_matrix_product_admits_boundary_shared_projection() -> None:
 def test_symbolic_matrix_product_rejects_projection_above_aggregate_boundary(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """One extra denominator term pushes the projection past 512 pre-SymPy."""
+    """One extra denominator term pushes projection past 512 pre-fallback."""
 
     import jacobian.math.matrices.symbolic._models as symbolic_models
 
@@ -1347,7 +1397,9 @@ def test_nonreduced_matrix_entry_parses_then_determinant_rejects_it() -> None:
         symbolic_determinant(matrix.entries, matrix.variables)
 
 
-def test_nonreduced_matrix_entry_is_rejected_on_the_product_path() -> None:
+def test_nonreduced_matrix_entry_is_rejected_before_product_growth(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     variables = ("x",)
     nonreduced = _rf(
         variables,
@@ -1358,6 +1410,12 @@ def test_nonreduced_matrix_entry_is_rejected_on_the_product_path() -> None:
     left = _matrix(((nonreduced,),), variables)
     right = _matrix(((one,),), variables)
 
+    from jacobian.math.matrices.symbolic import _models
+
+    def growth_must_not_run(*_args: object, **_kwargs: object) -> None:
+        pytest.fail("noncanonical values must be rejected before product growth")
+
+    monkeypatch.setattr(_models, "_projected_product_cells", growth_must_not_run)
     with pytest.raises(OperationDomainValidationError, match="must be coprime"):
         symbolic_matrix_multiply(left, right)
 

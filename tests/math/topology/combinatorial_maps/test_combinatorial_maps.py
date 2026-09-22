@@ -159,6 +159,8 @@ def test_catalog_contains_only_audited_agent_outcomes() -> None:
         "graph.embedding.orientable.check",
         "graph.embedding.rotation_system.find",
         "graph.embedding.nonorientable.check",
+        "graph.genus.orientable.exact.compute",
+        "graph.multigraph.embedding.check",
     }
 
 
@@ -212,15 +214,32 @@ class TestFaces:
                 ),
             )
 
-    def test_face_result_model_preserves_structural_claim(self) -> None:
+    def test_face_result_rejects_malformed_retained_map(self) -> None:
         result = compute_faces(FacesRequest(map=_four_cycle()))
-        claimed = FacesResult.model_validate(
-            {
-                **result.model_dump(mode="json"),
-                "face_of_dart": [1 - face for face in result.face_of_dart],
-            }
+        payload = result.model_dump(mode="json")
+        payload["map"]["darts"][0][2] = 0
+        with pytest.raises(ValidationError) as error:
+            FacesResult.model_validate(payload)
+        assert error.value.errors()[0]["type"] == (
+            "combinatorial_map.reverse_fixed_point"
         )
-        assert claimed.face_of_dart != result.face_of_dart
+
+    def test_face_result_model_rejects_forged_assignment(self) -> None:
+        result = compute_faces(FacesRequest(map=_four_cycle()))
+        with pytest.raises(ValidationError):
+            FacesResult.model_validate(
+                {
+                    **result.model_dump(mode="json"),
+                    "face_of_dart": [1 - face for face in result.face_of_dart],
+                }
+            )
+        with pytest.raises(ValidationError):
+            FacesResult.model_validate(
+                {
+                    **result.model_dump(mode="json"),
+                    "face_walks": ((0,), (0, 1, 2, 3, 4, 5, 6)),
+                }
+            )
 
 
 # ---------------------------------------------------------------------------

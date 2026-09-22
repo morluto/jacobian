@@ -23,6 +23,7 @@ from jacobian.math.graphs.values import SimpleUndirectedGraph
 from jacobian.math.topology.combinatorial_maps import (
     check_orientable_embedding,
     find_rotation_system,
+    minimum_orientable_genus,
     verify_orientable_embedding,
     verify_rotation_system_find,
 )
@@ -70,6 +71,15 @@ def _k33() -> SimpleUndirectedGraph:
 
 
 class TestFound:
+    def test_exact_minimum_genus_exhausts_a_small_nonplanar_graph(self) -> None:
+        result = minimum_orientable_genus(_k33(), max_candidates=64)
+
+        assert result.status == "EXACT"
+        assert result.minimum_genus == 1
+        assert result.candidates_examined == result.total_candidates == 64
+        assert result.certificate is not None
+        assert result.certificate.genus == 1
+
     def test_k4_planar_rotation_is_found(self) -> None:
         result = find_rotation_system(_k4(), 0, 1000)
 
@@ -299,6 +309,10 @@ class TestAdmissionAndParity:
 
             assert restored == result
             assert verify_rotation_system_find(restored)
+            forged = json.loads(result.model_dump_json())
+            forged["total_candidates"] += 1
+            with pytest.raises(ValidationError):
+                RotationSystemFindResult.model_validate_json(json.dumps(forged))
 
     def test_found_forgery_is_rejected_or_fails_verify(self) -> None:
         result = find_rotation_system(_k4(), 0, 1000)

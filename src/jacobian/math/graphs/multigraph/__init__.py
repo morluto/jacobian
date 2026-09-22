@@ -1,5 +1,6 @@
 """Native finite-multigraph operations."""
 
+from jacobian.math.graphs.multigraph._models import LooplessMultigraph, MultigraphEdge
 from jacobian.math.graphs.multigraph.operations import (
     cycle_multicover,
     eulerian_cycles,
@@ -10,6 +11,8 @@ from jacobian.math.graphs.multigraph.operations import (
 )
 
 __all__ = [
+    "LooplessMultigraph",
+    "MultigraphEdge",
     "cycle_multicover",
     "eulerian_cycles",
     "multigraph_flow_check",

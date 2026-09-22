@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from itertools import combinations
+from typing import cast
 
 import pytest
 from pydantic import ValidationError
@@ -12,9 +13,11 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
+from jacobian.math.graphs.multigraph._models import LooplessMultigraph, MultigraphEdge
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 from jacobian.math.topology.combinatorial_maps import (
     FiniteCombinatorialMap,
+    check_multigraph_embedding,
     check_orientable_embedding,
     euler_characteristic,
     orientable_genus,
@@ -23,6 +26,7 @@ from jacobian.math.topology.combinatorial_maps import (
 from jacobian.math.topology.combinatorial_maps._models import (
     MAX_EMBEDDING_EDGES,
     MAX_EMBEDDING_VERTICES,
+    MultigraphEmbeddingResult,
     OrientableEmbeddingCheckRequest,
     OrientableEmbeddingCheckResult,
 )
@@ -58,7 +62,10 @@ _K4_SPHERE_REVERSED = (
 
 def _k7() -> SimpleUndirectedGraph:
     vertices = tuple(str(index) for index in range(7))
-    edges = tuple(sorted(tuple(sorted(pair)) for pair in combinations(vertices, 2)))
+    edges = cast(
+        tuple[tuple[str, str], ...],
+        tuple(sorted(tuple(sorted(pair)) for pair in combinations(vertices, 2))),
+    )
     return SimpleUndirectedGraph(vertices=vertices, edges=edges)
 
 
@@ -97,6 +104,58 @@ def _combinatorial_map(
 
 
 class TestKnownAnswers:
+    def test_edgeless_multigraph_with_multiple_vertices_is_disconnected(self) -> None:
+        graph = LooplessMultigraph(vertex_count=2, edges=())
+
+        result = check_multigraph_embedding(graph, ((), ()))
+
+        assert result.status == "INVALID"
+        assert result.obstruction == "source multigraph is disconnected"
+
+    def test_null_multigraph_is_rejected(self) -> None:
+        with pytest.raises(OperationDomainValidationError) as exc_info:
+            check_multigraph_embedding(LooplessMultigraph(vertex_count=0, edges=()), ())
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "topology.multigraph_embedding.zero_vertices"
+        )
+
+    def test_native_graph_rotation_shape_is_admitted_before_indexing(self) -> None:
+        with pytest.raises(OperationDomainValidationError):
+            check_orientable_embedding("not-a-graph", ())  # type: ignore[arg-type]
+        with pytest.raises(OperationDomainValidationError):
+            check_orientable_embedding(_k4(), None)  # type: ignore[arg-type]
+
+    def test_native_rotation_shape_is_admitted_before_indexing(self) -> None:
+        graph = LooplessMultigraph(
+            vertex_count=2,
+            edges=(
+                MultigraphEdge(edge_id="e0", left=0, right=1),
+                MultigraphEdge(edge_id="e1", left=0, right=1),
+            ),
+        )
+        for rotations in (None, [["e0", "e1"], ["e1", "e0"]]):
+            with pytest.raises(OperationDomainValidationError) as exc_info:
+                check_multigraph_embedding(graph, rotations)  # type: ignore[arg-type]
+            assert (
+                exc_info.value.errors()[0]["type"]
+                == "topology.multigraph_embedding.rotations_shape"
+            )
+
+    def test_multigraph_result_round_trip_rejects_forged_source_ledger(self) -> None:
+        graph = LooplessMultigraph(
+            vertex_count=2,
+            edges=(
+                MultigraphEdge(edge_id="e0", left=0, right=1),
+                MultigraphEdge(edge_id="e1", left=0, right=1),
+            ),
+        )
+        result = check_multigraph_embedding(graph, (("e0", "e1"), ("e1", "e0")))
+        payload = json.loads(result.model_dump_json())
+        payload["darts"][0][0] = 1
+        with pytest.raises(ValidationError):
+            MultigraphEmbeddingResult.model_validate_json(json.dumps(payload))
+
     def test_k4_planar_is_genus_zero(self) -> None:
         result = check_orientable_embedding(_k4(), _K4_SPHERE)
 
@@ -277,6 +336,19 @@ class TestInvalidCandidates:
         assert result.status == "INVALID_EMBEDDING"
         assert result.obstruction_code == "GRAPH_DISCONNECTED"
 
+    def test_serialized_invalid_result_binds_actual_first_obstruction(self) -> None:
+        result = check_orientable_embedding(_k4(), _K4_SPHERE[:3])
+        payload = result.model_dump(mode="json")
+        payload["obstruction_code"] = "GRAPH_DISCONNECTED"
+        payload["obstruction_detail"] = "the supplied graph is not connected"
+        with pytest.raises(ValidationError):
+            OrientableEmbeddingCheckResult.model_validate(payload)
+
+        payload = result.model_dump(mode="json")
+        payload["rotations"] = _K4_SPHERE
+        with pytest.raises(ValidationError):
+            OrientableEmbeddingCheckResult.model_validate(payload)
+
     def test_corrupted_rotation_changes_the_face_partition(self) -> None:
         rotations = ((0, 2, 1), (0, 4, 3), (1, 3, 5), (2, 5, 4))
         result = check_orientable_embedding(_k4(), rotations)
@@ -308,16 +380,33 @@ class TestAdmissionAndParity:
             OrientableEmbeddingCheckResult.model_validate_json(json.dumps(forged))
         forged_rotations = json.loads(restored.model_dump_json())
         forged_rotations["rotations"][0] = [0, 1]
-        forged_claim = OrientableEmbeddingCheckResult.model_validate_json(
-            json.dumps(forged_rotations)
-        )
-        assert not verify_orientable_embedding(forged_claim)
+        with pytest.raises(ValidationError):
+            OrientableEmbeddingCheckResult.model_validate_json(
+                json.dumps(forged_rotations)
+            )
+
+        forged_dart = json.loads(restored.model_dump_json())
+        forged_dart["darts"][0][0] = 1
+        with pytest.raises(ValidationError):
+            OrientableEmbeddingCheckResult.model_validate_json(json.dumps(forged_dart))
+
+        forged_faces = json.loads(restored.model_dump_json())
+        forged_faces["face_walks"] = [
+            [0, 1, 2],
+            [3, 4, 5],
+            *forged_faces["face_walks"][2:],
+        ]
+        with pytest.raises(ValidationError):
+            OrientableEmbeddingCheckResult.model_validate_json(json.dumps(forged_faces))
 
     def test_vertex_bound_is_a_resource_boundary(self) -> None:
         size = MAX_EMBEDDING_VERTICES + 1
         vertices = tuple(str(index) for index in range(size))
-        edges = tuple(
-            tuple(sorted((vertices[i], vertices[i + 1]))) for i in range(size - 1)
+        edges = cast(
+            tuple[tuple[str, str], ...],
+            tuple(
+                tuple(sorted((vertices[i], vertices[i + 1]))) for i in range(size - 1)
+            ),
         )
         graph = SimpleUndirectedGraph(vertices=vertices, edges=edges)
 
@@ -328,9 +417,12 @@ class TestAdmissionAndParity:
     def test_edge_bound_is_a_resource_boundary(self) -> None:
         size = 64
         vertices = tuple(str(index) for index in range(size))
-        edges = tuple(
-            sorted(tuple(sorted(pair)) for pair in combinations(vertices, 2))
-        )[: MAX_EMBEDDING_EDGES + 1]
+        edges = cast(
+            tuple[tuple[str, str], ...],
+            tuple(sorted(tuple(sorted(pair)) for pair in combinations(vertices, 2)))[
+                : MAX_EMBEDDING_EDGES + 1
+            ],
+        )
         graph = SimpleUndirectedGraph(vertices=vertices, edges=edges)
 
         with pytest.raises(OperationResourceAdmissionError) as exc_info:

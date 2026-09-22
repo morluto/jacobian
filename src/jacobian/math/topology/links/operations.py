@@ -2,16 +2,25 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from fractions import Fraction
+from itertools import product
 from typing import NoReturn
 
+from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
+from jacobian.math.polynomials.values import RationalLaurentPolynomial
 from jacobian.math.topology.links._models import (
     CrossingVisit,
+    LinkBracketResult,
     LinkComponent,
     LinkComponentsResult,
+    LinkingMatrixResult,
+    LinkJonesResult,
+    LinkState,
     OrientedLinkDiagram,
 )
 
@@ -39,6 +48,189 @@ def _admit_components(diagram: OrientedLinkDiagram) -> None:
             code="link_diagram.components.crossings_over_envelope",
             message="link diagram exceeds the 64-crossing envelope",
         )
+
+
+def _add_term(
+    target: dict[int, Fraction], exponent: int, coefficient: Fraction
+) -> None:
+    if coefficient:
+        target[exponent] = target.get(exponent, Fraction(0)) + coefficient
+        if target[exponent] == 0:
+            del target[exponent]
+
+
+def _polynomial(terms: dict[int, Fraction]) -> RationalLaurentPolynomial:
+    from jacobian.math.polynomials.values import (
+        RationalLaurentPolynomial,
+        RationalLaurentPolynomialTerm,
+    )
+
+    return RationalLaurentPolynomial(
+        variables=("A",),
+        terms=tuple(
+            RationalLaurentPolynomialTerm(
+                coefficient=__import__(
+                    "jacobian._exact", fromlist=["CanonicalRational"]
+                ).CanonicalRational(num=value.numerator, den=value.denominator),
+                exponents=(exponent,),
+            )
+            for exponent, value in sorted(terms.items(), reverse=True)
+            if value
+        ),
+    )
+
+
+def _union_find(
+    size: int,
+) -> tuple[list[int], Callable[[int], int], Callable[[int, int], None]]:
+    parent = list(range(size))
+
+    def find(item: int) -> int:
+        while parent[item] != item:
+            parent[item] = parent[parent[item]]
+            item = parent[item]
+        return item
+
+    def union(left: int, right: int) -> None:
+        a, b = find(left), find(right)
+        if a != b:
+            parent[b] = a
+
+    return parent, find, union
+
+
+def _admit_bracket(diagram: OrientedLinkDiagram) -> None:
+    _admit_components(diagram)
+    if len(diagram.crossings) > 12:
+        raise OperationResourceAdmissionError(
+            location=("diagram",),
+            code="link_diagram.bracket.state_bound",
+            message="the exact bracket state family exceeds 2^12 admitted states",
+        )
+
+
+def link_bracket(diagram: OrientedLinkDiagram) -> LinkBracketResult:
+    """Compute the complete Kauffman bracket state sum in Laurent A."""
+    _admit_bracket(diagram)
+    crossings = diagram.crossings
+    darts = [dart for crossing in crossings for dart in crossing.half_edges]
+    index = {dart: i for i, dart in enumerate(darts)}
+    arcs = tuple((index[arc.first], index[arc.second]) for arc in diagram.arcs)
+    terms: dict[int, Fraction] = {}
+    states: list[LinkState] = []
+    state_choices = product((0, 1), repeat=len(crossings))
+    for choices in state_choices:
+        _parent, find, union = _union_find(len(darts))
+        for left, right in arcs:
+            union(left, right)
+        for crossing, choice in zip(crossings, choices, strict=True):
+            h = [index[item] for item in crossing.half_edges]
+            pairs = ((0, 1, 2, 3), (1, 2, 3, 0))[choice]
+            union(h[pairs[0]], h[pairs[1]])
+            union(h[pairs[2]], h[pairs[3]])
+        circles = (
+            len({find(item) for item in range(len(darts))}) + diagram.free_loops
+            if darts
+            else diagram.free_loops
+        )
+        if circles < 1:
+            circles = 1
+        base_exponent = len(crossings) - 2 * sum(choices)
+        # Expand delta^(circles-1), delta = -A^2 - A^-2.
+        delta_power = circles - 1
+        for negative_choices in range(delta_power + 1):
+            exponent = base_exponent + 2 * delta_power - 4 * negative_choices
+            coefficient = Fraction(
+                (-1) ** delta_power
+                * __import__("math").comb(delta_power, negative_choices),
+                1,
+            )
+            _add_term(terms, exponent, coefficient)
+        states.append(
+            LinkState(
+                choices=tuple(choices),
+                circle_count=circles,
+                exponent=base_exponent,
+                coefficient=__import__(
+                    "jacobian._exact", fromlist=["CanonicalRational"]
+                ).CanonicalRational(num=1, den=1),
+            )
+        )
+    if not states:  # zero-crossing unlink has one empty state
+        states.append(
+            LinkState(
+                choices=(),
+                circle_count=max(diagram.free_loops, 1),
+                exponent=0,
+                coefficient=__import__(
+                    "jacobian._exact", fromlist=["CanonicalRational"]
+                ).CanonicalRational(num=1, den=1),
+            )
+        )
+        for negative_choices in range(max(diagram.free_loops - 1, 0) + 1):
+            power = max(diagram.free_loops - 1, 0)
+            _add_term(
+                terms,
+                2 * power - 4 * negative_choices,
+                Fraction(
+                    (-1) ** power * __import__("math").comb(power, negative_choices), 1
+                ),
+            )
+    return LinkBracketResult._from_kernel(
+        diagram=diagram,
+        polynomial=_polynomial(terms),
+        states=tuple(states),
+        crossing_count=len(crossings),
+        state_count=len(states),
+    )
+
+
+def link_jones(diagram: OrientedLinkDiagram) -> LinkJonesResult:
+    """Return the writhe-normalized Jones polynomial, represented in A."""
+    bracket = link_bracket(diagram)
+    writhe = sum(crossing.sign for crossing in diagram.crossings)
+    sign_factor = Fraction(-1 if writhe % 2 else 1, 1)
+    terms = {
+        term.exponents[0] - 3 * writhe: sign_factor * term.coefficient.as_fraction()
+        for term in bracket.polynomial.terms
+    }
+    return LinkJonesResult._from_kernel(
+        diagram=diagram,
+        bracket=bracket,
+        polynomial=_polynomial(terms),
+        writhe=writhe,
+    )
+
+
+def link_linking_matrix(diagram: OrientedLinkDiagram) -> LinkingMatrixResult:
+    """Compute the exact oriented linking matrix from signed mixed crossings."""
+    components = link_components(diagram)
+    dart_component = {
+        dart: component.component_id
+        for component in components.components
+        for dart in component.darts
+    }
+    ids = tuple(component.component_id for component in components.components)
+    position = {identifier: index for index, identifier in enumerate(ids)}
+    matrix = [[Fraction(0) for _ in ids] for _ in ids]
+    for crossing in diagram.crossings:
+        over_id = dart_component[crossing.half_edges[crossing.over_pair[0]]]
+        under_id = dart_component[crossing.half_edges[crossing.under_pair[0]]]
+        if over_id != under_id:
+            i, j = position[over_id], position[under_id]
+            matrix[i][j] += Fraction(crossing.sign, 2)
+            matrix[j][i] += Fraction(crossing.sign, 2)
+    return LinkingMatrixResult._from_kernel(
+        diagram=diagram,
+        component_ids=ids,
+        matrix=tuple(
+            tuple(
+                CanonicalRational(num=value.numerator, den=value.denominator)
+                for value in row
+            )
+            for row in matrix
+        ),
+    )
 
 
 def link_components(diagram: OrientedLinkDiagram) -> LinkComponentsResult:
@@ -141,7 +333,7 @@ def link_components(diagram: OrientedLinkDiagram) -> LinkComponentsResult:
             "link_diagram.components.arc_cover_failed",
             "every diagram arc must appear exactly once",
         )
-    return LinkComponentsResult._from_kernel(components=ordered)
+    return LinkComponentsResult._from_kernel(diagram=diagram, components=ordered)
 
 
-__all__ = ["link_components"]
+__all__ = ["link_bracket", "link_components", "link_jones", "link_linking_matrix"]

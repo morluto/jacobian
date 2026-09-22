@@ -20,6 +20,7 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
+from jacobian.math.graphs.multigraph._models import LooplessMultigraph
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 from jacobian.math.matrices.values import (
     SparseRationalMatrix,
@@ -32,6 +33,9 @@ from ._models import (
     MAX_EMBEDDING_EDGES,
     MAX_EMBEDDING_ROTATION_ENTRIES,
     MAX_EMBEDDING_VERTICES,
+    MAX_MINIMUM_GENUS_CANDIDATES,
+    MAX_MULTIGRAPH_EMBEDDING_EDGES,
+    MAX_MULTIGRAPH_EMBEDDING_VERTICES,
     MAX_ROTATION_SYSTEM_CANDIDATES,
     CombinatorialMapBijection,
     ConnectedComponentsResult,
@@ -39,6 +43,8 @@ from ._models import (
     EulerCharacteristicCounts,
     EulerCharacteristicResult,
     FacesResult,
+    MinimumGenusResult,
+    MultigraphEmbeddingResult,
     OrientableEmbeddingCheckResult,
     OrientableGenusResult,
     OrientationReverseResult,
@@ -46,6 +52,7 @@ from ._models import (
     SignedEmbeddingCheckResult,
     VertexFaceIncidenceResult,
 )
+from ._signed_faces import signed_projected_faces
 from .values import (
     FiniteCombinatorialMap,
     _build_outgoing,
@@ -55,6 +62,7 @@ from .values import (
 )
 
 __all__ = [
+    "check_multigraph_embedding",
     "check_orientable_embedding",
     "check_signed_embedding",
     "connected_components",
@@ -63,10 +71,13 @@ __all__ = [
     "euler_characteristic",
     "face_orbits",
     "find_rotation_system",
+    "minimum_orientable_genus",
     "orientable_genus",
     "orientation_reverse",
     "rotation_successor",
     "verify_dual",
+    "verify_minimum_orientable_genus",
+    "verify_multigraph_embedding",
     "verify_orientable_embedding",
     "verify_orientation_reverse",
     "verify_signed_embedding",
@@ -91,6 +102,250 @@ def _admit_map(
         raise OperationDomainValidationError(
             location=("map",), code=error.type, message=error.message()
         ) from error
+
+
+def minimum_orientable_genus(
+    graph: SimpleUndirectedGraph, max_candidates: int = MAX_MINIMUM_GENUS_CANDIDATES
+) -> MinimumGenusResult:
+    """Exhaustively compute the minimum orientable cellular genus of ``graph``.
+
+    Unlike the existing threshold search, this operation only returns EXACT
+    after the complete finite rotation-system family has been examined.  A
+    budget stop is UNKNOWN and never a lower-bound or nonexistence claim.
+    """
+    if type(graph) is not SimpleUndirectedGraph:
+        raise OperationDomainValidationError(
+            location=("graph",),
+            code="topology.minimum_genus.graph_carrier",
+            message="graph must be a SimpleUndirectedGraph",
+        )
+    if (
+        type(max_candidates) is not int
+        or not 1 <= max_candidates <= MAX_MINIMUM_GENUS_CANDIDATES
+    ):
+        raise OperationDomainValidationError(
+            location=("max_candidates",),
+            code="topology.minimum_genus.candidate_bound",
+            message="max_candidates is outside the admitted envelope",
+        )
+    _admit_embedding_candidate(graph, ())
+    index, incident = _embedding_adjacency(graph)
+    rows = _rotation_system_row_choices(incident)
+    total_candidates = _rotation_system_total(incident)
+    if not _embedding_connected(graph, index):
+        return MinimumGenusResult._from_kernel(
+            graph=graph,
+            status="UNKNOWN",
+            minimum_genus=None,
+            rotations=(),
+            certificate=None,
+            candidates_examined=0,
+            total_candidates=total_candidates,
+            max_candidates=max_candidates,
+            reason="GRAPH_DISCONNECTED",
+        )
+    best: OrientableEmbeddingCheckResult | None = None
+    examined = 0
+    for candidate in _lazy_product(rows):
+        if examined >= max_candidates:
+            return MinimumGenusResult._from_kernel(
+                graph=graph,
+                status="UNKNOWN",
+                minimum_genus=None,
+                rotations=(),
+                certificate=None,
+                candidates_examined=examined,
+                total_candidates=total_candidates,
+                max_candidates=max_candidates,
+                reason="CANDIDATE_BUDGET_EXCEEDED",
+            )
+        checked = check_orientable_embedding(graph, candidate)
+        examined += 1
+        if checked.status != "ORIENTABLE_CELLULAR_EMBEDDING":
+            continue
+        if best is None or checked.genus < best.genus:
+            best = checked
+    if best is None:  # pragma: no cover - every connected unsigned system is cellular
+        raise OperationDomainValidationError(
+            location=("graph",),
+            code="topology.minimum_genus.no_embedding",
+            message="no cellular rotation system was produced",
+        )
+    return MinimumGenusResult._from_kernel(
+        graph=graph,
+        status="EXACT",
+        minimum_genus=best.genus,
+        rotations=best.rotations,
+        certificate=best,
+        candidates_examined=examined,
+        total_candidates=total_candidates,
+        max_candidates=max_candidates,
+        reason=None,
+    )
+
+
+def verify_minimum_orientable_genus(claim: MinimumGenusResult) -> bool:
+    """Check a caller-authored minimum-genus result against its retained graph."""
+    if type(claim) is not MinimumGenusResult:
+        return False
+    try:
+        expected = minimum_orientable_genus(claim.graph, claim.max_candidates)
+    except (OperationDomainValidationError, OperationResourceAdmissionError):
+        return False
+    return expected == claim
+
+
+def check_multigraph_embedding(  # noqa: C901
+    graph: LooplessMultigraph, rotations: tuple[tuple[str, ...], ...]
+) -> MultigraphEmbeddingResult:
+    """Validate the native rotation representation before any indexing."""
+    if type(graph) is not LooplessMultigraph:
+        raise OperationDomainValidationError(
+            location=("graph",),
+            code="topology.multigraph_embedding.graph_carrier",
+            message="graph must be a LooplessMultigraph",
+        )
+    if type(rotations) is not tuple or any(
+        type(row) is not tuple or any(type(edge_id) is not str for edge_id in row)
+        for row in rotations
+    ):
+        raise OperationDomainValidationError(
+            location=("rotations",),
+            code="topology.multigraph_embedding.rotations_shape",
+            message="rotations must be a tuple of tuple rows containing string edge IDs",
+        )
+    if graph.vertex_count == 0:
+        raise OperationDomainValidationError(
+            location=("graph",),
+            code="topology.multigraph_embedding.zero_vertices",
+            message="a multigraph embedding needs at least one vertex",
+        )
+    if (
+        graph.vertex_count > MAX_MULTIGRAPH_EMBEDDING_VERTICES
+        or len(graph.edges) > MAX_MULTIGRAPH_EMBEDDING_EDGES
+    ):
+        raise OperationResourceAdmissionError(
+            location=("graph",),
+            code="topology.multigraph_embedding.size_bound",
+            message="multigraph exceeds embedding envelope",
+        )
+    if len(rotations) != graph.vertex_count:
+        return MultigraphEmbeddingResult._from_kernel(
+            graph=graph,
+            status="INVALID",
+            rotations=rotations,
+            obstruction="rotation row count does not match the source graph",
+        )
+    edge_by_id = {edge.edge_id: edge for edge in graph.edges}
+    incidences: list[set[str]] = [set() for _ in range(graph.vertex_count)]
+    for edge in graph.edges:
+        incidences[edge.left].add(edge.edge_id)
+        incidences[edge.right].add(edge.edge_id)
+    for vertex, row in enumerate(rotations):
+        if (
+            len(row) != len(incidences[vertex])
+            or set(row) != incidences[vertex]
+            or len(set(row)) != len(row)
+        ):
+            return MultigraphEmbeddingResult._from_kernel(
+                graph=graph,
+                status="INVALID",
+                rotations=rotations,
+                obstruction=f"rotation row {vertex} does not cover its edge-ID incidences",
+            )
+    # Connectivity is part of the same closed-surface convention as the simple
+    # graph checker.  A one-vertex edgeless multigraph is the sphere point.
+    if graph.vertex_count > 1:
+        reached = {0}
+        changed = True
+        while changed:
+            changed = False
+            for edge in graph.edges:
+                if edge.left in reached or edge.right in reached:
+                    before = len(reached)
+                    reached.update((edge.left, edge.right))
+                    changed |= len(reached) != before
+        if len(reached) != graph.vertex_count:
+            return MultigraphEmbeddingResult._from_kernel(
+                graph=graph,
+                status="INVALID",
+                rotations=rotations,
+                obstruction="source multigraph is disconnected",
+            )
+    darts: list[tuple[int, int, int]] = []
+    edge_dart_ids: list[str] = []
+    for i, edge in enumerate(graph.edges):
+        darts.extend(
+            ((edge.left, edge.right, 2 * i + 1), (edge.right, edge.left, 2 * i))
+        )
+        edge_dart_ids.extend((edge.edge_id, edge.edge_id))
+    dart_rotations: list[tuple[int, ...]] = []
+    for vertex, row in enumerate(rotations):
+        dart_rotations.append(
+            tuple(
+                2 * list(edge_by_id).index(edge_id)
+                + (0 if edge_by_id[edge_id].left == vertex else 1)
+                for edge_id in row
+            )
+        )
+    sigma: list[int] = [0] * len(darts)
+    for dart_row in dart_rotations:
+        for i, dart in enumerate(dart_row):
+            sigma[dart] = dart_row[(i + 1) % len(dart_row)]
+    alpha = [dart[2] for dart in darts]
+    phi = [alpha[sigma[dart]] for dart in range(len(darts))] if darts else []
+    walks: list[tuple[int, ...]] = []
+    seen: set[int] = set()
+    for start in range(len(darts)):
+        if start in seen:
+            continue
+        walk: list[int] = []
+        current = start
+        while current not in seen:
+            seen.add(current)
+            walk.append(current)
+            current = phi[current]
+        walks.append(tuple(walk))
+    embedding_map = (
+        FiniteCombinatorialMap(
+            vertex_count=graph.vertex_count,
+            darts=tuple(darts),
+            rotations=tuple(dart_rotations),
+        )
+        if darts
+        else None
+    )
+    face_of_dart: list[int] = [0] * len(darts)
+    for face_index, face_walk in enumerate(walks):
+        for dart in face_walk:
+            face_of_dart[dart] = face_index
+    dual = None
+    if darts:
+        dual_darts = tuple(
+            (face_of_dart[dart], face_of_dart[reverse], reverse)
+            for dart, (_tail, _head, reverse) in enumerate(darts)
+        )
+        dual = FiniteCombinatorialMap(
+            vertex_count=len(walks), darts=dual_darts, rotations=tuple(walks)
+        )
+    return MultigraphEmbeddingResult._from_kernel(
+        graph=graph,
+        status="EMBEDDED",
+        rotations=tuple(tuple(row) for row in rotations),
+        darts=tuple(darts),
+        edge_dart_ids=tuple(edge_dart_ids),
+        face_walks=tuple(walks),
+        dual_edge_ids=tuple(edge.edge_id for edge in graph.edges),
+        embedding_map=embedding_map,
+        dual_map=dual,
+        obstruction=None,
+    )
+
+
+def verify_multigraph_embedding(claim: MultigraphEmbeddingResult) -> bool:
+    if type(claim) is not MultigraphEmbeddingResult:
+        return False
+    return check_multigraph_embedding(claim.graph, claim.rotations) == claim
 
 
 def rotation_successor(map_: FiniteCombinatorialMap, dart: int) -> int:
@@ -436,6 +691,21 @@ def _admit_embedding_candidate(
 ) -> None:
     """Share the catalog checker envelope with native callers."""
 
+    if type(graph) is not SimpleUndirectedGraph:
+        raise OperationDomainValidationError(
+            location=("graph",),
+            code="topology.embedding.graph_carrier",
+            message="graph must be a SimpleUndirectedGraph",
+        )
+    if type(rotations) is not tuple or any(
+        type(row) is not tuple or any(type(edge) is not int for edge in row)
+        for row in rotations
+    ):
+        raise OperationDomainValidationError(
+            location=("rotations",),
+            code="topology.embedding.rotations_shape",
+            message="rotations must be a tuple of tuple rows containing edge indices",
+        )
     if not graph.vertices:
         raise OperationDomainValidationError(
             location=("graph",),
@@ -720,6 +990,12 @@ def _admit_rotation_system_search(
 ) -> None:
     """Share the genus-search envelope with native callers."""
 
+    if type(graph) is not SimpleUndirectedGraph:
+        raise OperationDomainValidationError(
+            location=("graph",),
+            code="topology.embedding.graph_carrier",
+            message="graph must be a SimpleUndirectedGraph",
+        )
     if not graph.vertices:
         raise OperationDomainValidationError(
             location=("graph",),
@@ -935,157 +1211,13 @@ def _invalid_signed_embedding(
     )
 
 
-def _signed_cover_graph(
-    endpoints: list[tuple[int, int]],
-    canonical: tuple[tuple[int, ...], ...],
-    signs: tuple[int, ...],
-) -> tuple[list[tuple[int, int]], list[list[int]]]:
-    """Build the orientable double cover: endpoints and rotation rows.
-
-    Cover vertices are ``base_position * 2 + sheet``; cover edges are
-    ``base_edge * 2 + sheet-lift`` in base edge order.  Twisted base edges
-    cross sheets; the second sheet carries mirrored rotations.
-    """
-
-    vertex_count = len(canonical)
-    twisted = [sign == 0 for sign in signs]
-    cover_endpoints: list[tuple[int, int]] = []
-    for edge_index, (left, right) in enumerate(endpoints):
-        turn = 1 if twisted[edge_index] else 0
-        cover_endpoints.append((left * 2, right * 2 + turn))
-        cover_endpoints.append((left * 2 + 1, right * 2 + (1 - turn)))
-    cover_rows: list[list[int]] = [[] for _ in range(2 * vertex_count)]
-    for position in range(vertex_count):
-        for sheet in (0, 1):
-            order = (
-                list(canonical[position])
-                if sheet == 0
-                else list(reversed(canonical[position]))
-            )
-            row: list[int] = []
-            for edge_index in order:
-                left, right = endpoints[edge_index]
-                turn = 1 if twisted[edge_index] else 0
-                # Lift 2e joins (left, 0) to (right, turn); lift 2e+1 joins
-                # (left, 1) to (right, 1 - turn).  Exactly one lift carries
-                # (position, sheet).
-                if (position == left and sheet == 0) or (
-                    position == right and sheet == turn
-                ):
-                    row.append(2 * edge_index)
-                else:
-                    row.append(2 * edge_index + 1)
-            cover_rows[position * 2 + sheet] = row
-    return cover_endpoints, cover_rows
-
-
-def _cover_components(
-    cover_endpoints: list[tuple[int, int]], vertex_count: int
-) -> list[list[int]]:
-    """Split cover vertices into connected components in vertex order."""
-
-    adjacency: list[set[int]] = [set() for _ in range(vertex_count)]
-    for left, right in cover_endpoints:
-        adjacency[left].add(right)
-        adjacency[right].add(left)
-    seen = [False] * vertex_count
-    components: list[list[int]] = []
-    for start in range(vertex_count):
-        if seen[start]:
-            continue
-        queue = deque([start])
-        seen[start] = True
-        component = [start]
-        while queue:
-            node = queue.popleft()
-            for target in sorted(adjacency[node]):
-                if not seen[target]:
-                    seen[target] = True
-                    component.append(target)
-                    queue.append(target)
-        components.append(component)
-    return components
-
-
-def _project_component_faces(
-    endpoints: list[tuple[int, int]],
-    cover_endpoints: list[tuple[int, int]],
-    cover_rows: list[list[int]],
-    component: list[int],
-) -> list[tuple[int, ...]]:
-    """Run the unsigned ledger on one cover component and project its faces."""
-
-    members = set(component)
-    edge_order = [
-        edge_index
-        for edge_index, (left, right) in enumerate(cover_endpoints)
-        if left in members and right in members
-    ]
-    local_of = {edge_index: position for position, edge_index in enumerate(edge_order)}
-    labels = tuple(str(vertex) for vertex in component)
-    ordered_edges: list[tuple[str, str]] = []
-    for edge_index in edge_order:
-        left = str(cover_endpoints[edge_index][0])
-        right = str(cover_endpoints[edge_index][1])
-        ordered_edges.append((left, right) if left < right else (right, left))
-    comp_graph = SimpleUndirectedGraph(
-        vertices=labels,
-        edges=tuple(ordered_edges),
-    )
-    comp_index = {label: position for position, label in enumerate(labels)}
-    comp_canonical = tuple(
-        _canonical_edge_rotation(
-            tuple(
-                local_of[edge_index]
-                for edge_index in cover_rows[vertex]
-                if edge_index in local_of
-            )
-        )
-        for vertex in component
-    )
-    ledger = _embedding_ledger(comp_graph, comp_canonical, comp_index)
-    projected: list[tuple[int, ...]] = []
-    for walk in ledger.face_walks:
-        base_walk: list[int] = []
-        for dart in walk:
-            local_edge = dart // 2
-            global_edge = edge_order[local_edge]
-            base_edge = global_edge // 2
-            # Match the dart tail by vertex identity, not by parity.
-            local_tail = ledger.darts[dart][0]
-            cover_tail = component[local_tail]
-            base_left, base_right = endpoints[base_edge]
-            base_vertex = cover_tail // 2
-            if base_vertex == base_left:
-                base_walk.append(2 * base_edge)
-            elif base_vertex == base_right:
-                base_walk.append(2 * base_edge + 1)
-            else:
-                raise RuntimeError("a cover dart does not project to its base edge")
-        projected.append(tuple(base_walk))
-    return projected
-
-
 def _signed_cover_faces(
     endpoints: list[tuple[int, int]],
     canonical: tuple[tuple[int, ...], ...],
     signs: tuple[int, ...],
 ) -> list[tuple[int, ...]]:
-    """Project the double-cover faces to base dart walks.
-
-    Runs the unsigned face ledger on each connected cover component and
-    projects every cover face to a closed base dart walk.  Each base edge
-    occurs in exactly two projected positions.
-    """
-
-    cover_endpoints, cover_rows = _signed_cover_graph(endpoints, canonical, signs)
-    components = _cover_components(cover_endpoints, 2 * len(canonical))
-    projected: list[tuple[int, ...]] = []
-    for component in components:
-        projected.extend(
-            _project_component_faces(endpoints, cover_endpoints, cover_rows, component)
-        )
-    return projected
+    """Project the double-cover faces to base dart walks."""
+    return signed_projected_faces(endpoints, canonical, signs)
 
 
 def _signed_base_dart_data(
@@ -1371,6 +1503,21 @@ def _admit_signed_embedding_candidate(
 ) -> None:
     """Share the signed checker envelope with native callers."""
 
+    if type(graph) is not SimpleUndirectedGraph:
+        raise OperationDomainValidationError(
+            location=("graph",),
+            code="topology.embedding.graph_carrier",
+            message="graph must be a SimpleUndirectedGraph",
+        )
+    if type(rotations) is not tuple or any(
+        type(row) is not tuple or any(type(edge) is not int for edge in row)
+        for row in rotations
+    ):
+        raise OperationDomainValidationError(
+            location=("rotations",),
+            code="topology.embedding.rotations_shape",
+            message="rotations must be a tuple of tuple rows containing edge indices",
+        )
     if not graph.vertices:
         raise OperationDomainValidationError(
             location=("graph",),

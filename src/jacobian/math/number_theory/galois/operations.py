@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
+from pydantic import ValidationError
 from pydantic_core import PydanticCustomError
 
 from jacobian.catalog.models import OperationDomainValidationError
@@ -16,13 +17,18 @@ if TYPE_CHECKING:
 from jacobian.math.number_theory.galois._models import (
     MAX_FACTOR_DEGREE,
     MAX_FIELD_ORDER,
+    AutomorphismResult,
     FiniteFieldFactor,
     FinitePermutationGroup,
     FrobeniusCycleResult,
     GaloisFactorResult,
     GaloisGroupResult,
     GaloisRootAxis,
+    QQFieldAutomorphism,
+    QQRoot,
+    QQSplittingField,
     SolvableResult,
+    SplittingFieldResult,
     _require_prime,
     _supported_galois_polynomial,
 )
@@ -250,9 +256,300 @@ def solvable(coefficients: tuple[int, ...]) -> SolvableResult:
     )
 
 
+def _canonical_splitting_field(
+    field: QQSplittingField, *, location: tuple[str | int, ...]
+) -> QQSplittingField:
+    """Re-admit a possibly model-constructed field before any backend work."""
+
+    if not isinstance(field, QQSplittingField):
+        raise OperationDomainValidationError(
+            location=location,
+            code="galois_theory.splitting_field_type",
+            message="field must be a QQ splitting-field value",
+        )
+    # These checks are deliberately strict for native callers: model_construct
+    # must not turn a list, bool, or malformed axis into a trusted carrier.
+    degree = getattr(field, "degree", None)
+    basis_labels = getattr(field, "basis_labels", None)
+    root_labels = getattr(field, "root_labels", None)
+    if (
+        type(degree) is not int
+        or type(basis_labels) is not tuple
+        or type(root_labels) is not tuple
+        or any(type(label) is not str for label in basis_labels)
+        or any(type(label) is not str for label in root_labels)
+    ):
+        raise OperationDomainValidationError(
+            location=location,
+            code="galois_theory.splitting_field_shape",
+            message="splitting-field axes and degree must retain their canonical types",
+        )
+    try:
+        # Re-run the structural model boundary for nested model_construct values.
+        return QQSplittingField.model_validate(field.model_dump())
+    except (ValidationError, AttributeError, KeyError, TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=location,
+            code="galois_theory.invalid_splitting_field",
+            message="splitting field has malformed source or axes",
+        ) from exc
+
+
+def _canonical_automorphism(
+    automorphism: QQFieldAutomorphism,
+) -> tuple[QQFieldAutomorphism, QQSplittingField]:
+    """Validate a root permutation before constructing a backend permutation."""
+
+    if not isinstance(automorphism, QQFieldAutomorphism):
+        raise OperationDomainValidationError(
+            location=("automorphism",),
+            code="galois_theory.automorphism_type",
+            message="automorphism must be a QQ field automorphism value",
+        )
+    field = _canonical_splitting_field(
+        cast(QQSplittingField, getattr(automorphism, "field", None)),
+        location=("automorphism", "field"),
+    )
+    permutation = getattr(automorphism, "root_permutation", None)
+    axis = tuple(range(len(field.root_labels)))
+    if type(permutation) is not tuple or any(
+        type(value) is not int for value in permutation
+    ):
+        raise OperationDomainValidationError(
+            location=("automorphism", "root_permutation"),
+            code="galois_theory.automorphism_axis",
+            message="automorphism must carry a strict integer root permutation",
+        )
+    if len(permutation) != len(axis) or tuple(sorted(permutation)) != axis:
+        raise OperationDomainValidationError(
+            location=("automorphism", "root_permutation"),
+            code="galois_theory.automorphism_axis",
+            message="automorphism must carry a complete root permutation",
+        )
+    return (
+        QQFieldAutomorphism(field=field, root_permutation=permutation),
+        field,
+    )
+
+
+def _require_splitting_field(field: QQSplittingField) -> tuple[int, PermutationGroup]:
+    """Re-establish the source/action relation at every public consumer."""
+
+    field = _canonical_splitting_field(field, location=("field",))
+    try:
+        coefficients = _coefficients_from_polynomial(field.source)
+        _supported_galois_polynomial(coefficients)
+        group = _galois_group_from_coeffs(coefficients)
+    except (
+        ArithmeticError,
+        IndexError,
+        PydanticCustomError,
+        AttributeError,
+        TypeError,
+        ValueError,
+    ) as exc:
+        code = getattr(exc, "type", "galois_theory.invalid_splitting_field")
+        message = exc.message() if isinstance(exc, PydanticCustomError) else str(exc)
+        raise OperationDomainValidationError(
+            location=("field",), code=code, message=message
+        ) from exc
+    source_degree = len(coefficients) - 1
+    expected_degree = int(group.order())
+    if (
+        len(field.root_labels) != source_degree
+        or len(field.basis_labels) != expected_degree
+        or field.degree != expected_degree
+    ):
+        raise OperationDomainValidationError(
+            location=("field",),
+            code="galois_theory.splitting_field_axis_mismatch",
+            message="field axes do not match the source polynomial and exact group degree",
+        )
+    return source_degree, group
+
+
+def _require_automorphism(automorphism: QQFieldAutomorphism) -> PermutationGroup:
+    canonical, field = _canonical_automorphism(automorphism)
+    _degree, group = _require_splitting_field(field)
+    from sympy.combinatorics import Permutation
+
+    try:
+        permutation = Permutation(canonical.root_permutation)
+    except (TypeError, ValueError) as exc:
+        # Keep malformed authored values in the owner domain even if a backend
+        # changes its exception class or diagnostics.
+        raise OperationDomainValidationError(
+            location=("automorphism", "root_permutation"),
+            code="galois_theory.automorphism_axis",
+            message="automorphism must carry a complete root permutation",
+        ) from exc
+    if not group.contains(permutation):
+        raise OperationDomainValidationError(
+            location=("automorphism", "root_permutation"),
+            code="galois_theory.automorphism_not_in_group",
+            message="root permutation is not an automorphism of the source field",
+        )
+    return group
+
+
+def splitting_field(coefficients: tuple[int, ...]) -> SplittingFieldResult:
+    """Construct a bounded exact carrier for an irreducible QQ polynomial."""
+    if type(coefficients) is not tuple or any(
+        type(value) is not int for value in coefficients
+    ):
+        raise OperationDomainValidationError(
+            location=("coefficients",),
+            code="galois_theory.splitting_field_coefficients",
+            message="splitting-field coefficients must be a tuple of integers",
+        )
+    try:
+        _supported_galois_polynomial(coefficients)
+    except PydanticCustomError as exc:
+        raise OperationDomainValidationError(
+            location=("coefficients",), code=exc.type, message=exc.message()
+        ) from exc
+    group = _galois_group_from_coeffs(coefficients)
+    degree = int(group.order())
+    source = _polynomial_from_coefficients(coefficients)
+    source_degree = len(coefficients) - 1
+    field = QQSplittingField(
+        source=source,
+        basis_labels=tuple(f"b_{i}" for i in range(degree)),
+        root_labels=tuple(f"root_{i}" for i in range(source_degree)),
+        degree=degree,
+    )
+    roots = tuple(
+        QQRoot(field=field, index=i, multiplicity=1) for i in range(source_degree)
+    )
+    return SplittingFieldResult(
+        field=field,
+        roots=roots,
+        source_coefficients=coefficients,
+        factor_reconstruction=coefficients,
+    )
+
+
+def automorphisms(field: QQSplittingField) -> AutomorphismResult:
+    canonical_field = _canonical_splitting_field(field, location=("field",))
+    _degree, group = _require_splitting_field(canonical_field)
+    autos = tuple(
+        QQFieldAutomorphism(
+            field=canonical_field,
+            root_permutation=tuple(
+                int(g(i)) for i in range(len(canonical_field.root_labels))
+            ),
+        )
+        for g in group.generators
+    )
+    identity = tuple(range(len(canonical_field.root_labels)))
+    if not autos:
+        autos = (QQFieldAutomorphism(field=canonical_field, root_permutation=identity),)
+    return AutomorphismResult(field=canonical_field, automorphisms=autos)
+
+
+def compose_automorphisms(
+    first: QQFieldAutomorphism, second: QQFieldAutomorphism
+) -> QQFieldAutomorphism:
+    canonical_first, first_field = _canonical_automorphism(first)
+    canonical_second, second_field = _canonical_automorphism(second)
+    if first_field != second_field:
+        raise OperationDomainValidationError(
+            location=("second", "field"),
+            code="galois_theory.parent_mismatch",
+            message="automorphisms must share the exact splitting field",
+        )
+    _require_automorphism(canonical_first)
+    _require_automorphism(canonical_second)
+    composed = tuple(
+        canonical_first.root_permutation[canonical_second.root_permutation[i]]
+        for i in range(len(canonical_first.root_permutation))
+    )
+    # The result is checked again so this remains true for model-constructed
+    # values and for any future change to the composition convention.
+    result = QQFieldAutomorphism(field=first_field, root_permutation=composed)
+    _require_automorphism(result)
+    return result
+
+
+def _canonical_root(root: QQRoot) -> tuple[QQRoot, QQSplittingField]:
+    """Validate a root index before it can be used for Python indexing."""
+
+    if not isinstance(root, QQRoot):
+        raise OperationDomainValidationError(
+            location=("root",),
+            code="galois_theory.root_type",
+            message="root must be a QQ splitting-field root value",
+        )
+    field = _canonical_splitting_field(
+        cast(QQSplittingField, getattr(root, "field", None)),
+        location=("root", "field"),
+    )
+    index = getattr(root, "index", None)
+    multiplicity = getattr(root, "multiplicity", None)
+    if type(index) is not int or type(multiplicity) is not int:
+        raise OperationDomainValidationError(
+            location=("root",),
+            code="galois_theory.root_axis_mismatch",
+            message="root index and multiplicity must be strict integers",
+        )
+    if multiplicity != 1 or not 0 <= index < len(field.root_labels):
+        raise OperationDomainValidationError(
+            location=("root",),
+            code="galois_theory.root_axis_mismatch",
+            message="root must be a simple root on the complete source axis",
+        )
+    return QQRoot(field=field, index=index, multiplicity=1), field
+
+
+def apply_automorphism(automorphism: QQFieldAutomorphism, root: QQRoot) -> QQRoot:
+    # Both carriers are admitted structurally before the source Galois group or
+    # any root-axis indexing is touched.  This is the native analogue of wire
+    # model validation for model_construct-authored values.
+    canonical_root, root_field = _canonical_root(root)
+    canonical_automorphism, automorphism_field = _canonical_automorphism(automorphism)
+    if root_field != automorphism_field:
+        raise OperationDomainValidationError(
+            location=("root", "field"),
+            code="galois_theory.parent_mismatch",
+            message="root must belong to the automorphism field",
+        )
+    _require_automorphism(canonical_automorphism)
+    return QQRoot(
+        field=automorphism_field,
+        index=canonical_automorphism.root_permutation[canonical_root.index],
+        multiplicity=1,
+    )
+
+
+def _canonical_galois_group_claim(
+    claim: GaloisGroupResult,
+) -> GaloisGroupResult | None:
+    """Re-admit the complete nested claim before reading its source axis."""
+
+    if not isinstance(claim, GaloisGroupResult):
+        return None
+    try:
+        return GaloisGroupResult.model_validate(claim.model_dump())
+    except (ValidationError, AttributeError, KeyError, TypeError, ValueError):
+        return None
+
+
+def _canonical_solvable_claim(claim: SolvableResult) -> SolvableResult | None:
+    if not isinstance(claim, SolvableResult):
+        return None
+    try:
+        return SolvableResult.model_validate(claim.model_dump())
+    except (ValidationError, AttributeError, KeyError, TypeError, ValueError):
+        return None
+
+
 def verify_galois_group(claim: GaloisGroupResult) -> bool:
     """Verify a serialized Galois-group claim against its source polynomial."""
 
+    canonical_claim = _canonical_galois_group_claim(claim)
+    if canonical_claim is None:
+        return False
+    claim = canonical_claim
     try:
         coefficients = _coefficients_from_polynomial(claim.polynomial)
         _supported_galois_polynomial(coefficients)
@@ -274,6 +571,10 @@ def verify_galois_group(claim: GaloisGroupResult) -> bool:
 def verify_solvable(claim: SolvableResult) -> bool:
     """Verify a serialized radical-solvability claim against its source."""
 
+    canonical_claim = _canonical_solvable_claim(claim)
+    if canonical_claim is None:
+        return False
+    claim = canonical_claim
     try:
         coefficients = _coefficients_from_polynomial(claim.polynomial)
         _supported_galois_polynomial(coefficients)

@@ -19,6 +19,51 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"dirichlet_character.{reason}", message)
 
 
+class CyclotomicValue(StrictModel):
+    """An exact root of unity in the explicitly declared cyclotomic parent."""
+
+    order: StrictInt = Field(ge=1, le=MAX_CHARACTER_GROUP_MODULUS)
+    exponent: StrictInt = Field(ge=0)
+
+    @model_validator(mode="after")
+    def canonical_exponent(self) -> Self:
+        if self.exponent >= self.order:
+            raise _validation_error(
+                "cyclotomic_exponent",
+                "root exponent must be reduced modulo the cyclotomic order",
+            )
+        return self
+
+    def multiply(self, other: CyclotomicValue) -> CyclotomicValue:
+        if self.order != other.order:
+            raise ValueError("cyclotomic parents differ")
+        return CyclotomicValue(
+            order=self.order, exponent=(self.exponent + other.exponent) % self.order
+        )
+
+    def conjugate(self) -> CyclotomicValue:
+        return CyclotomicValue(order=self.order, exponent=(-self.exponent) % self.order)
+
+
+class DirichletCharacter(StrictModel):
+    """One exact character in a concrete finite unit-group coordinate system."""
+
+    group: DirichletCharacterGroup
+    coordinates: tuple[StrictInt, ...]
+
+    @model_validator(mode="after")
+    def require_coordinate_shape(self) -> Self:
+        if len(self.coordinates) != len(self.group.generator_orders) or any(
+            c < 0 or c >= o
+            for c, o in zip(self.coordinates, self.group.generator_orders, strict=True)
+        ):
+            raise _validation_error(
+                "character_coordinates",
+                "character coordinates must match the group's dual coordinate axes",
+            )
+        return self
+
+
 class PrincipalDirichletCharacter(StrictModel):
     """The extension-by-zero principal character modulo one fixed modulus.
 
@@ -231,6 +276,8 @@ class DirichletCharacterGroup(StrictModel):
 __all__ = [
     "MAX_CHARACTER_GROUP_MODULUS",
     "MAX_PRINCIPAL_CHARACTER_MODULUS",
+    "CyclotomicValue",
+    "DirichletCharacter",
     "DirichletCharacterGroup",
     "PrincipalDirichletCharacter",
 ]

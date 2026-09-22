@@ -5,7 +5,10 @@ from __future__ import annotations
 import math
 from itertools import product
 from math import gcd
+from typing import cast
 
+from pydantic import ValidationError
+from pydantic_core import PydanticCustomError
 from sympy import factorint
 
 from jacobian.catalog.models import (
@@ -13,17 +16,27 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.number_theory.characters._models import (
+    DirichletCharacterTableResult,
+    DirichletCharacterValueResult,
     PrincipalDirichletCharacterValueResult,
+    _require_bounded_digits,
 )
 from jacobian.math.number_theory.characters.values import (
     MAX_CHARACTER_GROUP_MODULUS,
     MAX_PRINCIPAL_CHARACTER_MODULUS,
+    CyclotomicValue,
+    DirichletCharacter,
     DirichletCharacterGroup,
     PrincipalDirichletCharacter,
 )
 
 __all__ = [
     "character_group",
+    "dirichlet_character",
+    "dirichlet_character_conjugate",
+    "dirichlet_character_product",
+    "dirichlet_character_table",
+    "dirichlet_character_value",
     "principal_dirichlet_character",
     "principal_dirichlet_character_value",
     "require_complete_character_group",
@@ -32,6 +45,25 @@ __all__ = [
 ]
 
 MAX_CHARACTER_GROUP_WORK = 500_000
+
+
+def _admit_character_integer(
+    integer: int, *, type_code: str = "dirichlet_character.integer_type"
+) -> None:
+    """Admit the exact integer envelope shared by native value operations."""
+
+    if type(integer) is not int:
+        raise OperationDomainValidationError(
+            location=("integer",),
+            code=type_code,
+            message="integer must be an exact integer",
+        )
+    try:
+        _require_bounded_digits(integer)
+    except PydanticCustomError as exc:
+        raise OperationResourceAdmissionError(
+            location=("integer",), code=exc.type, message=exc.message()
+        ) from exc
 
 
 def _admit_character_group(modulus: int) -> None:
@@ -102,10 +134,71 @@ def _primitive_root_prime_power(prime: int, exponent: int) -> tuple[int, int]:
     raise RuntimeError("odd prime-power unit group has no generator")
 
 
+def _admit_principal_modulus(modulus: int) -> None:
+    if type(modulus) is not int:
+        raise OperationDomainValidationError(
+            location=("modulus",),
+            code="dirichlet_character.principal.modulus_type",
+            message="principal-character modulus must be an integer",
+        )
+    if not 1 <= modulus <= MAX_PRINCIPAL_CHARACTER_MODULUS:
+        raise OperationDomainValidationError(
+            location=("modulus",),
+            code="dirichlet_character.principal.modulus_bound",
+            message=(
+                "principal-character modulus must be between 1 and "
+                f"{MAX_PRINCIPAL_CHARACTER_MODULUS}"
+            ),
+        )
+
+
+def _require_character(character: DirichletCharacter) -> DirichletCharacter:
+    if not isinstance(character, DirichletCharacter):
+        raise OperationDomainValidationError(
+            location=("character",),
+            code="dirichlet_character.character_type",
+            message="character must be a Dirichlet character value",
+        )
+    group = require_complete_character_group(
+        cast(DirichletCharacterGroup, getattr(character, "group", None))
+    )
+    orders = group.generator_orders
+    coordinates = getattr(character, "coordinates", None)
+    if (
+        type(coordinates) is not tuple
+        or len(coordinates) != len(orders)
+        or any(
+            type(coordinate) is not int or coordinate < 0 or coordinate >= order
+            for coordinate, order in zip(coordinates, orders, strict=True)
+        )
+    ):
+        raise OperationDomainValidationError(
+            location=("character", "coordinates"),
+            code="dirichlet_character.coordinates_invalid",
+            message="character coordinates must lie on the complete dual-group axes",
+        )
+    return DirichletCharacter.model_construct(group=group, coordinates=coordinates)
+
+
 def require_complete_principal_dirichlet_character(
     character: PrincipalDirichletCharacter,
-) -> None:
+) -> PrincipalDirichletCharacter:
     """Check the mathematical table claimed by a caller-supplied character."""
+    if not isinstance(character, PrincipalDirichletCharacter):
+        raise OperationDomainValidationError(
+            location=("character",),
+            code="dirichlet_character.principal.character_type",
+            message="character must be a principal Dirichlet character value",
+        )
+    try:
+        character = PrincipalDirichletCharacter.model_validate(character.model_dump())
+    except (ValidationError, AttributeError, KeyError, TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("character",),
+            code="dirichlet_character.principal.invalid_character",
+            message="principal character has malformed authored fields",
+        ) from exc
+    _admit_principal_modulus(character.modulus)
 
     expected_units = tuple(
         residue
@@ -132,6 +225,7 @@ def require_complete_principal_dirichlet_character(
                 "values must be the complete extension-by-zero principal character table"
             ),
         )
+    return character
 
 
 def require_principal_dirichlet_character_value_result(
@@ -139,6 +233,29 @@ def require_principal_dirichlet_character_value_result(
 ) -> None:
     """Check the character and source-evaluation relation of a claimed result."""
 
+    if not isinstance(result, PrincipalDirichletCharacterValueResult):
+        raise OperationDomainValidationError(
+            location=("result",),
+            code="dirichlet_character.principal.result_type",
+            message="result must be a principal-character evaluation value",
+        )
+    # This admission is deliberately performed before int() so bools, lists,
+    # and oversized authored carriers cannot become a successful source claim.
+    _admit_character_integer(
+        cast(int, getattr(result, "integer", None)),
+        type_code="dirichlet_character.principal.integer_type",
+    )
+    try:
+        canonical = PrincipalDirichletCharacterValueResult.model_validate(
+            result.model_dump()
+        )
+    except (ValidationError, AttributeError, KeyError, TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("result",),
+            code="dirichlet_character.principal.invalid_result",
+            message="principal-character result has malformed authored fields",
+        ) from exc
+    result = canonical
     require_complete_principal_dirichlet_character(result.character)
     residue = int(result.integer) % result.character.modulus
     if result.canonical_residue != residue:
@@ -150,16 +267,118 @@ def require_principal_dirichlet_character_value_result(
         raise ValueError("value does not match the source principal-character table")
 
 
+def dirichlet_character(
+    group: DirichletCharacterGroup, coordinates: tuple[int, ...]
+) -> DirichletCharacter:
+    group = require_complete_character_group(group)
+    if (
+        type(coordinates) is not tuple
+        or len(coordinates) != len(group.generator_orders)
+        or any(
+            type(c) is not int or c < 0 or c >= order
+            for c, order in zip(coordinates, group.generator_orders, strict=False)
+        )
+    ):
+        raise OperationDomainValidationError(
+            location=("coordinates",),
+            code="dirichlet_character.coordinates_shape",
+            message="character coordinates must match the group's dual axes",
+        )
+    return DirichletCharacter(group=group, coordinates=coordinates)
+
+
+def _character_value(
+    character: DirichletCharacter, integer: int
+) -> CyclotomicValue | None:
+    """Evaluate after the caller has performed one character admission."""
+    residue = integer % character.group.modulus
+    if residue not in character.group.unit_residues:
+        return None
+    row = character.group.unit_coordinates[character.group.unit_residues.index(residue)]
+    order = character.group.exponent
+    exponent = (
+        sum(
+            c * (order // o) * r
+            for c, o, r in zip(
+                character.coordinates,
+                character.group.generator_orders,
+                row,
+                strict=True,
+            )
+        )
+        % order
+    )
+    return CyclotomicValue(order=order, exponent=exponent)
+
+
+def dirichlet_character_value(
+    character: DirichletCharacter, integer: int
+) -> DirichletCharacterValueResult:
+    _admit_character_integer(integer)
+    character = _require_character(character)
+    value = _character_value(character, integer)
+    residue = integer % character.group.modulus
+    return DirichletCharacterValueResult(
+        character=character,
+        integer=integer,
+        canonical_residue=residue,
+        is_unit=value is not None,
+        value=value,
+    )
+
+
+def dirichlet_character_product(
+    left: DirichletCharacter, right: DirichletCharacter
+) -> DirichletCharacter:
+    left = _require_character(left)
+    right = _require_character(right)
+    if left.group != right.group:
+        raise OperationDomainValidationError(
+            location=("right", "group"),
+            code="dirichlet_character.parent_mismatch",
+            message="characters must use the identical group parent",
+        )
+    coords = tuple(
+        (a + b) % order
+        for a, b, order in zip(
+            left.coordinates,
+            right.coordinates,
+            left.group.generator_orders,
+            strict=True,
+        )
+    )
+    return DirichletCharacter(group=left.group, coordinates=coords)
+
+
+def dirichlet_character_table(
+    character: DirichletCharacter,
+) -> DirichletCharacterTableResult:
+    character = _require_character(character)
+    residues = tuple(range(character.group.modulus))
+    return DirichletCharacterTableResult(
+        character=character,
+        residues=residues,
+        values=tuple(_character_value(character, residue) for residue in residues),
+    )
+
+
+def dirichlet_character_conjugate(character: DirichletCharacter) -> DirichletCharacter:
+    character = _require_character(character)
+    return DirichletCharacter(
+        group=character.group,
+        coordinates=tuple(
+            (-c) % order
+            for c, order in zip(
+                character.coordinates, character.group.generator_orders, strict=True
+            )
+        ),
+    )
+
+
 def principal_dirichlet_character(modulus: int) -> PrincipalDirichletCharacter:
     """Return the complete extension-by-zero principal character modulo ``modulus``."""
 
-    if type(modulus) is not int:
-        raise TypeError("principal-character modulus must be an integer")
-    if not 1 <= modulus <= MAX_PRINCIPAL_CHARACTER_MODULUS:
-        raise ValueError(
-            "principal-character modulus must be between 1 and "
-            f"{MAX_PRINCIPAL_CHARACTER_MODULUS}"
-        )
+    _admit_principal_modulus(modulus)
     unit_residues = tuple(
         residue for residue in range(modulus) if math.gcd(residue, modulus) == 1
     )
@@ -176,9 +395,10 @@ def principal_dirichlet_character_value(
 ) -> int:
     """Return the exact value of ``character`` at one integer."""
 
-    if type(integer) is not int:
-        raise TypeError("principal-character input must be an integer")
-    require_complete_principal_dirichlet_character(character)
+    _admit_character_integer(
+        integer, type_code="dirichlet_character.principal.integer_type"
+    )
+    character = require_complete_principal_dirichlet_character(character)
     return character.values[integer % character.modulus]
 
 
@@ -284,22 +504,62 @@ def _component_log_table(
     return table
 
 
-def require_complete_character_group(group: DirichletCharacterGroup) -> None:
+def require_complete_character_group(
+    group: DirichletCharacterGroup,
+) -> DirichletCharacterGroup:
     """Check the mathematical decomposition claimed by a caller-supplied group."""
 
-    _admit_character_group(group.modulus)
+    if not isinstance(group, DirichletCharacterGroup):
+        raise OperationDomainValidationError(
+            location=("group",),
+            code="dirichlet_character.group.type",
+            message="group must be a Dirichlet-character group value",
+        )
+    modulus = cast(int, getattr(group, "modulus", None))
+    _admit_character_group(modulus)
     expected_units = tuple(
-        residue
-        for residue in range(group.modulus)
-        if math.gcd(residue, group.modulus) == 1
+        residue for residue in range(modulus) if math.gcd(residue, modulus) == 1
     )
-    if group.unit_residues != expected_units:
+    if getattr(group, "unit_residues", None) != expected_units:
         raise OperationDomainValidationError(
             location=("group", "unit_residues"),
             code="dirichlet_character.group.unit_residues_mismatch",
             message=(
                 "unit residues must be the complete canonical unit group modulo modulus"
             ),
+        )
+    structural_fields = (
+        getattr(group, "generator_orders", None),
+        getattr(group, "generators", None),
+        getattr(group, "invariant_factors", None),
+        getattr(group, "unit_coordinates", None),
+    )
+    if any(type(value) is not tuple for value in structural_fields):
+        raise OperationDomainValidationError(
+            location=("group",),
+            code="dirichlet_character.group.invalid_group",
+            message="character group has malformed authored fields",
+        )
+    generator_orders = cast(tuple[object, ...], structural_fields[0])
+    generators = cast(tuple[object, ...], structural_fields[1])
+    invariant_factors = cast(tuple[object, ...], structural_fields[2])
+    unit_coordinates = cast(tuple[object, ...], structural_fields[3])
+    if (
+        type(getattr(group, "character_count", None)) is not int
+        or type(getattr(group, "exponent", None)) is not int
+        or any(type(value) is not int or value <= 0 for value in generator_orders)
+        or any(type(value) is not int for value in generators)
+        or any(type(value) is not int or value <= 0 for value in invariant_factors)
+        or len(unit_coordinates) != len(expected_units)
+        or any(
+            type(row) is not tuple or any(type(value) is not int for value in row)
+            for row in unit_coordinates
+        )
+    ):
+        raise OperationDomainValidationError(
+            location=("group",),
+            code="dirichlet_character.group.invalid_group",
+            message="character group has malformed authored fields",
         )
     if group.character_count != len(expected_units):
         raise OperationDomainValidationError(
@@ -339,6 +599,7 @@ def require_complete_character_group(group: DirichletCharacterGroup) -> None:
             message="the common exponent must be the least common multiple of orders",
         )
     _require_generator_coordinate_round_trip(group)
+    return group
 
 
 def _require_generator_coordinate_round_trip(group: DirichletCharacterGroup) -> None:

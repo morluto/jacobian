@@ -19,6 +19,9 @@ from jacobian.canonical import format_canonical_integer
 from jacobian.math.number_theory.characters.values import (
     MAX_CHARACTER_GROUP_MODULUS,
     MAX_PRINCIPAL_CHARACTER_MODULUS,
+    CyclotomicValue,
+    DirichletCharacter,
+    DirichletCharacterGroup,
     PrincipalDirichletCharacter,
 )
 
@@ -44,6 +47,35 @@ DirichletCharacterInteger = Annotated[
     ExactInteger,
     AfterValidator(_require_bounded_digits),
 ]
+
+
+class DirichletCharacterRequest(StrictModel):
+    group: DirichletCharacterGroup
+    coordinates: tuple[StrictInt, ...]
+
+
+class DirichletCharacterValueRequest(StrictModel):
+    character: DirichletCharacter
+    integer: DirichletCharacterInteger
+
+
+class DirichletCharacterValueResult(StrictModel):
+    character: DirichletCharacter
+    integer: DirichletCharacterInteger
+    canonical_residue: StrictInt
+    is_unit: StrictBool
+    value: CyclotomicValue | None
+
+
+class DirichletCharacterProductRequest(StrictModel):
+    left: DirichletCharacter
+    right: DirichletCharacter
+
+
+class DirichletCharacterTableResult(StrictModel):
+    character: DirichletCharacter
+    residues: tuple[StrictInt, ...]
+    values: tuple[CyclotomicValue | None, ...]
 
 
 class PrincipalDirichletCharacterRequest(StrictModel):
@@ -131,6 +163,11 @@ __all__ = [
     "MAX_INTEGER_DIGITS",
     "CharacterGroupRequest",
     "DirichletCharacterInteger",
+    "DirichletCharacterProductRequest",
+    "DirichletCharacterRequest",
+    "DirichletCharacterTableResult",
+    "DirichletCharacterValueRequest",
+    "DirichletCharacterValueResult",
     "PrincipalDirichletCharacterRequest",
     "PrincipalDirichletCharacterValueRequest",
     "PrincipalDirichletCharacterValueResult",

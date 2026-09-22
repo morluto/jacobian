@@ -13,6 +13,10 @@ from jacobian.math.polynomials.values import RationalPolynomial
 
 MAX_FACTOR_DEGREE = 128
 MAX_GALOIS_GROUP_DEGREE = 6
+# A degree-six polynomial can have the full symmetric group, of order 6!.
+# The carrier must therefore represent the complete supported group-order
+# envelope, not only the smaller examples used by the operation manifest.
+MAX_SPLITTING_FIELD_DEGREE = 720
 MAX_FIELD_ORDER = 251
 GaloisCoefficient = Annotated[int, Field(ge=-(10**12), le=10**12, strict=True)]
 PositiveFactorDegree = Annotated[
@@ -236,6 +240,150 @@ class FrobeniusCycleResult(StrictModel):
         return self
 
 
+class QQSplittingField(StrictModel):
+    """A bounded QQ splitting-field presentation for one irreducible source.
+
+    The basis and root axes are deliberately retained in the value.  The
+    expensive irreducibility and action checks belong to the public consumers,
+    while this validator prevents an axis from silently changing size after
+    serialization.
+    """
+
+    source: RationalPolynomial
+    basis_labels: tuple[str, ...]
+    root_labels: tuple[str, ...]
+    degree: int = Field(ge=1, le=MAX_SPLITTING_FIELD_DEGREE)
+
+    @model_validator(mode="after")
+    def require_axes_bound_to_source(self) -> Self:
+        terms = self.source.polynomial.terms
+        if len(self.source.variables) != 1 or not terms:
+            raise _validation_error(
+                "splitting_field_source",
+                "splitting-field source must be a nonempty univariate polynomial",
+            )
+        source_degree = terms[0].exponents[0]
+        if len(self.root_labels) != source_degree:
+            raise _validation_error(
+                "root_axis_length",
+                "root axis must contain one position per source degree",
+            )
+        if len(self.basis_labels) != self.degree:
+            raise _validation_error(
+                "basis_axis_length",
+                "basis axis must contain exactly the declared field degree",
+            )
+        if len(set(self.root_labels)) != len(self.root_labels) or len(
+            set(self.basis_labels)
+        ) != len(self.basis_labels):
+            raise _validation_error(
+                "axis_labels",
+                "splitting-field axis labels must be unique",
+            )
+        return self
+
+
+class QQRoot(StrictModel):
+    field: QQSplittingField
+    index: StrictInt = Field(ge=0)
+    multiplicity: StrictInt = Field(ge=1)
+
+    @model_validator(mode="after")
+    def require_root_axis(self) -> Self:
+        if self.index >= len(self.field.root_labels):
+            raise _validation_error(
+                "root_index", "root index exceeds the retained root axis"
+            )
+        return self
+
+
+class QQFieldAutomorphism(StrictModel):
+    field: QQSplittingField
+    root_permutation: tuple[StrictInt, ...]
+
+    @model_validator(mode="after")
+    def require_permutation(self) -> Self:
+        axis = tuple(range(len(self.field.root_labels)))
+        if tuple(sorted(self.root_permutation)) != axis:
+            raise _validation_error(
+                "automorphism_permutation",
+                "automorphism must permute the complete root axis",
+            )
+        return self
+
+
+class SplittingFieldRequest(_SupportedGaloisPolynomialRequest):
+    pass
+
+
+class SplittingFieldResult(StrictModel):
+    field: QQSplittingField
+    roots: tuple[QQRoot, ...]
+    source_coefficients: tuple[int, ...]
+    factor_reconstruction: tuple[int, ...]
+
+    @model_validator(mode="after")
+    def require_source_and_root_binding(self) -> Self:
+        terms = self.field.source.polynomial.terms
+        degree = terms[0].exponents[0]
+        coefficients = [0] * (degree + 1)
+        for term in terms:
+            if term.coefficient.den != 1:
+                raise _validation_error(
+                    "splitting_field_coefficients",
+                    "splitting-field source coefficients must be integral",
+                )
+            coefficients[term.exponents[0]] = term.coefficient.num
+        expected = tuple(coefficients)
+        if (
+            self.source_coefficients != expected
+            or self.factor_reconstruction != expected
+        ):
+            raise _validation_error(
+                "splitting_field_reconstruction",
+                "reconstruction coefficients must equal the retained source polynomial",
+            )
+        if tuple(root.field for root in self.roots) != (self.field,) * len(self.roots):
+            raise _validation_error(
+                "splitting_field_root_parent",
+                "every root must retain the exact splitting-field parent",
+            )
+        if tuple(root.index for root in self.roots) != tuple(range(degree)):
+            raise _validation_error(
+                "splitting_field_root_axis",
+                "roots must enumerate the complete source root axis",
+            )
+        if any(root.multiplicity != 1 for root in self.roots):
+            raise _validation_error(
+                "splitting_field_multiplicity",
+                "the irreducible splitting-field slice has simple roots",
+            )
+        return self
+
+
+class AutomorphismRequest(StrictModel):
+    field: QQSplittingField
+
+
+class AutomorphismResult(StrictModel):
+    field: QQSplittingField
+    automorphisms: tuple[QQFieldAutomorphism, ...]
+
+
+class AutomorphismComposeRequest(StrictModel):
+    first: QQFieldAutomorphism
+    second: QQFieldAutomorphism
+
+
+class AutomorphismApplyRequest(StrictModel):
+    automorphism: QQFieldAutomorphism
+    root: QQRoot
+
+
+class AutomorphismApplyResult(StrictModel):
+    root: QQRoot
+
+
 class GaloisRootAxis(StrictModel):
     """The ordered root positions of one retained source polynomial.
 
@@ -357,6 +505,12 @@ class SolvableResult(StrictModel):
 
 
 __all__ = [
+    "MAX_SPLITTING_FIELD_DEGREE",
+    "AutomorphismApplyRequest",
+    "AutomorphismApplyResult",
+    "AutomorphismComposeRequest",
+    "AutomorphismRequest",
+    "AutomorphismResult",
     "FiniteFieldFactor",
     "FinitePermutationGroup",
     "FrobeniusCycleRequest",
@@ -366,6 +520,11 @@ __all__ = [
     "GaloisGroupRequest",
     "GaloisGroupResult",
     "GaloisRootAxis",
+    "QQFieldAutomorphism",
+    "QQRoot",
+    "QQSplittingField",
     "SolvableRequest",
     "SolvableResult",
+    "SplittingFieldRequest",
+    "SplittingFieldResult",
 ]

@@ -76,7 +76,7 @@ test-integration: ## Ordinary cross-owner mathematical seams (1 worker, 120s).
 		$(if $(TESTS),$(TESTS),tests/integration --ignore=tests/integration/catalog) \
 		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
 
-test-catalog-examples: ## Advertised invocation examples not owned by Singular.
+test-catalog-examples: ## Advertised invocation examples excluding Singular-owned cases.
 	$(UV_RUN) pytest -n 1 --dist worksteal --timeout=120 \
 		-m "$(ORDINARY_MARKER_EXPRESSION) and not singular_catalog_example" \
 		tests/integration/catalog/test_builtin_examples.py \

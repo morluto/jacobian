@@ -186,7 +186,7 @@ def admit_linear_program(program: StandardFormRationalLinearProgram) -> LinearAd
     for reason, measured, limit in (
         ("result_height", digits, MAX_CANONICAL_RATIONAL_DIGITS),
         ("basis_bound", candidates, MAX_LINEAR_PROGRAM_BASES),
-        ("work_bound", initial_work, MAX_LINEAR_PROGRAM_SCALAR_UPDATES),
+        ("work_bound", work, MAX_LINEAR_PROGRAM_SCALAR_UPDATES),
     ):
         if measured > limit:
             raise OperationResourceAdmissionError(

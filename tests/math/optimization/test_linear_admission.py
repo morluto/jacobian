@@ -8,9 +8,7 @@ from pydantic import ValidationError
 from tests.support.rationals import rational_payload as q
 
 from jacobian._execution import (
-    ExecutionResource,
     OperationExecutionTimeoutError,
-    OperationResourceExhaustedError,
     bind_request_deadline,
     current_request_execution,
     request_execution,
@@ -20,9 +18,11 @@ from jacobian.math.optimization import general_linear_program, linear_program
 from jacobian.math.optimization._general_models import GeneralFormRationalLinearProgram
 from jacobian.math.optimization._linear_basis import (
     LINEAR_PROGRAM_WALL_SECONDS,
+    admit_linear_program,
     basis_bounds,
 )
 from jacobian.math.optimization._models import (
+    MAX_LINEAR_PROGRAM_BASES,
     MAX_RATIONAL_DIGITS,
     StandardFormRationalLinearProgram,
 )
@@ -68,11 +68,47 @@ def _dense_program(n: int, m: int) -> StandardFormRationalLinearProgram:
     )
 
 
-def test_exhaustive_work_estimate_does_not_prevent_short_certificate() -> None:
-    result = linear_program(_dense_program(18, 6))
+def test_total_work_admission_rejects_18_by_6_before_search() -> None:
+    with pytest.raises(OperationResourceAdmissionError) as caught:
+        linear_program(_dense_program(18, 6))
+    assert caught.value.errors()[0]["type"] == "optimization.linear.work_bound"
+
+
+def test_total_work_boundary_accepts_14_by_8_shape() -> None:
+    count, work = basis_bounds(14, 8)
+    assert count < MAX_LINEAR_PROGRAM_BASES
+    assert work + 16 * (8 + 1) * (14 + 1) < 50_000_000
+    admission = admit_linear_program(_dense_program(14, 8))
+    assert admission.initial_work < 50_000_000
+
+    result = linear_program(_dense_program(14, 8))
     assert result.status == "OPTIMAL"
     assert result.primal_objective is not None
-    assert result.primal_objective.as_fraction().as_integer_ratio() == (6, 7)
+    assert result.dual_objective is not None
+    assert result.primal_objective.as_fraction().as_integer_ratio() == (8, 9)
+    assert result.dual_objective.as_fraction().as_integer_ratio() == (8, 9)
+    assert result.primal_candidate is not None
+    assert result.dual_candidate is not None
+    assert result.primal_residuals is not None
+    assert result.dual_slacks is not None
+    assert all(
+        residual.as_fraction().as_integer_ratio() == (0, 1)
+        for residual in result.primal_residuals
+    )
+    assert all(
+        slack.as_fraction().as_integer_ratio() == (0, 1) for slack in result.dual_slacks
+    )
+
+
+def test_total_work_rejects_15_by_8_before_search() -> None:
+    count, work = basis_bounds(15, 8)
+    total_work = work + 16 * (8 + 1) * (15 + 1)
+    assert count < MAX_LINEAR_PROGRAM_BASES
+    assert total_work > 50_000_000
+    program = _dense_program(15, 8)
+    with pytest.raises(OperationResourceAdmissionError) as caught:
+        linear_program(program)
+    assert caught.value.errors()[0]["type"] == "optimization.linear.work_bound"
 
 
 def test_standard_basis_admission_reports_measured_costs() -> None:
@@ -88,7 +124,7 @@ def test_standard_basis_admission_reports_measured_costs() -> None:
     assert "input_value" not in str(caught.value)
 
 
-def test_search_exhaustion_is_an_execution_error() -> None:
+def test_work_bound_admission_precedes_late_search_exhaustion() -> None:
     n, m = 18, 6
     program = StandardFormRationalLinearProgram.model_validate_json(
         json.dumps(
@@ -100,9 +136,9 @@ def test_search_exhaustion_is_an_execution_error() -> None:
             }
         )
     )
-    with pytest.raises(OperationResourceExhaustedError) as caught:
+    with pytest.raises(OperationResourceAdmissionError) as caught:
         linear_program(program)
-    assert caught.value.resource is ExecutionResource.WORK
+    assert caught.value.errors()[0]["type"] == "optimization.linear.work_bound"
 
 
 def test_native_general_deadline_covers_normalization_and_respects_outer_deadline() -> (

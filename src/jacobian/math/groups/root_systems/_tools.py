@@ -5,9 +5,11 @@ from typing import Any
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.groups.root_systems._models import (
     MAX_RANK,
+    CartanDatumRequest,
     CartanMatrixRequest,
     CartanTypeRequest,
     CartanTypeResult,
+    FiniteCartanDatum,
     RootSystemDataResult,
     SimpleReflectionRequest,
     SimpleReflectionResult,
@@ -19,6 +21,7 @@ from jacobian.math.groups.root_systems._models import (
     WeylLongestElementResult,
 )
 from jacobian.math.groups.root_systems.operations import (
+    cartan_datum,
     cartan_matrix_from_type,
     root_system_data,
     simple_reflection,
@@ -28,6 +31,10 @@ from jacobian.math.groups.root_systems.operations import (
     weyl_group_order,
     weyl_longest_element,
 )
+
+
+def _run_cartan_datum(request: CartanDatumRequest) -> FiniteCartanDatum:
+    return cartan_datum(request.matrix)
 
 
 def _run_cartan_matrix_from_type(request: CartanTypeRequest) -> CartanTypeResult:
@@ -79,6 +86,45 @@ _A2 = {
 }
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
+    MathTool(
+        operation_id="root_system.cartan_datum.compute",
+        title="Construct finite Cartan root, coroot, and weight lattice data",
+        description=(
+            "Construct the exact finite Cartan datum for a canonical Cartan matrix, "
+            "including a positive symmetrizer and explicit root-to-weight and "
+            "coroot-to-coweight basis maps. Nonsymmetric B/C/G matrices retain "
+            "their ordered basis transport."
+        ),
+        request_type=CartanDatumRequest,
+        result_type=FiniteCartanDatum,
+        run=_run_cartan_datum,
+        tags=("algebra", "root-system", "cartan", "lattice", "exact"),
+        discovery_terms=(
+            "Cartan datum",
+            "root coroot lattice",
+            "weight basis transport",
+        ),
+        examples=(
+            OperationExample(
+                name="g2_cartan_datum",
+                description=(
+                    "Construct root/coroot/weight basis data for G2; the matrix "
+                    "must be a finite-type Cartan matrix."
+                ),
+                input={
+                    "matrix": {
+                        "matrix": {
+                            "domain": "ZZ",
+                            "row_count": 2,
+                            "column_count": 2,
+                            "entries": [["2", "-3"], ["-1", "2"]],
+                        },
+                        "simple_root_axis": [0, 1],
+                    }
+                },
+            ),
+        ),
+    ),
     MathTool(
         operation_id="root_system.cartan_matrix.from_type.compute",
         title="Build a Cartan matrix from a finite Dynkin type and rank",

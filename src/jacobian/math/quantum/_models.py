@@ -6,6 +6,7 @@ from typing import Annotated, Literal, Self
 
 from pydantic import (
     AfterValidator,
+    ConfigDict,
     Field,
     StrictInt,
     StringConstraints,
@@ -186,6 +187,201 @@ class CheckSpaceCanonicalizeResult(StrictModel):
         )
 
 
+class QubitRegister(StrictModel):
+    """An ordered register that is the parent of every compact Pauli value."""
+
+    qubit_ids: tuple[QubitId, ...] = Field(min_length=1, max_length=MAX_QUBITS)
+
+    @model_validator(mode="after")
+    def require_unique_ids(self) -> Self:
+        if len(set(self.qubit_ids)) != len(self.qubit_ids):
+            raise _validation_error(
+                "register_ids_unique", "qubit register IDs must be unique"
+            )
+        return self
+
+
+class PhaseFreeQubitPauli(StrictModel):
+    model_config = ConfigDict(populate_by_name=True)
+    """A phase-free Pauli vector on one explicit qubit register."""
+
+    qubit_register: QubitRegister = Field(
+        alias="register", serialization_alias="register"
+    )
+    x_bits: tuple[StrictInt, ...]
+    z_bits: tuple[StrictInt, ...]
+
+    @model_validator(mode="after")
+    def require_register_shape(self) -> Self:
+        width = len(self.qubit_register.qubit_ids)
+        if len(self.x_bits) != width or len(self.z_bits) != width:
+            raise _validation_error(
+                "pauli_register_binding", "Pauli coordinates must match their register"
+            )
+        if any(bit not in (0, 1) for bit in (*self.x_bits, *self.z_bits)):
+            raise _validation_error(
+                "pauli_bits_binary", "phase-free Pauli bits must be binary"
+            )
+        return self
+
+    @property
+    def support(self) -> tuple[str, ...]:
+        return tuple(
+            q
+            for q, x, z in zip(
+                self.qubit_register.qubit_ids, self.x_bits, self.z_bits, strict=True
+            )
+            if x or z
+        )
+
+    @property
+    def weight(self) -> int:
+        return len(self.support)
+
+
+class ExactQubitPauli(StrictModel):
+    """The exact Pauli ``i^phase X^x Z^z`` under Jacobian's fixed convention."""
+
+    phase_free: PhaseFreeQubitPauli
+    phase: StrictInt = Field(ge=0, le=3)
+
+    @property
+    def register(self) -> QubitRegister:
+        return self.phase_free.qubit_register
+
+
+class PauliProductRequest(StrictModel):
+    left: ExactQubitPauli
+    right: ExactQubitPauli
+
+
+class PauliInverseRequest(StrictModel):
+    pauli: ExactQubitPauli
+
+
+class PauliProductResult(StrictModel):
+    left: ExactQubitPauli
+    right: ExactQubitPauli
+    product: ExactQubitPauli
+
+
+class PauliInverseResult(StrictModel):
+    source: ExactQubitPauli
+    inverse: ExactQubitPauli
+
+
+class PauliPairingRequest(StrictModel):
+    left: PhaseFreeQubitPauli
+    right: PhaseFreeQubitPauli
+
+
+class PauliPairingResult(StrictModel):
+    left: PhaseFreeQubitPauli
+    right: PhaseFreeQubitPauli
+    pairing: StrictInt = Field(ge=0, le=1)
+    commute: bool
+
+
+class CheckSpaceValue(StrictModel):
+    model_config = ConfigDict(populate_by_name=True)
+    """An isotropic check space with an explicit register parent."""
+
+    qubit_register: QubitRegister = Field(
+        alias="register", serialization_alias="register"
+    )
+    basis: tuple[PhaseFreeQubitPauli, ...] = Field(max_length=MAX_CHECK_ROWS)
+
+    @model_validator(mode="after")
+    def require_basis_parent(self) -> Self:
+        if any(row.qubit_register != self.qubit_register for row in self.basis):
+            raise _validation_error(
+                "check_space_parent", "all check rows must use the same register"
+            )
+        return self
+
+
+class NormalizerResult(StrictModel):
+    """The exact symplectic orthogonal space S-perp of an isotropic check space."""
+
+    check_space: CheckSpaceValue
+    orthogonal_basis: tuple[PhaseFreeQubitPauli, ...]
+    rank: int = Field(ge=0)
+    orthogonal_rank: int = Field(ge=0)
+    logical_dimension: int = Field(ge=0)
+
+    @model_validator(mode="after")
+    def require_dimensions(self) -> Self:
+        if not isinstance(self.check_space, CheckSpaceValue) or not isinstance(
+            self.check_space.qubit_register, QubitRegister
+        ):
+            raise _validation_error(
+                "normalizer_parent", "normalizer check-space parent is malformed"
+            )
+        if not isinstance(self.check_space.basis, tuple) or any(
+            not isinstance(row, PhaseFreeQubitPauli)
+            for row in self.check_space.basis
+        ) or not isinstance(self.orthogonal_basis, tuple) or any(
+            not isinstance(row, PhaseFreeQubitPauli)
+            for row in self.orthogonal_basis
+        ):
+            raise _validation_error(
+                "normalizer_parent",
+                "normalizer rows and check basis must be typed values",
+            )
+        register = self.check_space.qubit_register
+        width = len(register.qubit_ids)
+        for row in (*self.check_space.basis, *self.orthogonal_basis):
+            if (
+                row.qubit_register != register
+                or not isinstance(row.x_bits, tuple)
+                or not isinstance(row.z_bits, tuple)
+                or len(row.x_bits) != width
+                or len(row.z_bits) != width
+                or any(
+                    type(bit) is not int or bit not in (0, 1)
+                    for bit in (*row.x_bits, *row.z_bits)
+                )
+            ):
+                raise _validation_error(
+                    "normalizer_parent",
+                    "normalizer rows must be valid binary values on the check register",
+                )
+        if self.rank != len(self.check_space.basis) or self.orthogonal_rank != len(
+            self.orthogonal_basis
+        ):
+            raise _validation_error(
+                "normalizer_dimensions", "normalizer ranks must match retained bases"
+            )
+        if any(
+            row.qubit_register != self.check_space.qubit_register
+            for row in self.orthogonal_basis
+        ):
+            raise _validation_error(
+                "normalizer_parent",
+                "every normalizer row must use the check-space register",
+            )
+        if self.logical_dimension != self.orthogonal_rank - self.rank:
+            raise _validation_error(
+                "logical_dimension", "logical dimension must be dim(S-perp)-dim(S)"
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        check_space: CheckSpaceValue,
+        orthogonal_basis: tuple[PhaseFreeQubitPauli, ...],
+    ) -> Self:
+        return cls.model_construct(
+            check_space=check_space,
+            orthogonal_basis=orthogonal_basis,
+            rank=len(check_space.basis),
+            orthogonal_rank=len(orthogonal_basis),
+            logical_dimension=len(orthogonal_basis) - len(check_space.basis),
+        )
+
+
 __all__ = [
     "MAX_CHECK_ROWS",
     "MAX_QUBITS",
@@ -195,6 +391,17 @@ __all__ = [
     "CheckSpaceCanonicalizeRequest",
     "CheckSpaceCanonicalizeResult",
     "CheckSpaceStatus",
+    "CheckSpaceValue",
+    "ExactQubitPauli",
     "NonCommutingWitness",
+    "NormalizerResult",
+    "PauliInverseRequest",
+    "PauliInverseResult",
+    "PauliPairingRequest",
+    "PauliPairingResult",
+    "PauliProductRequest",
+    "PauliProductResult",
+    "PhaseFreeQubitPauli",
     "QubitId",
+    "QubitRegister",
 ]

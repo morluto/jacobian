@@ -11,6 +11,16 @@ from pydantic_core import PydanticCustomError
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
 from jacobian.math.matrices.values import RationalMatrix
+from jacobian.math.number_theory.quadratic_forms.general._extra_models import (
+    DiagonalizationResult,
+    FormRequest,
+    ModularProfileRequest,
+    ModularProfileResult,
+    PullbackRequest,
+    PullbackResult,
+    RadicalResult,
+    SignatureResult,
+)
 from jacobian.math.number_theory.quadratic_forms.general.values import (
     MAX_QUADRATIC_EVALUATION_DIGITS,
     MAX_QUADRATIC_EVALUATION_SUPPORT_TERMS,
@@ -156,6 +166,14 @@ class CoefficientMatrixResult(StrictModel):
 __all__ = [
     "CoefficientMatrixRequest",
     "CoefficientMatrixResult",
+    "DiagonalizationResult",
     "EvaluationRequest",
     "EvaluationResult",
+    "FormRequest",
+    "ModularProfileRequest",
+    "ModularProfileResult",
+    "PullbackRequest",
+    "PullbackResult",
+    "RadicalResult",
+    "SignatureResult",
 ]

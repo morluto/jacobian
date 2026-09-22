@@ -1844,7 +1844,7 @@ def _run_splitting_worker(
         cancellation_signal=cancellation_signal,
     )
     response = loads_strict_json(
-        worker_stdout,
+        encode_strict_json(worker_stdout),
         limits=CanonicalLimits(
             max_input_bytes=SPLITTING_STDOUT_BYTES,
             max_output_bytes=SPLITTING_STDOUT_BYTES,

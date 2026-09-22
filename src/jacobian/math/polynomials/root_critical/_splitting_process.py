@@ -20,7 +20,7 @@ from jacobian.canonical import encode_strict_json
 from jacobian.math.polynomials.values import RationalPolynomial
 from jacobian.process import (
     ProcessResourceLimits,
-    run_bounded_process,
+    run_checked_worker_process,
     worker_environment,
 )
 
@@ -32,6 +32,12 @@ SPLITTING_ADDRESS_SPACE_BYTES = 4 * 1024 * 1024 * 1024
 __all__ = ["run_splitting_worker_process"]
 
 
+def _decode_splitting_result(value: object) -> dict[str, object]:
+    if not isinstance(value, dict):
+        raise ValueError("splitting-field worker result must be an object")
+    return value
+
+
 def run_splitting_worker_process(
     polynomial: RationalPolynomial,
     *,
@@ -40,7 +46,7 @@ def run_splitting_worker_process(
     max_pair_rows: object,
     remaining_seconds: float,
     cancellation_signal: RequestCancellationSignal | None,
-) -> bytes:
+) -> dict[str, object]:
     """Run the splitting-field worker once and return its validated stdout bytes."""
 
     if remaining_seconds <= 0:
@@ -56,7 +62,7 @@ def run_splitting_worker_process(
         }
     )
     try:
-        completed = run_bounded_process(
+        response = run_checked_worker_process(
             [sys.executable, str(SPLITTING_WORKER_PATH)],
             input_bytes=payload,
             timeout_seconds=remaining_seconds,
@@ -69,25 +75,12 @@ def run_splitting_worker_process(
                 file_size_bytes=SPLITTING_STDOUT_BYTES,
             ),
             cancellation_event=cancellation_signal,
+            decode_result=_decode_splitting_result,
         )
+    except (OperationExecutionCancelledError, OperationExecutionTimeoutError):
+        raise
     except OSError as exc:
         raise RuntimeError(
             "bounded splitting-field kernel worker could not be started"
         ) from exc
-    if completed.cancelled:
-        raise OperationExecutionCancelledError(
-            "splitting-field computation cancelled during the kernel worker"
-        )
-    if completed.timed_out:
-        raise OperationExecutionTimeoutError(
-            "splitting-field deadline expired during the kernel worker"
-        )
-    if (
-        completed.stdout_exceeded
-        or completed.stderr_exceeded
-        or completed.returncode != 0
-    ):
-        raise RuntimeError(
-            "bounded splitting-field kernel worker did not establish a result"
-        )
-    return completed.stdout
+    return response

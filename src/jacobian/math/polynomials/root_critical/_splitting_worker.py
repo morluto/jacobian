@@ -12,9 +12,9 @@ from __future__ import annotations
 import sys
 from typing import Any, cast
 
+from jacobian._worker_protocol import encode_worker_result_frame
 from jacobian.canonical import (
     CanonicalLimits,
-    encode_strict_json,
     loads_strict_json,
 )
 from jacobian.math.polynomials.values import RationalPolynomial
@@ -102,7 +102,7 @@ def main() -> int:
     if not isinstance(payload, dict):
         raise SystemExit("malformed splitting-field kernel request")
     result = _run(payload)
-    sys.stdout.buffer.write(encode_strict_json(result))
+    sys.stdout.buffer.write(encode_worker_result_frame(result))
     return 0
 
 

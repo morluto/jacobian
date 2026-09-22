@@ -287,6 +287,57 @@ def test_sheaf_morphism_uses_modular_arithmetic_and_tuple_axes() -> None:
     assert all(matrix == (("0",),) for _key, matrix in result.components)
 
 
+def test_sheaf_morphism_preserves_width_through_zero_stalk() -> None:
+    complex_ = canonical_complex(("a", "b"), (("a", "b"),))
+    faces = tuple(face for group in complex_.faces_by_dimension for face in group.faces)
+    source_stalks = tuple(
+        SheafStalk(simplex=face, basis=() if len(face) == 2 else ("x",))
+        for face in faces
+    )
+    target_stalks = tuple(SheafStalk(simplex=face, basis=("x",)) for face in faces)
+    source = FiniteCellularSheaf(
+        complex=complex_,
+        coefficient_field=SheafField.RATIONAL,
+        stalks=source_stalks,
+        cover_restrictions=tuple(
+            SheafRestriction(
+                source=vertex,
+                target=("a", "b"),
+                row_basis=(),
+                column_basis=("x",),
+                entries=(),
+                cover_path=(vertex, ("a", "b")),
+            )
+            for vertex in (("a",), ("b",))
+        ),
+    )
+    target = FiniteCellularSheaf(
+        complex=complex_,
+        coefficient_field=SheafField.RATIONAL,
+        stalks=target_stalks,
+        cover_restrictions=tuple(
+            SheafRestriction(
+                source=vertex,
+                target=("a", "b"),
+                row_basis=("x",),
+                column_basis=("x",),
+                entries=(("0",),),
+                cover_path=(vertex, ("a", "b")),
+            )
+            for vertex in (("a",), ("b",))
+        ),
+    )
+    components = (
+        (("a",), (("0",),)),
+        (("b",), (("0",),)),
+        (("a", "b"), ((),)),
+    )
+
+    result = morphism(source, target, components)
+
+    assert result.natural is True
+
+
 def test_sheaf_morphism_rejects_incomplete_forged_diagram() -> None:
     sheaf = _rank_one_interval_sheaf()
     components = (("a", (("1",),)), ("b", (("1",),)), ("a.b", (("1",),)))
@@ -362,6 +413,52 @@ def test_filtered_chain_map_reduces_compositions_and_map_output() -> None:
     )
     assert result.chain_map is True
     assert result.maps == ((("0",),), (("0",),))
+
+
+def test_filtered_chain_map_preserves_width_through_zero_chain_group() -> None:
+    source = ChainComplexValue(
+        coefficient_ring=CoefficientRing.RATIONAL,
+        degree_min=0,
+        degree_max=1,
+        basis_sizes=(0, 1),
+        differential_matrices=((),),
+    )
+    target = ChainComplexValue(
+        coefficient_ring=CoefficientRing.RATIONAL,
+        degree_min=0,
+        degree_max=1,
+        basis_sizes=(1, 1),
+        differential_matrices=((("0",),),),
+    )
+    source_filtration = (
+        FiltrationLevel(
+            subspaces=(
+                FilteredSubspace(vectors=()),
+                FilteredSubspace(vectors=(("1",),)),
+            )
+        ),
+    )
+    target_filtration = (
+        FiltrationLevel(
+            subspaces=(
+                FilteredSubspace(vectors=(("1",),)),
+                FilteredSubspace(vectors=(("1",),)),
+            )
+        ),
+    )
+
+    result = filtered_map(
+        FilteredChainMapRequest(
+            source=source,
+            source_filtration=source_filtration,
+            target=target,
+            target_filtration=target_filtration,
+            maps=(((),), (("0",),)),
+        )
+    )
+
+    assert result.chain_map is True
+    assert result.filtration_preserving is True
 
 
 def test_filtered_chain_map_rejects_non_nested_non_exhaustive_filtration() -> None:

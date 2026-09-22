@@ -144,11 +144,11 @@ def _admit_component_matrix(
     return parsed
 
 
-def _mul(a: Any, b: Any, p: int | None) -> Any:
+def _mul(a: Any, b: Any, p: int | None, *, output_width: int) -> Any:
     if not a:
         return []
     if not b:
-        return [[] for _ in a]
+        return [[0] * output_width for _ in a]
     cols = list(zip(*b, strict=False))
     result = []
     for row in a:
@@ -249,12 +249,14 @@ def morphism(
                 [list(row) for row in given[b]],
                 [[_mat(x, p) for x in row] for row in restriction.entries],
                 p,
+                output_width=len(stalk[a].basis),
             )
             tr = target_cover[(restriction.source, restriction.target)]
             right = _mul(
                 [[_mat(x, p) for x in row] for row in tr.entries],
                 [list(row) for row in given[a]],
                 p,
+                output_width=len(stalk[a].basis),
             )
             if left != right:
                 return SheafMorphismResult(

@@ -112,6 +112,7 @@ def filtered_map(request: FilteredChainMapRequest) -> FilteredChainMapResult:
     # f d = d f, with matrix convention d rows lower x upper
     chain_ok = True
     for degree in range(len(parsed) - 1):
+        output_width = request.source.basis_sizes[degree + 1]
         left = _mul(
             parsed[degree],
             [
@@ -119,6 +120,7 @@ def filtered_map(request: FilteredChainMapRequest) -> FilteredChainMapResult:
                 for row in request.source.differential_matrices[degree]
             ],
             p,
+            output_width=output_width,
         )
         right = _mul(
             [
@@ -127,6 +129,7 @@ def filtered_map(request: FilteredChainMapRequest) -> FilteredChainMapResult:
             ],
             parsed[degree + 1],
             p,
+            output_width=output_width,
         )
         chain_ok = chain_ok and left == right
     preserving = True
@@ -167,11 +170,11 @@ def _serialize_entry(value: Any, prime: int | None) -> str:
     return format_canonical_integer(int(value))
 
 
-def _mul(left: Any, right: Any, prime: int | None) -> Any:
+def _mul(left: Any, right: Any, prime: int | None, *, output_width: int) -> Any:
     if not left:
         return []
     if not right:
-        return [[] for _ in left]
+        return [[0] * output_width for _ in left]
     cols = list(zip(*right, strict=False))
     result = []
     for row in left:

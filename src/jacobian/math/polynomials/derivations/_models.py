@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Self
+from typing import Literal, Self
 
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
@@ -20,6 +20,10 @@ MAX_DERIVATION_SOURCE_TERMS = 256
 MAX_DERIVATION_EXPONENT = 64
 MAX_DERIVATION_COEFFICIENT_DIGITS = 128
 MAX_DERIVATION_CONTRIBUTION_CELLS = 4_096
+MAX_DERIVATION_ITERATE_COUNT = 32
+MAX_DERIVATION_ITERATE_TERMS = 4_096
+MAX_DERIVATION_CERTIFICATE_CHAIN = 32
+MAX_DERIVATION_PARAMETER = "t"
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -98,6 +102,113 @@ class DerivationApplyRequest(StrictModel):
                 "the polynomial must use the derivation's ordered ring",
             )
         return self
+
+
+class DerivationIteratesRequest(StrictModel):
+    derivation: PolynomialDerivation
+    polynomial: RationalPolynomial
+    bound: int = Field(ge=0, le=MAX_DERIVATION_ITERATE_COUNT)
+
+    @model_validator(mode="after")
+    def require_shared_ring(self) -> Self:
+        if self.polynomial.variables != self.derivation.variables:
+            raise _validation_error(
+                "ordered_ring", "the polynomial must use the derivation's ordered ring"
+            )
+        return self
+
+
+class DerivationIteratesResult(StrictModel):
+    derivation: PolynomialDerivation
+    source: RationalPolynomial
+    iterates: tuple[RationalPolynomial, ...]
+    status: Literal["FIRST_ZERO_ON_F", "NONZERO_THROUGH_BOUND"]
+    first_zero_index: int | None = None
+
+    @model_validator(mode="after")
+    def require_profile(self) -> Self:
+        if not self.iterates or self.iterates[0] != self.source:
+            raise _validation_error(
+                "iterate_profile", "the iterate family must begin with the source"
+            )
+        if self.status == "FIRST_ZERO_ON_F":
+            if (
+                self.first_zero_index is None
+                or self.first_zero_index != len(self.iterates) - 1
+            ):
+                raise _validation_error(
+                    "iterate_profile",
+                    "first zero index must identify the final returned iterate",
+                )
+            if self.iterates[-1].polynomial.terms:
+                raise _validation_error(
+                    "iterate_profile", "the first-zero iterate must be zero"
+                )
+        elif self.first_zero_index is not None:
+            raise _validation_error(
+                "iterate_profile", "a nonzero bounded profile has no first-zero index"
+            )
+        return self
+
+
+class LocallyNilpotentCertificate(StrictModel):
+    derivation: PolynomialDerivation
+    generator_iterates: tuple[tuple[RationalPolynomial, ...], ...]
+
+    @model_validator(mode="after")
+    def require_shape(self) -> Self:
+        if len(self.generator_iterates) != len(self.derivation.variables):
+            raise _validation_error(
+                "certificate_shape",
+                "one complete iterate chain is required per generator",
+            )
+        for chain in self.generator_iterates:
+            if not chain or any(
+                value.variables != self.derivation.variables for value in chain
+            ):
+                raise _validation_error(
+                    "certificate_shape",
+                    "certificate chains must use the derivation ring",
+                )
+            if len(chain) > MAX_DERIVATION_CERTIFICATE_CHAIN:
+                raise _validation_error(
+                    "certificate_bound",
+                    "generator iterate chain exceeds the admitted bound",
+                )
+        return self
+
+
+class PolynomialGaAction(StrictModel):
+    source_variables: tuple[PolynomialVariable, ...]
+    parameter: PolynomialVariable = MAX_DERIVATION_PARAMETER
+    generator_images: tuple[RationalPolynomial, ...]
+
+    @model_validator(mode="after")
+    def require_action_shape(self) -> Self:
+        if self.parameter in self.source_variables:
+            raise _validation_error(
+                "action_parameter",
+                "the action parameter must be distinct from source variables",
+            )
+        expected = (*self.source_variables, self.parameter)
+        if len(self.generator_images) != len(self.source_variables) or any(
+            image.variables != expected for image in self.generator_images
+        ):
+            raise _validation_error(
+                "action_ring",
+                "action generator images must use the source ring extended by the parameter",
+            )
+        return self
+
+
+class DerivationCertificateRequest(StrictModel):
+    derivation: PolynomialDerivation
+    chains: tuple[tuple[RationalPolynomial, ...], ...]
+
+
+class GaActionRequest(StrictModel):
+    derivation: PolynomialDerivation
+    chains: tuple[tuple[RationalPolynomial, ...], ...]
 
 
 class DerivationApplyResult(StrictModel):

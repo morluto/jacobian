@@ -19,12 +19,103 @@ MAX_SHIFT_RESULT_ORDER = 32
 MAX_SHIFT_RESULT_DEGREE = 128
 MAX_SHIFT_RESULT_DIGITS = 256
 MAX_SHIFT_LEDGER_ROWS = 256
+MAX_DIFFERENTIAL_ORDER = 16
+MAX_DIFFERENTIAL_TERMS = 32
+MAX_DIFFERENTIAL_VARIABLE = "x"
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
     """Build a stable error owned by Ore-algebra contracts."""
 
     return PydanticCustomError(f"ore_algebra.{reason}", message)
+
+
+class DifferentialOreTerm(StrictModel):
+    """One left-coefficient monomial a(x) D^order."""
+
+    order: StrictInt = Field(ge=0, le=MAX_DIFFERENTIAL_ORDER)
+    coefficient: RationalFunction
+
+    @model_validator(mode="after")
+    def require_axis(self) -> Self:
+        if (
+            self.coefficient.variables != (MAX_DIFFERENTIAL_VARIABLE,)
+            or not self.coefficient.numerator.terms
+        ):
+            raise _validation_error(
+                "differential_coefficient",
+                "differential coefficients must be nonzero rational functions in QQ(x)",
+            )
+        return self
+
+
+class DifferentialOreOperator(StrictModel):
+    variable: Literal["x"] = "x"
+    terms: tuple[DifferentialOreTerm, ...] = Field(
+        default=(), max_length=MAX_DIFFERENTIAL_TERMS
+    )
+
+    @model_validator(mode="after")
+    def require_order(self) -> Self:
+        orders = tuple(term.order for term in self.terms)
+        if orders != tuple(sorted(orders)) or len(set(orders)) != len(orders):
+            raise _validation_error(
+                "differential_term_order",
+                "differential terms must use strictly increasing orders",
+            )
+        return self
+
+    @property
+    def order(self) -> int:
+        return max((term.order for term in self.terms), default=-1)
+
+
+class DifferentialOperatorMultiplyRequest(StrictModel):
+    left: DifferentialOreOperator
+    right: DifferentialOreOperator
+
+
+class DifferentialOperatorApplyRequest(StrictModel):
+    operator: DifferentialOreOperator
+    function: RationalFunction
+
+    @model_validator(mode="after")
+    def require_axis(self) -> Self:
+        if self.function.variables != (MAX_DIFFERENTIAL_VARIABLE,):
+            raise _validation_error(
+                "differential_function", "the applied function must use the QQ(x) axis"
+            )
+        return self
+
+
+class DifferentialOperatorApplyResult(StrictModel):
+    operator: DifferentialOreOperator
+    function: RationalFunction
+    result: RationalFunction
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        operator: DifferentialOreOperator,
+        function: RationalFunction,
+        result: RationalFunction,
+    ) -> Self:
+        return cls.model_construct(operator=operator, function=function, result=result)
+
+
+class DifferentialOperatorMultiplyResult(StrictModel):
+    left: DifferentialOreOperator
+    right: DifferentialOreOperator
+    product: DifferentialOreOperator
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        left: DifferentialOreOperator,
+        right: DifferentialOreOperator,
+        product: DifferentialOreOperator,
+    ) -> Self:
+        return cls.model_construct(left=left, right=right, product=product)
 
 
 class ShiftOreTerm(StrictModel):

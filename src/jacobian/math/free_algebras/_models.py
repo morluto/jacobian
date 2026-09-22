@@ -12,7 +12,7 @@ generators ``x`` and ``y``.
 
 from __future__ import annotations
 
-from typing import Annotated, Self
+from typing import Annotated, Literal, Self
 
 from pydantic import AfterValidator, Field, StringConstraints, model_validator
 from pydantic_core import PydanticCustomError
@@ -33,6 +33,20 @@ MAX_FREE_ALGEBRA_OPERAND_TERMS = 64
 MAX_FREE_ALGEBRA_RESULT_TERMS = 4_096
 MAX_FREE_ALGEBRA_TERM_PAIRS = MAX_FREE_ALGEBRA_OPERAND_TERMS**2
 MAX_FREE_ALGEBRA_COEFFICIENT_DIGITS = 64
+# Ideal-prefix output is an aggregate carrier: unlike multiplication, it
+# returns many basis polynomials at once. Keep that envelope independent from
+# the per-polynomial result bound.
+MAX_FREE_ALGEBRA_IDEAL_PREFIX_BASIS = MAX_FREE_ALGEBRA_RESULT_TERMS // 4
+MAX_FREE_ALGEBRA_IDEAL_PREFIX_TOTAL_TERMS = MAX_FREE_ALGEBRA_RESULT_TERMS // 2
+MAX_FREE_ALGEBRA_IDEAL_PREFIX_SERIALIZED_BYTES = 2_000_000
+# GS completion checks every ordered basis pair at each fixed-point round.
+# These are execution-envelope bounds; COMPLETE_THROUGH_DEGREE is returned only
+# after the bounded rounds reach a genuine zero-composition fixed point.
+MAX_FREE_ALGEBRA_GS_PAIR_CHECKS = MAX_FREE_ALGEBRA_TERM_PAIRS
+MAX_FREE_ALGEBRA_GS_COMPOSITIONS = MAX_FREE_ALGEBRA_RESULT_TERMS
+MAX_FREE_ALGEBRA_GS_REDUCTION_STEPS = (
+    MAX_FREE_ALGEBRA_RESULT_TERMS * MAX_FREE_ALGEBRA_WORD_LENGTH
+)
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -295,21 +309,106 @@ class FreeAlgebraPolynomialProductResult(StrictModel):
         return self
 
 
+class FreeAlgebraIdeal(StrictModel):
+    """A finitely generated left, right, or two-sided ideal presentation."""
+
+    alphabet: tuple[FreeAlgebraLetter, ...] = Field(
+        default=(), max_length=MAX_FREE_ALGEBRA_GENERATORS
+    )
+    generators: tuple[FreeAlgebraPolynomial, ...] = Field(max_length=32)
+    side: Literal["left", "right", "two-sided"]
+
+    @model_validator(mode="after")
+    def require_parent(self) -> Self:
+        _require_distinct_alphabet(self.alphabet)
+        if any(generator.alphabet != self.alphabet for generator in self.generators):
+            raise _validation_error(
+                "ideal_alphabet", "ideal generators must share the declared alphabet"
+            )
+        return self
+
+
+class FreeAlgebraIdealPrefixRequest(StrictModel):
+    ideal: FreeAlgebraIdeal
+    degree: int = Field(ge=0, le=MAX_FREE_ALGEBRA_WORD_LENGTH)
+
+
+class FreeAlgebraIdealPrefixResult(StrictModel):
+    ideal: FreeAlgebraIdeal
+    degree: int
+    basis: tuple[FreeAlgebraPolynomial, ...]
+
+    @model_validator(mode="after")
+    def require_result_parent(self) -> Self:
+        if any(value.alphabet != self.ideal.alphabet for value in self.basis):
+            raise _validation_error(
+                "ideal_basis_alphabet",
+                "ideal prefix basis must retain the ideal alphabet",
+            )
+        return self
+
+
+class GroebnerShirshovRequest(StrictModel):
+    ideal: FreeAlgebraIdeal
+    degree: int = Field(ge=0, le=MAX_FREE_ALGEBRA_WORD_LENGTH)
+
+
+class GroebnerShirshovResult(StrictModel):
+    ideal: FreeAlgebraIdeal
+    degree: int
+    basis: tuple[FreeAlgebraPolynomial, ...]
+    compositions: tuple[FreeAlgebraPolynomial, ...]
+    status: Literal["COMPLETE_THROUGH_DEGREE"] = "COMPLETE_THROUGH_DEGREE"
+
+    @model_validator(mode="after")
+    def require_result_parent(self) -> Self:
+        if any(
+            value.alphabet != self.ideal.alphabet
+            for value in (*self.basis, *self.compositions)
+        ):
+            raise _validation_error(
+                "gs_basis_alphabet", "GS values must retain the ideal alphabet"
+            )
+        return self
+
+
+# Review-facing canonical names; aliases preserve one carrier per mathematical value.
+FreeWord = FreeAlgebraWord
+NCPolynomial = FreeAlgebraPolynomial
+LeftIdealPresentation = FreeAlgebraIdeal
+RightIdealPresentation = FreeAlgebraIdeal
+TwoSidedIdealPresentation = FreeAlgebraIdeal
+DegreeBoundedGroebnerShirshovBasis = GroebnerShirshovResult
+
 __all__ = [
     "MAX_FREE_ALGEBRA_COEFFICIENT_DIGITS",
     "MAX_FREE_ALGEBRA_GENERATORS",
+    "MAX_FREE_ALGEBRA_GS_COMPOSITIONS",
+    "MAX_FREE_ALGEBRA_GS_PAIR_CHECKS",
+    "MAX_FREE_ALGEBRA_GS_REDUCTION_STEPS",
     "MAX_FREE_ALGEBRA_LETTER_LENGTH",
     "MAX_FREE_ALGEBRA_OPERAND_TERMS",
     "MAX_FREE_ALGEBRA_RESULT_TERMS",
     "MAX_FREE_ALGEBRA_RESULT_WORD_LENGTH",
     "MAX_FREE_ALGEBRA_TERM_PAIRS",
     "MAX_FREE_ALGEBRA_WORD_LENGTH",
+    "DegreeBoundedGroebnerShirshovBasis",
+    "FreeAlgebraIdeal",
+    "FreeAlgebraIdealPrefixRequest",
+    "FreeAlgebraIdealPrefixResult",
     "FreeAlgebraLetter",
     "FreeAlgebraPolynomial",
     "FreeAlgebraPolynomialProductRequest",
     "FreeAlgebraPolynomialProductResult",
     "FreeAlgebraTerm",
     "FreeAlgebraWord",
+    "FreeWord",
+    "GroebnerShirshovRequest",
+    "GroebnerShirshovResult",
+    "LeftIdealPresentation",
+    "NCPolynomial",
+    "RightIdealPresentation",
     "TermPairMultiplicationLedger",
+    "TwoSidedIdealPresentation",
     "canonical_word_key",
 ]

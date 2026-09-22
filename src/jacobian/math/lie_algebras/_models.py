@@ -233,6 +233,31 @@ class LieAlgebraRequest(StrictModel):
     )
 
 
+class LieDirectSumRequest(StrictModel):
+    """Two admitted Lie algebras and the ordered basis of their direct sum."""
+
+    left: FiniteDimensionalLieAlgebra
+    right: FiniteDimensionalLieAlgebra
+    basis: tuple[LieBasisLabel, ...] = Field(
+        min_length=2,
+        max_length=MAX_LIE_DIMENSION,
+        description=(
+            "Unique output labels in left-block then right-block order; their count "
+            "must equal the sum of the two source dimensions."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_output_axis(self) -> Self:
+        expected = len(self.left.basis) + len(self.right.basis)
+        if len(self.basis) != expected or len(set(self.basis)) != expected:
+            raise _validation_error(
+                "direct_sum_basis",
+                "direct-sum labels must be unique across both dimensions",
+            )
+        return self
+
+
 class LieKillingResult(StrictModel):
     """The exact Killing-form Gram matrix with its source algebra.
 

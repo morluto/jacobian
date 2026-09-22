@@ -5,6 +5,7 @@ from fractions import Fraction
 import pytest
 from pydantic import ValidationError
 
+from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.lie_algebras._models import (
     FiniteDimensionalLieAlgebra,
@@ -246,6 +247,28 @@ class TestQuotient:
             (0, 2, 0, F(-2)),
             (1, 2, 1, F(2)),
         )
+
+
+class TestPublishedDirectSum:
+    def test_catalog_operation_round_trips_exact_algebra(self) -> None:
+        from jacobian.math.lie_algebras._models import LieDirectSumRequest
+        from jacobian.math.lie_algebras._tools import TOOLS
+
+        tool = next(
+            tool
+            for tool in TOOLS
+            if tool.operation_id == "lie_algebra.direct_sum.compute"
+        )
+        line = _algebra(("t",), ())
+        request = LieDirectSumRequest(left=SL2, right=line, basis=("e", "f", "h", "t"))
+        result = tool.run(request)
+
+        assert result == lie_direct_sum(SL2, line, request.basis)
+        assert (
+            FiniteDimensionalLieAlgebra.model_validate_json(result.model_dump_json())
+            == result
+        )
+        assert Catalog.open().operation(tool.operation_id) is not None
 
 
 class TestDirectSum:

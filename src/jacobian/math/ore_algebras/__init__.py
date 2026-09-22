@@ -1,5 +1,13 @@
-"""Native exact univariate Ore-operator operations (shift type only)."""
+"""Native exact univariate shift and differential Ore-operator operations."""
 
-from jacobian.math.ore_algebras.operations import shift_operator_multiply
+from jacobian.math.ore_algebras.operations import (
+    differential_operator_apply,
+    differential_operator_multiply,
+    shift_operator_multiply,
+)
 
-__all__ = ["shift_operator_multiply"]
+__all__ = [
+    "differential_operator_apply",
+    "differential_operator_multiply",
+    "shift_operator_multiply",
+]

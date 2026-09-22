@@ -4,11 +4,13 @@ from typing import Any
 
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.lie_algebras._models import (
+    FiniteDimensionalLieAlgebra,
     LieAlgebraRequest,
     LieBracketRequest,
     LieBracketResult,
     LieCenterResult,
     LieDerivedSeriesResult,
+    LieDirectSumRequest,
     LieIdealCheckResult,
     LieIdealRequest,
     LieKillingResult,
@@ -21,6 +23,7 @@ from jacobian.math.lie_algebras.operations import (
     lie_bracket,
     lie_center,
     lie_derived_series,
+    lie_direct_sum,
     lie_killing_form,
     lie_lower_central_series,
     lie_quotient,
@@ -55,6 +58,12 @@ def _run_lie_ideal_check(request: LieIdealRequest) -> LieIdealCheckResult:
 
 def _run_lie_quotient(request: LieQuotientRequest) -> LieQuotientResult:
     return lie_quotient(request.algebra, request.ideal, request.quotient_basis)
+
+
+def _run_lie_direct_sum(
+    request: LieDirectSumRequest,
+) -> FiniteDimensionalLieAlgebra:
+    return lie_direct_sum(request.left, request.right, request.basis)
 
 
 def _rational(value: int) -> dict[str, str]:
@@ -401,6 +410,41 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                         },
                     },
                     "quotient_basis": ["u", "v"],
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="lie_algebra.direct_sum.compute",
+        title="Construct the exact direct sum of two Lie algebras",
+        description=(
+            "Construct the finite-dimensional direct sum L ⊕ M over QQ on a "
+            "caller-declared ordered basis. Each summand has dimension at most 8, "
+            "the combined dimension is at most 8, both source brackets must satisfy "
+            "Jacobi, source structure constants are embedded in their respective "
+            "blocks, and every mixed bracket is zero."
+        ),
+        request_type=LieDirectSumRequest,
+        result_type=FiniteDimensionalLieAlgebra,
+        run=_run_lie_direct_sum,
+        tags=("lie-algebra", "direct-sum", "exact", "rational"),
+        discovery_terms=(
+            "direct sum of Lie algebras",
+            "block diagonal Lie bracket",
+            "product Lie algebra",
+            "zero mixed bracket",
+        ),
+        examples=(
+            OperationExample(
+                name="sl2_plus_abelian_line",
+                description=(
+                    "Form sl2(QQ) direct sum a one-dimensional abelian algebra; "
+                    "the output basis lists the left block before the right block."
+                ),
+                input={
+                    "left": _SL2_ALGEBRA,
+                    "right": {"basis": ["t"], "structure_constants": []},
+                    "basis": ["e", "f", "h", "t"],
                 },
             ),
         ),

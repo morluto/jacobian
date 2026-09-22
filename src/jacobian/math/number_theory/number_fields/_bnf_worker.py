@@ -6,6 +6,7 @@ import hashlib
 import sys
 from typing import Any
 
+from jacobian._worker_protocol import encode_worker_result_frame
 from jacobian.canonical import (
     encode_strict_json,
     format_canonical_integer,
@@ -115,7 +116,7 @@ def main() -> int:
         OperationResourceAdmissionError,
     ) as exc:
         response = worker_rejection(exc, request_digest=digest)
-    sys.stdout.buffer.write(encode_strict_json(response))
+    sys.stdout.buffer.write(encode_worker_result_frame(response))
     return 0
 
 

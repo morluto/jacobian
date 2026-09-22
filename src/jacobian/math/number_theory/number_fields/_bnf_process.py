@@ -79,6 +79,12 @@ def _require_pari() -> None:
         ) from exc
 
 
+def _decode_bnf_result(value: object) -> dict[str, object]:
+    if not isinstance(value, dict):
+        raise ValueError("bnf worker result must be an object")
+    return value
+
+
 def run_bnf_worker(request: _BnfRequest) -> BnfWorkerResult:
     """Compute class and unit data in a request-owned killable worker."""
 
@@ -109,11 +115,11 @@ def run_bnf_worker(request: _BnfRequest) -> BnfWorkerResult:
                 )
             from jacobian.process import (
                 ProcessResourceLimits,
-                run_bounded_process,
+                run_checked_worker_process,
                 worker_environment,
             )
 
-            completed = run_bounded_process(
+            response = run_checked_worker_process(
                 [sys.executable, str(_WORKER)],
                 input_bytes=input_bytes,
                 timeout_seconds=remaining,
@@ -126,26 +132,17 @@ def run_bnf_worker(request: _BnfRequest) -> BnfWorkerResult:
                     file_size_bytes=_WORKER_FILE_SIZE_BYTES,
                 ),
                 cwd=worker_directory,
+                decode_result=_decode_bnf_result,
             )
-    except OperationExecutionTimeoutError:
+    except (OperationExecutionCancelledError, OperationExecutionTimeoutError):
         raise
     except OSError as exc:
         request_checkpoint("during bnf worker startup")
         raise RuntimeError("bounded bnf worker could not be started") from exc
 
     request_checkpoint("after number-field bnf worker")
-    if completed.cancelled:
-        raise OperationExecutionCancelledError("class/unit group computation cancelled")
-    if completed.timed_out:
-        raise OperationExecutionTimeoutError("class/unit group computation timed out")
-    if (
-        completed.stdout_exceeded
-        or completed.stderr_exceeded
-        or completed.returncode != 0
-    ):
-        raise RuntimeError("bounded bnf worker did not establish its invariants")
     return _decode_worker_response(
-        completed.stdout,
+        encode_strict_json(response),
         request=request,
         input_bytes=input_bytes,
         stdout_limit=stdout_limit,

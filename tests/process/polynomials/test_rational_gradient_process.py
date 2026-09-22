@@ -130,7 +130,7 @@ def test_cancellation_worker_timeout_uses_remaining_request_deadline(
 
     def timed_out(*args: Any, **kwargs: Any) -> BoundedProcessResult:
         payload = json.loads(kwargs["input_bytes"])
-        if payload.get("task") != "differentiate":
+        if payload.get("task") != "differentiate_batch":
             return original(*args, **kwargs)
         observed.update(kwargs)
         return _completed(returncode=None, timed_out=True)
@@ -148,8 +148,8 @@ def test_cancellation_worker_timeout_uses_remaining_request_deadline(
         gradient(_general_source())
 
     payload = json.loads(observed["input_bytes"])
-    assert payload["task"] == "differentiate"
-    assert payload["axis"] in (0, 1)
+    assert payload["task"] == "differentiate_batch"
+    assert [item["axis"] for item in payload["derivatives"]] == [0, 1]
     assert payload["variable_count"] == 2
     assert len(payload["numerator"]) == 2
     assert len(payload["denominator"]) == 2
@@ -166,6 +166,25 @@ def test_cancellation_worker_timeout_uses_remaining_request_deadline(
     )
 
 
+def test_general_gradient_batches_active_axes_in_one_worker(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    observed: list[dict[str, Any]] = []
+    original = process.run_bounded_process
+
+    def record(*args: Any, **kwargs: Any) -> BoundedProcessResult:
+        payload = json.loads(kwargs["input_bytes"])
+        if payload.get("task") == "differentiate_batch":
+            observed.append(payload)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(process, "run_bounded_process", record)
+    gradient(_general_source())
+
+    assert len(observed) == 1
+    assert [item["axis"] for item in observed[0]["derivatives"]] == [0, 1]
+
+
 def test_gradient_kernel_cancellation_is_typed_non_completion(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -175,7 +194,7 @@ def test_gradient_kernel_cancellation_is_typed_non_completion(
 
     def cancelled(*args: Any, **kwargs: Any) -> BoundedProcessResult:
         payload = json.loads(kwargs["input_bytes"])
-        if payload.get("task") != "differentiate":
+        if payload.get("task") != "differentiate_batch":
             return original(*args, **kwargs)
         return _completed(returncode=None, cancelled=True)
 

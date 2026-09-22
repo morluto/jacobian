@@ -29,8 +29,12 @@ from jacobian.math.matrices.symbolic._models import (
 from jacobian.math.polynomials._conversions import (
     rational_function_from_sympy,
     rational_function_to_sympy,
+    symbols_for_variables,
 )
-from jacobian.math.polynomials.values import RationalFunction
+from jacobian.math.polynomials.values import (
+    RationalFunction,
+    SparseRationalPolynomial,
+)
 
 SystemClassification = Literal["UNIQUE", "NON_UNIQUE", "INCONSISTENT"]
 
@@ -63,6 +67,11 @@ def _validate_matrix_carrier(value: object) -> RationalFunctionMatrix:
 
 def _matrix_from_values(
     entries: tuple[tuple[RationalFunction, ...], ...],
+    *,
+    symbols: tuple[Any, ...] | None = None,
+    polynomial_cache: dict[tuple[tuple[str, ...], SparseRationalPolynomial], Any]
+    | None = None,
+    value_cache: dict[RationalFunction, Any] | None = None,
 ) -> Any:
     import sympy
 
@@ -75,7 +84,18 @@ def _matrix_from_values(
     if rows > 8 or columns > 8:
         raise ValueError("symbolic matrix dimensions must be between 1 and 8")
     return sympy.Matrix(
-        [[rational_function_to_sympy(entry) for entry in row] for row in entries]
+        [
+            [
+                rational_function_to_sympy(
+                    entry,
+                    symbols=symbols,
+                    polynomial_cache=polynomial_cache,
+                    value_cache=value_cache,
+                )
+                for entry in row
+            ]
+            for row in entries
+        ]
     )
 
 
@@ -118,11 +138,17 @@ def _require_matrix_structure(
 def _require_matrix_values(
     entries: tuple[tuple[RationalFunction, ...], ...],
     variables: tuple[str, ...],
+    *,
+    symbols: tuple[Any, ...] | None = None,
+    polynomial_cache: dict[tuple[tuple[str, ...], SparseRationalPolynomial], Any]
+    | None = None,
 ) -> None:
     _require_matrix_structure(entries, variables)
     _require_canonical_symbolic_values(
         tuple(value for row in entries for value in row),
         label="symbolic matrix entry",
+        symbols=symbols,
+        polynomial_cache=polynomial_cache,
     )
 
 
@@ -131,9 +157,23 @@ def symbolic_determinant(
     variables: tuple[str, ...],
 ) -> RationalFunction:
     """Return the determinant in the declared rational-function field."""
-    _admit_determinant(entries, variables)
-    matrix = _matrix_from_values(entries)
-    return rational_function_from_sympy(matrix.det(method="bareiss"), variables)
+    symbols = symbols_for_variables(variables)
+    polynomial_cache: dict[tuple[tuple[str, ...], SparseRationalPolynomial], Any] = {}
+    _admit_determinant(
+        entries,
+        variables,
+        symbols=symbols,
+        polynomial_cache=polynomial_cache,
+    )
+    matrix = _matrix_from_values(
+        entries,
+        symbols=symbols,
+        polynomial_cache=polynomial_cache,
+        value_cache={},
+    )
+    return rational_function_from_sympy(
+        matrix.det(method="bareiss"), variables, symbols=symbols
+    )
 
 
 def symbolic_rank(
@@ -141,8 +181,21 @@ def symbolic_rank(
     variables: tuple[str, ...],
 ) -> tuple[int, tuple[int, ...]]:
     """Return the exact symbolic rank and RREF pivot columns."""
-    _domain_call(_require_matrix_values, entries, variables)
-    matrix = _matrix_from_values(entries)
+    symbols = symbols_for_variables(variables)
+    polynomial_cache: dict[tuple[tuple[str, ...], SparseRationalPolynomial], Any] = {}
+    _domain_call(
+        _require_matrix_values,
+        entries,
+        variables,
+        symbols=symbols,
+        polynomial_cache=polynomial_cache,
+    )
+    matrix = _matrix_from_values(
+        entries,
+        symbols=symbols,
+        polynomial_cache=polynomial_cache,
+        value_cache={},
+    )
     _, pivots = matrix.rref()
     return len(pivots), tuple(int(c) for c in pivots)
 
@@ -159,7 +212,16 @@ def symbolic_matrix_multiply(
 
     left = _domain_call(_validate_matrix_carrier, left)
     right = _domain_call(_validate_matrix_carrier, right)
-    _domain_call(_require_symbolic_product_admission, left, right)
+    symbols = symbols_for_variables(left.variables)
+    polynomial_cache: dict[tuple[tuple[str, ...], SparseRationalPolynomial], Any] = {}
+    value_cache: dict[RationalFunction, Any] = {}
+    _domain_call(
+        _require_symbolic_product_admission,
+        left,
+        right,
+        symbols=symbols,
+        polynomial_cache=polynomial_cache,
+    )
     # SymPy does not preserve a zero-row or zero-column dense matrix's second
     # axis.  The carrier owns those axes, so construct the zero product
     # directly whenever the backend has no nonempty dense representation.
@@ -171,7 +233,9 @@ def symbolic_matrix_multiply(
     ):
         import sympy
 
-        zero = rational_function_from_sympy(sympy.Integer(0), left.variables)
+        zero = rational_function_from_sympy(
+            sympy.Integer(0), left.variables, symbols=symbols
+        )
         return RationalFunctionMatrix(
             variables=left.variables,
             row_count=left.row_count,
@@ -181,14 +245,26 @@ def symbolic_matrix_multiply(
                 for _ in range(left.row_count)
             ),
         )
-    product = _matrix_from_values(left.entries) * _matrix_from_values(right.entries)
+    product = _matrix_from_values(
+        left.entries,
+        symbols=symbols,
+        polynomial_cache=polynomial_cache,
+        value_cache=value_cache,
+    ) * _matrix_from_values(
+        right.entries,
+        symbols=symbols,
+        polynomial_cache=polynomial_cache,
+        value_cache=value_cache,
+    )
     return RationalFunctionMatrix(
         variables=left.variables,
         row_count=left.row_count,
         column_count=right.column_count,
         entries=tuple(
             tuple(
-                rational_function_from_sympy(product[row, column], left.variables)
+                rational_function_from_sympy(
+                    product[row, column], left.variables, symbols=symbols
+                )
                 for column in range(product.cols)
             )
             for row in range(product.rows)
@@ -201,23 +277,50 @@ def symbolic_characteristic_polynomial(
     variables: tuple[str, ...],
 ) -> tuple[int, tuple[RationalFunction, ...]]:
     """Return (degree, descending coefficients) of det(lambda I - A)."""
-    _admit_characteristic(entries, variables)
-    return _symbolic_characteristic_polynomial_kernel(entries, variables)
+    symbols = symbols_for_variables(variables)
+    polynomial_cache: dict[tuple[tuple[str, ...], SparseRationalPolynomial], Any] = {}
+    value_cache: dict[RationalFunction, Any] = {}
+    _admit_characteristic(
+        entries,
+        variables,
+        symbols=symbols,
+        polynomial_cache=polynomial_cache,
+    )
+    return _symbolic_characteristic_polynomial_kernel(
+        entries,
+        variables,
+        symbols=symbols,
+        polynomial_cache=polynomial_cache,
+        value_cache=value_cache,
+    )
 
 
 def _symbolic_characteristic_polynomial_kernel(
     entries: tuple[tuple[RationalFunction, ...], ...],
     variables: tuple[str, ...],
+    *,
+    symbols: tuple[Any, ...] | None = None,
+    polynomial_cache: dict[tuple[tuple[str, ...], SparseRationalPolynomial], Any]
+    | None = None,
+    value_cache: dict[RationalFunction, Any] | None = None,
 ) -> tuple[int, tuple[RationalFunction, ...]]:
     import sympy
 
-    matrix = _matrix_from_values(entries)
+    if symbols is None:
+        symbols = symbols_for_variables(variables)
+    matrix = _matrix_from_values(
+        entries,
+        symbols=symbols,
+        polynomial_cache=polynomial_cache,
+        value_cache=value_cache,
+    )
     lam = sympy.Symbol("lambda")
     poly = (sympy.eye(matrix.rows) * lam - matrix).det(method="bareiss")
     expanded = sympy.Poly(poly, lam)
     coeffs = expanded.all_coeffs()
     return int(expanded.degree()), tuple(
-        rational_function_from_sympy(coefficient, variables) for coefficient in coeffs
+        rational_function_from_sympy(coefficient, variables, symbols=symbols)
+        for coefficient in coeffs
     )
 
 
@@ -249,6 +352,10 @@ def _require_native_system(
     entries: tuple[tuple[RationalFunction, ...], ...],
     rhs: tuple[RationalFunction, ...],
     variables: tuple[str, ...],
+    *,
+    symbols: tuple[Any, ...] | None = None,
+    polynomial_cache: dict[tuple[tuple[str, ...], SparseRationalPolynomial], Any]
+    | None = None,
 ) -> None:
     """Validate the complete mathematical request for direct native callers.
 
@@ -278,9 +385,14 @@ def _require_native_system(
     _require_canonical_symbolic_values(
         tuple(value for row in entries for value in row),
         label="symbolic matrix entry",
+        symbols=symbols,
+        polynomial_cache=polynomial_cache,
     )
     _require_canonical_symbolic_values(
-        rhs, label="symbolic linear-system right-hand side"
+        rhs,
+        label="symbolic linear-system right-hand side",
+        symbols=symbols,
+        polynomial_cache=polynomial_cache,
     )
 
 
@@ -300,12 +412,39 @@ def symbolic_linear_system_solve(
     """
     import sympy
 
+    symbols = symbols_for_variables(variables)
+    polynomial_cache: dict[tuple[tuple[str, ...], SparseRationalPolynomial], Any] = {}
+    value_cache: dict[RationalFunction, Any] = {}
     # Native callers bypass the wire envelope, so the complete mathematical
     # request is validated here before the backend runs.
-    _domain_call(_require_native_system, entries, rhs, variables)
+    _domain_call(
+        _require_native_system,
+        entries,
+        rhs,
+        variables,
+        symbols=symbols,
+        polynomial_cache=polynomial_cache,
+    )
 
-    matrix = _matrix_from_values(entries)
-    rhs_vec = sympy.Matrix([[rational_function_to_sympy(v) for v in rhs]]).T
+    matrix = _matrix_from_values(
+        entries,
+        symbols=symbols,
+        polynomial_cache=polynomial_cache,
+        value_cache=value_cache,
+    )
+    rhs_vec = sympy.Matrix(
+        [
+            [
+                rational_function_to_sympy(
+                    value,
+                    symbols=symbols,
+                    polynomial_cache=polynomial_cache,
+                    value_cache=value_cache,
+                )
+                for value in rhs
+            ]
+        ]
+    ).T
 
     aug = matrix.row_join(rhs_vec)
     rref_mat, pivots = aug.rref()
@@ -326,7 +465,7 @@ def symbolic_linear_system_solve(
         for i, pivot_col in enumerate(pivots):
             if pivot_col < n_cols:
                 solution[pivot_col] = rational_function_from_sympy(
-                    rref_mat[i, n_cols], variables
+                    rref_mat[i, n_cols], variables, symbols=symbols
                 )
         if len(solution) != n_cols:
             raise ValueError(
@@ -361,7 +500,7 @@ def symbolic_linear_system_solve(
                 variables=variables,
                 dimension=n_cols,
                 entries=tuple(
-                    rational_function_from_sympy(vec[i], variables)
+                    rational_function_from_sympy(vec[i], variables, symbols=symbols)
                     for i in range(n_cols)
                 ),
             )
@@ -372,12 +511,14 @@ def symbolic_linear_system_solve(
     # Set free variables to zero in the same augmented reduction.
     particular = []
     for _j in range(n_cols):
-        particular.append(rational_function_from_sympy(sympy.Integer(0), variables))
+        particular.append(
+            rational_function_from_sympy(sympy.Integer(0), variables, symbols=symbols)
+        )
 
     for i, pivot_col in enumerate(pivots):
         if pivot_col < n_cols:
             particular[pivot_col] = rational_function_from_sympy(
-                rref_mat[i, n_cols], variables
+                rref_mat[i, n_cols], variables, symbols=symbols
             )
 
     return (
@@ -417,6 +558,10 @@ def _require_square_entries(
 def _admit_determinant(
     entries: tuple[tuple[RationalFunction, ...], ...],
     variables: tuple[str, ...],
+    *,
+    symbols: tuple[Any, ...] | None = None,
+    polynomial_cache: dict[tuple[tuple[str, ...], SparseRationalPolynomial], Any]
+    | None = None,
 ) -> None:
     _domain_call(_require_matrix_structure, entries, variables)
     _domain_call(_require_square_entries, entries, "determinant")
@@ -429,12 +574,18 @@ def _admit_determinant(
         _require_canonical_symbolic_values,
         tuple(value for row in entries for value in row),
         label="symbolic determinant entry",
+        symbols=symbols,
+        polynomial_cache=polynomial_cache,
     )
 
 
 def _admit_characteristic(
     entries: tuple[tuple[RationalFunction, ...], ...],
     variables: tuple[str, ...],
+    *,
+    symbols: tuple[Any, ...] | None = None,
+    polynomial_cache: dict[tuple[tuple[str, ...], SparseRationalPolynomial], Any]
+    | None = None,
 ) -> None:
     _domain_call(_require_matrix_structure, entries, variables)
     _domain_call(_require_square_entries, entries, "characteristic polynomial")
@@ -447,4 +598,6 @@ def _admit_characteristic(
         _require_canonical_symbolic_values,
         tuple(value for row in entries for value in row),
         label="symbolic characteristic-polynomial entry",
+        symbols=symbols,
+        polynomial_cache=polynomial_cache,
     )

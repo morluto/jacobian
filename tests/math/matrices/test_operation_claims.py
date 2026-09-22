@@ -2,6 +2,7 @@
 
 import json
 from collections.abc import Callable
+from fractions import Fraction
 from typing import Any
 
 import pytest
@@ -65,6 +66,26 @@ def test_matrix_claim_checks_its_retained_source(kind: str) -> None:
         ["7" if kind == "adjugate" else {"num": "7", "den": "1"}]
     ]
     assert not verify(type(result).model_validate_json(json.dumps(payload)))
+
+
+def test_product_converts_each_source_scalar_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    matrix = RationalMatrix(entries=((_q(1), _q(2)), (_q(3), _q(4))))
+    original = CanonicalRational.as_fraction
+    conversions = 0
+
+    def counted(value: CanonicalRational) -> Fraction:
+        nonlocal conversions
+        conversions += 1
+        return original(value)
+
+    monkeypatch.setattr(CanonicalRational, "as_fraction", counted)
+
+    result = product_result(matrix, matrix)
+
+    assert result.product.entries[0][0] == _q(7)
+    assert conversions == 2 * matrix.row_count * matrix.column_count
 
 
 def test_product_rejects_mismatched_source_axes() -> None:

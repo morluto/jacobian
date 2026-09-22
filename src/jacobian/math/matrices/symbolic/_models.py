@@ -431,7 +431,12 @@ class RationalFunctionVectorBasis(StrictModel):
 
 
 def _require_canonical_symbolic_values(
-    values: tuple[RationalFunction, ...], *, label: str
+    values: tuple[RationalFunction, ...],
+    *,
+    label: str,
+    symbols: tuple[Any, ...] | None = None,
+    polynomial_cache: dict[tuple[tuple[str, ...], SparseRationalPolynomial], Any]
+    | None = None,
 ) -> None:
     """Recognize rational-function values after matrix-owned admission."""
 
@@ -442,6 +447,8 @@ def _require_canonical_symbolic_values(
             maximum_exponent=MAX_SYMBOLIC_RESULT_EXPONENT,
             maximum_coefficient_digits=MAX_SYMBOLIC_RESULT_COEFFICIENT_DIGITS,
             label=f"{label} {index}",
+            symbols=symbols,
+            polynomial_cache=polynomial_cache,
         )
 
 
@@ -602,6 +609,10 @@ def _polynomial_budget_violation(
 
 def _shared_common_denominator_bounds(
     factors: tuple[tuple[RationalFunction, RationalFunction], ...],
+    *,
+    symbols: tuple[Any, ...] | None = None,
+    polynomial_cache: dict[tuple[tuple[str, ...], SparseRationalPolynomial], Any]
+    | None = None,
 ) -> tuple[int, int, tuple[int, ...], tuple[int, ...], int, bool, int, bool] | None:
     """Return exact cell bounds for one shared product denominator, or None.
 
@@ -641,9 +652,20 @@ def _shared_common_denominator_bounds(
 
     from sympy import Poly
 
+    generators = symbols_for_variables(variables) if symbols is None else symbols
     pair_product_denominators = [
-        sparse_rational_polynomial_to_sympy(left_value.denominator, variables)
-        * sparse_rational_polynomial_to_sympy(right_value.denominator, variables)
+        sparse_rational_polynomial_to_sympy(
+            left_value.denominator,
+            variables,
+            symbols=generators,
+            cache=polynomial_cache,
+        )
+        * sparse_rational_polynomial_to_sympy(
+            right_value.denominator,
+            variables,
+            symbols=generators,
+            cache=polynomial_cache,
+        )
         for left_value, right_value in factors
     ]
     common_denominator = pair_product_denominators[0]
@@ -653,12 +675,19 @@ def _shared_common_denominator_bounds(
     ):
         return None
 
-    generators = symbols_for_variables(variables)
     numerator_sum = Poly(0, *generators, domain="QQ")
     for left_value, right_value in factors:
         numerator_sum += sparse_rational_polynomial_to_sympy(
-            left_value.numerator, variables
-        ) * sparse_rational_polynomial_to_sympy(right_value.numerator, variables)
+            left_value.numerator,
+            variables,
+            symbols=generators,
+            cache=polynomial_cache,
+        ) * sparse_rational_polynomial_to_sympy(
+            right_value.numerator,
+            variables,
+            symbols=generators,
+            cache=polynomial_cache,
+        )
 
     if numerator_sum.is_zero:
         zero_exponents = (0,) * len(variables)
@@ -709,6 +738,9 @@ def _product_cell_bounds(
     right: tuple[RationalFunction, ...],
     *,
     exact_shared_bounds: bool = True,
+    symbols: tuple[Any, ...] | None = None,
+    polynomial_cache: dict[tuple[tuple[str, ...], SparseRationalPolynomial], Any]
+    | None = None,
 ) -> tuple[int, int, tuple[int, ...], tuple[int, ...], int, bool, int, bool]:
     """Return raw work bounds and cancellation-safe canonical degree bounds.
 
@@ -778,7 +810,10 @@ def _product_cell_bounds(
             )
 
     return _expanded_product_cell_bounds(
-        factors, exact_shared_bounds=exact_shared_bounds
+        factors,
+        exact_shared_bounds=exact_shared_bounds,
+        symbols=symbols,
+        polynomial_cache=polynomial_cache,
     )
 
 
@@ -786,6 +821,9 @@ def _expanded_product_cell_bounds(
     factors: tuple[tuple[RationalFunction, RationalFunction], ...],
     *,
     exact_shared_bounds: bool = True,
+    symbols: tuple[Any, ...] | None = None,
+    polynomial_cache: dict[tuple[tuple[str, ...], SparseRationalPolynomial], Any]
+    | None = None,
 ) -> tuple[int, int, tuple[int, ...], tuple[int, ...], int, bool, int, bool]:
     """Bound a multi-factor cell by its unreduced common-denominator expansion.
 
@@ -853,7 +891,11 @@ def _expanded_product_cell_bounds(
                 1,
                 True,
             )
-        shared_bounds = _shared_common_denominator_bounds(factors)
+        shared_bounds = _shared_common_denominator_bounds(
+            factors,
+            symbols=symbols,
+            polynomial_cache=polynomial_cache,
+        )
         if shared_bounds is not None:
             return shared_bounds
 
@@ -959,39 +1001,62 @@ def _expanded_product_cell_bounds(
     )
 
 
-def _projected_expansion_terms(
-    left: RationalFunctionMatrix, right: RationalFunctionMatrix
-) -> int:
-    """Charge every cell the raw expansion its admitted shape must spend.
+type _ProductCellBounds = tuple[
+    int,
+    int,
+    tuple[int, ...],
+    tuple[int, ...],
+    int,
+    bool,
+    int,
+    bool,
+]
+type _ProjectedProductCell = tuple[
+    tuple[RationalFunction, ...],
+    tuple[RationalFunction, ...],
+    _ProductCellBounds,
+]
+
+
+def _projected_product_cells(
+    left: RationalFunctionMatrix,
+    right_columns: tuple[tuple[RationalFunction, ...], ...],
+) -> tuple[int, tuple[_ProjectedProductCell, ...]]:
+    """Charge cells once and retain bounds that need no exact fallback.
 
     A cell admitted through the exact shared-denominator fallback carries
-    exactly these raw product totals, and every other cell's cheap bounds
-    are already final, so the sum lower-bounds the aggregate expansion of
-    any request that survives admission.
+    exactly these raw product totals. Other cells' projected bounds are already
+    final and are reused by complete admission instead of rescanning the same
+    sparse values.
     """
 
     projected_expansion_terms = 0
+    cells: list[_ProjectedProductCell] = []
     for left_row in left.entries:
-        for right_column in zip(*right.entries, strict=True):
-            (
-                numerator_terms,
-                denominator_terms,
-                _numerator_exponents,
-                _denominator_exponents,
-                _maximum_coefficient_digits,
-                unit_denominator_factors,
-                _result_term_count,
-                _verified_no_cancellation,
-            ) = _product_cell_bounds(left_row, right_column, exact_shared_bounds=False)
+        for right_column in right_columns:
+            bounds = _product_cell_bounds(
+                left_row, right_column, exact_shared_bounds=False
+            )
+            cells.append((left_row, right_column, bounds))
+            numerator_terms, denominator_terms = bounds[:2]
+            unit_denominator_factors = bounds[5]
             projected_expansion_terms += numerator_terms
             if not unit_denominator_factors:
                 projected_expansion_terms += denominator_terms
-    return projected_expansion_terms
+            if projected_expansion_terms > MAX_SYMBOLIC_MATRIX_TERMS:
+                break
+        if projected_expansion_terms > MAX_SYMBOLIC_MATRIX_TERMS:
+            break
+    return projected_expansion_terms, tuple(cells)
 
 
 def _require_symbolic_product_admission(
     left: RationalFunctionMatrix,
     right: RationalFunctionMatrix,
+    *,
+    symbols: tuple[Any, ...] | None = None,
+    polynomial_cache: dict[tuple[tuple[str, ...], SparseRationalPolynomial], Any]
+    | None = None,
 ) -> None:
     """Prove that every exact product entry fits the canonical result value.
 
@@ -1000,10 +1065,10 @@ def _require_symbolic_product_admission(
     pairwise product denominator whose exact collected numerator admission
     proved coprime to the retained monic product, where reduction cannot
     trigger at all; anything else stays outside the admitted domain
-    because no pre-execution bound covers it. A cheap projection pass first
-    charges every cell the raw expansion the exact shared-denominator
-    admission spends when it succeeds, so a request above the aggregate
-    expansion budget is rejected before any SymPy conversion runs.
+    because no pre-execution bound covers it. After canonical input
+    recognition, a cheap projection pass charges every cell the raw expansion
+    the exact shared-denominator admission spends when it succeeds, so an
+    aggregate overflow is rejected before the exact fallback converts cells.
     """
 
     if left.variables != right.variables:
@@ -1018,89 +1083,104 @@ def _require_symbolic_product_admission(
             "the right row count",
         )
 
-    projected_expansion_terms = _projected_expansion_terms(left, right)
+    # Establish canonical mathematical values before any result-growth walk.
+    # Native carrier revalidation proves shape only; it does not make a forged
+    # or nonreduced rational-function value canonical.
+    for matrix_index, matrix in enumerate((left, right)):
+        _require_canonical_symbolic_values(
+            tuple(value for row in matrix.entries for value in row),
+            label=f"symbolic matrix {matrix_index} entry",
+            symbols=symbols,
+            polynomial_cache=polynomial_cache,
+        )
+
+    right_columns = tuple(zip(*right.entries, strict=True))
+    projected_expansion_terms, projected_cells = _projected_product_cells(
+        left, right_columns
+    )
     if projected_expansion_terms > MAX_SYMBOLIC_MATRIX_TERMS:
         raise _validation_error(
             "budget_exceeded",
             "symbolic matrix product exceeds the 512-term aggregate expansion budget",
         )
 
-    for matrix_index, matrix in enumerate((left, right)):
-        _require_canonical_symbolic_values(
-            tuple(value for row in matrix.entries for value in row),
-            label=f"symbolic matrix {matrix_index} entry",
-        )
-
     aggregate_expansion_terms = 0
     aggregate_result_terms = 0
-    for left_row in left.entries:
-        for right_column in zip(*right.entries, strict=True):
-            (
-                numerator_terms,
-                denominator_terms,
-                numerator_exponents,
-                denominator_exponents,
-                maximum_coefficient_digits,
-                unit_denominator_factors,
-                result_term_count,
-                verified_no_cancellation,
-            ) = _product_cell_bounds(left_row, right_column)
-            if result_term_count > MAX_SYMBOLIC_RESULT_TERMS:
-                # Raw scalar products are governed by the aggregate expansion
-                # budget below; this per-entry limit binds the already
-                # computed collected support of the canonical cell value.
-                raise _validation_error(
-                    "budget_exceeded",
-                    "symbolic matrix product exceeds the 256-term exact result budget",
-                )
-            if not (
-                unit_denominator_factors
-                or denominator_terms == 1
-                or verified_no_cancellation
-            ):
-                # Exact division by a non-monomial greatest common divisor can
-                # amplify coefficients far beyond the unreduced expansion
-                # (hidden cancellation inside the dividend), and no usable
-                # pre-execution height bound exists for that quotient. Cells
-                # whose common denominator has several terms therefore lack a
-                # coefficient bound and stay outside the admitted domain unless
-                # admission collected the shared product denominator's
-                # numerator sum and proved it coprime to the retained monic
-                # product. Unit
-                # denominators never cancel, and a monomial common denominator
-                # only loses monomial factors during cancellation (every
-                # divisor of a monomial is a monomial), so support and
-                # coefficient size stay within the raw expansion bounds.
-                raise _validation_error(
-                    "budget_exceeded",
-                    "symbolic matrix product cannot bound coefficient growth "
-                    "under cancellation by a multi-term denominator",
-                )
-            maximum_exponent = max(
-                (*numerator_exponents, *denominator_exponents), default=0
+    for left_row, right_column, projected_bounds in projected_cells:
+        bounds = projected_bounds
+        # A multi-term common denominator needs the bounded exact fallback.
+        # Unit and monomial-denominator projections are already complete.
+        if not (projected_bounds[5] or projected_bounds[1] == 1):
+            bounds = _product_cell_bounds(
+                left_row,
+                right_column,
+                symbols=symbols,
+                polynomial_cache=polynomial_cache,
             )
-            if maximum_exponent > MAX_SYMBOLIC_RESULT_EXPONENT:
-                raise _validation_error(
-                    "budget_exceeded",
-                    "symbolic matrix product exceeds the result exponent budget",
-                )
-            if maximum_coefficient_digits > MAX_SYMBOLIC_RESULT_COEFFICIENT_DIGITS:
-                raise _validation_error(
-                    "budget_exceeded",
-                    "symbolic matrix product exceeds the result coefficient budget",
-                )
-            # Unit denominators produce no denominator work at all, so the
-            # expansion charge counts only the scalar products that run.
-            aggregate_expansion_terms += numerator_terms
-            if not unit_denominator_factors:
-                aggregate_expansion_terms += denominator_terms
-            # Canonical result support is bounded separately from expansion
-            # work: every admitted cell carries exactly one canonical
-            # denominator term (unit or monomial), and cancellation in the
-            # admitted domain can only shrink collected numerator support,
-            # so result_term_count bounds the terms the returned
-            # RationalFunctionMatrix will validate.
-            aggregate_result_terms += result_term_count
+        (
+            numerator_terms,
+            denominator_terms,
+            numerator_exponents,
+            denominator_exponents,
+            maximum_coefficient_digits,
+            unit_denominator_factors,
+            result_term_count,
+            verified_no_cancellation,
+        ) = bounds
+        if result_term_count > MAX_SYMBOLIC_RESULT_TERMS:
+            # Raw scalar products are governed by the aggregate expansion
+            # budget below; this per-entry limit binds the already
+            # computed collected support of the canonical cell value.
+            raise _validation_error(
+                "budget_exceeded",
+                "symbolic matrix product exceeds the 256-term exact result budget",
+            )
+        if not (
+            unit_denominator_factors
+            or denominator_terms == 1
+            or verified_no_cancellation
+        ):
+            # Exact division by a non-monomial greatest common divisor can
+            # amplify coefficients far beyond the unreduced expansion
+            # (hidden cancellation inside the dividend), and no usable
+            # pre-execution height bound exists for that quotient. Cells
+            # whose common denominator has several terms therefore lack a
+            # coefficient bound and stay outside the admitted domain unless
+            # admission collected the shared product denominator's
+            # numerator sum and proved it coprime to the retained monic
+            # product. Unit denominators never cancel, and a monomial common
+            # denominator only loses monomial factors during cancellation
+            # (every divisor of a monomial is a monomial), so support and
+            # coefficient size stay within the raw expansion bounds.
+            raise _validation_error(
+                "budget_exceeded",
+                "symbolic matrix product cannot bound coefficient growth "
+                "under cancellation by a multi-term denominator",
+            )
+        maximum_exponent = max(
+            (*numerator_exponents, *denominator_exponents), default=0
+        )
+        if maximum_exponent > MAX_SYMBOLIC_RESULT_EXPONENT:
+            raise _validation_error(
+                "budget_exceeded",
+                "symbolic matrix product exceeds the result exponent budget",
+            )
+        if maximum_coefficient_digits > MAX_SYMBOLIC_RESULT_COEFFICIENT_DIGITS:
+            raise _validation_error(
+                "budget_exceeded",
+                "symbolic matrix product exceeds the result coefficient budget",
+            )
+        # Unit denominators produce no denominator work at all, so the
+        # expansion charge counts only the scalar products that run.
+        aggregate_expansion_terms += numerator_terms
+        if not unit_denominator_factors:
+            aggregate_expansion_terms += denominator_terms
+        # Canonical result support is bounded separately from expansion work:
+        # every admitted cell carries exactly one canonical denominator term
+        # (unit or monomial), and cancellation in the admitted domain can only
+        # shrink collected numerator support, so result_term_count bounds the
+        # terms the returned RationalFunctionMatrix will validate.
+        aggregate_result_terms += result_term_count
     if aggregate_expansion_terms > MAX_SYMBOLIC_MATRIX_TERMS:
         raise _validation_error(
             "budget_exceeded",

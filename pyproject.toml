@@ -94,6 +94,7 @@ markers = [
     "property: property-based invariant tests",
     "exhaustive: broad finite reference sweeps run by scheduled validation",
     "scale: optional near-envelope execution evidence",
+    "singular_catalog_example: advertised example owned by the Singular runtime lane",
 ]
 
 [tool.ruff]

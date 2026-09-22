@@ -1,8 +1,19 @@
 """Private FLINT adapters for exact finite Markov chains."""
 
 from fractions import Fraction
+from typing import Any
 
 from jacobian.math.probability.markov_chains.values import _TransitionMatrix
+
+
+def transition_matrix_to_flint(matrix: _TransitionMatrix) -> Any:
+    """Construct one request-local FLINT transition matrix."""
+
+    from flint import fmpq, fmpq_mat
+
+    return fmpq_mat(
+        [[fmpq(value.numerator, value.denominator) for value in row] for row in matrix]
+    )
 
 
 def mixing_time_search(
@@ -10,15 +21,16 @@ def mixing_time_search(
     stationary: tuple[Fraction, ...],
     epsilon: Fraction,
     max_steps: int,
+    *,
+    transition: Any | None = None,
 ) -> tuple[int | None, int, Fraction]:
     """Search exact worst-case total-variation distance through FLINT."""
 
     from flint import fmpq, fmpq_mat
 
     dimension = len(matrix)
-    transition = fmpq_mat(
-        [[fmpq(value.numerator, value.denominator) for value in row] for row in matrix]
-    )
+    if transition is None:
+        transition = transition_matrix_to_flint(matrix)
     power = fmpq_mat(dimension, dimension)
     for index in range(dimension):
         power[index, index] = 1
@@ -46,24 +58,36 @@ def mixing_time_search(
 
 
 def solve_stationary_class(
-    matrix: _TransitionMatrix, closed_class: tuple[int, ...]
+    matrix: _TransitionMatrix,
+    closed_class: tuple[int, ...],
+    *,
+    transition: Any | None = None,
 ) -> tuple[Fraction, ...]:
     """Solve the normalized stationary system on one closed class."""
 
     from flint import fmpq, fmpq_mat
 
     size = len(closed_class)
-    equations = [
-        [
-            fmpq(
-                matrix[closed_class[column]][closed_class[row]].numerator,
-                matrix[closed_class[column]][closed_class[row]].denominator,
-            )
-            - int(row == column)
-            for column in range(size)
+    if transition is None:
+        equations = [
+            [
+                fmpq(
+                    matrix[closed_class[column]][closed_class[row]].numerator,
+                    matrix[closed_class[column]][closed_class[row]].denominator,
+                )
+                - int(row == column)
+                for column in range(size)
+            ]
+            for row in range(size)
         ]
-        for row in range(size)
-    ]
+    else:
+        equations = [
+            [
+                transition[closed_class[column], closed_class[row]] - int(row == column)
+                for column in range(size)
+            ]
+            for row in range(size)
+        ]
     equations[-1] = [fmpq(1) for _ in range(size)]
     rhs = fmpq_mat([[0] for _ in range(size)])
     rhs[size - 1, 0] = 1
@@ -109,4 +133,9 @@ def solve_linear_system(
     ]
 
 
-__all__ = ["mixing_time_search", "solve_linear_system", "solve_stationary_class"]
+__all__ = [
+    "mixing_time_search",
+    "solve_linear_system",
+    "solve_stationary_class",
+    "transition_matrix_to_flint",
+]

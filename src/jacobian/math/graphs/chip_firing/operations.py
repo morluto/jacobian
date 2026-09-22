@@ -27,8 +27,11 @@ from jacobian.math.graphs.values import SimpleUndirectedGraph
 from jacobian.math.matrices.values import IntegerMatrix
 
 
-def _admit_connected(graph: SimpleUndirectedGraph) -> None:
-    if not _is_connected(graph):
+def _admit_connected(
+    graph: SimpleUndirectedGraph,
+    adjacency: tuple[tuple[int, ...], ...] | None = None,
+) -> None:
+    if not _is_connected(graph, adjacency):
         raise OperationDomainValidationError(
             location=("graph",),
             code="chip_firing.requires_connected_graph",
@@ -109,25 +112,53 @@ def _admit_configuration(
         )
 
 
-def _adjacency(graph: SimpleUndirectedGraph) -> tuple[tuple[int, ...], ...]:
-    """Build an adjacency-list representation from a canonical graph."""
-    n = len(graph.vertices)
-    idx = {v: i for i, v in enumerate(graph.vertices)}
-    adj: list[list[int]] = [[] for _ in range(n)]
-    for u, v in graph.edges:
-        i, j = idx[u], idx[v]
-        adj[i].append(j)
-        adj[j].append(i)
-    return tuple(tuple(row) for row in adj)
+def _graph_structure(
+    graph: SimpleUndirectedGraph,
+) -> tuple[tuple[tuple[int, ...], ...], tuple[int, ...]]:
+    """Build request-local adjacency and degrees in one source scan."""
+
+    rows: list[list[int]] = [[] for _ in graph.vertices]
+    indices = {vertex: index for index, vertex in enumerate(graph.vertices)}
+    for left, right in graph.edges:
+        left_index, right_index = indices[left], indices[right]
+        rows[left_index].append(right_index)
+        rows[right_index].append(left_index)
+    adjacency = tuple(tuple(row) for row in rows)
+    return adjacency, tuple(len(row) for row in adjacency)
 
 
-def _degrees(graph: SimpleUndirectedGraph) -> tuple[int, ...]:
-    idx = {v: i for i, v in enumerate(graph.vertices)}
-    deg = [0] * len(graph.vertices)
-    for u, v in graph.edges:
-        deg[idx[u]] += 1
-        deg[idx[v]] += 1
-    return tuple(deg)
+def _laplacian_entries(
+    adjacency: tuple[tuple[int, ...], ...], degrees: tuple[int, ...]
+) -> tuple[tuple[int, ...], ...]:
+    dimension = len(adjacency)
+    rows = []
+    for row in range(dimension):
+        neighbors = set(adjacency[row])
+        rows.append(
+            tuple(
+                degrees[row] if row == column else -int(column in neighbors)
+                for column in range(dimension)
+            )
+        )
+    return tuple(rows)
+
+
+def _reduced_laplacian_entries(
+    adjacency: tuple[tuple[int, ...], ...],
+    degrees: tuple[int, ...],
+    sink_index: int,
+) -> tuple[tuple[int, ...], ...]:
+    nonsink = tuple(index for index in range(len(adjacency)) if index != sink_index)
+    rows = []
+    for row in nonsink:
+        neighbors = set(adjacency[row])
+        rows.append(
+            tuple(
+                degrees[row] if row == column else -int(column in neighbors)
+                for column in nonsink
+            )
+        )
+    return tuple(rows)
 
 
 def laplacian(graph: SimpleUndirectedGraph) -> LaplacianResult:
@@ -135,26 +166,8 @@ def laplacian(graph: SimpleUndirectedGraph) -> LaplacianResult:
     _admit_graph(graph)
     vertices = graph.vertices
     n = len(vertices)
-    idx = {v: i for i, v in enumerate(vertices)}
-
-    adj = [[0] * n for _ in range(n)]
-    for u, v in graph.edges:
-        i, j = idx[u], idx[v]
-        adj[i][j] += 1
-        adj[j][i] += 1
-
-    laplacian = []
-    degrees = []
-    for i in range(n):
-        deg = sum(adj[i])
-        degrees.append(deg)
-        row = []
-        for j in range(n):
-            if i == j:
-                row.append(deg)
-            else:
-                row.append(-adj[i][j])
-        laplacian.append(tuple(row))
+    adjacency, degrees = _graph_structure(graph)
+    entries = _laplacian_entries(adjacency, degrees)
 
     return LaplacianResult(
         graph=graph,
@@ -162,9 +175,9 @@ def laplacian(graph: SimpleUndirectedGraph) -> LaplacianResult:
         laplacian=IntegerMatrix(
             row_count=n,
             column_count=n,
-            entries=tuple(tuple(int(value) for value in row) for row in laplacian),
+            entries=entries,
         ),
-        degrees=tuple(degrees),
+        degrees=degrees,
     )
 
 
@@ -174,12 +187,10 @@ def reduced_laplacian(
     """Delete the sink row/column from the full Laplacian."""
     _admit_sink(graph, sink)
     vertices = graph.vertices
-    n = len(vertices)
-    full = laplacian(graph)
-    lap = full.laplacian.entries
     sink_idx = vertices.index(sink)
-    nonsink = [i for i in range(n) if i != sink_idx]
-    reduced = tuple(tuple(lap[i][j] for j in nonsink) for i in nonsink)
+    nonsink = tuple(i for i in range(len(vertices)) if i != sink_idx)
+    adjacency, degrees = _graph_structure(graph)
+    reduced = _reduced_laplacian_entries(adjacency, degrees, sink_idx)
     return ReducedLaplacianResult(
         graph=graph,
         vertices=tuple(vertices[i] for i in nonsink),
@@ -204,23 +215,13 @@ def firing(
             message="firing vertex must be in the graph",
         )
     vertices = graph.vertices
-    n = len(vertices)
-    idx = {v: i for i, v in enumerate(vertices)}
-
-    adj = [[0] * n for _ in range(n)]
-    for u, v in graph.edges:
-        i, j = idx[u], idx[v]
-        adj[i][j] += 1
-        adj[j][i] += 1
-
-    fire_idx = idx[firing_vertex]
+    adjacency, degrees = _graph_structure(graph)
+    fire_idx = vertices.index(firing_vertex)
     result = list(divisor)
 
-    deg = sum(adj[fire_idx])
-    result[fire_idx] -= deg
-    for j in range(n):
-        if adj[fire_idx][j] > 0:
-            result[j] += adj[fire_idx][j]
+    result[fire_idx] -= degrees[fire_idx]
+    for neighbor in adjacency[fire_idx]:
+        result[neighbor] += 1
 
     return FiringResult(
         vertex=firing_vertex,
@@ -247,17 +248,13 @@ def fire_vector(
             code="chip_firing.coefficient_bound",
             message="firing vector coefficients exceed the digit bound",
         )
-    vertices = graph.vertices
-    n = len(vertices)
-    lap = tuple(
-        tuple(int(value) for value in row) for row in laplacian(graph).laplacian.entries
-    )
-    divisor_values = list(divisor)
-    f = firing_vector
+    adjacency, degrees = _graph_structure(graph)
     result = []
-    for i in range(n):
-        delta = sum(lap[i][j] * f[j] for j in range(n))
-        result.append(divisor_values[i] - delta)
+    for index, value in enumerate(divisor):
+        delta = degrees[index] * firing_vector[index] - sum(
+            firing_vector[neighbor] for neighbor in adjacency[index]
+        )
+        result.append(value - delta)
     return FireVectorResult(
         fired_divisor=tuple(result),
         degree_preserved=True,
@@ -314,14 +311,13 @@ def stabilize(
 ) -> StabilizeResult:
     """Stabilize a sink configuration and return the odometer."""
     _admit_configuration(graph, sink, configuration)
-    _admit_connected(graph)
+    adjacency, degrees = _graph_structure(graph)
+    _admit_connected(graph, adjacency)
     request_checkpoint("before chip-firing stabilization")
     vertices = graph.vertices
     sink_idx = vertices.index(sink)
-    adj = _adjacency(graph)
-    degrees = _degrees(graph)
     config = list(configuration)
-    eta, odometer = _stabilize_configuration(config, adj, degrees, sink_idx)
+    eta, odometer = _stabilize_configuration(config, adjacency, degrees, sink_idx)
     request_checkpoint("after chip-firing stabilization")
     return StabilizeResult(
         stable=tuple(eta),
@@ -337,8 +333,7 @@ def parallel_step(
     _admit_configuration(graph, sink, configuration)
     vertices = graph.vertices
     sink_idx = vertices.index(sink)
-    adj = _adjacency(graph)
-    degrees = _degrees(graph)
+    adjacency, degrees = _graph_structure(graph)
     config = list(configuration)
     fired = [
         v for i, v in enumerate(vertices) if i != sink_idx and config[i] >= degrees[i]
@@ -349,8 +344,8 @@ def parallel_step(
         next_config[vi] -= degrees[vi]
     for v in fired:
         vi = vertices.index(v)
-        for nb in adj[vi]:
-            next_config[nb] += 1
+        for neighbor in adjacency[vi]:
+            next_config[neighbor] += 1
     return ParallelStepResult(
         next_configuration=tuple(next_config),
         fired_vertices=tuple(fired),
@@ -368,14 +363,13 @@ def q_reduced(
     """
     _admit_divisor(graph, divisor)
     _admit_sink(graph, sink)
-    _admit_connected(graph)
+    adjacency, degrees = _graph_structure(graph)
+    _admit_connected(graph, adjacency)
     _admit_coefficient_height(divisor)
     request_checkpoint("before q-reduction")
     vertices = graph.vertices
     n = len(vertices)
     sink_idx = vertices.index(sink)
-    adj = _adjacency(graph)
-    degrees = _degrees(graph)
     config = list(divisor)
     total_firing = [0] * n
     nonsink = [i for i in range(n) if i != sink_idx]
@@ -389,7 +383,7 @@ def q_reduced(
         # Put x=Lq^-1*(D-deg), f=floor(x), r=x-f in [0,1)^n.
         # Then D-Lq*f=deg+Lq*r is >=0 and <2*deg coordinatewise.
         reduced = [
-            [degrees[i] if i == j else -int(j in adj[i]) for j in nonsink]
+            [degrees[i] if i == j else -int(j in adjacency[i]) for j in nonsink]
             for i in nonsink
         ]
         solution = fmpq_mat(reduced).solve(  # type: ignore[call-arg]  # python-flint 0.9 stubs omit documented algorithm.
@@ -402,7 +396,7 @@ def q_reduced(
             total_firing[i] = int(value.numerator) // int(value.denominator)
         for i in range(n):
             config[i] -= degrees[i] * total_firing[i] - sum(
-                total_firing[j] for j in adj[i]
+                total_firing[j] for j in adjacency[i]
             )
 
     # Initial nonsink mass < 2*sum(deg) <= 4m. The Green-function
@@ -410,7 +404,7 @@ def q_reduced(
     # 4m*(n-1)^2, including |S| for each Dhar set S. Thus this loop is
     # independent of divisor magnitude. Each burn pass costs O(n+m).
     while True:
-        config, odo = _stabilize_configuration(config, adj, degrees, sink_idx)
+        config, odo = _stabilize_configuration(config, adjacency, degrees, sink_idx)
         for i in nonsink:
             total_firing[i] += odo[i]
         request_checkpoint("during q-reduction Dhar burning")
@@ -419,7 +413,7 @@ def q_reduced(
         outgoing = [0] * n
         while pending:
             v = pending.popleft()
-            for j in adj[v]:
+            for j in adjacency[v]:
                 outgoing[j] += 1
                 if j not in burned and config[j] < outgoing[j]:
                     burned.add(j)
@@ -431,7 +425,7 @@ def q_reduced(
         # inside S have at least outdeg_S chips, so effectivity persists.
         for i in unburned:
             total_firing[i] += 1
-            for j in adj[i]:
+            for j in adjacency[i]:
                 if j in burned:
                     config[i] -= 1
                     config[j] += 1
@@ -458,7 +452,7 @@ def canonical_divisor(graph: SimpleUndirectedGraph) -> CanonicalDivisorResult:
     """Compute the canonical divisor K(v) = deg(v) - 2."""
     _admit_graph(graph)
     vertices = graph.vertices
-    degrees = _degrees(graph)
+    _adjacency, degrees = _graph_structure(graph)
     divisor = tuple(deg - 2 for deg in degrees)
     return CanonicalDivisorResult(
         vertices=vertices,
@@ -486,45 +480,41 @@ def _smith_normal_form_diagonal(
 def _critical_group_factors(
     graph: SimpleUndirectedGraph,
     sink: str,
+    adjacency: tuple[tuple[int, ...], ...],
+    degrees: tuple[int, ...],
 ) -> tuple[tuple[str, ...], tuple[int, ...]]:
     """Return (nonsink_vertices, invariant_factors) for the critical group."""
     vertices = graph.vertices
-    n = len(vertices)
     sink_idx = vertices.index(sink)
-    nonsink = [i for i in range(n) if i != sink_idx]
+    nonsink = [i for i in range(len(vertices)) if i != sink_idx]
     if not nonsink:
         return (), ()
-    idx = {vertex: index for index, vertex in enumerate(vertices)}
-    lap = [[0] * n for _ in range(n)]
-    for left, right in graph.edges:
-        i, j = idx[left], idx[right]
-        lap[i][i] += 1
-        lap[j][j] += 1
-        lap[i][j] -= 1
-        lap[j][i] -= 1
-    reduced = [[lap[i][j] for j in nonsink] for i in nonsink]
+    reduced = [
+        list(row) for row in _reduced_laplacian_entries(adjacency, degrees, sink_idx)
+    ]
     factors = _smith_normal_form_diagonal(reduced)
     nonsink_labels = tuple(vertices[i] for i in nonsink)
     invariant = tuple(d for d in factors if d != 0)
     return nonsink_labels, invariant
 
 
-def _is_connected(graph: SimpleUndirectedGraph) -> bool:
-    vertices = graph.vertices
-    if not vertices:
+def _is_connected(
+    graph: SimpleUndirectedGraph,
+    adjacency: tuple[tuple[int, ...], ...] | None = None,
+) -> bool:
+    if not graph.vertices:
         return False
-    neighbors: dict[str, set[str]] = {vertex: set() for vertex in vertices}
-    for left, right in graph.edges:
-        neighbors[left].add(right)
-        neighbors[right].add(left)
-    reached = {vertices[0]}
-    pending = [vertices[0]]
+    if adjacency is None:
+        adjacency, _degrees = _graph_structure(graph)
+    reached = {0}
+    pending = [0]
     while pending:
         vertex = pending.pop()
-        for neighbor in neighbors[vertex] - reached:
-            reached.add(neighbor)
-            pending.append(neighbor)
-    return len(reached) == len(vertices)
+        for neighbor in adjacency[vertex]:
+            if neighbor not in reached:
+                reached.add(neighbor)
+                pending.append(neighbor)
+    return len(reached) == len(graph.vertices)
 
 
 def critical_group(graph: SimpleUndirectedGraph, sink: str) -> CriticalGroupResult:
@@ -542,7 +532,8 @@ def critical_group(graph: SimpleUndirectedGraph, sink: str) -> CriticalGroupResu
             code="chip_firing.sink_not_in_graph",
             message="sink vertex must be in the graph",
         )
-    if not _is_connected(graph):
+    adjacency, degrees = _graph_structure(graph)
+    if not _is_connected(graph, adjacency):
         raise OperationDomainValidationError(
             location=("graph",),
             code="chip_firing.critical_group_requires_connected_graph",
@@ -557,7 +548,7 @@ def critical_group(graph: SimpleUndirectedGraph, sink: str) -> CriticalGroupResu
             code="chip_firing.critical_group_work_bound",
             message="reduced-Laplacian SNF exceeds the exact work bound",
         )
-    nonsink_labels, invariant = _critical_group_factors(graph, sink)
+    nonsink_labels, invariant = _critical_group_factors(graph, sink, adjacency, degrees)
     order = 1
     for d in invariant:
         order *= d
@@ -582,7 +573,8 @@ def abel_jacobi(
     """
     _admit_divisor(graph, divisor)
     _admit_sink(graph, sink)
-    _admit_connected(graph)
+    adjacency, degrees = _graph_structure(graph)
+    _admit_connected(graph, adjacency)
     _admit_coefficient_height(divisor)
     request_checkpoint("before Abel-Jacobi coordinates")
     if sum(divisor) != 0:
@@ -598,8 +590,7 @@ def abel_jacobi(
     from jacobian.math.graphs.chip_firing._snf_process import smith_coordinates
 
     matrix = [
-        [int(value) for value in row]
-        for row in reduced_laplacian(graph, sink).reduced_laplacian.entries
+        list(row) for row in _reduced_laplacian_entries(adjacency, degrees, sink_idx)
     ]
     invariant, coords = smith_coordinates(matrix, [divisor[i] for i in nonsink])
     request_checkpoint("after Abel-Jacobi coordinates")

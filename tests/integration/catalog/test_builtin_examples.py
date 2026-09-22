@@ -37,11 +37,22 @@ def _builtin_operations() -> tuple[MathTool[Any, Any], ...]:
     )
 
 
-@pytest.mark.parametrize(
-    "operation",
-    _builtin_operations(),
-    ids=lambda operation: operation.operation_id,
-)
+def _builtin_operation_parameters() -> tuple[Any, ...]:
+    return tuple(
+        pytest.param(
+            operation,
+            id=operation.operation_id,
+            marks=(
+                pytest.mark.singular_catalog_example
+                if operation.operation_id in _SINGULAR_OPERATION_IDS
+                else ()
+            ),
+        )
+        for operation in _builtin_operations()
+    )
+
+
+@pytest.mark.parametrize("operation", _builtin_operation_parameters())
 def test_advertised_invocation_example_executes_when_backend_is_available(
     operation: MathTool[Any, Any],
 ) -> None:

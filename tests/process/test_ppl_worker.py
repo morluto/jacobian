@@ -31,6 +31,23 @@ def test_ppl_worker_returns_exact_optimal_witness() -> None:
     assert result.dual == (Fraction(1),)
 
 
+def test_ppl_worker_batches_independent_exact_programs_in_one_process() -> None:
+    objective, coefficients, rhs = _source()
+    with request_execution(monotonic()):
+        bind_request_deadline(monotonic() + 10)
+        results = _ppl_process.solve_standard_form_batch_process(
+            (
+                (objective, coefficients, rhs),
+                ((Fraction(-1),), coefficients, rhs),
+            ),
+            maximum_result_digits=128,
+        )
+    assert tuple(result.status for result in results) == ("OPTIMAL", "OPTIMAL")
+    assert results[0].point == results[1].point == (Fraction(1),)
+    assert results[0].dual == (Fraction(1),)
+    assert results[1].dual == (Fraction(-1),)
+
+
 def test_ppl_worker_rejects_malformed_protocol_output(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -39,11 +56,15 @@ def test_ppl_worker_rejects_malformed_protocol_output(
         return decoder(
             {
                 "protocol_version": 1,
-                "status": "OPTIMAL",
-                "point": [["1", "1"]],
-                "dual": [],
-                "witness": [],
-                "ray": [],
+                "outcomes": [
+                    {
+                        "status": "OPTIMAL",
+                        "point": [["1", "1"]],
+                        "dual": [],
+                        "witness": [],
+                        "ray": [],
+                    }
+                ],
             }
         )
 
@@ -65,11 +86,15 @@ def test_ppl_worker_bounds_rationals_before_integer_parsing(
         return decoder(
             {
                 "protocol_version": 1,
-                "status": "OPTIMAL",
-                "point": [["1" * 129, "1"]],
-                "dual": [["1", "1"]],
-                "witness": [],
-                "ray": [],
+                "outcomes": [
+                    {
+                        "status": "OPTIMAL",
+                        "point": [["1" * 129, "1"]],
+                        "dual": [["1", "1"]],
+                        "witness": [],
+                        "ray": [],
+                    }
+                ],
             }
         )
 

@@ -19,6 +19,7 @@ PYTEST_DIAGNOSTIC_ARGS ?= --durations=10
 ORDINARY_MARKER_EXPRESSION := not property and not exhaustive and not scale
 RUFF_PATHS := src tests benchmarks typings
 PYTEST_RUNNER := $(UV_RUN) python tools/pytest_lifecycle.py
+MARKER_TEST_ROOTS := $(UV_RUN) python tools/marker_test_roots.py
 VALIDATION_LOCK := $(UV_RUN) python tools/with_validation_lock.py
 # Owner lanes cover every ordinary test root exactly once. CI runs
 # them independently; `make check-all` reproduces them locally in this order.
@@ -75,6 +76,12 @@ test-integration: ## Ordinary cross-owner mathematical seams (1 worker, 120s).
 		$(if $(TESTS),$(TESTS),tests/integration --ignore=tests/integration/catalog) \
 		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
 
+test-catalog-examples: ## Advertised invocation examples not owned by Singular.
+	$(UV_RUN) pytest -n 1 --dist worksteal --timeout=120 \
+		-m "$(ORDINARY_MARKER_EXPRESSION) and not singular_catalog_example" \
+		tests/integration/catalog/test_builtin_examples.py \
+		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
+
 test-focused: ## Edit loop: run explicit TESTS through its semantic LANE (for example, LANE=math).
 	@test -n "$(LANE)" || { echo "LANE is required, e.g. LANE=math" >&2; exit 2; }
 	@test -n "$(TESTS)" || { echo "TESTS is required, e.g. TESTS=tests/math/..." >&2; exit 2; }
@@ -117,7 +124,7 @@ test-process: ## Killable child-process boundaries (2 workers, 120s).
 test-mcp: ## MCP transport boundaries (2 workers, 120s).
 	$(PYTEST_RUNNER) --name mcp --timeout-seconds 4800 -- \
 		-n 2 --dist worksteal --timeout=120 --timeout-method=signal \
-		$(if $(TESTS),$(TESTS),tests/mcp) \
+		$(if $(TESTS),$(TESTS),tests/mcp tests/integration/catalog/test_mcp_builtin_examples.py) \
 		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
 
 test-singular: ## Pinned Singular exact-algebra backend (serial, 120s, kill-safe).
@@ -130,8 +137,11 @@ test-singular: ## Pinned Singular exact-algebra backend (serial, 120s, kill-safe
 		tests/process/polynomial_maps \
 		tests/math/geometry/algebraic_curves/test_projective_singularity_profile.py \
 		tests/process/geometry/test_projective_singularity_point_worker.py \
+		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
+	$(PYTEST_RUNNER) --name singular-catalog --timeout-seconds 300 -- \
+		-n 0 --timeout=120 --timeout-method=signal \
+		-m singular_catalog_example \
 		tests/integration/catalog/test_builtin_examples.py \
-		tests/integration/catalog/test_mcp_builtin_examples.py \
 		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
 
 test-qepcad: ## Pinned QEPCAD plane-topology backend (serial, kill-safe).
@@ -168,15 +178,17 @@ _test-full:
 	$(MAKE) test-cli
 	$(MAKE) test-tooling
 	$(MAKE) test-integration
+	$(MAKE) test-catalog-examples
 	$(MAKE) test-process
 	$(MAKE) test-mcp
 	$(MAKE) test-singular
 	$(MAKE) test-qepcad
 
 test-property: ## Run explicitly marked invariant checks once.
-	$(UV_RUN) pytest -n 0 --timeout=120 --timeout-method=thread -m property \
-		$(if $(TESTS),$(TESTS),tests) \
-		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
+	@tests="$(TESTS)"; \
+		if [ -z "$$tests" ]; then tests="$$($(MARKER_TEST_ROOTS) property)"; fi; \
+		$(UV_RUN) pytest -n 0 --timeout=120 --timeout-method=thread -m property \
+			$$tests $(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
 
 test-stress: ## Repeat explicitly marked property tests on the scheduled lane.
 	$(MAKE) test-property PYTEST_ARGS="--count=$(STRESS_COUNT) $(PYTEST_ARGS)"
@@ -185,17 +197,19 @@ test-scale: ## Run optional near-envelope mathematical execution evidence ($(SCA
 	$(VALIDATION_LOCK) run --target test-scale -- $(MAKE) _test-scale
 
 _test-scale:
-	$(UV_RUN) pytest -n $(SCALE_WORKERS) --dist worksteal --timeout=180 --timeout-method=thread -m scale \
-		$(if $(TESTS),$(TESTS),tests) \
-		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
+	@tests="$(TESTS)"; \
+		if [ -z "$$tests" ]; then tests="$$($(MARKER_TEST_ROOTS) scale)"; fi; \
+		$(UV_RUN) pytest -n $(SCALE_WORKERS) --dist worksteal --timeout=180 --timeout-method=thread -m scale \
+			$$tests $(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
 
 test-exhaustive: ## Broad finite reference sweeps reserved for scheduled validation (2 workers).
 	$(VALIDATION_LOCK) run --target test-exhaustive -- $(MAKE) _test-exhaustive
 
 _test-exhaustive:
-	$(UV_RUN) pytest -n 2 --dist worksteal --timeout=180 --timeout-method=thread -m exhaustive \
-		$(if $(TESTS),$(TESTS),tests) \
-		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
+	@tests="$(TESTS)"; \
+		if [ -z "$$tests" ]; then tests="$$($(MARKER_TEST_ROOTS) exhaustive)"; fi; \
+		$(UV_RUN) pytest -n 2 --dist worksteal --timeout=180 --timeout-method=thread -m exhaustive \
+			$$tests $(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
 
 test-ordering: ## Reproduce scheduled ordering (default seed 17; override with PYTEST_ARGS).
 	@test -n "$(ORDERING_LANE)" || { echo "ORDERING_LANE is required" >&2; exit 2; }

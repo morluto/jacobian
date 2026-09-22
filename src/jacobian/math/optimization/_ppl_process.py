@@ -73,73 +73,116 @@ def _decode_vector(
     )
 
 
+type _StandardFormData = tuple[
+    tuple[Fraction, ...],
+    tuple[tuple[Fraction, ...], ...],
+    tuple[Fraction, ...],
+]
+
+
+def _decode_outcome(
+    value: object,
+    *,
+    variables: int,
+    equations: int,
+    maximum_digits: int,
+) -> ExactLinearOutcome:
+    if not isinstance(value, dict) or set(value) != {
+        "status",
+        "point",
+        "dual",
+        "witness",
+        "ray",
+    }:
+        raise ValueError("PPL worker returned malformed outcome")
+    status = value["status"]
+    if status == "OPTIMAL":
+        return ExactLinearOutcome(
+            status=status,
+            point=_decode_vector(
+                value["point"], length=variables, maximum_digits=maximum_digits
+            ),
+            dual=_decode_vector(
+                value["dual"], length=equations, maximum_digits=maximum_digits
+            ),
+        )
+    if status == "INFEASIBLE":
+        return ExactLinearOutcome(
+            status=status,
+            witness=_decode_vector(
+                value["witness"], length=equations, maximum_digits=maximum_digits
+            ),
+        )
+    if status == "UNBOUNDED":
+        return ExactLinearOutcome(
+            status=status,
+            point=_decode_vector(
+                value["point"], length=variables, maximum_digits=maximum_digits
+            ),
+            ray=_decode_vector(
+                value["ray"], length=variables, maximum_digits=maximum_digits
+            ),
+        )
+    raise ValueError("PPL worker returned an invalid status")
+
+
 def _decoder(
-    variables: int, equations: int, maximum_digits: int
-) -> Callable[[object], ExactLinearOutcome]:
-    def decode(value: object) -> ExactLinearOutcome:
+    shapes: tuple[tuple[int, int], ...], maximum_digits: int
+) -> Callable[[object], tuple[ExactLinearOutcome, ...]]:
+    def decode(value: object) -> tuple[ExactLinearOutcome, ...]:
         if not isinstance(value, dict) or set(value) != {
             "protocol_version",
-            "status",
-            "point",
-            "dual",
-            "witness",
-            "ray",
+            "outcomes",
         }:
             raise ValueError("PPL worker returned malformed output")
         if value["protocol_version"] != _PROTOCOL_VERSION:
             raise ValueError("PPL worker returned an unsupported protocol version")
-        status = value["status"]
-        if status == "OPTIMAL":
-            return ExactLinearOutcome(
-                status=status,
-                point=_decode_vector(
-                    value["point"], length=variables, maximum_digits=maximum_digits
-                ),
-                dual=_decode_vector(
-                    value["dual"], length=equations, maximum_digits=maximum_digits
-                ),
+        outcomes = value["outcomes"]
+        if not isinstance(outcomes, list) or len(outcomes) != len(shapes):
+            raise ValueError("PPL worker returned a malformed outcome batch")
+        return tuple(
+            _decode_outcome(
+                outcome,
+                variables=variables,
+                equations=equations,
+                maximum_digits=maximum_digits,
             )
-        if status == "INFEASIBLE":
-            return ExactLinearOutcome(
-                status=status,
-                witness=_decode_vector(
-                    value["witness"], length=equations, maximum_digits=maximum_digits
-                ),
-            )
-        if status == "UNBOUNDED":
-            return ExactLinearOutcome(
-                status=status,
-                point=_decode_vector(
-                    value["point"], length=variables, maximum_digits=maximum_digits
-                ),
-                ray=_decode_vector(
-                    value["ray"], length=variables, maximum_digits=maximum_digits
-                ),
-            )
-        raise ValueError("PPL worker returned an invalid status")
+            for outcome, (variables, equations) in zip(outcomes, shapes, strict=True)
+        )
 
     return decode
 
 
-def solve_standard_form_process(
-    objective: tuple[Fraction, ...],
-    coefficients: tuple[tuple[Fraction, ...], ...],
-    rhs: tuple[Fraction, ...],
+def solve_standard_form_batch_process(
+    programs: tuple[_StandardFormData, ...],
     *,
     maximum_result_digits: int,
-) -> ExactLinearOutcome:
+) -> tuple[ExactLinearOutcome, ...]:
+    """Solve admitted independent programs in one killable worker request."""
+
+    if not programs:
+        return ()
     execution = current_request_execution()
     if execution is None or execution.deadline is None:
         raise RuntimeError("exact LP worker requires an owner-bound request deadline")
     payload = encode_strict_json(
         {
             "protocol_version": _PROTOCOL_VERSION,
-            "objective": [_encode_fraction(value) for value in objective],
-            "coefficients": [
-                [_encode_fraction(value) for value in row] for row in coefficients
+            "programs": [
+                {
+                    "objective": [_encode_fraction(value) for value in objective],
+                    "coefficients": [
+                        [_encode_fraction(value) for value in row]
+                        for row in coefficients
+                    ],
+                    "rhs": [_encode_fraction(value) for value in rhs],
+                }
+                for objective, coefficients, rhs in programs
             ],
-            "rhs": [_encode_fraction(value) for value in rhs],
         }
+    )
+    shapes = tuple(
+        (len(objective), len(rhs)) for objective, _coefficients, rhs in programs
     )
     try:
         with TemporaryDirectory(prefix="jacobian-ppl-") as worker_directory:
@@ -161,14 +204,29 @@ def solve_standard_form_process(
                     file_size_bytes=_FILE_SIZE_BYTES,
                 ),
                 cwd=worker_directory,
-                decode_result=_decoder(len(objective), len(rhs), maximum_result_digits),
+                decode_result=_decoder(shapes, maximum_result_digits),
             )
     except (OperationExecutionCancelledError, OperationExecutionTimeoutError):
         raise
     except OSError as exc:
         raise RuntimeError("bounded PPL worker could not be started") from exc
-    request_checkpoint("after exact PPL worker")
+    request_checkpoint("after exact PPL worker batch")
     return result
 
 
-__all__ = ["solve_standard_form_process"]
+def solve_standard_form_process(
+    objective: tuple[Fraction, ...],
+    coefficients: tuple[tuple[Fraction, ...], ...],
+    rhs: tuple[Fraction, ...],
+    *,
+    maximum_result_digits: int,
+) -> ExactLinearOutcome:
+    """Solve one admitted standard-form program through the bounded worker."""
+
+    return solve_standard_form_batch_process(
+        ((objective, coefficients, rhs),),
+        maximum_result_digits=maximum_result_digits,
+    )[0]
+
+
+__all__ = ["solve_standard_form_batch_process", "solve_standard_form_process"]

@@ -302,15 +302,16 @@ def compute_fixed_locus_kernel(
     else:
         minor = _submatrix(displacement, rows, columns)
         saturation_rows = _submatrix(image_saturation, rows, tuple(range(rank)))
-        selected_lifts = _rational_solve(fmpq_mat(minor), fmpq_mat(saturation_rows))
+        rational_minor = fmpq_mat(minor)
+        rational_saturation_rows = fmpq_mat(saturation_rows)
+        selected_lifts = _rational_solve(rational_minor, rational_saturation_rows)
         component_lifts = _zero_rational_matrix(dimension, rank)
         for row_index, ambient_row in enumerate(columns):
             for column in range(rank):
                 component_lifts[ambient_row, column] = selected_lifts[row_index, column]
-        saturation_minor = _submatrix(image_saturation, rows, tuple(range(rank)))
         displacement_rows = _submatrix(displacement, rows, tuple(range(dimension)))
         coordinates_rational = _rational_solve(
-            fmpq_mat(saturation_minor), fmpq_mat(displacement_rows)
+            rational_saturation_rows, fmpq_mat(displacement_rows)
         )
         image_coordinates = _require_integral(
             coordinates_rational, label="image-coordinate matrix"
@@ -335,7 +336,7 @@ def compute_fixed_locus_kernel(
                 for ambient_row in rows
             ],
         )
-        selected_base = _rational_solve(fmpq_mat(minor), rhs_minor)
+        selected_base = _rational_solve(rational_minor, rhs_minor)
         base_solution = _zero_rational_matrix(dimension, 1)
         for row_index, ambient_row in enumerate(columns):
             base_solution[ambient_row, 0] = selected_base[row_index, 0]

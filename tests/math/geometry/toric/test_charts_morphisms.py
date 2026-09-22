@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from itertools import product
+from time import monotonic
 
 import pytest
 from pydantic import ValidationError
@@ -217,6 +218,43 @@ def test_hilbert_basis_generates_every_nearby_semigroup_point() -> None:
             continue
         if _in_dual(point, cone_rays):
             assert point in generated, point
+
+
+def test_hilbert_reduction_shortcuts_exact_two_sum_witnesses() -> None:
+    candidates = tuple(
+        (first, second) for first in range(6) for second in range(6) if first or second
+    )
+    metrics = _kernel._HilbertReductionMetrics()
+
+    reduced = _kernel._minimal_hilbert_generators(
+        candidates,
+        2,
+        monotonic() + 10,
+        metrics=metrics,
+    )
+
+    assert reduced == ((0, 1), (1, 0))
+    assert metrics.candidate_checks == len(candidates)
+    assert metrics.solver_builds == metrics.solver_checks == len(reduced)
+    assert metrics.two_sum_redundancies == len(candidates) - len(reduced)
+    assert metrics.removed_generators == len(candidates) - len(reduced)
+    assert metrics.solver_seconds >= 0
+
+
+def test_hilbert_reduction_falls_back_for_longer_exact_combinations() -> None:
+    metrics = _kernel._HilbertReductionMetrics()
+
+    reduced = _kernel._minimal_hilbert_generators(
+        ((0, 1), (1, 0), (3, 0)),
+        2,
+        monotonic() + 10,
+        metrics=metrics,
+    )
+
+    assert reduced == ((0, 1), (1, 0))
+    assert metrics.two_sum_redundancies == 0
+    assert metrics.solver_checks == 3
+    assert metrics.removed_generators == 1
 
 
 def test_hilbert_basis_elements_are_indecomposable() -> None:

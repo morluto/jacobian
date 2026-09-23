@@ -51,6 +51,22 @@ def _brute_force(
     return rows
 
 
+@pytest.mark.parametrize(
+    ("member", "error_type"),
+    [
+        ((2, 1), "set_system.elements_not_sorted"),
+        ((1, 1), "set_system.duplicate_elements"),
+        ((2, 2, 1), "set_system.elements_not_sorted"),
+    ],
+)
+def test_source_member_order_validation_preserves_error_contract(
+    member: tuple[int, ...], error_type: str
+) -> None:
+    with pytest.raises(ValidationError) as error:
+        _family((member,))
+    assert error.value.errors()[0]["type"] == error_type
+
+
 def test_issue_fixture_three_petal_sunflowers() -> None:
     """The issue's fixture {01,02,04,05,12,45} with r=3 has four rows, core {0}."""
     source = _family(((0, 1), (0, 2), (0, 4), (0, 5), (1, 2), (4, 5)), ground=6)
@@ -166,7 +182,7 @@ def test_petal_count_below_two_is_rejected() -> None:
 
 def test_native_bool_petal_count_is_a_typed_domain_error() -> None:
     with pytest.raises(OperationDomainValidationError) as exc_info:
-        construct_sunflower_family(_family(((0,), (1,))), True)  # type: ignore[arg-type]
+        construct_sunflower_family(_family(((0,), (1,))), True)
     error = exc_info.value.errors()[0]
     assert error["loc"] == ("petal_count",)
     assert error["type"] == "set_system.sunflower.petal_count_type"
@@ -259,6 +275,7 @@ def test_qualifying_plan_stops_once_the_output_cannot_fit() -> None:
         construct_sunflower_family(source, 3)
 
 
+@pytest.mark.scale
 def test_large_core_allocation_is_checked_before_each_qualifying_row(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -299,6 +316,7 @@ def test_large_core_allocation_is_checked_before_each_qualifying_row(
     assert row_counts[-1] < 20
 
 
+@pytest.mark.scale
 def test_large_shared_core_family_is_admitted_at_the_real_bound() -> None:
     """The same 20-row family fits the 16M-unit envelope the kernel really has."""
 
@@ -309,6 +327,7 @@ def test_large_shared_core_family_is_admitted_at_the_real_bound() -> None:
     assert {row.core for row in result.sunflowers} == {core}
 
 
+@pytest.mark.scale
 def test_empty_cores_are_not_charged_at_an_unrelated_member_size() -> None:
     huge = tuple(range(100_000))
     isolates = tuple((100_000 + index,) for index in range(154))
@@ -325,6 +344,7 @@ def test_nested_chain_is_sunflower_free_without_candidate_output_rejection() -> 
     assert result.sunflower_free is True
 
 
+@pytest.mark.scale
 def test_sparse_large_member_does_not_price_every_pair_at_global_max() -> None:
     """A 10_000-set with 29 nested prefixes remains a cheap empty 4-sunflower search."""
     members = (
@@ -336,6 +356,7 @@ def test_sparse_large_member_does_not_price_every_pair_at_global_max() -> None:
     assert result.sunflower_free is True
 
 
+@pytest.mark.scale
 def test_core_bounds_are_summed_over_actual_candidates() -> None:
     """A 10_000/10_001 tail must not price every 4-candidate at the global max."""
     members = (
@@ -348,6 +369,7 @@ def test_core_bounds_are_summed_over_actual_candidates() -> None:
     assert result.sunflower_free is True
 
 
+@pytest.mark.scale
 def test_shared_core_allocation_is_rejected_while_enumerating() -> None:
     core = tuple(range(315))
     members = tuple((*core, 315 + index) for index in range(155))
@@ -370,6 +392,7 @@ def test_result_allocation_is_admitted_before_row_construction(
         construct_sunflower_family(source, 2)
 
 
+@pytest.mark.scale
 def test_r2_allocation_is_refused_while_enumerating(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -409,6 +432,7 @@ def test_r2_allocation_is_refused_while_enumerating(
     assert row_counts[-1] < 155 * 154 // 2
 
 
+@pytest.mark.scale
 def test_shared_core_allocation_is_admitted_at_the_real_bound() -> None:
     """A representable shared core is admitted by its actual coordinate widths.
 
@@ -426,6 +450,7 @@ def test_shared_core_allocation_is_admitted_at_the_real_bound() -> None:
     assert {row.core for row in result.sunflowers} == {core}
 
 
+@pytest.mark.scale
 def test_sole_edge_projection_is_charged_once() -> None:
     """A 300-element shared core fits once the removed duplicate ledger is not charged.
 
@@ -467,12 +492,14 @@ def test_cancellation_is_checkpointed_by_intersection_work(
     assert "before sunflower member expansion" in messages
 
 
+@pytest.mark.scale
 def test_exact_candidate_count_at_the_output_boundary_is_admitted() -> None:
     source = _family(tuple((index,) for index in range(155)), ground=155)
     result = construct_sunflower_family(source, 2)
     assert result.sunflower_count == 155 * 154 // 2
 
 
+@pytest.mark.scale
 def test_membership_bounds_apply_to_vacuous_requests() -> None:
     # A wide ambient axis is a scalar, so it is admitted on its own; the retained
     # work bound is the membership count, which is charged even when no petal
@@ -672,6 +699,7 @@ def test_compact_large_ground_set_is_admitted() -> None:
     assert type(result).model_validate_json(result.model_dump_json()) == result
 
 
+@pytest.mark.scale
 def test_large_ground_axis_charges_actual_membership_digits() -> None:
     """The ambient axis width is not multiplied across every coordinate."""
     from jacobian.math.combinatorics.extremal_sets._sunflower_r import (
@@ -712,10 +740,11 @@ def test_member_materialization_observes_cancellation(
     from jacobian._execution import (
         OperationExecutionCancelledError,
         request_cancellation,
+        request_checkpoint,
     )
 
     cancelled = Event()
-    original = sunflower_module.request_checkpoint
+    original = request_checkpoint
 
     def checkpoint(stage: str) -> None:
         original(stage)
@@ -741,10 +770,11 @@ def test_membership_digit_admission_observes_cancellation() -> None:
     from jacobian._execution import (
         OperationExecutionCancelledError,
         request_cancellation,
+        request_checkpoint,
     )
 
     cancelled = Event()
-    original = sunflower_module.request_checkpoint
+    original = request_checkpoint
 
     def checkpoint(stage: str) -> None:
         original(stage)

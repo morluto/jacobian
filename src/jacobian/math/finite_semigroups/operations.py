@@ -593,12 +593,11 @@ def local_structure(semigroup: FiniteSemigroup) -> LocalStructureResult:
     for e in idempotent_list:
         ei = idx[e]
         # eSe carrier: {e*s*e} in declared order.
-        seen_carrier: list[str] = []
+        seen_carrier: set[str] = set()
         for s in elements:
             value = multiplication[ei][idx[multiplication[idx[s]][ei]]]
-            if value not in seen_carrier:
-                seen_carrier.append(value)
-        carrier = tuple(a for a in elements if a in set(seen_carrier))
+            seen_carrier.add(value)
+        carrier = tuple(a for a in elements if a in seen_carrier)
         # Units of the local monoid with identity e.
         subgroup = tuple(
             a
@@ -802,13 +801,13 @@ def rees_quotient(
             code="finite_semigroup.ideal_not_declared",
             message="ideal elements must belong to the semigroup",
         )
-    if tuple(a for a in semigroup.elements if a in set(ideal)) != ideal:
+    ideal_set = set(ideal)
+    if tuple(a for a in semigroup.elements if a in ideal_set) != ideal:
         raise OperationDomainValidationError(
             location=("ideal",),
             code="finite_semigroup.ideal_order",
             message="ideal must use declared semigroup order without repeats",
         )
-    ideal_set = set(ideal)
     idx = {label: i for i, label in enumerate(semigroup.elements)}
     for s in semigroup.elements:
         for a in ideal:

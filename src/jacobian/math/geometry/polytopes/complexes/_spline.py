@@ -291,20 +291,20 @@ def piecewise_polynomial_from_maximal_pieces(
     complex_value = _admit_pieces(complex_value, pieces)
     by_id = {row.cell_id: row.polynomial for row in pieces}
     symbols = _poly_symbols(pieces[0].polynomial)
+    polynomials = {
+        cell_id: _to_poly(polynomial, symbols) for cell_id, polynomial in by_id.items()
+    }
     rows = []
     first_obstruction: tuple[str, RationalPolynomial] | None = None
     for face in complex_value.faces:
         supports = tuple(sorted(face.maximal_cell_ids))
         if len(supports) < 2 or face.dimension < 0:
             continue
+        ideal = _affine_ideal(face, symbols)
+        basis = sp.groebner(ideal, *symbols, domain=sp.QQ)
         for first, second in combinations(supports, 2):
-            left = _to_poly(by_id[first], symbols)
-            right = _to_poly(by_id[second], symbols)
-            difference = left - right
-            ideal = _affine_ideal(face, symbols)
-            remainder = sp.groebner(ideal, *symbols, domain=sp.QQ).reduce(
-                difference.as_expr()
-            )[1]
+            difference = polynomials[first] - polynomials[second]
+            remainder = basis.reduce(difference.as_expr())[1]
             reduced = _from_poly(
                 sp.Poly(remainder, *symbols, domain=sp.QQ),
                 tuple(complex_value.space.axes),

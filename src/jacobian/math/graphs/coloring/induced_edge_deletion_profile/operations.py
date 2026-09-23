@@ -463,7 +463,8 @@ def _compute_min_deletions_for_subset(  # noqa: C901
     if len(deleted) != k:
         raise RuntimeError("canonical deletion set has the wrong cardinality")
     # verify that G[S]-F is indeed r-colourable (reconstruction)
-    remaining_edges = [e for e in induced_edges if e not in set(deleted)]
+    deleted_set = set(deleted)
+    remaining_edges = [e for e in induced_edges if e not in deleted_set]
     if not _is_r_colorable_without_deletion(
         list(subset_vertices), remaining_edges, r, solver_conflicts
     ):

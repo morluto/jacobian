@@ -128,8 +128,9 @@ def _branch_sets_by_target(
             raise _MinorObstructionError(
                 "MISSING_BRANCH_SET", f"target {vertex!r} has no branch set"
             )
+    target_vertices = set(target.vertices)
     for branch in branch_sets:
-        if branch.target not in set(target.vertices):
+        if branch.target not in target_vertices:
             raise _MinorObstructionError(
                 "UNKNOWN_BRANCH_TARGET",
                 f"branch target {branch.target!r} is not a target vertex",
@@ -281,11 +282,9 @@ def check_minor_model(
         for vertex in target.vertices
     )
     used_vertices = tuple(vertex for vertex in source.vertices if vertex in occupied)
-    used_edges = tuple(
-        edge
-        for edge in source.edges
-        if edge in {witness.source_edge for witness in witnesses}
-    )
+    witness_edges = {witness.source_edge for witness in witnesses}
+    used_edges = tuple(edge for edge in source.edges if edge in witness_edges)
+    used_edges_set = set(used_edges)
     return MinorModelCheckResult._from_kernel(
         source=source,
         target=target,
@@ -302,7 +301,7 @@ def check_minor_model(
         ),
         used_source_edges=used_edges,
         deleted_source_edges=tuple(
-            edge for edge in source.edges if edge not in set(used_edges)
+            edge for edge in source.edges if edge not in used_edges_set
         ),
         obstruction_code=None,
         obstruction_detail=None,
@@ -546,8 +545,9 @@ def _branch_vertices_by_target(
             raise _MinorObstructionError(
                 "MISSING_BRANCH_VERTEX", f"target {vertex!r} has no branch vertex"
             )
+    target_vertices = set(target.vertices)
     for row in branch_vertices:
-        if row.target not in set(target.vertices):
+        if row.target not in target_vertices:
             raise _MinorObstructionError(
                 "UNKNOWN_BRANCH_TARGET",
                 f"branch target {row.target!r} is not a target vertex",
@@ -737,7 +737,7 @@ def check_topological_minor(
         ),
         used_source_edges=used_edges,
         deleted_source_edges=tuple(
-            edge for edge in source.edges if edge not in set(used_edges)
+            edge for edge in source.edges if edge not in used_edge_set
         ),
         obstruction_code=None,
         obstruction_detail=None,

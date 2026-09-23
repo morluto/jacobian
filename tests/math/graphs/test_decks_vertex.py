@@ -158,6 +158,13 @@ def test_defining_invariant_kelly_identities() -> None:
     order = len(graph.vertices)
     assert all(count == order - 2 for count in result.edge_appearances)
     assert all(count == order - 1 for count in result.vertex_appearances)
+    assert result.edge_appearances == tuple(
+        sum(edge in card.card.edges for card in result.cards) for edge in graph.edges
+    )
+    assert result.vertex_appearances == tuple(
+        sum(vertex in card.card.vertices for card in result.cards)
+        for vertex in graph.vertices
+    )
     assert sum(card.retained_edge_count for card in result.cards) == (order - 2) * len(
         graph.edges
     )

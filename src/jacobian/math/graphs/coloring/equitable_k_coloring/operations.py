@@ -93,6 +93,7 @@ def _backtracking_result(
         nx_graph.add_edge(u, v)
 
     vertices = list(graph.vertices)
+    vertex_index = {vertex: index for index, vertex in enumerate(vertices)}
 
     base = n // k
     remainder = n % k
@@ -113,7 +114,7 @@ def _backtracking_result(
             vertex = vertices[idx]
             ok = True
             for neighbor in nx_graph.neighbors(vertex):
-                neighbor_idx = vertices.index(neighbor)
+                neighbor_idx = vertex_index[neighbor]
                 if colors[neighbor_idx] == c:
                     ok = False
                     break

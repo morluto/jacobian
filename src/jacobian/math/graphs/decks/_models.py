@@ -69,8 +69,8 @@ class VertexDeletionFamily(StrictModel):
 
     One card per source vertex, each equal to direct deletion of its bound
     vertex. Deserialization establishes only the retained source and bounded
-    canonical shape. Kernel output uses ``_from_kernel`` after its trusted
-    bounded computation and counting replay.
+    canonical shape. Kernel output uses ``_from_kernel`` after bounded
+    construction; the appearance ledgers follow directly from deletion.
     """
 
     source: SimpleUndirectedGraph

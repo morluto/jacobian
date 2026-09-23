@@ -102,12 +102,13 @@ def trim_tree_automaton(
 
     profile = _build_reachable_state_profile(automaton)
     kept = tuple(sorted(set(profile.reachable_states) & _productive_states(automaton)))
+    kept_set = set(kept)
+    state_to_new = {state: index for index, state in enumerate(kept)}
     dropped = tuple(
-        state for state in range(automaton.state_count) if state not in set(kept)
+        state for state in range(automaton.state_count) if state not in kept_set
     )
     old_to_new = tuple(
-        kept.index(state) if state in set(kept) else -1
-        for state in range(automaton.state_count)
+        state_to_new.get(state, -1) for state in range(automaton.state_count)
     )
     if not kept:
         trimmed = BottomUpTreeAutomaton(

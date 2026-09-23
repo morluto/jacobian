@@ -871,20 +871,22 @@ def _pullback_vector(
 
     source_faces = _face_index(source, degree)
     target_faces = _face_index(target, degree)
+    source_vertex_index = {
+        vertex: index for index, vertex in enumerate(source.vertices)
+    }
     target_values = dict(zip(target_faces, coefficients, strict=True))
     pulled: list[int] = []
     for face in source.faces_by_dimension:
         if face.dimension != degree:
             continue
         for simplex in face.faces:
-            image = tuple(
-                vertex_map[source.vertices.index(vertex)] for vertex in simplex
-            )
+            image = tuple(vertex_map[source_vertex_index[vertex]] for vertex in simplex)
             if len(set(image)) != len(image):
                 pulled.append(0)
                 continue
             sorted_image = tuple(sorted(image))
-            order = tuple(sorted_image.index(label) for label in image)
+            image_position = {label: index for index, label in enumerate(sorted_image)}
+            order = tuple(image_position[label] for label in image)
             pulled.append(
                 (_permutation_sign(order) * target_values.get(sorted_image, 0)) % prime
             )

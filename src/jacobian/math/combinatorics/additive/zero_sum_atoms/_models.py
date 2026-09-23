@@ -187,10 +187,7 @@ class ZeroSumAtomHypergraphResult(StrictModel):
                 "hypergraph vertices must be decimal source indices in order",
             )
         for edge_id, members in self.hypergraph.edges:
-            expected = tuple(
-                str(index).zfill(label_width) for index in sorted(map(int, members))
-            )
-            if edge_id != ",".join(expected) or members != expected:
+            if members != tuple(sorted(members)) or edge_id != ",".join(members):
                 raise _validation_error(
                     "zero_sum_atom_edge_encoding",
                     "each edge ID and member tuple must encode increasing source indices",

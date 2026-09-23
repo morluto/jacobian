@@ -260,8 +260,8 @@ def direct_sum_predicate(
     right_values = {b % modulus for b in _parse_set(right)}
     representatives: dict[int, int] = {}
     collisions: set[int] = set()
-    for left_value in sorted(left_values):
-        for right_value in sorted(right_values):
+    for left_value in left_values:
+        for right_value in right_values:
             residue = (left_value + right_value) % modulus
             if residue in representatives:
                 collisions.add(residue)

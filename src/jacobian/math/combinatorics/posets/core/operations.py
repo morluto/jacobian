@@ -532,7 +532,7 @@ def width(poset: FinitePoset) -> PosetWidthResult:
     frontier: list[tuple[str, str]] = sorted(reachable_left)
     while frontier:
         left = frontier.pop()
-        for right in sorted(graph[left]):
+        for right in graph[left]:
             if raw_matching.get(left) == right or right in reachable_right:
                 continue
             reachable_right.add(right)
@@ -616,6 +616,7 @@ def _compute_mobius(
     graph.add_nodes_from(poset.elements)
     graph.add_edges_from((pair.lower, pair.upper) for pair in poset.strict_order_pairs)
     topological = tuple(nx.lexicographical_topological_sort(graph, key=str))
+    topological_position = {element: index for index, element in enumerate(topological)}
     closure = {(pair.lower, pair.upper) for pair in poset.strict_order_pairs}
     mu: dict[tuple[str, str], int] = {}
     contributions: dict[tuple[str, str], tuple[tuple[str, int], ...]] = {}
@@ -628,7 +629,7 @@ def _compute_mobius(
             terms = tuple(
                 sorted(
                     (middle, mu[(lower, middle)])
-                    for middle in topological[: topological.index(upper)]
+                    for middle in topological[: topological_position[upper]]
                     if middle == lower
                     or ((lower, middle) in closure and (middle, upper) in closure)
                 )

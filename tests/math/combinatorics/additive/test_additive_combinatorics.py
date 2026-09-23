@@ -275,6 +275,27 @@ class TestDirectSumPredicate:
         )
         result = _run_direct_sum(req)
         assert result.holds is False
+        assert result.collisions == (1,)
+        assert result.missing == (3,)
+
+    @pytest.mark.parametrize("collisions", [["2", "1"], ["1", "1"]])
+    def test_result_rejects_noncanonical_collision_diagnostics(
+        self, collisions: list[str]
+    ) -> None:
+        result = _run_direct_sum(
+            DirectSumPredicateRequest(
+                modulus=4,
+                left=FiniteIntegerSet(elements=(0, 1)),
+                right=FiniteIntegerSet(elements=(0, 1)),
+            )
+        )
+        payload = result.model_dump(mode="json")
+        payload["collisions"] = collisions
+        with pytest.raises(ValidationError) as error:
+            DirectSumPredicateResult.model_validate_json(json.dumps(payload))
+        assert error.value.errors()[0]["type"] == (
+            "additive_combinatorics.require_canonical_diagnostics"
+        )
 
     def test_z6_tiling(self) -> None:
         req = DirectSumPredicateRequest(

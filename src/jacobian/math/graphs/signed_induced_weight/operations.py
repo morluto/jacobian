@@ -219,12 +219,10 @@ def _lex_least_achiever(
         if _subset_value(chosen, scaled_edges) == target:
             return _declared_tuple(graph, chosen)
         candidates = sorted(
-            graph.vertices[index]
-            for index in range(last_position + 1, order)
-            if index not in chosen
+            (index for index in range(last_position + 1, order) if index not in chosen),
+            key=graph.vertices.__getitem__,
         )
-        for label in candidates:
-            index = graph.vertices.index(label)
+        for index in candidates:
             if (
                 _feasible_optimum(
                     admission,
@@ -253,9 +251,9 @@ def _with_free_isolates(
     ascending label order exactly when it shrinks the declared-order tuple.
     """
 
-    chosen = {graph.vertices.index(vertex) for vertex in witness}
-    for label in sorted(graph.vertices[index] for index in isolates):
-        index = graph.vertices.index(label)
+    vertex_index = {vertex: index for index, vertex in enumerate(graph.vertices)}
+    chosen = {vertex_index[vertex] for vertex in witness}
+    for index in sorted(isolates, key=graph.vertices.__getitem__):
         if index in chosen:
             continue
         candidate = _declared_tuple(graph, chosen | {index})

@@ -4,6 +4,7 @@ import json
 from collections import Counter
 from collections.abc import Iterator
 from contextlib import contextmanager
+from itertools import combinations
 from typing import Any
 
 import pytest
@@ -286,3 +287,31 @@ def test_extension_result_rejects_a_witness_that_drops_the_retained_base() -> No
     payload["extension"] = [0, 2, 4]
     with pytest.raises(ValidationError):
         CyclicDifferenceSetExtensionResult.model_validate_json(json.dumps(payload))
+
+
+def test_extension_search_matches_independent_small_cyclic_enumeration() -> None:
+    modulus = 7  # target order three
+    candidates = tuple(combinations(range(modulus), 3))
+    for base_size in range(1, 3):
+        for base in combinations(range(modulus), base_size):
+            expected = next(
+                (
+                    candidate
+                    for candidate in candidates
+                    if set(base) <= set(candidate)
+                    and len(
+                        {
+                            (left - right) % modulus
+                            for left in candidate
+                            for right in candidate
+                            if left != right
+                        }
+                    )
+                    == 3 * 2
+                ),
+                None,
+            )
+            result = decide_cyclic_difference_set_extension(
+                CyclicDifferenceSetExtensionRequest(base_elements=base, target_order=3)
+            )
+            assert result.extension == expected

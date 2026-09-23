@@ -242,7 +242,8 @@ def _require_adhesion_axes(
     expected = tuple(tuple(sorted(edge)) for edge in source.tree_edges)
     if tuple(row.edge for row in edges) != expected:
         raise ValueError("adhesions must retain the source tree-edge axis")
-    if any(not set(row.adhesion) <= set(source.graph.vertices) for row in edges):
+    graph_vertices = set(source.graph.vertices)
+    if any(not set(row.adhesion) <= graph_vertices for row in edges):
         raise ValueError("adhesions must use source graph vertices")
 
 

@@ -134,7 +134,10 @@ def _visit_extensions(
 ) -> tuple[int, ...] | None:
     remaining = target_order - len(selected)
     if remaining == 0:
-        return selected
+        # Candidate positions increase along each search path, but the fixed
+        # base may contain values above newly selected candidates. Keep paths
+        # cheap and canonicalize only the completed witness.
+        return tuple(sorted(selected))
     if len(available) - start < remaining:
         return None
     for position in range(start, len(available)):
@@ -143,7 +146,7 @@ def _visit_extensions(
         if local_mask is None:
             continue
         found = _visit_extensions(
-            tuple(sorted((*selected, candidate))),
+            (*selected, candidate),
             local_mask,
             position + 1,
             available,
@@ -164,7 +167,8 @@ def _find_extension(
     needed = target_order - len(base)
     if needed == 0:
         return base
-    available = tuple(value for value in range(modulus) if value not in set(base))
+    base_set = set(base)
+    available = tuple(value for value in range(modulus) if value not in base_set)
     return _visit_extensions(
         base,
         initial_mask,

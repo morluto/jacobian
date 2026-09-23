@@ -62,6 +62,24 @@ def _assert_operation_code(
     assert exc.value.errors()[0]["type"] == code
 
 
+def test_width_returns_a_matching_chain_cover_and_antichain() -> None:
+    poset = _materialize(["a", "b", "c", "d"], [("a", "b"), ("c", "d")])
+
+    result = width(poset)
+
+    assert result.width == 2
+    assert result.maximum_antichain == ("b", "d")
+    assert {
+        element for chain in result.minimum_chain_cover for element in chain.elements
+    } == {
+        "a",
+        "b",
+        "c",
+        "d",
+    }
+    assert len(result.minimum_chain_cover) == result.width
+
+
 def test_cover_relation_rejects_cycles_and_redundant_edges() -> None:
     with pytest.raises(OperationDomainValidationError) as exc:
         _materialize_request(

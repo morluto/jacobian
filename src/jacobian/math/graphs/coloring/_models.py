@@ -833,7 +833,8 @@ class ListCapacityEdgeColoringResult(StrictModel):
                     "graph.list_edge_coloring.assignment_length",
                     "the assignment must parallel the graph edges",
                 )
-            if any(color not in set(self.palette) for color in self.assignment):
+            palette = set(self.palette)
+            if any(color not in palette for color in self.assignment):
                 raise PydanticCustomError(
                     "graph.list_edge_coloring.assignment_palette",
                     "assigned colors must belong to the palette",

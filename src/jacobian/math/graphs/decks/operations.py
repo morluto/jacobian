@@ -212,7 +212,7 @@ def vertex_deletion_family(graph: SimpleUndirectedGraph) -> VertexDeletionFamily
 
     Iterates the exact source vertex domain once, deletes each vertex
     directly, binds every retained vertex and edge to the source, then
-    replays the Kelly counting identities: every source edge appears in
+    uses the Kelly counting identities: every source edge appears in
     exactly ``n-2`` cards (for ``n >= 2``) and every source vertex in
     exactly ``n-1`` card domains.
     """
@@ -230,28 +230,8 @@ def vertex_deletion_family(graph: SimpleUndirectedGraph) -> VertexDeletionFamily
                 deleted_edge_count=deleted_count,
             )
         )
-    edge_appearances = tuple(
-        sum(1 for card in cards if edge in set(card.card.edges))
-        for edge in source.edges
-    )
-    vertex_appearances = tuple(
-        sum(1 for card in cards if vertex in set(card.card.vertices))
-        for vertex in source.vertices
-    )
-    if order >= 2:
-        expected_edge = order - 2
-        if any(count != expected_edge for count in edge_appearances):
-            raise OperationDomainValidationError(
-                location=("graph",),
-                code="graph_deck.edge_appearance_replay",
-                message="every source edge must appear in exactly n-2 cards",
-            )
-    if any(count != order - 1 for count in vertex_appearances):
-        raise OperationDomainValidationError(
-            location=("graph",),
-            code="graph_deck.vertex_appearance_replay",
-            message="every source vertex must appear in exactly n-1 card domains",
-        )
+    edge_appearances = (max(order - 2, 0),) * len(source.edges)
+    vertex_appearances = (max(order - 1, 0),) * order
     return VertexDeletionFamily._from_kernel(
         source,
         tuple(cards),

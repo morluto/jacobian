@@ -244,8 +244,9 @@ class GraphMinimumSpanningTreeResult(StrictModel):
                 "graph.tree_edges_must_be_unique_and_canonically_sorted",
                 "tree edges must be unique and canonically sorted",
             )
+        vertices = set(self.vertices)
         if any(
-            endpoint not in set(self.vertices)
+            endpoint not in vertices
             for edge in self.tree_edges
             for endpoint in edge.endpoints
         ):

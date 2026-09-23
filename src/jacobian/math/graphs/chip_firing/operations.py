@@ -335,15 +335,16 @@ def parallel_step(
     sink_idx = vertices.index(sink)
     adjacency, degrees = _graph_structure(graph)
     config = list(configuration)
-    fired = [
-        v for i, v in enumerate(vertices) if i != sink_idx and config[i] >= degrees[i]
+    fired_indices = [
+        index
+        for index in range(len(vertices))
+        if index != sink_idx and config[index] >= degrees[index]
     ]
+    fired = [vertices[index] for index in fired_indices]
     next_config = list(config)
-    for v in fired:
-        vi = vertices.index(v)
+    for vi in fired_indices:
         next_config[vi] -= degrees[vi]
-    for v in fired:
-        vi = vertices.index(v)
+    for vi in fired_indices:
         for neighbor in adjacency[vi]:
             next_config[neighbor] += 1
     return ParallelStepResult(

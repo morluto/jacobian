@@ -1143,15 +1143,14 @@ class EliminationIdealResult(StrictModel):
 
     @model_validator(mode="after")
     def require_consistent_result(self) -> Self:
+        eliminated = set(self.eliminated_variables)
         for var in self.eliminated_variables:
             if var in self.elimination_ideal.variables:
                 raise _validation_error(
                     "eliminated variables must not appear in the elimination ideal"
                 )
         remaining = tuple(
-            variable
-            for variable in self.ideal.variables
-            if variable not in set(self.eliminated_variables)
+            variable for variable in self.ideal.variables if variable not in eliminated
         )
         if self.elimination_ideal.variables != remaining:
             raise _validation_error(

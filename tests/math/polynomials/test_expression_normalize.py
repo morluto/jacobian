@@ -87,6 +87,69 @@ def test_binomial_square_normalizes_without_parsing_strings() -> None:
     ] == [1, 2, 1]
 
 
+def test_product_orders_low_expansion_factors_first_with_exact_result() -> None:
+    def variable(name: str) -> dict[str, Any]:
+        return {"kind": "VARIABLE", "name": name}
+
+    large_support = {
+        "kind": "ADD",
+        "operands": [
+            {"kind": "POWER", "base": variable("x0"), "exponent": power}
+            for power in range(16)
+        ],
+    }
+    binomials = [
+        {
+            "kind": "ADD",
+            "operands": [
+                {"kind": "LITERAL", "value": {"num": 1, "den": 1}},
+                variable(f"x{index}"),
+            ],
+        }
+        for index in range(1, 7)
+    ]
+    factors = [large_support, *binomials]
+    source_order = {"kind": "MULTIPLY", "operands": factors}
+    reverse_order = {"kind": "MULTIPLY", "operands": list(reversed(factors))}
+    request = _request("QQ", source_order, variables=tuple(f"x{i}" for i in range(7)))
+    reverse_request = _request(
+        "QQ", reverse_order, variables=tuple(f"x{i}" for i in range(7))
+    )
+
+    assert isinstance(request.expression, PolynomialMultiply)
+    assert isinstance(reverse_request.expression, PolynomialMultiply)
+    planned = _metrics(request.expression)
+    reversed_planned = _metrics(reverse_request.expression)
+    source_children = [_metrics(factor) for factor in request.expression.operands]
+    source_fold_work = sum(child.work for child in source_children)
+    running_expansion = 1
+    for child in source_children:
+        source_fold_work += running_expansion * child.expansion_terms
+        running_expansion *= child.expansion_terms
+    assert planned.work < source_fold_work
+    assert planned.work == reversed_planned.work
+    assert source_fold_work - planned.work == 882
+
+    result = _normalize(request)
+    reversed_result = _normalize(reverse_request)
+    assert result.polynomial == reversed_result.polynomial
+    assert len(result.polynomial.polynomial.terms) == 1024
+
+    symbols = sympy.symbols("x0:7")
+    reference = sympy.expand(
+        sum(symbols[0] ** power for power in range(16))
+        * prod(1 + symbols[index] for index in range(1, 7))
+    )
+    assembled = sum(
+        sympy.Rational(term.coefficient.num, term.coefficient.den)
+        * prod(
+            symbol**power for symbol, power in zip(symbols, term.exponents, strict=True)
+        )
+        for term in result.polynomial.polynomial.terms
+    )
+    assert sympy.expand(assembled - reference) == 0
+
+
 def test_qq_accepts_and_zz_rejects_nonintegral_literals() -> None:
     literal = {"kind": "LITERAL", "value": {"num": 1, "den": 2}}
     assert normalize_polynomial_expression(_request("QQ", literal)).polynomial

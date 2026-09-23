@@ -416,12 +416,13 @@ def _solve_component_by_enumeration(
         for neighbor, weight in local_adjacency[changed]:
             current_value += weight if sides[neighbor] == old_side else -weight
         sides[changed] = not old_side
-        side_value = tuple(sides)
-        if current_value > best_value or (
-            current_value == best_value and side_value < best_sides
-        ):
+        if current_value > best_value:
             best_value = current_value
-            best_sides = side_value
+            best_sides = tuple(sides)
+        elif current_value == best_value:
+            side_value = tuple(sides)
+            if side_value < best_sides:
+                best_sides = side_value
     return _ComponentSolution(value=best_value, sides=best_sides)
 
 

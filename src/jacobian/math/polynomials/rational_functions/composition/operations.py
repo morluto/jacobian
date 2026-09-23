@@ -281,8 +281,15 @@ def _substitute_bound(
     polynomial: SparseRationalPolynomial,
     inner_bounds: tuple[FractionBound, ...],
     ledger: _Ledger,
+    *,
+    reuse_powers: bool = True,
 ) -> _SubstitutionBound:
-    """Bound a cleared-denominator substitution before any CAS expansion."""
+    """Bound a cleared-denominator substitution before any CAS expansion.
+
+    Reuse power bounds only when the non-monomial backend shares those exact
+    powers during substitution; the specialized monomial path retains per-use
+    accounting for its separate scalar-power execution.
+    """
     variable_count = len(inner_bounds[0].numerator.degrees) if inner_bounds else 0
     if not polynomial.terms:
         return _SubstitutionBound(
@@ -293,11 +300,28 @@ def _substitute_bound(
         max(term.exponents[axis] for term in polynomial.terms)
         for axis in range(len(inner_bounds))
     )
+    power_cache: dict[tuple[int, str, int], PolynomialBound] = {}
+
+    def power(
+        axis: int, kind: str, source: PolynomialBound, exponent: int
+    ) -> PolynomialBound:
+        # Keep the estimate cache aligned with concrete numerator/denominator
+        # powers in ``substitute``. Distinct axes may have equal bounds without
+        # representing the same polynomial, so bounds alone are not a safe key.
+        if not reuse_powers:
+            return _power(source, exponent, variable_count, ledger)
+        key = (axis, kind, exponent)
+        cached = power_cache.get(key)
+        if cached is None:
+            cached = _power(source, exponent, variable_count, ledger)
+            power_cache[key] = cached
+        return cached
+
     denominator = _one_polynomial(variable_count)
-    for bound, exponent in zip(inner_bounds, powers, strict=True):
+    for axis, (bound, exponent) in enumerate(zip(inner_bounds, powers, strict=True)):
         denominator = _multiply_polynomials(
             denominator,
-            _power(bound.denominator, exponent, variable_count, ledger),
+            power(axis, "denominator", bound.denominator, exponent),
             ledger,
         )
         _check_raw_exponents(denominator)
@@ -307,25 +331,25 @@ def _substitute_bound(
         coefficient = term.coefficient.as_fraction()
         # A zero inner coordinate annihilates this monomial when its exponent
         # is positive. The denominator is still formed from its canonical one.
-        for bound, exponent, common_power in zip(
-            inner_bounds, term.exponents, powers, strict=True
+        for axis, (bound, exponent, common_power) in enumerate(
+            zip(inner_bounds, term.exponents, powers, strict=True)
         ):
             if bound.is_zero and exponent:
                 product = _zero_polynomial(variable_count)
                 break
             product = _multiply_polynomials(
                 product,
-                _power(bound.numerator, exponent, variable_count, ledger),
+                power(axis, "numerator", bound.numerator, exponent),
                 ledger,
             )
             _check_raw_exponents(product)
             product = _multiply_polynomials(
                 product,
-                _power(
+                power(
+                    axis,
+                    "denominator",
                     bound.denominator,
                     common_power - exponent,
-                    variable_count,
-                    ledger,
                 ),
                 ledger,
             )
@@ -612,10 +636,16 @@ def compose_maps(  # noqa: C901
 
     for outer_component in outer.components:
         outer_numerator_bound = _substitute_bound(
-            outer_component.numerator, inner_bounds, ledger
+            outer_component.numerator,
+            inner_bounds,
+            ledger,
+            reuse_powers=not use_monomial_path,
         )
         outer_denominator_bound = _substitute_bound(
-            outer_component.denominator, inner_bounds, ledger
+            outer_component.denominator,
+            inner_bounds,
+            ledger,
+            reuse_powers=not use_monomial_path,
         )
         raw_numerator_bound = _multiply_polynomials(
             outer_numerator_bound.numerator,
@@ -788,17 +818,30 @@ def compose_maps(  # noqa: C901
             max(term.exponents[axis] for term in polynomial.terms)
             for axis in range(len(inner_components))
         )
+        power_cache: dict[tuple[int, str, int], Any] = {}
+
+        def substitution_power(kind: str, axis: int, exponent: int) -> Any:
+            key = (axis, kind, exponent)
+            cached_power = power_cache.get(key)
+            if cached_power is None:
+                source = inner_num[axis] if kind == "numerator" else inner_den[axis]
+                cached_power = source**exponent
+                power_cache[key] = cached_power
+            return cached_power
+
         common_denominator = Poly(1, *xgens, domain="QQ")
-        for denominator, exponent in zip(inner_den, powers, strict=True):
-            common_denominator *= denominator**exponent
+        for axis, exponent in enumerate(powers):
+            common_denominator *= substitution_power("denominator", axis, exponent)
         numerator = Poly(0, *xgens, domain="QQ")
         for term in polynomial.terms:
             request_checkpoint("during rational map composition substitution term")
             value = Poly(term.coefficient.as_fraction(), *xgens, domain="QQ")
-            for num, den, exponent, max_exponent in zip(
-                inner_num, inner_den, term.exponents, powers, strict=True
+            for axis, (exponent, max_exponent) in enumerate(
+                zip(term.exponents, powers, strict=True)
             ):
-                value *= num**exponent * den ** (max_exponent - exponent)
+                value *= substitution_power("numerator", axis, exponent) * (
+                    substitution_power("denominator", axis, max_exponent - exponent)
+                )
             numerator += value
         return numerator, common_denominator
 

@@ -904,7 +904,10 @@ def _product_total_coefficient_digits(
     )
 
 
-def _metrics(expression: PolynomialExpression) -> _ExpressionMetrics:
+def _metrics(
+    expression: PolynomialExpression,
+    multiply_orders: dict[int, tuple[int, ...]] | None = None,
+) -> _ExpressionMetrics:
     denominator: int | None
     if isinstance(expression, PolynomialLiteral):
         _admit_literal(expression.value)
@@ -961,7 +964,7 @@ def _metrics(expression: PolynomialExpression) -> _ExpressionMetrics:
             ),
         )
     if isinstance(expression, PolynomialPower):
-        base = _metrics(expression.base)
+        base = _metrics(expression.base, multiply_orders)
         exponent = expression.exponent
         if exponent == 0:
             # A zero power is the constant one and never expands the base, so
@@ -1133,14 +1136,29 @@ def _metrics(expression: PolynomialExpression) -> _ExpressionMetrics:
             single_term=_single_term_power(base.single_term, exponent),
         )
     if isinstance(expression, (PolynomialAdd, PolynomialMultiply)):
-        return _nary_expression_metrics(expression)
+        return _nary_expression_metrics(expression, multiply_orders)
     raise TypeError("expression kind is not a polynomial operator")
 
 
 def _nary_expression_metrics(  # noqa: C901
     expression: PolynomialAdd | PolynomialMultiply,
+    multiply_orders: dict[int, tuple[int, ...]] | None = None,
 ) -> _ExpressionMetrics:
-    child_metrics = [_metrics(operand) for operand in expression.operands]
+    indexed_children = [
+        (index, _metrics(operand, multiply_orders))
+        for index, operand in enumerate(expression.operands)
+    ]
+    if isinstance(expression, PolynomialMultiply):
+        # Multiplication is commutative. Grow the running product from the
+        # smallest admitted expansion bound so sparse factors do not inflate
+        # every subsequent pairwise convolution. The same stable plan drives
+        # admission and evaluation.
+        indexed_children.sort(key=lambda row: (row[1].expansion_terms, row[0]))
+        if multiply_orders is not None:
+            multiply_orders[id(expression)] = tuple(
+                index for index, _ in indexed_children
+            )
+    child_metrics = [metrics for _, metrics in indexed_children]
     nodes = min(_MAX_EXPRESSION_NODES + 1, 1 + sum(row.nodes for row in child_metrics))
     variables = frozenset().union(*(row.variables for row in child_metrics))
     if isinstance(expression, PolynomialAdd):
@@ -1679,7 +1697,8 @@ def normalize_polynomial_expression(  # noqa: C901
     source = _revalidate_expression_source(source)
     _admit_source_domain_claims(source)
     _bound_source_expression(source.expression)
-    metrics = _metrics(source.expression)
+    multiply_orders: dict[int, tuple[int, ...]] = {}
+    metrics = _metrics(source.expression, multiply_orders)
     if (
         metrics.nodes > _MAX_EXPRESSION_NODES
         or metrics.support > MAX_POLYNOMIAL_TERMS
@@ -1741,8 +1760,9 @@ def normalize_polynomial_expression(  # noqa: C901
             return result
         if isinstance(expression, PolynomialMultiply):
             result = {zero_exp: Fraction(1)}
-            for operand in expression.operands:
-                result = _multiply(result, evaluate(operand))
+            order = multiply_orders[id(expression)]
+            for index in order:
+                result = _multiply(result, evaluate(expression.operands[index]))
             return result
         if expression.exponent == 0:
             # A zero power is the constant one; do not expand the base, which

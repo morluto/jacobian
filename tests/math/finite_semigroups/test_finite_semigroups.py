@@ -228,6 +228,32 @@ class TestFiniteSemigroup:
         sg = _finite_semigroup(NULL_SG)
         assert sg.elements == ("0", "x", "y")
 
+    def test_associativity_check_matches_exhaustive_two_element_tables(self) -> None:
+        # Independently check all 2^(2*2) labeled binary operations against
+        # the defining triple identity, including both successful and failing
+        # operation-level checks.
+        for encoded in range(16):
+            table = tuple(
+                tuple(str((encoded >> (2 * i + j)) & 1) for j in range(2))
+                for i in range(2)
+            )
+            semigroup = FiniteSemigroup(elements=("0", "1"), multiplication=table)
+            expected = all(
+                table[int(table[i][j])][k] == table[i][int(table[j][k])]
+                for i in range(2)
+                for j in range(2)
+                for k in range(2)
+            )
+            if expected:
+                idempotents(semigroup)
+            else:
+                with pytest.raises(OperationDomainValidationError) as error:
+                    idempotents(semigroup)
+                assert (
+                    error.value.errors()[0]["type"]
+                    == "finite_semigroup.not_associative"
+                )
+
     def test_non_associative_rejected(self) -> None:
         # (a*b)*a = b*a = c, but a*(b*a) = a*c = a, so non-associative
         semigroup = FiniteSemigroup.model_validate(

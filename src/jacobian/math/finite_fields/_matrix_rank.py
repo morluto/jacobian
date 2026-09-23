@@ -76,8 +76,8 @@ def compute_rank(request: MatrixRankRequest) -> MatrixRankResult:
 def verify_matrix_rank(claim: MatrixRankResult) -> bool:
     """Check rank equality and nonsingularity of the declared pivot minor.
 
-    The native axis carrier bounds each axis by 1024 and the field order by
-    65536. Two eliminations cost at most twice 1024 cubed field operations.
+    The matrix value carrier bounds each axis by 256 and the field order by
+    65536. Two eliminations cost at most twice 256 cubed field operations.
     They share one field admission and one execution deadline. Any full-rank
     minor is accepted, independently of the producer's pivot selection.
     """

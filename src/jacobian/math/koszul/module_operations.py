@@ -18,6 +18,8 @@ from jacobian.math.koszul.module_models import (
     FiniteCommutativeAlgebra,
     ModuleDifferential,
     ModuleKoszulComplex,
+    ModuleKoszulDifferentialRequest,
+    ModuleKoszulDifferentialValue,
     ModuleKoszulHomology,
     ModuleKoszulRequest,
 )
@@ -357,4 +359,95 @@ def module_koszul_homology(
         dimensions=tuple(dimensions),
         cycle_dimensions=tuple(cycles),
         boundary_dimensions=tuple(boundaries),
+    )
+
+
+def module_koszul_differential(
+    request: ModuleKoszulDifferentialRequest | Mapping[str, Any],
+) -> ModuleKoszulDifferentialValue:
+    """Compute one exact degree of a finite-module Koszul differential.
+
+    Only the requested differential and its predecessor are materialized. The
+    latter is used to replay the adjacent square-zero identity.
+    """
+    try:
+        payload = (
+            request.model_dump()
+            if isinstance(request, ModuleKoszulDifferentialRequest)
+            else request
+        )
+        value = ModuleKoszulDifferentialRequest.model_validate(payload)
+        source = _as_request(value.request)
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="koszul.module.differential_request",
+            message="the degree-specific module Koszul request is not canonical",
+        ) from exc
+    _admit(source.module, source.sequence)
+    degree = value.degree
+    length = len(source.sequence)
+    module_dimension = len(source.module.basis)
+
+    def differential_at(
+        k: int,
+    ) -> tuple[
+        tuple[tuple[int, ...], ...], tuple[tuple[int, ...], ...], ModuleDifferential
+    ]:
+        source_wedges = tuple(combinations(range(length), k))
+        target_wedges = tuple(combinations(range(length), k - 1))
+        target_index = {wedge: index for index, wedge in enumerate(target_wedges)}
+        entries: list[tuple[int, int, CanonicalRational]] = []
+        actions = {
+            index: _action_matrix(source.module, element)
+            for index, element in enumerate(source.sequence)
+        }
+        for wedge_column, wedge in enumerate(source_wedges):
+            for position, sequence_index in enumerate(wedge):
+                sign = -1 if position % 2 else 1
+                target = wedge[:position] + wedge[position + 1 :]
+                for row in range(module_dimension):
+                    for column in range(module_dimension):
+                        coefficient = sign * actions[sequence_index][row][column]
+                        if coefficient:
+                            entries.append(
+                                (
+                                    target_index[target] * module_dimension + row,
+                                    wedge_column * module_dimension + column,
+                                    CanonicalRational.from_fraction(coefficient),
+                                )
+                            )
+        return (
+            source_wedges,
+            target_wedges,
+            ModuleDifferential(
+                row_count=len(target_wedges) * module_dimension,
+                column_count=len(source_wedges) * module_dimension,
+                entries=tuple(sorted(entries, key=lambda entry: (entry[0], entry[1]))),
+            ),
+        )
+
+    source_wedges, target_wedges, differential = differential_at(degree)
+    if degree > 1:
+        _, _, predecessor = differential_at(degree - 1)
+        outer, inner = _dense(predecessor), _dense(differential)
+        for row in range(len(outer)):
+            for column in range(len(inner[0]) if inner else 0):
+                if sum(
+                    outer[row][middle] * inner[middle][column]
+                    for middle in range(len(inner))
+                ):
+                    raise OperationDomainValidationError(
+                        location=("request", "degree"),
+                        code="koszul.module.differential_square",
+                        message="the selected differential fails the exact adjacent d^2=0 check",
+                    )
+    return ModuleKoszulDifferentialValue(
+        algebra=source.algebra,
+        module=source.module,
+        sequence=source.sequence,
+        degree=degree,
+        source_wedges=source_wedges,
+        target_wedges=target_wedges,
+        differential=differential,
     )

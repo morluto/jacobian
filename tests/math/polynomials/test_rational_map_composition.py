@@ -5,6 +5,7 @@ from itertools import product
 from time import monotonic
 
 import pytest
+import sympy
 from sympy import symbols
 
 from jacobian._execution import OperationExecutionTimeoutError, request_execution
@@ -217,9 +218,19 @@ def test_substitution_bound_reuses_repeated_exact_powers(
 
     monkeypatch.setattr(operations, "_power", count_power)
     operations._substitute_bound(polynomial, inner, ledger)
+    # The numerator and denominator bounds happen to be structurally equal,
+    # but represent distinct backend polynomials; each is powered once.
     repeated = (inner[1].numerator, 3)
-    assert calls.count(repeated) == 1
+    assert calls.count(repeated) == 2
 
+    backend_powers: list[tuple[object, int]] = []
+    original_poly_power = sympy.Poly.__pow__
+
+    def count_backend_power(poly: sympy.Poly, exponent: int) -> sympy.Poly:
+        backend_powers.append((poly.as_expr(), exponent))
+        return original_poly_power(poly, exponent)
+
+    monkeypatch.setattr(sympy.Poly, "__pow__", count_backend_power)
     inner_map = _map(
         ("x",),
         ("u", "v"),
@@ -231,6 +242,7 @@ def test_substitution_bound_reuses_repeated_exact_powers(
         (_rf(u**2 * v**3 + u * v**3, (u, v)),),
     )
     result = compose_maps(outer_map, inner_map)
+    assert backend_powers.count((x + 2, 3)) == 1
     expected = ((x + 1) ** 2 / (x + 2) ** 2 + (x + 1) / (x + 2)) * (
         (x + 2) / (x + 3)
     ) ** 3

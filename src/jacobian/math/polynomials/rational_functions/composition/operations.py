@@ -293,11 +293,21 @@ def _substitute_bound(
         max(term.exponents[axis] for term in polynomial.terms)
         for axis in range(len(inner_bounds))
     )
+    power_cache: dict[tuple[PolynomialBound, int], PolynomialBound] = {}
+
+    def power(source: PolynomialBound, exponent: int) -> PolynomialBound:
+        key = (source, exponent)
+        cached = power_cache.get(key)
+        if cached is None:
+            cached = _power(source, exponent, variable_count, ledger)
+            power_cache[key] = cached
+        return cached
+
     denominator = _one_polynomial(variable_count)
     for bound, exponent in zip(inner_bounds, powers, strict=True):
         denominator = _multiply_polynomials(
             denominator,
-            _power(bound.denominator, exponent, variable_count, ledger),
+            power(bound.denominator, exponent),
             ledger,
         )
         _check_raw_exponents(denominator)
@@ -315,18 +325,13 @@ def _substitute_bound(
                 break
             product = _multiply_polynomials(
                 product,
-                _power(bound.numerator, exponent, variable_count, ledger),
+                power(bound.numerator, exponent),
                 ledger,
             )
             _check_raw_exponents(product)
             product = _multiply_polynomials(
                 product,
-                _power(
-                    bound.denominator,
-                    common_power - exponent,
-                    variable_count,
-                    ledger,
-                ),
+                power(bound.denominator, common_power - exponent),
                 ledger,
             )
             _check_raw_exponents(product)

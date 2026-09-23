@@ -10,6 +10,7 @@ from sympy import symbols
 from jacobian._execution import OperationExecutionTimeoutError, request_execution
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.polynomials._conversions import rational_function_from_sympy
+from jacobian.math.polynomials.rational_functions import _bounds as rational_bounds
 from jacobian.math.polynomials.rational_functions.composition import (
     RationalFunctionMapComposition,
     compose_maps,
@@ -188,6 +189,52 @@ def test_monomial_fast_path_handles_every_outer_component() -> None:
         _rf(y**3 + 2 * x, (x, y)),
         _rf(y - 4 * x**2, (x, y)),
     )
+
+
+def test_substitution_bound_reuses_repeated_exact_powers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import jacobian.math.polynomials.rational_functions.composition.operations as operations
+
+    x, u, v = symbols("x u v")
+    polynomial = _rf(u**2 * v**3 + u * v**3, (u, v)).numerator
+    ledger = operations._Ledger()
+    inner = (
+        rational_bounds._fraction_bound(_rf((x + 1) / (x + 2), (x,)), ledger),
+        rational_bounds._fraction_bound(_rf((x + 2) / (x + 3), (x,)), ledger),
+    )
+    calls: list[tuple[object, int]] = []
+    original_power = operations._power
+
+    def count_power(
+        source: rational_bounds.PolynomialBound,
+        exponent: int,
+        variable_count: int,
+        work: operations._Ledger,
+    ) -> rational_bounds.PolynomialBound:
+        calls.append((source, exponent))
+        return original_power(source, exponent, variable_count, work)
+
+    monkeypatch.setattr(operations, "_power", count_power)
+    operations._substitute_bound(polynomial, inner, ledger)
+    repeated = (inner[1].numerator, 3)
+    assert calls.count(repeated) == 1
+
+    inner_map = _map(
+        ("x",),
+        ("u", "v"),
+        (_rf((x + 1) / (x + 2), (x,)), _rf((x + 2) / (x + 3), (x,))),
+    )
+    outer_map = _map(
+        ("u", "v"),
+        ("z",),
+        (_rf(u**2 * v**3 + u * v**3, (u, v)),),
+    )
+    result = compose_maps(outer_map, inner_map)
+    expected = ((x + 1) ** 2 / (x + 2) ** 2 + (x + 1) / (x + 2)) * (
+        (x + 2) / (x + 3)
+    ) ** 3
+    assert result.composite.components == (_rf(expected, (x,)),)
 
 
 def test_sparse_eight_axis_degree_sixty_four_composition_is_admitted() -> None:

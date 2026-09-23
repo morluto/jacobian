@@ -31,7 +31,7 @@ def _require_associative(semigroup: FiniteSemigroup) -> None:
     from pydantic_core import PydanticCustomError
 
     try:
-        semigroup._check_associativity(set(semigroup.elements))
+        semigroup._check_associativity()
     except PydanticCustomError as exc:
         raise OperationDomainValidationError(
             location=("semigroup",), code=exc.type, message=exc.message()

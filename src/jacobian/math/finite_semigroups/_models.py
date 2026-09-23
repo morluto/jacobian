@@ -51,17 +51,20 @@ class FiniteSemigroup(StrictModel):
                     )
         return self
 
-    def _check_associativity(self, labels: set[str]) -> None:
-        idx = {label: i for i, label in enumerate(self.elements)}
+    def _check_associativity(self) -> None:
+        # Encode the multiplication table once. The cubic associativity loop
+        # then performs integer indexing instead of repeated label hash lookups.
+        index = {label: i for i, label in enumerate(self.elements)}
+        table = tuple(
+            tuple(index[result] for result in row) for row in self.multiplication
+        )
         n = len(self.elements)
         for i in range(n):
             for j in range(n):
+                ij = table[i][j]
                 for k in range(n):
-                    ij = self.multiplication[i][j]
-                    jk = self.multiplication[j][k]
-                    left = self.multiplication[idx[ij]][k]
-                    right = self.multiplication[i][idx[jk]]
-                    if left != right:
+                    jk = table[j][k]
+                    if table[ij][k] != table[i][jk]:
                         raise _validation_error(
                             "not_associative",
                             f"semigroup must be associative: "

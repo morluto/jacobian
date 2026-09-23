@@ -371,6 +371,40 @@ def test_public_contract_explains_bounds_without_private_kernel_details() -> Non
     )
 
 
+def test_exhaustive_fallback_preserves_lexicographic_tie_break(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    graph = _cycle(5)
+    monkeypatch.setattr(
+        _maximum_cut, "_solve_component_with_z3", lambda _analysis, _index: None
+    )
+
+    result = _validated_result(graph)
+    candidates = (
+        (
+            False,
+            *(bool(mask & (1 << index)) for index in range(len(graph.vertices) - 1)),
+        )
+        for mask in range(1 << (len(graph.vertices) - 1))
+    )
+    indexed_edges = tuple(
+        (graph.vertices.index(left), graph.vertices.index(right))
+        for left, right in graph.edges
+    )
+    expected = min(
+        candidates,
+        key=lambda sides: (
+            -sum(sides[left] != sides[right] for left, right in indexed_edges),
+            sides,
+        ),
+    )
+
+    assert (
+        tuple(vertex in result.right_vertices for vertex in graph.vertices) == expected
+    )
+    _assert_cut_invariant(result)
+
+
 def test_bounded_exhaustive_fallback_preserves_an_exact_result(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

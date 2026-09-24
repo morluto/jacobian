@@ -29,6 +29,7 @@ _SUBMODULES = frozenset(
         "optimization",
         "polynomials",
         "probability",
+        "quaternions",
         "topology",
         "universal_algebra",
     }
@@ -64,6 +65,7 @@ __all__ = [
     "optimization",
     "polynomials",
     "probability",
+    "quaternions",
     "topology",
     "universal_algebra",
 ]

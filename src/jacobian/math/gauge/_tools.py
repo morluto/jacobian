@@ -6,13 +6,28 @@ from jacobian.math.gauge._models import (
     GaugeTransformResult,
     HolonomyRequest,
     HolonomyResult,
+    PermutationWilsonTraceRequest,
+    PermutationWilsonTraceResult,
     PlaquetteRequest,
     PlaquetteResult,
 )
+from jacobian.math.gauge._su2_models import (
+    SU2GaugeTransformRequest,
+    SU2GaugeTransformResult,
+    SU2HolonomyRequest,
+    SU2HolonomyResult,
+    SU2WilsonTraceResult,
+)
+from jacobian.math.gauge.observables import permutation_wilson_trace
 from jacobian.math.gauge.operations import (
     gauge_transform,
     path_holonomy,
     plaquette_curvature,
+)
+from jacobian.math.gauge.su2 import (
+    su2_gauge_transform,
+    su2_path_holonomy,
+    su2_wilson_trace,
 )
 
 
@@ -26,6 +41,24 @@ def _run_plaquette(request: PlaquetteRequest) -> PlaquetteResult:
 
 def _run_holonomy(request: HolonomyRequest) -> HolonomyResult:
     return path_holonomy(request.field, request.path)
+
+
+def _run_permutation_wilson(
+    request: PermutationWilsonTraceRequest,
+) -> PermutationWilsonTraceResult:
+    return permutation_wilson_trace(request)
+
+
+def _run_su2_transform(request: SU2GaugeTransformRequest) -> SU2GaugeTransformResult:
+    return su2_gauge_transform(request)
+
+
+def _run_su2_holonomy(request: SU2HolonomyRequest) -> SU2HolonomyResult:
+    return su2_path_holonomy(request)
+
+
+def _run_su2_wilson(request: SU2HolonomyResult) -> SU2WilsonTraceResult:
+    return su2_wilson_trace(request)
 
 
 _TRIANGLE_FIELD = {
@@ -51,13 +84,102 @@ _TRIANGLE_PATH = {
         {"edge_id": "ca", "forward": True},
     ]
 }
+_TRIVIAL_FIELD = {
+    "lattice": {
+        "vertices": ["v"],
+        "edges": [{"edge_id": "loop", "tail": "v", "head": "v"}],
+    },
+    "degree": 1,
+    "edge_labels": [{"edge_id": "loop", "label": {"degree": 1, "image": [0]}}],
+}
+_SU2_IDENTITY = {
+    "coordinates": [
+        {"num": "1", "den": "1"},
+        {"num": "0", "den": "1"},
+        {"num": "0", "den": "1"},
+        {"num": "0", "den": "1"},
+    ]
+}
+_SU2_FIELD = {
+    "lattice": {
+        "vertices": ["v0", "v1", "v2", "v3"],
+        "edges": [
+            {"edge_id": "e0", "tail": "v0", "head": "v1"},
+            {"edge_id": "e1", "tail": "v1", "head": "v2"},
+            {"edge_id": "e2", "tail": "v2", "head": "v3"},
+            {"edge_id": "e3", "tail": "v3", "head": "v0"},
+        ],
+    },
+    "edge_values": [
+        {
+            "edge_id": "e0",
+            "value": {
+                "coordinates": [
+                    {"num": "3", "den": "5"},
+                    {"num": "4", "den": "5"},
+                    {"num": "0", "den": "1"},
+                    {"num": "0", "den": "1"},
+                ]
+            },
+        },
+        {
+            "edge_id": "e1",
+            "value": {
+                "coordinates": [
+                    {"num": "5", "den": "13"},
+                    {"num": "0", "den": "1"},
+                    {"num": "12", "den": "13"},
+                    {"num": "0", "den": "1"},
+                ]
+            },
+        },
+        {
+            "edge_id": "e2",
+            "value": {
+                "coordinates": [
+                    {"num": "8", "den": "17"},
+                    {"num": "0", "den": "1"},
+                    {"num": "0", "den": "1"},
+                    {"num": "15", "den": "17"},
+                ]
+            },
+        },
+        {
+            "edge_id": "e3",
+            "value": {
+                "coordinates": [
+                    {"num": "0", "den": "1"},
+                    {"num": "1", "den": "1"},
+                    {"num": "0", "den": "1"},
+                    {"num": "0", "den": "1"},
+                ]
+            },
+        },
+    ],
+}
+_SU2_PATH = {"steps": [{"edge_id": f"e{i}", "forward": True} for i in range(4)]}
+_SU2_PLAQUETTE = {
+    "coordinates": [
+        {"num": "-140", "den": "221"},
+        {"num": "-120", "den": "221"},
+        {"num": "609", "den": "1105"},
+        {"num": "12", "den": "1105"},
+    ]
+}
+_SU2_HOLONOMY_INPUT = {
+    "field": _SU2_FIELD,
+    "path": _SU2_PATH,
+    "holonomy": _SU2_PLAQUETTE,
+    "start": "v0",
+    "end": "v0",
+}
 
 TOOLS = (
     MathTool(
         operation_id="lattice_gauge.transform.compute",
         title="Apply an exact finite gauge transformation to an edge field",
         description=(
-            "Apply the typed nonabelian transformation U'_e=h_tail^-1 U_e h_head "
+            "Apply the typed nonabelian transformation U'_e=g_tail U_e g_head^-1 "
             "to every edge of a permutation-valued lattice field, retaining the "
             "source lattice, group degree, and complete vertex-frame map."
         ),
@@ -101,6 +223,34 @@ TOOLS = (
         ),
     ),
     MathTool(
+        operation_id="lattice_gauge.permutation.wilson_trace.compute",
+        title="Compute an exact permutation-representation Wilson trace",
+        description=(
+            "For a closed path over a finite permutation-valued gauge field, "
+            "compute its ordered holonomy and the exact character of the "
+            "natural degree-d permutation representation, equal to the number "
+            "of fixed points of that holonomy."
+        ),
+        request_type=PermutationWilsonTraceRequest,
+        result_type=PermutationWilsonTraceResult,
+        run=_run_permutation_wilson,
+        tags=("lattice-gauge", "wilson-loop", "character", "permutation", "exact"),
+        discovery_terms=(
+            "finite group Wilson loop character",
+            "permutation representation trace of holonomy",
+        ),
+        examples=(
+            OperationExample(
+                name="triangle_permutation_wilson_trace",
+                description=(
+                    "The three equal 3-cycle link labels compose to the "
+                    "identity, so the natural representation trace is three."
+                ),
+                input={"field": _TRIANGLE_FIELD, "path": _TRIANGLE_PATH},
+            ),
+        ),
+    ),
+    MathTool(
         operation_id="lattice_gauge.holonomy.compute",
         title="Compute the ordered exact holonomy of a lattice gauge field",
         description=(
@@ -109,7 +259,8 @@ TOOLS = (
             "the ordered exact group product Hol = U_{e_1} ... U_{e_m} under "
             "the left-to-right convention with the per-edge contribution map "
             "and start/end vertices. Backward steps resolve to exact inverses, "
-            "so reverse traversal gives the inverse holonomy."
+            "so reverse traversal gives the inverse holonomy. A zero-length "
+            "path is the group identity at its explicitly named lattice vertex."
         ),
         request_type=HolonomyRequest,
         result_type=HolonomyResult,
@@ -161,6 +312,83 @@ TOOLS = (
                         ]
                     },
                 },
+            ),
+            OperationExample(
+                name="trivial_group_identity_path",
+                description=(
+                    "A based zero-length path has identity holonomy and no edge "
+                    "contributions; degree one is the trivial permutation group."
+                ),
+                input={
+                    "field": _TRIVIAL_FIELD,
+                    "path": {"steps": [], "basepoint": "v"},
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="lattice_gauge.su2.gauge_transform.compute",
+        title="Transform a rational SU(2) gauge field",
+        description=(
+            "Apply U'_(u->v)=g_u U_(u->v) g_v^-1 to an exact rational "
+            "unit-quaternion edge field; the source lattice and vertex frames "
+            "remain bound to the result."
+        ),
+        request_type=SU2GaugeTransformRequest,
+        result_type=SU2GaugeTransformResult,
+        run=_run_su2_transform,
+        tags=("lattice-gauge", "su2", "gauge-transform", "exact"),
+        discovery_terms=("SU(2) quaternion lattice gauge transform",),
+        examples=(
+            OperationExample(
+                name="rational_su2_plaquette_transform",
+                description="Transform four exact rational SU(2) links by identity vertex frames.",
+                input={
+                    "field": _SU2_FIELD,
+                    "vertex_values": [
+                        {"vertex": f"v{i}", "value": _SU2_IDENTITY} for i in range(4)
+                    ],
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="lattice_gauge.su2.holonomy.compute",
+        title="Compute rational SU(2) path holonomy",
+        description=(
+            "Compose source-bound rational unit-quaternion edge values along "
+            "an oriented lattice path; reverse traversal uses group inverse."
+        ),
+        request_type=SU2HolonomyRequest,
+        result_type=SU2HolonomyResult,
+        run=_run_su2_holonomy,
+        tags=("lattice-gauge", "su2", "holonomy", "exact"),
+        discovery_terms=("SU(2) quaternion path holonomy",),
+        examples=(
+            OperationExample(
+                name="rational_su2_plaquette_holonomy",
+                description="Compose four rational unit-quaternion links around a closed square.",
+                input={"field": _SU2_FIELD, "path": _SU2_PATH},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="lattice_gauge.su2.wilson_trace.compute",
+        title="Compute the rational SU(2) Wilson trace",
+        description=(
+            "Return 2 Re(U) for a source-bound closed rational SU(2) "
+            "holonomy as an exact canonical rational."
+        ),
+        request_type=SU2HolonomyResult,
+        result_type=SU2WilsonTraceResult,
+        run=_run_su2_wilson,
+        tags=("lattice-gauge", "su2", "wilson-trace", "exact"),
+        discovery_terms=("SU(2) Wilson loop trace",),
+        examples=(
+            OperationExample(
+                name="rational_su2_wilson_trace",
+                description="Compute the exact fundamental trace of a closed rational SU(2) holonomy.",
+                input=_SU2_HOLONOMY_INPUT,
             ),
         ),
     ),

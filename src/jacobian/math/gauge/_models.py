@@ -29,8 +29,8 @@ MAX_GAUGE_EDGES = 128
 MAX_GAUGE_DEGREE = 8
 """Maximum permutation degree of the structure group S_d."""
 
-MIN_GAUGE_DEGREE = 2
-"""Minimum permutation degree; degree one is trivial transport."""
+MIN_GAUGE_DEGREE = 1
+"""Minimum permutation degree; degree one is the trivial structure group."""
 
 MAX_GAUGE_PATH_LENGTH = 256
 """Maximum oriented steps in one admitted lattice path."""
@@ -96,8 +96,8 @@ class PermutationLabel(StrictModel):
     """One exact permutation of ``0..degree-1`` acting on the right.
 
     The image tuple sends each point to its image; composition applies
-    left-to-right along traversal order. Degree one is excluded as trivial
-    transport.
+    left-to-right along traversal order. Degree one represents the trivial
+    group and has the unique identity permutation ``(0,)``.
     """
 
     degree: StrictInt = Field(ge=MIN_GAUGE_DEGREE, le=MAX_GAUGE_DEGREE)
@@ -165,11 +165,19 @@ class GaugePathStep(StrictModel):
 
 
 class OrientedGaugePath(StrictModel):
-    """An ordered edge-ID/orientation walk over one lattice."""
+    """An ordered edge walk, or a based zero-length identity path."""
 
-    steps: tuple[GaugePathStep, ...] = Field(
-        min_length=1, max_length=MAX_GAUGE_PATH_LENGTH
-    )
+    steps: tuple[GaugePathStep, ...] = Field(max_length=MAX_GAUGE_PATH_LENGTH)
+    basepoint: GaugeLabel | None = None
+
+    @model_validator(mode="after")
+    def require_basepoint_for_empty_path(self) -> Self:
+        if not self.steps and self.basepoint is None:
+            raise _validation_error(
+                "empty_path_basepoint",
+                "a zero-length path must name its identity-path basepoint",
+            )
+        return self
 
 
 class EdgeContribution(StrictModel):
@@ -363,12 +371,31 @@ class HolonomyRequest(StrictModel):
     path: OrientedGaugePath
 
 
+class PermutationWilsonTraceRequest(StrictModel):
+    """Evaluate the natural permutation-character Wilson loop over ``S_d``."""
+
+    field: GaugeField
+    path: OrientedGaugePath
+
+
+class PermutationWilsonTraceResult(StrictModel):
+    """Exact trace in the natural degree-``d`` permutation representation."""
+
+    field: GaugeField
+    path: OrientedGaugePath
+    holonomy: PermutationLabel
+    trace: StrictInt = Field(ge=0, le=MAX_GAUGE_DEGREE)
+
+
 class HolonomyResult(StrictModel):
-    """Ordered holonomy with per-edge contributions and endpoints."""
+    """Ordered holonomy bound to its source field and oriented path."""
+
+    field: GaugeField
+    path: OrientedGaugePath
 
     holonomy: PermutationLabel
     contributions: tuple[EdgeContribution, ...] = Field(
-        min_length=1, max_length=MAX_GAUGE_PATH_LENGTH
+        max_length=MAX_GAUGE_PATH_LENGTH
     )
     start: GaugeLabel
     end: GaugeLabel
@@ -389,6 +416,8 @@ class HolonomyResult(StrictModel):
     def _from_kernel(
         cls,
         *,
+        field: GaugeField,
+        path: OrientedGaugePath,
         holonomy: PermutationLabel,
         contributions: tuple[EdgeContribution, ...],
         start: str,
@@ -397,6 +426,8 @@ class HolonomyResult(StrictModel):
         """Build a trusted kernel outcome without replaying its product."""
 
         return cls.model_construct(
+            field=field,
+            path=path,
             holonomy=holonomy,
             contributions=contributions,
             start=start,

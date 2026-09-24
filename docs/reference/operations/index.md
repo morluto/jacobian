@@ -20,3 +20,6 @@ that need more context than an operation card:
 - [Homogeneous monomial systems on algebraic tori](algebraic-torus-monomial-systems.md)
 - [Exact trigonometric-rational normalization](trigonometric-rational.md)
 - [Prime-field homogeneous fixed subspaces](prime-field-homogeneous-fixed-subspaces.md)
+
+- [Finite lattice gauge identity paths](lattice-gauge-identities.md)
+- [Rational SU(2) lattice gauge operations](lattice-gauge-su2.md)

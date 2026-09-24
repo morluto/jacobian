@@ -70,13 +70,35 @@ def test_plaquette_orientation_reverses_curvature() -> None:
 
 def test_gauge_transform_conjugates_closed_holonomy() -> None:
     field = _field()
-    # A transposition at the start frame does not commute with this field
-    # holonomy, so the assertion distinguishes h^-1 H h from h H h^-1.
+    # A 3-cycle is not self-inverse, so this distinguishes g H g^-1 from
+    # g^-1 H g as well as from the identity.
     frames = tuple(
         GaugeVertexValue(vertex=vertex, value=PermutationLabel(degree=3, image=image))
-        for vertex, image in (("a", (1, 0, 2)), ("b", (0, 1, 2)), ("c", (0, 1, 2)))
+        for vertex, image in (("a", (1, 2, 0)), ("b", (0, 1, 2)), ("c", (0, 1, 2)))
     )
     transformed = gauge_transform(field, frames).transformed
+    frame_by_vertex = {frame.vertex: frame.value.image for frame in frames}
+    source_by_edge = {entry.edge_id: entry.label.image for entry in field.edge_labels}
+    target_by_edge = {
+        entry.edge_id: entry.label.image for entry in transformed.edge_labels
+    }
+
+    def compose(first: tuple[int, ...], second: tuple[int, ...]) -> tuple[int, ...]:
+        return tuple(second[first[index]] for index in range(len(first)))
+
+    def inverse(image: tuple[int, ...]) -> tuple[int, ...]:
+        result = [0] * len(image)
+        for index, value in enumerate(image):
+            result[value] = index
+        return tuple(result)
+
+    for edge in field.lattice.edges:
+        expected_edge = compose(
+            compose(frame_by_vertex[edge.tail], source_by_edge[edge.edge_id]),
+            inverse(frame_by_vertex[edge.head]),
+        )
+        assert target_by_edge[edge.edge_id] == expected_edge
+
     old = path_holonomy(field, _path()).holonomy
     new = path_holonomy(transformed, _path()).holonomy
     h = frames[0].value.image

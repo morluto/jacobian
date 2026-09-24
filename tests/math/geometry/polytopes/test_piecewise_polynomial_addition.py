@@ -180,6 +180,39 @@ def test_addition_preflights_union_term_count_before_coefficient_arithmetic():
         )
 
 
+def test_addition_admits_exact_cancellation_before_the_coefficient_growth_bound():
+    modulus = 10**20_000 + 3
+
+    def constant(numerator: int) -> PiecewisePolynomialResult:
+        complex_value = polytopal_complex_closure((_interval(0, 1, "a"),))
+        pieces = tuple(
+            PieceAssignment(
+                cell_id=cell.cell_id,
+                polynomial=RationalPolynomial(
+                    variables=("x",),
+                    polynomial=SparseRationalPolynomial(
+                        terms=(
+                            RationalPolynomialTerm(
+                                coefficient=CanonicalRational(
+                                    num=numerator, den=modulus
+                                ),
+                                exponents=(0,),
+                            ),
+                        )
+                    ),
+                ),
+            )
+            for cell in complex_value.maximal_cells
+        )
+        return piecewise_polynomial_from_maximal_pieces(complex_value, pieces)
+
+    result = piecewise_polynomial_add(
+        PiecewisePolynomialAdditionRequest(left=constant(1), right=constant(-1))
+    )
+    assert result.status == "COMPATIBLE"
+    assert all(_coefficient_map(piece.polynomial) == {} for piece in result.pieces)
+
+
 def test_catalog_addition_example_executes_through_typed_contract():
     catalog = Catalog.open()
     operation = catalog.operation("piecewise_polynomial.add.compute")

@@ -34,7 +34,6 @@ from typing import TypedDict
 from sympy import Rational
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
-from jacobian.canonical import CanonicalLimits
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -48,7 +47,7 @@ from jacobian.math.geometry.polytopes._polyhedral_conversion import rational_ran
 from jacobian.math.geometry.polytopes._rational_geometry import vertices_from_halfspaces
 from jacobian.math.geometry.polytopes.complexes._models import (
     MAX_AFFINE_TRANSFORM_COMPONENT_DIGITS,
-    MAX_AFFINE_TRANSFORM_OUTPUT_BYTES,
+    MAX_AFFINE_TRANSFORM_OUTPUT_DIGITS,
     MAX_AFFINE_TRANSFORM_WORK,
     MAX_COMPLEX_CELLS,
     MAX_COMPLEX_COORDINATE_DIGITS,
@@ -57,7 +56,6 @@ from jacobian.math.geometry.polytopes.complexes._models import (
     MAX_COMPLEX_FACE_ENUMERATION_WORK,
     MAX_COMPLEX_INTERSECTION_WORK,
     MAX_COMPLEX_TOTAL_FACES,
-    CommonRefinementRequest,
     CommonRefinementResult,
     ComplexCellTransport,
     ComplexFace,
@@ -66,7 +64,6 @@ from jacobian.math.geometry.polytopes.complexes._models import (
     FaceCoverRelation,
     MaximalCellRecord,
     PairwiseIntersectionRecord,
-    PolytopalComplexAffineTransformRequest,
     PolytopalComplexAffineTransformResult,
     PolytopalComplexClosureResult,
     SourceCellTransport,
@@ -709,17 +706,40 @@ def _determinant(matrix: Sequence[Sequence[Fraction]]) -> Fraction:
 
 
 def _affine_transport_preflight(
-    request: PolytopalComplexAffineTransformRequest,
+    complex_value: PolytopalComplexClosureResult,
+    matrix: tuple[tuple[CanonicalRational, ...], ...],
+    translation: tuple[CanonicalRational, ...],
 ) -> tuple[list[list[Fraction]], list[Fraction]]:
     """Bound arithmetic and output before rebuilding or transforming geometry."""
-    complex_value = request.complex
+    if not isinstance(complex_value, PolytopalComplexClosureResult):
+        raise OperationDomainValidationError(
+            location=("complex",),
+            code="polytopal_complex.affine_transform_complex",
+            message="expected a canonical polytopal complex",
+        )
     dimension = len(complex_value.space.axes)
-    matrix = [
-        [Fraction(*entry.as_integer_ratio()) for entry in row] for row in request.matrix
+    if (
+        not isinstance(matrix, tuple)
+        or not isinstance(translation, tuple)
+        or len(matrix) != dimension
+        or len(translation) != dimension
+        or any(not isinstance(row, tuple) or len(row) != dimension for row in matrix)
+        or any(
+            not isinstance(entry, CanonicalRational) for row in matrix for entry in row
+        )
+        or not all(isinstance(entry, CanonicalRational) for entry in translation)
+    ):
+        raise OperationDomainValidationError(
+            location=("matrix",),
+            code="polytopal_complex.affine_transform_shape",
+            message="matrix and translation dimensions must match the complex axes",
+        )
+    linear_map = [
+        [Fraction(*entry.as_integer_ratio()) for entry in row] for row in matrix
     ]
-    translation = [Fraction(*entry.as_integer_ratio()) for entry in request.translation]
-    matrix_digits = max(_rational_digits(value) for row in matrix for value in row)
-    translation_digits = max(_rational_digits(value) for value in translation)
+    shift = [Fraction(*entry.as_integer_ratio()) for entry in translation]
+    matrix_digits = max(_rational_digits(value) for row in linear_map for value in row)
+    translation_digits = max(_rational_digits(value) for value in shift)
     source_points = tuple(
         vertex.coordinates
         for cell in complex_value.maximal_cells
@@ -794,33 +814,34 @@ def _affine_transport_preflight(
             message="the determinant height bound exceeds the affine transport envelope",
         )
 
-    input_bytes = len(complex_value.model_dump_json())
-    coordinate_slots = 2 * arithmetic_points * dimension
-    output_bound = (
-        2 * input_bytes
-        + coordinate_slots * (2 * output_component_bound + 48)
-        + 256 * (len(complex_value.faces) + len(complex_value.maximal_cells))
-        + 128 * len(complex_value.cover_relations)
+    # The result stores the source and target coordinate sets for every cell
+    # and face vertex plus the bound map itself. Each stored rational
+    # contributes its reduced numerator and denominator digit widths; the
+    # face, cell, and cover ledgers are fixed-cardinality ID data bounded by
+    # the canonical complex model limits.
+    transformed_rationals = arithmetic_points * dimension
+    output_digit_bound = 2 * (
+        2 * transformed_rationals * output_component_bound
+        + dimension * dimension * matrix_digits
+        + dimension * translation_digits
     )
-    if output_bound > min(
-        MAX_AFFINE_TRANSFORM_OUTPUT_BYTES, CanonicalLimits().max_output_bytes
-    ):
+    if output_digit_bound > MAX_AFFINE_TRANSFORM_OUTPUT_DIGITS:
         raise OperationResourceAdmissionError(
             location=("complex",),
             code="polytopal_complex.affine_transform_output_over_envelope",
             message=(
-                "the conservative source, target, and transport output exceeds "
-                f"the {MAX_AFFINE_TRANSFORM_OUTPUT_BYTES}-byte envelope"
+                "the conservative source, target, and transport rational digits "
+                f"exceed the {MAX_AFFINE_TRANSFORM_OUTPUT_DIGITS}-digit envelope"
             ),
         )
 
-    if _determinant(matrix) == 0:
+    if _determinant(linear_map) == 0:
         raise OperationDomainValidationError(
             location=("matrix",),
             code="polytopal_complex.affine_transform_singular",
             message="an affine complex transport requires an invertible matrix",
         )
-    return matrix, translation
+    return linear_map, shift
 
 
 def _affine_image(
@@ -856,21 +877,23 @@ def _polytope_from_complex_cell(
 
 
 def polytopal_complex_affine_transform(
-    request: PolytopalComplexAffineTransformRequest,
+    complex_value: PolytopalComplexClosureResult,
+    matrix: tuple[tuple[CanonicalRational, ...], ...],
+    translation: tuple[CanonicalRational, ...],
 ) -> PolytopalComplexAffineTransformResult:
     """Transport a complete complex through one invertible rational affine map."""
-    matrix, translation = _affine_transport_preflight(request)
+    linear_map, shift = _affine_transport_preflight(complex_value, matrix, translation)
     # The incidence ledger is caller-supplied mathematical data. Rebuild it
     # from source maximal cells before relying on it for face transport.
     from jacobian.math.geometry.polytopes.complexes._spline import _admit_complex
 
-    source = _admit_complex(request.complex)
+    source = _admit_complex(complex_value)
     transformed_point_map: dict[Point, Point] = {}
     for point in (
         _point(vertex.coordinates) for face in source.faces for vertex in face.vertices
     ):
         if point not in transformed_point_map:
-            image = _affine_image(point, matrix, translation)
+            image = _affine_image(point, linear_map, shift)
             if any(
                 _rational_digits(coordinate) > MAX_COMPLEX_COORDINATE_DIGITS
                 for coordinate in image
@@ -928,17 +951,17 @@ def polytopal_complex_affine_transform(
     return PolytopalComplexAffineTransformResult(
         source=source,
         target=target,
-        matrix=request.matrix,
-        translation=request.translation,
+        matrix=matrix,
+        translation=translation,
         cell_transport=cell_transport,
         face_transport=face_transport,
     )
 
 
 def polytopal_complex_common_refinement(
-    request: CommonRefinementRequest,
+    left: PolytopalComplexClosureResult, right: PolytopalComplexClosureResult
 ) -> CommonRefinementResult:
     """Compute an exact support-preserving common refinement."""
     from jacobian.math.geometry.polytopes.complexes._refinement import common_refinement
 
-    return common_refinement(request)
+    return common_refinement(left, right)

@@ -123,3 +123,22 @@ def test_coefficient_pole_at_center_is_rejected() -> None:
             ),
             {"values": [0]},
         )
+
+
+def test_order_zero_operator_represents_the_zero_formal_series() -> None:
+    carrier = differential_series_construct(
+        DifferentialOreOperator.model_validate(
+            {"terms": [{"order": 0, "coefficient": _rf([(1, 0)]).model_dump()}]}
+        ),
+        {"values": []},
+    )
+    assert carrier.operator.order == 0
+    assert carrier.initial_derivatives.values == ()
+
+
+def test_zero_operator_cannot_define_a_dfinite_series() -> None:
+    with pytest.raises(OperationDomainValidationError, match="nonzero"):
+        differential_series_construct(
+            DifferentialOreOperator.model_validate({"terms": []}),
+            {"values": []},
+        )

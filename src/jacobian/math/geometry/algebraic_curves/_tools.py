@@ -56,7 +56,22 @@ def compute_affine_curve_check(request: AffineCurveRequest) -> AffineCurveResult
 def compute_plane_curve_blowup_chart(
     request: PlaneCurveBlowupChartRequest,
 ) -> PlaneCurveBlowupChartResult:
-    return plane_curve_blowup_chart(request)
+    """Unpack one request and project the native blowup chart to its wire result."""
+    data = plane_curve_blowup_chart(
+        request.polynomial,
+        request.center,
+        request.radial_variable,
+        request.slope_variable,
+    )
+    return PlaneCurveBlowupChartResult(
+        source_polynomial=request.polynomial,
+        center=request.center,
+        radial_variable=request.radial_variable,
+        slope_variable=request.slope_variable,
+        exceptional_multiplicity=data.exceptional_multiplicity,
+        strict_transform=data.strict_transform,
+        exceptional_intersection_polynomial=data.exceptional_intersection_polynomial,
+    )
 
 
 def verify_affine_curve_check(claim: AffineCurveResult) -> bool:

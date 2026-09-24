@@ -12,5 +12,7 @@ fresh ordered axes.
 
 This reports one affine chart. It does not claim the complementary chart's
 intersection data or assemble global divisor classes. Expansion, degree,
-term count, and coefficient growth are admitted before substitution; bounded
-exact QQ arithmetic establishes the pullback divisibility identity.
+term count, and coefficient growth are admitted before substitution; the
+growth bound accumulates the distinct source coefficient denominators and the
+center-coordinate powers up to the curve degree. Bounded exact QQ arithmetic
+establishes the pullback divisibility identity.

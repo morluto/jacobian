@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import sympy
 
 from jacobian.catalog.models import (
@@ -29,8 +31,6 @@ from jacobian.math.geometry.algebraic_curves._models import (
     HOMOGENIZING_COORDINATE,
     AffineChartResult,
     AffineCurveResult,
-    PlaneCurveBlowupChartRequest,
-    PlaneCurveBlowupChartResult,
     ProjectiveClosureResult,
     RationalConicParametrizationResult,
     _require_curve_polynomial,
@@ -101,11 +101,34 @@ def affine_curve_check(polynomial: RationalPolynomial) -> tuple[bool, int]:
     return (not source.is_zero and degree >= 1, degree)
 
 
+@dataclass(frozen=True)
+class PlaneCurveBlowupChartData:
+    """Canonical strict-transform and exceptional-divisor data for one chart."""
+
+    exceptional_multiplicity: int
+    strict_transform: RationalPolynomial
+    exceptional_intersection_polynomial: RationalPolynomial
+
+
+def _digit_floor(value: int) -> int:
+    return len(str(abs(value))) - 1
+
+
+def _blowup_result_admission_error(location: str) -> OperationResourceAdmissionError:
+    return OperationResourceAdmissionError(
+        location=(location,),
+        code="plane_algebraic_curve.blowup_coefficient_growth_over_envelope",
+        message="the exact chart substitution exceeded the 128-digit curve coefficient bound",
+    )
+
+
 def plane_curve_blowup_chart(
-    request: PlaneCurveBlowupChartRequest,
-) -> PlaneCurveBlowupChartResult:
+    polynomial: RationalPolynomial,
+    center: VariablePoint,
+    radial_variable: PolynomialVariable,
+    slope_variable: PolynomialVariable,
+) -> PlaneCurveBlowupChartData:
     """Return the strict transform in x=a+u, y=b+u*t and its E intersection."""
-    polynomial = request.polynomial
     _admit_curve_polynomial(polynomial)
     if len(polynomial.variables) != 2:
         _domain_error(
@@ -113,7 +136,19 @@ def plane_curve_blowup_chart(
             "a plane-curve blowup requires exactly two source variables",
             "polynomial",
         )
-    if request.center.variables != polynomial.variables:
+    if radial_variable == slope_variable:
+        _domain_error(
+            "blowup_chart_axis_collision",
+            "chart variables must be distinct",
+            "radial_variable",
+        )
+    if {radial_variable, slope_variable} & set(polynomial.variables):
+        _domain_error(
+            "blowup_chart_axis_collision",
+            "chart variables must be fresh relative to the source axes",
+            "radial_variable",
+        )
+    if center.variables != polynomial.variables:
         _domain_error(
             "blowup_center_axis_invalid",
             "the center must use the complete ordered source axis",
@@ -127,13 +162,15 @@ def plane_curve_blowup_chart(
             "polynomial",
         )
     x, y = symbols_for_variables(polynomial.variables)
-    radial, slope = symbols_for_variables(
-        (request.radial_variable, request.slope_variable)
-    )
-    a, b = (value.as_fraction() for value in request.center.values)
+    radial, slope = symbols_for_variables((radial_variable, slope_variable))
+    a, b = (value.as_fraction() for value in center.values)
 
     # Bound the full binomial expansion, output carrier, and coefficient
     # growth before asking SymPy to expand the translated chart substitution.
+    # Translated terms combine over the least common multiple of the distinct
+    # source denominators multiplied by center-coordinate numerator and
+    # denominator powers up to the curve degree, so the bound accumulates
+    # that joint height instead of trusting the largest single coefficient.
     terms = polynomial.polynomial.terms
     raw_terms = sum((term.exponents[0] + 1) * (term.exponents[1] + 1) for term in terms)
     if raw_terms > 1_000_000 or raw_terms > 256:
@@ -142,20 +179,22 @@ def plane_curve_blowup_chart(
             code="plane_algebraic_curve.blowup_expansion_over_envelope",
             message="the predicted strict-transform expansion exceeds its 256-term bound",
         )
-    center_digits = max(
-        max(len(str(abs(value.numerator))), len(str(value.denominator)))
-        for value in (a, b)
-    )
     degree = int(source.total_degree())
-    coefficient_digits = max(
-        max(
-            len(str(abs(term.coefficient.as_fraction().numerator))),
-            len(str(term.coefficient.as_fraction().denominator)),
-        )
-        for term in terms
-    )
+    source_numerators = [term.coefficient.as_fraction().numerator for term in terms]
+    source_denominators = {term.coefficient.as_fraction().denominator for term in terms}
     growth_bound = (
-        coefficient_digits + degree * (center_digits + 2) + len(str(raw_terms))
+        1
+        + sum(_digit_floor(denominator) for denominator in source_denominators)
+        + max(_digit_floor(numerator) for numerator in source_numerators)
+        + degree
+        * (
+            _digit_floor(a.numerator)
+            + _digit_floor(a.denominator)
+            + _digit_floor(b.numerator)
+            + _digit_floor(b.denominator)
+            + 1
+        )
+        + _digit_floor(raw_terms)
     )
     if growth_bound > 128:
         raise OperationResourceAdmissionError(
@@ -217,35 +256,41 @@ def plane_curve_blowup_chart(
             "the exceptional restriction must be nonzero after removing the exact multiplicity",
             "polynomial",
         )
-    exceptional_poly = exceptional_poly.monic()
-    strict_transform = rational_polynomial_from_sympy(
-        strict_poly,
-        (request.radial_variable, request.slope_variable),
-        maximum_terms=256,
-    )
-    exceptional_intersection = rational_polynomial_from_sympy(
-        exceptional_poly, (request.slope_variable,), maximum_terms=256
-    )
-    require_polynomial_budget(
-        strict_transform,
-        maximum_terms=256,
-        maximum_exponent=128,
-        maximum_coefficient_digits=128,
-        label="strict-transform polynomial",
-    )
+    try:
+        strict_transform = rational_polynomial_from_sympy(
+            strict_poly,
+            (radial_variable, slope_variable),
+            maximum_terms=256,
+        )
+        require_polynomial_budget(
+            strict_transform,
+            maximum_terms=256,
+            maximum_exponent=128,
+            maximum_coefficient_digits=128,
+            label="strict-transform polynomial",
+        )
+    except ValueError as exc:
+        raise _blowup_result_admission_error("strict_transform") from exc
     if any(sum(term.exponents) > 128 for term in strict_transform.polynomial.terms):
         raise OperationResourceAdmissionError(
             location=("strict_transform",),
             code="plane_algebraic_curve.blowup_result_degree_over_envelope",
             message="the strict-transform polynomial exceeds the 128-degree output bound",
         )
-    require_polynomial_budget(
-        exceptional_intersection,
-        maximum_terms=256,
-        maximum_exponent=64,
-        maximum_coefficient_digits=128,
-        label="exceptional intersection polynomial",
-    )
+    exceptional_poly = exceptional_poly.monic()
+    try:
+        exceptional_intersection = rational_polynomial_from_sympy(
+            exceptional_poly, (slope_variable,), maximum_terms=256
+        )
+        require_polynomial_budget(
+            exceptional_intersection,
+            maximum_terms=256,
+            maximum_exponent=64,
+            maximum_coefficient_digits=128,
+            label="exceptional intersection polynomial",
+        )
+    except ValueError as exc:
+        raise _blowup_result_admission_error("exceptional_intersection") from exc
     replay = sympy.Poly(
         strict_poly.as_expr() * radial**multiplicity, radial, slope, domain=sympy.QQ
     )
@@ -255,11 +300,7 @@ def plane_curve_blowup_chart(
             "the strict-transform divisibility identity failed",
             "strict_transform",
         )
-    return PlaneCurveBlowupChartResult(
-        source_polynomial=polynomial,
-        center=request.center,
-        radial_variable=request.radial_variable,
-        slope_variable=request.slope_variable,
+    return PlaneCurveBlowupChartData(
         exceptional_multiplicity=multiplicity,
         strict_transform=strict_transform,
         exceptional_intersection_polynomial=exceptional_intersection,

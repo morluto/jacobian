@@ -9,7 +9,10 @@ import sympy
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.geometry.algebraic_curves import (
     _conic,
     _singularity,
@@ -188,6 +191,125 @@ def test_blowup_chart_requires_center_on_curve() -> None:
     )
     with _raises_operation_code("blowup_center_not_on_curve"):
         compute_plane_curve_blowup_chart(request)
+
+
+def test_plane_curve_blowup_chart_operates_on_canonical_values() -> None:
+    source = _polynomial(("x", "y"), (-1, (3, 0)), (1, (0, 2)))
+    data = operations.plane_curve_blowup_chart(
+        source,
+        _point(("x", "y"), (_rational(0), _rational(0))),
+        "u",
+        "t",
+    )
+    assert data.exceptional_multiplicity == 2
+    assert rational_polynomial_to_sympy(data.strict_transform) == sympy.Symbol(
+        "t"
+    ) ** 2 - sympy.Symbol("u")
+    assert (
+        rational_polynomial_to_sympy(data.exceptional_intersection_polynomial)
+        == sympy.Symbol("t") ** 2
+    )
+    with _raises_operation_code("blowup_chart_axis_collision"):
+        operations.plane_curve_blowup_chart(
+            source,
+            _point(("x", "y"), (_rational(0), _rational(0))),
+            "u",
+            "u",
+        )
+    with _raises_operation_code("blowup_chart_axis_collision"):
+        operations.plane_curve_blowup_chart(
+            source,
+            _point(("x", "y"), (_rational(0), _rational(0))),
+            "x",
+            "t",
+        )
+
+
+_ACCUMULATED_DENOMINATOR_PRIMES = (
+    10000000000000000000000000000000000000000000000000000000000000000000000000000049,
+    10000000000000000000000000000000000000000000000000000000000000000000000000000247,
+    10000000000000000000000000000000000000000000000000000000000000000000000000000561,
+    10000000000000000000000000000000000000000000000000000000000000000000000000000703,
+    10000000000000000000000000000000000000000000000000000000000000000000000000000967,
+    10000000000000000000000000000000000000000000000000000000000000000000000000001423,
+    10000000000000000000000000000000000000000000000000000000000000000000000000001599,
+    10000000000000000000000000000000000000000000000000000000000000000000000000001933,
+    10000000000000000000000000000000000000000000000000000000000000000000000000002007,
+    10000000000000000000000000000000000000000000000000000000000000000000000000002067,
+)
+
+
+def test_blowup_chart_admits_accumulated_source_denominators_before_expansion() -> None:
+    terms = []
+    for index, denominator in enumerate(_ACCUMULATED_DENOMINATOR_PRIMES, start=1):
+        terms.append(
+            RationalPolynomialTerm(
+                coefficient=_rational(1, denominator), exponents=(index, 0)
+            )
+        )
+        terms.append(
+            RationalPolynomialTerm(
+                coefficient=_rational(-1, denominator), exponents=(0, index)
+            )
+        )
+    terms.sort(key=lambda term: term.exponents, reverse=True)
+    request = PlaneCurveBlowupChartRequest(
+        polynomial=RationalPolynomial(
+            variables=("x", "y"),
+            polynomial=SparseRationalPolynomial(terms=tuple(terms)),
+        ),
+        center=_point(("x", "y"), (_rational(1), _rational(1))),
+        radial_variable="u",
+        slope_variable="t",
+    )
+    with pytest.raises(OperationResourceAdmissionError) as caught:
+        compute_plane_curve_blowup_chart(request)
+    assert (
+        caught.value.errors()[0]["type"]
+        == "plane_algebraic_curve.blowup_coefficient_growth_over_envelope"
+    )
+
+
+def test_blowup_chart_accumulated_denominators_match_local_computation() -> None:
+    first = 100000000000031
+    second = 100000001000027
+    result = compute_plane_curve_blowup_chart(
+        PlaneCurveBlowupChartRequest(
+            polynomial=_rational_polynomial(
+                ("x", "y"),
+                ((1, second), (3, 0)),
+                ((1, first), (2, 0)),
+                ((-1, second), (0, 3)),
+                ((-1, first), (0, 2)),
+            ),
+            center=_point(("x", "y"), (_rational(1), _rational(1))),
+            radial_variable="u",
+            slope_variable="t",
+        )
+    )
+    u, t = sympy.symbols("u t")
+    pulled = sympy.expand(
+        sympy.Rational(1, first) * ((1 + u) ** 2 - (1 + u * t) ** 2)
+        + sympy.Rational(1, second) * ((1 + u) ** 3 - (1 + u * t) ** 3)
+    )
+    pulled_poly = sympy.Poly(pulled, u, t, domain=sympy.QQ)
+    multiplicity = min(exponents[0] for exponents, _ in pulled_poly.terms())
+    strict_expected = sympy.expand(pulled / u)
+    assert multiplicity == 1
+    assert result.exceptional_multiplicity == 1
+    assert rational_polynomial_to_sympy(result.strict_transform) == strict_expected
+    exceptional_expected = sympy.Poly(
+        sympy.expand(strict_expected.subs(u, 0)), t, domain=sympy.QQ
+    ).monic()
+    assert (
+        rational_polynomial_to_sympy(result.exceptional_intersection_polynomial)
+        == exceptional_expected.as_expr()
+    )
+    denominators = {
+        term.coefficient.as_fraction().denominator
+        for term in result.strict_transform.polynomial.terms
+    }
+    assert first * second in denominators
 
 
 def test_linear_projective_curve_is_smooth_without_backend(

@@ -11,6 +11,7 @@ from jacobian.math.combinatorics.symmetric_functions._models import (
     SchurProductRequest,
     SchurProductResult,
     SchurProductTerm,
+    _lr_inner_content_orientation,
 )
 from jacobian.math.combinatorics.symmetric_functions.values import IntegerPartition
 
@@ -41,39 +42,50 @@ def littlewood_richardson_coefficient(
 def _compute_validated_lr(
     request: LittlewoodRichardsonCoefficientRequest,
 ) -> LittlewoodRichardsonCoefficientResult:
-    """Run the LR kernel on a request whose bounds were already admitted."""
-    outer = request.outer.parts
-    inner = request.inner.parts
-    content = request.content.parts
+    """Run the LR kernel on a request whose bounds were already admitted.
+
+    Both the native callable and the catalog wrapper share this one
+    post-admission path; neither replays request validation.
+    """
+    coefficient = _lr_coefficient(request.outer, request.inner, request.content)
+    return LittlewoodRichardsonCoefficientResult(
+        outer=request.outer,
+        inner=request.inner,
+        content=request.content,
+        coefficient=coefficient,
+    )
+
+
+def _lr_coefficient(
+    outer: IntegerPartition,
+    inner: IntegerPartition,
+    content: IntegerPartition,
+) -> int:
+    """Count LR tableaux for partitions already inside the admitted envelope."""
+    outer_parts = outer.parts
+    inner_parts = inner.parts
+    content_parts = content.parts
 
     if any(
-        inner[index] > (outer[index] if index < len(outer) else 0)
-        for index in range(len(inner))
+        inner_parts[index] > (outer_parts[index] if index < len(outer_parts) else 0)
+        for index in range(len(inner_parts))
     ):
-        return LittlewoodRichardsonCoefficientResult(
-            outer=request.outer,
-            inner=request.inner,
-            content=request.content,
-            coefficient=0,
-        )
+        return 0
 
-    skew_size = sum(outer) - sum(inner)
-    if skew_size != sum(content):
-        return LittlewoodRichardsonCoefficientResult(
-            outer=request.outer,
-            inner=request.inner,
-            content=request.content,
-            coefficient=0,
-        )
+    skew_size = sum(outer_parts) - sum(inner_parts)
+    if skew_size != sum(content_parts):
+        return 0
 
     cells = tuple(
         (row, column)
-        for row, outer_width in enumerate(outer)
-        for column in range(outer_width, inner[row] if row < len(inner) else 0, -1)
+        for row, outer_width in enumerate(outer_parts)
+        for column in range(
+            outer_width, inner_parts[row] if row < len(inner_parts) else 0, -1
+        )
     )
-    remaining = list(content)
+    remaining = list(content_parts)
     assigned: dict[tuple[int, int], int] = {}
-    prefix_counts = [0] * len(content)
+    prefix_counts = [0] * len(content_parts)
     visited = 0
     coefficient = 0
 
@@ -129,12 +141,7 @@ def _compute_validated_lr(
             remaining[entry_index] += 1
 
     search(0)
-    return LittlewoodRichardsonCoefficientResult(
-        outer=request.outer,
-        inner=request.inner,
-        content=request.content,
-        coefficient=coefficient,
-    )
+    return coefficient
 
 
 def schur_product(
@@ -151,23 +158,20 @@ def schur_product(
 
 
 def _schur_product_from_request(request: SchurProductRequest) -> SchurProductResult:
-    """Run complete expansion after the request has passed admission."""
+    """Run complete expansion after the request has passed admission.
+
+    Admission charged the cheaper commutative orientation once per candidate;
+    the expansion reuses that orientation through the shared LR kernel on
+    canonical partitions instead of constructing per-candidate requests.
+    """
     degree = sum(request.left.parts) + sum(request.right.parts)
-    candidates = _partitions_of(degree)
-    base = LittlewoodRichardsonCoefficientRequest.model_construct(
-        outer=IntegerPartition(parts=()),
-        inner=request.left,
-        content=request.right,
-    )
+    inner, content = _lr_inner_content_orientation(request.left, request.right)
     terms = []
-    for parts in candidates:
-        result = _compute_validated_lr(
-            base.model_copy(update={"outer": IntegerPartition(parts=parts)})
-        )
-        if result.coefficient:
-            terms.append(
-                SchurProductTerm(partition=result.outer, coefficient=result.coefficient)
-            )
+    for parts in _partitions_of(degree):
+        outer = IntegerPartition(parts=parts)
+        coefficient = _lr_coefficient(outer, inner, content)
+        if coefficient:
+            terms.append(SchurProductTerm(partition=outer, coefficient=coefficient))
     return SchurProductResult(
         left=request.left,
         right=request.right,

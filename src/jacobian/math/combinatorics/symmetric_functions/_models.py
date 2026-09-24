@@ -29,7 +29,6 @@ MAX_LR_SKEW_CELLS = 8
 MAX_LR_SEARCH_STATES = 100_000
 MAX_SCHUR_PRODUCT_WORK = 1_000_000
 MAX_SCHUR_PRODUCT_TERMS = 22  # p(8)
-MAX_SCHUR_PRODUCT_OUTPUT_BYTES = MAX_SCHUR_PRODUCT_TERMS * 256
 
 
 def _lr_prefix_state_bound(content: IntegerPartition) -> int:
@@ -59,6 +58,20 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
     """Build a stable validation error owned by symmetric-function contracts."""
 
     return PydanticCustomError(f"symmetric_function.{reason}", message)
+
+
+def _lr_inner_content_orientation(
+    left: IntegerPartition, right: IntegerPartition
+) -> tuple[IntegerPartition, IntegerPartition]:
+    """Orient a commutative LR lower pair by the cheaper content-prefix bound.
+
+    ``c^outer_{inner, content}`` is symmetric in its lower pair, so the
+    Schur-product kernel may swap the operands freely. Admission and the
+    kernel call this one owner helper so both agree on the same orientation.
+    """
+    if _lr_prefix_state_bound(right) <= _lr_prefix_state_bound(left):
+        return left, right
+    return right, left
 
 
 PointCoordinate = Annotated[
@@ -202,7 +215,10 @@ class LittlewoodRichardsonCoefficientRequest(StrictModel):
     The reading word scans each skew row right-to-left, from top to bottom;
     every prefix must contain at least as many ``i`` as ``i+1`` for all i.
     Complete search admits at most {MAX_LR_SKEW_CELLS} skew cells and
-    {MAX_LR_SEARCH_STATES} distinct content-word prefixes.
+    {MAX_LR_SEARCH_STATES} distinct content-word prefixes. Admission bounds
+    the skew diagram ``|outer| - |inner|`` and the content, not the ambient
+    diagrams, whose row-scan work is bounded by the shared 500-cell partition
+    carrier.
     """
 
     outer: IntegerPartition
@@ -211,16 +227,20 @@ class LittlewoodRichardsonCoefficientRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_bounded_search(self) -> Self:
-        for name, partition in (
-            ("outer", self.outer),
-            ("inner", self.inner),
-            ("content", self.content),
-        ):
-            if sum(partition.parts) > MAX_LR_SKEW_CELLS:
-                raise _validation_error(
-                    f"lr_{name}_size_exceeded",
-                    f"{name} partition size must not exceed {MAX_LR_SKEW_CELLS}",
-                )
+        # The tableau search runs only when the inner diagram is contained in
+        # the outer diagram and the sizes agree, so its cell count equals the
+        # admitted skew size, which then equals the content size.
+        skew_size = sum(self.outer.parts) - sum(self.inner.parts)
+        if skew_size > MAX_LR_SKEW_CELLS:
+            raise _validation_error(
+                "lr_skew_size_exceeded",
+                f"LR skew size |outer|-|inner| must not exceed {MAX_LR_SKEW_CELLS}",
+            )
+        if sum(self.content.parts) > MAX_LR_SKEW_CELLS:
+            raise _validation_error(
+                "lr_content_size_exceeded",
+                f"LR content size must not exceed {MAX_LR_SKEW_CELLS}",
+            )
         if _lr_prefix_state_bound(self.content) > MAX_LR_SEARCH_STATES:
             raise _validation_error(
                 "lr_search_states_exceeded",
@@ -253,26 +273,30 @@ class SchurProductRequest(StrictModel):
                 f"Schur product total degree must not exceed {MAX_LR_SKEW_CELLS}",
             )
         # Every possible outer shape of this degree is sent through the same
-        # admitted LR tableau kernel. Charge its complete prefix bound once per
-        # candidate before generating candidates or tableaux.
+        # admitted LR tableau kernel. The lower pair commutes, so the kernel
+        # searches with whichever operand has the cheaper content-prefix
+        # bound. Charge that orientation once per candidate before generating
+        # candidates or tableaux, and bound the expansion by term
+        # cardinality, not transport bytes.
         candidates = _partition_count(total)
-        prefix_bound = _lr_prefix_state_bound(self.right)
+        _inner, content = _lr_inner_content_orientation(self.left, self.right)
+        prefix_bound = _lr_prefix_state_bound(content)
         if prefix_bound > MAX_LR_SEARCH_STATES:
             raise _validation_error(
                 "schur_product_search_states_exceeded",
                 f"LR content-prefix bound must not exceed {MAX_LR_SEARCH_STATES}",
             )
         work = candidates * prefix_bound
-        output_bytes = candidates * 256
         if work > MAX_SCHUR_PRODUCT_WORK:
             raise _validation_error(
                 "schur_product_work_exceeded",
                 f"complete Schur product work bound must not exceed {MAX_SCHUR_PRODUCT_WORK}",
             )
-        if output_bytes > MAX_SCHUR_PRODUCT_OUTPUT_BYTES:
+        if candidates > MAX_SCHUR_PRODUCT_TERMS:
             raise _validation_error(
-                "schur_product_output_exceeded",
-                "complete Schur product output exceeds its admitted byte bound",
+                "schur_product_terms_exceeded",
+                "complete Schur product admits at most "
+                f"{MAX_SCHUR_PRODUCT_TERMS} candidate terms",
             )
         return self
 
@@ -316,7 +340,6 @@ def _partition_count(total: int) -> int:
 __all__ = [
     "MAX_LR_SEARCH_STATES",
     "MAX_LR_SKEW_CELLS",
-    "MAX_SCHUR_PRODUCT_OUTPUT_BYTES",
     "MAX_SCHUR_PRODUCT_TERMS",
     "MAX_SCHUR_PRODUCT_WORK",
     "IntegerPartition",

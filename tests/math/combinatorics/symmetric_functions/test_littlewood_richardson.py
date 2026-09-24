@@ -11,6 +11,7 @@ from math import factorial
 import pytest
 from pydantic import ValidationError
 
+from jacobian.math.combinatorics.symmetric_functions import _models as symmetric_models
 from jacobian.math.combinatorics.symmetric_functions._models import (
     MAX_LR_SEARCH_STATES,
     MAX_LR_SKEW_CELLS,
@@ -194,8 +195,8 @@ def test_lr_request_enforces_exact_cell_and_search_envelopes() -> None:
     assert MAX_LR_SKEW_CELLS == 8
     assert MAX_LR_SEARCH_STATES == 100_000
     assert _coefficient((8,), (), (8,)) == 1
-    with pytest.raises(ValidationError, match="outer partition size"):
-        _request((9,), (), (9,))
+    with pytest.raises(ValidationError, match="content size"):
+        _request((5,), (), (9,))
     with pytest.raises(ValidationError, match="prefix bound"):
         _request((8,), (), (1,) * 8)
 
@@ -262,8 +263,58 @@ def test_schur_product_admits_total_degree_before_candidate_search() -> None:
         SchurProductRequest(
             left=IntegerPartition(parts=(9,)), right=IntegerPartition(parts=())
         )
-    with pytest.raises(ValidationError, match="content-prefix bound"):
-        SchurProductRequest(
-            left=IntegerPartition(parts=()),
-            right=IntegerPartition(parts=(1,) * 8),
-        )
+
+
+def test_lr_admits_tiny_skew_inside_large_ambient_diagrams() -> None:
+    # The search envelope bounds the skew diagram, not the ambient diagrams:
+    # (9)/(8) has one cell even though |outer| = 9, and (500)/(492) stays
+    # inside the shared 500-cell partition carrier row scan.
+    assert _coefficient((9,), (8,), (1,)) == 1
+    assert _independent_lr_character_oracle((9,), (8,), (1,)) == 1
+    assert _coefficient((500,), (492,), (8,)) == 1
+    assert _coefficient((10,), (2,), (7,)) == 0  # sizes disagree: no search
+    with pytest.raises(ValidationError, match="skew"):
+        _request((9,), (), (9,))  # nine search cells exceeds the envelope
+
+
+def test_schur_product_admission_is_invariant_under_operand_order() -> None:
+    # LR coefficients commute in the lower pair, so admission must charge the
+    # cheaper content orientation and both orders must be admitted.
+    empty = IntegerPartition(parts=())
+    tall = IntegerPartition(parts=(1,) * 8)
+    forward = schur_product(empty, tall)
+    swapped = schur_product(tall, empty)
+    assert [(term.partition.parts, term.coefficient) for term in forward.terms] == [
+        ((1,) * 8, 1)
+    ]
+    assert [(term.partition.parts, term.coefficient) for term in swapped.terms] == [
+        ((1,) * 8, 1)
+    ]
+    assert forward.left.parts == ()
+    assert forward.right.parts == (1,) * 8
+    assert _independent_lr_character_oracle((1,) * 8, (), (1,) * 8) == 1
+
+
+def test_catalog_lr_invocation_shares_one_admission_pass(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original = symmetric_models._lr_prefix_state_bound
+    calls = 0
+
+    def counting(content: IntegerPartition) -> int:
+        nonlocal calls
+        calls += 1
+        return original(content)
+
+    monkeypatch.setattr(symmetric_models, "_lr_prefix_state_bound", counting)
+    tool = next(
+        item
+        for item in TOOLS
+        if item.operation_id
+        == "symmetric_function.littlewood_richardson.coefficient.compute"
+    )
+    request = tool.request_type.model_validate(tool.examples[0].input)
+    assert calls == 1  # owner admission ran once while parsing the request
+    result = tool.run(request)
+    assert result.coefficient == 2
+    assert calls == 1  # the catalog wrapper must not replay admission

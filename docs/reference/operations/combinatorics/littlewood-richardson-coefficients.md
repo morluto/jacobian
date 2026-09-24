@@ -18,11 +18,13 @@ product and the Littlewood–Richardson semigroup](https://link.springer.com/art
 
 The operation returns one exact coefficient bound to all three canonical
 `IntegerPartition` inputs. It returns zero when the inner diagram is not
-contained in the outer diagram or when the sizes do not match. For complete
-search, each input partition has size at most 8 and the number of distinct
-content-word prefixes is at most 100,000. These are operation-specific search
-bounds; the shared partition and tableau carriers retain their larger 500-cell
-envelope.
+contained in the outer diagram or when the sizes do not match. Complete search
+is bounded by the skew diagram, not the ambient diagrams: the skew size
+`|outer| - |inner|` and the content size are each at most 8, and the number of
+distinct content-word prefixes is at most 100,000. These are
+operation-specific search bounds; the shared partition and tableau carriers
+retain their larger 500-cell envelope, which bounds the row scan over the
+ambient diagrams.
 
 For example,
 
@@ -38,7 +40,10 @@ s_lambda`. It enumerates all partitions of the total degree and omits zero
 coefficients. Terms are ordered by descending lexicographic partition order.
 The complete product is admitted only when the total degree is at most 8;
 before candidate generation, admission multiplies the number of degree
-partitions by the complete content-prefix bound (capped at 1,000,000 units).
-This deliberately small shared envelope keeps every coefficient inside the
-existing LR kernel's admitted domain. The operation returns a finite Schur
-expansion, not a general symmetric-function carrier.
+partitions (at most 22 terms) by the complete content-prefix bound (capped at
+1,000,000 units). The LR coefficients commute in their lower pair, so the
+kernel searches with whichever operand admits the cheaper content orientation
+and admission charges that orientation; admission is therefore invariant under
+operand order. This deliberately small shared envelope keeps every coefficient
+inside the existing LR kernel's admitted domain. The operation returns a
+finite Schur expansion, not a general symmetric-function carrier.

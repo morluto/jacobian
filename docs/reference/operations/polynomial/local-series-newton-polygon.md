@@ -18,9 +18,19 @@ those edges and returns its characteristic polynomial over `QQ`. If its left
 endpoint has degree `j0`, each on-edge source term `a_j(t)y^j` contributes
 `lc(a_j) c^(j-j0)`. The result retains the source, edge, and transported
 leading coefficient for every term. Its nonzero roots are candidate leading
-coefficients under the edge valuation substitution. The operation does not
-adjoin roots, choose among them, or lift a branch; those steps require a target
-representation for algebraic coefficients and branch state.
+coefficients under the edge valuation substitution.
+
+`local_series.polynomial.newton_edge_characteristic_roots.compute` returns all
+roots with multiplicities when the edge polynomial has degree at most two.
+Rational roots remain rational; quadratic algebraic roots use the existing
+exact algebraic-root values. These are candidate leading coefficients, not
+lifted branches.
+
+`local_series.polynomial.smooth_branch_first_jet.compute` handles a separate
+smooth case: the caller supplies a rational simple root `c` of `F(0,y)`, and
+the operation returns `y(t)=c-F_t(0,c)/F_y(0,c)*t+O(t^2)`. It requires the
+coefficient prefixes through exponent one. It does not lift ramified, multiple,
+or algebraic-coefficient branches, or continue beyond the first jet.
 
 Admission is bounded to 256 coefficient rows, 8,192 aggregate Laurent slots,
 32,768 in `y` degree, and 256 digits per rational scalar. Empty and singleton

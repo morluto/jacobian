@@ -56,6 +56,11 @@ from jacobian.math.polynomials.local_series.puiseux_values import (
     PuiseuxTerm,
     TruncatedPuiseuxWindow,
 )
+from jacobian.math.polynomials.local_series.smooth_branch import (
+    SmoothBranchFirstJetRequest,
+    SmoothBranchFirstJetResult,
+    smooth_branch_first_jet,
+)
 from jacobian.math.polynomials.local_series.values import TruncatedLaurentWindow
 
 __all__ = [
@@ -73,6 +78,8 @@ __all__ = [
     "PuiseuxResidueResult",
     "PuiseuxTerm",
     "RationalFunctionExpansionResult",
+    "SmoothBranchFirstJetRequest",
+    "SmoothBranchFirstJetResult",
     "TruncatedLaurentWindow",
     "TruncatedPuiseuxWindow",
     "ValuationProfileResult",
@@ -102,6 +109,7 @@ __all__ = [
     "residue",
     "residue_puiseux",
     "shift",
+    "smooth_branch_first_jet",
     "subtract",
     "subtract_puiseux",
     "to_power_series",

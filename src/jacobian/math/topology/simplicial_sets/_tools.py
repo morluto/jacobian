@@ -21,6 +21,7 @@ from jacobian.math.topology.simplicial_sets.product_tools import TOOLS as PRODUC
 from jacobian.math.topology.simplicial_sets.standard_tools import (
     TOOLS as STANDARD_TOOLS,
 )
+from jacobian.math.topology.simplicial_sets.subset_tools import TOOLS as SUBSET_TOOLS
 from jacobian.math.topology.simplicial_sets.truncate_tools import (
     TOOLS as TRUNCATE_TOOLS,
 )
@@ -50,6 +51,7 @@ TOOLS = (
     *DEGENERACY_TOOLS,
     *MAP_TOOLS,
     *TRUNCATE_TOOLS,
+    *SUBSET_TOOLS,
     MathTool(
         operation_id="topology.simplicial_set.from_tables.compute",
         title="Check finite simplicial-set tables against every simplicial identity",

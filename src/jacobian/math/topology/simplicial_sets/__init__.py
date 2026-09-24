@@ -46,6 +46,11 @@ from jacobian.math.topology.simplicial_sets.standard import (
     simplex_horn,
     standard_simplex,
 )
+from jacobian.math.topology.simplicial_sets.subset import simplicial_subset
+from jacobian.math.topology.simplicial_sets.subset_models import (
+    SimplicialSubsetPrefix,
+    SimplicialSubsetRequest,
+)
 from jacobian.math.topology.simplicial_sets.truncate import truncate_simplicial_set
 from jacobian.math.topology.simplicial_sets.truncate_models import (
     SimplicialSetTruncateRequest,
@@ -65,6 +70,8 @@ __all__ = [
     "SimplicialSetProductResult",
     "SimplicialSetTablesResult",
     "SimplicialSetTruncateRequest",
+    "SimplicialSubsetPrefix",
+    "SimplicialSubsetRequest",
     "TruncatedSimplicialMap",
     "UnnormalizedChainsRequest",
     "UnnormalizedChainsResult",
@@ -79,6 +86,7 @@ __all__ = [
     "simplicial_set_coproduct",
     "simplicial_set_from_complex",
     "simplicial_set_product",
+    "simplicial_subset",
     "standard_simplex",
     "truncate_simplicial_set",
     "unnormalized_chains",

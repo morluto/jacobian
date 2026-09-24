@@ -238,28 +238,27 @@ def _canonical_weight(
             code="root_system.invalid_weight_lattice_shape",
             message="weight datum and coordinates must retain their typed axes",
         ) from error
-    if not isinstance(datum_value, FiniteCartanDatum) or not isinstance(
-        weight_cartan, CartanMatrix
-    ) or not _cartan_children_are_bounded(weight_cartan) or not isinstance(
-        root_to_weight, IntegerMatrix
-    ) or not _integer_matrix_children_are_bounded(root_to_weight) or not isinstance(
-        coroot_to_coweight, IntegerMatrix
-    ) or not _integer_matrix_children_are_bounded(coroot_to_coweight) or not isinstance(
-        symmetrizer, tuple
-    ) or len(symmetrizer) != len(weight_cartan) or any(
-        not isinstance(value, CanonicalRational) for value in symmetrizer
-    ) or not isinstance(coordinates_value, tuple) or len(
-        coordinates_value
-    ) != len(weight_cartan):
+    if (
+        not isinstance(datum_value, FiniteCartanDatum)
+        or not isinstance(weight_cartan, CartanMatrix)
+        or not _cartan_children_are_bounded(weight_cartan)
+        or not isinstance(root_to_weight, IntegerMatrix)
+        or not _integer_matrix_children_are_bounded(root_to_weight)
+        or not isinstance(coroot_to_coweight, IntegerMatrix)
+        or not _integer_matrix_children_are_bounded(coroot_to_coweight)
+        or not isinstance(symmetrizer, tuple)
+        or len(symmetrizer) != len(weight_cartan)
+        or any(not isinstance(value, CanonicalRational) for value in symmetrizer)
+        or not isinstance(coordinates_value, tuple)
+        or len(coordinates_value) != len(weight_cartan)
+    ):
         raise OperationDomainValidationError(
             location=("weight", "datum"),
             code="root_system.invalid_weight_lattice_shape",
             message="weight datum matrices, symmetrizer, and coordinates must retain their typed axes",
         )
     try:
-        return _canonical_lattice_vector(
-            weight, WeightLatticeVector, output_bound=True
-        )
+        return _canonical_lattice_vector(weight, WeightLatticeVector, output_bound=True)
     except OperationDomainValidationError:
         raise
     except (AttributeError, TypeError, ValueError, ValidationError) as error:

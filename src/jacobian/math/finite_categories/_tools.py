@@ -53,7 +53,7 @@ _TERMINAL_CATEGORY = {
 
 
 def compute_category_nerve(request: CategoryNerveRequest) -> FiniteCategoryNerve:
-    return nerve_prefix(request)
+    return nerve_prefix(request.category, request.max_degree)
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
@@ -138,8 +138,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "Construct N_k(C) as composable k-tuples through the requested degree, "
             "with exact face and degeneracy maps in a FiniteTruncatedSimplicialSet. "
             "Retain the source category and each simplex's morphism and vertex "
-            "transport. Degree counts, map rows, identity checks, and output are "
-            "preflight bounded."
+            "transport. Degree counts, map rows, total simplices, and identity "
+            "replay work are preflight bounded."
         ),
         request_type=CategoryNerveRequest,
         result_type=FiniteCategoryNerve,

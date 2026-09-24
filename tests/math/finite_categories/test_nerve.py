@@ -3,10 +3,12 @@
 import pytest
 
 from jacobian.catalog.catalog import Catalog
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.dispatch import invoke_operation
 from jacobian.math.finite_categories import (
-    CategoryNerveRequest,
     FiniteCategory,
     MorphismSpec,
     nerve_prefix,
@@ -32,7 +34,7 @@ def _interval() -> FiniteCategory:
 
 
 def test_interval_nerve_is_a_reusable_prefix_with_canonical_transport() -> None:
-    nerve = nerve_prefix(CategoryNerveRequest(category=_interval(), max_degree=2))
+    nerve = nerve_prefix(_interval(), 2)
     simplicial_set = nerve.simplicial_set
     assert nerve.category == _interval()
     assert tuple(map(len, simplicial_set.sets)) == (2, 3, 4)
@@ -82,7 +84,7 @@ def test_one_object_group_nerve_uses_composition_for_inner_faces() -> None:
             ("g", "g", "e"),
         ),
     )
-    nerve = nerve_prefix(CategoryNerveRequest(category=category, max_degree=2))
+    nerve = nerve_prefix(category, 2)
     simplicial_set = nerve.simplicial_set
     assert tuple(map(len, simplicial_set.sets)) == (1, 2, 4)
     two_simplices = nerve.simplex_morphisms[2]
@@ -94,9 +96,7 @@ def test_one_object_group_nerve_uses_composition_for_inner_faces() -> None:
 
 
 def test_nerve_simplicial_identities_are_exhausted_and_retained() -> None:
-    simplicial_set = nerve_prefix(
-        CategoryNerveRequest(category=_interval(), max_degree=2)
-    ).simplicial_set
+    simplicial_set = nerve_prefix(_interval(), 2).simplicial_set
     # The exact count is the finite identity families implemented by the set owner.
     assert simplicial_set.checked_identities == 3 + 1 + 8
 
@@ -117,7 +117,65 @@ def test_nerve_growth_is_rejected_before_materializing_an_oversized_degree() -> 
         ),
     )
     with pytest.raises(OperationResourceAdmissionError, match="degree 3"):
-        nerve_prefix(CategoryNerveRequest(category=category, max_degree=3))
+        nerve_prefix(category, 3)
+
+
+def _left_identity_violation() -> FiniteCategory:
+    # id_B∘g is declared to be f (both A→B), breaking the left identity law
+    # id_B∘g = g while every presentation-shape check still passes.
+    return FiniteCategory(
+        objects=("A", "B"),
+        morphisms=(
+            MorphismSpec(morphism_id="id_A", source="A", target="A"),
+            MorphismSpec(morphism_id="id_B", source="B", target="B"),
+            MorphismSpec(morphism_id="f", source="A", target="B"),
+            MorphismSpec(morphism_id="g", source="A", target="B"),
+        ),
+        identities=(("A", "id_A"), ("B", "id_B")),
+        composition=(
+            ("id_A", "id_A", "id_A"),
+            ("f", "id_A", "f"),
+            ("g", "id_A", "g"),
+            ("id_B", "id_B", "id_B"),
+            ("id_B", "f", "f"),
+            ("id_B", "g", "f"),
+        ),
+    )
+
+
+@pytest.mark.parametrize("max_degree", [0, 1, 2])
+def test_law_violating_category_is_rejected_as_a_domain_error(
+    max_degree: int,
+) -> None:
+    with pytest.raises(OperationDomainValidationError) as error:
+        nerve_prefix(_left_identity_violation(), max_degree)
+    assert error.value.errors()[0]["type"] == "finite_category.left_identity_law"
+
+
+def _discrete_category(count: int) -> FiniteCategory:
+    labels = tuple(f"o{i}" for i in range(count))
+    return FiniteCategory(
+        objects=labels,
+        morphisms=tuple(
+            MorphismSpec(morphism_id=f"id_{obj}", source=obj, target=obj)
+            for obj in labels
+        ),
+        identities=tuple((obj, f"id_{obj}") for obj in labels),
+        composition=tuple((f"id_{obj}", f"id_{obj}", f"id_{obj}") for obj in labels),
+    )
+
+
+def test_degree_zero_nerve_admits_the_per_degree_simplex_bound() -> None:
+    # N_0 of a 33-object discrete category is 33 vertices, above the
+    # 32-simplex per-degree bound; admission must reject before expansion.
+    oversized = _discrete_category(33)
+    with pytest.raises(
+        OperationResourceAdmissionError, match="nerve degree 0 has 33 simplices"
+    ):
+        nerve_prefix(oversized, 0)
+    # The one-below boundary stays accepted with its exact hand-counted nerve.
+    admitted = nerve_prefix(_discrete_category(32), 0)
+    assert tuple(map(len, admitted.simplicial_set.sets)) == (32,)
 
 
 def test_published_nerve_example_runs_through_the_catalog() -> None:

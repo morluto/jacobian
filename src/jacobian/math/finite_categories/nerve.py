@@ -2,14 +2,19 @@
 
 from __future__ import annotations
 
-import json
+from pydantic_core import PydanticCustomError
 
-from jacobian.catalog.models import OperationResourceAdmissionError
-from jacobian.math.finite_categories._models import (
-    CategoryNerveRequest,
-    FiniteCategoryNerve,
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
 )
-from jacobian.math.finite_categories.values import CategoryIdentifier, FiniteCategory
+from jacobian.math.finite_categories._models import FiniteCategoryNerve
+from jacobian.math.finite_categories.values import (
+    CategoryIdentifier,
+    FiniteCategory,
+    MorphismSpec,
+    _check_category_laws,
+)
 from jacobian.math.topology.simplicial_sets._models import (
     MAX_SIMPLICES_PER_DEGREE,
     MAX_SIMPLICIAL_SET_DEGREE,
@@ -17,10 +22,17 @@ from jacobian.math.topology.simplicial_sets._models import (
 )
 from jacobian.math.topology.simplicial_sets.operations import from_tables
 
-MAX_CATEGORY_NERVE_OUTPUT_BYTES = 8_000_000
+NERVE_IDENTITY_WORK_BOUND = 100_000
 
 
-def _category_tables(category: FiniteCategory):
+def _category_tables(
+    category: FiniteCategory,
+) -> tuple[
+    dict[CategoryIdentifier, MorphismSpec],
+    dict[CategoryIdentifier, CategoryIdentifier],
+    dict[tuple[CategoryIdentifier, CategoryIdentifier], CategoryIdentifier],
+    dict[CategoryIdentifier, list[CategoryIdentifier]],
+]:
     morphisms = category.morphisms
     by_id = {morphism.morphism_id: morphism for morphism in morphisms}
     identities = dict(category.identities)
@@ -33,24 +45,37 @@ def _category_tables(category: FiniteCategory):
     return by_id, identities, composition, outgoing
 
 
-def _admit(request: CategoryNerveRequest) -> None:
-    degree = request.max_degree
+def _admit(category: FiniteCategory, degree: int) -> None:
     if isinstance(degree, bool) or not 0 <= degree <= MAX_SIMPLICIAL_SET_DEGREE:
         raise OperationResourceAdmissionError(
             location=("max_degree",),
             code="finite_category.nerve_degree_out_of_bounds",
             message=f"max_degree must lie in 0..{MAX_SIMPLICIAL_SET_DEGREE}",
         )
-    category = request.category
     if not category.objects:
         raise OperationResourceAdmissionError(
             location=("category",),
             code="finite_category.nerve_empty_category",
             message="the nonempty simplicial-set carrier cannot represent an empty nerve",
         )
+    try:
+        _check_category_laws(category)
+    except PydanticCustomError as exc:
+        raise OperationDomainValidationError(
+            location=("category",), code=exc.type, message=exc.message()
+        ) from exc
     by_id, _, _, outgoing = _category_tables(category)
     endpoint_counts = dict.fromkeys(category.objects, 1)
     sizes = [len(category.objects)]
+    if sizes[0] > MAX_SIMPLICES_PER_DEGREE:
+        raise OperationResourceAdmissionError(
+            location=("max_degree",),
+            code="finite_category.nerve_degree_size_budget",
+            message=(
+                f"nerve degree 0 has {sizes[0]} simplices, exceeding "
+                f"the {MAX_SIMPLICES_PER_DEGREE}-simplex bound"
+            ),
+        )
     for _ in range(degree):
         next_counts = dict.fromkeys(category.objects, 0)
         for obj, count in endpoint_counts.items():
@@ -76,40 +101,12 @@ def _admit(request: CategoryNerveRequest) -> None:
             code="finite_category.nerve_simplex_budget",
             message="the nerve prefix exceeds the finite simplicial-set simplex bound",
         )
-    map_cells = sum((n + 1) * sizes[n] for n in range(1, degree + 1))
-    map_cells += sum((n + 1) * sizes[n] for n in range(degree))
-    identity_checks = sum((n + 1) * n // 2 for n in range(2, degree + 1))
-    identity_checks += sum((n + 1) * (n + 2) // 2 for n in range(max(0, degree - 1)))
-    identity_checks += sum((n + 1) * (n + 2) for n in range(degree))
-    max_id_bytes = max(
-        (
-            len(json.dumps(identifier, ensure_ascii=False))
-            for morphism in category.morphisms
-            for identifier in (morphism.morphism_id, morphism.source, morphism.target)
-        ),
-        default=2,
-    )
-    provenance_bytes = sum(
-        size * (256 + (2 * n + 1) * max_id_bytes) for n, size in enumerate(sizes)
-    )
     identity_work = sum(sizes[n] * ((n + 1) * n // 2) for n in range(2, degree + 1))
     identity_work += sum(
         sizes[n] * ((n + 1) * (n + 2) // 2) for n in range(max(0, degree - 1))
     )
     identity_work += sum(sizes[n] * ((n + 1) * (n + 2)) for n in range(degree))
-    estimated_bytes = (
-        len(category.model_dump_json())
-        + provenance_bytes
-        + map_cells * 12
-        + identity_checks * 24
-    )
-    if estimated_bytes > MAX_CATEGORY_NERVE_OUTPUT_BYTES:
-        raise OperationResourceAdmissionError(
-            location=("max_degree",),
-            code="finite_category.nerve_output_budget",
-            message="the nerve source maps and simplex provenance exceed the output-byte bound",
-        )
-    if identity_work > 100_000:
+    if identity_work > NERVE_IDENTITY_WORK_BOUND:
         raise OperationResourceAdmissionError(
             location=("max_degree",),
             code="finite_category.nerve_identity_work_budget",
@@ -117,11 +114,9 @@ def _admit(request: CategoryNerveRequest) -> None:
         )
 
 
-def nerve_prefix(request: CategoryNerveRequest) -> FiniteCategoryNerve:
+def nerve_prefix(category: FiniteCategory, max_degree: int) -> FiniteCategoryNerve:
     """Construct the nerve prefix and check its simplicial identities once."""
-    _admit(request)
-    category = request.category
-    max_degree = request.max_degree
+    _admit(category, max_degree)
     by_id, identities, composition, outgoing = _category_tables(category)
 
     levels: list[

@@ -78,6 +78,29 @@ def one_dimensional_fan() -> PeriodicFanPresentation:
     )
 
 
+def square_polygon_fan() -> PeriodicFanPresentation:
+    return PeriodicFanPresentation(
+        lattice_rank=2,
+        period_basis=((q(1), q(0)), (q(0), q(1))),
+        vertices=((0, 0), (1, 0), (0, 1), (1, 1)),
+        # The vertex sequence is a counterclockwise boundary cycle.
+        cells=((0, 1, 3, 2),),
+        overlap_candidates=all_translates(1, 2, 1),
+    )
+
+
+def hexagon_and_triangles_fan() -> PeriodicFanPresentation:
+    # Opposite corners of the square fundamental domain are cut off so that
+    # boundary faces match under period translations.
+    return PeriodicFanPresentation(
+        lattice_rank=2,
+        period_basis=((q(2), q(0)), (q(0), q(2))),
+        vertices=((0, 0), (1, 0), (2, 1), (2, 2), (1, 2), (0, 1), (2, 0), (0, 2)),
+        cells=((0, 1, 2, 3, 4, 5), (1, 2, 6), (4, 5, 7)),
+        overlap_candidates=all_translates(3, 2, 2),
+    )
+
+
 def rank_deficient_fan() -> PeriodicFanPresentation:
     return PeriodicFanPresentation(
         lattice_rank=1,
@@ -149,6 +172,70 @@ def test_one_dimensional_periodic_fan() -> None:
         (0, 1),
         (1, 1),
     }
+
+
+def test_periodic_quadrilateral_returns_its_polygon_face_lattice() -> None:
+    result = validate_periodic_fan(square_polygon_fan())
+    assert result.status == "VALID"
+    assert result.period_index == 1
+    by_dimension: dict[int, int] = {}
+    for cell in result.quotient_cells:
+        by_dimension[cell.dimension] = by_dimension.get(cell.dimension, 0) + 1
+    # A square tiling of the plane has one vertex orbit, two edge orbits,
+    # and one polygon orbit. Its diagonal is not a face.
+    assert by_dimension == {0: 1, 1: 2, 2: 1}
+    assert len(result.face_orbit_rows) == 9
+    ids_by_dimension = {
+        dimension: {
+            cell.cell_id
+            for cell in result.quotient_cells
+            if cell.dimension == dimension
+        }
+        for dimension in range(3)
+    }
+    relations = {(row.tau_cell_id, row.sigma_cell_id) for row in result.face_relations}
+    expected_relations = {
+        (cell_id, cell_id) for ids in ids_by_dimension.values() for cell_id in ids
+    }
+    polygon_id = next(iter(ids_by_dimension[2]))
+    expected_relations.update(
+        (vertex_id, edge_id)
+        for vertex_id in ids_by_dimension[0]
+        for edge_id in ids_by_dimension[1]
+    )
+    expected_relations.update(
+        (face_id, polygon_id)
+        for face_id in (*ids_by_dimension[0], *ids_by_dimension[1])
+    )
+    assert relations == expected_relations
+
+
+def test_periodic_hexagon_and_triangles_cover_fundamental_domain() -> None:
+    result = validate_periodic_fan(hexagon_and_triangles_fan())
+    assert result.status == "VALID"
+    assert result.covers_fundamental_domain is True
+    assert sum(cell.dimension == 2 for cell in result.quotient_cells) == 3
+
+
+def test_periodic_quadrilateral_rejects_nonconvex_vertex_cycle() -> None:
+    fan = PeriodicFanPresentation(
+        lattice_rank=2,
+        period_basis=((q(2), q(0)), (q(0), q(2))),
+        vertices=((0, 0), (2, 0), (0, 2), (2, 2)),
+        cells=((0, 1, 2, 3),),
+    )
+    result = validate_periodic_fan(fan)
+    assert result.status == "INVALID"
+    assert result.obstruction_code == (
+        "geometry.periodic_fan.polygon_not_strictly_convex"
+    )
+
+
+def test_unimodularity_claim_is_rejected_for_a_polygon_cell() -> None:
+    payload = square_polygon_fan().model_dump()
+    payload["unimodular_cells"] = (0,)
+    with pytest.raises(ValidationError, match="unimodularity claims"):
+        PeriodicFanPresentation.model_validate(payload)
 
 
 def test_period_lattice_rank_deficient_is_rejected() -> None:
@@ -233,6 +320,12 @@ def test_validation_result_round_trips_through_strict_json() -> None:
     )
     assert replayed_invalid == invalid
     assert replayed_invalid.fan == invalid.fan
+
+    polygon = validate_periodic_fan(square_polygon_fan())
+    replayed_polygon = PeriodicFanValidationResult.model_validate_json(
+        polygon.model_dump_json()
+    )
+    assert replayed_polygon == polygon
 
 
 def test_catalog_and_native_paths_share_one_recognition() -> None:

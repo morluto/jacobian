@@ -9,3 +9,4 @@
 - [Projective plane-curve singularity profiles](projective-plane-curve-singularities.md)
 - [Bounded regular plane-curve arclength](plane-curve-arclength.md)
 - [Rational coordinate covariant derivatives](rational-covariant-derivatives.md)
+- [Periodic-fan quotients](periodic-fan-quotients.md)

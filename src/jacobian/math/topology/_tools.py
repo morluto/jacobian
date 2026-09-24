@@ -1,6 +1,7 @@
 """Finite simplicial topology domain."""
 
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
+from jacobian.math.polynomials._models import IntegerPolynomial
 from jacobian.math.topology._homology import (
     IntegralSimplicialHomologyRequest,
     IntegralSimplicialHomologyResult,
@@ -29,14 +30,22 @@ from jacobian.math.topology._structural import (
     ConeResult,
     ElementaryCollapseRequest,
     ElementaryCollapseResult,
+    FaceEnumeratorRequest,
     FVectorRequest,
     FVectorResult,
+    GVectorResult,
+    InducedSubcomplexRequest,
+    InducedSubcomplexResult,
     JoinRequest,
     JoinResult,
     LinkRequest,
     LinkResult,
+    MinimalNonfacesRequest,
+    MinimalNonfacesResult,
     SkeletonRequest,
     SkeletonResult,
+    StanleyReisnerIdealRequest,
+    StanleyReisnerIdealResult,
     StarRequest,
     StarResult,
     VertexDeletionRequest,
@@ -45,9 +54,14 @@ from jacobian.math.topology._structural import (
     compute_cone,
     compute_elementary_collapse,
     compute_f_vector,
+    compute_face_enumerator,
+    compute_g_vector,
+    compute_induced_subcomplex,
     compute_join,
     compute_link,
+    compute_minimal_nonfaces,
     compute_skeleton,
+    compute_stanley_reisner_ideal,
     compute_star,
     compute_vertex_deletion,
 )
@@ -330,6 +344,68 @@ _f_vector_tool = MathTool(
     ),
 )
 
+_g_vector_tool = MathTool(
+    operation_id="topology.simplicial_complex.g_vector.compute",
+    title="Compute the g-vector of a simplicial complex",
+    description=(
+        "Compute f- and h-vectors and the conventional initial h-differences "
+        "g_i=h_i-h_(i-1) through the midpoint. This transform makes no "
+        "manifold, sphere, or nonnegativity claim."
+    ),
+    request_type=FVectorRequest,
+    result_type=GVectorResult,
+    run=compute_g_vector,
+    tags=("topology", "simplicial", "exact"),
+    examples=(
+        OperationExample(
+            name="four_cycle_g_vector",
+            description="The boundary of a quadrilateral has g-vector (1, 1).",
+            input={
+                "complex": {
+                    "vertices": ["a", "b", "c", "d"],
+                    "facets": [["a", "b"], ["b", "c"], ["c", "d"], ["a", "d"]],
+                }
+            },
+        ),
+    ),
+)
+
+_face_enumerator_tool = MathTool(
+    operation_id="topology.simplicial_complex.face_enumerator.compute",
+    title="Compute the simplicial face enumerator",
+    description=(
+        "Return the canonical integer polynomial F_K(t)=sum_sigma t^|sigma|, "
+        "where sigma ranges over every face including the empty face. The empty "
+        "face contributes the constant term one; coefficients are in descending "
+        "degree order and the result composes directly with integer-polynomial "
+        "operations."
+    ),
+    request_type=FaceEnumeratorRequest,
+    result_type=IntegerPolynomial,
+    run=compute_face_enumerator,
+    tags=("topology", "simplicial", "face-enumerator", "polynomial", "exact"),
+    discovery_terms=(
+        "simplicial face enumerator",
+        "simplicial f-polynomial",
+        "face-count polynomial",
+    ),
+    examples=(
+        OperationExample(
+            name="filled_triangle_face_enumerator",
+            description=(
+                "Count every face of a filled triangle by cardinality; facets "
+                "must be maximal simplices and the empty face contributes one."
+            ),
+            input={
+                "complex": {
+                    "vertices": ["a", "b", "c"],
+                    "facets": [["a", "b", "c"]],
+                }
+            },
+        ),
+    ),
+)
+
 _link_tool = MathTool(
     operation_id="topology.simplicial_complex.link.compute",
     title="Compute the link of a simplex",
@@ -412,6 +488,44 @@ _vertex_deletion_tool = MathTool(
     ),
 )
 
+_induced_subcomplex_tool = MathTool(
+    operation_id="topology.simplicial_complex.induced_subcomplex.compute",
+    title="Compute an induced subcomplex on selected vertices",
+    description=(
+        "Take the full subcomplex on a nonempty selected vertex subset of a "
+        "canonical finite simplicial complex. Return its exact face closure "
+        "and the image or deletion status of every source face."
+    ),
+    request_type=InducedSubcomplexRequest,
+    result_type=InducedSubcomplexResult,
+    run=compute_induced_subcomplex,
+    tags=("topology", "simplicial", "exact"),
+    examples=(
+        OperationExample(
+            name="induce_edge_from_triangle",
+            description="Restrict a filled triangle to two of its vertices.",
+            input={
+                "complex": {
+                    "vertices": ["a", "b", "c"],
+                    "maximal_simplices": [["a", "b", "c"]],
+                    "faces_by_dimension": [
+                        {"dimension": 0, "faces": [["a"], ["b"], ["c"]]},
+                        {
+                            "dimension": 1,
+                            "faces": [["a", "b"], ["a", "c"], ["b", "c"]],
+                        },
+                        {"dimension": 2, "faces": [["a", "b", "c"]]},
+                    ],
+                    "f_vector": [3, 3, 1],
+                    "dimension": 2,
+                    "closure_size": 7,
+                },
+                "selected_vertices": ["a", "b"],
+            },
+        ),
+    ),
+)
+
 _skeleton_tool = MathTool(
     operation_id="topology.simplicial_complex.skeleton.compute",
     title="Compute the k-skeleton of a simplicial complex",
@@ -473,7 +587,9 @@ _barycentric_subdivision_tool = MathTool(
     description=(
         "Compute the barycentric subdivision (order complex) of a finite "
         "simplicial complex: new vertices are nonempty faces, new simplices "
-        "are strict face chains."
+        "are strict face chains. Each output facet carries its exact source-face "
+        "chain. The complete subdivision must fit 128 maximal chains and 2048 "
+        "nonempty faces."
     ),
     request_type=BarycentricSubdivisionRequest,
     result_type=BarycentricSubdivisionResult,
@@ -637,15 +753,81 @@ _boundary_tool = MathTool(
     ),
 )
 
+_minimal_nonfaces_tool = MathTool(
+    operation_id="topology.simplicial_complex.minimal_nonfaces.compute",
+    title="Enumerate minimal nonfaces of a finite simplicial complex",
+    description=(
+        "Return every inclusion-minimal vertex subset absent from a canonical "
+        "finite simplicial complex, as a source-bound antichain in source "
+        "vertex order. The exact powerset, immediate-subface work, source "
+        "closure, and output are preflight-bounded; the current carrier admits "
+        "at most 14 vertices for this enumeration."
+    ),
+    request_type=MinimalNonfacesRequest,
+    result_type=MinimalNonfacesResult,
+    run=compute_minimal_nonfaces,
+    tags=("topology", "simplicial", "minimal-nonfaces", "antichain", "exact"),
+    discovery_terms=(
+        "minimal nonfaces of a simplicial complex",
+        "forbidden faces",
+        "minimal generators of a Stanley-Reisner ideal",
+    ),
+    examples=(
+        OperationExample(
+            name="boundary_triangle_minimal_nonface",
+            description=(
+                "The three edges form the boundary of a triangle; the only "
+                "minimal nonface is the full three-vertex set."
+            ),
+            input={"complex": _CANONICAL_CIRCLE},
+        ),
+    ),
+)
+
+_stanley_reisner_ideal_tool = MathTool(
+    operation_id="topology.simplicial_complex.stanley_reisner_ideal.compute",
+    title="Construct the Stanley-Reisner ideal of a finite simplicial complex",
+    description=(
+        "Return the exact squarefree monomial ideal generated by all minimal "
+        "nonfaces, with an explicit ordered binding from source vertex IDs to "
+        "collision-free polynomial variables. The current polynomial carrier "
+        "admits at most eight vertices and 64 generators; a simplex returns "
+        "the canonical zero ideal. Enumeration and result size are bounded."
+    ),
+    request_type=StanleyReisnerIdealRequest,
+    result_type=StanleyReisnerIdealResult,
+    run=compute_stanley_reisner_ideal,
+    tags=("topology", "simplicial", "Stanley-Reisner", "monomial-ideal", "exact"),
+    discovery_terms=(
+        "Stanley-Reisner ideal of a simplicial complex",
+        "minimal nonfaces squarefree monomial generators",
+    ),
+    examples=(
+        OperationExample(
+            name="triangle_boundary_ideal",
+            description=(
+                "The boundary of a triangle has one minimal nonface, "
+                "so its ideal is generated by v0*v1*v2."
+            ),
+            input={"complex": _CANONICAL_CIRCLE},
+        ),
+    ),
+)
+
 TOOLS: MathTools = (
     *TOPOLOGY_OPERATIONS,
     *RELEASE_TOOLS,
     _cone_tool,
     _boundary_tool,
+    _minimal_nonfaces_tool,
+    _stanley_reisner_ideal_tool,
     _f_vector_tool,
+    _g_vector_tool,
+    _face_enumerator_tool,
     _link_tool,
     _star_tool,
     _vertex_deletion_tool,
+    _induced_subcomplex_tool,
     _skeleton_tool,
     _join_tool,
     _barycentric_subdivision_tool,

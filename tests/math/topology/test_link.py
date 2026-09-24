@@ -84,7 +84,7 @@ def test_f_vector_filled_triangle() -> None:
         )
     )
     result = compute_f_vector(request)
-    assert result.f_vector == (3, 3, 1)
+    assert result.f_vector == (1, 3, 3, 1)
     assert result.h_vector == (1, 0, 0, 0)
 
 
@@ -96,7 +96,7 @@ def test_f_vector_single_edge() -> None:
         complex=_complex({"vertices": ["v0", "v1"], "facets": [["v0", "v1"]]})
     )
     result = compute_f_vector(request)
-    assert result.f_vector == (2, 1)
+    assert result.f_vector == (1, 2, 1)
     assert result.h_vector == (1, 0, 0)
 
 

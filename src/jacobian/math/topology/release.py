@@ -12,6 +12,7 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
+from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
 from jacobian.math.topology._models import (
     FiniteSimplicialComplex,
     HomologyConvention,
@@ -28,6 +29,7 @@ MAX_FACE_POSET_PAIR_CANDIDATES = 1_000_000
 MAX_FACE_POSET_CHAIN_CANDIDATES = 100_000
 MAX_CLIQUE_CANDIDATES = 100_000
 MAX_CLIQUE_FACETS = 16_384
+MAX_GRAPH_CLIQUE_VERTICES = 8
 
 
 class FacePosetRequest(StrictModel):
@@ -43,6 +45,10 @@ class FacePosetResult(StrictModel):
 
 class CliqueRequest(StrictModel):
     complex: SimplicialComplexRequest
+
+
+class GraphCliqueRequest(StrictModel):
+    graph: IndexedSimpleUndirectedGraph
 
 
 class CliqueResult(StrictModel):
@@ -198,6 +204,36 @@ def clique_complex(request: CliqueRequest) -> CliqueResult:
         graph_edges=edges,
         clique_facets=maximal,
         clique_complex=result_complex,
+    )
+
+
+def graph_clique_complex(request: GraphCliqueRequest) -> CliqueResult:
+    """Return the flag complex of a bounded indexed graph.
+
+    The graph is encoded as a one-dimensional finite simplicial complex and
+    passed through the same exact clique kernel used by complex completion.
+    Eight vertices is the largest envelope whose entire nonempty powerset
+    stays within the canonical simplicial carrier's dimension-seven limit.
+    """
+    graph = request.graph
+    if not 1 <= graph.vertex_count <= MAX_GRAPH_CLIQUE_VERTICES:
+        raise OperationResourceAdmissionError(
+            location=("graph", "vertex_count"),
+            code="topology.graph_clique.vertex_budget",
+            message="graph clique complexes admit between 1 and 8 vertices",
+        )
+    vertices = tuple(f"v{index}" for index in range(graph.vertex_count))
+    endpoints = {vertex for edge in graph.edges for vertex in edge}
+    facets = tuple((vertices[left], vertices[right]) for left, right in graph.edges)
+    facets += tuple(
+        (vertices[index],)
+        for index in range(graph.vertex_count)
+        if index not in endpoints
+    )
+    return clique_complex(
+        CliqueRequest(
+            complex=SimplicialComplexRequest(vertices=vertices, facets=facets)
+        )
     )
 
 
@@ -402,6 +438,7 @@ __all__ = [
     "CliqueResult",
     "FacePosetRequest",
     "FacePosetResult",
+    "GraphCliqueRequest",
     "HomologyManifoldRequest",
     "HomologyManifoldResult",
     "LocalHomologyRequest",
@@ -410,6 +447,7 @@ __all__ = [
     "OrientabilityResult",
     "clique_complex",
     "face_poset",
+    "graph_clique_complex",
     "homology_manifold",
     "local_homology",
     "orientability",

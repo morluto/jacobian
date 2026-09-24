@@ -12,6 +12,7 @@ exact direct operations:
 - `topology.simplicial_complex.face_enumerator.compute`
 - `topology.simplicial_complex.g_vector.compute`
 - `topology.simplicial_complex.clique_from_graph.compute`
+- `topology.poset.order_complex.compute`
 - `topology.simplicial_complex.one_skeleton.compute`
 - `topology.simplicial_homology.compute`
 - `topology.simplicial_homology.integral.compute`
@@ -54,6 +55,11 @@ faces. Admission counts maximal chains before enumerating them (at most 128)
 and checks the complete output face closure (at most 2048 nonempty faces).
 This allows low-output cases such as a 32-point discrete complex while
 rejecting a simplex whose order complex has too many maximal chains.
+
+The reusable `topology.poset.order_complex.compute` operation applies the same
+chain construction to any admitted `FinitePoset`, retaining the exact element
+labels on the output vertex axis. See the [order-complex contract](../topology/order-complex.md)
+for its exact face, dimension, maximal-chain, work, and output bounds.
 
 `induced_subcomplex.compute` selects a nonempty subset of the canonical
 vertex axis and returns the full subcomplex whose faces are exactly the source

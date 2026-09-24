@@ -19,6 +19,10 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
+from jacobian.math.geometry.differential._recognition_process import (
+    RationalFunctionRecognitionCandidate,
+    recognize_canonical_rational_functions,
+)
 from jacobian.math.polynomials._conversions import (
     rational_polynomial_from_sympy,
     sparse_rational_polynomial_to_sympy,
@@ -43,6 +47,10 @@ from jacobian.math.polynomials.rational_functions._bounds import (
 from jacobian.math.polynomials.rational_functions.composition._models import (
     RationalFunctionMapComposition,
     guard_key,
+)
+from jacobian.math.polynomials.rational_functions.gradient._gcd_process import (
+    KernelBatchInputLimitError,
+    normalize_admitted_fractions,
 )
 from jacobian.math.polynomials.rational_functions.gradient._kernel import (
     _normalize_fraction,
@@ -82,6 +90,41 @@ def _reject_undefined_outer_denominator() -> NoReturn:
 
 def _component_identity(component: RationalFunction) -> bytes:
     return encode_strict_json(component.model_dump(mode="json"))
+
+
+def _recognize_composition_sources(
+    components: tuple[RationalFunction, ...], *, deadline: float
+) -> None:
+    """Recognize all admitted nontrivial composition sources in one worker."""
+
+    candidates: list[RationalFunctionRecognitionCandidate] = []
+    for index, component in enumerate(components):
+        request_checkpoint("before composition source recognition")
+        if (
+            not component.numerator.terms
+            or not component.variables
+            or len(component.denominator.terms) == 1
+        ):
+            # Preserve the direct exact checks for cases with an immediate
+            # coprimality witness; only GCD-backed cases enter the worker batch.
+            _recognize_source(component, deadline)
+            continue
+        candidates.append(
+            RationalFunctionRecognitionCandidate(
+                owner="tensor", component=index, value=component
+            )
+        )
+    if not candidates:
+        return
+    recognition = recognize_canonical_rational_functions(
+        tuple(candidates), deadline=deadline
+    )
+    if recognition.non_coprime is not None:
+        raise OperationDomainValidationError(
+            location=(),
+            code="not_coprime",
+            message="rational-function numerator and denominator must be coprime",
+        )
 
 
 def _equal_inner_substitution_vanishes(
@@ -742,13 +785,14 @@ def compose_maps(  # noqa: C901
         component for component in (*outer.components, *inner.components)
     )
     recognized: set[bytes] = set()
+    recognition_sources: list[RationalFunction] = []
     for component in require_canonical:
         identity = _component_identity(component)
         if identity in recognized:
             continue
         recognized.add(identity)
-        request_checkpoint("before composition source recognition")
-        _recognize_source(component)
+        recognition_sources.append(component)
+    _recognize_composition_sources(tuple(recognition_sources), deadline=deadline)
     outer_components = require_canonical[: len(outer.components)]
     inner_components = require_canonical[len(outer.components) :]
     if use_monomial_path:
@@ -847,45 +891,75 @@ def compose_maps(  # noqa: C901
 
     composites: list[RationalFunction] = []
     composite_rows: dict[bytes, RationalFunction] = {}
-    for outer_component, prepared_component in zip(
-        outer_components, prepared, strict=True
-    ):
-        request_checkpoint("before rational map composition output row")
-        identity = _component_identity(outer_component)
-        cached = composite_rows.get(identity)
-        if cached is not None:
-            composites.append(cached)
-            continue
-        if use_monomial_path:
-            prepared_numerator = prepared_component.numerator
-            prepared_numerator_denominator = prepared_component.numerator_denominator
-            prepared_denominator = prepared_component.denominator
-            prepared_denominator_denominator = (
-                prepared_component.denominator_denominator
+    for chunk_start in range(0, len(outer_components), 8):
+        pending_identities: set[bytes] = set()
+        pending_rows: list[tuple[bytes, RationalFunction, Any, Any, Any, Any]] = []
+        normalization_pairs: list[tuple[Any, Any]] = []
+        for outer_component, prepared_component in zip(
+            outer_components[chunk_start : chunk_start + 8],
+            prepared[chunk_start : chunk_start + 8],
+            strict=True,
+        ):
+            request_checkpoint("before rational map composition output row")
+            identity = _component_identity(outer_component)
+            if identity in composite_rows or identity in pending_identities:
+                continue
+            if use_monomial_path:
+                prepared_numerator = prepared_component.numerator
+                prepared_numerator_denominator = prepared_component.numerator_denominator
+                prepared_denominator = prepared_component.denominator
+                prepared_denominator_denominator = (
+                    prepared_component.denominator_denominator
+                )
+                if (
+                    prepared_numerator is None
+                    or prepared_numerator_denominator is None
+                    or prepared_denominator is None
+                    or prepared_denominator_denominator is None
+                ):
+                    raise RuntimeError("monomial composition preparation is incomplete")
+                p_num = _prepared_poly_to_sympy(prepared_numerator, xvars)
+                p_den = _prepared_poly_to_sympy(prepared_numerator_denominator, xvars)
+                q_num = _prepared_poly_to_sympy(prepared_denominator, xvars)
+                q_den = _prepared_poly_to_sympy(prepared_denominator_denominator, xvars)
+            else:
+                p_num, p_den = substitute(outer_component.numerator)
+                q_num, q_den = substitute(outer_component.denominator)
+            if q_num.is_zero:
+                _reject_undefined_outer_denominator()
+            pending_identities.add(identity)
+            pending_rows.append(
+                (identity, outer_component, p_num, p_den, q_num, q_den)
             )
-            if (
-                prepared_numerator is None
-                or prepared_numerator_denominator is None
-                or prepared_denominator is None
-                or prepared_denominator_denominator is None
-            ):
-                raise RuntimeError("monomial composition preparation is incomplete")
-            p_num = _prepared_poly_to_sympy(prepared_numerator, xvars)
-            p_den = _prepared_poly_to_sympy(prepared_numerator_denominator, xvars)
-            q_num = _prepared_poly_to_sympy(prepared_denominator, xvars)
-            q_den = _prepared_poly_to_sympy(prepared_denominator_denominator, xvars)
-        else:
-            p_num, p_den = substitute(outer_component.numerator)
-            q_num, q_den = substitute(outer_component.denominator)
-        if q_num.is_zero:
-            _reject_undefined_outer_denominator()
-        denominator_value = _normalize_fraction(q_num, q_den, xvars)
-        outer_guard = _monic_guard(denominator_value)
-        if outer_guard is not None:
-            guards.append(outer_guard)
-        value = _normalize_fraction(p_num * q_den, p_den * q_num, xvars)
-        composite_rows[identity] = value
-        composites.append(value)
+            normalization_pairs.extend(
+                ((q_num, q_den), (p_num * q_den, p_den * q_num))
+            )
+        if not normalization_pairs:
+            continue
+        request_checkpoint("before rational map composition normalization batch")
+        try:
+            normalized = normalize_admitted_fractions(
+                tuple(normalization_pairs), xvars
+            )
+        except KernelBatchInputLimitError:
+            # Batching is an execution optimization. A large aggregate request
+            # falls back to the already admitted exact single-row worker path.
+            normalized = tuple(
+                _normalize_fraction(numerator, denominator, xvars)
+                for numerator, denominator in normalization_pairs
+            )
+        for row_index, (identity, _component, *_polynomials) in enumerate(
+            pending_rows
+        ):
+            request_checkpoint("after rational map composition normalization row")
+            denominator_value = normalized[2 * row_index]
+            outer_guard = _monic_guard(denominator_value)
+            if outer_guard is not None:
+                guards.append(outer_guard)
+            composite_rows[identity] = normalized[2 * row_index + 1]
+    composites = [
+        composite_rows[_component_identity(component)] for component in outer_components
+    ]
     guards = sorted(
         {guard_key(guard): guard for guard in guards}.values(), key=guard_key
     )

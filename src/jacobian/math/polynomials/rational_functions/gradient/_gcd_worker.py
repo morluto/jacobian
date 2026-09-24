@@ -205,6 +205,29 @@ def _differentiate(
     return {"derivatives": derivatives} if batch else derivatives[0]
 
 
+def _normalize_batch(
+    payload: dict[str, Any], variable_count: int, generators: tuple[Any, ...]
+) -> dict[str, Any]:
+    if set(payload) != {"task", "variable_count", "fractions"}:
+        raise ValueError("malformed kernel request")
+    fractions = payload["fractions"]
+    if not isinstance(fractions, list) or not 1 <= len(fractions) <= 16:
+        raise ValueError("malformed kernel request")
+    results = []
+    for item in fractions:
+        if (
+            not isinstance(item, dict)
+            or set(item) != {"numerator", "denominator"}
+            or not isinstance(item["numerator"], list)
+            or not isinstance(item["denominator"], list)
+        ):
+            raise ValueError("malformed kernel request")
+        numerator = _polynomial(item["numerator"], variable_count, generators)
+        denominator = _polynomial(item["denominator"], variable_count, generators)
+        results.append(_normalize_pair(numerator, denominator, None, variable_count))
+    return {"fractions": results}
+
+
 def _run(payload: dict[str, Any]) -> dict[str, Any]:
     from sympy import symbols
 
@@ -277,6 +300,8 @@ def _run(payload: dict[str, Any]) -> dict[str, Any]:
             else None
         )
         return _normalize_pair(numerator, denominator, factor, variable_count)
+    if task == "normalize_batch":
+        return _normalize_batch(payload, variable_count, generators)
     if task in {"differentiate", "differentiate_batch"}:
         return _differentiate(
             payload,

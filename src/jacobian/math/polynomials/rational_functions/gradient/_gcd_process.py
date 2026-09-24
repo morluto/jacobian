@@ -36,6 +36,12 @@ _GCD_STDOUT_BYTES = 256 * 1024
 _GRADIENT_BATCH_STDOUT_BYTES = 8 * _GCD_STDOUT_BYTES
 _GCD_STDERR_BYTES = 64 * 1024
 _GCD_ADDRESS_SPACE_BYTES = 1024 * 1024 * 1024
+_COMPOSITION_BATCH_STDOUT_BYTES = 16 * _GCD_STDOUT_BYTES + 64 * 1024
+_COMPOSITION_BATCH_INPUT_BYTES = 16 * 1024 * 1024
+
+
+class KernelBatchInputLimitError(ValueError):
+    """A proposed optional batch exceeds its aggregate input envelope."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -168,11 +174,16 @@ def _run_kernel_worker(
     *,
     stage: str,
     stdout_limit: int = _GCD_STDOUT_BYTES,
+    input_limit: int | None = None,
 ) -> dict[str, Any]:
     deadline = _request_deadline(stage=stage)
     request_checkpoint(f"before {stage} encoding")
     encoded = encode_strict_json(payload)
     request_checkpoint(f"after {stage} encoding")
+    if input_limit is not None and len(encoded) > input_limit:
+        raise KernelBatchInputLimitError(
+            f"{stage} input exceeds its {input_limit}-byte aggregate envelope"
+        )
     try:
         with TemporaryDirectory(prefix="jacobian-rational-gradient-gcd-") as worker_dir:
             remaining = deadline - monotonic()
@@ -315,6 +326,58 @@ def normalize_admitted_fraction(
     )
 
 
+def normalize_admitted_fractions(
+    pairs: tuple[tuple[Any, Any], ...],
+    variables: tuple[str, ...],
+) -> tuple[RationalFunction, ...]:
+    """Normalize up to 16 admitted fractions in one isolated worker."""
+
+    if not 1 <= len(pairs) <= 16:
+        raise ValueError("rational normalization batch must contain 1 to 16 rows")
+    variable_count = len(variables)
+    if variable_count == 0:
+        raise RuntimeError("rational-gradient normalization requires a declared axis")
+    response = _run_kernel_worker(
+        {
+            "task": "normalize_batch",
+            "variable_count": variable_count,
+            "fractions": [
+                {
+                    "numerator": _sympy_payload(numerator),
+                    "denominator": _sympy_payload(denominator),
+                }
+                for numerator, denominator in pairs
+            ],
+        },
+        stage="composition fraction normalization batch",
+        stdout_limit=_COMPOSITION_BATCH_STDOUT_BYTES,
+        input_limit=_COMPOSITION_BATCH_INPUT_BYTES,
+    )
+    values = response.get("fractions")
+    if (
+        set(response) != {"fractions"}
+        or not isinstance(values, list)
+        or len(values) != len(pairs)
+    ):
+        raise RuntimeError(
+            "bounded rational-composition normalization worker returned malformed output"
+        )
+    results: list[RationalFunction] = []
+    for value in values:
+        if not isinstance(value, dict) or set(value) != {"numerator", "denominator"}:
+            raise RuntimeError(
+                "bounded rational-composition normalization worker returned malformed output"
+            )
+        results.append(
+            RationalFunction._from_kernel(
+                variables=variables,
+                numerator=_sparse_from_records(value["numerator"], variable_count),
+                denominator=_sparse_from_records(value["denominator"], variable_count),
+            )
+        )
+    return tuple(results)
+
+
 def differentiate_admitted_fractions(
     source: RationalFunction,
     derivatives: tuple[tuple[int, tuple[list[Any], ...]], ...],
@@ -407,5 +470,6 @@ __all__ = [
     "differentiate_admitted_fractions",
     "forced_denominator_derivative_gcds",
     "normalize_admitted_fraction",
+    "normalize_admitted_fractions",
     "source_is_coprime",
 ]

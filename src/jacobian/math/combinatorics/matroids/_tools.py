@@ -13,6 +13,8 @@ from jacobian.math.combinatorics.matroids._models import (
     MatroidIntersectionRequest,
     MatroidIntersectionResult,
     MatroidWeightedIntersectionCertificateRequest,
+    MatroidWeightedIntersectionOptimizationRequest,
+    MatroidWeightedIntersectionOptimizationResult,
     MatroidWeightedIntersectionRankCertificateRequest,
     MatroidWeightedIntersectionRankCertificateResult,
     MatroidWeightedIntersectionResult,
@@ -25,6 +27,7 @@ from jacobian.math.combinatorics.matroids.graphic import graphic_matroid
 from jacobian.math.combinatorics.matroids.intersection import (
     matroid_common_basis,
     matroid_intersection,
+    maximum_weight_matroid_intersection,
     weighted_intersection_certificate,
     weighted_intersection_rank_certificate,
 )
@@ -69,6 +72,12 @@ def _run_weighted_intersection_rank_certificate(
     request: MatroidWeightedIntersectionRankCertificateRequest,
 ) -> MatroidWeightedIntersectionRankCertificateResult:
     return weighted_intersection_rank_certificate(request)
+
+
+def _run_weighted_intersection_optimization(
+    request: MatroidWeightedIntersectionOptimizationRequest,
+) -> MatroidWeightedIntersectionOptimizationResult:
+    return maximum_weight_matroid_intersection(request)
 
 
 _CLOSURE_EXAMPLE: dict[str, Any] = {
@@ -429,6 +438,60 @@ TOOLS = TOOLS + (  # noqa: RUF005
                             "columns": 2,
                         },
                         "ground_labels": ["a", "b"],
+                    },
+                },
+            ),
+        ),
+    ),
+)
+
+TOOLS = TOOLS + (  # noqa: RUF005
+    MathTool(
+        operation_id="matroid.intersection.maximum_weight.compute",
+        title="Compute a maximum-weight common independent set",
+        description=(
+            "Compute one exact maximum-weight set independent in both "
+            "represented matroids. The empty set is a candidate, so the "
+            "result can be empty when every feasible nonempty set has lower "
+            "weight. Separate weighted certificate operations check "
+            "caller-authored optimality witnesses."
+        ),
+        request_type=MatroidWeightedIntersectionOptimizationRequest,
+        result_type=MatroidWeightedIntersectionOptimizationResult,
+        run=_run_weighted_intersection_optimization,
+        tags=("matroid", "intersection", "weighted", "optimization", "exact"),
+        discovery_terms=(
+            "maximum-weight common independent set",
+            "weighted matroid intersection",
+            "maximum weight matroid intersection",
+        ),
+        examples=(
+            OperationExample(
+                name="one_positive_common_element",
+                description=(
+                    "Choose the heavier element that is nonloop in both "
+                    "rank-one sources."
+                ),
+                input={
+                    "first": {
+                        "matrix": {
+                            "prime": 2,
+                            "entries": [[1, 1]],
+                            "columns": 2,
+                        },
+                        "ground_labels": ["a", "b"],
+                    },
+                    "second": {
+                        "matrix": {
+                            "prime": 2,
+                            "entries": [[1, 0]],
+                            "columns": 2,
+                        },
+                        "ground_labels": ["a", "b"],
+                    },
+                    "weight_function": {
+                        "ground_axis": ["a", "b"],
+                        "values": [5, 3],
                     },
                 },
             ),

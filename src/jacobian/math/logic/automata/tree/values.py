@@ -144,6 +144,34 @@ class BottomUpTreeAutomaton(StrictModel):
                 raise ValueError("final state out of range")
 
 
+class DeterministicBottomUpTreeAutomaton(BottomUpTreeAutomaton):
+    """A partial or complete deterministic bottom-up tree automaton."""
+
+    @model_validator(mode="after")
+    def require_deterministic_transitions(self) -> Self:
+        keys = tuple((row.symbol, row.child_states) for row in self.transitions)
+        if len(keys) != len(set(keys)):
+            raise _validation_error(
+                "transitions_not_deterministic",
+                "deterministic automata have at most one target for each symbol and child-state tuple",
+            )
+        return self
+
+
+class CompleteDeterministicBottomUpTreeAutomaton(DeterministicBottomUpTreeAutomaton):
+    """A deterministic bottom-up tree automaton with a total transition table."""
+
+    @model_validator(mode="after")
+    def require_complete_transition_table(self) -> Self:
+        required = sum(self.state_count**rank for rank in self.arity)
+        if len(self.transitions) != required:
+            raise _validation_error(
+                "transition_table_incomplete",
+                "complete automata need exactly one transition for every symbol and child-state tuple",
+            )
+        return self
+
+
 def _reject_tree(message: str, *, resource: bool = True) -> NoReturn:
     error_type = (
         OperationResourceAdmissionError if resource else OperationDomainValidationError
@@ -495,6 +523,8 @@ __all__ = [
     "MAX_TREE_AUTOMATON_REACHABILITY_WORK",
     "MAX_TREE_AUTOMATON_WORK",
     "BottomUpTreeAutomaton",
+    "CompleteDeterministicBottomUpTreeAutomaton",
+    "DeterministicBottomUpTreeAutomaton",
     "RankedTree",
     "ReachableStateProfile",
     "TreeAutomatonTransition",

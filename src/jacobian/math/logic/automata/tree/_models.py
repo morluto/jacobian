@@ -2,20 +2,25 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal, Self
+from typing import Annotated, Any, Literal, Self
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import Field, StrictInt, field_validator, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import ExactInteger
 from jacobian._models import StrictModel
 from jacobian.math.logic.automata.tree.values import (
     MAX_REACHABILITY_WITNESS_NODES,
+    MAX_RUN_TREE_DEPTH,
+    MAX_RUN_TREE_NODES,
+    MAX_TA_ARITY,
     MAX_TA_STATES,
     MAX_TA_SYMBOLS,
     MAX_TA_TRANSITIONS,
     MAX_TREE_AUTOMATON_REACHABILITY_WORK,
     BottomUpTreeAutomaton,
+    CompleteDeterministicBottomUpTreeAutomaton,
+    DeterministicBottomUpTreeAutomaton,
     RankedTree,
     TreeStateChartEntry,
     TreeStateWitness,
@@ -91,6 +96,70 @@ class TreeRunResult(TreeRunRequest):
             root_states=root_states,
             state_chart=state_chart,
             node_count=node_count,
+        )
+
+
+class RankedTreePositionsRequest(StrictModel):
+    """Return every node address in a finite ranked tree."""
+
+    tree: RankedTree
+
+
+class RankedTreePositionsResult(RankedTreePositionsRequest):
+    """Zero-based child-index paths in root-first preorder."""
+
+    positions: tuple[
+        Annotated[
+            tuple[Annotated[StrictInt, Field(ge=0, lt=MAX_TA_ARITY)], ...],
+            Field(max_length=MAX_RUN_TREE_DEPTH),
+        ],
+        ...,
+    ] = Field(max_length=MAX_RUN_TREE_NODES)
+
+    @model_validator(mode="after")
+    def require_position_shape(self) -> Self:
+        if not self.positions or self.positions[0] != ():
+            raise _validation_error(
+                "positions_root", "positions must start with the empty root path"
+            )
+        if len(set(self.positions)) != len(self.positions):
+            raise _validation_error(
+                "positions_unique", "tree node positions must be unique"
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: RankedTreePositionsRequest,
+        *,
+        positions: tuple[tuple[int, ...], ...],
+    ) -> Self:
+        """Construct the complete position list emitted by the admitted kernel."""
+
+        return cls.model_construct(tree=request.tree, positions=positions)
+
+
+class RankedTreeSubtreeRequest(StrictModel):
+    """Select the rooted subtree at a zero-based child-index position."""
+
+    tree: RankedTree
+    position: tuple[Annotated[StrictInt, Field(ge=0, lt=MAX_TA_ARITY)], ...] = Field(
+        max_length=MAX_RUN_TREE_DEPTH
+    )
+
+
+class RankedTreeSubtreeResult(RankedTreeSubtreeRequest):
+    """A subtree together with its exact source tree and structural address."""
+
+    subtree: RankedTree
+
+    @classmethod
+    def _from_kernel(
+        cls, request: RankedTreeSubtreeRequest, *, subtree: RankedTree
+    ) -> Self:
+        return cls.model_construct(
+            tree=request.tree, position=request.position, subtree=subtree
         )
 
 
@@ -200,6 +269,261 @@ class TreeAutomatonTrimResult(StrictModel):
             raise _validation_error(
                 "witnesses_not_aligned",
                 "witnesses must carry exactly one entry per trimmed state in order",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(cls, **values: Any) -> Self:
+        return cls.model_construct(**values)
+
+
+class TreeAutomatonComplementRequest(StrictModel):
+    """Complement a complete deterministic automaton over its ranked alphabet."""
+
+    automaton: CompleteDeterministicBottomUpTreeAutomaton = Field(
+        description=(
+            "A deterministic complete bottom-up tree automaton. For every "
+            "ranked symbol of arity k, exactly one transition must exist for "
+            "each ordered k-tuple of source states."
+        )
+    )
+
+
+class TreeAutomatonBooleanProductRequest(StrictModel):
+    """Product two complete deterministic automata over one ranked alphabet."""
+
+    left: CompleteDeterministicBottomUpTreeAutomaton
+    right: CompleteDeterministicBottomUpTreeAutomaton
+    connective: Literal["intersection", "union", "difference", "symmetric_difference"]
+
+
+class TreeAutomatonBooleanProductResult(TreeAutomatonBooleanProductRequest):
+    """Direct product machine, whose states are ordered source-state pairs."""
+
+    product: CompleteDeterministicBottomUpTreeAutomaton
+    state_pairs: tuple[tuple[int, int], ...] = Field(max_length=MAX_TA_STATES)
+
+    @model_validator(mode="after")
+    def require_product_axes(self) -> Self:
+        pair_count = self.left.state_count * self.right.state_count
+        if pair_count > MAX_TA_STATES:
+            raise _validation_error(
+                "product_state_bound",
+                "the complete Cartesian product exceeds the supported state axis",
+            )
+        expected = tuple(
+            (left, right)
+            for left in range(self.left.state_count)
+            for right in range(self.right.state_count)
+        )
+        if self.state_pairs != expected or self.product.state_count != len(expected):
+            raise _validation_error(
+                "product_state_axis",
+                "product states must be the lexicographic source-state pairs",
+            )
+        if (
+            self.product.arity != self.left.arity
+            or self.product.arity != self.right.arity
+        ):
+            raise _validation_error(
+                "product_signature",
+                "Boolean product inputs must share the ranked signature",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(cls, **values: Any) -> Self:
+        return cls.model_construct(**values)
+
+
+class TreeAutomatonComplementResult(TreeAutomatonComplementRequest):
+    """Complement automaton with canonical state-axis transport."""
+
+    complement: CompleteDeterministicBottomUpTreeAutomaton
+    old_to_new: tuple[int, ...]
+    new_to_old: tuple[int, ...]
+    transition_count: int = Field(ge=0, le=MAX_TA_TRANSITIONS)
+
+    @model_validator(mode="after")
+    def require_axis_maps(self) -> Self:
+        state_count = self.automaton.state_count
+        expected = tuple(range(state_count))
+        if (
+            tuple(sorted(self.old_to_new)) != expected
+            or len(self.old_to_new) != state_count
+        ):
+            raise _validation_error(
+                "complement_state_map", "old_to_new must be a state permutation"
+            )
+        if (
+            len(self.new_to_old) != state_count
+            or tuple(sorted(self.new_to_old)) != expected
+            or tuple(self.old_to_new[old] for old in self.new_to_old) != expected
+        ):
+            raise _validation_error(
+                "complement_state_map", "state maps must be mutual inverses"
+            )
+        if (
+            self.complement.state_count != state_count
+            or self.complement.arity != self.automaton.arity
+        ):
+            raise _validation_error(
+                "complement_axes",
+                "complement preserves the state count and ranked signature",
+            )
+        if len(self.complement.transitions) != self.transition_count:
+            raise _validation_error(
+                "complement_transition_count",
+                "transition_count must match the complete result table",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(cls, **values: Any) -> Self:
+        return cls.model_construct(**values)
+
+
+class TreeAutomatonCompletionRequest(StrictModel):
+    """Complete a partial deterministic machine over its ranked alphabet."""
+
+    automaton: DeterministicBottomUpTreeAutomaton
+
+
+class TreeAutomatonCompletionResult(TreeAutomatonCompletionRequest):
+    """Complete transition table with the source-state map and optional sink."""
+
+    completed: CompleteDeterministicBottomUpTreeAutomaton
+    source_to_completed: tuple[int, ...] = Field(max_length=MAX_TA_STATES)
+    sink_state: int | None = Field(default=None, ge=0, lt=MAX_TA_STATES)
+
+    @model_validator(mode="after")
+    def require_canonical_state_transport(self) -> Self:
+        source = self.automaton
+        if self.source_to_completed != tuple(range(source.state_count)):
+            raise _validation_error(
+                "completion_state_map",
+                "completion preserves the source-state order",
+            )
+        if (
+            self.completed.arity != source.arity
+            or self.completed.final_states != source.final_states
+        ):
+            raise _validation_error(
+                "completion_source_context",
+                "completion preserves the ranked alphabet and source final states",
+            )
+        if self.sink_state is None:
+            required = sum(source.state_count**rank for rank in source.arity)
+            if (
+                self.completed.state_count != source.state_count
+                or len(source.transitions) != required
+            ):
+                raise _validation_error(
+                    "completion_missing_sink",
+                    "a partial source needs one added sink state",
+                )
+        elif (
+            self.sink_state != source.state_count
+            or self.completed.state_count != source.state_count + 1
+            or self.sink_state in self.completed.final_states
+        ):
+            raise _validation_error(
+                "completion_sink_state",
+                "the sink is the appended nonfinal state",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(cls, **values: Any) -> Self:
+        return cls.model_construct(**values)
+
+
+class TreeAutomatonMinimizeRequest(StrictModel):
+    """Minimize a partial or complete deterministic bottom-up automaton."""
+
+    automaton: DeterministicBottomUpTreeAutomaton
+
+
+class TreeAutomatonMinimizeResult(TreeAutomatonMinimizeRequest):
+    """Smallest reachable deterministic quotient and source-state transport."""
+
+    minimized: DeterministicBottomUpTreeAutomaton
+    old_to_new: tuple[int, ...] = Field(max_length=MAX_TA_STATES)
+    new_to_old: tuple[int | None, ...] = Field(max_length=MAX_TA_STATES)
+    reachable_states: tuple[int, ...] = Field(max_length=MAX_TA_STATES)
+
+    @model_validator(mode="after")
+    def require_canonical_minimization_axes(self) -> Self:
+        source = self.automaton
+        if self.reachable_states != tuple(sorted(set(self.reachable_states))):
+            raise _validation_error(
+                "minimize_reachable_order", "reachable states must be unique and sorted"
+            )
+        if any(not 0 <= state < source.state_count for state in self.reachable_states):
+            raise _validation_error(
+                "minimize_reachable_range", "reachable state is out of range"
+            )
+        if len(self.old_to_new) != source.state_count:
+            raise _validation_error(
+                "minimize_old_to_new_axis",
+                "old-to-new map must cover every source state",
+            )
+        if any(
+            image != -1 and not 0 <= image < self.minimized.state_count
+            for image in self.old_to_new
+        ):
+            raise _validation_error(
+                "minimize_map_range", "state images must be -1 or quotient states"
+            )
+        if self.minimized.arity != source.arity:
+            raise _validation_error(
+                "minimize_signature", "minimization preserves the ranked signature"
+            )
+        if (
+            len(self.new_to_old) != self.minimized.state_count
+            or self.new_to_old != tuple(sorted(set(self.new_to_old)))
+            or any(
+                state is not None and not 0 <= state < source.state_count
+                for state in self.new_to_old
+            )
+        ):
+            raise _validation_error(
+                "minimize_representatives",
+                "representatives must be one ordered source state per quotient state",
+            )
+        if self.reachable_states:
+            if set(self.reachable_states) != {
+                state for state, image in enumerate(self.old_to_new) if image >= 0
+            }:
+                raise _validation_error(
+                    "minimize_reachable_map",
+                    "reachable states must be exactly the mapped source states",
+                )
+            if {self.old_to_new[state] for state in self.reachable_states} != set(
+                range(self.minimized.state_count)
+            ):
+                raise _validation_error(
+                    "minimize_quotient_coverage",
+                    "reachable states must cover every quotient state",
+                )
+            if any(
+                representative is None or self.old_to_new[representative] != quotient
+                for quotient, representative in enumerate(self.new_to_old)
+            ):
+                raise _validation_error(
+                    "minimize_representative_map",
+                    "each representative must map to its quotient state",
+                )
+        elif (
+            self.minimized.state_count != 1
+            or self.minimized.transitions
+            or self.minimized.final_states
+            or any(image != -1 for image in self.old_to_new)
+            or self.new_to_old != (None,)
+        ):
+            raise _validation_error(
+                "minimize_empty_language_shape",
+                "an automaton with no ground trees uses one nonfinal state and maps all source states to -1",
             )
         return self
 
@@ -366,6 +690,12 @@ class TreeDeterminizeResult(TreeDeterminizeRequest):
 __all__ = [
     "AcceptedTreeCountRequest",
     "AcceptedTreeCountResult",
+    "TreeAutomatonBooleanProductRequest",
+    "TreeAutomatonBooleanProductResult",
+    "TreeAutomatonComplementRequest",
+    "TreeAutomatonComplementResult",
+    "TreeAutomatonMinimizeRequest",
+    "TreeAutomatonMinimizeResult",
     "TreeAutomatonReachabilityRequest",
     "TreeAutomatonTrimRequest",
     "TreeAutomatonTrimResult",

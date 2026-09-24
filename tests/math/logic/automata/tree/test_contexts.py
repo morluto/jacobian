@@ -54,6 +54,20 @@ def test_context_plugging_preserves_ranked_tree_structure():
     )
 
 
+def test_plug_admits_result_depth_using_hole_path_and_fixed_siblings():
+    sibling = RankedTree(symbol=0)
+    for _ in range(126):
+        sibling = RankedTree(symbol=1, children=(sibling,))
+    context = FiniteTreeContext(
+        arity=(0, 1, 2),
+        frames=({"symbol": 2, "hole_child": 0, "siblings": (sibling,)},),
+    )
+    result = plug_tree_context_operation(
+        TreeContextPlugRequest(context=context, tree=RankedTree(symbol=0))
+    )
+    assert result.plugged_tree.children[1] == sibling
+
+
 def test_induced_state_map_matches_independent_direct_evaluation():
     # Complete DTA over three constants and a binary `f`, with transition
     # f(x,y) = (x + 2y) mod 3. The oracle plugs each state at the hole and

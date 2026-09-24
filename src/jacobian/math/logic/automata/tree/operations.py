@@ -248,7 +248,9 @@ def ranked_tree_subtree(
             code="tree_automata.subtree.result_cells_bound",
             message="source-bound ranked-tree subtree exceeds its result allocation bound",
         )
-    return RankedTreeSubtreeResult._from_kernel(tree=tree, position=position, subtree=current)
+    return RankedTreeSubtreeResult._from_kernel(
+        tree=tree, position=position, subtree=current
+    )
 
 
 def boolean_product_tree_automata(

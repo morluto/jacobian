@@ -162,9 +162,7 @@ class RankedTreeSubtreeResult(RankedTreeSubtreeRequest):
         position: tuple[int, ...],
         subtree: RankedTree,
     ) -> Self:
-        return cls.model_construct(
-            tree=tree, position=position, subtree=subtree
-        )
+        return cls.model_construct(tree=tree, position=position, subtree=subtree)
 
 
 class AcceptedTreeCountRequest(StrictModel):

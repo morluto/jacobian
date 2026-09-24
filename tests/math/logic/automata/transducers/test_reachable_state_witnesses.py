@@ -1,10 +1,14 @@
 from itertools import product
 
 import pytest
+from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.logic.automata.transducers import reachable_state_witnesses
-from jacobian.math.logic.automata.transducers._models import ReachableStatesRequest
+from jacobian.math.logic.automata.transducers._models import (
+    ReachableStatesRequest,
+    ReachableStatesResult,
+)
 from jacobian.math.logic.automata.transducers._tools import TOOLS
 from jacobian.math.logic.automata.transducers.values import (
     SubseqFinalOutput,
@@ -123,10 +127,28 @@ def test_shortest_witness_output_growth_is_preflighted(
         ),
         final_outputs=(),
     )
-    monkeypatch.setattr(operations, "MAX_FST_REACHABLE_RESULT_BYTES", 1)
+    monkeypatch.setattr(operations, "MAX_FST_REACHABLE_WITNESS_OUTPUT_CELLS", 1)
     with pytest.raises(OperationResourceAdmissionError) as excinfo:
         reachable_state_witnesses(transducer)
     assert (
         excinfo.value.errors()[0]["type"]
         == "finite_state_transducer.reachable_result_bytes_exceeded"
     )
+
+
+def test_empty_witness_trace_is_rejected_as_validation_error() -> None:
+    payload = {
+        "transducer": {
+            "input_alphabet_size": 1,
+            "output_alphabet_size": 1,
+            "state_count": 1,
+            "initial_state": 0,
+            "transitions": [],
+            "final_outputs": [],
+        },
+        "witnesses": [
+            {"state": 0, "input_word": [], "output_word": [], "state_trace": []}
+        ],
+    }
+    with pytest.raises(ValidationError):
+        ReachableStatesResult.model_validate(payload)

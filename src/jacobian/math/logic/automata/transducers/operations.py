@@ -15,19 +15,17 @@ from jacobian.catalog.models import (
 from jacobian.math.logic.automata.transducers._models import (
     ComposeResult,
     MinimizeResult,
-    ReachableStatesRequest,
     ReachableStatesResult,
     ReachableStateWitness,
     StatePairDistinguishability,
-    SubseqRunRequest,
     SubseqRunResult,
 )
 from jacobian.math.logic.automata.transducers.values import (
     MAX_FST_ALPHABET,
     MAX_FST_ALPHABET_ID_LENGTH,
-    MAX_FST_REACHABLE_RESULT_BYTES,
+    MAX_FST_REACHABLE_WITNESS_OUTPUT_CELLS,
     MAX_FST_RESULT_WORD_LENGTH,
-    MAX_FST_RUN_RESULT_BYTES,
+    MAX_FST_RUN_RESULT_OUTPUT_CELLS,
     MAX_FST_STATES,
     MAX_FST_WORD_LENGTH,
     FiniteAlphabet,
@@ -82,7 +80,6 @@ __all__ = [
 MAX_MINIMIZE_SAMPLE_WORDS = 20000
 MAX_MORPHISM_TRANSITION_CELLS = 32 * 512
 MAX_MORPHISM_TRANSDUCER_BYTES = 128 * 1024
-MAX_FST_IDENTITY_RESULT_BYTES = 64 * 1024
 
 
 def _reject(code: str, message: str, *location: str) -> None:
@@ -131,6 +128,20 @@ def _admit_rational_transducer(transducer: object) -> RationalTransducer:
         ) from exc
 
 
+def _admit_word_morphism(morphism: object) -> WordMorphism:
+    if not isinstance(morphism, WordMorphism):
+        _reject("word_morphism_type", "morphism must be a WordMorphism", "morphism")
+    value = cast(WordMorphism, morphism)
+    try:
+        return WordMorphism.model_validate(value.model_dump(), strict=True)
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("morphism",),
+            code="finite_state_transducer.carrier_shape",
+            message="morphism must satisfy its complete canonical carrier shape",
+        ) from exc
+
+
 def word_morphism_to_subsequential(
     morphism: WordMorphism,
 ) -> SubsequentialTransducer:
@@ -140,8 +151,7 @@ def word_morphism_to_subsequential(
     The one state is final with empty output, so empty images remain defined
     empty transition outputs rather than missing transitions.
     """
-    if not isinstance(morphism, WordMorphism):
-        _reject("word_morphism_type", "morphism must be a WordMorphism", "morphism")
+    morphism = _admit_word_morphism(morphism)
     source_size = len(morphism.source_alphabet)
     target_size = len(morphism.target_alphabet)
     if source_size > 32 or target_size > 32:
@@ -264,14 +274,6 @@ def run_subsequential(
             "subsequential output may exceed the result word bound",
             "word",
         )
-    request_bytes = len(
-        encode_strict_json(
-            {
-                "transducer": transducer.model_dump(mode="json"),
-                "word": list(word),
-            }
-        )
-    )
     prefix_output_cells = sum(
         min(prefix_length * transition_bound, MAX_FST_RESULT_WORD_LENGTH)
         for prefix_length in range(len(word) + 1)
@@ -279,29 +281,16 @@ def run_subsequential(
     transition_output_cells = min(
         len(word) * transition_bound, MAX_FST_RESULT_WORD_LENGTH
     )
-    # Each output symbol is an integer in 0..31 (at most two digits and a
-    # separator).  The conservative estimate covers repeated prefix outputs,
-    # per-step output rows, state IDs, outer array syntax, all other output
-    # fields, and the request values echoed into the result.
-    projected_result_bytes = (
-        request_bytes
-        + 3
-        * (
-            prefix_output_cells
-            + transition_output_cells
-            + 3 * MAX_FST_RESULT_WORD_LENGTH
-            + MAX_FST_WORD_LENGTH
-        )
-        + 12 * (len(word) + 1)
-        + 4096
-    )
-    if projected_result_bytes > MAX_FST_RUN_RESULT_BYTES:
+    # The echoed transducer and word are bounded by the admitted carrier
+    # (edge, transition-output, and word-length cardinalities). The trace is
+    # the only kernel-expanded allocation: cumulative rows repeat prefix
+    # outputs, so bound their aggregate cells before any expansion begins.
+    if prefix_output_cells + transition_output_cells > MAX_FST_RUN_RESULT_OUTPUT_CELLS:
         raise OperationResourceAdmissionError(
             location=("transducer", "word"),
             code="finite_state_transducer.run_result_bytes_exceeded",
-            message="the exact run trace may exceed the canonical result byte bound",
+            message="the exact run trace may exceed the canonical result cell bound",
         )
-    request = SubseqRunRequest.model_construct(transducer=transducer, word=word)
 
     def result(
         status: Literal["OUTPUT", "UNDEFINED_TRANSITION", "NONFINAL_DOMAIN_STATE"],
@@ -319,7 +308,8 @@ def run_subsequential(
         obstruction_symbol: int | None,
     ) -> SubseqRunResult:
         return SubseqRunResult._from_kernel(
-            request,
+            transducer=transducer,
+            word=word,
             status=status,
             output=output,
             final_state=final_state,
@@ -445,18 +435,12 @@ def identity_transducer(
             "alphabet_id",
         )
 
-    alphabet_values = (
-        list(alphabet.symbols) if alphabet is not None else list(range(alphabet_size))
-    )
-    alphabet_bytes = len(encode_strict_json(alphabet_values))
-    projected_bytes = 2 * alphabet_bytes + 64 * alphabet_size + 2048
-    if projected_bytes > MAX_FST_IDENTITY_RESULT_BYTES:
-        raise OperationResourceAdmissionError(
-            location=("alphabet",),
-            code="finite_state_transducer.identity_result_bytes_exceeded",
-            message="canonical identity transducer may exceed the byte bound",
-        )
-
+    # The identity machine's size is fixed by admitted cardinalities: one
+    # state, one transition per input symbol (at most MAX_FST_ALPHABET of
+    # them), each carrying a single-symbol output, and one empty final
+    # output. The validated FiniteAlphabet carrier bounds each symbol string,
+    # so the canonical result is allocation-bounded without further
+    # admission.
     transitions = tuple(
         SubseqTransition(
             source=0,
@@ -511,28 +495,20 @@ def reachable_state_witnesses(
     state, whether or not that state is final.
     """
     admitted = _admit_transducer(transducer)
-    request = ReachableStatesRequest(transducer=admitted)
     max_transition_output = max(
         (len(transition.output) for transition in admitted.transitions), default=0
     )
     max_path_output = max(0, admitted.state_count - 1) * max_transition_output
     max_output_cells = admitted.state_count * max_path_output
-    source_bytes = len(encode_strict_json(admitted.model_dump(mode="json")))
-    # Integer indices are at most 31, so four JSON bytes per symbol safely
-    # bounds commas and digits. The remaining allowance covers path rows,
-    # state traces, and fixed source fields. Check before allocating witnesses.
-    projected_bytes = (
-        source_bytes
-        + 4 * max_output_cells
-        + 3 * admitted.state_count * max(0, admitted.state_count - 1)
-        + 512 * admitted.state_count
-        + 4096
-    )
-    if projected_bytes > MAX_FST_REACHABLE_RESULT_BYTES:
+    # Every witness path is simple, so aggregate output cells are bounded by
+    # the state count times the longest path output. The carrier already
+    # bounds transition-output length; check the aggregate allocation bound
+    # before materializing any witness list.
+    if max_output_cells > MAX_FST_REACHABLE_WITNESS_OUTPUT_CELLS:
         raise OperationResourceAdmissionError(
             location=("transducer",),
             code="finite_state_transducer.reachable_result_bytes_exceeded",
-            message="shortest-path witness result may exceed the canonical byte bound",
+            message="shortest-path witness output may exceed the canonical cell bound",
         )
 
     transitions = _transition_map(admitted)
@@ -581,7 +557,9 @@ def reachable_state_witnesses(
                 state_trace=tuple(trace),
             )
         )
-    return ReachableStatesResult._from_kernel(request, witnesses=tuple(witnesses))
+    return ReachableStatesResult._from_kernel(
+        transducer=admitted, witnesses=tuple(witnesses)
+    )
 
 
 def coaccessible_states(

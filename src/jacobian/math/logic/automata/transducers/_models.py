@@ -179,8 +179,9 @@ class SubseqRunResult(SubseqRunRequest):
     @classmethod
     def _from_kernel(
         cls,
-        request: SubseqRunRequest,
         *,
+        transducer: SubsequentialTransducer,
+        word: tuple[int, ...],
         status: Literal["OUTPUT", "UNDEFINED_TRANSITION", "NONFINAL_DOMAIN_STATE"],
         output: tuple[int, ...],
         final_state: int,
@@ -197,8 +198,8 @@ class SubseqRunResult(SubseqRunRequest):
         """Construct a run outcome emitted by the trusted owner-local kernel."""
 
         return cls.model_construct(
-            transducer=request.transducer,
-            word=request.word,
+            transducer=transducer,
+            word=word,
             status=status,
             output=output,
             final_state=final_state,
@@ -288,7 +289,7 @@ class ReachableStateWitness(StrictModel):
     output_word: tuple[int, ...] = Field(
         max_length=MAX_FST_STATES * MAX_FST_WORD_LENGTH
     )
-    state_trace: tuple[int, ...] = Field(max_length=MAX_FST_STATES)
+    state_trace: tuple[int, ...] = Field(min_length=1, max_length=MAX_FST_STATES)
 
 
 class ReachableStatesResult(ReachableStatesRequest):
@@ -313,7 +314,8 @@ class ReachableStatesResult(ReachableStatesRequest):
             )
         for row in self.witnesses:
             if (
-                row.state >= self.transducer.state_count
+                not row.state_trace
+                or row.state >= self.transducer.state_count
                 or row.state_trace[0] != self.transducer.initial_state
                 or row.state_trace[-1] != row.state
                 or len(row.state_trace) != len(row.input_word) + 1
@@ -351,11 +353,11 @@ class ReachableStatesResult(ReachableStatesRequest):
     @classmethod
     def _from_kernel(
         cls,
-        request: ReachableStatesRequest,
         *,
+        transducer: SubsequentialTransducer,
         witnesses: tuple[ReachableStateWitness, ...],
     ) -> Self:
-        return cls.model_construct(transducer=request.transducer, witnesses=witnesses)
+        return cls.model_construct(transducer=transducer, witnesses=witnesses)
 
 
 class TrimResult(TrimRequest):

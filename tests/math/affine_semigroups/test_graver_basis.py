@@ -89,3 +89,63 @@ def test_exact_work_envelope_rejects_before_enumeration():
         OperationResourceAdmissionError, match="complete Graver enumeration"
     ):
         graver_basis(_matrix((100, 99, 98, 97, 96)))
+
+
+def test_rank_one_integer_kernel_gives_complete_graver_basis_for_multirow_matrix():
+    configuration = IntegerMatrix.model_validate(
+        {"entries": [[1, 1, 1], [0, 1, 2]]}
+    )
+    result = graver_basis(configuration)
+    assert result.vectors == ((1, -2, 1),)
+    assert all(
+        sum(row[column] * result.vectors[0][column] for column in range(3)) == 0
+        for row in configuration.entries
+    )
+    brute_candidates = [
+        vector
+        for vector in product(range(-2, 3), repeat=3)
+        if any(vector)
+        and all(
+            sum(row[column] * vector[column] for column in range(3)) == 0
+            for row in configuration.entries
+        )
+    ]
+    brute_minima = [
+        vector
+        for vector in sorted(brute_candidates, key=lambda value: (sum(map(abs, value)), value))
+        if not any(
+            all(a == 0 or (a > 0) == (b > 0) for a, b in zip(other, vector, strict=True))
+            and all(abs(a) <= abs(b) for a, b in zip(other, vector, strict=True))
+            for other in brute_candidates
+            if sum(map(abs, other)) < sum(map(abs, vector))
+        )
+    ]
+    brute_sign_normalized = tuple(
+        sorted(
+            {
+                vector if next(value for value in vector if value) > 0 else tuple(-v for v in vector)
+                for vector in brute_minima
+            }
+        )
+    )
+    assert result.vectors == brute_sign_normalized
+
+    from jacobian.math.affine_semigroups.graver import markov_basis
+
+    assert markov_basis(configuration).moves == result.vectors
+
+
+def test_full_column_rank_configuration_has_empty_graver_basis():
+    configuration = IntegerMatrix.model_validate(
+        {"entries": [[1, 0, 2], [0, 1, 3], [1, 1, 0]]}
+    )
+    assert graver_basis(configuration).vectors == ()
+
+
+def test_multirow_kernel_with_nullity_above_one_is_rejected_without_search():
+    with pytest.raises(
+        OperationResourceAdmissionError, match="nullity-at-most-one exact Graver slices"
+    ):
+        graver_basis(
+            IntegerMatrix.model_validate({"entries": [[1, 0, 1, 0], [0, 1, 0, 1]]})
+        )

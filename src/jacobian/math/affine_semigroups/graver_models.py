@@ -1,4 +1,4 @@
-"""Typed result for exact Graver bases of bounded one-row configurations."""
+"""Typed result for exact Graver bases of bounded configurations."""
 
 from __future__ import annotations
 
@@ -50,10 +50,10 @@ class IntegerConfigurationGraverBasis(StrictModel):
     @model_validator(mode="after")
     def require_canonical_vectors(self) -> Self:
         n = self.configuration.column_count
-        if self.configuration.row_count != 1:
+        if not (1 <= self.configuration.row_count <= 12 and 1 <= n <= 12):
             raise PydanticCustomError(
-                "affine_semigroup.graver_rows",
-                "Graver results require one-row configurations",
+                "affine_semigroup.graver_shape",
+                "Graver results require configuration axes in 1..12",
             )
         if any(
             len(vector) != n
@@ -74,27 +74,27 @@ class IntegerConfigurationGraverBasis(StrictModel):
 
 
 class IntegerConfigurationGraverRequest(StrictModel):
-    """Request the complete Graver basis of a bounded one-row matrix."""
+    """Request the complete Graver basis in an admitted exact slice."""
 
     configuration: IntegerMatrix
 
     @model_validator(mode="after")
-    def require_one_row(self) -> Self:
-        if self.configuration.row_count != 1:
+    def require_bounded_axes(self) -> Self:
+        if not (1 <= self.configuration.row_count <= 12):
             raise PydanticCustomError(
                 "affine_semigroup.graver_rows",
-                "Graver enumeration requires exactly one row",
+                "Graver requests require 1..12 configuration rows",
             )
-        if not 1 <= self.configuration.column_count <= 5:
+        if not 1 <= self.configuration.column_count <= 12:
             raise PydanticCustomError(
                 "affine_semigroup.graver_columns",
-                "Graver enumeration supports 1..5 columns",
+                "Graver requests support 1..12 columns",
             )
         return self
 
 
 class IntegerConfigurationMarkovBasis(StrictModel):
-    """A globally fiber-connecting generating set for a one-row configuration."""
+    """A globally fiber-connecting generating set for a bounded configuration."""
 
     configuration: IntegerMatrix
     moves: tuple[tuple[ExactInteger, ...], ...] = Field(max_length=5_000)
@@ -106,10 +106,10 @@ class IntegerConfigurationMarkovBasis(StrictModel):
     @model_validator(mode="after")
     def require_canonical_moves(self) -> Self:
         n = self.configuration.column_count
-        if self.configuration.row_count != 1 or not 1 <= n <= 5:
+        if not (1 <= self.configuration.row_count <= 12 and 1 <= n <= 12):
             raise PydanticCustomError(
                 "affine_semigroup.markov_shape",
-                "Markov results require a one-row configuration with 1..5 columns",
+                "Markov results require configuration axes in 1..12",
             )
         if any(
             len(move) != n
@@ -130,21 +130,21 @@ class IntegerConfigurationMarkovBasis(StrictModel):
 
 
 class IntegerConfigurationMarkovBasisRequest(StrictModel):
-    """Request a globally connecting move family for a bounded one-row matrix."""
+    """Request a globally connecting move family in a bounded exact slice."""
 
     configuration: IntegerMatrix
 
     @model_validator(mode="after")
-    def require_one_row(self) -> Self:
-        if self.configuration.row_count != 1:
+    def require_bounded_axes(self) -> Self:
+        if not (1 <= self.configuration.row_count <= 12):
             raise PydanticCustomError(
                 "affine_semigroup.markov_rows",
-                "Markov basis enumeration requires exactly one row",
+                "Markov requests require 1..12 configuration rows",
             )
-        if not 1 <= self.configuration.column_count <= 5:
+        if not 1 <= self.configuration.column_count <= 12:
             raise PydanticCustomError(
                 "affine_semigroup.markov_columns",
-                "Markov basis enumeration supports 1..5 columns",
+                "Markov requests support 1..12 columns",
             )
         return self
 

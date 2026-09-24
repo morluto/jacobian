@@ -39,3 +39,14 @@ defensively validating the untrusted card value, including its exact
 permutation canonical form. The catalog parser then establishes that canonical
 form once, and its adapter runs the profile kernel without repeating resource
 admission or canonicalization.
+
+`graph.deck.isomorphism_classes.compute` consumes a complete
+`VertexDeletionFamily` and returns canonical representatives, exact class
+multiplicities, a class index for every source card, and a vertex permutation
+from each card's ordered vertex axis to its representative's `v00`, `v01`, ...
+axis. The profile retains the source-bound family so every returned map can be
+checked against the original card edges. It admits at most 10 source vertices,
+including source-family validation, permutation canonicalization, map cells,
+and output bytes. Empty and one-vertex sources retain zero-order cards and empty
+permutations. Classifying the finite supplied deck does not reconstruct the
+source graph or assert any reconstruction conjecture.

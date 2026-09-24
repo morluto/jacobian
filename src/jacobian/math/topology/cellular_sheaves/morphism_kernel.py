@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from itertools import pairwise
 from typing import Self
 
 from pydantic import model_validator
@@ -17,11 +18,13 @@ from jacobian.math.topology.cellular_sheaves._kernel import (
     _cochain_nullspace,
     _cochain_rref,
     _ExactField,
+    from_cover_maps,
 )
 from jacobian.math.topology.cellular_sheaves._models import (
     MAX_SHEAF_MORPHISM_OUTPUT_CHARS,
     MAX_SHEAF_MORPHISM_WORK,
     MAX_SHEAF_STALK_RANK,
+    CoverRestrictionMatrix,
     FiniteCellularSheaf,
     SheafRestriction,
     SheafStalk,
@@ -30,10 +33,11 @@ from jacobian.math.topology.cellular_sheaves._models import (
 from jacobian.math.topology.cellular_sheaves.extensions import (
     Component,
     SheafMorphismResult,
-    _complete_diagram,
+    _admit_component_matrix,
+    _admit_morphism_resources,
+    _admit_section_plan,
     _mul,
-    _scan_morphism_scalar_text,
-    morphism,
+    _resolve_component_key,
 )
 
 
@@ -120,6 +124,95 @@ def _fail_resource(code: str, message: str) -> OperationResourceAdmissionError:
     )
 
 
+def _readmit_parent_sheaf(
+    sheaf: FiniteCellularSheaf,
+    *,
+    role: str,
+) -> None:
+    """Reconstruct the parent diagram from covers before relying on derived maps."""
+    cover_maps = tuple(
+        CoverRestrictionMatrix(
+            source=restriction.source,
+            target=restriction.target,
+            entries=restriction.entries,
+        )
+        for restriction in sheaf.cover_restrictions
+    )
+    admitted = from_cover_maps(
+        sheaf.complex,
+        sheaf.coefficient_field,
+        sheaf.prime,
+        sheaf.stalks,
+        cover_maps,
+    )
+    if admitted.sheaf is None or admitted.sheaf != sheaf:
+        raise _fail_domain(
+            "parent_diagram_not_admitted",
+            f"the {role} sheaf restrictions must equal the exact functor diagram reconstructed from its cover maps",
+        )
+
+
+def _parent_reconstruction_bounds(
+    parents: tuple[FiniteCellularSheaf, FiniteCellularSheaf],
+    *,
+    input_digits: int,
+) -> tuple[int, int]:
+    """Bound combined exact cover coherence reconstruction before either run."""
+    total_work = 0
+    output_cells = 0
+    output_digits = 1
+    for sheaf in parents:
+        cells = sheaf.canonical_face_order
+        ranks = {stalk.simplex: len(stalk.basis) for stalk in sheaf.stalks}
+        for source in cells:
+            for target in cells:
+                gap = len(target) - len(source)
+                if gap < 2 or not set(source).issubset(target):
+                    continue
+                chain = [source]
+                current = source
+                for vertex in sorted(set(target) - set(source)):
+                    current = tuple(sorted((*current, vertex)))
+                    chain.append(current)
+                for earlier, later in pairwise(chain):
+                    total_work += max(
+                        1,
+                        ranks[source] * ranks[earlier] * ranks[later],
+                    )
+                output_cells += ranks[source] * ranks[target]
+                path_rank = max((ranks[cell] for cell in chain), default=0)
+                if path_rank:
+                    # A path of m matrix products has at most r^(m-1) terms
+                    # per entry. This bounds rational numerator/denominator
+                    # growth before the exact composites are materialized.
+                    term_count = path_rank ** (gap - 1)
+                    path_digits = (
+                        gap * input_digits * term_count + len(str(term_count)) + 2
+                    )
+                    output_digits = max(output_digits, path_digits)
+
+        # The cover verifier compares all pairs of saturated paths in every
+        # length-two diamond. Count matrix scalar products before calling it.
+        for source in cells:
+            for target in cells:
+                if len(target) - len(source) != 2 or not set(source).issubset(target):
+                    continue
+                middles = tuple(
+                    middle
+                    for middle in cells
+                    if len(middle) == len(source) + 1
+                    and set(source) < set(middle) < set(target)
+                )
+                for left_index, left_middle in enumerate(middles):
+                    for right_middle in middles[left_index + 1 :]:
+                        total_work += 2 * max(
+                            1,
+                            ranks[source] * ranks[left_middle] * ranks[target],
+                            ranks[source] * ranks[right_middle] * ranks[target],
+                        )
+    return total_work, sheaf_scalar_json_bound(output_cells, output_digits)
+
+
 def _coordinates(
     field: _ExactField,
     basis_rows: list[list[Scalar]],
@@ -152,39 +245,67 @@ def kernel_of_morphism(value: SheafMorphismResult) -> SheafMorphismKernelResult:
     """Compute the categorical kernel in finite-dimensional based stalks."""
     source, target = value.source, value.target
     field = _admit_field(source.coefficient_field, source.prime)
-    # Re-run the naturality and parent checks. A serialized natural flag is not evidence.
-    checked = morphism(source, target, value.components)
-    if not checked.natural:
+    target_field = _admit_field(target.coefficient_field, target.prime)
+    if (
+        source.complex != target.complex
+        or source.coefficient_field != target.coefficient_field
+        or source.prime != target.prime
+    ):
         raise _fail_domain(
-            "morphism_not_natural", "kernel requires a natural sheaf morphism"
+            "parent_mismatch",
+            "sheaf morphisms require one complex and coefficient field",
         )
-    _complete_diagram(source, role="source")
-    _complete_diagram(target, role="target")
+    _admit_section_plan(source)
+    _admit_section_plan(target)
+    target_cover, input_digits, morphism_work = _admit_morphism_resources(
+        source, target, value.components
+    )
     cells = source.canonical_face_order
+    normalized_keys = tuple(
+        _resolve_component_key(key, cells) for key, _matrix in value.components
+    )
+    if normalized_keys != cells:
+        raise _fail_domain(
+            "component_axis",
+            "one morphism component per simplex in canonical order is required",
+        )
     source_stalks = {stalk.simplex: stalk for stalk in source.stalks}
     target_stalks = {stalk.simplex: stalk for stalk in target.stalks}
-    components = {
-        key: tuple(tuple(field.parse(x) for x in row) for row in matrix)
-        for key, matrix in checked.components
-    }
+    components: dict[tuple[str, ...], tuple[tuple[Scalar, ...], ...]] = {}
+    canonical_components: list[Component] = []
+    for cell, (_key, matrix) in zip(cells, value.components, strict=True):
+        parsed = _admit_component_matrix(matrix, field, ("components", ".".join(cell)))
+        if len(parsed) != len(target_stalks[cell].basis) or any(
+            len(row) != len(source_stalks[cell].basis) for row in parsed
+        ):
+            raise _fail_domain(
+                "component_shape",
+                "morphism component matrices must match their stalk axes",
+            )
+        components[cell] = parsed
+        canonical_components.append((cell, field.render(parsed)))
     restrictions = {
         (item.source, item.target): item
         for item in (*source.cover_restrictions, *source.derived_restrictions)
     }
-    work = 0
+    kernel_work = 0
     for cell in cells:
         f_rank = len(source_stalks[cell].basis)
         g_rank = len(target_stalks[cell].basis)
-        work += max(1, f_rank) ** 3 + g_rank * f_rank * max(1, f_rank)
+        kernel_work += max(1, f_rank) ** 3 + g_rank * f_rank * max(1, f_rank)
     restriction_cells = sum(
         len(source_stalks[a].basis) * len(source_stalks[b].basis)
         for a, b in restrictions
     )
-    work += restriction_cells * max(1, MAX_SHEAF_STALK_RANK)
-    if work > MAX_SHEAF_MORPHISM_WORK:
+    kernel_work += restriction_cells * max(1, MAX_SHEAF_STALK_RANK)
+    reconstruction_work, reconstruction_chars = _parent_reconstruction_bounds(
+        (source, target), input_digits=input_digits
+    )
+    total_work = kernel_work + morphism_work + reconstruction_work
+    if total_work > MAX_SHEAF_MORPHISM_WORK:
         raise _fail_resource(
             "work_bound",
-            "pointwise kernel and induced restriction work exceeds its bound",
+            "parent coherence, naturality, and kernel work exceed the combined bound",
         )
     # Input sheaves/morphism were already bounded by their owners. Bound the
     # worst-case output before nullspace or restriction expansion.
@@ -196,10 +317,10 @@ def kernel_of_morphism(value: SheafMorphismResult) -> SheafMorphismKernelResult:
         )
         + restriction_cells * MAX_SHEAF_STALK_RANK
     )
-    _, input_digits = _scan_morphism_scalar_text(source, target, checked.components)
     output_digits = 2 * MAX_SHEAF_STALK_RANK * input_digits + 32
     if (
-        4 * len(checked.model_dump_json())
+        4 * len(value.model_dump_json())
+        + reconstruction_chars
         + sheaf_scalar_json_bound(output_cells, output_digits)
         > MAX_SHEAF_MORPHISM_OUTPUT_CHARS
     ):
@@ -207,6 +328,46 @@ def kernel_of_morphism(value: SheafMorphismResult) -> SheafMorphismKernelResult:
             "output_bound",
             "kernel basis, restrictions, and inclusion exceed their output envelope",
         )
+
+    # Reconstruct both complete parent functors only after the combined input,
+    # arithmetic, and output envelope has been admitted.
+    _readmit_parent_sheaf(source, role="source")
+    _readmit_parent_sheaf(target, role="target")
+
+    # Do not trust the serialized natural flag until both parent diagrams have
+    # been reconstructed and shown equal to their cover-map presentations.
+    for restriction in source.cover_restrictions:
+        source_component = components[restriction.source]
+        target_component = components[restriction.target]
+        source_restriction = tuple(
+            tuple(field.parse(entry) for entry in row) for row in restriction.entries
+        )
+        target_restriction = tuple(
+            tuple(target_field.parse(entry) for entry in row)
+            for row in target_cover[(restriction.source, restriction.target)].entries
+        )
+        left = _mul(
+            [list(row) for row in target_component],
+            [list(row) for row in source_restriction],
+            field.prime,
+            output_width=len(source_stalks[restriction.source].basis),
+        )
+        right = _mul(
+            [list(row) for row in target_restriction],
+            [list(row) for row in source_component],
+            field.prime,
+            output_width=len(source_stalks[restriction.source].basis),
+        )
+        if left != right:
+            raise _fail_domain(
+                "morphism_not_natural", "kernel requires a natural sheaf morphism"
+            )
+    checked = SheafMorphismResult(
+        source=source,
+        target=target,
+        components=tuple(canonical_components),
+        natural=True,
+    )
 
     bases: dict[tuple[str, ...], list[list[Scalar]]] = {}
     kernel_ranks: dict[tuple[str, ...], int] = {}

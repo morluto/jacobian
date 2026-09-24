@@ -2,13 +2,17 @@
 
 from fractions import Fraction
 
+import pytest
+
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.builtins import BUILTIN_TOOLS
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.topology._models import canonical_complex
 from jacobian.math.topology.cellular_sheaves import (
     SheafField,
     SheafMorphismKernelRequest,
     SheafMorphismKernelResult,
+    SheafMorphismResult,
     SheafStalk,
     from_cover_maps,
     kernel_of_morphism,
@@ -52,6 +56,33 @@ def _sheaf(rank: int = 2, field: SheafField = SheafField.RATIONAL, prime=None):
                     )
                     for j in range(rank)
                 ),
+            )
+            for face, coface in covers
+        ),
+    )
+    assert result.sheaf is not None
+    return result.sheaf
+
+
+def _triangle_sheaf():
+    complex_ = canonical_complex(("a", "b", "c"), (("a", "b", "c"),))
+    faces = tuple(face for group in complex_.faces_by_dimension for face in group.faces)
+    covers = tuple(
+        (face, coface)
+        for coface in faces
+        for face in faces
+        if len(coface) == len(face) + 1 and set(face) < set(coface)
+    )
+    result = from_cover_maps(
+        complex_,
+        SheafField.RATIONAL,
+        None,
+        tuple(SheafStalk(simplex=face, basis=("x",)) for face in faces),
+        tuple(
+            CoverRestrictionMatrix(
+                source=face,
+                target=coface,
+                entries=((_q(1),),),
             )
             for face, coface in covers
         ),
@@ -117,3 +148,36 @@ def test_kernel_uses_the_declared_prime_field() -> None:
     assert result.kernel.coefficient_field is SheafField.PRIME_FIELD
     assert result.kernel.prime == 3
     assert result.inclusion.components[0][1] == ((0,), (1,))
+
+
+@pytest.mark.parametrize("forged_role", ("source", "target"))
+def test_kernel_rechecks_parent_derived_restrictions(forged_role: str) -> None:
+    source, target = _triangle_sheaf(), _triangle_sheaf()
+    valid_source, valid_target = source, target
+    forged_parent = source if forged_role == "source" else target
+    derived = list(forged_parent.derived_restrictions)
+    candidate_index = next(
+        index
+        for index, restriction in enumerate(derived)
+        if len(restriction.target) - len(restriction.source) == 2
+    )
+    derived[candidate_index] = derived[candidate_index].model_copy(
+        update={"entries": ((_q(0),),)}
+    )
+    forged_parent = forged_parent.model_copy(
+        update={"derived_restrictions": tuple(derived)}
+    )
+    if forged_role == "source":
+        source = forged_parent
+    else:
+        target = forged_parent
+
+    components = tuple((cell, ((_q(1),),)) for cell in source.canonical_face_order)
+    candidate = morphism(source, target, components)
+    assert candidate.natural
+    assert valid_source != source if forged_role == "source" else valid_target != target
+    decoded = SheafMorphismResult.model_validate_json(candidate.model_dump_json())
+    assert decoded.source == source
+    assert decoded.target == target
+    with pytest.raises(OperationDomainValidationError, match="functor diagram"):
+        kernel_of_morphism(decoded)

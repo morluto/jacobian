@@ -40,6 +40,113 @@ class FilteredDirectSumRequest(StrictModel):
     right: FilteredChainComplexRequest
 
 
+def _require_canonical_inclusions(
+    left_maps: tuple[tuple[tuple[int, ...], ...], ...],
+    right_maps: tuple[tuple[tuple[int, ...], ...], ...],
+    left_sizes: tuple[int, ...],
+    right_sizes: tuple[int, ...],
+    output_sizes: tuple[int, ...],
+) -> None:
+    for degree, dimension in enumerate(output_sizes):
+        left = left_maps[degree]
+        right = right_maps[degree]
+        left_size = left_sizes[degree]
+        right_size = right_sizes[degree]
+        if (
+            len(left) != dimension
+            or len(right) != dimension
+            or any(len(row) != left_size for row in left)
+            or any(len(row) != right_size for row in right)
+            or left_size + right_size != dimension
+        ):
+            raise ValueError("direct-sum inclusion axes are inconsistent")
+        for row_index, (left_row, right_row) in enumerate(
+            zip(left, right, strict=True)
+        ):
+            if any(
+                value != (1 if row_index == column else 0)
+                for column, value in enumerate(left_row)
+            ) or any(
+                value != (1 if row_index - left_size == column else 0)
+                for column, value in enumerate(right_row)
+            ):
+                raise ValueError(
+                    "direct-sum inclusions must be canonical summand embeddings"
+                )
+
+
+def _require_block_sum_differentials(
+    left: ChainComplexValue,
+    right: ChainComplexValue,
+    output: ChainComplexValue,
+) -> None:
+    for index, (matrix_left, matrix_right) in enumerate(
+        zip(left.differential_matrices, right.differential_matrices, strict=True)
+    ):
+        output_matrix = output.differential_matrices[index]
+        left_rows = len(matrix_left)
+        left_columns = left.basis_sizes[index + 1]
+        for row_index, row in enumerate(output_matrix):
+            if row_index < left_rows:
+                source_row = matrix_left[row_index]
+                if any(
+                    row[column] != source_row[column] for column in range(left_columns)
+                ) or any(row[column] for column in range(left_columns, len(row))):
+                    raise ValueError(
+                        "direct-sum output differentials must be block diagonal"
+                    )
+            else:
+                source_row = matrix_right[row_index - left_rows]
+                if any(row[column] for column in range(left_columns)) or any(
+                    row[left_columns + column] != source_row[column]
+                    for column in range(len(source_row))
+                ):
+                    raise ValueError(
+                        "direct-sum output differentials must be block diagonal"
+                    )
+        if len(output_matrix) != len(matrix_left) + len(matrix_right):
+            raise ValueError("direct-sum output differentials must be block diagonal")
+
+
+def _require_block_sum_filtration(
+    left: FilteredChainComplexRequest,
+    right: FilteredChainComplexRequest,
+    output: FilteredChainComplexRequest,
+) -> None:
+    for level_index, (level_left, level_right) in enumerate(
+        zip(left.filtration, right.filtration, strict=True)
+    ):
+        output_level = output.filtration[level_index]
+        for degree, (space_left, space_right) in enumerate(
+            zip(level_left.subspaces, level_right.subspaces, strict=True)
+        ):
+            left_size = left.complex.basis_sizes[degree]
+            output_vectors = output_level.subspaces[degree].vectors
+            if len(output_vectors) != len(space_left.vectors) + len(
+                space_right.vectors
+            ):
+                raise ValueError("direct-sum output filtration must be the block sum")
+            for index, source_vector in enumerate(space_left.vectors):
+                vector = output_vectors[index]
+                if any(
+                    vector[column] != source_vector[column]
+                    for column in range(left_size)
+                ) or any(vector[column] for column in range(left_size, len(vector))):
+                    raise ValueError(
+                        "direct-sum output filtration must be the block sum"
+                    )
+            right_offset = len(space_left.vectors)
+            for index, source_vector in enumerate(space_right.vectors):
+                vector = output_vectors[right_offset + index]
+                if any(vector[column] for column in range(left_size)) or any(
+                    vector[left_size + column] != source_vector[column]
+                    for column in range(len(source_vector))
+                ):
+                    raise ValueError(
+                        "direct-sum output filtration must be the block sum"
+                    )
+
+
 class FilteredDirectSumResult(StrictModel):
     """A filtered direct sum and its canonical summand inclusions."""
 
@@ -72,85 +179,23 @@ class FilteredDirectSumResult(StrictModel):
             or combined.degree_max != right_complex.degree_max
         ):
             raise ValueError("direct-sum source and output axes are inconsistent")
-        for degree, dimension in enumerate(combined.basis_sizes):
-            left = self.left_inclusions[degree]
-            right = self.right_inclusions[degree]
-            left_size = left_complex.basis_sizes[degree]
-            right_size = right_complex.basis_sizes[degree]
-            if (
-                len(left) != dimension
-                or len(right) != dimension
-                or any(len(row) != left_size for row in left)
-                or any(len(row) != right_size for row in right)
-                or left_size + right_size != dimension
-            ):
-                raise ValueError("direct-sum inclusion axes are inconsistent")
-            expected_left = tuple(
-                tuple(1 if row == column else 0 for column in range(left_size))
-                for row in range(dimension)
-            )
-            expected_right = tuple(
-                tuple(
-                    1 if row - left_size == column else 0
-                    for column in range(right_size)
-                )
-                for row in range(dimension)
-            )
-            if left != expected_left or right != expected_right:
+        _require_canonical_inclusions(
+            self.left_inclusions,
+            self.right_inclusions,
+            left_complex.basis_sizes,
+            right_complex.basis_sizes,
+            combined.basis_sizes,
+        )
+        for index, (left_size, right_size) in enumerate(
+            zip(left_complex.basis_sizes, right_complex.basis_sizes, strict=True)
+        ):
+            if combined.basis_sizes[index] != left_size + right_size:
                 raise ValueError(
-                    "direct-sum inclusions must be canonical summand embeddings"
+                    "direct-sum output basis sizes must be the summand block sum"
                 )
 
-        expected_sizes = tuple(
-            left_size + right_size
-            for left_size, right_size in zip(
-                left_complex.basis_sizes, right_complex.basis_sizes, strict=True
-            )
-        )
-        if combined.basis_sizes != expected_sizes:
-            raise ValueError(
-                "direct-sum output basis sizes must be the summand block sum"
-            )
-        expected_differentials = []
-        for index, (matrix_left, matrix_right) in enumerate(
-            zip(
-                left_complex.differential_matrices,
-                right_complex.differential_matrices,
-                strict=True,
-            )
-        ):
-            left_columns = left_complex.basis_sizes[index + 1]
-            right_columns = right_complex.basis_sizes[index + 1]
-            expected_differentials.append(
-                tuple(tuple(row) + (0,) * right_columns for row in matrix_left)
-                + tuple((0,) * left_columns + tuple(row) for row in matrix_right)
-            )
-        if combined.differential_matrices != tuple(expected_differentials):
-            raise ValueError("direct-sum output differentials must be block diagonal")
-
-        expected_filtration = []
-        for level_left, level_right in zip(
-            self.left.filtration, self.right.filtration, strict=True
-        ):
-            expected_subspaces = []
-            for degree, (space_left, space_right) in enumerate(
-                zip(level_left.subspaces, level_right.subspaces, strict=True)
-            ):
-                left_size = left_complex.basis_sizes[degree]
-                right_size = right_complex.basis_sizes[degree]
-                vectors = tuple(
-                    tuple(vector) + (0,) * right_size for vector in space_left.vectors
-                ) + tuple(
-                    (0,) * left_size + tuple(vector) for vector in space_right.vectors
-                )
-                expected_subspaces.append(vectors)
-            expected_filtration.append(tuple(expected_subspaces))
-        actual_filtration = tuple(
-            tuple(subspace.vectors for subspace in level.subspaces)
-            for level in self.filtered_complex.filtration
-        )
-        if actual_filtration != tuple(expected_filtration):
-            raise ValueError("direct-sum output filtration must be the block sum")
+        _require_block_sum_differentials(left_complex, right_complex, combined)
+        _require_block_sum_filtration(self.left, self.right, self.filtered_complex)
         return self
 
 

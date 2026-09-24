@@ -5,7 +5,10 @@ from itertools import permutations
 import pytest
 
 from jacobian.catalog.catalog import Catalog
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.gauge import (
     FiniteGroupGaugeComplexRequest,
     FiniteGroupGaugeCurvatureRequest,
@@ -242,3 +245,28 @@ def test_parent_table_repetition_is_admitted_before_face_values_are_built():
     assert error.value.errors()[0]["type"] == (
         "lattice_gauge.finite_group.curvature_output_bound"
     )
+
+
+def test_curvature_consumer_rejects_forged_open_face_walk():
+    group, index = _s3()
+    lattice, field, complex_value = _triangle(group, index)
+    forged = type(complex_value).model_construct(
+        lattice=lattice,
+        group=group,
+        faces=(
+            FiniteGroupGaugeFace(
+                face_id="open",
+                boundary=OrientedGaugePath(
+                    steps=(GaugePathStep(edge_id="ab", forward=True),)
+                ),
+            ),
+        ),
+    )
+
+    with pytest.raises(OperationDomainValidationError) as error:
+        finite_group_gauge_curvature(
+            FiniteGroupGaugeCurvatureRequest.model_construct(
+                complex=forged, field=field
+            )
+        )
+    assert error.value.errors()[0]["type"] == "lattice_gauge.complex.face_closed"

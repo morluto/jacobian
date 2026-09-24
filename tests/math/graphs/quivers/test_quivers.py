@@ -152,8 +152,87 @@ def test_fixed_length_paths_handles_large_exact_count_with_small_work() -> None:
     assert result.total_paths == 32**32
 
 
-def test_fixed_length_paths_rejects_excessive_matrix_work() -> None:
-    request = FixedLengthPathsRequest(quiver=FiniteQuiver(vertex_count=128), length=32)
+def test_sparse_parallel_arrows_preserve_path_multiplicity() -> None:
+    from jacobian.math.graphs.quivers._path_bounds import fixed_length_paths_envelope
+
+    quiver = FiniteQuiver(
+        vertex_count=4,
+        arrows=tuple(
+            edge for edge in ((0, 1), (1, 2), (2, 3), (3, 0)) for _ in range(2)
+        ),
+    )
+    assert (
+        fixed_length_paths_envelope(vertex_count=4, arrow_count=8, length=4).method
+        == "sparse"
+    )
+    result = fixed_length_paths(quiver, 4)
+    assert result.path_matrix.entries == tuple(
+        tuple(16 * int(source == target) for target in range(4)) for source in range(4)
+    )
+    assert result.total_paths == 64
+
+
+def test_dense_parallel_arrows_preserve_path_multiplicity() -> None:
+    from jacobian.math.graphs.quivers._path_bounds import fixed_length_paths_envelope
+
+    quiver = FiniteQuiver(
+        vertex_count=2,
+        arrows=tuple(
+            (source, target)
+            for source in range(2)
+            for target in range(2)
+            for _ in range(2)
+        ),
+    )
+    assert (
+        fixed_length_paths_envelope(vertex_count=2, arrow_count=8, length=4).method
+        == "dense"
+    )
+    result = fixed_length_paths(quiver, 4)
+    assert result.path_matrix.entries == ((128, 128), (128, 128))
+    assert result.total_paths == 512
+
+
+def test_edgeless_large_quiver_uses_sparse_bound() -> None:
+    from jacobian.math.graphs.quivers._path_bounds import fixed_length_paths_envelope
+
+    quiver = FiniteQuiver(vertex_count=128)
+    assert (
+        fixed_length_paths_envelope(vertex_count=128, arrow_count=0, length=32).method
+        == "sparse"
+    )
+    result = fixed_length_paths(quiver, 32)
+    assert result.total_paths == 0
+    assert all(value == 0 for row in result.path_matrix.entries for value in row)
+
+
+def test_dense_exact_scalar_budget_is_admitted() -> None:
+    from jacobian.math.graphs.quivers._path_bounds import fixed_length_paths_envelope
+
+    size = 100
+    quiver = FiniteQuiver(
+        vertex_count=size,
+        arrows=tuple(
+            (source, target) for source in range(size) for target in range(size)
+        ),
+    )
+    envelope = fixed_length_paths_envelope(
+        vertex_count=size, arrow_count=size**2, length=11
+    )
+    assert envelope.method == "dense"
+    assert envelope.scalar_updates == 10_000_000
+    result = fixed_length_paths(quiver, 11)
+    assert result.path_matrix.entries[0][0] == size**10
+    assert result.total_paths == size**12
+    assert encode_strict_json(result.model_dump(mode="json"))
+
+
+def test_fixed_length_paths_rejects_excessive_work_in_both_regimes() -> None:
+    quiver = FiniteQuiver(
+        vertex_count=128,
+        arrows=tuple((source, target) for source in range(128) for target in range(24)),
+    )
+    request = FixedLengthPathsRequest(quiver=quiver, length=32)
     with pytest.raises(OperationDomainValidationError) as exc_info:
         fixed_length_paths(request.quiver, request.length)
 

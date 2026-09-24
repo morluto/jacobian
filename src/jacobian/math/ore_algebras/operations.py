@@ -5,32 +5,57 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 from fractions import Fraction
-from math import comb
+from math import comb, gcd
 from typing import Any
 
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
+from jacobian.math.number_theory.sequences.core._models import FiniteRationalSequence
 from jacobian.math.ore_algebras._models import (
+    MAX_DIFFERENTIAL_ADDITIVE_OUTPUT_BYTES,
+    MAX_DIFFERENTIAL_ADDITIVE_WORK_CELLS,
     MAX_DIFFERENTIAL_ORDER,
     MAX_DIFFERENTIAL_TERMS,
+    MAX_SHIFT_ADDITIVE_OUTPUT_BYTES,
+    MAX_SHIFT_ADDITIVE_WORK_CELLS,
     MAX_SHIFT_COEFFICIENT_DEGREE,
     MAX_SHIFT_COEFFICIENT_DIGITS,
     MAX_SHIFT_COEFFICIENT_TERMS,
     MAX_SHIFT_LEDGER_ROWS,
+    MAX_SHIFT_ORDER,
+    MAX_SHIFT_POWER_EXPONENT,
+    MAX_SHIFT_POWER_WORK_CELLS,
+    MAX_SHIFT_PREFIX_EVALUATION_CELLS,
+    MAX_SHIFT_PREFIX_INDEX,
+    MAX_SHIFT_PREFIX_OUTPUT_BYTES,
+    MAX_SHIFT_PREFIX_WORK_UNITS,
     MAX_SHIFT_RESULT_DEGREE,
     MAX_SHIFT_RESULT_DIGITS,
     MAX_SHIFT_RESULT_ORDER,
+    MAX_SHIFT_TERMS,
+    DifferentialOperatorAddResult,
     DifferentialOperatorApplyResult,
     DifferentialOperatorMultiplyResult,
+    DifferentialOperatorNormalizeResult,
     DifferentialOreOperator,
     ShiftMultiplyLedgerRow,
+    ShiftOperatorAddResult,
     ShiftOperatorMultiplyResult,
+    ShiftOperatorNormalizeResult,
+    ShiftOperatorPowerResult,
+    ShiftOperatorPrefixContribution,
+    ShiftOperatorPrefixPoleExclusion,
+    ShiftOperatorPrefixResidual,
+    ShiftOperatorPrefixResult,
+    ShiftOperatorScalarMultiplyResult,
     ShiftOreOperator,
+    ShiftOreTerm,
 )
 from jacobian.math.polynomials.values import (
     MAX_RATIONAL_FUNCTION_COEFFICIENT_DIGITS,
@@ -507,6 +532,863 @@ def shift_operator_multiply(
     )
 
 
+def _shift_power_source_profile(
+    operator: ShiftOreOperator,
+) -> dict[int, tuple[int, int, int]]:
+    """Read degree, support, and height bounds for integer-polynomial terms."""
+
+    source: dict[int, tuple[int, int, int]] = {}
+    for term in operator.terms:
+        if _decode_poly(term.coefficient.denominator.terms) != {0: Fraction(1)}:
+            raise OperationResourceAdmissionError(
+                location=("operator", "terms", term.exponent, "coefficient"),
+                code="ore_algebra.shift_power_coefficient_envelope",
+                message=(
+                    "powers above one currently require integer-polynomial "
+                    "coefficients in ZZ[n] so every stage's coefficient "
+                    "growth can be bounded before expansion"
+                ),
+            )
+        coefficients = tuple(
+            coefficient.coefficient.as_fraction()
+            for coefficient in term.coefficient.numerator.terms
+        )
+        if any(coefficient.denominator != 1 for coefficient in coefficients):
+            raise OperationResourceAdmissionError(
+                location=("operator", "terms", term.exponent, "coefficient"),
+                code="ore_algebra.shift_power_coefficient_envelope",
+                message=(
+                    "powers above one currently require integer-polynomial "
+                    "coefficients in ZZ[n] so every stage's coefficient "
+                    "growth can be bounded before expansion"
+                ),
+            )
+        source[term.exponent] = (
+            max(
+                (
+                    max(poly_term.exponents)
+                    for poly_term in term.coefficient.numerator.terms
+                ),
+                default=0,
+            ),
+            len(term.coefficient.numerator.terms),
+            max(
+                (
+                    len(format_canonical_integer(abs(coefficient.numerator)))
+                    for coefficient in coefficients
+                ),
+                default=0,
+            ),
+        )
+    return source
+
+
+def _preflight_shift_power_stages(operator: ShiftOreOperator, exponent: int) -> None:
+    """Bound every degree, support, height, and product stage before work."""
+
+    source = _shift_power_source_profile(operator)
+    stages = dict(source)
+    planned_work = 0
+    for stage in range(1, exponent):
+        next_stage: dict[int, tuple[int, int, int, int]] = {}
+        planned_work += len(stages) * len(source)
+        for left_exponent, (left_degree, left_terms, left_digits) in stages.items():
+            for right_exponent, (
+                right_degree,
+                right_terms,
+                right_digits,
+            ) in source.items():
+                pair = _shift_power_pair_profile(
+                    left_exponent,
+                    left_degree,
+                    left_terms,
+                    left_digits,
+                    right_degree,
+                    right_terms,
+                    right_digits,
+                )
+                output_exponent = left_exponent + right_exponent
+                current = next_stage.get(output_exponent)
+                if current is None:
+                    next_stage[output_exponent] = (*pair, 1)
+                else:
+                    degree, terms, digits, pair_count = current
+                    next_stage[output_exponent] = (
+                        max(degree, pair[0]),
+                        terms + pair[1],
+                        max(digits, pair[2]),
+                        pair_count + 1,
+                    )
+        if planned_work > MAX_SHIFT_POWER_WORK_CELLS:
+            raise OperationResourceAdmissionError(
+                location=("exponent", stage + 1),
+                code="ore_algebra.shift_power_work",
+                message="shift-operator power exceeds its admitted product-cell work bound",
+            )
+        if len(next_stage) > MAX_SHIFT_TERMS:
+            raise OperationResourceAdmissionError(
+                location=("exponent", stage + 1),
+                code="ore_algebra.shift_power_term_bound",
+                message="a shift-operator power stage may exceed the sparse term bound",
+            )
+        stages = _finish_shift_power_stage(next_stage, stage + 1)
+
+
+def _shift_power_pair_profile(
+    left_exponent: int,
+    left_degree: int,
+    left_terms: int,
+    left_digits: int,
+    right_degree: int,
+    right_terms: int,
+    right_digits: int,
+) -> tuple[int, int, int]:
+    """Bound one shift-weighted polynomial product before expansion."""
+
+    shift_digits = 0
+    if left_exponent and right_degree:
+        shift_factor = (right_degree + 1) * (2 * left_exponent) ** right_degree
+        shift_digits = len(str(shift_factor - 1))
+    shifted_terms = (
+        right_terms if not left_exponent or right_degree == 0 else right_degree + 1
+    )
+    convolution_count = min(left_degree + 1, right_degree + 1)
+    pair_terms = min(
+        left_degree + right_degree + 1,
+        left_terms * shifted_terms,
+    )
+    pair_digits = (
+        left_digits
+        + right_digits
+        + shift_digits
+        + (len(str(convolution_count - 1)) if convolution_count > 1 else 0)
+    )
+    return left_degree + right_degree, pair_terms, pair_digits
+
+
+def _finish_shift_power_stage(
+    stage: dict[int, tuple[int, int, int, int]], stage_number: int
+) -> dict[int, tuple[int, int, int]]:
+    """Check one predicted stage against reusable operator input bounds."""
+
+    result: dict[int, tuple[int, int, int]] = {}
+    for exponent, (degree, terms, digits, pair_count) in stage.items():
+        digits += len(str(pair_count - 1)) if pair_count > 1 else 0
+        terms = min(degree + 1, terms)
+        if (
+            degree > MAX_SHIFT_COEFFICIENT_DEGREE
+            or terms > MAX_SHIFT_COEFFICIENT_TERMS
+            or digits > MAX_SHIFT_COEFFICIENT_DIGITS
+        ):
+            raise OperationResourceAdmissionError(
+                location=("exponent", stage_number),
+                code="ore_algebra.shift_power_intermediate_bound",
+                message=(
+                    "a shift-operator power stage may exceed the coefficient "
+                    "degree, term, or digit bound before completion"
+                ),
+            )
+        result[exponent] = (degree, terms, digits)
+    return result
+
+
+def shift_operator_power(
+    operator: ShiftOreOperator | Mapping[str, Any], exponent: int
+) -> ShiftOperatorPowerResult:
+    """Compute a bounded nonnegative power in the shift Ore algebra."""
+
+    value = _admit_shift_operator(_as_operator(operator), label="operator")
+    if type(exponent) is not int or not 0 <= exponent <= MAX_SHIFT_POWER_EXPONENT:
+        raise OperationDomainValidationError(
+            location=("exponent",),
+            code="ore_algebra.shift_power_exponent",
+            message=(
+                "the shift-operator exponent must be in the admitted range "
+                f"0..{MAX_SHIFT_POWER_EXPONENT}"
+            ),
+        )
+    if value.order >= 0 and value.order * exponent > MAX_SHIFT_ORDER:
+        raise OperationResourceAdmissionError(
+            location=("exponent",),
+            code="ore_algebra.shift_power_order",
+            message="shift-operator power exceeds the canonical result-order bound",
+        )
+    if exponent > 1:
+        _preflight_shift_power_stages(value, exponent)
+
+    one = _encode_rf(({0: Fraction(1)}, {0: Fraction(1)}))
+    identity = ShiftOreOperator(
+        variable="n",
+        terms=(
+            # This is the multiplicative identity in QQ(n)<S>.
+            ShiftOreTerm(exponent=0, coefficient=one),
+        ),
+    )
+    result = identity if exponent == 0 else value
+    for _ in range(1, exponent):
+        result = shift_operator_multiply(result, value).product
+        if not result.terms:
+            break
+    return ShiftOperatorPowerResult._from_kernel(value, exponent, result)
+
+
+def _evaluate_rational_polynomial_at(
+    polynomial: SparseRationalPolynomial, index: int
+) -> Fraction:
+    """Evaluate one admitted univariate rational polynomial exactly."""
+    return sum(
+        (
+            term.coefficient.as_fraction() * index ** term.exponents[0]
+            for term in polynomial.terms
+        ),
+        Fraction(0),
+    )
+
+
+def _digit_count(value: int) -> int:
+    return len(format_canonical_integer(abs(value)))
+
+
+def _admit_polynomial_shift_operator(
+    value: ShiftOreOperator | Mapping[str, Any], *, label: str
+) -> ShiftOreOperator:
+    """Admit an operator in the closed subalgebra QQ[n]<S>."""
+    operator = _admit_shift_operator(_as_operator(value), label=label)
+    if any(
+        _decode_poly(term.coefficient.denominator.terms) != {0: Fraction(1)}
+        for term in operator.terms
+    ):
+        raise OperationDomainValidationError(
+            location=(label, "terms"),
+            code="ore_algebra.shift_polynomial_coefficients",
+            message="this operation requires polynomial coefficients in QQ[n]",
+        )
+    return operator
+
+
+def _operator_representation_byte_bound(operator: ShiftOreOperator) -> int:
+    return 256 * len(operator.terms) + sum(
+        128
+        + sum(
+            _digit_count(entry.coefficient.num)
+            + _digit_count(entry.coefficient.den)
+            + 128
+            for entry in term.coefficient.numerator.terms
+        )
+        for term in operator.terms
+    )
+
+
+def _preflight_polynomial_operator_addition(
+    left: ShiftOreOperator,
+    right: ShiftOreOperator,
+) -> tuple[tuple[int, dict[int, Fraction] | None, dict[int, Fraction] | None], ...]:
+    """Plan sparse coefficient sums and bound them before adding rationals."""
+    left_coefficients = {
+        term.exponent: _decode_poly(term.coefficient.numerator.terms)
+        for term in left.terms
+    }
+    right_coefficients = {
+        term.exponent: _decode_poly(term.coefficient.numerator.terms)
+        for term in right.terms
+    }
+    exponents = tuple(sorted(left_coefficients.keys() | right_coefficients.keys()))
+    if len(exponents) > MAX_SHIFT_TERMS:
+        raise OperationResourceAdmissionError(
+            location=("sum", "terms"),
+            code="ore_algebra.shift_addition_terms",
+            message="shift-operator sum exceeds the sparse operator-term budget",
+        )
+    cells = sum(map(len, left_coefficients.values())) + sum(
+        map(len, right_coefficients.values())
+    )
+    if cells > MAX_SHIFT_ADDITIVE_WORK_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("left", "terms"),
+            code="ore_algebra.shift_addition_work",
+            message="shift-operator addition exceeds the sparse coefficient-work budget",
+        )
+
+    plan = tuple(
+        (exponent, left_coefficients.get(exponent), right_coefficients.get(exponent))
+        for exponent in exponents
+    )
+    output_bytes = (
+        _operator_representation_byte_bound(left)
+        + _operator_representation_byte_bound(right)
+        + 256 * len(plan)
+    )
+    for _exponent, first, second in plan:
+        support = (first or {}).keys() | (second or {}).keys()
+        output_bytes += 128 * len(support)
+        for degree in support:
+            first_value = (first or {}).get(degree)
+            second_value = (second or {}).get(degree)
+            if first_value is None:
+                numerator_digits = _digit_count(second_value.numerator)
+                denominator_digits = _digit_count(second_value.denominator)
+            elif second_value is None:
+                numerator_digits = _digit_count(first_value.numerator)
+                denominator_digits = _digit_count(first_value.denominator)
+            else:
+                numerator_digits = (
+                    max(
+                        _digit_count(first_value.numerator)
+                        + _digit_count(second_value.denominator),
+                        _digit_count(second_value.numerator)
+                        + _digit_count(first_value.denominator),
+                    )
+                    + 1
+                )
+                denominator_digits = _digit_count(
+                    first_value.denominator
+                ) + _digit_count(second_value.denominator)
+            if (
+                max(numerator_digits, denominator_digits)
+                > MAX_RATIONAL_FUNCTION_COEFFICIENT_DIGITS
+            ):
+                raise OperationResourceAdmissionError(
+                    location=("sum", _exponent, degree),
+                    code="ore_algebra.shift_addition_coefficient_digits",
+                    message="shift-operator addition can exceed the rational coefficient-digit carrier",
+                )
+            output_bytes += numerator_digits + denominator_digits + 64
+    if output_bytes > MAX_SHIFT_ADDITIVE_OUTPUT_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("sum",),
+            code="ore_algebra.shift_addition_output",
+            message="shift-operator sum exceeds its serialized output budget",
+        )
+    return plan
+
+
+def shift_operator_add(
+    left: ShiftOreOperator | Mapping[str, Any],
+    right: ShiftOreOperator | Mapping[str, Any],
+) -> ShiftOperatorAddResult:
+    """Add polynomial-coefficient shift operators over the subring QQ[n]."""
+    left_value = _admit_polynomial_shift_operator(left, label="left")
+    right_value = _admit_polynomial_shift_operator(right, label="right")
+    plan = _preflight_polynomial_operator_addition(left_value, right_value)
+    result_terms: list[dict[str, Any]] = []
+    for exponent, first, second in plan:
+        coefficient = dict(first or {})
+        for degree, value in (second or {}).items():
+            total = coefficient.get(degree, Fraction(0)) + value
+            if total:
+                coefficient[degree] = total
+            else:
+                coefficient.pop(degree, None)
+        if coefficient:
+            result_terms.append(
+                {
+                    "exponent": exponent,
+                    "coefficient": _encode_rf((coefficient, {0: Fraction(1)})),
+                }
+            )
+    result = ShiftOreOperator.model_validate({"variable": "n", "terms": result_terms})
+    return ShiftOperatorAddResult._from_kernel(left_value, right_value, result)
+
+
+def shift_operator_scalar_left_multiply(
+    scalar: RationalFunction | Mapping[str, Any],
+    operator: ShiftOreOperator | Mapping[str, Any],
+) -> ShiftOperatorScalarMultiplyResult:
+    """Left-scale a polynomial-coefficient shift operator by an element of QQ."""
+    operator_value = _admit_polynomial_shift_operator(operator, label="operator")
+    scalar_value = _as_rational_function(scalar)
+    try:
+        scalar_value = RationalFunction.model_validate(scalar_value.model_dump())
+        require_canonical_rational_function(
+            scalar_value,
+            maximum_terms=1,
+            maximum_exponent=0,
+            maximum_coefficient_digits=MAX_SHIFT_COEFFICIENT_DIGITS,
+            label="shift scalar",
+        )
+        scalar_numerator, scalar_denominator = _decode_rf(scalar_value)
+        if (
+            scalar_value.variables != ("n",)
+            or scalar_denominator != {0: Fraction(1)}
+            or any(exponent != 0 for exponent in scalar_numerator)
+        ):
+            raise ValueError("the scalar must be a rational constant on QQ(n)")
+        scalar_fraction = scalar_numerator.get(0, Fraction(0))
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("scalar",),
+            code="ore_algebra.shift_rational_constant",
+            message="the left scalar must be a canonical rational constant on QQ(n)",
+        ) from exc
+
+    work_cells = sum(
+        len(term.coefficient.numerator.terms) for term in operator_value.terms
+    )
+    if work_cells > MAX_SHIFT_ADDITIVE_WORK_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("operator", "terms"),
+            code="ore_algebra.shift_scalar_work",
+            message="shift-operator scalar multiplication exceeds its coefficient-work budget",
+        )
+    scalar_digits = max(
+        _digit_count(scalar_fraction.numerator),
+        _digit_count(scalar_fraction.denominator),
+    )
+    output_bytes = _operator_representation_byte_bound(operator_value) + 256
+    for term in operator_value.terms:
+        for coefficient in term.coefficient.numerator.terms:
+            numerator_digits = _digit_count(coefficient.coefficient.num) + scalar_digits
+            denominator_digits = (
+                _digit_count(coefficient.coefficient.den) + scalar_digits
+            )
+            if (
+                max(numerator_digits, denominator_digits)
+                > MAX_RATIONAL_FUNCTION_COEFFICIENT_DIGITS
+            ):
+                raise OperationResourceAdmissionError(
+                    location=("operator", "terms", term.exponent),
+                    code="ore_algebra.shift_scalar_coefficient_digits",
+                    message="shift-operator scalar product can exceed the rational coefficient-digit carrier",
+                )
+            output_bytes += numerator_digits + denominator_digits + 256
+    if output_bytes > MAX_SHIFT_ADDITIVE_OUTPUT_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("operator",),
+            code="ore_algebra.shift_scalar_output",
+            message="shift-operator scalar product exceeds its serialized output budget",
+        )
+
+    result_terms = []
+    for term in operator_value.terms:
+        coefficient = {
+            exponent: value * scalar_fraction
+            for exponent, value in _decode_poly(
+                term.coefficient.numerator.terms
+            ).items()
+        }
+        coefficient = {
+            exponent: value for exponent, value in coefficient.items() if value
+        }
+        if coefficient:
+            result_terms.append(
+                {
+                    "exponent": term.exponent,
+                    "coefficient": _encode_rf((coefficient, {0: Fraction(1)})),
+                }
+            )
+    result = ShiftOreOperator.model_validate({"variable": "n", "terms": result_terms})
+    return ShiftOperatorScalarMultiplyResult._from_kernel(
+        scalar_value, operator_value, result
+    )
+
+
+def shift_operator_normalize_polynomial_coefficients(
+    operator: ShiftOreOperator | Mapping[str, Any],
+) -> ShiftOperatorNormalizeResult:
+    """Extract rational content from a polynomial-coefficient shift operator.
+
+    The normalized operator has integer polynomial coefficients, gcd of all
+    coefficient entries one, and positive leading coefficient. ``scale`` is
+    the exact rational with ``operator = scale * normalized``. Rational-
+    function operator coefficients are outside this normalization contract.
+    """
+    operator_value = _admit_polynomial_shift_operator(operator, label="operator")
+    coefficients = [
+        (term.exponent, _decode_poly(term.coefficient.numerator.terms))
+        for term in operator_value.terms
+    ]
+    coefficient_count = sum(len(polynomial) for _order, polynomial in coefficients)
+    if coefficient_count > MAX_SHIFT_ADDITIVE_WORK_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("operator", "terms"),
+            code="ore_algebra.shift_normalize_work",
+            message="shift-operator normalization exceeds its coefficient-work budget",
+        )
+    if not coefficients:
+        return ShiftOperatorNormalizeResult._from_kernel(
+            operator_value,
+            operator_value,
+            _encode_rf(({0: Fraction(1)}, {0: Fraction(1)})),
+        )
+
+    # Build one admitted content plan. Each input rational component has at
+    # most 64 digits; every lcm product fits below 192 digits before the
+    # resulting scale is required to fit the 128-digit rational-function
+    # carrier.
+    lcm_denominators = 1
+    common_numerator = 0
+    flattened = [
+        value for _order, polynomial in coefficients for value in polynomial.values()
+    ]
+    for value in flattened:
+        value_numerator = abs(value.numerator)
+        common_numerator = gcd(common_numerator, value_numerator)
+        common = gcd(lcm_denominators, value.denominator)
+        quotient = lcm_denominators // common
+        if _digit_count(quotient) + _digit_count(value.denominator) > 192:
+            raise OperationResourceAdmissionError(
+                location=("operator", "terms"),
+                code="ore_algebra.shift_normalize_intermediate_digits",
+                message="normalization denominator lcm exceeds its admitted intermediate bound",
+            )
+        lcm_denominators = quotient * value.denominator
+        if _digit_count(lcm_denominators) > MAX_RATIONAL_FUNCTION_COEFFICIENT_DIGITS:
+            raise OperationResourceAdmissionError(
+                location=("operator", "terms"),
+                code="ore_algebra.shift_normalize_scale_digits",
+                message="normalization scale exceeds the rational coefficient-digit carrier",
+            )
+    if common_numerator == 0:
+        raise RuntimeError("a nonzero operator has no nonzero polynomial coefficient")
+
+    _leading_order, leading_polynomial = coefficients[-1]
+    leading_coefficient = leading_polynomial[max(leading_polynomial)]
+    sign = -1 if leading_coefficient < 0 else 1
+    scale = Fraction(sign * common_numerator, lcm_denominators)
+    scale_digits = max(_digit_count(scale.numerator), _digit_count(scale.denominator))
+    if scale_digits > MAX_RATIONAL_FUNCTION_COEFFICIENT_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("scale",),
+            code="ore_algebra.shift_normalize_scale_digits",
+            message="normalization scale exceeds the rational coefficient-digit carrier",
+        )
+
+    output_bytes = (
+        _operator_representation_byte_bound(operator_value)
+        + 256
+        + _digit_count(scale.numerator)
+        + _digit_count(scale.denominator)
+    )
+    for _order, polynomial in coefficients:
+        output_bytes += 256
+        for value in polynomial.values():
+            multiplier = lcm_denominators // value.denominator
+            normalized_digits = _digit_count(value.numerator) + _digit_count(multiplier)
+            if normalized_digits > MAX_RATIONAL_FUNCTION_COEFFICIENT_DIGITS:
+                raise OperationResourceAdmissionError(
+                    location=("operator", "terms"),
+                    code="ore_algebra.shift_normalize_coefficient_digits",
+                    message="a primitive normalized coefficient can exceed the rational coefficient-digit carrier",
+                )
+            output_bytes += normalized_digits + 128
+    if output_bytes > MAX_SHIFT_ADDITIVE_OUTPUT_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("operator",),
+            code="ore_algebra.shift_normalize_output",
+            message="normalized shift operator and source scale exceed the serialized output budget",
+        )
+
+    normalized_terms = []
+    for exponent, polynomial in coefficients:
+        normalized = {
+            degree: Fraction(
+                sign
+                * value.numerator
+                * (lcm_denominators // value.denominator)
+                // common_numerator
+            )
+            for degree, value in polynomial.items()
+        }
+        normalized_terms.append(
+            {
+                "exponent": exponent,
+                "coefficient": _encode_rf((normalized, {0: Fraction(1)})),
+            }
+        )
+    normalized_operator = ShiftOreOperator.model_validate(
+        {"variable": "n", "terms": normalized_terms}
+    )
+    return ShiftOperatorNormalizeResult._from_kernel(
+        operator_value,
+        normalized_operator,
+        _encode_rf(({0: scale}, {0: Fraction(1)})),
+    )
+
+
+def _polynomial_evaluation_digit_bound(
+    polynomial: SparseRationalPolynomial, *, max_abs_index: int
+) -> tuple[int, int]:
+    """Bound numerator and denominator digits of a polynomial value.
+
+    A common denominator formed from every coefficient has at most t*D digits.
+    The lifted numerator is bounded by t*D + degree*digits(index) + log10(t).
+    This bounds Fraction intermediates as well as the reduced value.
+    """
+    if not polynomial.terms:
+        return 1, 1
+    term_count = len(polynomial.terms)
+    max_degree = max(term.exponents[0] for term in polynomial.terms)
+    coefficient_digits = max(
+        max(
+            _digit_count(term.coefficient.num),
+            _digit_count(term.coefficient.den),
+        )
+        for term in polynomial.terms
+    )
+    index_digits = _digit_count(max(1, max_abs_index))
+    numerator_digits = (
+        term_count * coefficient_digits
+        + max_degree * index_digits
+        + _digit_count(term_count)
+        + 2
+    )
+    denominator_digits = term_count * coefficient_digits + 1
+    return numerator_digits, denominator_digits
+
+
+def _rational_function_evaluation_digit_bound(
+    function: RationalFunction, *, max_abs_index: int
+) -> tuple[int, int]:
+    numerator_n, denominator_n = _polynomial_evaluation_digit_bound(
+        function.numerator, max_abs_index=max_abs_index
+    )
+    numerator_d, denominator_d = _polynomial_evaluation_digit_bound(
+        function.denominator, max_abs_index=max_abs_index
+    )
+    return numerator_n + denominator_d, denominator_n + numerator_d
+
+
+def _polynomial_evaluation_work_bound(
+    polynomial: SparseRationalPolynomial, *, max_abs_index: int
+) -> int:
+    """Upper-bound digit-weighted exact work for one polynomial evaluation."""
+    if not polynomial.terms:
+        return 0
+    term_count = len(polynomial.terms)
+    max_degree = max(term.exponents[0] for term in polynomial.terms)
+    coefficient_digits = max(
+        max(
+            _digit_count(term.coefficient.num),
+            _digit_count(term.coefficient.den),
+        )
+        for term in polynomial.terms
+    )
+    index_digits = _digit_count(max(1, max_abs_index))
+    return term_count * (
+        term_count * coefficient_digits + max_degree * index_digits + 1
+    )
+
+
+def _admit_shift_prefix_output(
+    operator: ShiftOreOperator,
+    sequence: FiniteRationalSequence,
+    start_index: int,
+    residual_count: int,
+    end_index: int,
+) -> None:
+    """Preflight exact coefficient, contribution, residual, and wire growth."""
+    right_boundary_count = len(sequence.values) - residual_count
+    evaluation_cells = residual_count * sum(
+        len(term.coefficient.numerator.terms) + len(term.coefficient.denominator.terms)
+        for term in operator.terms
+    )
+    if evaluation_cells > MAX_SHIFT_PREFIX_EVALUATION_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("sequence", "values"),
+            code="ore_algebra.shift_prefix_work",
+            message="shift-operator prefix evaluation exceeds its coefficient-evaluation budget",
+        )
+    max_abs_index = max((abs(start_index + residual_count - 1), abs(end_index - 1), 1))
+    work_units = residual_count * sum(
+        _polynomial_evaluation_work_bound(polynomial, max_abs_index=max_abs_index)
+        for term in operator.terms
+        for polynomial in (term.coefficient.numerator, term.coefficient.denominator)
+    )
+    if work_units > MAX_SHIFT_PREFIX_WORK_UNITS:
+        raise OperationResourceAdmissionError(
+            location=("operator", "terms"),
+            code="ore_algebra.shift_prefix_work",
+            message="shift-operator prefix evaluation exceeds its exact-arithmetic work budget",
+        )
+    coefficient_bounds = [
+        _rational_function_evaluation_digit_bound(
+            term.coefficient, max_abs_index=max_abs_index
+        )
+        for term in operator.terms
+    ]
+    if any(
+        max(numerator_digits, denominator_digits) > MAX_CANONICAL_RATIONAL_DIGITS
+        for numerator_digits, denominator_digits in coefficient_bounds
+    ):
+        raise OperationResourceAdmissionError(
+            location=("operator", "terms"),
+            code="ore_algebra.shift_prefix_coefficient_digits",
+            message="an evaluated shift coefficient can exceed the exact-rational result carrier",
+        )
+
+    output_bytes_bound = (
+        512 * residual_count
+        + 24 * right_boundary_count
+        + 256 * len(operator.terms)
+        + sum(
+            _digit_count(value.num) + _digit_count(value.den) + 64
+            for value in sequence.values
+        )
+        + sum(
+            _digit_count(coefficient.num) + _digit_count(coefficient.den) + 64
+            for term in operator.terms
+            for polynomial in (term.coefficient.numerator, term.coefficient.denominator)
+            for coefficient in (entry.coefficient for entry in polynomial.terms)
+        )
+    )
+    residual_digit_bound = 1
+    for offset in range(residual_count):
+        contribution_bounds: list[tuple[int, int]] = []
+        for term, (coefficient_num_digits, coefficient_den_digits) in zip(
+            operator.terms, coefficient_bounds, strict=True
+        ):
+            sequence_rational = sequence.values[offset + term.exponent]
+            sequence_num_digits = _digit_count(sequence_rational.num)
+            sequence_den_digits = _digit_count(sequence_rational.den)
+            contribution_n = coefficient_num_digits + sequence_num_digits
+            contribution_d = coefficient_den_digits + sequence_den_digits
+            if max(contribution_n, contribution_d) > MAX_CANONICAL_RATIONAL_DIGITS:
+                raise OperationResourceAdmissionError(
+                    location=("operator", "terms", term.exponent),
+                    code="ore_algebra.shift_prefix_contribution_digits",
+                    message="a shift-prefix contribution can exceed the exact-rational result carrier",
+                )
+            contribution_bounds.append((contribution_n, contribution_d))
+            output_bytes_bound += (
+                coefficient_num_digits
+                + coefficient_den_digits
+                + sequence_num_digits
+                + sequence_den_digits
+                + contribution_n
+                + contribution_d
+                + 512
+            )
+        denominator_digits = sum(den for _, den in contribution_bounds)
+        numerator_digits = max(
+            (
+                num + denominator_digits - den + _digit_count(len(contribution_bounds))
+                for num, den in contribution_bounds
+            ),
+            default=1,
+        )
+        if max(numerator_digits, denominator_digits) > MAX_CANONICAL_RATIONAL_DIGITS:
+            raise OperationResourceAdmissionError(
+                location=("operator",),
+                code="ore_algebra.shift_prefix_residual_digits",
+                message="the exact shift-prefix residual can exceed the rational result carrier",
+            )
+        residual_digit_bound = max(
+            residual_digit_bound, numerator_digits, denominator_digits
+        )
+        output_bytes_bound += 2 * residual_digit_bound + 512
+    if output_bytes_bound > MAX_SHIFT_PREFIX_OUTPUT_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("sequence", "values"),
+            code="ore_algebra.shift_prefix_output",
+            message="shift-prefix residual output exceeds its byte budget",
+        )
+
+
+def shift_operator_apply_to_sequence_prefix(
+    operator: ShiftOreOperator | Mapping[str, Any],
+    start_index: int,
+    sequence: FiniteRationalSequence | Mapping[str, Any],
+) -> ShiftOperatorPrefixResult:
+    """Return exact P f residuals on a finite prefix, without global claims.
+
+    The finite sequence has no implicit mathematical origin. ``start_index``
+    binds its first stored value to that integer. Rows requiring values past
+    the supplied prefix are reported separately; coefficient poles exclude
+    their entire index row.
+    """
+    operator_value = _as_operator(operator)
+    operator_value = _admit_shift_operator(operator_value, label="operator")
+    try:
+        sequence_value = FiniteRationalSequence.model_validate(
+            sequence.model_dump()
+            if isinstance(sequence, FiniteRationalSequence)
+            else sequence
+        )
+        if not isinstance(start_index, int) or isinstance(start_index, bool):
+            raise ValueError("start_index must be an integer")
+        end_index = start_index + len(sequence_value.values)
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("sequence",),
+            code="ore_algebra.shift_prefix_source",
+            message="the source must be a canonical rational prefix with bounded explicit indices",
+        ) from exc
+    if (
+        abs(start_index) > MAX_SHIFT_PREFIX_INDEX
+        or abs(end_index) > MAX_SHIFT_PREFIX_INDEX
+    ):
+        raise OperationResourceAdmissionError(
+            location=("start_index",),
+            code="ore_algebra.shift_prefix_index",
+            message="prefix indices exceed the admitted integer-index envelope",
+        )
+
+    max_order = operator_value.order
+    residual_count = (
+        len(sequence_value.values)
+        if max_order < 0
+        else max(0, len(sequence_value.values) - max_order)
+    )
+    _admit_shift_prefix_output(
+        operator_value, sequence_value, start_index, residual_count, end_index
+    )
+    right_boundary_indices = tuple(range(start_index + residual_count, end_index))
+
+    rows: list[ShiftOperatorPrefixResidual] = []
+    exclusions: list[ShiftOperatorPrefixPoleExclusion] = []
+    for offset in range(residual_count):
+        index = start_index + offset
+        contributions: list[ShiftOperatorPrefixContribution] = []
+        pole_exponents: list[int] = []
+        total = Fraction(0)
+        for term in operator_value.terms:
+            coefficient_numerator = _evaluate_rational_polynomial_at(
+                term.coefficient.numerator, index
+            )
+            coefficient_denominator = _evaluate_rational_polynomial_at(
+                term.coefficient.denominator, index
+            )
+            if coefficient_denominator == 0:
+                pole_exponents.append(term.exponent)
+                continue
+            coefficient = coefficient_numerator / coefficient_denominator
+            sequence_rational = sequence_value.values[offset + term.exponent]
+            sequence_term = sequence_rational.as_fraction()
+            value = coefficient * sequence_term
+            total += value
+            contributions.append(
+                ShiftOperatorPrefixContribution(
+                    exponent=term.exponent,
+                    sequence_index=index + term.exponent,
+                    coefficient=CanonicalRational.from_fraction(coefficient),
+                    sequence_value=sequence_rational,
+                    value=CanonicalRational.from_fraction(value),
+                )
+            )
+        if pole_exponents:
+            exclusions.append(
+                ShiftOperatorPrefixPoleExclusion(
+                    index=index, exponents=tuple(pole_exponents)
+                )
+            )
+            continue
+        rows.append(
+            ShiftOperatorPrefixResidual(
+                index=index,
+                contributions=tuple(contributions),
+                residual=CanonicalRational.from_fraction(total),
+            )
+        )
+    return ShiftOperatorPrefixResult._from_kernel(
+        operator_value,
+        start_index,
+        sequence_value,
+        tuple(rows),
+        tuple(exclusions),
+        right_boundary_indices,
+    )
+
+
 def _rf_derivative(value: tuple[_Poly, _Poly]) -> tuple[_Poly, _Poly]:
     numerator, denominator = value
     numerator_derivative = {e - 1: c * e for e, c in numerator.items() if e}
@@ -694,6 +1576,125 @@ def _admit_differential_function(value: RationalFunction) -> RationalFunction:
         ) from exc
 
 
+def _preflight_differential_addition(
+    left: DifferentialOreOperator,
+    right: DifferentialOreOperator,
+) -> tuple[tuple[int, RationalFunction | None, RationalFunction | None], ...]:
+    """Bound sparse rational-function sums before any coefficient expansion."""
+    left_by_order = {term.order: term.coefficient for term in left.terms}
+    right_by_order = {term.order: term.coefficient for term in right.terms}
+    orders = tuple(sorted(left_by_order.keys() | right_by_order.keys()))
+    if len(orders) > MAX_DIFFERENTIAL_TERMS:
+        raise OperationResourceAdmissionError(
+            location=("sum", "terms"),
+            code="ore_algebra.differential_addition_terms",
+            message="differential operator sum exceeds the sparse term budget",
+        )
+
+    plan = tuple(
+        (order, left_by_order.get(order), right_by_order.get(order)) for order in orders
+    )
+    work = len(left.terms) + len(right.terms)
+    output_bytes = 512 + len(left.model_dump_json()) + len(right.model_dump_json())
+    for order, first, second in plan:
+        if first is None or second is None:
+            coefficient = first or second
+            assert coefficient is not None
+            numerator_degree, denominator_degree, digits = _rf_bound(coefficient)
+            numerator_terms = len(coefficient.numerator.terms)
+            denominator_terms = len(coefficient.denominator.terms)
+        else:
+            first_bound = _rf_bound(first)
+            second_bound = _rf_bound(second)
+            first_num_terms = len(first.numerator.terms)
+            first_den_terms = len(first.denominator.terms)
+            second_num_terms = len(second.numerator.terms)
+            second_den_terms = len(second.denominator.terms)
+            # N1*D2 + N2*D1 over D1*D2. Count all sparse convolution
+            # pairs before executing any of those products.
+            work += (
+                first_num_terms * second_den_terms
+                + second_num_terms * first_den_terms
+                + first_den_terms * second_den_terms
+            )
+            first_num_degree, first_den_degree, first_digits = first_bound
+            second_num_degree, second_den_degree, second_digits = second_bound
+            numerator_degree = max(
+                first_num_degree + second_den_degree,
+                second_num_degree + first_den_degree,
+            )
+            denominator_degree = first_den_degree + second_den_degree
+            # Account for cross-product carries and coefficient growth during
+            # exact polynomial-GCD normalization, not just raw convolution.
+            digits = 2 * (first_digits + second_digits + 2) + 16
+            numerator_terms = min(
+                first_num_terms * second_den_terms + second_num_terms * first_den_terms,
+                numerator_degree + 1,
+            )
+            denominator_terms = min(
+                first_den_terms * second_den_terms,
+                denominator_degree + 1,
+            )
+
+        if (
+            max(numerator_degree, denominator_degree)
+            > MAX_RATIONAL_FUNCTION_REPRESENTATION_EXPONENT
+            or numerator_terms > MAX_RATIONAL_FUNCTION_TERMS
+            or denominator_terms > MAX_RATIONAL_FUNCTION_TERMS
+            or digits > MAX_RATIONAL_FUNCTION_COEFFICIENT_DIGITS
+        ):
+            raise OperationResourceAdmissionError(
+                location=("sum", order),
+                code="ore_algebra.differential_addition_coefficient",
+                message="differential operator sum exceeds the rational-function carrier budget",
+            )
+
+        # Polynomial GCD/normalization is bounded by the admitted degree and
+        # scalar height as well as by sparse cross-product work.
+        degree = max(numerator_degree, denominator_degree)
+        work += (degree + 1) ** 2 * digits
+        output_bytes += 256 + (numerator_terms + denominator_terms) * (96 + 2 * digits)
+
+    if work > MAX_DIFFERENTIAL_ADDITIVE_WORK_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("sum",),
+            code="ore_algebra.differential_addition_work",
+            message="differential operator addition exceeds its exact-work budget",
+        )
+    if output_bytes > MAX_DIFFERENTIAL_ADDITIVE_OUTPUT_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("sum",),
+            code="ore_algebra.differential_addition_output",
+            message="differential operator sum exceeds its serialized-output budget",
+        )
+    return plan
+
+
+def differential_operator_add(
+    left: DifferentialOreOperator | Mapping[str, Any],
+    right: DifferentialOreOperator | Mapping[str, Any],
+) -> DifferentialOperatorAddResult:
+    """Add differential Ore operators coefficientwise in left form."""
+    left_value = _admit_differential_operator(_as_differential_operator(left))
+    right_value = _admit_differential_operator(_as_differential_operator(right))
+    plan = _preflight_differential_addition(left_value, right_value)
+    terms = []
+    for order, first, second in plan:
+        if first is None:
+            coefficient = second
+        elif second is None:
+            coefficient = first
+        else:
+            coefficient = _encode_differential_rf(
+                _rf_add(_decode_rf(first), _decode_rf(second))
+            )
+        assert coefficient is not None
+        if coefficient.numerator.terms:
+            terms.append({"order": order, "coefficient": coefficient})
+    result = DifferentialOreOperator.model_validate({"variable": "x", "terms": terms})
+    return DifferentialOperatorAddResult._from_kernel(left_value, right_value, result)
+
+
 def differential_operator_apply(
     operator: DifferentialOreOperator | Mapping[str, Any],
     function: RationalFunction | Mapping[str, Any],
@@ -812,8 +1813,121 @@ def differential_operator_multiply(
     )
 
 
+def differential_operator_normalize_polynomial_coefficients(
+    operator: DifferentialOreOperator | Mapping[str, Any],
+) -> DifferentialOperatorNormalizeResult:
+    """Extract rational content from an operator in QQ[x]<D>.
+
+    The returned operator has integer polynomial coefficients with joint gcd
+    one and positive leading coefficient (greatest derivative order, then
+    greatest polynomial degree). ``operator = scale * normalized`` exactly.
+    Rational-function coefficients are outside this operation's domain.
+    """
+    value = _admit_differential_operator(_as_differential_operator(operator))
+    polynomials: list[tuple[int, _Poly]] = []
+    flattened: list[Fraction] = []
+    for term in value.terms:
+        numerator, denominator = _decode_rf(term.coefficient)
+        if denominator != {0: Fraction(1)}:
+            raise OperationDomainValidationError(
+                location=("operator", "terms", term.order, "coefficient"),
+                code="ore_algebra.differential_polynomial_coefficients",
+                message="differential normalization accepts only polynomial coefficients in QQ[x]",
+            )
+        polynomials.append((term.order, numerator))
+        flattened.extend(numerator.values())
+
+    if not flattened:
+        one = _encode_differential_rf(({0: Fraction(1)}, {0: Fraction(1)}))
+        return DifferentialOperatorNormalizeResult._from_kernel(value, value, one)
+
+    denominator_lcm = 1
+    numerator_gcd = 0
+    for coefficient in flattened:
+        numerator_gcd = gcd(numerator_gcd, abs(coefficient.numerator))
+        common = gcd(denominator_lcm, coefficient.denominator)
+        quotient = denominator_lcm // common
+        if _digit_count(quotient) + _digit_count(coefficient.denominator) > 192:
+            raise OperationResourceAdmissionError(
+                location=("operator", "terms"),
+                code="ore_algebra.differential_normalize_intermediate_digits",
+                message="normalization denominator lcm exceeds its admitted intermediate bound",
+            )
+        denominator_lcm = quotient * coefficient.denominator
+        if _digit_count(denominator_lcm) > MAX_RATIONAL_FUNCTION_COEFFICIENT_DIGITS:
+            raise OperationResourceAdmissionError(
+                location=("operator", "terms"),
+                code="ore_algebra.differential_normalize_scale_digits",
+                message="normalization scale exceeds the rational coefficient-digit carrier",
+            )
+
+    leading_order, leading_polynomial = polynomials[-1]
+    del leading_order
+    leading = leading_polynomial[max(leading_polynomial)]
+    sign = -1 if leading < 0 else 1
+    scale = Fraction(sign * numerator_gcd, denominator_lcm)
+    if (
+        max(_digit_count(scale.numerator), _digit_count(scale.denominator))
+        > MAX_RATIONAL_FUNCTION_COEFFICIENT_DIGITS
+    ):
+        raise OperationResourceAdmissionError(
+            location=("scale",),
+            code="ore_algebra.differential_normalize_scale_digits",
+            message="normalization scale exceeds the rational coefficient-digit carrier",
+        )
+
+    output_bytes = 256 + _digit_count(scale.numerator) + _digit_count(scale.denominator)
+    for _order, polynomial in polynomials:
+        output_bytes += 256
+        for coefficient in polynomial.values():
+            multiplier = denominator_lcm // coefficient.denominator
+            digits = _digit_count(coefficient.numerator) + _digit_count(multiplier)
+            if digits > MAX_RATIONAL_FUNCTION_COEFFICIENT_DIGITS:
+                raise OperationResourceAdmissionError(
+                    location=("operator", "terms"),
+                    code="ore_algebra.differential_normalize_coefficient_digits",
+                    message="a primitive normalized coefficient can exceed the rational coefficient-digit carrier",
+                )
+            output_bytes += digits + 128
+    if output_bytes > MAX_DIFFERENTIAL_ADDITIVE_OUTPUT_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("normalized",),
+            code="ore_algebra.differential_normalize_output",
+            message="normalized differential operator exceeds its serialized output budget",
+        )
+
+    normalized_terms = []
+    for order, polynomial in polynomials:
+        normalized = {
+            degree: Fraction(
+                sign
+                * coefficient.numerator
+                * (denominator_lcm // coefficient.denominator)
+                // numerator_gcd
+            )
+            for degree, coefficient in polynomial.items()
+        }
+        normalized_terms.append(
+            {
+                "order": order,
+                "coefficient": _encode_differential_rf((normalized, {0: Fraction(1)})),
+            }
+        )
+    normalized_operator = DifferentialOreOperator.model_validate(
+        {"variable": "x", "terms": normalized_terms}
+    )
+    return DifferentialOperatorNormalizeResult._from_kernel(
+        value,
+        normalized_operator,
+        _encode_differential_rf(({0: scale}, {0: Fraction(1)})),
+    )
+
+
 __all__ = [
+    "differential_operator_add",
     "differential_operator_apply",
     "differential_operator_multiply",
+    "differential_operator_normalize_polynomial_coefficients",
     "shift_operator_multiply",
+    "shift_operator_power",
 ]

@@ -89,7 +89,41 @@ def test_multiplication_by_nilpotent_induces_exact_chain_map() -> None:
     assert (
         product(differential, degree_map_1) == product(degree_map, differential) == {}
     )
-    assert ModuleKoszulChainMap.model_validate(result.model_dump()) == result
+    assert (
+        ModuleKoszulChainMap.model_validate_json(
+            encode_strict_json(result.model_dump(mode="json")), strict=True
+        )
+        == result
+    )
+
+
+def test_rectangular_map_between_distinct_modules_induces_chain_maps() -> None:
+    algebra, target = _dual_numbers()
+    source = BasedFiniteModule(
+        algebra=algebra,
+        basis=("one_mod_e",),
+        action=(((q(1),),), ((q(0),),)),
+    )
+    # A/(e) -> A sends 1 to e. It is nonzero and A-linear, but rectangular.
+    result = module_koszul_map(
+        ModuleKoszulMapRequest(
+            algebra=algebra,
+            source=source,
+            target=target,
+            sequence=((q(0), q(1)),),
+            map_matrix=((q(0),), (q(1),)),
+        )
+    )
+
+    assert result.source != result.target
+    assert result.degree_maps[0].row_count == 2
+    assert result.degree_maps[0].column_count == 1
+    assert result.degree_maps[0].entries == ((1, 0, q(1)),)
+    assert result.degree_maps[1].row_count == 2
+    assert result.degree_maps[1].column_count == 1
+    assert result.degree_maps[1].entries == ((1, 0, q(1)),)
+    assert not result.source_complex.differentials[0].entries
+    assert result.target_complex.differentials[0].entries == ((1, 0, q(1)),)
 
 
 def test_non_module_linear_map_is_rejected() -> None:

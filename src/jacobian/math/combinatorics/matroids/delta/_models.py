@@ -107,6 +107,40 @@ class DeltaMatroidWidthResult(DeltaMatroidWidthRequest):
         return cls.model_construct(delta_matroid=delta_matroid, width=width)
 
 
+class DeltaMatroidDistanceRequest(StrictModel):
+    """Distance from one ground subset to the complete feasible family."""
+
+    delta_matroid: FiniteDeltaMatroid
+    subset: tuple[int, ...] = Field(description="Sorted distinct ground indices")
+
+    @model_validator(mode="after")
+    def canonical_subset(self) -> Self:
+        require_twist_subset(self.delta_matroid, self.subset)
+        return self
+
+
+class DeltaMatroidDistanceResult(DeltaMatroidDistanceRequest):
+    """Exact Hamming distance and a deterministic nearest feasible set."""
+
+    distance: int = Field(ge=0)
+    nearest_feasible: tuple[int, ...]
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        delta_matroid: FiniteDeltaMatroid,
+        subset: tuple[int, ...],
+        distance: int,
+        nearest_feasible: tuple[int, ...],
+    ) -> Self:
+        return cls.model_construct(
+            delta_matroid=delta_matroid,
+            subset=subset,
+            distance=distance,
+            nearest_feasible=nearest_feasible,
+        )
+
+
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"delta_matroid.{reason}", message)
 
@@ -191,6 +225,8 @@ class DeltaMatroidRecognitionResult(StrictModel):
 
 
 __all__ = [
+    "DeltaMatroidDistanceRequest",
+    "DeltaMatroidDistanceResult",
     "DeltaMatroidFromFeasibleSetsRequest",
     "DeltaMatroidRecognitionResult",
     "DeltaMatroidTwistRequest",

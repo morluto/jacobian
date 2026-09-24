@@ -31,12 +31,45 @@ result-binding obstruction check. The aggregate worst case is therefore
 1,000,000 candidate checks per accepted call, which is part of this operation's
 advertised envelope rather than a universal result-construction rule.
 
-This initial operation deliberately does not construct twists, minors, binary
-matrix presentations, graph conversions, or interlace polynomials. Those are
-separate mathematical postconditions rather than fields of the recognition
-result.
-
 `delta_matroid.twist.compute` returns the canonical twisted `FiniteDeltaMatroid`.
-Width `max(|F|)-min(|F|)` is a native projection of the feasible family and is
-not a catalog operation. It scans every retained feasible-row length of the
-canonical value and has no extra row ceiling.
+`delta_matroid.distance.compute` returns the exact minimum
+`|X symmetric_difference F|` over every feasible set `F`, together with the
+lexicographically first nearest feasible set. Its work is linear in the
+admitted complete feasible family after source exchange admission.
+`delta_matroid.width.compute` returns the exact width
+`max(|F|)-min(|F|)` over the complete feasible family. The dual and
+deletion/contraction minor operations return complete reusable delta-matroid
+values. `delta_matroid.from_binary_matrix.compute` enumerates all principal
+submatrices of an admitted symmetric `GF(2)` matrix and selects exactly those
+with nonzero determinant.
+
+`delta_matroid.twist_width_profile.compute` returns one width for every subset
+of the ground set. The tuple position is the integer subset mask, with bit
+`i` selecting ground element `i`; thus position zero is the untwisted width.
+Before exchange validation or profile computation, admission bounds the state
+count to 4,096 and the product of states and feasible rows to 262,144. The
+profile is complete within this admitted scope; an over-limit request is
+rejected, never returned as a partial profile.
+
+`delta_matroid.feasible_size_profile.compute` returns the exact histogram
+`(c_0, ..., c_|E|)`, where `c_k` counts feasible sets with cardinality `k`.
+The result retains the labelled ground axis. Admission bounds the complete
+output to 4,096 entries and 32,768 encoded bytes before validating the source
+exchange axiom.
+
+`delta_matroid.direct_sum.compute` combines two values whose labelled grounds
+are disjoint. Its ground axis concatenates the left and right grounds, with the
+corresponding index injections returned explicitly. Each output feasible set
+is the union of one left feasible set and one right feasible set. Admission
+checks the combined ground size, feasible-pair count, feasible memberships,
+symmetric-exchange work ceiling, and a conservative encoded-result size before
+constructing any pairwise unions. The operation accepts at most 2,048 ground
+labels, 250,000 feasible-set pairs, and 2,000,000 estimated result bytes, while
+the result must also fit the carrier's 16,384 memberships and 250,000 exchange
+candidate checks. Input ground labels must be disjoint; overlapping names are
+rejected rather than silently tagged.
+
+Graph conversions, lower/upper matroids, subset-distance profiles, other
+direct-sum variants, relabelling, parity/size distributions, and interlace
+polynomials remain
+outside the currently published delta-matroid operations.

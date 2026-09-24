@@ -23,7 +23,7 @@ from jacobian.math.combinatorics.matroids.delta.extra import (
     BinaryMatrixResult,
     BinarySymmetricMatrix,
 )
-from jacobian.math.combinatorics.matroids.delta.extra_ops import binary
+from jacobian.math.combinatorics.matroids.delta.extra_ops import binary, loop_complement
 
 
 def _two_element_delta_matroid(*, scrambled: bool = False) -> FiniteFeasibleSetSystem:
@@ -36,14 +36,69 @@ def test_binary_identity_matrix_constructs_canonical_delta_matroid() -> None:
     assert result.delta_matroid.feasible == ((), (0,), (0, 1), (1,))
 
 
+def _gf2_nonsingular_by_row_reduction(matrix: tuple[tuple[int, ...], ...]) -> bool:
+    """Independent small-matrix oracle for principal-minor nonsingularity."""
+
+    rows = [list(row) for row in matrix]
+    rank = 0
+    for column in range(len(rows)):
+        pivot = next((row for row in range(rank, len(rows)) if rows[row][column]), None)
+        if pivot is None:
+            continue
+        rows[rank], rows[pivot] = rows[pivot], rows[rank]
+        for row in range(rank + 1, len(rows)):
+            if rows[row][column]:
+                rows[row] = [
+                    left ^ right
+                    for left, right in zip(rows[row], rows[rank], strict=True)
+                ]
+        rank += 1
+    return rank == len(rows)
+
+
+def test_binary_principal_minors_match_independent_gf2_oracle_through_order_four() -> (
+    None
+):
+    """Exercise all symmetric matrices through order four (1,099 matrices)."""
+
+    for order in range(5):
+        upper_positions = tuple(
+            (row, column) for row in range(order) for column in range(row, order)
+        )
+        for matrix_mask in range(1 << len(upper_positions)):
+            rows = [[0] * order for _ in range(order)]
+            for bit, (row, column) in enumerate(upper_positions):
+                value = matrix_mask >> bit & 1
+                rows[row][column] = rows[column][row] = value
+            matrix = tuple(tuple(row) for row in rows)
+            result = binary(
+                BinarySymmetricMatrix(
+                    ground=tuple(f"e{i}" for i in range(order)), entries=matrix
+                )
+            )
+            expected = []
+            for subset_mask in range(1 << order):
+                indices = tuple(i for i in range(order) if subset_mask >> i & 1)
+                principal = tuple(tuple(matrix[i][j] for j in indices) for i in indices)
+                if _gf2_nonsingular_by_row_reduction(principal):
+                    expected.append(indices)
+            assert result.delta_matroid.feasible == tuple(sorted(expected))
+            assert result.matrix.entries == matrix
+
+
 def test_catalog_contains_only_audited_agent_outcome() -> None:
     assert {tool.operation_id for tool in TOOLS} == {
+        "delta_matroid.direct_sum.compute",
         "delta_matroid.from_feasible_sets.compute",
+        "delta_matroid.distance.compute",
         "delta_matroid.twist.compute",
         "delta_matroid.width.compute",
         "delta_matroid.dual.compute",
         "delta_matroid.minor.compute",
         "delta_matroid.from_binary_matrix.compute",
+        "delta_matroid.binary_loop_complement.compute",
+        "delta_matroid.twist_width_profile.compute",
+        "delta_matroid.feasible_size_profile.compute",
     }
 
 
@@ -392,6 +447,57 @@ def test_even_subset_width_uses_linear_admission() -> None:
     assert width(source) == 8
 
 
+def test_feasible_size_profile_is_complete_ascending_histogram() -> None:
+    from jacobian.math.combinatorics.matroids.delta import feasible_size_profile
+
+    source = FiniteDeltaMatroid(
+        ground=("a", "b", "c"),
+        feasible=((), (0,), (0, 1), (1,)),
+    )
+
+    profile = feasible_size_profile(source)
+
+    assert profile.ground == source.ground
+    assert profile.counts_by_size == (1, 2, 1, 0)
+    assert sum(profile.counts_by_size) == len(source.feasible)
+
+
+def test_feasible_size_profile_preflights_output_before_exchange(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian.catalog.models import OperationResourceAdmissionError
+    from jacobian.math.combinatorics.matroids.delta import (
+        extra_ops,
+        feasible_size_profile,
+    )
+
+    def fail_if_replayed(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("exchange validation ran before output admission")
+
+    monkeypatch.setattr(extra_ops, "_check", fail_if_replayed)
+    monkeypatch.setattr(extra_ops, "MAX_FEASIBLE_SIZE_PROFILE_ENTRIES", 2)
+    source = FiniteDeltaMatroid(ground=("a", "b"), feasible=((),))
+    with pytest.raises(OperationResourceAdmissionError, match="output envelope"):
+        feasible_size_profile(source)
+
+
+def test_feasible_size_profile_does_not_replay_delta_exchange(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian.math.combinatorics.matroids.delta import (
+        extra_ops,
+        feasible_size_profile,
+    )
+
+    def fail_if_replayed(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("the profile does not depend on symmetric exchange")
+
+    monkeypatch.setattr(extra_ops, "_check", fail_if_replayed)
+    source = FiniteDeltaMatroid(ground=("a", "b"), feasible=((), (0,), (0, 1), (1,)))
+
+    assert feasible_size_profile(source).counts_by_size == (1, 2, 1)
+
+
 def test_width_ignores_recognition_label_envelope() -> None:
     from jacobian.math.combinatorics.matroids.delta import width
 
@@ -457,6 +563,48 @@ def test_binary_result_decoding_does_not_replay_principal_minors(
     monkeypatch.setattr(extra_ops, "_det2", fail)
 
     assert BinaryMatrixResult.model_validate_json(result.model_dump_json()) == result
+
+
+def test_binary_loop_complement_matches_independent_feasible_family_toggle() -> None:
+    """Diagonal toggles agree with the delta-matroid loop-complement axiom."""
+    for order in range(4):
+        upper = tuple((i, j) for i in range(order) for j in range(i, order))
+        for matrix_mask in range(1 << len(upper)):
+            rows = [[0] * order for _ in range(order)]
+            for bit, (i, j) in enumerate(upper):
+                rows[i][j] = rows[j][i] = matrix_mask >> bit & 1
+            entries = tuple(tuple(row) for row in rows)
+            source = BinarySymmetricMatrix(
+                ground=tuple(f"e{i}" for i in range(order)), entries=entries
+            )
+            original = set(binary(source).delta_matroid.feasible)
+            for subset_mask in range(1 << order):
+                subset = tuple(i for i in range(order) if subset_mask >> i & 1)
+                expected = set(original)
+                for element in subset:
+                    for feasible in tuple(expected):
+                        if element not in feasible:
+                            toggled = tuple(sorted((*feasible, element)))
+                            if toggled in expected:
+                                expected.remove(toggled)
+                            else:
+                                expected.add(toggled)
+                result = loop_complement(source, subset)
+                assert result.source == source
+                assert result.result.matrix.ground == source.ground
+                assert result.result.delta_matroid.feasible == tuple(sorted(expected))
+
+
+def test_binary_loop_complement_rejects_noncanonical_subset() -> None:
+    from pydantic import ValidationError
+
+    from jacobian.math.combinatorics.matroids.delta.extra import (
+        BinaryLoopComplementRequest,
+    )
+
+    matrix = BinarySymmetricMatrix(ground=("a", "b"), entries=((0, 0), (0, 0)))
+    with pytest.raises(ValidationError):
+        BinaryLoopComplementRequest(matrix=matrix, subset=(1, 0))
 
 
 def test_extra_operation_rejects_forged_non_delta_source() -> None:

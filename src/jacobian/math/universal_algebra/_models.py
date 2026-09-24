@@ -471,6 +471,7 @@ __all__ = [
 MAX_COUNTERMODEL_ORDER = 4
 MAX_COUNTERMODEL_TABLES = 500_000
 MAX_COUNTERMODEL_PREMISES = 16
+MAX_COUNTERMODEL_SEARCH_WORK = 50_000_000
 
 CountermodelFindStatus = Literal["FOUND", "EXHAUSTED_UP_TO_BOUND", "UNKNOWN"]
 
@@ -621,71 +622,156 @@ class CountermodelFindResult(StrictModel):
                 "countermodel_find_certificate_order",
                 "the certificate carrier must match the found order",
             )
+        if not self.min_order <= self.order <= self.max_order:
+            raise _validation_error(
+                "countermodel_find_certificate_order_range",
+                "the found order must lie in the declared search range",
+            )
+        unique_premises: list[MagmaEquation] = []
+        for premise in self.premises:
+            if premise not in unique_premises:
+                unique_premises.append(premise)
+        profiles = certificate.premises
+        if len(profiles) != len(unique_premises) or any(
+            (profile.left, profile.right) != (premise.left, premise.right)
+            for profile, premise in zip(profiles, unique_premises, strict=True)
+        ):
+            raise _validation_error(
+                "countermodel_find_certificate_premises",
+                "the found certificate must check the declared premise equations",
+            )
+        if (certificate.target.left, certificate.target.right) != (
+            self.target.left,
+            self.target.right,
+        ):
+            raise _validation_error(
+                "countermodel_find_certificate_target",
+                "the found certificate must check the declared target equation",
+            )
         return self
 
     @model_validator(mode="after")
     def require_find_receipt(self) -> Self:
-        if self.total_tables < 1:
-            raise _validation_error(
-                "countermodel_find_total_tables",
-                "the total table count is at least one",
-            )
-        if not 0 <= self.tables_examined <= self.total_tables:
-            raise _validation_error(
-                "countermodel_find_examined_bounds",
-                "examined tables must lie between zero and the total",
-            )
-        if list(self.orders_complete) != sorted(self.orders_complete) or len(
-            set(self.orders_complete)
-        ) != len(self.orders_complete):
-            raise _validation_error(
-                "countermodel_find_orders_complete",
-                "completed orders are distinct and increasing",
-            )
+        _require_find_receipt_common(self)
         if self.status == "FOUND":
-            if self.order is None:
-                raise _validation_error(
-                    "countermodel_find_found_order",
-                    "a found search carries its order",
-                )
-            if tuple(range(self.min_order, self.order)) != self.orders_complete:
-                raise _validation_error(
-                    "countermodel_find_minimality_receipt",
-                    "every smaller searched order was completely examined",
-                )
-            if self.tables_examined < 1:
-                raise _validation_error(
-                    "countermodel_find_found_examined",
-                    "a found search examined at least its witness",
-                )
+            _require_found_receipt(self)
         elif self.status == "EXHAUSTED_UP_TO_BOUND":
-            if tuple(range(self.min_order, self.max_order + 1)) != self.orders_complete:
-                raise _validation_error(
-                    "countermodel_find_exhaustion_orders",
-                    "an exhausted search completed every declared order",
-                )
-            if self.tables_examined != self.total_tables:
-                raise _validation_error(
-                    "countermodel_find_exhaustion_receipt",
-                    "an exhausted search examined every table",
-                )
-            if self.total_tables > self.table_budget:
-                raise _validation_error(
-                    "countermodel_find_exhaustion_budget",
-                    "an exhausted search fit its table budget",
-                )
-        elif self.tables_examined != self.table_budget:
-            raise _validation_error(
-                "countermodel_find_budget_receipt",
-                "a budget-exhausted search spent its full budget",
-            )
-        if self.status == "UNKNOWN" and self.total_tables <= self.table_budget:
-            raise _validation_error(
-                "countermodel_find_budget_scope",
-                "a budget-exhausted search left tables unexamined",
-            )
+            _require_exhaustion_receipt(self)
+        else:
+            _require_unknown_receipt(self)
         return self
 
     @classmethod
     def _from_kernel(cls, **values: Any) -> Self:
         return cls.model_construct(**values)
+
+
+def _require_find_receipt_common(result: CountermodelFindResult) -> None:
+    if result.min_order > result.max_order:
+        raise _validation_error(
+            "countermodel_find_order_range",
+            "min_order must not exceed max_order",
+        )
+    expected_total = sum(
+        order ** (order * order)
+        for order in range(result.min_order, result.max_order + 1)
+    )
+    if expected_total < 1:
+        raise _validation_error(
+            "countermodel_find_total_tables",
+            "the declared search range contains at least one table",
+        )
+    if result.total_tables != expected_total:
+        raise _validation_error(
+            "countermodel_find_total_tables_scope",
+            "total_tables must equal the exact table count in the declared range",
+        )
+    if not 0 <= result.tables_examined <= min(result.total_tables, result.table_budget):
+        raise _validation_error(
+            "countermodel_find_examined_bounds",
+            "examined tables must lie within the total and declared budget",
+        )
+    if list(result.orders_complete) != sorted(result.orders_complete) or len(
+        set(result.orders_complete)
+    ) != len(result.orders_complete):
+        raise _validation_error(
+            "countermodel_find_orders_complete",
+            "completed orders are distinct and increasing",
+        )
+
+
+def _require_found_receipt(result: CountermodelFindResult) -> None:
+    if result.order is None or not result.min_order <= result.order <= result.max_order:
+        raise _validation_error(
+            "countermodel_find_found_order",
+            "a found order lies within the declared search range",
+        )
+    if result.orders_complete != tuple(range(result.min_order, result.order)):
+        raise _validation_error(
+            "countermodel_find_minimality_receipt",
+            "every smaller searched order was completely examined",
+        )
+    before_order = sum(
+        order ** (order * order) for order in range(result.min_order, result.order)
+    )
+    through_order = before_order + result.order ** (result.order * result.order)
+    if not before_order < result.tables_examined <= through_order:
+        raise _validation_error(
+            "countermodel_find_found_examined_scope",
+            "the examined count must reach the found order without passing it",
+        )
+
+
+def _require_exhaustion_receipt(result: CountermodelFindResult) -> None:
+    if result.orders_complete != tuple(range(result.min_order, result.max_order + 1)):
+        raise _validation_error(
+            "countermodel_find_exhaustion_orders",
+            "an exhausted search completed every declared order",
+        )
+    if result.tables_examined != result.total_tables:
+        raise _validation_error(
+            "countermodel_find_exhaustion_receipt",
+            "an exhausted search examined every table",
+        )
+    if result.total_tables > result.table_budget:
+        raise _validation_error(
+            "countermodel_find_exhaustion_budget",
+            "an exhausted search fit its table budget",
+        )
+
+
+def _require_unknown_receipt(result: CountermodelFindResult) -> None:
+    if result.tables_examined != result.table_budget:
+        raise _validation_error(
+            "countermodel_find_budget_receipt",
+            "a budget-exhausted search spent its full budget",
+        )
+    if result.total_tables <= result.table_budget:
+        raise _validation_error(
+            "countermodel_find_budget_scope",
+            "a budget-exhausted search left tables unexamined",
+        )
+    if result.current_order is None or not (
+        result.min_order <= result.current_order <= result.max_order
+    ):
+        raise _validation_error(
+            "countermodel_find_current_order_range",
+            "the current order lies within the declared search range",
+        )
+    if result.orders_complete != tuple(range(result.min_order, result.current_order)):
+        raise _validation_error(
+            "countermodel_find_unknown_orders",
+            "unknown search receipts list exactly the completed prefix",
+        )
+    prior_tables = sum(
+        order ** (order * order)
+        for order in range(result.min_order, result.current_order)
+    )
+    current_tables = result.current_order ** (
+        result.current_order * result.current_order
+    )
+    if not prior_tables <= result.tables_examined < prior_tables + current_tables:
+        raise _validation_error(
+            "countermodel_find_unknown_examined_scope",
+            "the examined count locates the search inside current_order",
+        )

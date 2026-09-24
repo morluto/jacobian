@@ -8,6 +8,7 @@ from jacobian.catalog.models import OperationDomainValidationError
 
 from ._models import (
     MAX_COUNTERMODEL_ORDER,
+    MAX_COUNTERMODEL_SEARCH_WORK,
     MAX_COUNTERMODEL_TABLES,
     MAX_ENUMERATION_WORK,
     CongruenceObstruction,
@@ -47,7 +48,6 @@ __all__ = [
     "implication_countermodel_check",
     "quotient",
     "verify_congruence",
-    "verify_countermodel_find",
     "verify_equation_profile",
     "verify_evaluate",
     "verify_generated_subalgebra",
@@ -604,20 +604,59 @@ def _admit_countermodel_find(
                 code="variable_count_bound",
                 message="an equation may use at most eight variables",
             )
-    worst_work = sum(
-        max_order ** max(equation.left.variable_count, equation.right.variable_count)
-        * (len(equation.left.nodes) + len(equation.right.nodes))
-        for equation in equations
+    per_table_work, aggregate_work = _countermodel_search_work(
+        equations, min_order, max_order, table_budget
     )
-    if worst_work > MAX_ENUMERATION_WORK:
+    if per_table_work > MAX_ENUMERATION_WORK:
         _reject(
             location=("equations",),
             code="countermodel_work_bound",
             message=(
-                "complete assignment work at the largest searched order "
-                "exceeds the bound"
+                "complete assignment work for one candidate table exceeds the bound"
             ),
         )
+    if aggregate_work > MAX_COUNTERMODEL_SEARCH_WORK:
+        _reject(
+            location=("equations",),
+            code="countermodel_search_work_bound",
+            message=(
+                "the admitted table budget times complete assignment work "
+                "exceeds the bounded search-work envelope"
+            ),
+        )
+
+
+def _countermodel_search_work(
+    equations: tuple[MagmaEquation, ...],
+    min_order: int,
+    max_order: int,
+    table_budget: int,
+) -> tuple[int, int]:
+    """Return maximum per-table and budget-wide assignment-evaluation work."""
+
+    def work_at_order(order: int) -> int:
+        return sum(
+            order ** max(equation.left.variable_count, equation.right.variable_count)
+            * (len(equation.left.nodes) + len(equation.right.nodes))
+            for equation in equations
+        )
+
+    per_table = max(
+        (work_at_order(order) for order in range(min_order, max_order + 1)),
+        default=0,
+    )
+    remaining_tables = min(
+        table_budget,
+        _countermodel_table_total(min_order, max_order),
+    )
+    aggregate = 0
+    for order in range(min_order, max_order + 1):
+        tables_at_order = min(remaining_tables, order ** (order * order))
+        aggregate += tables_at_order * work_at_order(order)
+        remaining_tables -= tables_at_order
+        if remaining_tables == 0:
+            break
+    return per_table, aggregate
 
 
 def _magma_table_algebra(order: int, cells: tuple[int, ...]) -> FiniteAlgebra:
@@ -711,24 +750,6 @@ def countermodel_find(
         tables_examined=examined,
         total_tables=total,
     )
-
-
-def verify_countermodel_find(claim: CountermodelFindResult) -> bool:
-    """Check a claimed countermodel search by replaying it within its budget."""
-
-    try:
-        return (
-            countermodel_find(
-                claim.premises,
-                claim.target,
-                claim.min_order,
-                claim.max_order,
-                claim.table_budget,
-            )
-            == claim
-        )
-    except (OperationDomainValidationError, ValueError, TypeError):
-        return False
 
 
 def homomorphism_profile(

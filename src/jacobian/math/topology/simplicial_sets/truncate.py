@@ -6,8 +6,14 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.math.topology.simplicial_sets._models import FiniteTruncatedSimplicialSet
-from jacobian.math.topology.simplicial_sets.operations import from_tables
+from jacobian.math.topology.simplicial_sets._models import (
+    MAX_SIMPLICIAL_SET_DEGREE,
+    FiniteTruncatedSimplicialSet,
+)
+from jacobian.math.topology.simplicial_sets.operations import (
+    _from_admitted_tables,
+    admit_tables,
+)
 from jacobian.math.topology.simplicial_sets.truncate_models import (
     SimplicialSetTruncateRequest,
 )
@@ -39,6 +45,25 @@ def truncate_simplicial_set(
 ) -> FiniteTruncatedSimplicialSet:
     """Retain degrees 0..N and exactly the maps visible in that prefix."""
     source, degree = request.simplicial_set, request.max_degree
+    if type(degree) is not int or not 0 <= degree <= MAX_SIMPLICIAL_SET_DEGREE:
+        raise OperationDomainValidationError(
+            location=("max_degree",),
+            code="simplicial_set.degree_out_of_bounds",
+            message=(
+                f"max_degree must be an integer in 0..{MAX_SIMPLICIAL_SET_DEGREE}"
+            ),
+        )
+    if type(source.max_degree) is not int or not 0 <= source.max_degree <= (
+        MAX_SIMPLICIAL_SET_DEGREE
+    ):
+        raise OperationDomainValidationError(
+            location=("simplicial_set", "max_degree"),
+            code="simplicial_set.degree_out_of_bounds",
+            message=(
+                "source maximum degree must be an integer in "
+                f"0..{MAX_SIMPLICIAL_SET_DEGREE}"
+            ),
+        )
     if degree > source.max_degree:
         raise OperationDomainValidationError(
             location=("max_degree",),
@@ -46,10 +71,22 @@ def truncate_simplicial_set(
             message="max_degree must not exceed the source maximum degree",
         )
 
-    sizes = tuple(len(level) for level in source.sets[: degree + 1])
+    if not all(
+        isinstance(table, tuple)
+        for table in (source.sets, source.face_maps, source.degeneracy_maps)
+    ):
+        raise OperationDomainValidationError(
+            location=("simplicial_set",),
+            code="simplicial_set.degree_coverage_invalid",
+            message="source degree and map tables must be tuples",
+        )
+    sets = source.sets[: degree + 1]
+    faces = source.face_maps[:degree]
+    degeneracies = source.degeneracy_maps[:degree]
+    sizes = admit_tables(degree, sets, faces, degeneracies)
     map_entries = sum(sizes[n] * (n + 1) for n in range(1, degree + 1))
     map_entries += sum(sizes[n] * (n + 1) for n in range(degree))
-    estimated_bytes = _estimate_output_bytes(source.sets, degree, map_entries)
+    estimated_bytes = _estimate_output_bytes(sets, degree, map_entries)
     if map_entries > MAX_TRUNCATE_MAP_ENTRIES:
         raise OperationResourceAdmissionError(
             location=("simplicial_set",),
@@ -69,12 +106,8 @@ def truncate_simplicial_set(
             ),
         )
 
-    # Slice only after admission. Recheck this caller-supplied prefix so a
-    # forged/stale identity count cannot be carried into the returned value.
-    sets = source.sets[: degree + 1]
-    faces = source.face_maps[:degree]
-    degeneracies = source.degeneracy_maps[:degree]
-    checked = from_tables(degree, sets, faces, degeneracies)
+    # Recheck identities only after the caller-supplied axes are admitted.
+    checked = _from_admitted_tables(degree, sets, faces, degeneracies, sizes)
     if checked.status != "SIMPLICIAL_SET" or checked.simplicial_set is None:
         raise OperationDomainValidationError(
             location=("simplicial_set",),

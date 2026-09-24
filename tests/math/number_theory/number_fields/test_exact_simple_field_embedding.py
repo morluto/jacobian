@@ -102,6 +102,63 @@ def test_transport_preserves_rational_coordinates() -> None:
     assert result.image.coefficients_ascending[2].as_fraction() == Fraction(1, 2)
 
 
+def test_model_constructed_generator_image_degree_mismatch_is_rejected() -> None:
+    source = _field(1, 0, -2)
+    target = _field(1, 0, -3)
+    oversized_image = _element(_field(1, 0, 0, 0, -5), 1, 1, 1, 1)
+    request = SimpleNumberFieldEmbeddingRequest.model_construct(
+        source=source,
+        target=target,
+        generator_image=oversized_image,
+        element=_element(source, 1, 1),
+    )
+
+    with pytest.raises(OperationDomainValidationError, match="canonical validated"):
+        apply_simple_number_field_embedding(request)
+
+
+def test_model_constructed_element_wrong_parent_is_rejected() -> None:
+    source = _field(1, 0, -2)
+    target = _field(1, 0, 0, 0, -2)
+    request = SimpleNumberFieldEmbeddingRequest.model_construct(
+        source=source,
+        target=target,
+        generator_image=_element(target, 0, 0, 1, 0),
+        element=_element(target, 1, 0, 0, 0),
+    )
+
+    with pytest.raises(OperationDomainValidationError, match="canonical validated"):
+        apply_simple_number_field_embedding(request)
+
+
+def test_identity_embedding_at_advertised_maximum_degree_is_admitted() -> None:
+    sextic = _field(1, 0, 0, 0, 0, 0, -2)
+    element = _element(sextic, 1, 1, 0, 0, 0, 0)
+    result = apply_simple_number_field_embedding(
+        SimpleNumberFieldEmbeddingRequest(
+            source=sextic,
+            target=sextic,
+            generator_image=_element(sextic, 0, 1, 0, 0, 0, 0),
+            element=element,
+        )
+    )
+
+    assert result.image == element
+
+
+def test_degree_eight_identity_is_rejected_by_degree_admission() -> None:
+    octic = _field(1, 0, 0, 0, 0, 0, 0, 0, 2)
+    with pytest.raises(OperationDomainValidationError, match="degrees at most 6"):
+        apply_simple_number_field_embedding(
+            SimpleNumberFieldEmbeddingRequest(
+                source=octic,
+                target=octic,
+                generator_image=_element(octic, 0, 1, 0, 0, 0, 0, 0, 0),
+                element=_element(octic, 1, 1, 0, 0, 0, 0, 0, 0),
+            )
+        )
+
+
 def test_transport_preserves_products_against_independent_polynomial_remainder() -> (
     None
 ):

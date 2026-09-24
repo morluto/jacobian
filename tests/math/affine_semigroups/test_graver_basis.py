@@ -92,9 +92,7 @@ def test_exact_work_envelope_rejects_before_enumeration():
 
 
 def test_rank_one_integer_kernel_gives_complete_graver_basis_for_multirow_matrix():
-    configuration = IntegerMatrix.model_validate(
-        {"entries": [[1, 1, 1], [0, 1, 2]]}
-    )
+    configuration = IntegerMatrix.model_validate({"entries": [[1, 1, 1], [0, 1, 2]]})
     result = graver_basis(configuration)
     assert result.vectors == ((1, -2, 1),)
     assert all(
@@ -112,9 +110,13 @@ def test_rank_one_integer_kernel_gives_complete_graver_basis_for_multirow_matrix
     ]
     brute_minima = [
         vector
-        for vector in sorted(brute_candidates, key=lambda value: (sum(map(abs, value)), value))
+        for vector in sorted(
+            brute_candidates, key=lambda value: (sum(map(abs, value)), value)
+        )
         if not any(
-            all(a == 0 or (a > 0) == (b > 0) for a, b in zip(other, vector, strict=True))
+            all(
+                a == 0 or (a > 0) == (b > 0) for a, b in zip(other, vector, strict=True)
+            )
             and all(abs(a) <= abs(b) for a, b in zip(other, vector, strict=True))
             for other in brute_candidates
             if sum(map(abs, other)) < sum(map(abs, vector))
@@ -123,7 +125,9 @@ def test_rank_one_integer_kernel_gives_complete_graver_basis_for_multirow_matrix
     brute_sign_normalized = tuple(
         sorted(
             {
-                vector if next(value for value in vector if value) > 0 else tuple(-v for v in vector)
+                vector
+                if next(value for value in vector if value) > 0
+                else tuple(-v for v in vector)
                 for vector in brute_minima
             }
         )

@@ -29,6 +29,7 @@ from jacobian.math.number_theory.quadratic_forms.general.operations import (
     coefficient_matrix,
     coefficient_matrix_entries,
     evaluate_rational_quadratic_form,
+    integral_coefficient_content,
     require_coefficient_matrix_budget,
 )
 from jacobian.math.number_theory.quadratic_forms.general.theta_operations import (
@@ -60,6 +61,7 @@ __all__ = [
     "evaluate_rational_quadratic_form",
     "finite_box_value_profile",
     "finite_quadratic_gauss_sum",
+    "integral_coefficient_content",
     "quadratic_form_direct_sum",
     "quadratic_form_restrict_coordinates",
     "require_coefficient_matrix_budget",

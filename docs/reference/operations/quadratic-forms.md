@@ -24,6 +24,17 @@ indefinite forms because one value at one supplied vector is always finite;
 the theta-prefix operation below has a separate positive-definite integral
 domain.
 
+## Integral coefficient content
+
+`quadratic_form.integral_content.compute` accepts polynomial coefficients that
+are all integers and returns their nonnegative gcd together with the quotient
+form on the same ordered axis. The gcd includes both square and mixed-term
+coefficients. An all-zero form has content zero and, by convention, a zero
+primitive part. Rational nonintegral coefficients are rejected because an
+integral coefficient gcd is not defined for this representation. Input support
+is capped at 4096 stored coefficients; the operation is exact and linear in
+that bounded support.
+
 ## Theta-series prefixes
 
 `quadratic_form.theta_series_prefix.compute` accepts a `RationalQuadraticForm`

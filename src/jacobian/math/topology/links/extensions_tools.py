@@ -4,6 +4,7 @@ from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.topology.links._extensions_models import (
     AlexanderPolynomialRequest,
     AlexanderPolynomialResult,
+    BlackboardGraphRequest,
     BraidClosureResult,
     BraidPermutationResult,
     BraidProductRequest,
@@ -13,6 +14,7 @@ from jacobian.math.topology.links._extensions_models import (
     ConwayPolynomialResult,
     GoeritzDataRequest,
     GoeritzDataResult,
+    LinkBlackboardGraph,
     LinkCrossingProfileRequest,
     LinkCrossingProfileResult,
     LinkDeterminantRequest,
@@ -30,6 +32,7 @@ from jacobian.math.topology.links.extensions import (
     braid_multiply,
     braid_permutation,
     link_alexander_polynomial,
+    link_blackboard_graph,
     link_conway_polynomial,
     link_crossing_profile,
     link_determinant,
@@ -78,6 +81,10 @@ def _goeritz(request: GoeritzDataRequest) -> GoeritzDataResult:
     return link_goeritz_data(request.diagram)
 
 
+def _blackboard_graph(request: BlackboardGraphRequest) -> LinkBlackboardGraph:
+    return link_blackboard_graph(request.diagram)
+
+
 def _determinant(request: LinkDeterminantRequest) -> LinkDeterminantResult:
     return link_determinant(request.diagram)
 
@@ -99,6 +106,31 @@ _SIGMA_ONE_CUBED = {
         {"generator": 1, "exponent": 1},
         {"generator": 1, "exponent": 1},
     ],
+}
+
+_POSITIVE_HOPF_DIAGRAM = {
+    "crossings": [
+        {
+            "crossing_id": crossing_id,
+            "half_edges": [
+                f"{crossing_id}:dart_0",
+                f"{crossing_id}:dart_3",
+                f"{crossing_id}:dart_2",
+                f"{crossing_id}:dart_1",
+            ],
+            "over_pair": [0, 2],
+            "under_pair": [1, 3],
+            "sign": 1,
+        }
+        for crossing_id in ("crossing_000", "crossing_001")
+    ],
+    "arcs": [
+        {"tail": "crossing_000:dart_2", "head": "crossing_001:dart_1"},
+        {"tail": "crossing_000:dart_3", "head": "crossing_001:dart_0"},
+        {"tail": "crossing_001:dart_2", "head": "crossing_000:dart_1"},
+        {"tail": "crossing_001:dart_3", "head": "crossing_000:dart_0"},
+    ],
+    "free_loops": 0,
 }
 
 
@@ -273,13 +305,47 @@ TOOLS: MathTools = (
         ),
     ),
     MathTool(
+        operation_id="link_diagram.blackboard_graph.compute",
+        title="Construct a link diagram's signed checkerboard graph",
+        description=(
+            "Return the signed Tait graph by coloring the face of least boundary "
+            "dart shaded and alternating colors across projection arcs. Each shaded "
+            "region is a vertex; each crossing is an edge joining its shaded corner "
+            "regions. Its Tait sign is +1 exactly when those corners are the "
+            "overpassing pair. Retain all checkerboard region boundaries and "
+            "crossing-to-edge identities, including loops and parallel edges. "
+            "Connected nonempty crossing projections are admitted through 64 "
+            "crossings; the value does not decide diagram or link equivalence."
+        ),
+        request_type=BlackboardGraphRequest,
+        result_type=LinkBlackboardGraph,
+        run=_blackboard_graph,
+        tags=("link-diagram", "Tait-graph", "checkerboard", "exact"),
+        discovery_terms=(
+            "link diagram Tait graph",
+            "signed checkerboard graph",
+            "black graph of link diagram",
+        ),
+        examples=(
+            OperationExample(
+                name="positive_hopf_tait_graph",
+                description=(
+                    "Construct the signed two-vertex Tait graph of the positive "
+                    "Hopf diagram; its crossing projection must be connected."
+                ),
+                input={"diagram": _POSITIVE_HOPF_DIAGRAM},
+            ),
+        ),
+    ),
+    MathTool(
         operation_id="link_diagram.goeritz_matrix.compute",
         title="Construct a link diagram's Goeritz matrix",
         description=(
             "Enumerate the planar projection regions, choose the checkerboard "
             "shading containing the least boundary dart, assign incidence +1 "
-            "when the shaded corners are the overpassing pair and -1 otherwise, "
-            "and delete the last shaded region from the signed Laplacian. Return "
+            "(the Tait sign) when the shaded corners are the overpassing pair "
+            "and -1 otherwise. Delete the last shaded region from the signed "
+            "Laplacian, then return "
             "that exact reduced integral Goeritz matrix and its absolute "
             "determinant. This slice requires a connected "
             "nonempty projection with at most 32 crossings; it does not claim a "

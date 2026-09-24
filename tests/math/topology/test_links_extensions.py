@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Literal
 
 import pytest
@@ -15,26 +16,31 @@ from jacobian.catalog.models import (
 from jacobian.math.topology.links import (
     BraidLetter,
     BraidWord,
+    OrientedDiagramArc,
     braid_closure,
     braid_inverse,
     braid_multiply,
     braid_permutation,
     link_alexander_polynomial,
+    link_blackboard_graph,
     link_components,
     link_determinant,
     link_goeritz_data,
     link_linking_matrix,
+    link_mirror,
     link_seifert_circles,
     wirtinger_presentation,
 )
 from jacobian.math.topology.links._extensions_models import (
     AlexanderPolynomialRequest,
     AlexanderPolynomialResult,
+    BlackboardGraphRequest,
     BraidClosureResult,
     BraidProductRequest,
     BraidWordRequest,
     GoeritzDataRequest,
     GoeritzDataResult,
+    LinkBlackboardGraph,
     LinkDeterminantRequest,
     LinkDeterminantResult,
     SeifertCircleRequest,
@@ -156,13 +162,163 @@ class TestBraidWords:
 
 
 class TestGoeritzData:
+    def test_hopf_tait_graph_is_two_signed_parallel_edges_and_round_trips(self) -> None:
+        diagram = braid_closure(_two_braid(1, 1)).diagram
+        graph = link_blackboard_graph(diagram)
+
+        assert len(graph.shaded_region_ids) == 2
+        assert len(graph.edges) == 2
+        assert tuple(edge.crossing_id for edge in graph.edges) == tuple(
+            crossing.crossing_id for crossing in diagram.crossings
+        )
+        assert all(edge.tait_sign == 1 for edge in graph.edges)
+        assert all(
+            edge.first_region_id != edge.second_region_id for edge in graph.edges
+        )
+        assert (
+            len(
+                {
+                    frozenset((edge.first_region_id, edge.second_region_id))
+                    for edge in graph.edges
+                }
+            )
+            == 1
+        )
+        assert LinkBlackboardGraph.model_validate_json(graph.model_dump_json()) == graph
+
+        forged = graph.model_dump(mode="json")
+        forged["edges"][0]["tait_sign"] = -1
+        with pytest.raises(ValidationError, match="Tait sign"):
+            LinkBlackboardGraph.model_validate(forged)
+
+        # The signed Tait graph Laplacian gives the Hopf Goeritz matrix [[2,-2],[-2,2]].
+        laplacian = [[0, 0], [0, 0]]
+        vertex = {
+            region_id: index for index, region_id in enumerate(graph.shaded_region_ids)
+        }
+        for edge in graph.edges:
+            left, right = vertex[edge.first_region_id], vertex[edge.second_region_id]
+            laplacian[left][left] += edge.tait_sign
+            laplacian[right][right] += edge.tait_sign
+            laplacian[left][right] -= edge.tait_sign
+            laplacian[right][left] -= edge.tait_sign
+        assert laplacian == [[2, -2], [-2, 2]]
+        goeritz = link_goeritz_data(diagram)
+        assert goeritz.blackboard_graph == graph
+        assert goeritz.reduced_matrix.entries == ((2,),)
+
+        mirrored_graph = link_blackboard_graph(link_mirror(diagram).diagram)
+        assert tuple(edge.tait_sign for edge in mirrored_graph.edges) == (-1, -1)
+
+    def test_tait_graph_has_its_own_64_crossing_envelope(self) -> None:
+        diagram = braid_closure(_two_braid(*(1,) * 33)).diagram
+
+        graph = link_blackboard_graph(diagram)
+
+        assert len(graph.edges) == 33
+        assert len(graph.regions) == 35
+        with pytest.raises(OperationResourceAdmissionError, match="32 crossings"):
+            link_goeritz_data(diagram)
+
+        boundary_diagram = braid_closure(_two_braid(*(1,) * 64)).diagram
+        boundary_graph = link_blackboard_graph(boundary_diagram)
+        assert len(boundary_graph.edges) == 64
+        assert len(boundary_graph.regions) == 66
+
+        # U+0001 expands to a six-byte JSON escape. Repeated maximum-length
+        # labels exercise the output estimate's worst serialization case.
+        def escaped_label(index: int) -> str:
+            return "\x01" * 60 + f"{index:04}"
+
+        dart_map = {
+            dart: escaped_label(index)
+            for index, dart in enumerate(
+                dart
+                for crossing in boundary_diagram.crossings
+                for dart in crossing.half_edges
+            )
+        }
+        escaped_diagram = OrientedLinkDiagram(
+            crossings=tuple(
+                crossing.model_copy(
+                    update={
+                        "crossing_id": escaped_label(1000 + index),
+                        "half_edges": tuple(
+                            dart_map[dart] for dart in crossing.half_edges
+                        ),
+                    }
+                )
+                for index, crossing in enumerate(boundary_diagram.crossings)
+            ),
+            arcs=tuple(
+                OrientedDiagramArc(tail=dart_map[arc.tail], head=dart_map[arc.head])
+                for arc in boundary_diagram.arcs
+            ),
+        )
+        escaped_graph = link_blackboard_graph(escaped_diagram)
+        assert len(escaped_graph.model_dump_json().encode()) <= 512 * 1024
+
+    def test_catalog_publishes_reusable_tait_graph_value(self) -> None:
+        catalog = {tool.operation_id: tool for tool in BUILTIN_TOOLS}
+        diagram = braid_closure(_two_braid(1, 1)).diagram
+        graph = catalog["link_diagram.blackboard_graph.compute"].run(
+            BlackboardGraphRequest(diagram=diagram)
+        )
+
+        assert graph == link_blackboard_graph(diagram)
+
+    def test_decoding_rejects_forged_face_cycle_and_color_seed(self) -> None:
+        diagram = braid_closure(_two_braid(1, 1, 1)).diagram
+        graph = link_blackboard_graph(diagram)
+
+        malformed_face = graph.model_dump(mode="json")
+        face_index = max(
+            range(len(graph.regions)),
+            key=lambda index: len(graph.regions[index].boundary_darts),
+        )
+        boundary = malformed_face["regions"][face_index]["boundary_darts"]
+        assert len(boundary) > 2
+        boundary.reverse()
+        with pytest.raises(ValidationError, match="canonical face cycle"):
+            LinkBlackboardGraph.model_validate_json(json.dumps(malformed_face))
+
+        # Complement every color and consistently rebuild the edge incidence
+        # data. This describes the other mathematical checkerboard graph, but
+        # not the canonical color selected by the operation's least-face rule.
+        swapped = graph.model_dump(mode="json")
+        for region in swapped["regions"]:
+            region["shaded"] = not region["shaded"]
+        region_of_dart = {
+            dart: region["region_id"]
+            for region in swapped["regions"]
+            for dart in region["boundary_darts"]
+        }
+        shaded = {
+            region["region_id"] for region in swapped["regions"] if region["shaded"]
+        }
+        swapped["shaded_region_ids"] = [
+            region["region_id"] for region in swapped["regions"] if region["shaded"]
+        ]
+        for edge, crossing in zip(swapped["edges"], diagram.crossings, strict=True):
+            corners = tuple(
+                index
+                for index, dart in enumerate(crossing.half_edges)
+                if region_of_dart[dart] in shaded
+            )
+            edge["first_corner_index"], edge["second_corner_index"] = corners
+            edge["first_region_id"] = region_of_dart[crossing.half_edges[corners[0]]]
+            edge["second_region_id"] = region_of_dart[crossing.half_edges[corners[1]]]
+            edge["tait_sign"] = 1 if set(corners) == set(crossing.over_pair) else -1
+        with pytest.raises(ValidationError, match="deterministic shaded color"):
+            LinkBlackboardGraph.model_validate_json(json.dumps(swapped))
+
     def test_trefoil_goeritz_matrix_cross_checks_alexander_determinant(self) -> None:
         diagram = braid_closure(_two_braid(1, 1, 1)).diagram
         result = link_goeritz_data(diagram)
 
         assert result.reduced_matrix.entries == ((2, -1), (-1, 2))
         assert result.absolute_determinant == link_determinant(diagram).determinant == 3
-        assert len(result.crossing_contributions) == 3
+        assert len(result.blackboard_graph.edges) == 3
         assert GoeritzDataResult.model_validate_json(result.model_dump_json()) == result
 
     def test_mirror_negates_matrix_and_preserves_absolute_determinant(self) -> None:

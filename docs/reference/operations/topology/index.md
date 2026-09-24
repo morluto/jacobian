@@ -8,4 +8,8 @@ construction, finite-field homology, and integral homology. Recurrence and
 generating-series operations belong to combinatorics; their historical page is
 retained below for that mathematical reference.
 
+Classical oriented link diagrams expose typed crossing, arc, component, and
+crossing-sign data through the link-diagram operation family. The checkerboard
+graph and Goeritz slice is documented in [link diagrams](link-diagrams.md).
+
 - [Recurrences and rational generating series](recurrences-and-generating-series.md)

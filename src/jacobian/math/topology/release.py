@@ -45,7 +45,7 @@ MAX_FACE_POSET_CHAINS = 16_384
 MAX_FACE_POSET_PAIR_CANDIDATES = 1_000_000
 MAX_FACE_POSET_CHAIN_CANDIDATES = 100_000
 MAX_CLIQUE_CANDIDATES = 100_000
-MAX_CLIQUE_FACETS = 16_384
+MAX_CLIQUE_PAIR_CHECKS = 2_000_000
 MAX_GRAPH_CLIQUE_VERTICES = 8
 MAX_ORDER_COMPLEX_WORK = 1_000_000
 MAX_ORDER_COMPLEX_OUTPUT_BYTES = 1_500_000
@@ -512,14 +512,13 @@ def clique_complex(request: CliqueRequest) -> CliqueResult:
         else ()
     )
     edge_set = {frozenset(edge) for edge in edges}
-    facets: list[Simplex] = []
     vertices = source.vertices
     # A flag complex is determined by its graph, not by the dimension of the
     # presentation supplied by the caller.  In particular, a K4 presented as
-    # a one-dimensional graph still has a 3-simplex.  Admit every possible
-    # clique size before beginning enumeration so the search bound covers the
-    # complete candidate expansion.
+    # a one-dimensional graph still has a 3-simplex. Preflight the whole
+    # powerset and pair-check upper bound before the output-sensitive walk.
     candidate_count = 0
+    pair_check_bound = 0
     for size in range(1, len(vertices) + 1):
         candidate_count += comb(len(vertices), size)
         if candidate_count > MAX_CLIQUE_CANDIDATES:
@@ -528,24 +527,79 @@ def clique_complex(request: CliqueRequest) -> CliqueResult:
                 code="topology.clique.candidate_budget",
                 message="clique candidates exceed the admitted search bound",
             )
-    for size in range(1, len(vertices) + 1):
+        pair_check_bound += comb(len(vertices), size) * comb(size, 2)
+        if pair_check_bound > MAX_CLIQUE_PAIR_CHECKS:
+            raise OperationResourceAdmissionError(
+                location=("complex",),
+                code="topology.clique.pair_check_budget",
+                message="clique edge checks exceed the admitted work bound",
+            )
+
+    faces_by_dimension: list[list[Simplex]] = [
+        [] for _ in range(MAX_TOPOLOGY_DIMENSION + 1)
+    ]
+    face_count = 0
+    # A clique larger than the carrier's maximum simplex contains a
+    # (MAX_TOPOLOGY_DIMENSION + 2)-vertex clique.  Checking that size is enough
+    # to reject every out-of-carrier complex without enumerating larger sets.
+    largest_candidate_size = min(len(vertices), MAX_TOPOLOGY_DIMENSION + 2)
+    for size in range(largest_candidate_size, 0, -1):
         for candidate in combinations(vertices, size):
-            if size == 1 or all(
+            if size > 1 and not all(
                 frozenset(pair) in edge_set for pair in combinations(candidate, 2)
             ):
-                facets.append(candidate)
-    maximal = _maximal_faces(facets)
-    if len(maximal) > MAX_CLIQUE_FACETS:
-        raise OperationResourceAdmissionError(
-            location=("complex",),
-            code="topology.clique.output_budget",
-            message="clique facets exceed the admitted output bound",
-        )
-    result_complex = canonicalize(vertices, maximal).complex
+                continue
+            if size > MAX_TOPOLOGY_DIMENSION + 1:
+                raise OperationResourceAdmissionError(
+                    location=("complex",),
+                    code="topology.clique.dimension_budget",
+                    message=(
+                        "clique complex dimension exceeds the admitted "
+                        f"maximum {MAX_TOPOLOGY_DIMENSION}"
+                    ),
+                )
+            if face_count == MAX_TOPOLOGY_FACES:
+                raise OperationResourceAdmissionError(
+                    location=("complex",),
+                    code="topology.clique.face_budget",
+                    message=(
+                        "clique complex face closure exceeds the admitted "
+                        f"maximum {MAX_TOPOLOGY_FACES}"
+                    ),
+                )
+            faces_by_dimension[size - 1].append(candidate)
+            face_count += 1
+
+    maximal: list[Simplex] = []
+    maximal_sets: list[frozenset[str]] = []
+    # Process larger faces first. Once a face is maximal, no later face can
+    # contain it, so the public facet bound can be enforced before appending an
+    # oversized maximal-facet collection.
+    for faces in reversed(faces_by_dimension):
+        for face in faces:
+            face_set = frozenset(face)
+            if any(existing.issuperset(face_set) for existing in maximal_sets):
+                continue
+            if len(maximal) == MAX_TOPOLOGY_FACETS:
+                raise OperationResourceAdmissionError(
+                    location=("complex",),
+                    code="topology.clique.facet_budget",
+                    message=(
+                        "clique complex maximal facets exceed the admitted "
+                        f"maximum {MAX_TOPOLOGY_FACETS}"
+                    ),
+                )
+            maximal.append(face)
+            maximal_sets.append(face_set)
+
+    closure = tuple(tuple(faces) for faces in faces_by_dimension)
+    highest_dimension = max(index for index, faces in enumerate(closure) if faces)
+    closure = closure[: highest_dimension + 1]
+    result_complex = canonical_complex(vertices, tuple(maximal), closure=closure)
     return CliqueResult(
         source=source,
         graph_edges=edges,
-        clique_facets=maximal,
+        clique_facets=tuple(maximal),
         clique_complex=result_complex,
     )
 
@@ -567,7 +621,7 @@ def graph_clique_complex(request: GraphCliqueRequest) -> CliqueResult:
         )
     vertices = tuple(f"v{index}" for index in range(graph.vertex_count))
     endpoints = {vertex for edge in graph.edges for vertex in edge}
-    facets: tuple[tuple[str, ...], ...] = tuple(
+    facets: tuple[Simplex, ...] = tuple(
         (vertices[left], vertices[right]) for left, right in graph.edges
     )
     facets += tuple(

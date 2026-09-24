@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import deque
 from itertools import combinations
+from math import comb
 from typing import Literal
 
 from jacobian.canonical import strict_json_object_size
@@ -18,6 +19,8 @@ from jacobian.math.logic.automata.petri_nets._models import (
     MAX_MARKING_COMMUTATION_PROFILE_OUTPUT_BYTES,
     MAX_MARKING_COMMUTATION_PROFILE_WORK,
     MAX_MARKING_CONFLICT_PROFILE_OUTPUT_BYTES,
+    MAX_PETRI_NONNEGATIVE_INVARIANT_OUTPUT_BYTES,
+    MAX_PETRI_NONNEGATIVE_INVARIANT_WORK,
     MAX_SIPHON_TRAP_FAMILY_OUTPUT_BYTES,
     MAX_SIPHON_TRAP_PLACES,
     MAX_SIPHON_TRAP_WORK,
@@ -32,6 +35,7 @@ from jacobian.math.logic.automata.petri_nets._models import (
     MarkingReachabilityResult,
     PetriInvariantsResult,
     PetriMarkingState,
+    PetriNonnegativeInvariantResult,
     PetriPlaceSubset,
     PetriReachabilityEdge,
     PlaceSetInitialMarkingProfileResult,
@@ -72,6 +76,7 @@ __all__ = [
     "marking_conflict_profile",
     "marking_reachability",
     "petri_invariants",
+    "petri_nonnegative_invariant_generators",
     "place_set_initial_marking_profile",
     "place_set_support",
     "reachability_graph",
@@ -1376,6 +1381,130 @@ def petri_invariants(net: PetriNet) -> PetriInvariantsResult:
         incidence_rank=rank,
         p_invariants=p_basis,
         t_invariants=t_basis,
+    )
+
+
+def _nonnegative_kernel_admission(
+    matrix: tuple[tuple[int, ...], ...], dimension: int
+) -> tuple[int, int, int]:
+    """Return a sound enumeration/work/output bound for one integer kernel."""
+    row_count = len(matrix)
+    if dimension == 0:
+        return (0, 0, 0)
+    if row_count == 0 or not any(any(row) for row in matrix):
+        return (0, dimension * dimension, dimension * (dimension + 2))
+    # A nonzero 1-dimensional vector lies in the kernel only when every
+    # coefficient vanishes, handled above.
+    if dimension == 1:
+        return (0, 0, 0)
+    delta = max(abs(value) for row in matrix for value in row)
+    # Steinitz ordering: a conformally indecomposable zero-sum sequence of
+    # integer columns has distinct partial sums in [-m*Delta,m*Delta]^m.
+    # Thus every orthant Graver element, and hence each Hilbert basis vector,
+    # has l1 norm at most this bound.
+    height = (2 * row_count * delta + 1) ** row_count
+    candidates = comb(height + dimension, dimension)
+    # Bound testing each candidate against all earlier kernel candidates,
+    # including exact matrix products and coordinate comparisons.
+    work = candidates * candidates * max(1, dimension) + candidates * max(
+        1, row_count * dimension
+    )
+    output_bytes = candidates * dimension * (len(str(height)) + 2)
+    return height, work, output_bytes
+
+
+def _weak_compositions(total: int, length: int):
+    """Generate weak compositions in lexicographic order."""
+    if length == 0:
+        if total == 0:
+            yield ()
+        return
+    if length == 1:
+        yield (total,)
+        return
+    for first in range(total + 1):
+        for suffix in _weak_compositions(total - first, length - 1):
+            yield (first, *suffix)
+
+
+def _nonnegative_integer_kernel_generators(
+    matrix: tuple[tuple[int, ...], ...], dimension: int, height: int
+) -> tuple[tuple[int, ...], ...]:
+    """Enumerate all bounded kernel vectors and retain the indecomposables."""
+    if dimension == 0:
+        return ()
+    if not matrix or not any(any(row) for row in matrix):
+        return tuple(
+            tuple(1 if coordinate == index else 0 for coordinate in range(dimension))
+            for index in range(dimension)
+        )
+    if dimension == 1:
+        return ()
+    kernel_vectors: list[tuple[int, ...]] = []
+    generators: list[tuple[int, ...]] = []
+    for norm in range(1, height + 1):
+        for vector in _weak_compositions(norm, dimension):
+            if any(sum(a * x for a, x in zip(row, vector, strict=True)) for row in matrix):
+                continue
+            kernel_vectors.append(vector)
+            if not any(
+                all(part <= value for part, value in zip(previous, vector, strict=True))
+                for previous in kernel_vectors[:-1]
+            ):
+                generators.append(vector)
+    return tuple(sorted(generators))
+
+
+def petri_nonnegative_invariant_generators(
+    net: PetriNet,
+) -> PetriNonnegativeInvariantResult:
+    """Compute Hilbert bases for the nonnegative P- and T-invariant monoids.
+
+    This is complete within the admitted finite enumeration bound. The result
+    describes algebraic kernel vectors only; in particular, a T-invariant
+    does not imply that its transition multiset is fireable from any marking.
+    """
+    net = _admit_net(net)
+    incidence = tuple(
+        tuple(
+            net.post[place][transition] - net.pre[place][transition]
+            for transition in range(net.transition_count)
+        )
+        for place in range(net.place_count)
+    )
+    transposed = tuple(
+        tuple(incidence[place][transition] for place in range(net.place_count))
+        for transition in range(net.transition_count)
+    )
+    t_bound = _nonnegative_kernel_admission(incidence, net.transition_count)
+    p_bound = _nonnegative_kernel_admission(transposed, net.place_count)
+    total_work = t_bound[1] + p_bound[1]
+    total_output = (
+        t_bound[2]
+        + p_bound[2]
+        + _petri_net_reverse_output_bound(net)
+        + 512
+    )
+    if total_work > MAX_PETRI_NONNEGATIVE_INVARIANT_WORK:
+        raise OperationResourceAdmissionError(
+            location=("net",),
+            code="petri_net.nonnegative_invariant_work",
+            message="nonnegative invariant Hilbert-basis search exceeds its exact work bound",
+        )
+    if total_output > MAX_PETRI_NONNEGATIVE_INVARIANT_OUTPUT_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("net",),
+            code="petri_net.nonnegative_invariant_output",
+            message="nonnegative invariant Hilbert-basis output exceeds its bound",
+        )
+    return PetriNonnegativeInvariantResult._from_kernel(
+        net=net,
+        p_generators=_nonnegative_integer_kernel_generators(
+            transposed, net.place_count, p_bound[0]
+        ),
+        t_generators=_nonnegative_integer_kernel_generators(
+            incidence, net.transition_count, t_bound[0]
+        ),
     )
 
 

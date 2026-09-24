@@ -36,6 +36,8 @@ MAX_MARKING_CONFLICT_PROFILE_PAIRS = (
 )
 MAX_MARKING_COMMUTATION_PROFILE_OUTPUT_BYTES = 10 * 1024 * 1024
 MAX_MARKING_COMMUTATION_PROFILE_WORK = 100_000
+MAX_PETRI_NONNEGATIVE_INVARIANT_WORK = 2_000_000
+MAX_PETRI_NONNEGATIVE_INVARIANT_OUTPUT_BYTES = 4_000_000
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -1244,6 +1246,51 @@ class PetriInvariantsResult(PetriInvariantsRequest):
         return cls.model_construct(**values)
 
 
+class PetriNonnegativeInvariantRequest(StrictModel):
+    """Compute the complete nonnegative integer P/T-invariant generators."""
+
+    net: PetriNet
+
+
+class PetriNonnegativeInvariantResult(PetriNonnegativeInvariantRequest):
+    """Hilbert bases of the nonnegative left and right incidence kernels.
+
+    These are monoid generators, distinct from signed lattice bases. A
+    T-invariant here is an algebraic transition-count vector and carries no
+    fireability claim.
+    """
+
+    p_generators: tuple[tuple[int, ...], ...] = Field(default=())
+    t_generators: tuple[tuple[int, ...], ...] = Field(default=())
+
+    @model_validator(mode="after")
+    def require_canonical_generators(self) -> Self:
+        for vectors, ambient in (
+            (self.p_generators, self.net.place_count),
+            (self.t_generators, self.net.transition_count),
+        ):
+            if vectors != tuple(sorted(set(vectors))):
+                raise _validation_error(
+                    "nonnegative_invariants_order",
+                    "Hilbert basis vectors must be sorted and unique",
+                )
+            if any(
+                len(vector) != ambient
+                or not any(vector)
+                or any(value < 0 for value in vector)
+                for vector in vectors
+            ):
+                raise _validation_error(
+                    "nonnegative_invariants_axis",
+                    "Hilbert basis vectors must be nonzero nonnegative vectors on their axis",
+                )
+        return self
+
+    @classmethod
+    def _from_kernel(cls, **values: Any) -> Self:
+        return cls.model_construct(**values)
+
+
 __all__ = [
     "MAX_CONCURRENT_STEP_OCCURRENCES",
     "MAX_FIRING_SEQUENCE_LENGTH",
@@ -1270,6 +1317,8 @@ __all__ = [
     "PetriInvariantsRequest",
     "PetriInvariantsResult",
     "PetriMarkingState",
+    "PetriNonnegativeInvariantRequest",
+    "PetriNonnegativeInvariantResult",
     "PetriPlaceSubset",
     "PetriReachabilityEdge",
     "PlaceSetInitialMarkingProfileRequest",

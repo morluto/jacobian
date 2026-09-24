@@ -25,6 +25,8 @@ from jacobian.math.logic.automata.petri_nets._models import (
     MarkingReachabilityResult,
     PetriInvariantsRequest,
     PetriInvariantsResult,
+    PetriNonnegativeInvariantRequest,
+    PetriNonnegativeInvariantResult,
     PlaceSetInitialMarkingProfileRequest,
     PlaceSetInitialMarkingProfileResult,
     PlaceSetSupportRequest,
@@ -50,6 +52,7 @@ from jacobian.math.logic.automata.petri_nets.operations import (
     marking_conflict_profile,
     marking_reachability,
     petri_invariants,
+    petri_nonnegative_invariant_generators,
     place_set_initial_marking_profile,
     place_set_support,
     reachability_graph,
@@ -127,6 +130,12 @@ def compute_siphon_trap_family(
 
 def compute_petri_invariants(request: PetriInvariantsRequest) -> PetriInvariantsResult:
     return petri_invariants(request.net)
+
+
+def compute_petri_nonnegative_invariants(
+    request: PetriNonnegativeInvariantRequest,
+) -> PetriNonnegativeInvariantResult:
+    return petri_nonnegative_invariant_generators(request.net)
 
 
 def compute_place_set_support(request: PlaceSetSupportRequest) -> PlaceSetSupportResult:
@@ -543,6 +552,23 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 name="producer_consumer_invariants",
                 description="Invariants of a one-place producer/consumer net.",
                 input={"net": _PRODUCER_CONSUMER_NET},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="petri_net.nonnegative_invariant_generators.compute",
+        title="Compute nonnegative Petri P/T-invariant generators",
+        description="Return the complete Hilbert bases of nonnegative integer vectors in the left and right kernels of the incidence matrix. These monoid generators differ from signed lattice bases; T-invariants describe transition counts and do not assert fireability.",
+        request_type=PetriNonnegativeInvariantRequest,
+        result_type=PetriNonnegativeInvariantResult,
+        run=compute_petri_nonnegative_invariants,
+        tags=("petri-net", "invariants", "hilbert-basis", "exact"),
+        discovery_terms=("nonnegative invariant", "Hilbert basis", "nonnegative T-invariant", "nonnegative P-invariant"),
+        examples=(
+            OperationExample(
+                name="non_unimodular_transition_kernel",
+                description="The nonnegative transition kernel has an interior Hilbert generator in addition to its two extreme rays.",
+                input={"net": {"place_count": 1, "transition_count": 3, "pre": [[0, 0, 5]], "post": [[2, 3, 0]]}},
             ),
         ),
     ),

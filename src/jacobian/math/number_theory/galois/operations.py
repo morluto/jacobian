@@ -24,9 +24,15 @@ from jacobian.math.number_theory.galois._models import (
     FiniteFieldFactor,
     FinitePermutationGroup,
     FrobeniusCycleResult,
+    GaloisAutomorphismSubgroup,
     GaloisFactorResult,
+    GaloisFixedFieldRequest,
+    GaloisFixedFieldResult,
     GaloisGroupResult,
     GaloisRootAxis,
+    GaloisSubgroupRequest,
+    IntermediateFieldStabilizerRequest,
+    IntermediateFieldStabilizerResult,
     PolynomialDiscriminantRequest,
     PolynomialDiscriminantResult,
     QQFieldAutomorphism,
@@ -37,6 +43,14 @@ from jacobian.math.number_theory.galois._models import (
     SplittingFieldResult,
     _require_prime,
     _supported_galois_polynomial,
+)
+from jacobian.math.number_theory.number_fields._field_embedding import (
+    SimpleNumberFieldEmbedding,
+    SimpleNumberFieldEmbeddingRequest,
+    apply_simple_number_field_embedding,
+)
+from jacobian.math.number_theory.number_fields.values import (
+    SimpleNumberFieldPresentation,
 )
 from jacobian.math.polynomials.values import RationalPolynomial
 
@@ -734,6 +748,198 @@ def inverse_automorphism(
     if result.root_permutation != tuple(inverse_permutation):
         raise ArithmeticError("inverse field map and root permutation disagree")
     return result
+
+
+def _canonical_automorphism_subgroup(
+    subgroup: GaloisAutomorphismSubgroup,
+) -> GaloisAutomorphismSubgroup:
+    """Replay field membership and subgroup closure for a supplied value."""
+    if not isinstance(subgroup, GaloisAutomorphismSubgroup):
+        raise OperationDomainValidationError(
+            location=("subgroup",),
+            code="galois_theory.subgroup_type",
+            message="subgroup must be a typed exact automorphism subgroup",
+        )
+    try:
+        field = _canonical_splitting_field(
+            subgroup.field, location=("subgroup", "field")
+        )
+        candidate = GaloisAutomorphismSubgroup.model_validate(
+            {**subgroup.model_dump(), "field": field.model_dump()}
+        )
+        elements = tuple(
+            _canonical_automorphism(element)[0] for element in candidate.elements
+        )
+    except (ValidationError, AttributeError, KeyError, TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("subgroup",),
+            code="galois_theory.invalid_subgroup",
+            message="subgroup has malformed field or exact automorphism values",
+        ) from exc
+    if any(element.field != field for element in elements):
+        raise OperationDomainValidationError(
+            location=("subgroup", "elements"),
+            code="galois_theory.subgroup_parent_mismatch",
+            message="every subgroup element must belong to the same exact field",
+        )
+
+    full_group = automorphisms(field).automorphisms
+    full_by_action = {element.root_permutation: element for element in full_group}
+    by_action = {element.root_permutation: element for element in elements}
+    if len(by_action) != len(elements) or any(
+        action not in full_by_action for action in by_action
+    ):
+        raise OperationDomainValidationError(
+            location=("subgroup", "elements"),
+            code="galois_theory.subgroup_not_in_parent_group",
+            message="subgroup elements must be distinct members of the complete automorphism group",
+        )
+    identity = tuple(range(len(field.root_values)))
+    if identity not in by_action:
+        raise OperationDomainValidationError(
+            location=("subgroup", "elements"),
+            code="galois_theory.subgroup_missing_identity",
+            message="a subgroup must contain the identity automorphism",
+        )
+    for left in elements:
+        inverse = inverse_automorphism(left)
+        if inverse.root_permutation not in by_action:
+            raise OperationDomainValidationError(
+                location=("subgroup", "elements"),
+                code="galois_theory.subgroup_not_closed",
+                message="the supplied automorphisms are not closed under inverses",
+            )
+        for right in elements:
+            product = compose_automorphisms(left, right)
+            if product.root_permutation not in by_action:
+                raise OperationDomainValidationError(
+                    location=("subgroup", "elements"),
+                    code="galois_theory.subgroup_not_closed",
+                    message="the supplied automorphisms are not closed under composition",
+                )
+    return GaloisAutomorphismSubgroup(
+        field=field,
+        elements=tuple(by_action[key] for key in sorted(by_action)),
+    )
+
+
+def galois_subgroup(request: GaloisSubgroupRequest) -> GaloisAutomorphismSubgroup:
+    """Admit a complete subgroup of the exact supported automorphism group."""
+    try:
+        canonical_request = GaloisSubgroupRequest.model_validate(request.model_dump())
+        field = _canonical_splitting_field(canonical_request.field, location=("field",))
+        candidate = GaloisAutomorphismSubgroup(
+            field=field, elements=canonical_request.elements
+        )
+    except (ValidationError, AttributeError, KeyError, TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("subgroup",),
+            code="galois_theory.invalid_subgroup_request",
+            message="subgroup request must retain one exact supported field",
+        ) from exc
+    return _canonical_automorphism_subgroup(candidate)
+
+
+def galois_fixed_field(
+    request: GaloisFixedFieldRequest,
+) -> GaloisFixedFieldResult:
+    """Return the exact embedded fixed field of a supported QQ subgroup."""
+    try:
+        canonical_request = GaloisFixedFieldRequest.model_validate(request.model_dump())
+    except (ValidationError, AttributeError, TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("subgroup",),
+            code="galois_theory.invalid_fixed_field_request",
+            message="fixed-field request must contain one typed automorphism subgroup",
+        ) from exc
+    subgroup = _canonical_automorphism_subgroup(canonical_request.subgroup)
+    extension = subgroup.field.extension
+    if len(subgroup.elements) == 1:
+        # The trivial subgroup fixes all of L. Its canonical primitive element
+        # maps to itself, including when L=QQ has degree one.
+        fixed = extension
+        image = (
+            _field_element(extension, (Fraction(0), Fraction(1)))
+            if extension.degree == 2
+            else _field_element(extension, (Fraction(0),))
+        )
+    else:
+        if extension.degree != 2:
+            raise ArithmeticError("a nontrivial automorphism subgroup cannot act on QQ")
+        fixed = SimpleNumberFieldPresentation(coefficients_descending=(1, 0))
+        # The canonical degree-one presentation is QQ[x]/(x), so its generator
+        # is the zero element of the target field.
+        image = _zero(extension)
+    inclusion = SimpleNumberFieldEmbedding(
+        source=fixed, target=extension, generator_image=image
+    )
+    return GaloisFixedFieldResult(
+        subgroup=subgroup, fixed_field=fixed, inclusion=inclusion
+    )
+
+
+def intermediate_field_stabilizer(
+    request: IntermediateFieldStabilizerRequest,
+) -> IntermediateFieldStabilizerResult:
+    """Return automorphisms fixing a supplied embedded intermediate field."""
+    try:
+        canonical_request = IntermediateFieldStabilizerRequest.model_validate(
+            request.model_dump()
+        )
+    except (ValidationError, AttributeError, TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("inclusion",),
+            code="galois_theory.invalid_intermediate_field_request",
+            message="stabilizer request must contain a typed field inclusion",
+        ) from exc
+    field = _canonical_splitting_field(canonical_request.field, location=("field",))
+    inclusion = canonical_request.inclusion
+    if inclusion.target != field.extension or inclusion.source.degree > field.degree:
+        raise OperationDomainValidationError(
+            location=("inclusion",),
+            code="galois_theory.intermediate_field_parent_mismatch",
+            message="the intermediate-field map must land in the retained extension and cannot increase degree",
+        )
+    source_one = _field_element(
+        inclusion.source,
+        (Fraction(1),) + (Fraction(0),) * (inclusion.source.degree - 1),
+    )
+    try:
+        mapped_one = apply_simple_number_field_embedding(
+            SimpleNumberFieldEmbeddingRequest(
+                source=inclusion.source,
+                target=inclusion.target,
+                generator_image=inclusion.generator_image,
+                element=source_one,
+            )
+        )
+    except (
+        OperationDomainValidationError,
+        ValidationError,
+        TypeError,
+        ValueError,
+    ) as exc:
+        raise OperationDomainValidationError(
+            location=("inclusion",),
+            code="galois_theory.invalid_intermediate_field_embedding",
+            message="intermediate-field inclusion must be an exact injective QQ-field map",
+        ) from exc
+    if mapped_one.image != _one(field.extension):
+        raise OperationDomainValidationError(
+            location=("inclusion",),
+            code="galois_theory.intermediate_field_nonunital",
+            message="intermediate-field inclusion must preserve one",
+        )
+    fixed_elements = tuple(
+        automorphism
+        for automorphism in automorphisms(field).automorphisms
+        if _map_element(automorphism, inclusion.generator_image)
+        == inclusion.generator_image
+    )
+    subgroup = _canonical_automorphism_subgroup(
+        GaloisAutomorphismSubgroup(field=field, elements=fixed_elements)
+    )
+    return IntermediateFieldStabilizerResult(inclusion=inclusion, subgroup=subgroup)
 
 
 def _canonical_root(root: QQRoot) -> tuple[QQRoot, QQSplittingField]:

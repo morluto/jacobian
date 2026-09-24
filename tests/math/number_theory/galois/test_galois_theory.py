@@ -46,6 +46,9 @@ def test_catalog_contains_only_audited_operations() -> None:
         "number_field.automorphism.compose.compute",
         "number_field.automorphism.apply.compute",
         "number_field.automorphism.apply_element.compute",
+        "number_field.galois.subgroup.compute",
+        "number_field.galois.fixed_field.compute",
+        "number_field.galois.intermediate_stabilizer.compute",
     }
 
 

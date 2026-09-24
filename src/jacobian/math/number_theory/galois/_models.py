@@ -10,6 +10,9 @@ from pydantic_core import PydanticCustomError
 from jacobian._exact import ExactInteger
 from jacobian._models import StrictModel
 from jacobian.canonical import format_canonical_integer
+from jacobian.math.number_theory.number_fields._field_embedding import (
+    SimpleNumberFieldEmbedding,
+)
 from jacobian.math.number_theory.number_fields.values import (
     SimpleNumberFieldElement,
     SimpleNumberFieldPresentation,
@@ -388,8 +391,10 @@ class QQRoot(StrictModel):
 
 class QQFieldAutomorphism(StrictModel):
     field: QQSplittingField
-    root_permutation: tuple[StrictInt, ...]
-    basis_images: tuple[SimpleNumberFieldElement, ...]
+    root_permutation: tuple[StrictInt, ...] = Field(min_length=1, max_length=2)
+    basis_images: tuple[SimpleNumberFieldElement, ...] = Field(
+        min_length=1, max_length=2
+    )
 
     @model_validator(mode="after")
     def require_permutation(self) -> Self:
@@ -529,6 +534,76 @@ class AutomorphismElementApplyRequest(StrictModel):
 
     automorphism: QQFieldAutomorphism
     element: SimpleNumberFieldElement
+
+
+class GaloisAutomorphismSubgroup(StrictModel):
+    """A subgroup of the exact automorphisms of one supported splitting field."""
+
+    field: QQSplittingField
+    elements: tuple[QQFieldAutomorphism, ...] = Field(min_length=1, max_length=2)
+
+    @model_validator(mode="after")
+    def require_one_parent_and_canonical_axis(self) -> Self:
+        if any(element.field != self.field for element in self.elements):
+            raise _validation_error(
+                "subgroup_parent",
+                "every subgroup automorphism must belong to the retained field",
+            )
+        permutations = tuple(element.root_permutation for element in self.elements)
+        if permutations != tuple(sorted(set(permutations))):
+            raise _validation_error(
+                "subgroup_elements",
+                "subgroup automorphisms must be unique and sorted by root action",
+            )
+        return self
+
+
+class GaloisSubgroupRequest(StrictModel):
+    """A bounded candidate subset of a degree-at-most-two automorphism group."""
+
+    field: QQSplittingField
+    elements: tuple[QQFieldAutomorphism, ...] = Field(min_length=1, max_length=2)
+
+
+class GaloisFixedFieldRequest(StrictModel):
+    subgroup: GaloisAutomorphismSubgroup
+
+
+class GaloisFixedFieldResult(StrictModel):
+    subgroup: GaloisAutomorphismSubgroup
+    fixed_field: SimpleNumberFieldPresentation
+    inclusion: SimpleNumberFieldEmbedding
+
+    @model_validator(mode="after")
+    def require_embedding_parents(self) -> Self:
+        if (
+            self.inclusion.source != self.fixed_field
+            or self.inclusion.target != self.subgroup.field.extension
+        ):
+            raise _validation_error(
+                "fixed_field_parent",
+                "fixed-field inclusion must map the reported field into the subgroup parent",
+            )
+        return self
+
+
+class IntermediateFieldStabilizerRequest(StrictModel):
+    field: QQSplittingField
+    inclusion: SimpleNumberFieldEmbedding
+
+
+class IntermediateFieldStabilizerResult(StrictModel):
+    inclusion: SimpleNumberFieldEmbedding
+    subgroup: GaloisAutomorphismSubgroup
+
+    @model_validator(mode="after")
+    def require_inclusion_parent(self) -> Self:
+        if self.inclusion.target != self.subgroup.field.extension:
+            raise _validation_error(
+                "stabilizer_parent",
+                "intermediate-field inclusion and stabilizer must share the exact extension parent",
+            )
+        return self
 
 
 class GaloisRootAxis(StrictModel):

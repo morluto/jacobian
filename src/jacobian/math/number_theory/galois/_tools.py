@@ -13,10 +13,16 @@ from jacobian.math.number_theory.galois._models import (
     AutomorphismResult,
     FrobeniusCycleRequest,
     FrobeniusCycleResult,
+    GaloisAutomorphismSubgroup,
     GaloisFactorRequest,
     GaloisFactorResult,
+    GaloisFixedFieldRequest,
+    GaloisFixedFieldResult,
     GaloisGroupRequest,
     GaloisGroupResult,
+    GaloisSubgroupRequest,
+    IntermediateFieldStabilizerRequest,
+    IntermediateFieldStabilizerResult,
     PolynomialDiscriminantRequest,
     PolynomialDiscriminantResult,
     QQFieldAutomorphism,
@@ -32,7 +38,10 @@ from jacobian.math.number_theory.galois.operations import (
     compose_automorphisms,
     frobenius_cycle,
     galois_factor,
+    galois_fixed_field,
     galois_group,
+    galois_subgroup,
+    intermediate_field_stabilizer,
     inverse_automorphism,
     polynomial_discriminant,
     solvable,
@@ -87,6 +96,20 @@ def _apply_element(
     request: AutomorphismElementApplyRequest,
 ) -> SimpleNumberFieldElement:
     return apply_automorphism_to_element(request.automorphism, request.element)
+
+
+def _subgroup(request: GaloisSubgroupRequest) -> GaloisAutomorphismSubgroup:
+    return galois_subgroup(request)
+
+
+def _fixed_field(request: GaloisFixedFieldRequest) -> GaloisFixedFieldResult:
+    return galois_fixed_field(request)
+
+
+def _intermediate_stabilizer(
+    request: IntermediateFieldStabilizerRequest,
+) -> IntermediateFieldStabilizerResult:
+    return intermediate_field_stabilizer(request)
 
 
 def _discriminant(
@@ -303,6 +326,89 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                             {"num": "3", "den": "1"},
                             {"num": "2", "den": "1"},
                         ],
+                    },
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="number_field.galois.subgroup.compute",
+        title="Validate a subgroup of a supported Galois group",
+        description=(
+            "Canonicalize a supplied subset of exact automorphisms as a subgroup "
+            "of the retained QQ splitting field. Supported fields have degree at "
+            "most two, so the complete subgroup has at most two elements. The "
+            "result retains each exact field map and its root action."
+        ),
+        request_type=GaloisSubgroupRequest,
+        result_type=GaloisAutomorphismSubgroup,
+        run=_subgroup,
+        tags=("galois-theory", "subgroup", "exact"),
+        examples=(
+            OperationExample(
+                name="full_quadratic_galois_group",
+                description="The identity and conjugation form Gal(Q(sqrt(2))/Q).",
+                input={
+                    "field": _FIELD_X2,
+                    "elements": [_AUT_X2_ID, _AUT_X2_CONJUGATION],
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="number_field.galois.fixed_field.compute",
+        title="Compute an exact Galois fixed field",
+        description=(
+            "Compute the fixed field of a typed subgroup of the exact "
+            "automorphisms of a degree-at-most-two QQ splitting field. The "
+            "result includes an exact embedding of the fixed field into the "
+            "extension, so the inclusion is preserved."
+        ),
+        request_type=GaloisFixedFieldRequest,
+        result_type=GaloisFixedFieldResult,
+        run=_fixed_field,
+        tags=("galois-theory", "fixed-field", "exact"),
+        examples=(
+            OperationExample(
+                name="quadratic_fixed_by_conjugation",
+                description="Conjugation fixes the embedded rational field in Q(sqrt(2)).",
+                input={
+                    "subgroup": {
+                        "field": _FIELD_X2,
+                        "elements": [_AUT_X2_ID, _AUT_X2_CONJUGATION],
+                    }
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="number_field.galois.intermediate_stabilizer.compute",
+        title="Compute an intermediate field stabilizer",
+        description=(
+            "Return the exact automorphisms of a degree-at-most-two QQ "
+            "splitting field that fix a supplied embedded intermediate field "
+            "pointwise. The embedding is checked by exact power-basis arithmetic."
+        ),
+        request_type=IntermediateFieldStabilizerRequest,
+        result_type=IntermediateFieldStabilizerResult,
+        run=_intermediate_stabilizer,
+        tags=("galois-theory", "intermediate-field", "stabilizer", "exact"),
+        examples=(
+            OperationExample(
+                name="stabilizer_of_rational_subfield",
+                description="Every automorphism fixes the canonical embedded QQ subfield.",
+                input={
+                    "field": _FIELD_X2,
+                    "inclusion": {
+                        "source": _QQ_EXTENSION,
+                        "target": _X2_EXTENSION,
+                        "generator_image": {
+                            "presentation": _X2_EXTENSION,
+                            "coefficients_ascending": [
+                                {"num": "0", "den": "1"},
+                                {"num": "0", "den": "1"},
+                            ],
+                        },
                     },
                 },
             ),

@@ -457,7 +457,9 @@ TOOLS = (
         description=(
             "For an integral rational quadratic form, count every integer vector "
             "in [-B,B]^n by its exact value. The result retains the ordered source "
-            "axis and form. The full vector count, evaluation work, and aggregate "
+            "axis and form, transports profile values as canonical exact decimal "
+            "integers, and admits only complete histograms whose counts cover the "
+            "declared box. The full vector count, evaluation work, and aggregate "
             "output digits are admitted before evaluating the form."
         ),
         request_type=FiniteBoxProfileRequest,
@@ -491,7 +493,8 @@ TOOLS = (
             "Return sum_x exp(2*pi*i*Q(x)/m) over the complete residue module "
             "as an exact element of QQ[zeta_m] and its determining value histogram. "
             "Integral coefficients, modulus at most 64, and at most 2,000,000 "
-            "residue vectors are required."
+            "residue vectors are required, and the retained source and canonical "
+            "output are admitted by aggregate decimal digits before enumeration."
         ),
         request_type=FiniteGaussSumRequest,
         result_type=FiniteGaussSumResult,

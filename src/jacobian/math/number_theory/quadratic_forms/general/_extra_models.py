@@ -6,7 +6,7 @@ from typing import Literal, Self
 
 from pydantic import Field, model_validator
 
-from jacobian._exact import CanonicalRational, require_bounded_rational
+from jacobian._exact import CanonicalRational, ExactInteger, require_bounded_rational
 from jacobian._models import StrictModel
 from jacobian.math._labels import OpaqueLabel
 from jacobian.math.matrices.cyclic_linear._models import (
@@ -213,14 +213,16 @@ MAX_QUADRATIC_GAUSS_MODULUS = 64
 MAX_QUADRATIC_GAUSS_STATES = 2_000_000
 MAX_QUADRATIC_GAUSS_WORK = 2_000_000
 MAX_QUADRATIC_GAUSS_SUPPORT_TERMS = 4_096
+MAX_QUADRATIC_GAUSS_OUTPUT_DIGITS = 1_000_000
 
 
 class FiniteGaussSumRequest(StrictModel):
     """The sum of exp(2*pi*i*Q(x)/m) over the complete residue module.
 
     Admission bounds the residue domain, the polynomial support (which the
-    result retains and each enumerated state evaluates), and their product
-    as kernel work before any enumeration runs.
+    result retains and each enumerated state evaluates), their product as
+    kernel work, and the retained source plus canonical output as aggregate
+    decimal digits, all before any enumeration runs.
     """
 
     form: RationalQuadraticForm
@@ -305,7 +307,7 @@ class FiniteBoxProfileRequest(StrictModel):
 
 
 class FiniteBoxProfileRow(StrictModel):
-    value: int
+    value: ExactInteger
     representation_count: int = Field(ge=1)
 
 
@@ -319,8 +321,8 @@ class FiniteBoxProfileResult(StrictModel):
     rows: tuple[FiniteBoxProfileRow, ...] = Field(
         max_length=MAX_QUADRATIC_BOX_PROFILE_ROWS
     )
-    minimum_value: int
-    maximum_value: int
+    minimum_value: ExactInteger
+    maximum_value: ExactInteger
 
     @model_validator(mode="after")
     def complete_profile_shape(self) -> Self:
@@ -328,6 +330,16 @@ class FiniteBoxProfileResult(StrictModel):
             bound != (-self.radius, self.radius) for bound in self.coordinate_bounds
         ):
             raise ValueError("coordinate bounds must match the source form axis")
+        side_length = 2 * self.radius + 1
+        expected_vectors = 1
+        for _ in self.form.axis:
+            expected_vectors *= side_length
+            if expected_vectors > MAX_QUADRATIC_BOX_VECTORS:
+                break
+        if self.vector_count != expected_vectors:
+            raise ValueError("vector count must cover the declared integer box")
+        if sum(row.representation_count for row in self.rows) != self.vector_count:
+            raise ValueError("profile counts must cover the complete vector domain")
         values = tuple(row.value for row in self.rows)
         if not values or values != tuple(sorted(set(values))):
             raise ValueError("finite-box profile values must be strictly increasing")

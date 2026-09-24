@@ -14,6 +14,7 @@ from jacobian.math.number_theory.quadratic_forms.general.extra_operations import
     finite_quadratic_gauss_sum,
 )
 from jacobian.math.number_theory.quadratic_forms.general.values import (
+    MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS,
     QuadraticCrossTerm,
     RationalQuadraticForm,
 )
@@ -135,6 +136,41 @@ def test_rejects_oversized_support_before_enumeration() -> None:
     )
     with pytest.raises(OperationResourceAdmissionError, match="support"):
         finite_quadratic_gauss_sum(FiniteGaussSumRequest(form=form, modulus=1))
+
+
+def test_rejects_retained_source_above_output_digit_envelope() -> None:
+    # Modulus 1 always enumerates a single residue state, so the state and
+    # work bounds admit this schema-valid form, but the result retains the
+    # complete 2080-term form with 256-digit coefficients: well over one
+    # megabyte of canonical decimal digits for a one-state computation.
+    axis = tuple(f"x{index}" for index in range(64))
+    tall = 10**MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS - 1
+    form = RationalQuadraticForm(
+        axis=axis,
+        diagonal_coefficients=tuple(CanonicalRational(num=tall, den=1) for _ in axis),
+        cross_terms=tuple(
+            QuadraticCrossTerm(
+                left=left,
+                right=right,
+                coefficient=CanonicalRational(num=tall, den=1),
+            )
+            for left in range(64)
+            for right in range(left + 1, 64)
+        ),
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="output digit envelope"):
+        finite_quadratic_gauss_sum(FiniteGaussSumRequest(form=form, modulus=1))
+
+
+def test_small_support_with_tall_coefficients_remains_admitted() -> None:
+    # The output envelope must not evict tall-but-small forms: 10^256-1 is
+    # divisible by 3, so every residue of Q(x) = tall*x^2 vanishes mod 3.
+    tall = 10**MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS - 1
+    result = finite_quadratic_gauss_sum(
+        FiniteGaussSumRequest(form=_form(("x",), (tall,)), modulus=3)
+    )
+    assert result.histogram == (3, 0, 0)
+    assert result.total == 3
 
 
 def test_rejects_rational_coefficients() -> None:

@@ -8,7 +8,7 @@ from math import gcd
 
 from sympy import Poly, cyclotomic_poly, symbols
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import CanonicalRational, canonical_rational_component_digits
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -33,6 +33,7 @@ from jacobian.math.number_theory.quadratic_forms.general._extra_models import (
     MAX_QUADRATIC_DIAGONALIZATION_OUTPUT_DIGITS,
     MAX_QUADRATIC_DIAGONALIZATION_OUTPUT_TOTAL_DIGITS,
     MAX_QUADRATIC_DIAGONALIZATION_WORK,
+    MAX_QUADRATIC_GAUSS_OUTPUT_DIGITS,
     MAX_QUADRATIC_GAUSS_STATES,
     MAX_QUADRATIC_GAUSS_SUPPORT_TERMS,
     MAX_QUADRATIC_GAUSS_WORK,
@@ -514,6 +515,28 @@ def finite_quadratic_gauss_sum(request: FiniteGaussSumRequest) -> FiniteGaussSum
             message="cyclotomic coefficient growth exceeds the exact output bound",
         )
 
+    # The result retains the complete source form next to the histogram and
+    # the reduced cyclotomic coordinates, so the state bound alone does not
+    # bound the canonical response. Admit the aggregate decimal digits of
+    # every retained component before any enumeration runs.
+    source_digits = sum(len(label) for label in form.axis) + 2 * sum(
+        canonical_rational_component_digits(value)
+        for value in (
+            *form.diagonal_coefficients,
+            *(term.coefficient for term in form.cross_terms),
+        )
+    )
+    growth_digits = len(str(total * max(1, coefficient_l1) ** modulus))
+    output_digits = (
+        source_digits + modulus * len(str(total)) + degree * 2 * growth_digits
+    )
+    if output_digits > MAX_QUADRATIC_GAUSS_OUTPUT_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("form", "axis"),
+            code="quadratic_form.gauss_sum.output_bound",
+            message="finite Gauss result exceeds its admitted output digit envelope",
+        )
+
     histogram, enumerated = modular_histogram(form, modulus)
     if enumerated != total:
         raise RuntimeError(
@@ -531,8 +554,6 @@ def finite_quadratic_gauss_sum(request: FiniteGaussSumRequest) -> FiniteGaussSum
                 reduced[power - degree + lower_power] -= (
                     coefficient * phi_ascending[lower_power]
                 )
-    from jacobian._exact import CanonicalRational
-
     element = RationalCyclotomicElement(
         field=RationalCyclotomicField(order=modulus),
         coefficients_ascending=tuple(

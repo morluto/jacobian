@@ -182,8 +182,10 @@ function on residue classes under this contract.
 The kernel first admits the full state count (at most 2,000,000), modulus
 (at most 64), polynomial support (at most 4096 terms, which the result
 retains and every enumerated state evaluates), their product as kernel work
-(at most 2,000,000 term evaluations), and a conservative exact
-coefficient-growth bound. It then
+(at most 2,000,000 term evaluations), a conservative exact
+coefficient-growth bound, and the retained source plus canonical output as
+aggregate decimal digits (at most 1,000,000), so a state count of one never
+admits a response that outgrows the envelope. It then
 computes the modular profile once and reduces its histogram polynomial modulo
 the canonical cyclotomic polynomial. The exact output is carried by
 `RationalCyclotomicElement`; no floating approximation or separate residue

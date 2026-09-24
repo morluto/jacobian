@@ -62,6 +62,39 @@ def test_two_step_formula_returns_exact_ordered_relation_and_roundtrips() -> Non
     assert restored.formula.free_variables == (2, 0)
 
 
+def test_formula_atoms_normalize_but_free_variable_axis_order_is_preserved() -> None:
+    structure = _structure(4, ((0, 1), (1, 2), (2, 3), (3, 0)))
+    first = PrimitivePositiveFormula(
+        variable_count=3,
+        free_variables=(2, 0),
+        atoms=(
+            {"kind": "relation", "symbol_id": "E", "variables": (0, 1)},
+            {"kind": "equality", "left": 2, "right": 1},
+            {"kind": "relation", "symbol_id": "E", "variables": (0, 1)},
+            {"kind": "equality", "left": 1, "right": 2},
+        ),
+    )
+    equivalent = PrimitivePositiveFormula(
+        variable_count=3,
+        free_variables=(2, 0),
+        atoms=(
+            {"kind": "equality", "left": 1, "right": 2},
+            {"kind": "relation", "symbol_id": "E", "variables": (0, 1)},
+        ),
+    )
+
+    assert first == equivalent
+    assert first.model_dump_json() == equivalent.model_dump_json()
+    assert len(first.atoms) == 2
+    assert first.atoms[0].kind == "equality"
+    assert first.atoms[0].left == 1
+    assert first.atoms[0].right == 2
+    assert first.free_variables == (2, 0)
+    assert evaluate_pp_formula(structure, first).tuples == evaluate_pp_formula(
+        structure, equivalent
+    ).tuples
+
+
 def test_equality_nullary_atoms_and_empty_carrier_semantics() -> None:
     structure = _structure(2, ((0, 1),), proposition=True)
     same_endpoint = PrimitivePositiveFormula(
@@ -187,8 +220,21 @@ def test_evaluation_admits_coordinate_work_separately_from_atom_checks() -> None
         variable_count=5,
         free_variables=(),
         atoms=tuple(
-            {"kind": "relation", "symbol_id": "Q", "variables": (0, 1, 2, 3)}
-            for _ in range(8)
+            {
+                "kind": "relation",
+                "symbol_id": "Q",
+                "variables": variables,
+            }
+            for variables in (
+                (0, 1, 2, 3),
+                (0, 1, 3, 2),
+                (0, 2, 1, 3),
+                (0, 2, 3, 1),
+                (0, 3, 1, 2),
+                (0, 3, 2, 1),
+                (1, 0, 2, 3),
+                (1, 0, 3, 2),
+            )
         ),
     )
     with pytest.raises(OperationResourceAdmissionError, match="coordinate steps"):

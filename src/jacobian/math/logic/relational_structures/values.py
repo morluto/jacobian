@@ -214,11 +214,118 @@ class PrimitivePositiveFormula(StrictModel):
     ``free_variables`` are ordered result axes; every other declared variable
     is existentially quantified. An empty conjunction is true, which also
     allows a sentence to express existence of isolated quantified variables.
+    The atom tuple is a canonical conjunction presentation: equality endpoints
+    are ordered, duplicate atoms are removed, and atoms are sorted. This does
+    not reorder variable axes or terms of relation atoms.
     """
 
     variable_count: StrictInt = Field(ge=0, le=MAX_PP_VARIABLES)
-    free_variables: tuple[StrictInt, ...] = Field(max_length=MAX_PP_VARIABLES)
-    atoms: tuple[PPAtom, ...] = Field(max_length=MAX_PP_ATOMS)
+    free_variables: tuple[StrictInt, ...] = Field(
+        max_length=MAX_PP_VARIABLES,
+        description=(
+            "Distinct declared variables in result-axis order; all other "
+            "declared variables are existentially quantified."
+        ),
+    )
+    atoms: tuple[PPAtom, ...] = Field(
+        max_length=MAX_PP_ATOMS,
+        description=(
+            "Conjunctive relation/equality atoms. Construction sorts and "
+            "deduplicates atoms and orders equality endpoints; relation "
+            "argument and free-variable axis order are preserved."
+        ),
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def canonicalize_conjunction(cls, data: object) -> object:
+        """Normalize only a bounded, fully well-shaped raw atom sequence.
+
+        Overlong or malformed syntax is left untouched for the typed field
+        validators to reject; in particular, no sorting or deduplication runs
+        before the input atom-count ceiling has been checked.
+        """
+
+        if not isinstance(data, Mapping) or "atoms" not in data:
+            return data
+        atoms = data["atoms"]
+        if not isinstance(atoms, (list, tuple)) or len(atoms) > MAX_PP_ATOMS:
+            return data
+
+        keyed_atoms: list[tuple[tuple[object, ...], object]] = []
+        for atom in atoms:
+            if isinstance(atom, PPRelationAtom):
+                symbol_id = atom.symbol_id
+                variables = atom.variables
+                if type(symbol_id) is not str or any(type(v) is not int for v in variables):
+                    return data
+                key = ("relation", symbol_id, tuple(variables), 0, 0)
+                value: object = {
+                    "kind": "relation",
+                    "symbol_id": symbol_id,
+                    "variables": tuple(variables),
+                }
+            elif isinstance(atom, PPEqualityAtom):
+                left, right = sorted((atom.left, atom.right))
+                key = ("equality", "", (), left, right)
+                value = {"kind": "equality", "left": left, "right": right}
+            elif isinstance(atom, Mapping):
+                if len(atom) > 3:
+                    return data
+                kind = atom.get("kind")
+                if kind == "relation" and set(atom) == {
+                    "kind",
+                    "symbol_id",
+                    "variables",
+                }:
+                    symbol_id = atom["symbol_id"]
+                    variables = atom["variables"]
+                    if (
+                        type(symbol_id) is not str
+                        or not isinstance(variables, (list, tuple))
+                        or len(variables) > MAX_RELATIONAL_ARITY
+                        or any(type(variable) is not int for variable in variables)
+                    ):
+                        return data
+                    variables = tuple(variables)
+                    key = ("relation", symbol_id, variables, 0, 0)
+                    value = {
+                        "kind": "relation",
+                        "symbol_id": symbol_id,
+                        "variables": variables,
+                    }
+                elif kind == "equality" and set(atom) == {
+                    "kind",
+                    "left",
+                    "right",
+                }:
+                    left, right = atom["left"], atom["right"]
+                    if type(left) is not int or type(right) is not int:
+                        return data
+                    left, right = sorted((left, right))
+                    key = ("equality", "", (), left, right)
+                    value = {"kind": "equality", "left": left, "right": right}
+                else:
+                    return data
+            else:
+                return data
+            keyed_atoms.append((key, value))
+
+        normalized = tuple(
+            value
+            for _, value in sorted(
+                dict(keyed_atoms).items(), key=lambda item: item[0]
+            )
+        )
+        canonical = dict(data)
+        free_variables = canonical.get("free_variables")
+        if (
+            isinstance(free_variables, list)
+            and len(free_variables) <= MAX_PP_VARIABLES
+        ):
+            canonical["free_variables"] = tuple(free_variables)
+        canonical["atoms"] = normalized
+        return canonical
 
     @model_validator(mode="after")
     def require_valid_variable_axes(self) -> Self:

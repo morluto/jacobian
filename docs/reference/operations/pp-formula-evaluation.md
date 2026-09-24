@@ -9,6 +9,14 @@ existentially quantified. A relation atom must name a symbol in the exact
 structure signature and use exactly its declared arity. An empty conjunction
 is true, including the empty tuple for a true sentence.
 
+Formula construction canonicalizes the conjunction: it orders equality
+endpoints, removes repeated atoms, and sorts the remaining atoms
+deterministically. The public input allows at most 64 atoms before this
+normalization. Relation-atom term order is preserved, and the explicit
+free-variable axis order remains part of the formula value. Thus equivalent
+atom orderings and repetitions have the same serialized formula value without
+quotienting variable renamings or result-axis permutations.
+
 The `PPDefinedRelation` value retains the source structure, formula, and sorted
 unique tuple table. Its tuple coordinates follow the formula's free-variable
 order. This relation is an exact finite value after serialization; it does not

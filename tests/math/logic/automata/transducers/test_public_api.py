@@ -19,6 +19,7 @@ def test_exact_public_api_symbols() -> None:
         "identity_transducer",
         "invert_rational",
         "minimize_subsequential",
+        "project_rational_relation",
         "reachable_state_witnesses",
         "reachable_states",
         "replay_rational_path",

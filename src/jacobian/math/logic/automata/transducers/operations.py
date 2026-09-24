@@ -38,6 +38,13 @@ from jacobian.math.logic.automata.transducers.values import (
     SubsequentialTransducer,
     alphabet_parent_mismatch,
 )
+from jacobian.math.logic.languages.regular.values import (
+    MAX_NFA_OUTPUT_BYTES,
+    MAX_NFA_STATES,
+    MAX_NFA_TRANSITIONS,
+    NFA,
+    NFATransition,
+)
 from jacobian.math.logic.languages.words.values import WordMorphism
 
 
@@ -67,6 +74,7 @@ __all__ = [
     "identity_transducer",
     "invert_rational",
     "minimize_subsequential",
+    "project_rational_relation",
     "reachable_state_witnesses",
     "reachable_states",
     "replay_rational_path",
@@ -83,6 +91,7 @@ MAX_MINIMIZE_SAMPLE_WORDS = 20000
 MAX_MORPHISM_TRANSITION_CELLS = 32 * 512
 MAX_MORPHISM_TRANSDUCER_BYTES = 128 * 1024
 MAX_FST_IDENTITY_RESULT_BYTES = 64 * 1024
+MAX_RATIONAL_PROJECTION_WORK = 4_000_000
 
 
 def _reject(code: str, message: str, *location: str) -> None:
@@ -872,6 +881,134 @@ def invert_rational(
             )
             for e in transducer.edges
         ),
+    )
+
+
+def project_rational_relation(
+    transducer: RationalTransducer,
+    tape: Literal["input", "output"],
+) -> NFA:
+    """Return the regular projection of a finite rational relation.
+
+    Every accepting transducer path contributes its selected tape word.  The
+    result remains nondeterministic: distinct paths and multiple words on the
+    other tape are not collapsed by pretending the relation is a function.
+    Empty edge labels become epsilon transitions, and multi-symbol labels are
+    expanded into paths with fresh intermediate states.
+    """
+    transducer = _admit_rational_transducer(transducer)
+    if tape not in ("input", "output"):
+        _reject("projection_tape", "tape must be 'input' or 'output'", "tape")
+
+    is_input = tape == "input"
+    alphabet_size = (
+        transducer.input_alphabet_size if is_input else transducer.output_alphabet_size
+    )
+    alphabet_id = (
+        transducer.input_alphabet_id if is_input else transducer.output_alphabet_id
+    )
+    alphabet = transducer.input_alphabet if is_input else transducer.output_alphabet
+    alphabet_context_bytes = 128
+    if alphabet is not None:
+        alphabet_context_bytes += sum(
+            6 * len(symbol) + 2 for symbol in alphabet.symbols
+        )
+    if alphabet_id is not None:
+        alphabet_context_bytes += 6 * len(alphabet_id) + 2
+    labels = tuple(
+        edge.input_label if is_input else edge.output_label for edge in transducer.edges
+    )
+    label_cells = sum(map(len, labels))
+    bridge_count = (
+        len(transducer.initial_states) if len(transducer.initial_states) > 1 else 0
+    )
+    state_count = transducer.state_count + (1 if bridge_count else 0)
+    transition_count = bridge_count
+    for label in labels:
+        if label:
+            state_count += len(label) - 1
+            transition_count += len(label)
+        else:
+            transition_count += 1
+
+    # Account for the canonical value, each expanded state/edge, source labels,
+    # and the construction passes before allocating the result lists.
+    work_bound = (
+        transducer.state_count
+        + len(transducer.edges)
+        + label_cells
+        + state_count
+        + transition_count
+    )
+    output_bytes_bound = (
+        state_count * 32
+        + transition_count * 128
+        + label_cells * 8
+        + alphabet_context_bytes
+        + 1024
+    )
+    if (
+        state_count > MAX_NFA_STATES
+        or transition_count > MAX_NFA_TRANSITIONS
+        or work_bound > MAX_RATIONAL_PROJECTION_WORK
+        or output_bytes_bound > MAX_NFA_OUTPUT_BYTES
+    ):
+        raise OperationResourceAdmissionError(
+            location=("transducer", "tape"),
+            code="finite_state_transducer.relation_projection_bound_exceeded",
+            message="rational relation projection exceeds its NFA expansion bound",
+        )
+
+    initial_state = (
+        transducer.state_count if bridge_count else transducer.initial_states[0]
+    )
+    next_state = transducer.state_count + (1 if bridge_count else 0)
+    transitions: list[NFATransition] = []
+    if bridge_count:
+        for source in transducer.initial_states:
+            transitions.append(
+                NFATransition(
+                    transition_id=len(transitions),
+                    source=initial_state,
+                    symbol=None,
+                    target=source,
+                )
+            )
+
+    for edge, label in zip(transducer.edges, labels, strict=True):
+        if not label:
+            transitions.append(
+                NFATransition(
+                    transition_id=len(transitions),
+                    source=edge.source,
+                    symbol=None,
+                    target=edge.target,
+                )
+            )
+            continue
+        source = edge.source
+        for index, symbol in enumerate(label):
+            target = edge.target if index == len(label) - 1 else next_state
+            transitions.append(
+                NFATransition(
+                    transition_id=len(transitions),
+                    source=source,
+                    symbol=symbol,
+                    target=target,
+                )
+            )
+            if target == next_state:
+                next_state += 1
+            source = target
+
+    return NFA(
+        state_count=state_count,
+        alphabet_size=alphabet_size,
+        alphabet_id=alphabet_id,
+        alphabet=alphabet,
+        transitions=tuple(transitions),
+        initial_state=initial_state,
+        accepting_states=tuple(sorted(transducer.accepting_states)),
     )
 
 

@@ -745,6 +745,13 @@ class RationalRelationInverseRequest(StrictModel):
     transducer: RationalTransducer
 
 
+class RationalRelationProjectionRequest(StrictModel):
+    """Project one tape of a finite rational relation to a regular language."""
+
+    transducer: RationalTransducer
+    tape: Literal["input", "output"]
+
+
 class RelationPathReplayResult(RelationPathReplayRequest):
     status: Literal["ACCEPTING_PAIR", "INVALID_PATH"]
     input_word: tuple[int, ...] = Field(max_length=MAX_FST_RESULT_WORD_LENGTH)
@@ -817,6 +824,7 @@ __all__ = [
     "MinimizeRequest",
     "MinimizeResult",
     "RationalRelationInverseRequest",
+    "RationalRelationProjectionRequest",
     "RelationPathReplayRequest",
     "RelationPathReplayResult",
     "StatePairDistinguishability",

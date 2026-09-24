@@ -755,6 +755,7 @@ class TestNativeTransformations:
         assert {tool.operation_id for tool in TOOLS} == {
             "transducer.relation.inverse.compute",
             "transducer.relation.path.replay.compute",
+            "transducer.relation.projection.compute",
             "transducer.subsequential.compose.compute",
             "transducer.subsequential.from_word_morphism.compute",
             "transducer.subsequential.identity.compute",

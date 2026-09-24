@@ -36,6 +36,20 @@ initial and accepting sets, and edge order. This is a typed relation transform;
 applying it twice recovers the original canonical relation. Its work and result
 size are linear in the already bounded relation representation.
 
+`transducer.relation.projection.compute` consumes a `RationalTransducer` and
+selects either its `input` or `output` tape. It returns an epsilon-NFA accepting
+exactly the selected words contributed by accepting relation paths. The two
+alphabets are carried separately by the relation, and the result preserves the
+selected side's alphabet size, explicit ordered symbols, and optional identity.
+Multiple paths and multiple outputs for one input remain relational choices;
+the operation does not turn a nondeterministic relation into a function. A
+zero-length selected edge label becomes epsilon, while a longer label becomes
+a path with fresh intermediate states. Multiple initial states are joined by
+epsilon edges from one fresh NFA start state. State, transition, work, and
+result-byte estimates are admitted before expanded NFA transitions are built.
+The construction is checked against an independent accepting-path enumerator
+on finite acyclic relations and against inverse-relation projection identities.
+
 `transducer.subsequential.from_word_morphism.compute` converts a bounded
 `WordMorphism` into a one-state total transducer. The source and target alphabet
 orders are preserved as explicit alphabet contexts. Every source symbol has a

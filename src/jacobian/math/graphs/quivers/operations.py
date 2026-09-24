@@ -51,9 +51,9 @@ def vertex_profiles(quiver: FiniteQuiver) -> VertexProfilesResult:
 
 
 def fixed_length_paths(quiver: FiniteQuiver, length: int) -> FixedLengthPathsResult:
-    """Count paths of fixed length between all vertex pairs using matrix powers."""
+    """Count paths of fixed length between all vertex pairs exactly."""
     try:
-        fixed_length_paths_envelope(
+        envelope = fixed_length_paths_envelope(
             vertex_count=quiver.vertex_count,
             arrow_count=len(quiver.arrows),
             length=length,
@@ -65,13 +65,14 @@ def fixed_length_paths(quiver: FiniteQuiver, length: int) -> FixedLengthPathsRes
             message=str(error),
         ) from error
     n = quiver.vertex_count
-    matrix = [[0] * n for _ in range(n)]
-    for source, target in quiver.arrows:
-        matrix[source][target] += 1
-
     if length == 0:
         result = [[1 if i == j else 0 for j in range(n)] for i in range(n)]
+    elif envelope.method == "sparse":
+        result = _sparse_path_counts(n, quiver.arrows, length)
     else:
+        matrix = [[0] * n for _ in range(n)]
+        for source, target in quiver.arrows:
+            matrix[source][target] += 1
         result = matrix
         for _ in range(length - 1):
             result = _matrix_multiply(result, matrix)
@@ -83,6 +84,25 @@ def fixed_length_paths(quiver: FiniteQuiver, length: int) -> FixedLengthPathsRes
         path_matrix=_integer_matrix(result),
         total_paths=total,
     )
+
+
+def _sparse_path_counts(
+    vertex_count: int, arrows: tuple[tuple[int, int], ...], length: int
+) -> list[list[int]]:
+    """Apply the adjacency relation to each source row once per step."""
+    if not arrows:
+        return [[0] * vertex_count for _ in range(vertex_count)]
+    rows = [
+        [int(source == target) for target in range(vertex_count)]
+        for source in range(vertex_count)
+    ]
+    for _ in range(length):
+        next_rows = [[0] * vertex_count for _ in range(vertex_count)]
+        for source in range(vertex_count):
+            for tail, head in arrows:
+                next_rows[source][head] += rows[source][tail]
+        rows = next_rows
+    return rows
 
 
 def _matrix_multiply(a: list[list[int]], b: list[list[int]]) -> list[list[int]]:

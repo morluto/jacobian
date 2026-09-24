@@ -343,8 +343,25 @@ def function_field_base_embedding_apply(
             code="function_field.base_embedding_request_type",
             message="embedding and element must be function-field values",
         )
-    embedding = FunctionFieldBaseEmbedding.model_validate(embedding.model_dump())
-    element = FiniteFunctionFieldElement.model_validate(element.model_dump())
+    # A model_construct carrier bypasses Pydantic's nested checks, so
+    # re-admission may fail while dumping or revalidating.  Translate those
+    # malformed native values into the operation's stable domain errors.
+    try:
+        embedding = FunctionFieldBaseEmbedding.model_validate(embedding.model_dump())
+    except (ValidationError, AttributeError, KeyError, TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("embedding",),
+            code="function_field.invalid_base_embedding",
+            message="embedding has malformed field, target, or variable-image data",
+        ) from exc
+    try:
+        element = FiniteFunctionFieldElement.model_validate(element.model_dump())
+    except (ValidationError, AttributeError, KeyError, TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("element",),
+            code="function_field.invalid_element",
+            message="element has malformed coordinate data",
+        ) from exc
     if element.field != embedding.source:
         raise OperationDomainValidationError(
             location=("element", "field"),
@@ -1288,7 +1305,15 @@ def function_field_place_residue(
         coordinate.denominator.coefficients,
         prime,
     )
-    valuation = _rf_valuation(_from_internal_rational_function(rational, prime), place)
+    # A valuation routine cannot express the zero rational function, whose
+    # valuation is infinite.  Zero is regular at every place with residue
+    # zero, so detect it before the finite order-division loop.
+    if not any(rational[0]):
+        valuation = 0
+    else:
+        valuation = _rf_valuation(
+            _from_internal_rational_function(rational, prime), place
+        )
     if valuation < 0:
         raise OperationDomainValidationError(
             location=("element",),
@@ -1856,7 +1881,9 @@ def _preflight_riemann_roch_profile(
         contribution = multiplicity * prime_polynomial.degree
         if contribution > 0:
             finite_positive_degree += contribution
-            if prime_polynomial.coefficients == (0, 1):
+            # The place contract permits any prime associate, so recognize the
+            # x place by its monic representative, matching _admit_divisor.
+            if _monic_polynomial(prime_polynomial).coefficients == (0, 1):
                 positive_x_multiplicity = multiplicity
         else:
             finite_negative_degree -= contribution

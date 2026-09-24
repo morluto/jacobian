@@ -9,7 +9,10 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import DecimalIntegerEncoding
 from jacobian._models import StrictModel
-from jacobian.math.finite_fields.values import FiniteFieldElement
+from jacobian.math.finite_fields.values import (
+    FiniteFieldElement,
+    FiniteFieldPresentation,
+)
 
 MAX_CHARACTERISTIC = 257
 MAX_EXTENSION_DEGREE = 6
@@ -203,6 +206,68 @@ class FunctionFieldPlace(StrictModel):
             raise _validation_error(
                 "infinite_place_shape",
                 "the infinite place has degree one and no prime polynomial",
+            )
+        return self
+
+
+class HyperellipticAffinePlace(StrictModel):
+    """A rational affine point on a supported odd-characteristic y^2=f(x) model."""
+
+    field: FiniteFunctionField
+    x: int = Field(ge=0)
+    y: int = Field(ge=0)
+    local_parameter: Literal["x_minus_x0", "y"]
+    residue_field: FiniteFieldPresentation
+
+    @model_validator(mode="after")
+    def require_canonical_point_shape(self) -> Self:
+        prime = self.field.characteristic
+        if self.x >= prime or self.y >= prime:
+            raise _validation_error(
+                "affine_point_coordinates",
+                "affine coordinates must be canonical residues of the characteristic",
+            )
+        if (
+            self.residue_field.characteristic != prime
+            or self.residue_field.modulus_coefficients != (0, 1)
+        ):
+            raise _validation_error(
+                "affine_place_residue_parent",
+                "a rational affine point has residue parent GF(p) with modulus z",
+            )
+        if (self.y == 0) != (self.local_parameter == "y"):
+            raise _validation_error(
+                "affine_place_uniformizer",
+                "use y at a branch point and x-x0 when y is nonzero",
+            )
+        return self
+
+
+class HyperellipticAffinePlaceValuationRequest(StrictModel):
+    place: HyperellipticAffinePlace
+    element: FiniteFunctionFieldElement
+
+    @model_validator(mode="after")
+    def require_shared_parent(self) -> Self:
+        if self.place.field != self.element.field:
+            raise _validation_error(
+                "affine_valuation_parent_mismatch",
+                "the point and function element must share the exact function field",
+            )
+        return self
+
+
+class HyperellipticAffinePlaceValuationResult(StrictModel):
+    place: HyperellipticAffinePlace
+    element: FiniteFunctionFieldElement
+    valuation: int | None
+
+    @model_validator(mode="after")
+    def require_shared_parent(self) -> Self:
+        if self.place.field != self.element.field:
+            raise _validation_error(
+                "affine_valuation_parent_mismatch",
+                "the point and function element must retain the exact function field",
             )
         return self
 

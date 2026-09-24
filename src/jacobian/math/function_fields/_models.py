@@ -243,6 +243,26 @@ class HyperellipticAffinePlace(StrictModel):
         return self
 
 
+class HyperellipticInfinityPlace(StrictModel):
+    """The unique degree-one place at infinity on an odd-degree model."""
+
+    field: FiniteFunctionField
+    residue_field: FiniteFieldPresentation
+
+    @model_validator(mode="after")
+    def require_prime_constant_residue(self) -> Self:
+        prime = self.field.characteristic
+        if (
+            self.residue_field.characteristic != prime
+            or self.residue_field.modulus_coefficients != (0, 1)
+        ):
+            raise _validation_error(
+                "infinity_place_residue_parent",
+                "the odd-degree point at infinity is rational over GF(p)",
+            )
+        return self
+
+
 class HyperellipticAffinePlaceValuationRequest(StrictModel):
     place: HyperellipticAffinePlace
     element: FiniteFunctionFieldElement
@@ -253,6 +273,20 @@ class HyperellipticAffinePlaceValuationRequest(StrictModel):
             raise _validation_error(
                 "affine_valuation_parent_mismatch",
                 "the point and function element must share the exact function field",
+            )
+        return self
+
+
+class HyperellipticInfinityPlaceValuationRequest(StrictModel):
+    place: HyperellipticInfinityPlace
+    element: FiniteFunctionFieldElement
+
+    @model_validator(mode="after")
+    def require_shared_parent(self) -> Self:
+        if self.place.field != self.element.field:
+            raise _validation_error(
+                "infinity_valuation_parent_mismatch",
+                "the place and function element must share the exact function field",
             )
         return self
 
@@ -287,6 +321,21 @@ class HyperellipticAffinePlaceValuationResult(StrictModel):
             raise _validation_error(
                 "affine_valuation_parent_mismatch",
                 "the point and function element must retain the exact function field",
+            )
+        return self
+
+
+class HyperellipticInfinityPlaceValuationResult(StrictModel):
+    place: HyperellipticInfinityPlace
+    element: FiniteFunctionFieldElement
+    valuation: FunctionFieldValuation
+
+    @model_validator(mode="after")
+    def require_shared_parent(self) -> Self:
+        if self.place.field != self.element.field:
+            raise _validation_error(
+                "infinity_valuation_parent_mismatch",
+                "the place and function element must retain the exact function field",
             )
         return self
 

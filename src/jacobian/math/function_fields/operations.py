@@ -81,6 +81,8 @@ from jacobian.math.function_fields._models import (
     FunctionFieldValuation,
     HyperellipticAffinePlace,
     HyperellipticAffinePlaceValuationResult,
+    HyperellipticInfinityPlace,
+    HyperellipticInfinityPlaceValuationResult,
     PrimeFieldPolynomial,
     PrimeFieldRationalFunction,
 )
@@ -1504,6 +1506,85 @@ def function_field_hyperelliptic_affine_valuation(
         valuation=_function_field_valuation(
             numerator_order - ramification_index * denominator_order
         ),
+    )
+
+
+def function_field_hyperelliptic_infinity_valuation(
+    place: HyperellipticInfinityPlace,
+    element: FiniteFunctionFieldElement,
+) -> HyperellipticInfinityPlaceValuationResult:
+    """Value a quadratic hyperelliptic function at its odd-degree infinity.
+
+    For odd ``d = deg(f)``, the unique place over infinity has
+    ``v(x)=-2`` and ``v(y)=-d``. For ``a(x)+b(x)y``, the two nonzero
+    summands have valuations of opposite parity, so their leading terms
+    cannot cancel. The valuation is therefore their minimum.
+    """
+
+    if not isinstance(place, HyperellipticInfinityPlace):
+        raise OperationDomainValidationError(
+            location=("place",),
+            code="function_field.infinity_place_type",
+            message="place must be the typed hyperelliptic point at infinity",
+        )
+    try:
+        place = HyperellipticInfinityPlace.model_validate(place.model_dump())
+    except (ValidationError, AttributeError, KeyError, TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("place",),
+            code="function_field.invalid_infinity_place",
+            message="infinity place has malformed field or residue-parent data",
+        ) from exc
+    field = _validated_field(place.field)
+    _admit_field(field)
+    branch = _hyperelliptic_branch_polynomial(field)
+    if branch is None or (len(branch) - 1) % 2 == 0:
+        raise OperationDomainValidationError(
+            location=("place", "field"),
+            code="function_field.odd_hyperelliptic_infinity_required",
+            message=(
+                "the represented unique rational point at infinity requires an "
+                "odd-degree squarefree hyperelliptic model"
+            ),
+        )
+    if not isinstance(element, FiniteFunctionFieldElement):
+        raise OperationDomainValidationError(
+            location=("element",),
+            code="function_field.element_type",
+            message="element must be a finite function-field element value",
+        )
+    try:
+        element = FiniteFunctionFieldElement.model_validate(element.model_dump())
+    except (ValidationError, AttributeError, KeyError, TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("element",),
+            code="function_field.invalid_element",
+            message="element has malformed coordinate data",
+        ) from exc
+    if element.field != field:
+        raise OperationDomainValidationError(
+            location=("element", "field"),
+            code="function_field.parent_mismatch",
+            message="place and element must retain the identical function field",
+        )
+    element = _canonical_element(element, field)
+    degree_y = len(branch) - 1
+    valuations: list[int] = []
+    for coordinate_index, coordinate in enumerate(element.coordinates):
+        if coordinate.numerator.is_zero():
+            continue
+        rational_order = (
+            coordinate.denominator.degree - coordinate.numerator.degree
+        )
+        term_value = 2 * rational_order
+        if coordinate_index == 1:
+            term_value -= degree_y
+        valuations.append(term_value)
+    value = min(valuations) if valuations else None
+    return HyperellipticInfinityPlaceValuationResult(
+        place=place,
+        element=element,
+        valuation=_function_field_valuation(value),
     )
 
 

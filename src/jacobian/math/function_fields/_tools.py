@@ -35,6 +35,8 @@ from jacobian.math.function_fields._models import (
     FunctionFieldRiemannRochSpaceRequest,
     HyperellipticAffinePlaceValuationRequest,
     HyperellipticAffinePlaceValuationResult,
+    HyperellipticInfinityPlaceValuationRequest,
+    HyperellipticInfinityPlaceValuationResult,
 )
 from jacobian.math.function_fields.operations import (
     function_field_base_embedding,
@@ -49,6 +51,7 @@ from jacobian.math.function_fields.operations import (
     function_field_element_multiply,
     function_field_genus,
     function_field_hyperelliptic_affine_valuation,
+    function_field_hyperelliptic_infinity_valuation,
     function_field_place_residue,
     function_field_place_valuation,
     function_field_principal_divisor,
@@ -166,6 +169,13 @@ _RATIONAL_X = {
         }
     ],
 }
+_GF5_HYPERELLIPTIC_Y = {
+    "field": _GF5_HYPERELLIPTIC_FIELD,
+    "coordinates": [
+        _rational_function([0], [1], characteristic=5),
+        _rational_function([1], [1], characteristic=5),
+    ],
+}
 _X_DIVISOR = {
     "field": _RATIONAL_FIELD,
     "terms": [
@@ -201,6 +211,14 @@ def _run_hyperelliptic_affine_valuation(
     request: HyperellipticAffinePlaceValuationRequest,
 ) -> HyperellipticAffinePlaceValuationResult:
     return function_field_hyperelliptic_affine_valuation(
+        request.place, request.element
+    )
+
+
+def _run_hyperelliptic_infinity_valuation(
+    request: HyperellipticInfinityPlaceValuationRequest,
+) -> HyperellipticInfinityPlaceValuationResult:
+    return function_field_hyperelliptic_infinity_valuation(
         request.place, request.element
     )
 
@@ -516,6 +534,41 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                             _rational_function([1], [1], characteristic=5),
                         ],
                     },
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="function_field.hyperelliptic_infinity_place.valuation.compute",
+        title="Compute a hyperelliptic valuation at infinity",
+        description=(
+            "Compute an exact valuation at the unique GF(p)-rational point at "
+            "infinity of an odd-characteristic squarefree model y^2=f(x) with "
+            "odd deg(f). The place retains the exact curve and GF(p) residue "
+            "parent; finite values include zero and the zero element returns "
+            "the structural POSITIVE_INFINITY branch."
+        ),
+        request_type=HyperellipticInfinityPlaceValuationRequest,
+        result_type=HyperellipticInfinityPlaceValuationResult,
+        run=_run_hyperelliptic_infinity_valuation,
+        tags=("function-field", "hyperelliptic", "infinite-place", "valuation", "exact"),
+        examples=(
+            OperationExample(
+                name="valuation_of_y_at_odd_degree_infinity",
+                description=(
+                    "For y^2=x^3-x over GF(5), the unique point at infinity has "
+                    "v(x)=-2 and v(y)=-3."
+                ),
+                input={
+                    "place": {
+                        "field": _GF5_HYPERELLIPTIC_FIELD,
+                        "residue_field": {
+                            "characteristic": "5",
+                            "modulus_coefficients": ["0", "1"],
+                            "generator": "z",
+                        },
+                    },
+                    "element": _GF5_HYPERELLIPTIC_Y,
                 },
             ),
         ),

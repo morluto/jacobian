@@ -1,6 +1,7 @@
 # Number theory operations
 
 - [Rational function-field genus](function-field-genus.md)
+- [Odd-degree hyperelliptic valuation at infinity](function-field-hyperelliptic-infinity-valuation.md)
 - [Rational affine hyperelliptic valuations](hyperelliptic-affine-valuations.md)
 - [Level-one named modular-form q-expansions](modular-forms-level-one-q-expansions.md)
 - [Function-field divisor effective parts](function-field-divisor-effective-parts.md)

@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
+import json
+
 from pydantic import model_validator
 
 from jacobian._models import StrictModel
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.topology.chain_complexes.operations import homology_groups
 from jacobian.math.topology.chain_complexes.values import (
+    MAX_OPERATION_MATRIX_CELLS,
     ChainComplexValue,
     CoefficientRing,
     HomologyGroup,
@@ -15,6 +21,30 @@ from jacobian.math.topology.chain_complexes.values import (
 )
 from jacobian.math.topology.simplicial_sets._models import FiniteTruncatedSimplicialSet
 from jacobian.math.topology.simplicial_sets.operations import from_tables
+
+MAX_NORMALIZED_CHAIN_OUTPUT_BYTES = 256_000
+_NORMALIZED_CHAIN_OUTPUT_OVERHEAD = 4_096
+
+
+def _normalized_output_byte_bound(
+    simplicial_set: FiniteTruncatedSimplicialSet, matrix_cells: int
+) -> int:
+    """Bound retained source, repeated label axes, and dense integer matrices."""
+    source_bytes = len(simplicial_set.model_dump_json().encode("utf-8"))
+    # ensure_ascii bounds Unicode label expansion in the repeated basis axes.
+    basis_bytes = len(
+        json.dumps(
+            simplicial_set.sets, ensure_ascii=True, separators=(",", ":")
+        ).encode("utf-8")
+    )
+    # Boundary coefficients have magnitude at most N+1, with N<=4. Four
+    # characters per matrix cell cover signed entries and their comma.
+    return (
+        _NORMALIZED_CHAIN_OUTPUT_OVERHEAD
+        + source_bytes
+        + basis_bytes
+        + 4 * matrix_cells
+    )
 
 
 class SimplicialMapRequest(StrictModel):
@@ -139,10 +169,43 @@ class NormalizedChainsRequest(StrictModel):
 
 
 class NormalizedChainsResult(StrictModel):
+    """Reusable normalized chain complex with exact nondegenerate axes."""
+
     simplicial_set: FiniteTruncatedSimplicialSet
-    nondegenerate_counts: tuple[int, ...]
-    boundary_matrices: tuple[tuple[tuple[int, ...], ...], ...]
-    differential_squared_zero: bool
+    nondegenerate_bases: tuple[tuple[str, ...], ...]
+    chain_complex: ChainComplexValue
+
+    @model_validator(mode="after")
+    def require_source_bound_chain_axes(self):
+        if len(self.nondegenerate_bases) != self.simplicial_set.max_degree + 1:
+            raise ValueError("nondegenerate bases must cover every source degree")
+        expected_bases = []
+        for degree, level in enumerate(self.simplicial_set.sets):
+            degenerate = {
+                simplex
+                for row in (
+                    self.simplicial_set.degeneracy_maps[degree - 1] if degree else ()
+                )
+                for simplex in row
+            }
+            expected_bases.append(
+                tuple(
+                    label
+                    for index, label in enumerate(level)
+                    if index not in degenerate
+                )
+            )
+        if tuple(expected_bases) != self.nondegenerate_bases:
+            raise ValueError("normalized axes do not match source degeneracies")
+        value = self.chain_complex
+        if (
+            value.degree_min != 0
+            or value.degree_max != self.simplicial_set.max_degree
+            or value.basis_sizes != tuple(map(len, self.nondegenerate_bases))
+            or value.coefficient_ring is not CoefficientRing.INTEGER
+        ):
+            raise ValueError("chain complex must use the normalized source axes")
+        return self
 
 
 class NormalizedHomologyResult(StrictModel):
@@ -248,6 +311,30 @@ def simplicial_map(request: SimplicialMapRequest) -> SimplicialMapResult:
 def normalized_chains(
     simplicial_set: FiniteTruncatedSimplicialSet,
 ) -> NormalizedChainsResult:
+    source_sizes = tuple(len(level) for level in simplicial_set.sets)
+    cells = sum(
+        source_sizes[degree - 1] * source_sizes[degree]
+        for degree in range(1, len(source_sizes))
+    )
+    if cells > MAX_OPERATION_MATRIX_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("simplicial_set",),
+            code="simplicial_set.normalized_chain_matrix_budget_exceeded",
+            message=(
+                f"normalized boundary matrices may require {cells} cells, "
+                f"exceeding the {MAX_OPERATION_MATRIX_CELLS}-cell construction bound"
+            ),
+        )
+    output_bound = _normalized_output_byte_bound(simplicial_set, cells)
+    if output_bound > MAX_NORMALIZED_CHAIN_OUTPUT_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("simplicial_set",),
+            code="simplicial_set.normalized_chain_output_budget_exceeded",
+            message=(
+                f"estimated normalized chain result size {output_bound} bytes "
+                f"exceeds the {MAX_NORMALIZED_CHAIN_OUTPUT_BYTES}-byte output bound"
+            ),
+        )
     checked = from_tables(
         simplicial_set.max_degree,
         simplicial_set.sets,
@@ -288,11 +375,27 @@ def normalized_chains(
             for r in range(len(a))
         ]
         square = square and all(v == 0 for row in prod for v in row)
+    if not square:
+        raise OperationDomainValidationError(
+            location=("simplicial_set",),
+            code="simplicial_set.normalized_chain_identity_failed",
+            message="normalized differential does not square to zero",
+        )
+    bases = tuple(
+        tuple(s.sets[degree][index] for index in row)
+        for degree, row in enumerate(nd)
+    )
+    chain = ChainComplexValue(
+        coefficient_ring=CoefficientRing.INTEGER,
+        degree_min=0,
+        degree_max=s.max_degree,
+        basis_sizes=tuple(map(len, nd)),
+        differential_matrices=tuple(matrices),
+    )
     return NormalizedChainsResult(
         simplicial_set=s,
-        nondegenerate_counts=tuple(len(x) for x in nd),
-        boundary_matrices=tuple(matrices),
-        differential_squared_zero=square,
+        nondegenerate_bases=bases,
+        chain_complex=chain,
     )
 
 
@@ -307,14 +410,8 @@ def normalized_homology(
     free-cycle representatives in the normalized simplex axes.
     """
     normalized = normalized_chains(simplicial_set)
-    if not normalized.differential_squared_zero:
-        raise OperationDomainValidationError(
-            location=("simplicial_set",),
-            code="simplicial_set.normalized_homology_chain_identity_failed",
-            message="normalized differential does not square to zero",
-        )
     source = normalized.simplicial_set
-    sizes = normalized.nondegenerate_counts
+    sizes = normalized.chain_complex.basis_sizes
     if any(size > 64 for size in sizes):
         raise OperationDomainValidationError(
             location=("simplicial_set",),
@@ -328,27 +425,13 @@ def normalized_homology(
             code="simplicial_set.normalized_homology_matrix_budget_exceeded",
             message="normalized homology matrices exceed the 4096-cell bound",
         )
-    chain = ChainComplexValue(
-        coefficient_ring=CoefficientRing.INTEGER,
-        degree_min=0,
-        degree_max=source.max_degree,
-        basis_sizes=sizes,
-        differential_matrices=normalized.boundary_matrices,
-    )
+    chain = normalized.chain_complex
     # This shared exact kernel computes all group data, including the formal
     # top group of the retained chain prefix. Only degrees with a known incoming
     # simplicial boundary are exposed by this operation.
     computed = homology_groups(chain)
     nondegenerate_bases: list[tuple[str, ...]] = []
-    for degree, level in enumerate(source.sets):
-        degenerate = {
-            simplex
-            for row in (source.degeneracy_maps[degree - 1] if degree else ())
-            for simplex in row
-        }
-        nondegenerate_bases.append(
-            tuple(label for index, label in enumerate(level) if index not in degenerate)
-        )
+    nondegenerate_bases.extend(normalized.nondegenerate_bases)
     return NormalizedHomologyResult(
         simplicial_set=source,
         nondegenerate_bases=tuple(nondegenerate_bases),

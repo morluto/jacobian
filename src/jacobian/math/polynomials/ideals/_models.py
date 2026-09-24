@@ -62,6 +62,8 @@ def _admit_monomial_ideal(ideal: RationalPolynomialIdeal) -> None:
             "monomial-ideal exceeds the "
             f"{MAX_MONOMIAL_IDEAL_VARIABLES}-variable operation budget"
         )
+    if len(ideal.generators) == 1 and not ideal.generators[0].polynomial.terms:
+        return
     for generator in ideal.generators:
         terms = generator.polynomial.terms
         if len(terms) != 1:
@@ -150,15 +152,16 @@ class MonomialIdealBettiResult(StrictModel):
 
     ideal: RationalPolynomialIdeal
     lcm_lattice_homology: tuple[LcmLatticeHomologyEntry, ...] = Field(
-        min_length=1, max_length=MAX_MONOMIAL_LCM_ELEMENTS
+        max_length=MAX_MONOMIAL_LCM_ELEMENTS
     )
     multigraded_betti_numbers: tuple[MultigradedBettiNumber, ...] = Field(
-        min_length=1, max_length=MAX_MONOMIAL_BETTI_ENTRIES
+        max_length=MAX_MONOMIAL_BETTI_ENTRIES
     )
     graded_betti_numbers: tuple[GradedBettiNumber, ...] = Field(
-        min_length=1, max_length=MAX_MONOMIAL_BETTI_ENTRIES
+        max_length=MAX_MONOMIAL_BETTI_ENTRIES
     )
-    regularity: StrictInt = Field(
+    regularity: StrictInt | None = Field(
+        default=None,
         ge=1,
         le=MAX_MONOMIAL_IDEAL_VARIABLES * MAX_MONOMIAL_IDEAL_EXPONENT,
     )
@@ -166,6 +169,30 @@ class MonomialIdealBettiResult(StrictModel):
 
     @model_validator(mode="after")
     def require_canonical_shape(self) -> Self:
+        zero_ideal = len(self.ideal.generators) == 1 and not (
+            self.ideal.generators[0].polynomial.terms
+        )
+        if zero_ideal:
+            if (
+                self.lcm_lattice_homology
+                or self.multigraded_betti_numbers
+                or self.graded_betti_numbers
+                or self.regularity is not None
+                or self.has_linear_resolution
+            ):
+                raise _validation_error(
+                    "the zero ideal has empty Betti profiles and undefined regularity"
+                )
+            return self
+        if (
+            not self.lcm_lattice_homology
+            or not self.multigraded_betti_numbers
+            or not self.graded_betti_numbers
+            or self.regularity is None
+        ):
+            raise _validation_error(
+                "a nonzero monomial ideal needs complete nonempty Betti profiles"
+            )
         variable_count = len(self.ideal.variables)
         generator_count = len(self.ideal.generators)
         lattice_degrees = tuple(
@@ -226,7 +253,7 @@ class MonomialIdealBettiResult(StrictModel):
         lcm_lattice_homology: tuple[LcmLatticeHomologyEntry, ...],
         multigraded_betti_numbers: tuple[MultigradedBettiNumber, ...],
         graded_betti_numbers: tuple[GradedBettiNumber, ...],
-        regularity: int,
+        regularity: int | None,
         has_linear_resolution: bool,
     ) -> Self:
         """Build the exact result from one trusted owner-local kernel pass."""

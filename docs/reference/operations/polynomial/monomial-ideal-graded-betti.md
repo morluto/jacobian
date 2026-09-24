@@ -55,3 +55,8 @@ coefficient field, so it does not silently claim characteristic-independent
 Betti numbers. General homogeneous ideals, quotient rings, module
 resolutions, differentials, and Tor computations remain outside this
 operation.
+
+The existing singleton zero-polynomial presentation denotes the zero ideal.
+Its resolution and Betti profiles are empty, and `regularity` is `null` because
+the zero module has no nonzero graded component from which to define a finite
+regularity. The unit ideal remains outside the operation.

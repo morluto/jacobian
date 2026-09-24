@@ -87,9 +87,7 @@ def test_cubic_place_residue_uses_exact_extension_field_coordinates() -> None:
                 numerator=PrimeFieldPolynomial(
                     characteristic=2, coefficients=(0, 0, 0, 0, 0, 1)
                 ),
-                denominator=PrimeFieldPolynomial(
-                    characteristic=2, coefficients=(1,)
-                ),
+                denominator=PrimeFieldPolynomial(characteristic=2, coefficients=(1,)),
             ),
         ),
     )

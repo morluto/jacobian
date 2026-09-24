@@ -782,6 +782,8 @@ def character_tensor_decomposition(
     # At most three copies of the bounded degree-256 permutation group are
     # retained. Values use at most 512 digits; this estimate stays below both
     # the operation's 2 MB cap and the canonical 10 MB transport limit.
+    if axis.group is None:
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
     degree = axis.group.degree
     generator_count = len(axis.group.generators)
     group_bytes = 512 + generator_count * (degree * 8 + 16)

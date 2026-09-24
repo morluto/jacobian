@@ -112,6 +112,16 @@ def test_empty_degenerate_and_odd_cross_cases(
     assert result.signed_discriminant == _r(signed)
 
 
+def test_positive_dimensional_all_zero_form_has_zero_determinant() -> None:
+    form = _form((_r(0), _r(0), _r(0)))
+    result = polar_gram_determinant_discriminant(
+        DeterminantDiscriminantRequest(form=form)
+    )
+
+    assert result.polar_gram_determinant == _r(0)
+    assert result.signed_discriminant == _r(0)
+
+
 def test_determinant_transforms_by_square_under_rational_basis_change() -> None:
     # Q=x^2+xy+y^2; P=diag(2,1) gives Q(2u,v)=4u^2+2uv+v^2.
     # This explicit Q' obeys det(G_Q')=det(P)^2*det(G_Q)=4*3.

@@ -94,6 +94,26 @@ def test_rational_element_has_singleton_orbit_and_full_stabilizer() -> None:
     )
 
 
+def test_degree_one_qq_field_has_identity_orbit_and_stabilizer() -> None:
+    field = splitting_field(SplittingFieldRequest(polynomial=_poly((-1, 1)))).field
+    five = _element(field, 5)
+
+    result = element_embedding_orbit(
+        ElementEmbeddingOrbitRequest(field=field, element=five)
+    )
+
+    assert result.orbit == (five,)
+    assert result.orbit_size == 1
+    assert len(result.action) == 1
+    assert result.action[0].automorphism.root_permutation == (0,)
+    assert result.action[0].automorphism.basis_images == (_element(field, 1),)
+    assert result.action[0].image == five
+    assert result.stabilizer.elements == (result.action[0].automorphism,)
+    assert _polynomial_coefficients(result.minimal_polynomial) == (
+        Fraction(-5), Fraction(1)
+    )
+    assert type(result).model_validate(result.model_dump()) == result
+
 def test_orbit_rejects_element_from_isomorphic_but_distinct_parent() -> None:
     first = splitting_field(SplittingFieldRequest(polynomial=_poly((-2, 0, 1)))).field
     second = splitting_field(SplittingFieldRequest(polynomial=_poly((-8, 0, 1)))).field

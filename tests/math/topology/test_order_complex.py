@@ -14,7 +14,10 @@ from jacobian.math.combinatorics.posets.core._models import (
     ReflexivePairPolicy,
     RelationInterpretation,
 )
-from jacobian.math.combinatorics.posets.core.operations import materialize_finite_poset
+from jacobian.math.combinatorics.posets.core.operations import (
+    materialize_finite_poset,
+    verify_finite_poset,
+)
 from jacobian.math.topology._models import (
     ChainCoefficientRing,
     ChainComplexResult,
@@ -203,6 +206,19 @@ def test_order_complex_result_rejects_reversed_and_incomparable_chains() -> None
     forged["complex"] = canonical_complex(("a", "b"), (("a", "b"),)).model_dump()
     with pytest.raises(ValueError, match="cover relations"):
         OrderComplexResult.model_validate(forged)
+
+
+def test_order_complex_result_rejects_coordinated_forged_poset_covers() -> None:
+    result = order_complex(
+        OrderComplexRequest(poset=_poset(("a", "b"), (("a", "b"),)))
+    )
+    forged = result.model_dump()
+    forged["poset"]["cover_relations"] = [{"lower": "b", "upper": "a"}]
+    forged["maximal_chains"] = [["b", "a"]]
+    decoded_poset = type(result.poset).model_validate(forged["poset"])
+    assert not verify_finite_poset(decoded_poset)
+    with pytest.raises(ValueError, match="canonical finite poset"):
+        OrderComplexResult.model_validate_json(json.dumps(forged))
 
 
 def test_face_poset_result_rejects_forged_positional_labels() -> None:

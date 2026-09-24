@@ -278,6 +278,8 @@ class FacePosetResult(StrictModel):
         if self.order_relations != expected_relations_from_complex:
             raise ValueError("order relations must match order-complex edges")
         if self.poset is not None:
+            if not verify_finite_poset(self.poset):
+                raise ValueError("poset claims must describe a canonical finite poset")
             if self.poset.elements != expected_labels:
                 raise ValueError("poset elements must equal the face-label axis")
             expected_relations = tuple(
@@ -301,6 +303,11 @@ class OrderComplexResult(StrictModel):
 
     @model_validator(mode="after")
     def require_poset_and_complex_axes(self) -> OrderComplexResult:
+        # FinitePoset decoding checks claim shape, not mathematical truth.
+        # This result relies on its cover claims, so decoded values re-admit
+        # the bounded source poset without re-enumerating its order complex.
+        if not verify_finite_poset(self.poset):
+            raise ValueError("poset claims must describe a canonical finite poset")
         if self.vertex_elements != self.poset.elements:
             raise ValueError("vertex_elements must equal the poset element axis")
         if self.complex.vertices != self.vertex_elements:
@@ -473,7 +480,10 @@ def order_complex(request: OrderComplexRequest) -> OrderComplexResult:
     plan = _order_complex_plan(poset)
     closure, ordered_facets = _enumerate_order_complex_chains(elements, plan)
     complex_ = canonical_complex(elements, ordered_facets, closure=closure)
-    return OrderComplexResult(
+    # The input poset was re-admitted above and the kernel constructed these
+    # axes directly from its canonical claims. JSON consumers re-admit the
+    # embedded poset in the result model validator.
+    return OrderComplexResult.model_construct(
         poset=poset,
         complex=complex_,
         vertex_elements=elements,
@@ -518,7 +528,7 @@ def face_poset(request: FacePosetRequest) -> FacePosetResult:
             ReflexivePairPolicy.FORBIDDEN,
         )
         order_result = order_complex(OrderComplexRequest(poset=poset))
-        return FacePosetResult(
+        return FacePosetResult.model_construct(
             complex=complex_,
             faces=faces,
             face_element_labels=face_element_labels,
@@ -549,7 +559,7 @@ def face_poset(request: FacePosetRequest) -> FacePosetResult:
                 chains.append(tuple(face_element_labels[index] for index in chain))
     facets = _maximal_faces(chains)
     order_complex_value = canonicalize(face_element_labels, facets).complex
-    return FacePosetResult(
+    return FacePosetResult.model_construct(
         complex=complex_,
         faces=faces,
         face_element_labels=face_element_labels,

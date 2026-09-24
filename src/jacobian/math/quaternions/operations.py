@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fractions import Fraction
 from math import lcm
-from typing import cast
+from typing import NoReturn, cast
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import (
@@ -30,7 +30,7 @@ _PRODUCT_TERMS: tuple[tuple[tuple[int, int, int], ...], ...] = (
 )
 
 
-def _domain_error(location: str, reason: str, message: str) -> None:
+def _domain_error(location: str, reason: str, message: str) -> NoReturn:
     raise OperationDomainValidationError(
         location=(location,),
         code=f"quaternion.rational_unit.{reason}",
@@ -38,7 +38,7 @@ def _domain_error(location: str, reason: str, message: str) -> None:
     )
 
 
-def _resource_error(location: str, reason: str, message: str) -> None:
+def _resource_error(location: str, reason: str, message: str) -> NoReturn:
     raise OperationResourceAdmissionError(
         location=(location,),
         code=f"quaternion.rational_unit.{reason}",

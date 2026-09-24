@@ -37,12 +37,16 @@ An empty identity path is not a plaquette boundary. The plaquette operation
 requires a nonempty closed oriented edge walk, so an omitted face cannot be
 confused with a zero-curvature face.
 
-`lattice_gauge.permutation.wilson_trace.compute` accepts a closed path over
-the same bounded permutation-group field and returns its holonomy together
-with the character of the natural degree-`d` permutation representation.
-That exact integer is the number of points fixed by the holonomy (equivalently,
-the trace of its permutation matrix), so it is constant on conjugacy classes.
-This operation uses the specified natural representation; it does not accept
-an arbitrary caller-supplied representation or claim to evaluate every
-irreducible character. The request is bounded by the existing degree-eight
-and path-length-256 gauge envelope.
+The native helper `jacobian.math.gauge.permutation_wilson_trace` accepts a
+closed path over the same bounded permutation-group field and returns its
+holonomy together with the character of the natural degree-`d` permutation
+representation. That exact integer is the number of points fixed by the
+holonomy (equivalently, the trace of its permutation matrix), so it is
+constant on conjugacy classes. The helper recomputes the holonomy from the
+field and path; it does not rely on a caller-asserted holonomy. It uses the
+specified natural representation; it does not accept an arbitrary
+caller-supplied representation or claim to evaluate every irreducible
+character. The request is bounded by the existing degree-eight and
+path-length-256 gauge envelope. This cheap deterministic projection of the
+published holonomy is native API rather than a catalog operation; the Wilson
+loop character is discovered through `lattice_gauge.holonomy.compute`.

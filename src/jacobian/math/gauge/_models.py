@@ -371,13 +371,6 @@ class HolonomyRequest(StrictModel):
     path: OrientedGaugePath
 
 
-class PermutationWilsonTraceRequest(StrictModel):
-    """Evaluate the natural permutation-character Wilson loop over ``S_d``."""
-
-    field: GaugeField
-    path: OrientedGaugePath
-
-
 class PermutationWilsonTraceResult(StrictModel):
     """Exact trace in the natural degree-``d`` permutation representation."""
 

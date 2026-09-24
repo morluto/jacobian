@@ -6,8 +6,6 @@ from jacobian.math.gauge._models import (
     GaugeTransformResult,
     HolonomyRequest,
     HolonomyResult,
-    PermutationWilsonTraceRequest,
-    PermutationWilsonTraceResult,
     PlaquetteRequest,
     PlaquetteResult,
 )
@@ -16,9 +14,7 @@ from jacobian.math.gauge._su2_models import (
     SU2GaugeTransformResult,
     SU2HolonomyRequest,
     SU2HolonomyResult,
-    SU2WilsonTraceResult,
 )
-from jacobian.math.gauge.observables import permutation_wilson_trace
 from jacobian.math.gauge.operations import (
     gauge_transform,
     path_holonomy,
@@ -27,7 +23,6 @@ from jacobian.math.gauge.operations import (
 from jacobian.math.gauge.su2 import (
     su2_gauge_transform,
     su2_path_holonomy,
-    su2_wilson_trace,
 )
 
 
@@ -43,22 +38,12 @@ def _run_holonomy(request: HolonomyRequest) -> HolonomyResult:
     return path_holonomy(request.field, request.path)
 
 
-def _run_permutation_wilson(
-    request: PermutationWilsonTraceRequest,
-) -> PermutationWilsonTraceResult:
-    return permutation_wilson_trace(request)
-
-
 def _run_su2_transform(request: SU2GaugeTransformRequest) -> SU2GaugeTransformResult:
-    return su2_gauge_transform(request)
+    return su2_gauge_transform(request.field, request.vertex_values)
 
 
 def _run_su2_holonomy(request: SU2HolonomyRequest) -> SU2HolonomyResult:
-    return su2_path_holonomy(request)
-
-
-def _run_su2_wilson(request: SU2HolonomyResult) -> SU2WilsonTraceResult:
-    return su2_wilson_trace(request)
+    return su2_path_holonomy(request.field, request.path)
 
 
 _TRIANGLE_FIELD = {
@@ -158,21 +143,6 @@ _SU2_FIELD = {
     ],
 }
 _SU2_PATH = {"steps": [{"edge_id": f"e{i}", "forward": True} for i in range(4)]}
-_SU2_PLAQUETTE = {
-    "coordinates": [
-        {"num": "-140", "den": "221"},
-        {"num": "-120", "den": "221"},
-        {"num": "609", "den": "1105"},
-        {"num": "12", "den": "1105"},
-    ]
-}
-_SU2_HOLONOMY_INPUT = {
-    "field": _SU2_FIELD,
-    "path": _SU2_PATH,
-    "holonomy": _SU2_PLAQUETTE,
-    "start": "v0",
-    "end": "v0",
-}
 
 TOOLS = (
     MathTool(
@@ -223,34 +193,6 @@ TOOLS = (
         ),
     ),
     MathTool(
-        operation_id="lattice_gauge.permutation.wilson_trace.compute",
-        title="Compute an exact permutation-representation Wilson trace",
-        description=(
-            "For a closed path over a finite permutation-valued gauge field, "
-            "compute its ordered holonomy and the exact character of the "
-            "natural degree-d permutation representation, equal to the number "
-            "of fixed points of that holonomy."
-        ),
-        request_type=PermutationWilsonTraceRequest,
-        result_type=PermutationWilsonTraceResult,
-        run=_run_permutation_wilson,
-        tags=("lattice-gauge", "wilson-loop", "character", "permutation", "exact"),
-        discovery_terms=(
-            "finite group Wilson loop character",
-            "permutation representation trace of holonomy",
-        ),
-        examples=(
-            OperationExample(
-                name="triangle_permutation_wilson_trace",
-                description=(
-                    "The three equal 3-cycle link labels compose to the "
-                    "identity, so the natural representation trace is three."
-                ),
-                input={"field": _TRIANGLE_FIELD, "path": _TRIANGLE_PATH},
-            ),
-        ),
-    ),
-    MathTool(
         operation_id="lattice_gauge.holonomy.compute",
         title="Compute the ordered exact holonomy of a lattice gauge field",
         description=(
@@ -270,6 +212,8 @@ TOOLS = (
             "lattice gauge path holonomy",
             "Wilson line ordered product",
             "gauge field edge product",
+            "finite group Wilson loop character",
+            "permutation representation trace of holonomy",
         ),
         examples=(
             OperationExample(
@@ -363,32 +307,16 @@ TOOLS = (
         result_type=SU2HolonomyResult,
         run=_run_su2_holonomy,
         tags=("lattice-gauge", "su2", "holonomy", "exact"),
-        discovery_terms=("SU(2) quaternion path holonomy",),
+        discovery_terms=(
+            "SU(2) quaternion path holonomy",
+            "SU(2) Wilson loop trace",
+            "fundamental representation trace 2 Re of holonomy",
+        ),
         examples=(
             OperationExample(
                 name="rational_su2_plaquette_holonomy",
                 description="Compose four rational unit-quaternion links around a closed square.",
                 input={"field": _SU2_FIELD, "path": _SU2_PATH},
-            ),
-        ),
-    ),
-    MathTool(
-        operation_id="lattice_gauge.su2.wilson_trace.compute",
-        title="Compute the rational SU(2) Wilson trace",
-        description=(
-            "Return 2 Re(U) for a source-bound closed rational SU(2) "
-            "holonomy as an exact canonical rational."
-        ),
-        request_type=SU2HolonomyResult,
-        result_type=SU2WilsonTraceResult,
-        run=_run_su2_wilson,
-        tags=("lattice-gauge", "su2", "wilson-trace", "exact"),
-        discovery_terms=("SU(2) Wilson loop trace",),
-        examples=(
-            OperationExample(
-                name="rational_su2_wilson_trace",
-                description="Compute the exact fundamental trace of a closed rational SU(2) holonomy.",
-                input=_SU2_HOLONOMY_INPUT,
             ),
         ),
     ),

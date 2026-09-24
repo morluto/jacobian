@@ -70,6 +70,16 @@ def test_product_preserves_nullary_truth_values_and_empty_carriers() -> None:
     assert empty_product.product.carrier_size == 0
     assert empty_product.left_projection == empty_product.right_projection == ()
 
+    empty_true = FiniteRelationalStructure(
+        carrier_size=0,
+        signature=(FiniteRelationSymbol(symbol_id="P", arity=0),),
+        relation_tables=(((),),),
+    )
+    assert direct_product_structure(empty_true, empty_true).product.relation_tables == (
+        ((),),
+    )
+    assert direct_product_structure(false, empty_true).product.relation_tables == ((),)
+
 
 def test_product_rejects_signature_mismatch_and_overlarge_cartesian_table() -> None:
     left = _structure(2, [[0, 1]])

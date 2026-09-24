@@ -48,3 +48,20 @@ rings, or infer existence of a certificate from a bounded iterate search.
 
 The native function is
 `jacobian.math.polynomials.derivations.ga_action_from_derivation`.
+
+## A supplied finite stable subspace
+
+`algebraic_group.ga.stable_subrepresentation.compute` accepts a checked
+`PolynomialGaAction` and an ordered, linearly independent finite list of
+polynomials in its source ring. It checks each substituted basis polynomial
+and returns the exact action matrix over `QQ[t]`. Matrix columns correspond
+to input basis vectors and rows to output basis vectors. The basis order is
+part of the value, so its matrix coordinates remain stable across
+serialization.
+
+For translation `x -> x+t`, the basis `(1,x)` is stable and the matrix is
+`[[1,t],[0,1]]`. A supplied span that does not contain every action image is
+rejected. The operation checks only that explicit span; it does not search for
+all finite-dimensional subrepresentations. The basis dimension is at most 32,
+and degree, term count, expansion work, and coefficient growth are admitted
+before substitution.

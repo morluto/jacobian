@@ -134,8 +134,11 @@ def _work_bound(
             if level_index:
                 level_work += (
                     len(filtration[level_index - 1].subspaces[degree].vectors)
-                    * max(1, dimension) ** 2
+                    * max(1, dimension) ** 3
                 )
+            if degree:
+                source_dimension = sizes[degree - 1]
+                level_work += vectors * max(1, dimension, source_dimension) ** 3
     return square + level_work
 
 

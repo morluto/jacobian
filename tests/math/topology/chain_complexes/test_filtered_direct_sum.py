@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from importlib import import_module
+
 import pytest
 
 from jacobian.catalog.catalog import Catalog
@@ -26,6 +28,9 @@ from jacobian.math.topology.chain_complexes.values import (
 )
 
 _OPERATION_ID = "homological.filtered_chain_complex.direct_sum.compute"
+_DIRECT_SUM_MODULE = import_module(
+    "jacobian.math.topology.chain_complexes.filtered_direct_sum"
+)
 
 
 def _filtered(
@@ -136,6 +141,17 @@ def test_filtered_direct_sum_bounds_output_dimension_before_expansion() -> None:
         error.value.errors()[0]["type"]
         == "filtered_direct_sum.ambient_dimension_exceeded"
     )
+
+
+def test_filtered_direct_sum_admits_validation_work_before_exact_checks(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    left = _filtered([[1]], ([[1]], []))
+    right = _filtered([[2]], ([[1]], [[1]]))
+    monkeypatch.setattr(_DIRECT_SUM_MODULE, "MAX_FILTERED_DIRECT_SUM_WORK", 1)
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        filtered_direct_sum(left, right)
+    assert error.value.errors()[0]["type"] == "filtered_direct_sum.work_budget_exceeded"
 
 
 def test_filtered_direct_sum_rejects_misaligned_filtration_axes() -> None:

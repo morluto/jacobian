@@ -13,8 +13,10 @@ from jacobian.math.combinatorics.matroids.delta._models import (
     DeltaMatroidFromFeasibleSetsRequest,
     DeltaMatroidRecognitionResult,
     DeltaMatroidTwistRequest,
+    DeltaMatroidTwistResult,
     DeltaMatroidWidthRequest,
     DeltaMatroidWidthResult,
+    twist_result_serialized_bytes,
 )
 from jacobian.math.combinatorics.matroids.delta.extra import (
     BinaryLoopComplementRequest,
@@ -46,6 +48,7 @@ from jacobian.math.combinatorics.matroids.delta.operations import (
     width,
 )
 from jacobian.math.combinatorics.matroids.delta.values import (
+    MAX_DELTA_TWIST_RESULT_BYTES,
     DeltaMatroidAdmissionError,
     FiniteDeltaMatroid,
 )
@@ -66,9 +69,26 @@ def _from_feasible_sets(
         ) from exc
 
 
-def _twist(request: DeltaMatroidTwistRequest) -> FiniteDeltaMatroid:
+def _twist(request: DeltaMatroidTwistRequest) -> DeltaMatroidTwistResult:
     try:
-        return twist(request.delta_matroid, request.subset)
+        twisted = twist(request.delta_matroid, request.subset)
+        result_bytes = twist_result_serialized_bytes(
+            request.delta_matroid, request.subset, twisted
+        )
+        if result_bytes > MAX_DELTA_TWIST_RESULT_BYTES:
+            raise OperationResourceAdmissionError(
+                location=("result",),
+                code="delta_matroid.twist_result_bytes_exceeded",
+                message=(
+                    "source-bound twist result exceeds the "
+                    f"{MAX_DELTA_TWIST_RESULT_BYTES}-byte compact JSON envelope"
+                ),
+            )
+        return DeltaMatroidTwistResult._from_kernel(
+            request.delta_matroid, request.subset, twisted
+        )
+    except OperationResourceAdmissionError:
+        raise
     except DeltaMatroidAdmissionError as exc:
         raise OperationResourceAdmissionError(
             location=("delta_matroid",),
@@ -305,10 +325,11 @@ TOOLS: MathTools = (  # noqa: RUF005
             "difference X for each source feasible set F; the subset uses sorted "
             "ground indices. Source and output families are admitted at 16,384 "
             "memberships, 2,048 UTF-8 label bytes, and 250,000 symmetric-exchange "
-            "candidate checks."
+            "candidate checks. Return the source, canonical subset, and twisted "
+            "target together; the compact JSON result is bounded to 1,000,000 bytes."
         ),
         request_type=DeltaMatroidTwistRequest,
-        result_type=FiniteDeltaMatroid,
+        result_type=DeltaMatroidTwistResult,
         run=_twist,
         tags=("delta-matroid", "twist", "exact"),
         examples=(

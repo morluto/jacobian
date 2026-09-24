@@ -140,6 +140,102 @@ class SheafCochainMapResult(StrictModel):
     target_bases: tuple[tuple[SheafCochainCoordinate, ...], ...]
     components: tuple[tuple[tuple[SheafScalar, ...], ...], ...]
 
+    @model_validator(mode="after")
+    def require_structural_cochain_map(self) -> Self:
+        """Bind serialized axes and dimensions without replaying map mathematics."""
+        source = self.morphism.source
+        target = self.morphism.target
+        if (
+            not self.morphism.natural
+            or self.morphism.obstruction is not None
+            or source.complex != target.complex
+            or source.coefficient_field != target.coefficient_field
+            or source.prime != target.prime
+        ):
+            raise ValueError("a cochain map must retain one natural morphism parent")
+        degree_faces = tuple(group.faces for group in source.complex.faces_by_dimension)
+        degree_count = source.complex.dimension + 1
+        if not (
+            len(self.source_bases)
+            == len(self.target_bases)
+            == len(self.components)
+            == degree_count
+        ):
+            raise ValueError("cochain map degree axes must cover the source complex")
+
+        source_stalks = {item.simplex: item for item in source.stalks}
+        target_stalks = {item.simplex: item for item in target.stalks}
+        if len(source_stalks) != len(source.stalks) or len(target_stalks) != len(
+            target.stalks
+        ):
+            raise ValueError("cochain map parents must have unique stalk axes")
+        if set(source_stalks) != set(target_stalks) or set(source_stalks) != {
+            face for faces in degree_faces for face in faces
+        }:
+            raise ValueError("cochain map parents must bind every source simplex")
+
+        expected_faces = tuple(face for faces in degree_faces for face in faces)
+        if tuple(key for key, _matrix in self.morphism.components) != expected_faces:
+            raise ValueError("cochain map morphism must bind every stalk component")
+        morphism_matrices = tuple(matrix for _key, matrix in self.morphism.components)
+        for face, matrix in zip(expected_faces, morphism_matrices, strict=True):
+            if len(matrix) != len(target_stalks[face].basis) or any(
+                len(row) != len(source_stalks[face].basis) for row in matrix
+            ):
+                raise ValueError(
+                    "cochain map morphism components must match stalk axes"
+                )
+
+        cell_count = 0
+        scalar_matrices: list[tuple[tuple[SheafScalar, ...], ...]] = []
+        for degree, faces in enumerate(degree_faces):
+            expected_source = tuple(
+                SheafCochainCoordinate(simplex=face, basis_label=label)
+                for face in faces
+                for label in source_stalks[face].basis
+            )
+            expected_target = tuple(
+                SheafCochainCoordinate(simplex=face, basis_label=label)
+                for face in faces
+                for label in target_stalks[face].basis
+            )
+            source_axis = self.source_bases[degree]
+            target_axis = self.target_bases[degree]
+            matrix = self.components[degree]
+            if source_axis != expected_source or target_axis != expected_target:
+                raise ValueError("cochain map bases must match parent stalk axes")
+            if len(matrix) != len(expected_target) or any(
+                len(row) != len(expected_source) for row in matrix
+            ):
+                raise ValueError("cochain map matrices must match their degree axes")
+            cell_count += len(expected_source) * len(expected_target)
+            scalar_matrices.append(matrix)
+        if cell_count > MAX_SHEAF_SECTION_MATRIX_CELLS:
+            raise ValueError("cochain map matrices exceed their cell bound")
+        result_scalar_count = cell_count + sum(
+            len(row) for matrix in morphism_matrices for row in matrix
+        )
+        if (
+            sheaf_scalar_json_bound(result_scalar_count)
+            > MAX_SHEAF_MORPHISM_OUTPUT_CHARS
+        ):
+            raise ValueError("cochain map matrices exceed their output bound")
+        all_matrices = (*morphism_matrices, *scalar_matrices)
+        _require_field_scalars(
+            all_matrices,
+            source.coefficient_field,
+            source.prime,
+            label="cochain map component",
+        )
+        if any(
+            sheaf_scalar_digits(value) > MAX_SHEAF_ENTRY_DIGITS
+            for matrix in all_matrices
+            for row in matrix
+            for value in row
+        ):
+            raise ValueError("cochain map scalars exceed their digit bound")
+        return self
+
 
 def _section_resource(code: str, message: str) -> OperationResourceAdmissionError:
     return OperationResourceAdmissionError(
@@ -933,7 +1029,9 @@ def cochain_map(morphism_value: SheafMorphismResult) -> SheafCochainMapResult:
             "cochain_map_cells_bound",
             "the induced degreewise cochain matrices exceed their cell bound",
         )
-    scalar_count = matrix_cells
+    scalar_count = matrix_cells + sum(
+        len(row) for _face, matrix in checked.components for row in matrix
+    )
     output_chars = sheaf_scalar_json_bound(scalar_count)
     if output_chars > MAX_SHEAF_MORPHISM_OUTPUT_CHARS:
         raise _section_resource(

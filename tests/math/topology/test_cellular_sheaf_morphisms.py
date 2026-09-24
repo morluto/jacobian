@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import json
 from fractions import Fraction
+
+import pytest
+from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.builtins import BUILTIN_TOOLS
@@ -13,6 +17,7 @@ from jacobian.catalog.models import (
 from jacobian.math.topology._models import canonical_complex
 from jacobian.math.topology.cellular_sheaves import (
     SheafCochainMapRequest,
+    SheafCochainMapResult,
     SheafField,
     SheafMorphismRequest,
     SheafMorphismResult,
@@ -209,6 +214,66 @@ def test_cochain_map_consumer_rechecks_serialized_naturality_claim() -> None:
         assert "natural" in str(error)
     else:
         raise AssertionError("a false serialized naturality claim was consumed")
+
+
+def test_cochain_map_structural_axes_survive_serialization_without_replay() -> None:
+    sheaf = _triangle_sheaf()
+    components = tuple((face, ((_q("2"),),)) for face in sheaf.canonical_face_order)
+    result = cochain_map(morphism(sheaf, sheaf, components))
+    assert SheafCochainMapResult.model_validate_json(result.model_dump_json()) == result
+
+
+def test_cochain_map_json_rejects_malformed_model_construct_axes_and_shapes() -> None:
+    sheaf = _triangle_sheaf()
+    components = tuple((face, ((_q("2"),),)) for face in sheaf.canonical_face_order)
+    result = cochain_map(morphism(sheaf, sheaf, components))
+    malformed_values = (
+        SheafCochainMapResult.model_construct(
+            morphism=result.morphism,
+            source_bases=result.source_bases[:-1],
+            target_bases=result.target_bases,
+            components=result.components,
+        ),
+        SheafCochainMapResult.model_construct(
+            morphism=result.morphism,
+            source_bases=((), *result.source_bases[1:]),
+            target_bases=result.target_bases,
+            components=result.components,
+        ),
+        SheafCochainMapResult.model_construct(
+            morphism=result.morphism,
+            source_bases=result.source_bases,
+            target_bases=result.target_bases,
+            components=(((_q("2"),),), *result.components[1:]),
+        ),
+    )
+    for malformed in malformed_values:
+        with pytest.raises(ValidationError):
+            SheafCochainMapResult.model_validate_json(malformed.model_dump_json())
+
+    oversized = CanonicalRational(num=10**64, den=1)
+    oversized_morphism = SheafMorphismResult.model_construct(
+        source=sheaf,
+        target=sheaf,
+        components=tuple(
+            (face, ((oversized,),)) for face in sheaf.canonical_face_order
+        ),
+        natural=True,
+        obstruction=None,
+    )
+    oversized_result = SheafCochainMapResult.model_construct(
+        morphism=oversized_morphism,
+        source_bases=result.source_bases,
+        target_bases=result.target_bases,
+        components=result.components,
+    )
+    with pytest.raises(ValidationError):
+        SheafCochainMapResult.model_validate_json(oversized_result.model_dump_json())
+
+    payload = json.loads(result.model_dump_json())
+    payload["components"].pop()
+    with pytest.raises(ValidationError):
+        SheafCochainMapResult.model_validate_json(json.dumps(payload))
 
 
 def test_component_scalar_digit_bound_precedes_scalar_parsing() -> None:

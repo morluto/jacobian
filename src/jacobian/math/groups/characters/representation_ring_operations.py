@@ -6,13 +6,17 @@ from fractions import Fraction
 
 from pydantic import ValidationError
 
-from jacobian._exact import canonical_rational_component_digits
+from jacobian._exact import CanonicalRational, canonical_rational_component_digits
 from jacobian.canonical import CanonicalLimits
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.math.groups._models import GroupConjugacyClassesResult, PermutationGroup
+from jacobian.math.groups._models import (
+    MAX_GROUP_DEGREE,
+    GroupConjugacyClassesResult,
+    PermutationGroup,
+)
 from jacobian.math.groups.characters._cyclotomic import (
     add_values,
     conjugate_value,
@@ -31,6 +35,10 @@ from jacobian.math.groups.characters._models import (
     CharacterRingDecompositionRequest,
     CharacterRingDecompositionResult,
     CharacterRingElement,
+    CharacterRow,
+    CharacterTableResult,
+    CharacterTensorProductRequest,
+    ConjugacyClassPartition,
     CyclotomicValue,
     FiniteClassFunction,
 )
@@ -39,11 +47,14 @@ from jacobian.math.groups.characters.operations import (
     _fractions,
     _make_value,
     character_table,
+    class_function_pointwise_product,
 )
 from jacobian.math.groups.operations import group_conjugacy_classes, group_order
 
 MAX_CHARACTER_RING_DECOMPOSITION_WORK = 50_000_000
 MAX_CHARACTER_RING_DECOMPOSITION_OUTPUT_BYTES = 10_000_000
+MAX_CHARACTER_TENSOR_PRODUCT_WORK = 50_000_000
+MAX_CHARACTER_TENSOR_PRODUCT_OUTPUT_BYTES = 10_000_000
 
 
 def _invalid(
@@ -347,8 +358,366 @@ def class_function_character_decomposition(
     )
 
 
+def _admit_tensor_partition_shape(
+    partition: ConjugacyClassPartition, name: str
+) -> PermutationGroup:
+    if not isinstance(partition, ConjugacyClassPartition):
+        raise _invalid(
+            "groups.characters.tensor_product_partition",
+            "table must retain a conjugacy partition",
+            (name, "table", "partition"),
+        )
+    source = getattr(partition, "source", None)
+    if not isinstance(source, PermutationGroup):
+        raise _invalid(
+            "groups.characters.tensor_product_group",
+            "table must retain a concrete permutation group",
+            (name, "table", "partition", "source"),
+        )
+    degree = getattr(source, "degree", None)
+    if type(degree) is not int or not 1 <= degree <= MAX_GROUP_DEGREE:
+        raise OperationResourceAdmissionError(
+            location=(name, "table", "partition", "source"),
+            code="groups.characters.tensor_product_degree_exceeds_envelope",
+            message="permutation degree exceeds the tensor-product envelope",
+        )
+    generators = getattr(source, "generators", None)
+    if not isinstance(generators, tuple) or len(generators) > MAX_GROUP_DEGREE:
+        raise OperationResourceAdmissionError(
+            location=(name, "table", "partition", "source", "generators"),
+            code="groups.characters.tensor_product_generators_exceed_envelope",
+            message="generator count exceeds the tensor-product envelope",
+        )
+    for generator in generators:
+        if (
+            not isinstance(generator, tuple)
+            or len(generator) != degree
+            or any(type(x) is not int or x < 0 or x >= degree for x in generator)
+            or len(set(generator)) != degree
+        ):
+            raise _invalid(
+                "groups.characters.tensor_product_generator_shape",
+                "group generators must be bounded permutations",
+                (name, "table", "partition", "source", "generators"),
+            )
+    classes = getattr(partition, "classes", None)
+    if not isinstance(classes, tuple) or not 1 <= len(classes) <= MAX_CLASS_COUNT:
+        raise OperationResourceAdmissionError(
+            location=(name, "table", "partition", "classes"),
+            code="groups.characters.tensor_product_class_count_exceeds_envelope",
+            message="class count exceeds the tensor-product envelope",
+        )
+    represented_elements = 0
+    for cls in classes:
+        if not isinstance(cls, tuple) or not cls:
+            raise _invalid(
+                "groups.characters.tensor_product_partition_shape",
+                "partition element shapes are invalid",
+                (name, "table", "partition", "classes"),
+            )
+        represented_elements += len(cls)
+        if represented_elements > MAX_CYCLOTOMIC_ORDER:
+            break
+        for element_value in cls:
+            if (
+                not isinstance(element_value, tuple)
+                or len(element_value) != degree
+                or any(
+                    type(x) is not int or x < 0 or x >= degree for x in element_value
+                )
+                or len(set(element_value)) != degree
+            ):
+                raise _invalid(
+                    "groups.characters.tensor_product_partition_shape",
+                    "partition elements must be bounded permutations",
+                    (name, "table", "partition", "classes"),
+                )
+    if represented_elements > MAX_CYCLOTOMIC_ORDER:
+        raise OperationResourceAdmissionError(
+            location=(name, "table", "partition", "classes"),
+            code="groups.characters.tensor_product_group_order_exceeds_envelope",
+            message="tensor products currently admit group order at most 60",
+        )
+    return source
+
+
+def _admit_tensor_table_rows(table: CharacterTableResult, name: str) -> None:
+    partition = getattr(table, "partition", None)
+    if not isinstance(partition, ConjugacyClassPartition):
+        raise _invalid(
+            "groups.characters.tensor_product_partition",
+            "table must retain a conjugacy partition",
+            (name, "table", "partition"),
+        )
+    classes = getattr(partition, "classes", None)
+    rows = getattr(table, "rows", None)
+    if not isinstance(classes, tuple):
+        raise _invalid(
+            "groups.characters.tensor_product_partition",
+            "table classes must be a bounded tuple",
+            (name, "table", "partition", "classes"),
+        )
+    if (
+        not isinstance(rows, tuple)
+        or len(rows) != len(classes)
+        or not 1 <= len(rows) <= MAX_CLASS_COUNT
+    ):
+        raise _invalid(
+            "groups.characters.tensor_product_row_shape",
+            "character rows exceed the bounded table envelope",
+            (name, "table", "rows"),
+        )
+    cells = 0
+    for row in rows:
+        row_values = getattr(row, "values", None)
+        if (
+            not isinstance(row, CharacterRow)
+            or not isinstance(row_values, tuple)
+            or len(row_values) != len(classes)
+        ):
+            raise _invalid(
+                "groups.characters.tensor_product_row_shape",
+                "every row must cover the represented classes",
+                (name, "table", "rows"),
+            )
+        cells += len(row_values)
+        for value in row_values:
+            coefficients = getattr(value, "coefficients", None)
+            if (
+                not isinstance(value, CyclotomicValue)
+                or not isinstance(coefficients, tuple)
+                or len(coefficients) > MAX_CYCLOTOMIC_ORDER
+            ):
+                raise _invalid(
+                    "groups.characters.tensor_product_value_shape",
+                    "table values must use bounded exact cyclotomic coordinates",
+                    (name, "table", "rows"),
+                )
+            for coefficient in coefficients:
+                if (
+                    not isinstance(coefficient, CanonicalRational)
+                    or type(coefficient.num) is not int
+                    or type(coefficient.den) is not int
+                    or coefficient.den <= 0
+                    or coefficient.num.bit_length() > 1702
+                    or coefficient.den.bit_length() > 1702
+                    or max(len(str(abs(coefficient.num))), len(str(coefficient.den)))
+                    > MAX_VALUE_COEFFICIENT_DIGITS
+                ):
+                    raise OperationResourceAdmissionError(
+                        location=(name, "table", "rows"),
+                        code="groups.characters.tensor_product_table_height",
+                        message="table coefficient exceeds the exact coefficient envelope",
+                    )
+    if cells > MAX_CHARACTER_TABLE_CELLS:
+        raise OperationResourceAdmissionError(
+            location=(name, "table"),
+            code="groups.characters.tensor_product_table_exceeds_envelope",
+            message="character-table cells exceed the tensor-product envelope",
+        )
+
+
+def _admit_ring_element_shape(element: CharacterRingElement, name: str) -> None:
+    """Bound untrusted model-constructed table and coordinate shapes cheaply."""
+    table = getattr(element, "table", None)
+    if not isinstance(table, CharacterTableResult):
+        raise _invalid(
+            "groups.characters.tensor_product_table",
+            "input must retain a character table",
+            (name, "table"),
+        )
+    _admit_tensor_partition_shape(table.partition, name)
+    _admit_tensor_table_rows(table, name)
+    coords = getattr(element, "irreducible_multiplicities", None)
+    if not isinstance(coords, tuple) or len(coords) != len(table.rows):
+        raise _invalid(
+            "groups.characters.tensor_product_coordinate_shape",
+            "one bounded coordinate is required per table row",
+            (name, "irreducible_multiplicities"),
+        )
+    if any(
+        type(value) is not int
+        or value.bit_length() > 1702
+        or len(str(abs(value))) > MAX_VALUE_COEFFICIENT_DIGITS
+        for value in coords
+    ):
+        raise OperationResourceAdmissionError(
+            location=(name, "irreducible_multiplicities"),
+            code="groups.characters.tensor_product_coordinate_height",
+            message="virtual-character coordinates exceed the exact coefficient envelope",
+        )
+
+
+def character_tensor_product(
+    request: CharacterTensorProductRequest,
+) -> CharacterRingElement:
+    """Return exact irreducible coordinates of a bounded virtual-character product.
+
+    This currently authenticates complete canonical tables for the trivial,
+    cyclic (order at most 60), and S3 groups. It makes no general-group claim.
+    """
+    if not isinstance(request, CharacterTensorProductRequest):
+        raise _invalid(
+            "groups.characters.tensor_product_request_type",
+            "request must contain two table-bound virtual characters",
+            ("request",),
+        )
+    left, right = request.left, request.right
+    if not isinstance(left, CharacterRingElement) or not isinstance(
+        right, CharacterRingElement
+    ):
+        raise _invalid(
+            "groups.characters.tensor_product_input_type",
+            "both inputs must be virtual-character ring elements",
+            ("request",),
+        )
+    _admit_ring_element_shape(left, "left")
+    _admit_ring_element_shape(right, "right")
+    lt, rt = left.table, right.table
+    if lt.partition.source != rt.partition.source:
+        raise _invalid(
+            "groups.characters.tensor_product_parent_mismatch",
+            "both virtual characters must have the same concrete group parent",
+            ("right", "table", "partition", "source"),
+        )
+    source = lt.partition.source
+    # Admission is based only on already-bounded wire shapes and conservative
+    # scalar bounds, before canonical group/table expansion.
+    order = sum(len(cls) for cls in lt.partition.classes)
+    classes = len(lt.partition.classes)
+    rows = len(lt.rows)
+    dimension = euler_phi(order)
+    coefficient_digits = max(
+        1,
+        *(
+            len(str(abs(c)))
+            for c in (
+                *left.irreducible_multiplicities,
+                *right.irreducible_multiplicities,
+            )
+        ),
+    )
+    table_digits = max(
+        1,
+        *(
+            max(len(str(abs(value.num))), len(str(value.den)))
+            for element in (left, right)
+            for row in element.table.rows
+            for class_value in row.values
+            for value in class_value.coefficients
+        ),
+    )
+    expanded_digits = coefficient_digits + table_digits + len(str(rows))
+    product_digits = (
+        2 * expanded_digits
+        + (len(str(dimension - 1)) if dimension > 1 else 0)
+        + max(0, dimension - 1)
+        + 2
+    )
+    predicted_digits = product_digits + table_digits + len(str(order)) + (order - 1)
+    # Two input expansions and one exact reconstruction of the result are
+    # mandatory. Character decomposition independently authenticates its
+    # group/table, so charge the canonical group and table work twice.
+    expanded_work = 3 * rows * classes * dimension * expanded_digits**2
+    product_work = classes * dimension * dimension * product_digits**2
+    pairing_work = (
+        rows * classes * dimension * dimension * (product_digits + table_digits) ** 2
+    )
+    reconstruction_work = rows * classes * dimension * predicted_digits**2
+    work = (
+        expanded_work
+        + product_work
+        + pairing_work
+        + reconstruction_work
+        + 2 * order * order * source.degree * max(1, len(source.generators))
+        + 2 * order * order * dimension * table_digits**2
+        + 2 * rows * classes * dimension * table_digits**2
+    )
+    if work > MAX_CHARACTER_TENSOR_PRODUCT_WORK:
+        raise OperationResourceAdmissionError(
+            location=("request",),
+            code="groups.characters.tensor_product_work_exceeds_envelope",
+            message="table reconstruction and exact product exceed the tensor-product work envelope",
+        )
+    if predicted_digits > MAX_VALUE_COEFFICIENT_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("request",),
+            code="groups.characters.tensor_product_output_height",
+            message="predicted tensor-product coordinates exceed the exact coefficient envelope",
+        )
+    output_bytes = (
+        rows * (2 * MAX_VALUE_COEFFICIENT_DIGITS + 32)
+        + MAX_CHARACTER_TABLE_CELLS * 40
+        + 65_536
+    )
+    if (
+        output_bytes > MAX_CHARACTER_TENSOR_PRODUCT_OUTPUT_BYTES
+        or output_bytes > CanonicalLimits().max_output_bytes
+    ):
+        raise OperationResourceAdmissionError(
+            location=("request",),
+            code="groups.characters.tensor_product_output_exceeds_envelope",
+            message="tensor-product result exceeds the exact output envelope",
+        )
+    source = lt.partition.source
+    actual_order = group_order(source)
+    if actual_order > MAX_CYCLOTOMIC_ORDER:
+        raise OperationResourceAdmissionError(
+            location=("left", "table"),
+            code="groups.characters.tensor_product_group_order_exceeds_envelope",
+            message="tensor products currently admit group order at most 60",
+        )
+    raw_classes = group_conjugacy_classes(
+        source.degree, [list(g) for g in source.generators]
+    )
+    partition = GroupConjugacyClassesResult._from_kernel(
+        source, tuple(tuple(tuple(g) for g in cls) for cls in raw_classes)
+    )
+    table = character_table(partition)
+    if lt != table or rt != table:
+        raise _invalid(
+            "groups.characters.tensor_product_noncanonical_table",
+            "both inputs must retain the exact canonical character table for their group",
+            ("request",),
+        )
+    table_order = table.axis.cyclotomic_order
+
+    def expand(element: CharacterRingElement) -> FiniteClassFunction:
+        values = []
+        for j in range(classes):
+            coefficients = [Fraction(0) for _ in range(dimension)]
+            for multiplicity, row in zip(
+                element.irreducible_multiplicities, table.rows, strict=True
+            ):
+                for k, value in enumerate(row.values[j].coefficients):
+                    coefficients[k] += multiplicity * value.as_fraction()
+            values.append(_make_value(table_order, tuple(coefficients)))
+        return FiniteClassFunction._from_kernel(axis=table.axis, values=tuple(values))
+
+    product = class_function_pointwise_product(expand(left), expand(right))
+    decomposed = class_function_character_decomposition(
+        CharacterRingDecompositionRequest(class_function=product)
+    ).ring_element
+    if decomposed.table != table:
+        raise _invalid(
+            "groups.characters.tensor_product_reconstruction",
+            "product decomposition changed the canonical table",
+            ("request",),
+        )
+    # Verify the returned coordinates reconstruct the exact valuewise product.
+    if expand(decomposed) != product:
+        raise _invalid(
+            "groups.characters.tensor_product_reconstruction",
+            "irreducible coordinates failed exact reconstruction",
+            ("request",),
+        )
+    return decomposed
+
+
 __all__ = [
     "MAX_CHARACTER_RING_DECOMPOSITION_OUTPUT_BYTES",
     "MAX_CHARACTER_RING_DECOMPOSITION_WORK",
+    "MAX_CHARACTER_TENSOR_PRODUCT_WORK",
+    "character_tensor_product",
     "class_function_character_decomposition",
 ]

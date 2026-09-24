@@ -2,6 +2,9 @@
 from typing import Any
 
 from jacobian.catalog.models import MathTool, OperationExample
+from jacobian.math.topology.chain_complexes._filtered_models import (
+    FilteredChainComplexRequest,
+)
 from jacobian.math.topology.chain_complexes.filtered_extensions import *
 
 
@@ -17,6 +20,10 @@ def _abut(r: Any) -> Any:
     return abutment(r)
 
 
+def _homology_filtration(r: Any) -> Any:
+    return filtered_homology_filtration(r)
+
+
 _C = {
     "coefficient_ring": "QQ",
     "degree_min": 0,
@@ -29,6 +36,44 @@ _F = [
     {"subspaces": [{"vectors": [["1"]]}, {"vectors": [["1"]]}]},
 ]
 TOOLS = (
+    MathTool(
+        operation_id="homological.filtered_chain_complex.homology_filtration.compute",
+        title="Compute the induced filtration on homology",
+        description=(
+            "Compute exact homology bases over a bounded prime field and the "
+            "nested image of each retained chain filtration level in homology. "
+            "Each image basis class includes a filtered cycle representative and "
+            "an incoming chain whose boundary relates it to the retained global "
+            "homology representative."
+        ),
+        request_type=FilteredChainComplexRequest,
+        result_type=FilteredHomologyResult,
+        run=_homology_filtration,
+        tags=("homological", "filtered", "homology", "exact"),
+        examples=(
+            OperationExample(
+                name="diagonal_line_in_homology",
+                description=(
+                    "The first homology filtration level is the diagonal line "
+                    "inside a two-dimensional homology space."
+                ),
+                input={
+                    "complex": {
+                        "coefficient_ring": "GF_p",
+                        "prime": 2,
+                        "degree_min": 0,
+                        "degree_max": 0,
+                        "basis_sizes": [2],
+                        "differential_matrices": [],
+                    },
+                    "filtration": [
+                        {"subspaces": [{"vectors": [["1", "1"]]}]},
+                        {"subspaces": [{"vectors": [["1", "0"], ["0", "1"]]}]},
+                    ],
+                },
+            ),
+        ),
+    ),
     MathTool(
         operation_id="homological.filtered_chain_map.compute",
         title="Compute a filtered chain-map profile",
@@ -70,7 +115,14 @@ TOOLS = (
     MathTool(
         operation_id="homological.spectral_sequence.abutment.compute",
         title="Return an explicitly stabilized spectral-sequence abutment",
-        description="Return the last computed page only when the admitted finite window proves stabilization; active or truncated pages are not promoted to an abutment.",
+        description=(
+            "Return a stable E-infinity page only after the finite filtration "
+            "proves all later differentials vanish, together with the exact "
+            "comparison isomorphism to each quotient F_p H_n/F_(p-1) H_n. "
+            "The matrices use one chosen basis for each graded homology "
+            "quotient and do not assert a splitting of filtered homology. "
+            "Currently admitted over bounded GF(p) coefficients."
+        ),
         request_type=SpectralAbutmentRequest,
         result_type=SpectralAbutmentResult,
         run=_abut,

@@ -11,8 +11,6 @@ from jacobian.catalog.models import (
 )
 from jacobian.math.polynomials.derivations._weight_models import (
     PolynomialWeightAction,
-    PolynomialWeightActionRequest,
-    PolynomialWeightInvariantRequest,
 )
 from jacobian.math.polynomials.derivations._weight_operations import (
     diagonal_weight_action,
@@ -30,9 +28,7 @@ def _monomial_exponents(poly) -> tuple[tuple[int, ...], ...]:
 def test_complete_invariant_basis_against_independent_cartesian_oracle() -> None:
     action = PolynomialWeightAction(variables=("x", "y", "z"), weights=(2, -3, 1))
     degree = 5
-    result = gm_invariants_through_degree(
-        PolynomialWeightInvariantRequest(action=action, degree=degree)
-    )
+    result = gm_invariants_through_degree(action, degree)
 
     # Independent oracle enumerates the bounded exponent cube and filters by
     # total degree and the integer character pairing, not by the operation's
@@ -64,7 +60,7 @@ def test_complete_invariant_basis_against_independent_cartesian_oracle() -> None
 
 def test_invariants_compose_through_existing_coaction() -> None:
     action = PolynomialWeightAction(variables=("x", "y"), weights=(1, -1))
-    result = gm_invariants_through_degree({"action": action.model_dump(), "degree": 4})
+    result = gm_invariants_through_degree(action, 4)
     assert tuple(row.dimension for row in result.hilbert_prefix) == (1, 0, 1, 0, 1)
     assert tuple(_monomial_exponents(poly)[0] for poly in result.basis) == (
         (0, 0),
@@ -73,9 +69,7 @@ def test_invariants_compose_through_existing_coaction() -> None:
     )
 
     for invariant in result.basis:
-        coaction = diagonal_weight_action(
-            PolynomialWeightActionRequest(action=action, polynomial=invariant)
-        )
+        coaction = diagonal_weight_action(action, invariant)
         assert len(coaction.components) == 1
         assert coaction.components[0].weight == 0
         assert coaction.weight_zero == invariant
@@ -90,30 +84,19 @@ def test_invariant_slice_composition_follows_the_seven_variable_envelope() -> No
         variables=tuple(f"x{i}" for i in range(8)),
         weights=(1, -1, 0, 0, 0, 0, 0, 0),
     )
-    eight_slice = gm_invariants_through_degree(
-        PolynomialWeightInvariantRequest(action=eight, degree=1)
-    )
+    eight_slice = gm_invariants_through_degree(eight, 1)
     assert eight_slice.dimension == 7  # 1 plus the six zero-weight variables
     with pytest.raises(OperationDomainValidationError):
-        diagonal_weight_action(
-            {
-                "action": eight.model_dump(),
-                "polynomial": eight_slice.basis[1].model_dump(),
-            }
-        )
+        diagonal_weight_action(eight.model_dump(), eight_slice.basis[1].model_dump())
 
     seven = PolynomialWeightAction(
         variables=tuple(f"x{i}" for i in range(7)),
         weights=(1, -1, 0, 0, 0, 0, 0),
     )
-    seven_slice = gm_invariants_through_degree(
-        PolynomialWeightInvariantRequest(action=seven, degree=2)
-    )
+    seven_slice = gm_invariants_through_degree(seven, 2)
     assert seven_slice.dimension > 0
     for invariant in seven_slice.basis:
-        coaction = diagonal_weight_action(
-            PolynomialWeightActionRequest(action=seven, polynomial=invariant)
-        )
+        coaction = diagonal_weight_action(seven, invariant)
         assert tuple(component.weight for component in coaction.components) == (0,)
         assert coaction.weight_zero == invariant
 
@@ -126,9 +109,7 @@ def test_combinatorial_work_is_admitted_before_enumeration() -> None:
     # C(8+7, 7)=6435 candidates exceeds the 4096 envelope. In particular,
     # even an all-zero action is rejected before constructing its output basis.
     with pytest.raises(OperationResourceAdmissionError) as exc_info:
-        gm_invariants_through_degree(
-            PolynomialWeightInvariantRequest(action=action, degree=7)
-        )
+        gm_invariants_through_degree(action, 7)
     assert (
         exc_info.value.errors()[0]["type"]
         == "polynomial_weight_invariant.monomial_budget"

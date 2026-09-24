@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from math import comb
 from typing import Any
 
@@ -16,18 +16,19 @@ from jacobian.catalog.models import (
 )
 from jacobian.math.polynomials.derivations._weight_models import (
     MAX_DIAGONAL_WEIGHT,
+    MAX_GM_INVARIANT_DEGREE,
     MAX_GM_INVARIANT_MONOMIALS,
     MAX_WEIGHT_ACTION_DEGREE,
     MAX_WEIGHT_ACTION_TERMS,
+    MAX_WEIGHT_ACTION_VARIABLES,
     PolynomialWeightAction,
-    PolynomialWeightActionRequest,
     PolynomialWeightActionResult,
     PolynomialWeightComponent,
     PolynomialWeightDegreeDimension,
-    PolynomialWeightInvariantRequest,
     PolynomialWeightInvariantResult,
 )
 from jacobian.math.polynomials.values import (
+    PolynomialVariable,
     RationalLaurentPolynomial,
     RationalLaurentPolynomialTerm,
     RationalPolynomial,
@@ -36,25 +37,65 @@ from jacobian.math.polynomials.values import (
 )
 
 
-def _admit_request(
-    request: PolynomialWeightActionRequest | dict[str, Any],
-) -> PolynomialWeightActionRequest:
+def _as_weight_action(
+    action: PolynomialWeightAction | Mapping[str, Any], *, code: str
+) -> PolynomialWeightAction:
     try:
         payload = (
-            request.model_dump()
-            if isinstance(request, PolynomialWeightActionRequest)
-            else request
+            action.model_dump()
+            if isinstance(action, PolynomialWeightAction)
+            else action
         )
-        checked = PolynomialWeightActionRequest.model_validate(payload)
-        action = PolynomialWeightAction.model_validate(checked.action.model_dump())
-        source = RationalPolynomial.model_validate(checked.polynomial.model_dump())
-        checked = checked.model_copy(update={"action": action, "polynomial": source})
+        return PolynomialWeightAction.model_validate(payload)
     except (ValidationError, TypeError, ValueError, PydanticCustomError) as exc:
         raise OperationDomainValidationError(
-            location=("request",),
+            location=("action",),
+            code=code,
+            message="the request must carry one bounded integer weight per variable",
+        ) from exc
+
+
+def _as_decoded_polynomial(
+    value: RationalPolynomial | Mapping[str, Any],
+) -> RationalPolynomial:
+    try:
+        payload = value.model_dump() if isinstance(value, RationalPolynomial) else value
+        return RationalPolynomial.model_validate(payload)
+    except (ValidationError, TypeError, ValueError, PydanticCustomError) as exc:
+        raise OperationDomainValidationError(
+            location=("polynomial",),
             code="polynomial_weight_action.request_shape",
             message="the action request must contain a canonical polynomial in its bound ring",
         ) from exc
+
+
+def _admit_weight_request(
+    action: PolynomialWeightAction,
+    source: RationalPolynomial,
+    parameter: PolynomialVariable,
+) -> None:
+    if source.variables != action.variables:
+        raise OperationDomainValidationError(
+            location=("polynomial",),
+            code="polynomial_weight_action.request_shape",
+            message="polynomial and action must use the same ordered QQ ring",
+        )
+    if parameter in action.variables:
+        raise OperationDomainValidationError(
+            location=("parameter",),
+            code="polynomial_weight_action.request_shape",
+            message="the Laurent parameter must be distinct from ring variables",
+        )
+    if len(action.variables) > MAX_WEIGHT_ACTION_VARIABLES:
+        raise OperationDomainValidationError(
+            location=("action",),
+            code="polynomial_weight_action.request_shape",
+            message=(
+                f"the diagonal action is bounded to {MAX_WEIGHT_ACTION_VARIABLES} "
+                "source variables because the Laurent coaction carrier reserves "
+                "its eighth axis for the parameter"
+            ),
+        )
 
     if len(source.polynomial.terms) > MAX_WEIGHT_ACTION_TERMS:
         raise OperationResourceAdmissionError(
@@ -92,20 +133,25 @@ def _admit_request(
                 code="polynomial_weight_action.coefficient_budget",
                 message=str(exc),
             ) from exc
-    return checked
 
 
 def diagonal_weight_action(
-    request: PolynomialWeightActionRequest | dict[str, Any],
+    action: PolynomialWeightAction | Mapping[str, Any],
+    polynomial: RationalPolynomial | Mapping[str, Any],
+    parameter: PolynomialVariable = "t",
 ) -> PolynomialWeightActionResult:
     """Return ``rho(f)`` and its exact integer-weight decomposition.
 
     Each source monomial ``c*x**e`` maps to ``c*t**(w.e)*x**e``. The sparse
-    image has no more terms than the admitted source, so the preflight above
+    image has no more terms than the admitted source, so the preflight below
     bounds its complete expansion before the first output term is built.
     """
-    checked = _admit_request(request)
-    action, source, parameter = checked.action, checked.polynomial, checked.parameter
+    checked_action = _as_weight_action(
+        action, code="polynomial_weight_action.request_shape"
+    )
+    checked_source = _as_decoded_polynomial(polynomial)
+    _admit_weight_request(checked_action, checked_source, parameter)
+    action, source = checked_action, checked_source
     grouped: dict[int, list[RationalPolynomialTerm]] = {}
     coaction_terms: list[RationalLaurentPolynomialTerm] = []
     for term in source.polynomial.terms:
@@ -164,26 +210,24 @@ def _degree_compositions(variable_count: int, degree: int) -> Iterator[tuple[int
 
 
 def gm_invariants_through_degree(
-    request: PolynomialWeightInvariantRequest | dict[str, Any],
+    action: PolynomialWeightAction | Mapping[str, Any], degree: int
 ) -> PolynomialWeightInvariantResult:
     """Return the complete weight-zero monomial basis through one degree bound."""
-    try:
-        payload = (
-            request.model_dump()
-            if isinstance(request, PolynomialWeightInvariantRequest)
-            else request
-        )
-        checked = PolynomialWeightInvariantRequest.model_validate(payload)
-        action = PolynomialWeightAction.model_validate(checked.action.model_dump())
-        checked = checked.model_copy(update={"action": action})
-    except (ValidationError, TypeError, ValueError, PydanticCustomError) as exc:
+    action = _as_weight_action(action, code="polynomial_weight_invariant.request_shape")
+    if (
+        isinstance(degree, bool)
+        or not isinstance(degree, int)
+        or not 0 <= degree <= MAX_GM_INVARIANT_DEGREE
+    ):
         raise OperationDomainValidationError(
-            location=("request",),
+            location=("degree",),
             code="polynomial_weight_invariant.request_shape",
-            message="invariant-slice request must use a canonical bounded integer-weight action",
-        ) from exc
+            message=(
+                "the invariant-slice degree must be an integer between 0 and "
+                f"{MAX_GM_INVARIANT_DEGREE}"
+            ),
+        )
 
-    degree = checked.degree
     variable_count = len(action.variables)
     candidate_count = comb(variable_count + degree, degree)
     if candidate_count > MAX_GM_INVARIANT_MONOMIALS:

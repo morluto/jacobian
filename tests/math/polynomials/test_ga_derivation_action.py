@@ -293,6 +293,21 @@ def test_native_action_rejects_malformed_chains_as_domain_errors(
     assert error.value.errors()[0]["type"] == "polynomial_derivation.certificate_shape"
 
 
+def test_native_action_rejects_lazy_chain_iterables_without_materializing() -> None:
+    derivation, _ = _derivation()
+    pulled = 0
+
+    def lazy():
+        nonlocal pulled
+        while pulled < 100_000:
+            pulled += 1
+            yield ()
+
+    with pytest.raises(OperationDomainValidationError):
+        ga_action_from_derivation(derivation, lazy())
+    assert pulled == 0
+
+
 def test_action_input_chain_shape_is_bounded() -> None:
     with pytest.raises(ValidationError):
         GaActionRequest.model_validate(

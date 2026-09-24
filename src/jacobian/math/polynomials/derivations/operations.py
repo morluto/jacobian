@@ -586,31 +586,27 @@ def construct_locally_nilpotent_certificate(
     """Check complete generator chains and return the typed certificate."""
     derivation_value = _as_derivation(derivation)
     _admit_derivation(derivation_value)
-    try:
-        supplied = list(chains)
-    except TypeError as exc:
+    if not isinstance(chains, Sequence) or isinstance(chains, (str, bytes)):
         raise OperationDomainValidationError(
             location=("chains",),
             code="polynomial_derivation.certificate_shape",
             message="the certificate must supply one iterate chain per generator",
-        ) from exc
-    if len(supplied) != len(derivation_value.variables):
+        )
+    if len(chains) != len(derivation_value.variables):
         raise OperationDomainValidationError(
             location=("chains",),
             code="polynomial_derivation.certificate_shape",
             message="one chain is required per generator",
         )
     canonical: list[tuple[RationalPolynomial, ...]] = []
-    for index, chain in enumerate(supplied):
-        try:
-            chain_length = len(chain)
-        except TypeError as exc:
+    for index, chain in enumerate(chains):
+        if not isinstance(chain, Sequence) or isinstance(chain, (str, bytes)):
             raise OperationDomainValidationError(
                 location=("chains", index),
                 code="polynomial_derivation.certificate_shape",
                 message="each generator chain must be a sequence of polynomials",
-            ) from exc
-        if not 1 <= chain_length <= MAX_DERIVATION_CERTIFICATE_CHAIN:
+            )
+        if not 1 <= len(chain) <= MAX_DERIVATION_CERTIFICATE_CHAIN:
             raise OperationResourceAdmissionError(
                 location=("chains", index),
                 code="polynomial_derivation.certificate_bound",

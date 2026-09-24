@@ -197,7 +197,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
         request_type=PolynomialWeightInvariantRequest,
         result_type=PolynomialWeightInvariantResult,
-        run=gm_invariants_through_degree,
+        run=lambda request: gm_invariants_through_degree(
+            request.action, request.degree
+        ),
         tags=("algebraic-group", "gm", "invariants", "graded", "exact"),
         discovery_terms=(
             "G_m invariant polynomials through degree",
@@ -232,7 +234,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
         request_type=PolynomialWeightActionRequest,
         result_type=PolynomialWeightActionResult,
-        run=diagonal_weight_action,
+        run=lambda request: diagonal_weight_action(
+            request.action, request.polynomial, request.parameter
+        ),
         tags=("algebraic-group", "gm", "polynomial", "weights", "exact"),
         discovery_terms=(
             "multiplicative group polynomial action",

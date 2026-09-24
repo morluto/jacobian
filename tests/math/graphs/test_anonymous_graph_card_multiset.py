@@ -110,7 +110,7 @@ def test_deserialization_admits_its_exact_canonicalization_bound(monkeypatch) ->
         )
     )
     payload = output.model_dump(mode="python")
-    exact_work = factorial(4) * (4 + comb(4, 2))
+    exact_work = factorial(4) * (4 + 2 * comb(4, 2))
     monkeypatch.setattr(
         deck_models, "MAX_ANONYMOUS_CARD_CANONICALIZATION_WORK", exact_work
     )
@@ -206,7 +206,7 @@ def test_permutation_bound_accepts_exact_limit_and_rejects_one_unit_less(
 ) -> None:
     item = graph(("a", "b", "c", "d"), (("a", "b"),))
     request = AnonymousGraphCardMultisetRequest(card_order=4, cards=(item,))
-    exact_work = factorial(4) * (4 + comb(4, 2))
+    exact_work = factorial(4) * (4 + 2 * comb(4, 2))
     monkeypatch.setattr(
         deck_operations, "MAX_ANONYMOUS_CARD_CANONICALIZATION_WORK", exact_work
     )
@@ -216,6 +216,29 @@ def test_permutation_bound_accepts_exact_limit_and_rejects_one_unit_less(
     )
     with pytest.raises(OperationResourceAdmissionError, match="work bound"):
         anonymous_graph_card_multiset(request)
+
+
+def test_tied_order_eight_candidates_pay_for_full_vector_comparison() -> None:
+    vertices = tuple(f"v{i:02d}" for i in range(8))
+    request = AnonymousGraphCardMultisetRequest(
+        card_order=8, cards=(graph(vertices, ()),)
+    )
+    tied_work = factorial(8) * (8 + 2 * comb(8, 2))
+    assert tied_work > deck_operations.MAX_ANONYMOUS_CARD_CANONICALIZATION_WORK
+    with pytest.raises(OperationResourceAdmissionError, match="work bound"):
+        anonymous_graph_card_multiset(request)
+
+    payload = {
+        "card_order": 8,
+        "classes": [
+            {
+                "representative": {"vertices": list(vertices), "edges": []},
+                "multiplicity": 1,
+            }
+        ],
+    }
+    with pytest.raises(ValidationError, match="bounded permutation work"):
+        AnonymousGraphCardMultiset.model_validate(payload)
 
 
 def test_catalog_publishes_anonymous_cards_as_distinct_from_realizable_decks() -> None:

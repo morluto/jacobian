@@ -43,6 +43,12 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"graph_deck.{reason}", message)
 
 
+def _anonymous_canonicalization_work(order: int, card_count: int) -> int:
+    """Charge each permutation for vector generation and worst-case comparison."""
+    pair_count = comb(order, 2)
+    return card_count * factorial(order) * (order + 2 * max(1, pair_count))
+
+
 def _canonical_card_edges(
     vertices: tuple[str, ...], edges: tuple[tuple[str, str], ...]
 ) -> tuple[tuple[str, str], ...]:
@@ -117,7 +123,7 @@ class AnonymousGraphCardMultiset(StrictModel):
                 "anonymous_card_classes", "classes exceed the carrier bound"
             )
         pair_count = comb(n, 2)
-        work = len(self.classes) * factorial(n) * (n + max(1, pair_count))
+        work = _anonymous_canonicalization_work(n, len(self.classes))
         if work > MAX_ANONYMOUS_CARD_CANONICALIZATION_WORK:
             raise _validation_error(
                 "anonymous_card_validation_bound",

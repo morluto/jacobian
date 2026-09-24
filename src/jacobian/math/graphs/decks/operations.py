@@ -44,6 +44,7 @@ from jacobian.math.graphs.decks._models import (
     VertexDeckSubgraphContribution,
     VertexDeckSubgraphCount,
     VertexDeletionFamily,
+    _anonymous_canonicalization_work,
     _canonical_card_edges,
 )
 from jacobian.math.graphs.patterns._models import _require_bounded_request
@@ -92,7 +93,7 @@ def _admit_anonymous_card_request(
             message="cards must be an immutable tuple",
         )
     pair_count = comb(n, 2)
-    work = len(request.cards) * factorial(n) * (n + max(1, pair_count))
+    work = _anonymous_canonicalization_work(n, len(request.cards))
     if work > MAX_ANONYMOUS_CARD_CANONICALIZATION_WORK:
         raise OperationResourceAdmissionError(
             location=("cards",),

@@ -291,7 +291,12 @@ def finite_group_gauge_holonomy(
             message="path exceeds the 256-step bound",
         )
     work = order**3 + len(edges) + len(steps)
-    output_units = (len(steps) + 1) * order**2 + len(edges) + len(vertices) + len(steps)
+    # The result retains the field (which nests one copy of the parent table
+    # per edge value), one parent-bound element per path contribution, and a
+    # parent-bound holonomy. Count every serialized multiplication table before
+    # constructing the contribution ledger.
+    parent_copies = len(edges) + len(steps) + 2
+    output_units = parent_copies * order**2 + len(edges) + len(vertices) + len(steps)
     if (
         work > MAX_FINITE_GROUP_GAUGE_WORK
         or output_units > MAX_FINITE_GROUP_GAUGE_OUTPUT_UNITS

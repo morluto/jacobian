@@ -56,6 +56,38 @@ def _field(group, index, labels=((1, 2, 0), (1, 0, 2))):
     )
 
 
+def _s4_group():
+    elements = tuple(permutations(range(4)))
+
+    def compose(first, second):
+        return tuple(second[first[i]] for i in range(4))
+
+    index = {element: i for i, element in enumerate(elements)}
+    table = tuple(tuple(index[compose(a, b)] for b in elements) for a in elements)
+    return construct_finite_group_table(
+        FiniteGroupTableRequest(multiplication=table, identity=index[(0, 1, 2, 3)])
+    ).group
+
+
+def _loop_field(group, edge_count):
+    ids = tuple(f"edge-{i:03}" for i in range(edge_count))
+    lattice = GaugeLattice(
+        vertices=("v",),
+        edges=tuple(GaugeEdge(edge_id=edge_id, tail="v", head="v") for edge_id in ids),
+    )
+    return FiniteGroupGaugeField(
+        lattice=lattice,
+        group=group,
+        edge_values=tuple(
+            FiniteGroupGaugeEdgeLabel(
+                edge_id=edge_id,
+                value=FiniteGroupTableElement(group=group, index=group.identity),
+            )
+            for edge_id in ids
+        ),
+    )
+
+
 def test_noncommutative_path_order_and_serialization():
     group, index = _s3()
     field = _field(group, index)
@@ -153,29 +185,8 @@ def test_catalog_publishes_finite_group_holonomy():
 
 
 def test_output_expansion_is_admitted_before_contribution_construction():
-    elements = tuple(permutations(range(4)))
-
-    def compose(first, second):
-        return tuple(second[first[i]] for i in range(4))
-
-    index = {element: i for i, element in enumerate(elements)}
-    table = tuple(tuple(index[compose(a, b)] for b in elements) for a in elements)
-    group = construct_finite_group_table(
-        FiniteGroupTableRequest(multiplication=table, identity=index[(0, 1, 2, 3)])
-    ).group
-    lattice = GaugeLattice(
-        vertices=("v",), edges=(GaugeEdge(edge_id="loop", tail="v", head="v"),)
-    )
-    field = FiniteGroupGaugeField(
-        lattice=lattice,
-        group=group,
-        edge_values=(
-            FiniteGroupGaugeEdgeLabel(
-                edge_id="loop",
-                value=FiniteGroupTableElement(group=group, index=group.identity),
-            ),
-        ),
-    )
+    group = _s4_group()
+    field = _loop_field(group, 1)
     path = OrientedGaugePath.model_construct(
         steps=tuple(GaugePathStep(edge_id="loop", forward=True) for _ in range(256)),
         basepoint=None,
@@ -184,3 +195,30 @@ def test_output_expansion_is_admitted_before_contribution_construction():
         finite_group_gauge_holonomy(
             FiniteGroupGaugeHolonomyRequest(field=field, path=path)
         )
+
+
+def test_aggregate_parent_table_output_is_admitted_for_many_edges_and_steps():
+    group = _s4_group()
+    field = _loop_field(group, 128)
+    path = OrientedGaugePath.model_construct(
+        steps=tuple(GaugePathStep(edge_id="edge-000", forward=True) for _ in range(50)),
+        basepoint=None,
+    )
+    with pytest.raises(OperationResourceAdmissionError):
+        finite_group_gauge_holonomy(
+            FiniteGroupGaugeHolonomyRequest(field=field, path=path)
+        )
+
+
+def test_smaller_s4_output_boundary_is_accepted():
+    group = _s4_group()
+    field = _loop_field(group, 1)
+    path = OrientedGaugePath.model_construct(
+        steps=tuple(GaugePathStep(edge_id="edge-000", forward=True) for _ in range(50)),
+        basepoint=None,
+    )
+    result = finite_group_gauge_holonomy(
+        FiniteGroupGaugeHolonomyRequest(field=field, path=path)
+    )
+    assert result.holonomy.index == group.identity
+    assert len(result.contributions) == 50

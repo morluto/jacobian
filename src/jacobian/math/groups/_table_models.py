@@ -54,11 +54,21 @@ class FiniteGroupTable(StrictModel):
             any(len(row) != order for row in self.multiplication)
             or len(self.inverse) != order
             or self.identity >= order
+            or any(value >= order for row in self.multiplication for value in row)
             or any(index >= order for index in self.inverse)
         ):
             raise PydanticCustomError(
                 "finite_group.table.carrier_shape",
                 "table, identity, and inverse indices must match one finite group order",
+            )
+        if any(
+            self.multiplication[index][self.inverse[index]] != self.identity
+            or self.multiplication[self.inverse[index]][index] != self.identity
+            for index in range(order)
+        ):
+            raise PydanticCustomError(
+                "finite_group.table.inverse_binding",
+                "each inverse index must be a two-sided inverse in the multiplication table",
             )
         return self
 

@@ -1,5 +1,7 @@
 """Contracts for bounded indexed finite-group tables."""
 
+import json
+
 import pytest
 from pydantic import ValidationError
 
@@ -66,3 +68,32 @@ def test_element_index_is_checked_against_its_group_parent() -> None:
     )
     with pytest.raises(ValidationError, match="belong"):
         FiniteGroupTableElement(group=group, index=6)
+
+
+def test_table_rejects_forged_inverse_map_from_construct_and_json() -> None:
+    forged = FiniteGroupTable.model_construct(
+        identity=0,
+        multiplication=S3,
+        inverse=(0, 0, 2, 3, 5, 4),
+    )
+
+    with pytest.raises(ValidationError, match="two-sided inverse"):
+        FiniteGroupTable.model_validate_json(forged.model_dump_json())
+    with pytest.raises(ValidationError, match="two-sided inverse"):
+        FiniteGroupTable.model_validate(
+            {
+                "identity": 0,
+                "multiplication": S3,
+                "inverse": (0, 0, 2, 3, 5, 4),
+            }
+        )
+    with pytest.raises(ValidationError, match="two-sided inverse"):
+        FiniteGroupTable.model_validate_json(
+            json.dumps(
+                {
+                    "identity": 0,
+                    "multiplication": S3,
+                    "inverse": (0, 0, 2, 3, 5, 4),
+                }
+            )
+        )

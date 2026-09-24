@@ -46,7 +46,7 @@ def admit_tables(
     for degree, level in enumerate(sets):
         if (
             not isinstance(level, tuple)
-            or not 1 <= len(level) <= MAX_SIMPLICES_PER_DEGREE
+            or not 0 <= len(level) <= MAX_SIMPLICES_PER_DEGREE
             or any(not isinstance(label, str) or not label for label in level)
             or len(set(level)) != len(level)
         ):

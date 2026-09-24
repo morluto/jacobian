@@ -6,9 +6,13 @@ from fractions import Fraction
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.builtins import BUILTIN_TOOLS
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.topology._models import canonical_complex
 from jacobian.math.topology.cellular_sheaves import (
+    SheafCochainMapRequest,
     SheafField,
     SheafMorphismRequest,
     SheafMorphismResult,
@@ -19,6 +23,7 @@ from jacobian.math.topology.cellular_sheaves import (
 from jacobian.math.topology.cellular_sheaves._models import CoverRestrictionMatrix
 from jacobian.math.topology.cellular_sheaves.extensions import (
     SheafMorphismComposeRequest,
+    cochain_map,
     compose_morphisms,
 )
 
@@ -148,6 +153,62 @@ def test_composition_preserves_zero_dimensional_middle_stalks() -> None:
         axis
     )
     assert SheafMorphismRequest is not None
+
+
+def test_natural_morphism_induces_axis_bound_cochain_matrices() -> None:
+    sheaf = _triangle_sheaf()
+    components = tuple((face, ((_q("2"),),)) for face in sheaf.canonical_face_order)
+    sheaf_map = morphism(sheaf, sheaf, components)
+    result = cochain_map(sheaf_map)
+    restored = type(result).model_validate_json(result.model_dump_json())
+    assert restored == result
+    assert tuple(
+        tuple(len(axis) for axis in axes)
+        for axes in (result.source_bases, result.target_bases)
+    ) == (
+        (3, 3, 1),
+        (3, 3, 1),
+    )
+    assert result.components == (
+        (
+            (_q("2"), _q("0"), _q("0")),
+            (_q("0"), _q("2"), _q("0")),
+            (_q("0"), _q("0"), _q("2")),
+        ),
+        (
+            (_q("2"), _q("0"), _q("0")),
+            (_q("0"), _q("2"), _q("0")),
+            (_q("0"), _q("0"), _q("2")),
+        ),
+        ((_q("2"),),),
+    )
+    request = SheafCochainMapRequest(morphism=sheaf_map)
+    tool = next(
+        tool
+        for tool in BUILTIN_TOOLS
+        if tool.operation_id == "cellular_sheaf.morphism.cochain_map"
+    )
+    assert tool.run(request) == result
+
+
+def test_cochain_map_consumer_rechecks_serialized_naturality_claim() -> None:
+    sheaf = _triangle_sheaf()
+    components = tuple(
+        (face, ((_q("3") if face == ("a", "b") else _q("2"),),))
+        for face in sheaf.canonical_face_order
+    )
+    invalid_claim = SheafMorphismResult(
+        source=sheaf,
+        target=sheaf,
+        components=components,
+        natural=True,
+    )
+    try:
+        cochain_map(invalid_claim)
+    except OperationDomainValidationError as error:
+        assert "natural" in str(error)
+    else:
+        raise AssertionError("a false serialized naturality claim was consumed")
 
 
 def test_component_scalar_digit_bound_precedes_scalar_parsing() -> None:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from fractions import Fraction
 from math import factorial
 from typing import Any, Self
 
@@ -119,6 +120,25 @@ class SheafMorphismComposeRequest(StrictModel):
 
     first: SheafMorphismResult
     second: SheafMorphismResult
+
+
+class SheafCochainMapRequest(StrictModel):
+    """A natural stalk map whose induced cochain map is requested."""
+
+    morphism: SheafMorphismResult
+
+
+class SheafCochainMapResult(StrictModel):
+    """Degreewise cochain maps induced by a source-bound sheaf morphism.
+
+    ``components[k]`` maps the source cellular-sheaf cochains in degree k to
+    the target cochains, in the retained simplex/stalk coordinate axes.
+    """
+
+    morphism: SheafMorphismResult
+    source_bases: tuple[tuple[SheafCochainCoordinate, ...], ...]
+    target_bases: tuple[tuple[SheafCochainCoordinate, ...], ...]
+    components: tuple[tuple[tuple[SheafScalar, ...], ...], ...]
 
 
 def _section_resource(code: str, message: str) -> OperationResourceAdmissionError:
@@ -864,6 +884,95 @@ def morphism(
     )
 
 
+def cochain_map(morphism_value: SheafMorphismResult) -> SheafCochainMapResult:
+    """Construct the induced cellular cochain map degree by degree.
+
+    A serialized naturality flag is a caller claim, so this consumer admits
+    the source and target diagrams and establishes the naturality squares
+    before assembling the direct-sum stalk maps in each cochain degree.
+    """
+    checked = morphism(
+        morphism_value.source, morphism_value.target, morphism_value.components
+    )
+    if not checked.natural:
+        raise _section_domain(
+            "cochain_map_non_natural",
+            "an induced cochain map requires a natural cellular-sheaf morphism",
+        )
+    source = checked.source
+    target = checked.target
+    if source.complex != target.complex:
+        raise _section_domain(
+            "cochain_map_parent_mismatch",
+            "the induced cochain map requires the same source complex",
+        )
+    source_stalks = {item.simplex: item for item in source.stalks}
+    target_stalks = {item.simplex: item for item in target.stalks}
+    by_simplex = dict(checked.components)
+    degree_faces = tuple(group.faces for group in source.complex.faces_by_dimension)
+    source_bases: list[tuple[SheafCochainCoordinate, ...]] = []
+    target_bases: list[tuple[SheafCochainCoordinate, ...]] = []
+    dimensions: list[tuple[int, int]] = []
+    for faces in degree_faces:
+        source_basis = tuple(
+            SheafCochainCoordinate(simplex=face, basis_label=label)
+            for face in faces
+            for label in source_stalks[face].basis
+        )
+        target_basis = tuple(
+            SheafCochainCoordinate(simplex=face, basis_label=label)
+            for face in faces
+            for label in target_stalks[face].basis
+        )
+        source_bases.append(source_basis)
+        target_bases.append(target_basis)
+        dimensions.append((len(source_basis), len(target_basis)))
+    matrix_cells = sum(source_dim * target_dim for source_dim, target_dim in dimensions)
+    if matrix_cells > MAX_SHEAF_SECTION_MATRIX_CELLS:
+        raise _section_resource(
+            "cochain_map_cells_bound",
+            "the induced degreewise cochain matrices exceed their cell bound",
+        )
+    scalar_count = matrix_cells
+    output_chars = sheaf_scalar_json_bound(scalar_count)
+    if output_chars > MAX_SHEAF_MORPHISM_OUTPUT_CHARS:
+        raise _section_resource(
+            "cochain_map_output_bound",
+            "the induced degreewise cochain matrices exceed their output bound",
+        )
+    zero: SheafScalar = (
+        CanonicalRational.from_fraction(Fraction(0))
+        if source.coefficient_field.value == "QQ"
+        else 0
+    )
+    result_matrices = []
+    for faces, (source_dimension, target_dimension) in zip(
+        degree_faces, dimensions, strict=True
+    ):
+        matrix = [
+            [zero for _ in range(source_dimension)] for _ in range(target_dimension)
+        ]
+        source_offset = target_offset = 0
+        for face in faces:
+            component = by_simplex[face]
+            rows = len(target_stalks[face].basis)
+            columns = len(source_stalks[face].basis)
+            for row in range(rows):
+                for column in range(columns):
+                    matrix[target_offset + row][source_offset + column] = component[
+                        row
+                    ][column]
+            source_offset += columns
+            target_offset += rows
+        result_matrices.append(tuple(tuple(row) for row in matrix))
+    return SheafCochainMapResult(
+        morphism=checked,
+        source_bases=tuple(source_bases),
+        target_bases=tuple(target_bases),
+        components=tuple(result_matrices),
+    )
+
+
 def compose_morphisms(
     first: SheafMorphismResult, second: SheafMorphismResult
 ) -> SheafMorphismResult:
@@ -961,6 +1070,8 @@ def compose_morphisms(
 
 
 __all__ = [
+    "SheafCochainMapRequest",
+    "SheafCochainMapResult",
     "SheafMorphismComposeRequest",
     "SheafMorphismRequest",
     "SheafMorphismResult",
@@ -972,6 +1083,7 @@ __all__ = [
     "SheafSectionRestrictionRequest",
     "SheafSectionSpace",
     "SheafSectionsRequest",
+    "cochain_map",
     "compose_morphisms",
     "morphism",
     "restrict_sections",

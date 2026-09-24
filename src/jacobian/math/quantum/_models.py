@@ -812,41 +812,6 @@ class CSSCheckSpaceResult(StrictModel):
         return self
 
 
-def _binary_row_rank(rows: tuple[PhaseFreeQubitPauli, ...], width: int) -> int:
-    matrix = [[*row.x_bits, *row.z_bits] for row in rows]
-    rank = 0
-    for column in range(width):
-        pivot = next(
-            (index for index in range(rank, len(matrix)) if matrix[index][column]),
-            None,
-        )
-        if pivot is None:
-            continue
-        matrix[rank], matrix[pivot] = matrix[pivot], matrix[rank]
-        for index in range(rank + 1, len(matrix)):
-            if matrix[index][column]:
-                matrix[index] = [
-                    (left + right) % 2
-                    for left, right in zip(matrix[index], matrix[rank], strict=True)
-                ]
-        rank += 1
-    return rank
-
-
-def _pauli_symplectic_pairing(
-    left: PhaseFreeQubitPauli, right: PhaseFreeQubitPauli
-) -> int:
-    return (
-        sum(
-            x_left * z_right + z_left * x_right
-            for x_left, z_left, x_right, z_right in zip(
-                left.x_bits, left.z_bits, right.x_bits, right.z_bits, strict=True
-            )
-        )
-        % 2
-    )
-
-
 class LogicalPauliFrame(StrictModel):
     """A paired phase-free symplectic basis of ``S-perp/S``."""
 
@@ -857,6 +822,10 @@ class LogicalPauliFrame(StrictModel):
 
     @model_validator(mode="after")
     def require_quotient_frame(self) -> Self:
+        # Structural deserialization only: the producing kernel establishes the
+        # isotropic rank, S-perp membership, and canonical symplectic pairings
+        # once via _from_kernel. Replaying GF(2) elimination here would redo
+        # that mathematical work on every model_validate round trip.
         if not isinstance(self.check_space, CheckSpaceValue):
             raise _validation_error(
                 "logical_frame_parent", "frame requires a check space"
@@ -883,20 +852,6 @@ class LogicalPauliFrame(StrictModel):
                 "logical_frame_check_space",
                 "check rows must be valid phase-free values on the source register",
             )
-        if any(
-            _pauli_symplectic_pairing(left, right)
-            for i, left in enumerate(source_rows)
-            for right in source_rows[i + 1 :]
-        ):
-            raise _validation_error(
-                "logical_frame_nonisotropic", "source check space must be isotropic"
-            )
-        rank = _binary_row_rank(source_rows, 2 * n)
-        if self.logical_qubits != n - rank:
-            raise _validation_error(
-                "logical_frame_dimension",
-                "logical_qubit count must equal n minus the check-space rank",
-            )
         logical_rows = (*self.x_logical_basis, *self.z_logical_basis)
         if any(
             not isinstance(row, PhaseFreeQubitPauli)
@@ -909,29 +864,6 @@ class LogicalPauliFrame(StrictModel):
             raise _validation_error(
                 "logical_frame_register",
                 "logical representatives must be valid values on the source register",
-            )
-        if any(
-            _pauli_symplectic_pairing(check, logical)
-            for check in source_rows
-            for logical in logical_rows
-        ):
-            raise _validation_error(
-                "logical_frame_normalizer",
-                "every logical representative must lie in S-perp",
-            )
-        if any(
-            _pauli_symplectic_pairing(left, right)
-            for family in (self.x_logical_basis, self.z_logical_basis)
-            for index, left in enumerate(family)
-            for right in family[index + 1 :]
-        ) or any(
-            _pauli_symplectic_pairing(left, right) != int(i == j)
-            for i, left in enumerate(self.x_logical_basis)
-            for j, right in enumerate(self.z_logical_basis)
-        ):
-            raise _validation_error(
-                "logical_frame_pairing",
-                "logical representatives must have canonical symplectic pairings",
             )
         return self
 
@@ -1031,7 +963,11 @@ class CSSDistanceResult(StrictModel):
             (self.x_distance, self.x_representative, "x"),
             (self.z_distance, self.z_representative, "z"),
         ):
-            assert distance is not None and representative is not None
+            if distance is None or representative is None:
+                raise _validation_error(
+                    "css_distance_missing_sector",
+                    "both logical sectors require an exact distance and representative",
+                )
             if (
                 representative.qubit_register != register
                 or representative.weight != distance

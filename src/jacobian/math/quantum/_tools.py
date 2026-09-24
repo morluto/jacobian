@@ -56,7 +56,7 @@ def _run_canonicalize_check_space(
 
 
 def _run_css_check_space(request: CSSCheckSpaceRequest) -> CSSCheckSpaceResult:
-    return css_check_space(request)
+    return css_check_space(request.qubit_register, request.x_checks, request.z_checks)
 
 
 def _run_css_logical_frame(value: CSSCheckSpaceValue) -> CSSLogicalPauliFrame:
@@ -91,7 +91,10 @@ def _run_pairing(request: PauliPairingRequest) -> PauliPairingResult:
 def _run_family_commutation(
     request: PauliFamilyCommutationRequest,
 ) -> PauliFamilyCommutationResult:
-    return pauli_family_commutation_matrix(request)
+    return PauliFamilyCommutationResult(
+        source=request,
+        commutation_matrix=pauli_family_commutation_matrix(request.family),
+    )
 
 
 def _run_inverse(request: PauliInverseRequest) -> PauliInverseResult:
@@ -99,11 +102,14 @@ def _run_inverse(request: PauliInverseRequest) -> PauliInverseResult:
 
 
 def _run_from_labels(request: PauliFromLabelsRequest) -> PauliFromLabelsResult:
-    return pauli_from_labels(request)
+    return PauliFromLabelsResult(
+        source=request,
+        pauli=pauli_from_labels(request.qubit_register, request.labels, request.phase),
+    )
 
 
 def _run_to_labels(request: PauliToLabelsRequest) -> PauliToLabelsResult:
-    return pauli_to_labels(request)
+    return pauli_to_labels(request.pauli)
 
 
 def _run_syndrome(

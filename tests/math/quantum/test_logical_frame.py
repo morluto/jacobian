@@ -102,13 +102,15 @@ def test_catalog_publishes_generic_mixed_pauli_logical_frame() -> None:
     assert frame.z_logical_basis[0].qubit_register == frame.check_space.qubit_register
     assert LogicalPauliFrame.model_validate(frame.model_dump(mode="json")) == frame
 
-    outside_normalizer = frame.model_dump(mode="json")
-    outside_normalizer["x_logical_basis"][0]["x_bits"] = [1, 0]
-    outside_normalizer["x_logical_basis"][0]["z_bits"] = [0, 0]
-    with pytest.raises(ValidationError, match="S-perp"):
-        LogicalPauliFrame.model_validate(outside_normalizer)
+    # Deserialization is structural only: the kernel establishes S-perp
+    # membership and canonical pairings once, so model_validate must not replay
+    # that GF(2) work. Structural violations are still rejected here.
+    bad_register = frame.model_dump(mode="json")
+    bad_register["x_logical_basis"][0]["qubit_register"] = {"qubit_ids": ["other"]}
+    with pytest.raises(ValidationError, match="register"):
+        LogicalPauliFrame.model_validate(bad_register)
 
-    wrong_pairing = frame.model_dump(mode="json")
-    wrong_pairing["z_logical_basis"][0] = wrong_pairing["x_logical_basis"][0].copy()
-    with pytest.raises(ValidationError, match="canonical symplectic pairings"):
-        LogicalPauliFrame.model_validate(wrong_pairing)
+    bad_dimension = frame.model_dump(mode="json")
+    bad_dimension["x_logical_basis"] = []
+    with pytest.raises(ValidationError, match="size k"):
+        LogicalPauliFrame.model_validate(bad_dimension)

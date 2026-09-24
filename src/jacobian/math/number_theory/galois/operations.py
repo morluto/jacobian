@@ -11,7 +11,10 @@ from pydantic import ValidationError
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.number_theory.galois._factor_process import factor_mod_prime
 
 if TYPE_CHECKING:
@@ -21,6 +24,9 @@ from jacobian.math.number_theory.galois._models import (
     MAX_FACTOR_DEGREE,
     MAX_FIELD_ORDER,
     AutomorphismResult,
+    ElementAutomorphismImage,
+    ElementEmbeddingOrbitRequest,
+    ElementEmbeddingOrbitResult,
     FiniteFieldFactor,
     FinitePermutationGroup,
     FrobeniusCycleResult,
@@ -50,9 +56,14 @@ from jacobian.math.number_theory.number_fields._field_embedding import (
     apply_simple_number_field_embedding,
 )
 from jacobian.math.number_theory.number_fields.values import (
+    MAX_SIMPLE_NUMBER_FIELD_ELEMENT_DIGITS,
+    SimpleNumberFieldElement,
     SimpleNumberFieldPresentation,
 )
 from jacobian.math.polynomials.values import RationalPolynomial
+
+MAX_ELEMENT_ORBIT_POLYNOMIAL_DIGITS = 1100
+MAX_ELEMENT_ORBIT_OUTPUT_BYTES = 32_768
 
 
 def _admit(operation: Callable[[], None], *, location: tuple[str | int, ...]) -> None:
@@ -989,11 +1000,6 @@ def apply_automorphism(automorphism: QQFieldAutomorphism, root: QQRoot) -> QQRoo
 
 def apply_automorphism_to_element(automorphism: QQFieldAutomorphism, element):
     """Apply an exact field automorphism to any element in its source field."""
-    from jacobian.math.number_theory.number_fields.values import (
-        MAX_SIMPLE_NUMBER_FIELD_ELEMENT_DIGITS,
-        SimpleNumberFieldElement,
-    )
-
     canonical_automorphism, field = _canonical_automorphism(automorphism)
     try:
         canonical_element = SimpleNumberFieldElement.model_validate(
@@ -1012,47 +1018,193 @@ def apply_automorphism_to_element(automorphism: QQFieldAutomorphism, element):
             message="element must belong to the automorphism field",
         )
 
-    # For a quadratic field, the image of a+b*alpha is a+b*u+b*v*alpha.
-    # Bound unreduced rational coordinates before any exact multiplication.
-    element_coords = _coords(canonical_element)
-    if field.extension.degree == 2:
-        scalar, alpha = element_coords
-        image_scalar, image_alpha = _coords(canonical_automorphism.basis_images[1])
-
-        def product_digit_pair(left: Fraction, right: Fraction) -> tuple[int, int]:
-            return (
-                len(str(abs(left.numerator))) + len(str(abs(right.numerator))),
-                len(str(left.denominator)) + len(str(right.denominator)),
-            )
-
-        def sum_digit_bound(
-            left: Fraction, right_digits: tuple[int, int]
-        ) -> tuple[int, int]:
-            left_numerator = len(str(abs(left.numerator)))
-            left_denominator = len(str(left.denominator))
-            product_numerator, product_denominator = right_digits
-            return max(
-                left_numerator + product_denominator,
-                product_numerator + left_denominator,
-            ) + 1, max(left_denominator + product_denominator, 1)
-
-        scalar_sum_bounds = sum_digit_bound(
-            scalar, product_digit_pair(alpha, image_scalar)
-        )
-        alpha_bounds = product_digit_pair(alpha, image_alpha)
-        scalar_bound = max(scalar_sum_bounds)
-        alpha_bound = max(alpha_bounds)
-        if max(scalar_bound, alpha_bound) > MAX_SIMPLE_NUMBER_FIELD_ELEMENT_DIGITS:
-            raise OperationDomainValidationError(
-                location=("element",),
-                code="galois_theory.element_image_over_envelope",
-                message=(
-                    "the conservative exact automorphism-image coordinate bound "
-                    f"exceeds {MAX_SIMPLE_NUMBER_FIELD_ELEMENT_DIGITS} digits"
-                ),
-            )
+    _admit_element_image(canonical_automorphism, canonical_element)
     image = _map_element(canonical_automorphism, canonical_element)
     return _field_element(field.extension, _coords(image))
+
+
+def _admit_element_image(
+    automorphism: QQFieldAutomorphism, element: SimpleNumberFieldElement
+) -> None:
+    """Bound the exact rational coordinate arithmetic before map expansion."""
+    if automorphism.field.extension.degree != 2:
+        return
+    # For a quadratic field, the image of a+b*alpha is a+b*u+b*v*alpha.
+    element_coords = _coords(element)
+    scalar, alpha = element_coords
+    image_scalar, image_alpha = _coords(automorphism.basis_images[1])
+
+    def product_digit_pair(left: Fraction, right: Fraction) -> tuple[int, int]:
+        return (
+            len(str(abs(left.numerator))) + len(str(abs(right.numerator))),
+            len(str(left.denominator)) + len(str(right.denominator)),
+        )
+
+    def sum_digit_bound(
+        left: Fraction, right_digits: tuple[int, int]
+    ) -> tuple[int, int]:
+        left_numerator = len(str(abs(left.numerator)))
+        left_denominator = len(str(left.denominator))
+        product_numerator, product_denominator = right_digits
+        return max(
+            left_numerator + product_denominator,
+            product_numerator + left_denominator,
+        ) + 1, max(left_denominator + product_denominator, 1)
+
+    scalar_sum_bounds = sum_digit_bound(
+        scalar, product_digit_pair(alpha, image_scalar)
+    )
+    alpha_bounds = product_digit_pair(alpha, image_alpha)
+    scalar_bound = max(scalar_sum_bounds)
+    alpha_bound = max(alpha_bounds)
+    if max(scalar_bound, alpha_bound) > MAX_SIMPLE_NUMBER_FIELD_ELEMENT_DIGITS:
+        raise OperationDomainValidationError(
+            location=("element",),
+            code="galois_theory.element_image_over_envelope",
+            message=(
+                "the conservative exact automorphism-image coordinate bound "
+                f"exceeds {MAX_SIMPLE_NUMBER_FIELD_ELEMENT_DIGITS} digits"
+            ),
+        )
+
+
+def _admit_element_orbit_output(
+    field: QQSplittingField, element: SimpleNumberFieldElement
+) -> None:
+    """Preflight polynomial coordinate growth and the fixed-size result shape."""
+    element_digits = max(
+        max(
+            len(str(abs(coefficient.num))),
+            len(str(coefficient.den)),
+        )
+        for coefficient in element.coefficients_ascending
+    )
+    field_coefficient_digits = max(
+        len(str(abs(value)))
+        for value in field.extension.coefficients_descending
+    )
+    # The quadratic trace/norm formulas use at most four element coordinates
+    # and four defining-polynomial coefficient factors before rational
+    # reduction; the extra eight digits cover additions and signs.
+    polynomial_digits = 4 * element_digits + 4 * field_coefficient_digits + 8
+    if polynomial_digits > MAX_ELEMENT_ORBIT_POLYNOMIAL_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("element",),
+            code="galois_theory.element_orbit_polynomial_over_envelope",
+            message=(
+                "the conservative minimal-polynomial coefficient bound exceeds "
+                f"{MAX_ELEMENT_ORBIT_POLYNOMIAL_DIGITS} digits"
+            ),
+        )
+
+    # The output repeats at most five field elements (source, two images,
+    # two orbit values), three polynomial coefficients, and a bounded field/map
+    # envelope. This estimate is evaluated before constructing any images.
+    element_payload = 5 * field.extension.degree * 2 * element_digits
+    polynomial_payload = 3 * 2 * polynomial_digits
+    estimated_bytes = 2 * (element_payload + polynomial_payload) + 8_192
+    if estimated_bytes > MAX_ELEMENT_ORBIT_OUTPUT_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("element",),
+            code="galois_theory.element_orbit_output_over_envelope",
+            message=(
+                "the conservative exact orbit result estimate exceeds "
+                f"{MAX_ELEMENT_ORBIT_OUTPUT_BYTES} bytes"
+            ),
+        )
+
+def element_embedding_orbit(
+    request: ElementEmbeddingOrbitRequest,
+) -> ElementEmbeddingOrbitResult:
+    """Return the complete element orbit under the bounded QQ automorphism group."""
+    try:
+        canonical_request = ElementEmbeddingOrbitRequest.model_validate(
+            request.model_dump()
+        )
+        field = _canonical_splitting_field(
+            canonical_request.field, location=("field",)
+        )
+        element = canonical_request.element
+    except (ValidationError, AttributeError, KeyError, TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("field",),
+            code="galois_theory.invalid_element_orbit_request",
+            message="orbit input must bind one exact element to its QQ splitting field",
+        ) from exc
+
+    # Each coordinate has at most 256 decimal digits and the field degree and
+    # complete automorphism count are at most two. Automorphism image admission
+    # is checked for every map before any image is expanded; the orbit polynomial
+    # uses a fixed number of products/sums, with fewer than 1100 digits per
+    # rational coordinate under these input and defining-coefficient bounds.
+    _admit_element_orbit_output(field, element)
+    group = automorphisms(field).automorphisms
+    for automorphism in group:
+        _admit_element_image(automorphism, element)
+    action: list[ElementAutomorphismImage] = []
+    images: list[SimpleNumberFieldElement] = []
+    stabilizers: list[QQFieldAutomorphism] = []
+    for automorphism in group:
+        image = _field_element(
+            field.extension, _coords(_map_element(automorphism, element))
+        )
+        action.append(ElementAutomorphismImage(automorphism=automorphism, image=image))
+        if image == element:
+            stabilizers.append(automorphism)
+        if image not in images:
+            images.append(image)
+
+    orbit_size = len(images)
+    coordinates = _coords(element)
+    if field.extension.degree == 1 or coordinates[1] == 0:
+        polynomial_coefficients = (-coordinates[0], Fraction(1))
+    elif orbit_size == 2:
+        scalar, radical = coordinates
+        leading, linear, constant = map(Fraction, field.extension.coefficients_descending)
+        generator_trace = -linear / leading
+        generator_norm = constant / leading
+        trace = 2 * scalar + radical * generator_trace
+        norm = (
+            scalar * scalar
+            + scalar * radical * generator_trace
+            + radical * radical * generator_norm
+        )
+        polynomial_coefficients = (norm, -trace, Fraction(1))
+    else:
+        # A quadratic element fixed by its complete QQ automorphism group is rational.
+        polynomial_coefficients = (-coordinates[0], Fraction(1))
+
+    polynomial = RationalPolynomial.model_validate(
+        {
+            "variables": ["x"],
+            "polynomial": {
+                "terms": [
+                    {
+                        "coefficient": {
+                            "num": value.numerator,
+                            "den": value.denominator,
+                        },
+                        "exponents": [degree],
+                    }
+                    for degree, value in reversed(
+                        tuple(enumerate(polynomial_coefficients))
+                    )
+                    if value
+                ]
+            },
+        }
+    )
+    return ElementEmbeddingOrbitResult(
+        field=field,
+        source_element=element,
+        action=tuple(action),
+        orbit=tuple(images),
+        stabilizer=GaloisAutomorphismSubgroup(
+            field=field, elements=tuple(stabilizers)
+        ),
+        orbit_size=orbit_size,
+        minimal_polynomial=polynomial,
+    )
 
 
 def _canonical_galois_group_claim(

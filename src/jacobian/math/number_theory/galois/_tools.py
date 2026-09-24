@@ -11,6 +11,8 @@ from jacobian.math.number_theory.galois._models import (
     AutomorphismInverseRequest,
     AutomorphismRequest,
     AutomorphismResult,
+    ElementEmbeddingOrbitRequest,
+    ElementEmbeddingOrbitResult,
     FrobeniusCycleRequest,
     FrobeniusCycleResult,
     GaloisAutomorphismSubgroup,
@@ -36,6 +38,7 @@ from jacobian.math.number_theory.galois.operations import (
     apply_automorphism_to_element,
     automorphisms,
     compose_automorphisms,
+    element_embedding_orbit,
     frobenius_cycle,
     galois_factor,
     galois_fixed_field,
@@ -96,6 +99,10 @@ def _apply_element(
     request: AutomorphismElementApplyRequest,
 ) -> SimpleNumberFieldElement:
     return apply_automorphism_to_element(request.automorphism, request.element)
+
+
+def _element_orbit(request: ElementEmbeddingOrbitRequest) -> ElementEmbeddingOrbitResult:
+    return element_embedding_orbit(request)
 
 
 def _subgroup(request: GaloisSubgroupRequest) -> GaloisAutomorphismSubgroup:
@@ -325,6 +332,42 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                         "coefficients_ascending": [
                             {"num": "3", "den": "1"},
                             {"num": "2", "den": "1"},
+                        ],
+                    },
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="number_field.element.embedding_orbit.compute",
+        title="Compute an exact element embedding orbit",
+        description=(
+            "Compute the complete orbit of one exact field element under every "
+            "QQ-automorphism of a degree-at-most-two splitting field. The result "
+            "retains every exact map/image pair, the distinct orbit, its exact "
+            "stabilizer, orbit size, and the minimal polynomial over QQ."
+        ),
+        request_type=ElementEmbeddingOrbitRequest,
+        result_type=ElementEmbeddingOrbitResult,
+        run=_element_orbit,
+        tags=("galois-theory", "embedding", "orbit", "exact"),
+        discovery_terms=(
+            "number field element conjugates",
+            "Galois orbit of an algebraic number",
+            "element stabilizer under automorphisms",
+            "minimal polynomial from exact conjugates",
+        ),
+        examples=(
+            OperationExample(
+                name="orbit_of_sqrt2",
+                description="The two exact conjugates of sqrt(2) in QQ(sqrt(2)).",
+                input={
+                    "field": _FIELD_X2,
+                    "element": {
+                        "presentation": _X2_EXTENSION,
+                        "coefficients_ascending": [
+                            {"num": "0", "den": "1"},
+                            {"num": "1", "den": "1"},
                         ],
                     },
                 },

@@ -536,6 +536,38 @@ class AutomorphismElementApplyRequest(StrictModel):
     element: SimpleNumberFieldElement
 
 
+class ElementEmbeddingOrbitRequest(StrictModel):
+    """An element of one supported splitting field over QQ."""
+
+    field: QQSplittingField
+    element: SimpleNumberFieldElement
+
+    @model_validator(mode="after")
+    def require_element_parent(self) -> Self:
+        if self.element.presentation != self.field.extension:
+            raise _validation_error(
+                "element_orbit_parent",
+                "element must belong to the exact splitting-field presentation",
+            )
+        return self
+
+
+class ElementAutomorphismImage(StrictModel):
+    """One exact map and its image of the orbit's source element."""
+
+    automorphism: QQFieldAutomorphism
+    image: SimpleNumberFieldElement
+
+    @model_validator(mode="after")
+    def require_map_image_parents(self) -> Self:
+        if self.image.presentation != self.automorphism.field.extension:
+            raise _validation_error(
+                "element_orbit_image_parent",
+                "automorphism image must lie in its exact target field",
+            )
+        return self
+
+
 class GaloisAutomorphismSubgroup(StrictModel):
     """A subgroup of the exact automorphisms of one supported splitting field."""
 
@@ -554,6 +586,58 @@ class GaloisAutomorphismSubgroup(StrictModel):
             raise _validation_error(
                 "subgroup_elements",
                 "subgroup automorphisms must be unique and sorted by root action",
+            )
+        return self
+
+
+class ElementEmbeddingOrbitResult(StrictModel):
+    """Complete exact element action under the supported QQ automorphism group."""
+
+    field: QQSplittingField
+    source_element: SimpleNumberFieldElement
+    action: tuple[ElementAutomorphismImage, ...] = Field(min_length=1, max_length=2)
+    orbit: tuple[SimpleNumberFieldElement, ...] = Field(min_length=1, max_length=2)
+    stabilizer: GaloisAutomorphismSubgroup
+    orbit_size: StrictInt = Field(ge=1, le=2)
+    minimal_polynomial: RationalPolynomial
+
+    @model_validator(mode="after")
+    def require_complete_bound_result(self) -> Self:
+        if self.source_element.presentation != self.field.extension:
+            raise _validation_error(
+                "element_orbit_source_parent",
+                "source element must belong to the retained splitting field",
+            )
+        if self.stabilizer.field != self.field:
+            raise _validation_error(
+                "element_orbit_stabilizer_parent",
+                "stabilizer must belong to the retained splitting field",
+            )
+        if any(
+            item.automorphism.field != self.field
+            or item.image.presentation != self.field.extension
+            for item in self.action
+        ):
+            raise _validation_error(
+                "element_orbit_action_parent",
+                "every action map and image must use the retained field",
+            )
+        if any(value.presentation != self.field.extension for value in self.orbit):
+            raise _validation_error(
+                "element_orbit_value_parent",
+                "every orbit element must use the retained field",
+            )
+        if self.orbit_size != len(self.orbit) or self.orbit_size * len(
+            self.stabilizer.elements
+        ) != len(self.action):
+            raise _validation_error(
+                "element_orbit_cardinality",
+                "orbit, action, and stabilizer cardinalities are inconsistent",
+            )
+        if len(set(self.orbit)) != len(self.orbit):
+            raise _validation_error(
+                "element_orbit_duplicates",
+                "orbit elements must be distinct and canonically ordered",
             )
         return self
 

@@ -1,6 +1,7 @@
 # Number theory operations
 
 - [Level-one named modular-form q-expansions](modular-forms-level-one-q-expansions.md)
+- [Standard cyclotomic field inclusions](cyclotomic-field-inclusions.md)
 
 [Documentation home](../../../index.md) · [Tool surface](../../tools.md)
 

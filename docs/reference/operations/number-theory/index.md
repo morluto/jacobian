@@ -14,3 +14,4 @@ and finite abelian-group decompositions are separate catalog entries.
 - [Real-embedded binary power-sum gap profiles](binary-power-sum-gap-profile.md)
 - [Exact finite-sequence autocorrelation](finite-sequence-autocorrelation.md)
 - [Kempner arithmetic-progression decisions](kempner-arithmetic-progressions.md)
+- [Dense Kempner reciprocal-series enclosures](kempner-dense-series.md)

@@ -98,4 +98,6 @@ The accompanying `vertex_labels` tuple maps graph indices to source labels,
 and `edge_faces` is aligned with the graph edge list, preserving the exact
 source 1-face for each edge. Isolated vertices remain in the graph axis. The
 source complex's 64-vertex bound implies at most `binom(64, 2) = 2,016` graph
-edges, below the indexed graph value's edge cap.
+edges, below the indexed graph value's edge cap. Decoding checks that the
+vertex axes agree and that the edge map matches the source's stored 1-face
+axis; it does not replay the source complex's construction history.

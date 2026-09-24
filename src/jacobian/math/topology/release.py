@@ -5,7 +5,7 @@ from __future__ import annotations
 from itertools import combinations
 from math import comb
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
 from jacobian.catalog.models import (
@@ -14,6 +14,7 @@ from jacobian.catalog.models import (
 )
 from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
 from jacobian.math.topology._models import (
+    MAX_TOPOLOGY_VERTICES,
     FiniteSimplicialComplex,
     HomologyConvention,
     Simplex,
@@ -67,8 +68,31 @@ class OneSkeletonResult(StrictModel):
 
     source: FiniteSimplicialComplex
     graph: IndexedSimpleUndirectedGraph
-    vertex_labels: tuple[str, ...]
-    edge_faces: tuple[Simplex, ...]
+    vertex_labels: tuple[str, ...] = Field(max_length=MAX_TOPOLOGY_VERTICES)
+    edge_faces: tuple[Simplex, ...] = Field(
+        max_length=MAX_TOPOLOGY_VERTICES * (MAX_TOPOLOGY_VERTICES - 1) // 2
+    )
+
+    @model_validator(mode="after")
+    def require_source_axes(self) -> OneSkeletonResult:
+        if self.vertex_labels != self.source.vertices:
+            raise ValueError("vertex_labels must equal the source vertex axis")
+        if self.graph.vertex_count != len(self.source.vertices):
+            raise ValueError("graph vertex_count must match the source vertex axis")
+        graph_faces = tuple(
+            tuple(self.vertex_labels[index] for index in edge)
+            for edge in self.graph.edges
+        )
+        if graph_faces != self.edge_faces:
+            raise ValueError("edge_faces must map graph edges in graph edge order")
+        source_edges = (
+            self.source.faces_by_dimension[1].faces
+            if self.source.dimension >= 1
+            else ()
+        )
+        if set(self.edge_faces) != set(source_edges):
+            raise ValueError("graph edges must correspond exactly to source 1-faces")
+        return self
 
 
 class OrientabilityRequest(StrictModel):

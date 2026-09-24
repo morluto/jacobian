@@ -702,8 +702,11 @@ def test_extension_counts_match_direct_count_over_f25() -> None:
     assert result.counts[1].frobenius_power_sum == -1
 
 
-def test_point_enumeration_over_declared_quadratic_extension_field() -> None:
-    """A curve authored over F25 retains that field as its point parent."""
+def test_point_enumeration_over_directly_presented_extension_field() -> None:
+    """Directly presented F25 curves are supported; no base-field lift occurs."""
+    # This is a curve declared over this exact F25 presentation. It does not
+    # claim a canonical transport from a curve over F5: that needs an explicit
+    # typed embedding between the two field presentations.
     field = FiniteFieldPresentation(
         characteristic=5, modulus_coefficients=(2, 0, 1), generator="b"
     )

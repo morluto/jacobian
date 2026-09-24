@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from fractions import Fraction
 from math import gcd
 
@@ -127,6 +128,7 @@ def _check(s: TruncatedLaurentWindow) -> None:
             "precision",
             "coefficients",
             "center",
+            "place",
         )
     ):
         raise OperationDomainValidationError(
@@ -134,11 +136,20 @@ def _check(s: TruncatedLaurentWindow) -> None:
             code="local_series.series_structure",
             message="Laurent window is missing required structural fields",
         )
-    if type(s.variable) is not str:
+    if (
+        type(s.variable) is not str
+        or re.fullmatch(r"[A-Za-z][A-Za-z0-9_]{0,31}", s.variable) is None
+    ):
         raise OperationDomainValidationError(
             location=("series", "variable"),
             code="local_series.variable_type",
             message="Laurent variable must be a strict identifier string",
+        )
+    if s.place not in ("FINITE", "INFINITY") or type(s.place) is not str:
+        raise OperationDomainValidationError(
+            location=("series", "place"),
+            code="local_series.place_value",
+            message="Laurent expansion place must be FINITE or INFINITY",
         )
     if (
         type(s.valuation_lower) is not int
@@ -198,6 +209,12 @@ def _check(s: TruncatedLaurentWindow) -> None:
             code="local_series.center_value",
             message="Laurent center must be reduced with a positive denominator",
         )
+    if s.place == "INFINITY" and center != 0:
+        raise OperationDomainValidationError(
+            location=("series", "center"),
+            code="local_series.infinity_center",
+            message="an infinity expansion uses reciprocal parameter 1/x and center zero",
+        )
     # Native callers can supply model_construct() values, so do not rely on
     # the carrier validator having checked coefficient bounds.
     for coefficient in s.coefficients:
@@ -207,11 +224,15 @@ def _check(s: TruncatedLaurentWindow) -> None:
 def _pair(left: TruncatedLaurentWindow, right: TruncatedLaurentWindow) -> None:
     _check(left)
     _check(right)
-    if (left.variable, left.center) != (right.variable, right.center):
+    if (left.variable, left.place, left.center) != (
+        right.variable,
+        right.place,
+        right.center,
+    ):
         raise OperationDomainValidationError(
             location=("series",),
             code="local_series.parent_mismatch",
-            message="Laurent windows must share variable and center",
+            message="Laurent windows must share variable, expansion place, and center",
         )
 
 
@@ -236,6 +257,7 @@ def _window(
         _admit_coefficient(coefficient)
     return TruncatedLaurentWindow.model_construct(
         variable=source.variable,
+        place=source.place,
         center=source.center,
         valuation_lower=lo,
         precision=hi,

@@ -201,6 +201,31 @@ def test_exact_result_round_trips_and_its_ideal_composes_unchanged() -> None:
     assert isinstance(decoded.ideal, RationalPolynomialIdeal)
 
 
+def test_zero_ideal_has_an_empty_resolution_and_round_trips() -> None:
+    ideal = RationalPolynomialIdeal.model_validate(
+        {
+            "variables": ["x", "y"],
+            "generators": [
+                {
+                    "domain": "QQ",
+                    "variables": ["x", "y"],
+                    "polynomial": {"terms": []},
+                }
+            ],
+        }
+    )
+
+    result = monomial_ideal_graded_betti_table(ideal)
+
+    assert result.ideal == ideal
+    assert result.lcm_lattice_homology == ()
+    assert result.multigraded_betti_numbers == ()
+    assert result.graded_betti_numbers == ()
+    assert result.regularity is None
+    assert not result.has_linear_resolution
+    assert MonomialIdealBettiResult.model_validate_json(result.model_dump_json()) == result
+
+
 @pytest.mark.parametrize(
     ("generators", "message"),
     [

@@ -11,7 +11,9 @@ from jacobian.math.matrices.cyclic_linear._models import (
 from jacobian.math.number_theory.sequences.core import FiniteCyclotomicSequence
 
 
-def _element(field: RationalCyclotomicField, *coordinates: int) -> RationalCyclotomicElement:
+def _element(
+    field: RationalCyclotomicField, *coordinates: int
+) -> RationalCyclotomicElement:
     return RationalCyclotomicElement(
         field=field,
         coefficients_ascending=tuple(

@@ -3,25 +3,46 @@
 from __future__ import annotations
 
 from fractions import Fraction
-from itertools import permutations
+from itertools import pairwise, permutations
 from typing import Literal
 
 from jacobian._exact import CanonicalRational
-from jacobian.canonical import format_canonical_integer
+from jacobian.canonical import (
+    CanonicalLimits,
+    encode_strict_json,
+    format_canonical_integer,
+)
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.math.polynomials.tropical._models import AddBranch, InfinityCase
+from jacobian.math.polynomials.tropical._models import (
+    AddBranch,
+    InfinityCase,
+    PolynomialActiveTermsResult,
+    TropicalActiveTerm,
+)
 from jacobian.math.polynomials.tropical.values import (
+    MAX_TROPICAL_ACTIVE_RESULT_BYTES,
+    MAX_TROPICAL_ACTIVE_TERM_WORK,
     MAX_TROPICAL_EXPONENT,
+    MAX_TROPICAL_NEWTON_RESULT_BYTES,
     MAX_TROPICAL_POLYNOMIAL_TERMS,
+    MAX_TROPICAL_ROOT_CROSSOVER_PAIRS,
+    MAX_TROPICAL_ROOT_DIGITS,
+    MAX_TROPICAL_ROOT_RESULT_BYTES,
     MAX_TROPICAL_SCALAR_DIGITS,
     TropicalMatrix,
+    TropicalNewtonPolygonEdge,
+    TropicalNewtonPolygonProfile,
+    TropicalNewtonPolygonVertex,
     TropicalPolynomial,
     TropicalPolynomialTerm,
+    TropicalRootBreakpoint,
+    TropicalRootInterval,
     TropicalScalar,
     TropicalSemiring,
+    TropicalUnivariateRootProfile,
     TropicalVector,
     require_scalar_budget,
 )
@@ -391,6 +412,37 @@ def tropical_vector_scale(
     )
 
 
+def tropical_vector_projectivize(
+    vector: TropicalVector,
+) -> tuple[
+    Literal["PROJECTIVIZED", "NO_PROJECTIVE_CLASS"],
+    TropicalVector | None,
+    TropicalScalar | None,
+]:
+    """Normalize finite support to min 0 (min-plus) or max 0 (max-plus).
+
+    The returned translation is the scalar added to every coordinate. The
+    all-infinity vector is the semiring zero and has no projective class.
+    """
+    _admit_vector(vector)
+    finite = [
+        entry.value.as_fraction()
+        for entry in vector.entries
+        if entry.kind == "FINITE" and entry.value is not None
+    ]
+    if not finite:
+        return "NO_PROJECTIVE_CLASS", None, None
+    pivot = min(finite) if vector.semiring.convention == "MIN_PLUS" else max(finite)
+    shift = -pivot
+    translation = TropicalScalar(
+        semiring=vector.semiring,
+        kind="FINITE",
+        value=CanonicalRational.from_fraction(shift),
+    )
+    representative = tropical_vector_scale(translation, vector)
+    return "PROJECTIVIZED", representative, translation
+
+
 def _poly_terms(poly: TropicalPolynomial) -> dict[tuple[int, ...], TropicalScalar]:
     return {term.exponents: term.coefficient for term in poly.terms}
 
@@ -493,9 +545,155 @@ def tropical_polynomial_multiply(
     return _poly(left.semiring, left.variables, out)
 
 
-def tropical_polynomial_evaluate(
-    poly: TropicalPolynomial, point: TropicalVector
-) -> tuple[TropicalScalar, tuple[tuple[int, ...], ...]]:
+def _power_support(
+    polynomial: TropicalPolynomial, exponent: int
+) -> set[tuple[int, ...]]:
+    """Admit exact binary support convolutions before coefficient arithmetic."""
+    support: set[tuple[int, ...]] = {term.exponents for term in polynomial.terms}
+    result_support: set[tuple[int, ...]] | None = None
+    remaining = exponent
+    total_pair_work = 0
+    total_coordinate_work = 0
+
+    def product_support(
+        left: set[tuple[int, ...]], right: set[tuple[int, ...]]
+    ) -> set[tuple[int, ...]]:
+        nonlocal total_pair_work, total_coordinate_work
+        pair_work = len(left) * len(right)
+        total_pair_work += pair_work
+        total_coordinate_work += pair_work * max(1, len(polynomial.variables))
+        if total_pair_work > 750_000 or total_coordinate_work > 10_000_000:
+            raise OperationResourceAdmissionError(
+                location=("polynomial", "exponent"),
+                code="tropical.polynomial_power_work_bound",
+                message=(
+                    "power exceeds the admitted total sparse convolution or "
+                    "coordinate-addition work"
+                ),
+            )
+        output: set[tuple[int, ...]] = set()
+        for first in left:
+            for second in right:
+                summed = tuple(a + b for a, b in zip(first, second, strict=True))
+                if any(value > MAX_TROPICAL_EXPONENT for value in summed):
+                    raise OperationResourceAdmissionError(
+                        location=("polynomial", "exponent"),
+                        code="tropical.polynomial_power_exponent_bound",
+                        message="a power term exceeds the admitted exponent bound",
+                    )
+                output.add(summed)
+                if len(output) > MAX_TROPICAL_POLYNOMIAL_TERMS:
+                    raise OperationResourceAdmissionError(
+                        location=("polynomial", "terms"),
+                        code="tropical.polynomial_power_term_bound",
+                        message="an intermediate power exceeds the admitted term bound",
+                    )
+        return output
+
+    while remaining:
+        if remaining & 1:
+            result_support = (
+                set(support)
+                if result_support is None
+                else product_support(result_support, support)
+            )
+        remaining >>= 1
+        if remaining:
+            support = product_support(support, support)
+
+    return result_support or set()
+
+
+def _admit_power_coefficients_and_output(
+    polynomial: TropicalPolynomial,
+    exponent: int,
+    result_support: set[tuple[int, ...]],
+) -> None:
+    # Repeated rational tropical multiplication adds coefficients. Bound each
+    # numerator and denominator by the input digit envelope scaled by the
+    # requested power before any exact coefficient arithmetic begins.
+    max_input_digits = max(
+        (
+            max(
+                _digits(term.coefficient.value.num), _digits(term.coefficient.value.den)
+            )
+            for term in polynomial.terms
+            if term.coefficient.value is not None
+        ),
+        default=1,
+    )
+    coefficient_digit_bound = max_input_digits * exponent + _digits(exponent) + 1
+    if coefficient_digit_bound > MAX_TROPICAL_SCALAR_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("polynomial", "terms", "coefficient"),
+            code="tropical.polynomial_power_scalar_bound",
+            message="power coefficient growth may exceed the scalar digit envelope",
+        )
+
+    output_count = len(result_support)
+    variable_bytes = len(encode_strict_json(list(polynomial.variables)))
+    estimated_output_bytes = (
+        8_192
+        + variable_bytes * 2
+        + output_count
+        * (128 + 6 * len(polynomial.variables) + 2 * coefficient_digit_bound)
+    )
+    if estimated_output_bytes > CanonicalLimits().max_output_bytes:
+        raise OperationResourceAdmissionError(
+            location=("polynomial",),
+            code="tropical.polynomial_power_output_bound",
+            message="power result may exceed the admitted serialized output size",
+        )
+
+
+def tropical_polynomial_power(
+    polynomial: TropicalPolynomial, exponent: int
+) -> TropicalPolynomial:
+    """Return a bounded formal power, admitting all sparse products first."""
+    if type(exponent) is not int or not 0 <= exponent <= 16:
+        raise OperationDomainValidationError(
+            location=("exponent",),
+            code="tropical.polynomial_power_exponent",
+            message="polynomial exponent must be an integer between 0 and 16",
+        )
+    _admit_polynomial(polynomial)
+
+    if exponent == 0:
+        zero = TropicalScalar._from_kernel(
+            semiring=polynomial.semiring,
+            kind="FINITE",
+            value=CanonicalRational.from_integer_ratio(0, 1),
+        )
+        return _poly(
+            polynomial.semiring,
+            polynomial.variables,
+            {tuple(0 for _ in polynomial.variables): zero},
+        )
+
+    result_support = _power_support(polynomial, exponent)
+    _admit_power_coefficients_and_output(polynomial, exponent, result_support)
+
+    if not polynomial.terms:
+        return polynomial
+    result: TropicalPolynomial | None = None
+    base = polynomial
+    remaining = exponent
+    while remaining:
+        if remaining & 1:
+            result = (
+                base if result is None else tropical_polynomial_multiply(result, base)
+            )
+        remaining >>= 1
+        if remaining:
+            base = tropical_polynomial_multiply(base, base)
+    if result is None:
+        raise RuntimeError("positive polynomial power produced no result")
+    return result
+
+
+def _polynomial_point_plan(
+    poly: TropicalPolynomial, point: TropicalVector, *, witness_output: bool
+) -> tuple[int | None, ...]:
     _admit_polynomial(poly)
     _admit_vector(point)
     if poly.semiring != point.semiring or poly.variables != point.axis:
@@ -504,8 +702,116 @@ def tropical_polynomial_evaluate(
             code="tropical.polynomial_point_mismatch",
             message="point must share polynomial parent",
         )
-    values = []
+    coefficient_bounds: list[int | None] = []
+    work = 0
     for term in poly.terms:
+        if any(
+            coord.kind != "FINITE" and exponent
+            for exponent, coord in zip(term.exponents, point.entries, strict=True)
+        ):
+            coefficient_bounds.append(None)
+            continue
+        coefficient = _finite_value(term.coefficient)
+        numerator_digits = _digits(coefficient.num)
+        denominator_digits = _digits(coefficient.den)
+        work += numerator_digits * denominator_digits
+        for exponent, coord in zip(term.exponents, point.entries, strict=True):
+            if not exponent:
+                continue
+            coordinate = _finite_value(coord)
+            scale_num_digits = (
+                1
+                if coordinate.num == 0
+                else _digits(coordinate.num) + _digits(exponent)
+            )
+            scale_den_digits = _digits(coordinate.den)
+            if max(scale_num_digits, scale_den_digits) > MAX_TROPICAL_SCALAR_DIGITS:
+                raise OperationResourceAdmissionError(
+                    location=("point",),
+                    code="tropical.active_term_scalar_growth",
+                    message=(
+                        "a scaled point coordinate may exceed the exact tropical "
+                        "scalar digit envelope"
+                    ),
+                )
+            work += scale_num_digits * _digits(exponent) + scale_den_digits
+            previous_numerator_digits = numerator_digits
+            previous_denominator_digits = denominator_digits
+            numerator_digits = (
+                max(
+                    numerator_digits + scale_den_digits,
+                    scale_num_digits + denominator_digits,
+                )
+                + 1
+            )
+            denominator_digits += scale_den_digits
+            work += (
+                previous_numerator_digits * scale_den_digits
+                + scale_num_digits * previous_denominator_digits
+                + previous_denominator_digits * scale_den_digits
+                + 2 * numerator_digits * denominator_digits
+            )
+            if max(numerator_digits, denominator_digits) > MAX_TROPICAL_SCALAR_DIGITS:
+                raise OperationResourceAdmissionError(
+                    location=("polynomial", "terms"),
+                    code="tropical.active_term_scalar_growth",
+                    message=(
+                        "a monomial evaluation may exceed the exact tropical "
+                        "scalar digit envelope"
+                    ),
+                )
+            work += max(numerator_digits, denominator_digits)
+        coefficient_bounds.append(max(numerator_digits, denominator_digits))
+    if work > MAX_TROPICAL_ACTIVE_TERM_WORK:
+        raise OperationResourceAdmissionError(
+            location=("polynomial", "terms"),
+            code="tropical.active_term_work",
+            message="aggregate tropical monomial evaluation work exceeds its bound",
+        )
+
+    def scalar_bytes(scalar: TropicalScalar) -> int:
+        if scalar.value is None:
+            return 160
+        return _digits(scalar.value.num) + _digits(scalar.value.den) + 160
+
+    def term_bytes(term: TropicalPolynomialTerm) -> int:
+        return (
+            64
+            + sum(_digits(exponent) + 2 for exponent in term.exponents)
+            + scalar_bytes(term.coefficient)
+        )
+
+    source_bytes = 160 + sum(16 * len(label) + 8 for label in poly.variables)
+    source_bytes += sum(term_bytes(term) for term in poly.terms)
+    point_bytes = 160 + sum(16 * len(label) + 8 for label in point.axis)
+    point_bytes += sum(scalar_bytes(scalar) for scalar in point.entries)
+    rows_bytes = sum(
+        term_bytes(term) + 2 * (bound or 0) + 240
+        for term, bound in zip(poly.terms, coefficient_bounds, strict=True)
+        if bound is not None
+    )
+    maximum_value_bytes = max(
+        (2 * bound + 160 for bound in coefficient_bounds if bound is not None),
+        default=160,
+    )
+    if witness_output and (
+        source_bytes + point_bytes + rows_bytes + maximum_value_bytes + 512
+        > MAX_TROPICAL_ACTIVE_RESULT_BYTES
+    ):
+        raise OperationResourceAdmissionError(
+            location=("polynomial",),
+            code="tropical.active_term_output_bytes",
+            message="source-bound active-term result may exceed its output-byte bound",
+        )
+    return tuple(coefficient_bounds)
+
+
+def _evaluate_polynomial_terms(
+    poly: TropicalPolynomial, point: TropicalVector, *, witness_output: bool
+) -> tuple[tuple[int, TropicalPolynomialTerm, TropicalScalar], ...]:
+    _polynomial_point_plan(poly, point, witness_output=witness_output)
+    values = []
+    for index, term in enumerate(poly.terms):
         if any(
             point.entries[i].kind != "FINITE" and exp
             for i, exp in enumerate(term.exponents)
@@ -526,7 +832,14 @@ def tropical_polynomial_evaluate(
                         ),
                     ),
                 )
-        values.append((term.exponents, total))
+        values.append((index, term, total))
+    return tuple(values)
+
+
+def _polynomial_extremum(
+    poly: TropicalPolynomial,
+    values: tuple[tuple[int, TropicalPolynomialTerm, TropicalScalar], ...],
+) -> TropicalScalar:
     if not values:
         return TropicalScalar._from_kernel(
             semiring=poly.semiring,
@@ -534,12 +847,285 @@ def tropical_polynomial_evaluate(
             if poly.semiring.convention == "MIN_PLUS"
             else "NEGATIVE_INFINITY",
             value=None,
-        ), ()
-    result = values[0][1]
-    for _, value in values[1:]:
-        result = tropical_scalar_add(poly.semiring, result, value)[0]
-    active = tuple(exp for exp, value in values if value == result)
+        )
+    order_values = tuple(_order(value) for _, _, value in values)
+    extremal = (
+        min(value for value in order_values if value is not None)
+        if poly.semiring.convention == "MIN_PLUS"
+        else max(value for value in order_values if value is not None)
+    )
+    return next(value for _, _, value in values if _order(value) == extremal)
+
+
+def tropical_polynomial_evaluate(
+    poly: TropicalPolynomial, point: TropicalVector
+) -> tuple[TropicalScalar, tuple[tuple[int, ...], ...]]:
+    values = _evaluate_polynomial_terms(poly, point, witness_output=False)
+    result = _polynomial_extremum(poly, values)
+    active = tuple(term.exponents for _, term, value in values if value == result)
     return result, active
+
+
+def tropical_polynomial_active_terms(
+    poly: TropicalPolynomial, point: TropicalVector
+) -> PolynomialActiveTermsResult:
+    """Return every source-indexed monomial attaining the exact tropical extremum."""
+    values = _evaluate_polynomial_terms(poly, point, witness_output=True)
+    result = _polynomial_extremum(poly, values)
+    active = tuple(
+        TropicalActiveTerm(index=index, term=term, value=value)
+        for index, term, value in values
+        if value == result
+    )
+    return PolynomialActiveTermsResult.model_construct(
+        polynomial=poly,
+        point=point,
+        value=result,
+        active_terms=active,
+    )
+
+
+def tropical_polynomial_univariate_roots(
+    poly: TropicalPolynomial,
+) -> TropicalUnivariateRootProfile:
+    """Return all exact finite breakpoints of a univariate tropical polynomial.
+
+    Coefficients are line intercepts and exponents are slopes. A min-plus
+    root is a corner of the lower envelope; max-plus uses the upper envelope.
+    Root multiplicity is the absolute slope jump. The zero polynomial has no
+    affine profile or finite roots; a nonzero constant or monomial has one
+    unbounded interval and no finite roots.
+    """
+    _admit_polynomial(poly)
+    if len(poly.variables) != 1:
+        raise OperationDomainValidationError(
+            location=("polynomial", "variables"),
+            code="tropical.univariate_required",
+            message="univariate root profiles require exactly one polynomial variable",
+        )
+    if not poly.terms:
+        return TropicalUnivariateRootProfile(
+            source=poly, kind="ZERO_POLYNOMIAL", intervals=(), roots=()
+        )
+
+    term_count = len(poly.terms)
+    pair_count = term_count * (term_count - 1) // 2
+    if pair_count > MAX_TROPICAL_ROOT_CROSSOVER_PAIRS:
+        raise OperationResourceAdmissionError(
+            location=("polynomial", "terms"),
+            code="tropical.root_crossover_work",
+            message="pairwise tropical root crossover work exceeds the admitted bound",
+        )
+
+    coefficient_digits = max(
+        max(_digits(term.coefficient.value.num), _digits(term.coefficient.value.den))
+        for term in poly.terms
+        if term.coefficient.value is not None
+    )
+    # A line intersection subtracts two rationals, so numerator and
+    # denominator products are bounded by twice the largest admitted input.
+    # Reserve a few digits for subtraction and the (bounded) slope difference.
+    root_digit_bound = 2 * coefficient_digits + 8
+    if root_digit_bound > MAX_TROPICAL_ROOT_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("polynomial", "terms", "coefficient"),
+            code="tropical.root_digit_bound",
+            message="worst-case exact root size exceeds the admitted root digit bound",
+        )
+    # The profile has at most n-1 roots; across all corners at most 2n terms
+    # can be tied (each affine line meets the lower/upper envelope in at most
+    # one interval or point). This conservative JSON-size estimate is checked
+    # before any crossover arithmetic.
+    estimated_result_bytes = (
+        (8 * term_count + 4) * root_digit_bound + 1_024 * term_count + 2_048
+    )
+    if estimated_result_bytes > MAX_TROPICAL_ROOT_RESULT_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("polynomial",),
+            code="tropical.root_result_bytes",
+            message="tropical root profile may exceed the admitted result-byte bound",
+        )
+
+    is_max = poly.semiring.convention == "MAX_PLUS"
+    lines: list[tuple[int, Fraction, int]] = []
+    for term in poly.terms:
+        exponent = term.exponents[0]
+        coefficient = _finite_value(term.coefficient).as_fraction()
+        lines.append(
+            (
+                exponent,
+                -coefficient if is_max else coefficient,
+                -exponent if is_max else exponent,
+            )
+        )
+
+    # Negating max-plus lines converts the requested upper envelope to a
+    # lower envelope. Distinct exponents make transformed slopes unique.
+    lines.sort(key=lambda line: line[2], reverse=True)
+    hull: list[tuple[int, Fraction, int]] = []
+    starts: list[Fraction | None] = []
+    for line in lines:
+        crossing: Fraction | None = None
+        while hull:
+            previous = hull[-1]
+            crossing = (previous[1] - line[1]) / (line[2] - previous[2])
+            if starts[-1] is None or crossing > starts[-1]:
+                break
+            hull.pop()
+            starts.pop()
+        if not hull:
+            crossing = None
+        hull.append(line)
+        starts.append(crossing)
+
+    root_values = [start for start in starts[1:] if start is not None]
+    breakpoints: list[TropicalRootBreakpoint] = []
+    for index, value in enumerate(root_values):
+        left_exponent = hull[index][0]
+        right_exponent = hull[index + 1][0]
+        transformed_active = min(
+            intercept + slope * value for _, intercept, slope in lines
+        )
+        active = tuple(
+            sorted(
+                exponent
+                for exponent, intercept, slope in lines
+                if intercept + slope * value == transformed_active
+            )
+        )
+        root = CanonicalRational.from_fraction(value)
+        root_digits = max(_digits(root.num), _digits(root.den))
+        if root_digits > MAX_TROPICAL_ROOT_DIGITS:
+            raise OperationResourceAdmissionError(
+                location=("polynomial", "terms", "coefficient"),
+                code="tropical.root_digit_bound",
+                message="exact root exceeds the admitted root digit bound",
+            )
+        left_slope, right_slope = left_exponent, right_exponent
+        breakpoints.append(
+            TropicalRootBreakpoint(
+                value=root,
+                multiplicity=abs(right_slope - left_slope),
+                left_exponent=left_exponent,
+                right_exponent=right_exponent,
+                left_slope=left_slope,
+                right_slope=right_slope,
+                active_exponents=active,
+            )
+        )
+
+    intervals: list[TropicalRootInterval] = []
+    for index, line in enumerate(hull):
+        lower = root_values[index - 1] if index > 0 else None
+        upper = root_values[index] if index < len(root_values) else None
+        intervals.append(
+            TropicalRootInterval(
+                lower=CanonicalRational.from_fraction(lower)
+                if lower is not None
+                else None,
+                upper=CanonicalRational.from_fraction(upper)
+                if upper is not None
+                else None,
+                active_exponent=line[0],
+                slope=line[0],
+            )
+        )
+    return TropicalUnivariateRootProfile(
+        source=poly,
+        kind="FINITE_PROFILE",
+        intervals=tuple(intervals),
+        roots=tuple(breakpoints),
+    )
+
+
+def tropical_polynomial_univariate_newton_polygon(
+    poly: TropicalPolynomial,
+) -> TropicalNewtonPolygonProfile:
+    """Return the exact lower/upper coefficient hull and source-face ledger."""
+    _admit_polynomial(poly)
+    if len(poly.variables) != 1:
+        raise OperationDomainValidationError(
+            location=("polynomial", "variables"),
+            code="tropical.newton_polygon_univariate",
+            message="Newton polygon profile requires one variable",
+        )
+    count = len(poly.terms)
+    coefficient_digits = max(
+        (
+            max(
+                _digits(term.coefficient.value.num),
+                _digits(term.coefficient.value.den),
+            )
+            for term in poly.terms
+            if term.coefficient.value is not None
+        ),
+        default=1,
+    )
+    intermediate_bound = 3 * count * (4 * coefficient_digits + 32)
+    result_bound = count * (8 * coefficient_digits + 512)
+    if max(intermediate_bound, result_bound) > MAX_TROPICAL_NEWTON_RESULT_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("polynomial",),
+            code="tropical.newton_polygon_output_budget",
+            message="Newton polygon exact hull or output exceeds the admitted envelope",
+        )
+
+    points = [
+        (
+            term.exponents[0],
+            _finite_value(term.coefficient).as_fraction(),
+            index,
+        )
+        for index, term in enumerate(poly.terms)
+    ]
+
+    def cross(
+        a: tuple[int, Fraction, int],
+        b: tuple[int, Fraction, int],
+        c: tuple[int, Fraction, int],
+    ) -> Fraction:
+        return (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])
+
+    lower = poly.semiring.convention == "MIN_PLUS"
+    hull: list[tuple[int, Fraction, int]] = []
+    for point in points:
+        while len(hull) >= 2:
+            turn = cross(hull[-2], hull[-1], point)
+            if (lower and turn <= 0) or (not lower and turn >= 0):
+                hull.pop()
+            else:
+                break
+        hull.append(point)
+
+    vertices = tuple(
+        TropicalNewtonPolygonVertex(
+            source_term_index=index,
+            exponent=exponent,
+            coefficient=poly.terms[index].coefficient,
+        )
+        for exponent, _, index in hull
+    )
+    edges = []
+    for edge_index, (left, right) in enumerate(pairwise(hull)):
+        face_indices = tuple(
+            source_index
+            for source_index in range(left[2], right[2] + 1)
+            if cross(left, right, points[source_index]) == 0
+        )
+        slope = (right[1] - left[1]) / (right[0] - left[0])
+        edges.append(
+            TropicalNewtonPolygonEdge(
+                left_vertex_index=edge_index,
+                right_vertex_index=edge_index + 1,
+                source_term_indices=face_indices,
+                slope=CanonicalRational.from_fraction(slope),
+                tropical_root=CanonicalRational.from_fraction(-slope),
+                multiplicity=right[0] - left[0],
+            )
+        )
+    return TropicalNewtonPolygonProfile.model_construct(
+        source=poly, hull_vertices=vertices, edges=tuple(edges)
+    )
 
 
 def tropical_matrix_multiply(
@@ -736,12 +1322,17 @@ __all__ = [
     "tropical_matrix_finite_power_sum",
     "tropical_matrix_multiply",
     "tropical_matrix_power",
+    "tropical_polynomial_active_terms",
     "tropical_polynomial_add",
     "tropical_polynomial_evaluate",
     "tropical_polynomial_multiply",
+    "tropical_polynomial_power",
+    "tropical_polynomial_univariate_newton_polygon",
+    "tropical_polynomial_univariate_roots",
     "tropical_scalar_add",
     "tropical_scalar_multiply",
     "tropical_scalar_power",
     "tropical_vector_add",
+    "tropical_vector_projectivize",
     "tropical_vector_scale",
 ]

@@ -10,12 +10,31 @@ from pydantic_core import PydanticCustomError
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
 from jacobian.math._labels import OpaqueLabel
+from jacobian.math.geometry.polytopes.complexes._models import (
+    MAX_COMPLEX_TOTAL_FACES,
+    PolytopalComplexClosureResult,
+)
+from jacobian.math.geometry.polytopes.values import (
+    RationalHPolyhedron,
+    RationalPolyhedronVPresentation,
+)
 
 MAX_TROPICAL_SCALAR_DIGITS = 8_192
 MAX_TROPICAL_VECTOR_DIMENSION = 128
 MAX_TROPICAL_MATRIX_CELLS = 4_096
 MAX_TROPICAL_POLYNOMIAL_TERMS = 512
 MAX_TROPICAL_EXPONENT = 1_024
+MAX_TROPICAL_ROOT_CROSSOVER_PAIRS = 65_536
+MAX_TROPICAL_ROOT_RESULT_BYTES = 16 * 1024 * 1024
+MAX_TROPICAL_ROOT_DIGITS = 16_384
+MAX_TROPICAL_NEWTON_RESULT_BYTES = 16 * 1024 * 1024
+MAX_TROPICAL_SUBDIVISION_TERMS = 10
+MAX_TROPICAL_SUBDIVISION_COEFFICIENT_DIGITS = 32
+MAX_TROPICAL_SUBDIVISION_RESULT_BYTES = 4 * 1024 * 1024
+MAX_TROPICAL_HYPERSURFACE_CELLS = 40
+MAX_TROPICAL_HYPERSURFACE_RESULT_BYTES = 10 * 1024 * 1024
+MAX_TROPICAL_ACTIVE_TERM_WORK = 250_000_000
+MAX_TROPICAL_ACTIVE_RESULT_BYTES = 12 * 1024 * 1024
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -187,17 +206,435 @@ class TropicalPolynomial(StrictModel):
         return self
 
 
+class TropicalRootInterval(StrictModel):
+    """One maximal open interval with a fixed active affine term."""
+
+    lower: CanonicalRational | None
+    upper: CanonicalRational | None
+    active_exponent: int
+    slope: int
+
+
+class TropicalRootBreakpoint(StrictModel):
+    """A finite corner and all terms tied at its exact location."""
+
+    value: CanonicalRational
+    multiplicity: int
+    left_exponent: int
+    right_exponent: int
+    left_slope: int
+    right_slope: int
+    active_exponents: tuple[int, ...]
+
+
+class TropicalUnivariateRootProfile(StrictModel):
+    """Complete exact piecewise-linear profile for one tropical variable."""
+
+    source: TropicalPolynomial
+    kind: Literal["ZERO_POLYNOMIAL", "FINITE_PROFILE"]
+    intervals: tuple[TropicalRootInterval, ...]
+    roots: tuple[TropicalRootBreakpoint, ...]
+
+    @model_validator(mode="after")
+    def require_canonical_profile(self) -> Self:
+        if len(self.source.variables) != 1:
+            raise _validation_error(
+                "root_profile_axis", "root profile source must be univariate"
+            )
+        if self.kind == "ZERO_POLYNOMIAL":
+            if self.source.terms or self.intervals or self.roots:
+                raise _validation_error(
+                    "root_profile_zero", "zero polynomial has no finite affine profile"
+                )
+            return self
+        if not self.source.terms or len(self.intervals) != len(self.roots) + 1:
+            raise _validation_error(
+                "root_profile_shape", "finite profile needs one interval per root gap"
+            )
+        if self.intervals[0].lower is not None or self.intervals[-1].upper is not None:
+            raise _validation_error(
+                "root_profile_ends", "profile must include both unbounded end intervals"
+            )
+        for index, root in enumerate(self.roots):
+            left, right = self.intervals[index], self.intervals[index + 1]
+            if (
+                root.multiplicity != abs(root.right_slope - root.left_slope)
+                or root.left_slope != left.slope
+                or root.right_slope != right.slope
+                or root.left_exponent != left.active_exponent
+                or root.right_exponent != right.active_exponent
+                or root.value != left.upper
+                or root.value != right.lower
+                or tuple(sorted(set(root.active_exponents))) != root.active_exponents
+                or root.left_exponent not in root.active_exponents
+                or root.right_exponent not in root.active_exponents
+            ):
+                raise _validation_error(
+                    "root_profile_breakpoint",
+                    "root breakpoint disagrees with intervals",
+                )
+        if any(
+            left.value.as_fraction() >= right.value.as_fraction()
+            for left, right in zip(self.roots, self.roots[1:], strict=False)
+        ):
+            raise _validation_error(
+                "root_profile_order", "roots must be strictly increasing"
+            )
+        return self
+
+
+class TropicalNewtonPolygonVertex(StrictModel):
+    """A hull vertex with its source-term position and exact lifted point."""
+
+    source_term_index: int = Field(ge=0, le=MAX_TROPICAL_POLYNOMIAL_TERMS - 1)
+    exponent: int = Field(ge=0, le=MAX_TROPICAL_EXPONENT)
+    coefficient: TropicalScalar
+
+
+class TropicalNewtonPolygonEdge(StrictModel):
+    """A maximal lower/upper face, including all collinear source terms."""
+
+    left_vertex_index: int = Field(ge=0, le=MAX_TROPICAL_POLYNOMIAL_TERMS - 1)
+    right_vertex_index: int = Field(ge=1, le=MAX_TROPICAL_POLYNOMIAL_TERMS - 1)
+    source_term_indices: tuple[int, ...] = Field(
+        min_length=2, max_length=MAX_TROPICAL_POLYNOMIAL_TERMS
+    )
+    slope: CanonicalRational
+    tropical_root: CanonicalRational
+    multiplicity: int = Field(ge=1, le=MAX_TROPICAL_EXPONENT)
+
+
+class TropicalNewtonPolygonProfile(StrictModel):
+    """Exact one-variable coefficient hull bound to its formal source."""
+
+    source: TropicalPolynomial
+    hull_vertices: tuple[TropicalNewtonPolygonVertex, ...] = Field(
+        max_length=MAX_TROPICAL_POLYNOMIAL_TERMS
+    )
+    edges: tuple[TropicalNewtonPolygonEdge, ...] = Field(
+        max_length=MAX_TROPICAL_POLYNOMIAL_TERMS - 1
+    )
+
+    @model_validator(mode="after")
+    def require_profile_shape(self) -> Self:
+        if len(self.source.variables) != 1 or len(self.edges) != max(
+            0, len(self.hull_vertices) - 1
+        ):
+            raise _validation_error(
+                "newton_profile_shape",
+                "Newton polygon profile requires one variable and consecutive hull edges",
+            )
+        for index, vertex in enumerate(self.hull_vertices):
+            if (
+                vertex.source_term_index >= len(self.source.terms)
+                or vertex.exponent
+                != self.source.terms[vertex.source_term_index].exponents[0]
+                or vertex.coefficient
+                != self.source.terms[vertex.source_term_index].coefficient
+                or (index and vertex.exponent <= self.hull_vertices[index - 1].exponent)
+            ):
+                raise _validation_error(
+                    "newton_vertex_source",
+                    "hull vertices must preserve ordered source terms",
+                )
+        for index, edge in enumerate(self.edges):
+            if (
+                edge.left_vertex_index != index
+                or edge.right_vertex_index != index + 1
+                or edge.multiplicity
+                != self.hull_vertices[index + 1].exponent
+                - self.hull_vertices[index].exponent
+                or tuple(sorted(set(edge.source_term_indices)))
+                != edge.source_term_indices
+                or edge.source_term_indices[0]
+                != self.hull_vertices[index].source_term_index
+                or edge.source_term_indices[-1]
+                != self.hull_vertices[index + 1].source_term_index
+                or any(
+                    term_index >= len(self.source.terms)
+                    for term_index in edge.source_term_indices
+                )
+            ):
+                raise _validation_error(
+                    "newton_edge_shape",
+                    "Newton edges must retain ordered source provenance",
+                )
+        return self
+
+
+class TropicalLiftedSubdivisionFace(StrictModel):
+    """One source-bound lower/upper face of the lifted coefficient hull."""
+
+    lifted_face_index: int = Field(ge=0, le=15)
+    source_hull_facet_index: int | None = Field(default=None, ge=0, le=255)
+    normal: tuple[CanonicalRational, CanonicalRational, CanonicalRational]
+    offset: CanonicalRational
+    source_term_indices: tuple[int, ...] = Field(
+        min_length=3, max_length=MAX_TROPICAL_SUBDIVISION_TERMS
+    )
+    subdivision_cell_id: str = Field(min_length=1, max_length=64)
+
+    @model_validator(mode="after")
+    def require_source_order(self) -> Self:
+        if tuple(sorted(set(self.source_term_indices))) != self.source_term_indices:
+            raise _validation_error(
+                "lifted_face_source_order",
+                "lifted-face source term indices must be sorted and unique",
+            )
+        return self
+
+
+class TropicalSubdivisionFaceSupport(StrictModel):
+    """Source monomials and lifted facets dual to one projected complex face."""
+
+    face_id: str = Field(min_length=1, max_length=64)
+    dimension: int = Field(ge=-1, le=2)
+    source_term_indices: tuple[int, ...] = Field(
+        max_length=MAX_TROPICAL_SUBDIVISION_TERMS
+    )
+    lifted_face_indices: tuple[int, ...] = Field(max_length=16)
+
+    @model_validator(mode="after")
+    def require_sorted_provenance(self) -> Self:
+        if (
+            tuple(sorted(set(self.source_term_indices))) != self.source_term_indices
+            or tuple(sorted(set(self.lifted_face_indices))) != self.lifted_face_indices
+        ):
+            raise _validation_error(
+                "subdivision_face_provenance",
+                "subdivision provenance indices must be sorted and unique",
+            )
+        return self
+
+
+class TropicalRegularSubdivision(StrictModel):
+    """A source-bound bivariate regular subdivision in its exact cell complex."""
+
+    source: TropicalPolynomial
+    cell_complex: PolytopalComplexClosureResult
+    lifted_faces: tuple[TropicalLiftedSubdivisionFace, ...] = Field(
+        min_length=1, max_length=16
+    )
+    face_supports: tuple[TropicalSubdivisionFaceSupport, ...] = Field(
+        min_length=2, max_length=MAX_COMPLEX_TOTAL_FACES
+    )
+
+    @model_validator(mode="after")
+    def require_source_bound_complex(self) -> Self:
+        if (
+            len(self.source.variables) != 2
+            or self.cell_complex.dimension != 2
+            or self.cell_complex.space.axes != self.source.variables
+            or len(self.lifted_faces) != len(self.cell_complex.maximal_cells)
+            or len(self.face_supports) != len(self.cell_complex.faces)
+            or tuple(face.lifted_face_index for face in self.lifted_faces)
+            != tuple(range(len(self.lifted_faces)))
+        ):
+            raise _validation_error(
+                "subdivision_source_shape",
+                "regular subdivision must retain its bivariate source and complete planar complex",
+            )
+        maximal_ids = {cell.cell_id for cell in self.cell_complex.maximal_cells}
+        if any(
+            face.subdivision_cell_id not in maximal_ids for face in self.lifted_faces
+        ):
+            raise _validation_error(
+                "subdivision_cell_binding",
+                "every lifted face must map to a maximal cell of the returned complex",
+            )
+        if any(
+            term_index >= len(self.source.terms)
+            for lifted_face in self.lifted_faces
+            for term_index in lifted_face.source_term_indices
+        ):
+            raise _validation_error(
+                "lifted_face_term_index",
+                "lifted-face source indices must refer to the retained polynomial",
+            )
+        if any(
+            face.normal[2].num >= 0
+            if self.source.semiring.convention == "MIN_PLUS"
+            else face.normal[2].num <= 0
+            for face in self.lifted_faces
+        ):
+            raise _validation_error(
+                "subdivision_orientation",
+                "lifted face orientation must match the min-plus lower or max-plus upper convention",
+            )
+        for support, face in zip(
+            self.face_supports, self.cell_complex.faces, strict=True
+        ):
+            if support.face_id != face.face_id or support.dimension != face.dimension:
+                raise _validation_error(
+                    "subdivision_face_binding",
+                    "term supports must match the complete canonical face order",
+                )
+            if any(
+                index >= len(self.source.terms) for index in support.source_term_indices
+            ):
+                raise _validation_error(
+                    "subdivision_term_index",
+                    "term support indices must refer to the retained source polynomial",
+                )
+            if any(
+                index >= len(self.lifted_faces) for index in support.lifted_face_indices
+            ):
+                raise _validation_error(
+                    "subdivision_lifted_face_index",
+                    "dual lifted-face indices must refer to the returned lifted faces",
+                )
+        return self
+
+
+class TropicalHypersurfaceCell(StrictModel):
+    """One exact corner cell bound to its dual subdivision face."""
+
+    cell_id: str = Field(min_length=1, max_length=16)
+    dimension: int = Field(ge=0, le=1)
+    inequalities: RationalHPolyhedron
+    generators: RationalPolyhedronVPresentation
+    active_term_indices: tuple[int, ...] = Field(
+        min_length=2, max_length=MAX_TROPICAL_SUBDIVISION_TERMS
+    )
+    dual_face_id: str = Field(min_length=1, max_length=64)
+    dual_lifted_face_indices: tuple[int, ...] = Field(max_length=16)
+    incident_cell_ids: tuple[str, ...] = Field(
+        max_length=MAX_TROPICAL_HYPERSURFACE_CELLS
+    )
+    weight: int | None = Field(default=None, ge=1)
+
+    @model_validator(mode="after")
+    def require_exact_cell_shape(self) -> Self:
+        if (
+            self.inequalities.space.axes != self.generators.space.axes
+            or self.generators.empty
+            or self.generators.affine_dimension != self.dimension
+            or (self.dimension == 0) != (self.weight is None)
+            or tuple(sorted(set(self.active_term_indices))) != self.active_term_indices
+            or tuple(sorted(set(self.dual_lifted_face_indices)))
+            != self.dual_lifted_face_indices
+            or tuple(sorted(set(self.incident_cell_ids))) != self.incident_cell_ids
+            or self.cell_id in self.incident_cell_ids
+        ):
+            raise _validation_error(
+                "hypersurface_cell_shape",
+                "corner-cell geometry, dimension, weight, and provenance must agree",
+            )
+        return self
+
+
+class TropicalHypersurface(StrictModel):
+    """The complete bivariate corner locus and its dual regular subdivision."""
+
+    subdivision: TropicalRegularSubdivision
+    cells: tuple[TropicalHypersurfaceCell, ...] = Field(
+        min_length=1, max_length=MAX_TROPICAL_HYPERSURFACE_CELLS
+    )
+
+    @model_validator(mode="after")
+    def require_source_bound_cells(self) -> Self:
+        if len(self.subdivision.source.variables) != 2:
+            raise _validation_error(
+                "hypersurface_source_dimension",
+                "a bivariate hypersurface requires a bivariate source polynomial",
+            )
+        ids = tuple(cell.cell_id for cell in self.cells)
+        if len(set(ids)) != len(ids):
+            raise _validation_error(
+                "hypersurface_cell_ids", "corner-cell identifiers must be unique"
+            )
+        support_by_id = {
+            support.face_id: support for support in self.subdivision.face_supports
+        }
+        cell_by_id = {cell.cell_id: cell for cell in self.cells}
+        expected_dual_faces = {
+            support.face_id
+            for support in self.subdivision.face_supports
+            if support.dimension in (1, 2)
+        }
+        if {cell.dual_face_id for cell in self.cells} != expected_dual_faces:
+            raise _validation_error(
+                "hypersurface_face_completeness",
+                "every one- or two-dimensional subdivision face needs one dual cell",
+            )
+        for cell in self.cells:
+            support = support_by_id.get(cell.dual_face_id)
+            if (
+                support is None
+                or support.dimension != 2 - cell.dimension
+                or support.source_term_indices != cell.active_term_indices
+                or support.lifted_face_indices != cell.dual_lifted_face_indices
+                or cell.inequalities.space.axes != self.subdivision.source.variables
+                or any(
+                    index >= len(self.subdivision.source.terms)
+                    for index in cell.active_term_indices
+                )
+                or any(index not in cell_by_id for index in cell.incident_cell_ids)
+            ):
+                raise _validation_error(
+                    "hypersurface_dual_binding",
+                    "corner cells must bind to exact source and dual subdivision data",
+                )
+            for incident_id in cell.incident_cell_ids:
+                incident = cell_by_id[incident_id]
+                if (
+                    abs(incident.dimension - cell.dimension) != 1
+                    or cell.cell_id not in incident.incident_cell_ids
+                ):
+                    raise _validation_error(
+                        "hypersurface_incidence",
+                        "corner-cell incidence must be reciprocal and codimension one",
+                    )
+        for edge in self.cells:
+            if edge.dimension != 1:
+                continue
+            for vertex in self.cells:
+                if vertex.dimension != 0:
+                    continue
+                is_incident = set(edge.active_term_indices).issubset(
+                    vertex.active_term_indices
+                )
+                if (vertex.cell_id in edge.incident_cell_ids) != is_incident:
+                    raise _validation_error(
+                        "hypersurface_incidence_completeness",
+                        "edge-to-vertex incidence must match dual face containment",
+                    )
+        return self
+
+
 __all__ = [
+    "MAX_TROPICAL_ACTIVE_RESULT_BYTES",
+    "MAX_TROPICAL_ACTIVE_TERM_WORK",
     "MAX_TROPICAL_EXPONENT",
+    "MAX_TROPICAL_HYPERSURFACE_CELLS",
+    "MAX_TROPICAL_HYPERSURFACE_RESULT_BYTES",
     "MAX_TROPICAL_MATRIX_CELLS",
+    "MAX_TROPICAL_NEWTON_RESULT_BYTES",
     "MAX_TROPICAL_POLYNOMIAL_TERMS",
+    "MAX_TROPICAL_ROOT_CROSSOVER_PAIRS",
+    "MAX_TROPICAL_ROOT_DIGITS",
+    "MAX_TROPICAL_ROOT_RESULT_BYTES",
     "MAX_TROPICAL_SCALAR_DIGITS",
+    "MAX_TROPICAL_SUBDIVISION_COEFFICIENT_DIGITS",
+    "MAX_TROPICAL_SUBDIVISION_RESULT_BYTES",
+    "MAX_TROPICAL_SUBDIVISION_TERMS",
     "MAX_TROPICAL_VECTOR_DIMENSION",
+    "TropicalHypersurface",
+    "TropicalHypersurfaceCell",
+    "TropicalLiftedSubdivisionFace",
     "TropicalMatrix",
+    "TropicalNewtonPolygonEdge",
+    "TropicalNewtonPolygonProfile",
+    "TropicalNewtonPolygonVertex",
     "TropicalPolynomial",
     "TropicalPolynomialTerm",
+    "TropicalRegularSubdivision",
+    "TropicalRootBreakpoint",
+    "TropicalRootInterval",
     "TropicalScalar",
     "TropicalSemiring",
+    "TropicalSubdivisionFaceSupport",
+    "TropicalUnivariateRootProfile",
     "TropicalVector",
     "require_scalar_budget",
 ]

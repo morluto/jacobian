@@ -16,6 +16,7 @@ from jacobian.math.polynomials.tropical.operations import (
     tropical_polynomial_evaluate,
     tropical_polynomial_multiply,
     tropical_scalar_multiply,
+    tropical_vector_projectivize,
 )
 from jacobian.math.polynomials.tropical.values import (
     MAX_TROPICAL_SCALAR_DIGITS,
@@ -157,3 +158,63 @@ def test_assignment_profile_keeps_all_ties_at_infinity() -> None:
 def test_matrix_power_rejects_native_non_integer_exponents() -> None:
     with pytest.raises(OperationDomainValidationError):
         tropical_matrix_power(_matrix(), "1")  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    ("convention", "values", "expected", "shift"),
+    [
+        ("MIN_PLUS", (3, 8, None), (0, 5, None), -3),
+        ("MAX_PLUS", (-7, 2, None), (-9, 0, None), -2),
+    ],
+)
+def test_vector_projectivization_matches_exact_coordinate_oracle(
+    convention: str,
+    values: tuple[int | None, ...],
+    expected: tuple[int | None, ...],
+    shift: int,
+) -> None:
+    semiring = TropicalSemiring(convention=convention, base="ZZ")  # type: ignore[arg-type]
+    infinity = "POSITIVE_INFINITY" if convention == "MIN_PLUS" else "NEGATIVE_INFINITY"
+    vector = TropicalVector(
+        semiring=semiring,
+        axis=("a", "b", "c"),
+        entries=tuple(
+            TropicalScalar(
+                semiring=semiring,
+                kind="FINITE" if value is not None else infinity,
+                value=CanonicalRational.from_integer_ratio(value, 1)
+                if value is not None
+                else None,
+            )
+            for value in values
+        ),
+    )
+
+    kind, representative, translation = tropical_vector_projectivize(vector)
+
+    assert kind == "PROJECTIVIZED"
+    assert representative is not None and translation is not None
+    actual = tuple(
+        entry.value.as_fraction() if entry.value is not None else None
+        for entry in representative.entries
+    )
+    assert actual == expected
+    assert translation.value is not None
+    assert translation.value.as_fraction() == shift
+    finite_values = [v for v in actual if v is not None]
+    assert (min(finite_values) if convention == "MIN_PLUS" else max(finite_values)) == 0
+    # Common translation preserves pairwise differences, independently of the
+    # implementation's extremum selection.
+    assert actual[1] - actual[0] == values[1] - values[0]  # type: ignore[operator]
+
+
+def test_all_infinity_vector_has_no_projective_class() -> None:
+    semiring = _semiring()
+    infinity = TropicalScalar(semiring=semiring, kind="POSITIVE_INFINITY", value=None)
+    vector = TropicalVector(
+        semiring=semiring, axis=("x", "y"), entries=(infinity, infinity)
+    )
+
+    kind, representative, translation = tropical_vector_projectivize(vector)
+
+    assert (kind, representative, translation) == ("NO_PROJECTIVE_CLASS", None, None)

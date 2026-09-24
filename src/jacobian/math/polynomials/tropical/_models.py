@@ -4,13 +4,15 @@ from __future__ import annotations
 
 from typing import Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math.polynomials.tropical.values import (
     TropicalMatrix,
+    TropicalNewtonPolygonProfile,
     TropicalPolynomial,
+    TropicalPolynomialTerm,
     TropicalScalar,
     TropicalSemiring,
     TropicalVector,
@@ -143,6 +145,109 @@ class VectorScaleRequest(StrictModel):
         return self
 
 
+class VectorProjectivizeRequest(StrictModel):
+    """A tropical vector modulo common finite tropical translation."""
+
+    vector: TropicalVector
+
+
+class VectorProjectivizeResult(StrictModel):
+    source: TropicalVector
+    kind: Literal["PROJECTIVIZED", "NO_PROJECTIVE_CLASS"]
+    representative: TropicalVector | None = None
+    translation: TropicalScalar | None = None
+
+    @model_validator(mode="after")
+    def require_branch(self) -> Self:
+        if self.kind == "PROJECTIVIZED":
+            if self.representative is None or self.translation is None:
+                raise _validation_error(
+                    "projective_shape", "normalized result needs its translation"
+                )
+            if not any(entry.kind == "FINITE" for entry in self.source.entries):
+                raise _validation_error(
+                    "projective_source",
+                    "a projectivized vector needs a finite coordinate",
+                )
+            if (
+                self.representative.semiring != self.source.semiring
+                or self.representative.axis != self.source.axis
+                or self.translation.semiring != self.source.semiring
+                or self.translation.kind != "FINITE"
+            ):
+                raise _validation_error(
+                    "projective_shape",
+                    "normalized result must retain source domain and axes",
+                )
+            original = self.source.entries
+            normalized = self.representative.entries
+            if any(
+                (left.kind == "FINITE") != (right.kind == "FINITE")
+                for left, right in zip(original, normalized, strict=True)
+            ):
+                raise _validation_error(
+                    "projective_support", "normalization must preserve infinity support"
+                )
+            shift = self.translation.value.as_fraction()
+            original_values = []
+            normalized_values = []
+            for left, right in zip(original, normalized, strict=True):
+                if left.kind == "FINITE" and right.kind == "FINITE":
+                    if left.value is None or right.value is None:
+                        raise _validation_error(
+                            "projective_value",
+                            "finite coordinates must carry exact values",
+                        )
+                    if right.value.as_fraction() != left.value.as_fraction() + shift:
+                        raise _validation_error(
+                            "projective_translation",
+                            "representative must equal source plus the returned translation",
+                        )
+                    original_values.append(left.value.as_fraction())
+                    normalized_values.append(right.value.as_fraction())
+            pivot = (
+                min(original_values)
+                if self.source.semiring.convention == "MIN_PLUS"
+                else max(original_values)
+            )
+            normalized_pivot = (
+                min(normalized_values)
+                if self.source.semiring.convention == "MIN_PLUS"
+                else max(normalized_values)
+            )
+            if shift != -pivot or normalized_pivot != 0:
+                raise _validation_error(
+                    "projective_normalization",
+                    "translation must normalize the semiring extremum to zero",
+                )
+        elif (
+            self.representative is not None
+            or self.translation is not None
+            or any(entry.kind == "FINITE" for entry in self.source.entries)
+        ):
+            raise _validation_error(
+                "projective_shape",
+                "all-infinity vector has no projective representative",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        source: TropicalVector,
+        kind: Literal["PROJECTIVIZED", "NO_PROJECTIVE_CLASS"],
+        representative: TropicalVector | None = None,
+        translation: TropicalScalar | None = None,
+    ) -> Self:
+        return cls.model_construct(
+            source=source,
+            kind=kind,
+            representative=representative,
+            translation=translation,
+        )
+
+
 class VectorResult(StrictModel):
     result: TropicalVector
 
@@ -166,6 +271,13 @@ class PolynomialBinaryRequest(StrictModel):
                 "polynomials must share semiring and variable axis",
             )
         return self
+
+
+class PolynomialPowerRequest(StrictModel):
+    """Raise one sparse formal tropical polynomial to a bounded power."""
+
+    polynomial: TropicalPolynomial
+    exponent: int = Field(ge=0, le=16)
 
 
 class PolynomialEvaluateRequest(StrictModel):
@@ -214,6 +326,137 @@ class PolynomialEvaluateResult(StrictModel):
             value=value,
             active_exponents=active_exponents,
         )
+
+
+class PolynomialActiveTermsRequest(StrictModel):
+    """Request all source monomials attaining the semiring extremum."""
+
+    polynomial: TropicalPolynomial
+    point: TropicalVector
+
+    @model_validator(mode="after")
+    def require_axis(self) -> Self:
+        if (
+            self.polynomial.semiring != self.point.semiring
+            or self.polynomial.variables != self.point.axis
+        ):
+            raise _validation_error(
+                "polynomial_point_mismatch",
+                "point must share polynomial semiring and variable axis",
+            )
+        return self
+
+
+class TropicalActiveTerm(StrictModel):
+    """One indexed source term and its exact value at the evaluation point."""
+
+    index: StrictInt = Field(ge=0, le=511)
+    term: TropicalPolynomialTerm
+    value: TropicalScalar
+
+
+class PolynomialActiveTermsResult(StrictModel):
+    """Source-bound witness of every active monomial at one exact point."""
+
+    polynomial: TropicalPolynomial
+    point: TropicalVector
+    value: TropicalScalar
+    active_terms: tuple[TropicalActiveTerm, ...] = Field(max_length=512)
+
+    @model_validator(mode="after")
+    def require_source_indices(self) -> Self:
+        if (
+            self.polynomial.semiring != self.point.semiring
+            or self.polynomial.variables != self.point.axis
+            or self.value.semiring != self.polynomial.semiring
+        ):
+            raise _validation_error(
+                "active_terms_parent",
+                "source, point, and value must share their exact tropical parent",
+            )
+        indices = tuple(item.index for item in self.active_terms)
+        if indices != tuple(sorted(set(indices))) or any(
+            index >= len(self.polynomial.terms)
+            or self.polynomial.terms[index] != item.term
+            or item.value.semiring != self.polynomial.semiring
+            or item.value != self.value
+            for index, item in zip(indices, self.active_terms, strict=True)
+        ):
+            raise _validation_error(
+                "active_terms_source_indices",
+                "active witnesses must preserve canonical source-term indices",
+            )
+        if self.active_terms and self.value.kind != "FINITE":
+            raise _validation_error(
+                "active_terms_value", "a nonempty active set has a finite value"
+            )
+        if not self.active_terms and self.value.kind != (
+            "POSITIVE_INFINITY"
+            if self.polynomial.semiring.convention == "MIN_PLUS"
+            else "NEGATIVE_INFINITY"
+        ):
+            raise _validation_error(
+                "active_terms_value",
+                "an empty active set must carry the semiring additive identity",
+            )
+        return self
+
+
+class UnivariateRootsRequest(StrictModel):
+    polynomial: TropicalPolynomial
+
+
+class UnivariateNewtonPolygonRequest(StrictModel):
+    """Request an exact coefficient-lifted hull for a univariate polynomial."""
+
+    polynomial: TropicalPolynomial
+
+    @model_validator(mode="after")
+    def require_univariate(self) -> Self:
+        if len(self.polynomial.variables) != 1:
+            raise _validation_error(
+                "newton_polygon_univariate",
+                "Newton polygon profile requires one variable",
+            )
+        return self
+
+
+class UnivariateNewtonPolygonResult(StrictModel):
+    profile: TropicalNewtonPolygonProfile
+
+    @classmethod
+    def _from_kernel(cls, profile: TropicalNewtonPolygonProfile) -> Self:
+        return cls.model_construct(profile=profile)
+
+
+class BivariateRegularSubdivisionRequest(StrictModel):
+    """Compute the bounded exact subdivision of one bivariate polynomial."""
+
+    polynomial: TropicalPolynomial
+
+    @model_validator(mode="after")
+    def require_bivariate(self) -> Self:
+        if len(self.polynomial.variables) != 2:
+            raise _validation_error(
+                "regular_subdivision_bivariate",
+                "regular subdivision requires exactly two variables",
+            )
+        return self
+
+
+class BivariateHypersurfaceRequest(StrictModel):
+    """Compute the complete bounded exact corner complex of one polynomial."""
+
+    polynomial: TropicalPolynomial
+
+    @model_validator(mode="after")
+    def require_bivariate(self) -> Self:
+        if len(self.polynomial.variables) != 2:
+            raise _validation_error(
+                "hypersurface_bivariate",
+                "the exact tropical hypersurface currently requires two variables",
+            )
+        return self
 
 
 class MatrixMultiplyRequest(StrictModel):
@@ -342,6 +585,8 @@ class AssignmentResult(StrictModel):
 __all__ = [
     "AddBranch",
     "AssignmentResult",
+    "BivariateHypersurfaceRequest",
+    "BivariateRegularSubdivisionRequest",
     "FinitePowerSumResult",
     "InfinityCase",
     "MatrixAssignmentRequest",
@@ -349,16 +594,25 @@ __all__ = [
     "MatrixMultiplyRequest",
     "MatrixPowerRequest",
     "MatrixResult",
+    "PolynomialActiveTermsRequest",
+    "PolynomialActiveTermsResult",
     "PolynomialBinaryRequest",
     "PolynomialEvaluateRequest",
     "PolynomialEvaluateResult",
+    "PolynomialPowerRequest",
     "PolynomialResult",
     "ScalarAddRequest",
     "ScalarAddResult",
     "ScalarBinaryRequest",
     "ScalarPowerRequest",
     "ScalarResult",
+    "TropicalActiveTerm",
+    "UnivariateNewtonPolygonRequest",
+    "UnivariateNewtonPolygonResult",
+    "UnivariateRootsRequest",
     "VectorBinaryRequest",
+    "VectorProjectivizeRequest",
+    "VectorProjectivizeResult",
     "VectorResult",
     "VectorScaleRequest",
 ]

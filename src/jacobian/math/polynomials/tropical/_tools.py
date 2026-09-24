@@ -3,7 +3,13 @@
 
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.polynomials.tropical._models import *  # noqa: F403
+from jacobian.math.polynomials.tropical.hypersurface import (
+    compute_bivariate_hypersurface,
+)
 from jacobian.math.polynomials.tropical.operations import *  # noqa: F403
+from jacobian.math.polynomials.tropical.regular_subdivision import (
+    compute_bivariate_regular_subdivision,
+)
 from jacobian.math.polynomials.tropical.values import *  # noqa: F403
 
 
@@ -71,6 +77,18 @@ def compute_vector_scale(request: VectorScaleRequest) -> VectorResult:
     )
 
 
+def compute_vector_projectivize(
+    request: VectorProjectivizeRequest,
+) -> VectorProjectivizeResult:
+    kind, representative, translation = tropical_vector_projectivize(request.vector)
+    return VectorProjectivizeResult._from_kernel(
+        source=request.vector,
+        kind=kind,
+        representative=representative,
+        translation=translation,
+    )
+
+
 def compute_polynomial_add(request: PolynomialBinaryRequest) -> PolynomialResult:
     return PolynomialResult._from_kernel(
         tropical_polynomial_add(request.left, request.right)
@@ -83,6 +101,12 @@ def compute_polynomial_multiply(request: PolynomialBinaryRequest) -> PolynomialR
     )
 
 
+def compute_polynomial_power(request: PolynomialPowerRequest) -> PolynomialResult:
+    return PolynomialResult._from_kernel(
+        tropical_polynomial_power(request.polynomial, request.exponent)
+    )
+
+
 def compute_polynomial_evaluate(
     request: PolynomialEvaluateRequest,
 ) -> PolynomialEvaluateResult:
@@ -92,6 +116,26 @@ def compute_polynomial_evaluate(
         point=request.point,
         value=value,
         active_exponents=active,
+    )
+
+
+def compute_polynomial_active_terms(
+    request: PolynomialActiveTermsRequest,
+) -> PolynomialActiveTermsResult:
+    return tropical_polynomial_active_terms(request.polynomial, request.point)
+
+
+def compute_univariate_roots(
+    request: UnivariateRootsRequest,
+) -> TropicalUnivariateRootProfile:
+    return tropical_polynomial_univariate_roots(request.polynomial)
+
+
+def compute_univariate_newton_polygon(
+    request: UnivariateNewtonPolygonRequest,
+) -> UnivariateNewtonPolygonResult:
+    return UnivariateNewtonPolygonResult._from_kernel(
+        tropical_polynomial_univariate_newton_polygon(request.polynomial)
     )
 
 
@@ -212,6 +256,22 @@ TOOLS: MathTools = (
         ),
     ),
     MathTool(
+        operation_id="tropical.vector.projectivize.compute",
+        title="Projectivize a tropical vector",
+        description="Normalize finite coordinates to min 0 or max 0 and return the exact common translation; the all-infinity vector has no projective class.",
+        request_type=VectorProjectivizeRequest,
+        result_type=VectorProjectivizeResult,
+        run=compute_vector_projectivize,
+        tags=("tropical", "vector", "projective", "exact"),
+        examples=(
+            OperationExample(
+                name="min_plus_normalization",
+                description="Translate a finite min-plus vector so its minimum coordinate is zero.",
+                input={"vector": _vector((3, 5), ("x", "y"))},
+            ),
+        ),
+    ),
+    MathTool(
         operation_id="tropical.polynomial.add.compute",
         title="Add formal tropical polynomials",
         description="Combine sparse formal tropical polynomials by exponentwise tropical addition.",
@@ -250,6 +310,32 @@ TOOLS: MathTools = (
         ),
     ),
     MathTool(
+        operation_id="tropical.polynomial.power.compute",
+        title="Power a formal tropical polynomial",
+        description=(
+            "Compute a bounded nonnegative power in the sparse formal tropical "
+            "polynomial semiring. The result is the canonical exponent/coefficient "
+            "map; it does not compute a functional normal form."
+        ),
+        request_type=PolynomialPowerRequest,
+        result_type=PolynomialResult,
+        run=compute_polynomial_power,
+        tags=("tropical", "polynomial", "power", "exact"),
+        examples=(
+            OperationExample(
+                name="formal_binomial_cube",
+                description=(
+                    "Cube 0 plus x in MIN_PLUS: the formal result has coefficients "
+                    "0 at exponents 0, 1, 2, and 3."
+                ),
+                input={
+                    "polynomial": _poly((((0,), 0), ((1,), 0))),
+                    "exponent": 3,
+                },
+            ),
+        ),
+    ),
+    MathTool(
         operation_id="tropical.polynomial.evaluate.compute",
         title="Evaluate a tropical polynomial",
         description="Evaluate every monomial exactly and return all active exponents.",
@@ -264,6 +350,153 @@ TOOLS: MathTools = (
                 input={
                     "polynomial": _poly((((0,), 0), ((1,), 1))),
                     "point": _vector((2,), ("x",)),
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="tropical.polynomial.active_terms.compute",
+        title="Identify all active terms of a tropical polynomial",
+        description=(
+            "At one exact labelled point, return the tropical value and every "
+            "minimizing (min-plus) or maximizing (max-plus) source monomial, "
+            "with its canonical term index and exact evaluated value."
+        ),
+        request_type=PolynomialActiveTermsRequest,
+        result_type=PolynomialActiveTermsResult,
+        run=compute_polynomial_active_terms,
+        tags=("tropical", "polynomial", "active-terms", "exact"),
+        discovery_terms=(
+            "tropical polynomial active terms",
+            "minimizing monomials at a point",
+            "maximizing tropical monomials",
+            "tropical polynomial argmin or argmax",
+        ),
+        examples=(
+            OperationExample(
+                name="min_plus_active_tie",
+                description=(
+                    "At x=0 both terms of min(0, x) are active; source indices "
+                    "and exponents remain explicit."
+                ),
+                input={
+                    "polynomial": _poly((((0,), 0), ((1,), 0))),
+                    "point": _vector((0,), ("x",)),
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="tropical.polynomial.univariate_roots.compute",
+        title="Find exact univariate tropical roots",
+        description="Return all finite breakpoints, slope-jump multiplicities, exact active-term ties, and the complete piecewise-linear profile of a univariate tropical polynomial.",
+        request_type=UnivariateRootsRequest,
+        result_type=TropicalUnivariateRootProfile,
+        run=compute_univariate_roots,
+        tags=("tropical", "polynomial", "roots", "exact"),
+        examples=(
+            OperationExample(
+                name="min_plus_corner",
+                description="The min-plus polynomial min(0, 1+x) has root -1 with multiplicity one.",
+                input={"polynomial": _poly((((0,), 0), ((1,), 1)))},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="tropical.polynomial.univariate_newton_polygon.compute",
+        title="Compute a univariate tropical Newton polygon",
+        description="Return the exact lower or upper coefficient hull, source terms on every face, face slopes, and finite tropical roots with horizontal-length multiplicities.",
+        request_type=UnivariateNewtonPolygonRequest,
+        result_type=UnivariateNewtonPolygonResult,
+        run=compute_univariate_newton_polygon,
+        tags=("tropical", "polynomial", "newton-polygon", "exact"),
+        examples=(
+            OperationExample(
+                name="min_plus_newton_polygon",
+                description="For min-plus terms (0,0), (1,2), (3,0), return the lower coefficient hull and its two exact roots; the polynomial must be univariate.",
+                input={
+                    "polynomial": {
+                        "semiring": _s(),
+                        "variables": ["x"],
+                        "terms": [
+                            {"exponents": [0], "coefficient": _finite(0)},
+                            {"exponents": [1], "coefficient": _finite(2)},
+                            {"exponents": [3], "coefficient": _finite(0)},
+                        ],
+                    }
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="tropical.polynomial.bivariate_regular_subdivision.compute",
+        title="Compute a bivariate tropical regular subdivision",
+        description=(
+            "Compute one exact source-bound planar regular subdivision from a "
+            "bivariate tropical polynomial. Min-plus uses lower lifted faces; "
+            "max-plus uses upper lifted faces. The result includes the complete "
+            "face-closed rational cell complex and every lifted face's source-term "
+            "incidence. This bounded operation handles one polynomial only; it "
+            "does not intersect hypersurfaces or solve a tropical system."
+        ),
+        request_type=BivariateRegularSubdivisionRequest,
+        result_type=TropicalRegularSubdivision,
+        run=compute_bivariate_regular_subdivision,
+        tags=("tropical", "polynomial", "regular-subdivision", "exact"),
+        examples=(
+            OperationExample(
+                name="min_plus_square_subdivision",
+                description=(
+                    "Lift the four exponent points of a square with height one at "
+                    "(1,1) and compute the two exact lower triangles; the input "
+                    "must be one bivariate polynomial with bounded rational heights."
+                ),
+                input={
+                    "polynomial": {
+                        "semiring": _s(),
+                        "variables": ["x", "y"],
+                        "terms": [
+                            {"exponents": [0, 0], "coefficient": _finite(0)},
+                            {"exponents": [0, 1], "coefficient": _finite(0)},
+                            {"exponents": [1, 0], "coefficient": _finite(0)},
+                            {"exponents": [1, 1], "coefficient": _finite(1)},
+                        ],
+                    }
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="tropical.polynomial.bivariate_hypersurface.compute",
+        title="Compute a bivariate tropical hypersurface",
+        description=(
+            "Return the complete exact corner locus of one bivariate tropical "
+            "polynomial as rational H- and V-presentations. Each corner cell "
+            "retains its active source terms, dual regular-subdivision face, "
+            "incidence, and lattice edge weight. This bounded operation does "
+            "not intersect multiple hypersurfaces or solve a tropical system."
+        ),
+        request_type=BivariateHypersurfaceRequest,
+        result_type=TropicalHypersurface,
+        run=compute_bivariate_hypersurface,
+        tags=("tropical", "polynomial", "hypersurface", "exact"),
+        examples=(
+            OperationExample(
+                name="min_plus_tropical_line",
+                description=(
+                    "The corner locus of min(0,x,y) is a vertex with three "
+                    "primitive weight-one rays."
+                ),
+                input={
+                    "polynomial": {
+                        "semiring": _s(),
+                        "variables": ["x", "y"],
+                        "terms": [
+                            {"exponents": [0, 0], "coefficient": _finite(0)},
+                            {"exponents": [0, 1], "coefficient": _finite(0)},
+                            {"exponents": [1, 0], "coefficient": _finite(0)},
+                        ],
+                    }
                 },
             ),
         ),
@@ -358,9 +591,11 @@ __all__ = [
     "compute_polynomial_add",
     "compute_polynomial_evaluate",
     "compute_polynomial_multiply",
+    "compute_polynomial_power",
     "compute_scalar_add",
     "compute_scalar_multiply",
     "compute_scalar_power",
     "compute_vector_add",
+    "compute_vector_projectivize",
     "compute_vector_scale",
 ]

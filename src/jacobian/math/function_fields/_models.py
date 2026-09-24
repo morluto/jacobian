@@ -292,8 +292,8 @@ class FunctionFieldPrincipalDivisorResult(StrictModel):
 class FunctionFieldGenusRequest(StrictModel):
     field: FiniteFunctionField = Field(
         description=(
-            "A rational function field GF(p)(x), represented by the defining "
-            "polynomial 1; nontrivial algebraic extensions are unsupported."
+            "GF(p)(x), or a supported odd-characteristic quadratic "
+            "hyperelliptic extension y^2=f(x) with squarefree polynomial f."
         )
     )
 

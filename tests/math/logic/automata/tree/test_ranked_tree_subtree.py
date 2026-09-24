@@ -7,7 +7,6 @@ import pytest
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.logic.automata.tree import (
     RankedTree,
-    RankedTreeSubtreeRequest,
     ranked_tree_subtree,
 )
 from jacobian.math.logic.automata.tree._tools import TOOLS
@@ -35,9 +34,7 @@ def test_subtree_selection_retains_source_and_matches_recursive_oracle() -> None
         ),
     )
     for position in ((), (0,), (0, 0), (1,), (1, 1)):
-        result = ranked_tree_subtree(
-            RankedTreeSubtreeRequest(tree=source, position=position)
-        )
+        result = ranked_tree_subtree(source, position)
         assert result.tree is source
         assert result.position == position
         assert result.subtree == _recursive_at(source, position)
@@ -45,7 +42,7 @@ def test_subtree_selection_retains_source_and_matches_recursive_oracle() -> None
 
 def test_root_position_returns_exact_source_tree() -> None:
     source = RankedTree(symbol=0, children=(RankedTree(symbol=1),))
-    result = ranked_tree_subtree(RankedTreeSubtreeRequest(tree=source, position=()))
+    result = ranked_tree_subtree(source, ())
     assert result.subtree == source
     assert result.tree == source
 
@@ -53,7 +50,7 @@ def test_root_position_returns_exact_source_tree() -> None:
 def test_missing_child_index_is_rejected_as_invalid_address() -> None:
     source = RankedTree(symbol=0, children=(RankedTree(symbol=1),))
     with pytest.raises(OperationDomainValidationError, match="does not identify"):
-        ranked_tree_subtree(RankedTreeSubtreeRequest(tree=source, position=(1,)))
+        ranked_tree_subtree(source, (1,))
 
 
 def test_subtree_catalog_example_is_published_and_round_trips() -> None:

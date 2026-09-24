@@ -83,13 +83,21 @@ def compute_accepted_tree_count(
 def compute_ranked_tree_positions(
     request: RankedTreePositionsRequest,
 ) -> RankedTreePositionsResult:
-    return ranked_tree_positions(request)
+    return ranked_tree_positions(request.tree)
 
 
 def compute_ranked_tree_subtree(
     request: RankedTreeSubtreeRequest,
 ) -> RankedTreeSubtreeResult:
-    return ranked_tree_subtree(request)
+    return ranked_tree_subtree(request.tree, request.position)
+
+
+def compute_tree_automaton_boolean_product(
+    request: TreeAutomatonBooleanProductRequest,
+) -> TreeAutomatonBooleanProductResult:
+    return boolean_product_tree_automata(
+        request.left, request.right, request.connective
+    )
 
 
 def compute_tree_automaton_reachability(
@@ -201,7 +209,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
         request_type=TreeAutomatonBooleanProductRequest,
         result_type=TreeAutomatonBooleanProductResult,
-        run=boolean_product_tree_automata,
+        run=compute_tree_automaton_boolean_product,
         tags=("tree-automata", "boolean-operations", "product", "exact"),
         discovery_terms=(
             "tree language intersection",

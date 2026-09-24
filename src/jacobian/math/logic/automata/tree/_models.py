@@ -131,13 +131,13 @@ class RankedTreePositionsResult(RankedTreePositionsRequest):
     @classmethod
     def _from_kernel(
         cls,
-        request: RankedTreePositionsRequest,
         *,
+        tree: RankedTree,
         positions: tuple[tuple[int, ...], ...],
     ) -> Self:
         """Construct the complete position list emitted by the admitted kernel."""
 
-        return cls.model_construct(tree=request.tree, positions=positions)
+        return cls.model_construct(tree=tree, positions=positions)
 
 
 class RankedTreeSubtreeRequest(StrictModel):
@@ -156,10 +156,14 @@ class RankedTreeSubtreeResult(RankedTreeSubtreeRequest):
 
     @classmethod
     def _from_kernel(
-        cls, request: RankedTreeSubtreeRequest, *, subtree: RankedTree
+        cls,
+        *,
+        tree: RankedTree,
+        position: tuple[int, ...],
+        subtree: RankedTree,
     ) -> Self:
         return cls.model_construct(
-            tree=request.tree, position=request.position, subtree=subtree
+            tree=tree, position=position, subtree=subtree
         )
 
 

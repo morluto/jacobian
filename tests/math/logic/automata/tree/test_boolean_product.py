@@ -75,13 +75,7 @@ def test_boolean_product_agrees_with_independent_tree_evaluation(
     connective: str,
 ) -> None:
     left, right = _machine((0,)), _machine((1,))
-    result = boolean_product_tree_automata(
-        TreeAutomatonBooleanProductRequest(
-            left=left,
-            right=right,
-            connective=connective,
-        )
-    )
+    result = boolean_product_tree_automata(left, right, connective)  # type: ignore[arg-type]
     assert len(result.state_pairs) == 4
     for tree in _trees(left.arity, 6):
         lhs, rhs = _accepts(left, tree), _accepts(right, tree)
@@ -138,11 +132,7 @@ def test_binary_transition_children_are_paired_positionally() -> None:
     right = CompleteDeterministicBottomUpTreeAutomaton(
         state_count=2, arity=(0, 1, 2), transitions=right_rows, final_states=(1,)
     )
-    result = boolean_product_tree_automata(
-        TreeAutomatonBooleanProductRequest(
-            left=left, right=right, connective="symmetric_difference"
-        )
-    )
+    result = boolean_product_tree_automata(left, right, "symmetric_difference")
     for tree in _trees(left.arity, 2):
         assert _accepts(result.product, tree) == (
             _accepts(left, tree) != _accepts(right, tree)
@@ -175,13 +165,7 @@ def test_rejects_nondeterministic_input_and_mismatched_signature() -> None:
         final_states=(0,),
     )
     with pytest.raises(OperationDomainValidationError, match="ranked signature"):
-        boolean_product_tree_automata(
-            TreeAutomatonBooleanProductRequest(
-                left=left,
-                right=other_signature,
-                connective="intersection",
-            )
-        )
+        boolean_product_tree_automata(left, other_signature, "intersection")
 
 
 def test_pair_state_product_is_admitted_before_expansion() -> None:
@@ -189,13 +173,7 @@ def test_pair_state_product_is_admitted_before_expansion() -> None:
         state_count=9, arity=(), transitions=(), final_states=()
     )
     with pytest.raises(OperationResourceAdmissionError, match="state pairs"):
-        boolean_product_tree_automata(
-            TreeAutomatonBooleanProductRequest(
-                left=machine,
-                right=machine,
-                connective="intersection",
-            )
-        )
+        boolean_product_tree_automata(machine, machine, "intersection")
 
 
 def test_invalid_connective_rejected_by_typed_request() -> None:

@@ -6,20 +6,17 @@ from collections import defaultdict
 from collections.abc import Iterator
 from itertools import product
 from math import prod
+from typing import Literal
 
 from jacobian._execution import request_checkpoint
-from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
 from jacobian.math.logic.automata.tree._models import (
     AcceptedTreeCountResult,
-    RankedTreePositionsRequest,
     RankedTreePositionsResult,
-    RankedTreeSubtreeRequest,
     RankedTreeSubtreeResult,
-    TreeAutomatonBooleanProductRequest,
     TreeAutomatonBooleanProductResult,
     TreeAutomatonComplementResult,
     TreeAutomatonCompletionResult,
@@ -105,17 +102,11 @@ def _boolean_final(connective: str, left_final: bool, right_final: bool) -> bool
 
 
 def ranked_tree_positions(
-    request: RankedTreePositionsRequest,
+    tree: RankedTree,
 ) -> RankedTreePositionsResult:
     """Return all node positions as zero-based child-index paths in preorder."""
 
-    if type(request) is not RankedTreePositionsRequest:
-        raise OperationDomainValidationError(
-            location=("request",),
-            code="tree_automata.positions.request_type",
-            message="request must be a canonical ranked-tree-position request",
-        )
-    if type(request.tree) is not RankedTree:
+    if type(tree) is not RankedTree:
         raise OperationDomainValidationError(
             location=("tree",),
             code="tree_automata.positions.tree_type",
@@ -124,10 +115,10 @@ def ranked_tree_positions(
 
     # The first pass bounds the input structure and prices every path cell
     # without retaining result paths. Only after that plan fits the work and
-    # byte envelopes do we materialize the complete position tuple.
+    # allocation bounds do we materialize the complete position tuple.
     node_count = 0
     coordinate_count = 0
-    stack = [(request.tree, 1)]
+    stack = [(tree, 1)]
     while stack:
         node, depth = stack.pop()
         if (
@@ -165,22 +156,16 @@ def ranked_tree_positions(
             code="tree_automata.positions.work_bound",
             message="ranked tree position traversal exceeds its work bound",
         )
-    request_bytes = len(
-        encode_strict_json({"tree": request.tree.model_dump(mode="json")})
-    )
-    # A child index is in 0..15 (at most two digits). Four bytes per
-    # coordinate conservatively covers digits and separators; the remaining
-    # term covers row/outer-array punctuation and fixed result fields.
-    projected_result_bytes = request_bytes + 4 * coordinate_count + 4 * node_count + 256
-    if projected_result_bytes > MAX_RANKED_TREE_POSITIONS_RESULT_BYTES:
+    result_cells = node_count + coordinate_count
+    if result_cells > MAX_RANKED_TREE_POSITIONS_RESULT_CELLS:
         raise OperationResourceAdmissionError(
             location=("tree",),
-            code="tree_automata.positions.result_bytes_bound",
-            message="complete ranked-tree positions exceed the result byte envelope",
+            code="tree_automata.positions.result_cells_bound",
+            message="complete ranked-tree positions exceed the result allocation bound",
         )
 
     positions: list[tuple[int, ...]] = []
-    position_stack: list[tuple[RankedTree, tuple[int, ...]]] = [(request.tree, ())]
+    position_stack: list[tuple[RankedTree, tuple[int, ...]]] = [(tree, ())]
     while position_stack:
         node, position = position_stack.pop()
         positions.append(position)
@@ -191,21 +176,16 @@ def ranked_tree_positions(
         if len(positions) % 512 == 0:
             request_checkpoint("during ranked-tree position materialization")
 
-    return RankedTreePositionsResult._from_kernel(request, positions=tuple(positions))
+    return RankedTreePositionsResult._from_kernel(tree=tree, positions=tuple(positions))
 
 
 def ranked_tree_subtree(
-    request: RankedTreeSubtreeRequest,
+    tree: RankedTree,
+    position: tuple[int, ...],
 ) -> RankedTreeSubtreeResult:
     """Return the source-bound subtree rooted at a child-index position."""
 
-    if type(request) is not RankedTreeSubtreeRequest:
-        raise OperationDomainValidationError(
-            location=("request",),
-            code="tree_automata.subtree.request_type",
-            message="request must be a canonical ranked-tree-subtree request",
-        )
-    if type(request.tree) is not RankedTree or type(request.position) is not tuple:
+    if type(tree) is not RankedTree or type(position) is not tuple:
         raise OperationDomainValidationError(
             location=("tree",),
             code="tree_automata.subtree.input_type",
@@ -213,7 +193,7 @@ def ranked_tree_subtree(
         )
 
     node_count = 0
-    stack: list[tuple[RankedTree, int]] = [(request.tree, 1)]
+    stack: list[tuple[RankedTree, int]] = [(tree, 1)]
     while stack:
         node, depth = stack.pop()
         if (
@@ -243,8 +223,8 @@ def ranked_tree_subtree(
             )
         stack.extend((child, depth + 1) for child in node.children)
 
-    current = request.tree
-    for depth, index in enumerate(request.position):
+    current = tree
+    for depth, index in enumerate(position):
         if type(index) is not int or index < 0 or index >= len(current.children):
             raise OperationDomainValidationError(
                 location=("position", depth),
@@ -253,35 +233,34 @@ def ranked_tree_subtree(
             )
         current = current.children[index]
 
-    # The subtree is a structural subvalue of the source, so its canonical
-    # encoding cannot exceed the source encoding. The result retains both.
-    source_bytes = len(encode_strict_json(request.tree.model_dump(mode="json")))
-    projected_result_bytes = 2 * source_bytes + 4 * len(request.position) + 256
-    work_bound = 2 * node_count + len(request.position)
+    # The result retains the source tree, selected subtree, and address. Admit
+    # by retained nodes and address cells instead of serialized transport size.
+    work_bound = 2 * node_count + len(position)
     if work_bound > MAX_RANKED_TREE_POSITIONS_WORK:
         raise OperationResourceAdmissionError(
             location=("tree",),
             code="tree_automata.subtree.work_bound",
             message="ranked-tree subtree selection exceeds its traversal bound",
         )
-    if projected_result_bytes > MAX_RANKED_TREE_POSITIONS_RESULT_BYTES:
+    if 2 * node_count + len(position) > MAX_RANKED_TREE_SUBTREE_RESULT_CELLS:
         raise OperationResourceAdmissionError(
             location=("tree",),
-            code="tree_automata.subtree.result_bytes_bound",
-            message="source-bound ranked-tree subtree exceeds the result byte envelope",
+            code="tree_automata.subtree.result_cells_bound",
+            message="source-bound ranked-tree subtree exceeds its result allocation bound",
         )
-    return RankedTreeSubtreeResult._from_kernel(request, subtree=current)
+    return RankedTreeSubtreeResult._from_kernel(tree=tree, position=position, subtree=current)
 
 
 def boolean_product_tree_automata(
-    request: TreeAutomatonBooleanProductRequest,
+    left: CompleteDeterministicBottomUpTreeAutomaton,
+    right: CompleteDeterministicBottomUpTreeAutomaton,
+    connective: Literal["intersection", "union", "difference", "symmetric_difference"],
 ) -> TreeAutomatonBooleanProductResult:
     """Construct the exact direct product for two complete deterministic machines.
 
     Completeness makes every product state pair total, so each Boolean language
     connective is represented by the corresponding final-state predicate.
     """
-    left, right = request.left, request.right
     if left.arity != right.arity:
         raise OperationDomainValidationError(
             location=("right", "arity"),
@@ -353,13 +332,13 @@ def boolean_product_tree_automata(
         final_states=tuple(
             index
             for index, (a, b) in enumerate(state_pairs)
-            if _boolean_final(request.connective, a in left_finals, b in right_finals)
+            if _boolean_final(connective, a in left_finals, b in right_finals)
         ),
     )
     return TreeAutomatonBooleanProductResult._from_kernel(
         left=left,
         right=right,
-        connective=request.connective,
+        connective=connective,
         product=product_automaton,
         state_pairs=state_pairs,
     )
@@ -373,7 +352,8 @@ MAX_COMPLEMENT_OUTPUT_CELLS = (
 MAX_COMPLETION_OUTPUT_CELLS = MAX_TA_TRANSITIONS * (MAX_TA_ARITY + 2)
 MAX_MINIMIZE_WORK = MAX_TREE_AUTOMATON_WORK
 MAX_RANKED_TREE_POSITIONS_WORK = 600_000
-MAX_RANKED_TREE_POSITIONS_RESULT_BYTES = 4 * 1024 * 1024
+MAX_RANKED_TREE_POSITIONS_RESULT_CELLS = MAX_RUN_TREE_NODES * (MAX_RUN_TREE_DEPTH + 1)
+MAX_RANKED_TREE_SUBTREE_RESULT_CELLS = 2 * MAX_RUN_TREE_NODES + MAX_RUN_TREE_DEPTH
 
 
 def _tree_automaton_minimization_partition(

@@ -61,9 +61,7 @@ def test_catalog_contains_only_audited_agent_outcome() -> None:
 
 
 def test_relabel_permutation_transports_feasible_sets_and_source_maps() -> None:
-    source = FiniteDeltaMatroid(
-        ground=("a", "b"), feasible=((), (0,), (0, 1))
-    )
+    source = FiniteDeltaMatroid(ground=("a", "b"), feasible=((), (0,), (0, 1)))
 
     result = relabel(
         DeltaMatroidRelabelRequest(
@@ -78,13 +76,13 @@ def test_relabel_permutation_transports_feasible_sets_and_source_maps() -> None:
     assert result.relabelled.feasible == ((), (0, 1), (1,))
     assert result.target_to_source == (1, 0)
     assert result.source_to_target == (1, 0)
-    assert DeltaMatroidRelabelling.model_validate_json(result.model_dump_json()) == result
+    assert (
+        DeltaMatroidRelabelling.model_validate_json(result.model_dump_json()) == result
+    )
 
 
 def test_relabel_composes_to_identity_and_handles_empty_ground() -> None:
-    source = FiniteDeltaMatroid(
-        ground=("a", "b"), feasible=((), (0,), (0, 1))
-    )
+    source = FiniteDeltaMatroid(ground=("a", "b"), feasible=((), (0,), (0, 1)))
     swapped = relabel(
         DeltaMatroidRelabelRequest(
             delta_matroid=source,
@@ -103,11 +101,14 @@ def test_relabel_composes_to_identity_and_handles_empty_ground() -> None:
     assert restored.source_to_target == (1, 0)
 
     empty = FiniteDeltaMatroid(ground=(), feasible=((),))
-    assert relabel(
-        DeltaMatroidRelabelRequest(
-            delta_matroid=empty, target_ground=(), target_to_source=()
-        )
-    ).relabelled == empty
+    assert (
+        relabel(
+            DeltaMatroidRelabelRequest(
+                delta_matroid=empty, target_ground=(), target_to_source=()
+            )
+        ).relabelled
+        == empty
+    )
 
 
 def test_relabel_requires_a_bijection_and_distinct_bounded_labels() -> None:

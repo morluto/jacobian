@@ -29,9 +29,7 @@ from jacobian.math.combinatorics.matroids.delta.values import (
 MAX_DELTA_RELABEL_GROUND = MAX_DELTA_LABEL_BYTES + 1
 MAX_DELTA_RELABEL_TRANSPORT_WORK = (
     MAX_DELTA_MEMBERSHIPS * ((MAX_DELTA_LABEL_BYTES + 1).bit_length() + 1)
-    + 4
-    * MAX_DELTA_RELABEL_GROUND
-    * ((MAX_DELTA_RELABEL_GROUND).bit_length() + 2)
+    + 4 * MAX_DELTA_RELABEL_GROUND * ((MAX_DELTA_RELABEL_GROUND).bit_length() + 2)
     + MAX_DELTA_LABEL_BYTES
 )
 MAX_DELTA_RELABEL_OUTPUT_BYTES = 2_000_000
@@ -115,9 +113,13 @@ class DeltaMatroidRelabelRequest(StrictModel):
         if len(set(self.target_ground)) != n:
             raise _error("ground_unique", "target ground labels must be unique")
         try:
-            label_bytes = sum(len(label.encode("utf-8")) for label in self.target_ground)
+            label_bytes = sum(
+                len(label.encode("utf-8")) for label in self.target_ground
+            )
         except UnicodeEncodeError:
-            raise _error("ground_utf8", "target labels must be UTF-8 representable") from None
+            raise _error(
+                "ground_utf8", "target labels must be UTF-8 representable"
+            ) from None
         if label_bytes > MAX_DELTA_LABEL_BYTES:
             raise _error(
                 "ground_bytes",
@@ -168,7 +170,9 @@ def _output_estimate(
     rows = len(source.feasible)
     n = len(source.ground)
     index_digits = max(1, len(str(max(0, n - 1))))
-    transported_rows = 2 * rows + memberships * index_digits + max(0, memberships - rows)
+    transported_rows = (
+        2 * rows + memberships * index_digits + max(0, memberships - rows)
+    )
     source_wire = {
         "ground": list(source.ground),
         "feasible": [list(row) for row in source.feasible],
@@ -253,11 +257,11 @@ def relabel(request: DeltaMatroidRelabelRequest) -> DeltaMatroidRelabelling:
             message="ground-axis transport exceeds its admitted work bound",
         )
     output_bytes, admission_encoding_work = _output_estimate(
-            source,
-            request.target_ground,
-            request.target_to_source,
-            source_to_target,
-        )
+        source,
+        request.target_ground,
+        request.target_to_source,
+        source_to_target,
+    )
     # Reserve the full source-exchange envelope for both bounded admission and
     # recognition scans; the exact source request may use less, but this keeps
     # all mandatory phases within one operation-specific ceiling.

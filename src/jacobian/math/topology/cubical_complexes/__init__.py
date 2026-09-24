@@ -7,6 +7,7 @@ from jacobian.math.topology.cubical_complexes.extensions import (
     triangulate,
 )
 from jacobian.math.topology.cubical_complexes.operations import (
+    boundary_subcomplex,
     chain_complex,
     closed_star,
     f_vector,
@@ -24,6 +25,7 @@ from jacobian.math.topology.cubical_complexes.operations import (
 __all__ = [
     "bitmap_to_complex",
     "boundary",
+    "boundary_subcomplex",
     "chain_complex",
     "closed_star",
     "f_vector",

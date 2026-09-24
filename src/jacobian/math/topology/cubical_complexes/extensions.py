@@ -117,15 +117,6 @@ def bitmap_to_complex(request: CubicalBitmapRequest) -> CubicalBitmapResult:
     row_count = len(request.pixels)
     column_count = len(request.pixels[0])
     selected_count = sum(pixel for row in request.pixels for pixel in row)
-    if selected_count == 0:
-        raise OperationDomainValidationError(
-            location=("pixels",),
-            code="cubical_complex.bitmap_empty_foreground",
-            message=(
-                "an all-background bitmap has no value in the current nonempty "
-                "CubicalComplex representation"
-            ),
-        )
     if selected_count > MAX_CELLS:
         raise OperationResourceAdmissionError(
             location=("pixels",),
@@ -189,7 +180,10 @@ def bitmap_to_complex(request: CubicalBitmapRequest) -> CubicalBitmapResult:
         for column, foreground in enumerate(row_values)
         if foreground
     )
-    complex_, _ = _canonical_complex(tuple(entry.cell for entry in pixel_to_cell))
+    if pixel_to_cell:
+        complex_, _ = _canonical_complex(tuple(entry.cell for entry in pixel_to_cell))
+    else:
+        complex_ = CubicalComplex(ambient_dimension=2, cells=())
     return CubicalBitmapResult(
         complex=complex_,
         row_count=row_count,

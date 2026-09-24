@@ -13,6 +13,7 @@ from jacobian.math.topology.cubical_complexes._models import (
     MAX_DIM,
     MAX_LOWER_STAR_CELLS,
     MAX_LOWER_STAR_VERTICES,
+    CubicalBoundarySubcomplexResult,
     CubicalChainComplexRequest,
     CubicalChainComplexResult,
     CubicalClosedStarRequest,
@@ -36,6 +37,7 @@ from jacobian.math.topology.cubical_complexes.extensions_tools import (
     TOOLS as EXTENSION_TOOLS,
 )
 from jacobian.math.topology.cubical_complexes.operations import (
+    boundary_subcomplex,
     chain_complex,
     closed_star,
     f_vector,
@@ -67,6 +69,12 @@ def _face_poset(request: CubicalComplexRequest) -> CubicalFacePosetResult:
 
 def _chain_complex(request: CubicalChainComplexRequest) -> CubicalChainComplexResult:
     return chain_complex(request.cells, request.coefficient_ring, request.prime)
+
+
+def _boundary_subcomplex(
+    request: CubicalComplexRequest,
+) -> CubicalBoundarySubcomplexResult:
+    return boundary_subcomplex(request.cells)
 
 
 def _product(request: CubicalProductRequest) -> CubicalProductResult:
@@ -103,6 +111,36 @@ _CELLS = {
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
     *EXTENSION_TOOLS,
+    MathTool(
+        operation_id="topology.cubical_complex.boundary_subcomplex.compute",
+        title="Compute the exposed-facet boundary subcomplex",
+        description=(
+            "Require a pure positive-dimensional elementary cubical complex and "
+            "return the closure of codimension-one faces incident to exactly one "
+            "top-dimensional cell. The boundary can be empty and retains the "
+            "source ambient dimension. Face-generation, incidence, coordinate, "
+            "and output-size bounds are checked before cell expansion."
+        ),
+        request_type=CubicalComplexRequest,
+        result_type=CubicalBoundarySubcomplexResult,
+        run=_boundary_subcomplex,
+        tags=("topology", "cubical", "boundary", "subcomplex", "exact"),
+        discovery_terms=(
+            "cubical boundary subcomplex",
+            "exposed facets of a pure cubical complex",
+            "boundary faces incident to one top-dimensional cube",
+        ),
+        examples=(
+            OperationExample(
+                name="square_boundary_subcomplex",
+                description=(
+                    "Return the four exposed edges and all four vertices of a "
+                    "single unit square."
+                ),
+                input={"cells": [{"intervals": [[0, 1], [0, 1]]}]},
+            ),
+        ),
+    ),
     MathTool(
         operation_id="topology.cubical_complex.closed_star.compute",
         title="Compute a cubical cell's closed star",

@@ -46,6 +46,9 @@ MAX_CUBICAL_FACE_POSET_RESULT_BYTES = 8 * 1024 * 1024
 MAX_CUBICAL_CLOSED_STAR_RESULT_BYTES = 8 * 1024 * 1024
 MAX_CUBICAL_CLOSED_STAR_COORDINATE_DIGITS = 64
 MAX_CUBICAL_CLOSED_STAR_WORK = 2_000_000
+MAX_CUBICAL_BOUNDARY_SUBCOMPLEX_WORK = 8_000_000
+MAX_CUBICAL_BOUNDARY_SUBCOMPLEX_RESULT_BYTES = 8 * 1024 * 1024
+MAX_CUBICAL_BOUNDARY_SUBCOMPLEX_COORDINATE_DIGITS = 64
 MAX_CUBICAL_PRIME = 1000003
 MAX_TRIANGULATION_POINTS = 4096
 MAX_TRIANGULATION_SIMPLICES = 16384
@@ -100,12 +103,13 @@ class CubicalComplex(StrictModel):
     """Canonical cubical complex with an explicit ambient coordinate axis.
 
     ``cells`` is a sorted family of distinct cells.  Operations establish that
-    it is face closed before constructing this value; decoding checks only the
-    bounded cell and axis representation.
+    it is face closed before constructing this value; the empty family is the
+    void subcomplex and retains the declared ambient dimension. Decoding checks
+    only the bounded cell and axis representation.
     """
 
     ambient_dimension: int = Field(ge=1, le=MAX_DIM)
-    cells: tuple[CubicalCell, ...] = Field(min_length=1, max_length=MAX_FACE_CELLS)
+    cells: tuple[CubicalCell, ...] = Field(max_length=MAX_FACE_CELLS)
 
     @model_validator(mode="after")
     def require_structural_cells(self) -> Self:
@@ -120,6 +124,38 @@ class CubicalComplex(StrictModel):
             )
         if len(set(self.cells)) != len(self.cells):
             raise _validation_error("duplicate_cells", "cells must be distinct")
+        return self
+
+
+class CubicalBoundarySubcomplexResult(StrictModel):
+    """A pure cubical complex and its source-bound exposed-facet subcomplex.
+
+    The boundary may be empty; its ambient dimension remains the same as the
+    source complex so the void subcomplex has an unambiguous cubical context.
+    """
+
+    complex: CubicalComplex
+    boundary: CubicalComplex
+    exposed_facets: tuple[CubicalCell, ...] = Field(max_length=MAX_FACE_CELLS)
+
+    @model_validator(mode="after")
+    def require_source_binding(self) -> Self:
+        source_cells = set(self.complex.cells)
+        boundary_cells = set(self.boundary.cells)
+        if (
+            self.boundary.ambient_dimension != self.complex.ambient_dimension
+            or not boundary_cells.issubset(source_cells)
+            or not set(self.exposed_facets).issubset(boundary_cells)
+            or tuple(
+                sorted(self.exposed_facets, key=lambda cell: cell.intervals)
+            )
+            != self.exposed_facets
+            or len(set(self.exposed_facets)) != len(self.exposed_facets)
+        ):
+            raise _validation_error(
+                "boundary_subcomplex_source_binding",
+                "the boundary and exposed facets must be bound to the source complex",
+            )
         return self
 
 
@@ -457,9 +493,7 @@ class CubicalBitmapResult(StrictModel):
     complex: CubicalComplex
     row_count: int = Field(ge=1, le=MAX_CUBICAL_BITMAP_SIDE)
     column_count: int = Field(ge=1, le=MAX_CUBICAL_BITMAP_SIDE)
-    pixel_to_cell: tuple[CubicalBitmapPixelCell, ...] = Field(
-        min_length=1, max_length=MAX_CELLS
-    )
+    pixel_to_cell: tuple[CubicalBitmapPixelCell, ...] = Field(max_length=MAX_CELLS)
 
     @model_validator(mode="after")
     def require_bitmap_axis_and_bounds(self) -> Self:
@@ -788,6 +822,7 @@ __all__ = [
     "CubicalBitmapPixelCell",
     "CubicalBitmapRequest",
     "CubicalBitmapResult",
+    "CubicalBoundarySubcomplexResult",
     "CubicalCell",
     "CubicalCellBasis",
     "CubicalCellBirth",

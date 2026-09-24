@@ -24,7 +24,9 @@ considered; complete output closure is capped at 64 cells. The operation also
 bounds codimension-one cover candidates, coordinate integer size, and the
 serialized result at 8 MiB.
 
-The current `CubicalComplex` carrier is nonempty, so this operation does not
-represent the void complex. A zero-dimensional cube is supported: its poset
-has one element and no strict order relations. An all-point family produces an
-antichain, also with no strict order relations between distinct cells.
+The `CubicalComplex` value retains its ambient dimension and permits an empty
+cell tuple for derived subcomplexes. This face-poset operation still requires
+a nonempty generator family, and its returned poset has at least one element.
+A zero-dimensional cube is supported: its poset has one element and no strict
+order relations. An all-point family produces an antichain, also with no strict
+order relations between distinct cells.

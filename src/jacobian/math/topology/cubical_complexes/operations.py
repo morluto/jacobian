@@ -44,6 +44,9 @@ from jacobian.math.topology.chain_complexes.values import (
 )
 from jacobian.math.topology.cubical_complexes._models import (
     MAX_CELLS,
+    MAX_CUBICAL_BOUNDARY_SUBCOMPLEX_COORDINATE_DIGITS,
+    MAX_CUBICAL_BOUNDARY_SUBCOMPLEX_RESULT_BYTES,
+    MAX_CUBICAL_BOUNDARY_SUBCOMPLEX_WORK,
     MAX_CUBICAL_CHAIN_CELLS,
     MAX_CUBICAL_CHAIN_GROUP,
     MAX_CUBICAL_CLOSED_STAR_COORDINATE_DIGITS,
@@ -67,6 +70,7 @@ from jacobian.math.topology.cubical_complexes._models import (
     MAX_LOWER_STAR_RESULT_BYTES,
     MAX_LOWER_STAR_VALUE_DIGITS,
     MAX_LOWER_STAR_VERTICES,
+    CubicalBoundarySubcomplexResult,
     CubicalCell,
     CubicalCellBasis,
     CubicalCellBirth,
@@ -359,6 +363,130 @@ def face_closure(cells: tuple[CubicalCell, ...]) -> FaceClosureResult:
     )
 
 
+def boundary_subcomplex(
+    cells: tuple[CubicalCell, ...],
+) -> CubicalBoundarySubcomplexResult:
+    """Return the exposed-facet subcomplex of a pure positive-dimensional complex.
+
+    A codimension-one face is exposed when exactly one top-dimensional cube is
+    incident to it. The returned boundary is the complete downward closure of
+    those faces; if every such face is shared, that subcomplex is empty.
+    """
+    if type(cells) is not tuple or not cells or len(cells) > MAX_CELLS:
+        raise OperationDomainValidationError(
+            location=("cells",),
+            code="cubical_complex.boundary_subcomplex_source_shape",
+            message="boundary subcomplex requires a nonempty bounded generator family",
+        )
+    source_cells = tuple(sorted(set(cells), key=lambda cell: cell.intervals))
+    ambient_dimension = len(source_cells[0].intervals)
+    if any(len(cell.intervals) != ambient_dimension for cell in source_cells):
+        raise OperationDomainValidationError(
+            location=("cells",),
+            code="cubical_complex.boundary_subcomplex_ambient_axis",
+            message="all generators must use one ambient coordinate axis",
+        )
+
+    dimension = max(cell.dimension for cell in source_cells)
+    if dimension == 0:
+        raise OperationDomainValidationError(
+            location=("cells",),
+            code="cubical_complex.boundary_subcomplex_dimension",
+            message="boundary subcomplex requires positive-dimensional cells",
+        )
+
+    coordinate_digits = max(
+        _coordinate_digit_count(endpoint)
+        for cell in source_cells
+        for interval in cell.intervals
+        for endpoint in interval
+    )
+    if coordinate_digits > MAX_CUBICAL_BOUNDARY_SUBCOMPLEX_COORDINATE_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("cells",),
+            code="cubical_complex.boundary_subcomplex_coordinate_bound",
+            message="coordinates exceed the boundary-subcomplex digit bound",
+        )
+
+    top_cells = tuple(cell for cell in source_cells if cell.dimension == dimension)
+    source_face_candidates = sum(3**cell.dimension for cell in source_cells)
+    top_face_candidates = sum(3**cell.dimension for cell in top_cells)
+    facet_candidate_count = 2 * dimension * len(top_cells)
+    boundary_face_candidates = facet_candidate_count * 3 ** (dimension - 1)
+    generation_and_incidence_work = (
+        ambient_dimension
+        * (source_face_candidates + top_face_candidates + boundary_face_candidates)
+        + facet_candidate_count
+    )
+    sort_work_bound = 2 * ambient_dimension * (
+        len(source_cells) * MAX_CELLS.bit_length()
+        + (source_face_candidates + top_face_candidates + boundary_face_candidates)
+        * MAX_FACE_CELLS.bit_length()
+        + facet_candidate_count * MAX_FACE_CELLS.bit_length()
+    )
+    total_work_bound = generation_and_incidence_work + sort_work_bound
+    total_work_bound += 2 * len(cells) * ambient_dimension
+    cell_bytes_bound = ambient_dimension * (2 * coordinate_digits + 8) + 64
+    output_bytes_bound = (
+        512
+        + 2 * min(MAX_FACE_CELLS, source_face_candidates) * cell_bytes_bound
+        + facet_candidate_count * cell_bytes_bound
+    )
+    if (
+        source_face_candidates > MAX_FACE_CELLS
+        or top_face_candidates > MAX_FACE_CELLS
+        or boundary_face_candidates > MAX_CUBICAL_BOUNDARY_SUBCOMPLEX_WORK
+        or total_work_bound > MAX_CUBICAL_BOUNDARY_SUBCOMPLEX_WORK
+        or output_bytes_bound > MAX_CUBICAL_BOUNDARY_SUBCOMPLEX_RESULT_BYTES
+    ):
+        raise OperationResourceAdmissionError(
+            location=("cells",),
+            code="cubical_complex.boundary_subcomplex_bounds",
+            message=(
+                "face generation, incidence, or serialized boundary-subcomplex "
+                "output exceeds its admitted bound"
+            ),
+        )
+
+    complex_, _ = _canonical_complex(source_cells)
+    top_closure = _face_cells(top_cells)
+    if top_closure != complex_.cells:
+        raise OperationDomainValidationError(
+            location=("cells",),
+            code="cubical_complex.boundary_subcomplex_not_pure",
+            message="every cell must be a face of a top-dimensional cell",
+        )
+
+    facet_incidence: dict[tuple[tuple[int, int], ...], int] = {}
+    for cell in top_cells:
+        active_axes = tuple(
+            axis
+            for axis, (lower, upper) in enumerate(cell.intervals)
+            if upper > lower
+        )
+        for axis in active_axes:
+            lower, upper = cell.intervals[axis]
+            for endpoint in (lower, upper):
+                face = list(cell.intervals)
+                face[axis] = (endpoint, endpoint)
+                face_key = tuple(face)
+                facet_incidence[face_key] = facet_incidence.get(face_key, 0) + 1
+    exposed_facets = tuple(
+        CubicalCell(intervals=intervals)
+        for intervals, incidence in sorted(facet_incidence.items())
+        if incidence == 1
+    )
+    boundary_cells = _face_cells(exposed_facets)
+    return CubicalBoundarySubcomplexResult(
+        complex=complex_,
+        boundary=CubicalComplex(
+            ambient_dimension=ambient_dimension,
+            cells=boundary_cells,
+        ),
+        exposed_facets=exposed_facets,
+    )
+
+
 def _is_face_of(face: CubicalCell, coface: CubicalCell) -> bool:
     return len(face.intervals) == len(coface.intervals) and all(
         outer_lower <= inner_lower and inner_upper <= outer_upper
@@ -583,7 +711,7 @@ def one_skeleton(cells: tuple[CubicalCell, ...]) -> CubicalOneSkeletonResult:
         high[varying_axis] = (right_endpoint, right_endpoint)
         left_vertex = vertex_index[CubicalCell(intervals=tuple(low))]
         right_vertex = vertex_index[CubicalCell(intervals=tuple(high))]
-        graph_edges.add(tuple(sorted((left_vertex, right_vertex))))
+        graph_edges.add((min(left_vertex, right_vertex), max(left_vertex, right_vertex)))
     if len(vertex_cells) > MAX_INDEXED_SIMPLE_GRAPH_VERTICES:
         raise OperationResourceAdmissionError(
             location=("cells",),

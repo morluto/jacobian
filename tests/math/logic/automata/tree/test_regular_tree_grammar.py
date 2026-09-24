@@ -10,6 +10,7 @@ from jacobian.math.logic.automata.tree._models import (
 )
 from jacobian.math.logic.automata.tree._tools import TOOLS
 from jacobian.math.logic.automata.tree.operations import (
+    reachable_state_profile,
     regular_tree_grammar_to_automaton,
     run_tree_automaton,
 )
@@ -127,6 +128,36 @@ def test_empty_grammar_preserves_empty_signature_and_language() -> None:
     assert result.automaton.transitions == ()
     assert result.automaton.final_states == (1,)
     assert result.grammar == grammar
+
+
+def test_conversion_roundtrip_retains_unused_symbol_and_dead_state() -> None:
+    grammar = RegularTreeGrammar(
+        nonterminal_count=2,
+        arity=(0, 2, 1),
+        start_nonterminal=0,
+        productions=(
+            RegularTreeProduction(nonterminal=0, symbol=0, children=()),
+            RegularTreeProduction(nonterminal=1, symbol=1, children=(1, 1)),
+        ),
+    )
+
+    result = regular_tree_grammar_to_automaton(
+        RegularTreeGrammarToAutomatonRequest(grammar=grammar)
+    )
+    roundtrip = RegularTreeGrammarToAutomatonResult.model_validate(result.model_dump())
+    profile = reachable_state_profile(roundtrip.automaton)
+
+    assert roundtrip == result
+    assert roundtrip.grammar == RegularTreeGrammar.model_validate(grammar.model_dump())
+    assert roundtrip.automaton.arity == (0, 2, 1)
+    assert not any(row.symbol == 2 for row in roundtrip.automaton.transitions)
+    assert roundtrip.automaton.state_count == 2
+    assert any(
+        row.target_state == 1 and row.child_states == (1, 1)
+        for row in roundtrip.automaton.transitions
+    )
+    assert profile.reachable_states == (0,)
+    assert profile.unreachable_states == (1,)
 
 
 def test_maximum_admitted_rule_and_rank_shape_converts_within_work_bound() -> None:

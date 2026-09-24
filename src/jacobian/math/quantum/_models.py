@@ -290,6 +290,42 @@ class ExactStabilizerGroupRequest(StrictModel):
     generators: tuple[ExactQubitPauli, ...] = Field(max_length=MAX_CHECK_ROWS)
 
 
+class StabilizerCodeRequest(StrictModel):
+    """Select a joint eigenspace by assigning eigenvalues to a group basis."""
+
+    group: ExactStabilizerGroup
+    generator_eigenvalues: tuple[StrictInt, ...] = Field(
+        max_length=MAX_CHECK_ROWS,
+        description=(
+            "One strict +1 or -1 character value for each generator, in the "
+            "same order as group.generators."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_character_values(self) -> Self:
+        if len(self.generator_eigenvalues) != len(self.group.generators):
+            raise _validation_error(
+                "code_character_shape",
+                "one eigenvalue is required for each independent group generator",
+            )
+        if any(value not in (-1, 1) for value in self.generator_eigenvalues):
+            raise _validation_error(
+                "code_character_sign", "stabilizer generator eigenvalues must be +1 or -1"
+            )
+        return self
+
+
+class StabilizerCodeValue(StrictModel):
+    """Canonical +1 stabilizer group defining an exact qubit code subspace."""
+
+    group: ExactStabilizerGroup
+
+    @property
+    def logical_qubits(self) -> int:
+        return len(self.group.register.qubit_ids) - len(self.group.generators)
+
+
 class PauliProductRequest(StrictModel):
     left: ExactQubitPauli
     right: ExactQubitPauli

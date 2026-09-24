@@ -44,6 +44,11 @@ from jacobian.math.groups.root_systems._models import (
     WeylWeightOrbitRequest,
     WeylWeightOrbitResult,
 )
+from jacobian.math.groups.root_systems._weight_character_models import (
+    HighestWeightCharacterRequest,
+    IrreducibleWeightCharacter,
+    WeightMultiplicity,
+)
 from jacobian.math.groups.root_systems.operations import (
     cartan_datum,
     cartan_matrix_from_type,
@@ -78,6 +83,7 @@ from jacobian.math.groups.root_systems.operations import (
     weyl_weight_orbit,
     weyl_word_act_on_root_vector,
 )
+from jacobian.math.groups.root_systems.weight_character import highest_weight_character
 from jacobian.math.groups.root_systems.weyl_dimension import weyl_dimension
 
 __all__ = [
@@ -90,6 +96,8 @@ __all__ = [
     "FiniteDynkinDiagram",
     "HighestCorootComponent",
     "HighestCorootsResult",
+    "HighestWeightCharacterRequest",
+    "IrreducibleWeightCharacter",
     "LatticeVectorCreateRequest",
     "PositiveCorootsResult",
     "PositiveRootComponentProfile",
@@ -105,6 +113,7 @@ __all__ = [
     "RootToCorootResult",
     "RootToWeightLatticeRequest",
     "WeightLatticeVector",
+    "WeightMultiplicity",
     "WeylDimensionRequest",
     "WeylDimensionResult",
     "WeylElement",
@@ -126,6 +135,7 @@ __all__ = [
     "coxeter_polynomial",
     "dynkin_diagram",
     "highest_coroots",
+    "highest_weight_character",
     "positive_coroots",
     "positive_root_profile",
     "positive_roots",

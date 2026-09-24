@@ -23,10 +23,7 @@ from jacobian.math.matrices.cyclic_linear._models import (
     MAX_CYCLIC_FIELD_WORK,
     CyclicRationalBlockSymbol,
     CyclicRationalRankKernelProfile,
-    CyclotomicElementMapRequest,
     CyclotomicFieldInclusion,
-    CyclotomicFieldInclusionCompositionRequest,
-    CyclotomicFieldInclusionRequest,
     CyclotomicNonzeroMinor,
     CyclotomicRankKernelComponent,
     RationalCyclotomicElement,
@@ -114,31 +111,33 @@ def _require_standard_inclusion_image(inclusion: CyclotomicFieldInclusion) -> No
 
 
 def cyclotomic_field_inclusion(
-    request: CyclotomicFieldInclusionRequest,
+    source: RationalCyclotomicField,
+    target: RationalCyclotomicField,
 ) -> CyclotomicFieldInclusion:
     """Construct the canonical standard inclusion for orders source | target."""
-    return _standard_inclusion(request.source, request.target)
+    return _standard_inclusion(source, target)
 
 
 def compose_cyclotomic_field_inclusions(
-    request: CyclotomicFieldInclusionCompositionRequest,
+    first: CyclotomicFieldInclusion,
+    second: CyclotomicFieldInclusion,
 ) -> CyclotomicFieldInclusion:
     """Compose two standard inclusions with matching intermediate parents."""
-    if request.first.target != request.second.source:
+    if first.target != second.source:
         raise CyclicRankKernelAdmissionError(
             "inclusion_parent", "the first target must equal the second source field"
         )
-    _require_standard_inclusion_image(request.first)
-    _require_standard_inclusion_image(request.second)
-    return _standard_inclusion(request.first.source, request.second.target)
+    _require_standard_inclusion_image(first)
+    _require_standard_inclusion_image(second)
+    return _standard_inclusion(first.source, second.target)
 
 
 def apply_cyclotomic_field_inclusion(
-    request: CyclotomicElementMapRequest,
+    inclusion: CyclotomicFieldInclusion,
+    element: RationalCyclotomicElement,
 ) -> RationalCyclotomicElement:
     """Map an exact element along its canonical standard cyclotomic inclusion."""
-    inclusion = request.inclusion
-    if request.element.field != inclusion.source:
+    if element.field != inclusion.source:
         raise CyclicRankKernelAdmissionError(
             "inclusion_parent",
             "the element parent must equal the inclusion source field",
@@ -154,7 +153,7 @@ def apply_cyclotomic_field_inclusion(
     _require_standard_inclusion_image(inclusion)
     expected = _inclusion_poly(inclusion.source.order, inclusion.target.order)
     coordinates = tuple(
-        value.as_fraction() for value in request.element.coefficients_ascending
+        value.as_fraction() for value in element.coefficients_ascending
     )
     from sympy import Poly, cyclotomic_poly, symbols
 

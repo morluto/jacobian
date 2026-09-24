@@ -84,6 +84,14 @@ class DeterminantDiscriminantResult(StrictModel):
                 max_digits=MAX_POLAR_DETERMINANT_OUTPUT_DIGITS,
                 label="quadratic-form determinant result",
             )
+        sign = -1 if (n * (n - 1) // 2) % 2 else 1
+        if self.signed_discriminant.as_fraction() != (
+            sign * self.polar_gram_determinant.as_fraction()
+        ):
+            raise ValueError(
+                "signed discriminant must match the dimension-derived sign "
+                "of the polar Gram determinant"
+            )
         return self
 
     @classmethod

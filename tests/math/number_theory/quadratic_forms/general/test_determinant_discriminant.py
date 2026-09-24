@@ -6,6 +6,7 @@ from itertools import permutations
 from math import lcm
 
 import pytest
+from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.builtins import BUILTIN_TOOLS
@@ -181,6 +182,18 @@ def test_catalog_tool_runs_its_example_and_result_survives_json_round_trip() -> 
     restored = operation.result_type.model_validate_json(result.model_dump_json())
     assert restored.polar_gram_determinant == _r(3)
     assert restored.signed_discriminant == _r(-3)
+
+
+def test_result_rejects_signed_scalar_inconsistent_with_dimension() -> None:
+    form = _form((_r(1),))
+    result = polar_gram_determinant_discriminant(
+        DeterminantDiscriminantRequest(form=form)
+    )
+    malformed = json.loads(result.model_dump_json())
+    malformed["signed_discriminant"] = {"num": "99", "den": "1"}
+
+    with pytest.raises(ValidationError, match="dimension-derived sign"):
+        type(result).model_validate_json(json.dumps(malformed), strict=True)
 
 
 def test_axis_boundary_is_accepted_and_next_dimension_rejected() -> None:

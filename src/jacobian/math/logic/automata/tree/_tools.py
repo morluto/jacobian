@@ -24,6 +24,10 @@ from jacobian.math.logic.automata.tree._models import (
     TreeAutomatonReachabilityRequest,
     TreeAutomatonTrimRequest,
     TreeAutomatonTrimResult,
+    TreeContextPlugRequest,
+    TreeContextPlugResult,
+    TreeContextStateMapRequest,
+    TreeContextStateMapResult,
     TreeDeterminizeRequest,
     TreeDeterminizeResult,
     TreeRunRequest,
@@ -36,7 +40,9 @@ from jacobian.math.logic.automata.tree.operations import (
     complement_tree_automaton,
     complete_deterministic_tree_automaton,
     determinize_tree_automaton,
+    map_tree_context_states,
     minimize_tree_automaton,
+    plug_tree_context_operation,
     ranked_tree_positions,
     ranked_tree_subtree,
     reachable_state_profile,
@@ -197,6 +203,78 @@ _DETERMINIZE_EXAMPLE = {
 }
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
+    MathTool(
+        operation_id="ranked_tree.context.plug.compute",
+        title="Plug a ranked tree into a one-hole context",
+        description=(
+            "Substitute a finite ranked tree into the unique hole of a canonical "
+            "ranked-tree context. Context and input must use exactly the same "
+            "ranked alphabet; the complete output size and depth are admitted "
+            "before any output nodes are constructed."
+        ),
+        request_type=TreeContextPlugRequest,
+        result_type=TreeContextPlugResult,
+        run=plug_tree_context_operation,
+        tags=("ranked-tree", "context", "substitution", "exact"),
+        discovery_terms=("tree context plugging", "one-hole tree substitution"),
+        examples=(
+            OperationExample(
+                name="plug_leaf_into_binary_context",
+                description=(
+                    "Plug a leaf into the left hole of a binary root with a right leaf; "
+                    "the input tree and context must share the exact ranked alphabet."
+                ),
+                input={
+                    "context": {
+                        "arity": [0, 2],
+                        "frames": [
+                            {
+                                "symbol": 1,
+                                "hole_child": 0,
+                                "siblings": [{"symbol": 0, "children": []}],
+                            }
+                        ],
+                    },
+                    "tree": {"symbol": 0, "children": []},
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="tree_automaton.context.state_map.compute",
+        title="Compute a tree context induced state map",
+        description=(
+            "For a complete deterministic bottom-up automaton and a one-hole "
+            "ranked-tree context C, return the function q -> state(C[q]) on "
+            "every automaton state. The map is evaluated along the context "
+            "spine and preserves the full ranked alphabet and state axis."
+        ),
+        request_type=TreeContextStateMapRequest,
+        result_type=TreeContextStateMapResult,
+        run=map_tree_context_states,
+        tags=("tree-automata", "contexts", "state-map", "exact"),
+        discovery_terms=("tree context transformation", "context induced state map"),
+        examples=(
+            OperationExample(
+                name="identity_context_state_map",
+                description=(
+                    "Return the identity state map for the empty context; the automaton "
+                    "must be complete and share the context's ranked alphabet."
+                ),
+                input={
+                    "automaton": {
+                        "state_count": 1,
+                        "arity": [0],
+                        "transitions": [
+                            {"symbol": 0, "child_states": [], "target_state": 0}
+                        ],
+                        "final_states": [0],
+                    },
+                    "context": {"arity": [0], "frames": []},
+                },
+            ),
+        ),
+    ),
     MathTool(
         operation_id="tree_automaton.boolean_product.compute",
         title="Boolean product of deterministic tree automata",

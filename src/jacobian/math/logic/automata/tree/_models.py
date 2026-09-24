@@ -9,6 +9,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import ExactInteger
 from jacobian._models import StrictModel
+from jacobian.math.logic.automata.tree.contexts import FiniteTreeContext
 from jacobian.math.logic.automata.tree.values import (
     MAX_REACHABILITY_WITNESS_NODES,
     MAX_RUN_TREE_DEPTH,
@@ -163,6 +164,51 @@ class RankedTreeSubtreeResult(RankedTreeSubtreeRequest):
         subtree: RankedTree,
     ) -> Self:
         return cls.model_construct(tree=tree, position=position, subtree=subtree)
+
+
+class TreeContextPlugRequest(StrictModel):
+    context: FiniteTreeContext
+    tree: RankedTree
+
+
+class TreeContextPlugResult(TreeContextPlugRequest):
+    plugged_tree: RankedTree
+
+    @classmethod
+    def _from_kernel(
+        cls, request: TreeContextPlugRequest, *, plugged_tree: RankedTree
+    ) -> Self:
+        return cls.model_construct(
+            context=request.context, tree=request.tree, plugged_tree=plugged_tree
+        )
+
+
+class TreeContextStateMapRequest(StrictModel):
+    automaton: CompleteDeterministicBottomUpTreeAutomaton
+    context: FiniteTreeContext
+
+
+class TreeContextStateMapResult(TreeContextStateMapRequest):
+    state_map: tuple[int, ...] = Field(max_length=MAX_TA_STATES)
+
+    @model_validator(mode="after")
+    def require_state_axis(self) -> Self:
+        if len(self.state_map) != self.automaton.state_count or any(
+            not 0 <= state < self.automaton.state_count for state in self.state_map
+        ):
+            raise _validation_error(
+                "context_state_map_axis",
+                "state map must be a total endomap on the automaton state axis",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls, request: TreeContextStateMapRequest, *, state_map: tuple[int, ...]
+    ) -> Self:
+        return cls.model_construct(
+            automaton=request.automaton, context=request.context, state_map=state_map
+        )
 
 
 class AcceptedTreeCountRequest(StrictModel):

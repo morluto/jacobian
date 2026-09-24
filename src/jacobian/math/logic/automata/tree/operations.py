@@ -8,6 +8,8 @@ from itertools import product
 from math import prod
 from typing import Literal
 
+from pydantic import ValidationError
+
 from jacobian._execution import request_checkpoint
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -22,8 +24,18 @@ from jacobian.math.logic.automata.tree._models import (
     TreeAutomatonCompletionResult,
     TreeAutomatonMinimizeResult,
     TreeAutomatonTrimResult,
+    TreeContextPlugRequest,
+    TreeContextPlugResult,
+    TreeContextStateMapRequest,
+    TreeContextStateMapResult,
     TreeDeterminizeResult,
     TreeRunResult,
+)
+from jacobian.math.logic.automata.tree.contexts import (
+    FiniteTreeContext,
+    TreeContextFrame,
+    _plug_tree_context,
+    _tree_context_state_map,
 )
 from jacobian.math.logic.automata.tree.values import (
     MAX_RUN_TREE_DEPTH,
@@ -53,7 +65,9 @@ __all__ = [
     "complement_tree_automaton",
     "complete_deterministic_tree_automaton",
     "determinize_tree_automaton",
+    "map_tree_context_states",
     "minimize_tree_automaton",
+    "plug_tree_context_operation",
     "ranked_tree_positions",
     "ranked_tree_subtree",
     "reachable_state_profile",
@@ -66,6 +80,315 @@ __all__ = [
     "verify_tree_run",
     "verify_trim_tree_automaton",
 ]
+
+
+def _preflight_context(context: FiniteTreeContext) -> tuple[int, int]:
+    """Bound typed context structure before serialization or value validation."""
+    arity = getattr(context, "arity", None)
+    frames = getattr(context, "frames", None)
+    if type(arity) is not tuple or len(arity) > MAX_TA_SYMBOLS:
+        raise OperationDomainValidationError(
+            location=("context", "arity"),
+            code="tree_context.input_signature",
+            message="context arity must be a bounded tuple",
+        )
+    if any(type(rank) is not int or not 0 <= rank <= MAX_TA_ARITY for rank in arity):
+        raise OperationDomainValidationError(
+            location=("context", "arity"),
+            code="tree_context.input_signature",
+            message="context arities must be integers in the supported range",
+        )
+    if type(frames) is not tuple:
+        raise OperationDomainValidationError(
+            location=("context", "frames"),
+            code="tree_context.input_frames",
+            message="context frames must be a tuple",
+        )
+    if len(frames) > MAX_RUN_TREE_DEPTH:
+        raise OperationResourceAdmissionError(
+            location=("context", "frames"),
+            code="tree_context.depth_bound",
+            message="context spine exceeds the supported depth",
+        )
+    nodes = len(frames)
+    depth_bound = len(frames)
+    for frame_index, frame in enumerate(frames):
+        if type(frame) is not TreeContextFrame:
+            raise OperationDomainValidationError(
+                location=("context", "frames", frame_index),
+                code="tree_context.input_frame",
+                message="context frames must be canonical frame values",
+            )
+        symbol = getattr(frame, "symbol", None)
+        hole_child = getattr(frame, "hole_child", None)
+        siblings = getattr(frame, "siblings", None)
+        if (
+            type(symbol) is not int
+            or not 0 <= symbol < len(arity)
+            or type(hole_child) is not int
+            or type(siblings) is not tuple
+        ):
+            raise OperationDomainValidationError(
+                location=("context", "frames", frame_index),
+                code="tree_context.input_frame",
+                message="context frame fields must be canonical",
+            )
+        rank = arity[symbol]
+        if not 0 <= hole_child < rank or len(siblings) != rank - 1:
+            raise OperationDomainValidationError(
+                location=("context", "frames", frame_index),
+                code="tree_context.frame_rank",
+                message="context frame children do not match the symbol arity",
+            )
+        for sibling_index, sibling in enumerate(siblings):
+            stack = [(sibling, frame_index + 2)]
+            while stack:
+                node, depth = stack.pop()
+                nodes += 1
+                if nodes > MAX_RUN_TREE_NODES:
+                    raise OperationResourceAdmissionError(
+                        location=(
+                            "context",
+                            "frames",
+                            frame_index,
+                            "siblings",
+                            sibling_index,
+                        ),
+                        code="tree_context.node_bound",
+                        message="context size exceeds the supported node bound",
+                    )
+                if depth > MAX_RUN_TREE_DEPTH:
+                    raise OperationResourceAdmissionError(
+                        location=(
+                            "context",
+                            "frames",
+                            frame_index,
+                            "siblings",
+                            sibling_index,
+                        ),
+                        code="tree_context.depth_bound",
+                        message="context exceeds the supported tree depth",
+                    )
+                depth_bound = max(depth_bound, depth)
+                if (
+                    type(node) is not RankedTree
+                    or type(getattr(node, "symbol", None)) is not int
+                    or type(getattr(node, "children", None)) is not tuple
+                    or not 0 <= node.symbol < len(arity)
+                    or len(node.children) != arity[node.symbol]
+                ):
+                    raise OperationDomainValidationError(
+                        location=(
+                            "context",
+                            "frames",
+                            frame_index,
+                            "siblings",
+                            sibling_index,
+                        ),
+                        code="tree_context.sibling_shape",
+                        message="context siblings must be well-ranked canonical trees",
+                    )
+                stack.extend((child, depth + 1) for child in node.children)
+    return nodes, depth_bound
+
+
+def _preflight_tree(tree: RankedTree) -> tuple[int, int]:
+    """Bound a ranked tree before serialization or alphabet traversal."""
+    nodes = 0
+    depth_bound = 0
+    stack = [(tree, 1)]
+    while stack:
+        node, depth = stack.pop()
+        nodes += 1
+        if nodes > MAX_RUN_TREE_NODES:
+            raise OperationResourceAdmissionError(
+                location=("tree",),
+                code="tree_context.input_node_bound",
+                message="input tree exceeds the supported node bound",
+            )
+        if depth > MAX_RUN_TREE_DEPTH:
+            raise OperationResourceAdmissionError(
+                location=("tree",),
+                code="tree_context.input_depth_bound",
+                message="input tree exceeds the supported depth",
+            )
+        depth_bound = max(depth_bound, depth)
+        symbol = getattr(node, "symbol", None)
+        children = getattr(node, "children", None)
+        if (
+            type(node) is not RankedTree
+            or type(symbol) is not int
+            or not 0 <= symbol < MAX_TA_SYMBOLS
+            or type(children) is not tuple
+            or len(children) > MAX_TA_ARITY
+        ):
+            raise OperationDomainValidationError(
+                location=("tree",),
+                code="tree_context.input_tree_shape",
+                message="input tree must use canonical ranked-tree nodes",
+            )
+        stack.extend((child, depth + 1) for child in children)
+    return nodes, depth_bound
+
+
+def _preflight_complete_automaton(
+    automaton: CompleteDeterministicBottomUpTreeAutomaton,
+) -> None:
+    state_count = getattr(automaton, "state_count", None)
+    arity = getattr(automaton, "arity", None)
+    transitions = getattr(automaton, "transitions", None)
+    final_states = getattr(automaton, "final_states", None)
+    if type(transitions) is tuple and len(transitions) > MAX_TA_TRANSITIONS:
+        raise OperationResourceAdmissionError(
+            location=("automaton", "transitions"),
+            code="tree_context.automaton_transition_bound",
+            message="automaton transition rows exceed the supported bound",
+        )
+    if (
+        type(state_count) is not int
+        or not 1 <= state_count <= MAX_TA_STATES
+        or type(arity) is not tuple
+        or len(arity) > MAX_TA_SYMBOLS
+        or type(transitions) is not tuple
+        or len(transitions) > MAX_TA_TRANSITIONS
+        or type(final_states) is not tuple
+        or len(final_states) > MAX_TA_STATES
+    ):
+        raise OperationDomainValidationError(
+            location=("automaton",),
+            code="tree_context.automaton_shape",
+            message="automaton axes and rows must satisfy their bounded shapes",
+        )
+    if any(type(rank) is not int or not 0 <= rank <= MAX_TA_ARITY for rank in arity):
+        raise OperationDomainValidationError(
+            location=("automaton", "arity"),
+            code="tree_context.automaton_signature",
+            message="automaton arities must be integers in the supported range",
+        )
+    for transition in transitions:
+        if (
+            type(transition) is not TreeAutomatonTransition
+            or type(getattr(transition, "symbol", None)) is not int
+            or type(getattr(transition, "child_states", None)) is not tuple
+            or type(getattr(transition, "target_state", None)) is not int
+            or len(transition.child_states) > MAX_TA_ARITY
+        ):
+            raise OperationDomainValidationError(
+                location=("automaton", "transitions"),
+                code="tree_context.automaton_transition_shape",
+                message="automaton transitions must be canonical bounded rows",
+            )
+
+
+def plug_tree_context_operation(
+    request: TreeContextPlugRequest,
+) -> TreeContextPlugResult:
+    """Plug a ranked tree into a canonical one-hole ranked-tree context."""
+    if type(request) is not TreeContextPlugRequest:
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="tree_context.plug.request_type",
+            message="request must be a canonical tree-context plug request",
+        )
+    if (
+        type(request.context) is not FiniteTreeContext
+        or type(request.tree) is not RankedTree
+    ):
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="tree_context.plug.input_type",
+            message="context and tree must be canonical ranked-tree values",
+        )
+    tree_nodes, tree_depth = _preflight_tree(request.tree)
+    context_nodes, context_depth = _preflight_context(request.context)
+    if context_nodes + tree_nodes > MAX_RUN_TREE_NODES:
+        raise OperationResourceAdmissionError(
+            location=("context",),
+            code="tree_context.plug.node_bound",
+            message="plugged tree would exceed the supported node bound",
+        )
+    if context_depth + tree_depth > MAX_RUN_TREE_DEPTH:
+        raise OperationResourceAdmissionError(
+            location=("context",),
+            code="tree_context.plug.depth_bound",
+            message="plugged tree would exceed the supported depth bound",
+        )
+    try:
+        context = FiniteTreeContext.model_validate(
+            request.context.model_dump(mode="json")
+        )
+        tree = RankedTree.model_validate(request.tree.model_dump(mode="json"))
+    except ValidationError as exc:
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="tree_context.plug.invalid_value",
+            message="context and tree must satisfy their canonical value contracts",
+        ) from exc
+    admitted_request = TreeContextPlugRequest.model_construct(
+        context=context, tree=tree
+    )
+    return TreeContextPlugResult._from_kernel(
+        admitted_request,
+        plugged_tree=_plug_tree_context(
+            admitted_request.context, admitted_request.tree
+        ),
+    )
+
+
+def map_tree_context_states(
+    request: TreeContextStateMapRequest,
+) -> TreeContextStateMapResult:
+    """Evaluate the context-induced state transformation of a complete DTA."""
+    if type(request) is not TreeContextStateMapRequest:
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="tree_context.state_map.request_type",
+            message="request must be a canonical tree-context state-map request",
+        )
+    if (
+        type(request.automaton) is not CompleteDeterministicBottomUpTreeAutomaton
+        or type(request.context) is not FiniteTreeContext
+    ):
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="tree_context.state_map.input_type",
+            message="automaton and context must be canonical typed values",
+        )
+    _preflight_complete_automaton(request.automaton)
+    context_nodes, _ = _preflight_context(request.context)
+    state_context_work = (
+        len(request.automaton.transitions)
+        + context_nodes
+        + len(request.context.frames) * request.automaton.state_count
+    )
+    if state_context_work > MAX_TREE_AUTOMATON_WORK:
+        raise OperationResourceAdmissionError(
+            location=("context",),
+            code="tree_context.state_map.work_bound",
+            message="context state-map evaluation exceeds its work bound",
+        )
+    try:
+        automaton = CompleteDeterministicBottomUpTreeAutomaton.model_validate(
+            request.automaton.model_dump(mode="json")
+        )
+        context = FiniteTreeContext.model_validate(
+            request.context.model_dump(mode="json")
+        )
+    except ValidationError as exc:
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="tree_context.state_map.invalid_value",
+            message="automaton and context must satisfy their canonical value contracts",
+        ) from exc
+    admitted_request = TreeContextStateMapRequest.model_construct(
+        automaton=automaton, context=context
+    )
+    return TreeContextStateMapResult._from_kernel(
+        admitted_request,
+        state_map=_tree_context_state_map(
+            admitted_request.automaton, admitted_request.context
+        ),
+    )
 
 
 def _complete_deterministic_rows(

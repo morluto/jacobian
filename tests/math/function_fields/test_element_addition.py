@@ -12,12 +12,14 @@ from jacobian.catalog.models import (
 )
 from jacobian.math.function_fields import (
     FiniteFunctionFieldElement,
-    FunctionFieldElementAddRequest,
     PrimeFieldPolynomial,
     PrimeFieldRationalFunction,
     function_field_element_add,
 )
-from jacobian.math.function_fields._models import FiniteFunctionField
+from jacobian.math.function_fields._models import (
+    FiniteFunctionField,
+    FunctionFieldElementAddRequest,
+)
 from jacobian.math.function_fields._tools import TOOLS
 
 OPERATION_ID = "function_field.element.add.compute"
@@ -191,7 +193,7 @@ def test_work_and_output_admission_precede_coordinate_addition(
     )
 
     monkeypatch.setattr(operations, "MAX_ELEMENT_ADDITION_WORK", 2_000_000)
-    monkeypatch.setattr(operations, "MAX_ELEMENT_OUTPUT_BYTES", 1)
+    monkeypatch.setattr(operations, "MAX_ELEMENT_VALUE_BYTES", 1)
     with pytest.raises(OperationResourceAdmissionError) as output_error:
         function_field_element_add(left, right)
     assert (

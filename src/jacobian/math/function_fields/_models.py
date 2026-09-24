@@ -7,6 +7,7 @@ from typing import Annotated, Literal, Self
 from pydantic import Field, StringConstraints, model_validator
 from pydantic_core import PydanticCustomError
 
+from jacobian._exact import DecimalIntegerEncoding
 from jacobian._models import StrictModel
 from jacobian.math.finite_fields.values import FiniteFieldElement
 
@@ -16,12 +17,16 @@ MAX_POLYNOMIAL_X_DEGREE = 12
 MAX_POLYNOMIAL_COEFFICIENTS = MAX_POLYNOMIAL_X_DEGREE + 1
 MAX_LEDGER_ROWS = 64
 MAX_FIELD_ADMISSION_WORK = 4_000_000
-MAX_BASE_EMBEDDING_OUTPUT_BYTES = 32_768
+MAX_BASE_EMBEDDING_VALUE_BYTES = 32_768
 MAX_ELEMENT_ADDITION_WORK = 2_000_000
-MAX_ELEMENT_OUTPUT_BYTES = 32_768
+MAX_ELEMENT_VALUE_BYTES = 32_768
 MAX_INVERSION_WORK = 2_000_000
 MAX_MULTIPLICATION_WORK = 2_000_000
 MAX_DIVISOR_MULTIPLICITY_BITS = 4096
+# 2**4096 needs 1234 decimal digits; divisor degrees combine at most 256
+# places of degree <= 12, needing at most 1237 digits.
+MAX_DIVISOR_MULTIPLICITY_DIGITS = 1234
+MAX_DIVISOR_DEGREE_DIGITS = 1240
 MAX_RIEMANN_ROCH_BASIS_DIMENSION = MAX_POLYNOMIAL_X_DEGREE + 1
 MAX_RIEMANN_ROCH_CONSTRUCTION_WORK = 4096
 MAX_RATIONAL_PLACE_DEGREE = 12
@@ -32,6 +37,9 @@ MAX_RATIONAL_PLACE_WORK = 20_000_000
 FieldVariable = Annotated[
     str, StringConstraints(pattern=r"^[A-Za-z][A-Za-z0-9_]{0,15}$", strict=True)
 ]
+
+DivisorMultiplicity = Annotated[int, DecimalIntegerEncoding(max_digits=1234)]
+DivisorDegree = Annotated[int, DecimalIntegerEncoding(max_digits=1240)]
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -201,7 +209,7 @@ class FunctionFieldPlace(StrictModel):
 
 class FunctionFieldDivisorTerm(StrictModel):
     place: FunctionFieldPlace
-    multiplicity: int
+    multiplicity: DivisorMultiplicity
 
 
 class FunctionFieldDivisor(StrictModel):
@@ -258,7 +266,7 @@ class FunctionFieldDivisorAddRequest(StrictModel):
 
 class FunctionFieldDivisorScaleRequest(StrictModel):
     divisor: FunctionFieldDivisor
-    scalar: int
+    scalar: DivisorMultiplicity
 
 
 class FunctionFieldDivisorEffectivePartsResult(StrictModel):
@@ -271,14 +279,14 @@ class FunctionFieldDivisorEffectivePartsResult(StrictModel):
 
 class FunctionFieldDivisorDegreeResult(StrictModel):
     divisor: FunctionFieldDivisor
-    degree: int
+    degree: DivisorDegree
 
 
 class FunctionFieldPrincipalDivisorResult(StrictModel):
     field: FiniteFunctionField
     element: FiniteFunctionFieldElement
     divisor: FunctionFieldDivisor
-    degree: int
+    degree: DivisorDegree
 
 
 class FunctionFieldGenusRequest(StrictModel):
@@ -596,10 +604,12 @@ class FunctionFieldElementMultiplyResult(StrictModel):
 
 
 __all__ = [
-    "MAX_BASE_EMBEDDING_OUTPUT_BYTES",
+    "MAX_BASE_EMBEDDING_VALUE_BYTES",
     "MAX_CHARACTERISTIC",
+    "MAX_DIVISOR_DEGREE_DIGITS",
+    "MAX_DIVISOR_MULTIPLICITY_DIGITS",
     "MAX_ELEMENT_ADDITION_WORK",
-    "MAX_ELEMENT_OUTPUT_BYTES",
+    "MAX_ELEMENT_VALUE_BYTES",
     "MAX_EXTENSION_DEGREE",
     "MAX_FIELD_ADMISSION_WORK",
     "MAX_INVERSION_WORK",
@@ -607,6 +617,8 @@ __all__ = [
     "MAX_MULTIPLICATION_WORK",
     "MAX_POLYNOMIAL_COEFFICIENTS",
     "MAX_POLYNOMIAL_X_DEGREE",
+    "DivisorDegree",
+    "DivisorMultiplicity",
     "FiniteFunctionField",
     "FiniteFunctionFieldElement",
     "FunctionFieldBaseEmbedding",

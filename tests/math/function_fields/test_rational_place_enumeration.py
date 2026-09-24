@@ -3,10 +3,7 @@ from itertools import product
 import pytest
 
 from jacobian.catalog.models import OperationResourceAdmissionError
-from jacobian.math.function_fields._models import (
-    FunctionFieldPlaceEnumerationRequest,
-    PrimeFieldPolynomial,
-)
+from jacobian.math.function_fields._models import PrimeFieldPolynomial
 from jacobian.math.function_fields.operations import (
     function_field_rational_places_degree_bounded,
 )
@@ -58,9 +55,7 @@ def test_complete_rational_place_enumeration_has_independent_factor_checks(
     prime: int, bound: int, expected_count: int
 ) -> None:
     field = _field(prime)
-    result = function_field_rational_places_degree_bounded(
-        FunctionFieldPlaceEnumerationRequest(field=field, maximum_degree=bound)
-    )
+    result = function_field_rational_places_degree_bounded(field, bound)
 
     assert result.field == field
     assert len(result.places) == expected_count
@@ -86,9 +81,7 @@ def test_complete_rational_place_enumeration_has_independent_factor_checks(
 
 
 def test_rational_place_enumeration_contains_known_degree_two_polynomials() -> None:
-    result = function_field_rational_places_degree_bounded(
-        FunctionFieldPlaceEnumerationRequest(field=_field(2), maximum_degree=2)
-    )
+    result = function_field_rational_places_degree_bounded(_field(2), 2)
 
     degree_two = {
         place.prime_polynomial.coefficients
@@ -101,10 +94,8 @@ def test_rational_place_enumeration_contains_known_degree_two_polynomials() -> N
 def test_candidate_envelope_rejects_before_enumeration() -> None:
     # 257 + 257**2 candidates exceed the bound even though the degree field is
     # structurally valid and the request itself is tiny.
-    request = FunctionFieldPlaceEnumerationRequest(field=_field(257), maximum_degree=2)
-
     with pytest.raises(OperationResourceAdmissionError) as error:
-        function_field_rational_places_degree_bounded(request)
+        function_field_rational_places_degree_bounded(_field(257), 2)
 
     assert error.value.errors()[0]["type"] == (
         "function_field.place_enumeration_candidates_exceed_envelope"
@@ -112,9 +103,7 @@ def test_candidate_envelope_rejects_before_enumeration() -> None:
 
 
 def test_degree_one_candidate_boundary_is_accepted_completely() -> None:
-    result = function_field_rational_places_degree_bounded(
-        FunctionFieldPlaceEnumerationRequest(field=_field(257), maximum_degree=1)
-    )
+    result = function_field_rational_places_degree_bounded(_field(257), 1)
 
     assert len(result.places) == 258
     assert sum(place.kind == "FINITE" for place in result.places) == 257
@@ -142,9 +131,7 @@ def test_extension_field_is_rejected_instead_of_partially_enumerated() -> None:
     )
 
     with pytest.raises(OperationDomainValidationError) as error:
-        function_field_rational_places_degree_bounded(
-            FunctionFieldPlaceEnumerationRequest(field=extension, maximum_degree=1)
-        )
+        function_field_rational_places_degree_bounded(extension, 1)
 
     assert error.value.errors()[0]["type"] == (
         "function_field.place_extension_unsupported"

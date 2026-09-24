@@ -11,7 +11,6 @@ from jacobian.math.function_fields._models import (
     FiniteFunctionFieldElement,
     FunctionFieldBaseEmbedding,
     FunctionFieldBaseEmbeddingApplyRequest,
-    FunctionFieldBaseEmbeddingRequest,
     PrimeFieldPolynomial,
     PrimeFieldRationalFunction,
 )
@@ -40,9 +39,7 @@ def _field() -> FiniteFunctionField:
 
 def test_rational_base_inclusion_is_bound_to_exact_extension() -> None:
     target = _field()
-    embedding = function_field_base_embedding(
-        FunctionFieldBaseEmbeddingRequest(target=target)
-    ).embedding
+    embedding = function_field_base_embedding(target).embedding
     assert embedding.source.characteristic == target.characteristic
     assert embedding.source.variable == target.variable
     assert embedding.source.degree == 1
@@ -63,9 +60,7 @@ def test_base_inclusion_rejects_rational_target() -> None:
         defining_polynomial=(_rf((1,)),),
     )
     with pytest.raises(OperationDomainValidationError) as error:
-        function_field_base_embedding(
-            FunctionFieldBaseEmbeddingRequest(target=rational)
-        )
+        function_field_base_embedding(rational)
     assert error.value.errors()[0]["type"] == (
         "function_field.base_embedding_requires_extension"
     )
@@ -92,9 +87,7 @@ def test_base_embedding_value_rejects_different_rational_variable() -> None:
 
 def test_base_embedding_value_rejects_wrong_variable_image() -> None:
     target = _field()
-    embedding = function_field_base_embedding(
-        FunctionFieldBaseEmbeddingRequest(target=target)
-    ).embedding
+    embedding = function_field_base_embedding(target).embedding
     y = PrimeFieldRationalFunction(
         numerator=PrimeFieldPolynomial(characteristic=2, coefficients=(1,)),
         denominator=PrimeFieldPolynomial(characteristic=2, coefficients=(1,)),
@@ -108,9 +101,7 @@ def test_base_embedding_value_rejects_wrong_variable_image() -> None:
 
 def test_apply_inclusion_preserves_rational_function_and_composes() -> None:
     target = _field()
-    embedding = function_field_base_embedding(
-        FunctionFieldBaseEmbeddingRequest(target=target)
-    ).embedding
+    embedding = function_field_base_embedding(target).embedding
     x_plus_one_over_x = PrimeFieldRationalFunction(
         numerator=PrimeFieldPolynomial(characteristic=2, coefficients=(1, 1)),
         denominator=PrimeFieldPolynomial(characteristic=2, coefficients=(0, 1)),
@@ -118,11 +109,7 @@ def test_apply_inclusion_preserves_rational_function_and_composes() -> None:
     source_element = FiniteFunctionFieldElement(
         field=embedding.source, coordinates=(x_plus_one_over_x,)
     )
-    result = function_field_base_embedding_apply(
-        FunctionFieldBaseEmbeddingApplyRequest(
-            embedding=embedding, element=source_element
-        )
-    )
+    result = function_field_base_embedding_apply(embedding, source_element)
     assert result.image.field == target
     assert result.image.coordinates == (x_plus_one_over_x, _rf((0,)))
     product = function_field_element_multiply(result.image, result.image)
@@ -131,9 +118,7 @@ def test_apply_inclusion_preserves_rational_function_and_composes() -> None:
 
 def test_apply_inclusion_rejects_an_element_from_another_source() -> None:
     target = _field()
-    embedding = function_field_base_embedding(
-        FunctionFieldBaseEmbeddingRequest(target=target)
-    ).embedding
+    embedding = function_field_base_embedding(target).embedding
     other_source = FiniteFunctionField(
         characteristic=2,
         variable="t",

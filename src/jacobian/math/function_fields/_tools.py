@@ -150,7 +150,7 @@ _X_DIVISOR = {
                 "prime_polynomial": {"characteristic": 5, "coefficients": [0, 1]},
                 "degree": 1,
             },
-            "multiplicity": 1,
+            "multiplicity": "1",
         }
     ],
 }
@@ -175,7 +175,9 @@ def _run_place_residue(
 def _run_rational_place_enumeration(
     request: FunctionFieldPlaceEnumerationRequest,
 ) -> FunctionFieldPlaceEnumerationResult:
-    return function_field_rational_places_degree_bounded(request)
+    return function_field_rational_places_degree_bounded(
+        request.field, request.maximum_degree
+    )
 
 
 def _run_principal(
@@ -204,7 +206,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
         request_type=FunctionFieldBaseEmbeddingApplyRequest,
         result_type=FunctionFieldBaseEmbeddingApplyResult,
-        run=function_field_base_embedding_apply,
+        run=lambda request: function_field_base_embedding_apply(
+            request.embedding, request.element
+        ),
         tags=("function-field", "embedding", "transport", "exact"),
         examples=(
             OperationExample(
@@ -225,7 +229,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
         request_type=FunctionFieldBaseEmbeddingRequest,
         result_type=FunctionFieldBaseEmbeddingResult,
-        run=function_field_base_embedding,
+        run=lambda request: function_field_base_embedding(request.target),
         tags=("function-field", "embedding", "exact"),
         examples=(
             OperationExample(
@@ -281,7 +285,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             OperationExample(
                 name="double_a_finite_place",
                 description="Return 2[x] in the divisor group of GF(5)(x).",
-                input={"divisor": _X_DIVISOR, "scalar": 2},
+                input={"divisor": _X_DIVISOR, "scalar": "2"},
             ),
         ),
     ),
@@ -361,7 +365,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                                     "kind": "INFINITE",
                                     "degree": 1,
                                 },
-                                "multiplicity": 2,
+                                "multiplicity": "2",
                             }
                         ],
                     }
@@ -520,7 +524,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                                     },
                                     "degree": 1,
                                 },
-                                "multiplicity": 2,
+                                "multiplicity": "2",
                             },
                             {
                                 "place": {
@@ -528,7 +532,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                                     "kind": "INFINITE",
                                     "degree": 1,
                                 },
-                                "multiplicity": -3,
+                                "multiplicity": "-3",
                             },
                         ],
                     }
@@ -562,7 +566,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                                     },
                                     "degree": 1,
                                 },
-                                "multiplicity": 1,
+                                "multiplicity": "1",
                             },
                             {
                                 "place": {
@@ -570,7 +574,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                                     "kind": "INFINITE",
                                     "degree": 1,
                                 },
-                                "multiplicity": -1,
+                                "multiplicity": "-1",
                             },
                         ],
                     }

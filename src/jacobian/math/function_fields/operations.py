@@ -31,22 +31,24 @@ from jacobian.math.function_fields._gfpx import (
     poly_powmod,
     rf_add,
     rf_evaluate,
+    rf_inv,
     rf_is_zero,
     rf_mul,
     rf_normalize,
     rf_sub,
 )
 from jacobian.math.function_fields._models import (
-    MAX_BASE_EMBEDDING_OUTPUT_BYTES,
+    MAX_BASE_EMBEDDING_VALUE_BYTES,
     MAX_DIVISOR_MULTIPLICITY_BITS,
     MAX_ELEMENT_ADDITION_WORK,
-    MAX_ELEMENT_OUTPUT_BYTES,
+    MAX_ELEMENT_VALUE_BYTES,
     MAX_EXTENSION_DEGREE,
     MAX_FIELD_ADMISSION_WORK,
     MAX_INVERSION_WORK,
     MAX_MULTIPLICATION_WORK,
     MAX_POLYNOMIAL_X_DEGREE,
     MAX_RATIONAL_PLACE_CANDIDATES,
+    MAX_RATIONAL_PLACE_DEGREE,
     MAX_RATIONAL_PLACE_OUTPUT,
     MAX_RATIONAL_PLACE_WORK,
     MAX_RIEMANN_ROCH_BASIS_DIMENSION,
@@ -54,9 +56,7 @@ from jacobian.math.function_fields._models import (
     FiniteFunctionField,
     FiniteFunctionFieldElement,
     FunctionFieldBaseEmbedding,
-    FunctionFieldBaseEmbeddingApplyRequest,
     FunctionFieldBaseEmbeddingApplyResult,
-    FunctionFieldBaseEmbeddingRequest,
     FunctionFieldBaseEmbeddingResult,
     FunctionFieldDivisor,
     FunctionFieldDivisorDegreeResult,
@@ -65,7 +65,6 @@ from jacobian.math.function_fields._models import (
     FunctionFieldElementMultiplyResult,
     FunctionFieldGenusResult,
     FunctionFieldPlace,
-    FunctionFieldPlaceEnumerationRequest,
     FunctionFieldPlaceEnumerationResult,
     FunctionFieldPrincipalDivisorResult,
     FunctionFieldProductTerm,
@@ -261,11 +260,11 @@ def _admit_field_algebra(field: FiniteFunctionField) -> None:
 
 
 def function_field_base_embedding(
-    request: FunctionFieldBaseEmbeddingRequest,
+    target: FiniteFunctionField,
 ) -> FunctionFieldBaseEmbeddingResult:
     """Construct the natural inclusion of GF(p)(x) into a presented extension."""
 
-    target = _validated_field(request.target)
+    target = _validated_field(target)
     if target.degree <= 1:
         raise OperationDomainValidationError(
             location=("target",),
@@ -277,14 +276,14 @@ def function_field_base_embedding(
         field_bytes += 96
         for polynomial in (coefficient.numerator, coefficient.denominator):
             field_bytes += 8 + 4 * len(polynomial.coefficients)
-    output_bytes = 256 + 2 * field_bytes + 128 + 160 * target.degree
-    if output_bytes > MAX_BASE_EMBEDDING_OUTPUT_BYTES:
+    encoded_bytes = 256 + 2 * field_bytes + 128 + 160 * target.degree
+    if encoded_bytes > MAX_BASE_EMBEDDING_VALUE_BYTES:
         raise OperationResourceAdmissionError(
             location=("target",),
             code="function_field.base_embedding_output_exceeds_envelope",
             message=(
                 "the base embedding result exceeds the "
-                f"{MAX_BASE_EMBEDDING_OUTPUT_BYTES}-byte output envelope"
+                f"{MAX_BASE_EMBEDDING_VALUE_BYTES}-byte output envelope"
             ),
         )
     target = _canonical_field(target)
@@ -328,20 +327,21 @@ def function_field_base_embedding(
 
 
 def function_field_base_embedding_apply(
-    request: FunctionFieldBaseEmbeddingApplyRequest,
+    embedding: FunctionFieldBaseEmbedding,
+    element: FiniteFunctionFieldElement,
 ) -> FunctionFieldBaseEmbeddingApplyResult:
     """Apply the canonical rational-base inclusion to one rational function."""
 
-    if not isinstance(request, FunctionFieldBaseEmbeddingApplyRequest):
+    if not isinstance(embedding, FunctionFieldBaseEmbedding) or not isinstance(
+        element, FiniteFunctionFieldElement
+    ):
         raise OperationDomainValidationError(
-            location=("request",),
+            location=(),
             code="function_field.base_embedding_request_type",
-            message="request must be a function-field base-embedding application",
+            message="embedding and element must be function-field values",
         )
-    embedding = FunctionFieldBaseEmbedding.model_validate(
-        request.embedding.model_dump()
-    )
-    element = FiniteFunctionFieldElement.model_validate(request.element.model_dump())
+    embedding = FunctionFieldBaseEmbedding.model_validate(embedding.model_dump())
+    element = FiniteFunctionFieldElement.model_validate(element.model_dump())
     if element.field != embedding.source:
         raise OperationDomainValidationError(
             location=("element", "field"),
@@ -354,14 +354,14 @@ def function_field_base_embedding_apply(
         target_bytes += 96
         for polynomial in (coefficient.numerator, coefficient.denominator):
             target_bytes += 8 + 4 * len(polynomial.coefficients)
-    output_bytes = 1024 + 4 * target_bytes + 320 * target.degree
-    if output_bytes > MAX_BASE_EMBEDDING_OUTPUT_BYTES:
+    encoded_bytes = 1024 + 4 * target_bytes + 320 * target.degree
+    if encoded_bytes > MAX_BASE_EMBEDDING_VALUE_BYTES:
         raise OperationResourceAdmissionError(
             location=("embedding", "target"),
             code="function_field.base_embedding_output_exceeds_envelope",
             message=(
                 "the base embedding application exceeds the "
-                f"{MAX_BASE_EMBEDDING_OUTPUT_BYTES}-byte output envelope"
+                f"{MAX_BASE_EMBEDDING_VALUE_BYTES}-byte output envelope"
             ),
         )
     target = _canonical_field(target)
@@ -483,21 +483,21 @@ def _admit_addition_resources(
             ),
         )
     output_template = {"field": field.model_dump(mode="json"), "coordinates": []}
-    output_bytes = len(encode_strict_json(output_template))
+    encoded_bytes = len(encode_strict_json(output_template))
     for degree in output_degrees:
         polynomial = {
             "characteristic": prime,
             "coefficients": [prime - 1] * (degree + 1),
         }
         coordinate = {"numerator": polynomial, "denominator": polynomial}
-        output_bytes += len(encode_strict_json(coordinate)) + 1
-    if output_bytes > MAX_ELEMENT_OUTPUT_BYTES:
+        encoded_bytes += len(encode_strict_json(coordinate)) + 1
+    if encoded_bytes > MAX_ELEMENT_VALUE_BYTES:
         raise OperationResourceAdmissionError(
             location=("left", "coordinates"),
             code="function_field.element_addition_output_exceeds_envelope",
             message=(
                 "the exact function-field sum exceeds the "
-                f"{MAX_ELEMENT_OUTPUT_BYTES}-byte output envelope"
+                f"{MAX_ELEMENT_VALUE_BYTES}-byte output envelope"
             ),
         )
 
@@ -685,6 +685,33 @@ def function_field_element_multiply(
 
     field, left, right = _admit_elements(left, right)
     prime = field.characteristic
+    if field.degree == 1:
+        # The rational field GF(p)(x) uses the sentinel defining polynomial 1;
+        # its elements are single rational functions with no generator reduction.
+        left_value = _internal_coordinates(left)[0]
+        right_value = _internal_coordinates(right)[0]
+        product_value = rf_mul(left_value, right_value, prime)
+        product_coord = _from_internal_rational_function(product_value, prime)
+        product = FiniteFunctionFieldElement.model_construct(
+            field=field, coordinates=(product_coord,)
+        )
+        raw_terms: tuple[tuple[int, RF], ...] = (
+            ((0, product_value),) if not rf_is_zero(product_value) else ()
+        )
+        return FunctionFieldElementMultiplyResult._from_kernel(
+            field=field,
+            left=left,
+            right=right,
+            raw_product_terms=tuple(
+                FunctionFieldProductTerm(
+                    y_power=position,
+                    coefficient=_from_internal_rational_function(value, prime),
+                )
+                for position, value in raw_terms
+            ),
+            reduction_steps=(),
+            product=product,
+        )
     kpoly = _field_kpoly(field)
     reduced, raw_terms, reduction_steps = _multiply_internal(
         _internal_coordinates(left),
@@ -811,7 +838,7 @@ def function_field_element_inverse(
     # Six coordinates, each with numerator and denominator of at most 13
     # coefficients in 0..256, remains below this exact JSON envelope.  The
     # input field is already bounded and retained verbatim in the result.
-    output_bound = len(
+    encoded_bound = len(
         encode_strict_json(
             {
                 "field": field.model_dump(mode="json"),
@@ -833,7 +860,7 @@ def function_field_element_inverse(
             }
         )
     )
-    if output_bound > MAX_ELEMENT_OUTPUT_BYTES:
+    if encoded_bound > MAX_ELEMENT_VALUE_BYTES:
         raise OperationResourceAdmissionError(
             location=("element", "coordinates"),
             code="function_field.inverse_output_exceeds_envelope",
@@ -902,6 +929,21 @@ def _inverse_canonical(
     """Euclidean inverse for an admitted, nonzero canonical element."""
 
     prime = field.characteristic
+    if field.degree == 1:
+        # Rational-field elements are single rational functions; the sentinel
+        # defining polynomial 1 is not an extension modulus.
+        if not value or rf_is_zero(value[0]):
+            raise OperationDomainValidationError(
+                location=("element",),
+                code="function_field.zero_not_invertible",
+                message="the zero element has no multiplicative inverse",
+            )
+        return FiniteFunctionFieldElement.model_construct(
+            field=field,
+            coordinates=(
+                _from_internal_rational_function(rf_inv(value[0], prime), prime),
+            ),
+        )
     kpoly = _field_kpoly(field)
     _, inverse, _ = kp_xgcd(kp_normalize(value), kpoly, prime)
     _, remainder = kp_divmod(inverse, kpoly, prime)
@@ -918,7 +960,7 @@ def _inverse_canonical(
     )
 
 
-def _validated_field(field: FiniteFunctionField) -> FiniteFunctionField:
+def _validated_field(field: object) -> FiniteFunctionField:
     """Re-admit a native/model_construct field without doing backend work."""
 
     if not isinstance(field, FiniteFunctionField):
@@ -937,7 +979,7 @@ def _validated_field(field: FiniteFunctionField) -> FiniteFunctionField:
         ) from exc
 
 
-def _canonical_place(place: FunctionFieldPlace) -> FunctionFieldPlace:
+def _canonical_place(place: object) -> FunctionFieldPlace:
     """Re-admit place shape before factoring or any other backend call."""
 
     if not isinstance(place, FunctionFieldPlace):
@@ -977,7 +1019,8 @@ def _admit_rational_place_field(field: FiniteFunctionField) -> FiniteFunctionFie
 
 
 def function_field_rational_places_degree_bounded(
-    request: FunctionFieldPlaceEnumerationRequest,
+    field: FiniteFunctionField,
+    maximum_degree: int,
 ) -> FunctionFieldPlaceEnumerationResult:
     """Enumerate every place of GF(p)(x) through the requested degree.
 
@@ -986,24 +1029,19 @@ def function_field_rational_places_degree_bounded(
     space is admitted before irreducibility work or result construction.
     """
 
-    if not isinstance(request, FunctionFieldPlaceEnumerationRequest):
+    if type(maximum_degree) is not int:
         raise OperationDomainValidationError(
-            location=("request",),
+            location=("maximum_degree",),
             code="function_field.place_enumeration_request_type",
-            message="request must be a degree-bounded rational-place request",
+            message="maximum degree must be a strict integer",
         )
-    try:
-        request = FunctionFieldPlaceEnumerationRequest.model_validate(
-            request.model_dump()
-        )
-    except (ValidationError, AttributeError, KeyError, TypeError, ValueError) as exc:
+    if not 1 <= maximum_degree <= MAX_RATIONAL_PLACE_DEGREE:
         raise OperationDomainValidationError(
-            location=("request",),
+            location=("maximum_degree",),
             code="function_field.invalid_place_enumeration_request",
-            message="request has malformed field or degree-bound data",
-        ) from exc
-    field = _admit_rational_place_field(request.field)
-    maximum_degree = request.maximum_degree
+            message="maximum degree is outside the admitted degree bound",
+        )
+    field = _admit_rational_place_field(field)
     prime = field.characteristic
     candidate_count = sum(prime**degree for degree in range(1, maximum_degree + 1))
     estimated_work = sum(
@@ -1536,13 +1574,12 @@ def function_field_divisor_add(
             message="the combined divisor support exceeds 256 places",
         )
     if any(
-        term.multiplicity.bit_length() > MAX_DIVISOR_MULTIPLICITY_BITS + 1
-        for term in terms
+        term.multiplicity.bit_length() > MAX_DIVISOR_MULTIPLICITY_BITS for term in terms
     ):
         raise OperationResourceAdmissionError(
             location=("result", "terms"),
             code="function_field.divisor_result_multiplicity_exceeds_envelope",
-            message="the exact divisor sum exceeds the 4097-bit result envelope",
+            message="the exact divisor sum exceeds the 4096-bit result envelope",
         )
     return FunctionFieldDivisor(field=left.field, terms=terms)
 
@@ -1584,13 +1621,12 @@ def function_field_divisor_scale(
         if t.multiplicity * scalar
     )
     if any(
-        term.multiplicity.bit_length() > 2 * MAX_DIVISOR_MULTIPLICITY_BITS
-        for term in terms
+        term.multiplicity.bit_length() > MAX_DIVISOR_MULTIPLICITY_BITS for term in terms
     ):
         raise OperationResourceAdmissionError(
             location=("result", "terms"),
             code="function_field.divisor_result_multiplicity_exceeds_envelope",
-            message="the exact scaled divisor exceeds the 8192-bit result envelope",
+            message="the exact scaled divisor exceeds the 4096-bit result envelope",
         )
     return FunctionFieldDivisor(field=divisor.field, terms=terms)
 

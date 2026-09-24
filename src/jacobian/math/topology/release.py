@@ -58,6 +58,19 @@ class CliqueResult(StrictModel):
     clique_complex: FiniteSimplicialComplex
 
 
+class OneSkeletonRequest(StrictModel):
+    complex: SimplicialComplexRequest
+
+
+class OneSkeletonResult(StrictModel):
+    """A graph value with its exact simplicial vertex and edge axes."""
+
+    source: FiniteSimplicialComplex
+    graph: IndexedSimpleUndirectedGraph
+    vertex_labels: tuple[str, ...]
+    edge_faces: tuple[Simplex, ...]
+
+
 class OrientabilityRequest(StrictModel):
     complex: SimplicialComplexRequest
 
@@ -101,6 +114,26 @@ class HomologyManifoldResult(StrictModel):
 
 def _canonical(request: SimplicialComplexRequest) -> FiniteSimplicialComplex:
     return canonicalize(request.vertices, request.facets).complex
+
+
+def one_skeleton(request: OneSkeletonRequest) -> OneSkeletonResult:
+    """Return the graph on the canonical vertex axis and map edges to faces."""
+    source = _canonical(request.complex)
+    faces = source.faces_by_dimension[1].faces if source.dimension >= 1 else ()
+    vertex_index = {label: index for index, label in enumerate(source.vertices)}
+    edges = tuple(
+        sorted((vertex_index[left], vertex_index[right]) for left, right in faces)
+    )
+    graph = IndexedSimpleUndirectedGraph(vertex_count=len(source.vertices), edges=edges)
+    edge_faces = tuple(
+        tuple(source.vertices[index] for index in edge) for edge in graph.edges
+    )
+    return OneSkeletonResult(
+        source=source,
+        graph=graph,
+        vertex_labels=source.vertices,
+        edge_faces=edge_faces,
+    )
 
 
 def _all_faces_sorted(complex_: FiniteSimplicialComplex) -> tuple[Simplex, ...]:
@@ -443,6 +476,8 @@ __all__ = [
     "HomologyManifoldResult",
     "LocalHomologyRequest",
     "LocalHomologyResult",
+    "OneSkeletonRequest",
+    "OneSkeletonResult",
     "OrientabilityRequest",
     "OrientabilityResult",
     "clique_complex",
@@ -450,5 +485,6 @@ __all__ = [
     "graph_clique_complex",
     "homology_manifold",
     "local_homology",
+    "one_skeleton",
     "orientability",
 ]

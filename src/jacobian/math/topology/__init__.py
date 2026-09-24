@@ -12,7 +12,7 @@ from jacobian.math.topology.operations import (
     shelling_check,
     simplicial_chain_complex_value,
 )
-from jacobian.math.topology.release import graph_clique_complex
+from jacobian.math.topology.release import graph_clique_complex, one_skeleton
 
 __all__ = [
     "FiniteSimplicialComplex",
@@ -23,6 +23,7 @@ __all__ = [
     "graph_clique_complex",
     "homology",
     "integral_homology",
+    "one_skeleton",
     "pseudomanifold",
     "shelling_check",
     "simplicial_chain_complex_value",

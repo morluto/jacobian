@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable, Iterable
 from math import gcd
 from typing import Literal, NoReturn
@@ -24,16 +25,27 @@ from jacobian.math.topology.edge_paths._models import (
     WordLetter,
 )
 from jacobian.math.topology.links._extensions_models import (
+    MAX_CONWAY_CENTERED_DEGREE,
+    MAX_CONWAY_COEFFICIENT_DIGITS,
+    MAX_CONWAY_OUTPUT_BYTES,
+    MAX_STATE_CIRCLE_CROSSINGS,
+    MAX_STATE_CIRCLE_OUTPUT_BYTES,
     MAX_WIRTINGER_GENERATORS,
     AlexanderPolynomialResult,
     BraidClosureResult,
     BraidLetter,
     BraidPermutationResult,
     BraidWord,
+    ConwayPolynomialResult,
     GoeritzCrossingContribution,
     GoeritzDataResult,
     GoeritzRegion,
+    LinkCrossingProfileEntry,
+    LinkCrossingProfileResult,
     LinkDeterminantResult,
+    LinkDiagramSmoothingState,
+    LinkSmoothedCircle,
+    LinkStateCirclesResult,
     SeifertCircle,
     SeifertCircleResult,
     WirtingerArc,
@@ -41,8 +53,8 @@ from jacobian.math.topology.links._extensions_models import (
     WirtingerPresentationResult,
 )
 from jacobian.math.topology.links._models import (
-    ArcPairing,
     LinkCrossing,
+    OrientedDiagramArc,
     OrientedLinkDiagram,
 )
 from jacobian.math.topology.links.operations import link_components
@@ -172,7 +184,7 @@ def braid_closure(word: BraidWord) -> BraidClosureResult:
     first_top: list[str | None] = [None] * admitted.strand_count
     last_bottom: list[str | None] = [None] * admitted.strand_count
     crossings: list[LinkCrossing] = []
-    arcs: list[ArcPairing] = []
+    arcs: list[OrientedDiagramArc] = []
 
     for crossing_index, letter in enumerate(admitted.letters):
         crossing_id = f"crossing_{crossing_index:03d}"
@@ -192,14 +204,19 @@ def braid_closure(word: BraidWord) -> BraidClosureResult:
             if previous is None:
                 first_top[position] = top
             else:
-                arcs.append(ArcPairing(first=previous, second=top))
+                arcs.append(OrientedDiagramArc(tail=previous, head=top))
             last_bottom[position] = bottom_by_position[position]
+        ccw_darts = (darts[0], darts[3], darts[2], darts[1])
+        old_to_new = {0: 0, 3: 1, 2: 2, 1: 3}
+        old_over = (0, 2) if letter.exponent == 1 else (1, 3)
+        over_pair = tuple(sorted(old_to_new[index] for index in old_over))
+        under_pair = tuple(index for index in range(4) if index not in over_pair)
         crossings.append(
             LinkCrossing(
                 crossing_id=crossing_id,
-                half_edges=darts,
-                over_pair=(0, 2) if letter.exponent == 1 else (1, 3),
-                under_pair=(1, 3) if letter.exponent == 1 else (0, 2),
+                half_edges=ccw_darts,
+                over_pair=over_pair,
+                under_pair=under_pair,
                 sign=letter.exponent,
             )
         )
@@ -211,8 +228,8 @@ def braid_closure(word: BraidWord) -> BraidClosureResult:
         if first is None or last is None:
             free_loops += 1
         else:
-            arcs.append(ArcPairing(first=last, second=first))
-    arcs.sort(key=lambda arc: (min(arc.first, arc.second), max(arc.first, arc.second)))
+            arcs.append(OrientedDiagramArc(tail=last, head=first))
+    arcs.sort(key=lambda arc: (arc.tail, arc.head))
     diagram = OrientedLinkDiagram(
         crossings=tuple(crossings),
         arcs=tuple(arcs),
@@ -267,32 +284,8 @@ def _reduced_word(
 
 
 def _incoming_darts(diagram: OrientedLinkDiagram) -> set[str]:
-    strand_partner: dict[str, str] = {}
-    arc_partner: dict[str, str] = {}
-    for crossing in diagram.crossings:
-        for pair in (crossing.over_pair, crossing.under_pair):
-            left = crossing.half_edges[pair[0]]
-            right = crossing.half_edges[pair[1]]
-            strand_partner[left] = right
-            strand_partner[right] = left
-    for arc in diagram.arcs:
-        arc_partner[arc.first] = arc.second
-        arc_partner[arc.second] = arc.first
-
-    covered: set[str] = set()
-    incoming: set[str] = set()
-    for start in sorted(strand_partner):
-        if start in covered:
-            continue
-        current = start
-        while current not in covered:
-            entry = arc_partner[current]
-            exit_dart = strand_partner[entry]
-            covered.add(current)
-            covered.add(entry)
-            incoming.add(entry)
-            current = exit_dart
-    return incoming
+    """Return source darts where the encoded orientation enters crossings."""
+    return {arc.head for arc in diagram.arcs}
 
 
 def _integer_determinant(matrix: tuple[tuple[int, ...], ...]) -> int:
@@ -342,8 +335,8 @@ def _projection_faces(
         for index, dart in enumerate(crossing.half_edges):
             cyclic_successor[dart] = crossing.half_edges[(index + 1) % 4]
     for arc in diagram.arcs:
-        arc_partner[arc.first] = arc.second
-        arc_partner[arc.second] = arc.first
+        arc_partner[arc.tail] = arc.head
+        arc_partner[arc.head] = arc.tail
     face_successor = {
         dart: cyclic_successor[arc_partner[dart]] for dart in cyclic_successor
     }
@@ -372,8 +365,8 @@ def _projection_faces(
     }
     adjacency: dict[int, set[int]] = {index: set() for index in range(len(faces))}
     for arc in diagram.arcs:
-        left = face_of[arc.first]
-        right = face_of[arc.second]
+        left = face_of[arc.tail]
+        right = face_of[arc.head]
         if left == right:
             _domain_error(
                 ("diagram",),
@@ -547,8 +540,8 @@ def link_seifert_circles(diagram: OrientedLinkDiagram) -> SeifertCircleResult:
             smoothing_partner[right] = left
     arc_partner: dict[str, str] = {}
     for arc in admitted.arcs:
-        arc_partner[arc.first] = arc.second
-        arc_partner[arc.second] = arc.first
+        arc_partner[arc.tail] = arc.head
+        arc_partner[arc.head] = arc.tail
 
     covered: set[str] = set()
     circle_rows: list[SeifertCircle] = []
@@ -605,7 +598,7 @@ def wirtinger_presentation(
     )
     find, union = _union_find(darts)
     for arc in admitted.arcs:
-        union(arc.first, arc.second)
+        union(arc.tail, arc.head)
     for crossing in admitted.crossings:
         over_left = crossing.half_edges[crossing.over_pair[0]]
         over_right = crossing.half_edges[crossing.over_pair[1]]
@@ -830,6 +823,147 @@ def link_alexander_polynomial(
     return AlexanderPolynomialResult(diagram=admitted, polynomial=polynomial)
 
 
+def link_conway_polynomial(
+    diagram: OrientedLinkDiagram,
+) -> ConwayPolynomialResult:
+    """Return the normalized knot Conway polynomial from the exact Alexander value."""
+    return _conway_from_alexander(link_alexander_polynomial(diagram))
+
+
+def _conway_from_alexander(
+    alexander: AlexanderPolynomialResult,
+) -> ConwayPolynomialResult:
+    """Return the normalized knot Conway polynomial from the exact Alexander value.
+
+    For knots the Alexander polynomial is symmetric after a Laurent shift.
+    With ``x = t + t^-1 = z^2 + 2``, each symmetric pair
+    ``t^k + t^-k`` is converted by an exact integer recurrence. The normalization
+    ``Delta(1)=1`` fixes the sign and gives ``nabla(0)=1``.
+    """
+    centered_terms, degree = _center_normalized_alexander(alexander)
+    _admit_conway_expansion(alexander, centered_terms, degree)
+    conway_terms = _expand_conway_coefficients(centered_terms, degree)
+    polynomial = RationalLaurentPolynomial(
+        variables=("z",),
+        terms=tuple(
+            RationalLaurentPolynomialTerm(
+                coefficient=CanonicalRational(num=coefficient, den=1),
+                exponents=(exponent,),
+            )
+            for exponent, coefficient in sorted(conway_terms.items(), reverse=True)
+        ),
+    )
+    return ConwayPolynomialResult(alexander=alexander, polynomial=polynomial)
+
+
+def _center_normalized_alexander(
+    alexander: AlexanderPolynomialResult,
+) -> tuple[dict[int, int], int]:
+    source_terms: dict[int, int] = {}
+    for term in alexander.polynomial.terms:
+        coefficient = term.coefficient.as_fraction()
+        if coefficient.denominator != 1:
+            raise RuntimeError("knot Alexander coefficients must be integral")
+        source_terms[term.exponents[0]] = coefficient.numerator
+    if not source_terms:
+        raise RuntimeError("a knot Alexander polynomial cannot be zero")
+
+    least_exponent = min(source_terms)
+    greatest_exponent = max(source_terms)
+    exponent_span = greatest_exponent - least_exponent
+    if exponent_span % 2:
+        raise RuntimeError("knot Alexander support must have an integral center")
+    center = (least_exponent + greatest_exponent) // 2
+    centered_terms = {
+        exponent - center: coefficient for exponent, coefficient in source_terms.items()
+    }
+    degree = max(abs(exponent) for exponent in centered_terms)
+    if degree > MAX_CONWAY_CENTERED_DEGREE:
+        raise OperationResourceAdmissionError(
+            location=("diagram", "alexander", "polynomial"),
+            code="link_diagram.conway_degree_bound",
+            message="Conway conversion is bounded to centered Alexander degree 64",
+        )
+    if any(
+        centered_terms.get(exponent, 0) != centered_terms.get(-exponent, 0)
+        for exponent in range(1, degree + 1)
+    ):
+        raise RuntimeError("knot Alexander coefficients must be reciprocal")
+    augmentation = sum(centered_terms.values())
+    if augmentation not in (-1, 1):
+        raise RuntimeError(
+            "knot Alexander polynomial must evaluate to plus or minus one at 1"
+        )
+    if augmentation == -1:
+        centered_terms = {
+            exponent: -coefficient for exponent, coefficient in centered_terms.items()
+        }
+    return centered_terms, degree
+
+
+def _admit_conway_expansion(
+    alexander: AlexanderPolynomialResult,
+    centered_terms: dict[int, int],
+    degree: int,
+) -> None:
+    maximum_input_bits = max(
+        abs(value).bit_length() for value in centered_terms.values()
+    )
+    maximum_input_digits = (maximum_input_bits * 30_103 + 99_999) // 100_000
+    coefficient_digits_bound = (
+        maximum_input_digits + 2 * (degree + 1) + len(centered_terms)
+    )
+    work_bound = 4 * (degree + 1) ** 2
+    alexander_bytes = len(alexander.model_dump_json(warnings=False).encode())
+    output_bytes_bound = (
+        alexander_bytes + 256 + (degree + 1) * (2 * coefficient_digits_bound + 128)
+    )
+    if (
+        coefficient_digits_bound > MAX_CONWAY_COEFFICIENT_DIGITS
+        or work_bound > 100_000
+        or output_bytes_bound > MAX_CONWAY_OUTPUT_BYTES
+    ):
+        raise OperationResourceAdmissionError(
+            location=("diagram", "alexander", "polynomial"),
+            code="link_diagram.conway_output_bound",
+            message="exact Conway conversion exceeds its coefficient, work, or output bound",
+        )
+
+
+def _expand_conway_coefficients(
+    centered_terms: dict[int, int], degree: int
+) -> dict[int, int]:
+    conway_terms: dict[int, int] = {0: centered_terms.get(0, 0)}
+    if degree:
+        previous_previous = {0: 2}
+        previous = {0: 2, 2: 1}
+        for exponent, coefficient in previous.items():
+            conway_terms[exponent] = (
+                conway_terms.get(exponent, 0) + centered_terms.get(1, 0) * coefficient
+            )
+        for index in range(2, degree + 1):
+            current: dict[int, int] = {}
+            for exponent, coefficient in previous.items():
+                current[exponent] = current.get(exponent, 0) + 2 * coefficient
+                current[exponent + 2] = current.get(exponent + 2, 0) + coefficient
+            for exponent, coefficient in previous_previous.items():
+                current[exponent] = current.get(exponent, 0) - coefficient
+            current = {exponent: value for exponent, value in current.items() if value}
+            scalar = centered_terms.get(index, 0)
+            if scalar:
+                for exponent, coefficient in current.items():
+                    conway_terms[exponent] = (
+                        conway_terms.get(exponent, 0) + scalar * coefficient
+                    )
+            previous_previous, previous = previous, current
+    conway_terms = {
+        exponent: coefficient
+        for exponent, coefficient in conway_terms.items()
+        if coefficient
+    }
+    return conway_terms
+
+
 def link_determinant(diagram: OrientedLinkDiagram) -> LinkDeterminantResult:
     """Return ``abs(Delta_K(-1))`` under the knot Alexander convention."""
 
@@ -848,14 +982,168 @@ def link_determinant(diagram: OrientedLinkDiagram) -> LinkDeterminantResult:
     )
 
 
+def link_crossing_profile(
+    diagram: OrientedLinkDiagram,
+) -> LinkCrossingProfileResult:
+    """Return each crossing's sign and ordered over/under component pair."""
+    components = link_components(diagram)
+    component_by_role: dict[tuple[str, str], set[str]] = {}
+    for component in components.components:
+        for visit in component.visits:
+            component_by_role.setdefault((visit.crossing_id, visit.role), set()).add(
+                component.component_id
+            )
+    entries = []
+    for crossing in components.diagram.crossings:
+        over_ids = component_by_role.get((crossing.crossing_id, "OVER"), set())
+        under_ids = component_by_role.get((crossing.crossing_id, "UNDER"), set())
+        if len(over_ids) != 1 or len(under_ids) != 1:
+            raise OperationDomainValidationError(
+                location=("diagram", "crossings", crossing.crossing_id),
+                code="link_diagram.crossing_profile_component_roles",
+                message="each crossing strand must belong to exactly one diagram component",
+            )
+        entries.append(
+            LinkCrossingProfileEntry(
+                crossing_id=crossing.crossing_id,
+                sign=crossing.sign,
+                over_component_id=next(iter(over_ids)),
+                under_component_id=next(iter(under_ids)),
+            )
+        )
+    return LinkCrossingProfileResult(
+        components=components,
+        crossings=tuple(entries),
+        writhe=sum(entry.sign for entry in entries),
+    )
+
+
+def link_state_circles(
+    state: LinkDiagramSmoothingState,
+) -> LinkStateCirclesResult:
+    """Return the exact cyclic dart circles of one complete A/B state."""
+    if not isinstance(state, LinkDiagramSmoothingState):
+        _domain_error(
+            ("state",),
+            "smoothing_state_type",
+            "state must be a complete LinkDiagramSmoothingState value",
+        )
+    try:
+        admitted = LinkDiagramSmoothingState.model_validate_json(
+            state.model_dump_json(warnings=False)
+        )
+    except (AttributeError, TypeError, ValidationError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("state",),
+            code="link_diagram.smoothing_state_shape",
+            message="state must satisfy the complete source crossing-axis contract",
+        ) from exc
+    diagram = admitted.diagram
+    crossing_count = len(diagram.crossings)
+    if crossing_count > MAX_STATE_CIRCLE_CROSSINGS:
+        raise OperationResourceAdmissionError(
+            location=("state", "diagram", "crossings"),
+            code="link_diagram.state_circles_state_bound",
+            message="state-circle computation is bounded to 64 crossings",
+        )
+    dart_labels = tuple(
+        dart for crossing in diagram.crossings for dart in crossing.half_edges
+    )
+    label_bytes = sum(
+        len(json.dumps(dart, ensure_ascii=True, separators=(",", ":")).encode())
+        for dart in dart_labels
+    )
+    # The one requested state repeats every dart exactly once, with JSON
+    # delimiters for the circle partition and crossing-choice ledger. Escaped
+    # label lengths account for Unicode scalar labels.
+    output_bound = (
+        len(diagram.model_dump_json(warnings=False).encode())
+        + label_bytes
+        + (20 * len(dart_labels) + 8 * crossing_count + 16 * diagram.free_loops + 128)
+    )
+    if output_bound > MAX_STATE_CIRCLE_OUTPUT_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("state",),
+            code="link_diagram.state_circles_output_bound",
+            message="the state-circle result exceeds the 8 MiB output bound",
+        )
+    if 2 * len(dart_labels) + crossing_count > 4_096:
+        raise OperationResourceAdmissionError(
+            location=("state",),
+            code="link_diagram.state_circles_work_bound",
+            message="the state-circle traversal exceeds its work bound",
+        )
+
+    if not dart_labels:
+        circles = tuple(LinkSmoothedCircle(darts=()) for _ in range(diagram.free_loops))
+    else:
+        arc_mate: dict[str, str] = {}
+        for arc in diagram.arcs:
+            arc_mate[arc.tail] = arc.head
+            arc_mate[arc.head] = arc.tail
+        smoothing_mate: dict[str, str] = {}
+        for crossing, choice in zip(diagram.crossings, admitted.choices, strict=True):
+            over_even = set(crossing.over_pair) == {0, 2}
+            smoothing_index = (
+                (0 if choice == "A" else 1)
+                if over_even
+                else (1 if choice == "A" else 0)
+            )
+            pairs = ((0, 1, 2, 3), (1, 2, 3, 0))[smoothing_index]
+            half_edges = crossing.half_edges
+            left, right = half_edges[pairs[0]], half_edges[pairs[1]]
+            smoothing_mate[left] = right
+            smoothing_mate[right] = left
+            left, right = half_edges[pairs[2]], half_edges[pairs[3]]
+            smoothing_mate[left] = right
+            smoothing_mate[right] = left
+
+        unseen = set(dart_labels)
+        circle_rows: list[tuple[str, ...]] = []
+        while unseen:
+            start = min(unseen)
+            candidates: list[tuple[str, ...]] = []
+            for first_edge in ("arc", "smooth"):
+                row: list[str] = []
+                current = start
+                edge = first_edge
+                while True:
+                    row.append(current)
+                    current = (
+                        arc_mate[current] if edge == "arc" else smoothing_mate[current]
+                    )
+                    edge = "smooth" if edge == "arc" else "arc"
+                    if current == start and edge == first_edge:
+                        break
+                    if current in row:
+                        _domain_error(
+                            ("state",),
+                            "state_circles_not_cycles",
+                            "smoothing pairings must form disjoint dart cycles",
+                        )
+                candidates.append(tuple(row))
+            cycle = min(candidates)
+            circle_rows.append(cycle)
+            unseen.difference_update(cycle)
+        circles = tuple(LinkSmoothedCircle(darts=row) for row in sorted(circle_rows))
+    return LinkStateCirclesResult(
+        state=admitted,
+        circles=circles,
+        circle_count=len(circles),
+    )
+
+
 __all__ = [
     "braid_closure",
     "braid_inverse",
     "braid_multiply",
     "braid_permutation",
     "link_alexander_polynomial",
+    "link_conway_polynomial",
+    "link_crossing_profile",
     "link_determinant",
     "link_goeritz_data",
     "link_seifert_circles",
+    "link_state_circles",
     "wirtinger_presentation",
 ]

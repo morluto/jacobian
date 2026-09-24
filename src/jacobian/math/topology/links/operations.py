@@ -16,12 +16,20 @@ from jacobian.catalog.models import (
 )
 from jacobian.math.polynomials.values import RationalLaurentPolynomial
 from jacobian.math.topology.links._models import (
+    MAX_LINK_BRACKET_CROSSINGS,
+    MAX_LINK_BRACKET_OUTPUT_BYTES,
+    MAX_LINK_BRACKET_WORK,
     CrossingVisit,
     LinkBracketResult,
     LinkComponent,
+    LinkComponentOrientationTransport,
     LinkComponentsResult,
+    LinkCrossingSignChange,
+    LinkDartTransport,
+    LinkDiagramMirrorResult,
     LinkingMatrixResult,
     LinkJonesResult,
+    LinkOrientationReverseResult,
     LinkState,
     OrientedLinkDiagram,
 )
@@ -61,6 +69,143 @@ def _admit_components(diagram: OrientedLinkDiagram) -> OrientedLinkDiagram:
             message="link diagram exceeds the 64-crossing envelope",
         )
     return admitted
+
+
+def link_mirror(diagram: OrientedLinkDiagram) -> LinkDiagramMirrorResult:
+    """Mirror a classical link diagram, preserving its dart and arc identities.
+
+    The over- and under-passing strands are exchanged at each crossing and the
+    oriented crossing sign is negated. The finite label axes and zero-crossing
+    components are unchanged.
+    """
+
+    admitted = _admit_components(diagram)
+    mirrored = OrientedLinkDiagram(
+        crossings=tuple(
+            crossing.model_copy(
+                update={
+                    "over_pair": crossing.under_pair,
+                    "under_pair": crossing.over_pair,
+                    "sign": -crossing.sign,
+                }
+            )
+            for crossing in admitted.crossings
+        ),
+        arcs=admitted.arcs,
+        free_loops=admitted.free_loops,
+    )
+    return LinkDiagramMirrorResult(source=admitted, diagram=mirrored)
+
+
+def link_orientation_reverse(
+    diagram: OrientedLinkDiagram,
+    component_representatives: tuple[str, ...] = (),
+) -> LinkOrientationReverseResult:
+    """Reverse selected crossing-bearing components, retaining every dart ID.
+
+    Representatives are source crossing darts.  Crossing-free loops have no
+    oriented identity in the current value and therefore cannot be selected.
+    """
+    admitted = _admit_components(diagram)
+    source_components = link_components(admitted)
+    dart_component = {
+        dart: component.component_id
+        for component in source_components.components
+        for dart in component.darts
+    }
+    crossing_darts = {
+        dart for crossing in admitted.crossings for dart in crossing.half_edges
+    }
+    if len(set(component_representatives)) != len(component_representatives):
+        _reject(
+            "component_representatives",
+            "link_diagram.orientation_reverse.duplicate_representative",
+            "component representatives must be distinct",
+        )
+    selected: set[str] = set()
+    for representative in component_representatives:
+        component_id = dart_component.get(representative)
+        if representative not in crossing_darts or component_id is None:
+            _reject(
+                "component_representatives",
+                "link_diagram.orientation_reverse.untracked_component",
+                "each representative must identify a crossing-bearing component; free loops are untracked",
+            )
+        if component_id in selected:
+            _reject(
+                "component_representatives",
+                "link_diagram.orientation_reverse.duplicate_component",
+                "select at most one representative from each source component",
+            )
+        selected.add(component_id)
+
+    target_arcs = tuple(
+        type(arc)(tail=arc.head, head=arc.tail)
+        if dart_component[arc.tail] in selected
+        else arc
+        for arc in admitted.arcs
+    )
+    target_crossings = tuple(
+        crossing.model_copy(
+            update={
+                "sign": (
+                    -crossing.sign
+                    if (
+                        dart_component[crossing.half_edges[crossing.over_pair[0]]]
+                        in selected
+                    )
+                    != (
+                        dart_component[crossing.half_edges[crossing.under_pair[0]]]
+                        in selected
+                    )
+                    else crossing.sign
+                )
+            }
+        )
+        for crossing in admitted.crossings
+    )
+    target = OrientedLinkDiagram(
+        crossings=target_crossings, arcs=target_arcs, free_loops=admitted.free_loops
+    )
+    target_components = link_components(target)
+    target_by_darts = {
+        frozenset(component.darts): component
+        for component in target_components.components
+    }
+    transport = tuple(
+        LinkComponentOrientationTransport(
+            source_component_id=component.component_id,
+            target_component_id=target_by_darts[
+                frozenset(component.darts)
+            ].component_id,
+            orientation_reversed=component.component_id in selected,
+            darts=tuple(
+                LinkDartTransport(source_dart=dart, target_dart=dart)
+                for dart in sorted(component.darts)
+            ),
+        )
+        for component in source_components.components
+    )
+    changes = tuple(
+        LinkCrossingSignChange(
+            crossing_id=source_crossing.crossing_id,
+            source_sign=source_crossing.sign,
+            target_sign=target_crossing.sign,
+        )
+        for source_crossing, target_crossing in zip(
+            admitted.crossings, target.crossings, strict=True
+        )
+        if source_crossing.sign != target_crossing.sign
+    )
+    return LinkOrientationReverseResult(
+        source=admitted,
+        diagram=target,
+        source_components=source_components,
+        target_components=target_components,
+        component_representatives=component_representatives,
+        component_transport=transport,
+        crossing_sign_changes=changes,
+    )
 
 
 def _add_term(
@@ -114,11 +259,42 @@ def _union_find(
 
 def _admit_bracket(diagram: OrientedLinkDiagram) -> OrientedLinkDiagram:
     admitted = _admit_components(diagram)
-    if len(admitted.crossings) > 12:
+    crossing_count = len(admitted.crossings)
+    if crossing_count > MAX_LINK_BRACKET_CROSSINGS:
         raise OperationResourceAdmissionError(
             location=("diagram",),
             code="link_diagram.bracket.state_bound",
-            message="the exact bracket state family exceeds 2^12 admitted states",
+            message=(
+                "the exact bracket state family exceeds "
+                f"2^{MAX_LINK_BRACKET_CROSSINGS} admitted states"
+            ),
+        )
+    state_count = 1 << crossing_count
+    # One work unit is a DSU parent-edge visit or a state-expansion term. With
+    # 4c darts, 12c finds per state each visit at most 4c parent edges; the
+    # quadratic term dominates these visits and the remaining terms cover
+    # initialization and the binomial expansion.
+    work_bound = state_count * (
+        128 * crossing_count**2 + 8 * crossing_count + 4 * admitted.free_loops + 4
+    )
+    if work_bound > MAX_LINK_BRACKET_WORK:
+        raise OperationResourceAdmissionError(
+            location=("diagram",),
+            code="link_diagram.bracket.work_bound",
+            message="the conservative bracket state-sum work bound is exceeded",
+        )
+    # At most two smoothed circles per crossing plus the free loops can occur.
+    # The exponent interval then bounds the accumulated Laurent term count.
+    delta_power_bound = max(0, 2 * crossing_count + admitted.free_loops - 1)
+    polynomial_term_bound = 2 * crossing_count + 4 * delta_power_bound + 1
+    # Every state row is bounded by its <=12 binary choices and fixed scalar
+    # fields.  64 KiB covers the source diagram under the label and dart caps.
+    output_bound = state_count * 256 + polynomial_term_bound * 256 + 64 * 1024
+    if output_bound > MAX_LINK_BRACKET_OUTPUT_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("diagram",),
+            code="link_diagram.bracket.output_bound",
+            message="the conservative bracket result-size bound is exceeded",
         )
     return admitted
 
@@ -129,7 +305,7 @@ def link_bracket(diagram: OrientedLinkDiagram) -> LinkBracketResult:
     crossings = diagram.crossings
     darts = [dart for crossing in crossings for dart in crossing.half_edges]
     index = {dart: i for i, dart in enumerate(darts)}
-    arcs = tuple((index[arc.first], index[arc.second]) for arc in diagram.arcs)
+    arcs = tuple((index[arc.tail], index[arc.head]) for arc in diagram.arcs)
     terms: dict[int, Fraction] = {}
     states: list[LinkState] = []
     state_choices = product((0, 1), repeat=len(crossings))
@@ -252,87 +428,72 @@ def link_linking_matrix(diagram: OrientedLinkDiagram) -> LinkingMatrixResult:
 
 
 def link_components(diagram: OrientedLinkDiagram) -> LinkComponentsResult:
-    """Partition a classical oriented link diagram into oriented components.
-
-    At each crossing the over strand joins its over pair and the under
-    strand joins its under pair; the arc involution joins half-edges
-    between crossings. The two pairings are fixed-point-free involutions,
-    so alternating arc/strand steps from the smallest unvisited dart yields
-    disjoint cycles covering every half-edge exactly once. Each visit
-    records the crossing ID with the strand's OVER/UNDER role. Free loops
-    (zero-crossing components) return as empty-dart components.
-    """
-
+    """Traverse the explicitly oriented diagram cycles in their source direction."""
     diagram = _admit_components(diagram)
     strand_partner: dict[str, str] = {}
     dart_role: dict[str, str] = {}
+    crossing_of: dict[str, str] = {}
     for crossing in diagram.crossings:
-        darts = crossing.half_edges
-        over = tuple(darts[i] for i in crossing.over_pair)
-        under = tuple(darts[i] for i in crossing.under_pair)
-        strand_partner[over[0]] = over[1]
-        strand_partner[over[1]] = over[0]
-        strand_partner[under[0]] = under[1]
-        strand_partner[under[1]] = under[0]
-        dart_role[over[0]] = "OVER"
-        dart_role[over[1]] = "OVER"
-        dart_role[under[0]] = "UNDER"
-        dart_role[under[1]] = "UNDER"
-    arc_partner: dict[str, str] = {}
-    for arc in diagram.arcs:
-        arc_partner[arc.first] = arc.second
-        arc_partner[arc.second] = arc.first
-    # Replay the dart/half-edge invariant before traversal: every half-edge
-    # in exactly one crossing (strand map) and one arc (arc map).
-    if set(strand_partner) != set(arc_partner):
+        over = tuple(crossing.half_edges[i] for i in crossing.over_pair)
+        under = tuple(crossing.half_edges[i] for i in crossing.under_pair)
+        for left, right, role in (
+            (over[0], over[1], "OVER"),
+            (under[0], under[1], "UNDER"),
+        ):
+            strand_partner[left] = right
+            strand_partner[right] = left
+            dart_role[left] = role
+            dart_role[right] = role
+        for dart in crossing.half_edges:
+            crossing_of[dart] = crossing.crossing_id
+    arc_next = {arc.tail: arc.head for arc in diagram.arcs}
+    if set(strand_partner) != (set(arc_next) | {arc.head for arc in diagram.arcs}):
         _reject(
             "diagram",
             "link_diagram.components.dart_coverage_failed",
-            "every half-edge must lie in exactly one crossing and one arc",
+            "every half-edge must have one incoming or outgoing oriented arc",
         )
     visited: set[str] = set()
     components: list[LinkComponent] = []
-    index = 0
-    crossing_of = {
-        dart: crossing.crossing_id
-        for crossing in diagram.crossings
-        for dart in crossing.half_edges
-    }
-    for start in sorted(strand_partner):
+    for start in sorted(arc_next):
         if start in visited:
             continue
         cycle: list[str] = []
         visits: list[CrossingVisit] = []
         cursor = start
         while cursor not in visited:
-            # One arc step lands on the next entry dart, then the strand
-            # step crosses to its partner; both darts join the cycle so
-            # every half-edge is covered exactly once.
-            for dart in (cursor, arc_partner[cursor]):
-                visited.add(dart)
-                cycle.append(dart)
-                visits.append(
-                    CrossingVisit(crossing_id=crossing_of[dart], role=dart_role[dart])  # type: ignore[arg-type]
+            head = arc_next[cursor]
+            if cursor in visited or head in visited:
+                _reject(
+                    "diagram",
+                    "link_diagram.components.traversal_not_a_cycle",
+                    "oriented arc and strand steps must close into disjoint cycles",
                 )
-            cursor = strand_partner[arc_partner[cursor]]
-        # A cycle closes exactly at its start: the strand/arc involutions
-        # are deterministic, so re-entering `visited` elsewhere is a
-        # malformed pairing the value contract already excludes.
-        if cursor != start:  # pragma: no cover - excluded by value invariant
+            visited.add(cursor)
+            visited.add(head)
+            cycle.extend((cursor, head))
+            for dart in (cursor, head):
+                visits.append(
+                    CrossingVisit(
+                        crossing_id=crossing_of[dart],
+                        role=dart_role[dart],  # type: ignore[arg-type]
+                    )
+                )
+            cursor = strand_partner[head]
+        if cursor != start:
             _reject(
                 "diagram",
                 "link_diagram.components.traversal_not_a_cycle",
-                "component traversal must close into disjoint cycles",
+                "oriented component traversal must return to its first dart",
             )
         components.append(
             LinkComponent(
-                component_id=f"component_{index:03d}",
+                component_id=f"component_{len(components):03d}",
                 darts=tuple(cycle),
-                visits=tuple(sorted(visits, key=lambda v: v.crossing_id)),
+                visits=tuple(sorted(visits, key=lambda visit: visit.crossing_id)),
                 length=len(cycle),
             )
         )
-        index += 1
     for loop in range(diagram.free_loops):
         components.append(
             LinkComponent(
@@ -342,15 +503,7 @@ def link_components(diagram: OrientedLinkDiagram) -> LinkComponentsResult:
                 length=1,
             )
         )
-    ordered = tuple(sorted(components, key=lambda c: c.component_id))
-    # Every diagram arc appears exactly once across all components.
-    covered = [dart for component in ordered for dart in component.darts]
-    if len(covered) != len(set(covered)):
-        _reject(  # pragma: no cover - excluded by traversal construction
-            "diagram",
-            "link_diagram.components.arc_cover_failed",
-            "every diagram arc must appear exactly once",
-        )
+    ordered = tuple(sorted(components, key=lambda component: component.component_id))
     return LinkComponentsResult._from_kernel(diagram=diagram, components=ordered)
 
 

@@ -31,9 +31,12 @@ from jacobian.math.topology.links._extensions_models import (
     AlexanderPolynomialRequest,
     AlexanderPolynomialResult,
     BraidClosureResult,
+    BraidProductRequest,
     BraidWordRequest,
     GoeritzDataRequest,
     GoeritzDataResult,
+    LinkDeterminantRequest,
+    LinkDeterminantResult,
     SeifertCircleRequest,
     WirtingerPresentationRequest,
     WirtingerPresentationResult,
@@ -77,6 +80,52 @@ class TestBraidWords:
         with pytest.raises(OperationDomainValidationError, match="strand count"):
             braid_multiply(word, BraidWord(strand_count=3))
 
+    def test_braid_group_laws_match_independent_permutation_composition(self) -> None:
+        left = BraidWord(
+            strand_count=3,
+            letters=(
+                BraidLetter(generator=1, exponent=1),
+                BraidLetter(generator=2, exponent=-1),
+            ),
+        )
+        right = BraidWord(
+            strand_count=3,
+            letters=(
+                BraidLetter(generator=1, exponent=-1),
+                BraidLetter(generator=1, exponent=1),
+            ),
+        )
+        product = braid_multiply(left, right)
+        inverse = braid_inverse(left)
+        identity = braid_multiply(left, inverse)
+
+        assert identity.strand_count == 3
+        assert braid_permutation(identity).permutation == (0, 1, 2)
+        assert braid_permutation(inverse).permutation == tuple(
+            braid_permutation(left).permutation.index(i) for i in range(3)
+        )
+        p_left = braid_permutation(left).permutation
+        p_right = braid_permutation(right).permutation
+        assert braid_permutation(product).permutation == tuple(
+            p_right[p_left[i]] for i in range(3)
+        )
+        assert braid_permutation(product).closure_component_count == len(
+            braid_permutation(product).cycles
+        )
+
+    def test_catalog_exposes_exact_group_word_operations(self) -> None:
+        catalog = {tool.operation_id: tool for tool in BUILTIN_TOOLS}
+        word = _two_braid(1, -1, 1)
+        inverse = catalog["braid.word.inverse.compute"].run(BraidWordRequest(word=word))
+        product = catalog["braid.word.multiply.compute"].run(
+            BraidProductRequest(left=word, right=inverse)
+        )
+
+        assert product == BraidWord(
+            strand_count=2, letters=word.letters + inverse.letters
+        )
+        assert braid_permutation(product).permutation == (0, 1)
+
     def test_empty_closure_retains_every_free_component(self) -> None:
         result = braid_closure(BraidWord(strand_count=3))
 
@@ -111,7 +160,7 @@ class TestGoeritzData:
         diagram = braid_closure(_two_braid(1, 1, 1)).diagram
         result = link_goeritz_data(diagram)
 
-        assert result.reduced_matrix.entries == ((3,),)
+        assert result.reduced_matrix.entries == ((2, -1), (-1, 2))
         assert result.absolute_determinant == link_determinant(diagram).determinant == 3
         assert len(result.crossing_contributions) == 3
         assert GoeritzDataResult.model_validate_json(result.model_dump_json()) == result
@@ -120,7 +169,7 @@ class TestGoeritzData:
         right = link_goeritz_data(braid_closure(_two_braid(1, 1, 1)).diagram)
         left = link_goeritz_data(braid_closure(_two_braid(-1, -1, -1)).diagram)
 
-        assert left.reduced_matrix.entries == ((-3,),)
+        assert left.reduced_matrix.entries == ((-2, 1), (1, -2))
         assert left.absolute_determinant == right.absolute_determinant
 
     def test_figure_eight_has_two_by_two_goeritz_matrix_of_determinant_five(
@@ -138,7 +187,7 @@ class TestGoeritzData:
         diagram = braid_closure(word).diagram
         result = link_goeritz_data(diagram)
 
-        assert result.reduced_matrix.entries == ((2, -1), (-1, 3))
+        assert result.reduced_matrix.entries == ((3, -2), (-2, 3))
         assert result.absolute_determinant == link_determinant(diagram).determinant == 5
 
     def test_goeritz_slice_rejects_crossing_free_and_over_bound_diagrams(self) -> None:
@@ -228,9 +277,31 @@ class TestAlexanderPolynomial:
             ),
         )
 
-        assert link_determinant(trefoil).determinant == 3
+        figure_eight = braid_closure(figure_eight_word).diagram
+
+        for diagram, expected in ((trefoil, 3), (figure_eight, 5)):
+            determinant = link_determinant(diagram)
+            # Independent diagram route: the absolute reduced Goeritz determinant.
+            goeritz = link_goeritz_data(diagram)
+            assert determinant.determinant == expected
+            assert determinant.determinant == goeritz.absolute_determinant
+            assert determinant.alexander.diagram == diagram
+
+    def test_determinant_is_a_public_source_bound_operation(self) -> None:
+        tool = next(
+            tool
+            for tool in BUILTIN_TOOLS
+            if tool.operation_id == "link_diagram.determinant.compute"
+        )
+        diagram = braid_closure(_two_braid(1, 1, 1)).diagram
+        result = tool.run(LinkDeterminantRequest(diagram=diagram))
+
+        assert isinstance(result, LinkDeterminantResult)
+        assert result.alexander.diagram == diagram
+        assert result.determinant == 3
         assert (
-            link_determinant(braid_closure(figure_eight_word).diagram).determinant == 5
+            LinkDeterminantResult.model_validate_json(result.model_dump_json())
+            == result
         )
 
     def test_one_variable_contract_rejects_links(self) -> None:

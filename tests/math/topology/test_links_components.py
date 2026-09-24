@@ -8,11 +8,18 @@ from typing import cast
 import pytest
 from pydantic import ValidationError
 
-from jacobian.catalog.models import MathTool, OperationDomainValidationError
+from jacobian.catalog.models import (
+    MathTool,
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.topology.links import (
-    ArcPairing,
+    BraidLetter,
+    BraidWord,
     LinkCrossing,
+    OrientedDiagramArc,
     OrientedLinkDiagram,
+    braid_closure,
 )
 from jacobian.math.topology.links._models import (
     LinkBracketRequest,
@@ -20,6 +27,7 @@ from jacobian.math.topology.links._models import (
     LinkComponentsRequest,
     LinkComponentsResult,
     LinkingMatrixResult,
+    LinkJonesRequest,
     LinkJonesResult,
 )
 from jacobian.math.topology.links._tools import TOOLS, _run_bracket
@@ -36,12 +44,12 @@ def _crossing(
 ) -> LinkCrossing:
     under = (1, 3) if over == (0, 2) else (0, 2)
     return LinkCrossing(
-        crossing_id=cid, half_edges=darts, over_pair=over, under_pair=under
+        crossing_id=cid, half_edges=darts, over_pair=over, under_pair=under, sign=-1
     )
 
 
-def _arc(first: str, second: str) -> ArcPairing:
-    return ArcPairing(first=first, second=second)
+def _arc(tail: str, head: str) -> OrientedDiagramArc:
+    return OrientedDiagramArc(tail=tail, head=head)
 
 
 def _hopf() -> OrientedLinkDiagram:
@@ -69,6 +77,67 @@ def _unknot_curl() -> OrientedLinkDiagram:
 
 
 class TestKnownAnswer:
+    def test_full_admitted_jones_state_family_fits_work_and_output_bounds(self) -> None:
+        word = BraidWord(
+            strand_count=2,
+            letters=tuple(BraidLetter(generator=1, exponent=1) for _ in range(12)),
+        )
+        diagram = braid_closure(word).diagram.model_copy(update={"free_loops": 64})
+
+        bracket = link_bracket(diagram)
+        assert bracket.state_count == 1 << 12
+        assert len(bracket.model_dump_json().encode()) < 4 * 1024 * 1024
+
+        over_bound = braid_closure(
+            BraidWord(
+                strand_count=2,
+                letters=tuple(BraidLetter(generator=1, exponent=1) for _ in range(13)),
+            )
+        ).diagram
+        with pytest.raises(OperationResourceAdmissionError, match=r"2\^12"):
+            link_bracket(over_bound)
+
+    def test_public_jones_operation_matches_standard_knot_fixtures(self) -> None:
+        """Independent standard V(t) values, converted by t=A^(-4)."""
+        positive_trefoil = braid_closure(
+            BraidWord(
+                strand_count=2,
+                letters=tuple(BraidLetter(generator=1, exponent=1) for _ in range(3)),
+            )
+        ).diagram
+        figure_eight = braid_closure(
+            BraidWord(
+                strand_count=3,
+                letters=tuple(
+                    BraidLetter(generator=generator, exponent=exponent)
+                    for generator, exponent in ((1, 1), (2, -1), (1, 1), (2, -1))
+                ),
+            )
+        ).diagram
+        tool = next(
+            item for item in TOOLS if item.operation_id == "link_diagram.jones.compute"
+        )
+
+        fixtures = (
+            (OrientedLinkDiagram(free_loops=1), {0: 1}),
+            # V_trefoil(t) = t + t^3 - t^4.
+            (positive_trefoil, {-4: 1, -12: 1, -16: -1}),
+            # V_4_1(t) = t^2 - t + 1 - t^-1 + t^-2.
+            (figure_eight, {8: 1, 4: -1, 0: 1, -4: -1, -8: 1}),
+        )
+        for diagram, expected_a_terms in fixtures:
+            result = tool.run(LinkJonesRequest(diagram=diagram))
+            actual_a_terms = {
+                term.exponents[0]: term.coefficient.as_fraction()
+                for term in result.polynomial.terms
+            }
+            assert actual_a_terms == expected_a_terms
+            assert result.diagram == diagram
+            assert result.bracket.diagram == diagram
+            assert result.normalization == (
+                "(-A)^(-3w(D))*<D>(A); t=A^(-4); output in A"
+            )
+
     def test_mirror_swaps_smoothings_and_inverts_bracket_variable(self) -> None:
         diagram = _unknot_curl()
         mirror = diagram.model_copy(

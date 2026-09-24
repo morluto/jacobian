@@ -22,6 +22,7 @@ from jacobian.math.number_theory.modular_forms.character_basis import (
     modular_character_coordinates_hecke,
     modular_character_coordinates_product,
     modular_character_coordinates_q_expansion,
+    modular_character_coordinates_u_prime,
     modular_character_hecke_matrix,
 )
 from jacobian.math.number_theory.modular_forms.character_basis_models import (
@@ -40,6 +41,7 @@ from jacobian.math.number_theory.modular_forms.character_basis_models import (
     ModularCharacterQExpansion,
     ModularCharacterSpaceInclusion,
     ModularCharacterTransportedForm,
+    ModularCharacterUPrimeRequest,
 )
 from jacobian.math.number_theory.modular_forms.character_transport import (
     modular_character_coordinates_equal_in_common_space,
@@ -70,6 +72,12 @@ def _hecke_matrix(
     request: ModularCharacterHeckeMatrixRequest,
 ) -> ModularCharacterHeckeMatrix:
     return modular_character_hecke_matrix(request.space, request.index)
+
+
+def _u_prime(
+    request: ModularCharacterUPrimeRequest,
+) -> ModularFormCoordinates:
+    return modular_character_coordinates_u_prime(request.form, request.prime)
 
 
 def _product(
@@ -320,6 +328,25 @@ TOOLS: MathTools = (
                 input=_equality_example(),
             ),
         ),
+    ),
+    MathTool(
+        operation_id="modular_form.character_coordinates.u_prime.apply",
+        title="Apply a bad-prime U operator to a character cusp form",
+        description=(
+            "Apply U_p to generalized coordinates in the represented weight-two "
+            "S(Gamma0(N), chi) spaces over Q(zeta_6), for (N,p) equal to "
+            "(26,2), (26,13), (39,3), or (39,13). These primes divide the "
+            "declared level, so the image remains in the same character space. "
+            "The operation uses a_n(U_p f)=a_(p n)(f), admits exactly "
+            "p*(B-1)+1 source coefficients for target Sturm precision B and "
+            "the exact coefficient envelope before "
+            "PARI basis expansion, then returns same-parent coordinates only "
+            "after exact reconstruction through the target Sturm bound."
+        ),
+        request_type=ModularCharacterUPrimeRequest,
+        result_type=ModularFormCoordinates,
+        run=_u_prime,
+        tags=("modular-forms", "characters", "u-operator", "exact"),
     ),
     MathTool(
         operation_id="modular_form.character_hecke_matrix.compute",

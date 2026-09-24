@@ -4,6 +4,7 @@ import json
 from itertools import combinations, product
 
 import pytest
+from pydantic import ValidationError
 
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
@@ -12,6 +13,7 @@ from jacobian.catalog.models import (
 )
 from jacobian.dispatch import invoke_operation
 from jacobian.math.combinatorics.matroids._models import (
+    MAX_SPLIT_WEIGHT_DIGITS,
     LinearMatroid,
     MatroidRankMultiplier,
     MatroidWeightedIntersectionCertificateRequest,
@@ -19,6 +21,8 @@ from jacobian.math.combinatorics.matroids._models import (
     MatroidWeightedIntersectionOptimizationResult,
     MatroidWeightedIntersectionRankCertificateRequest,
     MatroidWeightFunction,
+    MaximumWeightBasisRequest,
+    MaximumWeightIndependentSetRequest,
 )
 from jacobian.math.combinatorics.matroids.intersection import (
     maximum_weight_matroid_intersection,
@@ -168,6 +172,60 @@ def test_finite_unit_slack_reweights_before_stopping() -> None:
     )
     assert decoded == result
     assert verify_weighted_intersection_result(result)
+
+
+def test_objective_request_models_enforce_twelve_digit_limit() -> None:
+    labels = ("a",)
+    matroid = _matroid(((1,),), labels)
+
+    def weight(value: int) -> dict[str, object]:
+        return {"ground_axis": labels, "values": (value,)}
+
+    requests = (
+        (MaximumWeightBasisRequest, {"matroid": matroid.model_dump(mode="json")}),
+        (
+            MaximumWeightIndependentSetRequest,
+            {"matroid": matroid.model_dump(mode="json")},
+        ),
+        (
+            MatroidWeightedIntersectionCertificateRequest,
+            {
+                "first": matroid.model_dump(mode="json"),
+                "second": matroid.model_dump(mode="json"),
+                "common_independent": (),
+                "first_split": weight(0),
+                "second_split": weight(0),
+            },
+        ),
+        (
+            MatroidWeightedIntersectionOptimizationRequest,
+            {
+                "first": matroid.model_dump(mode="json"),
+                "second": matroid.model_dump(mode="json"),
+            },
+        ),
+        (
+            MatroidWeightedIntersectionRankCertificateRequest,
+            {
+                "first": matroid.model_dump(mode="json"),
+                "second": matroid.model_dump(mode="json"),
+                "common_independent": (),
+                "first_rank_terms": (),
+                "second_rank_terms": (),
+            },
+        ),
+    )
+    for request_type, fields in requests:
+        accepted = {**fields, "weight_function": weight(10**12 - 1)}
+        request_type.model_validate_json(json.dumps(accepted))
+
+        rejected = {**fields, "weight_function": weight(10**12)}
+        with pytest.raises(ValidationError, match="objective weights"):
+            request_type.model_validate_json(json.dumps(rejected))
+
+    # The broader carrier supports 13 to 15 digit generated split values.
+    MatroidWeightFunction(ground_axis=labels, values=(10**12,))
+    MatroidWeightFunction(ground_axis=labels, values=(10**MAX_SPLIT_WEIGHT_DIGITS - 1,))
 
 
 def test_loop_counterexample_has_rank_dual_even_when_terminal_split_does_not() -> None:

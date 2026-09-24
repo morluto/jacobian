@@ -34,6 +34,16 @@ MAX_WEIGHT_DIGITS = 12
 MAX_SPLIT_WEIGHT_DIGITS = MAX_WEIGHT_DIGITS + 3
 """Room for the bounded split witness derived from input weights."""
 
+
+def _require_objective_weight_digits(weight_function: MatroidWeightFunction) -> None:
+    """Keep source objectives inside their advertised 12-digit domain."""
+    if any(abs(value) >= 10**MAX_WEIGHT_DIGITS for value in weight_function.values):
+        raise _validation_error(
+            "weights.objective_digits",
+            f"objective weights must have fewer than {MAX_WEIGHT_DIGITS} decimal digits",
+        )
+
+
 MAX_WEIGHTED_INTERSECTION_OPT_DUAL_DIGITS = 1024
 """Maximum decimal digits admitted for private integral split intermediates."""
 
@@ -270,6 +280,7 @@ class MaximumWeightBasisRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_ground_keyed_weights(self) -> Self:
+        _require_objective_weight_digits(self.weight_function)
         if set(self.weight_function.ground_axis) != set(self.matroid.ground_axis):
             raise _validation_error(
                 "weights.ground_coverage",
@@ -336,6 +347,7 @@ class MaximumWeightBasisResult(StrictModel):
 
     @model_validator(mode="after")
     def require_canonical_claim(self) -> Self:
+        _require_objective_weight_digits(self.weight_function)
         if set(self.weight_function.ground_axis) != set(self.matroid.ground_axis):
             raise _validation_error(
                 "weights.ground_coverage",
@@ -401,6 +413,7 @@ class MaximumWeightIndependentSetRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_ground_keyed_weights(self) -> Self:
+        _require_objective_weight_digits(self.weight_function)
         if self.weight_function.ground_axis != self.matroid.ground_axis:
             raise _validation_error(
                 "weights.ground_coverage",
@@ -430,6 +443,7 @@ class MaximumWeightIndependentSetResult(StrictModel):
 
     @model_validator(mode="after")
     def require_canonical_claim(self) -> Self:
+        _require_objective_weight_digits(self.weight_function)
         if self.weight_function.ground_axis != self.matroid.ground_axis:
             raise _validation_error(
                 "weights.ground_coverage",
@@ -523,6 +537,7 @@ class MatroidWeightedIntersectionCertificateRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_certificate_axes(self) -> Self:
+        _require_objective_weight_digits(self.weight_function)
         if (
             self.first.matrix.prime != self.second.matrix.prime
             or self.first.ground_axis != self.second.ground_axis
@@ -591,6 +606,7 @@ class MatroidWeightedIntersectionOptimizationRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_optimizer_axes(self) -> Self:
+        _require_objective_weight_digits(self.weight_function)
         if (
             self.first.matrix.prime != self.second.matrix.prime
             or self.first.ground_axis != self.second.ground_axis
@@ -667,6 +683,7 @@ class MatroidWeightedIntersectionRankCertificateRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_certificate_axes(self) -> Self:
+        _require_objective_weight_digits(self.weight_function)
         if (
             self.first.matrix.prime != self.second.matrix.prime
             or self.first.ground_axis != self.second.ground_axis
@@ -741,6 +758,7 @@ class MatroidWeightedIntersectionRankCertificateResult(StrictModel):
 
     @model_validator(mode="after")
     def require_result_context(self) -> Self:
+        _require_objective_weight_digits(self.weight_function)
         request = MatroidWeightedIntersectionRankCertificateRequest(
             first=self.first,
             second=self.second,
@@ -816,6 +834,7 @@ class MatroidWeightedIntersectionResult(StrictModel):
 
     @model_validator(mode="after")
     def require_canonical_certificate_shape(self) -> Self:
+        _require_objective_weight_digits(self.weight_function)
         first = self.first_maximizer.matroid
         second = self.second_maximizer.matroid
         n = first.ground_size

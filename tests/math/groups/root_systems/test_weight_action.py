@@ -16,6 +16,7 @@ from jacobian.math.groups.root_systems._models import (
 )
 from jacobian.math.groups.root_systems.operations import (
     cartan_datum,
+    cartan_matrix_from_type,
     weight_lattice_vector,
     weyl_element_from_word,
 )
@@ -207,6 +208,17 @@ def test_output_coordinate_growth_is_rejected_before_vector_construction(monkeyp
     )
     with pytest.raises(OperationResourceAdmissionError):
         weyl_element_act_on_weight(request)
+
+
+def test_rank_eight_fraction_preflight_accepts_identity_action():
+    e8 = cartan_matrix_from_type("E", 8).matrix
+    source = weight_lattice_vector(e8, (1, 0, 0, 0, 0, 0, 0, 0))
+    result = weyl_element_act_on_weight(
+        WeylElementWeightActionRequest(
+            element=weyl_element_from_word(e8, ()), weight=source
+        )
+    )
+    assert result == source
 
 
 def test_public_catalog_operation_uses_weight_lattice_value():

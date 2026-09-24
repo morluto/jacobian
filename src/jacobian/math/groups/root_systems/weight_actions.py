@@ -33,7 +33,7 @@ from jacobian.math.matrices.values import IntegerMatrix
 
 MAX_WEYL_WEIGHT_ACTION_WORK = 150_000
 MAX_WEYL_WEIGHT_ACTION_ALLOCATION_CELLS = 12 * MAX_RANK**2 + 4 * MAX_RANK
-MAX_WEYL_WEIGHT_ACTION_RATIONAL_BITS = 64
+MAX_WEYL_WEIGHT_ACTION_RATIONAL_BITS = 128
 
 
 def _integer_matrix_children_are_bounded(value: IntegerMatrix) -> bool:
@@ -151,15 +151,20 @@ def _weight_action_preflight(rank: int) -> tuple[int, int]:
     """Bound matrix cells and exact rational digits before matrix expansion.
 
     Finite Cartan entries have absolute value at most 3 and Weyl root-action
-    entries at most 6. Cramer's rule bounds inverse numerators by cofactors and
-    denominators by determinants; the additional rank factors bound the two
-    matrix products and their partial sums.
+    entries at most 6. Reduced Gauss-Jordan entries are ratios of minors, so
+    Cramer's determinant bound controls each stored Fraction. A pivot-row scale
+    and row update can form raw cross-products of those fractions before
+    reduction; four determinant bounds plus rank slack cover those temporary
+    numerators and denominators as well as the final matrix products.
     """
     allocation_cells = 12 * rank**2 + 4 * rank
     determinant_bound = factorial(rank) * 3**rank
     cofactor_bound = factorial(rank - 1) * 3 ** (rank - 1)
     numerator_bound = 3 * MAX_ROOT_COORDINATE * rank**2 * cofactor_bound
-    rational_bits = max(determinant_bound.bit_length(), numerator_bound.bit_length())
+    rational_bits = max(
+        4 * determinant_bound.bit_length() + 2 * rank.bit_length() + 4,
+        numerator_bound.bit_length(),
+    )
     return allocation_cells, rational_bits
 
 

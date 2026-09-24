@@ -366,12 +366,15 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     ),
     MathTool(
         operation_id="elliptic_curve.finite_field.quadratic_twist.compute",
-        title="Construct the canonical nontrivial quadratic twist",
+        title="Construct the canonical quadratic twist",
         description=(
-            "Return the canonical nontrivial quadratic twist of a nonsingular "
+            "Return the canonical quadratic twist of a nonsingular "
             "short-Weierstrass curve over an admitted finite field. The kernel "
             "chooses the least encoded nonsquare d and returns y^2 = x^3 + "
-            "d^2 A x + d^3 B. Its point count has the opposite Frobenius trace."
+            "d^2 A x + d^3 B. Its point count has the opposite Frobenius "
+            "trace; for exceptional curves the returned model can be "
+            "isomorphic to the source, so class distinctness is not "
+            "guaranteed and the isomorphism decision can be composed."
         ),
         request_type=FiniteFieldCurveRequest,
         result_type=FiniteFieldShortWeierstrassCurve,
@@ -384,7 +387,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             OperationExample(
                 name="nontrivial_twist_over_five",
-                description="Return the canonical nontrivial twist over F5.",
+                description="Return the canonical quadratic twist over F5.",
                 input={"curve": _finite_curve()},
             ),
         ),

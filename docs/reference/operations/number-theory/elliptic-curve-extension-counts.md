@@ -15,7 +15,9 @@ S_n = t S_(n-1) - q S_(n-2)
 The operation admits only base fields with `q <= 4096` and degrees at most 64.
 It preflights a conservative integer-growth bound before enumerating the base
 curve, and returns the base cardinality, base trace, each recurrence power sum,
-and each extension cardinality. Its trace is not accepted from caller input;
+and each extension cardinality. Admitted degrees let extension counts exceed
+the interoperable JSON integer range, so these exact integers serialize as
+canonical decimal strings. Its trace is not accepted from caller input;
 the operation derives it through exhaustive exact enumeration. This keeps the
 result independent of unverified Hasse-compatible trace claims.
 

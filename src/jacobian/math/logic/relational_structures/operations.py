@@ -8,28 +8,58 @@ from math import lcm
 from typing import Literal
 
 from jacobian._execution import request_checkpoint
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.logic.relational_structures._admission import (
     admit_core_computation,
     admit_embedding_search,
     admit_homomorphism_check,
+    admit_homomorphism_enumeration,
     admit_homomorphism_search,
+    admit_induced_substructure,
+    admit_polymorphism_check,
+    admit_relational_reduct,
 )
 from jacobian.math.logic.relational_structures._models import (
+    MAX_CSP_CONSTRAINTS,
+    MAX_CSP_SCOPE_ENTRIES,
+    CspAssignmentProfile,
+    CspAssignmentRequest,
+    CspConstraintEvaluation,
     EmbeddingSearchResult,
+    FiniteCspConstraint,
+    FiniteCspInstance,
     HomomorphismCheckResult,
     HomomorphismCoreResult,
     HomomorphismCountResult,
+    HomomorphismEnumerationResult,
     HomomorphismSearchResult,
     HomomorphismSearchStatus,
     HomomorphismStatus,
     HomomorphismViolationWitness,
     InducedEmbeddingCheckResult,
     InducedRelationProfile,
+    InducedSubstructureResult,
+    RelationalPolymorphism,
+    RelationalPolymorphismCheckResult,
+    RelationalPolymorphismRelationProfile,
+    RelationalPolymorphismRequest,
+    RelationalPolymorphismStatus,
+    RelationalPolymorphismWitness,
+    RelationalQuotient,
+    RelationalReductResult,
     SymbolTransportProfile,
 )
 from jacobian.math.logic.relational_structures.values import (
+    MAX_RELATIONAL_ARITY,
+    MAX_RELATIONAL_CARRIER,
+    MAX_RELATIONAL_SYMBOLS,
+    MAX_RELATIONAL_TABLE_ROWS,
+    MAX_RELATIONAL_TRANSPORT_TUPLES,
     FiniteRelationalStructure,
+    FiniteRelationSymbol,
 )
 
 
@@ -48,6 +78,246 @@ def _admit_structure(value: object, field: str) -> FiniteRelationalStructure:
             code="relational.homomorphism.structure_shape",
             message=f"{field} must satisfy its complete canonical relation tables",
         ) from exc
+
+
+def induced_substructure(
+    source: FiniteRelationalStructure, inclusion: Sequence[int]
+) -> InducedSubstructureResult:
+    """Return the exact induced structure on an ordered source-carrier subset.
+
+    New carrier label ``i`` denotes ``inclusion[i]`` in the source. Every
+    relation table is restricted to tuples wholly in that image and transported
+    through the selected order; nullary relations retain their truth value.
+    """
+
+    source = _admit_structure(source, "source")
+    inclusion = tuple(inclusion) if isinstance(inclusion, Sequence) else inclusion
+    admit_induced_substructure(source, inclusion)
+    source_to_induced = {
+        source_label: induced_label
+        for induced_label, source_label in enumerate(inclusion)
+    }
+    tables: list[tuple[tuple[int, ...], ...]] = []
+    rows_seen = 0
+    for table in source.relation_tables:
+        induced_rows = []
+        for row in table:
+            rows_seen += 1
+            if rows_seen % 4_096 == 0:
+                request_checkpoint(
+                    "during induced relational substructure construction"
+                )
+            if all(label in source_to_induced for label in row):
+                induced_rows.append(tuple(source_to_induced[label] for label in row))
+        tables.append(tuple(induced_rows))
+    substructure = FiniteRelationalStructure(
+        carrier_size=len(inclusion),
+        signature=source.signature,
+        relation_tables=tuple(tables),
+    )
+    return InducedSubstructureResult(
+        source=source,
+        substructure=substructure,
+        inclusion=inclusion,
+    )
+
+
+def reduct_structure(
+    source: FiniteRelationalStructure,
+    symbol_ids: Sequence[str],
+) -> RelationalReductResult:
+    """Return the selected source relations with an explicit symbol-axis map."""
+
+    source = _admit_structure(source, "source")
+    indices, _work, _output_bound = admit_relational_reduct(source, symbol_ids)
+    request_checkpoint("before relational reduct construction")
+    reduct = FiniteRelationalStructure(
+        carrier_size=source.carrier_size,
+        signature=tuple(source.signature[index] for index in indices),
+        relation_tables=tuple(source.relation_tables[index] for index in indices),
+    )
+    return RelationalReductResult._from_kernel(
+        source=source,
+        reduct=reduct,
+        source_symbol_indices=indices,
+    )
+
+
+def quotient_structure(
+    source: FiniteRelationalStructure,
+    classes: Sequence[int],
+) -> RelationalQuotient:
+    """Form an exact quotient when every relation is saturated by a partition."""
+
+    source = _admit_structure(source, "source")
+    if not isinstance(classes, Sequence) or isinstance(
+        classes, (str, bytes, bytearray)
+    ):
+        raise OperationDomainValidationError(
+            location=("classes",),
+            code="relational.quotient.partition_shape",
+            message="classes must be a finite sequence of exact integers",
+        )
+    if len(classes) != source.carrier_size:
+        raise OperationDomainValidationError(
+            location=("classes",),
+            code="relational.quotient.partition_axis",
+            message="classes must give exactly one label per source element",
+        )
+    if any(not isinstance(label, int) or isinstance(label, bool) for label in classes):
+        raise OperationDomainValidationError(
+            location=("classes",),
+            code="relational.quotient.partition_label",
+            message="every class label must be an exact integer",
+        )
+    work = sum(map(len, source.relation_tables))
+    if work > MAX_RELATIONAL_TRANSPORT_TUPLES:
+        raise OperationResourceAdmissionError(
+            location=("source", "relation_tables"),
+            code="relational.quotient.work_limit",
+            message="quotient construction exceeds the admitted tuple-work limit",
+        )
+    members: dict[int, list[int]] = {}
+    for element, label in enumerate(classes):
+        members.setdefault(label, []).append(element)
+    ordered_labels = sorted(members, key=lambda label: members[label][0])
+    quotient_index = {label: index for index, label in enumerate(ordered_labels)}
+    quotient_map = tuple(quotient_index[label] for label in classes)
+
+    quotient_tables: list[tuple[tuple[int, ...], ...]] = []
+    for symbol, table in zip(source.signature, source.relation_tables, strict=True):
+        fibers: dict[tuple[int, ...], int] = {}
+        for row in table:
+            quotient_row = tuple(quotient_map[element] for element in row)
+            fibers[quotient_row] = fibers.get(quotient_row, 0) + 1
+        quotient_rows: list[tuple[int, ...]] = []
+        for row, present_count in fibers.items():
+            fiber_size = 1
+            for quotient_label in row:
+                fiber_size *= len(members[ordered_labels[quotient_label]])
+            if present_count != fiber_size:
+                raise OperationDomainValidationError(
+                    location=("classes",),
+                    code="relational.quotient.not_saturated",
+                    message=(
+                        f"partition is not a congruence for relation "
+                        f"{symbol.symbol_id}: a quotient tuple has a partial "
+                        "source fiber"
+                    ),
+                )
+            quotient_rows.append(row)
+        quotient_tables.append(tuple(sorted(quotient_rows)))
+
+    quotient = FiniteRelationalStructure(
+        carrier_size=len(members),
+        signature=source.signature,
+        relation_tables=tuple(quotient_tables),
+    )
+    return RelationalQuotient.model_construct(
+        source=source, quotient=quotient, quotient_map=quotient_map
+    )
+
+
+def check_polymorphism(
+    request: RelationalPolymorphismRequest,
+) -> RelationalPolymorphismCheckResult:
+    """Check complete preservation of every finite basic relation by f:A^m→A.
+
+    The caller's table is indexed by lexicographic tuples in A^m. For each
+    relation, the kernel checks every ordered m-tuple of relation rows and
+    applies f coordinatewise. Admission covers the complete relation powers
+    before any row combinations or lookup indexes are expanded.
+    """
+
+    if not isinstance(request, RelationalPolymorphismRequest):
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="relational.polymorphism.request_type",
+            message="request must be a typed finite relational operation table",
+        )
+    source = _admit_structure(request.source, "source")
+    try:
+        admitted = RelationalPolymorphismRequest.model_validate(
+            {
+                "source": source.model_dump(),
+                "arity": request.arity,
+                "operation_table": request.operation_table,
+            },
+            strict=True,
+        )
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="relational.polymorphism.request_shape",
+            message="request must contain a complete source-bound operation table",
+        ) from exc
+    admit_polymorphism_check(source, admitted.arity)
+
+    carrier_size = source.carrier_size
+    arity = admitted.arity
+    operation_table = admitted.operation_table
+    relation_profiles: list[RelationalPolymorphismRelationProfile] = []
+    witness: RelationalPolymorphismWitness | None = None
+    checked_combinations = 0
+    for symbol, relation in zip(source.signature, source.relation_tables, strict=True):
+        relation_set = set(relation)
+        preserved = 0
+        for input_rows in product(relation, repeat=arity):
+            checked_combinations += 1
+            if checked_combinations % 4_096 == 0:
+                request_checkpoint("during relational polymorphism preservation check")
+            output_row: tuple[int, ...]
+            if symbol.arity == 0:
+                output_row = ()
+            else:
+                coordinates: list[int] = []
+                for coordinate in range(symbol.arity):
+                    table_index = 0
+                    for row in input_rows:
+                        table_index = table_index * carrier_size + row[coordinate]
+                    coordinates.append(operation_table[table_index])
+                output_row = tuple(coordinates)
+            if output_row in relation_set:
+                preserved += 1
+            elif witness is None:
+                witness = RelationalPolymorphismWitness(
+                    symbol_id=symbol.symbol_id,
+                    relation_arity=symbol.arity,
+                    input_rows=tuple(input_rows),
+                    output_row=output_row,
+                )
+        relation_profiles.append(
+            RelationalPolymorphismRelationProfile(
+                symbol_id=symbol.symbol_id,
+                arity=symbol.arity,
+                input_combinations=len(relation) ** arity,
+                preserved_combinations=preserved,
+            )
+        )
+
+    status = (
+        RelationalPolymorphismStatus.NOT_POLYMORPHISM
+        if witness is not None
+        else RelationalPolymorphismStatus.POLYMORPHISM
+    )
+    polymorphism = (
+        RelationalPolymorphism.model_construct(
+            source=source,
+            arity=arity,
+            operation_table=operation_table,
+        )
+        if witness is None
+        else None
+    )
+    return RelationalPolymorphismCheckResult._from_kernel(
+        source=source,
+        arity=arity,
+        operation_table=operation_table,
+        status=status,
+        polymorphism=polymorphism,
+        witness=witness,
+        relation_profiles=tuple(relation_profiles),
+    )
 
 
 def check_homomorphism(
@@ -78,8 +348,24 @@ def check_homomorphism(
             message="carrier_map must be a finite sequence of exact integers",
         )
     admit_homomorphism_check(source, target, carrier_map)
-    checked_map = tuple(carrier_map)
     target_tables = tuple(set(table) for table in target.relation_tables)
+    return _check_homomorphism_admitted(
+        source, target, tuple(carrier_map), target_tables
+    )
+
+
+def _check_homomorphism_admitted(
+    source: FiniteRelationalStructure,
+    target: FiniteRelationalStructure,
+    checked_map: tuple[int, ...],
+    target_tables: tuple[set[tuple[int, ...]], ...],
+) -> HomomorphismCheckResult:
+    """Decide a map between already-admitted structures.
+
+    Search and count callers validate the structures and candidate space once,
+    then reuse the target membership indexes for each generated map. This
+    avoids serializing and revalidating both complete structures per map.
+    """
 
     witness: HomomorphismViolationWitness | None = None
     profiles: list[SymbolTransportProfile] = []
@@ -119,6 +405,198 @@ def check_homomorphism(
         carrier_map=checked_map,
         witness=witness,
         symbol_profiles=tuple(profiles),
+    )
+
+
+def csp_instance_to_source_structure(
+    instance: FiniteCspInstance,
+) -> FiniteRelationalStructure:
+    """Convert a CSP instance to its canonical source relational structure.
+
+    A relation tuple records a constraint's ordered variable scope. Repeated
+    occurrences with the same symbol and scope collapse in the mathematical
+    relation table, while their distinct IDs remain in the input instance.
+    For every assignment into the template, satisfying all occurrences is
+    equivalent to preserving every source relation tuple.
+    """
+
+    if not isinstance(instance, FiniteCspInstance):
+        raise OperationDomainValidationError(
+            location=("instance",),
+            code="relational.csp.instance_type",
+            message="instance must be a finite CSP instance",
+        )
+    _preflight_csp_instance(instance)
+    try:
+        admitted = FiniteCspInstance.model_validate(instance.model_dump(), strict=True)
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("instance",),
+            code="relational.csp.instance_shape",
+            message="instance must have valid variables, constraints, and template relations",
+        ) from exc
+    table_by_symbol: dict[str, set[tuple[int, ...]]] = {
+        symbol.symbol_id: set() for symbol in admitted.template.signature
+    }
+    for constraint in admitted.constraints:
+        table_by_symbol[constraint.symbol_id].add(constraint.scope)
+    return FiniteRelationalStructure(
+        carrier_size=admitted.variable_count,
+        signature=admitted.template.signature,
+        relation_tables=tuple(
+            tuple(sorted(table_by_symbol[symbol.symbol_id]))
+            for symbol in admitted.template.signature
+        ),
+    )
+
+
+def profile_csp_assignment(request: CspAssignmentRequest) -> CspAssignmentProfile:
+    """Evaluate a complete assignment at every named CSP constraint.
+
+    This is a one-map check, not an unsatisfiability search. All occurrences
+    are evaluated in declaration order so duplicate constraints and the first
+    violated occurrence remain observable. The complete canonical source
+    structure is available separately via ``csp.instance.to_source_structure``.
+    """
+
+    if not isinstance(request, CspAssignmentRequest):
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="relational.csp.assignment_request_type",
+            message="request must be a typed CSP assignment profile request",
+        )
+    _preflight_csp_instance(request.instance)
+    raw_assignment = request.assignment
+    if (
+        type(raw_assignment) is not tuple
+        or len(raw_assignment) > MAX_RELATIONAL_CARRIER
+        or any(type(value) is not int for value in raw_assignment)
+    ):
+        raise OperationDomainValidationError(
+            location=("assignment",),
+            code="relational.csp.assignment_shape",
+            message="assignment must be a bounded tuple of exact integer labels",
+        )
+    try:
+        instance = FiniteCspInstance.model_validate(
+            request.instance.model_dump(), strict=True
+        )
+        assignment = raw_assignment
+        CspAssignmentRequest(instance=instance, assignment=assignment)
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="relational.csp.assignment_shape",
+            message="request must contain one in-range template value per variable",
+        ) from exc
+
+    symbol_index = {
+        symbol.symbol_id: index
+        for index, symbol in enumerate(instance.template.signature)
+    }
+    relation_sets = tuple(map(set, instance.template.relation_tables))
+    evaluations_list: list[CspConstraintEvaluation] = []
+    for constraint in instance.constraints:
+        request_checkpoint("during CSP assignment profile evaluation")
+        target_tuple = tuple(assignment[variable] for variable in constraint.scope)
+        evaluations_list.append(
+            CspConstraintEvaluation(
+                constraint_id=constraint.constraint_id,
+                symbol_id=constraint.symbol_id,
+                scope=constraint.scope,
+                target_tuple=target_tuple,
+                allowed=target_tuple
+                in relation_sets[symbol_index[constraint.symbol_id]],
+            )
+        )
+    evaluations = tuple(evaluations_list)
+    first_violation = next((item for item in evaluations if not item.allowed), None)
+    return CspAssignmentProfile(
+        status="NOT_A_SOLUTION" if first_violation is not None else "SOLUTION",
+        instance=instance,
+        assignment=assignment,
+        evaluations=evaluations,
+        first_violation=first_violation,
+    )
+
+
+def _preflight_csp_instance(instance: FiniteCspInstance) -> None:
+    """Bound native values before recursively copying them for revalidation."""
+
+    template = instance.template
+    constraints = instance.constraints
+    invalid = (
+        type(template) is not FiniteRelationalStructure
+        or type(instance.variable_count) is not int
+        or not 0 <= instance.variable_count <= MAX_RELATIONAL_CARRIER
+        or not isinstance(constraints, tuple)
+        or len(constraints) > MAX_CSP_CONSTRAINTS
+    )
+    if invalid:
+        _raise_invalid_csp_instance()
+    assert type(template) is FiniteRelationalStructure
+    if (
+        type(template.carrier_size) is not int
+        or not 0 <= template.carrier_size <= MAX_RELATIONAL_CARRIER
+        or not isinstance(template.signature, tuple)
+        or len(template.signature) > MAX_RELATIONAL_SYMBOLS
+        or not isinstance(template.relation_tables, tuple)
+        or len(template.relation_tables) != len(template.signature)
+    ):
+        _raise_invalid_csp_instance()
+    template_rows = 0
+    symbol_arities: dict[str, int] = {}
+    for symbol, table in zip(template.signature, template.relation_tables, strict=True):
+        if (
+            type(symbol) is not FiniteRelationSymbol
+            or type(symbol.symbol_id) is not str
+            or type(symbol.arity) is not int
+            or not 0 <= symbol.arity <= MAX_RELATIONAL_ARITY
+            or not isinstance(table, tuple)
+            or len(table) > MAX_RELATIONAL_TABLE_ROWS
+        ):
+            _raise_invalid_csp_instance()
+        symbol_arities[symbol.symbol_id] = symbol.arity
+        template_rows += len(table)
+        if template_rows > MAX_RELATIONAL_TRANSPORT_TUPLES:
+            _raise_invalid_csp_instance()
+        for row in table:
+            if (
+                not isinstance(row, tuple)
+                or len(row) != symbol.arity
+                or any(
+                    type(value) is not int or not 0 <= value < template.carrier_size
+                    for value in row
+                )
+            ):
+                _raise_invalid_csp_instance()
+    scope_entries = 0
+    for constraint in constraints:
+        if (
+            type(constraint) is not FiniteCspConstraint
+            or type(constraint.symbol_id) is not str
+            or not isinstance(constraint.scope, tuple)
+            or len(constraint.scope) > MAX_RELATIONAL_ARITY
+        ):
+            _raise_invalid_csp_instance()
+        arity = symbol_arities.get(constraint.symbol_id)
+        if arity is None or len(constraint.scope) != arity:
+            _raise_invalid_csp_instance()
+        scope_entries += len(constraint.scope)
+        if scope_entries > MAX_CSP_SCOPE_ENTRIES:
+            _raise_invalid_csp_instance()
+        if any(
+            type(variable) is not int or not 0 <= variable < instance.variable_count
+            for variable in constraint.scope
+        ):
+            _raise_invalid_csp_instance()
+
+
+def _raise_invalid_csp_instance() -> None:
+    raise OperationDomainValidationError(
+        location=("instance",),
+        code="relational.csp.instance_shape",
+        message="instance must satisfy the bounded finite CSP structure contract",
     )
 
 
@@ -176,6 +654,7 @@ def _first_homomorphism(
     search so both see identical order and receipts.
     """
 
+    target_tables = tuple(set(table) for table in target.relation_tables)
     examined = 0
     for candidate in product(range(target.carrier_size), repeat=source.carrier_size):
         examined += 1
@@ -183,7 +662,7 @@ def _first_homomorphism(
             request_checkpoint("during homomorphism search enumeration")
         if require_injective and len(set(candidate)) != source.carrier_size:
             continue
-        check = check_homomorphism(source, target, candidate)
+        check = _check_homomorphism_admitted(source, target, candidate, target_tables)
         if check.status is HomomorphismStatus.HOMOMORPHISM:
             return check, examined
     if examined != total_candidates:
@@ -354,13 +833,14 @@ def count_homomorphisms(
     total_candidates, _transport_tuples = admit_homomorphism_search(source, target)
     count = 0
     examined = 0
+    target_tables = tuple(set(table) for table in target.relation_tables)
     for candidate in product(range(target.carrier_size), repeat=source.carrier_size):
         examined += 1
         if examined % 4_096 == 0:
             request_checkpoint("during homomorphism count enumeration")
-        if check_homomorphism(source, target, candidate).status is (
-            HomomorphismStatus.HOMOMORPHISM
-        ):
+        if _check_homomorphism_admitted(
+            source, target, candidate, target_tables
+        ).status is (HomomorphismStatus.HOMOMORPHISM):
             count += 1
     if examined != total_candidates:
         raise RuntimeError("homomorphism count did not scan its admitted space")
@@ -368,6 +848,38 @@ def count_homomorphisms(
         source=source,
         target=target,
         count=count,
+        total_candidates=total_candidates,
+    )
+
+
+def enumerate_homomorphisms(
+    source: FiniteRelationalStructure,
+    target: FiniteRelationalStructure,
+) -> HomomorphismEnumerationResult:
+    """Return every relation-preserving carrier map in canonical order."""
+    source = _admit_structure(source, "source")
+    target = _admit_structure(target, "target")
+    total_candidates, _transport_tuples = admit_homomorphism_enumeration(source, target)
+    target_tables = tuple(set(table) for table in target.relation_tables)
+    maps: list[tuple[int, ...]] = []
+    examined = 0
+    for candidate in product(range(target.carrier_size), repeat=source.carrier_size):
+        examined += 1
+        if examined % 4_096 == 0:
+            request_checkpoint("during homomorphism enumeration")
+        if (
+            _check_homomorphism_admitted(
+                source, target, candidate, target_tables
+            ).status
+            is HomomorphismStatus.HOMOMORPHISM
+        ):
+            maps.append(candidate)
+    if examined != total_candidates:
+        raise RuntimeError("homomorphism enumeration did not scan its admitted space")
+    return HomomorphismEnumerationResult._from_kernel(
+        source=source,
+        target=target,
+        carrier_maps=tuple(maps),
         total_candidates=total_candidates,
     )
 
@@ -466,11 +978,14 @@ def compute_core(
     while True:
         size = current.carrier_size
         step: tuple[int, ...] | None = None
+        target_tables = tuple(set(table) for table in current.relation_tables)
         for candidate in product(range(size), repeat=size):
             scanned += 1
             if scanned % 4_096 == 0:
                 request_checkpoint("during core endomorphism enumeration")
-            check = check_homomorphism(current, current, candidate)
+            check = _check_homomorphism_admitted(
+                current, current, candidate, target_tables
+            )
             if (
                 check.status is HomomorphismStatus.HOMOMORPHISM
                 and len(set(candidate)) < size
@@ -506,8 +1021,13 @@ def compute_core(
 
 __all__ = [
     "check_homomorphism",
+    "check_polymorphism",
     "compute_core",
     "count_homomorphisms",
+    "csp_instance_to_source_structure",
+    "induced_substructure",
+    "quotient_structure",
+    "reduct_structure",
     "search_embedding",
     "search_homomorphism",
 ]

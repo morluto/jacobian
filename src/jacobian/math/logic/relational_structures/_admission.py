@@ -13,11 +13,15 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
+from jacobian.canonical import CanonicalLimits, encode_strict_json
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
 from jacobian.math.logic.relational_structures.values import (
+    MAX_RELATIONAL_OPERATION_TABLE_CELLS,
+    MAX_RELATIONAL_POLYMORPHISM_ARITY,
+    MAX_RELATIONAL_SYMBOLS,
     MAX_RELATIONAL_TRANSPORT_TUPLES,
     FiniteRelationalStructure,
 )
@@ -28,9 +32,17 @@ from jacobian.math.logic.relational_structures.values import (
 # work cap bounds tuple replays, the dominant cost.
 MAX_SEARCH_CANDIDATES = 65_536
 MAX_SEARCH_TUPLE_REPLAYS = 1_048_576
+MAX_HOMOMORPHISM_ENUMERATION_OUTPUT_BYTES = 8 * 1_048_576
 # An induced embedding must decide membership for every tuple in every
 # Cartesian relation domain, not only the sparse positive rows.
 MAX_EMBEDDING_REFLECTION_CELLS = 1_048_576
+# A supplied m-ary polymorphism checks every element of each relation power
+# R^m. These caps independently bound relation-product enumeration and the
+# coordinate operations needed to build each output tuple.
+MAX_POLYMORPHISM_RELATION_COMBINATIONS = 65_536
+MAX_POLYMORPHISM_COORDINATE_WORK = 1_000_000
+MAX_INDUCED_SUBSTRUCTURE_WORK = 81_920
+MAX_RELATIONAL_REDUCT_WORK = 81_920
 
 
 def candidate_space(source_size: int, target_size: int) -> int:
@@ -45,6 +57,60 @@ def candidate_space(source_size: int, target_size: int) -> int:
     if target_size == 0:
         return 0
     return int(pow(target_size, source_size))
+
+
+def admit_polymorphism_check(
+    source: FiniteRelationalStructure, arity: int
+) -> tuple[int, int]:
+    """Preflight complete operation-table size and relation-power work.
+
+    Returns (operation table cells, coordinate work). No relation product or
+    membership index is constructed before this estimate succeeds.
+    """
+
+    if not 1 <= arity <= MAX_RELATIONAL_POLYMORPHISM_ARITY:
+        raise OperationDomainValidationError(
+            location=("arity",),
+            code="relational.polymorphism.arity",
+            message=(
+                f"polymorphism arity must lie in 1..{MAX_RELATIONAL_POLYMORPHISM_ARITY}"
+            ),
+        )
+    table_cells = source.carrier_size**arity
+    if table_cells > MAX_RELATIONAL_OPERATION_TABLE_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("operation_table",),
+            code="relational.polymorphism.table_bound",
+            message=(
+                f"the complete operation table has {table_cells} cells, exceeding "
+                f"the {MAX_RELATIONAL_OPERATION_TABLE_CELLS}-cell envelope"
+            ),
+        )
+    combinations = 0
+    coordinate_work = 0
+    for symbol, table in zip(source.signature, source.relation_tables, strict=True):
+        count = len(table) ** arity
+        combinations += count
+        coordinate_work += count * symbol.arity * arity
+    if combinations > MAX_POLYMORPHISM_RELATION_COMBINATIONS:
+        raise OperationResourceAdmissionError(
+            location=("source", "relation_tables"),
+            code="relational.polymorphism.relation_product_bound",
+            message=(
+                "complete relation products exceed the "
+                f"{MAX_POLYMORPHISM_RELATION_COMBINATIONS}-combination envelope"
+            ),
+        )
+    if coordinate_work > MAX_POLYMORPHISM_COORDINATE_WORK:
+        raise OperationResourceAdmissionError(
+            location=("source", "relation_tables"),
+            code="relational.polymorphism.coordinate_work_bound",
+            message=(
+                "coordinatewise operation work exceeds the "
+                f"{MAX_POLYMORPHISM_COORDINATE_WORK}-step envelope"
+            ),
+        )
+    return table_cells, coordinate_work
 
 
 def core_search_work(source_size: int, transport_tuples: int) -> int:
@@ -133,6 +199,164 @@ def embedding_reflection_cells(source: FiniteRelationalStructure) -> int:
         1 if symbol.arity == 0 else source.carrier_size**symbol.arity
         for symbol in source.signature
     )
+
+
+def admit_induced_substructure(
+    source: FiniteRelationalStructure, inclusion: Sequence[int]
+) -> tuple[int, int]:
+    """Preflight induced-table restriction and a conservative JSON result bound.
+
+    The ordered inclusion is the new-carrier-to-source map. Every source row
+    and each of its coordinates are charged. The
+    result repeats the source and returns a substructure no larger than it;
+    therefore twice the canonical source JSON size, plus the inclusion and
+    fixed framing, is a conservative serialized-output estimate.
+    """
+
+    if not isinstance(inclusion, Sequence) or isinstance(
+        inclusion, (str, bytes, bytearray)
+    ):
+        raise OperationDomainValidationError(
+            location=("inclusion",),
+            code="relational.induced_substructure.inclusion_shape",
+            message="inclusion must be an ordered finite sequence of source labels",
+        )
+    if len(inclusion) > source.carrier_size:
+        raise OperationDomainValidationError(
+            location=("inclusion",),
+            code="relational.induced_substructure.inclusion_size",
+            message="the selected carrier cannot exceed the source carrier",
+        )
+    if any(
+        not isinstance(label, int) or isinstance(label, bool) for label in inclusion
+    ):
+        raise OperationDomainValidationError(
+            location=("inclusion",),
+            code="relational.induced_substructure.inclusion_label",
+            message="every inclusion label must be an exact integer",
+        )
+    if len(set(inclusion)) != len(inclusion):
+        raise OperationDomainValidationError(
+            location=("inclusion",),
+            code="relational.induced_substructure.inclusion_injective",
+            message="the ordered carrier selection must contain distinct labels",
+        )
+    if any(not 0 <= label < source.carrier_size for label in inclusion):
+        raise OperationDomainValidationError(
+            location=("inclusion",),
+            code="relational.induced_substructure.inclusion_range",
+            message="every selected label must belong to the source carrier",
+        )
+
+    work = sum(
+        len(table) * (symbol.arity + 1)
+        for symbol, table in zip(source.signature, source.relation_tables, strict=True)
+    )
+    if work > MAX_INDUCED_SUBSTRUCTURE_WORK:
+        raise OperationResourceAdmissionError(
+            location=("source", "relation_tables"),
+            code="relational.induced_substructure.work_bound",
+            message=(
+                f"induced relation transport needs {work} row/coordinate visits, "
+                "exceeding the "
+                f"{MAX_INDUCED_SUBSTRUCTURE_WORK}-visit envelope"
+            ),
+        )
+
+    source_json_bytes = len(source.model_dump_json().encode("utf-8"))
+    output_bound = 2 * source_json_bytes + 4 * len(inclusion) + 256
+    max_output_bytes = CanonicalLimits().max_output_bytes
+    if output_bound > max_output_bytes:
+        raise OperationResourceAdmissionError(
+            location=("source",),
+            code="relational.induced_substructure.output_bound",
+            message=(
+                f"the conservative induced-substructure JSON bound is "
+                f"{output_bound} bytes, exceeding the {max_output_bytes}-byte "
+                "canonical output limit"
+            ),
+        )
+    return work, output_bound
+
+
+def admit_relational_reduct(
+    source: FiniteRelationalStructure, symbol_ids: Sequence[str]
+) -> tuple[tuple[int, ...], int, int]:
+    """Preflight selected relation-table copying for one reduct.
+
+    Returns source signature indices in canonical source order, total row and
+    coordinate-copy work, and a conservative bound for the complete result.
+    The result contains both the original source and the copied reduct.
+    """
+
+    if not isinstance(symbol_ids, Sequence) or isinstance(
+        symbol_ids, (str, bytes, bytearray)
+    ):
+        raise OperationDomainValidationError(
+            location=("symbol_ids",),
+            code="relational.reduct.symbol_ids_shape",
+            message="symbol_ids must be an ordered finite sequence of relation IDs",
+        )
+    if len(symbol_ids) > MAX_RELATIONAL_SYMBOLS:
+        raise OperationDomainValidationError(
+            location=("symbol_ids",),
+            code="relational.reduct.symbol_ids_size",
+            message="selected relation IDs exceed the signature-size bound",
+        )
+    if any(type(symbol_id) is not str for symbol_id in symbol_ids):
+        raise OperationDomainValidationError(
+            location=("symbol_ids",),
+            code="relational.reduct.symbol_id_type",
+            message="selected relation IDs must be exact strings",
+        )
+    if len(set(symbol_ids)) != len(symbol_ids):
+        raise OperationDomainValidationError(
+            location=("symbol_ids",),
+            code="relational.reduct.symbol_ids_not_unique",
+            message="selected relation IDs must be unique",
+        )
+
+    selected = set(symbol_ids)
+    source_ids = tuple(symbol.symbol_id for symbol in source.signature)
+    unknown = selected.difference(source_ids)
+    if unknown:
+        raise OperationDomainValidationError(
+            location=("symbol_ids",),
+            code="relational.reduct.symbol_id_unknown",
+            message="every selected relation ID must belong to the source signature",
+        )
+    indices = tuple(
+        index for index, symbol_id in enumerate(source_ids) if symbol_id in selected
+    )
+    work = sum(
+        1 + len(source.relation_tables[index]) * (source.signature[index].arity + 1)
+        for index in indices
+    )
+    if work > MAX_RELATIONAL_REDUCT_WORK:
+        raise OperationResourceAdmissionError(
+            location=("source", "relation_tables"),
+            code="relational.reduct.work_bound",
+            message=(
+                f"reduct copying needs {work} row and coordinate visits, "
+                f"exceeding the {MAX_RELATIONAL_REDUCT_WORK}-visit envelope"
+            ),
+        )
+
+    source_bytes = len(source.model_dump_json().encode("utf-8"))
+    # The result serializes the source once and a reduct no larger than that
+    # source, plus object keys and at most eight small integer map entries.
+    output_bound = 2 * source_bytes + 256 + 12 * len(indices)
+    max_output_bytes = CanonicalLimits().max_output_bytes
+    if output_bound > max_output_bytes:
+        raise OperationResourceAdmissionError(
+            location=("source",),
+            code="relational.reduct.output_bound",
+            message=(
+                f"the reduct output may need {output_bound} bytes, exceeding "
+                f"the {max_output_bytes}-byte canonical output limit"
+            ),
+        )
+    return indices, work, output_bound
 
 
 def admit_embedding_search(
@@ -248,6 +472,38 @@ def admit_homomorphism_search(
     return space, transport_tuples
 
 
+def admit_homomorphism_enumeration(
+    source: FiniteRelationalStructure,
+    target: FiniteRelationalStructure,
+) -> tuple[int, int]:
+    """Admit complete homomorphism enumeration including a conservative output bound."""
+    space, transport_tuples = admit_homomorphism_search(source, target)
+    # The result echoes both structures, so charge their exact canonical JSON
+    # size as well as a conservative integer/list bound for every map.
+    retained_sources = len(
+        encode_strict_json(
+            {
+                "source": source.model_dump(mode="json"),
+                "target": target.model_dump(mode="json"),
+            }
+        )
+    )
+    # The factor intentionally exceeds the largest canonical carrier label,
+    # including commas, nested list framing, and map tuple framing.
+    output_bound = retained_sources + space * (4 + 8 * source.carrier_size) + 128
+    if output_bound > MAX_HOMOMORPHISM_ENUMERATION_OUTPUT_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("source",),
+            code="relational.homomorphism.enumeration_output",
+            message=(
+                f"the complete map list has a conservative {output_bound}-byte "
+                f"output bound, exceeding the "
+                f"{MAX_HOMOMORPHISM_ENUMERATION_OUTPUT_BYTES}-byte envelope"
+            ),
+        )
+    return space, transport_tuples
+
+
 def admit_core_computation(source: FiniteRelationalStructure) -> int:
     """Preflight one core iteration; return its worst-case replay work.
 
@@ -273,6 +529,9 @@ def admit_core_computation(source: FiniteRelationalStructure) -> int:
 
 __all__ = [
     "MAX_EMBEDDING_REFLECTION_CELLS",
+    "MAX_INDUCED_SUBSTRUCTURE_WORK",
+    "MAX_POLYMORPHISM_COORDINATE_WORK",
+    "MAX_POLYMORPHISM_RELATION_COMBINATIONS",
     "MAX_RELATIONAL_TRANSPORT_TUPLES",
     "MAX_SEARCH_CANDIDATES",
     "MAX_SEARCH_TUPLE_REPLAYS",
@@ -280,6 +539,8 @@ __all__ = [
     "admit_embedding_search",
     "admit_homomorphism_check",
     "admit_homomorphism_search",
+    "admit_induced_substructure",
+    "admit_polymorphism_check",
     "candidate_space",
     "core_search_work",
     "embedding_reflection_cells",

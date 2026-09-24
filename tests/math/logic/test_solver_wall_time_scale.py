@@ -41,8 +41,9 @@ def _threshold_3sat_request(*, timeout_ms: int) -> SatSolveRequest:
 
 @pytest.mark.scale
 def test_sat_solver_finishes_near_threshold_work_with_extended_wall_time() -> None:
-    result = solve_sat(_threshold_3sat_request(timeout_ms=120_000))
+    request = _threshold_3sat_request(timeout_ms=120_000)
+    result = solve_sat(request)
 
     assert result.outcome == "UNSAT"
     assert result.assignment is None
-    assert result.source.cnf == _threshold_3sat_request(timeout_ms=1_000).cnf
+    assert result.source.cnf == request.cnf

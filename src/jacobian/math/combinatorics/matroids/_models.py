@@ -568,6 +568,8 @@ class MatroidWeightedIntersectionOptimizationRequest(StrictModel):
                     "rank-oracle exchange-circuit construction",
                     "reachable-set, tight-edge, and dual-slack scans",
                     "integral weight-split intermediate arithmetic",
+                    "one bounded source-field primality check",
+                    "selected-matrix copies and residue validation",
                     "final common-set feasibility ranks",
                     "source-bound result serialization",
                 ],

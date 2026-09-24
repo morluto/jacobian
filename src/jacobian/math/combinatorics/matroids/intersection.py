@@ -31,7 +31,15 @@ from jacobian.math.combinatorics.matroids.operations import (
     _rank_work,
     _selected_columns_matrix,
 )
-from jacobian.math.matrices.finite_fields.linear_algebra import rank as pf_rank
+from jacobian.math.matrices.finite_fields.linear_algebra import (
+    _admit_prime,
+)
+from jacobian.math.matrices.finite_fields.linear_algebra import (
+    _rank_admitted as pf_rank_admitted,
+)
+from jacobian.math.matrices.finite_fields.linear_algebra import (
+    rank as pf_rank,
+)
 
 MAX_INTERSECTION_GROUND = 256
 # The oracle kernel has O(n^3) exchange probes.  A rank probe is charged for
@@ -78,6 +86,10 @@ def _weighted_intersection_optimization_admission(
     # ranks; all requests are admitted before the first such test.
     calls_per_source = n * (n + 1) ** 2 + 1
     rank_work = calls_per_source * (rank_cost_first + rank_cost_second)
+    # The rank estimate dominates each selected-column copy and residue
+    # validation (rows*n*min(rows,n) >= rows*k for every k <= n). Prime
+    # validation is performed once per operation and charged separately.
+    prime_validation_work = 1024
 
     update_rounds = n * (n + 1)
     scan_visits = 16 * n * n * update_rounds + 4 * n * n * (n + 1) + 2 * n * n
@@ -111,7 +123,8 @@ def _weighted_intersection_optimization_admission(
         + 512
     )
     if (
-        rank_work + arithmetic_work > MAX_WEIGHTED_INTERSECTION_WORK
+        rank_work + arithmetic_work + prime_validation_work
+        > MAX_WEIGHTED_INTERSECTION_WORK
         or output_bytes > MAX_WEIGHTED_INTERSECTION_OUTPUT_BYTES
     ):
         raise OperationResourceAdmissionError(
@@ -560,8 +573,8 @@ def _weighted_exchange_graph(
         if outside in chosen:
             continue
         plus = (*chosen, outside)
-        first_addable = _independent(first, plus)
-        second_addable = _independent(second, plus)
+        first_addable = _weighted_independent(first, plus)
+        second_addable = _weighted_independent(second, plus)
         if first_addable:
             sources.append(outside)
         if second_addable:
@@ -570,11 +583,22 @@ def _weighted_exchange_graph(
             continue
         for index, inside in enumerate(chosen):
             exchanged = (*chosen[:index], *chosen[index + 1 :], outside)
-            if not first_addable and _independent(first, exchanged):
+            if not first_addable and _weighted_independent(first, exchanged):
                 first_arcs.append((inside, outside))
-            if not second_addable and _independent(second, exchanged):
+            if not second_addable and _weighted_independent(second, exchanged):
                 second_arcs.append((outside, inside))
     return first_arcs, second_arcs, sources, sinks
+
+
+def _weighted_independent(matroid: LinearMatroid, subset: Sequence[int]) -> bool:
+    return len(subset) == _weighted_rank(matroid, subset)
+
+
+def _weighted_rank(matroid: LinearMatroid, indices: Sequence[int]) -> int:
+    if not indices:
+        return 0
+    matrix = _selected_columns_matrix(matroid, list(indices))
+    return pf_rank_admitted(matrix)
 
 
 def _weighted_tight_adjacency(
@@ -687,9 +711,10 @@ def maximum_weight_matroid_intersection(
         first, request.weight_function
     )
     _weighted_intersection_optimization_admission(first, second, weights)
+    _admit_prime(first.matrix.prime)
     selected = _weighted_matroid_intersection_admitted(first, second, weights)
-    rank_first = _rank(first, selected)
-    rank_second = _rank(second, selected)
+    rank_first = _weighted_rank(first, selected)
+    rank_second = _weighted_rank(second, selected)
     if rank_first != len(selected) or rank_second != len(selected):
         raise OperationDomainValidationError(
             location=("common_independent",),

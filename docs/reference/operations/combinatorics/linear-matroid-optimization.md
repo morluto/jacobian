@@ -171,8 +171,9 @@ optimality witness. The algorithm and its correctness argument are in
 
 The request admits at most 256 ground elements, the existing 11-decimal-digit
 weight limit, and an 8 MiB source-bound result. Admission accounts for the
-exchange rank calls, every reachable-graph and slack scan, and the maximum
-integer width of the private split before the first rank expansion. With `n`
+exchange rank calls, selected-matrix copies and residue validation, one
+bounded source-prime check, every reachable-graph and slack scan, and the
+maximum integer width of the private split before the first rank expansion. With `n`
 elements, `rᵢ=max(1, rowsᵢ)`, `κᵢ=rᵢ n min(rᵢ,n)`, and
 `q=n(n+1)²+1`, the rank work bound is `q(κ₁+κ₂)`. Schrijver's termination bound
 gives at most `T=n(n+1)` dual adjustments. If input weights have at most `d`
@@ -180,8 +181,22 @@ digits, the split entries have at most
 `D=d+ceil(log₁₀(2)+T log₁₀(3))` digits by the recurrence
 `B'≤3B+2·10ᵈ`; at most `L=ceil(D/9)` decimal limbs are charged per arithmetic
 scan. The scan bound is
-`16 n²T + 4 n²(n+1) + 2 n²`. Requests exceeding the combined 50,000,000-unit
+`16 n²T + 4 n²(n+1) + 2 n²`. The kernel tests the admitted field prime once
+and uses the admitted-prime rank entry point for exchange probes. Each `κᵢ`
+charge dominates a selected-column matrix copy and canonical-residue checks.
+Requests exceeding the combined 50,000,000-unit
 rank-and-arithmetic envelope, the 1,024-digit intermediate cap, or output
 bound are rejected before rank computation. This favors smaller grounds or
 low-row representations; the bound retains an exact finite envelope rather
 than a wall-clock timeout.
+
+This optimizer currently returns the exact candidate and objective without a
+replayable rank-dual witness. Its internal Frank split only proves optimality
+within each fixed cardinality and can fail the unrestricted split checker,
+including on disjoint loop/nonloop sources. The separate rank-dual checker
+accepts such witnesses, but this kernel does not construct them. Treat this
+optimizer as a prerequisite implementation, not completion of issue #1802's
+weighted-intersection acceptance. A follow-up needs a bounded dual-producing
+algorithm; the TDI and chain-support existence proof in [Goemans, Lecture
+12](https://math.mit.edu/~goemans/18438F09/lec12.pdf) does not by itself
+extract the multipliers.

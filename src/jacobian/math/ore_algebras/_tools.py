@@ -12,6 +12,8 @@ from jacobian.math.ore_algebras._models import (
     DifferentialOperatorMultiplyResult,
     DifferentialOperatorNormalizeRequest,
     DifferentialOperatorNormalizeResult,
+    PolynomialRecurrencePrefix,
+    PolynomialRecurrencePrefixRequest,
     ShiftOperatorAddRequest,
     ShiftOperatorAddResult,
     ShiftOperatorMultiplyRequest,
@@ -30,6 +32,7 @@ from jacobian.math.ore_algebras.operations import (
     differential_operator_apply,
     differential_operator_multiply,
     differential_operator_normalize_polynomial_coefficients,
+    polynomial_recurrence_generate_prefix,
     shift_operator_add,
     shift_operator_apply_to_sequence_prefix,
     shift_operator_multiply,
@@ -238,6 +241,52 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                     ),
                     "start_index": 0,
                     "sequence": {"values": ["0", "1", "1", "2", "3", "5"]},
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="ore.shift.recurrence.generate_finite_prefix.compute",
+        title="Generate a finite prefix from a polynomial recurrence",
+        description=(
+            "Generate an exact rational sequence prefix from polynomial "
+            "coefficients in QQ[n], consecutive initial values, and a finite "
+            "index interval. The leading coefficient must be nonzero at each "
+            "generated index. The result represents only those finite "
+            "recurrence equations and does not assert an infinite sequence."
+        ),
+        request_type=PolynomialRecurrencePrefixRequest,
+        result_type=PolynomialRecurrencePrefix,
+        run=lambda request: polynomial_recurrence_generate_prefix(
+            request.operator,
+            request.start_index,
+            request.initial_values,
+            request.steps,
+        ),
+        tags=("ore-algebra", "recurrence", "finite-prefix", "exact"),
+        discovery_terms=(
+            "generate sequence prefix from recurrence",
+            "polynomial recurrence finite initial value problem",
+            "P-recursive finite prefix",
+        ),
+        examples=(
+            OperationExample(
+                name="fibonacci_finite_recurrence_prefix",
+                description=(
+                    "Generate five further Fibonacci values from S^2-S-1; "
+                    "the recurrence is asserted only at the five generated indices."
+                ),
+                input={
+                    "operator": _operator(
+                        [
+                            (0, _rf_num_den([(-1, [0])], [(1, [0])])),
+                            (1, _rf_num_den([(-1, [0])], [(1, [0])])),
+                            (2, _one()),
+                        ]
+                    ),
+                    "start_index": 0,
+                    "initial_values": {"values": ["0", "1"]},
+                    "steps": 5,
                 },
             ),
         ),

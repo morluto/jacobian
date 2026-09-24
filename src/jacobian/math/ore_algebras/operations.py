@@ -22,6 +22,8 @@ from jacobian.math.ore_algebras._models import (
     MAX_DIFFERENTIAL_ADDITIVE_WORK_CELLS,
     MAX_DIFFERENTIAL_ORDER,
     MAX_DIFFERENTIAL_TERMS,
+    MAX_RECURRENCE_PREFIX_OUTPUT_BYTES,
+    MAX_RECURRENCE_PREFIX_WORK_CELLS,
     MAX_SHIFT_ADDITIVE_OUTPUT_BYTES,
     MAX_SHIFT_ADDITIVE_WORK_CELLS,
     MAX_SHIFT_COEFFICIENT_DEGREE,
@@ -44,6 +46,8 @@ from jacobian.math.ore_algebras._models import (
     DifferentialOperatorMultiplyResult,
     DifferentialOperatorNormalizeResult,
     DifferentialOreOperator,
+    PolynomialRecurrencePrefix,
+    PolynomialRecurrencePrefixRequest,
     ShiftMultiplyLedgerRow,
     ShiftOperatorAddResult,
     ShiftOperatorMultiplyResult,
@@ -1386,6 +1390,189 @@ def shift_operator_apply_to_sequence_prefix(
         tuple(rows),
         tuple(exclusions),
         right_boundary_indices,
+    )
+
+
+def _preflight_recurrence_coefficients(
+    request: PolynomialRecurrencePrefixRequest,
+    operator: ShiftOreOperator,
+    coefficients: dict[int, _Poly],
+    order: int,
+    coefficient_terms: int,
+) -> dict[int, _Poly]:
+    """Prove coefficient-height/output bounds, then clear denominators."""
+    denominator_digit_bound = sum(
+        _digit_count(value.denominator)
+        for poly in coefficients.values()
+        for value in poly.values()
+    )
+    max_index = max(
+        abs(request.start_index),
+        abs(request.start_index + request.steps + order - 1),
+        1,
+    )
+    max_coefficient_digits = max(
+        (
+            _digit_count(value.numerator)
+            for poly in coefficients.values()
+            for value in poly.values()
+        ),
+        default=1,
+    )
+    max_degree = max(
+        (degree for poly in coefficients.values() for degree in poly), default=0
+    )
+    c_digits = (
+        denominator_digit_bound
+        + max_coefficient_digits
+        + max_degree * _digit_count(max_index)
+        + coefficient_terms.bit_length()
+        + 2
+    )
+    initial_height = max(
+        (
+            max(_digit_count(v.num), _digit_count(v.den))
+            for v in request.initial_values.values
+        ),
+        default=1,
+    )
+    height = initial_height
+    for _ in range(request.steps):
+        height = order * height + (order + 1) * c_digits + order.bit_length() + 2
+        if height > MAX_CANONICAL_RATIONAL_DIGITS:
+            raise OperationResourceAdmissionError(
+                location=("steps",),
+                code="ore_algebra.recurrence_coefficient_growth",
+                message="finite recurrence coefficient-growth bound exceeds the exact rational carrier",
+            )
+    index_digits = _digit_count(max(1, max_index))
+    predicted_bytes = (
+        _operator_representation_byte_bound(operator)
+        + (order + request.steps) * (2 * height + 96 + 24 + 3 * index_digits)
+        + 512
+    )
+    if predicted_bytes > MAX_RECURRENCE_PREFIX_OUTPUT_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("steps",),
+            code="ore_algebra.recurrence_output_bytes",
+            message="finite recurrence output exceeds its admitted byte budget",
+        )
+
+    common_denominator = 1
+    for poly in coefficients.values():
+        for value in poly.values():
+            common_denominator = (
+                common_denominator
+                * value.denominator
+                // gcd(common_denominator, value.denominator)
+            )
+    return {
+        exponent: {degree: value * common_denominator for degree, value in poly.items()}
+        for exponent, poly in coefficients.items()
+    }
+
+
+def polynomial_recurrence_generate_prefix(
+    operator: ShiftOreOperator | Mapping[str, Any],
+    start_index: int,
+    initial_values: FiniteRationalSequence | Mapping[str, Any],
+    steps: int,
+) -> PolynomialRecurrencePrefix:
+    """Generate a finite solution prefix of a polynomial-coefficient recurrence.
+
+    The returned relation is only asserted at ``steps`` consecutive integer
+    indices. No global recurrence or infinite sequence is represented.
+    """
+    try:
+        request = PolynomialRecurrencePrefixRequest.model_validate(
+            {
+                "operator": operator.model_dump()
+                if isinstance(operator, ShiftOreOperator)
+                else operator,
+                "start_index": start_index,
+                "initial_values": initial_values.model_dump()
+                if isinstance(initial_values, FiniteRationalSequence)
+                else initial_values,
+                "steps": steps,
+            }
+        )
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="ore_algebra.finite_recurrence_request",
+            message="the recurrence, initial values, index range, or step count is invalid",
+        ) from exc
+
+    op = _admit_polynomial_shift_operator(request.operator, label="operator")
+    order = op.order
+    coefficients = {
+        term.exponent: _decode_poly(term.coefficient.numerator.terms)
+        for term in op.terms
+    }
+    coefficient_terms = sum(len(poly) for poly in coefficients.values())
+    work = (
+        request.steps
+        * max(1, len(coefficients))
+        * max(1, max((len(p) for p in coefficients.values()), default=0))
+    )
+    if work > MAX_RECURRENCE_PREFIX_WORK_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("operator",),
+            code="ore_algebra.recurrence_work",
+            message="finite recurrence generation exceeds its admitted coefficient-evaluation work",
+        )
+
+    # Admission proves height/output limits before denominator clearing or
+    # recurrence expansion.
+    integer_coefficients = _preflight_recurrence_coefficients(
+        request, op, coefficients, order, coefficient_terms
+    )
+
+    leading = integer_coefficients[order]
+
+    def evaluate(poly: dict[int, Fraction], index: int) -> Fraction:
+        return sum(
+            (value * index**degree for degree, value in poly.items()), Fraction(0)
+        )
+
+    # Check the complete declared finite recurrence interval before generating
+    # any values, so a singular leading coefficient cannot leave partial output.
+    leading_values = tuple(
+        evaluate(leading, request.start_index + step) for step in range(request.steps)
+    )
+    if any(value == 0 for value in leading_values):
+        raise OperationDomainValidationError(
+            location=("operator", "leading_coefficient"),
+            code="ore_algebra.singular_leading_coefficient",
+            message="the leading recurrence coefficient vanishes on the declared finite index interval",
+        )
+
+    values = [value.as_fraction() for value in request.initial_values.values]
+    recurrence_indices = tuple(
+        request.start_index + step for step in range(request.steps)
+    )
+    for step, index in enumerate(recurrence_indices):
+        total = Fraction(0)
+        for exponent, poly in integer_coefficients.items():
+            if exponent == order:
+                continue
+            total += evaluate(poly, index) * values[step + exponent]
+        value = -total / leading_values[step]
+        if (
+            max(_digit_count(value.numerator), _digit_count(value.denominator))
+            > MAX_CANONICAL_RATIONAL_DIGITS
+        ):
+            raise OperationResourceAdmissionError(
+                location=("values", step + order),
+                code="ore_algebra.recurrence_coefficient_growth",
+                message="generated recurrence value exceeds the exact rational carrier",
+            )
+        values.append(value)
+    sequence = FiniteRationalSequence.model_validate(
+        {"values": [CanonicalRational.from_fraction(value) for value in values]}
+    )
+    return PolynomialRecurrencePrefix._from_kernel(
+        op, request.start_index, recurrence_indices, sequence
     )
 
 

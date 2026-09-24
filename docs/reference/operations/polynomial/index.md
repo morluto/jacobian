@@ -90,6 +90,7 @@ to another polynomial operation.
 - [Differential Ore operator addition](ore-differential-addition.md)
 - [Polynomial-coefficient Ore operators](ore-shift-polynomial-algebra.md)
 - [Shift Ore operator powers](ore-shift-operator-powers.md)
+- [Finite prefixes from polynomial recurrences](ore-shift-finite-recurrence.md)
 - [Finite sequence prefixes for shift operators](ore-shift-sequence-prefix.md)
 
 - [Exact cyclotomic polynomials](cyclotomic.md)

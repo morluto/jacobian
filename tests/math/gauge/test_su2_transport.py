@@ -17,6 +17,7 @@ from jacobian.math.gauge._models import (
 from jacobian.math.gauge._su2_models import (
     SU2GaugeEdgeValue,
     SU2GaugeField,
+    SU2GaugeTransformRequest,
     SU2GaugeVertexValue,
     SU2HolonomyResult,
 )
@@ -212,6 +213,47 @@ def test_wilson_trace_is_invariant_under_an_exact_gauge_transform() -> None:
     )
     assert coordinates_of(moved_loop.holonomy) == expected
     assert su2_wilson_trace(moved_loop).trace == su2_wilson_trace(source_loop).trace
+
+
+def test_reordered_frames_are_canonicalized_and_compose_through_the_request() -> None:
+    field = _field()
+    frames = (
+        SU2GaugeVertexValue(vertex="v3", value=q(*IDENTITY)),
+        SU2GaugeVertexValue(vertex="v2", value=q(*LINKS[1])),
+        SU2GaugeVertexValue(vertex="v1", value=q(*IDENTITY)),
+        SU2GaugeVertexValue(vertex="v0", value=q(*LINKS[0])),
+    )
+    result = su2_gauge_transform(field, frames)
+    assert tuple(entry.vertex for entry in result.vertex_values) == (
+        field.lattice.vertices
+    )
+    restored = SU2GaugeTransformRequest.model_validate_json(
+        SU2GaugeTransformRequest(
+            field=field, vertex_values=result.vertex_values
+        ).model_dump_json()
+    )
+    assert restored.vertex_values == result.vertex_values
+    again = su2_gauge_transform(restored.field, restored.vertex_values)
+    assert again.transformed == result.transformed
+    assert again.vertex_values == result.vertex_values
+    reordered = SU2GaugeTransformRequest(field=field, vertex_values=frames)
+    moved = su2_gauge_transform(reordered.field, reordered.vertex_values)
+    assert moved.transformed == result.transformed
+    assert moved.vertex_values == result.vertex_values
+
+
+def test_duplicate_frames_do_not_claim_full_vertex_coverage() -> None:
+    field = _field()
+    frames = (
+        SU2GaugeVertexValue(vertex="v0", value=q(*IDENTITY)),
+        SU2GaugeVertexValue(vertex="v0", value=q(*LINKS[0])),
+        SU2GaugeVertexValue(vertex="v1", value=q(*IDENTITY)),
+        SU2GaugeVertexValue(vertex="v2", value=q(*IDENTITY)),
+    )
+    with pytest.raises(OperationDomainValidationError):
+        su2_gauge_transform(field, frames)
+    with pytest.raises(ValueError, match="transform_vertices"):
+        SU2GaugeTransformRequest(field=field, vertex_values=frames)
 
 
 def test_wilson_traces_are_native_helpers_not_catalog_operations() -> None:

@@ -207,8 +207,12 @@ def su2_gauge_transform(
         )
         transformed.append(SU2GaugeEdgeValue(edge_id=edge.edge_id, value=value))
     output = SU2GaugeField(lattice=field.lattice, edge_values=tuple(transformed))
+    canonical_frames = tuple(
+        SU2GaugeVertexValue(vertex=vertex, value=frames[vertex])
+        for vertex in field.lattice.vertices
+    )
     return SU2GaugeTransformResult(
-        source=field, transformed=output, vertex_values=vertex_values
+        source=field, transformed=output, vertex_values=canonical_frames
     )
 
 

@@ -8,6 +8,19 @@ from jacobian.math.number_theory.quadratic_forms.general._extra_models import (
     ThetaSeriesPrefixRequest,
     ThetaSeriesPrefixResult,
 )
+from jacobian.math.number_theory.quadratic_forms.general.characteristic_two import (
+    FiniteFieldQuadraticCrossTerm,
+    FiniteFieldQuadraticEvaluationRequest,
+    FiniteFieldQuadraticEvaluationResult,
+    FiniteFieldQuadraticForm,
+    FiniteFieldQuadraticPairingRequest,
+    FiniteFieldQuadraticPairingResult,
+    FiniteFieldQuadraticVector,
+)
+from jacobian.math.number_theory.quadratic_forms.general.characteristic_two_operations import (
+    evaluate_finite_field_quadratic_form,
+    polar_pairing_finite_field_quadratic_form,
+)
 from jacobian.math.number_theory.quadratic_forms.general.direct_sum_models import (
     QuadraticFormDirectSumRequest,
     QuadraticFormDirectSumResult,
@@ -43,6 +56,13 @@ from jacobian.math.number_theory.quadratic_forms.general.values import (
 __all__ = [
     "FiniteBoxProfileRequest",
     "FiniteBoxProfileResult",
+    "FiniteFieldQuadraticCrossTerm",
+    "FiniteFieldQuadraticEvaluationRequest",
+    "FiniteFieldQuadraticEvaluationResult",
+    "FiniteFieldQuadraticForm",
+    "FiniteFieldQuadraticPairingRequest",
+    "FiniteFieldQuadraticPairingResult",
+    "FiniteFieldQuadraticVector",
     "FiniteGaussSumRequest",
     "FiniteGaussSumResult",
     "QuadraticCrossTerm",
@@ -57,9 +77,11 @@ __all__ = [
     "bilinear_pairing",
     "coefficient_matrix",
     "coefficient_matrix_entries",
+    "evaluate_finite_field_quadratic_form",
     "evaluate_rational_quadratic_form",
     "finite_box_value_profile",
     "finite_quadratic_gauss_sum",
+    "polar_pairing_finite_field_quadratic_form",
     "quadratic_form_direct_sum",
     "quadratic_form_restrict_coordinates",
     "require_coefficient_matrix_budget",

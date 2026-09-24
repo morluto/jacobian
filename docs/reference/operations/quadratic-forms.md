@@ -19,6 +19,26 @@ associated polar matrix is derived as `B_ii = 2 a_i`, `B_ij = c_ij`, so its
 half-polar Gram matrix has off-diagonal entries `c_ij / 2`. Derived matrices
 are deliberately not independently accepted or returned by this leaf.
 
+## Characteristic-two finite-field forms
+
+`quadratic_form.characteristic_two.evaluate.compute` and
+`quadratic_form.characteristic_two.polar_pairing.compute` use the separate
+`FiniteFieldQuadraticForm` carrier over one explicit `FiniteFieldPresentation`
+of characteristic two. Its polynomial coefficients are field elements:
+
+```text
+Q(x) = sum_i a_i*x_i^2 + sum_{i<j} c_ij*x_i*x_j.
+```
+
+The diagonal coefficients remain stored and contribute to evaluation. The
+polar pairing is
+`B_Q(x,y) = sum_{i<j} c_ij*(x_i*y_j + x_j*y_i)`: square terms cancel in
+characteristic two, so the polar form alone does not determine Q. Vectors,
+forms, and outputs retain the exact field presentation and ordered axis. The
+current slice admits at most 256 axes and 4096 total polynomial terms; field
+admission checks the finite-field presentation before arithmetic. These two
+operations do not claim classification, parity, isometry, or nonsingularity.
+
 Evaluation is direct exact rational arithmetic. It supports degenerate and
 indefinite forms because one value at one supplied vector is always finite;
 the theta-prefix operation below has a separate positive-definite integral

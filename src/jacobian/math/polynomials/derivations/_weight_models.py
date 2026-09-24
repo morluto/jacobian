@@ -11,10 +11,14 @@ from jacobian.math.polynomials.values import (
     PolynomialVariable,
     RationalLaurentPolynomial,
     RationalPolynomial,
+    SparseRationalPolynomial,
 )
 
 MAX_DIAGONAL_WEIGHT = 64
 MAX_WEIGHT_ACTION_TERMS = 256
+# The Laurent coaction carrier reserves its eighth axis for the parameter, so
+# the source ring of a weight action is bounded like the Ga-action carrier.
+MAX_WEIGHT_ACTION_VARIABLES = 7
 MAX_WEIGHT_ACTION_DEGREE = 64
 MAX_GM_INVARIANT_DEGREE = 64
 MAX_GM_INVARIANT_MONOMIALS = 4_096
@@ -49,6 +53,13 @@ class PolynomialWeightActionRequest(StrictModel):
         if self.parameter in self.action.variables:
             raise ValueError(
                 "the Laurent parameter must be distinct from ring variables"
+            )
+        if len(self.action.variables) > MAX_WEIGHT_ACTION_VARIABLES:
+            raise ValueError(
+                "the diagonal action is bounded to "
+                f"{MAX_WEIGHT_ACTION_VARIABLES} source variables because the "
+                "Laurent coaction carrier reserves its eighth axis for the "
+                "parameter"
             )
         return self
 
@@ -89,7 +100,8 @@ class PolynomialWeightActionResult(StrictModel):
         zero = next((c.polynomial for c in self.components if c.weight == 0), None)
         if zero is None:
             zero = RationalPolynomial(
-                variables=self.action.variables, polynomial={"terms": []}
+                variables=self.action.variables,
+                polynomial=SparseRationalPolynomial(terms=()),
             )
         if zero != self.weight_zero:
             raise ValueError(

@@ -14,11 +14,12 @@ Laurent coaction, every nonzero integer-weight component, and the weight-zero
 polynomial. Negative weights are represented by the existing exact sparse
 Laurent value; no coefficient field extension is needed.
 
-The accepted envelope is at most 8 variables, weights of magnitude at most 64,
-256 source terms, total degree at most 64, and 128 decimal digits per rational
-coefficient. The induced Laurent exponent is bounded by 4096. These checks run
-before coaction terms and projections are constructed. Result terms cannot
-exceed the source term count.
+The accepted envelope is at most 7 source variables — the Laurent coaction
+carrier reserves its eighth axis for the parameter — weights of magnitude at
+most 64, 256 source terms, total degree at most 64, and 128 decimal digits per
+rational coefficient. The induced Laurent exponent is bounded by 4096. These
+checks run before coaction terms and projections are constructed. Result terms
+cannot exceed the source term count.
 
 For every monomial, the exponent is the dot product `w.e`. Setting `t=1`
 therefore gives the counit identity. Under multiplication of parameters, the

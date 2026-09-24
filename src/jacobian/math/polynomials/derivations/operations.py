@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from fractions import Fraction
 from math import factorial
 from typing import Any
 
+from pydantic import ValidationError
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
@@ -23,11 +24,10 @@ from jacobian.math.polynomials.derivations._models import (
     MAX_DERIVATION_ITERATE_COUNT,
     MAX_DERIVATION_ITERATE_TERMS,
     MAX_DERIVATION_SOURCE_TERMS,
-    MAX_GA_ACTION_OUTPUT_BYTES,
+    MAX_GA_ACTION_OUTPUT_CELLS,
     MAX_GA_ACTION_OUTPUT_TERMS,
     MAX_GA_ACTION_VARIABLES,
     DerivationApplyResult,
-    DerivationFromVectorFieldRequest,
     DerivationIteratesResult,
     LocallyNilpotentCertificate,
     PolynomialDerivation,
@@ -342,17 +342,17 @@ def _admit_action_output(
     )
     # This covers each scalar, exponent vector, and term object; axis labels
     # and polynomial wrappers are added separately below.
-    output_bytes = term_count * 384
-    output_bytes += sum(len(variable.encode("utf-8")) for variable in variables)
-    output_bytes += len(parameter.encode("utf-8")) + 256
+    output_cells = term_count * 384
+    output_cells += sum(len(variable.encode("utf-8")) for variable in variables)
+    output_cells += len(parameter.encode("utf-8")) + 256
     if (
         term_count > MAX_GA_ACTION_OUTPUT_TERMS
-        or output_bytes > MAX_GA_ACTION_OUTPUT_BYTES
+        or output_cells > MAX_GA_ACTION_OUTPUT_CELLS
     ):
         raise OperationResourceAdmissionError(
             location=("certificate", "generator_iterates"),
             code="polynomial_derivation.action_output_budget",
-            message="exponential action exceeds its term or serialized-output envelope",
+            message="exponential action exceeds its term or expansion-cell envelope",
         )
 
     action_coefficients: list[tuple[Fraction, ...]] = []
@@ -709,9 +709,7 @@ def apply_derivation(
 
 
 def derivation_from_vector_field(
-    components: tuple[RationalPolynomial, ...]
-    | DerivationFromVectorFieldRequest
-    | Mapping[str, Any],
+    components: Sequence[RationalPolynomial | Mapping[str, Any]] | Mapping[str, Any],
 ) -> PolynomialDerivation:
     """Bind vector-field components as the generator images of a derivation.
 
@@ -719,16 +717,42 @@ def derivation_from_vector_field(
     characterized by ``D(x_i)=f_i``.  This conversion preserves the ordered
     polynomial parent and does not interpret the components through a backend.
     """
-    if isinstance(components, DerivationFromVectorFieldRequest):
-        request = DerivationFromVectorFieldRequest.model_validate(
-            components.model_dump()
+    payload = (
+        components.get("components") if isinstance(components, Mapping) else components
+    )
+    if not isinstance(payload, Sequence) or isinstance(payload, (str, bytes)):
+        raise OperationDomainValidationError(
+            location=("components",),
+            code="polynomial_derivation.vector_field_shape",
+            message="a vector field must supply one component polynomial per generator",
         )
-    elif isinstance(components, Mapping):
-        request = DerivationFromVectorFieldRequest.model_validate(components)
-    else:
-        request = DerivationFromVectorFieldRequest(components=components)
-    variables = request.components[0].variables
-    derivation = PolynomialDerivation(variables=variables, images=request.components)
+    images: list[RationalPolynomial] = []
+    for index, component in enumerate(payload):
+        try:
+            value = (
+                component.model_dump()
+                if isinstance(component, RationalPolynomial)
+                else component
+            )
+            images.append(RationalPolynomial.model_validate(value))
+        except (ValidationError, TypeError, ValueError, PydanticCustomError) as exc:
+            raise OperationDomainValidationError(
+                location=("components", index),
+                code="polynomial_derivation.vector_field_shape",
+                message="vector-field components must be exact QQ polynomials",
+            ) from exc
+    variables = images[0].variables if images else ()
+    try:
+        derivation = PolynomialDerivation(variables=variables, images=tuple(images))
+    except (ValidationError, TypeError, ValueError, PydanticCustomError) as exc:
+        raise OperationDomainValidationError(
+            location=("components",),
+            code="polynomial_derivation.vector_field_shape",
+            message=(
+                "a vector field needs one component per distinct generator "
+                "of one ordered QQ ring"
+            ),
+        ) from exc
     _admit_derivation(derivation)
     return derivation
 

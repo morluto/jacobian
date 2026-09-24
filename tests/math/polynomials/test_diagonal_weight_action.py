@@ -122,6 +122,42 @@ def test_ring_binding_and_bounds_reject_before_expansion() -> None:
         )
 
 
+def test_eight_variable_action_is_rejected_before_result_construction() -> None:
+    # The Laurent coaction carrier has eight axes and the parameter owns one,
+    # so an otherwise valid eight-variable request must surface as a domain
+    # error at the request contract instead of leaking a Pydantic failure from
+    # result construction.
+    variables = tuple(f"x{i}" for i in range(8))
+    action = PolynomialWeightAction(variables=variables, weights=(1,) * 8)
+    source = _poly(variables, ((1, (1, 0, 0, 0, 0, 0, 0, 0)),))
+    with pytest.raises(OperationDomainValidationError) as error:
+        diagonal_weight_action(
+            {"action": action.model_dump(), "polynomial": source.model_dump()}
+        )
+    assert error.value.errors()[0]["type"] == "polynomial_weight_action.request_shape"
+
+
+def test_seven_variable_action_fills_the_carrier_with_its_parameter() -> None:
+    variables = tuple(f"x{i}" for i in range(7))
+    action = PolynomialWeightAction(
+        variables=variables, weights=(1, 2, -1, 3, -2, 4, -3)
+    )
+    monomials = ((2, (2, 0, 0, 0, 0, 0, 0)), (1, (1, 0, 0, 0, 0, 0, 0)))
+    source = _poly(variables, monomials)
+    result = diagonal_weight_action(
+        PolynomialWeightActionRequest(action=action, polynomial=source)
+    )
+    assert result.coaction.variables == (*variables, "t")
+    # Independent oracle: exponents 2 and 1 on x0 carry weights 2*1 and 1*1.
+    assert {
+        tuple(term.exponents[:-1]): term.exponents[-1] for term in result.coaction.terms
+    } == {
+        (2, 0, 0, 0, 0, 0, 0): 2,
+        (1, 0, 0, 0, 0, 0, 0): 1,
+    }
+    assert tuple(component.weight for component in result.components) == (1, 2)
+
+
 def test_weight_action_is_catalogued_with_valid_example() -> None:
     from jacobian.canonical import encode_strict_json
     from jacobian.catalog.catalog import Catalog

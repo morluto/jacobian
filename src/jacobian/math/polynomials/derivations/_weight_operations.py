@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from math import comb
 from typing import Any
 
@@ -152,7 +153,7 @@ def diagonal_weight_action(
     )
 
 
-def _degree_compositions(variable_count: int, degree: int):
+def _degree_compositions(variable_count: int, degree: int) -> Iterator[tuple[int, ...]]:
     """Yield a homogeneous monomial exponent basis in descending lex order."""
     if variable_count == 1:
         yield (degree,)

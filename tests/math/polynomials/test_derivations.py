@@ -1,6 +1,7 @@
 """Tests for exact polynomial-derivation application."""
 
 from fractions import Fraction
+from typing import Any
 
 import pytest
 from pydantic import ValidationError
@@ -96,17 +97,13 @@ class TestDerivationApplyKnownAnswers:
 
 
 def test_vector_field_conversion_preserves_generator_semantics() -> None:
-    from jacobian.math.polynomials.derivations._models import (
-        DerivationFromVectorFieldRequest,
-    )
     from jacobian.math.polynomials.derivations._tools import TOOLS
     from jacobian.math.polynomials.derivations.operations import (
         derivation_from_vector_field,
     )
 
     components = (_poly(XY, ((1, (0, 1)),)), _poly(XY, ()))
-    request = DerivationFromVectorFieldRequest(components=components)
-    derivation = derivation_from_vector_field(request)
+    derivation = derivation_from_vector_field(components)
     assert derivation.variables == XY
     assert derivation.images == components
 
@@ -114,12 +111,52 @@ def test_vector_field_conversion_preserves_generator_semantics() -> None:
     source = _poly(XY, ((1, (2, 0)), (3, (0, 1))))
     assert _terms(apply_derivation(derivation, source).result) == ((2, (1, 1)),)
 
-    tool = next(
-        tool
+    # The binder is a copy-only projection with no postcondition beyond the
+    # derivation value itself, so it stays a native helper and is not a
+    # published catalog operation.
+    assert all(
+        tool.operation_id != "polynomial_derivation.from_vector_field.compute"
         for tool in TOOLS
-        if tool.operation_id == "polynomial_derivation.from_vector_field.compute"
     )
-    assert tool.run(request) == derivation
+
+
+def test_vector_field_conversion_accepts_decoded_component_values() -> None:
+    from jacobian.math.polynomials.derivations.operations import (
+        derivation_from_vector_field,
+    )
+
+    derivation = derivation_from_vector_field(
+        {
+            "components": [
+                _poly(XY, ((1, (0, 1)),)).model_dump(),
+                _poly(XY, ()).model_dump(),
+            ]
+        }
+    )
+    assert derivation.variables == XY
+    assert derivation.images == (_poly(XY, ((1, (0, 1)),)), _poly(XY, ()))
+
+
+@pytest.mark.parametrize(
+    "invalid",
+    [
+        (),
+        {"components": []},
+        [_poly(XY, ((1, (0, 1)),))],
+        [_poly(("x",), ((1, (1,)),)), _poly(("y",), ())],
+        "not-a-vector-field",
+        7,
+        [_poly(XY, ((1, (0, 1)),)), "not-a-polynomial"],
+    ],
+)
+def test_vector_field_invalid_shapes_raise_domain_errors(invalid: Any) -> None:
+    from jacobian.math.polynomials.derivations.operations import (
+        derivation_from_vector_field,
+    )
+
+    with pytest.raises(OperationDomainValidationError) as error:
+        derivation_from_vector_field(invalid)
+    assert error.value.errors()[0]["type"] == "polynomial_derivation.vector_field_shape"
 
 
 class TestDerivationInvariants:

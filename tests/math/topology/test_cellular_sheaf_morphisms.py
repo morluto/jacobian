@@ -16,6 +16,8 @@ from jacobian.catalog.models import (
 )
 from jacobian.math.topology._models import canonical_complex
 from jacobian.math.topology.cellular_sheaves import (
+    FiniteCellularSheaf,
+    SheafCochainCoordinate,
     SheafCochainMapRequest,
     SheafCochainMapResult,
     SheafField,
@@ -274,6 +276,54 @@ def test_cochain_map_json_rejects_malformed_model_construct_axes_and_shapes() ->
     payload["components"].pop()
     with pytest.raises(ValidationError):
         SheafCochainMapResult.model_validate_json(json.dumps(payload))
+
+
+def test_cochain_map_json_rejects_overrank_parent_before_axis_expansion() -> None:
+    complex_ = canonical_complex(("a",), (("a",),))
+    source_stalk = SheafStalk(
+        simplex=("a",), basis=tuple(f"x{index}" for index in range(600))
+    )
+    target_stalk = SheafStalk(simplex=("a",), basis=())
+    source = FiniteCellularSheaf(
+        complex=complex_,
+        coefficient_field=SheafField.RATIONAL,
+        prime=None,
+        stalks=(source_stalk,),
+        cover_restrictions=(),
+        derived_restrictions=(),
+        diamonds=0,
+        comparable_pairs=0,
+    )
+    target = FiniteCellularSheaf(
+        complex=complex_,
+        coefficient_field=SheafField.RATIONAL,
+        prime=None,
+        stalks=(target_stalk,),
+        cover_restrictions=(),
+        derived_restrictions=(),
+        diamonds=0,
+        comparable_pairs=0,
+    )
+    forged_morphism = SheafMorphismResult.model_construct(
+        source=source,
+        target=target,
+        components=((("a",), ()),),
+        natural=True,
+        obstruction=None,
+    )
+    forged_result = SheafCochainMapResult.model_construct(
+        morphism=forged_morphism,
+        source_bases=(
+            tuple(
+                SheafCochainCoordinate(simplex=("a",), basis_label=f"x{index}")
+                for index in range(600)
+            ),
+        ),
+        target_bases=((),),
+        components=((),),
+    )
+    with pytest.raises(ValidationError):
+        SheafCochainMapResult.model_validate_json(forged_result.model_dump_json())
 
 
 def test_component_scalar_digit_bound_precedes_scalar_parsing() -> None:

@@ -10,10 +10,12 @@ import json
 from collections.abc import Mapping
 from fractions import Fraction
 from itertools import product
-from math import factorial, gcd, lcm
+from math import ceil, factorial, gcd, lcm, log2
 from typing import Any, Literal, cast
 
 from jacobian._exact import CanonicalRational, canonical_rational_component_digits
+from jacobian._execution import request_checkpoint
+from jacobian.canonical import CanonicalLimits
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -42,6 +44,9 @@ from jacobian.math.free_algebras._models import (
     MAX_FREE_ALGEBRA_SUBSTITUTION_OUTPUT_BYTES,
     MAX_FREE_ALGEBRA_SUBSTITUTION_WORK,
     MAX_FREE_ALGEBRA_TERM_PAIRS,
+    MAX_FREE_ALGEBRA_TRUNCATED_QUOTIENT_OUTPUT_BYTES,
+    MAX_FREE_ALGEBRA_TRUNCATED_QUOTIENT_TABLE_TERMS,
+    MAX_FREE_ALGEBRA_TRUNCATED_QUOTIENT_WORK,
     MAX_FREE_ALGEBRA_WORD_LENGTH,
     MAX_FREE_ALGEBRA_WORD_VALUE_LENGTH,
     MAX_FREE_WORD_FACTOR_DISTINCT,
@@ -80,6 +85,7 @@ from jacobian.math.free_algebras._models import (
     FreeAlgebraWordSuffixSplit,
     FreeWordImageInterval,
     GroebnerShirshovResult,
+    TruncatedFreeAlgebraQuotient,
     canonical_word_key,
 )
 
@@ -1805,6 +1811,222 @@ def quotient_normal_word_profile(
         leading_words=leading_words,
         components=tuple(components),
         hilbert_function=tuple(hilbert_function),
+    )
+
+
+def _normal_words_through_degree(
+    ideal: FreeAlgebraIdeal,
+    degree: int,
+    leading_words: tuple[tuple[str, ...], ...],
+) -> tuple[tuple[str, ...], ...]:
+    words = []
+    visited = 0
+    for word_degree in range(degree + 1):
+        for word in product(ideal.alphabet, repeat=word_degree):
+            visited += 1
+            if visited % 4_096 == 0:
+                request_checkpoint("during truncated quotient normal-word enumeration")
+            if not any(
+                word[start : start + len(leading)] == leading
+                for leading in leading_words
+                for start in range(len(word) - len(leading) + 1)
+            ):
+                words.append(word)
+    return tuple(words)
+
+
+def _is_reducible_word(
+    word: tuple[str, ...], leading_words: tuple[tuple[str, ...], ...]
+) -> bool:
+    return any(
+        word[start : start + len(leading)] == leading
+        for leading in leading_words
+        for start in range(len(word) - len(leading) + 1)
+    )
+
+
+def _admit_truncated_table(
+    ideal: FreeAlgebraIdeal,
+    completion: GroebnerShirshovResult,
+    degree: int,
+    basis: tuple[tuple[str, ...], ...],
+    leading_words: tuple[tuple[str, ...], ...],
+) -> frozenset[tuple[int, int]]:
+    """Preflight table cells, reduction work, and complete serialized output."""
+    dimension = len(basis)
+    pair_count = dimension**2
+    term_count_bound = dimension**3
+    if term_count_bound > MAX_FREE_ALGEBRA_TRUNCATED_QUOTIENT_TABLE_TERMS:
+        _reject_resource(
+            ("degree",),
+            "truncated_quotient_table_terms",
+            f"multiplication output may contain {term_count_bound} terms, exceeding the "
+            f"{MAX_FREE_ALGEBRA_TRUNCATED_QUOTIENT_TABLE_TERMS}-term bound",
+        )
+
+    scan_work = pair_count * (degree + 1 + len(leading_words) * (degree + 1) ** 2)
+    if scan_work > MAX_FREE_ALGEBRA_TRUNCATED_QUOTIENT_WORK:
+        _reject_resource(
+            ("degree",),
+            "truncated_quotient_scan_work",
+            "normal-word boundary checks exceed the truncated quotient work envelope",
+        )
+    reducible_pairs = set()
+    for left_index, left_word in enumerate(basis):
+        for right_index, right_word in enumerate(basis):
+            if len(left_word) + len(right_word) <= degree and _is_reducible_word(
+                left_word + right_word, leading_words
+            ):
+                reducible_pairs.add((left_index, right_index))
+            if (left_index * max(1, dimension) + right_index) % 4_096 == 0:
+                request_checkpoint("during truncated quotient multiplication preflight")
+
+    candidate_count = sum(
+        len(ideal.alphabet) ** word_degree for word_degree in range(degree + 1)
+    )
+    basis_term_count = sum(len(polynomial.terms) for polynomial in completion.basis)
+    sort_work = (
+        candidate_count * max(1, ceil(log2(max(2, candidate_count)))) * (degree + 1)
+    )
+    reduction_work = candidate_count * (
+        candidate_count * len(completion.basis) * (degree + 1)
+        + sort_work
+        + basis_term_count
+    )
+    total_work = scan_work + len(reducible_pairs) * reduction_work
+    if total_work > MAX_FREE_ALGEBRA_TRUNCATED_QUOTIENT_WORK:
+        _reject_resource(
+            ("degree",),
+            "truncated_quotient_reduction_work",
+            f"bounded multiplication reduction needs at most {total_work} work units, "
+            f"exceeding {MAX_FREE_ALGEBRA_TRUNCATED_QUOTIENT_WORK}",
+        )
+
+    ideal_bytes = len(
+        json.dumps(
+            ideal.model_dump(mode="json"), ensure_ascii=True, separators=(",", ":")
+        )
+    )
+    basis_bytes = len(
+        json.dumps(basis, ensure_ascii=True, separators=(",", ":")).encode("utf-8")
+    )
+    alphabet_bytes = (
+        sum(
+            len(json.dumps(letter, ensure_ascii=True).encode("utf-8")) + 1
+            for letter in ideal.alphabet
+        )
+        + 2
+    )
+    max_letter_bytes = max(
+        (
+            len(json.dumps(letter, ensure_ascii=True).encode("utf-8"))
+            for letter in ideal.alphabet
+        ),
+        default=2,
+    )
+    term_bytes = 256 + degree * (max_letter_bytes + 3)
+    output_bound = (
+        ideal_bytes
+        + basis_bytes
+        + pair_count * (256 + alphabet_bytes)
+        + term_count_bound * term_bytes
+        + term_bytes
+        + 2_048
+    )
+    output_limit = min(
+        MAX_FREE_ALGEBRA_TRUNCATED_QUOTIENT_OUTPUT_BYTES,
+        CanonicalLimits().max_output_bytes,
+    )
+    if output_bound > output_limit:
+        _reject_resource(
+            ("degree",),
+            "truncated_quotient_output_bytes",
+            f"truncated quotient needs at most {output_bound} serialized bytes, "
+            f"exceeding the {output_limit}-byte output bound",
+        )
+    return frozenset(reducible_pairs)
+
+
+def _truncated_multiplication_table(
+    alphabet: tuple[str, ...],
+    degree: int,
+    basis: tuple[tuple[str, ...], ...],
+    completion: GroebnerShirshovResult,
+    reducible_pairs: frozenset[tuple[int, int]],
+) -> tuple[tuple[FreeAlgebraPolynomial, ...], ...]:
+    zero = FreeAlgebraPolynomial.model_construct(alphabet=alphabet, terms=())
+    multiplication = []
+    dimension = len(basis)
+    for left_index, left_word in enumerate(basis):
+        row = []
+        for right_index, right_word in enumerate(basis):
+            product_word = left_word + right_word
+            if len(product_word) > degree:
+                row.append(zero)
+            elif (left_index, right_index) in reducible_pairs:
+                monomial = _encode(alphabet, {product_word: Fraction(1)})
+                row.append(_normal_form(monomial, completion.basis, degree))
+            else:
+                row.append(_encode(alphabet, {product_word: Fraction(1)}))
+            if (left_index * max(1, dimension) + right_index) % 4_096 == 0:
+                request_checkpoint("during truncated quotient multiplication table")
+        multiplication.append(tuple(row))
+    return tuple(multiplication)
+
+
+def truncated_quotient_algebra(
+    ideal: FreeAlgebraIdeal | Mapping[str, Any], degree: int
+) -> TruncatedFreeAlgebraQuotient:
+    """Return the exact finite algebra ``QQ<X>/(I + F_{>D})``.
+
+    The ideal must be two-sided and homogeneous. Products above D are zero;
+    other basis products reduce through the complete degree-D Groebner-Shirshov
+    basis.
+    """
+    value = _as_ideal(ideal)
+    if value.side != "two-sided":
+        raise OperationDomainValidationError(
+            location=("ideal", "side"),
+            code="free_algebra.truncated_quotient_requires_two_sided",
+            message="a truncated quotient requires side='two-sided'",
+        )
+    if (
+        not isinstance(degree, int)
+        or isinstance(degree, bool)
+        or not 0 <= degree <= MAX_FREE_ALGEBRA_WORD_LENGTH
+    ):
+        _reject_resource(
+            ("degree",),
+            "truncated_quotient_degree_bound",
+            "truncated quotient degree exceeds the admitted envelope",
+        )
+    _admit_quotient_profile(value, degree)
+    completion = groebner_shirshov_through_degree(value, degree)
+    leading_words = tuple(
+        sorted(
+            {
+                leading[0]
+                for polynomial in completion.basis
+                if (leading := _leading(polynomial)) is not None
+            },
+            key=lambda word: canonical_word_key(value.alphabet, word),
+        )
+    )
+    basis = _normal_words_through_degree(value, degree, leading_words)
+    reducible_pairs = _admit_truncated_table(
+        value, completion, degree, basis, leading_words
+    )
+    multiplication = _truncated_multiplication_table(
+        value.alphabet, degree, basis, completion, reducible_pairs
+    )
+    zero = FreeAlgebraPolynomial.model_construct(alphabet=value.alphabet, terms=())
+    unit = _encode(value.alphabet, {(): Fraction(1)}) if () in set(basis) else zero
+    return TruncatedFreeAlgebraQuotient.model_construct(
+        ideal=value,
+        degree=degree,
+        basis_words=basis,
+        multiplication=multiplication,
+        unit=unit,
     )
 
 

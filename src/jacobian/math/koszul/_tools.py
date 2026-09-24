@@ -6,6 +6,7 @@ from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.koszul._models import KoszulComplexRequest
 from jacobian.math.koszul.dga_operations import module_koszul_dga
 from jacobian.math.koszul.module_models import (
+    ModuleKoszulChainMap,
     ModuleKoszulComplex,
     ModuleKoszulDGA,
     ModuleKoszulDGARequest,
@@ -16,6 +17,7 @@ from jacobian.math.koszul.module_models import (
     ModuleKoszulExactnessProfile,
     ModuleKoszulHomology,
     ModuleKoszulHomologyRequest,
+    ModuleKoszulMapRequest,
     ModuleKoszulRequest,
     ModuleKoszulSequencePermutation,
     ModuleKoszulSequencePermutationRequest,
@@ -32,6 +34,7 @@ from jacobian.math.koszul.module_operations import (
     module_koszul_direct_sum,
     module_koszul_exactness_profile,
     module_koszul_homology,
+    module_koszul_map,
     module_koszul_quotient,
     module_koszul_sequence_permute,
     module_koszul_unit_contract,
@@ -111,6 +114,39 @@ _MODULE_EXAMPLE_COMPLEX = {
 }
 
 TOOLS: MathTools = (
+    MathTool(
+        operation_id="homological.koszul.module_map.compute",
+        title="Induce a map between finite-module Koszul complexes",
+        description=(
+            "Check an exact QQ-linear map is a homomorphism over the supplied "
+            "finite commutative algebra, then return its degreewise induced "
+            "chain map between Koszul complexes on the same ordered sequence. "
+            "Action checks, wedge axes, chain-map equations, work, and output "
+            "are bounded before publication."
+        ),
+        request_type=ModuleKoszulMapRequest,
+        result_type=ModuleKoszulChainMap,
+        run=module_koszul_map,
+        tags=("koszul", "module", "chain-map", "exact"),
+        discovery_terms=(
+            "module homomorphism induces map on Koszul complexes",
+            "functoriality of Koszul homology",
+            "chain map from a module map",
+        ),
+        examples=(
+            OperationExample(
+                name="identity_module_map",
+                description="The identity of a one-dimensional module induces identity maps in every Koszul degree.",
+                input={
+                    "algebra": _MODULE_EXAMPLE["algebra"],
+                    "source": _MODULE_EXAMPLE["module"],
+                    "target": _MODULE_EXAMPLE["module"],
+                    "sequence": _MODULE_EXAMPLE["sequence"],
+                    "map_matrix": [[{"num": "1", "den": "1"}]],
+                },
+            ),
+        ),
+    ),
     MathTool(
         operation_id="homological.koszul.module_direct_sum.compute",
         title="Compute Koszul complexes of a direct-sum module",

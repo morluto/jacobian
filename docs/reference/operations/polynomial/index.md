@@ -3,7 +3,7 @@
 ## Holonomic formal series
 
 `holonomic.differential_series.construct` represents the unique formal Taylor
-series at (x=0) determined by a nonzero differential operator over
+series at \(x=0\) determined by a nonzero differential operator over
 \(\mathbb{Q}(x)\) and the exact initial derivatives
 \(f(0),\ldots,f^{(r-1)}(0)\), where (r) is the operator order. Every
 coefficient must be regular at the center and the leading coefficient must be
@@ -13,7 +13,21 @@ determine each later Taylor coefficient uniquely. The returned
 one composable value. It denotes a formal series and makes no convergence or
 analytic-continuation claim. The ordinary-point coefficient-comparison
 principle is described in [DLMF §2.7](https://dlmf.nist.gov/2.7). Singular-center
-solutions and coefficient-prefix materialization are separate operations.
+solutions require separate semantics.
+
+`holonomic.differential_series.generate_finite_prefix.compute` returns the
+first `count` Taylor coefficients as a `FiniteRationalSequence`. Its entries
+are coefficients of powers of \(x\), so the supplied initial derivatives are
+divided by \(i!\) at indices below the operator order. It accepts polynomial
+differential coefficients in \(\mathbb{Q}[x]\); rational-function coefficient series
+remain representable but are outside this prefix operation's current domain.
+The ordinary-point coefficient recurrence is derived before any expansion,
+and scalar heights, recurrence work, sequence digits, and serialized output
+are admitted before the exact recurrence runs. It makes no claim about
+convergence or an infinite sequence value. The coefficient-comparison rule
+for an ordinary point is described in [DLMF §2.7](https://dlmf.nist.gov/2.7).
+See [the finite-prefix contract](holonomic-differential-series-prefix.md)
+for its recurrence and admission limits.
 
 ## Rational polynomial ideals
 

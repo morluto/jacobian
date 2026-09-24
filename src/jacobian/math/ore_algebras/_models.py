@@ -26,6 +26,10 @@ MAX_DIFFERENTIAL_TERMS = 32
 MAX_DIFFERENTIAL_VARIABLE = "x"
 MAX_DIFFERENTIAL_ADDITIVE_WORK_CELLS = 100_000_000
 MAX_DIFFERENTIAL_ADDITIVE_OUTPUT_BYTES = 2 * 1024 * 1024
+MAX_DFINITE_PREFIX_COUNT = 100_000
+MAX_DFINITE_PREFIX_WORK_UNITS = 100_000_000
+MAX_DFINITE_PREFIX_OUTPUT_BYTES = 12 * 1024 * 1024
+MAX_DFINITE_PREFIX_SCALAR_BITS = 131_072
 MAX_SHIFT_PREFIX_INDEX = 100_000
 MAX_SHIFT_PREFIX_EVALUATION_CELLS = 2_000_000
 MAX_SHIFT_PREFIX_WORK_UNITS = 100_000_000
@@ -168,6 +172,13 @@ class DFinitePowerSeriesRequest(StrictModel):
     operator: DifferentialOreOperator
     initial_derivatives: FiniteRationalSequence
     center: Literal[0] = 0
+
+
+class DFinitePowerSeriesPrefixRequest(StrictModel):
+    """Request the initial Taylor coefficients of an ordinary-point series."""
+
+    series: DFinitePowerSeries
+    count: StrictInt = Field(ge=0, le=MAX_DFINITE_PREFIX_COUNT)
 
 
 class DifferentialOperatorMultiplyRequest(StrictModel):

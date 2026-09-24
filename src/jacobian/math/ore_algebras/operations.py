@@ -5,19 +5,29 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 from fractions import Fraction
-from math import comb, gcd
+from math import comb, factorial, gcd, lcm
 from typing import Any
 
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
+from jacobian._exact import (
+    MAX_CANONICAL_RATIONAL_DIGITS,
+    CanonicalRational,
+)
 from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
 from jacobian.math.number_theory.sequences.core._models import FiniteRationalSequence
+from jacobian.math.number_theory.sequences.core.values import (
+    MAX_SEQUENCE_LENGTH,
+    MAX_SEQUENCE_TOTAL_DIGITS,
+)
 from jacobian.math.ore_algebras._models import (
+    MAX_DFINITE_PREFIX_OUTPUT_BYTES,
+    MAX_DFINITE_PREFIX_SCALAR_BITS,
+    MAX_DFINITE_PREFIX_WORK_UNITS,
     MAX_DIFFERENTIAL_ADDITIVE_OUTPUT_BYTES,
     MAX_DIFFERENTIAL_ADDITIVE_WORK_CELLS,
     MAX_DIFFERENTIAL_ORDER,
@@ -42,6 +52,7 @@ from jacobian.math.ore_algebras._models import (
     MAX_SHIFT_RESULT_ORDER,
     MAX_SHIFT_TERMS,
     DFinitePowerSeries,
+    DFinitePowerSeriesPrefixRequest,
     DFinitePowerSeriesRequest,
     DifferentialOperatorAddResult,
     DifferentialOperatorApplyResult,
@@ -1769,7 +1780,6 @@ def differential_series_construct(
                 "and have complete initial derivatives at its ordinary center"
             ),
         ) from exc
-
     admitted_operator = _admit_differential_operator(request.operator)
     output_bytes = len(request.model_dump_json().encode("utf-8")) + 32
     if output_bytes > MAX_DIFFERENTIAL_ADDITIVE_OUTPUT_BYTES:
@@ -1795,6 +1805,286 @@ def differential_series_construct(
                 "nonzero leading coefficient at its ordinary center x=0"
             ),
         ) from exc
+
+
+def _admit_dfinite_series(value: DFinitePowerSeries) -> DFinitePowerSeries:
+    """Re-admit a D-finite series before relying on its ODE and initial data."""
+    return differential_series_construct(value.operator, value.initial_derivatives)
+
+
+def _digits_for_bit_bound(bits: int) -> int:
+    """Conservatively convert a positive bit bound to decimal digits."""
+    return (max(bits, 1) * 30_103 + 99_999) // 100_000 + 1
+
+
+def _reject_dfinite_prefix(
+    *, location: tuple[str | int, ...], code: str, message: str
+) -> None:
+    raise OperationResourceAdmissionError(location=location, code=code, message=message)
+
+
+def _admit_dfinite_prefix_estimates(
+    *,
+    order: int,
+    count: int,
+    coefficient_denominators: list[int],
+    coefficient_numerators: list[int],
+    coefficient_terms: int,
+    initial_denominator_bits: int,
+    initial_numerator_bits: int,
+    initial_output_digits: int,
+) -> None:
+    """Admit exact scalar growth, recurrence work, and serialized output."""
+    denominator_bit_bound = 1 + sum(
+        value.bit_length() for value in coefficient_denominators
+    )
+    numerator_bit_bound = max(
+        (max(1, value.bit_length()) for value in coefficient_numerators), default=1
+    )
+    scalar_bit_bound = denominator_bit_bound + numerator_bit_bound
+    if scalar_bit_bound > MAX_DFINITE_PREFIX_SCALAR_BITS:
+        _reject_dfinite_prefix(
+            location=("series", "operator"),
+            code="ore_algebra.dfinite_prefix_scalar_bound",
+            message="the common exact coefficient scale exceeds the Taylor-prefix scalar bound",
+        )
+
+    operator_bits = (
+        denominator_bit_bound
+        + numerator_bit_bound
+        + (coefficient_terms + 1).bit_length()
+        + 2
+    )
+    numerator_bits = initial_numerator_bits
+    denominator_bits = initial_denominator_bits
+    output_digits = initial_output_digits
+    steps = max(0, count - order) if order else count
+    work = coefficient_terms * max(1, denominator_bit_bound) ** 2 + count * (
+        coefficient_terms + order + 1
+    )
+    for step in range(steps):
+        factorial_bits = order * max(1, (step + order + 1).bit_length())
+        sum_bits = (coefficient_terms + 1).bit_length() + 1
+        numerator_bits += operator_bits + factorial_bits + sum_bits
+        denominator_bits += operator_bits + factorial_bits + 1
+        numerator_digits = _digits_for_bit_bound(numerator_bits)
+        denominator_digits = _digits_for_bit_bound(denominator_bits)
+        if max(numerator_digits, denominator_digits) > MAX_CANONICAL_RATIONAL_DIGITS:
+            _reject_dfinite_prefix(
+                location=("count",),
+                code="ore_algebra.dfinite_prefix_coefficient_growth",
+                message="the conservative exact Taylor-coefficient height bound exceeds the rational carrier",
+            )
+        output_digits += numerator_digits + denominator_digits
+        scalar_cost = numerator_bits + denominator_bits + operator_bits
+        work += (coefficient_terms * (order + 2) + order + 1) * scalar_cost
+        if output_digits > MAX_SEQUENCE_TOTAL_DIGITS:
+            _reject_dfinite_prefix(
+                location=("count",),
+                code="ore_algebra.dfinite_prefix_output_digits",
+                message="the admitted Taylor-prefix representation exceeds the finite-sequence digit budget",
+            )
+        if work > MAX_DFINITE_PREFIX_WORK_UNITS:
+            _reject_dfinite_prefix(
+                location=("count",),
+                code="ore_algebra.dfinite_prefix_work",
+                message="the exact Taylor-prefix recurrence exceeds its admitted work budget",
+            )
+
+    if output_digits > MAX_SEQUENCE_TOTAL_DIGITS:
+        _reject_dfinite_prefix(
+            location=("count",),
+            code="ore_algebra.dfinite_prefix_output_digits",
+            message="the admitted Taylor-prefix representation exceeds the finite-sequence digit budget",
+        )
+    if work > MAX_DFINITE_PREFIX_WORK_UNITS:
+        _reject_dfinite_prefix(
+            location=("count",),
+            code="ore_algebra.dfinite_prefix_work",
+            message="the exact Taylor-prefix recurrence exceeds its admitted work budget",
+        )
+    if 512 + 2 * output_digits + 96 * count > MAX_DFINITE_PREFIX_OUTPUT_BYTES:
+        _reject_dfinite_prefix(
+            location=("count",),
+            code="ore_algebra.dfinite_prefix_output_bytes",
+            message="the exact Taylor prefix exceeds its serialized-output budget",
+        )
+
+
+def _compute_admitted_dfinite_prefix(
+    initial: tuple[Fraction, ...],
+    polynomials: list[tuple[int, dict[int, Fraction]]],
+    denominators: list[int],
+    order: int,
+    count: int,
+) -> FiniteRationalSequence:
+    """Clear coefficient denominators and evaluate a previously admitted series."""
+    common_denominator = 1
+    for denominator in denominators:
+        common_denominator = lcm(common_denominator, denominator)
+    scaled = [
+        (
+            exponent,
+            {
+                degree: coefficient.numerator
+                * (common_denominator // coefficient.denominator)
+                for degree, coefficient in polynomial.items()
+            },
+        )
+        for exponent, polynomial in polynomials
+    ]
+    leading = next(polynomial for exponent, polynomial in scaled if exponent == order)
+    leading_constant = leading.get(0, 0)
+    if leading_constant == 0:
+        raise OperationDomainValidationError(
+            location=("series", "operator"),
+            code="ore_algebra.dfinite_prefix_singular_center",
+            message="the leading differential coefficient must be nonzero at x=0",
+        )
+    values = list(initial)
+    steps = max(0, count - order) if order else count
+    for m in range(steps):
+        accumulated = Fraction(0)
+        for exponent, polynomial in scaled:
+            for degree, coefficient in polynomial.items():
+                if (exponent == order and degree == 0) or degree > m:
+                    continue
+                source_index = m - degree + exponent
+                if source_index >= len(values):
+                    continue
+                rising = 1
+                for factor in range(m - degree + 1, m - degree + exponent + 1):
+                    rising *= factor
+                accumulated += coefficient * rising * values[source_index]
+        pivot = leading_constant
+        for factor in range(m + 1, m + order + 1):
+            pivot *= factor
+        values.append(-accumulated / pivot)
+    return FiniteRationalSequence(
+        values=tuple(CanonicalRational.from_fraction(value) for value in values[:count])
+    )
+
+
+def differential_series_generate_prefix(
+    series: DFinitePowerSeries | Mapping[str, Any], count: int
+) -> FiniteRationalSequence:
+    """Compute the first ``count`` Taylor coefficients at the ordinary point 0.
+
+    The current bounded arithmetic domain requires polynomial differential
+    coefficients in QQ[x]. Initial data are derivatives, so input value i is
+    divided by i! before it is emitted as the coefficient of x^i.
+    """
+    try:
+        request = DFinitePowerSeriesPrefixRequest.model_validate(
+            {
+                "series": series.model_dump()
+                if isinstance(series, DFinitePowerSeries)
+                else series,
+                "count": count,
+            }
+        )
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="ore_algebra.dfinite_prefix_request",
+            message="the series prefix request must contain an ordinary-point D-finite value and a bounded count",
+        ) from exc
+
+    admitted = _admit_dfinite_series(request.series)
+    operator = admitted.operator
+    order = operator.order
+    count = request.count
+    if count > MAX_SEQUENCE_LENGTH:
+        _reject_dfinite_prefix(
+            location=("count",),
+            code="ore_algebra.dfinite_prefix_count",
+            message="the requested Taylor prefix exceeds the finite-sequence length limit",
+        )
+    if count == 0:
+        return FiniteRationalSequence(values=())
+    if order == 0:
+        output_bytes = 512 + 96 * count
+        if output_bytes > MAX_DFINITE_PREFIX_OUTPUT_BYTES:
+            _reject_dfinite_prefix(
+                location=("count",),
+                code="ore_algebra.dfinite_prefix_output_bytes",
+                message="the zero Taylor prefix exceeds its serialized-output budget",
+            )
+        return FiniteRationalSequence(
+            values=tuple(
+                CanonicalRational.from_fraction(Fraction(0)) for _ in range(count)
+            )
+        )
+
+    polynomials: list[tuple[int, dict[int, Fraction]]] = []
+    coefficient_denominators: list[int] = []
+    coefficient_numerators: list[int] = []
+    coefficient_terms = 0
+    denominator_bit_bound = 1
+    for term_index, term in enumerate(operator.terms):
+        denominator = term.coefficient.denominator.terms
+        if not (
+            len(denominator) == 1
+            and denominator[0].exponents == (0,)
+            and denominator[0].coefficient.as_fraction() == 1
+        ):
+            raise OperationDomainValidationError(
+                location=("series", "operator", "terms", term_index, "coefficient"),
+                code="ore_algebra.dfinite_prefix_polynomial_coefficients",
+                message="Taylor prefix generation currently requires polynomial coefficients in QQ[x]",
+            )
+        polynomial = _decode_poly(term.coefficient.numerator.terms)
+        polynomials.append((term.order, polynomial))
+        coefficient_terms += len(polynomial)
+        for coefficient in polynomial.values():
+            coefficient_denominators.append(coefficient.denominator)
+            coefficient_numerators.append(abs(coefficient.numerator))
+            denominator_bit_bound += coefficient.denominator.bit_length()
+
+    derivatives = tuple(
+        value.as_fraction() for value in admitted.initial_derivatives.values
+    )
+    initial = tuple(
+        derivative / factorial(index) for index, derivative in enumerate(derivatives)
+    )
+    initial_denominator_bits = (
+        sum(
+            derivative.denominator.bit_length() + factorial(index).bit_length()
+            for index, derivative in enumerate(derivatives)
+        )
+        + 1
+    )
+    initial_numerator_bits = initial_denominator_bits + max(
+        (max(1, abs(derivative.numerator).bit_length()) for derivative in derivatives),
+        default=1,
+    )
+    initial_digits = 0
+    for index, value in enumerate(initial[:count]):
+        numerator_digits = _digits_for_bit_bound(
+            max(1, abs(value.numerator).bit_length())
+        )
+        denominator_digits = _digits_for_bit_bound(value.denominator.bit_length())
+        if max(numerator_digits, denominator_digits) > MAX_CANONICAL_RATIONAL_DIGITS:
+            _reject_dfinite_prefix(
+                location=("series", "initial_derivatives", index),
+                code="ore_algebra.dfinite_prefix_coefficient_growth",
+                message="an initial Taylor coefficient exceeds the rational carrier",
+            )
+        initial_digits += numerator_digits + denominator_digits
+
+    _admit_dfinite_prefix_estimates(
+        order=order,
+        count=count,
+        coefficient_denominators=coefficient_denominators,
+        coefficient_numerators=coefficient_numerators,
+        coefficient_terms=coefficient_terms,
+        initial_denominator_bits=initial_denominator_bits,
+        initial_numerator_bits=initial_numerator_bits,
+        initial_output_digits=initial_digits,
+    )
+    return _compute_admitted_dfinite_prefix(
+        initial, polynomials, coefficient_denominators, order, count
+    )
 
 
 def _admit_differential_function(value: RationalFunction) -> RationalFunction:

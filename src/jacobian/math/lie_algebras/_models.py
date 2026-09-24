@@ -36,6 +36,10 @@ MAX_SUBALGEBRA_CHECK_WORK = (
 MAX_CENTRALIZER_WORK = (
     3 * MAX_LIE_DIMENSION**4 + MAX_LIE_DIMENSION**2 * MAX_STRUCTURE_NONZEROS
 )
+# Cardinality-and-digits budget for one intermediate canonical matrix built
+# during generated-subalgebra or generated-ideal closure: the entry count
+# times the admitted per-entry decimal digit width must fit this envelope.
+MAX_GENERATED_MATRIX_DECIMAL_DIGITS = 5_000_000
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:

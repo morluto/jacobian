@@ -119,6 +119,60 @@ def test_basis_generators_return_the_full_ideal() -> None:
     assert check_ideal(HEISENBERG, ideal).is_ideal
 
 
+def test_empty_generators_on_a_six_dimensional_algebra_return_zero_ideal() -> None:
+    algebra = FiniteDimensionalLieAlgebra.model_validate(
+        {"basis": [f"e{i}" for i in range(6)], "structure_constants": []}
+    )
+
+    ideal = lie_generated_ideal(algebra, [])
+
+    assert ideal.algebra == algebra
+    assert ideal.generators.row_count == 0
+    assert ideal.generators.column_count == 6
+    assert check_ideal(algebra, ideal).is_ideal
+
+
+def test_six_dimensional_single_generator_ideal_closes_exactly() -> None:
+    algebra = FiniteDimensionalLieAlgebra.model_validate(
+        {
+            "basis": [f"e{i}" for i in range(6)],
+            "structure_constants": [
+                {"i": 0, "j": 1, "k": 1, "coefficient": {"num": 1, "den": 1}}
+            ],
+        }
+    )
+    generator = LieAlgebraElement.model_validate(
+        {
+            "basis": [f"e{i}" for i in range(6)],
+            "coordinates": [
+                {"num": 1 if position == 0 else 0, "den": 1} for position in range(6)
+            ],
+        }
+    )
+
+    ideal = lie_generated_ideal(algebra, [generator])
+
+    assert _rows(ideal) == (
+        (Fraction(1), Fraction(0), Fraction(0), Fraction(0), Fraction(0), Fraction(0)),
+        (Fraction(0), Fraction(1), Fraction(0), Fraction(0), Fraction(0), Fraction(0)),
+    )
+    assert check_ideal(algebra, ideal).is_ideal
+
+
+def test_operation_rejects_generators_on_a_different_axis() -> None:
+    alien = LieAlgebraElement.model_validate(
+        {"basis": ["a", "b", "c"], "coordinates": [{"num": 1, "den": 1}] * 3}
+    )
+    with pytest.raises(
+        OperationDomainValidationError, match="ideal generators must use"
+    ) as exc_info:
+        lie_generated_ideal(HEISENBERG, [alien])
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "lie_algebra.generated_ideal_generator_basis"
+    )
+
+
 def test_source_bound_ideal_rejects_another_algebra_with_same_axis() -> None:
     ideal = lie_generated_ideal(HEISENBERG, [_element(1, 0, 0)])
     same_basis_different_bracket = FiniteDimensionalLieAlgebra.model_validate(

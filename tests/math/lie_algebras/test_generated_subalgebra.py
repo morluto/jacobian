@@ -3,7 +3,10 @@ from fractions import Fraction
 import pytest
 from pydantic import ValidationError
 
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.lie_algebras._models import (
     FiniteDimensionalLieAlgebra,
     LieAlgebraElement,
@@ -164,6 +167,53 @@ def test_moderate_height_full_rank_generators_are_admitted() -> None:
         ],
     )
     assert result.generators.row_count == 2
+
+
+def test_full_rank_basis_generators_admit_without_iterated_blowup() -> None:
+    algebra = FiniteDimensionalLieAlgebra.model_validate(
+        {
+            "basis": ["a", "b", "c", "d"],
+            "structure_constants": [
+                {"i": 0, "j": 1, "k": 1, "coefficient": {"num": 1, "den": 1}}
+            ],
+        }
+    )
+    generators = [
+        LieAlgebraElement.model_validate(
+            {
+                "basis": ["a", "b", "c", "d"],
+                "coordinates": [
+                    {"num": 1 if position == index else 0, "den": 1}
+                    for position in range(4)
+                ],
+            }
+        )
+        for index in range(4)
+    ]
+
+    generated = lie_generated_subalgebra(algebra, generators)
+
+    assert _rows(generated) == (
+        (Fraction(1), Fraction(0), Fraction(0), Fraction(0)),
+        (Fraction(0), Fraction(1), Fraction(0), Fraction(0)),
+        (Fraction(0), Fraction(0), Fraction(1), Fraction(0)),
+        (Fraction(0), Fraction(0), Fraction(0), Fraction(1)),
+    )
+    assert check_subalgebra(algebra, generated).is_subalgebra
+
+
+def test_operation_rejects_generators_on_a_different_axis() -> None:
+    alien = LieAlgebraElement.model_validate(
+        {"basis": ["u", "v", "w"], "coordinates": [{"num": 1, "den": 1}] * 3}
+    )
+    with pytest.raises(
+        OperationDomainValidationError, match="generators must use"
+    ) as exc_info:
+        lie_generated_subalgebra(HEISENBERG, [alien])
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "lie_algebra.generated_subalgebra_generator_basis"
+    )
 
 
 def test_catalog_declares_constructive_subalgebra_operation() -> None:

@@ -116,7 +116,7 @@ def _run_lie_subalgebra_check(
 
 def _run_lie_generated_subalgebra(
     request: LieGeneratedSubalgebraRequest,
-):
+) -> LieSubalgebra:
     return lie_generated_subalgebra(request.algebra, request.generators)
 
 

@@ -15,7 +15,7 @@ from jacobian._exact import (
     CanonicalRational,
     require_bounded_rational,
 )
-from jacobian.canonical import CanonicalLimits, decimal_digit_width
+from jacobian.canonical import decimal_digit_width
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -25,6 +25,7 @@ from jacobian.math.lie_algebras._models import (
     MAX_BRACKET_WORK,
     MAX_CENTRALIZER_WORK,
     MAX_ELEMENT_COEFFICIENT_DIGITS,
+    MAX_GENERATED_MATRIX_DECIMAL_DIGITS,
     MAX_LIE_DIMENSION,
     MAX_STRUCTURE_COEFFICIENT_DIGITS,
     MAX_STRUCTURE_NONZEROS,
@@ -39,11 +40,8 @@ from jacobian.math.lie_algebras._models import (
     LieAlgebraElement,
     LieBracketResult,
     LieCenterResult,
-    LieCentralizerRequest,
     LieCentralizerResult,
     LieDerivedSeriesResult,
-    LieGeneratedIdealRequest,
-    LieGeneratedSubalgebraRequest,
     LieIdeal,
     LieIdealCheckResult,
     LieKillingRadicalResult,
@@ -234,14 +232,53 @@ def _bracket_height_bound(
 def _check_generated_matrix_output_bound(
     *, entries: int, entry_digits: int, location: tuple[str | int, ...]
 ) -> None:
-    """Admit canonical matrix transport before constructing exact matrices."""
-    output_bytes = entries * (2 * entry_digits + 32) + 1024
-    if output_bytes > CanonicalLimits().max_output_bytes:
+    """Admit canonical matrix size before constructing exact matrices."""
+    if entries * entry_digits > MAX_GENERATED_MATRIX_DECIMAL_DIGITS:
         raise OperationResourceAdmissionError(
             location=location,
             code="lie_algebra.generated_subalgebra_output_bound",
-            message="generated-subalgebra intermediate matrix exceeds the canonical output-size bound",
+            message="generated-subalgebra intermediate matrix exceeds the admitted canonical entry-count times digit-width budget",
         )
+
+
+def _admit_generator_family(
+    algebra_value: FiniteDimensionalLieAlgebra,
+    generators_value: tuple[LieAlgebraElement, ...],
+    *,
+    coordinate_label: str,
+    family_bound_code: str,
+    family_bound_message: str,
+    basis_code: str,
+    basis_message: str,
+) -> None:
+    """Admit a generated closure's generator family, axes, and digit heights."""
+    if len(generators_value) > MAX_LIE_DIMENSION:
+        raise OperationDomainValidationError(
+            location=("generators",),
+            code=family_bound_code,
+            message=family_bound_message,
+        )
+    for generator_index, generator in enumerate(generators_value):
+        if generator.basis != algebra_value.basis:
+            raise OperationDomainValidationError(
+                location=("generators", generator_index),
+                code=basis_code,
+                message=basis_message,
+            )
+        for coordinate_index, coordinate in enumerate(generator.coordinates):
+            _run_admission(
+                lambda coordinate=coordinate: require_bounded_rational(
+                    coordinate,
+                    max_digits=MAX_ELEMENT_COEFFICIENT_DIGITS,
+                    label=coordinate_label,
+                ),
+                location=(
+                    "generators",
+                    generator_index,
+                    "coordinates",
+                    coordinate_index,
+                ),
+            )
 
 
 def _admit_generated_closure_height(
@@ -549,16 +586,27 @@ def lie_subalgebra_centralizer(
 
     from jacobian.math.matrices.operations import nullspace_result, rref_result
 
-    request = LieCentralizerRequest(
-        algebra=_as_algebra(algebra), elements=tuple(elements)
-    )
-    algebra_value = request.algebra
+    algebra_value = _as_algebra(algebra)
+    elements_value = tuple(_as_element(element) for element in elements)
+    if len(elements_value) > len(algebra_value.basis):
+        raise OperationDomainValidationError(
+            location=("elements",),
+            code="lie_algebra.centralizer_family_bound",
+            message="the centralizer family cannot exceed the ambient dimension",
+        )
+    for element_index, element in enumerate(elements_value):
+        if element.basis != algebra_value.basis:
+            raise OperationDomainValidationError(
+                location=("elements", element_index),
+                code="lie_algebra.centralizer_element_basis",
+                message="centralizer elements must use the algebra's ordered basis",
+            )
     table = _admit_lie_algebra(algebra_value)
     dimension = len(algebra_value.basis)
-    for element_index, element in enumerate(request.elements):
-        for coordinate_index, coordinate in enumerate(element.coordinates):
+    for element_index, element in enumerate(elements_value):
+        for coordinate_index, coordinate_value in enumerate(element.coordinates):
             _run_admission(
-                lambda coordinate=coordinate: require_bounded_rational(
+                lambda coordinate=coordinate_value: require_bounded_rational(
                     coordinate,
                     max_digits=MAX_ELEMENT_COEFFICIENT_DIGITS,
                     label="centralizer element coordinate",
@@ -570,8 +618,8 @@ def lie_subalgebra_centralizer(
     # the entry-height admission pass and exact row construction, and the
     # final term bounds reduction of the n^2-by-n system.
     work = (
-        len(request.elements) * dimension * MAX_STRUCTURE_NONZEROS
-        + 2 * (len(request.elements) * dimension) * dimension**2
+        len(elements_value) * dimension * MAX_STRUCTURE_NONZEROS
+        + 2 * (len(elements_value) * dimension) * dimension**2
         + dimension**4
     )
     if work > MAX_CENTRALIZER_WORK:
@@ -587,7 +635,7 @@ def lie_subalgebra_centralizer(
     # digit widths, and the common-denominator numerator is bounded by the
     # largest scaled numerator plus ceil(log10(t)).
     largest_entry_height_bound = 1
-    for element in request.elements:
+    for element in elements_value:
         for target in range(dimension):
             for coordinate in range(dimension):
                 term_heights: list[tuple[int, int]] = []
@@ -649,7 +697,7 @@ def lie_subalgebra_centralizer(
             )
             for coordinate in range(dimension)
         )
-        for element in request.elements
+        for element in elements_value
         for target in range(dimension)
     )
     matrix = rational_matrix_from_fractions(rows, column_count=dimension)
@@ -680,26 +728,21 @@ def lie_generated_subalgebra(
     """
     from jacobian.math.matrices.operations import rref_result
 
-    request = LieGeneratedSubalgebraRequest(
-        algebra=_as_algebra(algebra), generators=tuple(generators)
+    algebra_value = _as_algebra(algebra)
+    generators_value = tuple(_as_element(generator) for generator in generators)
+    _admit_generator_family(
+        algebra_value,
+        generators_value,
+        coordinate_label="subalgebra generator coordinate",
+        family_bound_code="lie_algebra.generated_subalgebra_generator_family_bound",
+        family_bound_message=(
+            "the generated-subalgebra generator family exceeds the admitted "
+            f"{MAX_LIE_DIMENSION}-vector bound"
+        ),
+        basis_code="lie_algebra.generated_subalgebra_generator_basis",
+        basis_message="generators must use the algebra's ordered basis",
     )
-    algebra_value = request.algebra
     dimension = len(algebra_value.basis)
-    for generator_index, generator in enumerate(request.generators):
-        for coordinate_index, coordinate in enumerate(generator.coordinates):
-            _run_admission(
-                lambda coordinate=coordinate: require_bounded_rational(
-                    coordinate,
-                    max_digits=MAX_ELEMENT_COEFFICIENT_DIGITS,
-                    label="subalgebra generator coordinate",
-                ),
-                location=(
-                    "generators",
-                    generator_index,
-                    "coordinates",
-                    coordinate_index,
-                ),
-            )
     # Bound every pairwise bracket, each RREF in a closure round, and
     # every possible strict dimension increase plus the final closure check.
     closure_work = (dimension + 1) * (
@@ -708,7 +751,7 @@ def lie_generated_subalgebra(
         + dimension**3
     )
     jacobi_work = 3 * dimension**5
-    generator_rref_work = len(request.generators) * dimension**2 + dimension**3
+    generator_rref_work = len(generators_value) * dimension**2 + dimension**3
     if (
         closure_work + generator_rref_work + jacobi_work
         > MAX_SUBALGEBRA_CHECK_WORK * 20
@@ -732,7 +775,7 @@ def lie_generated_subalgebra(
         max(
             (
                 decimal_digit_width(v.numerator)
-                for g in request.generators
+                for g in generators_value
                 for c in g.coordinates
                 for v in (c.as_fraction(),)
             ),
@@ -741,7 +784,7 @@ def lie_generated_subalgebra(
         max(
             (
                 decimal_digit_width(v.denominator)
-                for g in request.generators
+                for g in generators_value
                 for c in g.coordinates
                 for v in (c.as_fraction(),)
             ),
@@ -773,23 +816,9 @@ def lie_generated_subalgebra(
         entry_digits=initial_rref_height,
         location=("generators", "rref"),
     )
-    # Two supplied rows guarantee rank at least two only if they are
-    # independent; when they are dependent the resulting one-dimensional
-    # span closes by alternation and the implementation skips bracket work.
-    # Therefore two rows are a safe lower bound for preflighting all
-    # nontrivial closure paths.
-    rank_lower_bound = 2 if len(request.generators) >= 2 else len(request.generators)
-    _admit_generated_closure_height(
-        dimension=dimension,
-        rank_lower_bound=rank_lower_bound,
-        initial_height=initial_rref_height,
-        term_count=term_count,
-        structure_digits=structure_digits,
-    )
-
     rows = tuple(
         tuple(value.as_fraction() for value in item.coordinates)
-        for item in request.generators
+        for item in generators_value
     )
     if rows:
         reduced = rref_result(
@@ -799,6 +828,18 @@ def lie_generated_subalgebra(
             tuple(v.as_fraction() for v in row)
             for row in reduced.reduced_matrix.entries[: reduced.rank]
         )
+    # The initial RREF above is admitted by the generator-work, height, and
+    # output checks, so its canonical rank is known before closure. Each
+    # closure round either strictly increases the rank or terminates, so at
+    # most dimension - rank + 1 rounds of worst-case growth can occur.
+    _admit_generated_closure_height(
+        dimension=dimension,
+        rank_lower_bound=len(rows),
+        initial_height=initial_rref_height,
+        term_count=term_count,
+        structure_digits=structure_digits,
+    )
+
     while len(rows) > 1:
         brackets = _subspace_bracket_vectors(rows, rows, table, dimension)
         if not brackets:
@@ -842,35 +883,31 @@ def lie_generated_ideal(
     """Return the smallest ambient ideal containing the supplied vectors.
 
     The kernel repeatedly adjoins brackets of every ambient basis vector with
-    the current RREF rows. Dimension, total work, coefficient growth, and the
-    largest intermediate matrix are admitted before Jacobi expansion or RREF.
+    the current RREF rows. Dimension and total work are admitted upfront, and
+    each bracket or RREF stage admits its own coefficient growth and canonical
+    matrix size from the actual incoming heights before that stage expands.
     """
     from jacobian.math.matrices.operations import rref_result
 
-    request = LieGeneratedIdealRequest(
-        algebra=_as_algebra(algebra), generators=tuple(generators)
+    algebra_value = _as_algebra(algebra)
+    generators_value = tuple(_as_element(generator) for generator in generators)
+    _admit_generator_family(
+        algebra_value,
+        generators_value,
+        coordinate_label="ideal generator coordinate",
+        family_bound_code="lie_algebra.generated_ideal_generator_family_bound",
+        family_bound_message=(
+            "the generated-ideal generator family exceeds the admitted "
+            f"{MAX_LIE_DIMENSION}-vector bound"
+        ),
+        basis_code="lie_algebra.generated_ideal_generator_basis",
+        basis_message="ideal generators must use the algebra's ordered basis",
     )
-    algebra_value = request.algebra
     dimension = len(algebra_value.basis)
-    for generator_index, generator in enumerate(request.generators):
-        for coordinate_index, coordinate in enumerate(generator.coordinates):
-            _run_admission(
-                lambda coordinate=coordinate: require_bounded_rational(
-                    coordinate,
-                    max_digits=MAX_ELEMENT_COEFFICIENT_DIGITS,
-                    label="ideal generator coordinate",
-                ),
-                location=(
-                    "generators",
-                    generator_index,
-                    "coordinates",
-                    coordinate_index,
-                ),
-            )
 
     max_digits = MAX_CANONICAL_RATIONAL_DIGITS
     work = (
-        len(request.generators) * dimension**2
+        len(generators_value) * dimension**2
         + dimension**3
         + 3 * dimension**5
         + (dimension + 1)
@@ -886,16 +923,10 @@ def lie_generated_ideal(
             code="lie_algebra.generated_ideal_work_bound",
             message="generated-ideal closure exceeds its admitted exact-work bound",
         )
-    # The largest RREF input has at most d^2 + d rows and d columns. This
-    # public size envelope is admitted once; each RREF stage then uses the
-    # actual incoming coefficient height to admit its exact expansion.
-    output_bytes = (dimension**3 + dimension**2) * (2 * max_digits + 32) + 1024
-    if output_bytes > CanonicalLimits().max_output_bytes:
-        raise OperationResourceAdmissionError(
-            location=("generators",),
-            code="lie_algebra.generated_ideal_output_bound",
-            message="generated-ideal intermediate matrices exceed the canonical output-size bound",
-        )
+    # No static envelope is admitted here: every matrix this closure can
+    # construct (the initial generator RREF and each bracket/RREF round) is
+    # admitted below from the input's actual coefficient heights before it
+    # is built, and an empty generator family never expands at all.
 
     structure = tuple(
         item.coefficient.as_fraction() for item in algebra_value.structure_constants
@@ -914,7 +945,7 @@ def lie_generated_ideal(
     table = _admit_lie_algebra(algebra_value)
     rows = tuple(
         tuple(value.as_fraction() for value in item.coordinates)
-        for item in request.generators
+        for item in generators_value
     )
     if rows:
         source_digits = max(
@@ -929,10 +960,10 @@ def lie_generated_ideal(
             default=1,
         )
         initial_height = _rref_height_bound(dimension, source_digits)
-        initial_bytes = dimension**2 * (2 * initial_height + 32) + 1024
+        initial_digits = dimension**2 * initial_height
         if (
             initial_height > max_digits
-            or initial_bytes > CanonicalLimits().max_output_bytes
+            or initial_digits > MAX_GENERATED_MATRIX_DECIMAL_DIGITS
         ):
             raise OperationResourceAdmissionError(
                 location=("generators",),
@@ -963,10 +994,10 @@ def lie_generated_ideal(
         bracket_height = _bracket_height_bound(
             min(dimension, len(structure)), structure_digits, current_height
         )
-        bracket_bytes = dimension**3 * (2 * bracket_height + 32) + 1024
+        bracket_digits = dimension**3 * bracket_height
         if (
             bracket_height > max_digits
-            or bracket_bytes > CanonicalLimits().max_output_bytes
+            or bracket_digits > MAX_GENERATED_MATRIX_DECIMAL_DIGITS
         ):
             raise OperationResourceAdmissionError(
                 location=("generators",),
@@ -977,8 +1008,11 @@ def lie_generated_ideal(
         if not brackets:
             break
         rref_height = _rref_height_bound(dimension, max(current_height, bracket_height))
-        rref_bytes = (dimension**3 + dimension**2) * (2 * rref_height + 32) + 1024
-        if rref_height > max_digits or rref_bytes > CanonicalLimits().max_output_bytes:
+        rref_digits = (dimension**3 + dimension**2) * rref_height
+        if (
+            rref_height > max_digits
+            or rref_digits > MAX_GENERATED_MATRIX_DECIMAL_DIGITS
+        ):
             raise OperationResourceAdmissionError(
                 location=("generators",),
                 code="lie_algebra.generated_ideal_height_bound",
@@ -1730,12 +1764,12 @@ def lie_adjoint(
             code="lie_algebra.adjoint_height_bound",
             message="the adjoint matrix coefficient-growth bound exceeds the exact rational limit",
         )
-    estimated_bytes = dimension * dimension * (2 * result_digits + 48) + 2048
-    if estimated_bytes > CanonicalLimits().max_output_bytes:
+    estimated_digits = dimension * dimension * result_digits
+    if estimated_digits > MAX_GENERATED_MATRIX_DECIMAL_DIGITS:
         raise OperationResourceAdmissionError(
             location=("result", "matrix"),
             code="lie_algebra.adjoint_output_bound",
-            message="the adjoint matrix exceeds the canonical output-size bound",
+            message="the adjoint matrix exceeds the admitted canonical entry-count times digit-width budget",
         )
     work = dimension**3 + dimension * dimension * len(algebra_value.structure_constants)
     work_bound = MAX_LIE_DIMENSION**3 + MAX_LIE_DIMENSION**2 * MAX_STRUCTURE_NONZEROS

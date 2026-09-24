@@ -702,6 +702,54 @@ def test_extension_counts_match_direct_count_over_f25() -> None:
     assert result.counts[1].frobenius_power_sum == -1
 
 
+def test_point_enumeration_over_declared_quadratic_extension_field() -> None:
+    """A curve authored over F25 retains that field as its point parent."""
+    field = FiniteFieldPresentation(
+        characteristic=5, modulus_coefficients=(2, 0, 1), generator="b"
+    )
+    curve = FiniteFieldShortWeierstrassCurve(
+        field=field,
+        coefficient_a=FiniteFieldElement(presentation=field, coordinates=(1, 0)),
+        coefficient_b=FiniteFieldElement(presentation=field, coordinates=(1, 0)),
+    )
+
+    def add(left: tuple[int, int], right: tuple[int, int]) -> tuple[int, int]:
+        return ((left[0] + right[0]) % 5, (left[1] + right[1]) % 5)
+
+    def multiply(left: tuple[int, int], right: tuple[int, int]) -> tuple[int, int]:
+        # The declared modulus is b^2 + 2, hence b^2 = 3 in F25.
+        return (
+            (left[0] * right[0] + 3 * left[1] * right[1]) % 5,
+            (left[0] * right[1] + left[1] * right[0]) % 5,
+        )
+
+    expected: set[tuple[tuple[int, int], tuple[int, int]]] = set()
+    one = (1, 0)
+    for x0 in range(5):
+        for x1 in range(5):
+            x = (x0, x1)
+            rhs = add(add(multiply(multiply(x, x), x), x), one)
+            for y0 in range(5):
+                for y1 in range(5):
+                    y = (y0, y1)
+                    if multiply(y, y) == rhs:
+                        expected.add((x, y))
+
+    result = finite_field_points(curve)
+    actual = {
+        (point.x.coordinates, point.y.coordinates)
+        for point in result.points
+        if not point.at_infinity and point.x is not None and point.y is not None
+    }
+    assert len(result.points) == 27
+    assert actual == expected
+    assert all(point.curve == curve for point in result.points)
+    # The independently enumerated order is 27; Lagrange then checks every
+    # returned affine point through the public group operation.
+    for point in result.points:
+        assert finite_field_point_scalar(curve, point, 27).point.at_infinity
+
+
 @pytest.mark.parametrize(("prime", "a", "b"), [(5, 1, 1), (7, 2, 3), (11, 0, 4)])
 def test_character_sum_count_matches_independent_point_enumeration(
     prime: int, a: int, b: int

@@ -33,7 +33,10 @@ from .arithmetic_models import (
 from .newton_polygon import (
     LocalPolynomialInSeries,
     LocalPolynomialNewtonPolygonResult,
+    NewtonEdgeCharacteristicRequest,
+    NewtonEdgeCharacteristicResult,
     local_polynomial_newton_polygon,
+    newton_edge_characteristic_polynomial,
 )
 from .operations import (
     add_puiseux,
@@ -133,6 +136,58 @@ def _rational_function_at_infinity(
 
 
 TOOLS: MathTools = (
+    MathTool(
+        operation_id="local_series.polynomial.newton_edge_characteristic.compute",
+        title="Compute a Newton edge characteristic polynomial",
+        description=(
+            "For one exact lower Newton edge, transport each on-edge local "
+            "series leading coefficient into the characteristic polynomial "
+            "over QQ. The result retains its source and edge; it does not "
+            "select roots or claim a Puiseux branch."
+        ),
+        request_type=NewtonEdgeCharacteristicRequest,
+        result_type=NewtonEdgeCharacteristicResult,
+        run=newton_edge_characteristic_polynomial,
+        tags=("local-series", "polynomial", "newton-polygon", "puiseux", "exact"),
+        examples=(
+            OperationExample(
+                name="leading_coefficient_equation",
+                description="Extract the characteristic polynomial of the first edge.",
+                input={
+                    "polynomial": {
+                        "variable": "t",
+                        "place": "FINITE",
+                        "center": {"num": "0", "den": "1"},
+                        "coefficients": [
+                            {
+                                "y_degree": 0,
+                                "series": {
+                                    "variable": "t",
+                                    "place": "FINITE",
+                                    "center": {"num": "0", "den": "1"},
+                                    "valuation_lower": 2,
+                                    "precision": 3,
+                                    "coefficients": [{"num": "-1", "den": "1"}],
+                                },
+                            },
+                            {
+                                "y_degree": 2,
+                                "series": {
+                                    "variable": "t",
+                                    "place": "FINITE",
+                                    "center": {"num": "0", "den": "1"},
+                                    "valuation_lower": 0,
+                                    "precision": 1,
+                                    "coefficients": [{"num": "1", "den": "1"}],
+                                },
+                            },
+                        ],
+                    },
+                    "edge_index": 0,
+                },
+            ),
+        ),
+    ),
     MathTool(
         operation_id="local_series.polynomial.newton_polygon.compute",
         title="Compute a local polynomial Newton polygon",

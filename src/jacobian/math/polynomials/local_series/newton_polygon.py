@@ -20,7 +20,12 @@ from jacobian.math.polynomials.local_series.values import (
     MAX_LOCAL_SERIES_TERMS,
     TruncatedLaurentWindow,
 )
-from jacobian.math.polynomials.values import PolynomialVariable
+from jacobian.math.polynomials.values import (
+    PolynomialVariable,
+    RationalPolynomial,
+    RationalPolynomialTerm,
+    SparseRationalPolynomial,
+)
 
 MAX_LOCAL_POLYNOMIAL_ROWS = 256
 MAX_LOCAL_POLYNOMIAL_SERIES_SLOTS = 8192
@@ -91,6 +96,103 @@ class LocalPolynomialNewtonPolygonResult(StrictModel):
     points: tuple[NewtonPolygonPoint, ...]
     vertices: tuple[NewtonPolygonPoint, ...]
     edges: tuple[NewtonPolygonEdge, ...]
+
+
+class NewtonEdgeCharacteristicRequest(StrictModel):
+    """Select a lower edge of a local polynomial Newton polygon."""
+
+    polynomial: LocalPolynomialInSeries
+    edge_index: StrictInt = Field(ge=0)
+
+
+class NewtonEdgeCharacteristicTerm(StrictModel):
+    """Transport a source coefficient's leading term to the edge polynomial."""
+
+    y_degree: StrictInt = Field(ge=0)
+    characteristic_exponent: StrictInt = Field(ge=0)
+    leading_coefficient: CanonicalRational
+
+
+class NewtonEdgeCharacteristicResult(StrictModel):
+    """Exact rational edge polynomial, with its source coefficients retained."""
+
+    source: LocalPolynomialInSeries
+    edge_index: StrictInt = Field(ge=0)
+    edge: NewtonPolygonEdge
+    terms: tuple[NewtonEdgeCharacteristicTerm, ...]
+    characteristic_polynomial: RationalPolynomial
+
+
+def newton_edge_characteristic_polynomial(
+    request: NewtonEdgeCharacteristicRequest,
+) -> NewtonEdgeCharacteristicResult:
+    """Return the edge polynomial in the leading coefficient variable ``c``.
+
+    Its terms are ``lc(a_j) * c**(j-j_left)`` for source coefficients whose
+    valuation points lie on the selected lower edge. Roots describe possible
+    nonzero leading coefficients after the edge's valuation substitution; this
+    operation does not select or lift roots.
+    """
+    if not isinstance(request, NewtonEdgeCharacteristicRequest):
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="local_series.newton_characteristic_request_type",
+            message="request must select an edge of a local polynomial",
+        )
+    polygon = local_polynomial_newton_polygon(request.polynomial)
+    if request.edge_index >= len(polygon.edges):
+        raise OperationDomainValidationError(
+            location=("edge_index",),
+            code="local_series.newton_edge_index",
+            message="edge_index must select an edge in the exact lower Newton polygon",
+        )
+    edge = polygon.edges[request.edge_index]
+    left_degree = edge.left.y_degree
+    source_rows = {row.y_degree: row for row in request.polynomial.coefficients}
+    valuations = dict(polygon.coefficient_valuations)
+    transported = []
+    polynomial_terms = []
+    for degree in edge.source_y_degrees:
+        row = source_rows.get(degree)
+        valuation = valuations.get(degree)
+        if row is None or row.series is None or valuation is None:
+            raise OperationDomainValidationError(
+                location=("polynomial", "coefficients"),
+                code="local_series.newton_source_transport",
+                message="the selected edge could not be transported to its source coefficients",
+            )
+        offset = valuation - row.series.valuation_lower
+        coefficient = row.series.coefficients[offset]
+        exponent = degree - left_degree
+        transported.append(
+            NewtonEdgeCharacteristicTerm.model_construct(
+                y_degree=degree,
+                characteristic_exponent=exponent,
+                leading_coefficient=coefficient,
+            )
+        )
+        polynomial_terms.append(
+            RationalPolynomialTerm.model_construct(
+                coefficient=coefficient,
+                exponents=(exponent,),
+            )
+        )
+    characteristic = RationalPolynomial.model_construct(
+        domain="QQ",
+        variables=("c",),
+        polynomial=SparseRationalPolynomial.model_construct(
+            terms=tuple(
+                sorted(polynomial_terms, key=lambda term: term.exponents, reverse=True)
+            )
+        ),
+    )
+    return NewtonEdgeCharacteristicResult.model_construct(
+        source=request.polynomial,
+        edge_index=request.edge_index,
+        edge=edge,
+        terms=tuple(transported),
+        characteristic_polynomial=characteristic,
+    )
 
 
 def _admit(
@@ -225,7 +327,11 @@ __all__ = [
     "LocalPolynomialCoefficient",
     "LocalPolynomialInSeries",
     "LocalPolynomialNewtonPolygonResult",
+    "NewtonEdgeCharacteristicRequest",
+    "NewtonEdgeCharacteristicResult",
+    "NewtonEdgeCharacteristicTerm",
     "NewtonPolygonEdge",
     "NewtonPolygonPoint",
     "local_polynomial_newton_polygon",
+    "newton_edge_characteristic_polynomial",
 ]

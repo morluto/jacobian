@@ -6,7 +6,9 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.polynomials.local_series.newton_polygon import (
     LocalPolynomialCoefficient,
     LocalPolynomialInSeries,
+    NewtonEdgeCharacteristicRequest,
     local_polynomial_newton_polygon,
+    newton_edge_characteristic_polynomial,
 )
 from jacobian.math.polynomials.local_series.values import TruncatedLaurentWindow
 
@@ -103,3 +105,55 @@ def test_singleton_and_zero_row_preserve_exact_valuation() -> None:
     assert result.coefficient_valuations == ((0, None), (5, -1))
     assert [(p.y_degree, p.valuation) for p in result.vertices] == [(5, -1)]
     assert result.edges == ()
+
+
+def test_edge_characteristic_polynomial_transports_exact_leading_coefficients() -> None:
+    polynomial = _polynomial(
+        [
+            (1, _series(5, (2, 3), (8, 1))),
+            (2, _series(3, (-4, 5), (7, 1))),
+            (4, _series(-1, (3, 7))),
+        ]
+    )
+    result = newton_edge_characteristic_polynomial(
+        NewtonEdgeCharacteristicRequest(polynomial=polynomial, edge_index=0)
+    )
+    assert result.edge.slope.as_fraction() == -2
+    assert [
+        (
+            term.y_degree,
+            term.characteristic_exponent,
+            term.leading_coefficient.as_fraction(),
+        )
+        for term in result.terms
+    ] == [
+        (1, 0, Fraction(2, 3)),
+        (2, 1, Fraction(-4, 5)),
+        (4, 3, Fraction(3, 7)),
+    ]
+    assert result.characteristic_polynomial.variables == ("c",)
+    assert [
+        (term.exponents, term.coefficient.as_fraction())
+        for term in result.characteristic_polynomial.polynomial.terms
+    ] == [
+        ((3,), Fraction(3, 7)),
+        ((1,), Fraction(-4, 5)),
+        ((0,), Fraction(2, 3)),
+    ]
+    assert result.source == polynomial
+
+
+def test_edge_characteristic_rejects_nonexistent_edge() -> None:
+    from jacobian.math.polynomials.local_series.newton_polygon import (
+        NewtonEdgeCharacteristicRequest,
+        newton_edge_characteristic_polynomial,
+    )
+
+    with pytest.raises(OperationDomainValidationError) as error:
+        newton_edge_characteristic_polynomial(
+            NewtonEdgeCharacteristicRequest(
+                polynomial=_polynomial([(0, _series(1, (1, 1)))]),
+                edge_index=0,
+            )
+        )
+    assert error.value.errors()[0]["type"] == "local_series.newton_edge_index"

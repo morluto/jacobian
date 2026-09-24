@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from fractions import Fraction
+from math import comb, factorial, lcm
 from typing import Any
 
 from pydantic_core import PydanticCustomError
@@ -22,7 +23,13 @@ from jacobian.math.polynomials.derivations._models import (
     MAX_DERIVATION_ITERATE_COUNT,
     MAX_DERIVATION_ITERATE_TERMS,
     MAX_DERIVATION_SOURCE_TERMS,
+    MAX_GA_ACTION_GROUP_LAW_CELLS,
+    MAX_GA_ACTION_GROUP_LAW_COEFFICIENT_DIGITS,
+    MAX_GA_ACTION_OUTPUT_BYTES,
+    MAX_GA_ACTION_OUTPUT_TERMS,
+    MAX_GA_ACTION_VARIABLES,
     DerivationApplyResult,
+    DerivationFromVectorFieldRequest,
     DerivationIteratesResult,
     LocallyNilpotentCertificate,
     PolynomialDerivation,
@@ -314,6 +321,269 @@ def _encode(variables: tuple[str, ...], terms: _TermMap) -> RationalPolynomial:
     )
 
 
+def _action_parameter(variables: tuple[str, ...]) -> str:
+    if "t" not in variables:
+        return "t"
+    index = 0
+    while True:
+        candidate = f"action_{index}"
+        if candidate not in variables:
+            return candidate
+        index += 1
+
+
+def _admit_action_output(
+    certificate: LocallyNilpotentCertificate, parameter: str
+) -> tuple[tuple[Fraction, ...], ...]:
+    """Bound the exponential image and retain its exact scaled coefficients."""
+
+    images = certificate.generator_iterates
+    variables = certificate.derivation.variables
+    term_count = sum(
+        len(polynomial.polynomial.terms) for chain in images for polynomial in chain
+    )
+    # This covers each scalar, exponent vector, and term object; axis labels
+    # and polynomial wrappers are added separately below.
+    output_bytes = term_count * 384
+    output_bytes += sum(len(variable.encode("utf-8")) for variable in variables)
+    output_bytes += len(parameter.encode("utf-8")) + 256
+    if (
+        term_count > MAX_GA_ACTION_OUTPUT_TERMS
+        or output_bytes > MAX_GA_ACTION_OUTPUT_BYTES
+    ):
+        raise OperationResourceAdmissionError(
+            location=("certificate", "generator_iterates"),
+            code="polynomial_derivation.action_output_budget",
+            message="exponential action exceeds its term or serialized-output envelope",
+        )
+
+    action_coefficients: list[tuple[Fraction, ...]] = []
+    for chain in images:
+        coefficients: list[Fraction] = []
+        for degree, polynomial in enumerate(chain):
+            for term in polynomial.polynomial.terms:
+                scaled = Fraction(
+                    term.coefficient.num,
+                    term.coefficient.den * factorial(degree),
+                )
+                if (
+                    len(str(abs(scaled.numerator))) > MAX_DERIVATION_COEFFICIENT_DIGITS
+                    or len(str(scaled.denominator)) > MAX_DERIVATION_COEFFICIENT_DIGITS
+                ):
+                    raise OperationResourceAdmissionError(
+                        location=("certificate", "generator_iterates"),
+                        code="polynomial_derivation.action_coefficient_budget",
+                        message="exponential image coefficient exceeds the exact digit envelope",
+                    )
+                coefficients.append(scaled)
+        action_coefficients.append(tuple(coefficients))
+    return tuple(action_coefficients)
+
+
+def _coaction_denominator_digits(
+    action_coefficients: tuple[tuple[Fraction, ...], ...],
+) -> tuple[int, ...]:
+    """Compute exact common-denominator sizes, stopping at the admitted limit."""
+
+    digit_counts: list[int] = []
+    for values in action_coefficients:
+        common_denominator = 1
+        for denominator in {value.denominator for value in values}:
+            common_denominator = lcm(common_denominator, denominator)
+            if (
+                len(str(common_denominator))
+                > MAX_GA_ACTION_GROUP_LAW_COEFFICIENT_DIGITS
+            ):
+                raise OperationResourceAdmissionError(
+                    location=("certificate", "generator_iterates"),
+                    code="polynomial_derivation.action_law_coefficient_budget",
+                    message="coaction coefficient denominator exceeds its exact growth envelope",
+                )
+        digit_counts.append(len(str(common_denominator)))
+    return tuple(digit_counts)
+
+
+def _admit_coaction_term(
+    exponents: tuple[int, ...],
+    degree: int,
+    outer_coefficient: Fraction,
+    outer_denominator_digits: int,
+    image_supports: tuple[int, ...],
+    numerator_digits: tuple[int, ...],
+    denominator_digits: tuple[int, ...],
+    action_law_work: int,
+) -> int:
+    """Bound one substituted monomial's expansion and coefficient height."""
+
+    support_product = 1
+    product_numerator_digits = len(str(abs(outer_coefficient.numerator)))
+    denominator_bound = outer_denominator_digits
+    for axis, (exponent, support) in enumerate(
+        zip(exponents, image_supports, strict=True)
+    ):
+        if exponent:
+            if support == 0:
+                support_product = 0
+                break
+            product_numerator_digits += exponent * numerator_digits[axis]
+            denominator_bound += exponent * denominator_digits[axis]
+            for _ in range(exponent):
+                support_product *= support
+                action_law_work += support_product
+                if action_law_work > MAX_GA_ACTION_GROUP_LAW_CELLS:
+                    raise OperationResourceAdmissionError(
+                        location=("certificate",),
+                        code="polynomial_derivation.action_law_budget",
+                        message="additive-group coaction replay exceeds its exact expansion envelope",
+                    )
+    # Expanding (s+t)^degree contributes degree+1 exact cells.
+    action_law_work += degree + 1
+    if action_law_work > MAX_GA_ACTION_GROUP_LAW_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("certificate",),
+            code="polynomial_derivation.action_law_budget",
+            message="additive-group coaction replay exceeds its exact expansion envelope",
+        )
+    coefficient_digits = (
+        product_numerator_digits
+        + denominator_bound
+        + len(str(2**degree))
+        + len(str(action_law_work))
+    )
+    if coefficient_digits > MAX_GA_ACTION_GROUP_LAW_COEFFICIENT_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("certificate", "generator_iterates"),
+            code="polynomial_derivation.action_law_coefficient_budget",
+            message="coaction coefficient growth exceeds its exact digit envelope",
+        )
+    return action_law_work
+
+
+def _admit_coaction_expansion(
+    certificate: LocallyNilpotentCertificate,
+    action_coefficients: tuple[tuple[Fraction, ...], ...],
+) -> None:
+    """Preflight complete exact two-parameter coaction replay."""
+
+    images = certificate.generator_iterates
+
+    # For each outer monomial, substitute each source generator by its inner
+    # action image. The product of support sizes to the requested exponents is
+    # a complete upper bound on exact sparse product contributions.
+    image_supports = tuple(
+        sum(len(value.polynomial.terms) for value in chain) for chain in images
+    )
+    numerator_digits = tuple(
+        max((len(str(abs(value.numerator))) for value in values), default=1)
+        for values in action_coefficients
+    )
+    denominator_lcm_digits = _coaction_denominator_digits(action_coefficients)
+    action_law_work = 0
+    for generator_index, chain in enumerate(images):
+        coefficient_index = 0
+        for degree, polynomial in enumerate(chain):
+            for term in polynomial.polynomial.terms:
+                outer_coefficient = action_coefficients[generator_index][
+                    coefficient_index
+                ]
+                coefficient_index += 1
+                action_law_work = _admit_coaction_term(
+                    term.exponents,
+                    degree,
+                    outer_coefficient,
+                    denominator_lcm_digits[generator_index],
+                    image_supports,
+                    numerator_digits,
+                    denominator_lcm_digits,
+                    action_law_work,
+                )
+
+
+def _action_preflight(
+    certificate: LocallyNilpotentCertificate, parameter: str
+) -> tuple[tuple[Fraction, ...], ...]:
+    """Admit the finite action images and their complete coaction check."""
+
+    action_coefficients = _admit_action_output(certificate, parameter)
+    _admit_coaction_expansion(certificate, action_coefficients)
+    return action_coefficients
+
+
+def _check_ga_coaction(
+    action_images: tuple[RationalPolynomial, ...],
+    derivation: PolynomialDerivation,
+    parameter: str,
+) -> None:
+    """Check counit, infinitesimal recovery, and additive coassociativity."""
+
+    variables = derivation.variables
+    axis_count = len(variables)
+    lifted_images: list[_TermMap] = []
+    for index, image in enumerate(action_images):
+        terms = _term_map(image)
+        # The counit is evaluation at t=0; it must return x_i.
+        counit = {
+            exponents[:-1]: coefficient
+            for exponents, coefficient in terms.items()
+            if exponents[-1] == 0
+        }
+        if counit != _term_map(_generator(variables, index)):
+            raise OperationDomainValidationError(
+                location=("generator_images", index),
+                code="polynomial_derivation.action_counit",
+                message="exponential image does not satisfy the action identity at zero",
+            )
+        infinitesimal = {
+            exponents[:-1]: coefficient
+            for exponents, coefficient in terms.items()
+            if exponents[-1] == 1
+        }
+        if infinitesimal != _term_map(derivation.images[index]):
+            raise OperationDomainValidationError(
+                location=("generator_images", index),
+                code="polynomial_derivation.action_derivative",
+                message="exponential image derivative at zero does not recover the derivation",
+            )
+        lifted_images.append(
+            {
+                (*exponents[:-1], 0, exponents[-1]): coefficient
+                for exponents, coefficient in terms.items()
+            }
+        )
+
+    for index, image in enumerate(action_images):
+        left: _TermMap = {}
+        for exponents, coefficient in _term_map(image).items():
+            product: _TermMap = {(0,) * (axis_count + 2): coefficient}
+            for axis, power in enumerate(exponents[:-1]):
+                factor = lifted_images[axis]
+                for _ in range(power):
+                    product = _multiply(product, factor)
+            parameter_power = exponents[-1]
+            if parameter_power:
+                shifted: _TermMap = {}
+                for powers, value in product.items():
+                    target = list(powers)
+                    target[axis_count] += parameter_power
+                    shifted[tuple(target)] = value
+                product = shifted
+            _add(left, product)
+
+        right: _TermMap = {}
+        for exponents, coefficient in _term_map(image).items():
+            source_powers, parameter_power = exponents[:-1], exponents[-1]
+            for s_power in range(parameter_power + 1):
+                right[(*source_powers, s_power, parameter_power - s_power)] = (
+                    coefficient * comb(parameter_power, s_power)
+                )
+        if left != right:
+            raise OperationDomainValidationError(
+                location=("generator_images", index),
+                code="polynomial_derivation.action_coaction",
+                message="exponential images fail the additive-group coaction law",
+            )
+
+
 def _apply_admitted(
     derivation: PolynomialDerivation, polynomial: RationalPolynomial
 ) -> DerivationApplyResult:
@@ -364,6 +634,13 @@ def _admit_certificate(
 ) -> LocallyNilpotentCertificate:
     """Recheck the authored relation before exponentiating it."""
     certificate = _as_certificate(certificate)
+    return _verify_certificate(certificate)
+
+
+def _verify_certificate(
+    certificate: LocallyNilpotentCertificate,
+) -> LocallyNilpotentCertificate:
+    """Replay a canonical certificate after structural parsing."""
     if not isinstance(certificate, LocallyNilpotentCertificate):
         raise OperationDomainValidationError(
             location=("certificate",),
@@ -556,30 +833,68 @@ def construct_locally_nilpotent_certificate(
 def ga_action_from_certificate(
     certificate: LocallyNilpotentCertificate,
 ) -> PolynomialGaAction:
-    """Exponentiate a checked locally nilpotent derivation on generators."""
-    certificate = _admit_certificate(certificate)
+    """Recheck and exponentiate a caller-authored locally nilpotent certificate."""
+    certificate = _as_certificate(certificate)
+    derivation = certificate.derivation
+    if len(derivation.variables) > MAX_GA_ACTION_VARIABLES:
+        raise OperationResourceAdmissionError(
+            location=("certificate", "derivation", "variables"),
+            code="polynomial_derivation.action_variable_budget",
+            message=(
+                "the action parameter is an explicit polynomial axis, so the "
+                f"action supports at most {MAX_GA_ACTION_VARIABLES} source variables"
+            ),
+        )
+    certificate = _verify_certificate(certificate)
+    return _ga_action_from_admitted_certificate(certificate)
+
+
+def ga_action_from_derivation(
+    derivation: PolynomialDerivation | Mapping[str, Any],
+    chains: tuple[tuple[RationalPolynomial, ...], ...],
+) -> PolynomialGaAction:
+    """Construct a locally nilpotent certificate and exponentiate in one pass."""
+    derivation_value = _as_derivation(derivation)
+    if len(derivation_value.variables) > MAX_GA_ACTION_VARIABLES:
+        raise OperationResourceAdmissionError(
+            location=("derivation", "variables"),
+            code="polynomial_derivation.action_variable_budget",
+            message=(
+                "the action parameter is an explicit polynomial axis, so the "
+                f"action supports at most {MAX_GA_ACTION_VARIABLES} source variables"
+            ),
+        )
+    certificate = construct_locally_nilpotent_certificate(derivation_value, chains)
+    return _ga_action_from_admitted_certificate(certificate)
+
+
+def _ga_action_from_admitted_certificate(
+    certificate: LocallyNilpotentCertificate,
+) -> PolynomialGaAction:
+    """Build a bounded exact action after one complete certificate replay."""
     derivation = certificate.derivation
     variables = derivation.variables
-    parameter = "t"
+    parameter = _action_parameter(variables)
+    action_coefficients = _action_preflight(certificate, parameter)
     extended = (*variables, parameter)
     images: list[RationalPolynomial] = []
-    for chain in certificate.generator_iterates:
+    for chain, scaled_coefficients in zip(
+        certificate.generator_iterates, action_coefficients, strict=True
+    ):
         terms: dict[tuple[int, ...], Fraction] = {}
-        factorial = 1
+        coefficient_index = 0
         for index, value in enumerate(chain):
-            factorial = factorial * index if index else 1
             for term in value.polynomial.terms:
-                exponents = (*term.exponents, index)
-                coefficient = Fraction(
-                    term.coefficient.num, term.coefficient.den * factorial
-                )
-                terms[exponents] = terms.get(exponents, Fraction(0)) + coefficient
+                terms[(*term.exponents, index)] = scaled_coefficients[coefficient_index]
+                coefficient_index += 1
         images.append(
             _encode(extended, {key: value for key, value in terms.items() if value})
         )
-    return PolynomialGaAction.model_construct(
+    result = PolynomialGaAction.model_construct(
         source_variables=variables, parameter=parameter, generator_images=tuple(images)
     )
+    _check_ga_coaction(result.generator_images, derivation, parameter)
+    return result
 
 
 def apply_derivation(
@@ -593,9 +908,36 @@ def apply_derivation(
     return _apply_admitted(derivation_value, polynomial_value)
 
 
+def derivation_from_vector_field(
+    components: tuple[RationalPolynomial, ...]
+    | DerivationFromVectorFieldRequest
+    | Mapping[str, Any],
+) -> PolynomialDerivation:
+    """Bind vector-field components as the generator images of a derivation.
+
+    For ``X = sum_i f_i partial_i``, the associated algebra derivation is
+    characterized by ``D(x_i)=f_i``.  This conversion preserves the ordered
+    polynomial parent and does not interpret the components through a backend.
+    """
+    if isinstance(components, DerivationFromVectorFieldRequest):
+        request = DerivationFromVectorFieldRequest.model_validate(
+            components.model_dump()
+        )
+    elif isinstance(components, Mapping):
+        request = DerivationFromVectorFieldRequest.model_validate(components)
+    else:
+        request = DerivationFromVectorFieldRequest(components=components)
+    variables = request.components[0].variables
+    derivation = PolynomialDerivation(variables=variables, images=request.components)
+    _admit_derivation(derivation)
+    return derivation
+
+
 __all__ = [
     "apply_derivation",
     "construct_locally_nilpotent_certificate",
+    "derivation_from_vector_field",
     "derivation_iterates",
     "ga_action_from_certificate",
+    "ga_action_from_derivation",
 ]

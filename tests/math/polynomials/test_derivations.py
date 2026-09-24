@@ -95,6 +95,33 @@ class TestDerivationApplyKnownAnswers:
         assert _terms(result.contributions[1]) == ((1, (3, 0)),)
 
 
+def test_vector_field_conversion_preserves_generator_semantics() -> None:
+    from jacobian.math.polynomials.derivations._models import (
+        DerivationFromVectorFieldRequest,
+    )
+    from jacobian.math.polynomials.derivations._tools import TOOLS
+    from jacobian.math.polynomials.derivations.operations import (
+        derivation_from_vector_field,
+    )
+
+    components = (_poly(XY, ((1, (0, 1)),)), _poly(XY, ()))
+    request = DerivationFromVectorFieldRequest(components=components)
+    derivation = derivation_from_vector_field(request)
+    assert derivation.variables == XY
+    assert derivation.images == components
+
+    # Independent calculus oracle: y*d_x(x^2 + 3*y) + 0*d_y(...) = 2*x*y.
+    source = _poly(XY, ((1, (2, 0)), (3, (0, 1))))
+    assert _terms(apply_derivation(derivation, source).result) == ((2, (1, 1)),)
+
+    tool = next(
+        tool
+        for tool in TOOLS
+        if tool.operation_id == "polynomial_derivation.from_vector_field.compute"
+    )
+    assert tool.run(request) == derivation
+
+
 class TestDerivationInvariants:
     def test_leibniz_rule(self) -> None:
         from jacobian.math.polynomials.derivations.operations import (

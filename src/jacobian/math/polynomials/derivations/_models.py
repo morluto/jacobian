@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Literal, Self
+from typing import Annotated, Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import ConfigDict, Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
@@ -24,6 +24,20 @@ MAX_DERIVATION_ITERATE_COUNT = 32
 MAX_DERIVATION_ITERATE_TERMS = 4_096
 MAX_DERIVATION_CERTIFICATE_CHAIN = 32
 MAX_DERIVATION_PARAMETER = "t"
+MAX_GA_ACTION_VARIABLES = 7
+MAX_GA_ACTION_OUTPUT_TERMS = 4_096
+MAX_GA_ACTION_OUTPUT_BYTES = 2_000_000
+MAX_GA_ACTION_GROUP_LAW_CELLS = 25_000
+MAX_GA_ACTION_GROUP_LAW_COEFFICIENT_DIGITS = 512
+
+GeneratorIterateChain = Annotated[
+    tuple[RationalPolynomial, ...],
+    Field(min_length=1, max_length=MAX_DERIVATION_CERTIFICATE_CHAIN),
+]
+GeneratorIterateChains = Annotated[
+    tuple[GeneratorIterateChain, ...],
+    Field(max_length=MAX_DERIVATION_VARIABLES),
+]
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -62,7 +76,9 @@ class PolynomialDerivation(StrictModel):
     variables: tuple[PolynomialVariable, ...] = Field(
         min_length=1, max_length=MAX_DERIVATION_VARIABLES
     )
-    images: tuple[RationalPolynomial, ...] = Field(min_length=1)
+    images: tuple[RationalPolynomial, ...] = Field(
+        min_length=1, max_length=MAX_DERIVATION_VARIABLES
+    )
 
     @model_validator(mode="after")
     def require_complete_generator_images(self) -> Self:
@@ -100,6 +116,28 @@ class DerivationApplyRequest(StrictModel):
             raise _validation_error(
                 "ordered_ring",
                 "the polynomial must use the derivation's ordered ring",
+            )
+        return self
+
+
+class DerivationFromVectorFieldRequest(StrictModel):
+    """Convert a polynomial vector field to its induced QQ-derivation."""
+
+    components: Annotated[
+        tuple[RationalPolynomial, ...], Field(min_length=1, max_length=8)
+    ]
+
+    @model_validator(mode="after")
+    def require_vector_field_axis(self) -> Self:
+        variables = self.components[0].variables
+        if len(self.components) != len(variables):
+            raise _validation_error(
+                "vector_field_component_count",
+                "a vector field needs one polynomial component per ordered variable",
+            )
+        if any(component.variables != variables for component in self.components):
+            raise _validation_error(
+                "ordered_ring", "vector-field components must share one ordered QQ ring"
             )
         return self
 
@@ -153,7 +191,7 @@ class DerivationIteratesResult(StrictModel):
 
 class LocallyNilpotentCertificate(StrictModel):
     derivation: PolynomialDerivation
-    generator_iterates: tuple[tuple[RationalPolynomial, ...], ...]
+    generator_iterates: GeneratorIterateChains
 
     @model_validator(mode="after")
     def require_shape(self) -> Self:
@@ -185,10 +223,19 @@ class PolynomialGaAction(StrictModel):
 
     @model_validator(mode="after")
     def require_action_shape(self) -> Self:
+        if not 1 <= len(self.source_variables) <= MAX_GA_ACTION_VARIABLES:
+            raise _validation_error(
+                "action_variable_budget",
+                "an action needs 1 to 7 source variables because its parameter is an explicit polynomial axis",
+            )
         if self.parameter in self.source_variables:
             raise _validation_error(
                 "action_parameter",
                 "the action parameter must be distinct from source variables",
+            )
+        if len(set(self.source_variables)) != len(self.source_variables):
+            raise _validation_error(
+                "action_variable_axis", "source action variables must be unique"
             )
         expected = (*self.source_variables, self.parameter)
         if len(self.generator_images) != len(self.source_variables) or any(
@@ -198,17 +245,71 @@ class PolynomialGaAction(StrictModel):
                 "action_ring",
                 "action generator images must use the source ring extended by the parameter",
             )
+        term_count = sum(len(image.polynomial.terms) for image in self.generator_images)
+        if term_count > MAX_GA_ACTION_OUTPUT_TERMS:
+            raise _validation_error(
+                "action_output_terms", "action images exceed the complete term envelope"
+            )
+        if any(
+            any(exponent > MAX_DERIVATION_EXPONENT for exponent in term.exponents[:-1])
+            or term.exponents[-1] >= MAX_DERIVATION_CERTIFICATE_CHAIN
+            or sum(term.exponents)
+            > MAX_DERIVATION_EXPONENT + MAX_DERIVATION_CERTIFICATE_CHAIN - 1
+            or len(str(abs(term.coefficient.num))) > MAX_DERIVATION_COEFFICIENT_DIGITS
+            or len(str(term.coefficient.den)) > MAX_DERIVATION_COEFFICIENT_DIGITS
+            for image in self.generator_images
+            for term in image.polynomial.terms
+        ):
+            raise _validation_error(
+                "action_output_bound",
+                "action term exceeds its degree or coefficient envelope",
+            )
         return self
 
 
 class DerivationCertificateRequest(StrictModel):
     derivation: PolynomialDerivation
-    chains: tuple[tuple[RationalPolynomial, ...], ...]
+    chains: GeneratorIterateChains
 
 
 class GaActionRequest(StrictModel):
-    derivation: PolynomialDerivation
-    chains: tuple[tuple[RationalPolynomial, ...], ...]
+    model_config = ConfigDict(
+        json_schema_extra={
+            "description": (
+                "Construct exp(tD) from exact generator iterate chains. The "
+                "explicit parameter axis limits the source ring to "
+                f"{MAX_GA_ACTION_VARIABLES} variables; action output is bounded "
+                f"to {MAX_GA_ACTION_OUTPUT_TERMS} terms, "
+                f"{MAX_GA_ACTION_OUTPUT_BYTES} estimated bytes, and "
+                f"{MAX_GA_ACTION_GROUP_LAW_CELLS} coaction expansion cells "
+                "with coefficient-height bound "
+                f"{MAX_GA_ACTION_GROUP_LAW_COEFFICIENT_DIGITS} digits."
+            ),
+            "admission_limits": {
+                "max_source_variables": MAX_GA_ACTION_VARIABLES,
+                "max_action_output_terms": MAX_GA_ACTION_OUTPUT_TERMS,
+                "max_action_output_bytes": MAX_GA_ACTION_OUTPUT_BYTES,
+                "max_coaction_expansion_cells": MAX_GA_ACTION_GROUP_LAW_CELLS,
+                "max_coaction_coefficient_digits": MAX_GA_ACTION_GROUP_LAW_COEFFICIENT_DIGITS,
+                "max_generator_chain_length": MAX_DERIVATION_CERTIFICATE_CHAIN,
+            },
+        }
+    )
+
+    derivation: PolynomialDerivation = Field(
+        description=(
+            "The derivation must have at most "
+            f"{MAX_GA_ACTION_VARIABLES} ordered source variables so its "
+            "explicit additive parameter fits the 8-axis polynomial carrier."
+        )
+    )
+    chains: GeneratorIterateChains = Field(
+        description=(
+            "One complete exact iterate chain per generator, starting with "
+            "that generator and ending at zero; each chain has at most "
+            f"{MAX_DERIVATION_CERTIFICATE_CHAIN} polynomials."
+        )
+    )
 
 
 class DerivationApplyResult(StrictModel):

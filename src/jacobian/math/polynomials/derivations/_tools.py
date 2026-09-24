@@ -7,17 +7,30 @@ from jacobian.math.polynomials.derivations._models import (
     DerivationApplyRequest,
     DerivationApplyResult,
     DerivationCertificateRequest,
+    DerivationFromVectorFieldRequest,
     DerivationIteratesRequest,
     DerivationIteratesResult,
     GaActionRequest,
     LocallyNilpotentCertificate,
+    PolynomialDerivation,
     PolynomialGaAction,
+)
+from jacobian.math.polynomials.derivations._weight_models import (
+    PolynomialWeightActionRequest,
+    PolynomialWeightActionResult,
+    PolynomialWeightInvariantRequest,
+    PolynomialWeightInvariantResult,
+)
+from jacobian.math.polynomials.derivations._weight_operations import (
+    diagonal_weight_action,
+    gm_invariants_through_degree,
 )
 from jacobian.math.polynomials.derivations.operations import (
     apply_derivation,
     construct_locally_nilpotent_certificate,
+    derivation_from_vector_field,
     derivation_iterates,
-    ga_action_from_certificate,
+    ga_action_from_derivation,
 )
 
 
@@ -109,6 +122,36 @@ _CERTIFICATE_EXAMPLE = {
 
 _TOOLS += (
     MathTool(
+        operation_id="polynomial_derivation.from_vector_field.compute",
+        title="Convert a polynomial vector field into its algebra derivation",
+        description=(
+            "Bind one exact polynomial component f_i to each generator x_i, "
+            "representing D=sum_i f_i partial_i on the same ordered QQ ring. "
+            "The conversion retains the complete variable axis and admits all "
+            "component term, degree, exponent, and coefficient bounds before "
+            "publishing the derivation."
+        ),
+        request_type=DerivationFromVectorFieldRequest,
+        result_type=PolynomialDerivation,
+        run=lambda request: derivation_from_vector_field(request),
+        tags=("polynomial", "vector-field", "derivation", "exact"),
+        discovery_terms=(
+            "polynomial vector field as derivation",
+            "derivation from vector field",
+            "infinitesimal polynomial action",
+        ),
+        examples=(
+            OperationExample(
+                name="triangular_vector_field",
+                description=(
+                    "The vector field y partial_x has generator images D(x)=y "
+                    "and D(y)=0 in the ordered ring QQ[x,y]."
+                ),
+                input={"components": _TRIANGULAR_IMAGES},
+            ),
+        ),
+    ),
+    MathTool(
         operation_id="polynomial_derivation.iterates.compute",
         title="Compute a bounded exact derivation iterate profile",
         description="Compute D^0(f) through D^N(f), returning the first zero when reached or a nonzero-through-bound profile; a finite nonzero prefix is not a global nonnilpotence claim.",
@@ -147,11 +190,18 @@ _TOOLS += (
     MathTool(
         operation_id="algebraic_group.ga.action_from_derivation.compute",
         title="Exponentiate a checked locally nilpotent derivation",
-        description="Compute the finite exact additive-group exponential action exp(tD) on generators from a checked locally nilpotent certificate; the parameter is a new polynomial axis.",
+        description=(
+            "Check exact generator chains for local nilpotence, then return the "
+            "finite exponential coaction exp(tD) on generators. The producer "
+            "replays identity, infinitesimal recovery, and the additive coaction "
+            "law before returning. Admission bounds source variables, total "
+            "output terms and bytes, and exact two-parameter coaction expansion "
+            "work and coefficient height."
+        ),
         request_type=GaActionRequest,
         result_type=PolynomialGaAction,
-        run=lambda request: ga_action_from_certificate(
-            construct_locally_nilpotent_certificate(request.derivation, request.chains)
+        run=lambda request: ga_action_from_derivation(
+            request.derivation, request.chains
         ),
         tags=("algebraic-group", "ga", "derivation", "exact"),
         examples=(
@@ -164,6 +214,83 @@ _TOOLS += (
     ),
 )
 
-TOOLS: tuple[MathTool[Any, Any], ...] = _TOOLS
+TOOLS: tuple[MathTool[Any, Any], ...] = (
+    *_TOOLS,
+    MathTool(
+        operation_id="algebraic_group.gm.invariants_through_degree.compute",
+        title="Compute the bounded exact G_m invariant polynomial slice",
+        description=(
+            "Enumerate the complete monomial basis of QQ[x_1,...,x_n] in "
+            "total degree at most d, retain precisely those exponent vectors "
+            "whose dot product with the declared integer variable weights is "
+            "zero, and return the basis and Hilbert-function prefix. This is "
+            "the exact invariant subspace of the finite degree slice, not a "
+            "generating set for the global invariant ring. The full candidate "
+            "monomial count is admitted before enumeration and is bounded by "
+            "4096; weights retain the diagonal G_m coaction semantics, including "
+            "negative weights."
+        ),
+        request_type=PolynomialWeightInvariantRequest,
+        result_type=PolynomialWeightInvariantResult,
+        run=gm_invariants_through_degree,
+        tags=("algebraic-group", "gm", "invariants", "graded", "exact"),
+        discovery_terms=(
+            "G_m invariant polynomials through degree",
+            "weight-zero monomial basis",
+            "multiplicative group Hilbert prefix",
+        ),
+        examples=(
+            OperationExample(
+                name="opposite_weights_invariants_through_degree_four",
+                description="For weights (1,-1), the invariant monomials through degree four are 1, x*y, and x^2*y^2.",
+                input={
+                    "action": {"variables": ["x", "y"], "weights": [1, -1]},
+                    "degree": 4,
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="algebraic_group.gm.diagonal_weight_action.compute",
+        title="Apply a bounded diagonal integer-weight G_m action",
+        description=(
+            "For an exact QQ polynomial ring with 1 to 8 ordered variables and "
+            "one integer weight in [-64,64] per variable, return the Laurent "
+            "coaction image, exact integer-weight decomposition, and weight-zero "
+            "invariant projection of a same-parent polynomial. Source degree is "
+            "at most 64 and source terms at most 256; these bounds are checked "
+            "before constructing Laurent monomials. The diagonal formula "
+            "lambda.x_i=lambda^w_i*x_i satisfies counit and coassociativity "
+            "termwise, including negative weights."
+        ),
+        request_type=PolynomialWeightActionRequest,
+        result_type=PolynomialWeightActionResult,
+        run=diagonal_weight_action,
+        tags=("algebraic-group", "gm", "polynomial", "weights", "exact"),
+        discovery_terms=(
+            "multiplicative group polynomial action",
+            "diagonal integer weights",
+            "polynomial weight decomposition",
+            "weight zero invariant polynomial slice",
+        ),
+        examples=(
+            OperationExample(
+                name="positive_zero_and_negative_weights",
+                description=(
+                    "For weights (1,-1,0), x*y*z is fixed, while x^2 and y^2 "
+                    "have weights 2 and -2. The Laurent parameter is separate."
+                ),
+                input={
+                    "action": {"variables": ["x", "y", "z"], "weights": [1, -1, 0]},
+                    "polynomial": _poly(
+                        ["x", "y", "z"],
+                        [(1, [2, 0, 0]), (1, [1, 1, 1]), (1, [0, 2, 0])],
+                    ),
+                    "parameter": "t",
+                },
+            ),
+        ),
+    ),
+)
 
 __all__ = ["TOOLS"]

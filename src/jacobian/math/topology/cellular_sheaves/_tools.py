@@ -8,12 +8,15 @@ from jacobian.math.topology.cellular_sheaves._models import (
     FromCoverMapsResult,
     SheafCohomologyRequest,
     SheafCohomologyResult,
+    SheafSubcomplexRequest,
+    SheafSubcomplexResult,
 )
 from jacobian.math.topology.cellular_sheaves.extensions_tools import (
     TOOLS as EXTENSION_TOOLS,
 )
 from jacobian.math.topology.cellular_sheaves.operations import (
     from_cover_maps,
+    restrict_to_subcomplex,
     sheaf_cohomology,
 )
 
@@ -36,6 +39,12 @@ def _run_sheaf_cohomology(
     request: SheafCohomologyRequest,
 ) -> SheafCohomologyResult:
     return sheaf_cohomology(request.sheaf)
+
+
+def _run_restrict_to_subcomplex(
+    request: SheafSubcomplexRequest,
+) -> SheafSubcomplexResult:
+    return restrict_to_subcomplex(request.sheaf, request.subcomplex)
 
 
 _INTERVAL_CANONICAL = {
@@ -92,13 +101,72 @@ def _identity_cover_maps() -> list[dict[str, object]]:
         (["b", "c"], ["a", "b", "c"]),
     )
     return [
-        {"source": source, "target": target, "entries": [["1"]]}
+        {"source": source, "target": target, "entries": [[{"num": "1", "den": "1"}]]}
         for source, target in pairs
     ]
 
 
 TOOLS: MathTools = (
     *EXTENSION_TOOLS,
+    MathTool(
+        operation_id="cellular_sheaf.subcomplex.restrict",
+        title="Restrict a cellular sheaf to an included subcomplex",
+        description=(
+            "Filter a checked sheaf diagram to the cells of an included "
+            "simplicial subcomplex, retaining its exact stalk bases, coefficient "
+            "field, and all comparable-cell restriction maps."
+        ),
+        request_type=SheafSubcomplexRequest,
+        result_type=SheafSubcomplexResult,
+        run=_run_restrict_to_subcomplex,
+        tags=("topology", "cellular-sheaf", "restriction", "subcomplex", "exact"),
+        examples=(
+            OperationExample(
+                name="interval_vertex_subcomplex",
+                description="Restrict a constant sheaf on an interval to its vertex a.",
+                input={
+                    "sheaf": {
+                        "complex": _INTERVAL_CANONICAL,
+                        "coefficient_field": "QQ",
+                        "stalks": [
+                            {"simplex": ["a"], "basis": ["x"]},
+                            {"simplex": ["b"], "basis": ["x"]},
+                            {"simplex": ["a", "b"], "basis": ["x"]},
+                        ],
+                        "cover_restrictions": [
+                            {
+                                "source": ["a"],
+                                "target": ["a", "b"],
+                                "row_basis": ["x"],
+                                "column_basis": ["x"],
+                                "entries": [[{"num": "1", "den": "1"}]],
+                                "cover_path": [["a"], ["a", "b"]],
+                            },
+                            {
+                                "source": ["b"],
+                                "target": ["a", "b"],
+                                "row_basis": ["x"],
+                                "column_basis": ["x"],
+                                "entries": [[{"num": "1", "den": "1"}]],
+                                "cover_path": [["b"], ["a", "b"]],
+                            },
+                        ],
+                        "derived_restrictions": [],
+                        "diamonds": 0,
+                        "comparable_pairs": 2,
+                    },
+                    "subcomplex": {
+                        "vertices": ["a"],
+                        "maximal_simplices": [["a"]],
+                        "faces_by_dimension": [{"dimension": 0, "faces": [["a"]]}],
+                        "dimension": 0,
+                        "f_vector": [1],
+                        "closure_size": 1,
+                    },
+                },
+            ),
+        ),
+    ),
     MathTool(
         operation_id="cellular_sheaf.cohomology.compute",
         title="Compute cellular sheaf cohomology with representative cocycles",
@@ -149,7 +217,7 @@ TOOLS: MathTools = (
                                 "target": ["a", "b"],
                                 "row_basis": ["x"],
                                 "column_basis": ["x"],
-                                "entries": [["1"]],
+                                "entries": [[{"num": "1", "den": "1"}]],
                                 "cover_path": [["a"], ["a", "b"]],
                             },
                             {
@@ -157,7 +225,7 @@ TOOLS: MathTools = (
                                 "target": ["a", "b"],
                                 "row_basis": ["x"],
                                 "column_basis": ["x"],
-                                "entries": [["1"]],
+                                "entries": [[{"num": "1", "den": "1"}]],
                                 "cover_path": [["b"], ["a", "b"]],
                             },
                         ],
@@ -223,12 +291,12 @@ TOOLS: MathTools = (
                         {
                             "source": ["a"],
                             "target": ["a", "b"],
-                            "entries": [["1"]],
+                            "entries": [[{"num": "1", "den": "1"}]],
                         },
                         {
                             "source": ["b"],
                             "target": ["a", "b"],
-                            "entries": [["1"]],
+                            "entries": [[{"num": "1", "den": "1"}]],
                         },
                     ],
                 },
@@ -249,7 +317,7 @@ TOOLS: MathTools = (
                         {
                             "source": ["a", "b"],
                             "target": ["a", "b", "c"],
-                            "entries": [["2"]],
+                            "entries": [[{"num": "2", "den": "1"}]],
                         },
                         *(_identity_cover_maps()[7:]),
                     ],

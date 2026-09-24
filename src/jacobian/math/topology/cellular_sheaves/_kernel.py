@@ -15,8 +15,8 @@ from __future__ import annotations
 from fractions import Fraction
 from itertools import pairwise
 
+from jacobian._exact import CanonicalRational
 from jacobian._execution import BackendFailureReason, OperationBackendError
-from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -49,7 +49,9 @@ from jacobian.math.topology.cellular_sheaves._models import (
     SheafObstructionCode,
     SheafOutcome,
     SheafRestriction,
+    SheafScalar,
     SheafStalk,
+    sheaf_scalar_digits,
 )
 
 Scalar = Fraction | int
@@ -85,7 +87,7 @@ def _is_prime(value: int) -> bool:
 
 
 class _ExactField:
-    """One declared exact scalar field with canonical text round trips."""
+    """One declared exact scalar field with typed scalar round trips."""
 
     def __init__(self, field: SheafField, prime: int | None) -> None:
         self.field = field
@@ -96,28 +98,24 @@ class _ExactField:
             raise RuntimeError("prime-field arithmetic has no modulus")
         return self.prime
 
-    def parse(self, text: str) -> Scalar:
-        stripped = text.strip()
+    def parse(self, scalar: SheafScalar) -> Scalar:
         if self.field is SheafField.RATIONAL:
-            if not stripped or any(char not in "-+/0123456789" for char in stripped):
-                raise ValueError(f"{text!r} is not an exact rational scalar")
-            return Fraction(stripped)
-        if not stripped or any(char not in "-+0123456789" for char in stripped):
-            raise ValueError(f"{text!r} is not an exact integer scalar")
+            if not isinstance(scalar, CanonicalRational):
+                raise ValueError("QQ scalars must be CanonicalRational values")
+            return Fraction(scalar.num, scalar.den)
+        if type(scalar) is not int:
+            raise ValueError("GF(p) scalars must be strict integer representatives")
         prime = self.prime_modulus()
-        return int(stripped) % prime
+        if not 0 <= scalar < prime:
+            raise ValueError("GF(p) scalar must be the canonical residue")
+        return scalar
 
-    def text(self, value: Scalar) -> str:
+    def typed(self, value: Scalar) -> SheafScalar:
         if self.field is SheafField.RATIONAL:
             if not isinstance(value, Fraction):
                 raise RuntimeError("rational sheaf field received a modular scalar")
-            if value.denominator == 1:
-                return format_canonical_integer(value.numerator)
-            return (
-                f"{format_canonical_integer(value.numerator)}/"
-                f"{format_canonical_integer(value.denominator)}"
-            )
-        return str(int(value))
+            return CanonicalRational(num=value.numerator, den=value.denominator)
+        return int(value) % self.prime_modulus()
 
     def zero(self) -> Scalar:
         return Fraction(0) if self.field is SheafField.RATIONAL else 0
@@ -185,8 +183,8 @@ class _ExactField:
                 return False
         return True
 
-    def render(self, matrix: Matrix) -> tuple[tuple[str, ...], ...]:
-        return tuple(tuple(self.text(value) for value in row) for row in matrix)
+    def render(self, matrix: Matrix) -> tuple[tuple[SheafScalar, ...], ...]:
+        return tuple(tuple(self.typed(value) for value in row) for row in matrix)
 
 
 def _cells(complex_: FiniteSimplicialComplex) -> tuple[Simplex, ...]:
@@ -303,7 +301,11 @@ def _admit_resources(
     for index, cover_map in enumerate(cover_maps):
         for row in cover_map.entries:
             for entry in row:
-                if len(entry) > MAX_SHEAF_ENTRY_DIGITS:
+                if (
+                    isinstance(entry, (CanonicalRational, int))
+                    and type(entry) is not bool
+                    and sheaf_scalar_digits(entry) > MAX_SHEAF_ENTRY_DIGITS
+                ):
                     raise _resource(
                         "admission.entry_digits",
                         f"cover map {index} carries a scalar above the "
@@ -917,7 +919,7 @@ def sheaf_cohomology(  # noqa: C901
                 coboundary_rank=incoming_rank,
                 betti_number=betti,
                 cocycle_representatives=tuple(
-                    tuple(field.text(value) for value in vector)
+                    tuple(field.typed(value) for value in vector)
                     for vector in representatives
                 ),
             )
@@ -939,7 +941,7 @@ def sheaf_cohomology(  # noqa: C901
         cochain_dimensions=tuple(cochain_sizes),
         cochain_bases=tuple(tuple(basis) for basis in cochain_bases),
         coboundary_matrices=tuple(
-            tuple(tuple(field.text(value) for value in row) for row in block)
+            tuple(tuple(field.typed(value) for value in row) for row in block)
             for block in scalar_coboundaries
         ),
         groups=tuple(groups),

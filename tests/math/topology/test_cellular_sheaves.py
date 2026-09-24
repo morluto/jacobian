@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
-import pytest
+import json
+from fractions import Fraction
 
+import pytest
+from pydantic import ValidationError
+
+from jacobian._exact import CanonicalRational
 from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -28,6 +33,10 @@ OPERATION_ID = "cellular_sheaf.from_cover_maps.compute"
 
 _INTERVAL = canonical_complex(("a", "b"), (("a", "b"),))
 _TRIANGLE = canonical_complex(("a", "b", "c"), (("a", "b", "c"),))
+
+
+def _q(value: str | int) -> CanonicalRational:
+    return CanonicalRational.from_fraction(Fraction(value))
 
 
 def _cells(complex_: FiniteSimplicialComplex) -> list[tuple[str, ...]]:
@@ -60,11 +69,13 @@ def _covers(
 
 def _rank_one_request(
     complex_: FiniteSimplicialComplex,
-    scalar: str = "1",
+    scalar=None,
     *,
     field: SheafField = SheafField.RATIONAL,
     prime: int | None = None,
 ) -> FromCoverMapsRequest:
+    if scalar is None:
+        scalar = 1 if field is SheafField.PRIME_FIELD else _q(1)
     return FromCoverMapsRequest(
         complex=complex_,
         coefficient_field=field,
@@ -93,16 +104,16 @@ class TestKnownAnswer:
             *sheaf.cover_restrictions,
             *sheaf.derived_restrictions,
         ):
-            assert restriction.entries == (("1",),)
+            assert restriction.entries == ((_q("1"),),)
 
     def test_derived_maps_compose_declared_scalars_over_qq(self) -> None:
-        request = _rank_one_request(_TRIANGLE, scalar="1")
+        request = _rank_one_request(_TRIANGLE, scalar=_q("1"))
         maps = {(map_.source, map_.target): map_ for map_ in request.cover_maps}
         scaled = tuple(
             CoverRestrictionMatrix(
                 source=source,
                 target=target,
-                entries=(("3",),) if len(target) == 3 else (("2",),),
+                entries=((_q("3"),),) if len(target) == 3 else ((_q("2"),),),
             )
             for source, target in maps
         )
@@ -115,13 +126,13 @@ class TestKnownAnswer:
             for restriction in sheaf.derived_restrictions
         }
         for vertex in (("a",), ("b",), ("c",)):
-            assert derived[(vertex, ("a", "b", "c"))] == (("6",),)
+            assert derived[(vertex, ("a", "b", "c"))] == ((_q("6"),),)
 
     def test_prime_field_reduction_is_exact(self) -> None:
         request = _rank_one_request(_TRIANGLE, field=SheafField.PRIME_FIELD, prime=5)
         scaled = tuple(
             map_.model_copy(
-                update={"entries": (("3",),) if len(map_.target) == 3 else (("2",),)}
+                update={"entries": ((3,),) if len(map_.target) == 3 else ((2,),)}
             )
             for map_ in request.cover_maps
         )
@@ -134,7 +145,7 @@ class TestKnownAnswer:
             for restriction in sheaf.derived_restrictions
         }
         # 2 * 3 = 6 = 1 mod 5
-        assert derived[(("a",), ("a", "b", "c"))] == (("1",),)
+        assert derived[(("a",), ("a", "b", "c"))] == ((1,),)
 
 
 class TestBoundaryDegenerate:
@@ -182,7 +193,7 @@ class TestAdversarial:
     def test_corrupted_triangle_map_breaks_a_diamond(self) -> None:
         request = _rank_one_request(_TRIANGLE)
         corrupted = tuple(
-            map_.model_copy(update={"entries": (("2",),)})
+            map_.model_copy(update={"entries": ((_q("2"),),)})
             if (map_.source, map_.target) == (("a", "b"), ("a", "b", "c"))
             else map_
             for map_ in request.cover_maps
@@ -198,8 +209,8 @@ class TestAdversarial:
         assert diamond.target == ("a", "b", "c")
         assert diamond.first_path == (("a",), ("a", "b"), ("a", "b", "c"))
         assert diamond.second_path == (("a",), ("a", "c"), ("a", "b", "c"))
-        assert diamond.first_matrix == (("2",),)
-        assert diamond.second_matrix == (("1",),)
+        assert diamond.first_matrix == ((_q("2"),),)
+        assert diamond.second_matrix == ((_q("1"),),)
         assert result.sheaf is None
 
     def test_missing_cover_map_is_the_first_obstruction(self) -> None:
@@ -230,10 +241,10 @@ class TestAdversarial:
             ),
             cover_maps=(
                 CoverRestrictionMatrix(
-                    source=("a",), target=("a", "b"), entries=(("1",),)
+                    source=("a",), target=("a", "b"), entries=((_q("1"),),)
                 ),
                 CoverRestrictionMatrix(
-                    source=("b",), target=("a", "b"), entries=(("1",),)
+                    source=("b",), target=("a", "b"), entries=((_q("1"),),)
                 ),
             ),
         )
@@ -274,7 +285,7 @@ class TestAdversarial:
         forged = (
             *request.cover_maps,
             CoverRestrictionMatrix(
-                source=("a",), target=("a", "b", "c"), entries=(("1",),)
+                source=("a",), target=("a", "b", "c"), entries=((_q("1"),),)
             ),
         )
         with pytest.raises(OperationDomainValidationError) as excinfo:
@@ -298,7 +309,7 @@ class TestAdversarial:
 
 class TestDefiningInvariant:
     def test_every_diamond_replays_from_the_returned_cover_maps(self) -> None:
-        request = _rank_one_request(_TRIANGLE, scalar="2")
+        request = _rank_one_request(_TRIANGLE, scalar=_q("2"))
         result = _native(request)
         assert result.outcome is SheafOutcome.CELLULAR_SHEAF
         sheaf = result.sheaf
@@ -323,7 +334,13 @@ class TestDefiningInvariant:
             columns = len(right[0]) if inner else 0
             return tuple(
                 tuple(
-                    str(sum(int(left[i][k]) * int(right[k][j]) for k in range(inner)))
+                    _q(
+                        sum(
+                            Fraction(left[i][k].num, left[i][k].den)
+                            * Fraction(right[k][j].num, right[k][j].den)
+                            for k in range(inner)
+                        )
+                    )
                     for j in range(columns)
                 )
                 for i in range(rows)
@@ -358,7 +375,9 @@ class TestNativeCatalogParity:
         tool = next(tool for tool in BUILTIN_TOOLS if tool.operation_id == OPERATION_ID)
         outcomes = []
         for example in tool.examples:
-            request = FromCoverMapsRequest.model_validate(example.input)
+            request = FromCoverMapsRequest.model_validate_json(
+                json.dumps(example.input)
+            )
             result = tool.run(request)
             outcomes.append(result.outcome)
         assert outcomes == [
@@ -373,10 +392,48 @@ class TestSerialization:
         restored = FromCoverMapsResult.model_validate_json(result.model_dump_json())
         assert restored == result
 
+    def test_scalar_wire_values_keep_the_declared_field_types(self) -> None:
+        rational = _rank_one_request(_INTERVAL)
+        rational_payload = rational.model_dump(mode="json")
+        assert rational_payload["cover_maps"][0]["entries"][0][0] == {
+            "num": "1",
+            "den": "1",
+        }
+        assert (
+            FromCoverMapsRequest.model_validate_json(rational.model_dump_json())
+            == rational
+        )
+
+        finite = _rank_one_request(_INTERVAL, field=SheafField.PRIME_FIELD, prime=5)
+        finite_payload = finite.model_dump(mode="json")
+        assert finite_payload["cover_maps"][0]["entries"][0][0] == 1
+        assert (
+            FromCoverMapsRequest.model_validate_json(finite.model_dump_json()) == finite
+        )
+
+    def test_numeric_scalar_strings_are_rejected_in_json(self) -> None:
+        with pytest.raises(ValidationError):
+            CoverRestrictionMatrix.model_validate_json(
+                '{"source":["a"],"target":["a","b"],"entries":[["1"]]}'
+            )
+        with pytest.raises(ValidationError):
+            FromCoverMapsRequest(
+                complex=_INTERVAL,
+                coefficient_field=SheafField.RATIONAL,
+                stalks=tuple(
+                    SheafStalk(simplex=cell, basis=("x",)) for cell in _cells(_INTERVAL)
+                ),
+                cover_maps=(
+                    CoverRestrictionMatrix(
+                        source=("a",), target=("a", "b"), entries=((1,),)
+                    ),
+                ),
+            )
+
     def test_negative_result_round_trips(self) -> None:
         request = _rank_one_request(_TRIANGLE)
         corrupted = tuple(
-            map_.model_copy(update={"entries": (("2",),)})
+            map_.model_copy(update={"entries": ((_q("2"),),)})
             if (map_.source, map_.target) == (("a", "b"), ("a", "b", "c"))
             else map_
             for map_ in request.cover_maps
@@ -388,7 +445,7 @@ class TestSerialization:
     def test_forged_derived_map_fails_validation(self) -> None:
         result = _native(_rank_one_request(_TRIANGLE))
         payload = result.model_dump(mode="json")
-        payload["sheaf"]["derived_restrictions"][0]["entries"] = [["1", "2"]]
+        payload["sheaf"]["derived_restrictions"][0]["entries"] = [[_q("1"), _q("2")]]
         with pytest.raises(ValueError):
             FromCoverMapsResult.model_validate(payload)
 
@@ -491,7 +548,7 @@ class TestEnvelope:
             ),
             cover_maps=tuple(
                 CoverRestrictionMatrix(
-                    source=("a",), target=("a", "b"), entries=(("1",),)
+                    source=("a",), target=("a", "b"), entries=((_q("1"),),)
                 )
                 for _ in range(513)
             ),
@@ -505,7 +562,9 @@ class TestEnvelope:
     def test_entry_digits_above_the_envelope_is_a_resource_rejection(self) -> None:
         request = _rank_one_request(_INTERVAL)
         corrupted = (
-            request.cover_maps[0].model_copy(update={"entries": (("1" * 65,),)}),
+            request.cover_maps[0].model_copy(
+                update={"entries": ((CanonicalRational(num=10**64, den=1),),)}
+            ),
             request.cover_maps[1],
         )
         with pytest.raises(OperationResourceAdmissionError) as excinfo:

@@ -68,6 +68,10 @@ claim about arbitrary finite groups. Symmetric and exterior powers and Adams
 operations remain separate unimplemented capabilities. GAP describes
 class-function multiplication and scalar products in its
 [class-function reference](https://gap-system.github.io/gap/doc/ref/chap72_mj.html).
+The source permutation presentation has its own work bound before group-order
+computation; a forged table partition cannot reduce that bound, and large
+multi-generator presentations may be rejected even when their abstract group
+is small.
 
 ## Scaling a class function
 

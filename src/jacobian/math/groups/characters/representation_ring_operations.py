@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from fractions import Fraction
 
 from pydantic import ValidationError
@@ -55,6 +56,7 @@ MAX_CHARACTER_RING_DECOMPOSITION_WORK = 50_000_000
 MAX_CHARACTER_RING_DECOMPOSITION_OUTPUT_BYTES = 10_000_000
 MAX_CHARACTER_TENSOR_PRODUCT_WORK = 50_000_000
 MAX_CHARACTER_TENSOR_PRODUCT_OUTPUT_BYTES = 10_000_000
+MAX_CHARACTER_TENSOR_GROUP_ORDER_PREFLIGHT_WORK = 50_000_000
 
 
 def _invalid(
@@ -548,6 +550,139 @@ def _admit_ring_element_shape(element: CharacterRingElement, name: str) -> None:
         )
 
 
+def _admit_group_order_probe(
+    source: PermutationGroup,
+) -> tuple[PermutationGroup | None, int | None]:
+    """Bound Schreier-Sims from generator data, without trusting table classes.
+
+    Fixed points are removed from the probe's domain. A single permutation
+    generates a cyclic group whose order is computed directly from its cycle
+    lengths. For multiple generators, a conservative polynomial work envelope
+    bounds the Schreier-Sims probe independently of the retained partition.
+    """
+    degree = source.degree
+    generators = source.generators
+    support = tuple(
+        point
+        for point in range(degree)
+        if any(generator[point] != point for generator in generators)
+    )
+    if not support:
+        return None, 1
+    position = {point: index for index, point in enumerate(support)}
+    compressed = tuple(
+        sorted(
+            {
+                tuple(position[generator[point]] for point in support)
+                for generator in generators
+            }
+        )
+    )
+    active_degree = len(support)
+    if len(compressed) == 1:
+        permutation = compressed[0]
+        visited: set[int] = set()
+        order = 1
+        for point in range(active_degree):
+            if point in visited:
+                continue
+            current = point
+            cycle_length = 0
+            while current not in visited:
+                visited.add(current)
+                current = permutation[current]
+                cycle_length += 1
+            order = math.lcm(order, cycle_length)
+        return None, order
+    work = active_degree**5 * len(compressed) ** 2
+    if work > MAX_CHARACTER_TENSOR_GROUP_ORDER_PREFLIGHT_WORK:
+        raise OperationResourceAdmissionError(
+            location=("left", "table", "partition", "source"),
+            code="groups.characters.tensor_product_group_order_work_exceeds_envelope",
+            message="source-only Schreier-Sims admission exceeds the tensor-product work envelope",
+        )
+    probe = PermutationGroup(degree=active_degree, generators=compressed)
+    return probe, None
+
+
+def _admit_tensor_arithmetic(
+    left: CharacterRingElement,
+    right: CharacterRingElement,
+    source: PermutationGroup,
+) -> tuple[int, int, int]:
+    """Admit table expansion, product, pairings, reconstruction, and output."""
+    table = left.table
+    order = sum(len(cls) for cls in table.partition.classes)
+    classes = len(table.partition.classes)
+    rows = len(table.rows)
+    dimension = euler_phi(order)
+    coefficient_digits = max(
+        1,
+        *(
+            len(str(abs(coefficient)))
+            for element in (left, right)
+            for coefficient in element.irreducible_multiplicities
+        ),
+    )
+    table_digits = max(
+        1,
+        *(
+            max(len(str(abs(value.num))), len(str(value.den)))
+            for element in (left, right)
+            for row in element.table.rows
+            for class_value in row.values
+            for value in class_value.coefficients
+        ),
+    )
+    expanded_digits = coefficient_digits + table_digits + len(str(rows))
+    product_digits = (
+        2 * expanded_digits
+        + (len(str(dimension - 1)) if dimension > 1 else 0)
+        + max(0, dimension - 1)
+        + 2
+    )
+    predicted_digits = product_digits + table_digits + len(str(order)) + (order - 1)
+    # Two input expansions and one exact reconstruction of the result are
+    # mandatory. Character decomposition independently authenticates its
+    # group/table, so charge the canonical group and table work twice.
+    work = (
+        3 * rows * classes * dimension * expanded_digits**2
+        + classes * dimension * dimension * product_digits**2
+        + rows * classes * dimension * dimension * (product_digits + table_digits) ** 2
+        + rows * classes * dimension * predicted_digits**2
+        + 2 * order * order * source.degree * max(1, len(source.generators))
+        + 2 * order * order * dimension * table_digits**2
+        + 2 * rows * classes * dimension * table_digits**2
+    )
+    if work > MAX_CHARACTER_TENSOR_PRODUCT_WORK:
+        raise OperationResourceAdmissionError(
+            location=("request",),
+            code="groups.characters.tensor_product_work_exceeds_envelope",
+            message="table reconstruction and exact product exceed the tensor-product work envelope",
+        )
+    if predicted_digits > MAX_VALUE_COEFFICIENT_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("request",),
+            code="groups.characters.tensor_product_output_height",
+            message="predicted tensor-product coordinates exceed the exact coefficient envelope",
+        )
+    output_bytes = (
+        rows * (2 * MAX_VALUE_COEFFICIENT_DIGITS + 32)
+        + MAX_CHARACTER_TABLE_CELLS * 40
+        + 65_536
+    )
+    if (
+        output_bytes > MAX_CHARACTER_TENSOR_PRODUCT_OUTPUT_BYTES
+        or output_bytes > CanonicalLimits().max_output_bytes
+    ):
+        raise OperationResourceAdmissionError(
+            location=("request",),
+            code="groups.characters.tensor_product_output_exceeds_envelope",
+            message="tensor-product result exceeds the exact output envelope",
+        )
+    return order, classes, dimension
+
+
 def character_tensor_product(
     request: CharacterTensorProductRequest,
 ) -> CharacterRingElement:
@@ -581,86 +716,22 @@ def character_tensor_product(
             ("right", "table", "partition", "source"),
         )
     source = lt.partition.source
-    # Admission is based only on already-bounded wire shapes and conservative
-    # scalar bounds, before canonical group/table expansion.
-    order = sum(len(cls) for cls in lt.partition.classes)
-    classes = len(lt.partition.classes)
-    rows = len(lt.rows)
-    dimension = euler_phi(order)
-    coefficient_digits = max(
-        1,
-        *(
-            len(str(abs(c)))
-            for c in (
-                *left.irreducible_multiplicities,
-                *right.irreducible_multiplicities,
-            )
-        ),
-    )
-    table_digits = max(
-        1,
-        *(
-            max(len(str(abs(value.num))), len(str(value.den)))
-            for element in (left, right)
-            for row in element.table.rows
-            for class_value in row.values
-            for value in class_value.coefficients
-        ),
-    )
-    expanded_digits = coefficient_digits + table_digits + len(str(rows))
-    product_digits = (
-        2 * expanded_digits
-        + (len(str(dimension - 1)) if dimension > 1 else 0)
-        + max(0, dimension - 1)
-        + 2
-    )
-    predicted_digits = product_digits + table_digits + len(str(order)) + (order - 1)
-    # Two input expansions and one exact reconstruction of the result are
-    # mandatory. Character decomposition independently authenticates its
-    # group/table, so charge the canonical group and table work twice.
-    expanded_work = 3 * rows * classes * dimension * expanded_digits**2
-    product_work = classes * dimension * dimension * product_digits**2
-    pairing_work = (
-        rows * classes * dimension * dimension * (product_digits + table_digits) ** 2
-    )
-    reconstruction_work = rows * classes * dimension * predicted_digits**2
-    work = (
-        expanded_work
-        + product_work
-        + pairing_work
-        + reconstruction_work
-        + 2 * order * order * source.degree * max(1, len(source.generators))
-        + 2 * order * order * dimension * table_digits**2
-        + 2 * rows * classes * dimension * table_digits**2
-    )
-    if work > MAX_CHARACTER_TENSOR_PRODUCT_WORK:
+    source_order_probe, known_source_order = _admit_group_order_probe(source)
+    if known_source_order is not None and known_source_order > MAX_CYCLOTOMIC_ORDER:
         raise OperationResourceAdmissionError(
-            location=("request",),
-            code="groups.characters.tensor_product_work_exceeds_envelope",
-            message="table reconstruction and exact product exceed the tensor-product work envelope",
+            location=("left", "table", "partition", "source"),
+            code="groups.characters.tensor_product_group_order_exceeds_envelope",
+            message="tensor products currently admit group order at most 60",
         )
-    if predicted_digits > MAX_VALUE_COEFFICIENT_DIGITS:
-        raise OperationResourceAdmissionError(
-            location=("request",),
-            code="groups.characters.tensor_product_output_height",
-            message="predicted tensor-product coordinates exceed the exact coefficient envelope",
-        )
-    output_bytes = (
-        rows * (2 * MAX_VALUE_COEFFICIENT_DIGITS + 32)
-        + MAX_CHARACTER_TABLE_CELLS * 40
-        + 65_536
-    )
-    if (
-        output_bytes > MAX_CHARACTER_TENSOR_PRODUCT_OUTPUT_BYTES
-        or output_bytes > CanonicalLimits().max_output_bytes
-    ):
-        raise OperationResourceAdmissionError(
-            location=("request",),
-            code="groups.characters.tensor_product_output_exceeds_envelope",
-            message="tensor-product result exceeds the exact output envelope",
-        )
+    # Admission depends on bounded supplied shapes, then the source-only
+    # Schreier probe; neither trusts the retained partition's claimed order.
+    _, classes, dimension = _admit_tensor_arithmetic(left, right, source)
     source = lt.partition.source
-    actual_order = group_order(source)
+    if known_source_order is not None:
+        actual_order = known_source_order
+    else:
+        assert source_order_probe is not None
+        actual_order = group_order(source_order_probe)
     if actual_order > MAX_CYCLOTOMIC_ORDER:
         raise OperationResourceAdmissionError(
             location=("left", "table"),

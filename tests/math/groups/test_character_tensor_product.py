@@ -13,7 +13,9 @@ from jacobian.math.groups._models import GroupConjugacyClassesResult, Permutatio
 from jacobian.math.groups.characters._models import (
     CharacterRingElement,
     CharacterRow,
+    CharacterTableResult,
     CharacterTensorProductRequest,
+    ConjugacyClassPartition,
 )
 from jacobian.math.groups.characters.operations import character_table
 from jacobian.math.groups.characters.representation_ring_operations import (
@@ -176,3 +178,46 @@ def test_huge_model_constructed_integer_never_reaches_decimal_conversion() -> No
                 left=huge, right=_element(table, (1, 0, 0))
             )
         )
+
+
+def test_forged_order_one_partition_cannot_trigger_large_group_order_call(
+    monkeypatch,
+) -> None:
+    # A 64-cycle and a reflection generate D_64, of order 128. The forged
+    # carrier claims a one-element partition, so admission must derive its
+    # backend-work bound from the source permutations alone.
+    degree = 64
+    rotation = tuple((point + 1) % degree for point in range(degree))
+    reflection = tuple((-point) % degree for point in range(degree))
+    source = PermutationGroup(degree=degree, generators=(rotation, reflection))
+    small_table = _s3_table()
+    identity = tuple(range(degree))
+    forged_partition = ConjugacyClassPartition.model_construct(
+        source=source, classes=((identity,),)
+    )
+    forged_table = CharacterTableResult.model_construct(
+        partition=forged_partition,
+        axis=small_table.axis,
+        rows=(
+            CharacterRow.model_construct(
+                label="trivial", degree=1, values=(small_table.rows[0].values[0],)
+            ),
+        ),
+        degree_square_sum=1,
+    )
+    forged_element = CharacterRingElement.model_construct(
+        table=forged_table, irreducible_multiplicities=(1,)
+    )
+    request = CharacterTensorProductRequest.model_construct(
+        left=forged_element, right=forged_element
+    )
+
+    def unexpected_group_order(*args, **kwargs):
+        raise AssertionError("source-only admission must precede group_order")
+
+    monkeypatch.setattr(
+        "jacobian.math.groups.characters.representation_ring_operations.group_order",
+        unexpected_group_order,
+    )
+    with pytest.raises(OperationResourceAdmissionError):
+        character_tensor_product(request)

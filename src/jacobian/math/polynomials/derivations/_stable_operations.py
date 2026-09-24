@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from fractions import Fraction
-from math import comb, prod
+from math import comb, lcm, prod
 
 from pydantic_core import PydanticCustomError
 
@@ -53,6 +53,107 @@ def _reject(code: str, message: str, *, resource: bool = False) -> None:
     )
 
 
+def _ceil_log_count(count: int) -> int:
+    return 0 if count <= 1 else len(str(count - 1))
+
+
+def _check_coefficient_group_heights(
+    groups: Mapping[tuple[int, ...], list[tuple[int, int]]],
+) -> None:
+    """Bound exact rational sums using support collisions and common denominators."""
+    for contributions in groups.values():
+        denominators = {denominator for _, denominator in contributions}
+        if (
+            sum(len(str(value)) for value in denominators if value != 1)
+            > MAX_DERIVATION_COEFFICIENT_DIGITS
+        ):
+            raise OperationResourceAdmissionError(
+                location=("action",),
+                code="polynomial_ga_subrepresentation.action_coefficient_growth",
+                message="action-law common denominator exceeds the coefficient digit budget",
+            )
+        common_denominator = lcm(*denominators)
+        if len(str(common_denominator)) > MAX_DERIVATION_COEFFICIENT_DIGITS:
+            raise OperationResourceAdmissionError(
+                location=("action",),
+                code="polynomial_ga_subrepresentation.action_coefficient_growth",
+                message="action-law common denominator exceeds the coefficient digit budget",
+            )
+        max_numerator_digits = max(
+            numerator_digits
+            + (
+                len(str(common_denominator // denominator))
+                if common_denominator // denominator > 1
+                else 0
+            )
+            for numerator_digits, denominator in contributions
+        )
+        if (
+            max_numerator_digits + _ceil_log_count(len(contributions))
+            > MAX_DERIVATION_COEFFICIENT_DIGITS
+        ):
+            raise OperationResourceAdmissionError(
+                location=("action",),
+                code="polynomial_ga_subrepresentation.action_coefficient_growth",
+                message="action-law numerator growth exceeds the coefficient digit budget",
+            )
+
+
+def _verify_action_laws(
+    action_terms: tuple[_Terms, ...], variables: tuple[str, ...]
+) -> None:
+    for index, image in enumerate(action_terms):
+        counit = {
+            exponents[:-1]: coefficient
+            for exponents, coefficient in image.items()
+            if exponents[-1] == 0
+        }
+        expected_generator = {
+            tuple(
+                1 if axis == index else 0 for axis in range(len(variables))
+            ): Fraction(1)
+        }
+        if counit != expected_generator:
+            raise OperationDomainValidationError(
+                location=("action", "generator_images", index),
+                code="polynomial_ga_subrepresentation.action_counit",
+                message="action does not satisfy the additive identity law",
+            )
+        lhs: _Terms = {}
+        for exponents, coefficient in image.items():
+            product_terms: _Terms = {
+                tuple(0 for _ in range(len(variables) + 2)): Fraction(1)
+            }
+            for generator_image, exponent in zip(
+                action_terms, exponents[:-1], strict=True
+            ):
+                lifted = {
+                    (*powers[:-1], powers[-1], 0): value
+                    for powers, value in generator_image.items()
+                }
+                for _ in range(exponent):
+                    product_terms = _multiply(product_terms, lifted)
+            for powers, value in product_terms.items():
+                key = (*powers[:-1], powers[-1] + exponents[-1])
+                lhs[key] = lhs.get(key, Fraction(0)) + coefficient * value
+        rhs: _Terms = {}
+        for exponents, coefficient in image.items():
+            degree = exponents[-1]
+            for s_degree in range(degree + 1):
+                key = (*exponents[:-1], s_degree, degree - s_degree)
+                rhs[key] = rhs.get(key, Fraction(0)) + coefficient * comb(
+                    degree, s_degree
+                )
+        lhs = {key: value for key, value in lhs.items() if value}
+        rhs = {key: value for key, value in rhs.items() if value}
+        if lhs != rhs:
+            raise OperationDomainValidationError(
+                location=("action", "generator_images", index),
+                code="polynomial_ga_subrepresentation.action_composition",
+                message="action does not satisfy the additive composition law",
+            )
+
+
 def _canonical_action(
     value: PolynomialGaAction | Mapping[str, object],
 ) -> PolynomialGaAction:
@@ -92,20 +193,10 @@ def _admit_and_verify_ga_action(action: PolynomialGaAction) -> None:
     """Check counit and additive composition on generator images, bounded first."""
     action_terms = tuple(_term_map(image) for image in action.generator_images)
     variables = action.source_variables
-    max_digit = max(
-        (
-            max(len(str(abs(value.numerator))), len(str(value.denominator)))
-            for image in action_terms
-            for value in image.values()
-        ),
-        default=1,
-    )
     lhs_work = 0
     rhs_work = 0
     lhs_terms = 0
     rhs_terms = 0
-    max_source_degree = 0
-    max_parameter_degree = 0
     for image in action_terms:
         for exponents in image:
             factor = prod(
@@ -115,37 +206,10 @@ def _admit_and_verify_ga_action(action: PolynomialGaAction) -> None:
                 )
             )
             degree = sum(exponents[:-1])
-            max_source_degree = max(max_source_degree, degree)
-            max_parameter_degree = max(max_parameter_degree, exponents[-1])
             lhs_work += max(1, degree) * factor
             lhs_terms += factor
             rhs_work += exponents[-1] + 1
             rhs_terms += exponents[-1] + 1
-            lhs_digits = max_digit + factor * (
-                degree * (2 * max_digit + 1) + len(str(max(1, factor)))
-            )
-            rhs_digits = max_digit + exponents[-1] * 2 + len(str(exponents[-1] + 1))
-            if max(lhs_digits, rhs_digits) > MAX_DERIVATION_COEFFICIENT_DIGITS:
-                raise OperationResourceAdmissionError(
-                    location=("action",),
-                    code="polynomial_ga_subrepresentation.action_coefficient_growth",
-                    message="additive action-law check exceeds the coefficient digit budget",
-                )
-    lhs_aggregate_digits = max_digit + lhs_terms * (
-        max_source_degree * (2 * max_digit + 1) + len(str(max(1, lhs_terms)))
-    )
-    rhs_aggregate_digits = max_digit + rhs_terms * (
-        max_parameter_degree + len(str(max(1, rhs_terms)))
-    )
-    if (
-        max(lhs_aggregate_digits, rhs_aggregate_digits)
-        > MAX_DERIVATION_COEFFICIENT_DIGITS
-    ):
-        raise OperationResourceAdmissionError(
-            location=("action",),
-            code="polynomial_ga_subrepresentation.action_coefficient_growth",
-            message="combined additive action-law coefficients exceed the digit budget",
-        )
     if (
         lhs_work + rhs_work > MAX_GA_SUBREPRESENTATION_COMPOSITION_WORK
         or max(lhs_terms, rhs_terms) > MAX_GA_SUBREPRESENTATION_COMPOSITION_WORK
@@ -156,58 +220,93 @@ def _admit_and_verify_ga_action(action: PolynomialGaAction) -> None:
             message="additive action-law check exceeds the admitted work budget",
         )
 
-    for index, image in enumerate(action_terms):
-        counit = {
-            exponents[:-1]: coefficient
-            for exponents, coefficient in image.items()
-            if exponents[-1] == 0
-        }
-        expected_generator = {
-            tuple(
-                1 if axis == index else 0 for axis in range(len(variables))
-            ): Fraction(1)
-        }
-        if counit != expected_generator:
-            raise OperationDomainValidationError(
-                location=("action", "generator_images", index),
-                code="polynomial_ga_subrepresentation.action_counit",
-                message="action does not satisfy the additive identity law",
+    # Estimate rational heights per possible output monomial. This keeps a
+    # large coefficient attached to one sparse support term from being charged
+    # as if it were multiplied by every unrelated term in the action image.
+    source_axis_count = len(variables)
+    common_denominators: list[int] = []
+    max_scaled_numerator_digits: list[int] = []
+    support_images: list[tuple[tuple[int, ...], ...]] = []
+    for image in action_terms:
+        image_denominators = {value.denominator for value in image.values()}
+        if (
+            sum(len(str(value)) for value in image_denominators if value != 1)
+            > MAX_DERIVATION_COEFFICIENT_DIGITS
+        ):
+            raise OperationResourceAdmissionError(
+                location=("action",),
+                code="polynomial_ga_subrepresentation.action_coefficient_growth",
+                message="action coefficient common denominator exceeds the digit budget",
             )
+        denominator = lcm(*image_denominators) if image_denominators else 1
+        common_denominators.append(denominator)
+        scaled = [
+            abs(value.numerator) * (denominator // value.denominator)
+            for value in image.values()
+        ]
+        max_scaled_numerator_digits.append(
+            max((len(str(value)) for value in scaled), default=1)
+        )
+        support_images.append(tuple((*powers[:-1], powers[-1]) for powers in image))
 
-        lhs: _Terms = {}
+    lhs_height_groups: dict[tuple[int, ...], list[tuple[int, int]]] = {}
+    rhs_height_groups: dict[tuple[int, ...], list[tuple[int, int]]] = {}
+    for image in action_terms:
         for exponents, coefficient in image.items():
-            product_terms: _Terms = {
-                tuple(0 for _ in range(len(variables) + 2)): Fraction(1)
+            support_product: dict[tuple[int, ...], int] = {
+                tuple(0 for _ in range(source_axis_count + 1)): 1
             }
-            for generator_image, exponent in zip(
-                action_terms, exponents[:-1], strict=True
-            ):
-                lifted = {
-                    (*powers[:-1], powers[-1], 0): value
-                    for powers, value in generator_image.items()
-                }
+            for support, exponent in zip(support_images, exponents[:-1], strict=True):
                 for _ in range(exponent):
-                    product_terms = _multiply(product_terms, lifted)
-            for powers, value in product_terms.items():
-                key = (*powers[:-1], powers[-1] + exponents[-1])
-                lhs[key] = lhs.get(key, Fraction(0)) + coefficient * value
-
-        rhs: _Terms = {}
-        for exponents, coefficient in image.items():
-            parameter_degree = exponents[-1]
-            for s_degree in range(parameter_degree + 1):
-                key = (*exponents[:-1], s_degree, parameter_degree - s_degree)
-                rhs[key] = rhs.get(key, Fraction(0)) + coefficient * comb(
-                    parameter_degree, s_degree
+                    multiplied: dict[tuple[int, ...], int] = {}
+                    for left, left_count in support_product.items():
+                        for right in support:
+                            key = tuple(a + b for a, b in zip(left, right, strict=True))
+                            multiplied[key] = multiplied.get(key, 0) + left_count
+                    support_product = multiplied
+            denominator_digits = len(str(coefficient.denominator)) + sum(
+                exponent * (len(str(base)) if base > 1 else 0)
+                for base, exponent in zip(
+                    common_denominators, exponents[:-1], strict=True
                 )
-        lhs = {key: value for key, value in lhs.items() if value}
-        rhs = {key: value for key, value in rhs.items() if value}
-        if lhs != rhs:
-            raise OperationDomainValidationError(
-                location=("action", "generator_images", index),
-                code="polynomial_ga_subrepresentation.action_composition",
-                message="action does not satisfy the additive composition law",
             )
+            if denominator_digits > MAX_DERIVATION_COEFFICIENT_DIGITS:
+                raise OperationResourceAdmissionError(
+                    location=("action",),
+                    code="polynomial_ga_subrepresentation.action_coefficient_growth",
+                    message="composition coefficient denominator exceeds the digit budget",
+                )
+            denominator = coefficient.denominator * prod(
+                base**exponent
+                for base, exponent in zip(
+                    common_denominators, exponents[:-1], strict=True
+                )
+            )
+            numerator_digits = len(str(abs(coefficient.numerator))) + sum(
+                exponent * digits
+                for exponent, digits in zip(
+                    exponents[:-1], max_scaled_numerator_digits, strict=True
+                )
+            )
+            for support_powers, multiplicity in support_product.items():
+                key = (*support_powers[:-1], support_powers[-1], exponents[-1])
+                lhs_height_groups.setdefault(key, []).append(
+                    (numerator_digits + _ceil_log_count(multiplicity), denominator)
+                )
+            for s_degree in range(exponents[-1] + 1):
+                binomial = comb(exponents[-1], s_degree)
+                key = (*exponents[:-1], s_degree, exponents[-1] - s_degree)
+                rhs_height_groups.setdefault(key, []).append(
+                    (
+                        len(str(abs(coefficient.numerator)))
+                        + (len(str(binomial)) if binomial > 1 else 0),
+                        coefficient.denominator,
+                    )
+                )
+    _check_coefficient_group_heights(lhs_height_groups)
+    _check_coefficient_group_heights(rhs_height_groups)
+
+    _verify_action_laws(action_terms, variables)
 
 
 def _coordinate_frame(

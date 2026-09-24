@@ -50,6 +50,26 @@ def _translation_action():
     )
 
 
+def _scaled_translation_action(coefficient: int) -> PolynomialGaAction:
+    image = RationalPolynomial.model_validate(
+        {
+            "variables": ["x", "t"],
+            "polynomial": {
+                "terms": [
+                    {"coefficient": {"num": 1, "den": 1}, "exponents": [1, 0]},
+                    {
+                        "coefficient": {"num": coefficient, "den": 1},
+                        "exponents": [0, 1],
+                    },
+                ]
+            },
+        }
+    )
+    return PolynomialGaAction(
+        source_variables=("x",), parameter="t", generator_images=(image,)
+    )
+
+
 def test_translation_has_expected_matrix_and_stable_basis_roundtrips() -> None:
     action = _translation_action()
     result = ga_stable_subrepresentation(action, (_poly("x", 0), _poly("x", 1)))
@@ -78,6 +98,13 @@ def test_noninvariant_span_is_rejected() -> None:
         OperationDomainValidationError, match="outside the supplied span"
     ):
         ga_stable_subrepresentation(_translation_action(), (_poly("x", 1),))
+
+
+def test_large_valid_translation_coefficient_preserves_constant_subspace() -> None:
+    coefficient = 10**125 + 3
+    action = _scaled_translation_action(coefficient)
+    result = ga_stable_subrepresentation(action, (_poly("x", 0),))
+    assert result.action_matrix[0][0] == _poly("t", 0)
 
 
 def test_dependent_supplied_basis_is_rejected() -> None:

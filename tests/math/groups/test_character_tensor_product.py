@@ -4,6 +4,7 @@ from itertools import permutations
 
 import pytest
 
+import jacobian.math.groups.characters.representation_ring_operations as ring_operations
 from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -221,3 +222,16 @@ def test_forged_order_one_partition_cannot_trigger_large_group_order_call(
     )
     with pytest.raises(OperationResourceAdmissionError):
         character_tensor_product(request)
+
+
+def test_source_and_character_work_share_one_admission_cap() -> None:
+    table = _s3_table()
+    character = _element(table, (0, 0, 1))
+    with pytest.raises(OperationResourceAdmissionError):
+        ring_operations._admit_tensor_arithmetic(
+            character,
+            character,
+            table.partition.source,
+            source_work=ring_operations.MAX_CHARACTER_TENSOR_PRODUCT_WORK,
+            concrete_order=6,
+        )

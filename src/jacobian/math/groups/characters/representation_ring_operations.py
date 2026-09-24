@@ -56,7 +56,6 @@ MAX_CHARACTER_RING_DECOMPOSITION_WORK = 50_000_000
 MAX_CHARACTER_RING_DECOMPOSITION_OUTPUT_BYTES = 10_000_000
 MAX_CHARACTER_TENSOR_PRODUCT_WORK = 50_000_000
 MAX_CHARACTER_TENSOR_PRODUCT_OUTPUT_BYTES = 10_000_000
-MAX_CHARACTER_TENSOR_GROUP_ORDER_PREFLIGHT_WORK = 50_000_000
 
 
 def _invalid(
@@ -218,6 +217,36 @@ def _inner_product_value(
     return _make_value(
         order,
         tuple(coefficient / function.axis.group_order for coefficient in total),
+    )
+
+
+def _coordinates_on_authenticated_table(
+    function: FiniteClassFunction, table: CharacterTableResult
+) -> CharacterRingElement:
+    """Compute exact irreducible coordinates using an already canonical table."""
+    coordinates = []
+    for row in table.rows:
+        inner = _inner_product_value(
+            function, row.values, order=table.axis.cyclotomic_order
+        )
+        if inner.coefficients[0].den != 1 or any(
+            coefficient.num != 0 for coefficient in inner.coefficients[1:]
+        ):
+            raise _invalid(
+                "groups.characters.not_virtual_character",
+                "class function has a nonintegral irreducible coordinate",
+                ("class_function",),
+            )
+        coordinate = inner.coefficients[0].num
+        if coordinate.bit_length() > 1702:
+            raise OperationResourceAdmissionError(
+                location=("class_function",),
+                code="groups.characters.ring_coordinate_exceeds_envelope",
+                message="irreducible coordinate exceeds the exact integer envelope",
+            )
+        coordinates.append(coordinate)
+    return CharacterRingElement._from_kernel(
+        table=table, irreducible_multiplicities=tuple(coordinates)
     )
 
 
@@ -550,25 +579,28 @@ def _admit_ring_element_shape(element: CharacterRingElement, name: str) -> None:
         )
 
 
-def _admit_group_order_probe(
+def _admit_source_group_order(
     source: PermutationGroup,
-) -> tuple[PermutationGroup | None, int | None]:
-    """Bound Schreier-Sims from generator data, without trusting table classes.
+) -> tuple[int, int]:
+    """Compute source order by a source-only bounded permutation enumeration.
 
     Fixed points are removed from the probe's domain. A single permutation
     generates a cyclic group whose order is computed directly from its cycle
-    lengths. For multiple generators, a conservative polynomial work envelope
-    bounds the Schreier-Sims probe independently of the retained partition.
+    lengths. With multiple generators, the support must have size at most four:
+    then its symmetric group has at most 24 elements, and closure enumeration
+    gives an exact order with an explicit finite work bound. Larger supports
+    are rejected without asking a backend to compute group order.
     """
     degree = source.degree
     generators = source.generators
+    work = degree * max(1, len(generators))
     support = tuple(
         point
         for point in range(degree)
         if any(generator[point] != point for generator in generators)
     )
     if not support:
-        return None, 1
+        return 1, work
     position = {point: index for index, point in enumerate(support)}
     compressed = tuple(
         sorted(
@@ -579,6 +611,7 @@ def _admit_group_order_probe(
         )
     )
     active_degree = len(support)
+    work += active_degree * len(generators)
     if len(compressed) == 1:
         permutation = compressed[0]
         visited: set[int] = set()
@@ -593,28 +626,45 @@ def _admit_group_order_probe(
                 current = permutation[current]
                 cycle_length += 1
             order = math.lcm(order, cycle_length)
-        return None, order
-    work = active_degree**5 * len(compressed) ** 2
-    if work > MAX_CHARACTER_TENSOR_GROUP_ORDER_PREFLIGHT_WORK:
+        return order, work + active_degree
+    if math.factorial(active_degree) > MAX_CYCLOTOMIC_ORDER:
         raise OperationResourceAdmissionError(
             location=("left", "table", "partition", "source"),
             code="groups.characters.tensor_product_group_order_work_exceeds_envelope",
-            message="source-only Schreier-Sims admission exceeds the tensor-product work envelope",
+            message=(
+                "source-only permutation-degree bound exceeds the bounded "
+                "finite-group order envelope"
+            ),
         )
-    probe = PermutationGroup(degree=active_degree, generators=compressed)
-    return probe, None
+    identity = tuple(range(active_degree))
+    known = {identity}
+    pending = [identity]
+    while pending:
+        current_permutation = pending.pop()
+        for generator in compressed:
+            candidate = tuple(
+                generator[current_permutation[index]] for index in range(active_degree)
+            )
+            work += active_degree + 1
+            if candidate not in known:
+                known.add(candidate)
+                pending.append(candidate)
+    return len(known), work
 
 
 def _admit_tensor_arithmetic(
     left: CharacterRingElement,
     right: CharacterRingElement,
     source: PermutationGroup,
+    source_work: int,
+    concrete_order: int,
 ) -> tuple[int, int, int]:
     """Admit table expansion, product, pairings, reconstruction, and output."""
-    table = left.table
-    order = sum(len(cls) for cls in table.partition.classes)
-    classes = len(table.partition.classes)
-    rows = len(table.rows)
+    # Before authenticating the table, its claimed class count and order may
+    # understate the real group. Use the exact source order as a worst case.
+    order = concrete_order
+    classes = concrete_order
+    rows = concrete_order
     dimension = euler_phi(order)
     coefficient_digits = max(
         1,
@@ -643,16 +693,20 @@ def _admit_tensor_arithmetic(
     )
     predicted_digits = product_digits + table_digits + len(str(order)) + (order - 1)
     # Two input expansions and one exact reconstruction of the result are
-    # mandatory. Character decomposition independently authenticates its
-    # group/table, so charge the canonical group and table work twice.
+    # mandatory. This includes the source-only group-order enumeration once.
     work = (
         3 * rows * classes * dimension * expanded_digits**2
         + classes * dimension * dimension * product_digits**2
-        + rows * classes * dimension * dimension * (product_digits + table_digits) ** 2
+        + rows
+        * classes
+        * order
+        * (order + 4 * dimension * dimension)
+        * (product_digits + table_digits) ** 2
         + rows * classes * dimension * predicted_digits**2
-        + 2 * order * order * source.degree * max(1, len(source.generators))
-        + 2 * order * order * dimension * table_digits**2
-        + 2 * rows * classes * dimension * table_digits**2
+        + order * order * source.degree * max(1, len(source.generators))
+        + order * order * dimension * table_digits**2
+        + rows * classes * dimension * table_digits**2
+        + source_work
     )
     if work > MAX_CHARACTER_TENSOR_PRODUCT_WORK:
         raise OperationResourceAdmissionError(
@@ -716,28 +770,16 @@ def character_tensor_product(
             ("right", "table", "partition", "source"),
         )
     source = lt.partition.source
-    source_order_probe, known_source_order = _admit_group_order_probe(source)
-    if known_source_order is not None and known_source_order > MAX_CYCLOTOMIC_ORDER:
+    actual_order, source_work = _admit_source_group_order(source)
+    if actual_order > MAX_CYCLOTOMIC_ORDER:
         raise OperationResourceAdmissionError(
             location=("left", "table", "partition", "source"),
             code="groups.characters.tensor_product_group_order_exceeds_envelope",
             message="tensor products currently admit group order at most 60",
         )
-    # Admission depends on bounded supplied shapes, then the source-only
-    # Schreier probe; neither trusts the retained partition's claimed order.
-    _, classes, dimension = _admit_tensor_arithmetic(left, right, source)
-    source = lt.partition.source
-    if known_source_order is not None:
-        actual_order = known_source_order
-    else:
-        assert source_order_probe is not None
-        actual_order = group_order(source_order_probe)
-    if actual_order > MAX_CYCLOTOMIC_ORDER:
-        raise OperationResourceAdmissionError(
-            location=("left", "table"),
-            code="groups.characters.tensor_product_group_order_exceeds_envelope",
-            message="tensor products currently admit group order at most 60",
-        )
+    # Source order and its finite work are computed without trusting the
+    # retained partition. Charge that work with the arithmetic below.
+    _admit_tensor_arithmetic(left, right, source, source_work, actual_order)
     raw_classes = group_conjugacy_classes(
         source.degree, [list(g) for g in source.generators]
     )
@@ -752,6 +794,8 @@ def character_tensor_product(
             ("request",),
         )
     table_order = table.axis.cyclotomic_order
+    classes = len(table.axis.class_sizes)
+    dimension = euler_phi(table_order)
 
     def expand(element: CharacterRingElement) -> FiniteClassFunction:
         values = []
@@ -766,9 +810,7 @@ def character_tensor_product(
         return FiniteClassFunction._from_kernel(axis=table.axis, values=tuple(values))
 
     product = class_function_pointwise_product(expand(left), expand(right))
-    decomposed = class_function_character_decomposition(
-        CharacterRingDecompositionRequest(class_function=product)
-    ).ring_element
+    decomposed = _coordinates_on_authenticated_table(product, table)
     if decomposed.table != table:
         raise _invalid(
             "groups.characters.tensor_product_reconstruction",

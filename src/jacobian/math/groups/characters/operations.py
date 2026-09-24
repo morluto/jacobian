@@ -41,6 +41,8 @@ from jacobian.math.groups.characters._models import (
     MAX_VALUE_COEFFICIENT_DIGITS,
     CharacterRow,
     CharacterTableResult,
+    CharacterTensorDecompositionRequest,
+    CharacterTensorDecompositionResult,
     ClassAxis,
     ClassContribution,
     ClassFunctionInductionRequest,
@@ -678,6 +680,155 @@ def character_table(
         partition=parent,
         rows=tuple(rows),
         axis=table_axis,
+    )
+
+
+MAX_CHARACTER_TENSOR_INNER_WORK = 50_000_000
+MAX_CHARACTER_TENSOR_OUTPUT_BYTES = 2_000_000
+
+
+def character_tensor_decomposition(
+    request: CharacterTensorDecompositionRequest,
+) -> CharacterTensorDecompositionResult:
+    """Decompose an S3 character tensor product in its canonical irreducibles."""
+    if not isinstance(request, CharacterTensorDecompositionRequest):
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="groups.characters.tensor_request_type",
+            message="request must be a character tensor-decomposition request",
+        )
+    request = CharacterTensorDecompositionRequest.model_validate(request.model_dump())
+    partition = _admit_character_partition(request.partition)
+    table = character_table(partition)
+    if (
+        table.axis.group_order != 6
+        or table.axis.class_sizes != (1, 3, 2)
+        or table.axis.cyclotomic_order != 6
+        or tuple(row.label for row in table.rows) != ("trivial", "sign", "standard")
+    ):
+        raise OperationDomainValidationError(
+            location=("partition",),
+            code="groups.characters.tensor_group_unsupported",
+            message="tensor decomposition currently supports the canonical S3 table",
+        )
+    row_count = len(table.rows)
+    if request.left_row_index >= row_count or request.right_row_index >= row_count:
+        raise OperationDomainValidationError(
+            location=("row_index",),
+            code="groups.characters.tensor_row_index",
+            message="tensor-product row index is outside the canonical table",
+        )
+
+    axis = table.axis
+    left = FiniteClassFunction._from_kernel(
+        axis=axis, values=table.rows[request.left_row_index].values
+    )
+    right = FiniteClassFunction._from_kernel(
+        axis=axis, values=table.rows[request.right_row_index].values
+    )
+    product_axis, order, dimension = _admit_pointwise_axis(left, right)
+    pointwise_inputs = _admit_pointwise_inputs(
+        left, right, class_count=3, dimension=dimension
+    )
+    product_heights = _admit_pointwise_output(
+        pointwise_inputs, dimension=dimension, output_cells=3 * dimension
+    )
+    if any(height.denominator != 1 for height in product_heights):
+        raise OperationResourceAdmissionError(
+            location=("partition",),
+            code="groups.characters.tensor_product_height",
+            message="canonical S3 product estimate unexpectedly has a denominator",
+        )
+    predicted_product = FiniteClassFunction._from_kernel(
+        axis=product_axis,
+        values=tuple(
+            _make_value(
+                order,
+                (
+                    Fraction(10 ** max(1, height.lifted_numerator_digits) - 1),
+                    Fraction(0),
+                ),
+            )
+            for height in product_heights
+        ),
+    )
+
+    aggregate_inner_work = 0
+    for row in table.rows:
+        basis_function = FiniteClassFunction._from_kernel(axis=axis, values=row.values)
+        _admit_inner_product(predicted_product, basis_function)
+        maximum_digits = max(
+            canonical_rational_component_digits(coefficient)
+            for value in (*predicted_product.values, *basis_function.values)
+            for coefficient in value.coefficients
+        )
+        aggregate_inner_work += 3 * order * maximum_digits * maximum_digits
+    product_max_digits = max(
+        canonical_rational_component_digits(coefficient)
+        for value in (*left.values, *right.values)
+        for coefficient in value.coefficients
+    )
+    aggregate_work = (
+        3 * dimension * dimension * product_max_digits * product_max_digits
+        + aggregate_inner_work
+    )
+    if aggregate_work > MAX_CHARACTER_TENSOR_INNER_WORK:
+        raise OperationResourceAdmissionError(
+            location=("partition",),
+            code="groups.characters.tensor_work_exceeds_envelope",
+            message="tensor-product and multiplicity arithmetic exceeds its work envelope",
+        )
+
+    # At most three copies of the bounded degree-256 permutation group are
+    # retained. Values use at most 512 digits; this estimate stays below both
+    # the operation's 2 MB cap and the canonical 10 MB transport limit.
+    degree = axis.group.degree
+    generator_count = len(axis.group.generators)
+    group_bytes = 512 + generator_count * (degree * 8 + 16)
+    structure_bytes = 3 * group_bytes + 12 * degree * 8 + 128_000
+    value_bytes = 12 * dimension * (2 * MAX_VALUE_COEFFICIENT_DIGITS + 24)
+    if structure_bytes + value_bytes > MAX_CHARACTER_TENSOR_OUTPUT_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("partition",),
+            code="groups.characters.tensor_output_exceeds_envelope",
+            message="tensor-decomposition result exceeds its bounded output envelope",
+        )
+
+    # Whole-operation admission is complete before any product or pairing.
+    tensor_values = tuple(
+        _make_value(order, multiply_values(order, _fractions(a), _fractions(b)))
+        for a, b in zip(left.values, right.values, strict=True)
+    )
+    tensor_product = FiniteClassFunction._from_kernel(axis=axis, values=tensor_values)
+    multiplicities: list[int] = []
+    for row in table.rows:
+        total = zero_value(order)
+        for class_size, tensor_value, row_value in zip(
+            axis.class_sizes, tensor_values, row.values, strict=True
+        ):
+            conjugate = conjugate_value(order, _fractions(row_value))
+            product = multiply_values(order, _fractions(tensor_value), conjugate)
+            weighted = scale_value(order, Fraction(class_size), product)
+            total = add_values(order, total, weighted)
+        inner = _make_value(
+            order,
+            tuple(coefficient / axis.group_order for coefficient in total),
+        )
+        if (
+            inner.coefficients[0].den != 1
+            or inner.coefficients[0].num < 0
+            or any(coefficient.num != 0 for coefficient in inner.coefficients[1:])
+        ):
+            raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+        multiplicities.append(inner.coefficients[0].num)
+    if any(value > 4 for value in multiplicities):
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+    return CharacterTensorDecompositionResult._from_kernel(
+        table=table,
+        left_row_index=request.left_row_index,
+        right_row_index=request.right_row_index,
+        tensor_product=tensor_product,
+        multiplicities=tuple(multiplicities),
     )
 
 
@@ -1881,12 +2032,13 @@ def _admit_pointwise_output(
     *,
     dimension: int,
     output_cells: int,
-) -> None:
+) -> tuple[_InputHeight, ...]:
     # Each raw convolution coefficient sums at most dimension rational
     # products. Reduction uses at most dimension-1 monic cyclotomic steps;
     # the owner envelope bounds every reduction coefficient to one digit.
     reduction_digits = MAX_CYCLOTOMIC_REDUCTION_COEFFICIENT_DIGITS
     maximum_output_digits = 1
+    output_heights: list[_InputHeight] = []
     for left_height, right_height in heights:
         denominator = _bounded_product(
             left_height.denominator, right_height.denominator
@@ -1904,6 +2056,12 @@ def _admit_pointwise_output(
             + max(0, dimension - 1) * reduction_digits
         )
         output_denominator_digits = len(str(denominator))
+        output_heights.append(
+            _InputHeight(
+                denominator=denominator,
+                lifted_numerator_digits=output_numerator_digits,
+            )
+        )
         _reject_derived_height(
             "pointwise product",
             _CoefficientHeight(output_numerator_digits, output_denominator_digits),
@@ -1922,6 +2080,7 @@ def _admit_pointwise_output(
             code="groups.characters.product_output_exceeds_envelope",
             message="predicted exact class-function product exceeds the 2,000,000-byte envelope",
         )
+    return tuple(output_heights)
 
 
 def class_function_pointwise_product(

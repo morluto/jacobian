@@ -2,6 +2,23 @@
 
 [Finite mathematics operations](index.md) · [Tool surface](../../tools.md)
 
+## Decomposing an S3 tensor product
+
+`finite_group.character.tensor_product.decompose.compute` takes two row
+indices and a concrete complete class partition. It recomputes the canonical
+character table from that partition, so callers cannot supply an unauthenticated
+claim that arbitrary rows are a complete irreducible basis. This release is
+limited to S3. The result contains the pointwise tensor-product class function
+and its exact multiplicities, in table row order, computed by Hermitian inner
+products against every canonical irreducible row.
+
+For S3, the standard character `(2, 0, -1)` has tensor square `(4, 0, 1)`;
+its multiplicities in the trivial, sign, and standard rows are `(1, 1, 1)`.
+The operation preflights predicted product coefficient heights, every basis
+inner product, aggregate work, and output size before product or pairing
+arithmetic. It then checks the computed multiplicities are nonnegative
+integers.
+
 ## Scaling a class function
 
 `class_function.scale.compute` multiplies every value by one exact scalar in
@@ -70,9 +87,12 @@ decomposition into the trivial and standard representations.
 
 Deserialization checks the restriction and induction result shapes, axis
 parents, and class-index ranges. It does not recompute either class map or
-authenticate the relation between a map and the carried function values. A
-consumer relying on a serialized relation must check it: for restriction,
-compare each target value with its mapped source value; for induction,
-check each mapped subgroup class lies in the stated parent class and the
-induced values satisfy the class-sum formula. The operations construct these
-relations directly from admitted canonical class partitions.
+authenticate the relation between a map and the carried function values. It
+also does not reauthenticate a tensor result's character table or recompute its
+pointwise product and multiplicities. A consumer relying on any serialized
+relation must check it: for restriction, compare each target value with its
+mapped source value; for induction, check each mapped subgroup class lies in the
+stated parent class and the induced values satisfy the class-sum formula; for
+tensor decomposition, reauthenticate the canonical table and check the
+pointwise product and inner-product multiplicities. The operation constructs
+these relations from admitted canonical class partitions.

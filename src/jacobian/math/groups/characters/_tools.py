@@ -6,6 +6,8 @@ from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.groups.characters._models import (
     CharacterTableRequest,
     CharacterTableResult,
+    CharacterTensorDecompositionRequest,
+    CharacterTensorDecompositionResult,
     ClassFunctionAddRequest,
     ClassFunctionConjugateRequest,
     ClassFunctionInductionRequest,
@@ -26,6 +28,7 @@ from jacobian.math.groups.characters._models import (
 )
 from jacobian.math.groups.characters.operations import (
     character_table,
+    character_tensor_decomposition,
     class_function_add,
     class_function_conjugate,
     class_function_induce_from_subgroup,
@@ -47,6 +50,12 @@ def _run_inner_product(
 
 def _run_character_table(request: CharacterTableRequest) -> CharacterTableResult:
     return character_table(request.partition)
+
+
+def _run_tensor_decomposition(
+    request: CharacterTensorDecompositionRequest,
+) -> CharacterTensorDecompositionResult:
+    return character_tensor_decomposition(request)
 
 
 def _run_pointwise_product(
@@ -448,6 +457,37 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 input={
                     "scalar": _rational_value(-2),
                     "function": _s3_standard_class_function(),
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="finite_group.character.tensor_product.decompose.compute",
+        title="Decompose a tensor product of canonical S3 characters",
+        description=(
+            "Take the pointwise tensor product of two irreducible rows in the "
+            "canonical complete S3 table and return its exact multiplicities in "
+            "that basis. The supported group is currently S3."
+        ),
+        request_type=CharacterTensorDecompositionRequest,
+        result_type=CharacterTensorDecompositionResult,
+        run=_run_tensor_decomposition,
+        tags=("finite-group", "character", "tensor-product", "decomposition", "exact"),
+        discovery_terms=(
+            "decompose tensor product of irreducible characters",
+            "S3 character tensor decomposition",
+        ),
+        examples=(
+            OperationExample(
+                name="s3_standard_tensor_square",
+                description=(
+                    "Decompose standard tensor standard as trivial plus sign plus "
+                    "standard for S3."
+                ),
+                input={
+                    "partition": _S3_PARTITION,
+                    "left_row_index": 2,
+                    "right_row_index": 2,
                 },
             ),
         ),

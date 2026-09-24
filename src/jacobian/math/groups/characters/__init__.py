@@ -3,6 +3,8 @@
 from jacobian.math.groups.characters._models import (
     CharacterRow,
     CharacterTableResult,
+    CharacterTensorDecompositionRequest,
+    CharacterTensorDecompositionResult,
     ClassAxis,
     ClassContribution,
     ClassFunctionAddRequest,
@@ -22,6 +24,7 @@ from jacobian.math.groups.characters._models import (
 )
 from jacobian.math.groups.characters.operations import (
     character_table,
+    character_tensor_decomposition,
     class_function_add,
     class_function_conjugate,
     class_function_induce_from_subgroup,
@@ -35,6 +38,8 @@ from jacobian.math.groups.characters.operations import (
 __all__ = [
     "CharacterRow",
     "CharacterTableResult",
+    "CharacterTensorDecompositionRequest",
+    "CharacterTensorDecompositionResult",
     "ClassAxis",
     "ClassContribution",
     "ClassFunctionAddRequest",
@@ -52,6 +57,7 @@ __all__ = [
     "FrobeniusSchurIndicatorRequest",
     "FrobeniusSchurIndicatorResult",
     "character_table",
+    "character_tensor_decomposition",
     "class_function_add",
     "class_function_conjugate",
     "class_function_induce_from_subgroup",

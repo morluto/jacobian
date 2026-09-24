@@ -658,6 +658,62 @@ class CharacterTableResult(StrictModel):
         )
 
 
+class CharacterTensorDecompositionRequest(StrictModel):
+    """Decompose the tensor product of two rows in a supported canonical table."""
+
+    partition: GroupConjugacyClassesResult
+    left_row_index: int = Field(ge=0, le=MAX_CLASS_COUNT - 1, strict=True)
+    right_row_index: int = Field(ge=0, le=MAX_CLASS_COUNT - 1, strict=True)
+
+
+class CharacterTensorDecompositionResult(StrictModel):
+    """Tensor-product class function and multiplicities in the complete basis."""
+
+    table: CharacterTableResult
+    left_row_index: int = Field(ge=0, le=MAX_CLASS_COUNT - 1, strict=True)
+    right_row_index: int = Field(ge=0, le=MAX_CLASS_COUNT - 1, strict=True)
+    tensor_product: FiniteClassFunction
+    multiplicities: tuple[int, ...] = Field(min_length=1, max_length=MAX_CLASS_COUNT)
+
+    @model_validator(mode="after")
+    def require_basis_bound_decomposition(self) -> Self:
+        row_count = len(self.table.rows)
+        if self.left_row_index >= row_count or self.right_row_index >= row_count:
+            raise _validation_error(
+                "tensor_row_index", "tensor-product row index is outside the table"
+            )
+        if self.tensor_product.axis != self.table.axis:
+            raise _validation_error(
+                "tensor_axis", "tensor-product values must use the table class axis"
+            )
+        if len(self.multiplicities) != row_count or any(
+            multiplicity < 0 for multiplicity in self.multiplicities
+        ):
+            raise _validation_error(
+                "tensor_multiplicities",
+                "one nonnegative multiplicity is required per table row",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        table: CharacterTableResult,
+        left_row_index: int,
+        right_row_index: int,
+        tensor_product: FiniteClassFunction,
+        multiplicities: tuple[int, ...],
+    ) -> Self:
+        return cls.model_construct(
+            table=table,
+            left_row_index=left_row_index,
+            right_row_index=right_row_index,
+            tensor_product=tensor_product,
+            multiplicities=multiplicities,
+        )
+
+
 class FrobeniusSchurIndicatorRequest(StrictModel):
     """Ordinary second indicator of one row in a complete exact table."""
 
@@ -691,6 +747,8 @@ __all__ = [
     "CharacterRow",
     "CharacterTableRequest",
     "CharacterTableResult",
+    "CharacterTensorDecompositionRequest",
+    "CharacterTensorDecompositionResult",
     "ClassAxis",
     "ClassContribution",
     "ClassFunctionConjugateRequest",

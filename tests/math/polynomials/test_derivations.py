@@ -1,5 +1,6 @@
 """Tests for exact polynomial-derivation application."""
 
+from collections.abc import Iterator, Sequence
 from fractions import Fraction
 from typing import Any
 
@@ -135,6 +136,39 @@ def test_vector_field_conversion_accepts_decoded_component_values() -> None:
     )
     assert derivation.variables == XY
     assert derivation.images == (_poly(XY, ((1, (0, 1)),)), _poly(XY, ()))
+
+
+class _OversizedComponentSequence(Sequence[RationalPolynomial]):
+    """A bounded sequence that must never be iterated past admission."""
+
+    def __init__(self, length: int) -> None:
+        self.length = length
+        self.iterated = False
+
+    def __len__(self) -> int:
+        return self.length
+
+    def __getitem__(self, index: int) -> RationalPolynomial:
+        raise AssertionError("component parsed beyond the vector-field bound")
+
+    def __iter__(self) -> Iterator[RationalPolynomial]:
+        self.iterated = True
+        return super().__iter__()
+
+
+def test_oversized_vector_field_rejected_before_component_parsing() -> None:
+    from jacobian.math.polynomials.derivations._models import (
+        MAX_DERIVATION_VARIABLES,
+    )
+    from jacobian.math.polynomials.derivations.operations import (
+        derivation_from_vector_field,
+    )
+
+    oversized = _OversizedComponentSequence(MAX_DERIVATION_VARIABLES + 1)
+    with pytest.raises(OperationDomainValidationError) as error:
+        derivation_from_vector_field(oversized)
+    assert error.value.errors()[0]["type"] == "polynomial_derivation.vector_field_shape"
+    assert not oversized.iterated
 
 
 @pytest.mark.parametrize(

@@ -24,6 +24,7 @@ from jacobian.math.polynomials.derivations._models import (
     MAX_DERIVATION_ITERATE_COUNT,
     MAX_DERIVATION_ITERATE_TERMS,
     MAX_DERIVATION_SOURCE_TERMS,
+    MAX_DERIVATION_VARIABLES,
     MAX_GA_ACTION_OUTPUT_CELLS,
     MAX_GA_ACTION_OUTPUT_TERMS,
     MAX_GA_ACTION_VARIABLES,
@@ -737,6 +738,15 @@ def derivation_from_vector_field(
             location=("components",),
             code="polynomial_derivation.vector_field_shape",
             message="a vector field must supply one component polynomial per generator",
+        )
+    if len(payload) > MAX_DERIVATION_VARIABLES:
+        raise OperationDomainValidationError(
+            location=("components",),
+            code="polynomial_derivation.vector_field_shape",
+            message=(
+                "a vector field supplies at most one component per derivation "
+                f"variable, bounded by {MAX_DERIVATION_VARIABLES}"
+            ),
         )
     images: list[RationalPolynomial] = []
     for index, component in enumerate(payload):

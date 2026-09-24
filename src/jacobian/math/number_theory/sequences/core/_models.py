@@ -8,6 +8,7 @@ from pydantic import (
     Field,
     GetCoreSchemaHandler,
     GetJsonSchemaHandler,
+    StrictInt,
     ValidationInfo,
     model_validator,
 )
@@ -21,6 +22,10 @@ from jacobian._exact import (
 )
 from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian.math.matrices.cyclic_linear._models import (
+    RationalCyclotomicElement,
+    RationalCyclotomicField,
+)
 from jacobian.math.number_theory.sequences.core.values import (
     MAX_SEQUENCE_LENGTH,
     MAX_SEQUENCE_TOTAL_DIGITS,
@@ -205,6 +210,54 @@ class FiniteRationalSequence(FiniteSequence):
                 f"{MAX_SEQUENCE_TOTAL_DIGITS}-digit representation bound",
             )
         return self
+
+
+class FiniteCyclotomicSequence(StrictModel):
+    """A finite sequence in one exact rational cyclotomic field.
+
+    ``index_origin`` binds the first coefficient to its mathematical index;
+    every coefficient retains the same canonical field parent.
+    """
+
+    domain: Literal["cyclotomic"] = "cyclotomic"
+    index_origin: StrictInt = Field(ge=-(2**31), le=2**31 - 1)
+    field: RationalCyclotomicField
+    values: tuple[RationalCyclotomicElement, ...] = Field(
+        min_length=0, max_length=MAX_SEQUENCE_LENGTH
+    )
+
+    @model_validator(mode="after")
+    def require_shared_field_and_bounded_coordinates(self) -> Self:
+        if any(value.field != self.field for value in self.values):
+            raise _validation_error(
+                "cyclotomic_parent_mismatch",
+                "every sequence coefficient must use the declared cyclotomic field",
+            )
+        total_digits = sum(
+            len(format_canonical_integer(abs(coordinate.num)))
+            + len(format_canonical_integer(coordinate.den))
+            for value in self.values
+            for coordinate in value.coefficients_ascending
+        )
+        if total_digits > MAX_SEQUENCE_TOTAL_DIGITS:
+            raise _validation_error(
+                "representation_too_large",
+                "cyclotomic sequence exceeds the shared exact digit envelope",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        index_origin: int,
+        field: RationalCyclotomicField,
+        values: tuple[RationalCyclotomicElement, ...],
+    ) -> Self:
+        """Build a sequence after its producer has admitted and constructed it."""
+        return cls.model_construct(
+            index_origin=index_origin, field=field, values=values
+        )
 
 
 class AutocorrelationCell(StrictModel):

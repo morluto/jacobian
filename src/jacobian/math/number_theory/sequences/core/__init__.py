@@ -3,6 +3,7 @@
 from jacobian.math.number_theory.sequences.core._models import (
     AutocorrelationCell,
     AutocorrelationResult,
+    FiniteCyclotomicSequence,
     FiniteIntegerSequence,
     FiniteRationalSequence,
 )
@@ -45,6 +46,7 @@ from jacobian.math.number_theory.sequences.core.values import IntegerSequence
 __all__ = [
     "AutocorrelationCell",
     "AutocorrelationResult",
+    "FiniteCyclotomicSequence",
     "FiniteIntegerSequence",
     "FiniteRationalSequence",
     "IntegerSequence",

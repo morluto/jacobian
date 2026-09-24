@@ -586,10 +586,10 @@ def _admit_source_group_order(
 
     Fixed points are removed from the probe's domain. A single permutation
     generates a cyclic group whose order is computed directly from its cycle
-    lengths. With multiple generators, the support must have size at most four:
-    then its symmetric group has at most 24 elements, and closure enumeration
-    gives an exact order with an explicit finite work bound. Larger supports
-    are rejected without asking a backend to compute group order.
+    lengths. With multiple generators, enumerate the generated group closure
+    only until it has 61 elements. This accepts every represented group of
+    order at most 60, regardless of permutation support, while rejecting
+    larger groups after a fixed amount of source-only work.
     """
     degree = source.degree
     generators = source.generators
@@ -612,6 +612,8 @@ def _admit_source_group_order(
     )
     active_degree = len(support)
     work += active_degree * len(generators)
+    compression_bound = len(generators) ** 2 * active_degree
+    work += compression_bound
     if len(compressed) == 1:
         permutation = compressed[0]
         visited: set[int] = set()
@@ -627,13 +629,18 @@ def _admit_source_group_order(
                 cycle_length += 1
             order = math.lcm(order, cycle_length)
         return order, work + active_degree
-    if math.factorial(active_degree) > MAX_CYCLOTOMIC_ORDER:
+    closure_bound = (
+        (MAX_CYCLOTOMIC_ORDER + 1)
+        * len(compressed)
+        * active_degree
+        * (MAX_CYCLOTOMIC_ORDER + 1)
+    )
+    if work + closure_bound > MAX_CHARACTER_TENSOR_PRODUCT_WORK:
         raise OperationResourceAdmissionError(
             location=("left", "table", "partition", "source"),
             code="groups.characters.tensor_product_group_order_work_exceeds_envelope",
             message=(
-                "source-only permutation-degree bound exceeds the bounded "
-                "finite-group order envelope"
+                "source-only group closure exceeds the tensor-product work envelope"
             ),
         )
     identity = tuple(range(active_degree))
@@ -645,9 +652,15 @@ def _admit_source_group_order(
             candidate = tuple(
                 generator[current_permutation[index]] for index in range(active_degree)
             )
-            work += active_degree + 1
+            work += active_degree * (len(known) + 1) + 1
             if candidate not in known:
                 known.add(candidate)
+                if len(known) > MAX_CYCLOTOMIC_ORDER:
+                    raise OperationResourceAdmissionError(
+                        location=("left", "table", "partition", "source"),
+                        code="groups.characters.tensor_product_group_order_exceeds_envelope",
+                        message="tensor products currently admit group order at most 60",
+                    )
                 pending.append(candidate)
     return len(known), work
 

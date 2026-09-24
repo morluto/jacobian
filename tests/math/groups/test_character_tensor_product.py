@@ -98,6 +98,29 @@ def test_cyclic_and_virtual_tensor_products_are_exact() -> None:
     assert virtual.irreducible_multiplicities == (-1, 1, 0)
 
 
+def test_c5_with_redundant_generators_keeps_supported_cyclic_contract() -> None:
+    degree = 5
+    generator = tuple((point + 1) % degree for point in range(degree))
+    generator_square = tuple(generator[generator[point]] for point in range(degree))
+    source = PermutationGroup(degree=degree, generators=(generator, generator_square))
+    classes = group_conjugacy_classes(
+        degree, [list(item) for item in source.generators]
+    )
+    table = character_table(
+        GroupConjugacyClassesResult._from_kernel(
+            source, tuple(tuple(tuple(item) for item in cls) for cls in classes)
+        )
+    )
+    # For C5, rho_k(rot)=zeta_5^k, so rho_1 tensor rho_1 = rho_2.
+    product = character_tensor_product(
+        CharacterTensorProductRequest(
+            left=_element(table, (0, 1, 0, 0, 0)),
+            right=_element(table, (0, 1, 0, 0, 0)),
+        )
+    )
+    assert product.irreducible_multiplicities == (0, 0, 1, 0, 0)
+
+
 def test_parent_mismatch_and_noncanonical_table_rejected() -> None:
     table = _s3_table()
     source = PermutationGroup(degree=3, generators=((1, 2, 0),))

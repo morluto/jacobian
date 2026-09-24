@@ -64,6 +64,14 @@ the represented source dimension, target dimension, and submitted coordinate
 height; values whose full expansion or reconstruction could exceed the limit
 are rejected before PARI work.
 
+The coefficient-growth estimate relies on a finite canonical-basis contract:
+at the transport precisions `(13,3)`, `(13,8)`, `(13,10)`, `(26,8)`,
+`(26,10)`, and `(39,10)`, the S2 basis dimensions are respectively
+`1, 1, 1, 2, 2, 3`, and each cyclotomic rational coordinate is an integer of
+absolute value below 10. The basis producer admits the resulting cell/output
+envelope before PARI and checks the coefficient bound before publishing the
+basis. Regression fixtures cover both conjugate characters at each pair.
+
 `modular_form.character.equal.check` compares two transported forms only when
 they land in the identical target space and coefficient field. It recomputes
 each inclusion from the retained source form, checks the submitted target

@@ -22,6 +22,9 @@ from jacobian.math.number_theory.characters.operations import (
     dirichlet_character,
     dirichlet_character_value,
 )
+from jacobian.math.number_theory.modular_forms.character_basis import (
+    modular_character_basis_q_expansions,
+)
 from jacobian.math.number_theory.modular_forms.character_basis_models import (
     CyclotomicCharacterMap,
     CyclotomicIdentityFieldMap,
@@ -294,4 +297,26 @@ def test_transport_accepts_admitted_height_boundary_through_exact_expansion() ->
     assert transported.target_form.coordinates == (
         _element(coefficient),
         _element(-coefficient, -coefficient),
+    )
+
+
+@pytest.mark.parametrize(("level", "precision", "dimension"), [(13, 3, 1), (13, 8, 1), (13, 10, 1), (26, 8, 2), (26, 10, 2), (39, 10, 3)])
+@pytest.mark.parametrize("character_coordinate", [2, 10])
+def test_transport_sturm_basis_coefficient_envelope(
+    level: int, precision: int, dimension: int, character_coordinate: int
+) -> None:
+    character = dirichlet_character(
+        character_group(13), (character_coordinate,)
+    )
+    character = _inflate(character, level)
+    basis = modular_character_basis_q_expansions(
+        _space(level, character), precision=precision
+    )
+
+    assert len(basis.elements) == dimension
+    assert all(
+        value.den == 1 and abs(int(value.num)) < 10
+        for element in basis.elements
+        for coefficient in element.expansion.coefficients
+        for value in coefficient.coefficients_ascending
     )

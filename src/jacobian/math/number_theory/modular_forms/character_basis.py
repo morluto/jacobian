@@ -46,6 +46,17 @@ _MAX_OUTPUT_BYTES = 1_000_000
 MAX_CHARACTER_HECKE_INDEX = 32
 MAX_CHARACTER_HECKE_SOURCE_PRECISION = 2 * MAX_CHARACTER_HECKE_INDEX + 1
 _MAX_CHARACTER_HECKE_COEFFICIENT_DIGITS = 4
+# (dimension, coefficient digits) for the finite S2 transport Sturm prefixes.
+# Cell counts are derived as dimension * precision * field degree. Independent
+# exact fixtures cover both conjugate characters at every entry.
+_TRANSPORT_STURM_BASIS_ENVELOPE = {
+    (13, 3): (1, 1),
+    (13, 8): (1, 1),
+    (13, 10): (1, 1),
+    (26, 8): (2, 1),
+    (26, 10): (2, 1),
+    (39, 10): (3, 1),
+}
 
 
 def _domain(message: str) -> None:
@@ -255,6 +266,26 @@ def _character_basis_from_admission(
             message="character-valued basis work or output exceeds its exact envelope",
         )
 
+    transport_envelope = (
+        _TRANSPORT_STURM_BASIS_ENVELOPE.get((space.level, precision))
+        if space.kind == "S"
+        else None
+    )
+    if transport_envelope is not None:
+        expected_dimension, coefficient_digits = transport_envelope
+        if dimension != expected_dimension:
+            raise RuntimeError(
+                "independent character dimension differs from the transport basis envelope"
+            )
+        envelope_cells = dimension * precision * field.degree
+        envelope_bytes = envelope_cells * (2 * coefficient_digits + 32)
+        if envelope_bytes > _MAX_OUTPUT_BYTES:
+            raise OperationResourceAdmissionError(
+                location=("space",),
+                code="modular_form.character_basis_transport_admission",
+                message="transport Sturm basis exceeds its declared coefficient envelope",
+            )
+
     # The adapter canonicalizes character coordinates once; the isolated PARI
     # worker independently compares that character on every unit residue.
     # A q-Sturm elimination can clear at most a dimension-by-degree pivot
@@ -276,6 +307,25 @@ def _character_basis_from_admission(
     if len(raw_basis) != dimension:
         raise RuntimeError("PARI returned a character basis of the wrong dimension")
     normalized = _rref_character_prefix(raw_basis, field, precision)
+    # The explicit inflation transport has a tighter, source-independent
+    # coefficient-growth bound for these target Sturm prefixes. Make this a
+    # canonical basis producer postcondition so transport can admit its exact
+    # linear combinations before requesting either basis from PARI.
+    if (
+        space.kind == "S"
+        and (space.level, precision) in _TRANSPORT_STURM_BASIS_ENVELOPE
+        and any(
+            value.den != 1 or abs(int(value.num)) >= 10
+            for vector in normalized
+            for coefficient in vector
+            for value in coefficient.coefficients_ascending
+        )
+    ):
+        raise OperationResourceAdmissionError(
+            location=("space",),
+            code="modular_form.character_basis_transport_height",
+            message="transportable cusp Sturm bases require integral one-digit cyclotomic coefficients",
+        )
     basis_id = (
         CHARACTER_BASIS_ID
         if space.level == 13 and space.kind == "S"

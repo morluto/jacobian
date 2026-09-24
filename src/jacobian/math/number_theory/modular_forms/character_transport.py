@@ -281,7 +281,6 @@ def _expand_coordinate_tuple(
 ) -> tuple[RationalCyclotomicElement, ...]:
     if len(coordinates) != len(basis.elements):
         _domain("character coordinate count differs from its exact basis dimension")
-    _require_integral_transport_basis(basis)
     result = [[Fraction(0), Fraction(0)] for _ in range(basis.precision)]
     for scalar, element in zip(coordinates, basis.elements, strict=True):
         a, b = (
@@ -293,21 +292,6 @@ def _expand_coordinate_tuple(
             result[index][0] += a * c - b * d
             result[index][1] += a * d + b * c + b * d
     return tuple(cyclotomic._canonical(field, tuple(pair)) for pair in result)
-
-
-def _require_integral_transport_basis(basis) -> None:
-    for element in basis.elements:
-        for coefficient in element.expansion.coefficients:
-            if any(
-                value.den != 1
-                or len(str(abs(int(value.num)))) > _MAX_TRANSPORT_BASIS_DIGITS
-                for value in coefficient.coefficients_ascending
-            ):
-                raise OperationResourceAdmissionError(
-                    location=("inclusion", "source_space"),
-                    code="modular_form.character_transport_basis_height",
-                    message="this transport slice requires integral one-digit q-Sturm basis coefficients",
-                )
 
 
 def _coordinates_from_prefix(

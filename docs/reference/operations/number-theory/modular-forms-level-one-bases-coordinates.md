@@ -22,25 +22,35 @@ not only a finite q-prefix.
 `modular_form.equal.check` admits both coordinate values against their shared
 canonical basis and compares their exact rational tuples. Since a
 `ModularFormCoordinates` value represents a complete form in a deterministic
-basis, this decides global equality without relying on a finite q-prefix. The
-operation requires the same exact space; cross-level or cross-character
-comparisons need an explicit transport into a common space. An unconsumed,
-unvalidated coordinate payload does not by itself establish membership in that
-space. For q-prefixes,
+basis, this decides global equality within one exact rational space without
+relying on a finite q-prefix. For equal-weight rational trivial-character
+forms in different spaces, the operation takes a common-space path: both forms
+embed into `M_k(Gamma0(lcm(N_1,N_2)))`, and their exact q-expansions through
+that space's Sturm bound are compared; Sturm's theorem decides global equality
+there, and cusp forms embed in the ambient holomorphic space. Cross-character
+or differing-weight comparisons still need an explicit transport into a common
+space. An unconsumed, unvalidated coordinate payload does not by itself
+establish membership in that space. For q-prefixes,
 `modular_form.space.sturm_bound.compute` returns the exact Sturm integer; the
 caller can compare coefficients through that bound after establishing that
 both prefixes come from forms in the declared space. The Sturm bound is `B`,
 so a determining q-prefix contains `B + 1` coefficients, from index zero
 through index `B`.
-Prefix comparison is a separate caller-level use of Sturm's theorem, not the
-implementation of `modular_form.equal.check`.
+Inside one exact rational space the operation compares canonical
+coordinates, not a finite prefix; prefix comparison remains a separate
+caller-level use of Sturm's theorem, and the common-space path above is the
+operation's own use of it.
 
 These rational basis and coordinate operations support level one, holomorphic
 trivial-character spaces at Gamma0(2) and Gamma0(3), even-weight
 trivial-character spaces at Gamma0(4), and the represented
 `M_1`/`M_3(Gamma0(4), chi_{-4})` spaces, all with rational coefficients.
-Other levels, cusp subspaces above level one, and other nontrivial characters
-remain unsupported.
+Beyond those formula families, the bounded PARI Sturm-RREF path in
+[Rational Gamma0 modular-form bases](modular-forms-gamma0-rational-bases.md)
+supports rational trivial-character `M_k(Gamma0(N))` and `S_k(Gamma0(N))`
+spaces through level 10,000 whenever the weight, dimension, Sturm precision,
+aggregate work, and output bounds declared by that path admit the request.
+Other nontrivial characters remain unsupported by these rational operations.
 
 `ModularFormSpace` can represent a bounded cyclotomic coefficient parent using
 the canonical `RationalCyclotomicField` power-basis value. A narrow

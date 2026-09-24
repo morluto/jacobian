@@ -40,6 +40,7 @@ from jacobian.math.number_theory.modular_forms.values import (
     MAX_LEVEL_ONE_BASIS_COORDINATES,
     MAX_LEVEL_ONE_BASIS_PRECISION,
     MAX_LEVEL_ONE_BASIS_WEIGHT,
+    MAX_MODULAR_FORM_LEVEL,
     MAX_Q_TRANSFORM_OUTPUT_PRECISION,
     MAX_Q_TRANSFORM_SOURCE_ORDER,
     ModularFormBasis,
@@ -1340,6 +1341,26 @@ def _require_canonical_coordinate_space(
         )
 
 
+def _admitted_common_level(
+    left_space: ModularFormSpace, right_space: ModularFormSpace
+) -> int:
+    """The exact common Gamma0 level, admitted within the space bound."""
+
+    common_level = (
+        left_space.level * right_space.level // gcd(left_space.level, right_space.level)
+    )
+    if common_level > MAX_MODULAR_FORM_LEVEL:
+        raise OperationResourceAdmissionError(
+            location=(),
+            code="modular_form.equality_level_bound",
+            message=(
+                "the common Gamma0 level exceeds the modular-form level bound "
+                f"{MAX_MODULAR_FORM_LEVEL}"
+            ),
+        )
+    return common_level
+
+
 def modular_form_coordinates_equal(
     left: ModularFormCoordinates, right: ModularFormCoordinates
 ) -> bool:
@@ -1414,9 +1435,7 @@ def modular_form_coordinates_equal(
     # Both forms embed into M_k(Gamma0(lcm(N1,N2))). The Sturm theorem there
     # makes equality of this finite prefix equivalent to equality of forms;
     # cusp forms embed in its ambient holomorphic space as well.
-    common_level = (
-        left_space.level * right_space.level // gcd(left_space.level, right_space.level)
-    )
+    common_level = _admitted_common_level(left_space, right_space)
     common_space = ModularFormSpace(
         level=common_level, weight=left_space.weight, kind="M"
     )

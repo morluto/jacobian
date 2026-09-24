@@ -64,9 +64,7 @@ def admit_pp_evaluation(
 ) -> None:
     """Admit exhaustive pp assignment replay and output materialization."""
 
-    symbol_arities = {
-        symbol.symbol_id: symbol.arity for symbol in structure.signature
-    }
+    symbol_arities = {symbol.symbol_id: symbol.arity for symbol in structure.signature}
     for index, atom in enumerate(formula.atoms):
         if isinstance(atom, PPRelationAtom):
             arity = symbol_arities.get(atom.symbol_id)
@@ -232,38 +230,41 @@ def admit_polymorphism_family(
         )
 
     # A positive-arity operation on the empty carrier is the unique empty
-    # function. Avoid the ambiguous integer expression 0**0 for its table
-    # space while preserving the ordinary n^(n^m) count on nonempty carriers.
+    # function. For other carriers, stop multiplying as soon as the family cap
+    # is crossed so rejection never formats or retains an enormous n^(n^m).
     candidate_tables = (
         1
         if carrier_size == 0
-        else carrier_size**table_cells
+        else _capped_power(
+            carrier_size, table_cells, MAX_RELATIONAL_POLYMORPHISM_FAMILY_SIZE
+        )
     )
     if candidate_tables > MAX_RELATIONAL_POLYMORPHISM_FAMILY_SIZE:
         raise OperationResourceAdmissionError(
             location=("arity",),
             code="relational.polymorphism.family_candidate_bound",
             message=(
-                f"the complete function space contains {candidate_tables} tables, "
-                f"exceeding the {MAX_RELATIONAL_POLYMORPHISM_FAMILY_SIZE}-candidate envelope"
+                "the complete function space exceeds the "
+                f"{MAX_RELATIONAL_POLYMORPHISM_FAMILY_SIZE}-candidate envelope"
             ),
         )
 
-    combinations_per_candidate = 0
-    coordinate_work_per_candidate = 0
-    relation_index_work = 0
+    work_per_candidate = table_cells + carrier_size + 1 + len(source.signature)
     for symbol, relation in zip(source.signature, source.relation_tables, strict=True):
         combinations = len(relation) ** arity
-        combinations_per_candidate += combinations
-        # Charge both construction of each m-row input tuple and the m
-        # coordinate lookups used to compute every output coordinate.
-        coordinate_work_per_candidate += (
-            combinations * arity * (symbol.arity + 1)
+        # itertools.product copies one relation pool and initializes its
+        # arity-sized odometer for each candidate. The loop then materializes
+        # each m-row input tuple. Charge both before admitting enumeration.
+        work_per_candidate += len(relation) + arity
+        search_depth = len(relation).bit_length()
+        per_combination_work = (
+            arity
+            + 1
+            + symbol.arity * (3 * arity + 2)
+            + search_depth * 4 * (symbol.arity + 1)
         )
-        relation_index_work += len(relation) * (symbol.arity + 1)
-    work = relation_index_work + candidate_tables * (
-        table_cells + combinations_per_candidate + coordinate_work_per_candidate
-    )
+        work_per_candidate += combinations * per_combination_work
+    work = candidate_tables * work_per_candidate
     if work > MAX_POLYMORPHISM_FAMILY_WORK:
         raise OperationResourceAdmissionError(
             location=("source", "relation_tables"),
@@ -294,6 +295,17 @@ def admit_polymorphism_family(
             ),
         )
     return table_cells, candidate_tables, work, output_bound
+
+
+def _capped_power(base: int, exponent: int, cap: int) -> int:
+    """Return ``base**exponent`` exactly through cap, else ``cap + 1``."""
+
+    result = 1
+    for _ in range(exponent):
+        result *= base
+        if result > cap:
+            return cap + 1
+    return result
 
 
 def core_search_work(source_size: int, transport_tuples: int) -> int:

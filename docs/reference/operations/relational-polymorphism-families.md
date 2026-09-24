@@ -15,11 +15,11 @@ operation when complete family enumeration is outside the admitted envelope.
 
 The operation preflights the complete function-space size `|A|^(|A|^m)`,
 per-table size `|A|^m`, worst-case relation-product checks, coordinatewise
-table work, and a conservative output-size bound before constructing any
-candidate table or relation index. The current envelope admits at most 65,536
-candidate tables and 8,388,608 aggregate work steps; output is also limited to
-8 MiB. Exceeding an envelope refuses the request and never returns a partial
-family. These limits make the operation useful for small finite templates;
+table work, sorted-row membership comparisons, and a conservative output-size
+bound before constructing any candidate table. The current envelope admits at
+most 65,536 candidate tables and 8,388,608 aggregate work steps; output is also
+limited to 8 MiB. Exceeding an envelope refuses the request and never returns
+a partial family. These limits make the operation useful for small finite templates;
 they are execution bounds, not a change to the mathematical meaning of a
 polymorphism family.
 

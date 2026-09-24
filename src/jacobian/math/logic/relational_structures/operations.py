@@ -442,6 +442,33 @@ def _operation_table_index(inputs: tuple[int, ...], carrier_size: int) -> int:
     return index
 
 
+def _contains_sorted_relation_row(
+    relation: tuple[tuple[int, ...], ...], target: tuple[int, ...]
+) -> bool:
+    """Check membership with a deterministic scan of the canonical rows."""
+
+    low = 0
+    high = len(relation)
+    while low < high:
+        middle = (low + high) // 2
+        row = relation[middle]
+        order = 0
+        for left, right in zip(row, target, strict=True):
+            if left < right:
+                order = -1
+                break
+            if left > right:
+                order = 1
+                break
+        if order < 0:
+            low = middle + 1
+        elif order > 0:
+            high = middle
+        else:
+            return True
+    return False
+
+
 def enumerate_polymorphisms(
     request: RelationalPolymorphismEnumerationRequest,
 ) -> RelationalPolymorphismFamily:
@@ -470,10 +497,9 @@ def enumerate_polymorphisms(
         source, admitted.arity
     )
 
-    # Admission precedes both this candidate-space iterator and every set
-    # index. The function space has at most 65,536 rows, and its worst-case
-    # generation, preservation, coordinate, and output costs were bounded.
-    relation_sets = tuple(set(table) for table in source.relation_tables)
+    # Admission precedes candidate generation. Membership uses binary search
+    # over the canonical sorted relation rows, so its comparison and coordinate
+    # work has a deterministic bound included in the admission estimate.
     carrier_size = source.carrier_size
     polymorphisms: list[tuple[int, ...]] = []
     combinations_checked = 0
@@ -483,8 +509,8 @@ def enumerate_polymorphisms(
         if candidates_scanned % 256 == 1:
             request_checkpoint("during complete polymorphism family enumeration")
         preserved = True
-        for symbol, relation, relation_set in zip(
-            source.signature, source.relation_tables, relation_sets, strict=True
+        for symbol, relation in zip(
+            source.signature, source.relation_tables, strict=True
         ):
             for input_rows in product(relation, repeat=admitted.arity):
                 combinations_checked += 1
@@ -500,7 +526,7 @@ def enumerate_polymorphisms(
                     ]
                     for column in range(symbol.arity)
                 )
-                if output_row not in relation_set:
+                if not _contains_sorted_relation_row(relation, output_row):
                     preserved = False
                     break
             if not preserved:
@@ -509,7 +535,9 @@ def enumerate_polymorphisms(
             polymorphisms.append(operation_table)
 
     if candidates_scanned != candidate_count:
-        raise RuntimeError("polymorphism family did not scan its admitted function space")
+        raise RuntimeError(
+            "polymorphism family did not scan its admitted function space"
+        )
     operation_tables = tuple(polymorphisms)
     return RelationalPolymorphismFamily._from_kernel(
         source=source,

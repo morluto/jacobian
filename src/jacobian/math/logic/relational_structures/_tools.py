@@ -451,7 +451,8 @@ TOOLS: MathTools = (
             f"table-generation/preservation work to {MAX_POLYMORPHISM_FAMILY_WORK} "
             "steps, and the complete serialized result to "
             f"{MAX_POLYMORPHISM_FAMILY_OUTPUT_BYTES} bytes before allocating "
-            "candidate tables or relation indexes."
+            "candidate tables; canonical relation-row membership scans are "
+            "included in the work bound."
         ),
         request_type=RelationalPolymorphismEnumerationRequest,
         result_type=RelationalPolymorphismFamily,

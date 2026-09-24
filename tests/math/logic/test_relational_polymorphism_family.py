@@ -26,7 +26,9 @@ def _binary_relation(mask: int) -> FiniteRelationalStructure:
     return FiniteRelationalStructure(
         carrier_size=2,
         signature=(FiniteRelationSymbol(symbol_id="R", arity=2),),
-        relation_tables=(tuple(row for bit, row in enumerate(rows) if mask & (1 << bit)),),
+        relation_tables=(
+            tuple(row for bit, row in enumerate(rows) if mask & (1 << bit)),
+        ),
     )
 
 
@@ -84,7 +86,9 @@ def test_unary_singleton_example_roundtrips_as_a_source_bound_value() -> None:
     result = enumerate_polymorphisms(request)
 
     assert result.operation_tables == ((0, 0), (0, 1))
-    restored = RelationalPolymorphismFamily.model_validate_json(result.model_dump_json())
+    restored = RelationalPolymorphismFamily.model_validate_json(
+        result.model_dump_json()
+    )
     assert restored == result
     assert restored.source == source
 
@@ -123,15 +127,30 @@ def test_candidate_and_work_refusals_precede_function_space_iteration(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     def no_candidate_iteration(*_args: object, **_kwargs: object) -> object:
-        raise AssertionError("candidate function tables were requested before admission")
+        raise AssertionError(
+            "candidate function tables were requested before admission"
+        )
 
-    monkeypatch.setattr(operations, "_candidate_operation_tables", no_candidate_iteration)
+    monkeypatch.setattr(
+        operations, "_candidate_operation_tables", no_candidate_iteration
+    )
 
     too_many_candidates = FiniteRelationalStructure(carrier_size=4)
-    with pytest.raises(OperationResourceAdmissionError, match="complete function space"):
+    with pytest.raises(
+        OperationResourceAdmissionError, match="complete function space"
+    ):
         enumerate_polymorphisms(
             RelationalPolymorphismEnumerationRequest(
                 source=too_many_candidates, arity=2
+            )
+        )
+
+    # This cardinality is vastly larger than Python's decimal conversion
+    # limit. Admission must cap it without formatting the exact integer.
+    with pytest.raises(OperationResourceAdmissionError, match="candidate envelope"):
+        enumerate_polymorphisms(
+            RelationalPolymorphismEnumerationRequest(
+                source=FiniteRelationalStructure(carrier_size=64), arity=2
             )
         )
 

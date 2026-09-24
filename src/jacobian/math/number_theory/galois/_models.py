@@ -136,6 +136,33 @@ class SolvableRequest(_SupportedGaloisPolynomialRequest):
     """The supported SymPy domain for deciding radical solvability."""
 
 
+def _discriminant_coefficients(polynomial: RationalPolynomial) -> tuple[int, ...]:
+    """Admit a discriminant-profile polynomial and return ascending coefficients."""
+    terms = polynomial.polynomial.terms
+    if (
+        len(polynomial.variables) != 1
+        or not terms
+        or not 1 <= terms[0].exponents[0] <= MAX_GALOIS_GROUP_DEGREE
+    ):
+        raise _validation_error(
+            "degree_bound",
+            "discriminant profile requires a univariate polynomial of degree one through six",
+        )
+    if any(
+        term.coefficient.den != 1 or abs(term.coefficient.num) > 10**12
+        for term in terms
+    ):
+        raise _validation_error(
+            "coefficient_bound",
+            "discriminant coefficients must be integers of magnitude at most 10^12",
+        )
+    degree = terms[0].exponents[0]
+    coefficients = [0] * (degree + 1)
+    for term in terms:
+        coefficients[term.exponents[0]] = term.coefficient.num
+    return tuple(coefficients)
+
+
 class PolynomialDiscriminantRequest(StrictModel):
     """A bounded univariate polynomial over QQ, including reducible inputs."""
 
@@ -145,33 +172,12 @@ class PolynomialDiscriminantRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_supported_encoding(self) -> Self:
-        terms = self.polynomial.polynomial.terms
-        if (
-            len(self.polynomial.variables) != 1
-            or not terms
-            or not 1 <= terms[0].exponents[0] <= MAX_GALOIS_GROUP_DEGREE
-        ):
-            raise _validation_error(
-                "degree_bound",
-                "discriminant profile requires a univariate polynomial of degree one through six",
-            )
-        if any(
-            term.coefficient.den != 1 or abs(term.coefficient.num) > 10**12
-            for term in terms
-        ):
-            raise _validation_error(
-                "coefficient_bound",
-                "discriminant coefficients must be integers of magnitude at most 10^12",
-            )
+        _discriminant_coefficients(self.polynomial)
         return self
 
     @property
     def coefficients(self) -> tuple[int, ...]:
-        degree = self.polynomial.polynomial.terms[0].exponents[0]
-        coefficients = [0] * (degree + 1)
-        for term in self.polynomial.polynomial.terms:
-            coefficients[term.exponents[0]] = term.coefficient.num
-        return tuple(coefficients)
+        return _discriminant_coefficients(self.polynomial)
 
 
 class PolynomialDiscriminantResult(StrictModel):
@@ -409,6 +415,28 @@ class QQFieldAutomorphism(StrictModel):
         return self
 
 
+def _supported_splitting_field_polynomial(polynomial: RationalPolynomial) -> None:
+    """Admit an integral degree-one-or-two univariate polynomial over QQ."""
+    terms = polynomial.polynomial.terms
+    if (
+        len(polynomial.variables) != 1
+        or not terms
+        or terms[0].exponents[0] not in (1, 2)
+    ):
+        raise _validation_error(
+            "splitting_field_degree_bound",
+            "exact splitting fields currently admit polynomial degree one or two",
+        )
+    if any(
+        term.coefficient.den != 1 or abs(term.coefficient.num) > 10**12
+        for term in terms
+    ):
+        raise _validation_error(
+            "splitting_field_coefficient_bound",
+            "splitting-field coefficients must be integers of magnitude at most 10^12",
+        )
+
+
 class SplittingFieldRequest(StrictModel):
     """An integral univariate polynomial over QQ of degree at most two."""
 
@@ -418,24 +446,7 @@ class SplittingFieldRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_supported_encoding(self) -> Self:
-        terms = self.polynomial.polynomial.terms
-        if (
-            len(self.polynomial.variables) != 1
-            or not terms
-            or terms[0].exponents[0] not in (1, 2)
-        ):
-            raise _validation_error(
-                "splitting_field_degree_bound",
-                "exact splitting fields currently admit polynomial degree one or two",
-            )
-        if any(
-            term.coefficient.den != 1 or abs(term.coefficient.num) > 10**12
-            for term in terms
-        ):
-            raise _validation_error(
-                "splitting_field_coefficient_bound",
-                "splitting-field coefficients must be integers of magnitude at most 10^12",
-            )
+        _supported_splitting_field_polynomial(self.polynomial)
         return self
 
     @property

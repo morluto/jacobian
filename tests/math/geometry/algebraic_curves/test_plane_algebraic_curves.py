@@ -24,6 +24,7 @@ from jacobian.math.geometry.algebraic_curves._models import (
     AffineChartRequest,
     AffineChartResult,
     AffineCurveRequest,
+    PlaneCurveBlowupChartRequest,
     ProjectiveClosureRequest,
     ProjectiveClosureResult,
     ProjectivePlaneCurveSingularityProfile,
@@ -35,6 +36,7 @@ from jacobian.math.geometry.algebraic_curves._tools import (
     TOOLS,
     compute_affine_chart,
     compute_affine_curve_check,
+    compute_plane_curve_blowup_chart,
     compute_projective_closure,
     compute_projective_plane_curve_singularity_profile,
     compute_rational_conic_parametrization,
@@ -125,6 +127,7 @@ def _point(
 def test_catalog_contains_only_audited_operations() -> None:
     assert {tool.operation_id for tool in TOOLS} == {
         "algebraic_geometry.affine_plane_curve.check",
+        "algebraic_geometry.plane_curve.blowup_chart.compute",
         "algebraic_geometry.conic.rational_parametrization.compute",
         "algebraic_geometry.gaussian_polynomial.realification.compute",
         "algebraic_geometry.plane_curve.projective_closure.compute",
@@ -132,6 +135,59 @@ def test_catalog_contains_only_audited_operations() -> None:
         "algebraic_geometry.projective_curve.affine_chart.compute",
         "real_algebraic.plane_curve.arclength.enclose",
     }
+
+
+def test_cusp_blowup_chart_returns_strict_transform_and_exceptional_scheme() -> None:
+    source = _polynomial(("x", "y"), (-1, (3, 0)), (1, (0, 2)))
+    result = compute_plane_curve_blowup_chart(
+        PlaneCurveBlowupChartRequest(
+            polynomial=source,
+            center=_point(("x", "y"), (_rational(0), _rational(0))),
+            radial_variable="u",
+            slope_variable="t",
+        )
+    )
+    assert result.exceptional_multiplicity == 2
+    assert result.strict_transform.variables == ("u", "t")
+    assert rational_polynomial_to_sympy(result.strict_transform) == sympy.Symbol(
+        "t"
+    ) ** 2 - sympy.Symbol("u")
+    assert result.exceptional_intersection_polynomial.variables == ("t",)
+    assert (
+        rational_polynomial_to_sympy(result.exceptional_intersection_polynomial)
+        == sympy.Symbol("t") ** 2
+    )
+
+
+def test_blowup_chart_respects_translated_rational_center() -> None:
+    source = _polynomial(("x", "y"), (-1, (1, 0)), (1, (0, 1)))
+    result = compute_plane_curve_blowup_chart(
+        PlaneCurveBlowupChartRequest(
+            polynomial=source,
+            center=_point(("x", "y"), (_rational(1), _rational(1))),
+            radial_variable="r",
+            slope_variable="s",
+        )
+    )
+    assert result.exceptional_multiplicity == 1
+    assert (
+        rational_polynomial_to_sympy(result.strict_transform) == sympy.Symbol("s") - 1
+    )
+    assert (
+        rational_polynomial_to_sympy(result.exceptional_intersection_polynomial)
+        == sympy.Symbol("s") - 1
+    )
+
+
+def test_blowup_chart_requires_center_on_curve() -> None:
+    request = PlaneCurveBlowupChartRequest(
+        polynomial=_polynomial(("x", "y"), (1, (1, 0))),
+        center=_point(("x", "y"), (_rational(1), _rational(0))),
+        radial_variable="u",
+        slope_variable="t",
+    )
+    with _raises_operation_code("blowup_center_not_on_curve"):
+        compute_plane_curve_blowup_chart(request)
 
 
 def test_linear_projective_curve_is_smooth_without_backend(

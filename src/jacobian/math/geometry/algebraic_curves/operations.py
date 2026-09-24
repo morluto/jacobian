@@ -29,6 +29,8 @@ from jacobian.math.geometry.algebraic_curves._models import (
     HOMOGENIZING_COORDINATE,
     AffineChartResult,
     AffineCurveResult,
+    PlaneCurveBlowupChartRequest,
+    PlaneCurveBlowupChartResult,
     ProjectiveClosureResult,
     RationalConicParametrizationResult,
     _require_curve_polynomial,
@@ -45,7 +47,11 @@ from jacobian.math.polynomials._conversions import (
     symbols_for_variables,
 )
 from jacobian.math.polynomials.maps._models import VariablePoint
-from jacobian.math.polynomials.values import PolynomialVariable, RationalPolynomial
+from jacobian.math.polynomials.values import (
+    PolynomialVariable,
+    RationalPolynomial,
+    require_polynomial_budget,
+)
 
 
 def _domain_error(reason: str, message: str, *location: str) -> None:
@@ -93,6 +99,171 @@ def affine_curve_check(polynomial: RationalPolynomial) -> tuple[bool, int]:
     source = rational_polynomial_to_sympy(polynomial)
     degree = 0 if source.is_zero else int(source.total_degree())
     return (not source.is_zero and degree >= 1, degree)
+
+
+def plane_curve_blowup_chart(
+    request: PlaneCurveBlowupChartRequest,
+) -> PlaneCurveBlowupChartResult:
+    """Return the strict transform in x=a+u, y=b+u*t and its E intersection."""
+    polynomial = request.polynomial
+    _admit_curve_polynomial(polynomial)
+    if len(polynomial.variables) != 2:
+        _domain_error(
+            "blowup_axis_invalid",
+            "a plane-curve blowup requires exactly two source variables",
+            "polynomial",
+        )
+    if request.center.variables != polynomial.variables:
+        _domain_error(
+            "blowup_center_axis_invalid",
+            "the center must use the complete ordered source axis",
+            "center",
+        )
+    source = rational_polynomial_to_sympy(polynomial)
+    if source.is_zero or source.total_degree() < 1:
+        _domain_error(
+            "blowup_curve_invalid",
+            "the blowup source must be a nonzero curve polynomial",
+            "polynomial",
+        )
+    x, y = symbols_for_variables(polynomial.variables)
+    radial, slope = symbols_for_variables(
+        (request.radial_variable, request.slope_variable)
+    )
+    a, b = (value.as_fraction() for value in request.center.values)
+
+    # Bound the full binomial expansion, output carrier, and coefficient
+    # growth before asking SymPy to expand the translated chart substitution.
+    terms = polynomial.polynomial.terms
+    raw_terms = sum((term.exponents[0] + 1) * (term.exponents[1] + 1) for term in terms)
+    if raw_terms > 1_000_000 or raw_terms > 256:
+        raise OperationResourceAdmissionError(
+            location=("polynomial",),
+            code="plane_algebraic_curve.blowup_expansion_over_envelope",
+            message="the predicted strict-transform expansion exceeds its 256-term bound",
+        )
+    center_digits = max(
+        max(len(str(abs(value.numerator))), len(str(value.denominator)))
+        for value in (a, b)
+    )
+    degree = int(source.total_degree())
+    coefficient_digits = max(
+        max(
+            len(str(abs(term.coefficient.as_fraction().numerator))),
+            len(str(term.coefficient.as_fraction().denominator)),
+        )
+        for term in terms
+    )
+    growth_bound = (
+        coefficient_digits + degree * (center_digits + 2) + len(str(raw_terms))
+    )
+    if growth_bound > 128:
+        raise OperationResourceAdmissionError(
+            location=("center",),
+            code="plane_algebraic_curve.blowup_coefficient_growth_over_envelope",
+            message="the exact chart substitution may exceed the 128-digit curve coefficient bound",
+        )
+
+    source_expression = source.as_expr()
+    if (
+        source_expression.subs(
+            {
+                x: sympy.Rational(a.numerator, a.denominator),
+                y: sympy.Rational(b.numerator, b.denominator),
+            }
+        )
+        != 0
+    ):
+        _domain_error(
+            "blowup_center_not_on_curve",
+            "the blowup center must lie on the source curve",
+            "center",
+        )
+
+    pulled = sympy.Poly(
+        sympy.expand(
+            source_expression.subs(
+                {
+                    x: sympy.Rational(a.numerator, a.denominator) + radial,
+                    y: sympy.Rational(b.numerator, b.denominator) + radial * slope,
+                },
+                simultaneous=True,
+            )
+        ),
+        radial,
+        slope,
+        domain=sympy.QQ,
+    )
+    if pulled.is_zero:
+        _domain_error(
+            "blowup_pullback_zero", "the chart pullback must be nonzero", "polynomial"
+        )
+    multiplicity = min(exponents[0] for exponents, _ in pulled.terms())
+    strict_poly = sympy.Poly(
+        {
+            (exponents[0] - multiplicity, exponents[1]): coefficient
+            for exponents, coefficient in pulled.terms()
+        },
+        radial,
+        slope,
+        domain=sympy.QQ,
+    )
+    exceptional_poly = sympy.Poly(
+        strict_poly.as_expr().subs(radial, 0), slope, domain=sympy.QQ
+    )
+    if exceptional_poly.is_zero:
+        _domain_error(
+            "blowup_exceptional_restriction_zero",
+            "the exceptional restriction must be nonzero after removing the exact multiplicity",
+            "polynomial",
+        )
+    exceptional_poly = exceptional_poly.monic()
+    strict_transform = rational_polynomial_from_sympy(
+        strict_poly,
+        (request.radial_variable, request.slope_variable),
+        maximum_terms=256,
+    )
+    exceptional_intersection = rational_polynomial_from_sympy(
+        exceptional_poly, (request.slope_variable,), maximum_terms=256
+    )
+    require_polynomial_budget(
+        strict_transform,
+        maximum_terms=256,
+        maximum_exponent=128,
+        maximum_coefficient_digits=128,
+        label="strict-transform polynomial",
+    )
+    if any(sum(term.exponents) > 128 for term in strict_transform.polynomial.terms):
+        raise OperationResourceAdmissionError(
+            location=("strict_transform",),
+            code="plane_algebraic_curve.blowup_result_degree_over_envelope",
+            message="the strict-transform polynomial exceeds the 128-degree output bound",
+        )
+    require_polynomial_budget(
+        exceptional_intersection,
+        maximum_terms=256,
+        maximum_exponent=64,
+        maximum_coefficient_digits=128,
+        label="exceptional intersection polynomial",
+    )
+    replay = sympy.Poly(
+        strict_poly.as_expr() * radial**multiplicity, radial, slope, domain=sympy.QQ
+    )
+    if replay != pulled:
+        _domain_error(
+            "blowup_identity_failed",
+            "the strict-transform divisibility identity failed",
+            "strict_transform",
+        )
+    return PlaneCurveBlowupChartResult(
+        source_polynomial=polynomial,
+        center=request.center,
+        radial_variable=request.radial_variable,
+        slope_variable=request.slope_variable,
+        exceptional_multiplicity=multiplicity,
+        strict_transform=strict_transform,
+        exceptional_intersection_polynomial=exceptional_intersection,
+    )
 
 
 def projective_closure(polynomial: RationalPolynomial) -> RationalPolynomial:

@@ -18,6 +18,8 @@ from jacobian.math.geometry.algebraic_curves._models import (
     AffineChartResult,
     AffineCurveRequest,
     AffineCurveResult,
+    PlaneCurveBlowupChartRequest,
+    PlaneCurveBlowupChartResult,
     ProjectiveClosureRequest,
     ProjectiveClosureResult,
     ProjectivePlaneCurveSingularityProfile,
@@ -28,6 +30,7 @@ from jacobian.math.geometry.algebraic_curves._models import (
 from jacobian.math.geometry.algebraic_curves.operations import (
     affine_chart,
     affine_curve_check,
+    plane_curve_blowup_chart,
     projective_closure,
     rational_conic_parametrization,
     singularity_profile,
@@ -48,6 +51,12 @@ def compute_affine_curve_check(request: AffineCurveRequest) -> AffineCurveResult
     return AffineCurveResult(
         polynomial=request.polynomial, is_valid=is_valid, degree=degree
     )
+
+
+def compute_plane_curve_blowup_chart(
+    request: PlaneCurveBlowupChartRequest,
+) -> PlaneCurveBlowupChartResult:
+    return plane_curve_blowup_chart(request)
 
 
 def verify_affine_curve_check(claim: AffineCurveResult) -> bool:
@@ -217,6 +226,40 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                         (1, (0, 1, 0)),
                         (1, (0, 0, 1)),
                     )
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="algebraic_geometry.plane_curve.blowup_chart.compute",
+        title="Compute one exact affine plane-curve blowup chart",
+        description=(
+            "At a rational point (a,b) on a bounded affine curve f(x,y)=0, "
+            "substitute x=a+u and y=b+u*t, divide by the exact exceptional "
+            "multiplicity, and return the strict transform together with the "
+            "monic polynomial of its intersection with u=0. This is the chart "
+            "where the x-direction is the radial coordinate; other tangent "
+            "directions can be inspected in the complementary chart."
+        ),
+        request_type=PlaneCurveBlowupChartRequest,
+        result_type=PlaneCurveBlowupChartResult,
+        run=compute_plane_curve_blowup_chart,
+        tags=("algebraic-geometry", "plane-curve", "blowup", "exact-rational"),
+        examples=(
+            OperationExample(
+                name="node_blowup_chart",
+                description="Blow up x*y=0 at the origin in x=u, y=u*t; the strict transform is t=0 and its exceptional intersection is t=0.",
+                input={
+                    "polynomial": _polynomial(("x", "y"), (1, (1, 1))),
+                    "center": {
+                        "variables": ["x", "y"],
+                        "values": [
+                            {"num": "0", "den": "1"},
+                            {"num": "0", "den": "1"},
+                        ],
+                    },
+                    "radial_variable": "u",
+                    "slope_variable": "t",
                 },
             ),
         ),

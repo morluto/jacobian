@@ -5,6 +5,7 @@ from collections import Counter
 from itertools import product
 
 import pytest
+from pydantic import ValidationError
 
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -14,6 +15,7 @@ from jacobian.math.topology.cubical_complexes import operations
 from jacobian.math.topology.cubical_complexes._models import (
     CubicalBoundarySubcomplexResult,
     CubicalCell,
+    CubicalComplex,
     CubicalComplexRequest,
 )
 from jacobian.math.topology.cubical_complexes._tools import TOOLS
@@ -109,6 +111,17 @@ def test_coordinate_and_face_output_admission_precede_expansion(monkeypatch):
     )
 
 
+def test_forged_cells_are_revalidated_before_sort_dimension_or_digit_work():
+    malformed_length = CubicalCell.model_construct(intervals=((0, 2),))
+    malformed_coordinate = CubicalCell.model_construct(intervals=(("x", "y"),))
+    for forged in (malformed_length, malformed_coordinate, object()):
+        with pytest.raises(OperationDomainValidationError) as error:
+            operations.boundary_subcomplex((forged,))
+        assert error.value.errors()[0]["type"] == (
+            "cubical_complex.boundary_subcomplex_invalid_cell"
+        )
+
+
 def test_non_pure_check_uses_exact_face_closure_and_roundtrips_result():
     square = _cell((0, 1), (0, 1))
     result = operations.boundary_subcomplex((square,))
@@ -147,6 +160,50 @@ def test_all_square_subfamilies_match_an_independent_incidence_oracle():
         result = operations.boundary_subcomplex(source)
         assert {cell.intervals for cell in result.exposed_facets} == facets
         assert {cell.intervals for cell in result.boundary.cells} == expected_boundary
+
+
+def test_forged_serialized_result_must_retain_exact_facets_and_boundary():
+    square = _cell((0, 1), (0, 1))
+    result = operations.boundary_subcomplex((square,))
+    payload = result.model_dump(mode="json")
+    payload["exposed_facets"] = payload["exposed_facets"][:-1]
+    with pytest.raises(ValidationError) as missing_facet:
+        CubicalBoundarySubcomplexResult.model_validate_json(json.dumps(payload))
+    assert missing_facet.value.errors()[0]["type"] == (
+        "cubical_complex.boundary_subcomplex_claim_invalid"
+    )
+
+    payload = result.model_dump(mode="json")
+    payload["boundary"]["cells"] = payload["boundary"]["cells"][:-1]
+    with pytest.raises(ValidationError) as missing_face:
+        CubicalBoundarySubcomplexResult.model_validate_json(json.dumps(payload))
+    assert missing_face.value.errors()[0]["type"] == (
+        "cubical_complex.boundary_subcomplex_claim_invalid"
+    )
+
+
+def test_result_checker_admits_candidate_work_before_face_expansion(monkeypatch):
+    def fail_if_expanded(*_args, **_kwargs):
+        raise AssertionError("candidate closure ran before result admission")
+
+    monkeypatch.setattr(
+        "jacobian.math.topology.cubical_complexes._models._cubical_cell_face_intervals",
+        fail_if_expanded,
+    )
+    first = _cell(*((0, 1) for _ in range(10)))
+    second = _cell((2, 3), *((0, 1) for _ in range(9)))
+    source = CubicalComplex.model_construct(
+        ambient_dimension=10,
+        cells=tuple(sorted((first, second), key=lambda cell: cell.intervals)),
+    )
+    empty = CubicalComplex.model_construct(ambient_dimension=10, cells=())
+    with pytest.raises(ValidationError) as error:
+        CubicalBoundarySubcomplexResult.model_validate(
+            {"complex": source, "boundary": empty, "exposed_facets": ()}
+        )
+    assert error.value.errors()[0]["type"] == (
+        "cubical_complex.boundary_subcomplex_result_bounds"
+    )
 
 
 def test_tool_is_published_with_a_real_square_example():

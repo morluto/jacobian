@@ -378,26 +378,53 @@ def boundary_subcomplex(
             code="cubical_complex.boundary_subcomplex_source_shape",
             message="boundary subcomplex requires a nonempty bounded generator family",
         )
-    source_cells = tuple(sorted(set(cells), key=lambda cell: cell.intervals))
-    ambient_dimension = len(source_cells[0].intervals)
-    if any(len(cell.intervals) != ambient_dimension for cell in source_cells):
+    validated_cells: list[CubicalCell] = []
+    for cell in cells:
+        if type(cell) is not CubicalCell:
+            raise OperationDomainValidationError(
+                location=("cells",),
+                code="cubical_complex.boundary_subcomplex_invalid_cell",
+                message="every generator must be a canonical CubicalCell value",
+            )
+        intervals = cell.intervals
+        if (
+            type(intervals) is not tuple
+            or not 1 <= len(intervals) <= MAX_DIM
+            or any(
+                type(interval) is not tuple
+                or len(interval) != 2
+                or type(interval[0]) is not int
+                or type(interval[1]) is not int
+                for interval in intervals
+            )
+        ):
+            raise OperationDomainValidationError(
+                location=("cells",),
+                code="cubical_complex.boundary_subcomplex_invalid_cell",
+                message="generators must have bounded axes and strict integer endpoints",
+            )
+        try:
+            validated_cells.append(
+                CubicalCell.model_validate({"intervals": intervals})
+            )
+        except (AttributeError, TypeError, ValueError, ValidationError) as exc:
+            raise OperationDomainValidationError(
+                location=("cells",),
+                code="cubical_complex.boundary_subcomplex_invalid_cell",
+                message="generators must satisfy the elementary-cube interval contract",
+            ) from exc
+
+    validated_source = tuple(validated_cells)
+    ambient_dimension = len(validated_source[0].intervals)
+    if any(len(cell.intervals) != ambient_dimension for cell in validated_source):
         raise OperationDomainValidationError(
             location=("cells",),
             code="cubical_complex.boundary_subcomplex_ambient_axis",
             message="all generators must use one ambient coordinate axis",
         )
-
-    dimension = max(cell.dimension for cell in source_cells)
-    if dimension == 0:
-        raise OperationDomainValidationError(
-            location=("cells",),
-            code="cubical_complex.boundary_subcomplex_dimension",
-            message="boundary subcomplex requires positive-dimensional cells",
-        )
-
     coordinate_digits = max(
         _coordinate_digit_count(endpoint)
-        for cell in source_cells
+        for cell in validated_source
         for interval in cell.intervals
         for endpoint in interval
     )
@@ -406,6 +433,17 @@ def boundary_subcomplex(
             location=("cells",),
             code="cubical_complex.boundary_subcomplex_coordinate_bound",
             message="coordinates exceed the boundary-subcomplex digit bound",
+        )
+    source_cells = tuple(
+        sorted(set(validated_source), key=lambda cell: cell.intervals)
+    )
+
+    dimension = max(cell.dimension for cell in source_cells)
+    if dimension == 0:
+        raise OperationDomainValidationError(
+            location=("cells",),
+            code="cubical_complex.boundary_subcomplex_dimension",
+            message="boundary subcomplex requires positive-dimensional cells",
         )
 
     top_cells = tuple(cell for cell in source_cells if cell.dimension == dimension)
@@ -477,7 +515,7 @@ def boundary_subcomplex(
         if incidence == 1
     )
     boundary_cells = _face_cells(exposed_facets)
-    return CubicalBoundarySubcomplexResult(
+    return CubicalBoundarySubcomplexResult.model_construct(
         complex=complex_,
         boundary=CubicalComplex(
             ambient_dimension=ambient_dimension,

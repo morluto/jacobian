@@ -8,7 +8,10 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.groups.root_systems._models import (
+    CartanMatrix,
+    FiniteCartanDatum,
     WeightLatticeVector,
+    WeylElement,
     WeylElementWeightActionRequest,
 )
 from jacobian.math.groups.root_systems.operations import (
@@ -17,6 +20,7 @@ from jacobian.math.groups.root_systems.operations import (
     weyl_element_from_word,
 )
 from jacobian.math.groups.root_systems.weight_actions import weyl_element_act_on_weight
+from jacobian.math.matrices.values import IntegerMatrix
 
 _A2 = ((2, -1), (-1, 2))
 _B2 = ((2, -2), (-1, 2))
@@ -98,9 +102,6 @@ def test_same_rank_but_different_cartan_parent_is_rejected():
 
 
 def test_caller_constructed_invalid_weyl_element_is_re_admitted():
-    from jacobian.math.groups.root_systems._models import WeylElement
-    from jacobian.math.matrices.values import IntegerMatrix
-
     invalid = WeylElement.model_construct(
         matrix=cartan_datum(_A2).cartan_matrix,
         root_action=IntegerMatrix(
@@ -112,6 +113,64 @@ def test_caller_constructed_invalid_weyl_element_is_re_admitted():
     request = WeylElementWeightActionRequest(
         element=invalid,
         weight=weight_lattice_vector(_A2, (1, 0)),
+    )
+    with pytest.raises(OperationDomainValidationError):
+        weyl_element_act_on_weight(request)
+
+
+@pytest.mark.parametrize(
+    "root_action",
+    (
+        object(),
+        IntegerMatrix.model_construct(row_count=2, column_count=2, entries=object()),
+    ),
+)
+def test_malformed_nested_weyl_action_is_a_domain_error(root_action):
+    invalid = WeylElement.model_construct(
+        matrix=cartan_datum(_A2).cartan_matrix,
+        root_action=root_action,
+    )
+    request = WeylElementWeightActionRequest.model_construct(
+        element=invalid,
+        weight=weight_lattice_vector(_A2, (1, 0)),
+    )
+    with pytest.raises(OperationDomainValidationError):
+        weyl_element_act_on_weight(request)
+
+
+@pytest.mark.parametrize(
+    "weight",
+    (
+        WeightLatticeVector.model_construct(datum=object(), coordinates=(1, 0)),
+        WeightLatticeVector.model_construct(
+            datum=cartan_datum(_A2), coordinates=object()
+        ),
+        WeightLatticeVector.model_construct(
+            datum=FiniteCartanDatum.model_construct(
+                cartan_matrix=object(),
+                symmetrizer=(),
+                root_to_weight=object(),
+                coroot_to_coweight=object(),
+            ),
+            coordinates=(1, 0),
+        ),
+        WeightLatticeVector.model_construct(
+            datum=FiniteCartanDatum.model_construct(
+                cartan_matrix=CartanMatrix.model_construct(
+                    matrix=object(), simple_root_axis=(0, 1)
+                ),
+                symmetrizer=cartan_datum(_A2).symmetrizer,
+                root_to_weight=cartan_datum(_A2).root_to_weight,
+                coroot_to_coweight=cartan_datum(_A2).coroot_to_coweight,
+            ),
+            coordinates=(1, 0),
+        ),
+    ),
+)
+def test_malformed_nested_weight_shapes_are_domain_errors(weight):
+    request = WeylElementWeightActionRequest.model_construct(
+        element=weyl_element_from_word(_A2, (0,)),
+        weight=weight,
     )
     with pytest.raises(OperationDomainValidationError):
         weyl_element_act_on_weight(request)

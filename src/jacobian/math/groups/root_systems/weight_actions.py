@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from fractions import Fraction
 
+from pydantic import ValidationError
+
+from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -12,6 +15,8 @@ from jacobian.math.groups.root_systems._models import (
     MAX_LATTICE_OUTPUT_COORDINATE_BITS,
     MAX_POSITIVE_ROOTS,
     MAX_RANK,
+    CartanMatrix,
+    FiniteCartanDatum,
     WeightLatticeVector,
     WeylElement,
     WeylElementWeightActionRequest,
@@ -22,9 +27,48 @@ from jacobian.math.groups.root_systems.operations import (
     _as_cartan,
     _canonical_lattice_vector,
 )
+from jacobian.math.matrices.values import IntegerMatrix
 
 MAX_WEYL_WEIGHT_ACTION_WORK = 150_000
 MAX_WEYL_WEIGHT_ACTION_OUTPUT_BYTES = 8_192
+
+
+def _integer_matrix_children_are_bounded(value: IntegerMatrix) -> bool:
+    try:
+        domain = value.domain
+        rows = value.entries
+        row_count, column_count = value.row_count, value.column_count
+    except AttributeError:
+        return False
+    if (
+        domain != "ZZ"
+        or type(row_count) is not int
+        or type(column_count) is not int
+        or not isinstance(rows, tuple)
+        or not 1 <= len(rows) <= MAX_RANK
+        or row_count != len(rows)
+        or column_count != len(rows)
+    ):
+        return False
+    return all(
+        isinstance(row, tuple)
+        and len(row) == len(rows)
+        and all(type(value) is int for value in row)
+        for row in rows
+    )
+
+
+def _cartan_children_are_bounded(value: CartanMatrix) -> bool:
+    try:
+        matrix, axis = value.matrix, value.simple_root_axis
+    except AttributeError:
+        return False
+    return (
+        isinstance(matrix, IntegerMatrix)
+        and _integer_matrix_children_are_bounded(matrix)
+        and isinstance(axis, tuple)
+        and axis == tuple(range(matrix.row_count))
+    )
 
 
 def _matrix_inverse(
@@ -100,24 +144,132 @@ def _weight_action_matrix(
     return tuple(tuple(int(value) for value in row) for row in rational)
 
 
-def weyl_element_act_on_weight(
+def _request_inputs(
     request: WeylElementWeightActionRequest,
-) -> WeightLatticeVector:
-    """Return the exact image in the same ordered fundamental-weight lattice."""
+) -> tuple[WeylElement, WeightLatticeVector]:
     if not isinstance(request, WeylElementWeightActionRequest):
         raise OperationDomainValidationError(
             location=("request",),
             code="root_system.weyl_weight_action_request_type",
             message="request must bind a Weyl element and weight-lattice vector",
         )
-    element, weight = request.element, request.weight
+    try:
+        element, weight = request.element, request.weight
+    except AttributeError as error:
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="root_system.weyl_weight_action_request_shape",
+            message="request must contain both the Weyl element and weight value",
+        ) from error
+    return element, weight
+
+
+def _weyl_parent(element: WeylElement) -> CartanMatrix:
     if not isinstance(element, WeylElement):
         raise OperationDomainValidationError(
             location=("element",),
             code="root_system.invalid_weyl_element",
             message="element must be a typed finite Weyl-group value",
         )
-    cartan = _as_cartan(element.matrix)
+    try:
+        element_matrix, element_action = element.matrix, element.root_action
+    except AttributeError as error:
+        raise OperationDomainValidationError(
+            location=("element",),
+            code="root_system.invalid_weyl_element",
+            message="element must contain a typed Cartan parent and integer root action",
+        ) from error
+    if (
+        not isinstance(element_matrix, CartanMatrix)
+        or not _cartan_children_are_bounded(element_matrix)
+        or not isinstance(element_action, IntegerMatrix)
+        or not _integer_matrix_children_are_bounded(element_action)
+    ):
+        raise OperationDomainValidationError(
+            location=("element",),
+            code="root_system.invalid_weyl_element",
+            message="element must contain a typed Cartan parent and integer root action",
+        )
+    try:
+        cartan = _as_cartan(element_matrix)
+    except (AttributeError, TypeError, ValueError, ValidationError) as error:
+        raise OperationDomainValidationError(
+            location=("element", "matrix"),
+            code="root_system.invalid_weyl_element_parent",
+            message="the Weyl element must retain a canonical finite Cartan matrix",
+        ) from error
+    return cartan
+
+
+def _admitted_root_action(element: WeylElement) -> tuple[tuple[int, ...], ...]:
+    try:
+        return _admit_weyl_element_value(element)
+    except (AttributeError, TypeError, ValueError, ValidationError) as error:
+        raise OperationDomainValidationError(
+            location=("element", "root_action"),
+            code="root_system.invalid_weyl_action_shape",
+            message="the supplied Weyl element contains malformed action data",
+        ) from error
+
+
+def _canonical_weight(
+    weight: WeightLatticeVector,
+) -> tuple[FiniteCartanDatum, tuple[int, ...]]:
+    if not isinstance(weight, WeightLatticeVector):
+        raise OperationDomainValidationError(
+            location=("weight",),
+            code="root_system.invalid_weight_lattice_value",
+            message="weight must contain a typed finite Cartan datum",
+        )
+    try:
+        datum_value = weight.datum
+        weight_cartan = datum_value.cartan_matrix
+        root_to_weight = datum_value.root_to_weight
+        coroot_to_coweight = datum_value.coroot_to_coweight
+        symmetrizer = datum_value.symmetrizer
+        coordinates_value = weight.coordinates
+    except AttributeError as error:
+        raise OperationDomainValidationError(
+            location=("weight", "datum"),
+            code="root_system.invalid_weight_lattice_shape",
+            message="weight datum and coordinates must retain their typed axes",
+        ) from error
+    if not isinstance(datum_value, FiniteCartanDatum) or not isinstance(
+        weight_cartan, CartanMatrix
+    ) or not _cartan_children_are_bounded(weight_cartan) or not isinstance(
+        root_to_weight, IntegerMatrix
+    ) or not _integer_matrix_children_are_bounded(root_to_weight) or not isinstance(
+        coroot_to_coweight, IntegerMatrix
+    ) or not _integer_matrix_children_are_bounded(coroot_to_coweight) or not isinstance(
+        symmetrizer, tuple
+    ) or len(symmetrizer) != len(weight_cartan) or any(
+        not isinstance(value, CanonicalRational) for value in symmetrizer
+    ) or not isinstance(coordinates_value, tuple) or len(
+        coordinates_value
+    ) != len(weight_cartan):
+        raise OperationDomainValidationError(
+            location=("weight", "datum"),
+            code="root_system.invalid_weight_lattice_shape",
+            message="weight datum matrices, symmetrizer, and coordinates must retain their typed axes",
+        )
+    try:
+        return _canonical_lattice_vector(
+            weight, WeightLatticeVector, output_bound=True
+        )
+    except (AttributeError, TypeError, ValueError, ValidationError) as error:
+        raise OperationDomainValidationError(
+            location=("weight",),
+            code="root_system.invalid_weight_lattice_value",
+            message="weight must retain a canonical finite Cartan datum and bounded coordinates",
+        ) from error
+
+
+def weyl_element_act_on_weight(
+    request: WeylElementWeightActionRequest,
+) -> WeightLatticeVector:
+    """Return the exact image in the same ordered fundamental-weight lattice."""
+    element, weight = _request_inputs(request)
+    cartan = _weyl_parent(element)
     rows = cartan.entries
     # Re-admission closes at most 120 positive roots, checks each image, then
     # performs at most one inverse and matrix product per length descent. Count
@@ -135,10 +287,8 @@ def weyl_element_act_on_weight(
             code="root_system.weyl_weight_action_work_bound",
             message="exact weight-action validation and matrix work exceed the admitted bound",
         )
-    root_action = _admit_weyl_element_value(element)
-    datum, coordinates = _canonical_lattice_vector(
-        weight, WeightLatticeVector, output_bound=True
-    )
+    root_action = _admitted_root_action(element)
+    datum, coordinates = _canonical_weight(weight)
     if datum.cartan_matrix != cartan:
         raise OperationDomainValidationError(
             location=("weight", "datum"),

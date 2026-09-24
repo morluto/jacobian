@@ -24,6 +24,18 @@ from jacobian.math.combinatorics.matroids.delta.extra import (
     BinarySymmetricMatrix,
 )
 from jacobian.math.combinatorics.matroids.delta.extra_ops import binary
+from jacobian.math.combinatorics.matroids.delta.relabel import (
+    MAX_DELTA_RELABEL_GROUND,
+    MAX_DELTA_RELABEL_OUTPUT_BYTES,
+    MAX_DELTA_RELABEL_TRANSPORT_WORK,
+    MAX_DELTA_RELABEL_WORK,
+    DeltaMatroidRelabelling,
+    DeltaMatroidRelabelRequest,
+    relabel,
+)
+from jacobian.math.combinatorics.matroids.delta.values import (
+    MAX_DELTA_EXCHANGE_CANDIDATE_CHECKS,
+)
 
 
 def _two_element_delta_matroid(*, scrambled: bool = False) -> FiniteFeasibleSetSystem:
@@ -44,7 +56,124 @@ def test_catalog_contains_only_audited_agent_outcome() -> None:
         "delta_matroid.dual.compute",
         "delta_matroid.minor.compute",
         "delta_matroid.from_binary_matrix.compute",
+        "delta_matroid.relabel.compute",
     }
+
+
+def test_relabel_permutation_transports_feasible_sets_and_source_maps() -> None:
+    source = FiniteDeltaMatroid(
+        ground=("a", "b"), feasible=((), (0,), (0, 1))
+    )
+
+    result = relabel(
+        DeltaMatroidRelabelRequest(
+            delta_matroid=source,
+            target_ground=("B", "A"),
+            target_to_source=(1, 0),
+        )
+    )
+
+    assert result.source == source
+    assert result.relabelled.ground == ("B", "A")
+    assert result.relabelled.feasible == ((), (0, 1), (1,))
+    assert result.target_to_source == (1, 0)
+    assert result.source_to_target == (1, 0)
+    assert DeltaMatroidRelabelling.model_validate_json(result.model_dump_json()) == result
+
+
+def test_relabel_composes_to_identity_and_handles_empty_ground() -> None:
+    source = FiniteDeltaMatroid(
+        ground=("a", "b"), feasible=((), (0,), (0, 1))
+    )
+    swapped = relabel(
+        DeltaMatroidRelabelRequest(
+            delta_matroid=source,
+            target_ground=("B", "A"),
+            target_to_source=(1, 0),
+        )
+    )
+    restored = relabel(
+        DeltaMatroidRelabelRequest(
+            delta_matroid=swapped.relabelled,
+            target_ground=("a", "b"),
+            target_to_source=(1, 0),
+        )
+    )
+    assert restored.relabelled == source
+    assert restored.source_to_target == (1, 0)
+
+    empty = FiniteDeltaMatroid(ground=(), feasible=((),))
+    assert relabel(
+        DeltaMatroidRelabelRequest(
+            delta_matroid=empty, target_ground=(), target_to_source=()
+        )
+    ).relabelled == empty
+
+
+def test_relabel_requires_a_bijection_and_distinct_bounded_labels() -> None:
+    source = FiniteDeltaMatroid(ground=("a", "b"), feasible=((),))
+    with pytest.raises(ValueError, match="permutation"):
+        DeltaMatroidRelabelRequest(
+            delta_matroid=source,
+            target_ground=("A", "B"),
+            target_to_source=(0, 0),
+        )
+    with pytest.raises(ValueError, match="unique"):
+        DeltaMatroidRelabelRequest(
+            delta_matroid=source,
+            target_ground=("A", "A"),
+            target_to_source=(0, 1),
+        )
+    admitted_labels = ("A" * 2047, "B")
+    accepted = relabel(
+        DeltaMatroidRelabelRequest(
+            delta_matroid=source,
+            target_ground=admitted_labels,
+            target_to_source=(0, 1),
+        )
+    )
+    assert accepted.relabelled.ground == admitted_labels
+    with pytest.raises(ValueError, match="2048-byte"):
+        DeltaMatroidRelabelRequest(
+            delta_matroid=source,
+            target_ground=("A" * 2048, "B"),
+            target_to_source=(0, 1),
+        )
+
+
+def test_relabel_schema_advertises_runtime_admission_limits() -> None:
+    schema = DeltaMatroidRelabelRequest.model_json_schema()
+    limits = schema["admission_limits"]
+    assert limits["max_ground_elements"] == MAX_DELTA_RELABEL_GROUND
+    assert limits["max_feasible_set_memberships"] == 16_384
+    assert limits["max_transport_work_units"] == MAX_DELTA_RELABEL_TRANSPORT_WORK
+    assert limits["max_total_work_units"] == MAX_DELTA_RELABEL_WORK
+    assert MAX_DELTA_RELABEL_WORK == (
+        MAX_DELTA_RELABEL_TRANSPORT_WORK
+        + 2 * MAX_DELTA_EXCHANGE_CANDIDATE_CHECKS
+        + MAX_DELTA_RELABEL_OUTPUT_BYTES
+    )
+    assert limits["max_output_bytes"] == MAX_DELTA_RELABEL_OUTPUT_BYTES
+    assert schema["properties"]["target_ground"]["maxItems"] == (
+        MAX_DELTA_RELABEL_GROUND
+    )
+    assert schema["properties"]["target_to_source"]["maxItems"] == (
+        MAX_DELTA_RELABEL_GROUND
+    )
+
+
+def test_relabel_rejects_forged_source_that_violates_exchange() -> None:
+    forged = FiniteDeltaMatroid.model_construct(
+        ground=("a", "b", "c"), feasible=((), (0, 1), (2,))
+    )
+    with pytest.raises(ValueError, match="not a delta-matroid"):
+        relabel(
+            DeltaMatroidRelabelRequest.model_construct(
+                delta_matroid=forged,
+                target_ground=("A", "B", "C"),
+                target_to_source=(0, 1, 2),
+            )
+        )
 
 
 def test_twist_request_publishes_admission_limits() -> None:

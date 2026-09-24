@@ -57,7 +57,6 @@ class TestKnownAnswer:
         assert result.incidence_rank == 1
         assert result.p_invariants == ()
         assert result.t_invariants == ((1, 1),)
-        assert result.replayed
 
     def test_marked_graph_cycle_invariants(self) -> None:
         result = petri_invariants(_marked_graph_cycle_net())
@@ -74,7 +73,7 @@ class TestKnownAnswer:
         assert result.incidence.column_count == 2
 
 
-class TestPreservationReplay:
+class TestInvariantEquations:
     @pytest.mark.parametrize(
         "net",
         [_producer_consumer_net(), _marked_graph_cycle_net()],
@@ -201,6 +200,7 @@ class TestSerialization:
 
         assert decoded == result
         assert verify_invariants(decoded)
+        assert "replayed" not in result.model_dump(mode="json")
 
     def test_forged_invariants_do_not_verify(self) -> None:
         result = compute_petri_invariants(

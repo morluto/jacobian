@@ -1184,16 +1184,14 @@ class PetriInvariantsResult(PetriInvariantsRequest):
 
     Deserialization checks only the canonical shape: incidence axes match
     the net, every vector uses its axis, each basis is sign-normalized,
-    sorted, and unique with the nullity the Smith rank predicts, and the
-    replay flag is set. The owner-local kernel establishes that every
-    vector lies in the incidence (left) kernel.
+    sorted, and unique with the nullity the Smith rank predicts. The
+    owner-local kernel computes the exact bases.
     """
 
     incidence: IntegerMatrix
     incidence_rank: int = Field(ge=0)
     p_invariants: tuple[tuple[int, ...], ...] = Field(default=())
     t_invariants: tuple[tuple[int, ...], ...] = Field(default=())
-    replayed: bool
 
     @model_validator(mode="after")
     def require_canonical_invariant_shape(self) -> Self:
@@ -1239,11 +1237,6 @@ class PetriInvariantsResult(PetriInvariantsRequest):
                         "invariants_sign",
                         "invariant vectors must be sign-normalized",
                     )
-        if not self.replayed:
-            raise _validation_error(
-                "invariants_not_replayed",
-                "an invariant result must replay its bases in the kernel",
-            )
         return self
 
     @classmethod

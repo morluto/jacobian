@@ -1907,6 +1907,13 @@ def _admit_truncated_table(
             ideal.model_dump(mode="json"), ensure_ascii=True, separators=(",", ":")
         )
     )
+    completion_bytes = len(
+        json.dumps(
+            completion.model_dump(mode="json"),
+            ensure_ascii=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    )
     basis_bytes = len(
         json.dumps(basis, ensure_ascii=True, separators=(",", ":")).encode("utf-8")
     )
@@ -1927,6 +1934,7 @@ def _admit_truncated_table(
     term_bytes = 256 + degree * (max_letter_bytes + 3)
     output_bound = (
         ideal_bytes
+        + completion_bytes
         + basis_bytes
         + pair_count * (256 + alphabet_bytes)
         + term_count_bound * term_bytes
@@ -2023,6 +2031,7 @@ def truncated_quotient_algebra(
     unit = _encode(value.alphabet, {(): Fraction(1)}) if () in set(basis) else zero
     return TruncatedFreeAlgebraQuotient.model_construct(
         ideal=value,
+        completion=completion,
         degree=degree,
         basis_words=basis,
         multiplication=multiplication,

@@ -155,6 +155,26 @@ def test_free_and_zero_quotients_keep_the_correct_unit_and_cutoff() -> None:
     assert not zero.unit.terms
 
 
+def test_decoded_carrier_shape_is_not_a_semantic_certificate() -> None:
+    alphabet = ("x",)
+    relation = _polynomial(alphabet, {("x",): 1})
+    algebra = truncated_quotient_algebra(_ideal(alphabet, (relation,)), 1)
+    assert algebra.basis_words == ((),)
+
+    # JSON carries the source relation and completed presentation, but wire
+    # validation deliberately checks shape rather than replaying completion or
+    # multiplication. A consumer supplied such a value must check any table
+    # relation on which its own result depends.
+    forged = algebra.model_dump(mode="json")
+    forged["basis_words"] = [[], ["x"]]
+    zero = {"alphabet": ["x"], "terms": []}
+    forged["multiplication"] = [[zero, zero], [zero, zero]]
+    decoded = TruncatedFreeAlgebraQuotient.model_validate_json(json.dumps(forged))
+    assert decoded.basis_words == ((), ("x",))
+    assert decoded.multiplication[0][0].terms == ()
+    assert decoded.unit.terms[0].word == ()
+
+
 def test_nonhomogeneous_ideal_is_rejected() -> None:
     alphabet = ("x",)
     nonhomogeneous = _polynomial(alphabet, {(): 1, ("x",): 1})

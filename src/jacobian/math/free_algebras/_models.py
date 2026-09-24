@@ -829,6 +829,7 @@ class TruncatedFreeAlgebraQuotient(StrictModel):
     """
 
     ideal: FreeAlgebraIdeal
+    completion: GroebnerShirshovResult
     degree: int = Field(ge=0, le=MAX_FREE_ALGEBRA_WORD_LENGTH)
     basis_words: tuple[tuple[FreeAlgebraLetter, ...], ...] = Field(
         max_length=MAX_FREE_ALGEBRA_QUOTIENT_PROFILE_CANDIDATES
@@ -837,6 +838,19 @@ class TruncatedFreeAlgebraQuotient(StrictModel):
         max_length=MAX_FREE_ALGEBRA_QUOTIENT_PROFILE_CANDIDATES
     )
     unit: FreeAlgebraPolynomial
+
+    @model_validator(mode="after")
+    def require_completion_context(self) -> Self:
+        if (
+            self.completion.ideal != self.ideal
+            or self.completion.degree != self.degree
+            or self.completion.status != "COMPLETE_THROUGH_DEGREE"
+        ):
+            raise _validation_error(
+                "truncated_quotient_completion",
+                "the retained completion must match the source ideal and degree",
+            )
+        return self
 
     @model_validator(mode="after")
     def require_truncated_quotient_axes(self) -> Self:

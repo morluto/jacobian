@@ -42,7 +42,8 @@ def test_standard_inclusion_has_reduced_generator_image_and_maps_exactly() -> No
         )
     )
     assert tuple(value.as_fraction() for value in inclusion.generator_image) == (
-        Fraction(-1), Fraction(1)
+        Fraction(-1),
+        Fraction(1),
     )
 
     mapped = apply_cyclotomic_field_inclusion(

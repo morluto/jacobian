@@ -490,6 +490,18 @@ def test_empty_twist_result_roundtrips_and_is_identity() -> None:
     )
 
 
+def test_twist_result_json_rejects_a_different_ground_axis() -> None:
+    import json
+
+    source = FiniteDeltaMatroid(ground=("a",), feasible=((), (0,)))
+    result = _twist(DeltaMatroidTwistRequest(delta_matroid=source))
+    payload = json.loads(result.model_dump_json())
+    payload["twisted"]["ground"] = ["different"]
+
+    with pytest.raises(ValueError, match="twisted delta-matroid must preserve"):
+        DeltaMatroidTwistResult.model_validate_json(json.dumps(payload))
+
+
 def test_twist_result_byte_admission_has_exact_boundary(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

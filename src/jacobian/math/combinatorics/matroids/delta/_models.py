@@ -87,6 +87,15 @@ class DeltaMatroidTwistResult(DeltaMatroidTwistRequest):
 
     twisted: FiniteDeltaMatroid
 
+    @model_validator(mode="after")
+    def require_same_ground_axis(self) -> Self:
+        if self.twisted.ground != self.delta_matroid.ground:
+            raise _validation_error(
+                "twist_ground_axis",
+                "twisted delta-matroid must preserve the source ground axis",
+            )
+        return self
+
     @classmethod
     def _from_kernel(
         cls,

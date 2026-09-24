@@ -740,8 +740,18 @@ class CSSCheckSpaceRequest(StrictModel):
 
 
 class CSSNonOrthogonalWitness(StrictModel):
-    """Input row indices whose CSS inner product is one."""
+    """Register-bound input row indices the kernel found with inner product one.
 
+    The kernel computes the GF(2) pairing once when it selects the obstruction;
+    validation and transport stay structural. A consumer that relies on the
+    nonorthogonality recomputes it against these retained rows on this
+    retained register.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+    qubit_register: QubitRegister = Field(
+        alias="register", serialization_alias="register"
+    )
     x_row: StrictInt = Field(ge=0, lt=MAX_CHECK_ROWS)
     z_row: StrictInt = Field(ge=0, lt=MAX_CHECK_ROWS)
     x_bits: tuple[StrictInt, ...] = Field(min_length=1, max_length=MAX_QUBITS)
@@ -749,18 +759,42 @@ class CSSNonOrthogonalWitness(StrictModel):
     dot_product: Literal[1] = 1
 
     @model_validator(mode="after")
-    def require_nonorthogonality(self) -> Self:
-        if len(self.x_bits) != len(self.z_bits) or any(
-            bit not in (0, 1) for bit in (*self.x_bits, *self.z_bits)
-        ):
+    def require_register_bound_shape(self) -> Self:
+        if not isinstance(self.qubit_register, QubitRegister):
             raise _validation_error(
-                "css_witness_shape", "CSS witness rows must be matching binary vectors"
+                "css_witness_register", "CSS witness requires its source register"
             )
-        if sum(x * z for x, z in zip(self.x_bits, self.z_bits, strict=True)) % 2 != 1:
+        width = len(self.qubit_register.qubit_ids)
+        if len(self.x_bits) != width or len(self.z_bits) != width:
             raise _validation_error(
-                "css_witness_pairing", "CSS witness rows must have odd inner product"
+                "css_witness_shape", "CSS witness rows must span the retained register"
+            )
+        if any(bit not in (0, 1) for bit in (*self.x_bits, *self.z_bits)):
+            raise _validation_error(
+                "css_witness_bits", "CSS witness rows must be binary vectors"
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        register: QubitRegister,
+        x_row: int,
+        z_row: int,
+        x_bits: tuple[int, ...],
+        z_bits: tuple[int, ...],
+    ) -> Self:
+        """Build a trusted obstruction without replaying its kernel pairing."""
+
+        return cls.model_construct(
+            qubit_register=register,
+            x_row=x_row,
+            z_row=z_row,
+            x_bits=x_bits,
+            z_bits=z_bits,
+            dot_product=1,
+        )
 
 
 class CSSCheckSpaceValue(StrictModel):

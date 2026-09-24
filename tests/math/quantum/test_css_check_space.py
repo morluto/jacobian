@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from itertools import combinations, product
 
 import pytest
@@ -12,6 +13,7 @@ from jacobian.math.quantum import (
     css_exact_distance,
     css_logical_pauli_frame,
 )
+from jacobian.math.quantum._models import CSSNonOrthogonalWitness
 
 
 def _span(rows: tuple[tuple[int, ...], ...], width: int) -> set[tuple[int, ...]]:
@@ -389,6 +391,26 @@ def test_logical_frame_rejects_forged_register_role_and_combined_space() -> None
             css_logical_pauli_frame(bad_value)
 
 
+def test_logical_frame_rejects_constructed_combined_check_space() -> None:
+    from jacobian.catalog.models import OperationDomainValidationError
+    from jacobian.math.quantum import (
+        CheckSpaceValue,
+        CSSCheckSpaceValue,
+        css_logical_pauli_frame,
+    )
+
+    register = QubitRegister(qubit_ids=("q",))
+    with pytest.raises(OperationDomainValidationError):
+        css_logical_pauli_frame(
+            CSSCheckSpaceValue.model_construct(
+                qubit_register=register,
+                x_check_basis=(),
+                z_check_basis=(),
+                check_space=CheckSpaceValue.model_construct(),
+            )
+        )
+
+
 def test_css_and_logical_frame_accept_register_and_row_envelopes() -> None:
     register = QubitRegister(qubit_ids=tuple(f"q{i}" for i in range(32)))
     checks = tuple(tuple(int(i == j) for i in range(32)) for j in range(32))
@@ -402,3 +424,40 @@ def test_css_and_logical_frame_accept_register_and_row_envelopes() -> None:
     at_row_limit = css_check_space(one_qubit, ((0,),) * 64, ())
     assert at_row_limit.css_check_space is not None
     assert len(at_row_limit.css_check_space.x_check_basis) == 0
+
+
+def test_witness_deserialization_stays_structural_after_kernel_admission() -> None:
+    register = QubitRegister(qubit_ids=("a", "b"))
+    witness = css_check_space(register, ((1, 0),), ((1, 1),)).witness
+    assert witness is not None
+    # The kernel established the odd pairing once while selecting the
+    # obstruction, and the retained rows carry that exact witness.
+    assert sum(x * z for x, z in zip(witness.x_bits, witness.z_bits, strict=True)) % 2
+    dumped = witness.model_dump(by_alias=True)
+    flipped = {**dumped, "z_bits": [bit ^ 1 for bit in dumped["z_bits"]]}
+    assert (
+        sum(x * z for x, z in zip(flipped["x_bits"], flipped["z_bits"], strict=True))
+        % 2
+        == 0
+    )
+    # Transport must not recompute the GF(2) inner product: a structurally
+    # valid row pair deserializes without a mathematical replay.
+    assert CSSNonOrthogonalWitness.model_validate(flipped).x_bits == witness.x_bits
+
+
+def test_witness_retains_its_ordered_register_context() -> None:
+    first = css_check_space(
+        QubitRegister(qubit_ids=("q0", "q1")), ((1, 0),), ((1, 1),)
+    ).witness
+    second = css_check_space(
+        QubitRegister(qubit_ids=("q1", "q0")), ((1, 0),), ((1, 1),)
+    ).witness
+    assert first is not None and second is not None
+    assert first.qubit_register == QubitRegister(qubit_ids=("q0", "q1"))
+    first_json = first.model_dump(mode="json", by_alias=True)
+    assert first_json != second.model_dump(mode="json", by_alias=True)
+    restored = CSSNonOrthogonalWitness.model_validate_json(json.dumps(first_json))
+    assert restored == first
+    # Persisted coordinates map back onto the ordered qubit IDs.
+    assert restored.qubit_register.qubit_ids[0] == "q0"
+    assert restored.x_bits[0] == 1

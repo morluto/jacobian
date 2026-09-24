@@ -778,19 +778,20 @@ def stabilizer_error_equivalence(
             "quantum.stabilizer.not_a_check_space",
             "error equivalence requires a typed register-bound check space",
         )
-    register = _admit_register(check_space.qubit_register, "check_space")
-    if (
-        not isinstance(check_space.basis, tuple)
-        or len(check_space.basis) > MAX_CHECK_ROWS
-    ):
+    register = _admit_register(
+        getattr(check_space, "qubit_register", None), "check_space"
+    )
+    basis_value = getattr(check_space, "basis", None)
+    if not isinstance(basis_value, tuple) or len(basis_value) > MAX_CHECK_ROWS:
         _reject(
             "check_space",
             "quantum.stabilizer.invalid_basis",
             "check-space basis is malformed",
         )
+    basis = tuple(basis_value)
     n = len(register.qubit_ids)
     rows: list[list[int]] = []
-    for basis_row in check_space.basis:
+    for basis_row in basis:
         _admit_phase_free(basis_row, "check_space")
         if basis_row.qubit_register != register:
             _reject(
@@ -900,7 +901,13 @@ def css_check_space(
         )
     obstruction = next(
         (
-            CSSNonOrthogonalWitness(x_row=i, z_row=j, x_bits=xrow, z_bits=zrow)
+            CSSNonOrthogonalWitness._from_kernel(
+                register=admitted_register,
+                x_row=i,
+                z_row=j,
+                x_bits=xrow,
+                z_bits=zrow,
+            )
             for i, xrow in enumerate(x_tuple)
             for j, zrow in enumerate(z_tuple)
             if sum(a * b for a, b in zip(xrow, zrow, strict=True)) % 2
@@ -997,14 +1004,19 @@ def _admit_css_value(
     x_basis = getattr(value, "x_check_basis", None)
     z_basis = getattr(value, "z_check_basis", None)
     check_space = getattr(value, "check_space", None)
+    combined_basis = (
+        getattr(check_space, "basis", None)
+        if isinstance(check_space, CheckSpaceValue)
+        else None
+    )
     if (
         not isinstance(x_basis, tuple)
         or not isinstance(z_basis, tuple)
         or not isinstance(check_space, CheckSpaceValue)
         or len(x_basis) + len(z_basis) > MAX_CHECK_ROWS
-        or not isinstance(check_space.basis, tuple)
-        or len(check_space.basis) > MAX_CHECK_ROWS
-        or check_space.qubit_register != register
+        or not isinstance(combined_basis, tuple)
+        or len(combined_basis) > MAX_CHECK_ROWS
+        or getattr(check_space, "qubit_register", None) != register
     ):
         _reject(
             "css_check_space",
@@ -1016,7 +1028,7 @@ def _admit_css_value(
     base_work = (
         n * rx * rz
         + 2 * n * n * (rx + rz)
-        + 4 * n * n * (rx + rz + len(check_space.basis))
+        + 4 * n * n * (rx + rz + len(combined_basis))
     )
     # Include the nullspace, deterministic quotient complement, and all dual
     # linear solves in the same preflight. The bound assumes n candidates and

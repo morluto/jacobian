@@ -19,11 +19,14 @@ MAX_LOCAL_FACTOR_WORK = 8_000_000
 MAX_LEDGER_ROWS = 8_192
 MAX_EULER_PRIMES = 16
 MAX_EULER_WORK = 32_000_000
+MAX_INFINITE_PRODUCT_CUTOFF = 1_000
+MAX_INFINITE_PRODUCT_WORK = 64_000_000
 MAX_ADMISSIBILITY_CUTOFF = 1_000
 MAX_ADMISSIBILITY_WORK = 64_000_000
 MAX_INTERVAL_LENGTH = 20_000
 MAX_INTERVAL_VALUE = 10**12
 MAX_INTERVAL_SIEVE_RESIDUES = 4_000_000
+MAX_INTERVAL_SIEVE_VISITS = 2_000_000
 
 _CODE_PREFIX = "number_theory.squarefree_affine"
 
@@ -138,6 +141,42 @@ def admit_euler_product(
         admit_local_factor_work(source.form_count, prime)
 
 
+def admit_infinite_product(source: SquarefreeAffineFamily, cutoff: int) -> None:
+    """Admit a complete prime prefix and its elementary square-sum tail bound."""
+
+    admit_family(source)
+    if type(cutoff) is not int or not 1 <= cutoff <= MAX_INFINITE_PRODUCT_CUTOFF:
+        raise _resource_error(
+            "infinite_product_cutoff_budget",
+            f"prime cutoff must be between 1 and {MAX_INFINITE_PRODUCT_CUTOFF}",
+        )
+    from jacobian.math.number_theory.squarefree_affine_forms._admissibility import (
+        admissibility_cutoff,
+    )
+
+    theorem_cutoff, _, _ = admissibility_cutoff(source)
+    if cutoff < theorem_cutoff:
+        raise _domain_error(
+            "infinite_product_cutoff_too_small",
+            f"prime cutoff {cutoff} is below the family tail-theorem cutoff "
+            f"{theorem_cutoff}",
+        )
+    from jacobian.math.number_theory.squarefree_affine_forms._admissibility import (
+        primes_up_to,
+    )
+
+    primes = primes_up_to(cutoff)
+    work = sum(prime * prime for prime in primes) * source.form_count
+    if work > MAX_INFINITE_PRODUCT_WORK:
+        raise _resource_error(
+            "infinite_product_work_budget",
+            f"infinite-product prefix needs {work} congruence steps, exceeding "
+            f"{MAX_INFINITE_PRODUCT_WORK}",
+        )
+    for prime in primes:
+        admit_local_factor_work(source.form_count, prime)
+
+
 def admit_admissibility_cutoff(cutoff: int) -> None:
     """Require a checkable cutoff inside the prime envelope."""
 
@@ -208,21 +247,37 @@ def admit_interval_sieve_residues(work: int) -> None:
         )
 
 
+def admit_interval_sieve_visits(work: int) -> None:
+    """Bound interval-point visits along all admitted square-divisor classes."""
+
+    if work > MAX_INTERVAL_SIEVE_VISITS:
+        raise _resource_error(
+            "interval_sieve_visit_budget",
+            f"interval sieve would visit {work} congruent interval points, "
+            f"exceeding {MAX_INTERVAL_SIEVE_VISITS}",
+        )
+
+
 __all__ = [
     "MAX_ADMISSIBILITY_CUTOFF",
     "MAX_ADMISSIBILITY_WORK",
     "MAX_EULER_PRIMES",
     "MAX_EULER_WORK",
+    "MAX_INFINITE_PRODUCT_CUTOFF",
+    "MAX_INFINITE_PRODUCT_WORK",
     "MAX_INTERVAL_LENGTH",
     "MAX_INTERVAL_SIEVE_RESIDUES",
+    "MAX_INTERVAL_SIEVE_VISITS",
     "MAX_INTERVAL_VALUE",
     "MAX_LEDGER_ROWS",
     "MAX_LOCAL_FACTOR_PRIME",
     "MAX_LOCAL_FACTOR_WORK",
     "admit_euler_product",
     "admit_family",
+    "admit_infinite_product",
     "admit_interval",
     "admit_interval_sieve_residues",
+    "admit_interval_sieve_visits",
     "admit_local_factor",
     "admit_prime",
     "admit_prime_set",

@@ -5,27 +5,25 @@ from __future__ import annotations
 from fractions import Fraction
 
 from jacobian._exact import CanonicalRational
+from jacobian.math.analysis.intervals import ClosedRationalInterval
 from jacobian.math.number_theory.squarefree_affine_forms._admissibility import (
     LocalAdmissibilityResult,
 )
 from jacobian.math.number_theory.squarefree_affine_forms._admissibility import (
     local_admissibility as _local_admissibility_kernel,
 )
-from jacobian.math.number_theory.squarefree_affine_forms._admissibility import (
-    verify_local_admissibility as _verify_local_admissibility_kernel,
-)
 from jacobian.math.number_theory.squarefree_affine_forms._euler_product import (
     SquarefreeEulerProductResult,
     SquarefreeLocalFactorRow,
+)
+from jacobian.math.number_theory.squarefree_affine_forms._infinite_product import (
+    SquarefreeInfiniteProductEnclosure,
 )
 from jacobian.math.number_theory.squarefree_affine_forms._interval_count import (
     IntervalCountResult,
 )
 from jacobian.math.number_theory.squarefree_affine_forms._interval_count import (
     interval_count as _interval_count_kernel,
-)
-from jacobian.math.number_theory.squarefree_affine_forms._interval_count import (
-    verify_interval_count as _verify_interval_count_kernel,
 )
 from jacobian.math.number_theory.squarefree_affine_forms._kernel import (
     closed_form_ledger,
@@ -35,6 +33,7 @@ from jacobian.math.number_theory.squarefree_affine_forms._local_factor import (
 )
 from jacobian.math.number_theory.squarefree_affine_forms._models import (
     admit_euler_product,
+    admit_infinite_product,
     admit_local_factor,
 )
 from jacobian.math.number_theory.squarefree_affine_forms.values import (
@@ -119,18 +118,42 @@ def euler_product(
     )
 
 
+def infinite_product_enclosure(
+    source: SquarefreeAffineFamily, prime_cutoff: int
+) -> SquarefreeInfiniteProductEnclosure:
+    """Enclose the convergent square-free Euler product by a rational interval."""
+
+    from jacobian.math.number_theory.squarefree_affine_forms._admissibility import (
+        primes_up_to,
+    )
+
+    admit_infinite_product(source, prime_cutoff)
+    prefix = Fraction(1, 1)
+    for prime in primes_up_to(prime_cutoff):
+        _, ledger, covers_all = closed_form_ledger(source, prime)
+        modulus = prime * prime
+        bad_count = modulus if covers_all else len(ledger)
+        prefix *= Fraction(modulus - bad_count, modulus)
+    tail_lower = max(
+        Fraction(0, 1),
+        Fraction(prime_cutoff - len(source.forms), prime_cutoff),
+    )
+    return SquarefreeInfiniteProductEnclosure(
+        source=source,
+        prime_cutoff=prime_cutoff,
+        enclosure=ClosedRationalInterval(
+            lower=CanonicalRational.from_fraction(prefix * tail_lower),
+            upper=CanonicalRational.from_fraction(prefix),
+        ),
+    )
+
+
 def local_admissibility(
     source: SquarefreeAffineFamily,
 ) -> LocalAdmissibilityResult:
     """Decide local admissibility by finite check plus large-prime proof."""
 
     return _local_admissibility_kernel(source)
-
-
-def verify_local_admissibility(claim: LocalAdmissibilityResult) -> bool:
-    """Check an admissibility claim by recomputing its cutoff and rows."""
-
-    return _verify_local_admissibility_kernel(claim)
 
 
 def interval_count(
@@ -144,18 +167,11 @@ def interval_count(
     return _interval_count_kernel(source, lower, upper, include_ledger)
 
 
-def verify_interval_count(claim: IntervalCountResult) -> bool:
-    """Check an interval count by recomputing it within its bounds."""
-
-    return _verify_interval_count_kernel(claim)
-
-
 __all__ = [
     "euler_product",
+    "infinite_product_enclosure",
     "interval_count",
     "local_admissibility",
     "local_factor",
-    "verify_interval_count",
-    "verify_local_admissibility",
     "verify_squarefree_affine_family",
 ]

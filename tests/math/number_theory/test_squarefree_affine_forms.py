@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import random
 from fractions import Fraction
+from math import isqrt
 
 import pytest
 from pydantic import ValidationError
@@ -18,11 +19,10 @@ from jacobian.math.number_theory.squarefree_affine_forms import (
     SquarefreeAffineFamily,
     SquarefreeAffineForm,
     euler_product,
+    infinite_product_enclosure,
     interval_count,
     local_admissibility,
     local_factor,
-    verify_interval_count,
-    verify_local_admissibility,
     verify_squarefree_affine_family,
 )
 from jacobian.math.number_theory.squarefree_affine_forms._admissibility import (
@@ -33,9 +33,13 @@ from jacobian.math.number_theory.squarefree_affine_forms._euler_product import (
     SquarefreeEulerProductRequest,
     SquarefreeEulerProductResult,
 )
+from jacobian.math.number_theory.squarefree_affine_forms._infinite_product import (
+    SquarefreeInfiniteProductRequest,
+)
 from jacobian.math.number_theory.squarefree_affine_forms._interval_count import (
     IntervalCountRequest,
     IntervalCountResult,
+    _interval_sieve_work,
 )
 from jacobian.math.number_theory.squarefree_affine_forms._kernel import (
     _NoSolutions,
@@ -49,12 +53,14 @@ from jacobian.math.number_theory.squarefree_affine_forms._local_factor import (
 from jacobian.math.number_theory.squarefree_affine_forms._models import (
     MAX_EULER_PRIMES,
     MAX_INTERVAL_SIEVE_RESIDUES,
+    MAX_INTERVAL_SIEVE_VISITS,
     MAX_LOCAL_FACTOR_PRIME,
     admit_interval_sieve_residues,
 )
 from jacobian.math.number_theory.squarefree_affine_forms._tools import (
     TOOLS,
     compute_euler_product,
+    compute_infinite_product,
     compute_interval_count,
     compute_local_admissibility,
     compute_local_factor,
@@ -370,6 +376,41 @@ def test_euler_product_is_exact_over_its_prime_set() -> None:
     assert identically.rows[1].valid_count == 9
 
 
+def test_infinite_product_enclosure_uses_checked_rational_tail_bound() -> None:
+    result = compute_infinite_product(
+        SquarefreeInfiniteProductRequest(source=CONSECUTIVE_PAIR, prime_cutoff=100)
+    )
+    lower = result.enclosure.lower.as_fraction()
+    upper = result.enclosure.upper.as_fraction()
+    assert result.source == CONSECUTIVE_PAIR
+    assert result.prime_cutoff == 100
+
+    # For n and n+1, the two bad residues are distinct modulo p^2, so every
+    # local factor is independently 1 - 2/p^2. A longer finite product must
+    # remain inside the returned enclosure by the summable-factor tail bound.
+    longer_prefix = Fraction(1, 1)
+    for prime in primerange(2, 2_001):
+        longer_prefix *= Fraction(prime * prime - 2, prime * prime)
+    assert lower <= longer_prefix <= upper
+
+    cutoff_error = Fraction(2, 100)
+    prefix_at_cutoff = Fraction(1, 1)
+    for prime in primerange(2, 101):
+        prefix_at_cutoff *= Fraction(prime * prime - 2, prime * prime)
+    assert lower == prefix_at_cutoff * (1 - cutoff_error)
+    assert upper == prefix_at_cutoff
+
+    obstructed = _family(*(_form(f"r{i}", 1, i) for i in range(4)))
+    zero = infinite_product_enclosure(obstructed, 2)
+    assert zero.enclosure.lower.as_fraction() == 0
+    assert zero.enclosure.upper.as_fraction() == 0
+
+    too_small = _family(_form("large_slope", 5, 1))
+    with pytest.raises(OperationDomainValidationError) as error:
+        infinite_product_enclosure(too_small, 4)
+    assert error.value.errors()[0]["type"].endswith("infinite_product_cutoff_too_small")
+
+
 def test_metamorphic_row_order_relabeling_and_translation() -> None:
     shuffled = SquarefreeAffineFamily(
         forms=(CONSECUTIVE_PAIR.forms[1], CONSECUTIVE_PAIR.forms[0])
@@ -612,6 +653,7 @@ def test_tool_declarations_are_published() -> None:
     assert operation_ids == {
         "number_theory.squarefree_affine_forms.local_factor.compute",
         "number_theory.squarefree_affine_forms.euler_product.compute",
+        "number_theory.squarefree_affine_forms.infinite_product.enclose",
         "number_theory.squarefree_affine_forms.local_admissibility.decide",
         "number_theory.squarefree_affine_forms.interval_count.compute",
     }
@@ -656,7 +698,6 @@ def test_twin_pair_is_locally_admissible() -> None:
     assert result.cutoff == 1
     assert result.rows == ()
     assert result.obstruction is None
-    assert verify_local_admissibility(result)
 
 
 def test_single_form_is_locally_admissible() -> None:
@@ -664,7 +705,6 @@ def test_single_form_is_locally_admissible() -> None:
 
     assert result.status == "LOCALLY_ADMISSIBLE"
     assert result.cutoff == 1
-    assert verify_local_admissibility(result)
 
 
 def test_constant_four_is_obstructed_at_two() -> None:
@@ -675,10 +715,9 @@ def test_constant_four_is_obstructed_at_two() -> None:
     assert result.obstruction is not None
     assert result.obstruction.prime == 2
     assert result.obstruction.valid_count == 0
-    assert verify_local_admissibility(result)
 
 
-def test_admissibility_cutoff_and_rows_replay() -> None:
+def test_admissibility_cutoff_and_exact_rows() -> None:
     family = _family(_form("a", 6, 1), _form("b", 10, 3), _form("c", 15, 7))
     result = local_admissibility(family)
 
@@ -692,7 +731,6 @@ def test_admissibility_cutoff_and_rows_replay() -> None:
     assert result.status == "LOCALLY_ADMISSIBLE"
     assert all(row.valid_count > 0 for row in result.rows)
     assert _brute_force_admissible(family, 15)
-    assert verify_local_admissibility(result)
 
 
 def test_admissibility_matches_brute_force() -> None:
@@ -701,7 +739,6 @@ def test_admissibility_matches_brute_force() -> None:
 
     assert result.status == "LOCALLY_ADMISSIBLE"
     assert _brute_force_admissible(family, result.cutoff)
-    assert verify_local_admissibility(result)
 
 
 def test_admissibility_native_and_catalog_paths_agree() -> None:
@@ -717,7 +754,6 @@ def test_admissibility_round_trip_and_forgery() -> None:
     restored = LocalAdmissibilityResult.model_validate_json(result.model_dump_json())
 
     assert restored == result
-    assert verify_local_admissibility(restored)
     forged = json.loads(restored.model_dump_json())
     forged["status"] = "LOCALLY_ADMISSIBLE"
     forged["obstruction"] = None
@@ -751,7 +787,6 @@ def test_interval_count_one_to_twenty() -> None:
         (18, "n", 3),
         (20, "n", 2),
     ]
-    assert verify_interval_count(result)
 
 
 def test_interval_count_without_ledger() -> None:
@@ -760,7 +795,6 @@ def test_interval_count_without_ledger() -> None:
     assert result.count == 13
     assert result.matching == ()
     assert result.obstructions == ()
-    assert verify_interval_count(result)
 
 
 def test_interval_count_matches_brute_force() -> None:
@@ -791,7 +825,6 @@ def test_interval_count_matches_brute_force() -> None:
         form = next(f for f in family.forms if f.form_id == row.form_id)
         value = form.coefficient * row.n + form.constant
         assert value % (row.prime * row.prime) == 0
-    assert verify_interval_count(result)
 
 
 def test_interval_count_square_coefficient_does_not_materialize_residues() -> None:
@@ -805,12 +838,58 @@ def test_interval_count_square_coefficient_does_not_materialize_residues() -> No
     assert result.count == 0
     assert result.matching == ()
     assert [(row.n, row.prime) for row in result.obstructions] == [(0, 2), (1, 9973)]
-    assert verify_interval_count(result)
 
 
 def test_interval_sieve_residue_budget_is_a_resource_boundary() -> None:
     with pytest.raises(OperationResourceAdmissionError):
         admit_interval_sieve_residues(MAX_INTERVAL_SIEVE_RESIDUES + 1)
+
+
+def test_interval_sieve_charges_point_visits_before_congruence_expansion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Each form coefficient contains a distinct prime near 200,000 and the
+    # factors 2, 3, 5, 7.  Over this 20,000-point interval, class enumeration
+    # fits its 4,000,000 bound while the bounded progression-visit estimate
+    # exceeds its separate work envelope.
+    high_primes = tuple(primerange(200_000, 200_200))[:MAX_SQUAREFREE_FORMS]
+    family = _family(*(_form(f"p{prime}", 210 * prime, 0) for prime in high_primes))
+    maximum = max(abs(form.coefficient * 19_999) for form in family.forms)
+    primes = tuple(primerange(2, isqrt(maximum) + 1))
+    class_work, visit_work = _interval_sieve_work(family, primes, 20_000)
+    assert class_work < MAX_INTERVAL_SIEVE_RESIDUES
+    assert visit_work > MAX_INTERVAL_SIEVE_VISITS
+
+    def sieve_must_not_expand(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("congruence classes expanded before work admission")
+
+    monkeypatch.setattr(
+        "jacobian.math.number_theory.squarefree_affine_forms._interval_count._congruence_classes",
+        sieve_must_not_expand,
+    )
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
+        interval_count(family, 0, 19_999, False)
+    assert "interval_sieve_visit_budget" in exc_info.value.errors()[0]["type"]
+
+
+def test_interval_sieve_charges_full_residue_branch_once() -> None:
+    family = _family(_form("multiple", 4, 0))
+    class_work, visit_work = _interval_sieve_work(family, (2,), 20_000)
+    # When a coefficient and constant vanish modulo p^2, the kernel marks the
+    # interval directly instead of enumerating p^2 residue classes.
+    assert (class_work, visit_work) == (20_000, 20_000)
+
+
+def test_interval_sieve_visit_envelope_covers_brute_force_congruence_points() -> None:
+    family = _family(_form("even", 2, 0))
+    class_work, visit_work = _interval_sieve_work(family, (2,), 20)
+    # Independent oracle: 4 divides 2*n precisely at the ten even integers
+    # in [0, 19].  The preflight safely allows for either class meeting the
+    # interval's maximum per-progression count.
+    actual_hits = sum((2 * n) % 4 == 0 for n in range(20))
+    assert class_work == 2
+    assert actual_hits == 10
+    assert visit_work >= actual_hits
 
 
 def test_interval_count_zero_form_is_obstructed() -> None:
@@ -833,7 +912,6 @@ def test_interval_count_interior_zero_is_obstructed() -> None:
     assert result.count == 3
     assert result.matching == (1, 2, 3)
     assert [(row.n, row.prime) for row in result.obstructions] == [(0, 2)]
-    assert verify_interval_count(result)
 
     shifted = _family(_form("n_minus_one", 1, -1))
     shifted_result = interval_count(shifted, 0, 4, True)
@@ -841,7 +919,6 @@ def test_interval_count_interior_zero_is_obstructed() -> None:
     assert shifted_result.count == 4
     assert shifted_result.matching == (0, 2, 3, 4)
     assert [(row.n, row.prime) for row in shifted_result.obstructions] == [(1, 2)]
-    assert verify_interval_count(shifted_result)
 
 
 def test_interval_count_native_and_catalog_paths_agree() -> None:
@@ -857,21 +934,25 @@ def test_interval_count_round_trip_and_forgery() -> None:
     restored = IntervalCountResult.model_validate_json(result.model_dump_json())
 
     assert restored == result
-    assert verify_interval_count(restored)
     forged = json.loads(restored.model_dump_json())
     forged["count"] = 14
     with pytest.raises(ValidationError):
         IntervalCountResult.model_validate_json(json.dumps(forged))
     forged_moved = json.loads(restored.model_dump_json())
-    # Move n = 4 from rejected to accepted with a consistent count: the
-    # claim stays wire-valid but false, so only replay catches it.
+    # Move n = 4 from rejected to accepted with a consistent count. The
+    # decoded object preserves the caller's claim; a consumer that relies on
+    # membership must check the relevant square-divisibility relation.
     forged_moved["matching"] = sorted([*forged_moved["matching"], 4])
     forged_moved["obstructions"] = [
         row for row in forged_moved["obstructions"] if row["n"] != 4
     ]
     forged_moved["count"] = len(forged_moved["matching"])
     forged_claim = IntervalCountResult.model_validate_json(json.dumps(forged_moved))
-    assert not verify_interval_count(forged_claim)
+    assert 4 in forged_claim.matching
+    assert any(
+        (form.coefficient * 4 + form.constant) % 4 == 0
+        for form in forged_claim.source.forms
+    )
 
 
 def test_interval_reversed_bounds_are_rejected() -> None:

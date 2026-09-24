@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from itertools import combinations
+from itertools import combinations, pairwise
 from math import comb
 
 from pydantic import Field, model_validator
@@ -263,6 +263,20 @@ class FacePosetResult(StrictModel):
             raise ValueError("face-element labels must index the canonical face axis")
         if self.order_complex.vertices != expected_labels:
             raise ValueError("order-complex vertices must equal the face-label axis")
+        label_index = {label: index for index, label in enumerate(expected_labels)}
+        expected_relations_from_complex = tuple(
+            sorted(
+                (label_index[lower], label_index[upper])
+                for edge in (
+                    self.order_complex.faces_by_dimension[1].faces
+                    if self.order_complex.dimension >= 1
+                    else ()
+                )
+                for lower, upper in (edge,)
+            )
+        )
+        if self.order_relations != expected_relations_from_complex:
+            raise ValueError("order relations must match order-complex edges")
         if self.poset is not None:
             if self.poset.elements != expected_labels:
                 raise ValueError("poset elements must equal the face-label axis")
@@ -296,6 +310,18 @@ class OrderComplexResult(StrictModel):
         )
         if self.complex.maximal_simplices != expected_facets:
             raise ValueError("complex facets must equal the maximal-chain axis")
+        covers = {
+            (pair.lower, pair.upper) for pair in self.poset.cover_relations
+        }
+        cover_predecessors = {upper for _, upper in covers}
+        cover_successors = {lower for lower, _ in covers}
+        for chain in self.maximal_chains:
+            if not chain or len(chain) != len(set(chain)):
+                raise ValueError("maximal chains must be nonempty without repeats")
+            if any(pair not in covers for pair in pairwise(chain)):
+                raise ValueError("maximal chains must follow poset cover relations")
+            if chain[0] in cover_predecessors or chain[-1] in cover_successors:
+                raise ValueError("maximal chains must begin and end at poset extrema")
         return self
 
 

@@ -127,6 +127,13 @@ def _boundary_matrix(
     coefficient_ring: ChainCoefficientRing,
     prime: int | None,
 ) -> SparseBoundaryMatrix:
+    if not complex_.faces_by_dimension and dimension == 0:
+        return SparseBoundaryMatrix(
+            source_dimension=0,
+            target_dimension=-1,
+            rows=0,
+            columns=0,
+        )
     source = complex_.faces_by_dimension[dimension].faces
     if dimension == 0:
         return SparseBoundaryMatrix(
@@ -195,6 +202,8 @@ def _chain_parts(
         SimplexBasis(dimension=item.dimension, simplices=item.faces)
         for item in complex_.faces_by_dimension
     )
+    if not bases:
+        bases = (SimplexBasis(dimension=0, simplices=()),)
     boundaries = tuple(
         _boundary_matrix(
             complex_,
@@ -202,7 +211,7 @@ def _chain_parts(
             coefficient_ring=coefficient_ring,
             prime=prime,
         )
-        for dimension in range(complex_.dimension + 1)
+        for dimension in range(max(1, complex_.dimension + 1))
     )
     augmentation = (
         _augmentation(len(complex_.vertices))
@@ -373,11 +382,30 @@ def homology(
                 quotient_span_rank=quotient_span_rank,
             )
         )
+    if convention is HomologyConvention.REDUCED and complex_.dimension == -1:
+        groups.insert(
+            0,
+            HomologyGroupResult(
+                dimension=-1,
+                chain_dimension=1,
+                outgoing_boundary_rank=0,
+                cycle_dimension=1,
+                incoming_boundary_rank=0,
+                betti_number=1,
+                cycle_basis=(ModularVector(coefficients=(1,)),),
+                boundary_basis=(),
+                homology_basis=(ModularVector(coefficients=(1,)),),
+                quotient_span_rank=1,
+            ),
+        )
     return SimplicialHomologyResult.model_construct(
         complex=complex_,
         prime=prime,
         convention=convention,
-        dimension_range=(0, complex_.dimension),
+        dimension_range=(
+            -1 if convention is HomologyConvention.REDUCED and complex_.dimension == -1 else 0,
+            0 if complex_.dimension == -1 else complex_.dimension,
+        ),
         groups=tuple(groups),
     )
 

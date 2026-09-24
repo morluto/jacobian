@@ -26,8 +26,12 @@ operation does not create a durable complex, certificate record, or checker
 session.
 
 The `f_vector` operation uses the convention `(f_-1, f_0, ..., f_d)`, with
-`f_-1 = 1` for the empty face. It also returns the corresponding `h`-vector and
-Euler characteristic. The `g_vector` operation returns `g_0 = 1` and
+`f_-1 = 1` for the empty face. For `{∅}`, its nonempty-face `f_vector` is
+`()`, its dimension is `-1`, and its empty face stays implicit. The operation
+also returns the corresponding `h`-vector and Euler characteristic. Reduced
+simplicial homology includes `H̃_-1({∅}) = Z` and zero degree-zero homology;
+unreduced degree-zero homology is zero. The `g_vector` operation returns
+`g_0 = 1` and
 `g_i = h_i - h_(i-1)` through `i = floor((d+1)/2)`, along with the exact
 f- and h-vectors it uses. These are finite transforms of face counts; neither
 operation asserts that the complex is a sphere or manifold, or that g-vector

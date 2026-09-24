@@ -230,6 +230,18 @@ class TestSkeleton:
 
 
 class TestJoin:
+    def test_empty_complex_is_the_join_unit(self) -> None:
+        empty = SimplicialComplexRequest(vertices=(), facets=())
+        point = SimplicialComplexRequest(vertices=("p",), facets=(("p",),))
+        left = compute_join(JoinRequest(complex_a=empty, complex_b=point))
+        right = compute_join(JoinRequest(complex_a=point, complex_b=empty))
+        both = compute_join(JoinRequest(complex_a=empty, complex_b=empty))
+        assert left.join_complex == canonical_complex(("p",), (("p",),))
+        assert right.join_complex == left.join_complex
+        assert both.join_complex.dimension == -1
+        assert both.join_complex.vertices == ()
+        assert JoinResult.model_validate_json(both.model_dump_json()) == both
+
     def test_join_two_points(self) -> None:
         point_a = {"vertices": ["a"], "facets": [["a"]]}
         point_b = {"vertices": ["b"], "facets": [["b"]]}

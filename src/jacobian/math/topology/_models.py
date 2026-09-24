@@ -375,9 +375,9 @@ def _require_canonical_conversion_bounds(
     )
 
     sizes = (
-        (1, *complex_.f_vector)
+        ((1, *complex_.f_vector) if complex_.dimension >= 0 else (1, 0))
         if convention is HomologyConvention.REDUCED
-        else complex_.f_vector
+        else (complex_.f_vector if complex_.dimension >= 0 else (0,))
     )
     if any(size > MAX_BASIS_SIZE for size in sizes):
         raise _validation_error(
@@ -405,7 +405,7 @@ class ChainComplexRequest(StrictModel):
 class SimplexBasis(StrictModel):
     dimension: StrictInt = Field(ge=0, le=MAX_TOPOLOGY_DIMENSION)
     simplices: tuple[Simplex, ...] = Field(
-        min_length=1,
+        min_length=0,
         max_length=MAX_TOPOLOGY_CHAIN_GROUP,
     )
 
@@ -420,7 +420,7 @@ class SparseBoundaryMatrix(StrictModel):
     source_dimension: StrictInt = Field(ge=0, le=MAX_TOPOLOGY_DIMENSION)
     target_dimension: StrictInt = Field(ge=-1, le=MAX_TOPOLOGY_DIMENSION - 1)
     rows: StrictInt = Field(ge=0, le=MAX_TOPOLOGY_CHAIN_GROUP)
-    columns: StrictInt = Field(ge=1, le=MAX_TOPOLOGY_CHAIN_GROUP)
+    columns: StrictInt = Field(ge=0, le=MAX_TOPOLOGY_CHAIN_GROUP)
     entries: tuple[SparseMatrixEntry, ...] = Field(
         default=(),
         max_length=(MAX_TOPOLOGY_DIMENSION + 1) * MAX_TOPOLOGY_CHAIN_GROUP,
@@ -494,11 +494,11 @@ class ChainComplexResult(StrictModel):
     prime: StrictInt | None = Field(default=None, ge=2, le=MAX_TOPOLOGY_PRIME)
     convention: HomologyConvention
     simplex_bases: tuple[SimplexBasis, ...] = Field(
-        min_length=1,
+        min_length=0,
         max_length=MAX_TOPOLOGY_DIMENSION + 1,
     )
     boundary_matrices: tuple[SparseBoundaryMatrix, ...] = Field(
-        min_length=1,
+        min_length=0,
         max_length=MAX_TOPOLOGY_DIMENSION + 1,
     )
     augmentation: SparseBoundaryMatrix | None = None

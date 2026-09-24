@@ -37,8 +37,8 @@ class ModularVector(StrictModel):
 
 
 class HomologyGroupResult(StrictModel):
-    dimension: StrictInt = Field(ge=0, le=MAX_TOPOLOGY_DIMENSION)
-    chain_dimension: StrictInt = Field(ge=1, le=MAX_TOPOLOGY_CHAIN_GROUP)
+    dimension: StrictInt = Field(ge=-1, le=MAX_TOPOLOGY_DIMENSION)
+    chain_dimension: StrictInt = Field(ge=0, le=MAX_TOPOLOGY_CHAIN_GROUP)
     outgoing_boundary_rank: StrictInt = Field(ge=0, le=MAX_TOPOLOGY_CHAIN_GROUP)
     cycle_dimension: StrictInt = Field(ge=0, le=MAX_TOPOLOGY_CHAIN_GROUP)
     incoming_boundary_rank: StrictInt = Field(ge=0, le=MAX_TOPOLOGY_CHAIN_GROUP)
@@ -109,12 +109,23 @@ class SimplicialHomologyResult(StrictModel):
     @model_validator(mode="after")
     def require_complete_dimension_range(self) -> Self:
         dimensions = tuple(group.dimension for group in self.groups)
-        if dimensions != tuple(range(len(self.groups))):
+        if dimensions != tuple(
+            range(self.dimension_range[0], self.dimension_range[1] + 1)
+        ):
             raise _validation_error(
                 "topology.require_complete_dimension_range_2",
                 "homology groups must cover contiguous dimensions",
             )
-        if self.dimension_range != (0, len(self.groups) - 1):
+        expected_minimum = (
+            -1
+            if self.convention is HomologyConvention.REDUCED
+            and self.complex.dimension == -1
+            else 0
+        )
+        if self.dimension_range != (
+            expected_minimum,
+            expected_minimum + len(self.groups) - 1,
+        ):
             raise _validation_error(
                 "topology.require_complete_dimension_range_3",
                 "dimension_range does not cover every returned group",

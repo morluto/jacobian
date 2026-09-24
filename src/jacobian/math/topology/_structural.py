@@ -128,6 +128,10 @@ def _maximal_faces(faces: Iterable[Simplex]) -> tuple[tuple[str, ...], ...]:
 def join_maximal_facets(
     facets_a: tuple[Simplex, ...], facets_b: tuple[Simplex, ...]
 ) -> tuple[tuple[str, ...], ...]:
+    if not facets_a:
+        return facets_b
+    if not facets_b:
+        return facets_a
     return _maximal_faces(
         tuple(sorted(set(facet_a) | set(facet_b)))
         for facet_a in facets_a
@@ -1319,7 +1323,7 @@ def compute_join(request: JoinRequest) -> JoinResult:
     vertices = tuple(
         sorted(set(request.complex_a.vertices) | set(request.complex_b.vertices))
     )
-    dimension = max((len(facet) - 1 for facet in facets), default=0)
+    dimension = max((len(facet) - 1 for facet in facets), default=-1)
     return JoinResult._from_kernel(
         complex_a=request.complex_a,
         complex_b=request.complex_b,

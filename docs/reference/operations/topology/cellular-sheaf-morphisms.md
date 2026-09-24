@@ -37,3 +37,11 @@ The operations bound parent diagrams, pointwise component cells, exact scalar
 digits, square-multiplication work, induced matrix cells, and worst-case scalar
 output growth before arithmetic. The current per-coefficient input limit is
 64 decimal digits.
+
+`cellular_sheaf.morphism.kernel.compute` computes the categorical kernel
+stalkwise over `QQ` or `GF(p)`. Its result includes a based kernel sheaf, every
+derived restriction map expressed in the kernel stalk bases, and the canonical
+inclusion morphism into the source. The operation rechecks naturality from the
+component matrices and verifies that each source restriction preserves the
+pointwise kernel before it returns the induced map. A zero-dimensional kernel
+stalk is represented by an empty basis and correctly shaped empty matrices.

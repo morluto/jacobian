@@ -210,22 +210,56 @@ class ModularCharacterCoordinates(StrictModel):
         return self
 
 
+class ModularCharacterCommonTargetPrefix(StrictModel):
+    """An exact q-prefix in an explicitly embedded character space."""
+
+    space: ModularFormSpace
+    precision: StrictInt = Field(ge=1, le=128)
+    coefficients: tuple[RationalCyclotomicElement, ...] = Field(
+        min_length=1, max_length=128
+    )
+
+    @model_validator(mode="after")
+    def require_exact_parent_and_precision(self) -> Self:
+        field = self.space.coefficient_domain
+        if (
+            type(field) is not RationalCyclotomicField
+            or len(self.coefficients) != self.precision
+            or any(value.field != field for value in self.coefficients)
+        ):
+            raise PydanticCustomError(
+                "modular_forms.character_common_prefix_parent",
+                "common-target prefix must have exact precision and the declared cyclotomic parent",
+            )
+        return self
+
+
 class ModularCharacterTransportedForm(StrictModel):
     """A source form, its explicit inclusion, and exact target representation."""
 
     source_form: ModularFormCoordinates | ModularCharacterCoordinates
     inclusion: ModularCharacterSpaceInclusion
-    target_form: ModularCharacterCoordinates
-    target_q_expansion: ModularCharacterQExpansion
+    target_form: ModularCharacterCoordinates | None
+    target_q_expansion: ModularCharacterQExpansion | ModularCharacterCommonTargetPrefix
 
     @model_validator(mode="after")
     def require_transport_binding(self) -> Self:
         if (
             self.source_form.space != self.inclusion.source_space
-            or self.target_form.space != self.inclusion.target_space
             or self.target_q_expansion.space != self.inclusion.target_space
-            or self.target_q_expansion.basis_id != self.target_form.basis_id
             or len(self.target_q_expansion.coefficients) == 0
+            or (
+                isinstance(self.target_q_expansion, ModularCharacterQExpansion)
+                and (
+                    self.target_form is None
+                    or self.target_form.space != self.inclusion.target_space
+                    or self.target_q_expansion.basis_id != self.target_form.basis_id
+                )
+            )
+            or (
+                isinstance(self.target_q_expansion, ModularCharacterCommonTargetPrefix)
+                and self.target_form is not None
+            )
         ):
             raise PydanticCustomError(
                 "modular_forms.character_transport_binding",
@@ -254,6 +288,7 @@ __all__ = [
     "ModularCharacterBasis",
     "ModularCharacterBasisElement",
     "ModularCharacterBasisRequest",
+    "ModularCharacterCommonTargetPrefix",
     "ModularCharacterCoordinates",
     "ModularCharacterCoordinatesRequest",
     "ModularCharacterCoordinatesTransportRequest",

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from fractions import Fraction
-from math import gcd
+from math import gcd, lcm
 
 from jacobian._execution import request_checkpoint
 from jacobian.catalog.models import (
@@ -22,6 +22,7 @@ from jacobian.math.number_theory.characters.operations import (
 from jacobian.math.number_theory.characters.values import DirichletCharacter
 from jacobian.math.number_theory.modular_forms import cyclotomic
 from jacobian.math.number_theory.modular_forms.character_basis import (
+    _TRANSPORT_STURM_BASIS_ENVELOPE,
     CHARACTER_BASIS_ID,
     _character_basis_from_admission,
     _character_sturm_precision,
@@ -29,6 +30,7 @@ from jacobian.math.number_theory.modular_forms.character_basis import (
     _require_basis_space,
 )
 from jacobian.math.number_theory.modular_forms.character_basis_models import (
+    ModularCharacterCommonTargetPrefix,
     ModularCharacterCoordinates,
     ModularCharacterEqualityResult,
     ModularCharacterQExpansion,
@@ -59,17 +61,20 @@ class _AdmittedTransport:
     target_character_dimensions: tuple[int, int]
 
 
-def _linear_combination_digit_bound(coordinate_digits: int, terms: int) -> int:
+def _linear_combination_digit_bound(
+    coordinate_digits: int, terms: int, basis_coefficient_digits: int
+) -> int:
     """Bound a cyclotomic linear combination with integral, one-digit basis rows.
 
     In Q(zeta_6), multiplication by an integral basis coefficient combines
-    at most three products of scalar coordinates. Clearing the two scalar
-    denominators costs at most twice their digit height; summing ``terms``
-    coordinates multiplies that common-denominator envelope by ``terms``.
-    The extra two digits cover the coefficients (whose absolute values are
-    at most 9) and the final numerator addition.
+    at most three rational products. Their common denominator is bounded by
+    the product of the ``terms`` coordinate denominators and ``terms`` basis
+    denominators; the numerator adds at most ``3 * terms`` such products.
+    This covers the integral one-digit bases at levels 13, 26, and 39.
     """
-    return terms * (2 * coordinate_digits + 2) + 1
+    return (
+        terms * (coordinate_digits + basis_coefficient_digits) + len(str(3 * terms)) + 2
+    )
 
 
 def _is_zero(value: RationalCyclotomicElement) -> bool:
@@ -102,7 +107,7 @@ def _require_inflation_map(
         or type(source.level) is not int
         or type(target.level) is not int
         or source.level not in (13, 26, 39)
-        or target.level not in (26, 39)
+        or target.level not in (13, 26, 39, 78)
         or target.level % source.level
         or source.weight != 2
         or target.weight != 2
@@ -121,7 +126,7 @@ def _require_inflation_map(
         or inclusion.character_map.target != target.character
     ):
         _domain(
-            "character transport supports explicit S2 inclusions between levels 13, 26, and 39 over the identical Q(zeta_6) parent"
+            "character transport supports explicit S2 inclusions from levels 13, 26, or 39 into levels 13, 26, 39, or 78 over the identical Q(zeta_6) parent"
         )
     source_char = inclusion.character_map.source
     target_char = inclusion.character_map.target
@@ -133,7 +138,7 @@ def _require_inflation_map(
             "character inflation moduli must bind their exact source and target levels"
         )
     # Prove the authored map is pullback along residue reduction, on every
-    # target unit. This is bounded by the admitted target level (at most 39).
+    # target unit. This is bounded by the admitted target level (at most 78).
     for residue in range(target.level):
         if gcd(residue, target.level) != 1:
             continue
@@ -176,11 +181,15 @@ def _admit_transport(
     source_cusp, _ = character_space_dimensions(
         source_space.level, source_space.weight, source_space.character, field
     )
-    target_cusp, _ = character_space_dimensions(
-        inclusion.target_space.level,
-        inclusion.target_space.weight,
-        inclusion.target_space.character,
-        field,
+    target_cusp = (
+        0
+        if inclusion.target_space.level in (13, 78)
+        else character_space_dimensions(
+            inclusion.target_space.level,
+            inclusion.target_space.weight,
+            inclusion.target_space.character,
+            field,
+        )[0]
     )
     if type(form) is ModularFormCoordinates:
         if (
@@ -234,8 +243,18 @@ def _admit_transport(
         default=1,
     )
     same_space = source_space == inclusion.target_space
+    source_basis_digits = _TRANSPORT_STURM_BASIS_ENVELOPE[
+        (source_space.level, target_precision)
+    ][1]
+    target_basis_digits = (
+        0
+        if inclusion.target_space.level in (13, 78)
+        else _TRANSPORT_STURM_BASIS_ENVELOPE[
+            (inclusion.target_space.level, target_precision)
+        ][1]
+    )
     source_expansion_digits = _linear_combination_digit_bound(
-        coordinate_digits, source_cusp
+        coordinate_digits, source_cusp, source_basis_digits
     )
     target_coordinate_digits = (
         coordinate_digits if same_space else source_expansion_digits
@@ -243,7 +262,11 @@ def _admit_transport(
     target_expansion_digits = (
         source_expansion_digits
         if same_space
-        else _linear_combination_digit_bound(source_expansion_digits, target_cusp)
+        else source_expansion_digits
+        if inclusion.target_space.level in (13, 78)
+        else _linear_combination_digit_bound(
+            source_expansion_digits, target_cusp, target_basis_digits
+        )
     )
     if (
         max(source_expansion_digits, target_expansion_digits)
@@ -350,29 +373,40 @@ def _linear_combination_from_coordinates(coordinates, basis):
 
 
 def _transport_from_bases(
-    admitted: _AdmittedTransport, source_basis, target_basis
+    admitted: _AdmittedTransport, source_basis, target_basis=None
 ) -> ModularCharacterTransportedForm:
     source_prefix = _expand_coordinates(admitted.form, source_basis, admitted.field)
     if len(source_prefix) != admitted.precision:
         _domain("source basis must extend through the target Sturm precision")
-    if admitted.inclusion.source_space == admitted.inclusion.target_space:
+    if admitted.inclusion.target_space.level in (13, 78):
+        target_form = None
+        target_expansion = ModularCharacterCommonTargetPrefix(
+            space=admitted.inclusion.target_space,
+            precision=admitted.precision,
+            coefficients=source_prefix,
+        )
+    elif admitted.inclusion.source_space == admitted.inclusion.target_space:
         if type(admitted.form) is ModularCharacterCoordinates:
             target_form = admitted.form
         else:
             _domain("identity transport requires generalized character coordinates")
-        target_expansion = source_prefix
+        target_expansion = ModularCharacterQExpansion(
+            space=admitted.inclusion.target_space,
+            basis_id=target_basis.basis_id,
+            coefficients=source_prefix,
+        )
     else:
         target_form = _coordinates_from_prefix(source_prefix, target_basis)
-        target_expansion = source_prefix
+        target_expansion = ModularCharacterQExpansion(
+            space=admitted.inclusion.target_space,
+            basis_id=target_basis.basis_id,
+            coefficients=source_prefix,
+        )
     return ModularCharacterTransportedForm(
         source_form=admitted.form,
         inclusion=admitted.inclusion,
         target_form=target_form,
-        target_q_expansion=ModularCharacterQExpansion(
-            space=admitted.inclusion.target_space,
-            basis_id=target_basis.basis_id,
-            coefficients=target_expansion,
-        ),
+        target_q_expansion=target_expansion,
     )
 
 
@@ -389,7 +423,9 @@ def modular_character_coordinates_transport(
         admitted.source_character_dimensions,
     )
     target_basis = (
-        source_basis
+        None
+        if inclusion.target_space.level in (13, 78)
+        else source_basis
         if inclusion.target_space == inclusion.source_space
         else _basis(
             inclusion.target_space,
@@ -434,17 +470,59 @@ def modular_character_coordinates_equal_in_common_space(
             code="modular_form.character_equality_common_target",
             message="both forms must land in the identical common target space",
         )
+    expected_level = lcm(
+        left_admitted.inclusion.source_space.level,
+        right_admitted.inclusion.source_space.level,
+    )
+    if target.level != expected_level:
+        raise OperationDomainValidationError(
+            location=("right", "inclusion", "target_space", "level"),
+            code="modular_form.character_equality_target_not_lcm",
+            message="the common target level must be the least common multiple of source levels",
+        )
     if left_admitted.field != right_admitted.field:
         _domain(
             "common-target character equality requires the identical coefficient field"
         )
-    request_checkpoint("before common character target basis materialization")
-    target_basis = _basis(
-        target,
-        left_admitted.precision,
-        left_admitted.target_character_dimensions,
+    combined_work = sum(
+        admitted.precision
+        * (
+            admitted.source_dimension * admitted.field.degree**2
+            + admitted.target_dimension**2
+            + admitted.source_dimension * admitted.target_dimension
+        )
+        for admitted in (left_admitted, right_admitted)
     )
-    bases = [(target, target_basis)]
+    combined_output_bytes = sum(
+        admitted.precision
+        * admitted.field.degree
+        * (2 * MAX_CYCLIC_FIELD_ELEMENT_DIGITS + 32)
+        + admitted.target_dimension
+        * admitted.field.degree
+        * (2 * MAX_CYCLIC_FIELD_ELEMENT_DIGITS + 32)
+        for admitted in (left_admitted, right_admitted)
+    )
+    if (
+        combined_work > _MAX_TRANSPORT_WORK
+        or combined_output_bytes > _MAX_TRANSPORT_OUTPUT_BYTES
+    ):
+        raise OperationResourceAdmissionError(
+            location=(),
+            code="modular_form.character_equality_admission",
+            message="combined common-space equality work or output exceeds its admitted envelope",
+        )
+
+    request_checkpoint("before common character target basis materialization")
+    target_basis = (
+        None
+        if target.level in (13, 78)
+        else _basis(
+            target,
+            left_admitted.precision,
+            left_admitted.target_character_dimensions,
+        )
+    )
+    bases = [] if target_basis is None else [(target, target_basis)]
     transported = []
     for value, admitted in ((left, left_admitted), (right, right_admitted)):
         source_space = admitted.inclusion.source_space

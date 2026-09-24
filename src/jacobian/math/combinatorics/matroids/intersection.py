@@ -12,8 +12,12 @@ from jacobian.math.combinatorics.matroids._models import (
     MatroidCommonBasisResult,
     MatroidIntersectionResult,
     MatroidIntersectionWitness,
+    MatroidRankMultiplier,
     MatroidWeightedIntersectionCertificateRequest,
+    MatroidWeightedIntersectionRankCertificateRequest,
+    MatroidWeightedIntersectionRankCertificateResult,
     MatroidWeightedIntersectionResult,
+    MatroidWeightFunction,
 )
 from jacobian.math.combinatorics.matroids.operations import (
     MAX_CLOSURE_RANK_WORK,
@@ -570,12 +574,211 @@ def verify_weighted_intersection_result(
         return False
 
 
+def _weighted_rank_dual_ranks(
+    sources: tuple[LinearMatroid, LinearMatroid],
+    families: tuple[
+        tuple[MatroidRankMultiplier, ...], tuple[MatroidRankMultiplier, ...]
+    ],
+    ground_size: int,
+    maximum_positive_weight: int,
+) -> tuple[tuple[int, ...], tuple[int, ...]]:
+    """Recompute listed ranks and enforce their coefficient bounds."""
+    ranks_by_side: list[tuple[int, ...]] = []
+    for source, family in zip(sources, families, strict=True):
+        ranks = tuple(_rank(source, term.subset) for term in family)
+        for term, rank in zip(family, ranks, strict=True):
+            bound = maximum_positive_weight
+            if rank > 0:
+                bound *= ground_size
+            if term.multiplier > bound:
+                raise OperationDomainValidationError(
+                    location=("rank_terms",),
+                    code="matroid.weighted_intersection.rank_dual.multiplier",
+                    message=(
+                        "rank multiplier exceeds the normalized coefficient "
+                        "bound for its rank and objective"
+                    ),
+                )
+        ranks_by_side.append(ranks)
+    return ranks_by_side[0], ranks_by_side[1]
+
+
+def _weighted_rank_dual_values_and_cover(
+    families: tuple[
+        tuple[MatroidRankMultiplier, ...], tuple[MatroidRankMultiplier, ...]
+    ],
+    ranks_by_side: tuple[tuple[int, ...], tuple[int, ...]],
+    ground_size: int,
+) -> tuple[int, list[int]]:
+    """Return the rank-dual objective and its coordinatewise coverage."""
+    dual_value = 0
+    coverage = [0] * ground_size
+    for family, ranks in zip(families, ranks_by_side, strict=True):
+        dual_value += sum(
+            term.multiplier * rank for term, rank in zip(family, ranks, strict=True)
+        )
+        for term in family:
+            for element in term.subset:
+                coverage[element] += term.multiplier
+    return dual_value, coverage
+
+
+def weighted_intersection_rank_certificate(
+    request: MatroidWeightedIntersectionRankCertificateRequest,
+) -> MatroidWeightedIntersectionRankCertificateResult:
+    """Check a sparse rank-inequality dual for a common independent set.
+
+    The dual bound is computed from the caller's listed rank multipliers. No
+    independent-set enumeration or optimizer is used. The returned split is
+    derived from the first-side dual coverage, clipped coordinatewise to the
+    positive objective weights, and can be passed to the existing supplied
+    weight-splitting checker.
+    """
+    if type(request) is not MatroidWeightedIntersectionRankCertificateRequest:
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="matroid.weighted_intersection.rank_dual.request",
+            message="request must be a canonical weighted-intersection rank certificate",
+        )
+    try:
+        request = MatroidWeightedIntersectionRankCertificateRequest.model_validate(
+            request.model_dump(mode="python")
+        )
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="matroid.weighted_intersection.rank_dual.request",
+            message="weighted-intersection rank certificate request is not canonical",
+        ) from exc
+
+    first, second = _admit_pair(request.first, request.second)
+    objective, _ = _canonical_weight_function(first, request.weight_function)
+    n = first.ground_size
+    w_plus = max(0, max(objective, default=0))
+    candidate = request.common_independent
+    terms = (request.first_rank_terms, request.second_rank_terms)
+    sources = (first, second)
+    rank_costs = tuple(
+        sum(_rank_work(len(source.matrix.entries), len(term.subset)) for term in family)
+        + _rank_work(len(source.matrix.entries), len(candidate))
+        for source, family in zip(sources, terms, strict=True)
+    )
+    rank_work = sum(rank_costs)
+    cover_work = n * sum(len(family) for family in terms)
+    split_values_first = [0] * n
+    for term in request.first_rank_terms:
+        for element in term.subset:
+            split_values_first[element] += term.multiplier
+    split_values_first = [
+        min(value, max(0, objective[element]))
+        for element, value in enumerate(split_values_first)
+    ]
+    split_values_second = [
+        objective[element] - split_values_first[element] for element in range(n)
+    ]
+    first_split = MatroidWeightFunction(
+        ground_axis=first.ground_axis,
+        values=tuple(split_values_first),
+    )
+    second_split = MatroidWeightFunction(
+        ground_axis=second.ground_axis,
+        values=tuple(split_values_second),
+    )
+    output_bytes = (
+        _weighted_intersection_output_bound_bytes(
+            first,
+            second,
+            objective,
+            split_values_first,
+            split_values_second,
+            len(candidate),
+        )
+        + 8 * sum(len(term.subset) for family in terms for term in family)
+        + 64 * sum(len(family) for family in terms)
+    )
+    total_work = rank_work + cover_work
+    if (
+        rank_work > MAX_WEIGHTED_INTERSECTION_WORK
+        or total_work > MAX_WEIGHTED_INTERSECTION_WORK
+        or output_bytes > MAX_WEIGHTED_INTERSECTION_OUTPUT_BYTES
+    ):
+        raise OperationResourceAdmissionError(
+            location=("first", "second", "rank_terms"),
+            code="matroid.weighted_intersection.rank_dual.work_bound",
+            message=(
+                "rank-dual certificate rank work or result output exceeds the "
+                f"{MAX_WEIGHTED_INTERSECTION_WORK}-unit work or "
+                f"{MAX_WEIGHTED_INTERSECTION_OUTPUT_BYTES}-byte output envelope"
+            ),
+        )
+
+    ranks_by_side = _weighted_rank_dual_ranks(sources, terms, n, w_plus)
+
+    first_candidate_rank = _rank(first, candidate)
+    second_candidate_rank = _rank(second, candidate)
+    if first_candidate_rank != len(candidate) or second_candidate_rank != len(
+        candidate
+    ):
+        raise OperationDomainValidationError(
+            location=("common_independent",),
+            code="matroid.weighted_intersection.rank_dual.feasibility",
+            message="candidate must be independent in both source matroids",
+        )
+
+    dual_value, coverage = _weighted_rank_dual_values_and_cover(terms, ranks_by_side, n)
+    if any(coverage[element] < objective[element] for element in range(n)):
+        raise OperationDomainValidationError(
+            location=("first_rank_terms", "second_rank_terms"),
+            code="matroid.weighted_intersection.rank_dual.cover",
+            message="rank-dual multipliers must cover every objective weight coordinatewise",
+        )
+
+    candidate_weight = sum(objective[element] for element in candidate)
+    if dual_value != candidate_weight:
+        raise OperationDomainValidationError(
+            location=("common_independent", "first_rank_terms", "second_rank_terms"),
+            code="matroid.weighted_intersection.rank_dual.optimality",
+            message="rank-dual objective must equal the feasible candidate weight",
+        )
+    return MatroidWeightedIntersectionRankCertificateResult._from_kernel(
+        request=request,
+        total_weight=candidate_weight,
+        first_split=first_split,
+        second_split=second_split,
+    )
+
+
+def verify_weighted_intersection_rank_certificate(
+    result: MatroidWeightedIntersectionRankCertificateResult,
+) -> bool:
+    """Explicitly recompute a serialized rank-dual certificate."""
+    try:
+        request = MatroidWeightedIntersectionRankCertificateRequest(
+            first=result.first,
+            second=result.second,
+            weight_function=result.weight_function,
+            common_independent=result.common_independent,
+            first_rank_terms=result.first_rank_terms,
+            second_rank_terms=result.second_rank_terms,
+        )
+        return weighted_intersection_rank_certificate(request) == result
+    except (
+        OperationDomainValidationError,
+        OperationResourceAdmissionError,
+        TypeError,
+        ValueError,
+    ):
+        return False
+
+
 __all__ = [
     "matroid_common_basis",
     "matroid_intersection",
     "replay_common_basis_result",
     "replay_intersection_result",
     "verify_common_basis_result",
+    "verify_weighted_intersection_rank_certificate",
     "verify_weighted_intersection_result",
     "weighted_intersection_certificate",
+    "weighted_intersection_rank_certificate",
 ]

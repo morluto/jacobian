@@ -3,7 +3,10 @@
 from jacobian.math.combinatorics.matroids._models import (
     GraphicMatroidRequest,
     LinearMatroid,
+    MatroidRankMultiplier,
     MatroidWeightedIntersectionCertificateRequest,
+    MatroidWeightedIntersectionRankCertificateRequest,
+    MatroidWeightedIntersectionRankCertificateResult,
     MatroidWeightedIntersectionResult,
     MatroidWeightFunction,
 )
@@ -12,8 +15,10 @@ from jacobian.math.combinatorics.matroids.intersection import (
     matroid_common_basis,
     matroid_intersection,
     verify_common_basis_result,
+    verify_weighted_intersection_rank_certificate,
     verify_weighted_intersection_result,
     weighted_intersection_certificate,
+    weighted_intersection_rank_certificate,
 )
 from jacobian.math.combinatorics.matroids.operations import (
     matroid_closure,
@@ -28,8 +33,11 @@ from jacobian.math.combinatorics.matroids.operations import (
 __all__ = [
     "GraphicMatroidRequest",
     "LinearMatroid",
+    "MatroidRankMultiplier",
     "MatroidWeightFunction",
     "MatroidWeightedIntersectionCertificateRequest",
+    "MatroidWeightedIntersectionRankCertificateRequest",
+    "MatroidWeightedIntersectionRankCertificateResult",
     "MatroidWeightedIntersectionResult",
     "graphic_matroid",
     "matroid_closure",
@@ -42,6 +50,8 @@ __all__ = [
     "verify_common_basis_result",
     "verify_maximum_weight_basis",
     "verify_maximum_weight_independent_set",
+    "verify_weighted_intersection_rank_certificate",
     "verify_weighted_intersection_result",
     "weighted_intersection_certificate",
+    "weighted_intersection_rank_certificate",
 ]

@@ -100,3 +100,50 @@ A serialized result can be independently recomputed with
 `verify_weighted_intersection_result`.
 This operation checks a supplied split; it does not find an optimum candidate
 or construct the split.
+
+## Supplied rank-dual certificate
+
+`matroid.intersection.weighted_rank_certificate.check` checks a candidate and
+two finite chains of nonnegative integer multipliers on the source rank
+inequalities. For a first-side term `(S, y_S)` and second-side term `(T, z_T)`,
+the checker recomputes `r_1(S)` and `r_2(T)`, verifies
+
+\[
+\sum_{S\ni e} y_S + \sum_{T\ni e} z_T \geq w_e
+\quad\text{for every ground element }e,
+\]
+
+and requires
+
+\[
+\sum_S y_S r_1(S) + \sum_T z_T r_2(T) = w(I).
+\]
+
+The candidate must be independent in both sources. For every common
+independent `J`, its incidence vector satisfies both matroid rank systems, so
+the dual cover bounds `w(J)` by the displayed dual value. Equality with the
+feasible candidate therefore proves maximum weight, including signed weights
+and the empty optimum. This is the LP dual of Edmonds' common-independent-set
+polytope, whose rank inequalities form a TDI system; see Schrijver,
+*Combinatorial Optimization*, Chapter 41, §41.4, Theorem 41.12. The theorem's
+dual may be taken with integral multipliers for integer weights. The nested
+chain normal form follows by solving each side's rank dual as the ordinary
+maximum-weight independent-set dual; the union of two chains has a totally
+unimodular incidence matrix. See also Goemans, *Topics in Combinatorial
+Optimization*, [Lecture 13](https://ocw.mit.edu/courses/18-997-topics-in-combinatorial-optimization-spring-2004/198d8ca054827e34f49f5c781fc23226_co_lec13.pdf),
+which spells out this dual and chain reduction.
+
+Each side supplies at most `n` nonempty nested subsets, for at most `2n` terms
+overall. Multiplier entries are exact integers bounded by the objective and
+ground limits; zero-rank terms are supported for loop subsets and have zero
+dual cost. One aggregate 50,000,000-unit envelope covers every listed rank,
+both candidate feasibility ranks, and the elementwise coverage scan. A
+conservative 8 MiB result bound includes both sources, the dual terms, and the
+derived split.
+
+The result retains the source parents, candidate, rank terms, and a derived
+integral split `w=u+v`. The split is clipped to `0≤u_e≤max(0,w_e)`, so it stays
+within the existing weight-entry bound and composes with
+`matroid.intersection.weighted_certificate.check`. This operation checks a
+supplied rank dual; it does not find a candidate or construct the dual. The
+weighted optimizer in issue #1802 remains deferred.

@@ -13,6 +13,8 @@ from jacobian.math.combinatorics.matroids._models import (
     MatroidIntersectionRequest,
     MatroidIntersectionResult,
     MatroidWeightedIntersectionCertificateRequest,
+    MatroidWeightedIntersectionRankCertificateRequest,
+    MatroidWeightedIntersectionRankCertificateResult,
     MatroidWeightedIntersectionResult,
     MaximumWeightBasisRequest,
     MaximumWeightBasisResult,
@@ -24,6 +26,7 @@ from jacobian.math.combinatorics.matroids.intersection import (
     matroid_common_basis,
     matroid_intersection,
     weighted_intersection_certificate,
+    weighted_intersection_rank_certificate,
 )
 from jacobian.math.combinatorics.matroids.operations import (
     closure_result,
@@ -60,6 +63,12 @@ def _run_weighted_intersection_certificate(
     request: MatroidWeightedIntersectionCertificateRequest,
 ) -> MatroidWeightedIntersectionResult:
     return weighted_intersection_certificate(request)
+
+
+def _run_weighted_intersection_rank_certificate(
+    request: MatroidWeightedIntersectionRankCertificateRequest,
+) -> MatroidWeightedIntersectionRankCertificateResult:
+    return weighted_intersection_rank_certificate(request)
 
 
 _CLOSURE_EXAMPLE: dict[str, Any] = {
@@ -264,6 +273,55 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                         "ground_axis": ["a", "b"],
                         "values": [0, 0],
                     },
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="matroid.intersection.weighted_rank_certificate.check",
+        title="Check a weighted matroid intersection rank-dual certificate",
+        description=(
+            "Check a caller-supplied common independent set and sparse nested "
+            "chains of nonnegative integer multipliers on each source's rank "
+            "inequalities. Recompute listed ranks, verify the coordinatewise "
+            "dual cover and equality of primal and dual values, then return the "
+            "candidate and the implied integer weight split. This checks a "
+            "certificate and does not find a candidate or construct a dual. "
+            "The returned split composes with "
+            "matroid.intersection.weighted_certificate.check."
+        ),
+        request_type=MatroidWeightedIntersectionRankCertificateRequest,
+        result_type=MatroidWeightedIntersectionRankCertificateResult,
+        run=_run_weighted_intersection_rank_certificate,
+        tags=("matroid", "intersection", "weighted", "dual", "optimality", "exact"),
+        discovery_terms=(
+            "check weighted matroid intersection rank dual",
+            "rank inequality certificate for maximum weight common independent set",
+            "dual certificate for weighted matroid intersection",
+        ),
+        examples=(
+            OperationExample(
+                name="rank_one_pair_rank_dual",
+                description=(
+                    "Certify the weight-5 singleton in two identical rank-one "
+                    "matroids using a rank inequality from the first source."
+                ),
+                input={
+                    "first": {
+                        "matrix": {"prime": 2, "entries": [[1, 1]], "columns": 2},
+                        "ground_labels": ["a", "b"],
+                    },
+                    "second": {
+                        "matrix": {"prime": 2, "entries": [[1, 1]], "columns": 2},
+                        "ground_labels": ["a", "b"],
+                    },
+                    "weight_function": {
+                        "ground_axis": ["a", "b"],
+                        "values": [5, 3],
+                    },
+                    "common_independent": [0],
+                    "first_rank_terms": [{"subset": [0, 1], "multiplier": 5}],
+                    "second_rank_terms": [],
                 },
             ),
         ),

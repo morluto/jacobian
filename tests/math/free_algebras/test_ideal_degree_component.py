@@ -195,7 +195,7 @@ def test_degree_component_rejects_oversized_ambient_word_axis_before_expansion()
     assert exc_info.value.errors()[0]["type"] == "free_algebra.component_word_axis"
 
 
-def test_degree_component_admits_source_and_result_serialized_size_together() -> None:
+def test_degree_component_admits_source_and_result_cells_together() -> None:
     alphabet = ("😀" * 64, "😁" * 64)
     generator = _poly(
         alphabet,
@@ -206,6 +206,4 @@ def test_degree_component_admits_source_and_result_serialized_size_together() ->
     with pytest.raises(OperationResourceAdmissionError) as exc_info:
         ideal_degree_component(ideal, 4)
 
-    assert (
-        exc_info.value.errors()[0]["type"] == "free_algebra.component_serialized_size"
-    )
+    assert exc_info.value.errors()[0]["type"] == "free_algebra.component_cells"

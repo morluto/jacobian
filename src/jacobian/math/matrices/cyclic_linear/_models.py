@@ -281,6 +281,24 @@ class CyclotomicFieldInclusion(StrictModel):
                 "cyclotomic_coordinate_count",
                 "an inclusion generator image needs exactly phi(target order) coordinates",
             )
+        for value in self.generator_image:
+            # Native callers can construct CanonicalRational directly, so the
+            # raw JSON string-length guard above is not sufficient here.
+            # Reject huge integers from bit length before decimal conversion.
+            if (
+                abs(value.num).bit_length() > MAX_CYCLIC_FIELD_ELEMENT_DIGITS * 4
+                or value.den.bit_length() > MAX_CYCLIC_FIELD_ELEMENT_DIGITS * 4
+                or max(
+                    len(format_canonical_integer(abs(value.num))),
+                    len(format_canonical_integer(value.den)),
+                )
+                > MAX_CYCLIC_FIELD_ELEMENT_DIGITS
+            ):
+                raise _validation_error(
+                    "cyclotomic_coordinate_digits",
+                    "cyclotomic inclusion image coordinates exceed the "
+                    f"{MAX_CYCLIC_FIELD_ELEMENT_DIGITS}-digit bound",
+                )
         return self
 
 

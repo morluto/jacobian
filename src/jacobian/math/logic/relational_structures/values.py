@@ -34,6 +34,7 @@ MAX_RELATIONAL_TRANSPORT_TUPLES = 16_384
 # the larger carrier envelope.
 MAX_RELATIONAL_POLYMORPHISM_ARITY = 8
 MAX_RELATIONAL_OPERATION_TABLE_CELLS = 16_384
+MAX_RELATIONAL_POLYMORPHISM_FAMILY_SIZE = 65_536
 # Primitive-positive formula evaluation is exhaustive over assignments. These
 # independent ceilings bound candidate assignments, atom replays, and the
 # materialized defined relation before any Cartesian expansion.
@@ -391,6 +392,7 @@ __all__ = [
     "MAX_RELATIONAL_CARRIER",
     "MAX_RELATIONAL_OPERATION_TABLE_CELLS",
     "MAX_RELATIONAL_POLYMORPHISM_ARITY",
+    "MAX_RELATIONAL_POLYMORPHISM_FAMILY_SIZE",
     "MAX_RELATIONAL_SYMBOLS",
     "MAX_RELATIONAL_TABLE_ROWS",
     "MAX_RELATIONAL_TRANSPORT_TUPLES",

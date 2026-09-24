@@ -26,6 +26,7 @@ from jacobian.math.logic.relational_structures.values import (
     MAX_RELATIONAL_CARRIER,
     MAX_RELATIONAL_OPERATION_TABLE_CELLS,
     MAX_RELATIONAL_POLYMORPHISM_ARITY,
+    MAX_RELATIONAL_POLYMORPHISM_FAMILY_SIZE,
     MAX_RELATIONAL_SYMBOLS,
     MAX_RELATIONAL_TABLE_ROWS,
     MAX_RELATIONAL_TRANSPORT_TUPLES,
@@ -49,6 +50,10 @@ MAX_EMBEDDING_REFLECTION_CELLS = 1_048_576
 # coordinate operations needed to build each output tuple.
 MAX_POLYMORPHISM_RELATION_COMBINATIONS = 65_536
 MAX_POLYMORPHISM_COORDINATE_WORK = 1_000_000
+# Complete fixed-arity family enumeration charges candidate table generation,
+# all worst-case relation-product checks, and coordinatewise table work.
+MAX_POLYMORPHISM_FAMILY_WORK = 8_388_608
+MAX_POLYMORPHISM_FAMILY_OUTPUT_BYTES = 8 * 1_048_576
 MAX_INDUCED_SUBSTRUCTURE_WORK = 81_920
 MAX_RELATIONAL_REDUCT_WORK = 81_920
 MAX_RELATIONAL_PRODUCT_WORK = 1_048_576
@@ -194,6 +199,97 @@ def admit_polymorphism_check(
             ),
         )
     return table_cells, coordinate_work
+
+
+def admit_polymorphism_family(
+    source: FiniteRelationalStructure, arity: int
+) -> tuple[int, int, int, int]:
+    """Preflight the complete function family, preservation replay, and output.
+
+    Returns table cells per operation, total candidate tables, aggregate work,
+    and a conservative serialized-output bound. No function table or relation
+    membership index is constructed before this succeeds.
+    """
+
+    if not 1 <= arity <= MAX_RELATIONAL_POLYMORPHISM_ARITY:
+        raise OperationDomainValidationError(
+            location=("arity",),
+            code="relational.polymorphism.arity",
+            message=(
+                f"polymorphism arity must lie in 1..{MAX_RELATIONAL_POLYMORPHISM_ARITY}"
+            ),
+        )
+    carrier_size = source.carrier_size
+    table_cells = carrier_size**arity
+    if table_cells > MAX_RELATIONAL_OPERATION_TABLE_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("operation_table",),
+            code="relational.polymorphism.table_bound",
+            message=(
+                f"each complete operation table has {table_cells} cells, exceeding "
+                f"the {MAX_RELATIONAL_OPERATION_TABLE_CELLS}-cell envelope"
+            ),
+        )
+
+    # A positive-arity operation on the empty carrier is the unique empty
+    # function. Avoid the ambiguous integer expression 0**0 for its table
+    # space while preserving the ordinary n^(n^m) count on nonempty carriers.
+    candidate_tables = (
+        1
+        if carrier_size == 0
+        else carrier_size**table_cells
+    )
+    if candidate_tables > MAX_RELATIONAL_POLYMORPHISM_FAMILY_SIZE:
+        raise OperationResourceAdmissionError(
+            location=("arity",),
+            code="relational.polymorphism.family_candidate_bound",
+            message=(
+                f"the complete function space contains {candidate_tables} tables, "
+                f"exceeding the {MAX_RELATIONAL_POLYMORPHISM_FAMILY_SIZE}-candidate envelope"
+            ),
+        )
+
+    combinations_per_candidate = 0
+    coordinate_work_per_candidate = 0
+    relation_index_work = 0
+    for symbol, relation in zip(source.signature, source.relation_tables, strict=True):
+        combinations = len(relation) ** arity
+        combinations_per_candidate += combinations
+        coordinate_work_per_candidate += combinations * symbol.arity * arity
+        relation_index_work += len(relation) * (symbol.arity + 1)
+    work = relation_index_work + candidate_tables * (
+        table_cells + combinations_per_candidate + coordinate_work_per_candidate
+    )
+    if work > MAX_POLYMORPHISM_FAMILY_WORK:
+        raise OperationResourceAdmissionError(
+            location=("source", "relation_tables"),
+            code="relational.polymorphism.family_work_bound",
+            message=(
+                f"complete family enumeration requires at most {work} table-generation, "
+                f"relation-check, and coordinate steps, exceeding the "
+                f"{MAX_POLYMORPHISM_FAMILY_WORK}-step envelope"
+            ),
+        )
+
+    source_bytes = len(source.model_dump_json().encode("utf-8"))
+    coordinate_digits = len(str(carrier_size - 1)) if carrier_size else 1
+    per_table_bytes = 2 + table_cells * (coordinate_digits + 1)
+    output_bound = (
+        source_bytes
+        + 256
+        + candidate_tables * per_table_bytes
+        + max(candidate_tables - 1, 0)
+    )
+    if output_bound > MAX_POLYMORPHISM_FAMILY_OUTPUT_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("operation_tables",),
+            code="relational.polymorphism.family_output_bound",
+            message=(
+                f"the complete family has a conservative {output_bound}-byte output "
+                f"bound, exceeding the {MAX_POLYMORPHISM_FAMILY_OUTPUT_BYTES}-byte envelope"
+            ),
+        )
+    return table_cells, candidate_tables, work, output_bound
 
 
 def core_search_work(source_size: int, transport_tuples: int) -> int:

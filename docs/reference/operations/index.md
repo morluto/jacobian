@@ -20,3 +20,4 @@ that need more context than an operation card:
 - [Homogeneous monomial systems on algebraic tori](algebraic-torus-monomial-systems.md)
 - [Exact trigonometric-rational normalization](trigonometric-rational.md)
 - [Prime-field homogeneous fixed subspaces](prime-field-homogeneous-fixed-subspaces.md)
+- [Affine-semigroup Hilbert bases](affine-semigroup-hilbert-bases.md)

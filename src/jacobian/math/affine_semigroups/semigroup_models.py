@@ -1,12 +1,18 @@
 from __future__ import annotations
 
+from typing import Annotated
+
 from pydantic import Field
 
 from jacobian._exact import CanonicalRational, ExactInteger
 from jacobian._models import StrictModel
 from jacobian.math.affine_semigroups.semigroup import (
+    MAX_AFFINE_GENERATORS,
+    MAX_AFFINE_GRAPH_MOVES,
     AffineConfiguration,
     AffineFiber,
+    AffineFiberGraph,
+    AffineHilbertBasis,
     AffineMembershipResult,
     PositiveAffineSemigroup,
     PositiveGradingResult,
@@ -37,9 +43,35 @@ class AffineMembershipRequest(AffineFiberRequest):
     pass
 
 
+class AffineFiberGraphRequest(AffineFiberRequest):
+    moves: tuple[
+        Annotated[tuple[ExactInteger, ...], Field(max_length=MAX_AFFINE_GENERATORS)],
+        ...,
+    ] = Field(
+        description=(
+            "At most 16 nonzero integer kernel vectors on the generator axis. "
+            "Each move z must satisfy A z = 0 exactly."
+        ),
+        max_length=MAX_AFFINE_GRAPH_MOVES,
+    )
+
+
+class AffineHilbertBasisRequest(StrictModel):
+    configuration: AffineConfiguration = Field(
+        description=(
+            "Generators of a full-dimensional pointed cone in Z^2. The exact "
+            "primitive-ray determinant must be at most 1,000."
+        )
+    )
+
+
 __all__ = [
     "AffineFiber",
+    "AffineFiberGraph",
+    "AffineFiberGraphRequest",
     "AffineFiberRequest",
+    "AffineHilbertBasis",
+    "AffineHilbertBasisRequest",
     "AffineMembershipRequest",
     "AffineMembershipResult",
     "AffineSemigroupRequest",

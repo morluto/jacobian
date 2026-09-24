@@ -26,6 +26,7 @@ from jacobian.math.geometry.polytopes._models import (
     RationalVPolytope,
 )
 from jacobian.math.geometry.polytopes.complexes._models import (
+    MAX_COMPLEX_CELLS,
     ComplexPoint,
     PieceAssignment,
     PieceCompatibilityRow,
@@ -282,11 +283,15 @@ def _canonical_piece_assignments(
     pieces: tuple[PieceAssignment, ...],
 ) -> tuple[PieceAssignment, ...]:
     """Validate source-to-cell polynomial axes without computing continuity."""
-    if (
-        not isinstance(pieces, tuple)
-        or not pieces
-        or any(not isinstance(row, PieceAssignment) for row in pieces)
-    ):
+    if not isinstance(pieces, tuple) or not pieces:
+        _reject("piece_type", "pieces must be canonical cell-polynomial assignments")
+    if len(pieces) > MAX_COMPLEX_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("pieces",),
+            code="polytopal_complex.piece_count",
+            message="too many pieces",
+        )
+    if any(not isinstance(row, PieceAssignment) for row in pieces):
         _reject("piece_type", "pieces must be canonical cell-polynomial assignments")
     try:
         canonical_pieces = tuple(
@@ -315,12 +320,6 @@ def _canonical_piece_assignments(
     if any(row.polynomial.variables != variables for row in canonical_pieces):
         _reject(
             "piece_ring", "all pieces must use one identical ordered polynomial ring"
-        )
-    if len(canonical_pieces) > 16:
-        raise OperationResourceAdmissionError(
-            location=("pieces",),
-            code="polytopal_complex.piece_count",
-            message="too many pieces",
         )
     return canonical_pieces
 
@@ -1067,6 +1066,9 @@ def _admit_spline(
         and face.dimension == dimension - 1
         and smoothness >= 0
     )
+    row_bound = interface_count * _facet_remainder_dimension(
+        dimension, degree, smoothness
+    )
     # Each interface contributes at most one dense row per monomial.  Reserve
     # the full row-by-column materialization before SymPy or RationalMatrix
     # allocation; this bounds both the exact constraint output and elimination.
@@ -1076,6 +1078,13 @@ def _admit_spline(
             location=("complex",),
             code="polytopal_complex.spline_constraints",
             message="spline compatibility matrix exceeds the admitted envelope",
+        )
+    rank_work = 2 * row_bound * width * min(row_bound, width)
+    if rank_work > MAX_SPLINE_DIMENSION_RANK_WORK:
+        raise OperationResourceAdmissionError(
+            location=("complex",),
+            code="polytopal_complex.spline_rank_work",
+            message="spline rank and nullspace work exceeds the admitted envelope",
         )
     # The unconstrained case has a width-by-width nullspace basis.  Admit the
     # complete exact result (both matrices and all rational components) before
@@ -1199,6 +1208,93 @@ def _spline_basis_coordinates(
     return coordinates
 
 
+def _admit_spline_coordinate_materialization(
+    complex_value: PolytopalComplexClosureResult,
+    coefficient_axis: tuple[tuple[str, tuple[int, ...]], ...],
+    constraint_rows: tuple[tuple[Fraction, ...], ...],
+    vector: tuple[Fraction, ...],
+    width: int,
+) -> None:
+    """Bound retained basis bytes and exact work before nullspace expansion."""
+    maximum_entry_digits = max(
+        (
+            _decimal_digits_upper(value.numerator)
+            + _decimal_digits_upper(value.denominator)
+            for row in constraint_rows
+            for value in row
+        ),
+        default=1,
+    )
+    rank_bound = min(len(constraint_rows), width)
+    row_height = (width + 1) * maximum_entry_digits + len(str(width + 1))
+    determinant_digits = rank_bound * row_height + rank_bound * len(
+        str(max(rank_bound, 1))
+    )
+    if determinant_digits > MAX_CANONICAL_RATIONAL_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("degree",),
+            code="polytopal_complex.spline_coordinates_height",
+            message="the canonical spline basis may exceed the exact rational component bound",
+        )
+    basis_scalar_digits = max(1, 2 * determinant_digits + 4)
+    coordinate_scalar_digits = max(
+        (
+            _decimal_digits_upper(value.numerator)
+            + _decimal_digits_upper(value.denominator)
+            for value in vector
+        ),
+        default=1,
+    )
+    result_bound = (
+        (len(constraint_rows) * width + width * width) * (2 * basis_scalar_digits + 32)
+        + width * (coordinate_scalar_digits + 32)
+        + len(encode_strict_json(complex_value.model_dump(mode="json")))
+        + 512 * len(coefficient_axis)
+        + 4096
+    )
+    if result_bound > MAX_SPLINE_COORDINATE_OUTPUT_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("degree",),
+            code="polytopal_complex.spline_coordinates_output",
+            message="the source-bound spline space and coordinates exceed the output envelope",
+        )
+    matrix_work = len(constraint_rows) * width
+    if matrix_work + 3 * width * width > 32_000_000:
+        raise OperationResourceAdmissionError(
+            location=("degree",),
+            code="polytopal_complex.spline_coordinates_work",
+            message="spline membership and basis-coordinate work exceed the admitted envelope",
+        )
+    reconstruction_digits = width * (
+        coordinate_scalar_digits + basis_scalar_digits + len(str(width)) + 2
+    )
+    if reconstruction_digits > MAX_CANONICAL_RATIONAL_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("function",),
+            code="polytopal_complex.spline_coordinates_reconstruction_height",
+            message="reconstructing the basis coordinates may exceed the exact scalar envelope",
+        )
+    coefficient_digits = coordinate_scalar_digits
+    for row in constraint_rows:
+        value_digits = max(
+            (
+                _decimal_digits_upper(value.numerator)
+                + _decimal_digits_upper(value.denominator)
+                for value in row
+            ),
+            default=1,
+        )
+        if (
+            width * (value_digits + coefficient_digits + len(str(width)) + 2)
+            > MAX_CANONICAL_RATIONAL_DIGITS
+        ):
+            raise OperationResourceAdmissionError(
+                location=("function",),
+                code="polytopal_complex.spline_coordinates_height",
+                message="spline membership products exceed the exact scalar envelope",
+            )
+
+
 def spline_coordinates(
     request: SplineCoordinatesRequest,
 ) -> SplineCoordinatesResult:
@@ -1257,86 +1353,10 @@ def spline_coordinates(
     )
     if axis != coefficient_axis:
         raise ArithmeticError("spline coordinate coefficient-axis mismatch")
-    # Preflight the complete retained space and new coordinate vector before
-    # the nullspace basis backend expands.  The scalar-height bound follows
-    # Cramer's rule after row-wise denominator clearing of the admitted matrix.
-    maximum_entry_digits = max(
-        (
-            _decimal_digits_upper(value.numerator)
-            + _decimal_digits_upper(value.denominator)
-            for row in constraint_rows
-            for value in row
-        ),
-        default=1,
-    )
-    rank_bound = min(len(constraint_rows), width)
-    row_height = (width + 1) * maximum_entry_digits + len(str(width + 1))
-    determinant_digits = rank_bound * row_height + rank_bound * len(
-        str(max(rank_bound, 1))
-    )
-    if determinant_digits > MAX_CANONICAL_RATIONAL_DIGITS:
-        raise OperationResourceAdmissionError(
-            location=("degree",),
-            code="polytopal_complex.spline_coordinates_height",
-            message="the canonical spline basis may exceed the exact rational component bound",
-        )
-    basis_scalar_digits = max(1, 2 * determinant_digits + 4)
-    coordinate_scalar_digits = max(
-        (
-            _decimal_digits_upper(value.numerator)
-            + _decimal_digits_upper(value.denominator)
-            for value in coefficients
-        ),
-        default=1,
-    )
-    result_bound = (
-        (len(constraint_rows) * width + width * width) * (2 * basis_scalar_digits + 32)
-        + width * (coordinate_scalar_digits + 32)
-        + len(encode_strict_json(complex_value.model_dump(mode="json")))
-        + 512 * len(coefficient_axis)
-        + 4096
-    )
-    if result_bound > MAX_SPLINE_COORDINATE_OUTPUT_BYTES:
-        raise OperationResourceAdmissionError(
-            location=("degree",),
-            code="polytopal_complex.spline_coordinates_output",
-            message="the source-bound spline space and coordinates exceed the output envelope",
-        )
-    matrix_work = len(constraint_rows) * width
-    if matrix_work + width * width > 32_000_000:
-        raise OperationResourceAdmissionError(
-            location=("degree",),
-            code="polytopal_complex.spline_coordinates_work",
-            message="spline membership and basis-coordinate work exceed the admitted envelope",
-        )
-
     vector = tuple(coefficients)
-    for row in constraint_rows:
-        value_digits = max(
-            (
-                _decimal_digits_upper(value.numerator)
-                + _decimal_digits_upper(value.denominator)
-                for value in row
-            ),
-            default=1,
-        )
-        coefficient_digits = max(
-            (
-                _decimal_digits_upper(value.numerator)
-                + _decimal_digits_upper(value.denominator)
-                for value in vector
-            ),
-            default=1,
-        )
-        if (
-            width * (value_digits + coefficient_digits + len(str(width)) + 2)
-            > MAX_CANONICAL_RATIONAL_DIGITS
-        ):
-            raise OperationResourceAdmissionError(
-                location=("function",),
-                code="polytopal_complex.spline_coordinates_height",
-                message="spline membership products exceed the exact scalar envelope",
-            )
+    _admit_spline_coordinate_materialization(
+        complex_value, coefficient_axis, constraint_rows, vector, width
+    )
     if any(
         sum(
             (entry * value for entry, value in zip(row, vector, strict=True)),

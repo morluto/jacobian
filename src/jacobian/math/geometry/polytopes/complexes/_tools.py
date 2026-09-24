@@ -567,7 +567,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "Check one supplied cellwise polynomial against the exact degree and "
             "C^r compatibility conditions, then return its coordinates in the "
             "canonical nullspace basis together with the source-bound spline "
-            "space. Caller continuity ledgers are recomputed from the pieces."
+            "space. Caller continuity ledgers are ignored; membership is checked "
+            "against the exact compatibility matrix."
         ),
         request_type=SplineCoordinatesRequest,
         result_type=SplineCoordinatesResult,

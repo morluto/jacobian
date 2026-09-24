@@ -133,6 +133,117 @@ def test_piecewise_function_roundtrips_through_source_bound_spline_coordinates()
     assert revived == result
 
 
+def test_two_dimensional_source_pieces_reconstruct_from_spline_coordinates():
+    complex_value = polytopal_complex_closure(
+        (
+            RationalVPolytope(
+                space=RationalCoordinateSpace(axes=("x", "y")),
+                vertices=tuple(
+                    RationalPolytopeVertex(
+                        vertex_id=f"a{index}",
+                        coordinates=tuple(
+                            CanonicalRational(num=v, den=1) for v in point
+                        ),
+                    )
+                    for index, point in enumerate(((0, 0), (1, 0), (1, 1)))
+                ),
+            ),
+            RationalVPolytope(
+                space=RationalCoordinateSpace(axes=("x", "y")),
+                vertices=tuple(
+                    RationalPolytopeVertex(
+                        vertex_id=f"b{index}",
+                        coordinates=tuple(
+                            CanonicalRational(num=v, den=1) for v in point
+                        ),
+                    )
+                    for index, point in enumerate(((0, 0), (1, 1), (0, 1)))
+                ),
+            ),
+        )
+    )
+    cells = tuple(sorted(complex_value.maximal_cells, key=lambda cell: cell.cell_id))
+    polynomial = RationalPolynomial(
+        variables=("x", "y"),
+        polynomial=SparseRationalPolynomial(
+            terms=(
+                RationalPolynomialTerm(
+                    coefficient=CanonicalRational(num=1, den=1), exponents=(1, 0)
+                ),
+                RationalPolynomialTerm(
+                    coefficient=CanonicalRational(num=1, den=2), exponents=(0, 1)
+                ),
+            )
+        ),
+    )
+    function = piecewise_polynomial_from_maximal_pieces(
+        complex_value,
+        tuple(
+            PieceAssignment(cell_id=cell.cell_id, polynomial=polynomial)
+            for cell in cells
+        ),
+    )
+    result = spline_coordinates(
+        SplineCoordinatesRequest(function=function, degree=1, smoothness=0)
+    )
+
+    axis = result.spline_space.coefficient_axis
+    source_vector = tuple(
+        next(
+            (
+                term.coefficient.as_fraction()
+                for piece in function.pieces
+                if piece.cell_id == cell_id
+                for term in piece.polynomial.polynomial.terms
+                if term.exponents == monomial
+            ),
+            Fraction(0),
+        )
+        for cell_id, monomial in axis
+    )
+    basis = tuple(
+        tuple(entry.as_fraction() for entry in row)
+        for row in result.spline_space.nullspace_basis.entries
+    )
+    reconstructed = tuple(
+        sum(
+            (
+                coordinate.as_fraction() * basis[row][column]
+                for row, coordinate in enumerate(result.basis_coordinates)
+            ),
+            Fraction(0),
+        )
+        for column in range(len(axis))
+    )
+    assert result.spline_space.complex == complex_value
+    assert result.spline_space.complex.dimension == 2
+    assert reconstructed == source_vector
+
+
+def test_piece_count_is_rejected_before_assignment_canonicalization(monkeypatch):
+    function = _two_interval_function(((0, 1),), ((0, 1),))
+    malformed = PieceAssignment.model_construct(cell_id="invalid", polynomial=None)
+    forged = PiecewisePolynomialResult.model_construct(
+        complex=function.complex,
+        pieces=(malformed,) * 17,
+        compatibility=(),
+        status="COMPATIBLE",
+        obstruction_face_id=None,
+        obstruction_difference=None,
+    )
+
+    def should_not_canonicalize(*_args, **_kwargs):
+        raise AssertionError(
+            "piece assignments were canonicalized before count admission"
+        )
+
+    monkeypatch.setattr(PieceAssignment, "model_validate", should_not_canonicalize)
+    with pytest.raises(OperationResourceAdmissionError, match="too many pieces"):
+        spline_coordinates(
+            SplineCoordinatesRequest(function=forged, degree=1, smoothness=0)
+        )
+
+
 def test_coordinates_reject_exact_smoothness_and_degree_failures():
     continuous_not_c1 = _two_interval_function((), ((1, 1), (0, -1)))
     with pytest.raises(OperationDomainValidationError, match=r"C\^r interface"):

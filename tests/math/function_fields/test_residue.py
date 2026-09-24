@@ -11,7 +11,10 @@ from jacobian.math.function_fields._models import (
     PrimeFieldPolynomial,
     PrimeFieldRationalFunction,
 )
-from jacobian.math.function_fields.operations import function_field_place_residue
+from jacobian.math.function_fields.operations import (
+    function_field_place_residue,
+    function_field_place_valuation,
+)
 
 
 def _rf(
@@ -54,6 +57,50 @@ def test_finite_residue_is_exact_reduction_in_irreducible_quotient() -> None:
     )
     # z^2 = -z - 1 in GF(5)[z]/(z^2+z+1).
     assert result.residue.coordinates == (4, 4)
+
+
+def test_cubic_place_residue_uses_exact_extension_field_coordinates() -> None:
+    # x^3 + x + 1 is irreducible over GF(2). In its quotient, z^3 = z + 1,
+    # hence z^5 = z^2 + z + 1. The residue carrier must retain all three
+    # power-basis coordinates and the exact place modulus.
+    field = FiniteFunctionField(
+        characteristic=2,
+        defining_polynomial=(
+            PrimeFieldRationalFunction(
+                numerator=PrimeFieldPolynomial(characteristic=2, coefficients=(1,)),
+                denominator=PrimeFieldPolynomial(characteristic=2, coefficients=(1,)),
+            ),
+        ),
+    )
+    place = FunctionFieldPlace(
+        field=field,
+        kind="FINITE",
+        prime_polynomial=PrimeFieldPolynomial(
+            characteristic=2, coefficients=(1, 1, 0, 1)
+        ),
+        degree=3,
+    )
+    x_to_fifth = FiniteFunctionFieldElement(
+        field=field,
+        coordinates=(
+            PrimeFieldRationalFunction(
+                numerator=PrimeFieldPolynomial(
+                    characteristic=2, coefficients=(0, 0, 0, 0, 0, 1)
+                ),
+                denominator=PrimeFieldPolynomial(
+                    characteristic=2, coefficients=(1,)
+                ),
+            ),
+        ),
+    )
+
+    assert function_field_place_valuation(place, x_to_fifth) == 0
+    result = function_field_place_residue(place, x_to_fifth)
+
+    assert result.residue.presentation == FiniteFieldPresentation.model_construct(
+        characteristic=2, modulus_coefficients=(1, 1, 0, 1), generator="z"
+    )
+    assert result.residue.coordinates == (1, 1, 1)
 
 
 def test_residue_cancels_a_common_factor_before_reduction() -> None:

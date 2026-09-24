@@ -1,6 +1,8 @@
 """Free associative algebra word and noncommutative polynomial ownership."""
 
 from jacobian.math.free_algebras._models import (
+    FreeAlgebraFactorAvoidanceDFA,
+    FreeAlgebraFactorAvoidanceRequest,
     FreeAlgebraIdeal,
     FreeAlgebraIdealDegreeComponentRequest,
     FreeAlgebraIdealDegreeComponentResult,
@@ -27,6 +29,7 @@ from jacobian.math.free_algebras.operations import (
     add,
     compare_words,
     concatenate_words,
+    factor_avoidance_dfa,
     groebner_shirshov_through_degree,
     ideal_degree_component,
     ideal_generated_prefix,
@@ -44,6 +47,8 @@ from jacobian.math.free_algebras.operations import (
 )
 
 __all__ = [
+    "FreeAlgebraFactorAvoidanceDFA",
+    "FreeAlgebraFactorAvoidanceRequest",
     "FreeAlgebraIdeal",
     "FreeAlgebraIdealDegreeComponentRequest",
     "FreeAlgebraIdealDegreeComponentResult",
@@ -68,6 +73,7 @@ __all__ = [
     "add",
     "compare_words",
     "concatenate_words",
+    "factor_avoidance_dfa",
     "groebner_shirshov_through_degree",
     "ideal_degree_component",
     "ideal_generated_prefix",

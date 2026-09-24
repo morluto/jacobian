@@ -13,10 +13,18 @@ from jacobian.math.number_theory.modular_forms.character_basis_models import (
     ModularCharacterBasisRequest,
     ModularCharacterCoordinatesProductRequest,
     ModularCharacterCoordinatesRequest,
+    ModularCharacterCoordinatesTransportRequest,
+    ModularCharacterEqualityRequest,
+    ModularCharacterEqualityResult,
     ModularCharacterHeckeMatrix,
     ModularCharacterHeckeMatrixRequest,
     ModularCharacterHeckeRequest,
     ModularCharacterQExpansion,
+    ModularCharacterTransportedForm,
+)
+from jacobian.math.number_theory.modular_forms.character_transport import (
+    modular_character_coordinates_equal_in_common_space,
+    modular_character_coordinates_transport,
 )
 from jacobian.math.number_theory.modular_forms.values import (
     ModularFormCoordinates,
@@ -25,7 +33,7 @@ from jacobian.math.number_theory.modular_forms.values import (
 
 
 def _compute(request: ModularCharacterBasisRequest) -> ModularCharacterBasis:
-    return modular_character_basis_q_expansions(request.space)
+    return modular_character_basis_q_expansions(request.space, request.precision)
 
 
 def _coordinates_q_expansion(
@@ -48,6 +56,20 @@ def _product(
     request: ModularCharacterCoordinatesProductRequest,
 ) -> ModularFormFieldQExpansion:
     return modular_character_coordinates_product(request.left, request.right)
+
+
+def _transport(
+    request: ModularCharacterCoordinatesTransportRequest,
+) -> ModularCharacterTransportedForm:
+    return modular_character_coordinates_transport(request.form, request.inclusion)
+
+
+def _global_equal(
+    request: ModularCharacterEqualityRequest,
+) -> ModularCharacterEqualityResult:
+    return modular_character_coordinates_equal_in_common_space(
+        request.left, request.right
+    )
 
 
 def _character_form_example(coordinate: int = 2) -> dict[str, object]:
@@ -107,6 +129,36 @@ def _character_form_example(coordinate: int = 2) -> dict[str, object]:
 
 
 TOOLS: MathTools = (
+    MathTool(
+        operation_id="modular_form.character_coordinates.transport.compute",
+        title="Transport a character form through explicit inflation",
+        description=(
+            "Map an S2 character form from level 13, 26, or 39 into a nested "
+            "level-26 or level-39 cusp space. The request carries the explicit "
+            "Dirichlet-character inflation and identity Q(zeta_6) field map. "
+            "The result retains both parents, target coordinates, and the exact "
+            "q-prefix through the target Sturm bound."
+        ),
+        request_type=ModularCharacterCoordinatesTransportRequest,
+        result_type=ModularCharacterTransportedForm,
+        run=_transport,
+        tags=("modular-forms", "characters", "transport", "exact"),
+    ),
+    MathTool(
+        operation_id="modular_form.character.equal.check",
+        title="Check global equality in a common character space",
+        description=(
+            "Compare two source forms after checking their explicit order-six "
+            "character inflations into the identical S2 target at level 26 or "
+            "39. Recompute each target representation and compare exact "
+            "coefficients through the target Sturm bound; retained target "
+            "coordinates and prefixes must agree with their source inclusions."
+        ),
+        request_type=ModularCharacterEqualityRequest,
+        result_type=ModularCharacterEqualityResult,
+        run=_global_equal,
+        tags=("modular-forms", "characters", "equality", "exact"),
+    ),
     MathTool(
         operation_id="modular_form.character_hecke_matrix.compute",
         title="Compute a Hecke matrix on a character-valued modular-form space",
@@ -182,7 +234,9 @@ TOOLS: MathTools = (
             "M or S spaces with an even order-6 character of conductor 13 at "
             "levels 13, 26, or 39. Dimensions are established by the bounded "
             "Cohen-Oesterle formula and checked against PARI; the result retains "
-            "the exact character and coefficient-field parents."
+            "the exact character and coefficient-field parents. An optional "
+            "precision may extend the canonical basis through a nested target's "
+            "Sturm bound; it must be at least the source bound and at most 128."
         ),
         request_type=ModularCharacterBasisRequest,
         result_type=ModularCharacterBasis,

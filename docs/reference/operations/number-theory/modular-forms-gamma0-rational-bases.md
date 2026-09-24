@@ -30,8 +30,8 @@ arithmetic, compares that dimension with PARI, and checks that the returned
 prefix has the full expected rank before publishing a basis. The
 `S_2(Gamma0(13), chi)` one-dimensional basis retains its established
 identifier, which existing character-coordinate operations consume; the
-generalized bases do not imply coordinate, operator, transport, or equality
-support outside that original parent. The formula follows Quer, “Dimensions
+generalized bases do not imply coordinate or operator support outside the
+documented parents. The formula follows Quer, “Dimensions
 of spaces of modular forms,” Theorem 2.3 and the definitions preceding it
 ([paper](https://www.impan.pl/shop/publication/transaction/download/product/82407)).
 For this admitted family, with `k=2` and conductor `c=13`, the cusp dimension
@@ -48,6 +48,25 @@ formula implementation.
 See [level-one bases and coordinates](modular-forms-level-one-bases-coordinates.md)
 for the original exact q-prefix and same-space character-coordinate contract.
 Other character spaces and general field-valued Gamma0 bases remain unsupported.
+
+For the order-6 `S_2` slice, `modular_form.character_coordinates.transport.compute`
+supports explicit nested-level inclusion from level 13, 26, or 39 into level
+26 or 39 when the source level divides the target. The request preserves both
+exact space parents and carries the character pullback and identity map of
+`Q(zeta_6)` parents. It checks the character map on every target unit and
+requires each character's explicit modulus to equal its space level. The
+operation returns target coordinates and the exact q-prefix through the target
+Sturm precision, extending the source basis while retaining its canonical
+q-Sturm RREF normalization when needed.
+
+`modular_form.character.equal.check` compares two transported forms only when
+they land in the identical target space and coefficient field. It recomputes
+each inclusion from the retained source form, checks the submitted target
+coordinates and q-prefix, and compares all coefficients through the target
+Sturm bound. This is a narrow global-equality decision for these represented
+spaces; it does not add arbitrary-character transport, implicit character
+inflation, coefficient-field embeddings, or Hecke support. The dimension
+formula and PARI cross-check boundaries above remain unchanged.
 
 For this represented character slice,
 `modular_form.character_hecke_matrix.compute` returns the exact 1-by-1 matrix

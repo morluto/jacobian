@@ -24,7 +24,12 @@ canonical basis and compares their exact rational tuples. Since a
 `ModularFormCoordinates` value represents a complete form in a deterministic
 basis, this decides global equality without relying on a finite q-prefix. The
 operation requires the same exact space; cross-level or cross-character
-comparisons need an explicit transport into a common space. An unconsumed,
+comparisons need an explicit transport into a common space. For the narrow
+order-6 `S_2` family at levels 13, 26, and 39, explicit character inflation
+and common-target comparison are available through
+`modular_form.character_coordinates.transport.compute` and
+`modular_form.character.equal.check`, as described in [Rational Gamma0
+modular-form bases](modular-forms-gamma0-rational-bases.md). An unconsumed,
 unvalidated coordinate payload does not by itself establish membership in that
 space. For q-prefixes,
 `modular_form.space.sturm_bound.compute` returns the exact Sturm integer; the
@@ -62,8 +67,10 @@ PARI basis prefix through `q^(2n)`, applies the exact character-valued Hecke
 coefficient formula, and reconstructs the image in the same exact coordinate
 space through the Sturm bound. Its coefficient-height admission uses the
 weight-2 eigenform bound `|a_m| <= sigma_1(m) <= m(m+1)/2` across the entire
-requested prefix. No implicit embeddings across characters,
-fields, levels, or basis versions are defined.
+requested prefix. This coordinate operation does not define implicit
+embeddings across characters, fields, levels, or basis versions. The separate
+explicit-inflation path above preserves and validates both source and target
+parents.
 
 For rational scalar multiples of the two conjugate character forms, the
 operation `modular_form.character_coordinates.product.compute` multiplies

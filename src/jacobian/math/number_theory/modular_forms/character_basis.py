@@ -200,25 +200,39 @@ def _coefficient(
 
 def modular_character_basis_q_expansions(
     space: ModularFormSpace,
+    precision: int | None = None,
 ) -> ModularCharacterBasis:
-    """Construct the exact Sturm-determining q-prefix basis for the admitted space."""
+    """Construct the exact canonical basis, optionally extending its q-prefix."""
     space, field, character_request = _require_basis_space(space)
-    return _character_basis_from_admission(space, field, character_request)
+    return _character_basis_from_admission(
+        space, field, character_request, precision=precision
+    )
 
 
 def _character_basis_from_admission(
     space: ModularFormSpace,
     field: RationalCyclotomicField,
     character_request: dict[str, object],
+    *,
+    precision: int | None = None,
+    admitted_dimensions: tuple[int, int] | None = None,
 ) -> ModularCharacterBasis:
     """Construct the basis after source and character admission has completed."""
     # Quer, Thm. 2.3, gives the exact independent dimension formula for this
     # bounded character family. Admission is complete before entering PARI.
-    cusp_dimension, full_dimension = character_space_dimensions(
-        space.level, space.weight, space.character, field
+    cusp_dimension, full_dimension = (
+        character_space_dimensions(space.level, space.weight, space.character, field)
+        if admitted_dimensions is None
+        else admitted_dimensions
     )
     dimension = cusp_dimension if space.kind == "S" else full_dimension
-    precision = _character_sturm_precision(space)
+    sturm_precision = _character_sturm_precision(space)
+    if precision is None:
+        precision = sturm_precision
+    if type(precision) is not int or not sturm_precision <= precision <= 128:
+        _domain(
+            "character basis precision must reach the space Sturm bound and remain at most 128"
+        )
     work = precision * max(1, dimension) ** 2 * field.degree * 16
     if field.degree != 2 or precision > MAX_PARI_BASIS_PRECISION or dimension > 32:
         _domain(

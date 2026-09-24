@@ -36,4 +36,6 @@ modular operator actions accept canonical basis coordinates, whose q-expansions
 and space membership are defined by the basis construction. Exact character-bound dimensions, Sturm bound, and bases
 also support M_1 and M_3 on Gamma0(4) with chi_-4; the two-dimensional
 weight-three basis is documented separately. Cross-space equality for these
-character-valued spaces is not currently supported.
+character-valued spaces is supported only through the explicit bounded
+inflation and common-target comparison documented in [Rational Gamma0
+modular-form bases](modular-forms-gamma0-rational-bases.md).

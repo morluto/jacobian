@@ -192,12 +192,54 @@ def test_domain_limits_and_polynomial_axis_are_explicit() -> None:
         )
 
 
-def test_generator_candidate_envelope_rejects_before_graver_enumeration(
+def test_toric_ideal_admits_the_textbook_three_weight_configuration() -> None:
+    ideal = toric_ideal(_configuration((1, 2, 3)))
+
+    assert ideal.variables == ("x1", "x2", "x3")
+    # One binomial per independently verified Graver vector of [1 2 3]
+    # (see tests/math/affine_semigroups/test_graver_basis.py), in sorted order.
+    assert _exponent_coefficients(ideal) == (
+        (((0, 3, 0), 1), ((0, 0, 2), -1)),
+        (((1, 0, 1), 1), ((0, 2, 0), -1)),
+        (((1, 1, 0), 1), ((0, 0, 1), -1)),
+        (((2, 0, 0), 1), ((0, 1, 0), -1)),
+        (((3, 0, 0), 1), ((0, 0, 1), -1)),
+    )
+    for generator in ideal.generators:
+        weighted_degrees = {
+            sum(
+                weight * exponent
+                for weight, exponent in zip((1, 2, 3), term.exponents, strict=True)
+            )
+            for term in generator.polynomial.terms
+        }
+        assert len(weighted_degrees) == 1
+    assert verify_groebner_basis(groebner_basis(ideal, "lex"))
+
+
+def test_candidate_work_envelope_rejects_before_graver_enumeration(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def fail_if_called(_configuration):
-        raise AssertionError("Graver enumeration ran before the 64-generator preflight")
+    def fail_if_called(*_args, **_kwargs):
+        raise AssertionError(
+            "Graver enumeration ran before the work-envelope preflight"
+        )
 
     monkeypatch.setattr(graver_module, "_enumerate_graver_vectors", fail_if_called)
-    with pytest.raises(OperationResourceAdmissionError, match="more than 64"):
+    with pytest.raises(
+        OperationResourceAdmissionError, match="candidate-pair work exceeds"
+    ):
+        toric_ideal(_configuration((1, 2, 10)))
+
+
+def test_generator_bound_admits_on_the_exact_enumerated_basis_size(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(graver_module, "MAX_TORIC_IDEAL_GENERATORS", 4)
+    # [1 2 3] has exactly five Graver generators, so it is refused...
+    with pytest.raises(
+        OperationResourceAdmissionError, match="more than 4 ideal generators"
+    ):
         toric_ideal(_configuration((1, 2, 3)))
+    # ...while a four-generator presentation stays admitted at the limit.
+    assert len(toric_ideal(_configuration((1, 1, 2))).generators) == 4

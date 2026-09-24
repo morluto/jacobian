@@ -6,7 +6,10 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.canonical import encode_strict_json
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.logic.automata.transducers import (
     FiniteAlphabet,
     RationalEdge,
@@ -22,12 +25,15 @@ from jacobian.math.logic.automata.transducers import (
     trim_subsequential,
     verify_composition,
     verify_subsequential_run,
+    word_morphism_to_subsequential,
 )
 from jacobian.math.logic.automata.transducers._models import (
     ComposeRequest,
     MinimizeRequest,
     MinimizeResult,
+    RationalRelationInverseRequest,
     RelationPathReplayRequest,
+    SubseqIdentityRequest,
     SubseqRunRequest,
     TrimRequest,
     TrimResult,
@@ -35,11 +41,19 @@ from jacobian.math.logic.automata.transducers._models import (
 from jacobian.math.logic.automata.transducers._tools import (
     TOOLS,
     compute_compose,
+    compute_identity,
     compute_minimize,
+    compute_relation_inverse,
     compute_relation_path_replay,
     compute_run,
     compute_trim,
 )
+from jacobian.math.logic.automata.transducers.values import (
+    MAX_FST_RESULT_WORD_LENGTH,
+    MAX_FST_RUN_RESULT_BYTES,
+)
+from jacobian.math.logic.languages.words.operations import apply_morphism
+from jacobian.math.logic.languages.words.values import FiniteWord, WordMorphism
 
 
 def _flip() -> SubsequentialTransducer:
@@ -82,7 +96,195 @@ def test_native_boundaries_reject_model_constructed_carriers() -> None:
         replay_rational_path(forged_rational, 0, ())
 
 
+class TestSubsequentialIdentityOperation:
+    def test_identity_runs_match_direct_word_oracle_and_keep_parent(self) -> None:
+        request = SubseqIdentityRequest(
+            alphabet=FiniteAlphabet(symbols=("b", "a")), alphabet_id="two-letters"
+        )
+        result = compute_identity(request)
+        assert result.input_alphabet == request.alphabet
+        assert result.output_alphabet == request.alphabet
+        assert result.input_alphabet_id == result.output_alphabet_id == "two-letters"
+        assert result.transitions == (
+            SubseqTransition(source=0, input_symbol=0, target=0, output=(0,)),
+            SubseqTransition(source=0, input_symbol=1, target=0, output=(1,)),
+        )
+        assert result.final_outputs == (SubseqFinalOutput(state=0, output=()),)
+
+        words = [()]
+        for length in range(1, 6):
+            words.extend(
+                tuple((bits >> shift) & 1 for shift in reversed(range(length)))
+                for bits in range(1 << length)
+            )
+        for word in words:
+            run = run_subsequential(result, word)
+            assert run.status == "OUTPUT"
+            assert run.output == word
+
+    def test_identity_operation_manifest_and_alphabet_bound(self) -> None:
+        tool = next(
+            item
+            for item in TOOLS
+            if item.operation_id == "transducer.subsequential.identity.compute"
+        )
+        request = tool.request_type.model_validate(tool.examples[0].input)
+        result = tool.run(request)
+        assert result.input_alphabet == FiniteAlphabet(symbols=("a", "b"))
+
+        assert len(identity_transducer(32).transitions) == 32
+        with pytest.raises(OperationResourceAdmissionError) as error:
+            identity_transducer(33)
+        assert error.value.errors()[0]["type"] == (
+            "finite_state_transducer.identity_alphabet_bound_exceeded"
+        )
+
+
+class TestWordMorphismTransducerConversion:
+    def test_conversion_matches_independent_morphism_evaluator(self) -> None:
+        morphism = WordMorphism(
+            source_alphabet=("a", "b"),
+            target_alphabet=("y", "x"),
+            images=(("x", "y"), ()),
+        )
+        transducer = word_morphism_to_subsequential(morphism)
+        assert transducer.input_alphabet == FiniteAlphabet(symbols=("a", "b"))
+        assert transducer.output_alphabet == FiniteAlphabet(symbols=("y", "x"))
+        assert tuple(edge.output for edge in transducer.transitions) == ((1, 0), ())
+        assert transducer.final_outputs == (SubseqFinalOutput(state=0, output=()),)
+
+        words = [()]
+        for length in range(1, 5):
+            words.extend(
+                tuple((bits >> shift) & 1 for shift in reversed(range(length)))
+                for bits in range(1 << length)
+            )
+        for indices in words:
+            source_word = FiniteWord(
+                alphabet=morphism.source_alphabet,
+                letters=tuple(morphism.source_alphabet[index] for index in indices),
+            )
+            expected = apply_morphism(morphism, source_word)
+            outcome = run_subsequential(transducer, indices)
+            assert outcome.status == "OUTPUT"
+            actual_letters = tuple(
+                morphism.target_alphabet[index] for index in outcome.output
+            )
+            assert actual_letters == expected.letters
+
+    def test_transition_output_limit_is_admitted_before_conversion(self) -> None:
+        accepted = WordMorphism(
+            source_alphabet=("a",), target_alphabet=("x",), images=(("x",) * 512,)
+        )
+        assert (
+            len(word_morphism_to_subsequential(accepted).transitions[0].output) == 512
+        )
+        rejected = WordMorphism(
+            source_alphabet=("a",), target_alphabet=("x",), images=(("x",) * 513,)
+        )
+        with pytest.raises(OperationResourceAdmissionError) as error:
+            word_morphism_to_subsequential(rejected)
+        assert error.value.errors()[0]["type"] == (
+            "finite_state_transducer.morphism_image_bound_exceeded"
+        )
+
+    def test_alphabet_larger_than_transducer_carrier_is_rejected(self) -> None:
+        symbols = tuple(f"s{index}" for index in range(33))
+        morphism = WordMorphism(
+            source_alphabet=symbols,
+            target_alphabet=("x",),
+            images=(("x",),) * 33,
+        )
+        with pytest.raises(OperationResourceAdmissionError) as error:
+            word_morphism_to_subsequential(morphism)
+        assert error.value.errors()[0]["type"] == (
+            "finite_state_transducer.morphism_alphabet_bound_exceeded"
+        )
+
+
 class TestSubsequentialRun:
+    @staticmethod
+    def _observed(result: object) -> tuple[object, ...]:
+        return (
+            result.status,
+            result.output,
+            result.final_state,
+            result.undefined_position,
+            result.partial_output,
+            result.state_trace,
+            result.transition_outputs,
+            result.cumulative_outputs,
+            result.final_output,
+            result.obstruction_position,
+            result.obstruction_state,
+            result.obstruction_symbol,
+        )
+
+    @staticmethod
+    def _direct_run(
+        transducer: SubsequentialTransducer, word: tuple[int, ...]
+    ) -> tuple[object, ...]:
+        """Independent small evaluator used as a semantic oracle."""
+        rows = {(t.source, t.input_symbol): t for t in transducer.transitions}
+        final_rows = {row.state: row.output for row in transducer.final_outputs}
+        state = transducer.initial_state
+        states = [state]
+        step_outputs: list[tuple[int, ...]] = []
+        prefixes = [()]
+        emitted: tuple[int, ...] = ()
+        for position, symbol in enumerate(word):
+            transition = rows.get((state, symbol))
+            if transition is None:
+                return (
+                    "UNDEFINED_TRANSITION",
+                    (),
+                    state,
+                    position,
+                    emitted,
+                    tuple(states),
+                    tuple(step_outputs),
+                    tuple(prefixes),
+                    (),
+                    position,
+                    state,
+                    symbol,
+                )
+            state = transition.target
+            emitted = emitted + transition.output
+            states.append(state)
+            step_outputs.append(transition.output)
+            prefixes.append(emitted)
+        if state not in final_rows:
+            return (
+                "NONFINAL_DOMAIN_STATE",
+                (),
+                state,
+                None,
+                emitted,
+                tuple(states),
+                tuple(step_outputs),
+                tuple(prefixes),
+                (),
+                len(word),
+                state,
+                None,
+            )
+        final = final_rows[state]
+        return (
+            "OUTPUT",
+            emitted + final,
+            state,
+            None,
+            (),
+            tuple(states),
+            tuple(step_outputs),
+            tuple(prefixes),
+            final,
+            None,
+            None,
+            None,
+        )
+
     def test_successful_empty_output_is_distinct(self) -> None:
         transducer = SubsequentialTransducer(
             input_alphabet_size=1,
@@ -95,34 +297,121 @@ class TestSubsequentialRun:
             final_outputs=(SubseqFinalOutput(state=0, output=()),),
         )
 
-        assert run_subsequential(transducer, (0, 0)) == (
-            "OUTPUT",
-            (),
-            0,
-            None,
-            (),
+        assert self._observed(run_subsequential(transducer, (0, 0))) == (
+            self._direct_run(transducer, (0, 0))
         )
+        outcome = run_subsequential(transducer, (0, 0))
+        assert outcome.state_trace == (0, 0, 0)
+        assert outcome.transition_outputs == ((), ())
+        assert outcome.cumulative_outputs == ((), (), ())
+        assert outcome.final_output == ()
 
     def test_undefined_transition_preserves_partial_trace(self) -> None:
         transducer = _flip()
 
-        status, output, state, position, partial = run_subsequential(
-            transducer.model_copy(update={"transitions": transducer.transitions[:1]}),
-            (0, 1),
+        source = transducer.model_copy(
+            update={"transitions": transducer.transitions[:1]}
         )
+        outcome = run_subsequential(source, (0, 1))
 
-        assert (status, output, state, position, partial) == (
+        assert (
+            outcome.status,
+            outcome.output,
+            outcome.final_state,
+            outcome.undefined_position,
+            outcome.partial_output,
+        ) == (
             "UNDEFINED_TRANSITION",
             (),
             0,
             1,
             (1,),
         )
+        assert self._observed(outcome) == self._direct_run(source, (0, 1))
+        outcome = compute_run(
+            SubseqRunRequest(
+                transducer=transducer.model_copy(
+                    update={"transitions": transducer.transitions[:1]}
+                ),
+                word=(0, 1),
+            )
+        )
+        assert (outcome.obstruction_position, outcome.obstruction_state) == (1, 0)
+        assert outcome.obstruction_symbol == 1
+        assert outcome.transition_outputs == ((1,),)
+        assert outcome.cumulative_outputs == ((), (1,))
 
     def test_nonfinal_state_is_not_a_function_value(self) -> None:
         transducer = _flip().model_copy(update={"final_outputs": ()})
 
-        assert run_subsequential(transducer, (0,))[0] == "NONFINAL_DOMAIN_STATE"
+        assert self._observed(run_subsequential(transducer, (0,))) == self._direct_run(
+            transducer, (0,)
+        )
+
+    def test_trace_records_final_output_separately(self) -> None:
+        transducer = SubsequentialTransducer(
+            input_alphabet_size=2,
+            output_alphabet_size=2,
+            state_count=3,
+            initial_state=0,
+            transitions=(
+                SubseqTransition(source=0, input_symbol=0, target=1, output=()),
+                SubseqTransition(source=1, input_symbol=1, target=2, output=(1, 0)),
+            ),
+            final_outputs=(SubseqFinalOutput(state=2, output=(0,)),),
+        )
+
+        result = run_subsequential(transducer, (0, 1))
+
+        assert self._observed(result) == self._direct_run(transducer, (0, 1))
+        assert result.output == (1, 0, 0)
+        assert result.state_trace == (0, 1, 2)
+        assert result.transition_outputs == ((), (1, 0))
+        assert result.cumulative_outputs == ((), (), (1, 0))
+        assert result.final_output == (0,)
+
+    def test_run_result_byte_bound_is_checked_before_trace_expansion(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import jacobian.math.logic.automata.transducers.operations as kernels
+
+        monkeypatch.setattr(kernels, "MAX_FST_RUN_RESULT_BYTES", 1)
+        monkeypatch.setattr(
+            kernels,
+            "_transition_map",
+            lambda _transducer: pytest.fail("trace expansion began before admission"),
+        )
+        with pytest.raises(OperationResourceAdmissionError) as error:
+            run_subsequential(_flip(), (0,))
+        assert (
+            error.value.errors()[0]["type"]
+            == "finite_state_transducer.run_result_bytes_exceeded"
+        )
+
+    def test_maximum_admitted_output_keeps_cumulative_trace_within_bytes(self) -> None:
+        transducer = SubsequentialTransducer(
+            input_alphabet_size=1,
+            output_alphabet_size=1,
+            state_count=1,
+            initial_state=0,
+            transitions=(
+                SubseqTransition(
+                    source=0,
+                    input_symbol=0,
+                    target=0,
+                    output=(0,) * 8,
+                ),
+            ),
+            final_outputs=(SubseqFinalOutput(state=0, output=()),),
+        )
+        result = compute_run(SubseqRunRequest(transducer=transducer, word=(0,) * 512))
+
+        assert len(result.output) == MAX_FST_RESULT_WORD_LENGTH
+        assert len(result.cumulative_outputs) == 513
+        assert len(result.cumulative_outputs[-1]) == MAX_FST_RESULT_WORD_LENGTH
+        assert len(encode_strict_json(result.model_dump(mode="json"))) <= (
+            MAX_FST_RUN_RESULT_BYTES
+        )
 
     def test_adapter_binds_transducer_and_word(self) -> None:
         request = SubseqRunRequest(transducer=_flip(), word=(0, 1))
@@ -131,6 +420,10 @@ class TestSubsequentialRun:
         assert result.transducer == request.transducer
         assert result.word == request.word
         assert result.output == (1, 0)
+        assert result.state_trace == (0, 0, 0)
+        assert result.transition_outputs == ((1,), (0,))
+        assert result.cumulative_outputs == ((), (1,), (1, 0))
+        assert result.final_output == ()
 
         decoded = type(result).model_validate_json(result.model_dump_json())
         assert verify_subsequential_run(decoded)
@@ -172,7 +465,7 @@ class TestComposition:
     def test_flip_after_flip_is_identity(self) -> None:
         composite = compose_subsequential(_flip(), _flip())
 
-        assert run_subsequential(composite, (0, 1, 0))[1] == (0, 1, 0)
+        assert run_subsequential(composite, (0, 1, 0)).output == (0, 1, 0)
 
     def test_second_nonfinal_after_first_final_output_rejects_word(self) -> None:
         first = SubsequentialTransducer(
@@ -197,7 +490,7 @@ class TestComposition:
         composite = compose_subsequential(first, second)
 
         assert composite.final_outputs == ()
-        assert run_subsequential(composite, ())[0] == "NONFINAL_DOMAIN_STATE"
+        assert run_subsequential(composite, ()).status == "NONFINAL_DOMAIN_STATE"
 
     def test_unreachable_cartesian_states_do_not_block_composition(self) -> None:
         large = _flip().model_copy(update={"state_count": 9})
@@ -205,7 +498,7 @@ class TestComposition:
 
         result = compute_compose(request)
         assert result.transducer.state_count == 1
-        assert run_subsequential(result.transducer, (0, 1, 0))[1] == (0, 1, 0)
+        assert run_subsequential(result.transducer, (0, 1, 0)).output == (0, 1, 0)
 
     def test_adapter_binds_both_operands(self) -> None:
         request = ComposeRequest(first=identity_transducer(2), second=_flip())
@@ -213,7 +506,7 @@ class TestComposition:
 
         assert result.first == request.first
         assert result.second == request.second
-        assert run_subsequential(result.transducer, (0, 1))[1] == (1, 0)
+        assert run_subsequential(result.transducer, (0, 1)).output == (1, 0)
         decoded = type(result).model_validate_json(result.model_dump_json())
         assert verify_composition(decoded)
         forged = decoded.transducer.model_copy(
@@ -224,7 +517,7 @@ class TestComposition:
 
 class TestNativeTransformations:
     def test_identity_is_exact(self) -> None:
-        assert run_subsequential(identity_transducer(3), (0, 1, 2))[1] == (0, 1, 2)
+        assert run_subsequential(identity_transducer(3), (0, 1, 2)).output == (0, 1, 2)
 
     def test_trim_removes_unreachable_state(self) -> None:
         source = SubsequentialTransducer(
@@ -321,8 +614,8 @@ class TestNativeTransformations:
         def function_value(
             transducer: SubsequentialTransducer, word: tuple[int, ...]
         ) -> tuple[bool, tuple[int, ...]]:
-            status, output, *_ = run_subsequential(transducer, word)
-            return (status == "OUTPUT", output)
+            outcome = run_subsequential(transducer, word)
+            return (outcome.status == "OUTPUT", outcome.output)
 
         for length in range(6):
             for raw in product((0, 1), repeat=length):
@@ -434,11 +727,39 @@ class TestNativeTransformations:
         assert inverse.edges[1].input_label == (0,)
         assert inverse.edges[1].output_label == (1,)
 
+    def test_rational_inverse_is_published_and_involutive_after_json_round_trip(
+        self,
+    ) -> None:
+        relation = _relation()
+        tool = next(
+            tool
+            for tool in TOOLS
+            if tool.operation_id == "transducer.relation.inverse.compute"
+        )
+        request = RationalRelationInverseRequest(
+            transducer=RationalTransducer.model_validate_json(
+                relation.model_dump_json()
+            )
+        )
+
+        inverse = tool.run(request)
+        twice = compute_relation_inverse(
+            RationalRelationInverseRequest(transducer=inverse)
+        )
+
+        assert inverse.input_alphabet == relation.output_alphabet
+        assert inverse.output_alphabet == relation.input_alphabet
+        assert twice == relation
+
     def test_only_audited_outcomes_are_public(self) -> None:
         assert {tool.operation_id for tool in TOOLS} == {
+            "transducer.relation.inverse.compute",
             "transducer.relation.path.replay.compute",
             "transducer.subsequential.compose.compute",
+            "transducer.subsequential.from_word_morphism.compute",
+            "transducer.subsequential.identity.compute",
             "transducer.subsequential.minimize.compute",
+            "transducer.subsequential.reachable_states.compute",
             "transducer.subsequential.run.compute",
             "transducer.subsequential.trim.compute",
         }

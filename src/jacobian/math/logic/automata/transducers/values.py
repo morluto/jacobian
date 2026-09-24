@@ -8,32 +8,27 @@ from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+from jacobian.math.logic.finite_alphabet import (
+    MAX_FINITE_ALPHABET_SIZE,
+    MAX_FINITE_ALPHABET_SYMBOL_LENGTH,
+    FiniteAlphabet,
+)
 
 MAX_FST_STATES = 64
-MAX_FST_ALPHABET = 32
+MAX_FST_ALPHABET = MAX_FINITE_ALPHABET_SIZE
 MAX_FST_WORD_LENGTH = 512
 MAX_FST_EDGES = 4096
 MAX_FST_RESULT_WORD_LENGTH = 4096
+MAX_FST_RUN_RESULT_BYTES = 8 * 1024 * 1024
+MAX_FST_REACHABLE_RESULT_BYTES = 8 * 1024 * 1024
+MAX_FST_ALPHABET_SYMBOL_LENGTH = MAX_FINITE_ALPHABET_SYMBOL_LENGTH
+MAX_FST_ALPHABET_ID_LENGTH = 128
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
     """Build a stable validation error owned by transducer values."""
 
     return PydanticCustomError(f"finite_state_transducer.{reason}", message)
-
-
-class FiniteAlphabet(StrictModel):
-    """An ordered finite symbol axis used as an explicit transducer parent."""
-
-    symbols: tuple[str, ...] = Field(min_length=1, max_length=MAX_FST_ALPHABET)
-
-    @model_validator(mode="after")
-    def require_unique_symbols(self) -> Self:
-        if len(set(self.symbols)) != len(self.symbols):
-            raise _validation_error(
-                "alphabet_symbols_not_unique", "alphabet symbols must be unique"
-            )
-        return self
 
 
 def alphabet_parent_mismatch(
@@ -167,8 +162,12 @@ class SubsequentialTransducer(StrictModel):
 
     input_alphabet_size: int = Field(ge=1, le=MAX_FST_ALPHABET)
     output_alphabet_size: int = Field(ge=1, le=MAX_FST_ALPHABET)
-    input_alphabet_id: str | None = Field(default=None)
-    output_alphabet_id: str | None = Field(default=None)
+    input_alphabet_id: str | None = Field(
+        default=None, max_length=MAX_FST_ALPHABET_ID_LENGTH
+    )
+    output_alphabet_id: str | None = Field(
+        default=None, max_length=MAX_FST_ALPHABET_ID_LENGTH
+    )
     input_alphabet: FiniteAlphabet | None = None
     output_alphabet: FiniteAlphabet | None = None
     state_count: int = Field(ge=1, le=MAX_FST_STATES)
@@ -334,7 +333,9 @@ class RationalTransducer(StrictModel):
 __all__ = [
     "MAX_FST_ALPHABET",
     "MAX_FST_EDGES",
+    "MAX_FST_REACHABLE_RESULT_BYTES",
     "MAX_FST_RESULT_WORD_LENGTH",
+    "MAX_FST_RUN_RESULT_BYTES",
     "MAX_FST_STATES",
     "MAX_FST_WORD_LENGTH",
     "FiniteAlphabet",

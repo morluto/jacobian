@@ -6,13 +6,10 @@ from typing import Any
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.number_theory.quadratic_forms.general._extra_models import (
-    MAX_THETA_PREFIX_CUTOFF,
     FiniteBoxProfileRequest,
     FiniteBoxProfileResult,
     FiniteGaussSumRequest,
     FiniteGaussSumResult,
-    ThetaSeriesPrefixRequest,
-    ThetaSeriesPrefixResult,
 )
 from jacobian.math.number_theory.quadratic_forms.general._models import *  # noqa: F403
 from jacobian.math.number_theory.quadratic_forms.general.direct_sum_models import (
@@ -33,9 +30,6 @@ from jacobian.math.number_theory.quadratic_forms.general.operations import (
     bilinear_pairing,
     coefficient_matrix,
     evaluate_rational_quadratic_form,
-)
-from jacobian.math.number_theory.quadratic_forms.general.theta_operations import (
-    theta_series_prefix,
 )
 from jacobian.math.number_theory.quadratic_forms.general.values import (
     MAX_QUADRATIC_EVALUATION_DIGITS,
@@ -128,12 +122,6 @@ def compute_coordinate_restriction(
     request: QuadraticFormRestrictionRequest,
 ) -> QuadraticFormRestrictionResult:
     return quadratic_form_restrict_coordinates(request)
-
-
-def compute_theta_series_prefix(
-    request: ThetaSeriesPrefixRequest,
-) -> ThetaSeriesPrefixResult:
-    return theta_series_prefix(request)
 
 
 def compute_finite_box_profile(
@@ -393,9 +381,9 @@ TOOLS = (
             "Combine an ordered finite family of QQ forms on disjoint generated "
             "coordinate axes. Return the exact block sum with coordinate inclusion "
             "and projection matrices; the aggregate dimension is at most 128 and "
-            "the aggregate polynomial support at most 4096 terms. A conservative "
-            "serialized-output bound is 6,937,760 bytes under the current "
-            "256-digit coefficient envelope, below the 10 MiB canonical limit."
+            "the aggregate polynomial support at most 4096 terms. Under that "
+            "envelope the output is at most 4,341,760 aggregate decimal digits, "
+            "within the operation's 8,000,000-digit output bound."
         ),
         request_type=QuadraticFormDirectSumRequest,
         result_type=QuadraticFormDirectSumResult,
@@ -460,47 +448,6 @@ TOOLS = (
             ),
         ),
     ),
-    MathTool(
-        operation_id="quadratic_form.theta_series_prefix.compute",
-        title="Compute an exact quadratic-form theta prefix",
-        description=(
-            "Return coefficients r_Q(0) through r_Q(N) for an integral "
-            "positive-definite QQ polynomial form. Exact adjugate bounds "
-            "prove the complete finite lattice box. Dimension is at most 7, "
-            f"cutoff at most {MAX_THETA_PREFIX_CUTOFF}, and enumeration is "
-            "admitted by exact vector, work, and serialized-output bounds."
-        ),
-        request_type=ThetaSeriesPrefixRequest,
-        result_type=ThetaSeriesPrefixResult,
-        run=compute_theta_series_prefix,
-        tags=("quadratic-form", "theta-series", "exact"),
-        examples=(
-            OperationExample(
-                name="binary_cross_term",
-                description=(
-                    "Compute q^0 through q^4 for x^2+xy+y^2; coefficients "
-                    "count all integral vectors, including sign and order."
-                ),
-                input={
-                    "form": {
-                        "axis": ["x", "y"],
-                        "diagonal_coefficients": [
-                            {"num": "1", "den": "1"},
-                            {"num": "1", "den": "1"},
-                        ],
-                        "cross_terms": [
-                            {
-                                "left": 0,
-                                "right": 1,
-                                "coefficient": {"num": "1", "den": "1"},
-                            }
-                        ],
-                    },
-                    "cutoff": 4,
-                },
-            ),
-        ),
-    ),
 )
 TOOLS = (
     *TOOLS,
@@ -510,8 +457,8 @@ TOOLS = (
         description=(
             "For an integral rational quadratic form, count every integer vector "
             "in [-B,B]^n by its exact value. The result retains the ordered source "
-            "axis and form. The full vector count and conservative output size are "
-            "admitted before evaluating the form."
+            "axis and form. The full vector count, evaluation work, and aggregate "
+            "output digits are admitted before evaluating the form."
         ),
         request_type=FiniteBoxProfileRequest,
         result_type=FiniteBoxProfileResult,
@@ -580,6 +527,5 @@ __all__ = [
     "compute_pullback",
     "compute_radical",
     "compute_signature",
-    "compute_theta_series_prefix",
     "evaluate_form",
 ]

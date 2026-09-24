@@ -5,13 +5,14 @@ from __future__ import annotations
 from itertools import permutations, product
 from math import factorial, isqrt
 
+from jacobian._exact import canonical_rational_component_digits
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
 from jacobian.math.number_theory.quadratic_forms.general._extra_models import (
     MAX_THETA_PREFIX_DIMENSION,
-    MAX_THETA_PREFIX_OUTPUT_BYTES,
+    MAX_THETA_PREFIX_OUTPUT_DIGITS,
     MAX_THETA_PREFIX_VECTORS,
     MAX_THETA_PREFIX_WORK,
     ThetaSeriesPrefixRequest,
@@ -184,13 +185,23 @@ def _admit_box_and_output(
             message="theta enumeration exceeds the operation work envelope",
         )
     count_digits = len(str(vector_count))
-    source_bytes = len(request.form.model_dump_json().encode("utf-8"))
-    output_bytes = source_bytes + 256 + (request.cutoff + 1) * (count_digits + 3)
-    if output_bytes > MAX_THETA_PREFIX_OUTPUT_BYTES:
+    # The result retains the source form and the coefficient prefix. Bound
+    # both by their aggregate decimal digits; per-entry serialization
+    # structure scales with the already bounded coefficient count.
+    form = request.form
+    source_digits = sum(len(label) for label in form.axis) + 2 * sum(
+        canonical_rational_component_digits(value)
+        for value in (
+            *form.diagonal_coefficients,
+            *(term.coefficient for term in form.cross_terms),
+        )
+    )
+    output_digits = source_digits + (request.cutoff + 1) * (count_digits + 1)
+    if output_digits > MAX_THETA_PREFIX_OUTPUT_DIGITS:
         raise OperationResourceAdmissionError(
             location=("cutoff",),
             code="quadratic_form.theta_output_bound",
-            message="theta prefix exceeds its canonical serialized-output envelope",
+            message="theta prefix exceeds its admitted aggregate output digit envelope",
         )
     return radii
 

@@ -95,6 +95,48 @@ def test_rejects_residue_space_above_bound_before_enumeration() -> None:
         finite_quadratic_gauss_sum(request)
 
 
+def test_rejects_dense_support_before_enumeration() -> None:
+    # A dense 20-variable form with modulus 2 has only 2^20 states, but each
+    # state evaluates all 210 polynomial terms.
+    axis = tuple(f"x{index}" for index in range(20))
+    form = RationalQuadraticForm(
+        axis=axis,
+        diagonal_coefficients=tuple(CanonicalRational(num=1, den=1) for _ in axis),
+        cross_terms=tuple(
+            QuadraticCrossTerm(
+                left=left,
+                right=right,
+                coefficient=CanonicalRational(num=1, den=1),
+            )
+            for left in range(20)
+            for right in range(left + 1, 20)
+        ),
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="work bound"):
+        finite_quadratic_gauss_sum(FiniteGaussSumRequest(form=form, modulus=2))
+
+
+def test_rejects_oversized_support_before_enumeration() -> None:
+    # Modulus 1 always has a single state, so only the support bound guards
+    # the retained source and per-state traversal.
+    axis = tuple(f"x{index}" for index in range(100))
+    form = RationalQuadraticForm(
+        axis=axis,
+        diagonal_coefficients=tuple(CanonicalRational(num=1, den=1) for _ in axis),
+        cross_terms=tuple(
+            QuadraticCrossTerm(
+                left=left,
+                right=right,
+                coefficient=CanonicalRational(num=1, den=1),
+            )
+            for left in range(100)
+            for right in range(left + 1, 100)
+        ),
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="support"):
+        finite_quadratic_gauss_sum(FiniteGaussSumRequest(form=form, modulus=1))
+
+
 def test_rejects_rational_coefficients() -> None:
     form = RationalQuadraticForm(
         axis=("x",),

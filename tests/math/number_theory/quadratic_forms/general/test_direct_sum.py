@@ -5,7 +5,6 @@ from fractions import Fraction
 import pytest
 
 from jacobian._exact import CanonicalRational
-from jacobian.canonical import CanonicalLimits
 from jacobian.math.number_theory.quadratic_forms.general._models import (
     EvaluationRequest,
 )
@@ -13,9 +12,10 @@ from jacobian.math.number_theory.quadratic_forms.general._tools import evaluate_
 from jacobian.math.number_theory.quadratic_forms.general.direct_sum_models import (
     MAX_DIRECT_SUM_AXIS,
     MAX_DIRECT_SUM_FORM_TERMS,
+    MAX_DIRECT_SUM_OUTPUT_DIGITS,
     QuadraticFormDirectSumRequest,
     QuadraticFormDirectSumResult,
-    direct_sum_output_byte_upper_bound,
+    direct_sum_output_digit_upper_bound,
 )
 from jacobian.math.number_theory.quadratic_forms.general.direct_sum_operations import (
     quadratic_form_direct_sum,
@@ -157,18 +157,32 @@ def test_deserialization_rejects_inconsistent_coordinate_map_shape() -> None:
         QuadraticFormDirectSumResult.model_validate(payload)
 
 
-def test_maximum_admitted_support_and_dense_maps_fit_canonical_output_limit() -> None:
+def test_maximum_admitted_support_and_dense_maps_fit_output_digit_limit() -> None:
     assert (
-        direct_sum_output_byte_upper_bound(
-            MAX_DIRECT_SUM_AXIS, MAX_DIRECT_SUM_FORM_TERMS
+        direct_sum_output_digit_upper_bound(
+            MAX_DIRECT_SUM_AXIS, 2 * MAX_DIRECT_SUM_FORM_TERMS
         )
-        < CanonicalLimits().max_output_bytes
+        < MAX_DIRECT_SUM_OUTPUT_DIGITS
     )
     assert (
-        direct_sum_output_byte_upper_bound(
+        direct_sum_output_digit_upper_bound(
             MAX_DIRECT_SUM_AXIS,
-            MAX_DIRECT_SUM_FORM_TERMS,
+            2 * MAX_DIRECT_SUM_FORM_TERMS,
             map_component_digits=32_768,
         )
-        > CanonicalLimits().max_output_bytes
+        > MAX_DIRECT_SUM_OUTPUT_DIGITS
     )
+
+
+def test_deserialization_rejects_maps_beyond_the_output_digit_limit() -> None:
+    axis = tuple(f"x{i}" for i in range(16))
+    result = quadratic_form_direct_sum(
+        QuadraticFormDirectSumRequest(forms=(_form(axis, (1,) * 16),))
+    )
+    payload = result.model_dump(mode="python")
+    payload["coordinate_inclusions"][0]["entries"] = tuple(
+        tuple(CanonicalRational.from_integer_ratio(10**9_000, 1) for _ in range(16))
+        for _ in range(16)
+    )
+    with pytest.raises(ValueError, match="output digit bound"):
+        QuadraticFormDirectSumResult.model_validate(payload)

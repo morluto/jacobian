@@ -32,7 +32,7 @@ def quadratic_form_direct_sum(
     forms = request.forms
     total = sum(len(form.axis) for form in forms)
     axis: list[str] = []
-    diagonal = []
+    diagonal: list[CanonicalRational] = []
     cross_terms: list[QuadraticCrossTerm] = []
     inclusions: list[RationalMatrix] = []
     projections: list[RationalMatrix] = []

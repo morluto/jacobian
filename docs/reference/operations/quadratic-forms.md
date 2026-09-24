@@ -21,13 +21,14 @@ are deliberately not independently accepted or returned by this leaf.
 
 Evaluation is direct exact rational arithmetic. It supports degenerate and
 indefinite forms because one value at one supplied vector is always finite;
-the theta-prefix operation below has a separate positive-definite integral
-domain.
+representation numbers and theta prefixes are not part of this contract.
 
 ## Theta-series prefixes
 
-`quadratic_form.theta_series_prefix.compute` accepts a `RationalQuadraticForm`
+The native theta-prefix kernel accepts a `RationalQuadraticForm`
 whose polynomial coefficients are integers and which is positive definite.
+It is not published as a catalog operation: global lattice enumeration
+leaves stay outside the public dispatch boundary.
 For cutoff `N`, its `coefficients` tuple is exactly
 `(r_Q(0), ..., r_Q(N))`, the coefficients of `q^0` through `q^N`; it does not
 include an `O(q^(N+1))` term. Variables retain the form's ordered axis, and
@@ -46,9 +47,10 @@ empty-matrix convention and has prefix `(1, 0, ..., 0)`.
 
 Admission caps dimension at 7, cutoff at 512, the proved box at 100,000
 vectors, total determinant and evaluation work at 2,000,000, determinant
-intermediate height at 2,000 decimal digits, and canonical output at 1 MB.
-Vector and output limits are checked before lattice enumeration. These bounds
-are operation limits, not mathematical limits on theta series.
+intermediate height at 2,000 decimal digits, and the retained source plus
+prefix at 64,000 aggregate decimal digits. Vector and output limits are
+checked before lattice enumeration. These bounds are operation limits, not
+mathematical limits on theta series.
 
 `quadratic_form.bilinear_pairing.compute` takes two vectors on the same axis
 and returns the full polar value
@@ -96,10 +98,11 @@ space, with map order matching `source_forms`.
 The empty family gives the zero-dimensional zero form, the additive identity
 for this operation. Aggregate dimension is bounded by 128 and aggregate
 polynomial support by 4096 terms before the kernel builds the block result.
-At the maximum dimension and support, the conservative canonical-output
-estimate is 6,937,760 bytes, below the 10 MiB transport limit. It counts both
-retained source and output coefficients, the dense inclusion/projection
-entries, and term/axis/container overhead.
+Under those envelopes every retained coefficient carries at most 256 digits
+per component and the block maps are 0/1, so the maximum legitimate output is
+4,341,760 aggregate decimal digits, below the operation's 8,000,000-digit
+bound; the result constructor re-establishes that bound for deserialized
+values whose dense map entries are caller supplied.
 This QQ operation does not coerce integral forms, join equal-named variables,
 or claim a lattice isometry; integral-domain promotion needs an explicit
 typed map in a later slice.
@@ -117,9 +120,10 @@ an empty source form is handled the same way.
 The restriction is defined by setting every unselected source coordinate to
 zero. This is a coordinate-subspace operation; arbitrary subspace restrictions
 remain represented by the existing pullback operation with an explicit matrix.
-Axis dimension is capped at 128, polynomial support at 4096 terms, and the
-source-retaining result is admitted against the canonical serialized-output
-limit before the inclusion matrix or restricted polynomial is built.
+Axis dimension is capped at 128 and polynomial support at 4096 terms; under
+those envelopes the source-retaining result's aggregate output digits are
+bounded before the inclusion matrix or restricted polynomial is built, and
+the result constructor re-establishes the bound for deserialized values.
 
 ## Proper classes of positive-definite integral binary forms
 
@@ -176,7 +180,10 @@ one. Nonintegral coefficients are rejected because they do not define a
 function on residue classes under this contract.
 
 The kernel first admits the full state count (at most 2,000,000), modulus
-(at most 64), and a conservative exact coefficient-growth bound. It then
+(at most 64), polynomial support (at most 4096 terms, which the result
+retains and every enumerated state evaluates), their product as kernel work
+(at most 2,000,000 term evaluations), and a conservative exact
+coefficient-growth bound. It then
 computes the modular profile once and reduces its histogram polynomial modulo
 the canonical cyclotomic polynomial. The exact output is carried by
 `RationalCyclotomicElement`; no floating approximation or separate residue

@@ -18,6 +18,7 @@ from jacobian.math.number_theory.quadratic_forms.general.finite_box_operations i
     finite_box_value_profile,
 )
 from jacobian.math.number_theory.quadratic_forms.general.values import (
+    MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS,
     QuadraticCrossTerm,
     RationalQuadraticForm,
 )
@@ -96,4 +97,17 @@ def test_box_vector_count_is_admitted_before_evaluation():
         finite_box_value_profile(FiniteBoxProfileRequest(form=form, radius=8))
     assert (
         exc_info.value.errors()[0]["type"] == "quadratic_form.finite_box_vector_bound"
+    )
+
+
+def test_box_output_digit_envelope_is_admitted_before_evaluation():
+    # A dense box whose value count fits, but whose tallest coefficients make
+    # the aggregate profile digits exceed the output envelope before any
+    # vector is evaluated.
+    tall = 10**MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS - 1
+    form = _form(("x", "y", "z", "w"), (tall, tall, tall, tall))
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
+        finite_box_value_profile(FiniteBoxProfileRequest(form=form, radius=4))
+    assert (
+        exc_info.value.errors()[0]["type"] == "quadratic_form.finite_box_output_bound"
     )

@@ -85,12 +85,22 @@ class OneSkeletonResult(StrictModel):
         )
         if graph_faces != self.edge_faces:
             raise ValueError("edge_faces must map graph edges in graph edge order")
-        source_edges = (
+        stored_source_edges = (
             self.source.faces_by_dimension[1].faces
             if self.source.dimension >= 1
             else ()
         )
-        if set(self.edge_faces) != set(source_edges):
+        # The carrier's JSON decoder checks face-axis shape, but does not replay
+        # facet closure. This operation relies specifically on the 1-face axis,
+        # so check that bounded relation against at most 128 facets of size 8.
+        facet_edges = {
+            tuple(sorted(pair))
+            for facet in self.source.maximal_simplices
+            for pair in combinations(facet, 2)
+        }
+        if set(stored_source_edges) != facet_edges:
+            raise ValueError("source 1-face axis must match its maximal facets")
+        if set(self.edge_faces) != facet_edges:
             raise ValueError("graph edges must correspond exactly to source 1-faces")
         return self
 

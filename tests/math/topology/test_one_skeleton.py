@@ -82,3 +82,18 @@ def test_decoded_one_skeleton_rejects_forged_provenance() -> None:
         assert "graph edges must correspond exactly to source 1-faces" in str(error)
     else:
         raise AssertionError("forged one-skeleton provenance was accepted")
+
+
+def test_decoded_one_skeleton_rejects_forged_source_face_axis() -> None:
+    result = one_skeleton(
+        OneSkeletonRequest(complex={"vertices": ["a", "b"], "facets": [["a", "b"]]})
+    )
+    payload = result.model_dump(mode="json")
+    payload["source"]["maximal_simplices"] = [["a"], ["b"]]
+
+    try:
+        OneSkeletonResult.model_validate(payload)
+    except ValueError as error:
+        assert "source 1-face axis must match its maximal facets" in str(error)
+    else:
+        raise AssertionError("a forged source face axis was accepted")

@@ -133,3 +133,36 @@ def test_edge_cap_is_rejected_before_incidence_matrix_expansion(
     monkeypatch.setattr(graphic.PrimeFieldMatrix, "_from_admitted", forbidden)
     with pytest.raises(OperationResourceAdmissionError, match="at most 256"):
         graphic_matroid(GraphicMatroidRequest(graph=graph))
+
+
+def test_retained_axis_bound_rejects_before_incidence_matrix_expansion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian.math.combinatorics.matroids import graphic
+    from jacobian.math.combinatorics.matroids._models import (
+        MAX_GROUND_AXIS_CODEPOINTS,
+    )
+
+    huge = "x" * (MAX_GROUND_AXIS_CODEPOINTS + 1)
+    graph = _graph(("a", huge), (("a", huge),))
+
+    def forbidden(**_kwargs: object) -> None:
+        raise AssertionError("matrix construction ran before axis admission")
+
+    monkeypatch.setattr(graphic.PrimeFieldMatrix, "_from_admitted", forbidden)
+    with pytest.raises(
+        OperationResourceAdmissionError, match="codepoint allocation bound"
+    ):
+        graphic_matroid(GraphicMatroidRequest(graph=graph))
+
+
+def test_retained_axis_at_the_codepoint_boundary_is_admitted() -> None:
+    from jacobian.math.combinatorics.matroids._models import (
+        MAX_GROUND_AXIS_CODEPOINTS,
+    )
+
+    long_vertex = "y" * (MAX_GROUND_AXIS_CODEPOINTS - 1)
+    graph = _graph(("a", long_vertex), (("a", long_vertex),))
+    matroid = graphic_matroid(GraphicMatroidRequest(graph=graph))
+    assert matroid.ground_size == 1
+    assert json.loads(matroid.ground_axis[0]) == ["a", long_vertex]

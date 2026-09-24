@@ -19,9 +19,11 @@ forest, with rank `|V| - c(G)` including isolated vertices.
 
 The result is an ordinary `LinearMatroid` and composes directly with keyed
 maximum-weight basis and independent-set operations. The constructor admits at
-most 256 vertices and 256 edges before allocating its incidence matrix. A
-deserialized matrix remains an ordinary represented matroid; consumers that
-need graph provenance should retain the original graph and its edge-label map.
+most 256 vertices and 256 edges before allocating its incidence matrix, and
+bounds the retained endpoint-label axis at 65,536 Unicode codepoints counted
+once per edge endpoint. A deserialized matrix remains an ordinary represented
+matroid; consumers that need graph provenance should retain the original graph
+and its edge-label map.
 
 ## Maximum-weight independent set
 
@@ -38,10 +40,12 @@ This differs from `matroid.basis.maximum_weight.compute`, which must return a
 basis even when some basis elements have negative weights.
 
 The current exact envelope admits at most 256 ground elements, 256 matrix
-rows, and fewer than 12 decimal digits per weight. Before rank calculations,
-the operation charges the number of positive-weight rank probes at the full
-representation-rank cost, plus the final selected-set rank and output size,
-against the 50,000,000-unit matroid work limit.
+rows, fewer than 12 decimal digits per weight, and a retained ground axis of
+at most 65,536 Unicode codepoints. Before rank calculations, the operation
+charges the number of positive-weight rank probes at the full
+representation-rank cost, plus the final selected-set rank and the retained
+index, weight-digit, and duplicated-axis label allocation, against the
+50,000,000-unit matroid work and result-output limits.
 
 The returned value can be independently replayed with
 `verify_maximum_weight_independent_set`. That replay recomputes the deterministic
@@ -63,9 +67,13 @@ The result is bound to both represented matroids. Deserializing it replays the
 source ranks, feasibility ranks, and witness ranks against those matrices;
 `verify_common_basis_result` independently checks the same claims for values
 constructed outside the wire path. The admitted ground and work limits match
-maximum-cardinality matroid intersection and include the two added full-source
-rank calculations. Requests beyond the exact envelope fail admission; they do
-not produce a negative common-basis conclusion.
+maximum-cardinality matroid intersection: admission precomputes both
+source ranks, reuses them for the closed decision, bounds each retained
+ground axis at 65,536 Unicode codepoints, and charges the exchange search at
+the regime those ranks make reachable — at most `min(r₁, r₂) + 2` searches of
+cached probes on matrices of at most `min(r₁, r₂) + 1` columns. A rank-zero
+source is presolved exactly. Requests beyond the exact envelope fail
+admission; they do not produce a negative common-basis conclusion.
 
 ## Supplied weighted-intersection certificate
 
@@ -91,8 +99,10 @@ The request and result retain the original weights, both split-weight
 single-matroid maximizers, and the candidate. The ground and row limits are
 256; each weight entry follows the existing fewer-than-12-decimal-digit
 contract. One aggregate 50,000,000-unit envelope covers both greedy scans and
-both candidate feasibility ranks; the source-bound result also has a
-conservative 8 MiB serialized-size bound that includes repeated axis labels.
+both candidate feasibility ranks; each source also carries the shared
+65,536-codepoint bound on its retained ground axis, and each greedy phase
+must fit the single-matroid index, weight-digit, and duplicated-axis output
+budget before any rank expansion.
 A serialized result can be independently recomputed with
 `verify_weighted_intersection_result`.
 This operation checks a supplied split; it does not find an optimum candidate

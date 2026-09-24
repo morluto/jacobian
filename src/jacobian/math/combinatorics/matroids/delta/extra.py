@@ -13,10 +13,9 @@ MAX_BINARY_LABEL_BYTES = 2_048
 MAX_TWIST_WIDTH_STATES = 4_096
 MAX_TWIST_WIDTH_WORK = 262_144
 MAX_FEASIBLE_SIZE_PROFILE_ENTRIES = 4_096
-MAX_FEASIBLE_SIZE_PROFILE_OUTPUT_BYTES = 32_768
+MAX_FEASIBLE_SIZE_PROFILE_RETAINED_UNITS = 32_768
 MAX_DIRECT_SUM_GROUND = 2_048
 MAX_DIRECT_SUM_FEASIBLE_PAIRS = 250_000
-MAX_DIRECT_SUM_OUTPUT_BYTES = 2_000_000
 
 
 class DeltaMatroidDirectSumRequest(StrictModel):
@@ -286,13 +285,14 @@ class DeltaMatroidFeasibleSizeProfileRequest(StrictModel):
         json_schema_extra={
             "description": (
                 "Return the exact number of feasible sets of each size from zero "
-                "through the ground-set size. Admission bounds the output axis "
-                f"to {MAX_FEASIBLE_SIZE_PROFILE_ENTRIES} entries and its encoded "
-                f"size to {MAX_FEASIBLE_SIZE_PROFILE_OUTPUT_BYTES} bytes."
+                "through the ground-set size. Admission bounds the profile axis "
+                f"to {MAX_FEASIBLE_SIZE_PROFILE_ENTRIES} entries and the retained "
+                "counts and ground labels to "
+                f"{MAX_FEASIBLE_SIZE_PROFILE_RETAINED_UNITS} allocation units."
             ),
             "admission_limits": {
                 "max_profile_entries": MAX_FEASIBLE_SIZE_PROFILE_ENTRIES,
-                "max_encoded_output_bytes": MAX_FEASIBLE_SIZE_PROFILE_OUTPUT_BYTES,
+                "max_retained_units": MAX_FEASIBLE_SIZE_PROFILE_RETAINED_UNITS,
             },
         }
     )
@@ -322,7 +322,7 @@ __all__ = [
     "MAX_BINARY_GROUND",
     "MAX_BINARY_LABEL_BYTES",
     "MAX_FEASIBLE_SIZE_PROFILE_ENTRIES",
-    "MAX_FEASIBLE_SIZE_PROFILE_OUTPUT_BYTES",
+    "MAX_FEASIBLE_SIZE_PROFILE_RETAINED_UNITS",
     "MAX_TWIST_WIDTH_STATES",
     "MAX_TWIST_WIDTH_WORK",
     "BinaryMatrixRequest",

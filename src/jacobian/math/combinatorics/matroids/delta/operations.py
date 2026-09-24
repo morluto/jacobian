@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import json
-
 from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationDomainValidationError
@@ -15,7 +13,6 @@ from jacobian.math.combinatorics.matroids.delta._models import (
 )
 from jacobian.math.combinatorics.matroids.delta.extra import DeltaMatroidDirectSumResult
 from jacobian.math.combinatorics.matroids.delta.values import (
-    MAX_DELTA_EXCHANGE_CANDIDATE_CHECKS,
     MAX_DELTA_MEMBERSHIPS,
     DeltaMatroidAdmissionError,
     FiniteDeltaMatroid,
@@ -24,6 +21,33 @@ from jacobian.math.combinatorics.matroids.delta.values import (
     require_delta_matroid_envelope,
     require_delta_matroid_exchange_work,
 )
+
+
+def _admit_direct_sum_source(value: object, name: str) -> FiniteDeltaMatroid:
+    """Revalidate one native direct-sum operand before any field access.
+
+    A deserialized or ``model_construct``-forged operand is caller-authored, so
+    the carrier is reconstructed through the canonical contract and malformed
+    values map to the operation's declared domain error instead of leaking
+    attribute, indexing, or Pydantic exceptions.
+    """
+
+    if type(value) is not FiniteDeltaMatroid:
+        raise OperationDomainValidationError(
+            location=(name,),
+            code="delta_matroid.source_not_valid",
+            message=f"direct-sum {name} operand must be a finite delta-matroid",
+        )
+    try:
+        return FiniteDeltaMatroid.model_validate(value.model_dump(mode="python"))
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=(name,),
+            code="delta_matroid.source_not_valid",
+            message=f"direct-sum {name} operand is not a canonical finite "
+            "delta-matroid",
+        ) from exc
+
 
 __all__ = [
     "direct_sum",
@@ -38,13 +62,21 @@ __all__ = [
 def direct_sum(
     left: FiniteDeltaMatroid, right: FiniteDeltaMatroid
 ) -> DeltaMatroidDirectSumResult:
-    """Return the disjoint-ground direct sum, with concatenated ground axis."""
+    """Return the disjoint-ground direct sum, with concatenated ground axis.
+
+    Both operands are revalidated as canonical carriers before any field is
+    read.  The pairwise-union family satisfies symmetric exchange by the
+    direct-sum theorem, so admission bounds the actual product construction
+    and retained output through the ground, feasible-pair, membership, and
+    label envelopes rather than replaying the recognition axiom.
+    """
     from jacobian.math.combinatorics.matroids.delta.extra import (
         MAX_DIRECT_SUM_FEASIBLE_PAIRS,
         MAX_DIRECT_SUM_GROUND,
-        MAX_DIRECT_SUM_OUTPUT_BYTES,
     )
 
+    left = _admit_direct_sum_source(left, "left")
+    right = _admit_direct_sum_source(right, "right")
     left_system = FiniteFeasibleSetSystem(ground=left.ground, feasible=left.feasible)
     right_system = FiniteFeasibleSetSystem(ground=right.ground, feasible=right.feasible)
     # Admit source envelopes and verify caller-authored values before composing.
@@ -79,31 +111,12 @@ def direct_sum(
             "memberships_exceeded",
             "direct-sum feasible memberships exceed the delta-matroid envelope",
         )
-    # Every pair of output sets can differ in at most n elements. This sound
-    # pre-product ceiling also ensures the result remains admissible by the
-    # delta-matroid exchange checker.
-    if pairs * pairs * ground_size * ground_size > MAX_DELTA_EXCHANGE_CANDIDATE_CHECKS:
-        raise DeltaMatroidAdmissionError(
-            "candidate_work_exceeded",
-            "direct-sum family exceeds the symmetric-exchange work envelope",
-        )
-    ground_json = json.dumps(left.ground + right.ground, ensure_ascii=False)
-    digits = max(1, len(str(max(0, ground_size - 1))))
-    family_bound = membership_count * (digits + 1) + 2 * pairs
-    maps_bound = (len(left.ground) + len(right.ground)) * (digits + 2)
-    total_bound = (
-        len(left.model_dump_json().encode("utf-8"))
-        + len(right.model_dump_json().encode("utf-8"))
-        + len(ground_json.encode("utf-8"))
-        + family_bound
-        + maps_bound
-        + 512
-    )
-    if total_bound > MAX_DIRECT_SUM_OUTPUT_BYTES:
-        raise DeltaMatroidAdmissionError(
-            "direct_sum_output_exceeded",
-            f"direct-sum result exceeds the {MAX_DIRECT_SUM_OUTPUT_BYTES}-byte envelope",
-        )
+    # The two source envelopes above bound every retained ground label, and
+    # the pair and membership bounds above exactly bound the result family's
+    # rows and index positions, so the direct sum materializes within the
+    # carrier's declared cardinality envelopes without estimating encoded
+    # bytes and without charging a symmetric-exchange replay this operation
+    # never performs.
 
     rows = tuple(
         sorted(

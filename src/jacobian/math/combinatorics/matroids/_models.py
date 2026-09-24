@@ -30,6 +30,32 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
 MAX_WEIGHT_DIGITS = 12
 """Schema-visible cap on decimal digits of one matroid weight entry."""
 
+MAX_GROUND_AXIS_CODEPOINTS = 65_536
+"""Allocation cap on the Unicode codepoints of one retained ground axis."""
+
+MAX_INDEPENDENT_SET_OUTPUT_UNITS = (
+    3 * MAX_GROUND_SIZE
+    + MAX_WEIGHT_DIGITS * MAX_GROUND_SIZE
+    + 2 * MAX_GROUND_AXIS_CODEPOINTS
+)
+"""Retained-index, weight-digit, and repeated-axis materialization budget for
+one maximum-weight independent-set phase: the selected-set, greedy-order, and
+witness index charges plus one sign-and-digit charge per weight, and the
+ground axis codepoints retained by both the source matroid and the canonical
+weight function."""
+
+
+def ground_axis_codepoints(matroid: LinearMatroid) -> int:
+    """Total Unicode codepoints of one matroid's retained ground axis.
+
+    Matrix residues and index tuples are cardinality- and digit-bounded by the
+    canonical model contracts above; the label text is the only quantity a
+    well-formed operand can carry without an explicit native bound, so result
+    admission charges it in codepoints rather than transport bytes.
+    """
+
+    return sum(len(label) for label in matroid.ground_axis)
+
 
 class GraphicMatroidRequest(StrictModel):
     """Construct the GF(2) incidence representation of a simple graph."""
@@ -495,11 +521,13 @@ class MatroidWeightedIntersectionCertificateRequest(StrictModel):
                 "max_representation_rows": MAX_REPRESENTATION_ROWS,
                 "max_weight_digits": MAX_WEIGHT_DIGITS,
                 "max_aggregate_rank_work": 50_000_000,
-                "max_result_bytes": 8 * 1024 * 1024,
+                "max_ground_axis_codepoints": MAX_GROUND_AXIS_CODEPOINTS,
+                "max_independent_set_output_units": MAX_INDEPENDENT_SET_OUTPUT_UNITS,
                 "work_includes": [
                     "both split-weight greedy scans",
                     "both candidate feasibility ranks",
-                    "source-bound certificate result serialization",
+                    "the source ranks precomputed during admission",
+                    "source-bound certificate result materialization",
                 ],
             },
         }
@@ -641,15 +669,19 @@ class MatroidIntersectionRequest(StrictModel):
             "description": (
                 "Compute a maximum common independent set for two linear "
                 "matroids on one labelled ground. The exact exchange kernel "
-                "admits at most 256 ground elements and a derived "
-                "50,000,000-unit bound covering rank probes, min-max witness "
+                "admits at most 256 ground elements, a 65,536-codepoint "
+                "retained ground axis, and a derived 50,000,000-unit bound "
+                "covering the two precomputed source ranks, exchange probes "
+                "in the regime those ranks make reachable, min-max witness "
                 "work, representation rows, and O(n) result materialization "
                 "for the returned independent set and rank partition."
             ),
             "admission_limits": {
                 "max_ground_elements": 256,
                 "max_work_units": 50_000_000,
+                "max_retained_axis_codepoints": MAX_GROUND_AXIS_CODEPOINTS,
                 "work_includes": [
+                    "both precomputed source ranks",
                     "exchange rank probes",
                     "representation rows",
                     "min-max witness ranks",

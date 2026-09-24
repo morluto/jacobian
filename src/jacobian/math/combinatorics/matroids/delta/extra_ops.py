@@ -8,7 +8,7 @@ from jacobian.math.combinatorics.greedoids.values import FiniteFeasibleSetSystem
 from jacobian.math.combinatorics.matroids.delta.extra import (
     MAX_BINARY_GROUND,
     MAX_FEASIBLE_SIZE_PROFILE_ENTRIES,
-    MAX_FEASIBLE_SIZE_PROFILE_OUTPUT_BYTES,
+    MAX_FEASIBLE_SIZE_PROFILE_RETAINED_UNITS,
     MAX_TWIST_WIDTH_STATES,
     MAX_TWIST_WIDTH_WORK,
     BinaryLoopComplementRequest,
@@ -311,20 +311,22 @@ def feasible_size_profile(d: FiniteDeltaMatroid) -> DeltaMatroidFeasibleSizeProf
     d = _admit_delta(d)
     entries = len(d.ground) + 1
     try:
-        label_bytes = sum(len(label.encode("utf-8")) for label in d.ground)
+        for label in d.ground:
+            label.encode("utf-8")
     except UnicodeEncodeError:
         raise OperationDomainValidationError(
             location=("delta_matroid", "ground"),
             code="delta_matroid.labels_not_utf8",
             message="delta-matroid ground labels must be UTF-8-representable",
         ) from None
-    # The result retains its ground axis and emits each count as decimal JSON.
-    # Since the input family is already materialized, its row count bounds each
-    # coefficient; this conservative estimate includes keys and JSON syntax.
-    output_bytes = 2 * label_bytes + entries * (12 + len(str(len(d.feasible)))) + 512
+    axis_codepoints = sum(len(label) for label in d.ground)
+    # The result retains its ground axis and one decimal count per size, and
+    # the input family is already materialized, so its row count bounds each
+    # coefficient. Charge one unit per retained index and label codepoint.
+    retained_units = entries * (1 + len(str(len(d.feasible)))) + axis_codepoints
     if (
         entries > MAX_FEASIBLE_SIZE_PROFILE_ENTRIES
-        or output_bytes > MAX_FEASIBLE_SIZE_PROFILE_OUTPUT_BYTES
+        or retained_units > MAX_FEASIBLE_SIZE_PROFILE_RETAINED_UNITS
     ):
         raise OperationResourceAdmissionError(
             location=("delta_matroid",),

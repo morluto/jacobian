@@ -32,25 +32,112 @@ def test_intersection_uses_bounded_exchange_work_at_twenty_elements() -> None:
     assert result.witness.equality == 0
 
 
-def test_intersection_accepts_last_rank_work_boundary() -> None:
-    # For one-row representations, 83 elements sit just below the admitted
-    # 50M rank-work envelope; the next size exceeds it.
-    result = matroid_intersection(_zero_matroid(83), _zero_matroid(83))
+def test_intersection_presolves_large_rank_zero_grounds(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # One-row rank-zero sources used to be rejected from 84 elements upward by
+    # the ambient worst-case charge even though no singleton is independent.
+    # Presolving the exact source ranks keeps these cheap requests admitted.
+    import jacobian.math.combinatorics.matroids.intersection as intersection
+
+    calls = 0
+    original_rank = intersection.pf_rank
+
+    def count_rank(*args: object, **kwargs: object) -> int:
+        nonlocal calls
+        calls += 1
+        return original_rank(*args, **kwargs)
+
+    monkeypatch.setattr(intersection, "pf_rank", count_rank)
+    for columns in (84, 256):
+        calls = 0
+        result = matroid_intersection(_zero_matroid(columns), _zero_matroid(columns))
+        assert result.common_independent == ()
+        assert result.cardinality == 0
+        assert result.witness.equality == 0
+        # The presolve completes on the two admitted source ranks alone: no
+        # per-element independence probe reaches the rank kernel.
+        assert calls == 2
+        replay_intersection_result(result)
+    first = _zero_matroid(84)
+    assert not _independent_by_coefficients(first, (0,))
+    assert not _independent_by_coefficients(first, (83,))
+
+
+def test_intersection_presolves_dense_rank_zero_sources() -> None:
+    # A wider dense rank-zero representation is admitted while its six exact
+    # rank charges (two presolved sources plus four result-carrier ranks) fit
+    # the envelope, and it completes without a single exchange probe.
+    dense = LinearMatroid(
+        matrix=PrimeFieldMatrix(
+            prime=2,
+            entries=tuple((0,) * 256 for _ in range(64)),
+            columns=256,
+        )
+    )
+    result = matroid_intersection(dense, dense)
     assert result.common_independent == ()
+    replay_intersection_result(result)
 
 
-def test_intersection_rejects_rank_work_before_calling_rank(
+def test_rank_zero_beyond_the_dense_rank_envelope_fails_admission() -> None:
+    # A full 256-by-256 dense representation charges six full-rank eliminations
+    # beyond the envelope even after the rank-zero presolve, so admission
+    # refuses it instead of relying on the zero entries to be cheap.
+    dense = LinearMatroid(
+        matrix=PrimeFieldMatrix(
+            prime=2,
+            entries=tuple((0,) * 256 for _ in range(256)),
+            columns=256,
+        )
+    )
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        matroid_intersection(dense, dense)
+    assert error.value.errors()[0]["type"] == "matroid.intersection.work_bound"
+
+
+def _identity_matroid(columns: int) -> LinearMatroid:
+    return LinearMatroid(
+        matrix=PrimeFieldMatrix(
+            prime=2,
+            entries=tuple(
+                tuple(int(row == column) for column in range(columns))
+                for row in range(columns)
+            ),
+            columns=columns,
+        )
+    )
+
+
+def test_intersection_accepts_and_rejects_around_the_dense_identity_envelope(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import jacobian.math.combinatorics.matroids.intersection as intersection
 
-    def unexpected_rank(*args: object, **kwargs: object) -> int:
-        raise AssertionError("rank oracle ran before aggregate admission")
+    accepted = matroid_intersection(_identity_matroid(16), _identity_matroid(16))
+    assert accepted.common_independent == tuple(range(16))
 
-    monkeypatch.setattr(intersection, "pf_rank", unexpected_rank)
+    calls = 0
+    original_rank = intersection.pf_rank
+
+    def count_rank(*args: object, **kwargs: object) -> int:
+        nonlocal calls
+        calls += 1
+        return original_rank(*args, **kwargs)
+
+    monkeypatch.setattr(intersection, "pf_rank", count_rank)
+
+    def unexpected_kernel(*args: object, **kwargs: object) -> None:
+        raise AssertionError("exchange kernel ran after work rejection")
+
+    monkeypatch.setattr(
+        intersection, "_matroid_intersection_admitted", unexpected_kernel
+    )
     with pytest.raises(OperationResourceAdmissionError) as error:
-        matroid_intersection(_zero_matroid(84), _zero_matroid(84))
+        matroid_intersection(_identity_matroid(84), _identity_matroid(84))
     assert error.value.errors()[0]["type"] == "matroid.intersection.work_bound"
+    # Only the two precomputed source ranks run; no exchange probe does.
+    assert calls == 2
 
 
 def test_intersection_rejects_large_retained_axis_before_rank(
@@ -73,19 +160,20 @@ def test_intersection_rejects_large_retained_axis_before_rank(
     assert error.value.errors()[0]["type"] == "matroid.intersection.work_bound"
 
 
-def test_intersection_admits_output_bound_at_its_limit(
+def test_intersection_admits_the_last_axis_codepoint_boundary(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import jacobian.math.combinatorics.matroids.intersection as intersection
+    from jacobian.math.combinatorics.matroids._models import (
+        MAX_GROUND_AXIS_CODEPOINTS,
+    )
 
-    matroid = _zero_matroid(2)
-    monkeypatch.setattr(
-        intersection,
-        "MAX_INTERSECTION_OUTPUT_BYTES",
-        intersection._intersection_output_bound_bytes(matroid, matroid),
+    labels = ("x" * 4, "y" * (MAX_GROUND_AXIS_CODEPOINTS - 4))
+    matroid = LinearMatroid(
+        matrix=PrimeFieldMatrix(prime=2, entries=((1, 0), (0, 1)), columns=2),
+        ground_labels=labels,
     )
     result = matroid_intersection(matroid, matroid)
-    assert result.common_independent == ()
+    assert result.common_independent == (0, 1)
 
 
 def test_intersection_schema_discloses_derived_work_envelope() -> None:

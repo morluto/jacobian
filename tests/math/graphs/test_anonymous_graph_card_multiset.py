@@ -11,18 +11,24 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.graphs.decks import (
+    AnonymousGraphCardMultiset,
     AnonymousGraphCardMultisetRequest,
     anonymous_graph_card_multiset,
 )
+from jacobian.math.graphs.decks import _models as deck_models
 from jacobian.math.graphs.decks import operations as deck_operations
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 
-def graph(vertices: tuple[str, ...], edges: tuple[tuple[str, str], ...]) -> SimpleUndirectedGraph:
+def graph(
+    vertices: tuple[str, ...], edges: tuple[tuple[str, str], ...]
+) -> SimpleUndirectedGraph:
     return SimpleUndirectedGraph(vertices=vertices, edges=edges)
 
 
-def test_independent_relabelings_have_one_canonical_class_and_preserve_multiplicity() -> None:
+def test_independent_relabelings_have_one_canonical_class_and_preserve_multiplicity() -> (
+    None
+):
     first = graph(("a", "b", "c", "d"), (("a", "b"), ("b", "c")))
     second = graph(("w", "x", "y", "z"), (("x", "z"), ("w", "x")))
     result = anonymous_graph_card_multiset(
@@ -54,6 +60,68 @@ def test_empty_multiset_retains_explicit_card_order() -> None:
     assert result.classes == ()
 
 
+def test_serialized_result_round_trips_and_preserves_canonical_identity() -> None:
+    request = AnonymousGraphCardMultisetRequest(
+        card_order=3,
+        cards=(graph(("a", "b", "c"), (("a", "b"),)),),
+    )
+    result = anonymous_graph_card_multiset(request)
+    restored = AnonymousGraphCardMultiset.model_validate_json(result.model_dump_json())
+    assert restored == result
+
+
+def test_deserialization_rejects_noncanonical_representative() -> None:
+    with pytest.raises(ValidationError, match="minimal under all vertex permutations"):
+        AnonymousGraphCardMultiset.model_validate(
+            {
+                "card_order": 3,
+                "classes": [
+                    {
+                        "representative": {
+                            "vertices": ["v00", "v01", "v02"],
+                            "edges": [["v00", "v01"]],
+                        },
+                        "multiplicity": 1,
+                    }
+                ],
+            }
+        )
+
+
+def test_deserialization_rejects_duplicate_isomorphism_classes() -> None:
+    one_edge = {"vertices": ["v00", "v01", "v02"], "edges": [["v01", "v02"]]}
+    with pytest.raises(ValidationError, match="classes must be unique"):
+        AnonymousGraphCardMultiset.model_validate(
+            {
+                "card_order": 3,
+                "classes": [
+                    {"representative": one_edge, "multiplicity": 1},
+                    {"representative": one_edge, "multiplicity": 2},
+                ],
+            }
+        )
+
+
+def test_deserialization_admits_its_exact_canonicalization_bound(monkeypatch) -> None:
+    output = anonymous_graph_card_multiset(
+        AnonymousGraphCardMultisetRequest(
+            card_order=4,
+            cards=(graph(("a", "b", "c", "d"), (("a", "b"),)),),
+        )
+    )
+    payload = output.model_dump(mode="python")
+    exact_work = factorial(4) * (4 + comb(4, 2))
+    monkeypatch.setattr(
+        deck_models, "MAX_ANONYMOUS_CARD_CANONICALIZATION_WORK", exact_work
+    )
+    assert AnonymousGraphCardMultiset.model_validate(payload) == output
+    monkeypatch.setattr(
+        deck_models, "MAX_ANONYMOUS_CARD_CANONICALIZATION_WORK", exact_work - 1
+    )
+    with pytest.raises(ValidationError, match="bounded permutation work"):
+        AnonymousGraphCardMultiset.model_validate(payload)
+
+
 def test_mixed_card_orders_are_rejected() -> None:
     with pytest.raises(ValidationError, match="declared card_order"):
         AnonymousGraphCardMultisetRequest(
@@ -68,7 +136,9 @@ def test_model_construct_parent_and_nested_parent_attacks_are_rejected() -> None
 
     valid = graph(("a", "b"), (("a", "b"),))
     child_request = RequestChild.model_construct(card_order=2, cards=(valid,))
-    with pytest.raises(OperationDomainValidationError, match="AnonymousGraphCardMultisetRequest"):
+    with pytest.raises(
+        OperationDomainValidationError, match="AnonymousGraphCardMultisetRequest"
+    ):
         anonymous_graph_card_multiset(child_request)
 
     forged_graph = SimpleUndirectedGraph.model_construct(
@@ -81,7 +151,42 @@ def test_model_construct_parent_and_nested_parent_attacks_are_rejected() -> None
         anonymous_graph_card_multiset(forged_request)
 
 
-def test_permutation_bound_accepts_exact_limit_and_rejects_one_unit_less(monkeypatch) -> None:
+@pytest.mark.parametrize(
+    ("vertices", "edges", "message"),
+    [
+        (("a", "b"), (("a", "b"),) * 2, "more edge entries"),
+        (("a", "b"), (("a", "missing"),), "declared vertices"),
+        (("a" * 65, "b"), (), "label bound"),
+        (("😀" * 17, "b"), (), "byte bound"),
+        (("e\u0301", "b"), (), "NFC"),
+        (("\ud800", "b"), (), "Unicode scalar"),
+    ],
+)
+def test_model_construct_graph_shape_label_and_edge_bounds(
+    vertices: tuple[str, ...], edges: tuple[tuple[str, str], ...], message: str
+) -> None:
+    forged_graph = SimpleUndirectedGraph.model_construct(vertices=vertices, edges=edges)
+    request = AnonymousGraphCardMultisetRequest.model_construct(
+        card_order=2, cards=(forged_graph,)
+    )
+    with pytest.raises(OperationDomainValidationError, match=message):
+        anonymous_graph_card_multiset(request)
+
+
+def test_model_construct_duplicate_edges_are_rejected() -> None:
+    forged_graph = SimpleUndirectedGraph.model_construct(
+        vertices=("a", "b", "c"), edges=(("a", "b"), ("a", "b"))
+    )
+    request = AnonymousGraphCardMultisetRequest.model_construct(
+        card_order=3, cards=(forged_graph,)
+    )
+    with pytest.raises(OperationDomainValidationError, match="unique canonical pairs"):
+        anonymous_graph_card_multiset(request)
+
+
+def test_permutation_bound_accepts_exact_limit_and_rejects_one_unit_less(
+    monkeypatch,
+) -> None:
     item = graph(("a", "b", "c", "d"), (("a", "b"),))
     request = AnonymousGraphCardMultisetRequest(card_order=4, cards=(item,))
     exact_work = factorial(4) * (4 + comb(4, 2))
@@ -99,8 +204,10 @@ def test_permutation_bound_accepts_exact_limit_and_rejects_one_unit_less(monkeyp
 def test_catalog_publishes_anonymous_cards_as_distinct_from_realizable_decks() -> None:
     tool = Catalog.open().operation("graph.deck.from_cards.construct")
     assert tool is not None
-    result = tool.run(tool.request_type.model_validate(
-        {"card_order": 1, "cards": [{"vertices": ["x"], "edges": []}]}
-    ))
+    result = tool.run(
+        tool.request_type.model_validate(
+            {"card_order": 1, "cards": [{"vertices": ["x"], "edges": []}]}
+        )
+    )
     assert result.card_order == 1
     assert result.classes[0].multiplicity == 1

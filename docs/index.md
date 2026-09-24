@@ -47,6 +47,8 @@ caller composes the returned mathematical values.
   notes that are not captured by the live schema.
 - [Schemas and value interoperability](reference/value-interoperability.md) —
   canonical ownership, explicit conversions, and serialized trust boundaries.
+- [Graph deck values](reference/graph-decks.md) — source-bound deletion families
+  versus anonymous graph-card multisets and their canonical form.
 - [Rational Bernstein coordinates](reference/polynomial-bernstein.md) — exact
   polynomial basis conversion on boxes, admission bounds, and evidence.
 - [Testing strategy](reference/testing-strategy.md) — validation ownership and

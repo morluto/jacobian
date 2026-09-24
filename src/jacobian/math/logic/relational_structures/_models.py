@@ -136,6 +136,13 @@ class RelationalReductRequest(StrictModel):
         return self
 
 
+class RelationalProductRequest(StrictModel):
+    """Form the direct product of two structures with identical signatures."""
+
+    left: FiniteRelationalStructure
+    right: FiniteRelationalStructure
+
+
 class RelationalReductResult(StrictModel):
     """A reduct together with its exact relation-symbol inclusion map."""
 
@@ -198,6 +205,56 @@ class RelationalReductResult(StrictModel):
             reduct=reduct,
             source_symbol_indices=source_symbol_indices,
         )
+
+
+class RelationalProductResult(StrictModel):
+    """A direct product with canonical coordinate projections.
+
+    Product carrier label ``i * right.carrier_size + j`` denotes ``(i, j)``.
+    Relation tables use that encoding coordinatewise; signatures are retained
+    verbatim from both (necessarily equal) factors.
+    """
+
+    left: FiniteRelationalStructure
+    right: FiniteRelationalStructure
+    product: FiniteRelationalStructure
+    left_projection: tuple[StrictInt, ...]
+    right_projection: tuple[StrictInt, ...]
+
+    @model_validator(mode="after")
+    def require_canonical_product_axis(self) -> Self:
+        if self.left.signature != self.right.signature:
+            raise _validation_error(
+                "product_signature", "product factors need the same ranked signature"
+            )
+        if self.product.signature != self.left.signature:
+            raise _validation_error(
+                "product_signature", "product retains the factor signature"
+            )
+        size = self.left.carrier_size * self.right.carrier_size
+        if self.product.carrier_size != size:
+            raise _validation_error(
+                "product_carrier", "product carrier is the Cartesian carrier"
+            )
+        expected_left = (
+            tuple(index // self.right.carrier_size for index in range(size))
+            if self.right.carrier_size
+            else ()
+        )
+        expected_right = (
+            tuple(index % self.right.carrier_size for index in range(size))
+            if self.right.carrier_size
+            else ()
+        )
+        if (
+            self.left_projection != expected_left
+            or self.right_projection != expected_right
+        ):
+            raise _validation_error(
+                "product_projections",
+                "projections must follow canonical lexicographic pair labels",
+            )
+        return self
 
 
 class HomomorphismViolationWitness(StrictModel):

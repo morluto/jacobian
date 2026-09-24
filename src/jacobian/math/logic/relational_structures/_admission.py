@@ -19,9 +19,11 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.logic.relational_structures.values import (
+    MAX_RELATIONAL_CARRIER,
     MAX_RELATIONAL_OPERATION_TABLE_CELLS,
     MAX_RELATIONAL_POLYMORPHISM_ARITY,
     MAX_RELATIONAL_SYMBOLS,
+    MAX_RELATIONAL_TABLE_ROWS,
     MAX_RELATIONAL_TRANSPORT_TUPLES,
     FiniteRelationalStructure,
 )
@@ -43,6 +45,7 @@ MAX_POLYMORPHISM_RELATION_COMBINATIONS = 65_536
 MAX_POLYMORPHISM_COORDINATE_WORK = 1_000_000
 MAX_INDUCED_SUBSTRUCTURE_WORK = 81_920
 MAX_RELATIONAL_REDUCT_WORK = 81_920
+MAX_RELATIONAL_PRODUCT_WORK = 1_048_576
 
 
 def candidate_space(source_size: int, target_size: int) -> int:
@@ -357,6 +360,68 @@ def admit_relational_reduct(
             ),
         )
     return indices, work, output_bound
+
+
+def admit_relational_product(
+    left: FiniteRelationalStructure, right: FiniteRelationalStructure
+) -> tuple[int, int]:
+    """Preflight pairwise relation rows, coordinate work, and result bytes."""
+    if left.signature != right.signature:
+        raise OperationDomainValidationError(
+            location=("right", "signature"),
+            code="relational.product.signature_mismatch",
+            message="direct product factors must have identical ranked signatures",
+        )
+    carrier_size = left.carrier_size * right.carrier_size
+    if carrier_size > MAX_RELATIONAL_CARRIER:
+        raise OperationResourceAdmissionError(
+            location=("product", "carrier_size"),
+            code="relational.product.carrier_bound",
+            message=f"Cartesian carrier has {carrier_size} labels, exceeding {MAX_RELATIONAL_CARRIER}",
+        )
+    row_pairs = tuple(
+        len(left_table) * len(right_table)
+        for left_table, right_table in zip(
+            left.relation_tables, right.relation_tables, strict=True
+        )
+    )
+    if any(rows > MAX_RELATIONAL_TABLE_ROWS for rows in row_pairs):
+        raise OperationResourceAdmissionError(
+            location=("product", "relation_tables"),
+            code="relational.product.table_rows_bound",
+            message=f"a product relation exceeds the {MAX_RELATIONAL_TABLE_ROWS}-row table bound",
+        )
+    work = (
+        sum(
+            rows * (symbol.arity + 1)
+            for rows, symbol in zip(row_pairs, left.signature, strict=True)
+        )
+        + 2 * carrier_size
+    )
+    if work > MAX_RELATIONAL_PRODUCT_WORK:
+        raise OperationResourceAdmissionError(
+            location=("product",),
+            code="relational.product.work_bound",
+            message=f"direct product needs {work} row/coordinate visits, exceeding {MAX_RELATIONAL_PRODUCT_WORK}",
+        )
+    product_bytes = 512 + len(left.signature) * 64
+    label_width = len(str(max(0, carrier_size - 1)))
+    for rows, symbol in zip(row_pairs, left.signature, strict=True):
+        product_bytes += rows * (symbol.arity * (label_width + 1) + 3) + 8
+    output_bound = (
+        len(left.model_dump_json().encode("utf-8"))
+        + len(right.model_dump_json().encode("utf-8"))
+        + product_bytes
+        + carrier_size * 12
+    )
+    maximum = CanonicalLimits().max_output_bytes
+    if output_bound > maximum:
+        raise OperationResourceAdmissionError(
+            location=("product",),
+            code="relational.product.output_bound",
+            message=f"direct product result needs at most {output_bound} bytes, exceeding {maximum}",
+        )
+    return work, output_bound
 
 
 def admit_embedding_search(

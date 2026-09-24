@@ -18,19 +18,35 @@ from jacobian.math.number_theory.elliptic_curves.finite_field import (
     FiniteFieldCurveRequest,
     FiniteFieldDiscriminantRequest,
     FiniteFieldDiscriminantResult,
+    FiniteFieldExtensionCountsRequest,
+    FiniteFieldExtensionCountsResult,
+    FiniteFieldGroupStructureResult,
+    FiniteFieldIsogenyClassRequest,
+    FiniteFieldIsogenyClassResult,
+    FiniteFieldIsomorphismRequest,
+    FiniteFieldIsomorphismResult,
     FiniteFieldPointAdditionRequest,
     FiniteFieldPointCheckResult,
+    FiniteFieldPointOrderRequest,
+    FiniteFieldPointOrderResult,
     FiniteFieldPointRequest,
     FiniteFieldPointResult,
     FiniteFieldPointSet,
     FiniteFieldScalarRequest,
+    FiniteFieldShortWeierstrassCurve,
     finite_field_cardinality,
     finite_field_discriminant,
+    finite_field_extension_counts,
+    finite_field_group_structure,
+    finite_field_isogeny_class,
+    finite_field_isomorphism,
     finite_field_point_add,
     finite_field_point_check,
     finite_field_point_negate,
+    finite_field_point_order,
     finite_field_point_scalar,
     finite_field_points,
+    finite_field_quadratic_twist,
 )
 from jacobian.math.number_theory.elliptic_curves.operations import (
     add_points,
@@ -71,6 +87,18 @@ def compute_finite_field_discriminant(
     return finite_field_discriminant(
         request.field, request.coefficient_a, request.coefficient_b
     )
+
+
+def compute_finite_field_quadratic_twist(
+    request: FiniteFieldCurveRequest,
+) -> FiniteFieldShortWeierstrassCurve:
+    return finite_field_quadratic_twist(request.curve)
+
+
+def compute_finite_field_group_structure(
+    request: FiniteFieldCurveRequest,
+) -> FiniteFieldGroupStructureResult:
+    return finite_field_group_structure(request.curve)
 
 
 _DISCRIMINANT_EXAMPLE: dict[str, Any] = {
@@ -162,12 +190,30 @@ def _finite_curve() -> dict[str, Any]:
     }
 
 
+def _finite_point(x: int, y: int) -> dict[str, Any]:
+    return {
+        "curve": _finite_curve(),
+        "at_infinity": False,
+        "x": _finite_field_element(x),
+        "y": _finite_field_element(y),
+    }
+
+
 _FINITE_INFINITY = {"curve": _finite_curve(), "at_infinity": True, "x": None, "y": None}
 
 _FINITE_FIELD_DISCRIMINANT_EXAMPLE: dict[str, Any] = {
     "field": _F5_PRESENTATION,
     "coefficient_a": _finite_field_element(1),
     "coefficient_b": _finite_field_element(1),
+}
+
+_FINITE_FIELD_ISOGENY_EXAMPLE: dict[str, Any] = {
+    "first": _finite_curve(),
+    "second": {
+        **_finite_curve(),
+        "coefficient_a": _finite_field_element(2),
+        "coefficient_b": _finite_field_element(1),
+    },
 }
 
 
@@ -216,12 +262,12 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         tags=("elliptic-curve", "finite-field", "group-law", "exact"),
         examples=(
             OperationExample(
-                name="identity_addition",
-                description="Add the identity to itself; both points must be bound to the same nonsingular curve.",
+                name="secant_addition_over_five",
+                description="Add (0,1) and (2,1) on y^2=x^3+x+1 over F5; both points retain the exact curve parent.",
                 input={
                     "curve": _finite_curve(),
-                    "first": _FINITE_INFINITY,
-                    "second": _FINITE_INFINITY,
+                    "first": _finite_point(0, 1),
+                    "second": _finite_point(2, 1),
                 },
             ),
         ),
@@ -245,6 +291,26 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                     "point": _FINITE_INFINITY,
                     "scalar": 0,
                 },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="elliptic_curve.finite_field.point.order.compute",
+        title="Compute the exact order of a finite-field elliptic-curve point",
+        description="Compute a point's exact order using the exact curve cardinality and prime-divisor minimality witnesses; the field order must fit the bounded trace computation.",
+        request_type=FiniteFieldPointOrderRequest,
+        result_type=FiniteFieldPointOrderResult,
+        run=lambda request: finite_field_point_order(request.curve, request.point),
+        tags=("elliptic-curve", "finite-field", "point-order", "exact"),
+        discovery_terms=(
+            "finite-field elliptic-curve point order",
+            "elliptic point torsion order over finite field",
+        ),
+        examples=(
+            OperationExample(
+                name="order_of_point_over_five",
+                description="Compute the exact order of (0,1) on y²=x³+x+1 over F5 with annihilator and prime-divisor checks.",
+                input={"curve": _finite_curve(), "point": _finite_point(0, 1)},
             ),
         ),
     ),
@@ -277,6 +343,125 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 name="count_five_field",
                 description="Count the points over F5; exhaustive enumeration requires a nonsingular curve over a bounded finite field.",
                 input={"curve": _finite_curve()},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="elliptic_curve.finite_field.extension_counts.compute",
+        title="Count finite-field elliptic curve extensions",
+        description="Compute exact point counts over F_(q^n) for a bounded degree prefix from the Frobenius recurrence, deriving the base trace by exhaustive exact point enumeration.",
+        request_type=FiniteFieldExtensionCountsRequest,
+        result_type=FiniteFieldExtensionCountsResult,
+        run=lambda request: finite_field_extension_counts(
+            request.curve, request.max_degree
+        ),
+        tags=("elliptic-curve", "finite-field", "extension-counts", "exact"),
+        examples=(
+            OperationExample(
+                name="count_extensions_five_field",
+                description="Count the curve over F5 and its first two extension fields using exact Frobenius recurrence.",
+                input={"curve": _finite_curve(), "max_degree": 2},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="elliptic_curve.finite_field.quadratic_twist.compute",
+        title="Construct the canonical nontrivial quadratic twist",
+        description=(
+            "Return the canonical nontrivial quadratic twist of a nonsingular "
+            "short-Weierstrass curve over an admitted finite field. The kernel "
+            "chooses the least encoded nonsquare d and returns y^2 = x^3 + "
+            "d^2 A x + d^3 B. Its point count has the opposite Frobenius trace."
+        ),
+        request_type=FiniteFieldCurveRequest,
+        result_type=FiniteFieldShortWeierstrassCurve,
+        run=compute_finite_field_quadratic_twist,
+        tags=("elliptic-curve", "finite-field", "quadratic-twist", "exact"),
+        discovery_terms=(
+            "quadratic twist over finite fields",
+            "nontrivial elliptic curve twist",
+        ),
+        examples=(
+            OperationExample(
+                name="nontrivial_twist_over_five",
+                description="Return the canonical nontrivial twist over F5.",
+                input={"curve": _finite_curve()},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="elliptic_curve.finite_field.group_structure.compute",
+        title="Compute the finite-field elliptic-curve group structure",
+        description=(
+            "Return the invariant factors of E(F_q) and exact curve-bound point "
+            "generators. The complete point set is enumerated within the "
+            "admitted Hasse-order and work bounds; the returned generators "
+            "form the full direct product, not only separate cyclic subgroups."
+        ),
+        request_type=FiniteFieldCurveRequest,
+        result_type=FiniteFieldGroupStructureResult,
+        run=compute_finite_field_group_structure,
+        tags=("elliptic-curve", "finite-field", "group-structure", "exact"),
+        discovery_terms=(
+            "finite-field elliptic curve group structure",
+            "elliptic curve invariant factors and generators",
+        ),
+        examples=(
+            OperationExample(
+                name="point_group_over_five",
+                description="Compute invariant factors and full point generators for y²=x³+x+1 over F5.",
+                input={"curve": _finite_curve()},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="elliptic_curve.finite_field.isogeny_class.decide",
+        title="Compare finite-field elliptic-curve isogeny classes",
+        description="Decide whether two nonsingular short-Weierstrass curves over the same exact finite-field presentation are isogenous by comparing their exactly computed Frobenius polynomials. This does not construct an isogeny.",
+        request_type=FiniteFieldIsogenyClassRequest,
+        result_type=FiniteFieldIsogenyClassResult,
+        run=lambda request: finite_field_isogeny_class(request.first, request.second),
+        tags=("elliptic-curve", "finite-field", "isogeny-class", "exact"),
+        discovery_terms=(
+            "compare elliptic curve isogeny classes over a finite field",
+            "finite-field elliptic isogeny by Frobenius polynomial",
+        ),
+        examples=(
+            OperationExample(
+                name="compare_two_curves_over_five",
+                description="Compare two nonsingular curves over the same F5 presentation by their exact point counts and Frobenius polynomials.",
+                input=_FINITE_FIELD_ISOGENY_EXAMPLE,
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="elliptic_curve.finite_field.isomorphism.decide",
+        title="Decide finite-field elliptic-curve model isomorphism",
+        description=(
+            "Decide short-Weierstrass model isomorphism over the same exact "
+            "finite-field presentation by a complete bounded search for the "
+            "scaling u with (x,y) mapped to (u^2*x,u^3*y)."
+        ),
+        request_type=FiniteFieldIsomorphismRequest,
+        result_type=FiniteFieldIsomorphismResult,
+        run=lambda request: finite_field_isomorphism(request.source, request.target),
+        tags=("elliptic-curve", "finite-field", "isomorphism", "exact"),
+        discovery_terms=(
+            "isomorphism of short Weierstrass elliptic curves over finite fields",
+            "finite-field elliptic curve model isomorphism",
+        ),
+        examples=(
+            OperationExample(
+                name="scaled_models_over_five",
+                description="Find the explicit scaling between isomorphic models over F5.",
+                input={
+                    "source": _finite_curve(),
+                    "target": {
+                        **_finite_curve(),
+                        "coefficient_a": _finite_field_element(1),
+                        "coefficient_b": _finite_field_element(4),
+                    },
+                },
             ),
         ),
     ),

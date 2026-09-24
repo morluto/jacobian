@@ -13,11 +13,14 @@ this operation's domain. The existing `FiniteFunctionField` and
 field arithmetic can therefore consume the same parent without an isomorphism
 or lossy curve-to-field conversion.
 
-The operation performs the normal bounded function-field parent admission,
-including separability and irreducibility, then checks the normalized
-quadratic equation and the branch polynomial's squarefreeness. The branch
-polynomial has a simple zero over the algebraic closure, so it is not a square
-in `GF(p)(x)` and the quadratic extension remains geometrically integral. The
+The operation first admits the field carrier's characteristic, coefficient
+degrees, extension degree, and estimated work against the function-field
+resource envelope. It then checks the model-specific normalized quadratic
+equation and branch-polynomial squarefreeness. These checks prove the needed
+algebraic properties for this family: a simple root remains a simple root over
+the algebraic closure, so `f` is not a square in `overline{GF(p)}(x)` and the
+quadratic extension is geometrically irreducible; odd characteristic makes
+the defining quadratic separable in `y`. The
 smooth projective model maps with degree two to `P^1`; its branch points are
 the roots of `f`, together with infinity exactly when `deg(f)` is odd. In odd
 characteristic Riemann–Hurwitz therefore gives

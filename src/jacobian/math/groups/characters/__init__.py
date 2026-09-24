@@ -1,5 +1,10 @@
 """Finite class-function operations."""
 
+from jacobian.math.groups.characters._abelian_models import (
+    FiniteAbelianCharacterRow,
+    FiniteAbelianCharacterTableRequest,
+    FiniteAbelianCharacterTableResult,
+)
 from jacobian.math.groups.characters._models import (
     CharacterRow,
     CharacterTableResult,
@@ -19,6 +24,9 @@ from jacobian.math.groups.characters._models import (
     FiniteClassFunction,
     FrobeniusSchurIndicatorRequest,
     FrobeniusSchurIndicatorResult,
+)
+from jacobian.math.groups.characters.abelian_operations import (
+    finite_abelian_character_table,
 )
 from jacobian.math.groups.characters.operations import (
     character_table,
@@ -48,6 +56,9 @@ __all__ = [
     "ClassFunctionScaleRequest",
     "ConjugacyClassPartition",
     "CyclotomicValue",
+    "FiniteAbelianCharacterRow",
+    "FiniteAbelianCharacterTableRequest",
+    "FiniteAbelianCharacterTableResult",
     "FiniteClassFunction",
     "FrobeniusSchurIndicatorRequest",
     "FrobeniusSchurIndicatorResult",
@@ -59,5 +70,6 @@ __all__ = [
     "class_function_pointwise_product",
     "class_function_restrict_to_subgroup",
     "class_function_scale",
+    "finite_abelian_character_table",
     "frobenius_schur_indicator",
 ]

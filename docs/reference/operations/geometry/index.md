@@ -11,3 +11,4 @@
 - [Projective plane-curve singularity profiles](projective-plane-curve-singularities.md)
 - [Bounded regular plane-curve arclength](plane-curve-arclength.md)
 - [Rational coordinate covariant derivatives](rational-covariant-derivatives.md)
+- [Two-dimensional Bieberbach polygon quotient chains](bieberbach-polygon-quotient-chains.md)

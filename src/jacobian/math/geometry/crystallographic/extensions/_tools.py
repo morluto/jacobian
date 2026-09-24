@@ -2,12 +2,16 @@
 
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.geometry.crystallographic.extensions._models import (
+    BieberbachFaceOrbitComplex,
     CrystallographicAffineRealization,
     CrystallographicExtensionTorsionResult,
     CrystallographicFundamentalDomainResult,
     CrystallographicPolytopePairingRequest,
     CrystallographicPolytopePairingResult,
     FiniteLatticeExtension,
+)
+from jacobian.math.geometry.crystallographic.extensions.face_orbits import (
+    quotient_face_orbit_complex,
 )
 from jacobian.math.geometry.crystallographic.extensions.operations import (
     affine_section_realization,
@@ -237,6 +241,27 @@ _UNIT_SQUARE_PAIRING_RESULT = {
 }
 
 TOOLS: MathTools = (
+    MathTool(
+        operation_id="crystallographic.quotient_face_orbits.compute",
+        title="Construct a bounded Bieberbach polygon quotient complex",
+        description=(
+            "Recheck a rank-two crystallographic fundamental polygon and use "
+            "its exact directed side pairings to compute vertex and edge orbits, "
+            "group-labelled face incidences, and the augmented integral cellular "
+            "chain complex of the quotient. This operation supports at most 32 "
+            "vertices and facets. It does not return or claim a free ZGamma "
+            "resolution."
+        ),
+        request_type=CrystallographicFundamentalDomainResult,
+        result_type=BieberbachFaceOrbitComplex,
+        run=quotient_face_orbit_complex,
+        tags=("crystallographic-group", "Bieberbach", "quotient-cell-complex", "exact"),
+        discovery_terms=(
+            "Bieberbach flat surface integral quotient cellular chains",
+            "compute Klein bottle or torus chain complex from exact side pairings",
+            "crystallographic polygon face orbits with group-labelled boundaries",
+        ),
+    ),
     MathTool(
         operation_id="crystallographic.extension.fundamental_domain.check",
         title="Check a crystallographic polytope fundamental domain",

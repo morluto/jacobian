@@ -407,6 +407,27 @@ def _extension_product(
     return translated, source.multiplication_table[left_holonomy][right_holonomy]
 
 
+def _inverse_extension_element(
+    source: FiniteLatticeExtension,
+    element: tuple[tuple[int, ...], int],
+) -> tuple[tuple[int, ...], int]:
+    """Invert one canonical lattice-extension element exactly."""
+    translation, holonomy = element
+    inverse_holonomy = next(
+        candidate
+        for candidate in range(len(source.multiplication_table))
+        if source.multiplication_table[holonomy][candidate] == 0
+        and source.multiplication_table[candidate][holonomy] == 0
+    )
+    action_inverse = _unimodular_inverse(source.action_matrices[holonomy])
+    offset = tuple(
+        translation[axis] + source.factor_set[holonomy][inverse_holonomy][axis]
+        for axis in range(len(translation))
+    )
+    inverse_translation = tuple(-value for value in _matvec(action_inverse, offset))
+    return inverse_translation, inverse_holonomy
+
+
 def _admit_polytope_pairing(polytope: RationalVPolytope, pairing_count: int) -> None:
     """Preflight exact pairing work/output before the full facet enumeration."""
     dimension = len(polytope.space.axes)

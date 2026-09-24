@@ -3,6 +3,7 @@ from __future__ import annotations
 from importlib import import_module
 
 import pytest
+from pydantic import ValidationError
 
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
@@ -19,6 +20,7 @@ from jacobian.math.topology.chain_complexes._filtered_operations import (
     associated_graded,
 )
 from jacobian.math.topology.chain_complexes.filtered_direct_sum import (
+    FilteredDirectSumResult,
     filtered_direct_sum,
 )
 from jacobian.math.topology.chain_complexes.operations import chain_map_commutes
@@ -113,6 +115,21 @@ def test_filtered_direct_sum_block_differential_filtration_and_composition() -> 
     assert graded.graded_dimensions == ((2, 1), (0, 1))
     assert graded.graded_differentials[0] == (((0,), (2,)),)
     assert graded.graded_differentials[1] == ((),)
+
+
+def test_filtered_direct_sum_result_rejects_forged_inclusions_and_output() -> None:
+    result = filtered_direct_sum(
+        _filtered([[1]], ([[1]], [])), _filtered([[2]], ([[1]], [[1]]))
+    )
+    payload = result.model_dump(mode="python")
+    payload["left_inclusions"] = [[[0], [0]], [[0], [0]]]
+    with pytest.raises(ValidationError, match="canonical summand embeddings"):
+        FilteredDirectSumResult.model_validate(payload)
+
+    payload = result.model_dump(mode="python")
+    payload["filtered_complex"]["complex"]["differential_matrices"] = [[[1, 0], [0, 0]]]
+    with pytest.raises(ValidationError, match="block diagonal"):
+        FilteredDirectSumResult.model_validate(payload)
 
 
 def test_filtered_direct_sum_keeps_zero_dimensional_degenerate_case() -> None:

@@ -10,6 +10,10 @@ from jacobian.math.topology.chain_complexes._filtered_models import (
 from jacobian.math.topology.chain_complexes._filtered_operations import (
     associated_graded,
 )
+from jacobian.math.topology.chain_complexes.filtered_direct_sum import (
+    FilteredDirectSumResult,
+    filtered_direct_sum,
+)
 from jacobian.math.topology.chain_complexes.filtered_extensions import (
     FilteredHomologyDegree,
     FilteredHomologyLevel,
@@ -45,6 +49,7 @@ __all__ = [
     "ChainComplexValue",
     "CoefficientRing",
     "FilteredChainComplexRequest",
+    "FilteredDirectSumResult",
     "FilteredHomologyDegree",
     "FilteredHomologyLevel",
     "FilteredHomologyResult",
@@ -63,6 +68,7 @@ __all__ = [
     "chain_map_commutes",
     "construct_chain_complex",
     "differential_squares_to_zero",
+    "filtered_direct_sum",
     "filtered_homology_filtration",
     "homology_groups",
     "mapping_cone",

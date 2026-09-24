@@ -9,3 +9,4 @@ generating-series operations belong to combinatorics; their historical page is
 retained below for that mathematical reference.
 
 - [Recurrences and rational generating series](recurrences-and-generating-series.md)
+- [Filtered chain-complex direct sums](filtered-complex-direct-sum.md)

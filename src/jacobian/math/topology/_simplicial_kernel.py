@@ -4,8 +4,14 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.matrices.finite_fields import linear_algebra as prime_field
+from jacobian.math.topology._barycentric import (
+    BarycentricSubdivisionLimitExceededError,
+)
 from jacobian.math.topology._barycentric import (
     barycentric_subdivision as _barycentric_kernel,
 )
@@ -20,7 +26,6 @@ from jacobian.math.topology._homology import (
     SimplicialHomologyResult,
 )
 from jacobian.math.topology._models import (
-    MAX_BARYCENTRIC_SOURCE_FACES,
     MAX_TOPOLOGY_FACES,
     MAX_TOPOLOGY_FACETS,
     BarycentricSubdivisionResult,
@@ -34,7 +39,6 @@ from jacobian.math.topology._models import (
     SimplicialComplexCanonicalizationResult,
     SparseBoundaryMatrix,
     SparseMatrixEntry,
-    _all_faces,
     _require_canonical_conversion_bounds,
     _require_request_complex,
     canonical_complex,
@@ -417,34 +421,61 @@ def barycentric_subdivision(
         lambda: require_canonical_complex_admission(complex_), location=("complex",)
     )
 
-    sorted_faces = sorted(
-        _all_faces(complex_.maximal_simplices), key=lambda face: (len(face), face)
+    source_faces = tuple(
+        face for dimension in complex_.faces_by_dimension for face in dimension.faces
     )
-    if len(sorted_faces) > MAX_BARYCENTRIC_SOURCE_FACES:
-        raise OperationDomainValidationError(
+    try:
+        subdivision = _barycentric_kernel(
+            list(source_faces), maximal_chain_limit=MAX_TOPOLOGY_FACETS
+        )
+    except BarycentricSubdivisionLimitExceededError as exc:
+        raise OperationResourceAdmissionError(
             location=("complex",),
-            code="topology.require_barycentric_work_bounds_1",
+            code="topology.barycentric_subdivision.too_many_chains",
             message=(
-                "barycentric subdivision requires at most "
-                f"{MAX_BARYCENTRIC_SOURCE_FACES} faces; input would produce "
-                f"more than {MAX_TOPOLOGY_FACETS} subdivision facets"
+                "barycentric subdivision would produce more than "
+                f"{MAX_TOPOLOGY_FACETS} maximal chains"
+            ),
+        ) from exc
+    facets = tuple(sorted(tuple(sorted(facet)) for facet in subdivision.facets))
+    closure = face_closure(facets)
+    if sum(map(len, closure)) > MAX_TOPOLOGY_FACES:
+        raise OperationResourceAdmissionError(
+            location=("complex",),
+            code="topology.barycentric_subdivision.output_faces",
+            message=(
+                "barycentric subdivision face closure exceeds "
+                f"{MAX_TOPOLOGY_FACES} non-empty faces"
             ),
         )
-    subdivision = _barycentric_kernel(sorted_faces)
-    facets = tuple(sorted(tuple(sorted(facet)) for facet in subdivision.facets))
+    face_by_vertex = dict(
+        zip(subdivision.vertices, subdivision.vertex_faces, strict=True)
+    )
+    facet_face_chains = tuple(
+        tuple(
+            sorted(
+                (face_by_vertex[vertex] for vertex in facet),
+                key=lambda face: (len(face), face),
+            )
+        )
+        for facet in subdivision.facets
+    )
     return BarycentricSubdivisionResult._from_kernel(
         original_vertices=complex_.vertices,
-        original_dimension=max(len(facet) - 1 for facet in complex_.maximal_simplices),
+        original_dimension=complex_.dimension,
         subdivision_vertices=subdivision.vertices,
         subdivision_facets=subdivision.facets,
         num_new_vertices=len(subdivision.vertices),
         complex=complex_,
         subdivision_complex=(
-            canonical_complex(tuple(sorted(subdivision.vertices)), facets)
+            canonical_complex(
+                tuple(sorted(subdivision.vertices)), facets, closure=closure
+            )
             if facets
             else None
         ),
         subdivision_vertex_faces=subdivision.vertex_faces,
+        subdivision_facet_face_chains=facet_face_chains,
     )
 
 

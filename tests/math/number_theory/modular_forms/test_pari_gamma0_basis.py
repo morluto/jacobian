@@ -3,16 +3,21 @@
 from __future__ import annotations
 
 import json
+import time
 from fractions import Fraction
 
 import pytest
 
 from jacobian._exact import CanonicalRational
+from jacobian._execution import request_execution
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
 from jacobian.math.number_theory.modular_forms import basis
+from jacobian.math.number_theory.modular_forms._models import (
+    ModularFormBasisFrameRequest,
+)
 from jacobian.math.number_theory.modular_forms._tools import TOOLS
 from jacobian.math.number_theory.modular_forms.values import (
     ModularFormCoordinates,
@@ -189,3 +194,95 @@ def test_gamma0_five_hecke_matrix_uses_pari_basis_and_exact_t2_formula() -> None
 def test_gamma0_five_hecke_matrix_rejects_non_coprime_index() -> None:
     with pytest.raises(OperationDomainValidationError):
         basis.modular_form_hecke_matrix(_space("M"), 5)
+
+
+def _rat(value: int) -> CanonicalRational:
+    return CanonicalRational(num=value, den=1)
+
+
+def test_basis_worker_retains_a_longer_caller_deadline(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import jacobian.process as process
+
+    captured: dict[str, object] = {}
+
+    def failing_launch(_argv: object, **kwargs: object) -> None:
+        captured.update(kwargs)
+        raise OSError("fake launch barrier")
+
+    monkeypatch.setattr(process, "run_checked_worker_process", failing_launch)
+    started = time.monotonic()
+    with (
+        request_execution(started, outer_deadline=started + 600.0),
+        pytest.raises(RuntimeError, match="could not start"),
+    ):
+        basis.modular_form_basis_q_expansions(_space("M"), 3)
+
+    remaining = captured["timeout_seconds"]
+    limits = captured["resource_limits"]
+    assert isinstance(remaining, float)
+    assert remaining > 30.0
+    assert limits.cpu_seconds >= 600
+
+
+def test_basis_worker_caps_only_without_a_caller_deadline(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import jacobian.process as process
+
+    captured: dict[str, object] = {}
+
+    def failing_launch(_argv: object, **kwargs: object) -> None:
+        captured.update(kwargs)
+        raise OSError("fake launch barrier")
+
+    monkeypatch.setattr(process, "run_checked_worker_process", failing_launch)
+    with (
+        request_execution(time.monotonic()),
+        pytest.raises(RuntimeError, match="could not start"),
+    ):
+        basis.modular_form_basis_q_expansions(_space("M"), 3)
+
+    remaining = captured["timeout_seconds"]
+    limits = captured["resource_limits"]
+    assert isinstance(remaining, float)
+    assert remaining <= 30.0
+    assert limits.cpu_seconds == 30
+
+
+def test_identity_frame_at_pari_space_uses_the_sturm_determining_precision() -> None:
+    space = _space("M")
+    frame = basis.modular_form_basis_frame(
+        ModularFormBasisFrameRequest(
+            space=space,
+            source_basis_id=PARI_BASIS_ID,
+            source_labels=("q^0", "q^1", "q^2"),
+            labels=("f0", "f1", "f2"),
+            entries=(
+                (_rat(1), _rat(0), _rat(0)),
+                (_rat(0), _rat(1), _rat(0)),
+                (_rat(0), _rat(0), _rat(1)),
+            ),
+        )
+    )
+
+    framed = basis.modular_form_hecke_matrix_in_frame(frame, 2)
+    canonical = basis.modular_form_hecke_matrix(space, 2)
+
+    assert framed.row_labels == framed.column_labels == ("f0", "f1", "f2")
+    assert tuple(
+        tuple(value.as_fraction() for value in row) for row in framed.entries
+    ) == tuple(tuple(value.as_fraction() for value in row) for row in canonical.entries)
+
+    form = ModularFormCoordinates(
+        space=space,
+        basis_id=PARI_BASIS_ID,
+        coordinates=(_rat(3), _rat(-1), _rat(2)),
+    )
+    converted = basis.modular_form_coordinates_to_frame(frame, form)
+    assert tuple(value.as_fraction() for value in converted.coordinates) == (
+        Fraction(3),
+        Fraction(-1),
+        Fraction(2),
+    )

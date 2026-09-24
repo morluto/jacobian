@@ -9,6 +9,7 @@ import time
 from fractions import Fraction
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from typing import Literal
 
 from jacobian._execution import (
     OperationExecutionCancelledError,
@@ -35,13 +36,15 @@ from jacobian.math.number_theory.characters.operations import (
 from jacobian.math.number_theory.characters.values import DirichletCharacter
 from jacobian.math.number_theory.modular_forms.values import ModularFormSpace
 
-PARI_STURM_RREF_BASIS_ID = "gamma0-rational-gamma0-sturm-rref-v1"
+PARI_STURM_RREF_BASIS_ID: Literal["gamma0-rational-gamma0-sturm-rref-v1"] = (
+    "gamma0-rational-gamma0-sturm-rref-v1"
+)
 MAX_PARI_BASIS_LEVEL = 10_000
 MAX_PARI_BASIS_PRECISION = 128
 MAX_PARI_BASIS_WEIGHT = 120
 MAX_PARI_BASIS_DIMENSION = 32
 MAX_PARI_BASIS_COEFFICIENT_DIGITS = 512
-MAX_PARI_BASIS_OUTPUT_BYTES = 8 * 1024 * 1024
+MAX_PARI_BASIS_ALLOCATION_BYTES = 8 * 1024 * 1024
 MAX_PARI_BASIS_WORK = 50_000_000
 _WORKER = Path(__file__).resolve().with_name("_pari_basis_worker.py")
 _ATKIN_WORKER = Path(__file__).resolve().with_name("_pari_atkin_worker.py")
@@ -162,7 +165,7 @@ def pari_gamma0_rational_basis(
     # This check is deliberately redundant with admission: it protects the
     # canonical encoder if PARI returns an unexpected rational representation.
     estimated_bytes = expected_dimension * precision * (2 * admitted_rref_digits + 32)
-    if estimated_bytes > MAX_PARI_BASIS_OUTPUT_BYTES:
+    if estimated_bytes > MAX_PARI_BASIS_ALLOCATION_BYTES:
         raise OperationResourceAdmissionError(
             location=("space",),
             code="modular_form.pari_basis_output_bound",
@@ -206,12 +209,14 @@ def _pari_character_request(space: ModularFormSpace) -> dict[str, object]:
             code="modular_form.pari_character_level",
             message="PARI character modulus must equal the modular-form level",
         )
+    field_order = getattr(field, "order", None)
+    group_exponent = group.exponent
     if (
-        type(getattr(field, "order", None)) is not int
-        or getattr(field, "order", None) < 1
-        or getattr(field, "order", None) > 128
-        or type(group.exponent) is not int
-        or group.exponent < 1
+        type(field_order) is not int
+        or field_order < 1
+        or field_order > 128
+        or type(group_exponent) is not int
+        or group_exponent < 1
     ):
         raise OperationResourceAdmissionError(
             location=("space", "coefficient_domain"),
@@ -273,7 +278,7 @@ def pari_gamma0_atkin_matrix(
     basis_vectors: tuple[tuple[Fraction, ...], ...],
     *,
     admitted_work: int,
-    admitted_output_bytes: int,
+    admitted_allocation_bytes: int,
 ) -> tuple[tuple[Fraction, ...], ...]:
     """Return W_Q's exact matrix in Jacobian's admitted basis."""
     if admitted_work > MAX_PARI_BASIS_WORK:
@@ -282,7 +287,7 @@ def pari_gamma0_atkin_matrix(
             code="modular_form.atkin_lehner_work_bound",
             message="Atkin-Lehner work exceeds its admitted envelope",
         )
-    if admitted_output_bytes > MAX_PARI_BASIS_OUTPUT_BYTES:
+    if admitted_allocation_bytes > MAX_PARI_BASIS_ALLOCATION_BYTES:
         raise OperationResourceAdmissionError(
             location=("form",),
             code="modular_form.atkin_lehner_output_bound",
@@ -305,14 +310,15 @@ def pari_gamma0_atkin_matrix(
                 precision,
                 basis_vectors,
                 admitted_work=admitted_work,
-                admitted_output_bytes=admitted_output_bytes,
+                admitted_allocation_bytes=admitted_allocation_bytes,
             )
-    deadline = execution.started_at + _WORKER_TIMEOUT_SECONDS
     if execution.deadline is not None:
-        deadline = min(deadline, execution.deadline)
+        deadline = execution.deadline
+    else:
+        deadline = execution.started_at + _WORKER_TIMEOUT_SECONDS
     bind_request_deadline(deadline)
     request_checkpoint("before PARI Atkin-Lehner worker")
-    payload = {
+    payload: dict[str, object] = {
         "level": space.level,
         "weight": space.weight,
         "kind": space.kind,
@@ -354,7 +360,10 @@ def pari_gamma0_atkin_matrix(
                 stdout_limit=stdout_limit,
                 stderr_limit=_WORKER_STDERR_BYTES,
                 resource_limits=ProcessResourceLimits(
-                    cpu_seconds=math.ceil(_WORKER_TIMEOUT_SECONDS),
+                    cpu_seconds=max(
+                        math.ceil(_WORKER_TIMEOUT_SECONDS),
+                        math.ceil(deadline - execution.started_at),
+                    ),
                     address_space_bytes=_WORKER_ADDRESS_SPACE_BYTES,
                     file_size_bytes=_WORKER_FILE_SIZE_BYTES,
                 ),
@@ -422,12 +431,13 @@ def _run_basis_worker(
                 expected_dimension,
                 character_request=character_request,
             )
-    deadline = execution.started_at + _WORKER_TIMEOUT_SECONDS
     if execution.deadline is not None:
-        deadline = min(deadline, execution.deadline)
+        deadline = execution.deadline
+    else:
+        deadline = execution.started_at + _WORKER_TIMEOUT_SECONDS
     bind_request_deadline(deadline)
     request_checkpoint("before PARI modular-form basis worker")
-    payload = {
+    payload: dict[str, object] = {
         "level": space.level,
         "weight": space.weight,
         "kind": space.kind,
@@ -462,7 +472,10 @@ def _run_basis_worker(
                 stdout_limit=stdout_limit,
                 stderr_limit=_WORKER_STDERR_BYTES,
                 resource_limits=ProcessResourceLimits(
-                    cpu_seconds=math.ceil(_WORKER_TIMEOUT_SECONDS),
+                    cpu_seconds=max(
+                        math.ceil(_WORKER_TIMEOUT_SECONDS),
+                        math.ceil(deadline - execution.started_at),
+                    ),
                     address_space_bytes=_WORKER_ADDRESS_SPACE_BYTES,
                     file_size_bytes=_WORKER_FILE_SIZE_BYTES,
                 ),
@@ -591,10 +604,10 @@ def _decode_worker_json(value: object) -> dict[str, object]:
 
 
 __all__ = [
+    "MAX_PARI_BASIS_ALLOCATION_BYTES",
     "MAX_PARI_BASIS_COEFFICIENT_DIGITS",
     "MAX_PARI_BASIS_DIMENSION",
     "MAX_PARI_BASIS_LEVEL",
-    "MAX_PARI_BASIS_OUTPUT_BYTES",
     "MAX_PARI_BASIS_PRECISION",
     "MAX_PARI_BASIS_WEIGHT",
     "MAX_PARI_BASIS_WORK",

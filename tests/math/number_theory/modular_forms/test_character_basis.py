@@ -38,7 +38,7 @@ from jacobian.math.number_theory.modular_forms.character_basis_models import (
     ModularCharacterHeckeMatrix,
     ModularCharacterHeckeMatrixRequest,
 )
-from jacobian.math.number_theory.modular_forms.pari_basis import (
+from jacobian.math.number_theory.modular_forms.pari_backend import (
     _pari_character_request,
     pari_character_basis,
 )
@@ -134,7 +134,7 @@ def test_forged_character_coordinates_are_rejected_before_pari(
     monkeypatch: pytest.MonkeyPatch, coordinates: tuple[object, ...]
 ) -> None:
     from jacobian.math.number_theory.modular_forms import character_basis
-    from jacobian.math.number_theory.modular_forms.pari_basis import (
+    from jacobian.math.number_theory.modular_forms.pari_backend import (
         _pari_character_request,
     )
 
@@ -289,7 +289,7 @@ def test_conjugate_character_product_returns_sturm_reconstructed_target() -> Non
 
     from jacobian.math.number_theory.modular_forms import cyclotomic
     from jacobian.math.number_theory.modular_forms.character_basis import _coefficient
-    from jacobian.math.number_theory.modular_forms.pari_basis import (
+    from jacobian.math.number_theory.modular_forms.pari_backend import (
         _pari_character_request,
         pari_character_basis,
     )

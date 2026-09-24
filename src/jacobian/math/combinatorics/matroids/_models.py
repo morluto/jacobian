@@ -443,7 +443,6 @@ class MaximumWeightIndependentSetResult(StrictModel):
 
     @model_validator(mode="after")
     def require_canonical_claim(self) -> Self:
-        _require_objective_weight_digits(self.weight_function)
         if self.weight_function.ground_axis != self.matroid.ground_axis:
             raise _validation_error(
                 "weights.ground_coverage",

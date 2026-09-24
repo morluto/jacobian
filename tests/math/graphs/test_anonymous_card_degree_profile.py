@@ -10,7 +10,7 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.dispatch import invoke_operation
+from jacobian.dispatch import OperationRequestValidationError, invoke_operation
 from jacobian.math.graphs.decks import (
     AnonymousCardDegreeProfile,
     AnonymousCardDegreeProfileRequest,
@@ -213,6 +213,10 @@ def test_catalog_round_trip_canonicalizes_nested_multiset_only_once(
         return original(vertices, edges)
 
     monkeypatch.setattr(deck_models, "_canonical_card_edges", counted)
+    exact_total_work = deck_models._anonymous_profile_resource_estimates(3, 2)[1]
+    monkeypatch.setattr(
+        deck_models, "MAX_ANONYMOUS_CARD_PROFILE_WORK", exact_total_work
+    )
     invocation = invoke_operation(
         operation.operation_id, operation.examples[0].input, Catalog.open()
     )
@@ -220,3 +224,25 @@ def test_catalog_round_trip_canonicalizes_nested_multiset_only_once(
     assert calls == 2
     decoded = operation.result_type.model_validate_json(json.dumps(invocation.output))
     assert decoded.total_card_multiplicity == 3
+
+
+def test_catalog_rejects_combined_bound_before_nested_canonicalization(
+    monkeypatch,
+) -> None:
+    operation = Catalog.open().operation("graph.deck.card_invariant_profile.compute")
+    assert operation is not None
+    payload = operation.examples[0].input
+    original = deck_models._canonical_card_edges
+    calls = 0
+
+    def counted(vertices, edges):
+        nonlocal calls
+        calls += 1
+        return original(vertices, edges)
+
+    monkeypatch.setattr(deck_models, "_canonical_card_edges", counted)
+    monkeypatch.setattr(deck_models, "MAX_ANONYMOUS_CARD_PROFILE_WORK", 1)
+    with pytest.raises(OperationRequestValidationError) as error:
+        invoke_operation(operation.operation_id, payload, Catalog.open())
+    assert "shared work bound" in str(error.value.cause)
+    assert calls == 0

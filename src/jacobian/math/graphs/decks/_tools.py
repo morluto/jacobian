@@ -28,7 +28,7 @@ from jacobian.math.graphs.decks._models import (
     VertexDeletionFamily,
 )
 from jacobian.math.graphs.decks.operations import (
-    _compute_anonymous_card_degree_profile,
+    _profile_from_admitted_multiset,
     anonymous_graph_card_multiset,
     edge_deletion_family,
     edge_unlabelled_deck,
@@ -76,9 +76,9 @@ def _run_unlabelled_vertex(
 def _run_anonymous_card_degree_profile(
     request: AnonymousCardDegreeProfileRequest,
 ) -> AnonymousCardDegreeProfile:
-    # Dispatch parsed nested multiset JSON through its bounded canonical-form
-    # validator; skip repeating that semantic work in the catalog path.
-    return _compute_anonymous_card_degree_profile(request.multiset, trusted=True)
+    # The request's before-validator admits the combined envelope before nested
+    # card parsing; that parser then establishes canonical form exactly once.
+    return _profile_from_admitted_multiset(request.multiset)
 
 
 def _run_vertex_deck_induced_pattern_count(

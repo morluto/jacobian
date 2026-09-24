@@ -52,6 +52,7 @@ from jacobian.math.graphs.decks._models import (
     VertexDeckSubgraphCount,
     VertexDeletionFamily,
     _anonymous_canonicalization_work,
+    _anonymous_profile_resource_estimates,
     _canonical_card_edges,
 )
 from jacobian.math.graphs.patterns._models import _require_bounded_request
@@ -233,9 +234,7 @@ def anonymous_graph_card_multiset(
     return AnonymousGraphCardMultiset._from_kernel(request.card_order, classes)
 
 
-def _admit_anonymous_profile_input(
-    multiset: AnonymousGraphCardMultiset, *, trusted: bool
-) -> None:
+def _admit_anonymous_profile_input(multiset: AnonymousGraphCardMultiset) -> None:
     if type(multiset) is not AnonymousGraphCardMultiset:
         raise OperationDomainValidationError(
             location=("multiset",),
@@ -257,15 +256,11 @@ def _admit_anonymous_profile_input(
             message="multiset classes must be a bounded immutable tuple",
         )
 
-    pair_count = comb(order, 2)
-    canonical_work = _anonymous_canonicalization_work(order, len(classes))
     class_count = len(classes)
-    per_class_profile_work = order * order + 3 * order + 4 * pair_count + 4
-    histogram_order_work = (
-        class_count * max(1, order) * max(1, class_count.bit_length())
+    pair_count = comb(order, 2)
+    canonical_work, total_work, cells, output_bytes = (
+        _anonymous_profile_resource_estimates(order, class_count)
     )
-    profile_work = class_count * per_class_profile_work + histogram_order_work
-    total_work = canonical_work + profile_work
     if (
         canonical_work > MAX_ANONYMOUS_CARD_CANONICALIZATION_WORK
         or total_work > MAX_ANONYMOUS_CARD_PROFILE_WORK
@@ -275,25 +270,18 @@ def _admit_anonymous_profile_input(
             code="graph_deck.card_profile_work_bound",
             message="canonical validation and degree profiling exceed the shared work bound",
         )
-    cells = len(classes) * max(order, 1)
     if cells > MAX_ANONYMOUS_CARD_PROFILE_CELLS:
         raise OperationResourceAdmissionError(
             location=("multiset", "classes"),
             code="graph_deck.card_profile_cell_bound",
             message="degree-profile cells exceed the materialization bound",
         )
-    output_bytes = 128 + len(classes) * (64 + 16 * order)
     if output_bytes > MAX_ANONYMOUS_CARD_PROFILE_RESULT_BYTES:
         raise OperationResourceAdmissionError(
             location=("multiset", "classes"),
             code="graph_deck.card_profile_output_bound",
             message="degree-profile output exceeds the byte bound",
         )
-
-    if trusted:
-        # The strict JSON parser has already admitted and canonicalized every
-        # nested card. Only the profile-specific resource envelope remains.
-        return
 
     expected_vertices = tuple(f"v{i:02d}" for i in range(order))
     previous: tuple[tuple[str, str], ...] | None = None
@@ -336,9 +324,16 @@ def _admit_anonymous_profile_input(
 
 
 def _compute_anonymous_card_degree_profile(
-    multiset: AnonymousGraphCardMultiset, *, trusted: bool
+    multiset: AnonymousGraphCardMultiset,
 ) -> AnonymousCardDegreeProfile:
-    _admit_anonymous_profile_input(multiset, trusted=trusted)
+    _admit_anonymous_profile_input(multiset)
+    return _profile_from_admitted_multiset(multiset)
+
+
+def _profile_from_admitted_multiset(
+    multiset: AnonymousGraphCardMultiset,
+) -> AnonymousCardDegreeProfile:
+    """Run the kernel after request-level resource and domain admission."""
     order = multiset.card_order
     counts: dict[tuple[int, ...], int] = {}
     total = 0
@@ -371,7 +366,7 @@ def anonymous_card_degree_profile(
             message="request must be an AnonymousCardDegreeProfileRequest",
         )
     multiset = getattr(request, "multiset", None)
-    return _compute_anonymous_card_degree_profile(multiset, trusted=False)
+    return _compute_anonymous_card_degree_profile(multiset)
 
 
 def _admit_deck_graph(graph: SimpleUndirectedGraph) -> SimpleUndirectedGraph:

@@ -52,6 +52,20 @@ def _anonymous_canonicalization_work(order: int, card_count: int) -> int:
     return card_count * factorial(order) * (order + 2 * max(1, pair_count))
 
 
+def _anonymous_profile_resource_estimates(
+    order: int, card_count: int
+) -> tuple[int, int, int, int]:
+    """Estimate combined canonical-validation and degree-profile resources."""
+    pair_count = comb(order, 2)
+    canonical_work = _anonymous_canonicalization_work(order, card_count)
+    per_class_profile_work = order * order + 3 * order + 4 * pair_count + 4
+    histogram_order_work = card_count * max(1, order) * max(1, card_count.bit_length())
+    profile_work = card_count * per_class_profile_work + histogram_order_work
+    cells = card_count * max(order, 1)
+    output_bytes = 128 + card_count * (64 + 16 * order)
+    return canonical_work, canonical_work + profile_work, cells, output_bytes
+
+
 def _canonical_card_edges(
     vertices: tuple[str, ...], edges: tuple[tuple[str, str], ...]
 ) -> tuple[tuple[str, str], ...]:
@@ -250,7 +264,8 @@ class AnonymousCardDegreeProfile(StrictModel):
         cells = len(self.degree_multisets) * max(order, 1)
         if output_bytes > MAX_ANONYMOUS_CARD_PROFILE_RESULT_BYTES:
             raise _validation_error(
-                "card_profile_output_bound", "degree-profile values exceed the byte bound"
+                "card_profile_output_bound",
+                "degree-profile values exceed the byte bound",
             )
         if cells > MAX_ANONYMOUS_CARD_PROFILE_CELLS:
             raise _validation_error(
@@ -328,6 +343,112 @@ class AnonymousCardDegreeProfileRequest(StrictModel):
             "representatives and their exact multiplicities."
         )
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def admit_combined_resources_before_nested_canonicalization(cls, value: Any) -> Any:
+        """Reject over-budget profiles before parsing canonical card classes."""
+        _admit_anonymous_profile_wire_resources(value)
+        return _normalize_anonymous_profile_json_tuples(value)
+
+
+def _admit_anonymous_profile_wire_resources(value: Any) -> None:
+    if type(value) is not dict:
+        return
+    multiset = value.get("multiset")
+    if type(multiset) is not dict:
+        return
+    order = multiset.get("card_order")
+    classes = multiset.get("classes")
+    if (
+        type(order) is not int
+        or not 0 <= order <= MAX_UNLABELLED_DECK_VERTICES
+        or type(classes) not in (list, tuple)
+    ):
+        return
+    if len(classes) > MAX_ANONYMOUS_CARD_CLASSES:
+        raise _validation_error(
+            "card_profile_class_bound", "profile input has too many card classes"
+        )
+    canonical_work, total_work, cells, output_bytes = (
+        _anonymous_profile_resource_estimates(order, len(classes))
+    )
+    if (
+        canonical_work > MAX_ANONYMOUS_CARD_CANONICALIZATION_WORK
+        or total_work > MAX_ANONYMOUS_CARD_PROFILE_WORK
+    ):
+        raise _validation_error(
+            "card_profile_work_bound",
+            "canonical validation and degree profiling exceed the shared work bound",
+        )
+    if cells > MAX_ANONYMOUS_CARD_PROFILE_CELLS:
+        raise _validation_error(
+            "card_profile_cell_bound",
+            "degree-profile cells exceed the materialization bound",
+        )
+    if output_bytes > MAX_ANONYMOUS_CARD_PROFILE_RESULT_BYTES:
+        raise _validation_error(
+            "card_profile_output_bound",
+            "degree-profile output exceeds the byte bound",
+        )
+
+
+def _normalize_anonymous_profile_json_tuples(value: Any) -> Any:
+    """Restore tuple fields after the JSON before validator receives lists."""
+    if type(value) is not dict:
+        return value
+    multiset = value.get("multiset")
+    if type(multiset) is not dict:
+        return value
+    order = multiset.get("card_order")
+    classes = multiset.get("classes")
+    if type(order) is not int or not 0 <= order <= MAX_UNLABELLED_DECK_VERTICES:
+        return value
+    if type(classes) is not list:
+        return value
+    pair_count = comb(order, 2)
+    normalized_classes = tuple(
+        _normalize_anonymous_profile_json_class(item, order, pair_count)
+        for item in classes
+    )
+    normalized_multiset = dict(multiset)
+    normalized_multiset["classes"] = normalized_classes
+    normalized_request = dict(value)
+    normalized_request["multiset"] = normalized_multiset
+    return normalized_request
+
+
+def _normalize_anonymous_profile_json_class(
+    item: Any, order: int, pair_count: int
+) -> Any:
+    if type(item) is not dict:
+        return item
+    representative = item.get("representative")
+    if type(representative) is not dict:
+        return item
+    vertices = representative.get("vertices")
+    edges = representative.get("edges")
+    if type(vertices) is list and len(vertices) > order:
+        raise _validation_error(
+            "card_profile_vertex_length",
+            "a card has more vertex labels than its declared order",
+        )
+    if type(edges) is list and len(edges) > pair_count:
+        raise _validation_error(
+            "card_profile_edge_length",
+            "a card has more edges than a simple graph of its order",
+        )
+    normalized_representative = dict(representative)
+    if type(vertices) is list:
+        normalized_representative["vertices"] = tuple(vertices)
+    if type(edges) is list:
+        normalized_representative["edges"] = tuple(
+            tuple(edge) if type(edge) is list and len(edge) == 2 else edge
+            for edge in edges
+        )
+    normalized_class = dict(item)
+    normalized_class["representative"] = normalized_representative
+    return normalized_class
 
 
 class VertexDeckRequest(StrictModel):

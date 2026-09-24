@@ -32,10 +32,10 @@ the total card multiplicity, so an empty card multiset of order `n` produces an
 empty histogram with order `n` and total zero. This invariant profile makes no
 source-deck realizability claim.
 
-The consumer admits canonical-validation work, degree-vector and edge-scan
-work, histogram aggregation and ordering, materialized degree cells, and result
-bytes before profile construction. Native calls
-re-admit the untrusted card value, including its exact permutation canonical
-form. The catalog adapter relies on the strict JSON parsing boundary to perform
-that canonical validation once, then uses the admitted profile kernel without
-repeating canonicalization.
+The request admits the combined canonical-validation and profile work, degree
+cells, and result bytes from the declared order and class count before nested
+card parsing begins. Native calls perform the same combined admission before
+defensively validating the untrusted card value, including its exact
+permutation canonical form. The catalog parser then establishes that canonical
+form once, and its adapter runs the profile kernel without repeating resource
+admission or canonicalization.

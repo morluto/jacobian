@@ -27,8 +27,6 @@ MAX_DERIVATION_PARAMETER = "t"
 MAX_GA_ACTION_VARIABLES = 7
 MAX_GA_ACTION_OUTPUT_TERMS = 4_096
 MAX_GA_ACTION_OUTPUT_BYTES = 2_000_000
-MAX_GA_ACTION_GROUP_LAW_CELLS = 25_000
-MAX_GA_ACTION_GROUP_LAW_COEFFICIENT_DIGITS = 512
 
 GeneratorIterateChain = Annotated[
     tuple[RationalPolynomial, ...],
@@ -280,17 +278,12 @@ class GaActionRequest(StrictModel):
                 "explicit parameter axis limits the source ring to "
                 f"{MAX_GA_ACTION_VARIABLES} variables; action output is bounded "
                 f"to {MAX_GA_ACTION_OUTPUT_TERMS} terms, "
-                f"{MAX_GA_ACTION_OUTPUT_BYTES} estimated bytes, and "
-                f"{MAX_GA_ACTION_GROUP_LAW_CELLS} coaction expansion cells "
-                "with coefficient-height bound "
-                f"{MAX_GA_ACTION_GROUP_LAW_COEFFICIENT_DIGITS} digits."
+                f"{MAX_GA_ACTION_OUTPUT_BYTES} estimated bytes."
             ),
             "admission_limits": {
                 "max_source_variables": MAX_GA_ACTION_VARIABLES,
                 "max_action_output_terms": MAX_GA_ACTION_OUTPUT_TERMS,
                 "max_action_output_bytes": MAX_GA_ACTION_OUTPUT_BYTES,
-                "max_coaction_expansion_cells": MAX_GA_ACTION_GROUP_LAW_CELLS,
-                "max_coaction_coefficient_digits": MAX_GA_ACTION_GROUP_LAW_COEFFICIENT_DIGITS,
                 "max_generator_chain_length": MAX_DERIVATION_CERTIFICATE_CHAIN,
             },
         }

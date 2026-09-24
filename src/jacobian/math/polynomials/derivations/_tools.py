@@ -192,11 +192,8 @@ _TOOLS += (
         title="Exponentiate a checked locally nilpotent derivation",
         description=(
             "Check exact generator chains for local nilpotence, then return the "
-            "finite exponential coaction exp(tD) on generators. The producer "
-            "replays identity, infinitesimal recovery, and the additive coaction "
-            "law before returning. Admission bounds source variables, total "
-            "output terms and bytes, and exact two-parameter coaction expansion "
-            "work and coefficient height."
+            "finite exponential coaction exp(tD) on generators. Admission "
+            "bounds source variables and total exact output terms and bytes."
         ),
         request_type=GaActionRequest,
         result_type=PolynomialGaAction,

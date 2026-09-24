@@ -479,9 +479,16 @@ class TreeAutomatonMinimizeResult(TreeAutomatonMinimizeRequest):
             raise _validation_error(
                 "minimize_signature", "minimization preserves the ranked signature"
             )
+        non_null_representatives = tuple(
+            state for state in self.new_to_old if state is not None
+        )
         if (
             len(self.new_to_old) != self.minimized.state_count
-            or self.new_to_old != tuple(sorted(set(self.new_to_old)))
+            or (
+                len(non_null_representatives) == len(self.new_to_old)
+                and non_null_representatives
+                != tuple(sorted(set(non_null_representatives)))
+            )
             or any(
                 state is not None and not 0 <= state < source.state_count
                 for state in self.new_to_old

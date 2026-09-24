@@ -624,11 +624,22 @@ def complete_deterministic_tree_automaton(
         (transition.symbol, transition.child_states): transition.target_state
         for transition in automaton.transitions
     }
+
+    def completed_target(symbol: int, children: tuple[int, ...]) -> int:
+        target = existing.get((symbol, children))
+        if target is not None:
+            return target
+        if sink_state is None:
+            raise RuntimeError(
+                "a complete source automaton is missing an admitted transition"
+            )
+        return sink_state
+
     transitions = tuple(
         TreeAutomatonTransition(
             symbol=symbol,
             child_states=children,
-            target_state=existing.get((symbol, children), sink_state),
+            target_state=completed_target(symbol, children),
         )
         for symbol, rank in enumerate(automaton.arity)
         for children in product(range(completed_state_count), repeat=rank)

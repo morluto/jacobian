@@ -71,8 +71,10 @@ def _multiply(
     return tuple(
         tuple(
             sum(
-                (Fraction(left[row][inner]) * right[inner][column]
-                 for inner in range(rank)),
+                (
+                    Fraction(left[row][inner]) * right[inner][column]
+                    for inner in range(rank)
+                ),
                 Fraction(0),
             )
             for column in range(rank)
@@ -149,8 +151,7 @@ def weyl_element_act_on_weight(
     max_coordinate = max((abs(value) for value in coordinates), default=0)
     coordinate_bound = max(
         (
-            sum(abs(action[row][column]) for column in range(rank))
-            * max_coordinate
+            sum(abs(action[row][column]) for column in range(rank)) * max_coordinate
             for row in range(rank)
         ),
         default=0,
@@ -174,6 +175,4 @@ def weyl_element_act_on_weight(
         for row in range(rank)
     )
     _admit_lattice_coordinates(image, rank, output=True)
-    return WeightLatticeVector.model_construct(
-        datum=datum, coordinates=image
-    )
+    return WeightLatticeVector.model_construct(datum=datum, coordinates=image)

@@ -55,9 +55,7 @@ def test_a2_action_matches_exact_reflection_formula_and_serializes():
     decoded_request = WeylElementWeightActionRequest.model_validate_json(
         request.model_dump_json()
     )
-    decoded_result = WeightLatticeVector.model_validate_json(
-        result.model_dump_json()
-    )
+    decoded_result = WeightLatticeVector.model_validate_json(result.model_dump_json())
     assert weyl_element_act_on_weight(decoded_request) == decoded_result
 
 
@@ -73,9 +71,12 @@ def test_identity_reflection_composition_and_inverse_are_exact():
     identity = weyl_element_from_word(_A2, ())
     reflection = weyl_element_from_word(_A2, (0,))
 
-    assert weyl_element_act_on_weight(
-        WeylElementWeightActionRequest(element=identity, weight=source)
-    ) == source
+    assert (
+        weyl_element_act_on_weight(
+            WeylElementWeightActionRequest(element=identity, weight=source)
+        )
+        == source
+    )
     once = weyl_element_act_on_weight(
         WeylElementWeightActionRequest(element=reflection, weight=source)
     )
@@ -127,7 +128,9 @@ def test_output_coordinate_growth_is_rejected_before_vector_construction(monkeyp
     def construction_is_too_late(*args, **kwargs):
         pytest.fail("weight output must be admitted before result construction")
 
-    monkeypatch.setattr(WeightLatticeVector, "model_construct", construction_is_too_late)
+    monkeypatch.setattr(
+        WeightLatticeVector, "model_construct", construction_is_too_late
+    )
     with pytest.raises(OperationResourceAdmissionError):
         weyl_element_act_on_weight(request)
 

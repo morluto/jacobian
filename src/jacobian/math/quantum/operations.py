@@ -24,6 +24,8 @@ from jacobian.math.quantum._models import (
     CSSLogicalPauliFrame,
     CSSNonOrthogonalWitness,
     ExactQubitPauli,
+    ExactStabilizerGroup,
+    ExactStabilizerGroupRequest,
     LogicalPauliFrame,
     NonCommutingWitness,
     NormalizerResult,
@@ -448,6 +450,118 @@ def pauli_inverse(value: ExactQubitPauli) -> PauliInverseResult:
         phase=phase,
     )
     return PauliInverseResult(source=value, inverse=inverse)
+
+
+def stabilizer_group_from_generators(
+    request: ExactStabilizerGroupRequest,
+) -> ExactStabilizerGroup:
+    """Validate exact stabilizer generators and retain an independent basis.
+
+    A generator is Hermitian precisely when ``phase + x.z`` is even under
+    ``i^phase X^x Z^z``. Pairwise commutation is checked before elimination.
+    During incremental GF(2) reduction, each dependent row is multiplied by
+    the selected Hermitian generators that cancel its vector. A zero vector
+    must then have phase zero: phase two would put ``-I`` in the group.
+    """
+    if not isinstance(request, ExactStabilizerGroupRequest):
+        _reject(
+            "request",
+            "quantum.stabilizer.exact_group.invalid_request",
+            "request must contain a register and exact Pauli generators",
+        )
+    register = _admit_register(request.qubit_register, "register")
+    values = request.generators
+    if not isinstance(values, tuple) or len(values) > MAX_CHECK_ROWS:
+        _reject(
+            "generators",
+            "quantum.stabilizer.exact_group.invalid_size",
+            "exact generator family exceeds its admitted row count",
+        )
+
+    # Admission is performed once before arithmetic. Charge the complete
+    # pairwise scan and the worst-case elimination pass, plus bounded pivot
+    # ordering overhead, before doing any generator arithmetic.
+    width = len(register.qubit_ids)
+    count = len(values)
+    pair_count = count * (count - 1) // 2
+    work_bound = (
+        2 * pair_count * width
+        + 3 * count * min(count, width) * width
+        + count * width * (MAX_QUBIT_LABEL_LENGTH + 4)
+        + count * width
+    )
+    if work_bound > 470_000:
+        raise OperationResourceAdmissionError(
+            location=("generators",),
+            code="quantum.stabilizer.exact_group.over_envelope",
+            message="exact generator validation exceeds its work envelope",
+        )
+
+    generators: list[ExactQubitPauli] = []
+    for index, value in enumerate(values):
+        pauli = _admit_exact(value, f"generators[{index}]")
+        if pauli.register != register:
+            _reject(
+                f"generators[{index}]",
+                "quantum.stabilizer.exact_group.register_mismatch",
+                "every exact generator must use the identical ordered register",
+            )
+        if (
+            pauli.phase
+            + sum(
+                x * z
+                for x, z in zip(
+                    pauli.phase_free.x_bits, pauli.phase_free.z_bits, strict=True
+                )
+            )
+        ) % 2:
+            _reject(
+                f"generators[{index}]",
+                "quantum.stabilizer.exact_group.non_hermitian_generator",
+                "stabilizer generators must be Hermitian Paulis",
+            )
+        generators.append(pauli)
+
+    for i, first in enumerate(generators):
+        for second in generators[i + 1 :]:
+            if _symplectic_pairing(
+                (*first.phase_free.x_bits, *first.phase_free.z_bits),
+                (*second.phase_free.x_bits, *second.phase_free.z_bits),
+                width,
+            ):
+                _reject(
+                    "generators",
+                    "quantum.stabilizer.exact_group.noncommuting_generators",
+                    "stabilizer generators must commute pairwise",
+                )
+
+    # Each echelon row is an exact product of selected input generators.
+    # Its leading coordinate is unique; the phase is carried through each
+    # multiplication, so a dependent row detects the actual scalar relation.
+    echelon: dict[int, ExactQubitPauli] = {}
+    independent: list[ExactQubitPauli] = []
+    for generator in generators:
+        reduced = generator
+        vector = (*reduced.phase_free.x_bits, *reduced.phase_free.z_bits)
+        for pivot in sorted(echelon):
+            if vector[pivot]:
+                row = echelon[pivot]
+                product_pauli = pauli_multiply(reduced, row).product
+                reduced = product_pauli
+                vector = (*reduced.phase_free.x_bits, *reduced.phase_free.z_bits)
+        pivot = next((column for column, bit in enumerate(vector) if bit), None)
+        if pivot is None:
+            if reduced.phase != 0:
+                _reject(
+                    "generators",
+                    "quantum.stabilizer.exact_group.forbidden_scalar",
+                    "a generator dependency produces a nonidentity scalar",
+                )
+            continue
+        echelon[pivot] = reduced
+        independent.append(generator)
+
+    return ExactStabilizerGroup(qubit_register=register, generators=tuple(independent))
 
 
 def _gf2_nullspace(rows: list[list[int]], width: int) -> tuple[tuple[int, ...], ...]:

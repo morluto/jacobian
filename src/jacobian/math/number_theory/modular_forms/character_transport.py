@@ -45,7 +45,6 @@ from jacobian.math.number_theory.modular_forms.values import (
 
 _MAX_TRANSPORT_WORK = 5_000_000
 _MAX_TRANSPORT_OUTPUT_BYTES = 1_000_000
-_MAX_TRANSPORT_BASIS_DIGITS = 1
 
 
 @dataclass(frozen=True)

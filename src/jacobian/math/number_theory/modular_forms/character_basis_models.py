@@ -1,0 +1,142 @@
+"""Typed exact carriers for the bounded character-valued basis slice."""
+
+from __future__ import annotations
+
+from typing import Literal, Self
+
+from pydantic import Field, StrictInt, model_validator
+from pydantic_core import PydanticCustomError
+
+from jacobian._models import StrictModel
+from jacobian.math.matrices.cyclic_linear._models import (
+    RationalCyclotomicElement,
+    RationalCyclotomicField,
+)
+from jacobian.math.number_theory.modular_forms.values import (
+    ModularFormCoordinates,
+    ModularFormSpace,
+)
+
+
+class ModularCharacterBasisRequest(StrictModel):
+    """Request one supported exact character-valued basis prefix."""
+
+    space: ModularFormSpace
+
+
+class ModularCharacterQExpansion(StrictModel):
+    """One finite q-prefix over the explicit cyclotomic field of its space."""
+
+    space: ModularFormSpace
+    basis_id: Literal["gamma0-13-even-order6-character-sturm-v1"]
+    coefficients: tuple[RationalCyclotomicElement, ...] = Field(
+        min_length=3, max_length=3
+    )
+
+    @model_validator(mode="after")
+    def require_coefficient_parent(self) -> Self:
+        field = self.space.coefficient_domain
+        if type(field) is not RationalCyclotomicField:
+            raise PydanticCustomError(
+                "modular_forms.character_q_parent",
+                "character q-expansion requires a cyclotomic coefficient field",
+            )
+        if any(value.field != field for value in self.coefficients):
+            raise PydanticCustomError(
+                "modular_forms.character_q_coefficient_parent",
+                "every q coefficient must belong to the space coefficient field",
+            )
+        return self
+
+
+class ModularCharacterCoordinatesRequest(StrictModel):
+    """Construct the exact Sturm prefix of one represented character form."""
+
+    form: ModularFormCoordinates
+
+
+class ModularCharacterHeckeRequest(StrictModel):
+    """Apply one admitted Hecke index to a character-valued form."""
+
+    form: ModularFormCoordinates
+    index: StrictInt = Field(ge=1, le=32)
+
+
+class ModularCharacterHeckeMatrixRequest(StrictModel):
+    """Request the Hecke action matrix in the canonical character basis."""
+
+    space: ModularFormSpace
+    index: StrictInt = Field(ge=1, le=32)
+
+
+class ModularCharacterHeckeMatrix(StrictModel):
+    """Exact Hecke matrix bound to one represented character space and basis."""
+
+    space: ModularFormSpace
+    basis_id: Literal["gamma0-13-even-order6-character-sturm-v1"]
+    index: StrictInt = Field(ge=1, le=32)
+    entries: tuple[tuple[RationalCyclotomicElement],] = Field(
+        min_length=1, max_length=1
+    )
+
+    @model_validator(mode="after")
+    def require_entry_parent(self) -> Self:
+        field = self.space.coefficient_domain
+        if (
+            type(field) is not RationalCyclotomicField
+            or self.entries[0][0].field != field
+        ):
+            raise PydanticCustomError(
+                "modular_forms.character_hecke_matrix_parent",
+                "the Hecke matrix entry must belong to its character space field",
+            )
+        return self
+
+
+class ModularCharacterCoordinatesProductRequest(StrictModel):
+    """Multiply the two conjugate represented character forms."""
+
+    left: ModularFormCoordinates
+    right: ModularFormCoordinates
+
+
+class ModularCharacterBasisElement(StrictModel):
+    label: str = Field(min_length=1, max_length=96)
+    expansion: ModularCharacterQExpansion
+
+
+class ModularCharacterBasis(StrictModel):
+    """A complete admitted character-valued basis through a Sturm prefix."""
+
+    space: ModularFormSpace
+    basis_id: Literal["gamma0-13-even-order6-character-sturm-v1"]
+    precision: Literal[3] = 3
+    elements: tuple[ModularCharacterBasisElement, ...] = Field(
+        min_length=1, max_length=1
+    )
+
+    @model_validator(mode="after")
+    def require_source_and_precision(self) -> Self:
+        if any(
+            item.expansion.space != self.space
+            or item.expansion.basis_id != self.basis_id
+            or len(item.expansion.coefficients) != 3
+            for item in self.elements
+        ):
+            raise PydanticCustomError(
+                "modular_forms.character_basis_binding",
+                "character basis vectors must preserve the exact source and precision",
+            )
+        return self
+
+
+__all__ = [
+    "ModularCharacterBasis",
+    "ModularCharacterBasisElement",
+    "ModularCharacterBasisRequest",
+    "ModularCharacterCoordinatesRequest",
+    "ModularCharacterHeckeMatrix",
+    "ModularCharacterHeckeMatrixRequest",
+    "ModularCharacterHeckeRequest",
+    "ModularCharacterQExpansion",
+]

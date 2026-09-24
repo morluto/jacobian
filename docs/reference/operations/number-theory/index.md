@@ -1,6 +1,9 @@
 # Number theory operations
 
 - [Level-one named modular-form q-expansions](modular-forms-level-one-q-expansions.md)
+- [Modular-form spaces, bases, and coordinates](modular-forms-level-one-bases-coordinates.md)
+- [Rational Gamma0 modular-form bases](modular-forms-gamma0-rational-bases.md)
+- [Formal q-series U and V prefix maps](modular-form-formal-q-series-operators.md)
 
 [Documentation home](../../../index.md) · [Tool surface](../../tools.md)
 

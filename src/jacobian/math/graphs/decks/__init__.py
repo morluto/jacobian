@@ -1,6 +1,9 @@
 """Exact source-bound vertex-deletion deck operations."""
 
 from jacobian.math.graphs.decks._models import (
+    AnonymousCardDegreeFrequency,
+    AnonymousCardDegreeProfile,
+    AnonymousCardDegreeProfileRequest,
     AnonymousGraphCardClass,
     AnonymousGraphCardMultiset,
     AnonymousGraphCardMultisetRequest,
@@ -23,6 +26,7 @@ from jacobian.math.graphs.decks._models import (
     VertexDeletionFamily,
 )
 from jacobian.math.graphs.decks.operations import (
+    anonymous_card_degree_profile,
     anonymous_graph_card_multiset,
     edge_deletion_family,
     edge_unlabelled_deck,
@@ -38,6 +42,9 @@ from jacobian.math.graphs.decks.operations import (
 )
 
 __all__ = [
+    "AnonymousCardDegreeFrequency",
+    "AnonymousCardDegreeProfile",
+    "AnonymousCardDegreeProfileRequest",
     "AnonymousGraphCardClass",
     "AnonymousGraphCardMultiset",
     "AnonymousGraphCardMultisetRequest",
@@ -58,6 +65,7 @@ __all__ = [
     "VertexDeckSubgraphCount",
     "VertexDeckSubgraphCountRequest",
     "VertexDeletionFamily",
+    "anonymous_card_degree_profile",
     "anonymous_graph_card_multiset",
     "edge_deletion_family",
     "edge_unlabelled_deck",

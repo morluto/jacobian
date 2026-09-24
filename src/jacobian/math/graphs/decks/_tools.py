@@ -5,6 +5,8 @@ from typing import Any
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.graphs.decks._models import (
     MAX_KELLY_DECK_TOTAL_WORK,
+    AnonymousCardDegreeProfile,
+    AnonymousCardDegreeProfileRequest,
     AnonymousGraphCardMultiset,
     AnonymousGraphCardMultisetRequest,
     EdgeDeckRequest,
@@ -26,6 +28,7 @@ from jacobian.math.graphs.decks._models import (
     VertexDeletionFamily,
 )
 from jacobian.math.graphs.decks.operations import (
+    _compute_anonymous_card_degree_profile,
     anonymous_graph_card_multiset,
     edge_deletion_family,
     edge_unlabelled_deck,
@@ -70,6 +73,14 @@ def _run_unlabelled_vertex(
     return unlabelled_vertex_deck(request.deck)
 
 
+def _run_anonymous_card_degree_profile(
+    request: AnonymousCardDegreeProfileRequest,
+) -> AnonymousCardDegreeProfile:
+    # Dispatch parsed nested multiset JSON through its bounded canonical-form
+    # validator; skip repeating that semantic work in the catalog path.
+    return _compute_anonymous_card_degree_profile(request.multiset, trusted=True)
+
+
 def _run_vertex_deck_induced_pattern_count(
     request: VertexDeckInducedSubgraphCountRequest,
 ) -> VertexDeckInducedSubgraphCount:
@@ -95,6 +106,57 @@ def _run_vertex_deck_degree_multiset(
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
+    MathTool(
+        operation_id="graph.deck.card_invariant_profile.compute",
+        title="Profile anonymous graph cards by degree multiset",
+        description=(
+            "Group the degree multisets of canonical anonymous graph-card "
+            "representatives, summing each class's exact positive multiplicity. "
+            "Retain the declared card order, including for an empty input. This "
+            "is an invariant profile of the supplied cards; it does not assert "
+            "that they form a realizable graph deck or identify a source."
+        ),
+        request_type=AnonymousCardDegreeProfileRequest,
+        result_type=AnonymousCardDegreeProfile,
+        run=_run_anonymous_card_degree_profile,
+        tags=("graph", "deck", "anonymous", "degree-multiset", "invariant", "exact"),
+        discovery_terms=(
+            "anonymous graph card degree profile",
+            "degree multiset histogram of cards",
+            "degree invariant across card classes",
+        ),
+        examples=(
+            OperationExample(
+                name="empty_and_edge_card_profile",
+                description=(
+                    "Count the degree multisets of an empty three-vertex card and "
+                    "two copies of a one-edge card; all representatives must be "
+                    "canonical cards of the declared order three."
+                ),
+                input={
+                    "multiset": {
+                        "card_order": 3,
+                        "classes": [
+                            {
+                                "representative": {
+                                    "vertices": ["v00", "v01", "v02"],
+                                    "edges": [],
+                                },
+                                "multiplicity": "1",
+                            },
+                            {
+                                "representative": {
+                                    "vertices": ["v00", "v01", "v02"],
+                                    "edges": [["v01", "v02"]],
+                                },
+                                "multiplicity": "2",
+                            },
+                        ],
+                    }
+                },
+            ),
+        ),
+    ),
     MathTool(
         operation_id="graph.deck.from_cards.construct",
         title="Canonicalize an anonymous multiset of graph cards",

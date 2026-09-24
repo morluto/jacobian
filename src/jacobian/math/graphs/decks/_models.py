@@ -27,6 +27,9 @@ MAX_UNLABELLED_EDGE_DECK_RESULT_BYTES = 1_000_000
 MAX_ANONYMOUS_CARD_CANONICALIZATION_WORK = 2_000_000
 MAX_ANONYMOUS_CARD_RESULT_BYTES = 1_000_000
 MAX_ANONYMOUS_CARD_CLASSES = MAX_ANONYMOUS_CARD_RESULT_BYTES // 64
+MAX_ANONYMOUS_CARD_PROFILE_WORK = 2_000_000
+MAX_ANONYMOUS_CARD_PROFILE_CELLS = 200_000
+MAX_ANONYMOUS_CARD_PROFILE_RESULT_BYTES = 1_000_000
 """Admission cap on aggregate card edges across the whole family."""
 MAX_VERTEX_DECK_SOURCE_EDGES = comb(MAX_UNLABELLED_DECK_VERTICES, 2)
 MAX_VERTEX_DECK_CARD_EDGE_TOTAL = MAX_UNLABELLED_DECK_VERTICES * comb(
@@ -206,6 +209,125 @@ class AnonymousGraphCardMultiset(StrictModel):
         cls, card_order: int, classes: tuple[AnonymousGraphCardClass, ...]
     ) -> Self:
         return cls.model_construct(card_order=card_order, classes=classes)
+
+
+class AnonymousCardDegreeFrequency(StrictModel):
+    """One sorted degree multiset and its exact total card multiplicity."""
+
+    degrees: tuple[int, ...] = Field(
+        max_length=MAX_UNLABELLED_DECK_VERTICES,
+        description="Nonincreasing vertex degrees, with one coordinate per card vertex.",
+    )
+    multiplicity: Annotated[int, DecimalIntegerEncoding(max_digits=20)] = Field(ge=1)
+
+
+class AnonymousCardDegreeProfile(StrictModel):
+    """Degree-multiset histogram for an anonymous card multiset."""
+
+    card_order: int = Field(ge=0, le=MAX_UNLABELLED_DECK_VERTICES)
+    total_card_multiplicity: Annotated[int, DecimalIntegerEncoding(max_digits=20)] = (
+        Field(ge=0)
+    )
+    degree_multisets: tuple[AnonymousCardDegreeFrequency, ...] = Field(
+        max_length=MAX_ANONYMOUS_CARD_CLASSES
+    )
+
+    @model_validator(mode="after")
+    def require_canonical_degree_profile(self) -> Self:
+        order = self.card_order
+        if type(order) is not int or not 0 <= order <= MAX_UNLABELLED_DECK_VERTICES:
+            raise _validation_error(
+                "card_profile_order", "card_order is outside its bound"
+            )
+        if (
+            type(self.degree_multisets) is not tuple
+            or len(self.degree_multisets) > MAX_ANONYMOUS_CARD_CLASSES
+        ):
+            raise _validation_error(
+                "card_profile_rows", "degree_multisets must be a tuple"
+            )
+        output_bytes = 128 + len(self.degree_multisets) * (64 + 16 * order)
+        cells = len(self.degree_multisets) * max(order, 1)
+        if output_bytes > MAX_ANONYMOUS_CARD_PROFILE_RESULT_BYTES:
+            raise _validation_error(
+                "card_profile_output_bound", "degree-profile values exceed the byte bound"
+            )
+        if cells > MAX_ANONYMOUS_CARD_PROFILE_CELLS:
+            raise _validation_error(
+                "card_profile_cell_bound", "degree-profile values exceed the cell bound"
+            )
+        previous: tuple[int, ...] | None = None
+        total = 0
+        for row in self.degree_multisets:
+            if type(row) is not AnonymousCardDegreeFrequency:
+                raise _validation_error(
+                    "card_profile_row_type", "profile rows have the wrong carrier"
+                )
+            degrees = getattr(row, "degrees", None)
+            multiplicity = getattr(row, "multiplicity", None)
+            if (
+                type(degrees) is not tuple
+                or len(degrees) != order
+                or any(
+                    type(degree) is not int or degree < 0 or degree >= max(order, 1)
+                    for degree in degrees
+                )
+                or tuple(sorted(degrees, reverse=True)) != degrees
+            ):
+                raise _validation_error(
+                    "card_profile_degrees",
+                    "each degree multiset must be a sorted vector on the declared card order",
+                )
+            if (
+                type(multiplicity) is not int
+                or multiplicity < 1
+                or multiplicity >= 10**20
+            ):
+                raise _validation_error(
+                    "card_profile_multiplicity",
+                    "profile multiplicities must be positive bounded integers",
+                )
+            if previous is not None and degrees <= previous:
+                raise _validation_error(
+                    "card_profile_ordering",
+                    "degree multiset rows must be unique and lexicographically ordered",
+                )
+            previous = degrees
+            total += multiplicity
+        if (
+            type(self.total_card_multiplicity) is not int
+            or self.total_card_multiplicity >= 10**20
+            or self.total_card_multiplicity != total
+        ):
+            raise _validation_error(
+                "card_profile_total",
+                "total_card_multiplicity must equal the histogram sum",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        card_order: int,
+        total_card_multiplicity: int,
+        degree_multisets: tuple[AnonymousCardDegreeFrequency, ...],
+    ) -> Self:
+        return cls.model_construct(
+            card_order=card_order,
+            total_card_multiplicity=total_card_multiplicity,
+            degree_multisets=degree_multisets,
+        )
+
+
+class AnonymousCardDegreeProfileRequest(StrictModel):
+    """Profile a validated anonymous graph-card multiset by degree multiset."""
+
+    multiset: AnonymousGraphCardMultiset = Field(
+        description=(
+            "Anonymous multiset of pairwise nonisomorphic canonical graph-card "
+            "representatives and their exact multiplicities."
+        )
+    )
 
 
 class VertexDeckRequest(StrictModel):

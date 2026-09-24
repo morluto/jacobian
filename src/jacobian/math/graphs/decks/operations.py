@@ -16,6 +16,10 @@ from jacobian.catalog.models import (
 )
 from jacobian.math.graphs.decks._models import (
     MAX_ANONYMOUS_CARD_CANONICALIZATION_WORK,
+    MAX_ANONYMOUS_CARD_CLASSES,
+    MAX_ANONYMOUS_CARD_PROFILE_CELLS,
+    MAX_ANONYMOUS_CARD_PROFILE_RESULT_BYTES,
+    MAX_ANONYMOUS_CARD_PROFILE_WORK,
     MAX_ANONYMOUS_CARD_RESULT_BYTES,
     MAX_DECK_CARD_EDGES,
     MAX_DECK_VERTICES,
@@ -26,6 +30,9 @@ from jacobian.math.graphs.decks._models import (
     MAX_UNLABELLED_DECK_ISOMORPHISM_WORK,
     MAX_UNLABELLED_DECK_VERTICES,
     MAX_UNLABELLED_EDGE_DECK_RESULT_BYTES,
+    AnonymousCardDegreeFrequency,
+    AnonymousCardDegreeProfile,
+    AnonymousCardDegreeProfileRequest,
     AnonymousGraphCardClass,
     AnonymousGraphCardMultiset,
     AnonymousGraphCardMultisetRequest,
@@ -55,6 +62,7 @@ from jacobian.math.graphs.realization._models import DegreeSequence
 from jacobian.math.graphs.values import MAX_GRAPH_LABEL_BYTES, SimpleUndirectedGraph
 
 __all__ = [
+    "anonymous_card_degree_profile",
     "anonymous_graph_card_multiset",
     "edge_deletion_family",
     "edge_unlabelled_deck",
@@ -223,6 +231,147 @@ def anonymous_graph_card_multiset(
         for key in sorted(counts)
     )
     return AnonymousGraphCardMultiset._from_kernel(request.card_order, classes)
+
+
+def _admit_anonymous_profile_input(
+    multiset: AnonymousGraphCardMultiset, *, trusted: bool
+) -> None:
+    if type(multiset) is not AnonymousGraphCardMultiset:
+        raise OperationDomainValidationError(
+            location=("multiset",),
+            code="graph_deck.card_profile_multiset_carrier",
+            message="multiset must be an AnonymousGraphCardMultiset",
+        )
+    order = getattr(multiset, "card_order", None)
+    classes = getattr(multiset, "classes", None)
+    if type(order) is not int or not 0 <= order <= MAX_UNLABELLED_DECK_VERTICES:
+        raise OperationDomainValidationError(
+            location=("multiset", "card_order"),
+            code="graph_deck.card_profile_order",
+            message="multiset card_order is outside the supported bound",
+        )
+    if type(classes) is not tuple or len(classes) > MAX_ANONYMOUS_CARD_CLASSES:
+        raise OperationDomainValidationError(
+            location=("multiset", "classes"),
+            code="graph_deck.card_profile_class_bound",
+            message="multiset classes must be a bounded immutable tuple",
+        )
+
+    pair_count = comb(order, 2)
+    canonical_work = _anonymous_canonicalization_work(order, len(classes))
+    class_count = len(classes)
+    per_class_profile_work = order * order + 3 * order + 4 * pair_count + 4
+    histogram_order_work = (
+        class_count * max(1, order) * max(1, class_count.bit_length())
+    )
+    profile_work = class_count * per_class_profile_work + histogram_order_work
+    total_work = canonical_work + profile_work
+    if (
+        canonical_work > MAX_ANONYMOUS_CARD_CANONICALIZATION_WORK
+        or total_work > MAX_ANONYMOUS_CARD_PROFILE_WORK
+    ):
+        raise OperationResourceAdmissionError(
+            location=("multiset", "classes"),
+            code="graph_deck.card_profile_work_bound",
+            message="canonical validation and degree profiling exceed the shared work bound",
+        )
+    cells = len(classes) * max(order, 1)
+    if cells > MAX_ANONYMOUS_CARD_PROFILE_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("multiset", "classes"),
+            code="graph_deck.card_profile_cell_bound",
+            message="degree-profile cells exceed the materialization bound",
+        )
+    output_bytes = 128 + len(classes) * (64 + 16 * order)
+    if output_bytes > MAX_ANONYMOUS_CARD_PROFILE_RESULT_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("multiset", "classes"),
+            code="graph_deck.card_profile_output_bound",
+            message="degree-profile output exceeds the byte bound",
+        )
+
+    if trusted:
+        # The strict JSON parser has already admitted and canonicalized every
+        # nested card. Only the profile-specific resource envelope remains.
+        return
+
+    expected_vertices = tuple(f"v{i:02d}" for i in range(order))
+    previous: tuple[tuple[str, str], ...] | None = None
+    for index, item in enumerate(classes):
+        if type(item) is not AnonymousGraphCardClass:
+            raise OperationDomainValidationError(
+                location=("multiset", "classes", index),
+                code="graph_deck.card_profile_class_type",
+                message="multiset classes must use AnonymousGraphCardClass",
+            )
+        multiplicity = getattr(item, "multiplicity", None)
+        if type(multiplicity) is not int or not 1 <= multiplicity < 10**12:
+            raise OperationDomainValidationError(
+                location=("multiset", "classes", index, "multiplicity"),
+                code="graph_deck.card_profile_multiplicity",
+                message="card-class multiplicities must be positive bounded exact integers",
+            )
+        graph = getattr(item, "representative", None)
+        _admit_anonymous_card(graph, order, pair_count, index)
+        if graph.vertices != expected_vertices:
+            raise OperationDomainValidationError(
+                location=("multiset", "classes", index, "representative", "vertices"),
+                code="graph_deck.card_profile_axis",
+                message="card representatives must use the canonical fixed-width axis",
+            )
+        key = graph.edges
+        if previous is not None and key <= previous:
+            raise OperationDomainValidationError(
+                location=("multiset", "classes", index),
+                code="graph_deck.card_profile_ordering",
+                message="canonical card classes must be unique and ordered",
+            )
+        previous = key
+        if _canonical_card_edges(graph.vertices, key) != key:
+            raise OperationDomainValidationError(
+                location=("multiset", "classes", index, "representative"),
+                code="graph_deck.card_profile_not_canonical",
+                message="each untrusted card representative must be permutation-minimal",
+            )
+
+
+def _compute_anonymous_card_degree_profile(
+    multiset: AnonymousGraphCardMultiset, *, trusted: bool
+) -> AnonymousCardDegreeProfile:
+    _admit_anonymous_profile_input(multiset, trusted=trusted)
+    order = multiset.card_order
+    counts: dict[tuple[int, ...], int] = {}
+    total = 0
+    for item in multiset.classes:
+        degrees = [0] * order
+        index = {vertex: i for i, vertex in enumerate(item.representative.vertices)}
+        for left, right in item.representative.edges:
+            degrees[index[left]] += 1
+            degrees[index[right]] += 1
+        degree_multiset = tuple(sorted(degrees, reverse=True))
+        counts[degree_multiset] = counts.get(degree_multiset, 0) + item.multiplicity
+        total += item.multiplicity
+    rows = tuple(
+        AnonymousCardDegreeFrequency.model_construct(
+            degrees=degrees, multiplicity=counts[degrees]
+        )
+        for degrees in sorted(counts)
+    )
+    return AnonymousCardDegreeProfile._from_kernel(order, total, rows)
+
+
+def anonymous_card_degree_profile(
+    request: AnonymousCardDegreeProfileRequest,
+) -> AnonymousCardDegreeProfile:
+    """Compute degree-multiset frequencies without a source-deck claim."""
+    if type(request) is not AnonymousCardDegreeProfileRequest:
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="graph_deck.card_profile_request_carrier",
+            message="request must be an AnonymousCardDegreeProfileRequest",
+        )
+    multiset = getattr(request, "multiset", None)
+    return _compute_anonymous_card_degree_profile(multiset, trusted=False)
 
 
 def _admit_deck_graph(graph: SimpleUndirectedGraph) -> SimpleUndirectedGraph:

@@ -309,7 +309,7 @@ def _require_group_ring_boundary_zero(
     if any(terms.values()):
         _domain(
             "group_ring_boundary_not_square_zero",
-            "group-labelled face incidences fail the free-resolution boundary relation",
+            "group-labelled face incidences fail the group-ring cellular boundary relation",
             ("source", "pairings"),
         )
 

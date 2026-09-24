@@ -19,6 +19,11 @@ The resulting ordinary cellular chain complex composes directly with
 recover the torus chains from the unit square and the Klein bottle homology
 from a glide-reflection rectangle.
 
+The group-labelled entries are reconstructed from the checked fundamental
+polygon each time this operation runs. They are retained as explanatory
+resolution data, but no downstream operation accepts them as authoritative
+input; integral homology consumes only the augmented `ChainComplexValue`.
+
 This operation does not return a free `ZGamma`-resolution or a contracting
 homotopy. Its group-labelled entries retain the face-incidence information
 needed for a later resolution value and checker; `d^2 = 0` alone is not treated

@@ -2,6 +2,8 @@
 
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.gauge._models import (
+    FiniteGroupGaugeHolonomyRequest,
+    FiniteGroupGaugeHolonomyResult,
     GaugeTransformRequest,
     GaugeTransformResult,
     HolonomyRequest,
@@ -18,6 +20,7 @@ from jacobian.math.gauge._su2_models import (
     SU2HolonomyResult,
     SU2WilsonTraceResult,
 )
+from jacobian.math.gauge.finite_group import finite_group_gauge_holonomy
 from jacobian.math.gauge.observables import permutation_wilson_trace
 from jacobian.math.gauge.operations import (
     gauge_transform,
@@ -59,6 +62,12 @@ def _run_su2_holonomy(request: SU2HolonomyRequest) -> SU2HolonomyResult:
 
 def _run_su2_wilson(request: SU2HolonomyResult) -> SU2WilsonTraceResult:
     return su2_wilson_trace(request)
+
+
+def _run_finite_group_holonomy(
+    request: FiniteGroupGaugeHolonomyRequest,
+) -> FiniteGroupGaugeHolonomyResult:
+    return finite_group_gauge_holonomy(request)
 
 
 _TRIANGLE_FIELD = {
@@ -324,6 +333,24 @@ TOOLS = (
                     "path": {"steps": [], "basepoint": "v"},
                 },
             ),
+        ),
+    ),
+    MathTool(
+        operation_id="lattice_gauge.finite_group.holonomy.compute",
+        title="Compute path holonomy in an exact finite group table",
+        description=(
+            "Compose table-indexed edge values along an oriented lattice path. "
+            "The field is bound to one complete finite multiplication table; "
+            "backward steps use that table's inverse and factors multiply in "
+            "path traversal order."
+        ),
+        request_type=FiniteGroupGaugeHolonomyRequest,
+        result_type=FiniteGroupGaugeHolonomyResult,
+        run=_run_finite_group_holonomy,
+        tags=("lattice-gauge", "finite-group", "holonomy", "exact"),
+        discovery_terms=(
+            "finite group lattice gauge holonomy",
+            "table group edge transport",
         ),
     ),
     MathTool(

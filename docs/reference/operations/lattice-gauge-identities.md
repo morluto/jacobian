@@ -18,6 +18,21 @@ No gauge-orbit search is performed. Quaternion and matrix group carriers remain 
 slice; the natural permutation-representation trace is provided separately
 for closed paths.
 
+## Finite multiplication-table groups
+
+`lattice_gauge.finite_group.holonomy.compute` accepts a separate
+`FiniteGroupGaugeField` whose edge values are indices into one exact
+`FiniteGroupTable`. The operation re-admits the table's identity, inverse, and
+associativity laws, validates full edge coverage and path chaining, and returns
+each oriented contribution plus the ordered product in that same table
+parent. Backward traversal resolves through the parent's inverse map. A
+zero-step path returns the table identity at its named lattice vertex.
+
+The path convention is `h_0 = 1` and `h_i = h_{i-1} * U_i` in traversal
+order. This matters for noncommutative groups such as S3. This slice does not
+provide vertex gauge transformations, plaquette curvature, or Wilson traces
+for arbitrary table groups.
+
 ## Identity cases
 
 `lattice_gauge.holonomy.compute` accepts a zero-length path only when the path

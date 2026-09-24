@@ -13,11 +13,13 @@ included as a noncommutative fixture. The carrier establishes exact finite
 group laws for this indexed table; it does not provide an isomorphism
 canonicalizer or arbitrary matrix representation.
 
-The current `lattice_gauge.*` operations accept permutation labels in `S_d`,
-not elements of an arbitrary supplied subgroup and not `FiniteGroupTable`
-elements. A future gauge integration should bind each edge/frame value to one
-group parent and ensure closure in that exact group. The present carrier alone
-does not make arbitrary finite-group gauge fields accepted.
+The `lattice_gauge.finite_group.holonomy.compute` operation composes edge
+indices from one `FiniteGroupTable` along an oriented path. Backward traversal
+uses the table's inverse, and multiplication follows path order. Its distinct
+`FiniteGroupGaugeField` retains the table as the exact group parent. It does
+not change the existing permutation-valued `S_d` or rational `SU(2)` field
+contracts. The operation computes open-path holonomy and does not claim
+plaquette observables or Wilson traces for arbitrary groups.
 
 The multiplication-table value stores the exact indexed operation and its
 derived inverse map. Consumers accepting a caller-supplied value must re-admit

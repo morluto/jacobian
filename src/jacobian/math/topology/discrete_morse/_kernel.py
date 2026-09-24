@@ -21,6 +21,10 @@ from jacobian.math.topology._models import (
     FiniteSimplicialComplex,
     Simplex,
 )
+from jacobian.math.topology.chain_complexes.values import (
+    ChainComplexValue,
+    CoefficientRing,
+)
 from jacobian.math.topology.discrete_morse._models import (
     MAX_MORSE_BOUNDARY_ENTRIES,
     MAX_MORSE_CELLS,
@@ -37,6 +41,7 @@ from jacobian.math.topology.discrete_morse._models import (
     GradientPathCount,
     GradientPathsResult,
     GradientPathStep,
+    IntegerMorseComplexResult,
     MatchingPair,
     MorseBoundaryEntry,
     MorseComplexResult,
@@ -665,4 +670,133 @@ def compute_morse_complex(
     )
 
 
-__all__ = ["compute_gradient_paths", "compute_morse_complex", "construct_matching"]
+def _simplicial_incidence(coface: Simplex, face: Simplex) -> int:
+    """Return the oriented boundary incidence for lexicographic simplex bases."""
+
+    for position in range(len(coface)):
+        if coface[:position] + coface[position + 1 :] == face:
+            return -1 if position % 2 else 1
+    raise RuntimeError("gradient step is not a codimension-one simplex incidence")
+
+
+def _signed_gradient_path_coefficient(
+    steps: tuple[tuple[MorseGradientStepKind, Simplex, Simplex], ...],
+) -> int:
+    """Compute the Forman orientation transport and initial boundary sign.
+
+    The simplex orientations use sorted vertex order. Across a matched upper
+    cell u, Forman transports the orientation from lower face a to the next
+    lower face b by requiring (du,a)(du,b)=-1. Relative to fixed orientations
+    this contributes ``-(u:a)(u:b)``; the initial critical-cell boundary
+    incidence is then multiplied by each matched-step transport sign.
+    """
+
+    source = steps[0][1]
+    first_face = steps[0][2]
+    coefficient = _simplicial_incidence(source, first_face)
+    for index, (kind, lower, upper) in enumerate(steps):
+        if kind is not _UP:
+            continue
+        if index + 1 >= len(steps) or steps[index + 1][0] is not _DOWN:
+            raise RuntimeError("matched gradient step has no following down incidence")
+        next_face = steps[index + 1][2]
+        coefficient *= -_simplicial_incidence(upper, lower) * _simplicial_incidence(
+            upper, next_face
+        )
+    return coefficient
+
+
+def compute_integer_morse_complex(
+    complex_: FiniteSimplicialComplex,
+    pairs: tuple[MatchingPair, ...],
+) -> IntegerMorseComplexResult:
+    """Compute the bounded integral Morse differential from signed paths."""
+
+    admitted = _admit_acyclic_matching(complex_, pairs)
+    matching = admitted.result
+    profile = admitted.critical_profile
+    cells = _closure_cells(complex_)
+    basis_by_dimension = tuple(
+        CriticalCellBasis(
+            dimension=dimension,
+            cells=tuple(
+                cell for cell in profile.critical_cells if len(cell) - 1 == dimension
+            ),
+        )
+        for dimension in range(complex_.dimension + 1)
+    )
+    if any(len(basis.cells) > 64 for basis in basis_by_dimension):
+        raise _resource(
+            "admission.integer_chain_rank",
+            "each integral Morse chain group is limited to 64 critical cells",
+            ("pairs",),
+        )
+    matrix_cells = sum(
+        len(basis_by_dimension[dimension - 1].cells)
+        * len(basis_by_dimension[dimension].cells)
+        for dimension in range(1, len(basis_by_dimension))
+    )
+    if matrix_cells > 4096:
+        raise _resource(
+            "admission.integer_matrix_cells",
+            "integral Morse differentials exceed the 4096-cell output envelope",
+            ("pairs",),
+        )
+
+    critical = set(profile.critical_cells)
+    matched, upper = _matching_maps(matching.pairs)
+    faces_of = _faces_by_coface(cells)
+    row_indices = tuple(
+        {cell: index for index, cell in enumerate(basis.cells)}
+        for basis in basis_by_dimension
+    )
+    differential_matrices: list[tuple[tuple[int, ...], ...]] = []
+    total_paths = 0
+    total_states = 0
+    for dimension in range(1, len(basis_by_dimension)):
+        lower_basis = basis_by_dimension[dimension - 1].cells
+        upper_basis = basis_by_dimension[dimension].cells
+        matrix = [[0] * len(upper_basis) for _ in lower_basis]
+        for column, cell in enumerate(upper_basis):
+            raw_paths, states = _enumerate_gradient_paths(
+                faces_of,
+                matched,
+                upper,
+                critical,
+                cell,
+                None,
+                max_paths=MAX_MORSE_GRADIENT_PATHS - total_paths,
+                max_states=MAX_MORSE_GRADIENT_STATES - total_states,
+                max_steps=MAX_MORSE_PATH_STEPS,
+            )
+            total_paths += len(raw_paths)
+            total_states += states
+            for steps in raw_paths:
+                coefficient = _signed_gradient_path_coefficient(steps)
+                target_index = row_indices[dimension - 1][steps[-1][2]]
+                matrix[target_index][column] += coefficient
+        differential_matrices.append(tuple(tuple(row) for row in matrix))
+
+    value = ChainComplexValue(
+        coefficient_ring=CoefficientRing.INTEGER,
+        degree_min=0,
+        degree_max=complex_.dimension,
+        basis_sizes=tuple(len(basis.cells) for basis in basis_by_dimension),
+        differential_matrices=tuple(differential_matrices),
+    )
+    return IntegerMorseComplexResult._from_kernel(
+        complex=complex_,
+        pairs=matching.pairs,
+        critical_profile=profile,
+        critical_cells_by_dimension=basis_by_dimension,
+        chain_complex=value,
+        gradient_path_total=total_paths,
+    )
+
+
+__all__ = [
+    "compute_gradient_paths",
+    "compute_integer_morse_complex",
+    "compute_morse_complex",
+    "construct_matching",
+]

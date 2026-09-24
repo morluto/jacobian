@@ -9,6 +9,8 @@ from jacobian.math.topology.discrete_morse._models import (
     DiscreteMorseMatchingResult,
     GradientPathsRequest,
     GradientPathsResult,
+    IntegerMorseComplexRequest,
+    IntegerMorseComplexResult,
     MorseComplexRequest,
     MorseComplexResult,
 )
@@ -17,6 +19,7 @@ from jacobian.math.topology.discrete_morse.extensions_tools import (
 )
 from jacobian.math.topology.discrete_morse.operations import (
     compute_gradient_paths,
+    compute_integer_morse_complex,
     compute_morse_complex,
     construct_matching,
 )
@@ -46,6 +49,13 @@ def _run_compute_gradient_paths(
 def _run_compute_morse_complex(request: MorseComplexRequest) -> MorseComplexResult:
     canonical = canonicalize(request.complex.vertices, request.complex.facets).complex
     return compute_morse_complex(canonical, request.pairs)
+
+
+def _run_compute_integer_morse_complex(
+    request: IntegerMorseComplexRequest,
+) -> IntegerMorseComplexResult:
+    canonical = canonicalize(request.complex.vertices, request.complex.facets).complex
+    return compute_integer_morse_complex(canonical, request.pairs)
 
 
 _CIRCLE_FACETS = {
@@ -244,6 +254,39 @@ TOOLS: MathTools = (
                     "numbers are (1, 1)."
                 ),
                 input={"complex": _CIRCLE_FACETS, "pairs": _CIRCLE_MATCHING_PAIRS},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="topology.discrete_morse.integer_complex.compute",
+        title="Compute the integral signed Morse chain complex",
+        description=(
+            "For a supplied acyclic matching on a bounded finite simplicial "
+            "complex, return the exact Morse differential over ZZ with the "
+            "critical simplices as ordered bases. Simplex orientations use "
+            "lexicographic vertex order; each gradient path contributes its "
+            "initial simplicial boundary incidence followed by Forman's "
+            "orientation transport across matched cells."
+        ),
+        request_type=IntegerMorseComplexRequest,
+        result_type=IntegerMorseComplexResult,
+        run=_run_compute_integer_morse_complex,
+        tags=("topology", "discrete-morse", "morse-complex", "integer", "exact"),
+        discovery_terms=(
+            "integral discrete Morse complex",
+            "signed Morse differential",
+            "Morse boundary over integers",
+            "ZZ gradient paths",
+        ),
+        examples=(
+            OperationExample(
+                name="interval_integral_boundary",
+                description=(
+                    "The empty matching on one interval has both endpoints and "
+                    "the edge critical; its signed boundary uses lexicographic "
+                    "orientations [a,b]."
+                ),
+                input={"complex": _INTERVAL_FACETS, "pairs": []},
             ),
         ),
     ),

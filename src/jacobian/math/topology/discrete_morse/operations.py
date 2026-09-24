@@ -10,6 +10,9 @@ from jacobian.math.topology.discrete_morse._kernel import (
     compute_gradient_paths as _compute_gradient_paths,
 )
 from jacobian.math.topology.discrete_morse._kernel import (
+    compute_integer_morse_complex as _compute_integer_morse_complex,
+)
+from jacobian.math.topology.discrete_morse._kernel import (
     compute_morse_complex as _compute_morse_complex,
 )
 from jacobian.math.topology.discrete_morse._kernel import (
@@ -18,6 +21,7 @@ from jacobian.math.topology.discrete_morse._kernel import (
 from jacobian.math.topology.discrete_morse._models import (
     DiscreteMorseMatchingResult,
     GradientPathsResult,
+    IntegerMorseComplexResult,
     MatchingPair,
     MorseComplexResult,
 )
@@ -70,8 +74,19 @@ def compute_morse_complex(
     return _compute_morse_complex(complex_, pairs)
 
 
+def compute_integer_morse_complex(
+    complex_: FiniteSimplicialComplex,
+    pairs: tuple[MatchingPair, ...],
+) -> IntegerMorseComplexResult:
+    """Compute the ZZ Morse chain complex using lex-oriented signed paths."""
+
+    require_canonical_complex_admission(complex_)
+    return _compute_integer_morse_complex(complex_, pairs)
+
+
 __all__ = [
     "compute_gradient_paths",
+    "compute_integer_morse_complex",
     "compute_morse_complex",
     "construct_matching",
 ]

@@ -24,6 +24,10 @@ from jacobian.math.topology._models import (
     Simplex,
     SimplicialComplexRequest,
 )
+from jacobian.math.topology.chain_complexes.values import (
+    ChainComplexValue,
+    CoefficientRing,
+)
 
 MAX_MORSE_CELLS = 4096
 MAX_MORSE_PAIRS = 2048
@@ -512,6 +516,13 @@ class MorseComplexRequest(StrictModel):
     coefficient_field: Literal["GF(2)"] = "GF(2)"
 
 
+class IntegerMorseComplexRequest(StrictModel):
+    """One simplicial complex and supplied matching for integral reduction."""
+
+    complex: SimplicialComplexRequest
+    pairs: tuple[MatchingPair, ...] = Field(default=(), max_length=MAX_MORSE_PAIRS)
+
+
 class MorseComplexResult(StrictModel):
     """The graded Morse complex of one acyclic matching over GF(2).
 
@@ -593,6 +604,59 @@ class MorseComplexResult(StrictModel):
         return cls.model_construct(**values)
 
 
+class IntegerMorseComplexResult(StrictModel):
+    """The integral Morse chain complex with critical-cell coordinate axes."""
+
+    complex: FiniteSimplicialComplex
+    pairs: tuple[MatchingPair, ...] = Field(default=(), max_length=MAX_MORSE_PAIRS)
+    critical_profile: CriticalCellProfile
+    critical_cells_by_dimension: tuple[CriticalCellBasis, ...] = Field(
+        min_length=1, max_length=MAX_TOPOLOGY_DIMENSION + 1
+    )
+    chain_complex: ChainComplexValue
+    gradient_path_total: StrictInt = Field(ge=0, le=MAX_MORSE_GRADIENT_PATHS)
+
+    @model_validator(mode="after")
+    def require_integral_morse_axes(self) -> Self:
+        if self.chain_complex.coefficient_ring is not CoefficientRing.INTEGER:
+            raise _validation_error(
+                "integer_morse_coefficient_ring",
+                "the integral Morse chain complex must use ZZ coefficients",
+            )
+        if self.chain_complex.basis_sizes != tuple(
+            len(basis.cells) for basis in self.critical_cells_by_dimension
+        ):
+            raise _validation_error(
+                "integer_morse_basis_sizes",
+                "integer Morse chain ranks must match the labeled critical-cell axes",
+            )
+        if tuple(
+            basis.dimension for basis in self.critical_cells_by_dimension
+        ) != tuple(range(len(self.critical_cells_by_dimension))):
+            raise _validation_error(
+                "integer_morse_basis_dimensions",
+                "critical-cell axes must cover contiguous dimensions from zero",
+            )
+        if tuple(
+            sorted(
+                cell
+                for basis in self.critical_cells_by_dimension
+                for cell in basis.cells
+            )
+        ) != tuple(sorted(self.critical_profile.critical_cells)):
+            raise _validation_error(
+                "integer_morse_basis_partition",
+                "critical-cell axes must partition the source critical cells",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(cls, **values: Any) -> Self:
+        """Build after the bounded signed reduction established its chain value."""
+
+        return cls.model_construct(**values)
+
+
 def _canonical_cell_order(complex_: FiniteSimplicialComplex) -> tuple[Simplex, ...]:
     return tuple(face for group in complex_.faces_by_dimension for face in group.faces)
 
@@ -615,6 +679,8 @@ __all__ = [
     "GradientPathStep",
     "GradientPathsRequest",
     "GradientPathsResult",
+    "IntegerMorseComplexRequest",
+    "IntegerMorseComplexResult",
     "MatchingPair",
     "MorseBoundaryEntry",
     "MorseComplexRequest",

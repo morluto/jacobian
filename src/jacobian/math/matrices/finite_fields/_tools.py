@@ -11,6 +11,12 @@ from jacobian.math.matrices.finite_fields._models import (
     PrimeFieldRrefResult,
 )
 from jacobian.math.matrices.finite_fields.linear_algebra import PrimeFieldMatrix
+from jacobian.math.matrices.finite_fields.quotient_spaces import (
+    PrimeFieldQuotientRequest,
+    PrimeFieldQuotientSpace,
+    PrimeFieldQuotientVector,
+    PrimeFieldVectorProjectionRequest,
+)
 
 
 def compute_rank(request: PrimeFieldMatrixRequest) -> PrimeFieldMatrixRankResult:
@@ -42,6 +48,18 @@ def compute_nullspace(request: PrimeFieldMatrixRequest) -> PrimeFieldNullspaceRe
             columns=request.matrix.columns,
         ),
     )
+
+
+def compute_quotient_space(
+    request: PrimeFieldQuotientRequest,
+) -> PrimeFieldQuotientSpace:
+    return native.quotient_space(request)
+
+
+def project_quotient_vector(
+    request: PrimeFieldVectorProjectionRequest,
+) -> PrimeFieldQuotientVector:
+    return native.project_quotient_vector(request)
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
@@ -128,6 +146,69 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                         "entries": [[1, 0, 1], [0, 1, 1]],
                         "columns": 3,
                     }
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="prime_field.vector_space.quotient.compute",
+        title="Construct a prime-field quotient space",
+        description=(
+            "Construct GF(p)^n/W from bounded subspace generators. Return a "
+            "source-bound quotient basis and the exact projection matrix from "
+            "ambient coordinates to quotient coordinates."
+        ),
+        request_type=PrimeFieldQuotientRequest,
+        result_type=PrimeFieldQuotientSpace,
+        run=compute_quotient_space,
+        tags=("linear-algebra", "finite-field", "quotient", "exact"),
+        examples=(
+            OperationExample(
+                name="coordinate_quotient_gf3",
+                description=(
+                    "Form GF(3)^2 / span((1,1)); the returned map sends (x,y) "
+                    "to x-y in the basis represented by (1,0)."
+                ),
+                input={
+                    "subspace": {
+                        "prime": 3,
+                        "ambient_dimension": 2,
+                        "generators": [[1, 1]],
+                    }
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="prime_field.vector_space.quotient.project",
+        title="Project a vector to a prime-field quotient",
+        description=(
+            "Apply a source-bound GF(p) quotient projection to an ambient vector "
+            "and return quotient coordinates with the same quotient parent."
+        ),
+        request_type=PrimeFieldVectorProjectionRequest,
+        result_type=PrimeFieldQuotientVector,
+        run=project_quotient_vector,
+        tags=("linear-algebra", "finite-field", "quotient", "exact"),
+        examples=(
+            OperationExample(
+                name="project_gf3_vector",
+                description="Project the ambient vector (2,0) using the quotient above.",
+                input={
+                    "quotient": {
+                        "source": {
+                            "prime": 3,
+                            "ambient_dimension": 2,
+                            "generators": [[1, 1]],
+                        },
+                        "quotient_basis": [[1, 0]],
+                        "projection": {
+                            "prime": 3,
+                            "entries": [[1, 2]],
+                            "columns": 2,
+                        },
+                    },
+                    "vector": [2, 0],
                 },
             ),
         ),

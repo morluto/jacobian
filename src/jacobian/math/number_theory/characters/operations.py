@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from bisect import bisect_left
 from fractions import Fraction
 from itertools import product
 from math import gcd
@@ -13,7 +14,12 @@ from pydantic_core import PydanticCustomError
 from sympy import QQ, Poly, bernoulli, cyclotomic_poly, factorint, symbols
 
 from jacobian._exact import CanonicalRational
-from jacobian.canonical import format_canonical_integer
+from jacobian.canonical import (
+    CanonicalLimits,
+    encode_strict_json,
+    format_canonical_integer,
+    strict_json_object_size,
+)
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -35,6 +41,7 @@ from jacobian.math.number_theory.characters._models import (
     DirichletCharacterJacobiSumResult,
     DirichletCharacterLValueNonpositiveResult,
     DirichletCharacterOrderResult,
+    DirichletCharacterOrthogonalityOverCharactersResult,
     DirichletCharacterOrthogonalityResult,
     DirichletCharacterParityResult,
     DirichletCharacterPrimitiveGaussNormResult,
@@ -86,6 +93,7 @@ __all__ = [
     "dirichlet_character_l_value_nonpositive_integer",
     "dirichlet_character_order",
     "dirichlet_character_orthogonality",
+    "dirichlet_character_orthogonality_over_characters",
     "dirichlet_character_parity",
     "dirichlet_character_power",
     "dirichlet_character_primitive_gauss_norm",
@@ -327,6 +335,103 @@ def dirichlet_character_orthogonality(
     return DirichletCharacterOrthogonalityResult._from_kernel(
         left=left,
         right=right,
+        value=value,
+    )
+
+
+def dirichlet_character_orthogonality_over_characters(
+    group: DirichletCharacterGroup,
+    left_integer: int,
+    right_integer: int,
+) -> DirichletCharacterOrthogonalityOverCharactersResult:
+    r"""Return ``sum_chi chi(a) conjugate(chi(b))`` exactly.
+
+    Finite dual-group orthogonality reduces this sum to the unit-class
+    indicator: it is ``phi(N)`` when both residues are the same unit and zero
+    otherwise. This direct kernel avoids expanding all characters or roots of
+    unity; the validated group still retains its bounded common exponent and
+    exact unit-class convention.
+    """
+    _admit_character_integer(left_integer)
+    _admit_character_integer(right_integer)
+    group = require_complete_character_group(group)
+    left_digits = len(format_canonical_integer(abs(left_integer)))
+    right_digits = len(format_canonical_integer(abs(right_integer)))
+    rank = len(group.generator_orders)
+    work = (
+        group.modulus
+        + group.character_count * max(1, rank)
+        + left_digits
+        + right_digits
+    )
+    if work > MAX_CHARACTER_ORTHOGONALITY_WORK:
+        raise OperationResourceAdmissionError(
+            location=("group",),
+            code="dirichlet_character.dual_orthogonality.work_bound",
+            message="dual-group orthogonality exceeds its admitted work envelope",
+        )
+
+    def array_size(parts: tuple[int, ...]) -> int:
+        return 2 + max(0, len(parts) - 1) + sum(parts)
+
+    def integer_array_size(values: tuple[int, ...]) -> int:
+        return array_size(tuple(len(str(value)) for value in values))
+
+    group_output_bytes = strict_json_object_size(
+        (
+            ("modulus", len(str(group.modulus))),
+            ("unit_residues", integer_array_size(group.unit_residues)),
+            ("character_count", len(str(group.character_count))),
+            ("invariant_factors", integer_array_size(group.invariant_factors)),
+            ("generators", integer_array_size(group.generators)),
+            ("generator_orders", integer_array_size(group.generator_orders)),
+            (
+                "unit_coordinates",
+                array_size(
+                    tuple(integer_array_size(row) for row in group.unit_coordinates)
+                ),
+            ),
+            ("exponent", len(str(group.exponent))),
+        )
+    )
+    def integer_string_size(value: int) -> int:
+        return len(format_canonical_integer(value)) + 2
+
+    output_bytes_bound = strict_json_object_size(
+        (
+            ("group", group_output_bytes),
+            ("left_integer", integer_string_size(left_integer)),
+            ("right_integer", integer_string_size(right_integer)),
+            ("left_residue", len(str(group.modulus - 1))),
+            ("right_residue", len(str(group.modulus - 1))),
+            ("value", len(str(group.character_count))),
+        )
+    )
+    if output_bytes_bound > CanonicalLimits().max_output_bytes:
+        raise OperationResourceAdmissionError(
+            location=("group",),
+            code="dirichlet_character.dual_orthogonality.output_bound",
+            message="dual-group orthogonality result exceeds the canonical output bound",
+        )
+
+    modulus = group.modulus
+    left_residue = left_integer % modulus
+    right_residue = right_integer % modulus
+    left_index = bisect_left(group.unit_residues, left_residue)
+    right_index = bisect_left(group.unit_residues, right_residue)
+    both_units = (
+        left_index < len(group.unit_residues)
+        and group.unit_residues[left_index] == left_residue
+        and right_index < len(group.unit_residues)
+        and group.unit_residues[right_index] == right_residue
+    )
+    value = group.character_count if both_units and left_residue == right_residue else 0
+    return DirichletCharacterOrthogonalityOverCharactersResult._from_kernel(
+        group=group,
+        left_integer=left_integer,
+        right_integer=right_integer,
+        left_residue=left_residue,
+        right_residue=right_residue,
         value=value,
     )
 

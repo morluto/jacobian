@@ -255,7 +255,11 @@ def admit_polymorphism_family(
     for symbol, relation in zip(source.signature, source.relation_tables, strict=True):
         combinations = len(relation) ** arity
         combinations_per_candidate += combinations
-        coordinate_work_per_candidate += combinations * symbol.arity * arity
+        # Charge both construction of each m-row input tuple and the m
+        # coordinate lookups used to compute every output coordinate.
+        coordinate_work_per_candidate += (
+            combinations * arity * (symbol.arity + 1)
+        )
         relation_index_work += len(relation) * (symbol.arity + 1)
     work = relation_index_work + candidate_tables * (
         table_cells + combinations_per_candidate + coordinate_work_per_candidate

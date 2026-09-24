@@ -132,28 +132,7 @@ def _admit_anonymous_card(
             message="card vertices must be unique NFC labels on the declared order",
         )
     for vertex in vertices:
-        if type(vertex) is not str or not vertex or len(vertex) > MAX_GRAPH_LABEL_BYTES:
-            raise OperationDomainValidationError(
-                location=("cards", index, "vertices"),
-                code="graph_deck.anonymous_card_labels",
-                message="card labels must be nonempty strings within the graph label bound",
-            )
-        try:
-            encoded = vertex.encode("utf-8")
-        except UnicodeEncodeError as error:
-            raise OperationDomainValidationError(
-                location=("cards", index, "vertices"),
-                code="graph_deck.anonymous_card_labels",
-                message="card labels must contain only Unicode scalar values",
-            ) from error
-        if len(encoded) > MAX_GRAPH_LABEL_BYTES or not unicodedata.is_normalized(
-            "NFC", vertex
-        ):
-            raise OperationDomainValidationError(
-                location=("cards", index, "vertices"),
-                code="graph_deck.anonymous_card_labels",
-                message="card labels must use NFC and fit the graph UTF-8 byte bound",
-            )
+        _admit_anonymous_graph_label(vertex, index, "vertices")
     if len(set(vertices)) != order:
         raise OperationDomainValidationError(
             location=("cards", index),
@@ -177,6 +156,9 @@ def _admit_anonymous_card(
             code="graph_deck.anonymous_card_edges",
             message="card edges must be pairs of string labels",
         )
+    for edge in edges:
+        for endpoint in edge:
+            _admit_anonymous_graph_label(endpoint, index, "edges")
     vertex_set = set(vertices)
     if len(set(edges)) != len(edges) or any(
         a >= b or a not in vertex_set or b not in vertex_set for a, b in edges
@@ -185,6 +167,32 @@ def _admit_anonymous_card(
             location=("cards", index),
             code="graph_deck.anonymous_card_edges",
             message="card edges must be unique canonical pairs of declared vertices",
+        )
+
+
+def _admit_anonymous_graph_label(label: str, card_index: int, field: str) -> None:
+    location = ("cards", card_index, field)
+    if type(label) is not str or not label or len(label) > MAX_GRAPH_LABEL_BYTES:
+        raise OperationDomainValidationError(
+            location=location,
+            code="graph_deck.anonymous_card_labels",
+            message="card and edge labels must be nonempty strings within the graph label bound",
+        )
+    try:
+        encoded = label.encode("utf-8")
+    except UnicodeEncodeError as error:
+        raise OperationDomainValidationError(
+            location=location,
+            code="graph_deck.anonymous_card_labels",
+            message="card and edge labels must contain only Unicode scalar values",
+        ) from error
+    if len(encoded) > MAX_GRAPH_LABEL_BYTES or not unicodedata.is_normalized(
+        "NFC", label
+    ):
+        raise OperationDomainValidationError(
+            location=location,
+            code="graph_deck.anonymous_card_labels",
+            message="card and edge labels must use NFC and fit the graph UTF-8 byte bound",
         )
 
 

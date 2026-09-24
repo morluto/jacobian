@@ -184,6 +184,23 @@ def test_model_construct_duplicate_edges_are_rejected() -> None:
         anonymous_graph_card_multiset(request)
 
 
+@pytest.mark.parametrize(
+    ("endpoint", "message"),
+    [("x" * 65, "within the graph label bound"), ("\ud800", "Unicode scalar")],
+)
+def test_model_construct_edge_endpoints_are_bounded_before_set_checks(
+    endpoint: str, message: str
+) -> None:
+    forged_graph = SimpleUndirectedGraph.model_construct(
+        vertices=("a", "b"), edges=((endpoint, "b"),)
+    )
+    request = AnonymousGraphCardMultisetRequest.model_construct(
+        card_order=2, cards=(forged_graph,)
+    )
+    with pytest.raises(OperationDomainValidationError, match=message):
+        anonymous_graph_card_multiset(request)
+
+
 def test_permutation_bound_accepts_exact_limit_and_rejects_one_unit_less(
     monkeypatch,
 ) -> None:

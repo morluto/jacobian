@@ -164,6 +164,18 @@ def test_nonconstant_scalar_is_not_mistaken_for_a_rational_constant() -> None:
         shift_operator_scalar_left_multiply(_rf(((1, 1),)), _op(((0, _rf(((1, 0),))),)))
 
 
+def test_malformed_scalar_is_rejected_under_the_scalar_contract() -> None:
+    with pytest.raises(OperationDomainValidationError) as error:
+        shift_operator_scalar_left_multiply(
+            {"domain": "QQ", "variables": ["n"]},
+            _op(((0, _rf(((1, 0),))),)),
+        )
+
+    diagnostic = error.value.errors()[0]
+    assert diagnostic["loc"] == ("scalar",)
+    assert diagnostic["type"] == "ore_algebra.shift_rational_constant"
+
+
 def test_normalization_returns_exact_source_scale_and_primitive_operator() -> None:
     source = _op(
         (

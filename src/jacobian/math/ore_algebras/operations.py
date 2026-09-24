@@ -18,11 +18,11 @@ from jacobian.catalog.models import (
 )
 from jacobian.math.number_theory.sequences.core._models import FiniteRationalSequence
 from jacobian.math.ore_algebras._models import (
-    MAX_DIFFERENTIAL_ADDITIVE_OUTPUT_BYTES,
+    MAX_DIFFERENTIAL_ADDITIVE_OUTPUT_WEIGHT,
     MAX_DIFFERENTIAL_ADDITIVE_WORK_CELLS,
     MAX_DIFFERENTIAL_ORDER,
     MAX_DIFFERENTIAL_TERMS,
-    MAX_SHIFT_ADDITIVE_OUTPUT_BYTES,
+    MAX_SHIFT_ADDITIVE_OUTPUT_WEIGHT,
     MAX_SHIFT_ADDITIVE_WORK_CELLS,
     MAX_SHIFT_COEFFICIENT_DEGREE,
     MAX_SHIFT_COEFFICIENT_DIGITS,
@@ -33,7 +33,7 @@ from jacobian.math.ore_algebras._models import (
     MAX_SHIFT_POWER_WORK_CELLS,
     MAX_SHIFT_PREFIX_EVALUATION_CELLS,
     MAX_SHIFT_PREFIX_INDEX,
-    MAX_SHIFT_PREFIX_OUTPUT_BYTES,
+    MAX_SHIFT_PREFIX_OUTPUT_WEIGHT,
     MAX_SHIFT_PREFIX_WORK_UNITS,
     MAX_SHIFT_RESULT_DEGREE,
     MAX_SHIFT_RESULT_DIGITS,
@@ -766,7 +766,7 @@ def _admit_polynomial_shift_operator(
     return operator
 
 
-def _operator_representation_byte_bound(operator: ShiftOreOperator) -> int:
+def _operator_representation_weight_bound(operator: ShiftOreOperator) -> int:
     return 256 * len(operator.terms) + sum(
         128
         + sum(
@@ -813,24 +813,28 @@ def _preflight_polynomial_operator_addition(
         (exponent, left_coefficients.get(exponent), right_coefficients.get(exponent))
         for exponent in exponents
     )
-    output_bytes = (
-        _operator_representation_byte_bound(left)
-        + _operator_representation_byte_bound(right)
+    output_weight = (
+        _operator_representation_weight_bound(left)
+        + _operator_representation_weight_bound(right)
         + 256 * len(plan)
     )
     for _exponent, first, second in plan:
-        support = (first or {}).keys() | (second or {}).keys()
-        output_bytes += 128 * len(support)
+        first_polynomial: dict[int, Fraction] = {} if first is None else first
+        second_polynomial: dict[int, Fraction] = {} if second is None else second
+        support = first_polynomial.keys() | second_polynomial.keys()
+        output_weight += 128 * len(support)
         for degree in support:
-            first_value = (first or {}).get(degree)
-            second_value = (second or {}).get(degree)
-            if first_value is None:
-                numerator_digits = _digit_count(second_value.numerator)
-                denominator_digits = _digit_count(second_value.denominator)
-            elif second_value is None:
-                numerator_digits = _digit_count(first_value.numerator)
-                denominator_digits = _digit_count(first_value.denominator)
+            if degree not in second_polynomial:
+                sole_value = first_polynomial[degree]
+                numerator_digits = _digit_count(sole_value.numerator)
+                denominator_digits = _digit_count(sole_value.denominator)
+            elif degree not in first_polynomial:
+                sole_value = second_polynomial[degree]
+                numerator_digits = _digit_count(sole_value.numerator)
+                denominator_digits = _digit_count(sole_value.denominator)
             else:
+                first_value = first_polynomial[degree]
+                second_value = second_polynomial[degree]
                 numerator_digits = (
                     max(
                         _digit_count(first_value.numerator)
@@ -852,8 +856,8 @@ def _preflight_polynomial_operator_addition(
                     code="ore_algebra.shift_addition_coefficient_digits",
                     message="shift-operator addition can exceed the rational coefficient-digit carrier",
                 )
-            output_bytes += numerator_digits + denominator_digits + 64
-    if output_bytes > MAX_SHIFT_ADDITIVE_OUTPUT_BYTES:
+            output_weight += numerator_digits + denominator_digits + 64
+    if output_weight > MAX_SHIFT_ADDITIVE_OUTPUT_WEIGHT:
         raise OperationResourceAdmissionError(
             location=("sum",),
             code="ore_algebra.shift_addition_output",
@@ -896,8 +900,8 @@ def shift_operator_scalar_left_multiply(
 ) -> ShiftOperatorScalarMultiplyResult:
     """Left-scale a polynomial-coefficient shift operator by an element of QQ."""
     operator_value = _admit_polynomial_shift_operator(operator, label="operator")
-    scalar_value = _as_rational_function(scalar)
     try:
+        scalar_value = _as_rational_function(scalar)
         scalar_value = RationalFunction.model_validate(scalar_value.model_dump())
         require_canonical_rational_function(
             scalar_value,
@@ -934,13 +938,11 @@ def shift_operator_scalar_left_multiply(
         _digit_count(scalar_fraction.numerator),
         _digit_count(scalar_fraction.denominator),
     )
-    output_bytes = _operator_representation_byte_bound(operator_value) + 256
+    output_weight = _operator_representation_weight_bound(operator_value) + 256
     for term in operator_value.terms:
-        for coefficient in term.coefficient.numerator.terms:
-            numerator_digits = _digit_count(coefficient.coefficient.num) + scalar_digits
-            denominator_digits = (
-                _digit_count(coefficient.coefficient.den) + scalar_digits
-            )
+        for entry in term.coefficient.numerator.terms:
+            numerator_digits = _digit_count(entry.coefficient.num) + scalar_digits
+            denominator_digits = _digit_count(entry.coefficient.den) + scalar_digits
             if (
                 max(numerator_digits, denominator_digits)
                 > MAX_RATIONAL_FUNCTION_COEFFICIENT_DIGITS
@@ -950,15 +952,15 @@ def shift_operator_scalar_left_multiply(
                     code="ore_algebra.shift_scalar_coefficient_digits",
                     message="shift-operator scalar product can exceed the rational coefficient-digit carrier",
                 )
-            output_bytes += numerator_digits + denominator_digits + 256
-    if output_bytes > MAX_SHIFT_ADDITIVE_OUTPUT_BYTES:
+            output_weight += numerator_digits + denominator_digits + 256
+    if output_weight > MAX_SHIFT_ADDITIVE_OUTPUT_WEIGHT:
         raise OperationResourceAdmissionError(
             location=("operator",),
             code="ore_algebra.shift_scalar_output",
             message="shift-operator scalar product exceeds its serialized output budget",
         )
 
-    result_terms = []
+    result_terms: list[dict[str, Any]] = []
     for term in operator_value.terms:
         coefficient = {
             exponent: value * scalar_fraction
@@ -1053,14 +1055,14 @@ def shift_operator_normalize_polynomial_coefficients(
             message="normalization scale exceeds the rational coefficient-digit carrier",
         )
 
-    output_bytes = (
-        _operator_representation_byte_bound(operator_value)
+    output_weight = (
+        _operator_representation_weight_bound(operator_value)
         + 256
         + _digit_count(scale.numerator)
         + _digit_count(scale.denominator)
     )
     for _order, polynomial in coefficients:
-        output_bytes += 256
+        output_weight += 256
         for value in polynomial.values():
             multiplier = lcm_denominators // value.denominator
             normalized_digits = _digit_count(value.numerator) + _digit_count(multiplier)
@@ -1070,8 +1072,8 @@ def shift_operator_normalize_polynomial_coefficients(
                     code="ore_algebra.shift_normalize_coefficient_digits",
                     message="a primitive normalized coefficient can exceed the rational coefficient-digit carrier",
                 )
-            output_bytes += normalized_digits + 128
-    if output_bytes > MAX_SHIFT_ADDITIVE_OUTPUT_BYTES:
+            output_weight += normalized_digits + 128
+    if output_weight > MAX_SHIFT_ADDITIVE_OUTPUT_WEIGHT:
         raise OperationResourceAdmissionError(
             location=("operator",),
             code="ore_algebra.shift_normalize_output",
@@ -1216,7 +1218,7 @@ def _admit_shift_prefix_output(
             message="an evaluated shift coefficient can exceed the exact-rational result carrier",
         )
 
-    output_bytes_bound = (
+    output_weight_bound = (
         512 * residual_count
         + 24 * right_boundary_count
         + 256 * len(operator.terms)
@@ -1249,7 +1251,7 @@ def _admit_shift_prefix_output(
                     message="a shift-prefix contribution can exceed the exact-rational result carrier",
                 )
             contribution_bounds.append((contribution_n, contribution_d))
-            output_bytes_bound += (
+            output_weight_bound += (
                 coefficient_num_digits
                 + coefficient_den_digits
                 + sequence_num_digits
@@ -1275,12 +1277,12 @@ def _admit_shift_prefix_output(
         residual_digit_bound = max(
             residual_digit_bound, numerator_digits, denominator_digits
         )
-        output_bytes_bound += 2 * residual_digit_bound + 512
-    if output_bytes_bound > MAX_SHIFT_PREFIX_OUTPUT_BYTES:
+        output_weight_bound += 2 * residual_digit_bound + 512
+    if output_weight_bound > MAX_SHIFT_PREFIX_OUTPUT_WEIGHT:
         raise OperationResourceAdmissionError(
             location=("sequence", "values"),
             code="ore_algebra.shift_prefix_output",
-            message="shift-prefix residual output exceeds its byte budget",
+            message="shift-prefix residual output exceeds its representation-weight budget",
         )
 
 
@@ -1313,9 +1315,10 @@ def shift_operator_apply_to_sequence_prefix(
             code="ore_algebra.shift_prefix_source",
             message="the source must be a canonical rational prefix with bounded explicit indices",
         ) from exc
+    last_stored_index = end_index - 1 if sequence_value.values else end_index
     if (
         abs(start_index) > MAX_SHIFT_PREFIX_INDEX
-        or abs(end_index) > MAX_SHIFT_PREFIX_INDEX
+        or abs(last_stored_index) > MAX_SHIFT_PREFIX_INDEX
     ):
         raise OperationResourceAdmissionError(
             location=("start_index",),
@@ -1576,10 +1579,28 @@ def _admit_differential_function(value: RationalFunction) -> RationalFunction:
         ) from exc
 
 
+def _differential_operator_representation_weight(
+    operator: DifferentialOreOperator,
+) -> int:
+    return 256 * len(operator.terms) + sum(
+        128
+        + sum(
+            128
+            + _digit_count(entry.coefficient.num)
+            + _digit_count(entry.coefficient.den)
+            for entry in polynomial.terms
+        )
+        for term in operator.terms
+        for polynomial in (term.coefficient.numerator, term.coefficient.denominator)
+    )
+
+
 def _preflight_differential_addition(
     left: DifferentialOreOperator,
     right: DifferentialOreOperator,
-) -> tuple[tuple[int, RationalFunction | None, RationalFunction | None], ...]:
+) -> tuple[
+    tuple[int, RationalFunction | tuple[RationalFunction, RationalFunction]], ...
+]:
     """Bound sparse rational-function sums before any coefficient expansion."""
     left_by_order = {term.order: term.coefficient for term in left.terms}
     right_by_order = {term.order: term.coefficient for term in right.terms}
@@ -1591,19 +1612,34 @@ def _preflight_differential_addition(
             message="differential operator sum exceeds the sparse term budget",
         )
 
-    plan = tuple(
-        (order, left_by_order.get(order), right_by_order.get(order)) for order in orders
-    )
+    plan_entries: list[
+        tuple[int, RationalFunction | tuple[RationalFunction, RationalFunction]]
+    ] = []
+    for order in orders:
+        if order in left_by_order:
+            if order in right_by_order:
+                plan_entries.append(
+                    (order, (left_by_order[order], right_by_order[order]))
+                )
+            else:
+                plan_entries.append((order, left_by_order[order]))
+        else:
+            plan_entries.append((order, right_by_order[order]))
+    plan = tuple(plan_entries)
     work = len(left.terms) + len(right.terms)
-    output_bytes = 512 + len(left.model_dump_json()) + len(right.model_dump_json())
-    for order, first, second in plan:
-        if first is None or second is None:
-            coefficient = first or second
-            assert coefficient is not None
+    output_weight = (
+        512
+        + _differential_operator_representation_weight(left)
+        + _differential_operator_representation_weight(right)
+    )
+    for order, operands in plan:
+        if not isinstance(operands, tuple):
+            coefficient = operands
             numerator_degree, denominator_degree, digits = _rf_bound(coefficient)
             numerator_terms = len(coefficient.numerator.terms)
             denominator_terms = len(coefficient.denominator.terms)
         else:
+            first, second = operands
             first_bound = _rf_bound(first)
             second_bound = _rf_bound(second)
             first_num_terms = len(first.numerator.terms)
@@ -1653,7 +1689,7 @@ def _preflight_differential_addition(
         # scalar height as well as by sparse cross-product work.
         degree = max(numerator_degree, denominator_degree)
         work += (degree + 1) ** 2 * digits
-        output_bytes += 256 + (numerator_terms + denominator_terms) * (96 + 2 * digits)
+        output_weight += 256 + (numerator_terms + denominator_terms) * (96 + 2 * digits)
 
     if work > MAX_DIFFERENTIAL_ADDITIVE_WORK_CELLS:
         raise OperationResourceAdmissionError(
@@ -1661,7 +1697,7 @@ def _preflight_differential_addition(
             code="ore_algebra.differential_addition_work",
             message="differential operator addition exceeds its exact-work budget",
         )
-    if output_bytes > MAX_DIFFERENTIAL_ADDITIVE_OUTPUT_BYTES:
+    if output_weight > MAX_DIFFERENTIAL_ADDITIVE_OUTPUT_WEIGHT:
         raise OperationResourceAdmissionError(
             location=("sum",),
             code="ore_algebra.differential_addition_output",
@@ -1679,16 +1715,13 @@ def differential_operator_add(
     right_value = _admit_differential_operator(_as_differential_operator(right))
     plan = _preflight_differential_addition(left_value, right_value)
     terms = []
-    for order, first, second in plan:
-        if first is None:
-            coefficient = second
-        elif second is None:
-            coefficient = first
-        else:
+    for order, operands in plan:
+        if isinstance(operands, tuple):
             coefficient = _encode_differential_rf(
-                _rf_add(_decode_rf(first), _decode_rf(second))
+                _rf_add(_decode_rf(operands[0]), _decode_rf(operands[1]))
             )
-        assert coefficient is not None
+        else:
+            coefficient = operands
         if coefficient.numerator.terms:
             terms.append({"order": order, "coefficient": coefficient})
     result = DifferentialOreOperator.model_validate({"variable": "x", "terms": terms})
@@ -1876,9 +1909,11 @@ def differential_operator_normalize_polynomial_coefficients(
             message="normalization scale exceeds the rational coefficient-digit carrier",
         )
 
-    output_bytes = 256 + _digit_count(scale.numerator) + _digit_count(scale.denominator)
+    output_weight = (
+        256 + _digit_count(scale.numerator) + _digit_count(scale.denominator)
+    )
     for _order, polynomial in polynomials:
-        output_bytes += 256
+        output_weight += 256
         for coefficient in polynomial.values():
             multiplier = denominator_lcm // coefficient.denominator
             digits = _digit_count(coefficient.numerator) + _digit_count(multiplier)
@@ -1888,8 +1923,8 @@ def differential_operator_normalize_polynomial_coefficients(
                     code="ore_algebra.differential_normalize_coefficient_digits",
                     message="a primitive normalized coefficient can exceed the rational coefficient-digit carrier",
                 )
-            output_bytes += digits + 128
-    if output_bytes > MAX_DIFFERENTIAL_ADDITIVE_OUTPUT_BYTES:
+            output_weight += digits + 128
+    if output_weight > MAX_DIFFERENTIAL_ADDITIVE_OUTPUT_WEIGHT:
         raise OperationResourceAdmissionError(
             location=("normalized",),
             code="ore_algebra.differential_normalize_output",

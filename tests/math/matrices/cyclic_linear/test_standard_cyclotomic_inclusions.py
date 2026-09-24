@@ -5,6 +5,7 @@ from __future__ import annotations
 from fractions import Fraction
 
 import pytest
+from pydantic import ValidationError
 from sympy import Poly, cyclotomic_poly, symbols
 
 from jacobian._exact import CanonicalRational
@@ -14,6 +15,7 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.dispatch import invoke_operation
 from jacobian.math.matrices.cyclic_linear import (
     CyclotomicElementMapRequest,
+    CyclotomicFieldInclusion,
     CyclotomicFieldInclusionCompositionRequest,
     CyclotomicFieldInclusionRequest,
     RationalCyclotomicElement,
@@ -156,4 +158,28 @@ def test_inclusion_rejects_nondividing_parent() -> None:
             "matrix.cyclic.cyclotomic_inclusion.compute",
             {"source": {"order": 4}, "target": {"order": 6}},
             Catalog.open(),
+        )
+
+
+def test_native_integer_generator_image_coordinates_obey_height_bound() -> None:
+    source = RationalCyclotomicField(order=3)
+    target = RationalCyclotomicField(order=6)
+    valid_boundary = CyclotomicFieldInclusion(
+        source=source,
+        target=target,
+        generator_image=(
+            CanonicalRational(num=10**255, den=1),
+            CanonicalRational(num=0, den=1),
+        ),
+    )
+    assert len(str(valid_boundary.generator_image[0].num)) == 256
+
+    with pytest.raises(ValidationError, match="256-digit bound"):
+        CyclotomicFieldInclusion(
+            source=source,
+            target=target,
+            generator_image=(
+                CanonicalRational(num=10**256, den=1),
+                CanonicalRational(num=0, den=1),
+            ),
         )

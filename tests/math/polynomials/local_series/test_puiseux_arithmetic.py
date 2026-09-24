@@ -364,3 +364,30 @@ def test_add_result_byte_preflight_accepts_at_boundary_and_rejects_above() -> No
         OperationResourceAdmissionError, match="serialized-size envelope"
     ):
         add_puiseux(left_over, right_over)
+
+
+def test_single_near_limit_rational_is_copied_by_add_and_product_by_one() -> None:
+    numerator = 10**4_095 + 1
+    denominator = 10**4_095 + 3
+    assert gcd(numerator, denominator) == 1
+    coefficient = q(numerator, denominator)
+    assert len(str(numerator)) == 4_096
+    assert len(str(denominator)) == 4_096
+    source = TruncatedPuiseuxWindow(
+        valuation_lower=q(0),
+        precision=q(1),
+        ramification_index=1,
+        terms=(PuiseuxTerm(exponent=q(0), coefficient=coefficient),),
+    )
+    empty = TruncatedPuiseuxWindow(
+        valuation_lower=q(0), precision=q(1), ramification_index=1, terms=()
+    )
+    one = TruncatedPuiseuxWindow(
+        valuation_lower=q(0),
+        precision=q(1),
+        ramification_index=1,
+        terms=(PuiseuxTerm(exponent=q(0), coefficient=q(1)),),
+    )
+
+    assert add_puiseux(source, empty) == source
+    assert multiply_puiseux(source, one) == source

@@ -51,7 +51,9 @@ from jacobian.math.number_theory.modular_forms.values import (
     ModularFormOperatorImage,
     ModularFormOperatorImagePrefix,
     ModularFormSpace,
+    ModularFormSpaceInclusion,
     ModularQExpansion,
+    natural_gamma0_inclusion_issue,
 )
 from jacobian.math.polynomials.series._models import TruncatedSeries
 
@@ -1507,8 +1509,30 @@ def modular_form_coordinates_equal(
     return left_expansion == right_expansion
 
 
+def modular_form_space_inclusion(
+    source_space: ModularFormSpace, target_space: ModularFormSpace
+) -> ModularFormSpaceInclusion:
+    """Construct the natural supported inclusion of nested Gamma0 spaces."""
+
+    issue = natural_gamma0_inclusion_issue(
+        "natural_gamma0_level_inclusion", source_space, target_space
+    )
+    if issue is not None:
+        reason, message = issue
+        raise OperationDomainValidationError(
+            location=("source_space",),
+            code=f"modular_form.inclusion_{reason}",
+            message=message,
+        )
+    return ModularFormSpaceInclusion.model_construct(
+        map_kind="natural_gamma0_level_inclusion",
+        source_space=source_space,
+        target_space=target_space,
+    )
+
+
 def modular_form_coordinates_transport(
-    form: ModularFormCoordinates, target_space: ModularFormSpace
+    form: ModularFormCoordinates, inclusion: ModularFormSpaceInclusion
 ) -> ModularFormCoordinates:
     """Express a rational trivial-character form in a nested Gamma0 space.
 
@@ -1523,49 +1547,31 @@ def modular_form_coordinates_transport(
             code="modular_form.transport_form_type",
             message="form must be an exact modular-form coordinate value",
         )
-    if not isinstance(target_space, ModularFormSpace):
+    if type(inclusion) is not ModularFormSpaceInclusion:
         raise OperationDomainValidationError(
-            location=("target_space",),
-            code="modular_form.transport_target_type",
-            message="target_space must be an exact modular-form space value",
+            location=("inclusion",),
+            code="modular_form.transport_inclusion_type",
+            message="inclusion must be an exact modular-form space inclusion value",
         )
     source_space = form.space
-    if (
-        source_space.character != "TRIVIAL"
-        or target_space.character != "TRIVIAL"
-        or source_space.coefficient_domain != "QQ"
-        or target_space.coefficient_domain != "QQ"
-    ):
+    issue = natural_gamma0_inclusion_issue(
+        inclusion.map_kind, inclusion.source_space, inclusion.target_space
+    )
+    if issue is not None:
+        reason, message = issue
         raise OperationDomainValidationError(
-            location=("target_space",),
-            code="modular_form.transport_parent_unsupported",
-            message="coordinate transport currently supports QQ trivial-character spaces only",
+            location=("inclusion",),
+            code=f"modular_form.transport_inclusion_{reason}",
+            message=message,
         )
-    if source_space.weight != target_space.weight:
+    if source_space != inclusion.source_space:
         raise OperationDomainValidationError(
-            location=("target_space", "weight"),
-            code="modular_form.transport_weight_mismatch",
-            message="source and target weights must agree",
+            location=("inclusion", "source_space"),
+            code="modular_form.transport_source_mismatch",
+            message="inclusion source must equal the coordinate form space",
         )
-    if source_space.level <= 0 or target_space.level <= 0:
-        raise OperationDomainValidationError(
-            location=("target_space", "level"),
-            code="modular_form.transport_level_value",
-            message="source and target levels must be positive",
-        )
-    if target_space.level % source_space.level:
-        raise OperationDomainValidationError(
-            location=("target_space", "level"),
-            code="modular_form.transport_level_not_nested",
-            message="source Gamma0 level must divide the target level",
-        )
-    if source_space.kind == "M" and target_space.kind == "S":
-        raise OperationDomainValidationError(
-            location=("target_space", "kind"),
-            code="modular_form.transport_kind_not_nested",
-            message="the full holomorphic space does not embed into the cuspidal subspace",
-        )
-
+    target_space = inclusion.target_space
+    source_space = form.space
     target_precision = sturm_bound(target_space).bound + 1
     # Admitting the source at the target's determining precision also proves
     # the source representation can supply every target comparison term.

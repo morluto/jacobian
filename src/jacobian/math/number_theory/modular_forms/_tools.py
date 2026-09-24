@@ -24,6 +24,7 @@ from jacobian.math.number_theory.modular_forms._models import (
     ModularFormHeckeMatrixRequest,
     ModularFormOperatorImagePrefixRequest,
     ModularFormOperatorImageRequest,
+    ModularFormSpaceInclusionRequest,
     SpaceDimensionRequest,
     SpaceDimensionResult,
 )
@@ -47,6 +48,7 @@ from jacobian.math.number_theory.modular_forms.basis import (
     modular_form_hecke_matrix_in_frame,
     modular_form_operator_image,
     modular_form_operator_image_q_expansion,
+    modular_form_space_inclusion,
 )
 from jacobian.math.number_theory.modular_forms.character_basis_tools import (
     TOOLS as CHARACTER_BASIS_TOOLS,
@@ -67,6 +69,7 @@ from jacobian.math.number_theory.modular_forms.values import (
     ModularFormHeckeMatrix,
     ModularFormOperatorImage,
     ModularFormOperatorImagePrefix,
+    ModularFormSpaceInclusion,
     ModularQExpansion,
 )
 
@@ -100,7 +103,13 @@ def multiply_coordinate_forms(
 def transport_coordinates(
     request: ModularFormCoordinatesTransportRequest,
 ) -> ModularFormCoordinates:
-    return modular_form_coordinates_transport(request.form, request.target_space)
+    return modular_form_coordinates_transport(request.form, request.inclusion)
+
+
+def compute_modular_form_space_inclusion(
+    request: ModularFormSpaceInclusionRequest,
+) -> ModularFormSpaceInclusion:
+    return modular_form_space_inclusion(request.source_space, request.target_space)
 
 
 def decide_coordinate_equality(
@@ -199,6 +208,31 @@ def compute_operator_image_prefix(
 
 TOOLS: MathTools = (
     MathTool(
+        operation_id="modular_form.space.inclusion.compute",
+        title="Construct a natural inclusion of modular-form spaces",
+        description=(
+            "Construct the natural same-weight inclusion from a trivial-character "
+            "QQ space on Gamma0(M) into one on Gamma0(N) when M divides N. "
+            "The full space maps to the full space; cusp forms map to cusp or "
+            "full spaces. The typed result retains both exact parents and can "
+            "be supplied to coordinate transport."
+        ),
+        request_type=ModularFormSpaceInclusionRequest,
+        result_type=ModularFormSpaceInclusion,
+        run=compute_modular_form_space_inclusion,
+        tags=("modular-forms", "spaces", "inclusion", "exact"),
+        examples=(
+            OperationExample(
+                name="level_one_into_gamma0_two",
+                description="Construct M4(SL2Z) → M4(Gamma0(2)).",
+                input={
+                    "source_space": {"level": 1, "weight": 4, "kind": "M"},
+                    "target_space": {"level": 2, "weight": 4, "kind": "M"},
+                },
+            ),
+        ),
+    ),
+    MathTool(
         operation_id="modular_form.equal.check",
         title="Check global equality of modular forms",
         description=(
@@ -241,10 +275,10 @@ TOOLS: MathTools = (
     ),
     MathTool(
         operation_id="modular_form.coordinates.transport.compute",
-        title="Transport modular-form coordinates into a nested Gamma0 space",
+        title="Transport modular-form coordinates along a typed Gamma0 inclusion",
         description=(
             "Express an exact QQ, trivial-character form in a same-weight target "
-            "Gamma0 space when the source level divides the target level. M maps "
+            "Gamma0 space along an explicit same-weight `ModularFormSpaceInclusion`. M maps "
             "to M; S maps to S or M. The operation solves against the target "
             "canonical basis through its exact Sturm precision and returns "
             "target-bound coordinates. It admits both bases, combined work, "
@@ -264,7 +298,10 @@ TOOLS: MathTools = (
                         "basis_id": "level-one-e4-e6-monomials-v1",
                         "coordinates": [{"num": "1", "den": "1"}],
                     },
-                    "target_space": {"level": 2, "weight": 4, "kind": "M"},
+                    "inclusion": {
+                        "source_space": {"level": 1, "weight": 4, "kind": "M"},
+                        "target_space": {"level": 2, "weight": 4, "kind": "M"},
+                    },
                 },
             ),
         ),

@@ -24,6 +24,7 @@ from jacobian.math.number_theory.modular_forms.values import (
     ModularFormFramedCoordinates,
     ModularFormOperatorImage,
     ModularFormSpace,
+    ModularFormSpaceInclusion,
 )
 
 
@@ -111,9 +112,16 @@ class ModularFormCoordinatesFieldExtensionRequest(StrictModel):
 
 
 class ModularFormCoordinatesTransportRequest(StrictModel):
-    """Transport exact coordinates along a nested trivial-character Gamma0 inclusion."""
+    """Transport exact coordinates along a typed Gamma0 inclusion."""
 
     form: ModularFormCoordinates
+    inclusion: ModularFormSpaceInclusion
+
+
+class ModularFormSpaceInclusionRequest(StrictModel):
+    """Construct the natural inclusion between two supported Gamma0 spaces."""
+
+    source_space: ModularFormSpace
     target_space: ModularFormSpace
 
 
@@ -347,6 +355,7 @@ __all__ = [
     "ModularFormHeckeMatrixRequest",
     "ModularFormOperatorImagePrefixRequest",
     "ModularFormOperatorImageRequest",
+    "ModularFormSpaceInclusionRequest",
     "SpaceDimensionRequest",
     "SpaceDimensionResult",
 ]

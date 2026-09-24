@@ -12,6 +12,7 @@ that need more context than an operation card:
 
 - [Combinatorics on words](words/index.md)
 - [Finite relational direct products](relational-direct-product.md)
+- [Primitive positive formula evaluation](pp-formula-evaluation.md)
 - [Set systems and sunflower hypergraphs](combinatorics/index.md)
 - [Geometry](geometry/index.md)
 - [Regular languages](regular-languages.md)

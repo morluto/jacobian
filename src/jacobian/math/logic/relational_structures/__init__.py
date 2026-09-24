@@ -20,6 +20,7 @@ from jacobian.math.logic.relational_structures._models import (
     InducedRelationProfile,
     InducedSubstructureRequest,
     InducedSubstructureResult,
+    PPFormulaEvaluationRequest,
     RelationalPolymorphism,
     RelationalPolymorphismCheckResult,
     RelationalPolymorphismRelationProfile,
@@ -41,6 +42,7 @@ from jacobian.math.logic.relational_structures.operations import (
     csp_instance_to_source_structure,
     direct_product_structure,
     enumerate_homomorphisms,
+    evaluate_pp_formula,
     induced_substructure,
     profile_csp_assignment,
     quotient_structure,
@@ -51,6 +53,10 @@ from jacobian.math.logic.relational_structures.operations import (
 from jacobian.math.logic.relational_structures.values import (
     FiniteRelationalStructure,
     FiniteRelationSymbol,
+    PPDefinedRelation,
+    PPEqualityAtom,
+    PPRelationAtom,
+    PrimitivePositiveFormula,
 )
 
 # The authoritative native surface: every export accepts domain values
@@ -78,6 +84,11 @@ __all__ = [
     "InducedRelationProfile",
     "InducedSubstructureRequest",
     "InducedSubstructureResult",
+    "PPDefinedRelation",
+    "PPEqualityAtom",
+    "PPFormulaEvaluationRequest",
+    "PPRelationAtom",
+    "PrimitivePositiveFormula",
     "RelationalPolymorphism",
     "RelationalPolymorphismCheckResult",
     "RelationalPolymorphismRelationProfile",
@@ -97,6 +108,7 @@ __all__ = [
     "csp_instance_to_source_structure",
     "direct_product_structure",
     "enumerate_homomorphisms",
+    "evaluate_pp_formula",
     "induced_substructure",
     "profile_csp_assignment",
     "quotient_structure",

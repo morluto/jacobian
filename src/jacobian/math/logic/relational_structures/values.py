@@ -13,7 +13,7 @@ partial/weighted relations are out of scope.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Annotated, Self
+from typing import Annotated, Literal, Self
 
 from pydantic import Field, StrictInt, StringConstraints, model_validator
 from pydantic_core import PydanticCustomError
@@ -34,6 +34,15 @@ MAX_RELATIONAL_TRANSPORT_TUPLES = 16_384
 # the larger carrier envelope.
 MAX_RELATIONAL_POLYMORPHISM_ARITY = 8
 MAX_RELATIONAL_OPERATION_TABLE_CELLS = 16_384
+# Primitive-positive formula evaluation is exhaustive over assignments. These
+# independent ceilings bound candidate assignments, atom replays, and the
+# materialized defined relation before any Cartesian expansion.
+MAX_PP_VARIABLES = 8
+MAX_PP_ATOMS = 64
+MAX_PP_EVALUATION_ASSIGNMENTS = 1_048_576
+MAX_PP_EVALUATION_ATOM_CHECKS = 8_388_608
+MAX_PP_EVALUATION_COORDINATE_WORK = 16_777_216
+MAX_PP_DEFINED_TUPLES = 65_536
 
 RelationSymbolId = Annotated[
     str,
@@ -179,7 +188,98 @@ class FiniteRelationalStructure(StrictModel):
         return self
 
 
+class PPRelationAtom(StrictModel):
+    """A relation-symbol application to variables of a pp formula."""
+
+    kind: Literal["relation"]
+    symbol_id: RelationSymbolId
+    variables: tuple[StrictInt, ...] = Field(max_length=MAX_RELATIONAL_ARITY)
+
+
+class PPEqualityAtom(StrictModel):
+    """Logical equality between two formula variables."""
+
+    kind: Literal["equality"]
+    left: StrictInt
+    right: StrictInt
+
+
+PPAtom = PPRelationAtom | PPEqualityAtom
+
+
+class PrimitivePositiveFormula(StrictModel):
+    """A finite single-sorted pp formula in explicit variable coordinates.
+
+    The formula is a conjunction of relation and equality atoms. Variables in
+    ``free_variables`` are ordered result axes; every other declared variable
+    is existentially quantified. An empty conjunction is true, which also
+    allows a sentence to express existence of isolated quantified variables.
+    """
+
+    variable_count: StrictInt = Field(ge=0, le=MAX_PP_VARIABLES)
+    free_variables: tuple[StrictInt, ...] = Field(max_length=MAX_PP_VARIABLES)
+    atoms: tuple[PPAtom, ...] = Field(max_length=MAX_PP_ATOMS)
+
+    @model_validator(mode="after")
+    def require_valid_variable_axes(self) -> Self:
+        if len(set(self.free_variables)) != len(self.free_variables):
+            raise _validation_error(
+                "pp.free_variables", "free-variable axes must be distinct"
+            )
+        if any(not 0 <= variable < self.variable_count for variable in self.free_variables):
+            raise _validation_error(
+                "pp.free_variable_range", "free variables must name declared variables"
+            )
+        for atom in self.atoms:
+            if isinstance(atom, PPRelationAtom):
+                variables = atom.variables
+            else:
+                variables = (atom.left, atom.right)
+            if any(not 0 <= variable < self.variable_count for variable in variables):
+                raise _validation_error(
+                    "pp.atom_variable_range", "every atom variable must be declared"
+                )
+        return self
+
+
+class PPDefinedRelation(StrictModel):
+    """The exact relation defined by a formula on one retained structure.
+
+    Tuple position ``i`` denotes formula variable ``free_variables[i]``.
+    Rows are sorted and unique; structure, formula, and axis remain attached
+    so the finite relation is interpretable after serialization.
+    """
+
+    structure: FiniteRelationalStructure
+    formula: PrimitivePositiveFormula
+    tuples: tuple[tuple[StrictInt, ...], ...] = Field(
+        max_length=MAX_PP_DEFINED_TUPLES
+    )
+
+    @model_validator(mode="after")
+    def require_exact_relation_shape(self) -> Self:
+        axis_width = len(self.formula.free_variables)
+        if self.tuples != tuple(sorted(set(self.tuples))):
+            raise _validation_error(
+                "pp.result_canonical", "defined tuples must be sorted and unique"
+            )
+        for row in self.tuples:
+            if len(row) != axis_width or any(
+                not 0 <= value < self.structure.carrier_size for value in row
+            ):
+                raise _validation_error(
+                    "pp.result_tuple", "each defined tuple must lie on the free axes"
+                )
+        return self
+
+
 __all__ = [
+    "MAX_PP_ATOMS",
+    "MAX_PP_DEFINED_TUPLES",
+    "MAX_PP_EVALUATION_ASSIGNMENTS",
+    "MAX_PP_EVALUATION_ATOM_CHECKS",
+    "MAX_PP_EVALUATION_COORDINATE_WORK",
+    "MAX_PP_VARIABLES",
     "MAX_RELATIONAL_ARITY",
     "MAX_RELATIONAL_CARRIER",
     "MAX_RELATIONAL_OPERATION_TABLE_CELLS",
@@ -189,5 +289,9 @@ __all__ = [
     "MAX_RELATIONAL_TRANSPORT_TUPLES",
     "FiniteRelationSymbol",
     "FiniteRelationalStructure",
+    "PPDefinedRelation",
+    "PPEqualityAtom",
+    "PPRelationAtom",
+    "PrimitivePositiveFormula",
     "RelationSymbolId",
 ]

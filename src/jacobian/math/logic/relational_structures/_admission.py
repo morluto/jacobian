@@ -19,6 +19,10 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.logic.relational_structures.values import (
+    MAX_PP_DEFINED_TUPLES,
+    MAX_PP_EVALUATION_ASSIGNMENTS,
+    MAX_PP_EVALUATION_ATOM_CHECKS,
+    MAX_PP_EVALUATION_COORDINATE_WORK,
     MAX_RELATIONAL_CARRIER,
     MAX_RELATIONAL_OPERATION_TABLE_CELLS,
     MAX_RELATIONAL_POLYMORPHISM_ARITY,
@@ -26,6 +30,8 @@ from jacobian.math.logic.relational_structures.values import (
     MAX_RELATIONAL_TABLE_ROWS,
     MAX_RELATIONAL_TRANSPORT_TUPLES,
     FiniteRelationalStructure,
+    PPRelationAtom,
+    PrimitivePositiveFormula,
 )
 
 # Exhaustive homomorphism search work: every candidate carrier map is
@@ -46,6 +52,80 @@ MAX_POLYMORPHISM_COORDINATE_WORK = 1_000_000
 MAX_INDUCED_SUBSTRUCTURE_WORK = 81_920
 MAX_RELATIONAL_REDUCT_WORK = 81_920
 MAX_RELATIONAL_PRODUCT_WORK = 1_048_576
+
+
+def admit_pp_evaluation(
+    structure: FiniteRelationalStructure, formula: PrimitivePositiveFormula
+) -> None:
+    """Admit exhaustive pp assignment replay and output materialization."""
+
+    symbol_arities = {
+        symbol.symbol_id: symbol.arity for symbol in structure.signature
+    }
+    for index, atom in enumerate(formula.atoms):
+        if isinstance(atom, PPRelationAtom):
+            arity = symbol_arities.get(atom.symbol_id)
+            if arity is None:
+                raise OperationDomainValidationError(
+                    location=("formula", "atoms", index, "symbol_id"),
+                    code="relational.pp.unknown_symbol",
+                    message="every relation atom must name a symbol of the structure",
+                )
+            if len(atom.variables) != arity:
+                raise OperationDomainValidationError(
+                    location=("formula", "atoms", index, "variables"),
+                    code="relational.pp.atom_arity",
+                    message="relation atom variables must match the symbol arity",
+                )
+
+    size = structure.carrier_size
+    assignments = 1 if formula.variable_count == 0 else size**formula.variable_count
+    output_tuples = (
+        1 if len(formula.free_variables) == 0 else size ** len(formula.free_variables)
+    )
+    atom_checks = assignments * len(formula.atoms)
+    coordinate_work = assignments * formula.variable_count
+    coordinate_work += assignments * sum(
+        len(atom.variables) if isinstance(atom, PPRelationAtom) else 2
+        for atom in formula.atoms
+    )
+    coordinate_work += output_tuples * len(formula.free_variables)
+    if assignments > MAX_PP_EVALUATION_ASSIGNMENTS:
+        raise OperationResourceAdmissionError(
+            location=("formula", "variable_count"),
+            code="relational.pp.assignment_bound",
+            message=(
+                f"complete formula evaluation has {assignments} assignments, "
+                f"exceeding the {MAX_PP_EVALUATION_ASSIGNMENTS}-assignment envelope"
+            ),
+        )
+    if atom_checks > MAX_PP_EVALUATION_ATOM_CHECKS:
+        raise OperationResourceAdmissionError(
+            location=("formula", "atoms"),
+            code="relational.pp.atom_check_bound",
+            message=(
+                f"complete formula evaluation has {atom_checks} atom checks, "
+                f"exceeding the {MAX_PP_EVALUATION_ATOM_CHECKS}-check envelope"
+            ),
+        )
+    if coordinate_work > MAX_PP_EVALUATION_COORDINATE_WORK:
+        raise OperationResourceAdmissionError(
+            location=("formula",),
+            code="relational.pp.coordinate_work_bound",
+            message=(
+                f"complete formula evaluation has {coordinate_work} coordinate "
+                f"steps, exceeding the {MAX_PP_EVALUATION_COORDINATE_WORK}-step envelope"
+            ),
+        )
+    if output_tuples > MAX_PP_DEFINED_TUPLES:
+        raise OperationResourceAdmissionError(
+            location=("formula", "free_variables"),
+            code="relational.pp.output_bound",
+            message=(
+                f"the defined relation has at most {output_tuples} tuples, "
+                f"exceeding the {MAX_PP_DEFINED_TUPLES}-tuple envelope"
+            ),
+        )
 
 
 def candidate_space(source_size: int, target_size: int) -> int:

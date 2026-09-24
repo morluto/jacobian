@@ -20,6 +20,7 @@ from jacobian.math.logic.relational_structures._admission import (
     admit_homomorphism_search,
     admit_induced_substructure,
     admit_polymorphism_check,
+    admit_pp_evaluation,
     admit_relational_product,
     admit_relational_reduct,
 )
@@ -62,6 +63,9 @@ from jacobian.math.logic.relational_structures.values import (
     MAX_RELATIONAL_TRANSPORT_TUPLES,
     FiniteRelationalStructure,
     FiniteRelationSymbol,
+    PPDefinedRelation,
+    PPRelationAtom,
+    PrimitivePositiveFormula,
 )
 
 
@@ -80,6 +84,61 @@ def _admit_structure(value: object, field: str) -> FiniteRelationalStructure:
             code="relational.homomorphism.structure_shape",
             message=f"{field} must satisfy its complete canonical relation tables",
         ) from exc
+
+
+def evaluate_pp_formula(
+    structure: FiniteRelationalStructure,
+    formula: PrimitivePositiveFormula,
+) -> PPDefinedRelation:
+    """Return the exact free-variable relation defined by a pp formula."""
+
+    structure = _admit_structure(structure, "structure")
+    if not isinstance(formula, PrimitivePositiveFormula):
+        raise OperationDomainValidationError(
+            location=("formula",),
+            code="relational.pp.formula_type",
+            message="formula must be a typed primitive-positive formula",
+        )
+    try:
+        formula = PrimitivePositiveFormula.model_validate(
+            formula.model_dump(), strict=True
+        )
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("formula",),
+            code="relational.pp.formula_shape",
+            message="formula must have bounded declared variables and valid atoms",
+        ) from exc
+    admit_pp_evaluation(structure, formula)
+
+    relation_index = {
+        symbol.symbol_id: index for index, symbol in enumerate(structure.signature)
+    }
+    relation_tables = tuple(map(set, structure.relation_tables))
+    defined: set[tuple[int, ...]] = set()
+    carrier_size = structure.carrier_size
+    # itertools.product over a zero-length variable list yields its one empty
+    # assignment. Over an empty carrier with any variables, it yields none.
+    for assignment_index, assignment in enumerate(
+        product(range(carrier_size), repeat=formula.variable_count)
+    ):
+        if assignment_index % 1024 == 0:
+            request_checkpoint("during primitive-positive formula evaluation")
+        for atom in formula.atoms:
+            if isinstance(atom, PPRelationAtom):
+                target_tuple = tuple(assignment[v] for v in atom.variables)
+                if target_tuple not in relation_tables[relation_index[atom.symbol_id]]:
+                    break
+            elif assignment[atom.left] != assignment[atom.right]:
+                break
+        else:
+            defined.add(tuple(assignment[v] for v in formula.free_variables))
+    tuples = tuple(sorted(defined))
+    # The kernel has already established the exact relation and the model's
+    # bounded structural shape, so do not replay the evaluation in validation.
+    return PPDefinedRelation.model_construct(
+        structure=structure, formula=formula, tuples=tuples
+    )
 
 
 def induced_substructure(

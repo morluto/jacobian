@@ -27,6 +27,7 @@ from jacobian.math.logic.relational_structures._models import (
     HomomorphismSearchResult,
     InducedSubstructureRequest,
     InducedSubstructureResult,
+    PPFormulaEvaluationRequest,
     RelationalPolymorphismCheckResult,
     RelationalPolymorphismRequest,
     RelationalProductRequest,
@@ -44,6 +45,7 @@ from jacobian.math.logic.relational_structures.operations import (
     csp_instance_to_source_structure,
     direct_product_structure,
     enumerate_homomorphisms,
+    evaluate_pp_formula,
     induced_substructure,
     profile_csp_assignment,
     quotient_structure,
@@ -59,6 +61,7 @@ from jacobian.math.logic.relational_structures.values import (
     MAX_RELATIONAL_SYMBOLS,
     MAX_RELATIONAL_TABLE_ROWS,
     FiniteRelationalStructure,
+    PPDefinedRelation,
 )
 
 
@@ -146,6 +149,10 @@ def _polymorphism_check(
     return check_polymorphism(request)
 
 
+def _pp_formula_evaluation(request: PPFormulaEvaluationRequest) -> PPDefinedRelation:
+    return evaluate_pp_formula(request.structure, request.formula)
+
+
 _DIRECTED_EDGE = {"symbol_id": "E", "arity": 2}
 
 _THREE_CYCLE = {
@@ -217,6 +224,56 @@ TOOLS: MathTools = (
                 input={
                     "left": _DIRECTED_EDGE_STRUCTURE,
                     "right": _DIRECTED_EDGE_STRUCTURE,
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="pp_formula.evaluate_relation.compute",
+        title="Evaluate a primitive-positive formula on a finite structure",
+        description=(
+            "Return the complete exact relation of free-variable tuples "
+            "satisfying a conjunction of relation and equality atoms, with "
+            "all other declared variables existentially quantified. The "
+            "result retains the interpreted structure, formula, and ordered "
+            "free-variable axes. Relation symbols and arities must match the "
+            "structure's exact signature. Complete assignment, atom-check, "
+            "and output-relation bounds are checked before enumeration; "
+            "coordinate extraction work is bounded separately; "
+            "resource refusal is not a partial relation."
+        ),
+        request_type=PPFormulaEvaluationRequest,
+        result_type=PPDefinedRelation,
+        run=_pp_formula_evaluation,
+        tags=("relational-structures", "finite-model-theory", "csp", "exact"),
+        discovery_terms=(
+            "primitive positive formula",
+            "conjunctive query evaluation",
+            "pp-defined relation",
+            "finite relational formula semantics",
+            "CSP solution relation",
+        ),
+        examples=(
+            OperationExample(
+                name="directed_two_step_reachability",
+                description=(
+                    "The formula exists y with E(x,y) and E(y,z), returning "
+                    "the exact two-step relation while retaining x,z axis order."
+                ),
+                input={
+                    "structure": {
+                        "carrier_size": 3,
+                        "signature": [_DIRECTED_EDGE],
+                        "relation_tables": [[[0, 1], [1, 2]]],
+                    },
+                    "formula": {
+                        "variable_count": 3,
+                        "free_variables": [0, 2],
+                        "atoms": [
+                            {"kind": "relation", "symbol_id": "E", "variables": [0, 1]},
+                            {"kind": "relation", "symbol_id": "E", "variables": [1, 2]},
+                        ],
+                    },
                 },
             ),
         ),

@@ -20,6 +20,7 @@ from jacobian.math.number_theory.modular_forms import cyclotomic
 from jacobian.math.number_theory.modular_forms.character_basis_models import (
     ModularCharacterBasis,
     ModularCharacterBasisElement,
+    ModularCharacterCoordinates,
     ModularCharacterHeckeMatrix,
     ModularCharacterQExpansion,
 )
@@ -59,6 +60,17 @@ _TRANSPORT_STURM_BASIS_ENVELOPE = {
     (26, 29): (2, 1),
     (39, 10): (3, 1),
     (39, 29): (3, 1),
+}
+# Exact finite envelope for the generalized-character U_p slice. The entries
+# are (Sturm precision, source precision, dimension, basis coefficient digits,
+# induced coordinate digits) for every supported level/prime pair. The two
+# conductor-13 order-six characters are conjugates; focused fixtures check
+# both conjugates at every pair.
+_CHARACTER_U_PRIME_ENVELOPE = {
+    (26, 2): (8, 15, 2, 1, 2),
+    (26, 13): (8, 92, 2, 2, 2),
+    (39, 3): (10, 28, 3, 1, 2),
+    (39, 13): (10, 118, 3, 2, 2),
 }
 
 
@@ -829,6 +841,247 @@ def modular_character_coordinates_hecke(
         basis_id=CHARACTER_BASIS_ID,
         coordinates=(result_coordinate,),
     )
+
+
+def _admit_general_character_coordinates(
+    form: ModularCharacterCoordinates,
+) -> tuple[
+    ModularCharacterCoordinates,
+    ModularFormSpace,
+    RationalCyclotomicField,
+    dict[str, object],
+    tuple[int, int],
+    int,
+]:
+    if type(form) is not ModularCharacterCoordinates:
+        _domain("U_p requires canonical generalized character coordinates")
+    try:
+        form = ModularCharacterCoordinates.model_validate(
+            form.model_dump(warnings=False)
+        )
+    except (AttributeError, TypeError, ValueError) as error:
+        raise OperationDomainValidationError(
+            location=("form",),
+            code="modular_form.character_coordinates_invalid",
+            message="generalized character coordinates are malformed",
+        ) from error
+    space, field, character_request = _require_basis_space(form.space)
+    if space.kind != "S" or space.level == 13:
+        _domain("U_p coordinates require an admitted level-26 or level-39 cusp space")
+    dimensions = character_space_dimensions(
+        space.level, space.weight, space.character, field
+    )
+    cusp_dimension = dimensions[0]
+    if (
+        form.basis_id != "gamma0-cyclotomic-character-sturm-rref-v1"
+        or len(form.coordinates) != cusp_dimension
+        or not form.coordinates
+    ):
+        _domain("U_p coordinates must match the exact generalized cusp basis")
+    coordinate_digits = 1
+    for coordinate in form.coordinates:
+        if (
+            type(coordinate) is not RationalCyclotomicElement
+            or coordinate.field != field
+        ):
+            _domain("U_p coordinates must use the exact declared cyclotomic parent")
+        _, _, digits = cyclotomic._validate_element(coordinate)
+        coordinate_digits = max(coordinate_digits, digits)
+    return (
+        form,
+        space,
+        field,
+        character_request,
+        dimensions,
+        coordinate_digits,
+    )
+
+
+def modular_character_coordinates_u_prime(
+    form: ModularCharacterCoordinates, prime: int
+) -> ModularCharacterCoordinates:
+    """Apply U_p and reconstruct in the same admitted character cusp space.
+
+    This bounded action covers p | N for the represented weight-two character
+    cusp spaces at levels 26 and 39. It uses a p-times-Sturm source prefix,
+    applies a_n(U_p f) = a_{pn}(f), and proves closure by exact reconstruction
+    in the canonical target Sturm basis.
+    """
+    admitted = _admit_general_character_coordinates(form)
+    form, space, field, character_request, dimensions, input_digits = admitted
+    dimension = dimensions[0]
+    if (
+        type(prime) is not int
+        or (space.level, prime) not in _CHARACTER_U_PRIME_ENVELOPE
+    ):
+        raise OperationDomainValidationError(
+            location=("prime",),
+            code="modular_form.character_u_prime_parent",
+            message="the supported character U_p action requires p=2 or 13 at level 26 and p=3 or 13 at level 39",
+        )
+    (
+        sturm_precision,
+        source_precision,
+        expected_dimension,
+        basis_digits,
+        matrix_digits,
+    ) = _CHARACTER_U_PRIME_ENVELOPE[(space.level, prime)]
+    if (
+        dimension != expected_dimension
+        or _character_sturm_precision(space) != sturm_precision
+    ):
+        raise RuntimeError("character U_p envelope disagrees with exact space data")
+
+    # A sum of at most `dimension` cyclotomic products has this numerator and
+    # denominator digit bound. The finite matrix coefficient envelope is
+    # established independently for both admitted conjugate characters.
+    linear_digits = (
+        dimension * (input_digits + matrix_digits) + len(str(3 * dimension)) + 2
+    )
+    intermediate_digits = (
+        dimension * (input_digits + basis_digits) + len(str(3 * dimension)) + 2
+    )
+    closure_digits = (
+        dimension * (matrix_digits + basis_digits) + len(str(3 * dimension)) + 2
+    )
+    work = (
+        space.level * field.degree * 8
+        + source_precision * dimension * field.degree * 8
+        + sturm_precision * dimension * dimension * field.degree * 16
+        + dimension * dimension * field.degree * 8
+    )
+    basis_bytes = source_precision * dimension * field.degree * (2 * basis_digits + 32)
+    matrix_bytes = dimension * dimension * field.degree * (2 * matrix_digits + 32)
+    result_bytes = dimension * field.degree * (2 * linear_digits + 32)
+    if (
+        linear_digits > MAX_CYCLIC_FIELD_ELEMENT_DIGITS
+        or intermediate_digits > MAX_CYCLIC_FIELD_ELEMENT_DIGITS
+        or closure_digits > MAX_CYCLIC_FIELD_ELEMENT_DIGITS
+        or work > _MAX_WORK
+        or basis_bytes + matrix_bytes + result_bytes > _MAX_OUTPUT_BYTES
+    ):
+        raise OperationResourceAdmissionError(
+            location=("form",),
+            code="modular_form.character_u_prime_admission",
+            message="character U_p basis, exact coefficient growth, work, or output exceeds its admitted envelope",
+        )
+
+    request_checkpoint("before character U_p basis expansion")
+    basis = _character_basis_from_admission(
+        space,
+        field,
+        character_request,
+        precision=source_precision,
+        admitted_dimensions=dimensions,
+    )
+    if basis.basis_id != form.basis_id or len(basis.elements) != dimension:
+        raise RuntimeError("character U_p basis differs from its admitted parent")
+    for element in basis.elements:
+        for coefficient in element.expansion.coefficients:
+            if any(
+                max(
+                    len(str(abs(int(value.num)))),
+                    len(str(int(value.den))),
+                )
+                > basis_digits
+                for value in coefficient.coefficients_ascending
+            ):
+                raise OperationResourceAdmissionError(
+                    location=("space",),
+                    code="modular_form.character_u_prime_basis_height",
+                    message="extended character U_p basis exceeds its exact coefficient envelope",
+                )
+
+    vectors = tuple(item.expansion.coefficients for item in basis.elements)
+    pivots = tuple(
+        next(
+            index
+            for index, coefficient in enumerate(vector[:sturm_precision])
+            if not _is_zero(coefficient)
+        )
+        for vector in vectors
+    )
+    columns: list[tuple[RationalCyclotomicElement, ...]] = []
+    for vector in vectors:
+        request_checkpoint("during character U_p basis reconstruction")
+        image = tuple(vector[prime * index] for index in range(sturm_precision))
+        coordinates = tuple(image[pivot] for pivot in pivots)
+        if any(
+            max(
+                len(str(abs(int(value.num)))),
+                len(str(int(value.den))),
+            )
+            > matrix_digits
+            for coordinate in coordinates
+            for value in coordinate.coefficients_ascending
+        ):
+            raise OperationResourceAdmissionError(
+                location=("space",),
+                code="modular_form.character_u_prime_matrix_height",
+                message="U_p action exceeds its exact coordinate matrix envelope",
+            )
+        reconstructed = tuple(
+            _linear_combination_coefficient(vectors, coordinates, index, field)
+            for index in range(sturm_precision)
+        )
+        if reconstructed != image:
+            raise OperationDomainValidationError(
+                location=("space", "target"),
+                code="modular_form.character_u_prime_not_closed",
+                message="the U_p image failed exact reconstruction in its declared target space",
+            )
+        columns.append(coordinates)
+
+    result_coordinates = tuple(
+        _sum_cyclotomic(
+            (
+                cyclotomic.multiply(columns[column][row], form.coordinates[column])
+                for column in range(dimension)
+            ),
+            field,
+        )
+        for row in range(dimension)
+    )
+    if any(
+        max(
+            len(str(abs(int(value.num)))),
+            len(str(int(value.den))),
+        )
+        > linear_digits
+        for coordinate in result_coordinates
+        for value in coordinate.coefficients_ascending
+    ):
+        raise RuntimeError("character U_p result exceeded its admitted height")
+    request_checkpoint("after character U_p target reconstruction")
+    return ModularCharacterCoordinates(
+        space=space,
+        basis_id=form.basis_id,
+        coordinates=result_coordinates,
+    )
+
+
+def _linear_combination_coefficient(
+    vectors: tuple[tuple[RationalCyclotomicElement, ...], ...],
+    coordinates: tuple[RationalCyclotomicElement, ...],
+    index: int,
+    field: RationalCyclotomicField,
+) -> RationalCyclotomicElement:
+    return _sum_cyclotomic(
+        (
+            cyclotomic.multiply(coordinates[row], vectors[row][index])
+            for row in range(len(vectors))
+        ),
+        field,
+    )
+
+
+def _sum_cyclotomic(
+    values, field: RationalCyclotomicField
+) -> RationalCyclotomicElement:
+    total = _coefficient(field, (Fraction(0),) * field.degree)
+    for value in values:
+        total = cyclotomic.add(total, value)
+    return total
 
 
 def modular_character_hecke_matrix(

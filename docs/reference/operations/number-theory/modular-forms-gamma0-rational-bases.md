@@ -106,6 +106,24 @@ action through the Sturm-determining prefix. It makes no claim about Hecke
 matrices on other character spaces.
 [PARI modular-forms reference](https://pari.math.u-bordeaux.fr/dochtml/ref-stable/Modular_forms.html)
 
+The character-coordinate slice also supports the modular `U_p` action at bad
+primes for `(N,p) = (26,2), (26,13), (39,3), (39,13)`. The operation accepts
+only the generalized cusp coordinates for the exact weight-two spaces already
+represented above, and returns coordinates in that same space. It computes
+the complete source prefix through `p * (B - 1)`, where `B` is the target
+Sturm precision, selects `a_(p n)` for each target coefficient, and solves
+against the canonical target basis through all `B` coefficients. Exact closure
+is checked before returning; finite coefficient envelopes are established for
+both conjugate conductor-13 order-six characters at each admitted pair.
+
+PARI's modular-symbol reference distinguishes `T_p` from `U_p` by level: its
+`mshecke` operation returns `U_p` when `p` divides `N` ([PARI modular-symbols
+reference](https://pari.math.u-bordeaux.fr/dochtml/ref-stable/Modular_symbols.html)).
+The q-coefficient action used here is the exact coefficient projection
+`a_n(U_p f) = a_(p n)(f)`. The operation does not infer modularity from a
+formal-series `U_p` transform: modularity follows from the represented source
+space and the exact same-space Sturm reconstruction.
+
 Before backend work, Jacobian admits level, weight, dimension, Sturm
 precision, aggregate work, rational elimination growth, and serialized output.
 The PARI call runs in a request-scoped resource-limited worker so it can be

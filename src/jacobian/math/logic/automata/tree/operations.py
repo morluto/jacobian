@@ -7,6 +7,8 @@ from collections.abc import Iterator
 from itertools import product
 from math import prod
 
+from pydantic import ValidationError
+
 from jacobian._execution import request_checkpoint
 from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import (
@@ -19,6 +21,8 @@ from jacobian.math.logic.automata.tree._models import (
     RankedTreePositionsResult,
     RankedTreeSubtreeRequest,
     RankedTreeSubtreeResult,
+    RegularTreeGrammarToAutomatonRequest,
+    RegularTreeGrammarToAutomatonResult,
     TreeAutomatonBooleanProductRequest,
     TreeAutomatonBooleanProductResult,
     TreeAutomatonComplementResult,
@@ -60,6 +64,7 @@ __all__ = [
     "ranked_tree_positions",
     "ranked_tree_subtree",
     "reachable_state_profile",
+    "regular_tree_grammar_to_automaton",
     "run_tree_automaton",
     "tree_state_chart",
     "trim_tree_automaton",
@@ -374,6 +379,65 @@ MAX_COMPLETION_OUTPUT_CELLS = MAX_TA_TRANSITIONS * (MAX_TA_ARITY + 2)
 MAX_MINIMIZE_WORK = MAX_TREE_AUTOMATON_WORK
 MAX_RANKED_TREE_POSITIONS_WORK = 600_000
 MAX_RANKED_TREE_POSITIONS_RESULT_BYTES = 4 * 1024 * 1024
+MAX_TREE_GRAMMAR_CONVERSION_WORK = 5_000_000
+
+
+def regular_tree_grammar_to_automaton(
+    request: RegularTreeGrammarToAutomatonRequest,
+) -> RegularTreeGrammarToAutomatonResult:
+    """Translate each production to the corresponding bottom-up transition."""
+
+    try:
+        canonical = RegularTreeGrammarToAutomatonRequest.model_validate(
+            request.model_dump()
+        )
+    except (ValidationError, AttributeError, TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("grammar",),
+            code="tree_automata.invalid_regular_tree_grammar",
+            message="conversion requires a canonical bounded regular tree grammar",
+        ) from exc
+    grammar = canonical.grammar
+    transition_work = sum(2 + len(rule.children) for rule in grammar.productions)
+    production_count = len(grammar.productions)
+    sorting_work = (
+        4
+        * production_count
+        * (production_count + 1).bit_length()
+        * max(grammar.arity, default=0)
+    )
+    # Sixteen passes cover request validation, output construction, and
+    # source/result relation validation; sorting uses bounded rank-sized keys.
+    work_bound = (
+        sorting_work
+        + 16 * transition_work
+        + 8 * grammar.nonterminal_count
+        + 4 * len(grammar.arity)
+    )
+    if work_bound > MAX_TREE_GRAMMAR_CONVERSION_WORK:
+        raise OperationResourceAdmissionError(
+            location=("grammar", "productions"),
+            code="tree_automata.grammar_conversion_work_bound",
+            message="regular tree grammar conversion exceeds its work envelope",
+        )
+    transitions = tuple(
+        TreeAutomatonTransition(
+            symbol=rule.symbol,
+            child_states=rule.children,
+            target_state=rule.nonterminal,
+        )
+        for rule in grammar.productions
+    )
+    automaton = BottomUpTreeAutomaton(
+        state_count=grammar.nonterminal_count,
+        arity=grammar.arity,
+        transitions=transitions,
+        final_states=(grammar.start_nonterminal,),
+    )
+    return RegularTreeGrammarToAutomatonResult(
+        grammar=grammar,
+        automaton=automaton,
+    )
 
 
 def _tree_automaton_minimization_partition(

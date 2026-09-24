@@ -22,6 +22,7 @@ from jacobian.math.logic.automata.tree.values import (
     CompleteDeterministicBottomUpTreeAutomaton,
     DeterministicBottomUpTreeAutomaton,
     RankedTree,
+    RegularTreeGrammar,
     TreeStateChartEntry,
     TreeStateWitness,
 )
@@ -275,6 +276,47 @@ class TreeAutomatonTrimResult(StrictModel):
     @classmethod
     def _from_kernel(cls, **values: Any) -> Self:
         return cls.model_construct(**values)
+
+
+class RegularTreeGrammarToAutomatonRequest(StrictModel):
+    """Convert a unit-free regular tree grammar to its bottom-up automaton."""
+
+    grammar: RegularTreeGrammar
+
+
+class RegularTreeGrammarToAutomatonResult(StrictModel):
+    """The source grammar and the equivalent bottom-up tree automaton."""
+
+    grammar: RegularTreeGrammar
+    automaton: BottomUpTreeAutomaton
+
+    @model_validator(mode="after")
+    def require_exact_state_and_rule_transport(self) -> Self:
+        grammar = self.grammar
+        machine = self.automaton
+        if (
+            machine.state_count != grammar.nonterminal_count
+            or machine.arity != grammar.arity
+            or machine.final_states != (grammar.start_nonterminal,)
+            or len(machine.transitions) != len(grammar.productions)
+        ):
+            raise _validation_error(
+                "grammar_automaton_binding",
+                "automaton must retain the grammar signature, state axis, and start state",
+            )
+        for production, transition in zip(
+            grammar.productions, machine.transitions, strict=True
+        ):
+            if (
+                transition.symbol != production.symbol
+                or transition.child_states != production.children
+                or transition.target_state != production.nonterminal
+            ):
+                raise _validation_error(
+                    "grammar_rule_transport",
+                    "each grammar production must become its corresponding automaton transition",
+                )
+        return self
 
 
 class TreeAutomatonComplementRequest(StrictModel):
@@ -690,6 +732,8 @@ class TreeDeterminizeResult(TreeDeterminizeRequest):
 __all__ = [
     "AcceptedTreeCountRequest",
     "AcceptedTreeCountResult",
+    "RegularTreeGrammarToAutomatonRequest",
+    "RegularTreeGrammarToAutomatonResult",
     "TreeAutomatonBooleanProductRequest",
     "TreeAutomatonBooleanProductResult",
     "TreeAutomatonComplementRequest",

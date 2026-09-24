@@ -23,6 +23,7 @@ from jacobian.math.logic.automata.tree.operations import (
     ranked_tree_positions,
     ranked_tree_subtree,
     reachable_state_profile,
+    regular_tree_grammar_to_automaton,
     run_tree_automaton,
     trim_tree_automaton,
     verify_accepted_tree_count,
@@ -37,6 +38,8 @@ from jacobian.math.logic.automata.tree.values import (
     DeterministicBottomUpTreeAutomaton,
     RankedTree,
     ReachableStateProfile,
+    RegularTreeGrammar,
+    RegularTreeProduction,
     TreeAutomatonTransition,
 )
 
@@ -50,6 +53,8 @@ __all__ = [
     "RankedTreeSubtreeRequest",
     "RankedTreeSubtreeResult",
     "ReachableStateProfile",
+    "RegularTreeGrammar",
+    "RegularTreeProduction",
     "TreeAutomatonBooleanProductRequest",
     "TreeAutomatonBooleanProductResult",
     "TreeAutomatonComplementResult",
@@ -67,6 +72,7 @@ __all__ = [
     "ranked_tree_positions",
     "ranked_tree_subtree",
     "reachable_state_profile",
+    "regular_tree_grammar_to_automaton",
     "run_tree_automaton",
     "trim_tree_automaton",
     "verify_accepted_tree_count",

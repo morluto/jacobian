@@ -8,7 +8,7 @@ from typing import Literal
 
 from pydantic import Field, StrictInt, TypeAdapter, ValidationError, model_validator
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
 from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import (
@@ -134,7 +134,50 @@ def _admit_parent(source: LocalPolynomialInSeries) -> None:
             code="local_series.newton_center",
             message="local polynomial center must be a canonical rational",
         )
-    if source.place == "INFINITY" and source.center.as_fraction() != 0:
+    # Native callers can bypass the Pydantic validator with model_construct(),
+    # so re-establish the center's reduced components, denominator
+    # positivity, and scalar bound before the hull consumes it, mirroring the
+    # nested Laurent and Puiseux window admission.
+    center_num = getattr(source.center, "num", None)
+    center_den = getattr(source.center, "den", None)
+    if type(center_num) is not int or type(center_den) is not int:
+        raise OperationDomainValidationError(
+            location=("polynomial", "center"),
+            code="local_series.newton_center",
+            message="local polynomial center components must be strict integers",
+        )
+    try:
+        center = source.center.as_fraction()
+    except (TypeError, ValueError, ZeroDivisionError) as error:
+        raise OperationDomainValidationError(
+            location=("polynomial", "center"),
+            code="local_series.newton_center",
+            message="local polynomial center must be a valid canonical rational",
+        ) from error
+    if center_den <= 0 or (center_num, center_den) != (
+        center.numerator,
+        center.denominator,
+    ):
+        raise OperationDomainValidationError(
+            location=("polynomial", "center"),
+            code="local_series.newton_center",
+            message=(
+                "local polynomial center must be reduced with a positive denominator"
+            ),
+        )
+    try:
+        require_bounded_rational(
+            source.center,
+            max_digits=MAX_LOCAL_SERIES_COEFFICIENT_DIGITS,
+            label="local polynomial center",
+        )
+    except ValueError as error:
+        raise OperationResourceAdmissionError(
+            location=("polynomial", "center"),
+            code="local_series.newton_center_bound",
+            message=str(error),
+        ) from error
+    if source.place == "INFINITY" and center != 0:
         raise OperationDomainValidationError(
             location=("polynomial", "center"),
             code="local_series.newton_infinity_center",

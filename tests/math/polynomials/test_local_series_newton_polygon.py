@@ -3,7 +3,10 @@ from fractions import Fraction
 import pytest
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.polynomials.local_series.newton_polygon import (
     LocalPolynomialCoefficient,
     LocalPolynomialInSeries,
@@ -169,6 +172,28 @@ def test_forged_infinity_center_is_rejected() -> None:
     )
     with pytest.raises(OperationDomainValidationError, match="center zero"):
         local_polynomial_newton_polygon(forged)
+
+
+def test_forged_finite_center_is_rejected_before_hull_construction() -> None:
+    for center in (
+        CanonicalRational.model_construct(num=2, den=2),
+        CanonicalRational.model_construct(num=1, den=0),
+        CanonicalRational.model_construct(num="0", den="1"),
+    ):
+        forged = LocalPolynomialInSeries.model_construct(
+            variable="t", place="FINITE", center=center, coefficients=()
+        )
+        with pytest.raises(OperationDomainValidationError):
+            local_polynomial_newton_polygon(forged)
+
+    huge = LocalPolynomialInSeries.model_construct(
+        variable="t",
+        place="FINITE",
+        center=CanonicalRational.from_fraction(Fraction(10**4_500 + 7, 3)),
+        coefficients=(),
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="digit bound"):
+        local_polynomial_newton_polygon(huge)
 
 
 def test_forged_ragged_series_is_rejected() -> None:

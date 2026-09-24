@@ -344,6 +344,31 @@ def test_product_rejects_pair_work_before_convolution() -> None:
         multiply_puiseux(left, left)
 
 
+def _scaled_window(count: int, factor: int, precision: int) -> TruncatedPuiseuxWindow:
+    return window(
+        tuple((Fraction(i), factor + 2 * i + 1) for i in range(count)),
+        precision=Fraction(precision),
+    )
+
+
+def test_product_result_envelope_is_capped_at_the_transport_ceiling() -> None:
+    # A one-term factor times a 4,000-term factor of ~1,500-digit
+    # coefficients passes every representation bound (work, support, and the
+    # 4,096-digit component bound) and yields 4,000 results with ~3,000-digit
+    # numerators: about 12 MB of canonical decimal output, above the 10 MiB
+    # encoded-result envelope these operations promise. Admission must reject
+    # it before constructing the result instead of failing serialization.
+    left = _scaled_window(1, 10**1_499, 4_000)
+    right = _scaled_window(4_000, 10**1_499, 4_000)
+
+    with pytest.raises(OperationResourceAdmissionError, match="digit envelope"):
+        multiply_puiseux(left, right)
+
+    # The same shape one envelope-step below the ceiling stays admitted.
+    admitted = multiply_puiseux(left, _scaled_window(3_000, 10**1_499, 4_000))
+    assert len(admitted.terms) == 3_000
+
+
 def test_add_result_envelope_accepts_sparse_terms_and_rejects_above_term_bound() -> (
     None
 ):

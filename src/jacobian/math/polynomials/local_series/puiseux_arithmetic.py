@@ -28,9 +28,12 @@ from jacobian.math.polynomials.local_series.values import (
 from jacobian.math.polynomials.values import PolynomialVariable
 
 MAX_PUISEUX_ARITHMETIC_WORK = 1_000_000
-MAX_PUISEUX_RESULT_DIGITS = MAX_LOCAL_SERIES_TERMS * (
-    2 * MAX_LOCAL_SERIES_COEFFICIENT_DIGITS + 64
-)
+# Aggregate serialized-digit envelope for one canonical Puiseux result,
+# matching the canonical 10 MiB encoded-output limit. One canonical decimal
+# digit prices one ASCII output character, so admission rejects a result
+# that could not be transported instead of only the worst-case product of
+# the retained-term and coefficient-digit representation bounds.
+MAX_PUISEUX_RESULT_DIGITS = 10 * 1024 * 1024
 _MAX_SCALAR_BITS = floor(MAX_LOCAL_SERIES_COEFFICIENT_DIGITS * log2(10))
 _VARIABLE_ADAPTER = TypeAdapter(PolynomialVariable)
 
@@ -332,7 +335,7 @@ def add(
 ) -> TruncatedPuiseuxWindow:
     """Add two windows through the common known cutoff."""
     a, b, ramification = _pair(left, right)
-    _, lower_a, terms_a, precision_a = a
+    center, lower_a, terms_a, precision_a = a
     _, lower_b, terms_b, precision_b = b
     lower = min(lower_a, lower_b)
     precision = min(precision_a, precision_b)
@@ -347,7 +350,7 @@ def add(
     coefficients = {
         exponent: sum(values, Fraction()) for exponent, values in grouped.items()
     }
-    _admit_result_envelope(coefficients, left.variable)
+    _admit_result_envelope(coefficients, left.variable, center)
     return _make(left, lower, precision, coefficients, ramification)
 
 
@@ -356,7 +359,7 @@ def subtract(
 ) -> TruncatedPuiseuxWindow:
     """Subtract two windows through the common known cutoff."""
     a, b, ramification = _pair(left, right)
-    _, lower_a, terms_a, precision_a = a
+    center, lower_a, terms_a, precision_a = a
     _, lower_b, terms_b, precision_b = b
     lower = min(lower_a, lower_b)
     precision = min(precision_a, precision_b)
@@ -374,7 +377,7 @@ def subtract(
     coefficients = {
         exponent: sum(values, Fraction()) for exponent, values in grouped.items()
     }
-    _admit_result_envelope(coefficients, left.variable)
+    _admit_result_envelope(coefficients, left.variable, center)
     return _make(left, lower, precision, coefficients, ramification)
 
 
@@ -400,14 +403,21 @@ def _admit_support(term_count: int) -> None:
 
 
 def _admit_result_envelope(
-    coefficients: dict[Fraction, Fraction], variable: str
+    coefficients: dict[Fraction, Fraction], variable: str, center: Fraction
 ) -> None:
     # Estimate the result envelope from admitted input widths and bounded
     # sum/product growth instead of charging every term at the worst-case
     # scalar digit bound. Exponents have denominator <= 256 and absolute
-    # value <= 1e6; the fixed allowance covers mapping keys, center, window
-    # bounds, and parent data as decimal digits plus structural overhead.
-    total = len(variable.encode("utf-8")) + 512
+    # value <= 1e6; the fixed allowance covers mapping keys, window bounds,
+    # and parent data as decimal digits plus structural overhead, while the
+    # result's repeated center is charged at its exact admitted widths. The
+    # total is capped at the canonical encoded-output transport ceiling.
+    total = (
+        len(variable.encode("utf-8"))
+        + len(format_canonical_integer(center.numerator))
+        + len(format_canonical_integer(center.denominator))
+        + 512
+    )
     for exponent, value in coefficients.items():
         total += (
             len(format_canonical_integer(exponent.numerator))
@@ -429,7 +439,7 @@ def multiply(
 ) -> TruncatedPuiseuxWindow:
     """Multiply windows through the greatest precision known from both tails."""
     a, b, ramification = _pair(left, right)
-    _, lower_a, terms_a, precision_a = a
+    center, lower_a, terms_a, precision_a = a
     _, lower_b, terms_b, precision_b = b
     valuation_a = min((exponent for exponent, _ in terms_a), default=precision_a)
     valuation_b = min((exponent for exponent, _ in terms_b), default=precision_b)
@@ -466,7 +476,7 @@ def multiply(
         exponent: sum((left * right for left, right in values), Fraction())
         for exponent, values in contributions.items()
     }
-    _admit_result_envelope(coefficients, left.variable)
+    _admit_result_envelope(coefficients, left.variable, center)
     return _make(left, lower, precision, coefficients, ramification)
 
 
@@ -477,7 +487,7 @@ def derivative(series: TruncatedPuiseuxWindow) -> TruncatedPuiseuxWindow:
     ``O(t^(P-1))``. A zero retained prefix therefore stays a zero *prefix*;
     it does not establish that the underlying series is zero.
     """
-    _, lower, terms, precision = _check(series)
+    center, lower, terms, precision = _check(series)
     output_lower = lower - 1
     output_precision = precision - 1
     _admit_window_bounds(output_lower, output_precision)
@@ -498,7 +508,7 @@ def derivative(series: TruncatedPuiseuxWindow) -> TruncatedPuiseuxWindow:
         for exponent, coefficient in terms
         if exponent
     }
-    _admit_result_envelope(coefficients, series.variable)
+    _admit_result_envelope(coefficients, series.variable, center)
     return _make(
         series,
         output_lower,
@@ -674,7 +684,7 @@ def inverse(series: TruncatedPuiseuxWindow) -> TruncatedPuiseuxWindow:
     the valuation of its unknown tail and is therefore not invertible from
     the supplied information.
     """
-    _, _, terms, source_precision = _check(series)
+    center, _, terms, source_precision = _check(series)
     if not terms:
         _domain(
             "puiseux_inverse_undetermined",
@@ -711,7 +721,7 @@ def inverse(series: TruncatedPuiseuxWindow) -> TruncatedPuiseuxWindow:
             lower,
             series.ramification_index,
         )
-    _admit_result_envelope(coefficients, series.variable)
+    _admit_result_envelope(coefficients, series.variable, center)
     return _make(series, lower, precision, coefficients, series.ramification_index)
 
 

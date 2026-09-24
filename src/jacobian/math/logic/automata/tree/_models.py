@@ -176,10 +176,14 @@ class TreeContextPlugResult(TreeContextPlugRequest):
 
     @classmethod
     def _from_kernel(
-        cls, request: TreeContextPlugRequest, *, plugged_tree: RankedTree
+        cls,
+        *,
+        context: FiniteTreeContext,
+        tree: RankedTree,
+        plugged_tree: RankedTree,
     ) -> Self:
         return cls.model_construct(
-            context=request.context, tree=request.tree, plugged_tree=plugged_tree
+            context=context, tree=tree, plugged_tree=plugged_tree
         )
 
 
@@ -204,10 +208,14 @@ class TreeContextStateMapResult(TreeContextStateMapRequest):
 
     @classmethod
     def _from_kernel(
-        cls, request: TreeContextStateMapRequest, *, state_map: tuple[int, ...]
+        cls,
+        *,
+        automaton: CompleteDeterministicBottomUpTreeAutomaton,
+        context: FiniteTreeContext,
+        state_map: tuple[int, ...],
     ) -> Self:
         return cls.model_construct(
-            automaton=request.automaton, context=request.context, state_map=state_map
+            automaton=automaton, context=context, state_map=state_map
         )
 
 

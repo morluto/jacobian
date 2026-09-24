@@ -106,6 +106,18 @@ def compute_tree_automaton_boolean_product(
     )
 
 
+def compute_tree_context_plug(
+    request: TreeContextPlugRequest,
+) -> TreeContextPlugResult:
+    return plug_tree_context_operation(request.context, request.tree)
+
+
+def compute_tree_context_state_map(
+    request: TreeContextStateMapRequest,
+) -> TreeContextStateMapResult:
+    return map_tree_context_states(request.automaton, request.context)
+
+
 def compute_tree_automaton_reachability(
     request: TreeAutomatonReachabilityRequest,
 ) -> ReachableStateProfile:
@@ -214,7 +226,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
         request_type=TreeContextPlugRequest,
         result_type=TreeContextPlugResult,
-        run=plug_tree_context_operation,
+        run=compute_tree_context_plug,
         tags=("ranked-tree", "context", "substitution", "exact"),
         discovery_terms=("tree context plugging", "one-hole tree substitution"),
         examples=(
@@ -251,7 +263,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
         request_type=TreeContextStateMapRequest,
         result_type=TreeContextStateMapResult,
-        run=map_tree_context_states,
+        run=compute_tree_context_state_map,
         tags=("tree-automata", "contexts", "state-map", "exact"),
         discovery_terms=("tree context transformation", "context induced state map"),
         examples=(

@@ -22,9 +22,7 @@ from jacobian.math.logic.automata.tree._models import (
     TreeAutomatonCompletionResult,
     TreeAutomatonMinimizeResult,
     TreeAutomatonTrimResult,
-    TreeContextPlugRequest,
     TreeContextPlugResult,
-    TreeContextStateMapRequest,
     TreeContextStateMapResult,
     TreeDeterminizeResult,
     TreeRunResult,
@@ -326,35 +324,28 @@ def _preflight_complete_automaton(
 
 
 def plug_tree_context_operation(
-    request: TreeContextPlugRequest,
+    context: FiniteTreeContext,
+    tree: RankedTree,
 ) -> TreeContextPlugResult:
     """Plug a ranked tree into a canonical one-hole ranked-tree context."""
-    if type(request) is not TreeContextPlugRequest:
-        raise OperationDomainValidationError(
-            location=("request",),
-            code="tree_context.plug.request_type",
-            message="request must be a canonical tree-context plug request",
-        )
-    context_value = getattr(request, "context", None)
-    tree_value = getattr(request, "tree", None)
     if (
-        type(context_value) is not FiniteTreeContext
-        or type(tree_value) is not RankedTree
+        type(context) is not FiniteTreeContext
+        or type(tree) is not RankedTree
     ):
         raise OperationDomainValidationError(
             location=("request",),
             code="tree_context.plug.input_type",
             message="context and tree must be canonical ranked-tree values",
         )
-    tree_nodes, tree_depth = _preflight_tree(tree_value)
-    context_nodes, sibling_depth = _preflight_context(context_value)
+    tree_nodes, tree_depth = _preflight_tree(tree)
+    context_nodes, sibling_depth = _preflight_context(context)
     if context_nodes + tree_nodes > MAX_RUN_TREE_NODES:
         raise OperationResourceAdmissionError(
             location=("context",),
             code="tree_context.plug.node_bound",
             message="plugged tree would exceed the supported node bound",
         )
-    output_depth = max(len(context_value.frames) + tree_depth, sibling_depth)
+    output_depth = max(len(context.frames) + tree_depth, sibling_depth)
     if output_depth > MAX_RUN_TREE_DEPTH:
         raise OperationResourceAdmissionError(
             location=("context",),
@@ -362,38 +353,32 @@ def plug_tree_context_operation(
             message="plugged tree would exceed the supported depth bound",
         )
     return TreeContextPlugResult._from_kernel(
-        request,
-        plugged_tree=_plug_tree_context(context_value, tree_value),
+        context=context,
+        tree=tree,
+        plugged_tree=_plug_tree_context(context, tree),
     )
 
 
 def map_tree_context_states(
-    request: TreeContextStateMapRequest,
+    automaton: CompleteDeterministicBottomUpTreeAutomaton,
+    context: FiniteTreeContext,
 ) -> TreeContextStateMapResult:
     """Evaluate the context-induced state transformation of a complete DTA."""
-    if type(request) is not TreeContextStateMapRequest:
-        raise OperationDomainValidationError(
-            location=("request",),
-            code="tree_context.state_map.request_type",
-            message="request must be a canonical tree-context state-map request",
-        )
-    automaton_value = getattr(request, "automaton", None)
-    context_value = getattr(request, "context", None)
     if (
-        type(automaton_value) is not CompleteDeterministicBottomUpTreeAutomaton
-        or type(context_value) is not FiniteTreeContext
+        type(automaton) is not CompleteDeterministicBottomUpTreeAutomaton
+        or type(context) is not FiniteTreeContext
     ):
         raise OperationDomainValidationError(
             location=("request",),
             code="tree_context.state_map.input_type",
             message="automaton and context must be canonical typed values",
         )
-    _preflight_complete_automaton(automaton_value)
-    context_nodes, _ = _preflight_context(context_value)
+    _preflight_complete_automaton(automaton)
+    context_nodes, _ = _preflight_context(context)
     state_context_work = (
-        len(automaton_value.transitions)
+        len(automaton.transitions)
         + context_nodes
-        + len(context_value.frames) * automaton_value.state_count
+        + len(context.frames) * automaton.state_count
     )
     if state_context_work > MAX_TREE_AUTOMATON_WORK:
         raise OperationResourceAdmissionError(
@@ -402,8 +387,9 @@ def map_tree_context_states(
             message="context state-map evaluation exceeds its work bound",
         )
     return TreeContextStateMapResult._from_kernel(
-        request,
-        state_map=_tree_context_state_map(automaton_value, context_value),
+        automaton=automaton,
+        context=context,
+        state_map=_tree_context_state_map(automaton, context),
     )
 
 

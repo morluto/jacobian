@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from fractions import Fraction
+from itertools import product
+from math import gcd
 
 import pytest
 from pydantic import TypeAdapter, ValidationError
@@ -16,6 +18,7 @@ from jacobian.math.matrices.cyclic_linear._models import (
 from jacobian.math.number_theory.characters.operations import (
     character_group,
     dirichlet_character,
+    dirichlet_character_value,
 )
 from jacobian.math.number_theory.modular_forms import (
     character_basis as character_basis_module,
@@ -117,16 +120,107 @@ def test_exact_character_basis_is_parented_and_sturm_determining(
 def test_character_basis_rejects_other_modular_space() -> None:
     assert ModularCharacterBasisRequest(space=_space()).space == _space()
     assert Catalog.open().operation("modular_form.character_basis.compute") is not None
-    with pytest.raises(OperationDomainValidationError, match="supports S2"):
-        modular_character_basis_q_expansions(
-            ModularFormSpace(
-                level=13,
-                weight=2,
-                kind="M",
-                character=dirichlet_character(character_group(13), (2,)),
-                coefficient_domain=RationalCyclotomicField(order=6),
-            ),
+    full = modular_character_basis_q_expansions(
+        ModularFormSpace(
+            level=13,
+            weight=2,
+            kind="M",
+            character=dirichlet_character(character_group(13), (2,)),
+            coefficient_domain=RationalCyclotomicField(order=6),
+        ),
+    )
+    assert len(full.elements) == 3
+    assert full.precision == 3
+
+
+def _inflated_character(level: int, coordinate: int) -> object:
+    source = dirichlet_character(character_group(13), (coordinate,))
+    target_group = character_group(level)
+    for coordinates in product(
+        *(range(order) for order in target_group.generator_orders)
+    ):
+        candidate = dirichlet_character(target_group, coordinates)
+        if all(
+            dirichlet_character_value(candidate, residue).value
+            == dirichlet_character_value(source, residue).value
+            for residue in range(level)
+            if gcd(residue, level) == 1
+        ):
+            return candidate
+    raise AssertionError("explicit character inflation fixture was not found")
+
+
+@pytest.mark.parametrize(
+    ("level", "cusp_dimension", "full_dimension", "precision"),
+    [(13, 1, 3, 3), (26, 2, 6, 8), (39, 3, 7, 10)],
+)
+@pytest.mark.parametrize("coordinate", [2, 10])
+def test_inflated_character_basis_has_independent_dimension_and_sturm_rank(
+    level: int,
+    cusp_dimension: int,
+    full_dimension: int,
+    precision: int,
+    coordinate: int,
+) -> None:
+    character = _inflated_character(level, coordinate)
+    field = RationalCyclotomicField(order=6)
+    cusp = ModularFormSpace(
+        level=level, weight=2, kind="S", character=character, coefficient_domain=field
+    )
+    full = cusp.model_copy(update={"kind": "M"})
+    cusp_basis = modular_character_basis_q_expansions(cusp)
+    full_basis = modular_character_basis_q_expansions(full)
+
+    # Cohen--Oesterle dimensions, independently evaluated from the exact
+    # conductor-13 character sums: dim S=(1,2,3), dim M=(3,6,7).
+    assert len(cusp_basis.elements) == cusp_dimension
+    assert len(full_basis.elements) == full_dimension
+    assert cusp_basis.precision == full_basis.precision == precision
+    assert cusp_basis.basis_id == (
+        "gamma0-13-even-order6-character-sturm-v1"
+        if level == 13
+        else "gamma0-cyclotomic-character-sturm-rref-v1"
+    )
+    assert full_basis.basis_id == ("gamma0-cyclotomic-character-sturm-rref-v1")
+    for basis in (cusp_basis, full_basis):
+        restored = TypeAdapter(ModularCharacterBasis).validate_json(
+            basis.model_dump_json()
         )
+        assert restored == basis
+        raw_roundtrip = tuple(
+            tuple(
+                tuple(
+                    Fraction(value.num, value.den)
+                    for value in coefficient.coefficients_ascending
+                )
+                for coefficient in element.expansion.coefficients
+            )
+            for element in basis.elements
+        )
+        assert character_basis_module._rref_character_prefix(
+            raw_roundtrip, field, precision
+        ) == tuple(element.expansion.coefficients for element in basis.elements)
+        pivots = [
+            next(
+                index
+                for index, coefficient in enumerate(element.expansion.coefficients)
+                if any(value.num for value in coefficient.coefficients_ascending)
+            )
+            for element in basis.elements
+        ]
+        assert pivots == sorted(set(pivots))
+        for row, element in enumerate(basis.elements):
+            assert element.expansion.coefficients[pivots[row]] == _scalar(1)
+            assert all(
+                not any(
+                    value.num
+                    for value in element.expansion.coefficients[
+                        pivot
+                    ].coefficients_ascending
+                )
+                for pivot in pivots
+                if pivot != pivots[row]
+            )
 
 
 @pytest.mark.parametrize("coordinates", [(12,), ("2",)])

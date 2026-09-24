@@ -40,13 +40,16 @@ trivial-character spaces at Gamma0(2) and Gamma0(3), even-weight
 trivial-character spaces at Gamma0(4), and the represented
 `M_1`/`M_3(Gamma0(4), chi_{-4})` spaces, all with rational coefficients.
 Other levels, cusp subspaces above level one, and other nontrivial characters
-remain unsupported.
+remain unsupported in the rational basis and coordinate paths.
 
 `ModularFormSpace` can represent a bounded cyclotomic coefficient parent using
 the canonical `RationalCyclotomicField` power-basis value. A narrow
-field-valued exception is now supported for even order-6 characters modulo 13:
-`modular_form.character_basis.compute` returns a one-element basis of
-`S_2(Gamma0(13), chi)` over `Q(zeta_6)`, normalized through q^0..q^2.
+field-valued character basis slice supports even order-6 characters of
+conductor 13 at levels 13, 26, and 39, in both `M_2` and `S_2`, over
+`Q(zeta_6)`. `modular_form.character_basis.compute` returns the complete
+q-Sturm RREF basis at precisions 3, 8, and 10 for those levels.
+`S_2(Gamma0(13), chi)` remains one-dimensional and retains its previous
+basis identifier and normalization through q^0..q^2.
 `ModularFormCoordinates` represents one exact scalar multiple of that
 basis element; `modular_form.character_coordinates.q_expansion.compute`
 returns its exact field-valued Sturm prefix. The operation
@@ -86,7 +89,7 @@ The conjugate-character product above is a separate bounded operation that
 returns its target Sturm prefix.
 
 This exception does not widen the generic rational dimension, Sturm, basis,
-frame, or operator paths. Those paths remain restricted to their documented
+frame, coordinate, transport, equality, or operator paths. Those paths remain restricted to their documented
 rational families and reject a cyclotomic parent when their operation relies
 on rational coefficients. A nontrivial character must be supplied
 explicitly at the Gamma0 level; callers must use
@@ -95,9 +98,10 @@ a character of smaller modulus. The character's value order must divide the
 declared cyclotomic field order; `QQ` remains valid for rational-valued
 characters. Cyclotomic parent order is at most 128 and field degree at most 32,
 checked when the space value is constructed, before an expansion operation can
-allocate coefficient vectors. Outside the stated level-13 character slice,
-this representation adds no basis, membership, or q-expansion claim for those
-parents.
+allocate coefficient vectors. Outside the stated level-13/26/39 character
+basis slice, this representation adds no character basis, membership, or
+q-expansion claim for those parents. Only the original level-13 cusp basis is
+consumed by the existing character-coordinate operations.
 
 For `chi_{-4}(n) = 0` on even `n`, `1` for `n = 1 (mod 4)`, and `-1` for
 `n = 3 (mod 4)`, the basis generator is

@@ -20,11 +20,34 @@ PARI's reference documents `mfinit` for full `M_k(Gamma0(N), chi)` spaces and
 cuspidal `S_k` spaces, `mfbasis` for the space basis, and `mfcoefs` for the
 matrix of basis q-expansions. This general Gamma0 adapter remains restricted
 to trivial character and rational coefficients. Separately, Jacobian has a
-bounded character-valued basis and coordinate slice for the even order-6
-characters modulo 13 in `S_2(Gamma0(13), chi)` over `Q(zeta_6)`; see
-[level-one bases and coordinates](modular-forms-level-one-bases-coordinates.md)
-for its exact q-prefix and same-space global equality contract. Other
-character spaces and general field-valued Gamma0 bases remain unsupported.
+bounded cyclotomic character-space basis slice for the even order-6 characters
+of conductor 13, represented at levels 13, 26, and 39 over `Q(zeta_6)`. It
+covers weight 2, both `M` and `S`, and returns q-Sturm RREF bases through
+precisions 3, 8, and 10, respectively. Its dimension implementation admits
+only this parity, conductor, level, and field range. It computes the
+Cohen--Oesterle character sums and cusp term in exact rational/cyclotomic
+arithmetic, compares that dimension with PARI, and checks that the returned
+prefix has the full expected rank before publishing a basis. The
+`S_2(Gamma0(13), chi)` one-dimensional basis retains its established
+identifier, which existing character-coordinate operations consume; the
+generalized bases do not imply coordinate, operator, transport, or equality
+support outside that original parent. The formula follows Quer, “Dimensions
+of spaces of modular forms,” Theorem 2.3 and the definitions preceding it
+([paper](https://www.impan.pl/shop/publication/transaction/download/product/82407)).
+For this admitted family, with `k=2` and conductor `c=13`, the cusp dimension
+is
+`dim S = nu_0/12 - nu_infinity/2 - nu_2/4 - nu_3/3`, where
+`nu_0 = N * product_{p|N}(1+1/p)`, `nu_2` and `nu_3` are the sums of `chi(x)`
+over unit roots of `x^2+1` and `x^2+x+1` modulo `N`, and
+`nu_infinity = sum_{d|N, gcd(d,N/d)|(N/13)} phi(gcd(d,N/d))`.
+The full dimension is `dim M = dim S + nu_infinity`. This gives cusp/full
+dimensions `1/3`, `2/6`, and `3/7` at levels 13, 26, and 39. The inputs must
+have even order-six character, exact conductor 13, and values in the declared
+`Q(zeta_6)` field; no other character weights, levels, or conductors use this
+formula implementation.
+See [level-one bases and coordinates](modular-forms-level-one-bases-coordinates.md)
+for the original exact q-prefix and same-space character-coordinate contract.
+Other character spaces and general field-valued Gamma0 bases remain unsupported.
 
 For this represented character slice,
 `modular_form.character_hecke_matrix.compute` returns the exact 1-by-1 matrix

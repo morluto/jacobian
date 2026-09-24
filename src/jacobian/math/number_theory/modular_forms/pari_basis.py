@@ -504,6 +504,10 @@ def pari_character_basis(
     )
     if response.get("kind") != "character_complete":
         raise RuntimeError("PARI character basis worker did not complete")
+    if response.get("backend_dimension") != expected_dimension:
+        raise RuntimeError(
+            "PARI character dimension differs from Jacobian's exact formula"
+        )
     if response.get("coefficient_field_order") != space.coefficient_domain.order:  # type: ignore[union-attr]
         raise RuntimeError("PARI character basis worker changed its coefficient field")
     raw = response.get("vectors")

@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from enum import StrEnum
-from typing import Annotated, Literal, Self
+from fractions import Fraction
+from typing import Annotated, Any, Literal, Self
 
-from pydantic import Field, StrictInt, model_validator
-from pydantic_core import PydanticCustomError
+from pydantic import Field, GetCoreSchemaHandler, StrictInt, model_validator
+from pydantic_core import PydanticCustomError, core_schema
 
 from jacobian._exact import ExactInteger
 from jacobian._models import StrictModel
@@ -65,6 +67,112 @@ MAX_INTEGRAL_HOMOLOGY_WORK_UNITS = 5_000_000
 INTEGRAL_HOMOLOGY_WALL_SECONDS = 30.0 * 60.0
 
 
+def _bounded_integer_digits(value: int, maximum: int) -> int:
+    """Count decimal digits without converting over-bound integers to text."""
+    magnitude = abs(value)
+    if magnitude == 0:
+        return 1
+    # log10(2) > 0.30102, so this is a safe lower bound for the decimal
+    # digit count. Values clearly outside the owner envelope never reach str(),
+    # which itself has an interpreter-wide conversion limit.
+    minimum_digits = ((magnitude.bit_length() - 1) * 30_102) // 100_000 + 1
+    if minimum_digits > maximum:
+        return maximum + 1
+    return len(str(magnitude))
+
+
+@dataclass(frozen=True)
+class _ChainCoefficientEncoding:
+    """Native exact chain scalars with a lossless JSON string encoding."""
+
+    max_digits: int = MAX_CHAIN_COMPLEX_COEFFICIENT_DIGITS
+
+    def __get_pydantic_core_schema__(
+        self, source: Any, handler: GetCoreSchemaHandler
+    ) -> core_schema.CoreSchema:
+        if self.max_digits < 1:
+            raise TypeError("chain coefficient digit bound must be positive")
+
+        integer = r"(?:0|-?[1-9][0-9]*)"
+        rational = rf"(?:{integer}|-?[1-9][0-9]*/[1-9][0-9]*)"
+        wire = core_schema.str_schema(
+            strict=True,
+            pattern=rf"^{rational}(?![\s\S])",
+            regex_engine="python-re",
+            # A rational may contain a negative maximum-width numerator, a
+            # slash, and a maximum-width positive denominator.
+            max_length=2 * self.max_digits + 2,
+        )
+
+        def parse_wire(value: str) -> int | Fraction:
+            components = value.split("/", 1)
+            if any(len(part.lstrip("-")) > self.max_digits for part in components):
+                raise PydanticCustomError(
+                    "chain_complex.entry_digit_bound_exceeded",
+                    "chain coefficient exceeds the decimal digit bound",
+                )
+            if len(components) == 1:
+                return int(value)
+            result = Fraction(int(components[0]), int(components[1]))
+            if _format_chain_coefficient(result) != value:
+                raise PydanticCustomError(
+                    "chain_complex.entry_not_canonical",
+                    "rational chain coefficients must be reduced and canonical",
+                )
+            return result
+
+        def require_native(value: int | Fraction) -> int | Fraction:
+            if type(value) is int:
+                components = (_bounded_integer_digits(value, self.max_digits),)
+            elif type(value) is Fraction:
+                components = (
+                    _bounded_integer_digits(value.numerator, self.max_digits),
+                    _bounded_integer_digits(value.denominator, self.max_digits),
+                )
+            else:
+                raise PydanticCustomError(
+                    "chain_complex.entry_type",
+                    "chain coefficients must be native integers or Fractions",
+                )
+            if max(components, default=1) > self.max_digits:
+                raise PydanticCustomError(
+                    "chain_complex.entry_digit_bound_exceeded",
+                    "chain coefficient exceeds the decimal digit bound",
+                )
+            return value
+
+        return core_schema.json_or_python_schema(
+            json_schema=core_schema.no_info_after_validator_function(parse_wire, wire),
+            python_schema=core_schema.no_info_after_validator_function(
+                require_native,
+                core_schema.union_schema(
+                    [
+                        core_schema.int_schema(strict=True),
+                        core_schema.is_instance_schema(Fraction),
+                    ]
+                ),
+            ),
+            serialization=core_schema.plain_serializer_function_ser_schema(
+                _format_chain_coefficient,
+                when_used="json",
+                return_schema=wire,
+            ),
+        )
+
+
+def _format_chain_coefficient(value: int | Fraction) -> str:
+    if type(value) is int:
+        return str(value)
+    if type(value) is Fraction:
+        if value.denominator == 1:
+            return str(value.numerator)
+        return f"{value.numerator}/{value.denominator}"
+    raise TypeError("unsupported chain coefficient")
+
+
+ChainCoefficient = Annotated[int | Fraction, _ChainCoefficientEncoding()]
+
+
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"chain_complex.{reason}", message)
 
@@ -85,7 +193,7 @@ class ChainComplexValue(StrictModel):
     degree_min: int = Field(ge=-MAX_CHAIN_DEGREE, le=MAX_CHAIN_DEGREE)
     degree_max: int = Field(ge=-MAX_CHAIN_DEGREE, le=MAX_CHAIN_DEGREE)
     basis_sizes: tuple[int, ...]
-    differential_matrices: tuple[tuple[tuple[str, ...], ...], ...]
+    differential_matrices: tuple[tuple[tuple[ChainCoefficient, ...], ...], ...]
 
     @model_validator(mode="after")
     def require_canonical_chain_complex(self) -> Self:
@@ -140,12 +248,12 @@ class ChainComplexValue(StrictModel):
                         f"differential_matrices[{idx}] column count {len(row)} != {cols_expected}",
                     )
                 for entry in row:
-                    _require_rational_entry_grammar(
+                    _require_coefficient_scalar(
                         self.coefficient_ring,
                         entry,
                         prime=self.prime,
                     )
-                    total_entry_chars += len(entry)
+                    total_entry_chars += len(_format_chain_coefficient(entry))
             total_cells += rows_expected * cols_expected
         if total_cells > MAX_MATRIX_CELLS:
             raise _validation_error(
@@ -198,95 +306,45 @@ def require_prime_field_admission(
             raise ValueError(f"prime {prime} is not prime")
 
 
-def _require_canonical_integer_spelling(entry: str, part: str) -> int:
-    """Parse one canonical integer: no leading zeros, no negative zero."""
-    if len(part) > 1 and (part[0] == "0" or part.startswith("-0")):
-        raise _validation_error(
-            "entry_not_canonical", f"entry '{entry}' is not canonically spelled"
-        )
-    return int(part)
-
-
-def _require_canonical_fraction_entry(entry: str) -> None:
-    """Fraction spellings are reduced with denominator >= 2 and digit bounds."""
-    from math import gcd
-
-    num_str, den_str = entry.split("/", 1)
-    numerator = _require_canonical_integer_spelling(entry, num_str)
-    denominator = _require_canonical_integer_spelling(entry, den_str)
-    if den_str.lstrip("-").lstrip("0") == "" or denominator == 0:
-        raise _validation_error(
-            "fraction_zero_denominator", f"entry '{entry}' has zero denominator"
-        )
-    if numerator == 0:
-        raise _validation_error(
-            "zero_not_canonical",
-            f"entry '{entry}' is not canonically spelled; spell zero as '0'",
-        )
-    if (
-        len(num_str.lstrip("-")) > MAX_CHAIN_COMPLEX_COEFFICIENT_DIGITS
-        or len(den_str.lstrip("-")) > MAX_CHAIN_COMPLEX_COEFFICIENT_DIGITS
-    ):
-        raise _validation_error(
-            "entry_digit_bound_exceeded", "differential entry exceeds digit bound"
-        )
-    # One rational has one reduced spelling.
-    if denominator <= 1 or gcd(abs(numerator), denominator) != 1:
-        raise _validation_error(
-            "fraction_not_reduced",
-            f"entry '{entry}' is not a reduced fraction; use its "
-            "canonical reduced spelling",
-        )
-
-
-def _require_rational_entry_grammar(
+def _require_coefficient_scalar(
     coefficient_ring: CoefficientRing,
     entry: object,
     *,
     prime: int | None = None,
 ) -> None:
-    """One canonical matrix entry: reduced rational grammar with digit bounds.
-
-    Spellings must be canonical so one based complex has exactly one
-    serialized identity: integers carry no leading zeros and no negative
-    zero, fraction strings are fully reduced with denominator >= 2, and
-    prime-field entries are residues in ``[0, p)``. A fractional string
-    such as "1/2" would pass the rational regex but every downstream
-    kernel parses prime-field entries with int(), so admitting it here
-    would turn an accepted request into an execution failure.
-    """
-    import re
-
-    if not isinstance(entry, str):
-        raise _validation_error(
-            "entry_not_string", "differential entries must be strings"
-        )
-    if not re.fullmatch(r"-?\d+(/\d+)?", entry):
-        raise _validation_error(
-            "entry_grammar_invalid",
-            f"entry '{entry}' does not match rational string grammar",
-        )
-
-    if "/" in entry:
-        if coefficient_ring != CoefficientRing.RATIONAL:
+    """Check scalar type, coefficient-ring fit, and exact digit bounds."""
+    if type(entry) is int:
+        digits = _bounded_integer_digits(entry, MAX_CHAIN_COMPLEX_COEFFICIENT_DIGITS)
+        value = entry
+    elif type(entry) is Fraction:
+        if coefficient_ring is not CoefficientRing.RATIONAL:
             raise _validation_error(
                 "coefficient_entry_not_integer",
-                f"{coefficient_ring.value} entry '{entry}' must be an integer",
+                f"{coefficient_ring.value} coefficients must be integers",
             )
-        _require_canonical_fraction_entry(entry)
-        return
-    value = _require_canonical_integer_spelling(entry, entry)
-    if len(entry.lstrip("-")) > MAX_CHAIN_COMPLEX_COEFFICIENT_DIGITS:
+        digits = max(
+            _bounded_integer_digits(
+                entry.numerator, MAX_CHAIN_COMPLEX_COEFFICIENT_DIGITS
+            ),
+            _bounded_integer_digits(
+                entry.denominator, MAX_CHAIN_COMPLEX_COEFFICIENT_DIGITS
+            ),
+        )
+        value = entry
+    else:
+        raise _validation_error(
+            "entry_type", "chain coefficients must be native integers or Fractions"
+        )
+    if digits > MAX_CHAIN_COMPLEX_COEFFICIENT_DIGITS:
         raise _validation_error(
             "entry_digit_bound_exceeded", "differential entry exceeds digit bound"
         )
-    if coefficient_ring == CoefficientRing.PRIME_FIELD and (
-        value < 0 or (prime is not None and value >= prime)
+    if coefficient_ring is CoefficientRing.PRIME_FIELD and (
+        type(value) is not int or value < 0 or (prime is not None and value >= prime)
     ):
         raise _validation_error(
             "prime_field_residue_invalid",
-            f"prime-field entry '{entry}' must be a canonical "
-            f"integer residue in [0, {prime})",
+            f"prime-field entry {entry!r} must be an integer residue in [0, {prime})",
         )
 
 
@@ -453,10 +511,7 @@ def _require_integral_group_source_binding(
             or group.incoming_chain_rank != incoming_rank
             or certified_source.row_count != outgoing_rows
             or certified_source.column_count != group.chain_rank
-            or tuple(
-                tuple(str(value) for value in row) for row in certified_source.entries
-            )
-            != outgoing_entries
+            or certified_source.entries != outgoing_entries
         ):
             raise _validation_error(
                 "integral_homology_source_mismatch",
@@ -577,12 +632,12 @@ class MappingConeResult(StrictModel):
     """
 
     cone_basis_sizes: tuple[int, ...]
-    cone_differential_matrices: tuple[tuple[tuple[str, ...], ...], ...]
+    cone_differential_matrices: tuple[tuple[tuple[ChainCoefficient, ...], ...], ...]
     source_degree_min: int
     target_degree_min: int
     source: ChainComplexValue
     target: ChainComplexValue
-    map_matrices: tuple[tuple[tuple[str, ...], ...], ...]
+    map_matrices: tuple[tuple[tuple[ChainCoefficient, ...], ...], ...]
     value: ChainComplexValue
 
     @model_validator(mode="after")
@@ -625,10 +680,12 @@ class MappingConeResult(StrictModel):
         cls,
         *,
         cone_basis_sizes: tuple[int, ...],
-        cone_differential_matrices: tuple[tuple[tuple[str, ...], ...], ...],
+        cone_differential_matrices: tuple[
+            tuple[tuple[ChainCoefficient, ...], ...], ...
+        ],
         source: ChainComplexValue,
         target: ChainComplexValue,
-        map_matrices: tuple[tuple[tuple[str, ...], ...], ...],
+        map_matrices: tuple[tuple[tuple[ChainCoefficient, ...], ...], ...],
         value: ChainComplexValue,
     ) -> Self:
         return cls.model_construct(
@@ -652,7 +709,7 @@ class TensorProductResult(StrictModel):
     """
 
     tensor_basis_sizes: tuple[int, ...]
-    tensor_differential_matrices: tuple[tuple[tuple[str, ...], ...], ...]
+    tensor_differential_matrices: tuple[tuple[tuple[ChainCoefficient, ...], ...], ...]
     coefficient_ring: CoefficientRing
     prime: int | None = Field(default=None, ge=2)
     degree_min: int
@@ -721,7 +778,9 @@ class TensorProductResult(StrictModel):
         cls,
         *,
         tensor_basis_sizes: tuple[int, ...],
-        tensor_differential_matrices: tuple[tuple[tuple[str, ...], ...], ...],
+        tensor_differential_matrices: tuple[
+            tuple[tuple[ChainCoefficient, ...], ...], ...
+        ],
         left: ChainComplexValue,
         right: ChainComplexValue,
         value: ChainComplexValue,
@@ -780,7 +839,7 @@ class VerificationResult(StrictModel):
     complex: ChainComplexValue | None = None
     source: ChainComplexValue | None = None
     target: ChainComplexValue | None = None
-    map_matrices: tuple[tuple[tuple[str, ...], ...], ...] | None = None
+    map_matrices: tuple[tuple[tuple[ChainCoefficient, ...], ...], ...] | None = None
 
     @model_validator(mode="after")
     def require_complete_source(self) -> Self:
@@ -821,7 +880,7 @@ class VerificationResult(StrictModel):
         detail: str,
         source: ChainComplexValue,
         target: ChainComplexValue,
-        map_matrices: tuple[tuple[tuple[str, ...], ...], ...],
+        map_matrices: tuple[tuple[tuple[ChainCoefficient, ...], ...], ...],
     ) -> Self:
         return cls.model_construct(
             is_valid=is_valid,

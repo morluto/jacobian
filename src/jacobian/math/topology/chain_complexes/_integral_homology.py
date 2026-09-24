@@ -20,7 +20,6 @@ from jacobian._execution import (
     current_request_execution,
     request_checkpoint,
 )
-from jacobian.canonical import parse_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices.certified_snf.operations import (
     Matrix,
@@ -939,12 +938,10 @@ def _require_height(bound: SmithHeightBound, *, label: str) -> None:
         )
 
 
-def _parse_integer_differentials(source: ChainComplexValue) -> tuple[Matrix, ...]:
+def _copy_integer_differentials(source: ChainComplexValue) -> tuple[Matrix, ...]:
     parsed: list[Matrix] = []
     for matrix in source.differential_matrices:
-        parsed.append(
-            [[parse_canonical_integer(value) for value in row] for row in matrix]
-        )
+        parsed.append([list(row) for row in matrix])
     return tuple(parsed)
 
 
@@ -977,7 +974,7 @@ def _require_integral_source_bounds(source: ChainComplexValue) -> None:
             f"{MAX_INTEGRAL_HOMOLOGY_MATRIX_CELLS} cells",
         )
     if any(
-        len(value.lstrip("-")) > MAX_INTEGRAL_HOMOLOGY_INPUT_DIGITS
+        len(str(abs(value))) > MAX_INTEGRAL_HOMOLOGY_INPUT_DIGITS
         for matrix in source.differential_matrices
         for row in matrix
         for value in row
@@ -1104,13 +1101,13 @@ def admit_integral_homology(source: ChainComplexValue) -> IntegralHomologyExecut
         len(source.basis_sizes)
         + matrix_cells
         + sum(
-            len(value)
+            len(str(abs(value)))
             for matrix in source.differential_matrices
             for row in matrix
             for value in row
         )
     )
-    differentials = _parse_integer_differentials(source)
+    differentials = _copy_integer_differentials(source)
     square_zero_work = _require_square_zero(source, differentials)
     _require_deadline(deadline, "after d^2 admission")
 

@@ -259,6 +259,63 @@ class PauliInverseRequest(StrictModel):
     pauli: ExactQubitPauli
 
 
+class PauliFromLabelsRequest(StrictModel):
+    """A complete ordered I/X/Y/Z row and its scalar phase."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    qubit_register: QubitRegister = Field(
+        alias="register", serialization_alias="register"
+    )
+    labels: tuple[Literal["I", "X", "Y", "Z"], ...] = Field(
+        min_length=1, max_length=MAX_QUBITS
+    )
+    phase: StrictInt = Field(default=0, ge=0, le=3)
+
+    @model_validator(mode="after")
+    def require_complete_row(self) -> Self:
+        if len(self.labels) != len(self.qubit_register.qubit_ids):
+            raise _validation_error(
+                "label_register_shape",
+                "Pauli labels must cover the full ordered register",
+            )
+        return self
+
+
+class PauliFromLabelsResult(StrictModel):
+    source: PauliFromLabelsRequest
+    pauli: ExactQubitPauli
+
+    @model_validator(mode="after")
+    def require_register_binding(self) -> Self:
+        if self.pauli.register != self.source.qubit_register:
+            raise _validation_error(
+                "label_result_register",
+                "converted Pauli must retain the source register",
+            )
+        return self
+
+
+class PauliToLabelsRequest(StrictModel):
+    pauli: ExactQubitPauli
+
+
+class PauliToLabelsResult(StrictModel):
+    source: ExactQubitPauli
+    labels: tuple[Literal["I", "X", "Y", "Z"], ...] = Field(
+        min_length=1, max_length=MAX_QUBITS
+    )
+    phase: StrictInt = Field(ge=0, le=3)
+
+    @model_validator(mode="after")
+    def require_complete_row(self) -> Self:
+        if len(self.labels) != len(self.source.register.qubit_ids):
+            raise _validation_error(
+                "label_result_shape", "labels must cover the complete Pauli register"
+            )
+        return self
+
+
 def _valid_register(value: object) -> bool:
     if not isinstance(value, QubitRegister):
         return False
@@ -383,6 +440,71 @@ class PauliPairingResult(StrictModel):
         return self
 
 
+class PauliFamilyEntry(StrictModel):
+    """One named phase-free Pauli row in an ordered family."""
+
+    pauli_id: Annotated[
+        str,
+        StringConstraints(min_length=1, max_length=MAX_QUBIT_LABEL_LENGTH, strict=True),
+        AfterValidator(_require_scalar_label),
+    ]
+    pauli: PhaseFreeQubitPauli
+
+
+class PauliFamilyCommutationRequest(StrictModel):
+    """An ordered named family of Paulis on one common register."""
+
+    family: tuple[PauliFamilyEntry, ...] = Field(
+        min_length=1, max_length=MAX_CHECK_ROWS
+    )
+
+    @model_validator(mode="after")
+    def require_family_axis(self) -> Self:
+        identifiers = tuple(entry.pauli_id for entry in self.family)
+        if len(set(identifiers)) != len(identifiers):
+            raise _validation_error("family_ids_unique", "Pauli IDs must be unique")
+        register = self.family[0].pauli.qubit_register
+        if any(entry.pauli.qubit_register != register for entry in self.family):
+            raise _validation_error(
+                "family_register",
+                "every Pauli in the family must use one identical ordered register",
+            )
+        return self
+
+
+class PauliFamilyCommutationResult(StrictModel):
+    """The exact alternating commutation matrix, retaining its named row axis."""
+
+    source: PauliFamilyCommutationRequest
+    commutation_matrix: tuple[tuple[StrictInt, ...], ...] = Field(
+        max_length=MAX_CHECK_ROWS
+    )
+
+    @model_validator(mode="after")
+    def require_axis_and_form(self) -> Self:
+        count = len(self.source.family)
+        matrix = self.commutation_matrix
+        if len(matrix) != count or any(len(row) != count for row in matrix):
+            raise _validation_error(
+                "commutation_matrix_shape",
+                "matrix must be square on the retained family axis",
+            )
+        if any(bit not in (0, 1) for row in matrix for bit in row):
+            raise _validation_error(
+                "commutation_matrix_bits", "commutation matrix entries must be binary"
+            )
+        if any(matrix[i][i] != 0 for i in range(count)) or any(
+            matrix[i][j] != matrix[j][i]
+            for i in range(count)
+            for j in range(i + 1, count)
+        ):
+            raise _validation_error(
+                "commutation_matrix_form",
+                "commutation matrix must be alternating and symmetric over GF(2)",
+            )
+        return self
+
+
 class CheckSpaceValue(StrictModel):
     model_config = ConfigDict(populate_by_name=True)
     """An isotropic check space with an explicit register parent."""
@@ -489,17 +611,495 @@ class NormalizerResult(StrictModel):
         )
 
 
+class StabilizerSyndromeRequest(StrictModel):
+    """Measure one phase-free Pauli against a register-bound check space."""
+
+    check_space: CheckSpaceValue
+    error: PhaseFreeQubitPauli
+
+
+class StabilizerSyndromeResult(StrictModel):
+    """Syndrome bits indexed by the canonical RREF basis of the check space."""
+
+    check_space: CheckSpaceValue
+    error: PhaseFreeQubitPauli
+    syndrome: tuple[StrictInt, ...] = Field(max_length=MAX_CHECK_ROWS)
+    zero_syndrome: bool
+
+    @model_validator(mode="after")
+    def require_syndrome_binding(self) -> Self:
+        register = self.check_space.qubit_register
+        if self.error.qubit_register != register:
+            raise _validation_error(
+                "syndrome_register", "error and check space must share a register"
+            )
+        if len(self.syndrome) != len(self.check_space.basis):
+            raise _validation_error(
+                "syndrome_axis", "one syndrome bit is required per canonical check"
+            )
+        if any(bit not in (0, 1) for bit in self.syndrome):
+            raise _validation_error("syndrome_bits", "syndrome entries must be bits")
+        if type(self.zero_syndrome) is not bool or self.zero_syndrome != all(
+            bit == 0 for bit in self.syndrome
+        ):
+            raise _validation_error(
+                "syndrome_zero", "zero_syndrome must match the exact syndrome"
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        check_space: CheckSpaceValue,
+        error: PhaseFreeQubitPauli,
+        syndrome: tuple[int, ...],
+    ) -> Self:
+        return cls.model_construct(
+            check_space=check_space,
+            error=error,
+            syndrome=syndrome,
+            zero_syndrome=not any(syndrome),
+        )
+
+
+class StabilizerErrorEquivalenceRequest(StrictModel):
+    """Compare two phase-free errors modulo one isotropic check space."""
+
+    check_space: CheckSpaceValue
+    left: PhaseFreeQubitPauli
+    right: PhaseFreeQubitPauli
+
+
+class StabilizerErrorEquivalenceResult(StrictModel):
+    """Whether two Pauli errors differ by an element of the check space."""
+
+    check_space: CheckSpaceValue
+    left: PhaseFreeQubitPauli
+    right: PhaseFreeQubitPauli
+    difference: PhaseFreeQubitPauli
+    equivalent_mod_stabilizers: bool
+
+    @model_validator(mode="after")
+    def require_equivalence_binding(self) -> Self:
+        register = self.check_space.qubit_register
+        if any(
+            row.qubit_register != register
+            for row in (self.left, self.right, self.difference)
+        ):
+            raise _validation_error(
+                "equivalence_register", "errors and check space must share a register"
+            )
+        expected = tuple(
+            (left + right) % 2
+            for left, right in zip(
+                (*self.left.x_bits, *self.left.z_bits),
+                (*self.right.x_bits, *self.right.z_bits),
+                strict=True,
+            )
+        )
+        if (*self.difference.x_bits, *self.difference.z_bits) != expected:
+            raise _validation_error(
+                "equivalence_difference",
+                "difference must be left plus right over GF(2)",
+            )
+        if type(self.equivalent_mod_stabilizers) is not bool:
+            raise _validation_error(
+                "equivalence_decision", "equivalence decision must be boolean"
+            )
+        return self
+
+
+class CSSCheckSpaceRequest(StrictModel):
+    """Binary X- and Z-check rows on one explicitly ordered register."""
+
+    model_config = ConfigDict(populate_by_name=True)
+    qubit_register: QubitRegister = Field(
+        alias="register", serialization_alias="register"
+    )
+    x_checks: tuple[
+        Annotated[tuple[StrictInt, ...], Field(min_length=1, max_length=MAX_QUBITS)],
+        ...,
+    ] = Field(max_length=MAX_CHECK_ROWS)
+    z_checks: tuple[
+        Annotated[tuple[StrictInt, ...], Field(min_length=1, max_length=MAX_QUBITS)],
+        ...,
+    ] = Field(max_length=MAX_CHECK_ROWS)
+
+    @model_validator(mode="after")
+    def require_check_shapes(self) -> Self:
+        width = len(self.qubit_register.qubit_ids)
+        rows = (*self.x_checks, *self.z_checks)
+        if any(len(row) != width for row in rows):
+            raise _validation_error(
+                "css_row_shape", "CSS rows must match register width"
+            )
+        if any(bit not in (0, 1) for row in rows for bit in row):
+            raise _validation_error("css_bits", "CSS check entries must be bits")
+        return self
+
+
+class CSSNonOrthogonalWitness(StrictModel):
+    """Input row indices whose CSS inner product is one."""
+
+    x_row: StrictInt = Field(ge=0, lt=MAX_CHECK_ROWS)
+    z_row: StrictInt = Field(ge=0, lt=MAX_CHECK_ROWS)
+    x_bits: tuple[StrictInt, ...] = Field(min_length=1, max_length=MAX_QUBITS)
+    z_bits: tuple[StrictInt, ...] = Field(min_length=1, max_length=MAX_QUBITS)
+    dot_product: Literal[1] = 1
+
+    @model_validator(mode="after")
+    def require_nonorthogonality(self) -> Self:
+        if len(self.x_bits) != len(self.z_bits) or any(
+            bit not in (0, 1) for bit in (*self.x_bits, *self.z_bits)
+        ):
+            raise _validation_error(
+                "css_witness_shape", "CSS witness rows must be matching binary vectors"
+            )
+        if sum(x * z for x, z in zip(self.x_bits, self.z_bits, strict=True)) % 2 != 1:
+            raise _validation_error(
+                "css_witness_pairing", "CSS witness rows must have odd inner product"
+            )
+        return self
+
+
+class CSSCheckSpaceValue(StrictModel):
+    """A successful CSS decomposition of one binary stabilizer check space."""
+
+    model_config = ConfigDict(populate_by_name=True)
+    qubit_register: QubitRegister = Field(
+        alias="register", serialization_alias="register"
+    )
+    x_check_basis: tuple[PhaseFreeQubitPauli, ...] = Field(max_length=MAX_CHECK_ROWS)
+    z_check_basis: tuple[PhaseFreeQubitPauli, ...] = Field(max_length=MAX_CHECK_ROWS)
+    check_space: CheckSpaceValue
+
+    @model_validator(mode="after")
+    def require_register_and_roles(self) -> Self:
+        if any(
+            row.qubit_register != self.qubit_register
+            for row in (*self.x_check_basis, *self.z_check_basis)
+        ):
+            raise _validation_error(
+                "css_register", "CSS rows must use the result register"
+            )
+        if any(any(row.z_bits) for row in self.x_check_basis) or any(
+            any(row.x_bits) for row in self.z_check_basis
+        ):
+            raise _validation_error(
+                "css_roles", "X and Z check bases must retain their roles"
+            )
+        if self.check_space.qubit_register != self.qubit_register:
+            raise _validation_error(
+                "css_check_space_register",
+                "combined checks must use the result register",
+            )
+        return self
+
+
+class CSSCheckSpaceResult(StrictModel):
+    """A successful CSS check-space value or a nonorthogonality witness."""
+
+    css_check_space: CSSCheckSpaceValue | None = None
+    witness: CSSNonOrthogonalWitness | None = None
+
+    @model_validator(mode="after")
+    def require_branch(self) -> Self:
+        if (self.css_check_space is None) == (self.witness is None):
+            raise _validation_error(
+                "css_branch", "CSS result requires exactly one outcome"
+            )
+        return self
+
+
+def _binary_row_rank(rows: tuple[PhaseFreeQubitPauli, ...], width: int) -> int:
+    matrix = [[*row.x_bits, *row.z_bits] for row in rows]
+    rank = 0
+    for column in range(width):
+        pivot = next(
+            (index for index in range(rank, len(matrix)) if matrix[index][column]),
+            None,
+        )
+        if pivot is None:
+            continue
+        matrix[rank], matrix[pivot] = matrix[pivot], matrix[rank]
+        for index in range(rank + 1, len(matrix)):
+            if matrix[index][column]:
+                matrix[index] = [
+                    (left + right) % 2
+                    for left, right in zip(matrix[index], matrix[rank], strict=True)
+                ]
+        rank += 1
+    return rank
+
+
+def _pauli_symplectic_pairing(
+    left: PhaseFreeQubitPauli, right: PhaseFreeQubitPauli
+) -> int:
+    return (
+        sum(
+            x_left * z_right + z_left * x_right
+            for x_left, z_left, x_right, z_right in zip(
+                left.x_bits, left.z_bits, right.x_bits, right.z_bits, strict=True
+            )
+        )
+        % 2
+    )
+
+
+class LogicalPauliFrame(StrictModel):
+    """A paired phase-free symplectic basis of ``S-perp/S``."""
+
+    check_space: CheckSpaceValue
+    x_logical_basis: tuple[PhaseFreeQubitPauli, ...] = Field(max_length=MAX_QUBITS)
+    z_logical_basis: tuple[PhaseFreeQubitPauli, ...] = Field(max_length=MAX_QUBITS)
+    logical_qubits: int = Field(ge=0, le=MAX_QUBITS)
+
+    @model_validator(mode="after")
+    def require_quotient_frame(self) -> Self:
+        if not isinstance(self.check_space, CheckSpaceValue):
+            raise _validation_error(
+                "logical_frame_parent", "frame requires a check space"
+            )
+        if (
+            len(self.x_logical_basis) != self.logical_qubits
+            or len(self.z_logical_basis) != self.logical_qubits
+        ):
+            raise _validation_error(
+                "logical_frame_dimension", "both logical families must have size k"
+            )
+        register = self.check_space.qubit_register
+        n = len(register.qubit_ids)
+        source_rows = self.check_space.basis
+        if any(
+            not isinstance(row, PhaseFreeQubitPauli)
+            or row.qubit_register != register
+            or len(row.x_bits) != n
+            or len(row.z_bits) != n
+            or any(bit not in (0, 1) for bit in (*row.x_bits, *row.z_bits))
+            for row in source_rows
+        ):
+            raise _validation_error(
+                "logical_frame_check_space",
+                "check rows must be valid phase-free values on the source register",
+            )
+        if any(
+            _pauli_symplectic_pairing(left, right)
+            for i, left in enumerate(source_rows)
+            for right in source_rows[i + 1 :]
+        ):
+            raise _validation_error(
+                "logical_frame_nonisotropic", "source check space must be isotropic"
+            )
+        rank = _binary_row_rank(source_rows, 2 * n)
+        if self.logical_qubits != n - rank:
+            raise _validation_error(
+                "logical_frame_dimension",
+                "logical_qubit count must equal n minus the check-space rank",
+            )
+        logical_rows = (*self.x_logical_basis, *self.z_logical_basis)
+        if any(
+            not isinstance(row, PhaseFreeQubitPauli)
+            or row.qubit_register != register
+            or len(row.x_bits) != n
+            or len(row.z_bits) != n
+            or any(bit not in (0, 1) for bit in (*row.x_bits, *row.z_bits))
+            for row in logical_rows
+        ):
+            raise _validation_error(
+                "logical_frame_register",
+                "logical representatives must be valid values on the source register",
+            )
+        if any(
+            _pauli_symplectic_pairing(check, logical)
+            for check in source_rows
+            for logical in logical_rows
+        ):
+            raise _validation_error(
+                "logical_frame_normalizer",
+                "every logical representative must lie in S-perp",
+            )
+        if any(
+            _pauli_symplectic_pairing(left, right)
+            for family in (self.x_logical_basis, self.z_logical_basis)
+            for index, left in enumerate(family)
+            for right in family[index + 1 :]
+        ) or any(
+            _pauli_symplectic_pairing(left, right) != int(i == j)
+            for i, left in enumerate(self.x_logical_basis)
+            for j, right in enumerate(self.z_logical_basis)
+        ):
+            raise _validation_error(
+                "logical_frame_pairing",
+                "logical representatives must have canonical symplectic pairings",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        check_space: CheckSpaceValue,
+        x_logical_basis: tuple[PhaseFreeQubitPauli, ...],
+        z_logical_basis: tuple[PhaseFreeQubitPauli, ...],
+    ) -> Self:
+        return cls.model_construct(
+            check_space=check_space,
+            x_logical_basis=x_logical_basis,
+            z_logical_basis=z_logical_basis,
+            logical_qubits=len(x_logical_basis),
+        )
+
+
+class CSSLogicalPauliFrame(StrictModel):
+    """Register-bound representatives of a symplectic basis of ``S-perp/S``."""
+
+    css_check_space: CSSCheckSpaceValue
+    x_logical_basis: tuple[PhaseFreeQubitPauli, ...] = Field(max_length=MAX_QUBITS)
+    z_logical_basis: tuple[PhaseFreeQubitPauli, ...] = Field(max_length=MAX_QUBITS)
+    logical_qubits: StrictInt = Field(ge=0, le=MAX_QUBITS)
+
+    @model_validator(mode="after")
+    def require_frame_shape(self) -> Self:
+        register = self.css_check_space.qubit_register
+        if (
+            len(self.x_logical_basis) != self.logical_qubits
+            or len(self.z_logical_basis) != self.logical_qubits
+        ):
+            raise _validation_error(
+                "css_logical_frame_rank", "both CSS logical families must match k"
+            )
+        if any(
+            row.qubit_register != register
+            for row in (*self.x_logical_basis, *self.z_logical_basis)
+        ):
+            raise _validation_error(
+                "css_logical_frame_register", "logical Paulis must use the CSS register"
+            )
+        if any(any(row.z_bits) for row in self.x_logical_basis) or any(
+            any(row.x_bits) for row in self.z_logical_basis
+        ):
+            raise _validation_error(
+                "css_logical_frame_roles",
+                "logical X/Z representatives must retain their roles",
+            )
+        return self
+
+
+class CSSDistanceResult(StrictModel):
+    """Exact minimum X/Z logical weights, each with one minimum representative."""
+
+    css_check_space: CSSCheckSpaceValue
+    logical_qubits: StrictInt = Field(ge=0, le=MAX_QUBITS)
+    x_distance: StrictInt | None = Field(default=None, ge=1, le=MAX_QUBITS)
+    x_representative: PhaseFreeQubitPauli | None = None
+    z_distance: StrictInt | None = Field(default=None, ge=1, le=MAX_QUBITS)
+    z_representative: PhaseFreeQubitPauli | None = None
+
+    @model_validator(mode="after")
+    def require_exact_or_degenerate_branch(self) -> Self:
+        if self.logical_qubits == 0:
+            if any(
+                value is not None
+                for value in (
+                    self.x_distance,
+                    self.x_representative,
+                    self.z_distance,
+                    self.z_representative,
+                )
+            ):
+                raise _validation_error(
+                    "css_distance_no_logicals",
+                    "a code with no logical qubits has no logical distances",
+                )
+            return self
+        if any(
+            value is None
+            for value in (
+                self.x_distance,
+                self.x_representative,
+                self.z_distance,
+                self.z_representative,
+            )
+        ):
+            raise _validation_error(
+                "css_distance_missing_sector",
+                "both logical sectors require an exact distance and representative",
+            )
+        register = self.css_check_space.qubit_register
+        for distance, representative, role in (
+            (self.x_distance, self.x_representative, "x"),
+            (self.z_distance, self.z_representative, "z"),
+        ):
+            assert distance is not None and representative is not None
+            if (
+                representative.qubit_register != register
+                or representative.weight != distance
+            ):
+                raise _validation_error(
+                    "css_distance_representative",
+                    "minimum representative must have the declared weight on the source register",
+                )
+            if (role == "x" and any(representative.z_bits)) or (
+                role == "z" and any(representative.x_bits)
+            ):
+                raise _validation_error(
+                    "css_distance_role",
+                    "X and Z representatives must retain their CSS coordinate roles",
+                )
+        return self
+
+
+class StabilizerDistanceResult(StrictModel):
+    """Exact minimum mixed-Pauli logical weight for one check space."""
+
+    check_space: CheckSpaceValue
+    logical_qubits: StrictInt = Field(ge=0, le=MAX_QUBITS)
+    distance: StrictInt | None = Field(default=None, ge=1, le=MAX_QUBITS)
+    representative: PhaseFreeQubitPauli | None = None
+
+    @model_validator(mode="after")
+    def require_exact_or_degenerate_branch(self) -> Self:
+        if self.logical_qubits == 0:
+            if self.distance is not None or self.representative is not None:
+                raise _validation_error(
+                    "distance_no_logicals", "a code with k=0 has no logical distance"
+                )
+            return self
+        if self.distance is None or self.representative is None:
+            raise _validation_error(
+                "distance_missing_representative",
+                "a positive-k code needs a minimum logical Pauli",
+            )
+        if (
+            self.representative.qubit_register != self.check_space.qubit_register
+            or self.representative.weight != self.distance
+        ):
+            raise _validation_error(
+                "distance_representative",
+                "minimum representative must have the declared weight on the source register",
+            )
+        return self
+
+
 __all__ = [
     "MAX_CHECK_ROWS",
     "MAX_QUBITS",
     "MAX_QUBIT_LABEL_LENGTH",
     "BinaryPauliRow",
+    "CSSCheckSpaceRequest",
+    "CSSCheckSpaceResult",
+    "CSSCheckSpaceValue",
+    "CSSDistanceResult",
+    "CSSLogicalPauliFrame",
+    "CSSNonOrthogonalWitness",
     "CanonicalCheckRow",
     "CheckSpaceCanonicalizeRequest",
     "CheckSpaceCanonicalizeResult",
     "CheckSpaceStatus",
     "CheckSpaceValue",
     "ExactQubitPauli",
+    "LogicalPauliFrame",
     "NonCommutingWitness",
     "NormalizerResult",
     "PauliInverseRequest",
@@ -511,4 +1111,8 @@ __all__ = [
     "PhaseFreeQubitPauli",
     "QubitId",
     "QubitRegister",
+    "StabilizerErrorEquivalenceRequest",
+    "StabilizerErrorEquivalenceResult",
+    "StabilizerSyndromeRequest",
+    "StabilizerSyndromeResult",
 ]

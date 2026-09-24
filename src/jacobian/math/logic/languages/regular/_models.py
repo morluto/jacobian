@@ -9,6 +9,9 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import ExactInteger
 from jacobian._models import StrictModel
+from jacobian.math.logic.automata.transducers.values import (
+    SubsequentialTransducer,
+)
 from jacobian.math.logic.languages.regular.values import (
     DFA,
     MAX_COUNT_WORD_LENGTH,
@@ -17,6 +20,7 @@ from jacobian.math.logic.languages.regular.values import (
     MAX_LABELED_AUTOMATON_STATES,
     MAX_TRANSITION_PROFILE_PATH_LENGTH,
     MAX_WORD_LENGTH,
+    NFA,
     FiniteLabeledAutomaton,
 )
 
@@ -45,21 +49,138 @@ class ComplementRequest(StrictModel):
     dfa: DFA
 
 
+class SubsequentialPreimageRequest(StrictModel):
+    """Preimage of a DFA language under a parented subsequential transducer."""
+
+    dfa: DFA
+    transducer: SubsequentialTransducer
+
+    @model_validator(mode="after")
+    def require_same_explicit_output_alphabet(self) -> Self:
+        alphabet = self.dfa.alphabet
+        output_alphabet = self.transducer.output_alphabet
+        if alphabet is None or output_alphabet is None:
+            raise _validation_error(
+                "preimage_alphabet_context_missing",
+                "preimage requires explicit DFA and transducer output alphabet contexts",
+            )
+        if self.transducer.input_alphabet is None:
+            raise _validation_error(
+                "preimage_input_alphabet_context_missing",
+                "preimage requires an explicit transducer input alphabet context",
+            )
+        if alphabet != output_alphabet:
+            raise _validation_error(
+                "preimage_alphabet_context_mismatch",
+                "DFA and transducer output alphabet contexts must be identical",
+            )
+        if (self.dfa.alphabet_id is None) != (
+            self.transducer.output_alphabet_id is None
+        ) or self.dfa.alphabet_id != self.transducer.output_alphabet_id:
+            raise _validation_error(
+                "preimage_alphabet_identity_mismatch",
+                "DFA and transducer output alphabet identities must be identical",
+            )
+        if self.dfa.alphabet_size != len(alphabet.symbols):
+            raise _validation_error(
+                "preimage_alphabet_size_mismatch",
+                "DFA alphabet_size must match the explicit alphabet context",
+            )
+        return self
+
+
+class SubsequentialImageRequest(StrictModel):
+    """Image of a source regular language under a parented subsequential map."""
+
+    dfa: DFA
+    transducer: SubsequentialTransducer
+
+    @model_validator(mode="after")
+    def require_matching_explicit_input_alphabet(self) -> Self:
+        alphabet = self.dfa.alphabet
+        input_alphabet = self.transducer.input_alphabet
+        if alphabet is None or input_alphabet is None:
+            raise _validation_error(
+                "image_alphabet_context_missing",
+                "image requires explicit DFA and transducer input alphabet contexts",
+            )
+        if self.transducer.output_alphabet is None:
+            raise _validation_error(
+                "image_output_alphabet_context_missing",
+                "image requires an explicit transducer output alphabet context",
+            )
+        if alphabet != input_alphabet:
+            raise _validation_error(
+                "image_alphabet_context_mismatch",
+                "DFA and transducer input alphabet contexts must be identical",
+            )
+        if (self.dfa.alphabet_id is None) != (
+            self.transducer.input_alphabet_id is None
+        ) or self.dfa.alphabet_id != self.transducer.input_alphabet_id:
+            raise _validation_error(
+                "image_alphabet_identity_mismatch",
+                "DFA and transducer input alphabet identities must be identical",
+            )
+        if self.dfa.alphabet_size != len(alphabet.symbols):
+            raise _validation_error(
+                "image_alphabet_size_mismatch",
+                "DFA alphabet_size must match the explicit alphabet context",
+            )
+        return self
+
+
+class NFAMembershipRequest(StrictModel):
+    """Decide whether a parented finite word belongs to an NFA language."""
+
+    nfa: NFA
+    word: tuple[int, ...] = Field(max_length=MAX_WORD_LENGTH)
+
+    @model_validator(mode="after")
+    def require_explicit_alphabet_context(self) -> Self:
+        if self.nfa.alphabet is None:
+            raise _validation_error(
+                "nfa_membership_alphabet_context_missing",
+                "NFA membership requires an explicit alphabet context",
+            )
+        return self
+
+
+class NFAMembershipResult(StrictModel):
+    """Exact NFA membership value bound to its NFA and finite word."""
+
+    nfa: NFA
+    word: tuple[int, ...] = Field(max_length=MAX_WORD_LENGTH)
+    accepted: bool
+
+
 class EquivalenceRequest(StrictModel):
-    """Two total DFAs over one common ordered alphabet."""
+    """Two total DFAs over one common ordered alphabet parent."""
 
     left: DFA = Field(
         description=(
-            "Complete deterministic finite automaton; it must use the same "
-            "ordered alphabet axis as right."
+            "Complete deterministic finite automaton; alphabet size, optional "
+            "identity, and optional ordered context must equal right."
         )
     )
     right: DFA = Field(
         description=(
-            "Complete deterministic finite automaton; it must use the same "
-            "ordered alphabet axis as left."
+            "Complete deterministic finite automaton; alphabet size, optional "
+            "identity, and optional ordered context must equal left."
         )
     )
+
+    @model_validator(mode="after")
+    def require_same_alphabet_parent(self) -> Self:
+        if (
+            self.left.alphabet_size != self.right.alphabet_size
+            or self.left.alphabet_id != self.right.alphabet_id
+            or self.left.alphabet != self.right.alphabet
+        ):
+            raise _validation_error(
+                "alphabet_mismatch",
+                "equivalence requires exactly matching alphabet sizes and parents",
+            )
+        return self
 
 
 class EquivalenceResult(StrictModel):
@@ -80,6 +201,14 @@ class EquivalenceResult(StrictModel):
             raise _validation_error(
                 "alphabet_mismatch",
                 "equivalence results must retain DFAs over one common alphabet",
+            )
+        if (
+            self.left.alphabet_id != self.right.alphabet_id
+            or self.left.alphabet != self.right.alphabet
+        ):
+            raise _validation_error(
+                "alphabet_mismatch",
+                "equivalence results must retain DFAs with identical alphabet parents",
             )
         fields = (
             self.distinguishing_word,
@@ -246,7 +375,11 @@ __all__ = [
     "CountResult",
     "EquivalenceRequest",
     "EquivalenceResult",
+    "NFAMembershipRequest",
+    "NFAMembershipResult",
     "RunRequest",
     "RunResult",
+    "SubsequentialImageRequest",
+    "SubsequentialPreimageRequest",
     "TransitionParikhProfileRequest",
 ]

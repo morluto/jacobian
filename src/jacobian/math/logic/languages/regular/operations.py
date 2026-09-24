@@ -9,6 +9,7 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
+from jacobian.math.logic.automata.transducers.values import SubsequentialTransducer
 from jacobian.math.logic.languages.regular._models import CountResult, RunResult
 from jacobian.math.logic.languages.regular._profile_admission import (
     TransitionParikhAdmissionPlan,
@@ -20,6 +21,7 @@ from jacobian.math.logic.languages.regular.values import (
     MAX_COUNT_RESULT_DIGITS,
     MAX_COUNT_WORD_LENGTH,
     MAX_DFA_ALPHABET,
+    MAX_DFA_ALPHABET_ID_LENGTH,
     MAX_DFA_EQUIVALENCE_INTERMEDIATE_ALLOCATION,
     MAX_DFA_EQUIVALENCE_OUTPUT_ALLOCATION,
     MAX_DFA_EQUIVALENCE_PRODUCT_STATES,
@@ -27,11 +29,25 @@ from jacobian.math.logic.languages.regular.values import (
     MAX_DFA_EQUIVALENCE_TRACE_ROWS,
     MAX_DFA_EQUIVALENCE_WITNESS_LENGTH,
     MAX_DFA_EQUIVALENCE_WORK,
+    MAX_DFA_PREIMAGE_OUTPUT_BYTES,
+    MAX_DFA_PREIMAGE_PRODUCT_STATES,
+    MAX_DFA_PREIMAGE_PRODUCT_TRANSITIONS,
+    MAX_DFA_PREIMAGE_WORK,
     MAX_DFA_STATES,
     MAX_DFA_TRANSITIONS,
+    MAX_NFA_MEMBERSHIP_WORK,
+    MAX_NFA_STATES,
+    MAX_NFA_TRANSITIONS,
+    MAX_SUBSEQUENTIAL_IMAGE_INTERMEDIATE_BYTES,
+    MAX_SUBSEQUENTIAL_IMAGE_OUTPUT_BYTES,
+    MAX_SUBSEQUENTIAL_IMAGE_WORK,
+    MAX_WORD_LENGTH,
+    NFA,
     AutomatonTransition,
     DFATransition,
+    FiniteAlphabet,
     FiniteLabeledAutomaton,
+    NFATransition,
     TransitionParikhCell,
     TransitionParikhProfile,
 )
@@ -41,7 +57,10 @@ __all__ = [
     "dfa_complement",
     "dfa_equivalence",
     "dfa_run",
+    "dfa_subsequential_image",
+    "dfa_subsequential_preimage",
     "dfa_transition_carrier",
+    "nfa_membership",
     "transition_parikh_profile",
     "verify_accepted_word_count",
     "verify_dfa_run",
@@ -63,6 +82,144 @@ def dfa_run(dfa: DFA, word: tuple[int, ...]) -> tuple[bool, int]:
     for symbol in word:
         state = transitions[(state, symbol)]
     return (state in dfa.accepting_states, state)
+
+
+def nfa_membership(nfa: NFA, word: tuple[int, ...]) -> bool:
+    """Decide membership by bounded state-set propagation with epsilon closure."""
+    _validate_nfa_membership_input(nfa, word)
+    work_bound = (2 * len(word) + 1) * (nfa.state_count + len(nfa.transitions))
+    work_bound += len(nfa.transitions)
+    if work_bound > MAX_NFA_MEMBERSHIP_WORK:
+        raise OperationResourceAdmissionError(
+            location=("nfa", "word"),
+            code="regular_language.nfa_membership_work_bound",
+            message="NFA membership exceeds the state-set propagation work bound",
+        )
+    request_checkpoint("after NFA membership admission")
+    ledger = OperationWorkLedger(work_bound)
+    epsilon_edges: list[list[int]] = [[] for _ in range(nfa.state_count)]
+    labeled_edges: dict[tuple[int, int], list[int]] = {}
+    for edge in nfa.transitions:
+        ledger.charge()
+        if edge.symbol is None:
+            epsilon_edges[edge.source].append(edge.target)
+        else:
+            labeled_edges.setdefault((edge.source, edge.symbol), []).append(edge.target)
+    active = _nfa_epsilon_closure({nfa.initial_state}, epsilon_edges, ledger)
+    for symbol in word:
+        request_checkpoint("during NFA membership propagation")
+        destinations: set[int] = set()
+        for state in active:
+            ledger.charge()
+            targets = labeled_edges.get((state, symbol), ())
+            ledger.charge(len(targets))
+            destinations.update(targets)
+        active = _nfa_epsilon_closure(destinations, epsilon_edges, ledger)
+    return not active.isdisjoint(nfa.accepting_states)
+
+
+def _validate_nfa_membership_input(nfa: object, word: object) -> None:
+    if type(nfa) is not NFA:
+        raise OperationDomainValidationError(
+            location=("nfa",),
+            code="regular_language.nfa_membership.noncanonical_nfa",
+            message="membership requires a canonical NFA value",
+        )
+    if (
+        type(nfa.state_count) is not int
+        or not 1 <= nfa.state_count <= MAX_NFA_STATES
+        or type(nfa.alphabet_size) is not int
+        or not 0 <= nfa.alphabet_size <= MAX_DFA_ALPHABET
+        or type(nfa.initial_state) is not int
+        or not 0 <= nfa.initial_state < nfa.state_count
+        or type(nfa.alphabet) is not FiniteAlphabet
+        or len(nfa.alphabet.symbols) != nfa.alphabet_size
+        or (
+            nfa.alphabet_id is not None
+            and (
+                type(nfa.alphabet_id) is not str
+                or len(nfa.alphabet_id) > MAX_DFA_ALPHABET_ID_LENGTH
+            )
+        )
+        or type(nfa.accepting_states) is not tuple
+        or any(
+            type(state) is not int or not 0 <= state < nfa.state_count
+            for state in nfa.accepting_states
+        )
+        or len(set(nfa.accepting_states)) != len(nfa.accepting_states)
+        or type(nfa.transitions) is not tuple
+        or len(nfa.transitions) > MAX_NFA_TRANSITIONS
+    ):
+        raise OperationDomainValidationError(
+            location=("nfa",),
+            code="regular_language.nfa_membership.invalid_nfa",
+            message="membership requires a valid explicitly parented NFA carrier",
+        )
+    if any(type(edge) is not NFATransition for edge in nfa.transitions):
+        raise OperationDomainValidationError(
+            location=("nfa", "transitions"),
+            code="regular_language.nfa_membership.invalid_transition",
+            message="NFA transitions must be canonical NFATransition values",
+        )
+    if tuple(edge.transition_id for edge in nfa.transitions) != tuple(
+        range(len(nfa.transitions))
+    ):
+        raise OperationDomainValidationError(
+            location=("nfa", "transitions"),
+            code="regular_language.nfa_membership.invalid_transition_axis",
+            message="NFA transition IDs must be the canonical ordered edge axis",
+        )
+    for edge in nfa.transitions:
+        if (
+            type(edge) is not NFATransition
+            or type(edge.source) is not int
+            or not 0 <= edge.source < nfa.state_count
+            or type(edge.target) is not int
+            or not 0 <= edge.target < nfa.state_count
+            or (
+                edge.symbol is not None
+                and (
+                    type(edge.symbol) is not int
+                    or not 0 <= edge.symbol < nfa.alphabet_size
+                )
+            )
+        ):
+            raise OperationDomainValidationError(
+                location=("nfa", "transitions"),
+                code="regular_language.nfa_membership.invalid_transition",
+                message="NFA transitions must have in-range states and symbols",
+            )
+    if (
+        type(word) is not tuple
+        or len(word) > MAX_WORD_LENGTH
+        or any(
+            type(symbol) is not int or not 0 <= symbol < nfa.alphabet_size
+            for symbol in word
+        )
+    ):
+        raise OperationDomainValidationError(
+            location=("word",),
+            code="regular_language.nfa_membership.invalid_word",
+            message="word symbols must be in the NFA alphabet and within the word bound",
+        )
+
+
+def _nfa_epsilon_closure(
+    seeds: set[int],
+    epsilon_edges: list[list[int]],
+    ledger: OperationWorkLedger,
+) -> set[int]:
+    reached = set(seeds)
+    frontier = list(seeds)
+    while frontier:
+        state = frontier.pop()
+        ledger.charge()
+        for target in epsilon_edges[state]:
+            ledger.charge()
+            if target not in reached:
+                reached.add(target)
+                frontier.append(target)
+    return reached
 
 
 def count_accepted_words(dfa: DFA, word_length: int) -> int:
@@ -219,10 +376,467 @@ def dfa_complement(dfa: DFA) -> DFA:
     return DFA(
         state_count=dfa.state_count,
         alphabet_size=dfa.alphabet_size,
+        alphabet_id=dfa.alphabet_id,
+        alphabet=dfa.alphabet,
         transitions=dfa.transitions,
         initial_state=dfa.initial_state,
         accepting_states=tuple(sorted(set(range(dfa.state_count)) - accepting)),
     )
+
+
+def dfa_subsequential_preimage(dfa: DFA, transducer: SubsequentialTransducer) -> DFA:
+    """Return the input language mapped by the subsequential machine into L(dfa).
+
+    Undefined transducer transitions and nonfinal terminal states reject. The
+    transition and final output words are consumed by the DFA in order.
+    """
+    if type(dfa) is not DFA or type(transducer) is not SubsequentialTransducer:
+        raise OperationDomainValidationError(
+            location=("dfa", "transducer"),
+            code="regular_language.preimage.noncanonical_input",
+            message="preimage requires canonical DFA and subsequential transducer values",
+        )
+    dfa = _admit_cross_domain_dfa(dfa, "preimage")
+    transducer = _admit_cross_domain_transducer(transducer, "preimage")
+    if (
+        dfa.alphabet is None
+        or transducer.output_alphabet is None
+        or transducer.input_alphabet is None
+        or dfa.alphabet != transducer.output_alphabet
+        or dfa.alphabet_id != transducer.output_alphabet_id
+        or dfa.alphabet_size != len(dfa.alphabet.symbols)
+    ):
+        raise OperationDomainValidationError(
+            location=("dfa", "transducer"),
+            code="regular_language.preimage.alphabet_mismatch",
+            message=(
+                "preimage requires matching explicit output alphabet parents and "
+                "an explicit input parent"
+            ),
+        )
+    work_bound, output_transition_bound = _admit_subsequential_preimage(dfa, transducer)
+    return _build_subsequential_preimage(
+        dfa, transducer, work_bound, output_transition_bound
+    )
+
+
+def _admit_subsequential_preimage(
+    dfa: DFA, transducer: SubsequentialTransducer
+) -> tuple[int, int]:
+    request_checkpoint("before subsequential preimage admission")
+    input_size = transducer.input_alphabet_size
+    product_state_bound = transducer.state_count * dfa.state_count
+    # Any omitted transducer transition may require one additional rejecting
+    # sink in the total DFA result. Reserve it before product exploration.
+    has_undefined_transitions = len(transducer.transitions) < (
+        transducer.state_count * input_size
+    )
+    product_bound = product_state_bound + int(has_undefined_transitions)
+    product_transition_bound = product_bound * input_size
+    max_output = max(
+        (
+            len(item.output)
+            for item in (*transducer.transitions, *transducer.final_outputs)
+        ),
+        default=0,
+    )
+    work_bound = product_bound * (input_size + max_output * (input_size + 1))
+    output_transition_bound = MAX_DFA_STATES * input_size
+    output_bytes_bound = 4096 + output_transition_bound * 128
+    if (
+        product_bound > MAX_DFA_PREIMAGE_PRODUCT_STATES
+        or product_transition_bound > MAX_DFA_PREIMAGE_PRODUCT_TRANSITIONS
+        or work_bound > MAX_DFA_PREIMAGE_WORK
+        or output_transition_bound > MAX_DFA_TRANSITIONS
+        or output_bytes_bound > MAX_DFA_PREIMAGE_OUTPUT_BYTES
+    ):
+        raise OperationResourceAdmissionError(
+            location=("transducer", "dfa"),
+            code="regular_language.preimage_resource_bound",
+            message="subsequential preimage exceeds its product, work, or output bound",
+        )
+    # Admission uses the complete product bound, not the reachable subset, so
+    # every accepted request fits the result carrier before expansion starts.
+    request_checkpoint("after subsequential preimage admission")
+    return work_bound, output_transition_bound
+
+
+def _admit_cross_domain_dfa(dfa: DFA, operation: str) -> DFA:
+    """Recheck a caller-supplied carrier at this public native boundary."""
+    try:
+        return DFA.model_validate(dfa.model_dump(), strict=True)
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("dfa",),
+            code=f"regular_language.{operation}.invalid_dfa_carrier",
+            message=f"{operation} requires a structurally valid canonical DFA",
+        ) from exc
+
+
+def _admit_cross_domain_transducer(
+    transducer: SubsequentialTransducer, operation: str
+) -> SubsequentialTransducer:
+    """Recheck a caller-supplied carrier without replaying its computation."""
+    try:
+        return SubsequentialTransducer.model_validate(
+            transducer.model_dump(), strict=True
+        )
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("transducer",),
+            code=f"regular_language.{operation}.invalid_transducer_carrier",
+            message=(
+                f"{operation} requires a structurally valid canonical "
+                "subsequential transducer"
+            ),
+        ) from exc
+
+
+def _build_subsequential_preimage(
+    dfa: DFA,
+    transducer: SubsequentialTransducer,
+    work_bound: int,
+    output_transition_bound: int,
+) -> DFA:
+    input_size = transducer.input_alphabet_size
+    ledger = OperationWorkLedger(work_bound)
+    transducer_edges = {
+        (item.source, item.input_symbol): item for item in transducer.transitions
+    }
+    final_outputs = {item.state: item.output for item in transducer.final_outputs}
+    dfa_edges = _transition_map(dfa)
+    initial = (transducer.initial_state, dfa.initial_state)
+    pairs = [initial]
+    state_ids = {initial: 0}
+    row_coordinates: list[tuple[int, int, int]] = []
+    accepting: list[int] = []
+    has_sink = False
+
+    cursor = 0
+    while cursor < len(pairs):
+        request_checkpoint("during subsequential preimage product exploration")
+        transducer_state, dfa_state = pairs[cursor]
+        if transducer_state in final_outputs:
+            terminal = _consume_dfa_output(
+                dfa_edges,
+                dfa_state,
+                final_outputs[transducer_state],
+                ledger,
+            )
+            if terminal in dfa.accepting_states:
+                accepting.append(cursor)
+        for symbol in range(input_size):
+            ledger.charge()
+            edge = transducer_edges.get((transducer_state, symbol))
+            if edge is None:
+                has_sink = True
+                target_id = -1
+            else:
+                target = (
+                    edge.target,
+                    _consume_dfa_output(dfa_edges, dfa_state, edge.output, ledger),
+                )
+                target_id = state_ids.get(target, -1)
+                if target_id < 0:
+                    target_id = len(pairs)
+                    state_ids[target] = target_id
+                    pairs.append(target)
+                    if len(pairs) + int(has_sink) > MAX_DFA_STATES:
+                        raise OperationResourceAdmissionError(
+                            location=("transducer", "dfa"),
+                            code="regular_language.preimage_state_bound",
+                            message="reachable subsequential preimage exceeds DFA state bound",
+                        )
+            row_coordinates.append((cursor, symbol, target_id))
+        cursor += 1
+    # A rejecting sink is needed whenever an undefined edge was seen. It loops
+    # over all input symbols; its state was reserved above by the output bound.
+    if len(row_coordinates) > output_transition_bound:
+        raise OperationResourceAdmissionError(
+            location=("transducer", "dfa"),
+            code="regular_language.preimage_transition_bound",
+            message="subsequential preimage exceeds DFA transition bound",
+        )
+    if has_sink:
+        sink = len(pairs)
+        row_coordinates = [
+            (source, symbol, sink if target == -1 else target)
+            for source, symbol, target in row_coordinates
+        ]
+        for symbol in range(input_size):
+            row_coordinates.append((sink, symbol, sink))
+    if len(pairs) + int(has_sink) > MAX_DFA_STATES:
+        raise OperationResourceAdmissionError(
+            location=("transducer", "dfa"),
+            code="regular_language.preimage_state_bound",
+            message="reachable subsequential preimage exceeds DFA state bound",
+        )
+    request_checkpoint("before subsequential preimage result construction")
+    return DFA(
+        state_count=len(pairs) + int(has_sink),
+        alphabet_size=input_size,
+        alphabet_id=transducer.input_alphabet_id,
+        alphabet=transducer.input_alphabet,
+        transitions=tuple(
+            DFATransition(source=source, symbol=symbol, target=target)
+            for source, symbol, target in row_coordinates
+        ),
+        initial_state=0,
+        accepting_states=tuple(accepting),
+    )
+
+
+def _consume_dfa_output(
+    dfa_edges: dict[tuple[int, int], int],
+    state: int,
+    output: tuple[int, ...],
+    ledger: OperationWorkLedger,
+) -> int:
+    for output_symbol in output:
+        ledger.charge()
+        state = dfa_edges[(state, output_symbol)]
+    return state
+
+
+def dfa_subsequential_image(dfa: DFA, transducer: SubsequentialTransducer) -> NFA:
+    """Return an epsilon-NFA for the transducer image of ``L(dfa)``.
+
+    The construction expands reachable source-DFA/transducer product edges
+    into an epsilon-NFA over output symbols, includes final-output paths only
+    at accepting source states. Undefined transducer transitions contribute no
+    path.
+    """
+    if type(dfa) is not DFA or type(transducer) is not SubsequentialTransducer:
+        raise OperationDomainValidationError(
+            location=("dfa", "transducer"),
+            code="regular_language.image.noncanonical_input",
+            message="image requires canonical DFA and subsequential transducer values",
+        )
+    dfa = _admit_cross_domain_dfa(dfa, "image")
+    transducer = _admit_cross_domain_transducer(transducer, "image")
+    if (
+        dfa.alphabet is None
+        or transducer.input_alphabet is None
+        or transducer.output_alphabet is None
+        or dfa.alphabet != transducer.input_alphabet
+        or dfa.alphabet_id != transducer.input_alphabet_id
+        or dfa.alphabet_size != len(dfa.alphabet.symbols)
+    ):
+        raise OperationDomainValidationError(
+            location=("dfa", "transducer"),
+            code="regular_language.image.alphabet_mismatch",
+            message=(
+                "image requires matching explicit input alphabets and an explicit "
+                "transducer output alphabet"
+            ),
+        )
+    work_bound, nfa_state_bound, nfa_transition_bound = _admit_subsequential_image(
+        dfa, transducer
+    )
+    return _build_subsequential_image(
+        dfa,
+        transducer,
+        work_bound,
+        nfa_state_bound,
+        nfa_transition_bound,
+    )
+
+
+def _admit_subsequential_image(
+    dfa: DFA, transducer: SubsequentialTransducer
+) -> tuple[int, int, int]:
+    request_checkpoint("before subsequential image admission")
+    pair_bound = dfa.state_count * transducer.state_count
+    transition_output_edges = dfa.state_count * sum(
+        max(1, len(edge.output)) for edge in transducer.transitions
+    )
+    final_output_edges = len(dfa.accepting_states) * sum(
+        max(1, len(final.output)) for final in transducer.final_outputs
+    )
+    transition_intermediates = dfa.state_count * sum(
+        max(0, len(edge.output) - 1) for edge in transducer.transitions
+    )
+    final_intermediates = len(dfa.accepting_states) * sum(
+        max(0, len(final.output) - 1) for final in transducer.final_outputs
+    )
+    nfa_state_bound = pair_bound + transition_intermediates + final_intermediates + 1
+    nfa_transition_bound = transition_output_edges + final_output_edges
+    product_transition_bound = dfa.state_count * len(transducer.transitions)
+    terminal_pair_bound = len(dfa.accepting_states) * len(transducer.final_outputs)
+    intermediate_bytes_bound = (
+        pair_bound * 128
+        + product_transition_bound * 128
+        + terminal_pair_bound * 96
+        + nfa_state_bound * 256
+        + nfa_transition_bound * 128
+    )
+    output_bytes_bound = 4096 + nfa_state_bound * 24 + nfa_transition_bound * 72
+    work_bound = (
+        pair_bound * transducer.input_alphabet_size
+        + transition_output_edges
+        + final_output_edges
+        + nfa_state_bound
+        + nfa_transition_bound
+    )
+    if (
+        nfa_state_bound > MAX_NFA_STATES
+        or nfa_transition_bound > MAX_NFA_TRANSITIONS
+        or intermediate_bytes_bound > MAX_SUBSEQUENTIAL_IMAGE_INTERMEDIATE_BYTES
+        or output_bytes_bound > MAX_SUBSEQUENTIAL_IMAGE_OUTPUT_BYTES
+        or work_bound > MAX_SUBSEQUENTIAL_IMAGE_WORK
+    ):
+        raise OperationResourceAdmissionError(
+            location=("dfa", "transducer"),
+            code="regular_language.image_resource_bound",
+            message=(
+                "subsequential image exceeds its product or epsilon-NFA "
+                "work, intermediate-allocation, or output bound"
+            ),
+        )
+    request_checkpoint("after subsequential image admission")
+    return work_bound, nfa_state_bound, nfa_transition_bound
+
+
+def _build_subsequential_image(
+    dfa: DFA,
+    transducer: SubsequentialTransducer,
+    work_bound: int,
+    nfa_state_bound: int,
+    nfa_transition_bound: int,
+) -> NFA:
+    ledger = OperationWorkLedger(work_bound)
+    pairs, product_edges, terminal_pairs = _reachable_image_product(
+        dfa, transducer, ledger
+    )
+    transitions, state_count, accepting_sink = _expand_image_nfa(
+        pairs,
+        product_edges,
+        terminal_pairs,
+        nfa_state_bound,
+        nfa_transition_bound,
+        ledger,
+    )
+    request_checkpoint("before subsequential image result construction")
+    return NFA(
+        state_count=state_count,
+        alphabet_size=transducer.output_alphabet_size,
+        alphabet_id=transducer.output_alphabet_id,
+        alphabet=transducer.output_alphabet,
+        transitions=transitions,
+        initial_state=0,
+        accepting_states=() if accepting_sink is None else (accepting_sink,),
+    )
+
+
+def _reachable_image_product(
+    dfa: DFA,
+    transducer: SubsequentialTransducer,
+    ledger: OperationWorkLedger,
+) -> tuple[
+    list[tuple[int, int]],
+    list[tuple[int, tuple[int, ...], int]],
+    list[tuple[int, tuple[int, ...]]],
+]:
+    input_edges = _transition_map(dfa)
+    transducer_edges = {
+        (edge.source, edge.input_symbol): edge for edge in transducer.transitions
+    }
+    finals = {item.state: item.output for item in transducer.final_outputs}
+    initial_pair = (dfa.initial_state, transducer.initial_state)
+    pairs = [initial_pair]
+    pair_ids = {initial_pair: 0}
+    product_edges: list[tuple[int, tuple[int, ...], int]] = []
+    terminal_pairs: list[tuple[int, tuple[int, ...]]] = []
+    cursor = 0
+    while cursor < len(pairs):
+        request_checkpoint("during subsequential image product exploration")
+        dfa_state, transducer_state = pairs[cursor]
+        final_output = finals.get(transducer_state)
+        if dfa_state in dfa.accepting_states and final_output is not None:
+            terminal_pairs.append((cursor, final_output))
+        for input_symbol in range(dfa.alphabet_size):
+            ledger.charge()
+            edge = transducer_edges.get((transducer_state, input_symbol))
+            if edge is None:
+                continue
+            target_pair = (
+                input_edges[(dfa_state, input_symbol)],
+                edge.target,
+            )
+            target_id = pair_ids.get(target_pair)
+            if target_id is None:
+                target_id = len(pairs)
+                pair_ids[target_pair] = target_id
+                pairs.append(target_pair)
+            product_edges.append((cursor, edge.output, target_id))
+            ledger.charge(len(edge.output))
+        cursor += 1
+
+    return pairs, product_edges, terminal_pairs
+
+
+def _expand_image_nfa(
+    pairs: list[tuple[int, int]],
+    product_edges: list[tuple[int, tuple[int, ...], int]],
+    terminal_pairs: list[tuple[int, tuple[int, ...]]],
+    nfa_state_bound: int,
+    nfa_transition_bound: int,
+    ledger: OperationWorkLedger,
+) -> tuple[tuple[NFATransition, ...], int, int | None]:
+    state_count = len(pairs)
+    transitions: list[NFATransition] = []
+
+    def add_nfa_state() -> int:
+        nonlocal state_count
+        if state_count >= nfa_state_bound:
+            raise OperationResourceAdmissionError(
+                location=("dfa", "transducer"),
+                code="regular_language.image_state_bound",
+                message="subsequential image exceeds NFA state bound",
+            )
+        ledger.charge()
+        state = state_count
+        state_count += 1
+        return state
+
+    def add_transition(source: int, symbol: int | None, target: int) -> None:
+        if len(transitions) >= nfa_transition_bound:
+            raise OperationResourceAdmissionError(
+                location=("dfa", "transducer"),
+                code="regular_language.image_transition_bound",
+                message="subsequential image exceeds NFA transition bound",
+            )
+        ledger.charge()
+        transitions.append(
+            NFATransition(
+                transition_id=len(transitions),
+                source=source,
+                symbol=symbol,
+                target=target,
+            )
+        )
+
+    # Product state IDs are stable as BFS discovers them.
+    accepting_sink = add_nfa_state() if terminal_pairs else None
+
+    def add_word_path(source: int, word: tuple[int, ...], target: int) -> None:
+        if not word:
+            add_transition(source, None, target)
+            return
+        current = source
+        for offset, symbol in enumerate(word):
+            next_state = target if offset == len(word) - 1 else add_nfa_state()
+            add_transition(current, symbol, next_state)
+            current = next_state
+
+    for source, output, target in product_edges:
+        request_checkpoint("during subsequential image path expansion")
+        add_word_path(source, output, target)
+    for source, output in terminal_pairs:
+        request_checkpoint("during subsequential image final-output expansion")
+        assert accepting_sink is not None
+        add_word_path(source, output, accepting_sink)
+    return tuple(transitions), state_count, accepting_sink
 
 
 def _require_equivalence_dfa(value: object, location: str) -> int:
@@ -303,7 +917,11 @@ def _admit_dfa_equivalence(left: DFA, right: DFA) -> tuple[int, int]:
 
     source_work = _require_equivalence_dfa(left, "left")
     source_work += _require_equivalence_dfa(right, "right")
-    if left.alphabet_size != right.alphabet_size:
+    if (
+        left.alphabet_size != right.alphabet_size
+        or left.alphabet_id != right.alphabet_id
+        or left.alphabet != right.alphabet
+    ):
         raise OperationDomainValidationError(
             location=("right", "alphabet_size"),
             code="regular_language.equivalence.alphabet_mismatch",

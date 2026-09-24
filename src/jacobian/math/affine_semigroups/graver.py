@@ -16,6 +16,7 @@ from jacobian.math.affine_semigroups.graver_models import (
     IntegerConfigurationGraverBasis,
     IntegerConfigurationMarkovBasis,
 )
+from jacobian.math.affine_semigroups.operations import relation_lattice
 from jacobian.math.affine_semigroups.semigroup import (
     AffineConfiguration,
     _admit_configuration,
@@ -136,7 +137,7 @@ def _enumerate_graver_vectors(
 
 
 def graver_basis(configuration: IntegerMatrix) -> IntegerConfigurationGraverBasis:
-    """Return all conformally indecomposable vectors in a one-row kernel.
+    """Return all conformally indecomposable vectors in an admitted kernel.
 
     For a one-row integer matrix, expansion of a relation into unit signed
     summands gives a minimal zero-sum sequence in [-M, M]. Such a sequence has
@@ -144,12 +145,31 @@ def graver_basis(configuration: IntegerMatrix) -> IntegerConfigurationGraverBasi
     Graver vector lies in the admitted coordinate box. We enumerate that full
     box and retain exactly the componentwise minima in each sign orthant.
     """
-    entries = _normalized_graver_weights(configuration)
-    bound, _candidate_states = _admit_graver_search(entries)
-    return IntegerConfigurationGraverBasis(
-        configuration=configuration,
-        vectors=_enumerate_graver_vectors(entries, bound),
-    )
+    if configuration.row_count == 1 and configuration.column_count <= 5:
+        entries = _normalized_graver_weights(configuration)
+        bound, _candidate_states = _admit_graver_search(entries)
+        vectors = _enumerate_graver_vectors(entries, bound)
+    else:
+        # In nullity at most one, the primitive generator of ker_Z(A) is the
+        # entire Graver basis (or the basis is empty). Reuse the admitted exact
+        # Smith/Hermite kernel instead of searching an arbitrary coordinate box.
+        lattice = relation_lattice(configuration)
+        if lattice.nullity > 1:
+            raise OperationResourceAdmissionError(
+                location=("configuration",),
+                code="affine_semigroup.graver_nullity",
+                message=(
+                    "outside the one-row, at-most-five-column enumeration and "
+                    "nullity-at-most-one exact Graver slices"
+                ),
+            )
+        if lattice.nullity == 0:
+            vectors = ()
+        else:
+            vector = tuple(int(value) for value in lattice.relation_basis.entries[0])
+            first = next(value for value in vector if value)
+            vectors = (vector if first > 0 else tuple(-value for value in vector),)
+    return IntegerConfigurationGraverBasis(configuration=configuration, vectors=vectors)
 
 
 def markov_basis(configuration: IntegerMatrix) -> IntegerConfigurationMarkovBasis:

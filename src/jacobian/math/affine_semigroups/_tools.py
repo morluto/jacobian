@@ -135,18 +135,22 @@ def _run_markov_basis(
 _GRAVER_TOOLS = (
     MathTool(
         operation_id="integer_configuration.graver_basis.compute",
-        title="Compute a complete one-row integer Graver basis",
+        title="Compute a complete integer Graver basis in bounded exact slices",
         description=(
-            "Return every sign-normalized conformally indecomposable relation of a "
-            "one-row integer configuration. Completeness is exact for the accepted "
-            "input; admission limits the matrix to five columns and preflights the "
-            "complete coordinate-box and candidate-pair minimality work. This operation "
-            "does not claim a Markov basis."
+            "Return the complete sign-normalized Graver basis for either a one-row "
+            "matrix with at most five columns, or a matrix with at most 12 rows and "
+            "columns whose integer kernel has nullity at most one. The one-row slice "
+            "preflights a complete theorem-bounded coordinate box and candidate-pair "
+            "work. The nullity-at-most-one slice uses the complete exact kernel lattice; "
+            "a nullity-one lattice has a single primitive generator up to sign. Other "
+            "matrices are rejected after bounded kernel admission, without truncated "
+            "search or a completeness claim."
         ),
         request_type=IntegerConfigurationGraverRequest,
         result_type=IntegerConfigurationGraverBasis,
         run=_run_graver,
         discovery_terms=(
+            "complete Graver basis of a bounded integer matrix with nullity at most one",
             "complete Graver basis of a one-row integer matrix",
             "conformally indecomposable primitive partition identities",
             "one-dimensional integer kernel move basis",
@@ -205,14 +209,15 @@ _GRAVER_TOOLS = (
 _MARKOV_TOOLS = (
     MathTool(
         operation_id="integer_configuration.markov_basis.compute",
-        title="Compute a global Markov basis of a one-row configuration",
+        title="Compute a global Markov basis in bounded exact slices",
         description=(
             "Return a complete move family that generates the integer "
             "configuration's toric ideal and connects every nonnegative fiber. "
             "The bounded implementation returns the complete Graver basis on "
-            "the same generator axis; this is a global guarantee, unlike "
-            "connectivity of any one materialized fiber. Admission uses the "
-            "Graver work, coordinate, and result-size limits."
+            "the same generator axis; it admits the one-row, at-most-five-column "
+            "enumeration and arbitrary matrices of at most 12 rows and columns "
+            "when their integer kernel has nullity at most one. This is a global "
+            "guarantee, unlike connectivity of any one materialized fiber."
         ),
         request_type=IntegerConfigurationMarkovBasisRequest,
         result_type=IntegerConfigurationMarkovBasis,

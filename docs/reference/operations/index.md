@@ -21,3 +21,4 @@ that need more context than an operation card:
 - [Exact trigonometric-rational normalization](trigonometric-rational.md)
 - [Prime-field homogeneous fixed subspaces](prime-field-homogeneous-fixed-subspaces.md)
 - [Affine-semigroup Hilbert bases](affine-semigroup-hilbert-bases.md)
+- [Integer-configuration Graver bases](integer-configuration-graver-bases.md)

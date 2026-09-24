@@ -122,6 +122,20 @@ def test_forged_cells_are_revalidated_before_sort_dimension_or_digit_work():
         )
 
 
+def test_huge_endpoint_bit_length_is_rejected_before_cell_model_validation(monkeypatch):
+    def fail_if_validated(*_args, **_kwargs):
+        raise AssertionError("large endpoint reached CubicalCell validation")
+
+    monkeypatch.setattr(CubicalCell, "model_validate", fail_if_validated)
+    huge = 1 << 100_000
+    forged = CubicalCell.model_construct(intervals=((huge, huge + 1),))
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        operations.boundary_subcomplex((forged,))
+    assert error.value.errors()[0]["type"] == (
+        "cubical_complex.boundary_subcomplex_coordinate_bound"
+    )
+
+
 def test_non_pure_check_uses_exact_face_closure_and_roundtrips_result():
     square = _cell((0, 1), (0, 1))
     result = operations.boundary_subcomplex((square,))

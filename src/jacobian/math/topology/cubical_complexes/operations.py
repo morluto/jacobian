@@ -403,6 +403,17 @@ def boundary_subcomplex(
                 code="cubical_complex.boundary_subcomplex_invalid_cell",
                 message="generators must have bounded axes and strict integer endpoints",
             )
+        if any(
+            _coordinate_digit_count(endpoint)
+            > MAX_CUBICAL_BOUNDARY_SUBCOMPLEX_COORDINATE_DIGITS
+            for interval in intervals
+            for endpoint in interval
+        ):
+            raise OperationResourceAdmissionError(
+                location=("cells",),
+                code="cubical_complex.boundary_subcomplex_coordinate_bound",
+                message="coordinates exceed the boundary-subcomplex digit bound",
+            )
         try:
             validated_cells.append(
                 CubicalCell.model_validate({"intervals": intervals})

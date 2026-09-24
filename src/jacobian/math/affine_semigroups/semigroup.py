@@ -797,7 +797,7 @@ def _canonical_graph_moves(
 def _graph_components(
     vertex_count: int, edges: set[tuple[int, int]]
 ) -> tuple[tuple[int, ...], ...]:
-    adjacency = [set() for _ in range(vertex_count)]
+    adjacency: list[set[int]] = [set() for _ in range(vertex_count)]
     for left, right in edges:
         adjacency[left].add(right)
         adjacency[right].add(left)

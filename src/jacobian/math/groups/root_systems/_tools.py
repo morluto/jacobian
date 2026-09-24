@@ -41,6 +41,7 @@ from jacobian.math.groups.root_systems._models import (
     WeylElementLengthResult,
     WeylElementOrderResult,
     WeylElementRequest,
+    WeylElementWeightActionRequest,
     WeylExponentsResult,
     WeylGroupOrderResult,
     WeylLongestElementResult,
@@ -85,6 +86,7 @@ from jacobian.math.groups.root_systems.operations import (
     weyl_weight_orbit,
     weyl_word_act_on_root_vector,
 )
+from jacobian.math.groups.root_systems.weight_actions import weyl_element_act_on_weight
 from jacobian.math.groups.root_systems.weyl_dimension import weyl_dimension
 from jacobian.math.polynomials._models import IntegerPolynomial
 
@@ -213,6 +215,12 @@ def _run_weyl_element_compose(request: WeylElementComposeRequest) -> WeylElement
 
 def _run_weyl_element_inverse(request: WeylElementInverseRequest) -> WeylElement:
     return weyl_element_inverse(request.element)
+
+
+def _run_weyl_element_weight_action(
+    request: WeylElementWeightActionRequest,
+) -> WeightLatticeVector:
+    return weyl_element_act_on_weight(request)
 
 
 def _run_weyl_element_descents(
@@ -1072,6 +1080,68 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                             "entries": [["1", "0"], ["0", "1"]],
                         },
                     }
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="weyl_group.element.act_on_weight.compute",
+        title="Apply a Weyl element to an exact weight vector",
+        description=(
+            "Apply a parent-bound finite Weyl element to a weight-lattice "
+            "vector in the same ordered Cartan datum. The result is the "
+            "canonical weight-lattice value in fundamental-weight coordinates; "
+            "the action is induced from the element's exact root-lattice matrix."
+        ),
+        request_type=WeylElementWeightActionRequest,
+        result_type=WeightLatticeVector,
+        run=_run_weyl_element_weight_action,
+        tags=("algebra", "root-system", "weyl-group", "weight", "action", "exact"),
+        discovery_terms=(
+            "Weyl element act on weight vector",
+            "Weyl group action on fundamental weight coordinates",
+            "apply Weyl transformation to weight lattice value",
+        ),
+        examples=(
+            OperationExample(
+                name="a2_simple_reflection_on_fundamental_weight",
+                description=(
+                    "Apply s0 to the first fundamental weight of A2. Since "
+                    "alpha0=(2,-1) in fundamental-weight coordinates, the "
+                    "image is (-1,1)."
+                ),
+                input={
+                    "element": {
+                        "matrix": _A2["matrix"],
+                        "root_action": {
+                            "domain": "ZZ",
+                            "row_count": 2,
+                            "column_count": 2,
+                            "entries": [["-1", "1"], ["0", "1"]],
+                        },
+                    },
+                    "weight": {
+                        "datum": {
+                            "cartan_matrix": _A2["matrix"],
+                            "symmetrizer": [
+                                {"num": "1", "den": "1"},
+                                {"num": "1", "den": "1"},
+                            ],
+                            "root_to_weight": {
+                                "domain": "ZZ",
+                                "row_count": 2,
+                                "column_count": 2,
+                                "entries": [["2", "-1"], ["-1", "2"]],
+                            },
+                            "coroot_to_coweight": {
+                                "domain": "ZZ",
+                                "row_count": 2,
+                                "column_count": 2,
+                                "entries": [["2", "-1"], ["-1", "2"]],
+                            },
+                        },
+                        "coordinates": [1, 0],
+                    },
                 },
             ),
         ),

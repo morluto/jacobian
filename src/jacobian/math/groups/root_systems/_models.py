@@ -1126,6 +1126,13 @@ class WeylElementInverseRequest(StrictModel):
     element: WeylElement
 
 
+class WeylElementWeightActionRequest(StrictModel):
+    """Apply one Weyl element to an exact weight-lattice value."""
+
+    element: WeylElement
+    weight: WeightLatticeVector
+
+
 class WeylVectorActionRequest(WeylElementRequest):
     """Apply a bounded Weyl word to a vector in the simple-root basis."""
 

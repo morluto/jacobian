@@ -1,0 +1,179 @@
+"""Exact Weyl actions on parent-bound weight-lattice values."""
+
+from __future__ import annotations
+
+from fractions import Fraction
+
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
+from jacobian.math.groups.root_systems._models import (
+    MAX_LATTICE_OUTPUT_COORDINATE_BITS,
+    MAX_POSITIVE_ROOTS,
+    MAX_RANK,
+    WeightLatticeVector,
+    WeylElement,
+    WeylElementWeightActionRequest,
+)
+from jacobian.math.groups.root_systems.operations import (
+    _admit_lattice_coordinates,
+    _admit_weyl_element_value,
+    _as_cartan,
+    _canonical_lattice_vector,
+)
+
+MAX_WEYL_WEIGHT_ACTION_WORK = 150_000
+MAX_WEYL_WEIGHT_ACTION_OUTPUT_BYTES = 8_192
+
+
+def _matrix_inverse(
+    matrix: tuple[tuple[int, ...], ...],
+) -> tuple[tuple[Fraction, ...], ...]:
+    rank = len(matrix)
+    augmented = [
+        [Fraction(value) for value in row]
+        + [Fraction(int(row_index == column)) for column in range(rank)]
+        for row_index, row in enumerate(matrix)
+    ]
+    for column in range(rank):
+        pivot = next(
+            (row for row in range(column, rank) if augmented[row][column]), None
+        )
+        if pivot is None:
+            raise OperationDomainValidationError(
+                location=("element", "matrix"),
+                code="root_system.weight_action_singular_cartan",
+                message="the finite Cartan matrix must be invertible",
+            )
+        augmented[column], augmented[pivot] = augmented[pivot], augmented[column]
+        scale = augmented[column][column]
+        augmented[column] = [value / scale for value in augmented[column]]
+        for row in range(rank):
+            if row == column:
+                continue
+            scale = augmented[row][column]
+            if scale:
+                augmented[row] = [
+                    left - scale * right
+                    for left, right in zip(
+                        augmented[row], augmented[column], strict=True
+                    )
+                ]
+    return tuple(tuple(row[rank:]) for row in augmented)
+
+
+def _multiply(
+    left: tuple[tuple[int, ...] | tuple[Fraction, ...], ...],
+    right: tuple[tuple[int, ...] | tuple[Fraction, ...], ...],
+) -> tuple[tuple[Fraction, ...], ...]:
+    rank = len(left)
+    return tuple(
+        tuple(
+            sum(
+                (Fraction(left[row][inner]) * right[inner][column]
+                 for inner in range(rank)),
+                Fraction(0),
+            )
+            for column in range(rank)
+        )
+        for row in range(rank)
+    )
+
+
+def _weight_action_matrix(
+    cartan: tuple[tuple[int, ...], ...],
+    root_action: tuple[tuple[int, ...], ...],
+) -> tuple[tuple[int, ...], ...]:
+    """Conjugate root action through Q -> P, whose matrix is the Cartan matrix."""
+    inverse = _matrix_inverse(cartan)
+    cartan_root_action = _multiply(cartan, root_action)
+    rational = _multiply(cartan_root_action, inverse)
+    if any(value.denominator != 1 for row in rational for value in row):
+        raise OperationDomainValidationError(
+            location=("element", "root_action"),
+            code="root_system.invalid_weight_action",
+            message="the root action must preserve the integral weight lattice",
+        )
+    return tuple(tuple(int(value) for value in row) for row in rational)
+
+
+def weyl_element_act_on_weight(
+    request: WeylElementWeightActionRequest,
+) -> WeightLatticeVector:
+    """Return the exact image in the same ordered fundamental-weight lattice."""
+    if not isinstance(request, WeylElementWeightActionRequest):
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="root_system.weyl_weight_action_request_type",
+            message="request must bind a Weyl element and weight-lattice vector",
+        )
+    element, weight = request.element, request.weight
+    if not isinstance(element, WeylElement):
+        raise OperationDomainValidationError(
+            location=("element",),
+            code="root_system.invalid_weyl_element",
+            message="element must be a typed finite Weyl-group value",
+        )
+    cartan = _as_cartan(element.matrix)
+    rows = cartan.entries
+    # Re-admission closes at most 120 positive roots, checks each image, then
+    # performs at most one inverse and matrix product per length descent. Count
+    # root closure, root-image checks, every descent, datum canonicalization,
+    # and the induced weight-matrix work at the maximum supported rank.
+    work = (
+        2 * MAX_POSITIVE_ROOTS * MAX_RANK**2
+        + 2 * (MAX_POSITIVE_ROOTS + 1) * MAX_RANK**3
+        + 6 * MAX_RANK**3
+        + 20 * MAX_RANK**2
+    )
+    if work > MAX_WEYL_WEIGHT_ACTION_WORK:
+        raise OperationResourceAdmissionError(
+            location=("element",),
+            code="root_system.weyl_weight_action_work_bound",
+            message="exact weight-action validation and matrix work exceed the admitted bound",
+        )
+    root_action = _admit_weyl_element_value(element)
+    datum, coordinates = _canonical_lattice_vector(
+        weight, WeightLatticeVector, output_bound=True
+    )
+    if datum.cartan_matrix != cartan:
+        raise OperationDomainValidationError(
+            location=("weight", "datum"),
+            code="root_system.weyl_weight_parent_mismatch",
+            message="the Weyl element and weight must use the same ordered Cartan datum",
+        )
+
+    rank = len(cartan)
+    action = _weight_action_matrix(rows, root_action)
+    max_coordinate = max((abs(value) for value in coordinates), default=0)
+    coordinate_bound = max(
+        (
+            sum(abs(action[row][column]) for column in range(rank))
+            * max_coordinate
+            for row in range(rank)
+        ),
+        default=0,
+    )
+    if coordinate_bound.bit_length() > MAX_LATTICE_OUTPUT_COORDINATE_BITS:
+        raise OperationResourceAdmissionError(
+            location=("weight",),
+            code="root_system.weyl_weight_action_output_bound",
+            message="some exact weight-action coordinate may exceed the output bound",
+        )
+    output_bytes_bound = rank * 48 + 3 * rank**2 * 16 + 1_024
+    if output_bytes_bound > MAX_WEYL_WEIGHT_ACTION_OUTPUT_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("weight",),
+            code="root_system.weyl_weight_action_output_bytes",
+            message="the exact weight-action result exceeds the output-byte bound",
+        )
+
+    image = tuple(
+        sum(action[row][column] * coordinates[column] for column in range(rank))
+        for row in range(rank)
+    )
+    _admit_lattice_coordinates(image, rank, output=True)
+    return WeightLatticeVector.model_construct(
+        datum=datum, coordinates=image
+    )

@@ -906,7 +906,9 @@ def compose_maps(  # noqa: C901
                 continue
             if use_monomial_path:
                 prepared_numerator = prepared_component.numerator
-                prepared_numerator_denominator = prepared_component.numerator_denominator
+                prepared_numerator_denominator = (
+                    prepared_component.numerator_denominator
+                )
                 prepared_denominator = prepared_component.denominator
                 prepared_denominator_denominator = (
                     prepared_component.denominator_denominator
@@ -928,19 +930,13 @@ def compose_maps(  # noqa: C901
             if q_num.is_zero:
                 _reject_undefined_outer_denominator()
             pending_identities.add(identity)
-            pending_rows.append(
-                (identity, outer_component, p_num, p_den, q_num, q_den)
-            )
-            normalization_pairs.extend(
-                ((q_num, q_den), (p_num * q_den, p_den * q_num))
-            )
+            pending_rows.append((identity, outer_component, p_num, p_den, q_num, q_den))
+            normalization_pairs.extend(((q_num, q_den), (p_num * q_den, p_den * q_num)))
         if not normalization_pairs:
             continue
         request_checkpoint("before rational map composition normalization batch")
         try:
-            normalized = normalize_admitted_fractions(
-                tuple(normalization_pairs), xvars
-            )
+            normalized = normalize_admitted_fractions(tuple(normalization_pairs), xvars)
         except KernelBatchInputLimitError:
             # Batching is an execution optimization. A large aggregate request
             # falls back to the already admitted exact single-row worker path.
@@ -948,9 +944,7 @@ def compose_maps(  # noqa: C901
                 _normalize_fraction(numerator, denominator, xvars)
                 for numerator, denominator in normalization_pairs
             )
-        for row_index, (identity, _component, *_polynomials) in enumerate(
-            pending_rows
-        ):
+        for row_index, (identity, _component, *_polynomials) in enumerate(pending_rows):
             request_checkpoint("after rational map composition normalization row")
             denominator_value = normalized[2 * row_index]
             outer_guard = _monic_guard(denominator_value)

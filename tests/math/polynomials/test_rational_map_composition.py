@@ -450,7 +450,9 @@ def test_catalog_composition_batches_source_recognition_and_normalization(
     recognize = composition_ops.recognize_canonical_rational_functions
     normalize = normalize_admitted_fractions
 
-    def record_recognition(candidates: tuple[object, ...], *, deadline: float) -> object:
+    def record_recognition(
+        candidates: tuple[object, ...], *, deadline: float
+    ) -> object:
         recognition_calls.append(len(candidates))
         return recognize(candidates, deadline=deadline)  # type: ignore[arg-type]
 
@@ -508,8 +510,7 @@ def test_composition_normalization_batches_respect_row_limit_and_output_order(
 
     assert batch_sizes == [16, 2]
     assert result.composite.components == tuple(
-        _rf(((index + 1) * x - index) / (2 * x - 1), (x,))
-        for index in range(9)
+        _rf(((index + 1) * x - index) / (2 * x - 1), (x,)) for index in range(9)
     )
     assert len(result.construction_locus_guard) == 2
 

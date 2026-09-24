@@ -78,14 +78,14 @@ def _is_zero(value: RationalCyclotomicElement) -> bool:
 
 def _require_inflation_map(
     inclusion: ModularCharacterSpaceInclusion,
-) -> None:
+) -> ModularCharacterSpaceInclusion:
     if type(inclusion) is not ModularCharacterSpaceInclusion:
         _domain("character transport requires a canonical explicit inclusion value")
     try:
         inclusion = ModularCharacterSpaceInclusion.model_validate(
-            inclusion.model_dump()
+            inclusion.model_dump(warnings=False)
         )
-    except (TypeError, ValueError) as error:
+    except (AttributeError, TypeError, ValueError) as error:
         raise OperationDomainValidationError(
             location=("inclusion",),
             code="modular_form.character_inclusion_invalid",
@@ -129,7 +129,9 @@ def _require_inflation_map(
         source_char.group.modulus != source.level
         or target_char.group.modulus != target.level
     ):
-        _domain("character inflation moduli must bind their exact source and target levels")
+        _domain(
+            "character inflation moduli must bind their exact source and target levels"
+        )
     # Prove the authored map is pullback along residue reduction, on every
     # target unit. This is bounded by the admitted target level (at most 39).
     for residue in range(target.level):
@@ -143,16 +145,30 @@ def _require_inflation_map(
                 code="modular_form.character_inflation_mismatch",
                 message="target character is not the explicit inflation of the source character",
             )
-    return
+    return inclusion
+
+
+def _canonical_transport_form(
+    form: ModularFormCoordinates | ModularCharacterCoordinates,
+) -> ModularFormCoordinates | ModularCharacterCoordinates:
+    if type(form) not in (ModularFormCoordinates, ModularCharacterCoordinates):
+        _domain("character transport requires a canonical character coordinate form")
+    try:
+        return type(form).model_validate(form.model_dump(warnings=False))
+    except (AttributeError, TypeError, ValueError) as error:
+        raise OperationDomainValidationError(
+            location=("form",),
+            code="modular_form.character_coordinates_invalid",
+            message="character coordinate form is malformed",
+        ) from error
 
 
 def _admit_transport(
     form: ModularFormCoordinates | ModularCharacterCoordinates,
     inclusion: ModularCharacterSpaceInclusion,
 ) -> _AdmittedTransport:
-    _require_inflation_map(inclusion)
-    if type(form) not in (ModularFormCoordinates, ModularCharacterCoordinates):
-        _domain("character transport requires a canonical character coordinate form")
+    inclusion = _require_inflation_map(inclusion)
+    form = _canonical_transport_form(form)
     if form.space != inclusion.source_space:
         _domain("source form parent must equal the explicit inclusion source")
     source_space = inclusion.source_space
@@ -176,7 +192,9 @@ def _admit_transport(
             or type(form.coordinates[0]) is not RationalCyclotomicElement
             or form.coordinates[0].field != field
         ):
-            _domain("legacy character coordinates are admitted only in the level-13 cusp source")
+            _domain(
+                "legacy character coordinates are admitted only in the level-13 cusp source"
+            )
         for coordinate in form.coordinates:
             cyclotomic._validate_element(coordinate)
     else:
@@ -185,9 +203,14 @@ def _admit_transport(
             or len(form.coordinates) != source_cusp
             or source_space.level == 13
         ):
-            _domain("general character coordinates must match a level-26 or level-39 cusp basis")
+            _domain(
+                "general character coordinates must match a level-26 or level-39 cusp basis"
+            )
         for coordinate in form.coordinates:
-            if type(coordinate) is not RationalCyclotomicElement or coordinate.field != field:
+            if (
+                type(coordinate) is not RationalCyclotomicElement
+                or coordinate.field != field
+            ):
                 _domain("every character coordinate must use the exact declared field")
             cyclotomic._validate_element(coordinate)
 
@@ -220,11 +243,12 @@ def _admit_transport(
     target_expansion_digits = (
         source_expansion_digits
         if same_space
-        else _linear_combination_digit_bound(
-            source_expansion_digits, target_cusp
-        )
+        else _linear_combination_digit_bound(source_expansion_digits, target_cusp)
     )
-    if max(source_expansion_digits, target_expansion_digits) > MAX_CYCLIC_FIELD_ELEMENT_DIGITS:
+    if (
+        max(source_expansion_digits, target_expansion_digits)
+        > MAX_CYCLIC_FIELD_ELEMENT_DIGITS
+    ):
         raise OperationResourceAdmissionError(
             location=("form",),
             code="modular_form.character_transport_height_admission",
@@ -322,9 +346,7 @@ def _coordinates_from_prefix(
 
 
 def _linear_combination_from_coordinates(coordinates, basis):
-    return _expand_coordinate_tuple(
-        coordinates, basis, basis.space.coefficient_domain
-    )
+    return _expand_coordinate_tuple(coordinates, basis, basis.space.coefficient_domain)
 
 
 def _transport_from_bases(
@@ -380,18 +402,22 @@ def modular_character_coordinates_transport(
     return result
 
 
-def _revalidate_transport(value: ModularCharacterTransportedForm) -> _AdmittedTransport:
+def _revalidate_transport(
+    value: ModularCharacterTransportedForm,
+) -> tuple[ModularCharacterTransportedForm, _AdmittedTransport]:
     if type(value) is not ModularCharacterTransportedForm:
         _domain("global character equality requires canonical transported forms")
     try:
-        value = ModularCharacterTransportedForm.model_validate(value.model_dump())
-    except (TypeError, ValueError) as error:
+        value = ModularCharacterTransportedForm.model_validate(
+            value.model_dump(warnings=False)
+        )
+    except (AttributeError, TypeError, ValueError) as error:
         raise OperationDomainValidationError(
             location=("form",),
             code="modular_form.character_transport_value_invalid",
             message="transported character form is malformed",
         ) from error
-    return _admit_transport(value.source_form, value.inclusion)
+    return value, _admit_transport(value.source_form, value.inclusion)
 
 
 def modular_character_coordinates_equal_in_common_space(
@@ -399,8 +425,8 @@ def modular_character_coordinates_equal_in_common_space(
     right: ModularCharacterTransportedForm,
 ) -> ModularCharacterEqualityResult:
     """Decide equality after validating both explicit maps into one target."""
-    left_admitted = _revalidate_transport(left)
-    right_admitted = _revalidate_transport(right)
+    left, left_admitted = _revalidate_transport(left)
+    right, right_admitted = _revalidate_transport(right)
     target = left_admitted.inclusion.target_space
     if right_admitted.inclusion.target_space != target:
         raise OperationDomainValidationError(
@@ -409,7 +435,9 @@ def modular_character_coordinates_equal_in_common_space(
             message="both forms must land in the identical common target space",
         )
     if left_admitted.field != right_admitted.field:
-        _domain("common-target character equality requires the identical coefficient field")
+        _domain(
+            "common-target character equality requires the identical coefficient field"
+        )
     request_checkpoint("before common character target basis materialization")
     target_basis = _basis(
         target,

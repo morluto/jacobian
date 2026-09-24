@@ -50,7 +50,9 @@ _LEGACY_BASIS = "gamma0-13-even-order6-character-sturm-v1"
 
 def _inflate(source_character, target_level: int):
     target_group = character_group(target_level)
-    for coordinates in product(*(range(order) for order in target_group.generator_orders)):
+    for coordinates in product(
+        *(range(order) for order in target_group.generator_orders)
+    ):
         target_character = dirichlet_character(target_group, coordinates)
         if all(
             dirichlet_character_value(target_character, residue).value
@@ -123,7 +125,10 @@ def test_transport_retains_inflation_and_exact_target_sturm_prefix() -> None:
     assert transported.target_form.coordinates == (_element(1), _element(-1, -1))
     assert len(transported.target_q_expansion.coefficients) == 8
     assert [
-        tuple((coefficient.num, coefficient.den) for coefficient in term.coefficients_ascending)
+        tuple(
+            (coefficient.num, coefficient.den)
+            for coefficient in term.coefficients_ascending
+        )
         for term in transported.target_q_expansion.coefficients
     ] == [
         ((0, 1), (0, 1)),
@@ -135,9 +140,12 @@ def test_transport_retains_inflation_and_exact_target_sturm_prefix() -> None:
         ((4, 1), (-2, 1)),
         ((0, 1), (0, 1)),
     ]
-    assert TypeAdapter(ModularCharacterTransportedForm).validate_json(
-        transported.model_dump_json()
-    ) == transported
+    assert (
+        TypeAdapter(ModularCharacterTransportedForm).validate_json(
+            transported.model_dump_json()
+        )
+        == transported
+    )
     assert Catalog.open().operation(
         "modular_form.character_coordinates.transport.compute"
     )
@@ -207,7 +215,9 @@ def test_transport_rejects_wrong_inflation_and_nonidentity_field_map() -> None:
     wrong_character = dirichlet_character(character_group(26), (10,))
     wrong_character_space = _space(26, wrong_character)
     bad_map = _inclusion(source_space, wrong_character_space)
-    with pytest.raises(OperationDomainValidationError, match="not the explicit inflation"):
+    with pytest.raises(
+        OperationDomainValidationError, match="not the explicit inflation"
+    ):
         modular_character_coordinates_transport(_level_13_form(source_space), bad_map)
 
     larger_field = RationalCyclotomicField(order=12)
@@ -245,9 +255,78 @@ def test_transport_request_model_round_trip() -> None:
         form=_level_13_form(source_space),
         inclusion=_inclusion(source_space, target_space),
     )
-    assert TypeAdapter(ModularCharacterCoordinatesTransportRequest).validate_json(
-        request.model_dump_json()
-    ) == request
+    assert (
+        TypeAdapter(ModularCharacterCoordinatesTransportRequest).validate_json(
+            request.model_dump_json()
+        )
+        == request
+    )
+
+
+def test_transport_rejects_malformed_constructed_inclusion_with_typed_error() -> None:
+    source_character = dirichlet_character(character_group(13), (2,))
+    source_space = _space(13, source_character)
+    target_space = _space(26, _inflate(source_character, 26))
+    inclusion = _inclusion(source_space, target_space)
+    malformed_source = source_space.model_dump()
+    malformed_source["level"] = "13"
+    forged_inclusion = inclusion.model_copy(update={"source_space": malformed_source})
+
+    with pytest.raises(OperationDomainValidationError) as error:
+        modular_character_coordinates_transport(
+            _level_13_form(source_space), forged_inclusion
+        )
+
+    assert error.value.errors()[0]["type"] == "modular_form.character_inclusion_invalid"
+
+
+def test_transport_rejects_malformed_constructed_form_with_typed_error() -> None:
+    source_character = dirichlet_character(character_group(13), (2,))
+    source_space = _space(13, source_character)
+    target_space = _space(26, _inflate(source_character, 26))
+    malformed_space = source_space.model_dump()
+    malformed_space["level"] = "13"
+    forged_form = _level_13_form(source_space).model_copy(
+        update={"space": malformed_space}
+    )
+
+    with pytest.raises(OperationDomainValidationError) as error:
+        modular_character_coordinates_transport(
+            forged_form, _inclusion(source_space, target_space)
+        )
+
+    assert (
+        error.value.errors()[0]["type"] == "modular_form.character_coordinates_invalid"
+    )
+
+
+def test_common_equality_rejects_malformed_constructed_transport_with_typed_error() -> (
+    None
+):
+    source_character = dirichlet_character(character_group(13), (2,))
+    source_space = _space(13, source_character)
+    target_space = _space(26, _inflate(source_character, 26))
+    transported = modular_character_coordinates_transport(
+        _level_13_form(source_space), _inclusion(source_space, target_space)
+    )
+    malformed_space = source_space.model_dump()
+    malformed_space["level"] = "13"
+    forged = transported.model_copy(
+        update={
+            "source_form": {
+                **transported.source_form.model_dump(),
+                "space": malformed_space,
+            }
+        }
+    )
+
+    with pytest.raises(OperationDomainValidationError) as error:
+        modular_character_coordinates_equal_in_common_space(forged, transported)
+
+    assert (
+        error.value.errors()[0]["type"]
+        == "modular_form.character_transport_value_invalid"
+    )
 
 
 def test_transport_height_boundary_is_admitted_before_basis_materialization(
@@ -300,14 +379,15 @@ def test_transport_accepts_admitted_height_boundary_through_exact_expansion() ->
     )
 
 
-@pytest.mark.parametrize(("level", "precision", "dimension"), [(13, 3, 1), (13, 8, 1), (13, 10, 1), (26, 8, 2), (26, 10, 2), (39, 10, 3)])
+@pytest.mark.parametrize(
+    ("level", "precision", "dimension"),
+    [(13, 3, 1), (13, 8, 1), (13, 10, 1), (26, 8, 2), (26, 10, 2), (39, 10, 3)],
+)
 @pytest.mark.parametrize("character_coordinate", [2, 10])
 def test_transport_sturm_basis_coefficient_envelope(
     level: int, precision: int, dimension: int, character_coordinate: int
 ) -> None:
-    character = dirichlet_character(
-        character_group(13), (character_coordinate,)
-    )
+    character = dirichlet_character(character_group(13), (character_coordinate,))
     character = _inflate(character, level)
     basis = modular_character_basis_q_expansions(
         _space(level, character), precision=precision

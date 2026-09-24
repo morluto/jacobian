@@ -3,6 +3,7 @@
 import pytest
 
 from jacobian._exact import CanonicalRational
+from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.number_theory.quadratic_forms.general._models import (
     EvaluationRequest,
 )
@@ -102,6 +103,46 @@ def test_empty_form_restricts_to_empty_form() -> None:
 def test_request_rejects_repeated_or_foreign_labels(selected_axis, message) -> None:
     with pytest.raises(ValueError, match=message):
         QuadraticFormRestrictionRequest(form=_form(), selected_axis=selected_axis)
+
+
+def test_restriction_admits_source_axis_at_the_operation_boundary() -> None:
+    wide = RationalQuadraticForm(
+        axis=tuple(f"x{i}" for i in range(129)),
+        diagonal_coefficients=(_r(1),) * 129,
+    )
+    request = QuadraticFormRestrictionRequest(form=wide, selected_axis=("x0",))
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        quadratic_form_restrict_coordinates(request)
+    assert (
+        error.value.errors()[0]["type"]
+        == "quadratic_form.coordinate_restriction_axis_bound"
+    )
+
+
+def test_constructed_restriction_request_admits_support_at_the_kernel() -> None:
+    dense = RationalQuadraticForm(
+        axis=tuple(f"x{i}" for i in range(91)),
+        diagonal_coefficients=(_r(1),) * 91,
+        cross_terms=tuple(
+            QuadraticCrossTerm(left=left, right=right, coefficient=_r(1))
+            for left in range(91)
+            for right in range(left + 1, 91)
+        ),
+    )
+    assert (
+        len(dense.diagonal_coefficients) + len(dense.cross_terms)
+        == 91 + 91 * 90 // 2
+        > 4_096
+    )
+    request = QuadraticFormRestrictionRequest.model_construct(
+        form=dense, selected_axis=("x0",)
+    )
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        quadratic_form_restrict_coordinates(request)
+    assert (
+        error.value.errors()[0]["type"]
+        == "quadratic_form.coordinate_restriction_support_bound"
+    )
 
 
 def test_deserialization_rejects_inclusion_that_does_not_select_declared_axes() -> None:

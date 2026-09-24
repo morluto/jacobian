@@ -46,54 +46,37 @@ def direct_sum_output_digit_upper_bound(
 
 
 class QuadraticFormDirectSumRequest(StrictModel):
-    """An ordered finite family of rational forms to sum orthogonally."""
+    """An ordered finite family of rational forms to sum orthogonally.
+
+    The aggregate axis and support envelopes are semantic admission and run
+    once at the operation boundary in ``require_direct_sum_budget``; a
+    schema-valid family outside the envelope is parsed here and rejected as
+    the operation's admission error, including natively constructed
+    requests.
+    """
 
     forms: tuple[RationalQuadraticForm, ...] = Field(
         max_length=MAX_DIRECT_SUM_COMPONENTS
     )
 
-    @model_validator(mode="after")
-    def admit_aggregate_shape(self) -> Self:
-        dimension = sum(len(form.axis) for form in self.forms)
-        support = sum(
-            len(form.diagonal_coefficients) + len(form.cross_terms)
-            for form in self.forms
-        )
-        if dimension > MAX_DIRECT_SUM_AXIS:
-            raise ValueError(
-                "quadratic-form direct sum exceeds the aggregate axis bound"
-            )
-        if support > MAX_DIRECT_SUM_FORM_TERMS:
-            raise ValueError(
-                "quadratic-form direct sum exceeds the aggregate support bound"
-            )
-        # The kernel's output is exactly the retained coefficients and 0/1
-        # block maps, so the axis and support cardinality envelopes already
-        # bound the aggregate output digits below MAX_DIRECT_SUM_OUTPUT_DIGITS;
-        # the result constructor re-establishes the bound for deserialized
-        # values whose map entries are caller supplied.
-        return self
-
 
 class QuadraticFormRestrictionRequest(StrictModel):
-    """Restrict a rational form to an ordered coordinate subset."""
+    """Restrict a rational form to an ordered coordinate subset.
+
+    The source axis and support envelopes run once at the operation boundary
+    in ``require_direct_sum_budget``; only the coordinate-subset relation is
+    checked here.
+    """
 
     form: RationalQuadraticForm
     selected_axis: tuple[OpaqueLabel, ...] = Field(max_length=MAX_DIRECT_SUM_AXIS)
 
     @model_validator(mode="after")
-    def admit_coordinate_subset(self) -> Self:
-        if len(self.form.axis) > MAX_DIRECT_SUM_AXIS:
-            raise ValueError("quadratic-form restriction exceeds the axis bound")
+    def require_coordinate_subset(self) -> Self:
         if len(set(self.selected_axis)) != len(self.selected_axis):
             raise ValueError("selected quadratic-form coordinates must be unique")
         if any(label not in self.form.axis for label in self.selected_axis):
             raise ValueError("selected coordinates must belong to the source axis")
-        support = len(self.form.diagonal_coefficients) + len(self.form.cross_terms)
-        if support > MAX_DIRECT_SUM_FORM_TERMS:
-            raise ValueError("quadratic-form restriction exceeds the support bound")
-        # As above, the axis and support envelopes bound the restricted
-        # output's aggregate digits; see the result constructor.
         return self
 
 

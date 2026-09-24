@@ -34,17 +34,22 @@ from typing import TypedDict
 from sympy import Rational
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
+from jacobian.canonical import CanonicalLimits
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
 from jacobian.math.geometry.polytopes._models import (
     RationalCoordinateSpace,
+    RationalPolytopeVertex,
     RationalVPolytope,
 )
 from jacobian.math.geometry.polytopes._polyhedral_conversion import rational_rank
 from jacobian.math.geometry.polytopes._rational_geometry import vertices_from_halfspaces
 from jacobian.math.geometry.polytopes.complexes._models import (
+    MAX_AFFINE_TRANSFORM_COMPONENT_DIGITS,
+    MAX_AFFINE_TRANSFORM_OUTPUT_BYTES,
+    MAX_AFFINE_TRANSFORM_WORK,
     MAX_COMPLEX_CELLS,
     MAX_COMPLEX_COORDINATE_DIGITS,
     MAX_COMPLEX_COVER_RELATIONS,
@@ -52,26 +57,44 @@ from jacobian.math.geometry.polytopes.complexes._models import (
     MAX_COMPLEX_FACE_ENUMERATION_WORK,
     MAX_COMPLEX_INTERSECTION_WORK,
     MAX_COMPLEX_TOTAL_FACES,
+    CommonRefinementRequest,
+    CommonRefinementResult,
+    ComplexCellTransport,
     ComplexFace,
+    ComplexFaceTransport,
     ComplexPoint,
     FaceCoverRelation,
     MaximalCellRecord,
     PairwiseIntersectionRecord,
+    PolytopalComplexAffineTransformRequest,
+    PolytopalComplexAffineTransformResult,
     PolytopalComplexClosureResult,
     SourceCellTransport,
 )
 from jacobian.math.geometry.polytopes.complexes._spline import (
+    piecewise_polynomial_add,
     piecewise_polynomial_evaluate,
     piecewise_polynomial_from_maximal_pieces,
+    piecewise_polynomial_multiply,
+    piecewise_polynomial_smoothness,
+    spline_dimension,
+    spline_evaluate,
     spline_space,
 )
 from jacobian.math.geometry.polytopes.operations import facet_incidence
 from jacobian.math.geometry.polytopes.values import Vertex
 
 __all__ = [
+    "piecewise_polynomial_add",
     "piecewise_polynomial_evaluate",
     "piecewise_polynomial_from_maximal_pieces",
+    "piecewise_polynomial_multiply",
+    "piecewise_polynomial_smoothness",
+    "polytopal_complex_affine_transform",
     "polytopal_complex_closure",
+    "polytopal_complex_common_refinement",
+    "spline_dimension",
+    "spline_evaluate",
     "spline_space",
 ]
 
@@ -654,3 +677,268 @@ def polytopal_complex_closure(
         reduced_euler_characteristic=euler_characteristic - 1,
         component_count=components.count(),
     )
+
+
+def _rational_digits(value: Fraction) -> int:
+    return max(len(str(abs(value.numerator))), len(str(value.denominator)))
+
+
+def _determinant(matrix: Sequence[Sequence[Fraction]]) -> Fraction:
+    """Compute a small exact determinant by fraction-preserving elimination."""
+    work = [list(row) for row in matrix]
+    determinant = Fraction(1)
+    for column in range(len(work)):
+        pivot = next(
+            (row for row in range(column, len(work)) if work[row][column]), None
+        )
+        if pivot is None:
+            return Fraction(0)
+        if pivot != column:
+            work[column], work[pivot] = work[pivot], work[column]
+            determinant = -determinant
+        pivot_value = work[column][column]
+        determinant *= pivot_value
+        for row in range(column + 1, len(work)):
+            if not work[row][column]:
+                continue
+            multiplier = work[row][column] / pivot_value
+            for entry in range(column + 1, len(work)):
+                work[row][entry] -= multiplier * work[column][entry]
+            work[row][column] = Fraction(0)
+    return determinant
+
+
+def _affine_transport_preflight(
+    request: PolytopalComplexAffineTransformRequest,
+) -> tuple[list[list[Fraction]], list[Fraction]]:
+    """Bound arithmetic and output before rebuilding or transforming geometry."""
+    complex_value = request.complex
+    dimension = len(complex_value.space.axes)
+    matrix = [
+        [Fraction(*entry.as_integer_ratio()) for entry in row] for row in request.matrix
+    ]
+    translation = [Fraction(*entry.as_integer_ratio()) for entry in request.translation]
+    matrix_digits = max(_rational_digits(value) for row in matrix for value in row)
+    translation_digits = max(_rational_digits(value) for value in translation)
+    source_points = tuple(
+        vertex.coordinates
+        for cell in complex_value.maximal_cells
+        for vertex in cell.vertices
+    ) + tuple(
+        vertex.coordinates for face in complex_value.faces for vertex in face.vertices
+    )
+    if any(len(point) != dimension for point in source_points):
+        raise OperationDomainValidationError(
+            location=("complex",),
+            code="polytopal_complex.affine_transform_coordinate_dimension",
+            message="every complex point must use exactly the labelled space axes",
+        )
+    coordinate_digits = max(
+        _rational_digits(Fraction(*coordinate.as_integer_ratio()))
+        for point in source_points
+        for coordinate in point
+    )
+    for component, digits in (
+        ("matrix", matrix_digits),
+        ("translation", translation_digits),
+        ("coordinates", coordinate_digits),
+    ):
+        if digits > MAX_COMPLEX_COORDINATE_DIGITS:
+            raise OperationResourceAdmissionError(
+                location=(component,),
+                code="polytopal_complex.affine_transform_input_digits_over_envelope",
+                message=(
+                    f"affine transform {component} exceed the "
+                    f"{MAX_COMPLEX_COORDINATE_DIGITS}-digit input envelope"
+                ),
+            )
+
+    point_count = sum(len(cell.vertices) for cell in complex_value.maximal_cells)
+    face_point_count = sum(len(face.vertices) for face in complex_value.faces)
+    arithmetic_points = point_count + face_point_count
+    work_bound = arithmetic_points * dimension * dimension
+    if work_bound > MAX_AFFINE_TRANSFORM_WORK:
+        raise OperationResourceAdmissionError(
+            location=("complex",),
+            code="polytopal_complex.affine_transform_work_over_envelope",
+            message=(
+                "matrix-coordinate products exceed the "
+                f"{MAX_AFFINE_TRANSFORM_WORK}-operation affine transport envelope"
+            ),
+        )
+
+    # A product uses at most the sum of operand digit lengths. Summing at most
+    # d products and one translation with a common denominator gives this
+    # conservative bound for either reduced numerator or denominator.
+    term_digits = max(matrix_digits + coordinate_digits, translation_digits)
+    output_component_bound = (dimension + 1) * term_digits + dimension
+    if output_component_bound > MAX_AFFINE_TRANSFORM_COMPONENT_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("matrix",),
+            code="polytopal_complex.affine_transform_growth_over_envelope",
+            message=(
+                "the conservative transformed-coordinate height exceeds the "
+                f"{MAX_AFFINE_TRANSFORM_COMPONENT_DIGITS}-digit envelope"
+            ),
+        )
+
+    determinant_digits_bound = (
+        dimension * matrix_digits + math.ceil(math.log10(math.factorial(dimension)))
+        if dimension > 1
+        else matrix_digits
+    )
+    if determinant_digits_bound > MAX_AFFINE_TRANSFORM_COMPONENT_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("matrix",),
+            code="polytopal_complex.affine_transform_determinant_growth_over_envelope",
+            message="the determinant height bound exceeds the affine transport envelope",
+        )
+
+    input_bytes = len(complex_value.model_dump_json())
+    coordinate_slots = 2 * arithmetic_points * dimension
+    output_bound = (
+        2 * input_bytes
+        + coordinate_slots * (2 * output_component_bound + 48)
+        + 256 * (len(complex_value.faces) + len(complex_value.maximal_cells))
+        + 128 * len(complex_value.cover_relations)
+    )
+    if output_bound > min(
+        MAX_AFFINE_TRANSFORM_OUTPUT_BYTES, CanonicalLimits().max_output_bytes
+    ):
+        raise OperationResourceAdmissionError(
+            location=("complex",),
+            code="polytopal_complex.affine_transform_output_over_envelope",
+            message=(
+                "the conservative source, target, and transport output exceeds "
+                f"the {MAX_AFFINE_TRANSFORM_OUTPUT_BYTES}-byte envelope"
+            ),
+        )
+
+    if _determinant(matrix) == 0:
+        raise OperationDomainValidationError(
+            location=("matrix",),
+            code="polytopal_complex.affine_transform_singular",
+            message="an affine complex transport requires an invertible matrix",
+        )
+    return matrix, translation
+
+
+def _affine_image(
+    point: Point,
+    matrix: Sequence[Sequence[Fraction]],
+    translation: Sequence[Fraction],
+) -> Point:
+    return tuple(
+        sum(
+            (matrix[row][column] * point[column] for column in range(len(point))),
+            translation[row],
+        )
+        for row in range(len(point))
+    )
+
+
+def _polytope_from_complex_cell(
+    space: RationalCoordinateSpace, points: Sequence[Point], prefix: str
+) -> RationalVPolytope:
+    ordered = sorted(set(points))
+    return RationalVPolytope(
+        space=space,
+        vertices=tuple(
+            RationalPolytopeVertex(
+                vertex_id=f"{prefix}{index:03d}",
+                coordinates=tuple(
+                    CanonicalRational.from_fraction(value) for value in point
+                ),
+            )
+            for index, point in enumerate(ordered)
+        ),
+    )
+
+
+def polytopal_complex_affine_transform(
+    request: PolytopalComplexAffineTransformRequest,
+) -> PolytopalComplexAffineTransformResult:
+    """Transport a complete complex through one invertible rational affine map."""
+    matrix, translation = _affine_transport_preflight(request)
+    # The incidence ledger is caller-supplied mathematical data. Rebuild it
+    # from source maximal cells before relying on it for face transport.
+    from jacobian.math.geometry.polytopes.complexes._spline import _admit_complex
+
+    source = _admit_complex(request.complex)
+    transformed_point_map: dict[Point, Point] = {}
+    for point in (
+        _point(vertex.coordinates) for face in source.faces for vertex in face.vertices
+    ):
+        if point not in transformed_point_map:
+            image = _affine_image(point, matrix, translation)
+            if any(
+                _rational_digits(coordinate) > MAX_COMPLEX_COORDINATE_DIGITS
+                for coordinate in image
+            ):
+                raise OperationResourceAdmissionError(
+                    location=("matrix",),
+                    code="polytopal_complex.affine_transform_result_digits_over_envelope",
+                    message=(
+                        "a transformed coordinate exceeds the "
+                        f"{MAX_COMPLEX_COORDINATE_DIGITS}-digit complex envelope"
+                    ),
+                )
+            transformed_point_map[point] = image
+    transformed_cells = tuple(
+        _polytope_from_complex_cell(
+            source.space,
+            tuple(
+                transformed_point_map[_point(vertex.coordinates)]
+                for vertex in cell.vertices
+            ),
+            f"t{cell_index:02d}v",
+        )
+        for cell_index, cell in enumerate(source.maximal_cells)
+    )
+    target = polytopal_complex_closure(transformed_cells)
+
+    target_cells_by_source_index = {
+        row.source_index: row.cell_id for row in target.source_cell_map
+    }
+    cell_transport = tuple(
+        ComplexCellTransport(
+            source_cell_id=source_cell.cell_id,
+            target_cell_id=target_cells_by_source_index[index],
+        )
+        for index, source_cell in enumerate(source.maximal_cells)
+    )
+    target_face_by_key = {
+        _canonical_key(
+            _point(vertex.coordinates) for vertex in face.vertices
+        ): face.face_id
+        for face in target.faces
+    }
+    face_transport = tuple(
+        ComplexFaceTransport(
+            source_face_id=face.face_id,
+            target_face_id=target_face_by_key[
+                _canonical_key(
+                    transformed_point_map[_point(vertex.coordinates)]
+                    for vertex in face.vertices
+                )
+            ],
+        )
+        for face in source.faces
+    )
+    return PolytopalComplexAffineTransformResult(
+        source=source,
+        target=target,
+        matrix=request.matrix,
+        translation=request.translation,
+        cell_transport=cell_transport,
+        face_transport=face_transport,
+    )
+
+
+def polytopal_complex_common_refinement(
+    request: CommonRefinementRequest,
+) -> CommonRefinementResult:
+    """Compute an exact support-preserving common refinement."""
+    from jacobian.math.geometry.polytopes.complexes._refinement import common_refinement
+
+    return common_refinement(request)

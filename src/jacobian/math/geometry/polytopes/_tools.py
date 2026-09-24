@@ -32,7 +32,14 @@ from jacobian.math.geometry.polytopes.operations import (
     polytope_vertex_figure,
     polytope_volume,
 )
-from jacobian.math.geometry.polytopes.values import Vertex
+from jacobian.math.geometry.polytopes.polyhedron_conversion import (
+    halfspaces_to_v_presentation,
+)
+from jacobian.math.geometry.polytopes.values import (
+    RationalHPolyhedron,
+    RationalPolyhedronVPresentation,
+    Vertex,
+)
 
 
 def compute_polytope_support(request: PolytopeSupportRequest) -> PolytopeSupportResult:
@@ -90,6 +97,65 @@ def compute_polytope_volume(request: PolytopeVolumeRequest) -> PolytopeVolumeRes
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
+    MathTool(
+        operation_id="polytope.rational.h_to_v.compute",
+        title="Convert an exact rational H-polyhedron to finite points and directions",
+        description=(
+            "Convert inequalities a·x <= b to a serializable exact V-presentation "
+            "containing finite points, oriented recession rays, and lineality directions. "
+            "The value distinguishes empty from nonempty affine, bounded, and unbounded "
+            "polyhedra. Generators are exact but are not promised minimal or canonical. "
+            "Work, coefficient growth, and a conservative result-byte bound are admitted "
+            "before double-description expansion."
+        ),
+        request_type=RationalHPolyhedron,
+        result_type=RationalPolyhedronVPresentation,
+        run=halfspaces_to_v_presentation,
+        tags=("polyhedron", "H-to-V", "exact-rational", "recession-cone"),
+        discovery_terms=(
+            "H to V polyhedron conversion",
+            "rational polyhedron vertices rays lineality",
+        ),
+        examples=(
+            OperationExample(
+                name="unit_square",
+                description="Convert the four defining inequalities of the unit square on ordered axes [x,y].",
+                input={
+                    "space": {"axes": ["x", "y"]},
+                    "inequalities": [
+                        {
+                            "normal": [
+                                {"num": "-1", "den": "1"},
+                                {"num": "0", "den": "1"},
+                            ],
+                            "bound": {"num": "0", "den": "1"},
+                        },
+                        {
+                            "normal": [
+                                {"num": "0", "den": "1"},
+                                {"num": "-1", "den": "1"},
+                            ],
+                            "bound": {"num": "0", "den": "1"},
+                        },
+                        {
+                            "normal": [
+                                {"num": "1", "den": "1"},
+                                {"num": "0", "den": "1"},
+                            ],
+                            "bound": {"num": "1", "den": "1"},
+                        },
+                        {
+                            "normal": [
+                                {"num": "0", "den": "1"},
+                                {"num": "1", "den": "1"},
+                            ],
+                            "bound": {"num": "1", "den": "1"},
+                        },
+                    ],
+                },
+            ),
+        ),
+    ),
     MathTool(
         operation_id="polytope.rational.support.compute",
         title="Compute an exact rational polytope support value",

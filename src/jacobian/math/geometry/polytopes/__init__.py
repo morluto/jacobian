@@ -30,7 +30,17 @@ from jacobian.math.geometry.polytopes.operations import (
     verify_facet_incidence,
     verify_primitive_facet,
 )
-from jacobian.math.geometry.polytopes.values import Halfspace, Vertex
+from jacobian.math.geometry.polytopes.polyhedron_conversion import (
+    halfspaces_to_v_presentation,
+)
+from jacobian.math.geometry.polytopes.values import (
+    Halfspace,
+    RationalAffineHalfspace,
+    RationalHPolyhedron,
+    RationalPolyhedronSpace,
+    RationalPolyhedronVPresentation,
+    Vertex,
+)
 
 __all__ = [
     "EdgeProfileResult",
@@ -43,9 +53,13 @@ __all__ = [
     "PrismVertexMap",
     "PyramidBaseVertexMap",
     "PyramidResult",
+    "RationalAffineHalfspace",
     "RationalCoordinateSpace",
     "RationalCovector",
     "RationalExposedFace",
+    "RationalHPolyhedron",
+    "RationalPolyhedronSpace",
+    "RationalPolyhedronVPresentation",
     "RationalPolytopeVertex",
     "RationalVPolytope",
     "Vertex",
@@ -53,6 +67,7 @@ __all__ = [
     "VertexFigureResult",
     "VertexFigureVertexMap",
     "convex_hull_volume",
+    "halfspaces_to_v_presentation",
     "polytope_edge_profile",
     "polytope_join",
     "polytope_prism",

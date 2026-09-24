@@ -99,6 +99,18 @@ class PolyhedronConversion:
 
 
 @dataclass(frozen=True)
+class _HalfspaceConversionAdmission:
+    """Precomputed, request-local exact-conversion admission plan."""
+
+    dimension: int
+    source_row_count: int
+    homogeneous_rows: tuple[IntegerVector, ...]
+    maximum_rays: int
+    candidate_pairs: int
+    minor_digits: int
+
+
+@dataclass(frozen=True)
 class HullConversion:
     """Facet description and incidence of a finite point hull."""
 
@@ -138,7 +150,7 @@ def dd_work_bound(row_count: int, cone_dimension: int) -> tuple[int, int]:
     return maximum_rays, pairs
 
 
-def require_dd_work_admissible(row_count: int, cone_dimension: int) -> None:
+def require_dd_work_admissible(row_count: int, cone_dimension: int) -> tuple[int, int]:
     """Reject a conversion whose theorem-backed worst case exceeds its budget."""
 
     rays, pairs = dd_work_bound(row_count, cone_dimension)
@@ -148,14 +160,23 @@ def require_dd_work_admissible(row_count: int, cone_dimension: int) -> None:
             f"work bound (at most {rays} rays and {pairs} candidate pairs; "
             f"limits are {MAX_DD_RAY_BOUND} and {MAX_DD_PAIR_BOUND})"
         )
+    return rays, pairs
 
 
 def require_dd_weighted_work_admissible(
-    row_count: int, cone_dimension: int, minor_digits: int
+    row_count: int,
+    cone_dimension: int,
+    minor_digits: int,
+    *,
+    candidate_pairs: int | None = None,
 ) -> None:
     """Couple theorem-backed pair work to conservative integer height."""
 
-    _rays, pairs = dd_work_bound(row_count, cone_dimension)
+    pairs = (
+        dd_work_bound(row_count, cone_dimension)[1]
+        if candidate_pairs is None
+        else candidate_pairs
+    )
     weighted = max(1, pairs) * minor_digits**2
     if weighted > MAX_DD_WEIGHTED_HEIGHT_WORK:
         raise PolyhedralConversionAdmissionError(
@@ -558,12 +579,17 @@ def cone_generators(rows: Sequence[Sequence[int]]) -> ConeConversion:
     )
 
 
-def halfspaces_to_generators(
-    rows: Sequence[tuple[Sequence[object], object]], dimension: int
-) -> PolyhedronConversion:
-    """Convert affine inequalities ``a*x <= b`` to exact affine generators."""
+def _admit_halfspaces_to_generators(
+    rows: Sequence[tuple[Sequence[object], object]],
+    dimension: int,
+    *,
+    maximum_result_minor_digits: int | None = None,
+) -> _HalfspaceConversionAdmission:
+    """Admit DD work and height once, before homogeneous cone expansion."""
 
-    require_dd_work_admissible(len(rows) + 1, dimension + 1)
+    maximum_rays, candidate_pairs = require_dd_work_admissible(
+        len(rows) + 1, dimension + 1
+    )
     minor_digits = require_dd_height_admissible(
         _component_digit_bound(
             [(*coefficients, offset) for coefficients, offset in rows]
@@ -571,7 +597,20 @@ def halfspaces_to_generators(
         dimension,
         affine_halfspaces=True,
     )
-    require_dd_weighted_work_admissible(len(rows) + 1, dimension + 1, minor_digits)
+    if (
+        maximum_result_minor_digits is not None
+        and minor_digits > maximum_result_minor_digits
+    ):
+        raise PolyhedralConversionAdmissionError(
+            "exact generator coefficients can exceed the admitted result-height bound "
+            f"({minor_digits} > {maximum_result_minor_digits} digits)"
+        )
+    require_dd_weighted_work_admissible(
+        len(rows) + 1,
+        dimension + 1,
+        minor_digits,
+        candidate_pairs=candidate_pairs,
+    )
     homogeneous = [
         primitive_homogeneous_halfspace(coefficients, offset)
         for coefficients, offset in rows
@@ -579,7 +618,23 @@ def halfspaces_to_generators(
     # The affine chart is t >= 0.  It distinguishes vertices from recession
     # directions and prevents the opposite representative of a point ray.
     homogeneous.append((1, *([0] * dimension)))
-    cone = cone_generators(homogeneous)
+    return _HalfspaceConversionAdmission(
+        dimension=dimension,
+        source_row_count=len(rows),
+        homogeneous_rows=tuple(homogeneous),
+        maximum_rays=maximum_rays,
+        candidate_pairs=candidate_pairs,
+        minor_digits=minor_digits,
+    )
+
+
+def _halfspaces_to_generators_from_admission(
+    admission: _HalfspaceConversionAdmission,
+) -> PolyhedronConversion:
+    """Expand an already admitted homogeneous affine cone."""
+
+    dimension = admission.dimension
+    cone = cone_generators(admission.homogeneous_rows)
     vertices: list[tuple[Fraction, ...]] = []
     incidences: list[int] = []
     recession: list[IntegerVector] = []
@@ -589,7 +644,7 @@ def halfspaces_to_generators(
             point = tuple(Fraction(value, t) for value in ray.vector[1:])
             if point not in vertices:
                 vertices.append(point)
-                incidences.append(ray.active & ((1 << len(rows)) - 1))
+                incidences.append(ray.active & ((1 << admission.source_row_count) - 1))
         elif t == 0:
             recession.append(tuple(ray.vector[1:]))
     affine_lineality = tuple(
@@ -616,6 +671,15 @@ def halfspaces_to_generators(
         affine_dimension,
         cone,
     )
+
+
+def halfspaces_to_generators(
+    rows: Sequence[tuple[Sequence[object], object]], dimension: int
+) -> PolyhedronConversion:
+    """Convert affine inequalities ``a*x <= b`` to exact affine generators."""
+
+    admission = _admit_halfspaces_to_generators(rows, dimension)
+    return _halfspaces_to_generators_from_admission(admission)
 
 
 def points_to_facets(

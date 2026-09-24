@@ -147,13 +147,60 @@ def test_output_admission_precedes_reversed_term_construction(
         "MAX_FREE_ALGEBRA_ANTIAUTOMORPHISM_OUTPUT_BYTES",
         1,
     )
-    monkeypatch.setattr(operations, "FreeAlgebraTerm", construction_must_not_run)
+    monkeypatch.setattr(
+        operations, "_reverse_canonical_terms", construction_must_not_run
+    )
 
     with pytest.raises(OperationResourceAdmissionError) as exc_info:
         reverse_polynomial_antiautomorphism(value)
 
     assert exc_info.value.errors()[0]["type"] == (
         "free_algebra.antiautomorphism_output_budget"
+    )
+
+
+def test_work_admission_rejects_before_polynomial_revalidation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    word = ("x",) * 64
+    term = FreeAlgebraTerm.model_construct(
+        coefficient=CanonicalRational.from_fraction(Fraction(1)), word=word
+    )
+    # Deliberately forged/repeated support is sufficient here: the work
+    # preflight must reject its shape before canonical validation sorts it.
+    oversized = FreeAlgebraPolynomial.model_construct(
+        alphabet=("x",), terms=(term,) * 4_096
+    )
+
+    def revalidation_must_not_run(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("polynomial revalidation ran before work admission")
+
+    monkeypatch.setattr(operations, "_admit_polynomial", revalidation_must_not_run)
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
+        reverse_polynomial_antiautomorphism(oversized)
+
+    assert exc_info.value.errors()[0]["type"] == (
+        "free_algebra.antiautomorphism_work_budget"
+    )
+
+
+def test_work_admission_accepts_exact_bound_and_rejects_one_below(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    value = _polynomial(("x", "y"), {("x", "y"): 1, ("y",): 2})
+    required = operations._antiautomorphism_admission_work(value)
+
+    monkeypatch.setattr(operations, "MAX_FREE_ALGEBRA_ANTIAUTOMORPHISM_WORK", required)
+    assert reverse_polynomial_antiautomorphism(value).alphabet == value.alphabet
+
+    monkeypatch.setattr(
+        operations, "MAX_FREE_ALGEBRA_ANTIAUTOMORPHISM_WORK", required - 1
+    )
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
+        reverse_polynomial_antiautomorphism(value)
+
+    assert exc_info.value.errors()[0]["type"] == (
+        "free_algebra.antiautomorphism_work_budget"
     )
 
 

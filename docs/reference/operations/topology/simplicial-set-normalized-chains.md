@@ -20,3 +20,9 @@ degree sizes and serialized axes before identity replay or matrix construction.
 Coefficients are integral. Use the unnormalized
 chain operation when every simplex, including degenerate ones, should remain
 in the basis.
+
+The result codec checks that chain ranks and labels match the source's visible
+degeneracy axes; it does not recompute the boundary matrices. A consumer that
+receives a caller supplied or edited serialized result and relies on the
+matrices being induced by its source prefix must check that source-to-boundary
+relation at its own admitted input boundary.

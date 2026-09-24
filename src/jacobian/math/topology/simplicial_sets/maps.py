@@ -169,7 +169,12 @@ class NormalizedChainsRequest(StrictModel):
 
 
 class NormalizedChainsResult(StrictModel):
-    """Reusable normalized chain complex with exact nondegenerate axes."""
+    """Normalized chain value with source labels bound to its rank axes.
+
+    Decoding checks structural source/axis correspondence only. Consumers that
+    rely on the source-to-boundary relation recheck it when admitting this
+    caller-supplied value; model validation does not replay the boundary build.
+    """
 
     simplicial_set: FiniteTruncatedSimplicialSet
     nondegenerate_bases: tuple[tuple[str, ...], ...]

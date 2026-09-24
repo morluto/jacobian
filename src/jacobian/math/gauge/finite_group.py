@@ -101,7 +101,9 @@ def _admit_group(
     return table, inverse, identity, order
 
 
-def _admit_field(field: FiniteGroupGaugeField, group: FiniteGroupTable, order: int):
+def _admit_field(
+    field: FiniteGroupGaugeField, group: FiniteGroupTable, order: int
+) -> tuple[tuple[str, ...], tuple[GaugeEdge, ...], dict[str, int]]:
     lattice = field.lattice
     vertices, edges, values = lattice.vertices, lattice.edges, field.edge_values
     if (
@@ -195,7 +197,13 @@ def _admit_field(field: FiniteGroupGaugeField, group: FiniteGroupTable, order: i
     return vertices, edges, value_by_id
 
 
-def _resolve_path(path: OrientedGaugePath, vertices, edges, values, inverse):
+def _resolve_path(
+    path: OrientedGaugePath,
+    vertices: tuple[str, ...],
+    edges: tuple[GaugeEdge, ...],
+    values: dict[str, int],
+    inverse: tuple[int, ...],
+) -> tuple[str, str, tuple[tuple[str, bool, int], ...]]:
     steps = path.steps
     if not isinstance(steps, tuple) or len(steps) > 256:
         raise OperationResourceAdmissionError(
@@ -242,6 +250,8 @@ def _resolve_path(path: OrientedGaugePath, vertices, edges, values, inverse):
         resolved.append(
             (step.edge_id, step.forward, index if step.forward else inverse[index])
         )
+    if start is None or cursor is None:
+        raise RuntimeError("admitted nonempty path produced no endpoints")
     return start, cursor, tuple(resolved)
 
 

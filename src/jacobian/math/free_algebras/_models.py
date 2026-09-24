@@ -29,16 +29,47 @@ MAX_FREE_ALGEBRA_LETTER_LENGTH = 64
 MAX_FREE_ALGEBRA_WORD_LENGTH = 32
 # The product of two declared words has length at most twice that bound.
 MAX_FREE_ALGEBRA_RESULT_WORD_LENGTH = 2 * MAX_FREE_ALGEBRA_WORD_LENGTH
+MAX_FREE_ALGEBRA_WORD_VALUE_LENGTH = MAX_FREE_ALGEBRA_RESULT_WORD_LENGTH
+MAX_FREE_WORD_POWER_EXPONENT = 64
+MAX_FREE_WORD_SPLITS = MAX_FREE_ALGEBRA_WORD_LENGTH + 1
+MAX_FREE_WORD_SPLIT_LETTER_CELLS = MAX_FREE_ALGEBRA_WORD_LENGTH * MAX_FREE_WORD_SPLITS
+MAX_FREE_WORD_FACTOR_OCCURRENCES = (
+    (MAX_FREE_ALGEBRA_WORD_LENGTH + 1) * (MAX_FREE_ALGEBRA_WORD_LENGTH + 2) // 2
+)
+MAX_FREE_WORD_FACTOR_LETTER_CELLS = (
+    MAX_FREE_ALGEBRA_WORD_LENGTH
+    * (MAX_FREE_ALGEBRA_WORD_LENGTH + 1)
+    * (MAX_FREE_ALGEBRA_WORD_LENGTH + 2)
+    // 6
+)
+MAX_FREE_WORD_FACTOR_DISTINCT = (
+    MAX_FREE_ALGEBRA_WORD_LENGTH * (MAX_FREE_ALGEBRA_WORD_LENGTH + 1) // 2 + 1
+)
+MAX_FREE_WORD_OVERLAP_ALIGNMENTS = 2 * MAX_FREE_ALGEBRA_WORD_LENGTH - 1
+MAX_FREE_WORD_OVERLAP_LETTER_CELLS = 14_000
+MAX_FREE_WORD_OVERLAP_WORK = 4_096
 MAX_FREE_ALGEBRA_OPERAND_TERMS = 64
+MAX_FREE_ALGEBRA_ADDITION_TERMS = 2 * MAX_FREE_ALGEBRA_OPERAND_TERMS
+MAX_FREE_ALGEBRA_ADDITION_OUTPUT_BYTES = 2_000_000
 MAX_FREE_ALGEBRA_RESULT_TERMS = 4_096
 MAX_FREE_ALGEBRA_TERM_PAIRS = MAX_FREE_ALGEBRA_OPERAND_TERMS**2
 MAX_FREE_ALGEBRA_COEFFICIENT_DIGITS = 64
+MAX_FREE_ALGEBRA_SUBSTITUTION_EXPANSIONS = 65_536
+MAX_FREE_ALGEBRA_SUBSTITUTION_WORK = 1_000_000
+MAX_FREE_ALGEBRA_SUBSTITUTION_OUTPUT_BYTES = 2_000_000
 # Ideal-prefix output is an aggregate carrier: unlike multiplication, it
 # returns many basis polynomials at once. Keep that envelope independent from
 # the per-polynomial result bound.
 MAX_FREE_ALGEBRA_IDEAL_PREFIX_BASIS = MAX_FREE_ALGEBRA_RESULT_TERMS // 4
 MAX_FREE_ALGEBRA_IDEAL_PREFIX_TOTAL_TERMS = MAX_FREE_ALGEBRA_RESULT_TERMS // 2
 MAX_FREE_ALGEBRA_IDEAL_PREFIX_SERIALIZED_BYTES = 2_000_000
+# A direct homogeneous ideal-component calculation is a dense exact row-space
+# problem.  Keep its ambient word axis and returned basis small enough for a
+# single request-scoped rational elimination.
+MAX_FREE_ALGEBRA_IDEAL_COMPONENT_WORDS = 128
+MAX_FREE_ALGEBRA_IDEAL_COMPONENT_CONTEXTS = 256
+MAX_FREE_ALGEBRA_IDEAL_COMPONENT_MATRIX_CELLS = 32_768
+MAX_FREE_ALGEBRA_IDEAL_COMPONENT_SERIALIZED_BYTES = 2_000_000
 # GS completion checks every ordered basis pair at each fixed-point round.
 # These are execution-envelope bounds; COMPLETE_THROUGH_DEGREE is returned only
 # after the bounded rounds reach a genuine zero-composition fixed point.
@@ -47,6 +78,8 @@ MAX_FREE_ALGEBRA_GS_COMPOSITIONS = MAX_FREE_ALGEBRA_RESULT_TERMS
 MAX_FREE_ALGEBRA_GS_REDUCTION_STEPS = (
     MAX_FREE_ALGEBRA_RESULT_TERMS * MAX_FREE_ALGEBRA_WORD_LENGTH
 )
+MAX_FREE_ALGEBRA_QUOTIENT_PROFILE_CANDIDATES = 16_384
+MAX_FREE_ALGEBRA_QUOTIENT_PROFILE_OUTPUT_BYTES = 2_000_000
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -111,10 +144,11 @@ class FreeAlgebraWord(StrictModel):
     )
     letters: tuple[FreeAlgebraLetter, ...] = Field(
         default=(),
-        max_length=MAX_FREE_ALGEBRA_WORD_LENGTH,
+        max_length=MAX_FREE_ALGEBRA_WORD_VALUE_LENGTH,
         description=(
             "Ordered generator labels spelling one word; the empty tuple is the "
-            "multiplicative unit."
+            "multiplicative unit. Source requests admit at most 32 letters; "
+            "bounded word results may contain up to 64."
         ),
     )
 
@@ -139,6 +173,242 @@ class FreeAlgebraWord(StrictModel):
         """Whether this word is the empty multiplicative unit."""
 
         return not self.letters
+
+
+class FreeAlgebraWordPairRequest(StrictModel):
+    """Two words over one ordered alphabet for a binary word operation."""
+
+    left: FreeAlgebraWord = Field(description="Source word of at most 32 letters.")
+    right: FreeAlgebraWord = Field(description="Source word of at most 32 letters.")
+
+    @model_validator(mode="after")
+    def require_shared_alphabet(self) -> Self:
+        if self.left.alphabet != self.right.alphabet:
+            raise _validation_error(
+                "word_alphabet_mismatch", "words must use the same ordered alphabet"
+            )
+        if max(self.left.length, self.right.length) > MAX_FREE_ALGEBRA_WORD_LENGTH:
+            raise _validation_error(
+                "word_source_length",
+                "source words may contain at most 32 letters",
+            )
+        return self
+
+
+class FreeAlgebraWordPairResult(StrictModel):
+    """Concatenation with source intervals and degree addition."""
+
+    left: FreeAlgebraWord
+    right: FreeAlgebraWord
+    product: FreeAlgebraWord
+    left_range: tuple[int, int]
+    right_range: tuple[int, int]
+    degree_addition: tuple[int, int, int]
+
+
+class FreeAlgebraWordRequest(StrictModel):
+    """One source word subject to the 32-letter operation input bound."""
+
+    word: FreeAlgebraWord = Field(description="Source word of at most 32 letters.")
+
+    @model_validator(mode="after")
+    def require_bounded_source(self) -> Self:
+        if self.word.length > MAX_FREE_ALGEBRA_WORD_LENGTH:
+            raise _validation_error(
+                "word_source_length", "source words may contain at most 32 letters"
+            )
+        return self
+
+
+class FreeAlgebraWordPowerRequest(FreeAlgebraWordRequest):
+    exponent: int = Field(ge=0, le=MAX_FREE_WORD_POWER_EXPONENT)
+
+
+class FreeAlgebraWordPowerResult(StrictModel):
+    word: FreeAlgebraWord
+    exponent: int = Field(ge=0, le=MAX_FREE_WORD_POWER_EXPONENT)
+    power: FreeAlgebraWord
+    degree_multiplication: tuple[int, int, int]
+
+
+class FreeAlgebraWordReverseResult(StrictModel):
+    word: FreeAlgebraWord
+    reverse: FreeAlgebraWord
+
+
+class FreeAlgebraWordCompareResult(StrictModel):
+    """Degree-lexicographic comparison: -1, 0, or 1."""
+
+    left: FreeAlgebraWord
+    right: FreeAlgebraWord
+    comparison: Literal[-1, 0, 1]
+    degree_comparison: Literal[-1, 0, 1]
+    generator_order_comparison: Literal[-1, 0, 1]
+    first_differing_position: int | None = Field(
+        default=None, ge=0, le=MAX_FREE_ALGEBRA_WORD_LENGTH
+    )
+    left_generator_rank: int | None = Field(
+        default=None, ge=0, le=MAX_FREE_ALGEBRA_GENERATORS - 1
+    )
+    right_generator_rank: int | None = Field(
+        default=None, ge=0, le=MAX_FREE_ALGEBRA_GENERATORS - 1
+    )
+
+
+class FreeAlgebraWordPrefixSplit(StrictModel):
+    """One prefix and its complementary suffix."""
+
+    prefix_letters: tuple[FreeAlgebraLetter, ...] = Field(
+        max_length=MAX_FREE_ALGEBRA_WORD_LENGTH
+    )
+    completing_suffix_letters: tuple[FreeAlgebraLetter, ...] = Field(
+        max_length=MAX_FREE_ALGEBRA_WORD_LENGTH
+    )
+
+
+class FreeAlgebraWordSuffixSplit(StrictModel):
+    """One suffix and its complementary prefix."""
+
+    completing_prefix_letters: tuple[FreeAlgebraLetter, ...] = Field(
+        max_length=MAX_FREE_ALGEBRA_WORD_LENGTH
+    )
+    suffix_letters: tuple[FreeAlgebraLetter, ...] = Field(
+        max_length=MAX_FREE_ALGEBRA_WORD_LENGTH
+    )
+
+
+class FreeAlgebraWordPrefixesResult(StrictModel):
+    word: FreeAlgebraWord
+    splits: tuple[FreeAlgebraWordPrefixSplit, ...] = Field(
+        max_length=MAX_FREE_ALGEBRA_WORD_LENGTH + 1
+    )
+
+
+class FreeAlgebraWordSuffixesResult(StrictModel):
+    word: FreeAlgebraWord
+    splits: tuple[FreeAlgebraWordSuffixSplit, ...] = Field(
+        max_length=MAX_FREE_ALGEBRA_WORD_LENGTH + 1
+    )
+
+
+class FreeAlgebraWordFactorOccurrences(StrictModel):
+    """One distinct factor and every start position where it occurs."""
+
+    letters: tuple[FreeAlgebraLetter, ...] = Field(
+        max_length=MAX_FREE_ALGEBRA_WORD_LENGTH
+    )
+    positions: tuple[int, ...] = Field(max_length=MAX_FREE_ALGEBRA_WORD_LENGTH + 1)
+
+
+class FreeAlgebraWordFactorsResult(StrictModel):
+    """Distinct contiguous factors with all source occurrence positions."""
+
+    word: FreeAlgebraWord
+    factors: tuple[FreeAlgebraWordFactorOccurrences, ...] = Field(
+        max_length=MAX_FREE_WORD_FACTOR_DISTINCT
+    )
+
+
+class FreeAlgebraWordOverlapWitness(StrictModel):
+    """One common word with both source occurrences and their contexts."""
+
+    kind: Literal["OVERLAP", "INCLUSION"]
+    common_word: FreeAlgebraWord
+    left_offset: int = Field(ge=0, le=MAX_FREE_ALGEBRA_WORD_VALUE_LENGTH)
+    right_offset: int = Field(ge=0, le=MAX_FREE_ALGEBRA_WORD_VALUE_LENGTH)
+    left_prefix: tuple[FreeAlgebraLetter, ...] = Field(
+        max_length=MAX_FREE_ALGEBRA_WORD_LENGTH
+    )
+    left_suffix: tuple[FreeAlgebraLetter, ...] = Field(
+        max_length=MAX_FREE_ALGEBRA_WORD_LENGTH
+    )
+    right_prefix: tuple[FreeAlgebraLetter, ...] = Field(
+        max_length=MAX_FREE_ALGEBRA_WORD_LENGTH
+    )
+    right_suffix: tuple[FreeAlgebraLetter, ...] = Field(
+        max_length=MAX_FREE_ALGEBRA_WORD_LENGTH
+    )
+
+
+class FreeAlgebraWordOverlapResult(StrictModel):
+    """All nontrivial overlap and proper inclusion ambiguities for two words."""
+
+    left: FreeAlgebraWord
+    right: FreeAlgebraWord
+    witnesses: tuple[FreeAlgebraWordOverlapWitness, ...] = Field(
+        max_length=MAX_FREE_WORD_OVERLAP_ALIGNMENTS
+    )
+
+
+class FreeAlgebraWordSubstitution(StrictModel):
+    """A specified free-monoid homomorphism between two generator alphabets."""
+
+    source_alphabet: tuple[FreeAlgebraLetter, ...] = Field(
+        max_length=MAX_FREE_ALGEBRA_GENERATORS
+    )
+    target_alphabet: tuple[FreeAlgebraLetter, ...] = Field(
+        max_length=MAX_FREE_ALGEBRA_GENERATORS
+    )
+    images: tuple[FreeAlgebraWord, ...] = Field(
+        max_length=MAX_FREE_ALGEBRA_GENERATORS,
+        description="One target word of at most 32 letters for each source generator.",
+    )
+
+    @model_validator(mode="after")
+    def require_generator_images(self) -> Self:
+        _require_distinct_alphabet(self.source_alphabet)
+        _require_distinct_alphabet(self.target_alphabet)
+        if len(self.images) != len(self.source_alphabet):
+            raise _validation_error(
+                "substitution_image_count",
+                "substitution needs one image per source generator",
+            )
+        if any(image.alphabet != self.target_alphabet for image in self.images):
+            raise _validation_error(
+                "substitution_target_alphabet",
+                "every generator image must use the target alphabet",
+            )
+        if any(image.length > MAX_FREE_ALGEBRA_WORD_LENGTH for image in self.images):
+            raise _validation_error(
+                "substitution_image_length",
+                "generator images may contain at most 32 letters",
+            )
+        return self
+
+
+class FreeAlgebraWordSubstitutionRequest(StrictModel):
+    substitution: FreeAlgebraWordSubstitution
+    word: FreeAlgebraWord = Field(description="Source word of at most 32 letters.")
+
+    @model_validator(mode="after")
+    def require_source_word(self) -> Self:
+        if self.word.length > MAX_FREE_ALGEBRA_WORD_LENGTH:
+            raise _validation_error(
+                "word_source_length", "source words may contain at most 32 letters"
+            )
+        if self.word.alphabet != self.substitution.source_alphabet:
+            raise _validation_error(
+                "substitution_source_alphabet",
+                "word must use the substitution source alphabet",
+            )
+        return self
+
+
+class FreeWordImageInterval(StrictModel):
+    """Target half-open interval receiving one source letter occurrence."""
+
+    source_index: int = Field(ge=0, lt=MAX_FREE_ALGEBRA_WORD_LENGTH)
+    target_start: int = Field(ge=0, le=MAX_FREE_ALGEBRA_WORD_VALUE_LENGTH)
+    target_end: int = Field(ge=0, le=MAX_FREE_ALGEBRA_WORD_VALUE_LENGTH)
+
+
+class FreeAlgebraWordSubstitutionResult(StrictModel):
+    substitution: FreeAlgebraWordSubstitution
+    word: FreeAlgebraWord
+    image: FreeAlgebraWord
+    occurrence_images: tuple[FreeWordImageInterval, ...] = Field(
+        max_length=MAX_FREE_ALGEBRA_WORD_LENGTH
+    )
 
 
 class FreeAlgebraTerm(StrictModel):
@@ -262,6 +532,13 @@ class FreeAlgebraPolynomialProductRequest(StrictModel):
     )
 
 
+class FreeAlgebraPolynomialAddRequest(StrictModel):
+    """Add sparse NC polynomials over the identical ordered alphabet."""
+
+    left: FreeAlgebraPolynomial
+    right: FreeAlgebraPolynomial
+
+
 class FreeAlgebraPolynomialProductResult(StrictModel):
     """Canonical distributive product with its multiplication ledger."""
 
@@ -305,6 +582,51 @@ class FreeAlgebraPolynomialProductResult(StrictModel):
             raise _validation_error(
                 "ledger_collection",
                 "ledger collected-word accounting must partition the term pairs",
+            )
+        return self
+
+
+class FreeAlgebraPolynomialHomomorphism(StrictModel):
+    """A specified unital QQ-algebra map between two free algebras."""
+
+    source_alphabet: tuple[FreeAlgebraLetter, ...] = Field(
+        max_length=MAX_FREE_ALGEBRA_GENERATORS
+    )
+    target_alphabet: tuple[FreeAlgebraLetter, ...] = Field(
+        max_length=MAX_FREE_ALGEBRA_GENERATORS
+    )
+    images: tuple[FreeAlgebraPolynomial, ...] = Field(
+        max_length=MAX_FREE_ALGEBRA_GENERATORS,
+        description="One target polynomial image, possibly zero, per source generator.",
+    )
+
+    @model_validator(mode="after")
+    def require_generator_images(self) -> Self:
+        _require_distinct_alphabet(self.source_alphabet)
+        _require_distinct_alphabet(self.target_alphabet)
+        if len(self.images) != len(self.source_alphabet):
+            raise _validation_error(
+                "polynomial_substitution_image_count",
+                "polynomial substitution needs one image per source generator",
+            )
+        if any(image.alphabet != self.target_alphabet for image in self.images):
+            raise _validation_error(
+                "polynomial_substitution_target_alphabet",
+                "every generator image must use the target alphabet",
+            )
+        return self
+
+
+class FreeAlgebraPolynomialSubstitutionRequest(StrictModel):
+    substitution: FreeAlgebraPolynomialHomomorphism
+    polynomial: FreeAlgebraPolynomial
+
+    @model_validator(mode="after")
+    def require_source_alphabet(self) -> Self:
+        if self.polynomial.alphabet != self.substitution.source_alphabet:
+            raise _validation_error(
+                "polynomial_substitution_source_alphabet",
+                "polynomial must use the substitution source alphabet",
             )
         return self
 
@@ -372,6 +694,233 @@ class GroebnerShirshovResult(StrictModel):
         return self
 
 
+class FreeAlgebraQuotientProfileRequest(StrictModel):
+    """Request the bounded graded quotient word-basis profile."""
+
+    ideal: FreeAlgebraIdeal
+    degree: int = Field(ge=0, le=MAX_FREE_ALGEBRA_WORD_LENGTH)
+
+
+class FreeAlgebraQuotientDegreeComponent(StrictModel):
+    """Canonical irreducible words in one homogeneous quotient degree."""
+
+    degree: int = Field(ge=0, le=MAX_FREE_ALGEBRA_WORD_LENGTH)
+    normal_words: tuple[tuple[FreeAlgebraLetter, ...], ...] = Field(
+        max_length=MAX_FREE_ALGEBRA_QUOTIENT_PROFILE_CANDIDATES
+    )
+
+
+class FreeAlgebraQuotientProfileResult(StrictModel):
+    """Source-bound normal words and Hilbert-function values through D."""
+
+    ideal: FreeAlgebraIdeal
+    degree: int = Field(ge=0, le=MAX_FREE_ALGEBRA_WORD_LENGTH)
+    leading_words: tuple[tuple[FreeAlgebraLetter, ...], ...] = Field(
+        max_length=MAX_FREE_ALGEBRA_RESULT_TERMS
+    )
+    components: tuple[FreeAlgebraQuotientDegreeComponent, ...] = Field(
+        max_length=MAX_FREE_ALGEBRA_WORD_LENGTH + 1
+    )
+    hilbert_function: tuple[int, ...] = Field(
+        max_length=MAX_FREE_ALGEBRA_WORD_LENGTH + 1
+    )
+
+    @model_validator(mode="after")
+    def require_canonical_profile(self) -> Self:
+        if self.ideal.side != "two-sided":
+            raise _validation_error(
+                "quotient_profile_side", "quotient profile requires a two-sided ideal"
+            )
+        if (
+            len(self.components) != self.degree + 1
+            or len(self.hilbert_function) != self.degree + 1
+        ):
+            raise _validation_error(
+                "quotient_profile_degree_axis",
+                "quotient profile must contain each degree from zero through D",
+            )
+        if any(
+            any(letter not in self.ideal.alphabet for letter in word)
+            for word in self.leading_words
+        ):
+            raise _validation_error(
+                "quotient_profile_leading_word_alphabet",
+                "leading words must use the ideal alphabet",
+            )
+        keys = tuple(
+            canonical_word_key(self.ideal.alphabet, word) for word in self.leading_words
+        )
+        if keys != tuple(sorted(set(keys))):
+            raise _validation_error(
+                "quotient_profile_leading_words",
+                "leading words must be distinct and in canonical ascending order",
+            )
+        if any(len(word) > self.degree for word in self.leading_words):
+            raise _validation_error(
+                "quotient_profile_leading_degree",
+                "leading words must lie within the profile degree bound",
+            )
+        for degree, component in enumerate(self.components):
+            if component.degree != degree:
+                raise _validation_error(
+                    "quotient_profile_component_degree",
+                    "quotient components must be ordered by degree from zero",
+                )
+            if self.hilbert_function[degree] != len(component.normal_words):
+                raise _validation_error(
+                    "quotient_profile_dimension",
+                    "Hilbert-function values must equal normal-word counts",
+                )
+            words = component.normal_words
+            if any(
+                any(letter not in self.ideal.alphabet for letter in word)
+                for word in words
+            ):
+                raise _validation_error(
+                    "quotient_profile_word_alphabet",
+                    "normal words must use the ideal alphabet",
+                )
+            keys = tuple(
+                canonical_word_key(self.ideal.alphabet, word) for word in words
+            )
+            if any(len(word) != degree for word in words) or keys != tuple(
+                sorted(set(keys))
+            ):
+                raise _validation_error(
+                    "quotient_profile_normal_words",
+                    "normal words must be distinct, degree-homogeneous, and canonically ordered",
+                )
+            if any(
+                any(
+                    word[start : start + len(leading)] == leading
+                    for leading in self.leading_words
+                    for start in range(len(word) - len(leading) + 1)
+                )
+                for word in words
+            ):
+                raise _validation_error(
+                    "quotient_profile_reducible_word",
+                    "normal-word basis elements must avoid every leading-word factor",
+                )
+        return self
+
+
+class FreeAlgebraIdealDegreeComponentRequest(StrictModel):
+    """Request one homogeneous degree component of a two-sided ideal."""
+
+    ideal: FreeAlgebraIdeal
+    degree: int = Field(ge=0, le=MAX_FREE_ALGEBRA_WORD_LENGTH)
+
+
+class FreeAlgebraIdealDegreeComponentResult(StrictModel):
+    """Canonical row-space basis of one homogeneous ideal component."""
+
+    ideal: FreeAlgebraIdeal
+    degree: int = Field(ge=0, le=MAX_FREE_ALGEBRA_WORD_LENGTH)
+    component_basis: tuple[FreeAlgebraPolynomial, ...] = Field(
+        max_length=MAX_FREE_ALGEBRA_IDEAL_COMPONENT_WORDS
+    )
+    ambient_dimension: int = Field(ge=0, le=MAX_FREE_ALGEBRA_IDEAL_COMPONENT_WORDS)
+    ideal_dimension: int = Field(ge=0, le=MAX_FREE_ALGEBRA_IDEAL_COMPONENT_WORDS)
+
+    @model_validator(mode="after")
+    def require_result_contract(self) -> Self:
+        if self.ideal.side != "two-sided":
+            raise _validation_error(
+                "component_side", "ideal component result must be two-sided"
+            )
+        if any(value.alphabet != self.ideal.alphabet for value in self.component_basis):
+            raise _validation_error(
+                "component_alphabet", "ideal component values must retain the alphabet"
+            )
+        if any(
+            not polynomial.terms
+            or any(len(term.word) != self.degree for term in polynomial.terms)
+            for polynomial in self.component_basis
+        ):
+            raise _validation_error(
+                "component_degree",
+                "component basis polynomials must have the result degree",
+            )
+        if self.ambient_dimension != len(self.ideal.alphabet) ** self.degree:
+            raise _validation_error(
+                "component_ambient_dimension",
+                "ambient dimension must match the degree word space",
+            )
+        if self.ideal_dimension > self.ambient_dimension:
+            raise _validation_error(
+                "component_dimension", "ideal dimension cannot exceed ambient dimension"
+            )
+        if self.ideal_dimension != len(self.component_basis):
+            raise _validation_error(
+                "component_dimension", "ideal dimension must equal the basis size"
+            )
+        return self
+
+
+class FreeAlgebraIdealMembershipRequest(StrictModel):
+    """Ask whether one bounded polynomial lies in a presented two-sided ideal."""
+
+    ideal: FreeAlgebraIdeal
+    polynomial: FreeAlgebraPolynomial
+
+
+class FreeAlgebraIdealMembershipResult(StrictModel):
+    """Exact bounded membership decision, or UNKNOWN if completion was not reached."""
+
+    ideal: FreeAlgebraIdeal
+    polynomial: FreeAlgebraPolynomial
+    status: Literal["MEMBER", "NOT_MEMBER", "UNKNOWN"]
+    normal_form: FreeAlgebraPolynomial | None = None
+    completion_degree: int | None = Field(
+        default=None, ge=0, le=MAX_FREE_ALGEBRA_WORD_LENGTH
+    )
+
+    @model_validator(mode="after")
+    def require_decision_contract(self) -> Self:
+        if self.ideal.side != "two-sided":
+            raise _validation_error(
+                "membership_side", "membership result requires a two-sided ideal"
+            )
+        if self.polynomial.alphabet != self.ideal.alphabet:
+            raise _validation_error(
+                "membership_alphabet", "membership values must share the ideal alphabet"
+            )
+        if (
+            self.normal_form is not None
+            and self.normal_form.alphabet != self.ideal.alphabet
+        ):
+            raise _validation_error(
+                "membership_normal_form_alphabet",
+                "normal form must retain the ideal alphabet",
+            )
+        if self.status == "UNKNOWN":
+            if self.normal_form is not None or self.completion_degree is not None:
+                raise _validation_error(
+                    "membership_unknown_claim",
+                    "UNKNOWN cannot carry a normal form or completion claim",
+                )
+        elif self.normal_form is None or self.completion_degree is None:
+            raise _validation_error(
+                "membership_missing_evidence",
+                "a decision requires a completed normal form",
+            )
+        elif (
+            max((len(term.word) for term in self.polynomial.terms), default=0)
+            > self.completion_degree
+        ):
+            raise _validation_error(
+                "membership_completion_degree",
+                "completion degree must cover every candidate term",
+            )
+        elif (self.status == "MEMBER") != (not self.normal_form.terms):
+            raise _validation_error(
+                "membership_normal_form",
+                "status must agree with whether the normal form is zero",
+            )
+        return self
+
+
 # Review-facing canonical names; aliases preserve one carrier per mathematical value.
 FreeWord = FreeAlgebraWord
 NCPolynomial = FreeAlgebraPolynomial
@@ -381,6 +930,8 @@ TwoSidedIdealPresentation = FreeAlgebraIdeal
 DegreeBoundedGroebnerShirshovBasis = GroebnerShirshovResult
 
 __all__ = [
+    "MAX_FREE_ALGEBRA_ADDITION_OUTPUT_BYTES",
+    "MAX_FREE_ALGEBRA_ADDITION_TERMS",
     "MAX_FREE_ALGEBRA_COEFFICIENT_DIGITS",
     "MAX_FREE_ALGEBRA_GENERATORS",
     "MAX_FREE_ALGEBRA_GS_COMPOSITIONS",
@@ -388,21 +939,53 @@ __all__ = [
     "MAX_FREE_ALGEBRA_GS_REDUCTION_STEPS",
     "MAX_FREE_ALGEBRA_LETTER_LENGTH",
     "MAX_FREE_ALGEBRA_OPERAND_TERMS",
+    "MAX_FREE_ALGEBRA_QUOTIENT_PROFILE_CANDIDATES",
+    "MAX_FREE_ALGEBRA_QUOTIENT_PROFILE_OUTPUT_BYTES",
     "MAX_FREE_ALGEBRA_RESULT_TERMS",
     "MAX_FREE_ALGEBRA_RESULT_WORD_LENGTH",
     "MAX_FREE_ALGEBRA_TERM_PAIRS",
     "MAX_FREE_ALGEBRA_WORD_LENGTH",
+    "MAX_FREE_ALGEBRA_WORD_VALUE_LENGTH",
+    "MAX_FREE_WORD_FACTOR_DISTINCT",
+    "MAX_FREE_WORD_FACTOR_LETTER_CELLS",
+    "MAX_FREE_WORD_FACTOR_OCCURRENCES",
+    "MAX_FREE_WORD_OVERLAP_ALIGNMENTS",
+    "MAX_FREE_WORD_OVERLAP_LETTER_CELLS",
+    "MAX_FREE_WORD_POWER_EXPONENT",
     "DegreeBoundedGroebnerShirshovBasis",
     "FreeAlgebraIdeal",
     "FreeAlgebraIdealPrefixRequest",
     "FreeAlgebraIdealPrefixResult",
     "FreeAlgebraLetter",
     "FreeAlgebraPolynomial",
+    "FreeAlgebraPolynomialAddRequest",
     "FreeAlgebraPolynomialProductRequest",
     "FreeAlgebraPolynomialProductResult",
+    "FreeAlgebraQuotientDegreeComponent",
+    "FreeAlgebraQuotientProfileRequest",
+    "FreeAlgebraQuotientProfileResult",
     "FreeAlgebraTerm",
     "FreeAlgebraWord",
+    "FreeAlgebraWordCompareResult",
+    "FreeAlgebraWordFactorOccurrences",
+    "FreeAlgebraWordFactorsResult",
+    "FreeAlgebraWordOverlapResult",
+    "FreeAlgebraWordOverlapWitness",
+    "FreeAlgebraWordPairRequest",
+    "FreeAlgebraWordPairResult",
+    "FreeAlgebraWordPowerRequest",
+    "FreeAlgebraWordPowerResult",
+    "FreeAlgebraWordPrefixSplit",
+    "FreeAlgebraWordPrefixesResult",
+    "FreeAlgebraWordRequest",
+    "FreeAlgebraWordReverseResult",
+    "FreeAlgebraWordSubstitution",
+    "FreeAlgebraWordSubstitutionRequest",
+    "FreeAlgebraWordSubstitutionResult",
+    "FreeAlgebraWordSuffixSplit",
+    "FreeAlgebraWordSuffixesResult",
     "FreeWord",
+    "FreeWordImageInterval",
     "GroebnerShirshovRequest",
     "GroebnerShirshovResult",
     "LeftIdealPresentation",

@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from fractions import Fraction
 from itertools import product
+from math import gcd
+
+from sympy import Poly, cyclotomic_poly, symbols
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import (
@@ -12,16 +15,30 @@ from jacobian.catalog.models import (
 )
 from jacobian.math._exact_linear_algebra import symmetric_inertia
 from jacobian.math._labels import MAX_OPAQUE_LABEL_LENGTH
+from jacobian.math.matrices.cyclic_linear._models import (
+    MAX_CYCLIC_FIELD_ELEMENT_DIGITS,
+    RationalCyclotomicElement,
+    RationalCyclotomicField,
+)
 from jacobian.math.matrices.values import (
+    MAX_MATRIX_SCALAR_DIGITS,
     RationalMatrix,
     RationalVectorSpaceBasis,
     rational_matrix_from_fractions,
     rational_vector_space_basis_from_fractions,
 )
 from jacobian.math.number_theory.quadratic_forms.general._extra_models import (
+    MAX_QUADRATIC_DIAGONALIZATION_AXIS,
+    MAX_QUADRATIC_DIAGONALIZATION_INTERMEDIATE_DIGITS,
+    MAX_QUADRATIC_DIAGONALIZATION_OUTPUT_DIGITS,
+    MAX_QUADRATIC_DIAGONALIZATION_OUTPUT_TOTAL_DIGITS,
+    MAX_QUADRATIC_DIAGONALIZATION_WORK,
+    MAX_QUADRATIC_GAUSS_STATES,
     MAX_QUADRATIC_PULLBACK_AXIS,
     MAX_QUADRATIC_PULLBACK_OUTPUT_ENTRIES,
     MAX_QUADRATIC_PULLBACK_WORK,
+    FiniteGaussSumRequest,
+    FiniteGaussSumResult,
 )
 from jacobian.math.number_theory.quadratic_forms.general.operations import (
     coefficient_matrix_entries,
@@ -224,6 +241,97 @@ def quadratic_pullback(
     )
 
 
+def _ceil_log10_positive(value: int) -> int:
+    """Return the exact integer ceiling of log10(value), for value >= 1."""
+    if value <= 1:
+        return 0
+    return len(str(value - 1))
+
+
+def require_diagonalization_budget(form: RationalQuadraticForm) -> None:
+    """Admit dense work and a Hadamard bound before rational elimination.
+
+    Clearing all denominators gives an integral matrix C. The stored cross
+    coefficients contribute half-coefficients to C's symmetric matrix, so
+    their reduced denominators are counted twice. Pair pivots apply the
+    integer matrix [[1, 1], [1, -1]]; each transformed entry is a sum of at
+    most four entries of C. Every later Schur-complement entry and change
+    coefficient is a ratio of minors of this transformed integral matrix.
+    Hadamard's bound, enlarged for the unreduced Fraction products in one
+    elimination update, therefore bounds every exact intermediate.
+    """
+    n = len(form.axis)
+    if n > MAX_QUADRATIC_DIAGONALIZATION_AXIS:
+        raise OperationResourceAdmissionError(
+            location=("form", "axis"),
+            code="quadratic_form.diagonalization_axis_bound",
+            message="diagonalization dimension exceeds the dense exact envelope",
+        )
+    work = n * n * n
+    if work > MAX_QUADRATIC_DIAGONALIZATION_WORK:
+        raise OperationResourceAdmissionError(
+            location=("form", "axis"),
+            code="quadratic_form.diagonalization_work_bound",
+            message="diagonalization exceeds the admitted exact work envelope",
+        )
+    if not n:
+        return
+
+    # A diagonal presentation needs no elimination: its basis change is I.
+    # This admits high-height diagonal forms without charging them for
+    # determinant bounds that are irrelevant to the actual kernel.
+    if not form.cross_terms:
+        return
+
+    coefficient_digits = max(
+        (len(str(abs(value.num))) for value in form.diagonal_coefficients),
+        default=1,
+    )
+    coefficient_digits = max(
+        coefficient_digits,
+        *(len(str(abs(term.coefficient.num))) for term in form.cross_terms),
+    )
+
+    # A_ii has denominator d.den; A_ij=c/2 has a reduced denominator that
+    # occurs twice, once in each symmetric entry. Their product is a common
+    # denominator for the coefficient matrix.
+    denominator_exponent = sum(
+        _ceil_log10_positive(value.den) for value in form.diagonal_coefficients
+    )
+    for term in form.cross_terms:
+        twice_denominator = 2 * term.coefficient.den
+        denominator = twice_denominator // gcd(
+            abs(term.coefficient.num), twice_denominator
+        )
+        denominator_exponent += 2 * _ceil_log10_positive(denominator)
+    clearing_digits = denominator_exponent + 1
+    integer_entry_digits = coefficient_digits + clearing_digits
+    transformed_entry_digits = integer_entry_digits + 2
+    # Hadamard: |det(M_k)| <= k! * max(|M_ij|)^k <=
+    # 10^(n*entry_digits + n*ceil(log10(n))).
+    minor_digits = n * transformed_entry_digits + n * _ceil_log10_positive(n) + 1
+    diagonal_digits = minor_digits + clearing_digits + 1
+    total_output_digits = n * n * 2 * minor_digits + n * 2 * diagonal_digits
+    # Fraction multiplication and subtraction in each Schur update use at
+    # most a fixed number of products of these bounded minor ratios.
+    intermediate_digits = 8 * (minor_digits + clearing_digits) + 64
+    if (
+        minor_digits > MAX_MATRIX_SCALAR_DIGITS
+        or minor_digits > MAX_QUADRATIC_DIAGONALIZATION_OUTPUT_DIGITS
+        or diagonal_digits > MAX_QUADRATIC_DIAGONALIZATION_OUTPUT_DIGITS
+        or total_output_digits > MAX_QUADRATIC_DIAGONALIZATION_OUTPUT_TOTAL_DIGITS
+        or intermediate_digits > MAX_QUADRATIC_DIAGONALIZATION_INTERMEDIATE_DIGITS
+    ):
+        raise OperationResourceAdmissionError(
+            location=("form",),
+            code="quadratic_form.diagonalization_coefficient_growth",
+            message=(
+                "diagonalization's exact minor bound exceeds the admitted "
+                "intermediate or result envelope"
+            ),
+        )
+
+
 def quadratic_diagonalization(  # noqa: C901
     form: RationalQuadraticForm,
 ) -> tuple[tuple[Fraction, ...], RationalMatrix]:
@@ -249,30 +357,21 @@ def quadratic_diagonalization(  # noqa: C901
 
     def pair_change(index: int) -> None:
         """Apply P <- P*T and A <- T.T*A*T for T=[[1,1],[1,-1]]."""
-        old_a = [row[:] for row in a]
-        old_p = [row[:] for row in p]
         for r in range(n):
-            p[r][index] = old_p[r][index] + old_p[r][index + 1]
-            p[r][index + 1] = old_p[r][index] - old_p[r][index + 1]
-        # Build T explicitly; this keeps the congruence relation obvious and
-        # handles pair/untouched cross terms as well as the pair block.
-        transformed = [[Fraction(0) for _ in range(n)] for _ in range(n)]
-        t = [[Fraction(int(r == c)) for c in range(n)] for r in range(n)]
-        t[index][index] = t[index + 1][index] = Fraction(1)
-        t[index][index + 1] = Fraction(1)
-        t[index + 1][index + 1] = Fraction(-1)
+            left, right = p[r][index], p[r][index + 1]
+            p[r][index] = left + right
+            p[r][index + 1] = left - right
+        # T differs from I only in this 2x2 block. Apply the right
+        # multiplication (column combinations), then T.T on the left
+        # (matching row combinations), in O(n^2) rather than O(n^4).
         for r in range(n):
-            for c in range(n):
-                transformed[r][c] = sum(
-                    (
-                        t[u][r] * old_a[u][v] * t[v][c]
-                        for u in range(n)
-                        for v in range(n)
-                    ),
-                    Fraction(),
-                )
+            left, right = a[r][index], a[r][index + 1]
+            a[r][index] = left + right
+            a[r][index + 1] = left - right
         for r in range(n):
-            a[r][:] = transformed[r]
+            top, bottom = a[index][r], a[index + 1][r]
+            a[index][r] = top + bottom
+            a[index + 1][r] = top - bottom
 
     k = 0
     diagonal: list[Fraction] = []
@@ -352,11 +451,87 @@ def modular_histogram(
     return tuple(hist), states
 
 
+def finite_quadratic_gauss_sum(request: FiniteGaussSumRequest) -> FiniteGaussSumResult:
+    """Compute sum_x zeta_m^Q(x), reducing the full histogram in QQ[zeta_m]."""
+
+    form, modulus = request.form, request.modulus
+    if any(c.den != 1 for c in form.diagonal_coefficients) or any(
+        term.coefficient.den != 1 for term in form.cross_terms
+    ):
+        raise OperationDomainValidationError(
+            location=("form",),
+            code="quadratic_form.integral_required",
+            message="finite Gauss sums require integral coefficients",
+        )
+
+    total = modulus ** len(form.axis)
+    if total > MAX_QUADRATIC_GAUSS_STATES:
+        raise OperationResourceAdmissionError(
+            location=("form", "axis"),
+            code="quadratic_form.gauss_sum.state_bound",
+            message="complete residue domain exceeds the finite Gauss state bound",
+        )
+
+    # The public modulus cap bounds both cyclotomic construction and the
+    # power-basis reduction. Establish coefficient growth before enumerating.
+    variable = symbols("x")
+    defining = tuple(
+        int(value)
+        for value in Poly(cyclotomic_poly(modulus, variable), variable).all_coeffs()
+    )
+    degree = len(defining) - 1
+    if defining[0] != 1 or degree < 1 or degree > modulus:
+        raise RuntimeError("cyclotomic polynomial has an unexpected canonical shape")
+    coefficient_l1 = sum(abs(value) for value in defining)
+    if total * max(1, coefficient_l1) ** modulus >= 10**MAX_CYCLIC_FIELD_ELEMENT_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("modulus",),
+            code="quadratic_form.gauss_sum.coefficient_bound",
+            message="cyclotomic coefficient growth exceeds the exact output bound",
+        )
+
+    histogram, enumerated = modular_histogram(form, modulus)
+    if enumerated != total:
+        raise RuntimeError(
+            "modular profile did not account for the complete residue domain"
+        )
+
+    # Convert Phi_m to ascending order and reduce sum_r h_r*x^r modulo Phi_m.
+    phi_ascending = tuple(reversed(defining))
+    reduced = list(histogram)
+    for power in range(modulus - 1, degree - 1, -1):
+        coefficient = reduced[power]
+        if coefficient:
+            reduced[power] = 0
+            for lower_power in range(degree):
+                reduced[power - degree + lower_power] -= (
+                    coefficient * phi_ascending[lower_power]
+                )
+    from jacobian._exact import CanonicalRational
+
+    element = RationalCyclotomicElement(
+        field=RationalCyclotomicField(order=modulus),
+        coefficients_ascending=tuple(
+            CanonicalRational.from_fraction(Fraction(value))
+            for value in reduced[:degree]
+        ),
+    )
+    return FiniteGaussSumResult(
+        form=form,
+        modulus=modulus,
+        histogram=histogram,
+        total=total,
+        value=element,
+    )
+
+
 __all__ = [
+    "finite_quadratic_gauss_sum",
     "modular_histogram",
     "quadratic_diagonalization",
     "quadratic_pullback",
     "quadratic_radical",
     "quadratic_signature",
+    "require_diagonalization_budget",
     "require_pullback_budget",
 ]

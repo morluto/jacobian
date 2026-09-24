@@ -27,6 +27,7 @@ from jacobian.math.number_theory.quadratic_forms.general.values import (
     MAX_QUADRATIC_EVALUATION_TERM_DIGITS,
     RationalCoordinateVector,
     RationalQuadraticForm,
+    require_bilinear_pairing_budget,
 )
 
 
@@ -101,6 +102,76 @@ class EvaluationResult(StrictModel):
         )
 
 
+class BilinearPairingRequest(StrictModel):
+    """Evaluate the polar pairing after a single exact-growth preflight.
+
+    For t active products, admission bounds the aggregate denominator digit
+    count d plus one coefficient/vector-product height and ``len(str(t))`` by
+    the evaluation result digit limit. Form support is independently capped.
+    """
+
+    form: RationalQuadraticForm = Field(
+        description=(
+            "Polynomial form; its diagonal and cross-term support is jointly "
+            f"limited to {MAX_QUADRATIC_EVALUATION_SUPPORT_TERMS} terms."
+        )
+    )
+    left: RationalCoordinateVector = Field(
+        description="First rational vector, on exactly the form's ordered axis."
+    )
+    right: RationalCoordinateVector = Field(
+        description=(
+            "Second rational vector, on exactly the form's ordered axis. "
+            "For active polar products, aggregate denominator digits d and "
+            "product count t are admitted by "
+            f"d + {MAX_QUADRATIC_EVALUATION_TERM_DIGITS} + 1 + len(str(t)) "
+            f"<= {MAX_QUADRATIC_EVALUATION_DIGITS}."
+        )
+    )
+
+    @model_validator(mode="after")
+    def require_shared_axes(self) -> Self:
+        if self.left.axis != self.form.axis or self.right.axis != self.form.axis:
+            raise _validation_error(
+                "axis_mismatch", "both vectors must use the quadratic-form axis"
+            )
+        try:
+            require_bilinear_pairing_budget(self.form, self.left, self.right)
+        except ValueError as error:
+            raise _validation_error("pairing_budget", str(error)) from error
+        return self
+
+
+class BilinearPairingResult(StrictModel):
+    """The exact polar value ``Q(x+y)-Q(x)-Q(y)`` on one source axis."""
+
+    form: RationalQuadraticForm
+    left: RationalCoordinateVector
+    right: RationalCoordinateVector
+    value: CanonicalRational
+
+    @model_validator(mode="after")
+    def require_bounded_result(self) -> Self:
+        try:
+            require_bounded_rational(
+                self.value,
+                max_digits=MAX_QUADRATIC_EVALUATION_DIGITS,
+                label="quadratic-form polar pairing",
+            )
+        except ValueError as error:
+            raise _validation_error("pairing_budget", str(error)) from error
+        return self
+
+    @classmethod
+    def _from_kernel(cls, request: BilinearPairingRequest, *, value: Fraction) -> Self:
+        return cls.model_construct(
+            form=request.form,
+            left=request.left,
+            right=request.right,
+            value=CanonicalRational.from_fraction(value),
+        )
+
+
 MAX_COEFFICIENT_MATRIX_AXIS = 128
 
 
@@ -164,6 +235,8 @@ class CoefficientMatrixResult(StrictModel):
 
 
 __all__ = [
+    "BilinearPairingRequest",
+    "BilinearPairingResult",
     "CoefficientMatrixRequest",
     "CoefficientMatrixResult",
     "DiagonalizationResult",

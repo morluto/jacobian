@@ -1,13 +1,41 @@
 """Public declarations for exact general quadratic forms."""
 # ruff: noqa: F405
 
+from typing import Any
+
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import MathTool, OperationExample
+from jacobian.math.number_theory.quadratic_forms.general._extra_models import (
+    MAX_THETA_PREFIX_CUTOFF,
+    FiniteBoxProfileRequest,
+    FiniteBoxProfileResult,
+    FiniteGaussSumRequest,
+    FiniteGaussSumResult,
+    ThetaSeriesPrefixRequest,
+    ThetaSeriesPrefixResult,
+)
 from jacobian.math.number_theory.quadratic_forms.general._models import *  # noqa: F403
+from jacobian.math.number_theory.quadratic_forms.general.direct_sum_models import (
+    QuadraticFormDirectSumRequest,
+    QuadraticFormDirectSumResult,
+    QuadraticFormRestrictionRequest,
+    QuadraticFormRestrictionResult,
+)
+from jacobian.math.number_theory.quadratic_forms.general.direct_sum_operations import (
+    quadratic_form_direct_sum,
+    quadratic_form_restrict_coordinates,
+)
 from jacobian.math.number_theory.quadratic_forms.general.extra_operations import *  # noqa: F403
+from jacobian.math.number_theory.quadratic_forms.general.finite_box_operations import (
+    finite_box_value_profile,
+)
 from jacobian.math.number_theory.quadratic_forms.general.operations import (
+    bilinear_pairing,
     coefficient_matrix,
     evaluate_rational_quadratic_form,
+)
+from jacobian.math.number_theory.quadratic_forms.general.theta_operations import (
+    theta_series_prefix,
 )
 from jacobian.math.number_theory.quadratic_forms.general.values import (
     MAX_QUADRATIC_EVALUATION_DIGITS,
@@ -19,6 +47,15 @@ from jacobian.math.number_theory.quadratic_forms.general.values import (
 def evaluate_form(request: EvaluationRequest) -> EvaluationResult:
     return EvaluationResult._from_kernel(
         request, value=evaluate_rational_quadratic_form(request.form, request.vector)
+    )
+
+
+def compute_bilinear_pairing(
+    request: BilinearPairingRequest,
+) -> BilinearPairingResult:
+    return BilinearPairingResult._from_kernel(
+        request,
+        value=bilinear_pairing(request.form, request.left, request.right),
     )
 
 
@@ -58,11 +95,15 @@ def compute_pullback(request: PullbackRequest) -> PullbackResult:
 
 
 def compute_diagonalization(request: FormRequest) -> DiagonalizationResult:
+    require_diagonalization_budget(request.form)
     diagonal, change = quadratic_diagonalization(request.form)
+    basis_axis = tuple(f"basis_{index}" for index in range(len(request.form.axis)))
     return DiagonalizationResult._from_kernel(
         form=request.form,
         diagonal=tuple(CanonicalRational.from_fraction(v) for v in diagonal),
         change=change,
+        source_axis=request.form.axis,
+        basis_axis=basis_axis,
     )
 
 
@@ -71,6 +112,34 @@ def compute_modular_profile(request: ModularProfileRequest) -> ModularProfileRes
     return ModularProfileResult(
         form=request.form, modulus=request.modulus, histogram=hist, total=total
     )
+
+
+def compute_finite_gauss_sum(request: FiniteGaussSumRequest) -> FiniteGaussSumResult:
+    return finite_quadratic_gauss_sum(request)
+
+
+def compute_direct_sum(
+    request: QuadraticFormDirectSumRequest,
+) -> QuadraticFormDirectSumResult:
+    return quadratic_form_direct_sum(request)
+
+
+def compute_coordinate_restriction(
+    request: QuadraticFormRestrictionRequest,
+) -> QuadraticFormRestrictionResult:
+    return quadratic_form_restrict_coordinates(request)
+
+
+def compute_theta_series_prefix(
+    request: ThetaSeriesPrefixRequest,
+) -> ThetaSeriesPrefixResult:
+    return theta_series_prefix(request)
+
+
+def compute_finite_box_profile(
+    request: FiniteBoxProfileRequest,
+) -> FiniteBoxProfileResult:
+    return finite_box_value_profile(request)
 
 
 def _form_example() -> dict[str, object]:
@@ -83,7 +152,7 @@ def _form_example() -> dict[str, object]:
     }
 
 
-TOOLS = (
+TOOLS: tuple[MathTool[Any, Any], ...] = (
     MathTool(
         operation_id="quadratic_form.evaluate.compute",
         title="Evaluate an exact rational quadratic form",
@@ -211,7 +280,11 @@ TOOLS = (
     MathTool(
         operation_id="quadratic_form.rational_diagonalization.compute",
         title="Diagonalize a rational quadratic form",
-        description="Return an exact tracked congruence change and diagonal coefficients.",
+        description=(
+            "Return D=P transpose A P with the exact source row axis and "
+            "diagonal-basis column axis. Dimension, exact work, intermediate "
+            "growth, and result size are admitted before elimination."
+        ),
         request_type=FormRequest,
         result_type=DiagonalizationResult,
         run=compute_diagonalization,
@@ -262,13 +335,251 @@ TOOLS = (
         ),
     ),
 )
+TOOLS = (
+    *TOOLS,
+    MathTool(
+        operation_id="quadratic_form.bilinear_pairing.compute",
+        title="Compute the polar pairing of a quadratic form",
+        description=(
+            "Return Q(x+y)-Q(x)-Q(y) exactly for two rational vectors on the "
+            "form axis. The result uses the full polar bilinear convention; "
+            "odd cross coefficients are retained without halving."
+        ),
+        request_type=BilinearPairingRequest,
+        result_type=BilinearPairingResult,
+        run=compute_bilinear_pairing,
+        tags=("quadratic-form", "bilinear", "exact"),
+        examples=(
+            OperationExample(
+                name="odd_cross_coefficient",
+                description="Polarize x^2+3xy+2y^2 at (1,2) and (3,-1).",
+                input={
+                    "form": {
+                        "axis": ["x", "y"],
+                        "diagonal_coefficients": [
+                            {"num": "1", "den": "1"},
+                            {"num": "2", "den": "1"},
+                        ],
+                        "cross_terms": [
+                            {
+                                "left": 0,
+                                "right": 1,
+                                "coefficient": {"num": "3", "den": "1"},
+                            }
+                        ],
+                    },
+                    "left": {
+                        "axis": ["x", "y"],
+                        "coordinates": [
+                            {"num": "1", "den": "1"},
+                            {"num": "2", "den": "1"},
+                        ],
+                    },
+                    "right": {
+                        "axis": ["x", "y"],
+                        "coordinates": [
+                            {"num": "3", "den": "1"},
+                            {"num": "-1", "den": "1"},
+                        ],
+                    },
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="quadratic_form.direct_sum.compute",
+        title="Take the orthogonal direct sum of rational quadratic forms",
+        description=(
+            "Combine an ordered finite family of QQ forms on disjoint generated "
+            "coordinate axes. Return the exact block sum with coordinate inclusion "
+            "and projection matrices; the aggregate dimension is at most 128 and "
+            "the aggregate polynomial support at most 4096 terms. A conservative "
+            "serialized-output bound is 6,937,760 bytes under the current "
+            "256-digit coefficient envelope, below the 10 MiB canonical limit."
+        ),
+        request_type=QuadraticFormDirectSumRequest,
+        result_type=QuadraticFormDirectSumResult,
+        run=compute_direct_sum,
+        tags=("quadratic-form", "direct-sum", "exact"),
+        examples=(
+            OperationExample(
+                name="orthogonal_sum_with_repeated_source_labels",
+                description=(
+                    "Sum two rational forms whose local labels overlap; generated "
+                    "factor-coordinate axes keep the summands disjoint."
+                ),
+                input={
+                    "forms": [
+                        {
+                            "axis": ["x", "y"],
+                            "diagonal_coefficients": [
+                                {"num": "1", "den": "1"},
+                                {"num": "0", "den": "1"},
+                            ],
+                            "cross_terms": [
+                                {
+                                    "left": 0,
+                                    "right": 1,
+                                    "coefficient": {"num": "3", "den": "1"},
+                                }
+                            ],
+                        },
+                        {
+                            "axis": ["x"],
+                            "diagonal_coefficients": [{"num": "2", "den": "1"}],
+                        },
+                    ]
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="quadratic_form.coordinate_restriction.compute",
+        title="Restrict a rational quadratic form to coordinate axes",
+        description=(
+            "Restrict a QQ form to an ordered subset of its existing coordinate "
+            "axes. Return the source form, the restricted form, and the exact "
+            "source-coordinate inclusion matrix. This operation handles coordinate "
+            "subspaces only; it does not compute restrictions to arbitrary subspaces."
+        ),
+        request_type=QuadraticFormRestrictionRequest,
+        result_type=QuadraticFormRestrictionResult,
+        run=compute_coordinate_restriction,
+        tags=("quadratic-form", "restriction", "exact"),
+        examples=(
+            OperationExample(
+                name="ordered_coordinate_subset",
+                description=(
+                    "Keep coordinates y then x; the mixed term is retained and "
+                    "the inclusion columns follow the requested order."
+                ),
+                input={
+                    "form": _form_example(),
+                    "selected_axis": ["y", "x"],
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="quadratic_form.theta_series_prefix.compute",
+        title="Compute an exact quadratic-form theta prefix",
+        description=(
+            "Return coefficients r_Q(0) through r_Q(N) for an integral "
+            "positive-definite QQ polynomial form. Exact adjugate bounds "
+            "prove the complete finite lattice box. Dimension is at most 7, "
+            f"cutoff at most {MAX_THETA_PREFIX_CUTOFF}, and enumeration is "
+            "admitted by exact vector, work, and serialized-output bounds."
+        ),
+        request_type=ThetaSeriesPrefixRequest,
+        result_type=ThetaSeriesPrefixResult,
+        run=compute_theta_series_prefix,
+        tags=("quadratic-form", "theta-series", "exact"),
+        examples=(
+            OperationExample(
+                name="binary_cross_term",
+                description=(
+                    "Compute q^0 through q^4 for x^2+xy+y^2; coefficients "
+                    "count all integral vectors, including sign and order."
+                ),
+                input={
+                    "form": {
+                        "axis": ["x", "y"],
+                        "diagonal_coefficients": [
+                            {"num": "1", "den": "1"},
+                            {"num": "1", "den": "1"},
+                        ],
+                        "cross_terms": [
+                            {
+                                "left": 0,
+                                "right": 1,
+                                "coefficient": {"num": "1", "den": "1"},
+                            }
+                        ],
+                    },
+                    "cutoff": 4,
+                },
+            ),
+        ),
+    ),
+)
+TOOLS = (
+    *TOOLS,
+    MathTool(
+        operation_id="quadratic_form.finite_box_value_profile.compute",
+        title="Compute a finite-box quadratic-form value profile",
+        description=(
+            "For an integral rational quadratic form, count every integer vector "
+            "in [-B,B]^n by its exact value. The result retains the ordered source "
+            "axis and form. The full vector count and conservative output size are "
+            "admitted before evaluating the form."
+        ),
+        request_type=FiniteBoxProfileRequest,
+        result_type=FiniteBoxProfileResult,
+        run=compute_finite_box_profile,
+        tags=("quadratic-form", "finite-box", "exact"),
+        examples=(
+            OperationExample(
+                name="indefinite-binary-form",
+                description="Count values of x^2-y^2 on the complete box [-1,1]^2.",
+                input={
+                    "form": {
+                        "axis": ["x", "y"],
+                        "diagonal_coefficients": [
+                            {"num": "1", "den": "1"},
+                            {"num": "-1", "den": "1"},
+                        ],
+                    },
+                    "radius": 1,
+                },
+            ),
+        ),
+    ),
+)
+TOOLS = (
+    *TOOLS,
+    MathTool(
+        operation_id="quadratic_form.finite_gauss_sum.compute",
+        title="Compute an exact finite quadratic Gauss sum",
+        description=(
+            "Return sum_x exp(2*pi*i*Q(x)/m) over the complete residue module "
+            "as an exact element of QQ[zeta_m] and its determining value histogram. "
+            "Integral coefficients, modulus at most 64, and at most 2,000,000 "
+            "residue vectors are required."
+        ),
+        request_type=FiniteGaussSumRequest,
+        result_type=FiniteGaussSumResult,
+        run=compute_finite_gauss_sum,
+        tags=("quadratic-form", "gauss-sum", "cyclotomic", "exact"),
+        examples=(
+            OperationExample(
+                name="one-variable-mod-five",
+                description="The exact quadratic Gauss sum for Q(x)=x^2 modulo 5.",
+                input={
+                    "form": {
+                        "axis": ["x"],
+                        "diagonal_coefficients": [{"num": "1", "den": "1"}],
+                    },
+                    "modulus": 5,
+                },
+            ),
+        ),
+    ),
+)
+
+
 __all__ = [
     "TOOLS",
+    "compute_bilinear_pairing",
     "compute_coefficient_matrix",
+    "compute_coordinate_restriction",
     "compute_diagonalization",
+    "compute_direct_sum",
+    "compute_finite_box_profile",
+    "compute_finite_gauss_sum",
     "compute_modular_profile",
     "compute_pullback",
     "compute_radical",
     "compute_signature",
+    "compute_theta_series_prefix",
     "evaluate_form",
 ]

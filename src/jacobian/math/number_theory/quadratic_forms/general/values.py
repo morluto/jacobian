@@ -269,6 +269,54 @@ def require_evaluation_budget(
         )
 
 
+def require_bilinear_pairing_budget(
+    form: RationalQuadraticForm,
+    left: RationalCoordinateVector,
+    right: RationalCoordinateVector,
+) -> None:
+    """Bound exact denominator and output growth before polar arithmetic."""
+
+    support_terms = len(form.diagonal_coefficients) + len(form.cross_terms)
+    if support_terms > MAX_QUADRATIC_EVALUATION_SUPPORT_TERMS:
+        raise ValueError("quadratic-form pairing exceeds the total support budget")
+    left_values = tuple(value.as_fraction() for value in left.coordinates)
+    right_values = tuple(value.as_fraction() for value in right.coordinates)
+    denominator_digits = 0
+    products = 0
+    for index, coefficient in enumerate(form.diagonal_coefficients):
+        if coefficient.as_fraction() and left_values[index] and right_values[index]:
+            products += 1
+            denominator_digits += (
+                len(str(abs(coefficient.den)))
+                + len(str(abs(left.coordinates[index].den)))
+                + len(str(abs(right.coordinates[index].den)))
+            )
+    for term in form.cross_terms:
+        if not term.coefficient.as_fraction():
+            continue
+        for left_index, right_index in (
+            (term.left, term.right),
+            (term.right, term.left),
+        ):
+            if left_values[left_index] and right_values[right_index]:
+                products += 1
+                denominator_digits += (
+                    len(str(abs(term.coefficient.den)))
+                    + len(str(abs(left.coordinates[left_index].den)))
+                    + len(str(abs(right.coordinates[right_index].den)))
+                )
+    if products and (
+        denominator_digits
+        + MAX_QUADRATIC_EVALUATION_TERM_DIGITS
+        + 1  # A diagonal polar product is multiplied by 2.
+        + len(str(products))
+        > MAX_QUADRATIC_EVALUATION_DIGITS
+    ):
+        raise ValueError(
+            "quadratic-form pairing exceeds the exact rational growth budget"
+        )
+
+
 __all__ = [
     "MAX_QUADRATIC_EVALUATION_DIGITS",
     "MAX_QUADRATIC_EVALUATION_SUPPORT_TERMS",
@@ -278,5 +326,6 @@ __all__ = [
     "QuadraticCrossTerm",
     "RationalCoordinateVector",
     "RationalQuadraticForm",
+    "require_bilinear_pairing_budget",
     "require_evaluation_budget",
 ]

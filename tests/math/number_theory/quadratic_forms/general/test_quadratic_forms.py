@@ -11,14 +11,17 @@ from jacobian.math.number_theory.quadratic_forms.general import (
     QuadraticCrossTerm,
     RationalCoordinateVector,
     RationalQuadraticForm,
+    bilinear_pairing,
     evaluate_rational_quadratic_form,
 )
 from jacobian.math.number_theory.quadratic_forms.general._models import (
+    BilinearPairingRequest,
     EvaluationRequest,
     EvaluationResult,
 )
 from jacobian.math.number_theory.quadratic_forms.general._tools import (
     TOOLS,
+    compute_bilinear_pairing,
     evaluate_form,
 )
 from jacobian.math.number_theory.quadratic_forms.general.values import (
@@ -28,6 +31,37 @@ from jacobian.math.number_theory.quadratic_forms.general.values import (
     MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS,
     MAX_QUADRATIC_VECTOR_COORDINATE_DIGITS,
 )
+
+
+def test_full_polar_pairing_matches_independent_polarization_with_odd_cross_term() -> (
+    None
+):
+    form_data = {
+        "axis": ["x", "y"],
+        "diagonal_coefficients": [_rational(1), _rational(2)],
+        "cross_terms": [{"left": 0, "right": 1, "coefficient": _rational(3)}],
+    }
+    left_data = {"axis": ["x", "y"], "coordinates": [_rational(1, 2), _rational(2)]}
+    right_data = {"axis": ["x", "y"], "coordinates": [_rational(3), _rational(-1, 3)]}
+    request = BilinearPairingRequest.model_validate(
+        {"form": form_data, "left": left_data, "right": right_data}
+    )
+    result = compute_bilinear_pairing(request)
+
+    x = (Fraction(1, 2), Fraction(2))
+    y = (Fraction(3), Fraction(-1, 3))
+
+    def q(vector: tuple[Fraction, Fraction]) -> Fraction:
+        return vector[0] ** 2 + 3 * vector[0] * vector[1] + 2 * vector[1] ** 2
+
+    summed = tuple(a + b for a, b in zip(x, y, strict=True))
+    expected = q(summed) - q(x) - q(y)
+    assert expected == Fraction(107, 6)
+    assert result.value == CanonicalRational.from_fraction(expected)
+    assert bilinear_pairing(request.form, request.left, request.right) == expected
+    assert "quadratic_form.bilinear_pairing.compute" in {
+        tool.operation_id for tool in TOOLS
+    }
 
 
 def _rational(numerator: int, denominator: int = 1) -> dict[str, int]:

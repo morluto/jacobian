@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
-from typing import Self
+from typing import Literal, Self
 
 from pydantic import Field, model_validator
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
 from jacobian.math._labels import OpaqueLabel
+from jacobian.math.matrices.cyclic_linear._models import (
+    MAX_CYCLIC_FIELD_ELEMENT_DIGITS,
+    RationalCyclotomicElement,
+    RationalCyclotomicField,
+)
 from jacobian.math.matrices.values import RationalMatrix, RationalVectorSpaceBasis
 from jacobian.math.number_theory.quadratic_forms.general.values import (
     RationalQuadraticForm,
@@ -17,6 +22,11 @@ from jacobian.math.number_theory.quadratic_forms.general.values import (
 MAX_QUADRATIC_PULLBACK_AXIS = 128
 MAX_QUADRATIC_PULLBACK_WORK = 2_000_000
 MAX_QUADRATIC_PULLBACK_OUTPUT_ENTRIES = MAX_QUADRATIC_PULLBACK_AXIS**2
+MAX_QUADRATIC_DIAGONALIZATION_AXIS = 64
+MAX_QUADRATIC_DIAGONALIZATION_WORK = MAX_QUADRATIC_DIAGONALIZATION_AXIS**3
+MAX_QUADRATIC_DIAGONALIZATION_INTERMEDIATE_DIGITS = 16_384
+MAX_QUADRATIC_DIAGONALIZATION_OUTPUT_DIGITS = 8_192
+MAX_QUADRATIC_DIAGONALIZATION_OUTPUT_TOTAL_DIGITS = 2_000_000
 
 
 class FormRequest(StrictModel):
@@ -117,8 +127,16 @@ class PullbackResult(StrictModel):
 
 class DiagonalizationResult(StrictModel):
     form: RationalQuadraticForm
-    diagonal: tuple[CanonicalRational, ...]
+    diagonal: tuple[CanonicalRational, ...] = Field(
+        max_length=MAX_QUADRATIC_DIAGONALIZATION_AXIS
+    )
     change: RationalMatrix
+    source_axis: tuple[OpaqueLabel, ...] = Field(
+        max_length=MAX_QUADRATIC_DIAGONALIZATION_AXIS
+    )
+    basis_axis: tuple[OpaqueLabel, ...] = Field(
+        max_length=MAX_QUADRATIC_DIAGONALIZATION_AXIS
+    )
 
     @model_validator(mode="after")
     def shape(self) -> Self:
@@ -127,8 +145,29 @@ class DiagonalizationResult(StrictModel):
             len(self.diagonal) != n
             or self.change.row_count != n
             or self.change.column_count != n
+            or self.source_axis != self.form.axis
+            or len(self.basis_axis) != n
+            or len(set(self.basis_axis)) != n
         ):
-            raise ValueError("diagonalization dimensions must match form axis")
+            raise ValueError("diagonalization axes and dimensions must match")
+        output_digits = 0
+        for value in self.diagonal:
+            require_bounded_rational(
+                value,
+                max_digits=MAX_QUADRATIC_DIAGONALIZATION_OUTPUT_DIGITS,
+                label="quadratic-form diagonalization coefficient",
+            )
+            output_digits += len(str(abs(value.num))) + len(str(value.den))
+        for row in self.change.entries:
+            for value in row:
+                require_bounded_rational(
+                    value,
+                    max_digits=MAX_QUADRATIC_DIAGONALIZATION_OUTPUT_DIGITS,
+                    label="quadratic-form diagonalization change coefficient",
+                )
+                output_digits += len(str(abs(value.num))) + len(str(value.den))
+        if output_digits > MAX_QUADRATIC_DIAGONALIZATION_OUTPUT_TOTAL_DIGITS:
+            raise ValueError("diagonalization result exceeds its aggregate digit bound")
         return self
 
     @classmethod
@@ -138,8 +177,16 @@ class DiagonalizationResult(StrictModel):
         form: RationalQuadraticForm,
         diagonal: tuple[CanonicalRational, ...],
         change: RationalMatrix,
+        source_axis: tuple[OpaqueLabel, ...],
+        basis_axis: tuple[OpaqueLabel, ...],
     ) -> Self:
-        return cls.model_construct(form=form, diagonal=diagonal, change=change)
+        return cls.model_construct(
+            form=form,
+            diagonal=diagonal,
+            change=change,
+            source_axis=source_axis,
+            basis_axis=basis_axis,
+        )
 
 
 class ModularProfileRequest(StrictModel):
@@ -162,8 +209,154 @@ class ModularProfileResult(StrictModel):
         return self
 
 
+MAX_QUADRATIC_GAUSS_MODULUS = 64
+MAX_QUADRATIC_GAUSS_STATES = 2_000_000
+
+
+class FiniteGaussSumRequest(StrictModel):
+    """The sum of exp(2*pi*i*Q(x)/m) over the complete residue module."""
+
+    form: RationalQuadraticForm
+    modulus: int = Field(ge=1, le=MAX_QUADRATIC_GAUSS_MODULUS)
+
+
+class FiniteGaussSumResult(StrictModel):
+    """Exact Gauss sum and the complete value histogram determining it."""
+
+    form: RationalQuadraticForm
+    modulus: int = Field(ge=1, le=MAX_QUADRATIC_GAUSS_MODULUS)
+    additive_character: Literal["EXP_2PI_I_Q_OVER_MODULUS_V1"] = (
+        "EXP_2PI_I_Q_OVER_MODULUS_V1"
+    )
+    histogram: tuple[int, ...]
+    total: int = Field(ge=1)
+    value: RationalCyclotomicElement
+
+    @model_validator(mode="after")
+    def exact_shape(self) -> Self:
+        if (
+            len(self.histogram) != self.modulus
+            or self.total != self.modulus ** len(self.form.axis)
+            or sum(self.histogram) != self.total
+            or self.value.field != RationalCyclotomicField(order=self.modulus)
+        ):
+            raise ValueError("finite Gauss sum must match its complete modular profile")
+        if any(
+            count < 0 or count > MAX_QUADRATIC_GAUSS_STATES for count in self.histogram
+        ):
+            raise ValueError("finite Gauss histogram exceeds its admitted state count")
+        if any(
+            max(len(str(abs(coordinate.num))), len(str(coordinate.den)))
+            > MAX_CYCLIC_FIELD_ELEMENT_DIGITS
+            for coordinate in self.value.coefficients_ascending
+        ):
+            raise ValueError("finite Gauss coordinates exceed the cyclotomic bound")
+        return self
+
+
+MAX_THETA_PREFIX_CUTOFF = 512
+MAX_THETA_PREFIX_DIMENSION = 7
+MAX_THETA_PREFIX_VECTORS = 100_000
+MAX_THETA_PREFIX_WORK = 2_000_000
+MAX_THETA_PREFIX_OUTPUT_BYTES = 1_000_000
+
+
+class ThetaSeriesPrefixRequest(StrictModel):
+    """Exact coefficients of a positive-definite integral form through q^N."""
+
+    form: RationalQuadraticForm
+    cutoff: int = Field(ge=0, le=MAX_THETA_PREFIX_CUTOFF)
+
+
+class ThetaSeriesPrefixResult(StrictModel):
+    """The source-bound tuple (r_Q(0), ..., r_Q(cutoff))."""
+
+    form: RationalQuadraticForm
+    cutoff: int = Field(ge=0, le=MAX_THETA_PREFIX_CUTOFF)
+    coefficients: tuple[int, ...]
+
+    @model_validator(mode="after")
+    def require_prefix_shape(self) -> Self:
+        if len(self.coefficients) != self.cutoff + 1:
+            raise ValueError("theta coefficients must cover q^0 through q^cutoff")
+        if any(value < 0 for value in self.coefficients):
+            raise ValueError("theta coefficients must be nonnegative")
+        return self
+
+
+MAX_QUADRATIC_BOX_RADIUS = 64
+MAX_QUADRATIC_BOX_VECTORS = 25_000
+MAX_QUADRATIC_BOX_PROFILE_ROWS = 25_000
+MAX_QUADRATIC_BOX_OUTPUT_BYTES = 1_000_000
+
+
+class FiniteBoxProfileRequest(StrictModel):
+    """Complete value histogram on the symmetric integer box [-radius,radius]^n."""
+
+    form: RationalQuadraticForm
+    radius: int = Field(ge=0, le=MAX_QUADRATIC_BOX_RADIUS)
+
+
+class FiniteBoxProfileRow(StrictModel):
+    value: int
+    representation_count: int = Field(ge=1)
+
+
+class FiniteBoxProfileResult(StrictModel):
+    """Exact source-bound counts of integral vectors by the value of an integral form."""
+
+    form: RationalQuadraticForm
+    radius: int = Field(ge=0, le=MAX_QUADRATIC_BOX_RADIUS)
+    coordinate_bounds: tuple[tuple[int, int], ...]
+    vector_count: int = Field(ge=1, le=MAX_QUADRATIC_BOX_VECTORS)
+    rows: tuple[FiniteBoxProfileRow, ...] = Field(
+        max_length=MAX_QUADRATIC_BOX_PROFILE_ROWS
+    )
+    minimum_value: int
+    maximum_value: int
+
+    @model_validator(mode="after")
+    def complete_profile_shape(self) -> Self:
+        if len(self.coordinate_bounds) != len(self.form.axis) or any(
+            bound != (-self.radius, self.radius) for bound in self.coordinate_bounds
+        ):
+            raise ValueError("coordinate bounds must match the source form axis")
+        values = tuple(row.value for row in self.rows)
+        if not values or values != tuple(sorted(set(values))):
+            raise ValueError("finite-box profile values must be strictly increasing")
+        if (self.minimum_value, self.maximum_value) != (values[0], values[-1]):
+            raise ValueError("finite-box extrema must match the complete profile")
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        form: RationalQuadraticForm,
+        radius: int,
+        coordinate_bounds: tuple[tuple[int, int], ...],
+        vector_count: int,
+        rows: tuple[FiniteBoxProfileRow, ...],
+        minimum_value: int,
+        maximum_value: int,
+    ) -> Self:
+        """Construct the profile after its complete histogram was established."""
+        return cls.model_construct(
+            form=form,
+            radius=radius,
+            coordinate_bounds=coordinate_bounds,
+            vector_count=vector_count,
+            rows=rows,
+            minimum_value=minimum_value,
+            maximum_value=maximum_value,
+        )
+
+
 __all__ = [
     "DiagonalizationResult",
+    "FiniteBoxProfileRequest",
+    "FiniteBoxProfileResult",
+    "FiniteBoxProfileRow",
     "FormRequest",
     "ModularProfileRequest",
     "ModularProfileResult",
@@ -171,4 +364,6 @@ __all__ = [
     "PullbackResult",
     "RadicalResult",
     "SignatureResult",
+    "ThetaSeriesPrefixRequest",
+    "ThetaSeriesPrefixResult",
 ]

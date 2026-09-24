@@ -6,7 +6,6 @@ from fractions import Fraction
 from itertools import combinations
 
 from jacobian._exact import CanonicalRational
-from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.koszul._admission import (
     SparsePolynomial,
@@ -27,6 +26,7 @@ from jacobian.math.topology.chain_complexes.operations import construct_chain_co
 from jacobian.math.topology.chain_complexes.values import (
     MAX_BASIS_SIZE,
     MAX_MATRIX_CELLS,
+    ChainCoefficient,
     ChainComplexValue,
     CoefficientRing,
 )
@@ -75,18 +75,11 @@ def _as_value(
     )
 
 
-def _scalar_spelling(polynomial: SparsePolynomial) -> str:
-    """Spell one constant polynomial in the canonical chain-complex grammar."""
-
+def _scalar_value(polynomial: SparsePolynomial) -> Fraction:
     if not polynomial:
-        return "0"
+        return Fraction(0)
     coefficient = next(iter(polynomial.values()))
-    if coefficient.denominator == 1:
-        return format_canonical_integer(coefficient.numerator)
-    return (
-        f"{format_canonical_integer(coefficient.numerator)}/"
-        f"{format_canonical_integer(coefficient.denominator)}"
-    )
+    return coefficient
 
 
 def _converted_chain_complex(
@@ -111,11 +104,11 @@ def _converted_chain_complex(
     )
     if cells > MAX_MATRIX_CELLS:
         return None
-    matrices: list[tuple[tuple[str, ...], ...]] = []
+    matrices: list[tuple[tuple[ChainCoefficient, ...], ...]] = []
     for matrix in differentials:
-        dense = [["0"] * matrix.column_count for _ in range(matrix.row_count)]
+        dense = [[Fraction(0)] * matrix.column_count for _ in range(matrix.row_count)]
         for entry in matrix.entries:
-            dense[entry.row][entry.column] = _scalar_spelling(
+            dense[entry.row][entry.column] = _scalar_value(
                 {
                     term.exponents: Fraction(term.coefficient.num, term.coefficient.den)
                     for term in entry.polynomial.polynomial.terms

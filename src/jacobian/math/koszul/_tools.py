@@ -4,15 +4,37 @@ from typing import Any
 
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.koszul._models import KoszulComplexRequest
+from jacobian.math.koszul.dga_operations import module_koszul_dga
 from jacobian.math.koszul.module_models import (
     ModuleKoszulComplex,
+    ModuleKoszulDGA,
+    ModuleKoszulDGARequest,
+    ModuleKoszulDifferentialRequest,
+    ModuleKoszulDifferentialValue,
+    ModuleKoszulDirectSumRequest,
+    ModuleKoszulDirectSumValue,
+    ModuleKoszulExactnessProfile,
     ModuleKoszulHomology,
     ModuleKoszulHomologyRequest,
     ModuleKoszulRequest,
+    ModuleKoszulSequencePermutation,
+    ModuleKoszulSequencePermutationRequest,
+    ModuleKoszulUnitContraction,
+    ModuleKoszulUnitContractionRequest,
+    ModuleKoszulZeroExtension,
+    ModuleKoszulZeroExtensionRequest,
+    ModuleQuotientValue,
 )
 from jacobian.math.koszul.module_operations import (
+    module_koszul_append_zero,
     module_koszul_complex,
+    module_koszul_differential,
+    module_koszul_direct_sum,
+    module_koszul_exactness_profile,
     module_koszul_homology,
+    module_koszul_quotient,
+    module_koszul_sequence_permute,
+    module_koszul_unit_contract,
 )
 from jacobian.math.koszul.operations import koszul_complex
 from jacobian.math.koszul.values import (
@@ -73,8 +95,80 @@ _MODULE_EXAMPLE = {
     },
     "sequence": [[{"num": "1", "den": "1"}]],
 }
+_MODULE_EXAMPLE_COMPLEX = {
+    "algebra": _MODULE_EXAMPLE["algebra"],
+    "module": _MODULE_EXAMPLE["module"],
+    "sequence": _MODULE_EXAMPLE["sequence"],
+    "basis_sizes": [1, 1],
+    "differentials": [
+        {
+            "row_count": 1,
+            "column_count": 1,
+            "entries": [[0, 0, {"num": "1", "den": "1"}]],
+        }
+    ],
+    "square_zero": True,
+}
 
 TOOLS: MathTools = (
+    MathTool(
+        operation_id="homological.koszul.module_direct_sum.compute",
+        title="Compute Koszul complexes of a direct-sum module",
+        description=(
+            "Construct K(f; M direct_sum N) and the two source-bound summand "
+            "complexes over one finite commutative algebra. Returns canonical "
+            "degreewise inclusions whose images partition every target basis; "
+            "both inclusions are checked to commute with each differential. "
+            "The aggregate bases, differential contributions and exact matrices "
+            "are admitted before complex construction."
+        ),
+        request_type=ModuleKoszulDirectSumRequest,
+        result_type=ModuleKoszulDirectSumValue,
+        run=module_koszul_direct_sum,
+        tags=("koszul", "module", "direct-sum", "chain-map", "exact"),
+        examples=(
+            OperationExample(
+                name="dual_number_module_split",
+                description="Split the Koszul complex of a direct sum of two modules over the dual numbers.",
+                input={
+                    "algebra": _MODULE_EXAMPLE["algebra"],
+                    "left": _MODULE_EXAMPLE["module"],
+                    "right": {
+                        **_MODULE_EXAMPLE["module"],
+                        "basis": ["n"],
+                        "action": [[[{"num": "1", "den": "1"}]]],
+                    },
+                    "sequence": [[{"num": "1", "den": "1"}]],
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="homological.koszul.differential.compute",
+        title="Compute one degree of a finite-module Koszul differential",
+        description=(
+            "Compute d_k: M tensor Lambda^k -> M tensor Lambda^(k-1) for one "
+            "selected degree of a finite-module Koszul sequence. Returns the "
+            "source-bound module/algebra/sequence, canonical increasing wedge "
+            "axes, and exact sparse matrix. Only this differential and its "
+            "predecessor are materialized; d_(k-1)d_k is replayed exactly. "
+            "The current finite-module sequence and matrix admission limits apply."
+        ),
+        request_type=ModuleKoszulDifferentialRequest,
+        result_type=ModuleKoszulDifferentialValue,
+        run=module_koszul_differential,
+        tags=("koszul", "differential", "exact"),
+        examples=(
+            OperationExample(
+                name="one_dimensional_module_differential",
+                description=(
+                    "Compute d_1 for the one-dimensional module over QQ with "
+                    "the unit as its Koszul sequence element."
+                ),
+                input={"request": _MODULE_EXAMPLE, "degree": 1},
+            ),
+        ),
+    ),
     MathTool(
         operation_id="koszul.complex.construct.compute",
         title="Construct the exact Koszul complex of a polynomial sequence",
@@ -130,6 +224,47 @@ TOOLS: MathTools = (
         ),
     ),
     MathTool(
+        operation_id="homological.koszul.dga.compute",
+        title="Construct a finite-algebra Koszul differential graded algebra",
+        description=(
+            "Construct the complete unital DGA K(f; A) for an explicit finite "
+            "commutative rational algebra with a verified two-sided unit. The "
+            "result includes its exact module Koszul differential and the sparse "
+            "multiplication table induced by algebra multiplication and exterior "
+            "wedge signs. Chain basis, identity work, complete product entries, "
+            "coefficient growth, and output bytes are admitted before expansion."
+        ),
+        request_type=ModuleKoszulDGARequest,
+        result_type=ModuleKoszulDGA,
+        run=module_koszul_dga,
+        tags=("koszul", "dga", "differential-graded-algebra", "exact"),
+        discovery_terms=(
+            "Koszul differential graded algebra",
+            "Koszul wedge multiplication",
+            "graded Leibniz Koszul complex",
+        ),
+        examples=(
+            OperationExample(
+                name="two_generator_koszul_dga_over_qq",
+                description=(
+                    "Construct K(0,0; QQ), retaining the unit and signed exterior "
+                    "product e_0 e_1 = - e_1 e_0."
+                ),
+                input={
+                    "algebra": {
+                        "basis": ["1"],
+                        "multiplication": [[[{"num": "1", "den": "1"}]]],
+                        "unit": [{"num": "1", "den": "1"}],
+                    },
+                    "sequence": [
+                        [{"num": "0", "den": "1"}],
+                        [{"num": "0", "den": "1"}],
+                    ],
+                },
+            ),
+        ),
+    ),
+    MathTool(
         operation_id="homological.koszul.complex.compute",
         title="Construct a finite-module Koszul complex",
         description="Construct the exact Koszul complex of a finite based module over a finite commutative algebra, retaining algebra/module axes and checking d²=0.",
@@ -146,9 +281,103 @@ TOOLS: MathTools = (
         ),
     ),
     MathTool(
+        operation_id="homological.koszul.sequence_permute.compute",
+        title="Permute a finite-module Koszul sequence",
+        description=(
+            "Rebuild the Koszul complex in the requested sequence order and "
+            "return explicit signed exterior-power chain isomorphisms in both "
+            "directions. The source differential is checked against its retained "
+            "algebra, module action, and sequence before transport."
+        ),
+        request_type=ModuleKoszulSequencePermutationRequest,
+        result_type=ModuleKoszulSequencePermutation,
+        run=module_koszul_sequence_permute,
+        tags=("koszul", "sequence", "permutation", "chain-isomorphism", "exact"),
+        examples=(
+            OperationExample(
+                name="swap_two_unit_entries",
+                description=(
+                    "Swap two equal unit entries; the degree-two exterior basis "
+                    "map still records the minus sign."
+                ),
+                input={
+                    "complex": {
+                        "algebra": _MODULE_EXAMPLE["algebra"],
+                        "module": _MODULE_EXAMPLE["module"],
+                        "sequence": _MODULE_EXAMPLE["sequence"] * 2,
+                        "basis_sizes": [1, 2, 1],
+                        "differentials": [
+                            {
+                                "row_count": 1,
+                                "column_count": 2,
+                                "entries": [
+                                    [0, 0, {"num": "1", "den": "1"}],
+                                    [0, 1, {"num": "1", "den": "1"}],
+                                ],
+                            },
+                            {
+                                "row_count": 2,
+                                "column_count": 1,
+                                "entries": [
+                                    [0, 0, {"num": "-1", "den": "1"}],
+                                    [1, 0, {"num": "1", "den": "1"}],
+                                ],
+                            },
+                        ],
+                    },
+                    "new_to_old": [1, 0],
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="homological.koszul.unit_contraction.compute",
+        title="Contract a finite-module Koszul complex at a unit entry",
+        description=(
+            "Return the exact degree-raising homotopy induced by the inverse of "
+            "a unit sequence entry. The operation checks dH + Hd = identity "
+            "on the retained sequence-derived complex."
+        ),
+        request_type=ModuleKoszulUnitContractionRequest,
+        result_type=ModuleKoszulUnitContraction,
+        run=module_koszul_unit_contract,
+        tags=("koszul", "unit", "contracting-homotopy", "exact"),
+        examples=(
+            OperationExample(
+                name="one_term_unit",
+                description="Contract the one-term Koszul complex of the unit entry.",
+                input={"complex": _MODULE_EXAMPLE_COMPLEX, "unit_index": 0},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="homological.koszul.append_zero.compute",
+        title="Append a zero entry to a finite-module Koszul sequence",
+        description=(
+            "Construct K(f_1,...,f_r,0;M) and return the canonical unshifted "
+            "and shifted inclusions/projections splitting it as K(f;M) plus "
+            "its degree shift. Exact chain and splitting identities are checked."
+        ),
+        request_type=ModuleKoszulZeroExtensionRequest,
+        result_type=ModuleKoszulZeroExtension,
+        run=module_koszul_append_zero,
+        tags=("koszul", "sequence", "zero-entry", "chain-splitting", "exact"),
+        examples=(
+            OperationExample(
+                name="append_zero_to_one_term_complex",
+                description="Split the Koszul complex of (1, 0) into the contractible two-term summand and its shift.",
+                input={"complex": _MODULE_EXAMPLE_COMPLEX},
+            ),
+        ),
+    ),
+    MathTool(
         operation_id="homological.koszul.homology.compute",
         title="Compute finite-module Koszul homology",
-        description="Compute exact homology dimensions of a retained finite-module Koszul complex from its source-bound differentials.",
+        description=(
+            "Compute exact cycle, boundary, and homology bases in every degree "
+            "of a retained finite-module Koszul complex. Basis vectors use the "
+            "source-bound chain axes; the result also returns their dimensions."
+        ),
         request_type=ModuleKoszulHomologyRequest,
         result_type=ModuleKoszulHomology,
         run=lambda request: module_koszul_homology(request.complex),
@@ -166,6 +395,66 @@ TOOLS: MathTools = (
                         "differentials": [],
                     }
                 },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="homological.koszul.exactness_profile.compute",
+        title="Compute positive-degree Koszul exactness profile",
+        description=(
+            "Return every homology dimension and whether this supplied finite "
+            "Koszul complex is acyclic above degree zero. If higher homology is "
+            "nonzero, include a concrete first-degree class representative in "
+            "the retained chain basis. This does not infer a theorem-level "
+            "regular-sequence property."
+        ),
+        request_type=ModuleKoszulHomologyRequest,
+        result_type=ModuleKoszulExactnessProfile,
+        run=module_koszul_exactness_profile,
+        tags=("koszul", "homology", "exactness", "exact"),
+        examples=(
+            OperationExample(
+                name="unit_sequence_is_acyclic_above_zero",
+                description=(
+                    "The unit sequence on the regular module gives an exact "
+                    "positive-degree profile for this finite complex."
+                ),
+                input={
+                    "complex": {
+                        "algebra": _MODULE_EXAMPLE["algebra"],
+                        "module": _MODULE_EXAMPLE["module"],
+                        "sequence": _MODULE_EXAMPLE["sequence"],
+                        "basis_sizes": [1, 1],
+                        "differentials": [
+                            {
+                                "row_count": 1,
+                                "column_count": 1,
+                                "entries": [[0, 0, {"num": "1", "den": "1"}]],
+                            }
+                        ],
+                    }
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="homological.koszul.module_quotient.compute",
+        title="Compute the degree-zero Koszul quotient module",
+        description=(
+            "Construct M/(f_1,...,f_r)M exactly as a based module over the same "
+            "finite commutative algebra, together with a canonical relation-space "
+            "basis, quotient representatives, and the source projection. The empty "
+            "sequence returns M; a unit-generated relation space returns the zero module."
+        ),
+        request_type=ModuleKoszulRequest,
+        result_type=ModuleQuotientValue,
+        run=module_koszul_quotient,
+        tags=("koszul", "module", "quotient", "exact"),
+        examples=(
+            OperationExample(
+                name="quotient_by_unit",
+                description="The unit generates the whole module, so the degree-zero quotient is the zero module.",
+                input=_MODULE_EXAMPLE,
             ),
         ),
     ),

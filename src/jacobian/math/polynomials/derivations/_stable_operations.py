@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from fractions import Fraction
-from math import prod
+from math import comb, prod
 
 from pydantic_core import PydanticCustomError
 
@@ -37,6 +37,7 @@ from jacobian.math.polynomials.values import (
 MAX_GA_SUBREPRESENTATION_SOURCE_TERMS = 128
 MAX_GA_SUBREPRESENTATION_EXPANSION_WORK = 1_000_000
 MAX_GA_SUBREPRESENTATION_COORDINATE_WORK = 5_000_000
+MAX_GA_SUBREPRESENTATION_COMPOSITION_WORK = 25_000
 
 _Terms = dict[tuple[int, ...], Fraction]
 
@@ -85,6 +86,128 @@ def _substitute_basis(
     return {
         monomial: coefficient for monomial, coefficient in result.items() if coefficient
     }
+
+
+def _admit_and_verify_ga_action(action: PolynomialGaAction) -> None:
+    """Check counit and additive composition on generator images, bounded first."""
+    action_terms = tuple(_term_map(image) for image in action.generator_images)
+    variables = action.source_variables
+    max_digit = max(
+        (
+            max(len(str(abs(value.numerator))), len(str(value.denominator)))
+            for image in action_terms
+            for value in image.values()
+        ),
+        default=1,
+    )
+    lhs_work = 0
+    rhs_work = 0
+    lhs_terms = 0
+    rhs_terms = 0
+    max_source_degree = 0
+    max_parameter_degree = 0
+    for image in action_terms:
+        for exponents in image:
+            factor = prod(
+                max(1, len(generator_image)) ** exponent
+                for generator_image, exponent in zip(
+                    action_terms, exponents[:-1], strict=True
+                )
+            )
+            degree = sum(exponents[:-1])
+            max_source_degree = max(max_source_degree, degree)
+            max_parameter_degree = max(max_parameter_degree, exponents[-1])
+            lhs_work += max(1, degree) * factor
+            lhs_terms += factor
+            rhs_work += exponents[-1] + 1
+            rhs_terms += exponents[-1] + 1
+            lhs_digits = max_digit + factor * (
+                degree * (2 * max_digit + 1) + len(str(max(1, factor)))
+            )
+            rhs_digits = max_digit + exponents[-1] * 2 + len(str(exponents[-1] + 1))
+            if max(lhs_digits, rhs_digits) > MAX_DERIVATION_COEFFICIENT_DIGITS:
+                raise OperationResourceAdmissionError(
+                    location=("action",),
+                    code="polynomial_ga_subrepresentation.action_coefficient_growth",
+                    message="additive action-law check exceeds the coefficient digit budget",
+                )
+    lhs_aggregate_digits = max_digit + lhs_terms * (
+        max_source_degree * (2 * max_digit + 1) + len(str(max(1, lhs_terms)))
+    )
+    rhs_aggregate_digits = max_digit + rhs_terms * (
+        max_parameter_degree + len(str(max(1, rhs_terms)))
+    )
+    if (
+        max(lhs_aggregate_digits, rhs_aggregate_digits)
+        > MAX_DERIVATION_COEFFICIENT_DIGITS
+    ):
+        raise OperationResourceAdmissionError(
+            location=("action",),
+            code="polynomial_ga_subrepresentation.action_coefficient_growth",
+            message="combined additive action-law coefficients exceed the digit budget",
+        )
+    if (
+        lhs_work + rhs_work > MAX_GA_SUBREPRESENTATION_COMPOSITION_WORK
+        or max(lhs_terms, rhs_terms) > MAX_GA_SUBREPRESENTATION_COMPOSITION_WORK
+    ):
+        raise OperationResourceAdmissionError(
+            location=("action",),
+            code="polynomial_ga_subrepresentation.action_law_work",
+            message="additive action-law check exceeds the admitted work budget",
+        )
+
+    for index, image in enumerate(action_terms):
+        counit = {
+            exponents[:-1]: coefficient
+            for exponents, coefficient in image.items()
+            if exponents[-1] == 0
+        }
+        expected_generator = {
+            tuple(
+                1 if axis == index else 0 for axis in range(len(variables))
+            ): Fraction(1)
+        }
+        if counit != expected_generator:
+            raise OperationDomainValidationError(
+                location=("action", "generator_images", index),
+                code="polynomial_ga_subrepresentation.action_counit",
+                message="action does not satisfy the additive identity law",
+            )
+
+        lhs: _Terms = {}
+        for exponents, coefficient in image.items():
+            product_terms: _Terms = {
+                tuple(0 for _ in range(len(variables) + 2)): Fraction(1)
+            }
+            for generator_image, exponent in zip(
+                action_terms, exponents[:-1], strict=True
+            ):
+                lifted = {
+                    (*powers[:-1], powers[-1], 0): value
+                    for powers, value in generator_image.items()
+                }
+                for _ in range(exponent):
+                    product_terms = _multiply(product_terms, lifted)
+            for powers, value in product_terms.items():
+                key = (*powers[:-1], powers[-1] + exponents[-1])
+                lhs[key] = lhs.get(key, Fraction(0)) + coefficient * value
+
+        rhs: _Terms = {}
+        for exponents, coefficient in image.items():
+            parameter_degree = exponents[-1]
+            for s_degree in range(parameter_degree + 1):
+                key = (*exponents[:-1], s_degree, parameter_degree - s_degree)
+                rhs[key] = rhs.get(key, Fraction(0)) + coefficient * comb(
+                    parameter_degree, s_degree
+                )
+        lhs = {key: value for key, value in lhs.items() if value}
+        rhs = {key: value for key, value in rhs.items() if value}
+        if lhs != rhs:
+            raise OperationDomainValidationError(
+                location=("action", "generator_images", index),
+                code="polynomial_ga_subrepresentation.action_composition",
+                message="action does not satisfy the additive composition law",
+            )
 
 
 def _coordinate_frame(
@@ -376,7 +499,14 @@ def _admit_basis(
         )
     basis_terms = sum(len(value.polynomial.terms) for value in basis)
     matrix_term_bound = len(basis) * expansion_terms
-    output_bytes = (basis_terms + expansion_terms + matrix_term_bound) * 384
+    action_bytes = (
+        sum(len(image.polynomial.terms) for image in action.generator_images) * 384
+    )
+    action_bytes += sum(len(value.encode("utf-8")) for value in action.source_variables)
+    action_bytes += len(action.parameter.encode("utf-8")) + 256
+    output_bytes = (
+        action_bytes + (basis_terms + expansion_terms + matrix_term_bound) * 384
+    )
     output_bytes += len(basis) ** 2 * 256
     if output_bytes > MAX_GA_ACTION_OUTPUT_BYTES:
         _reject(
@@ -456,6 +586,7 @@ def ga_stable_subrepresentation(
     claim to find other finite-dimensional subrepresentations.
     """
     action_value, basis_value = _prepare_input(action, basis)
+    _admit_and_verify_ga_action(action_value)
     pivot_monomials, inverse = _admit_basis(action_value, basis_value)
     matrix = _compute_matrix(action_value, basis_value, pivot_monomials, inverse)
     return PolynomialGaStableSubrepresentation.model_construct(

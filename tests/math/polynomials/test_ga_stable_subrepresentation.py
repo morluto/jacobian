@@ -9,8 +9,13 @@ from jacobian.catalog.models import (
     MathTool,
     OperationDomainValidationError,
     OperationMatchRequest,
+    OperationResourceAdmissionError,
 )
-from jacobian.math.polynomials.derivations._models import PolynomialDerivation
+from jacobian.math.polynomials.derivations import _stable_operations
+from jacobian.math.polynomials.derivations._models import (
+    PolynomialDerivation,
+    PolynomialGaAction,
+)
 from jacobian.math.polynomials.derivations._stable_models import (
     PolynomialGaStableSubrepresentationRequest,
 )
@@ -79,6 +84,46 @@ def test_dependent_supplied_basis_is_rejected() -> None:
     x = _poly("x", 1)
     with pytest.raises(OperationDomainValidationError, match="linearly independent"):
         ga_stable_subrepresentation(_translation_action(), (x, x))
+
+
+def test_serialized_action_claim_must_satisfy_additive_law() -> None:
+    action = _translation_action()
+    malformed_image = RationalPolynomial.model_validate(
+        {
+            "variables": ["x", "t"],
+            "polynomial": {
+                "terms": [
+                    {"coefficient": {"num": 1, "den": 1}, "exponents": [1, 0]},
+                    {"coefficient": {"num": 1, "den": 1}, "exponents": [0, 2]},
+                ]
+            },
+        }
+    )
+    forged = PolynomialGaAction.model_construct(
+        source_variables=action.source_variables,
+        parameter=action.parameter,
+        generator_images=(malformed_image,),
+    )
+    with pytest.raises(OperationDomainValidationError, match="composition law"):
+        ga_stable_subrepresentation(forged, (_poly("x", 0),))
+
+
+def test_retained_action_bytes_are_included_before_substitution(monkeypatch) -> None:
+    action = _translation_action()
+    # Without the retained action this one-vector result estimate is 1,408
+    # bytes. Including the serialized action takes the total above 2,000.
+    monkeypatch.setattr(_stable_operations, "MAX_GA_ACTION_OUTPUT_BYTES", 2_000)
+
+    def expansion_must_not_start(*_args, **_kwargs):
+        raise AssertionError("substitution ran before combined output admission")
+
+    monkeypatch.setattr(
+        _stable_operations, "_substitute_basis", expansion_must_not_start
+    )
+    with pytest.raises(
+        OperationResourceAdmissionError, match="serialized-output budget"
+    ):
+        ga_stable_subrepresentation(action, (_poly("x", 0),))
 
 
 def test_request_preserves_explicit_axis_and_catalog_example() -> None:

@@ -12,7 +12,15 @@ point `(a,0)`, squarefreeness gives `f'(a) != 0`; the operation uses `y` as
 uniformizer and solves `f(x(y))=y^2`. For an element represented as
 `(u(x)+v(x)y)/d(x)`, the norm `u(x)^2-v(x)^2 f(x)` bounds the finite expansion
 needed to find its exact order. Resource admission precedes that expansion.
-The zero element is reported with valuation `null`.
+Both function-field valuation operations return finite results in the closed
+tagged shape `{ "kind": "FINITE", "value": n }`, including when `n=0`. The
+zero function uses the distinct shape
+`{ "kind": "POSITIVE_INFINITY" }`; this branch has no numeric field and does
+not serialize as `null`.
+
+The rational-function-field `function_field.place.valuation.compute` operation
+uses the same tagged result for finite and infinite rational-function-field
+places.
 
 This slice covers only rational affine points of the supported hyperelliptic
 model. It does not represent points over extension residue fields or points at

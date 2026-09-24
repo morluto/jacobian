@@ -19,12 +19,14 @@ from jacobian.math.function_fields._models import (
     FunctionFieldElementInverseRequest,
     FunctionFieldElementMultiplyRequest,
     FunctionFieldElementMultiplyResult,
+    FunctionFieldFiniteValuation,
     FunctionFieldGenusRequest,
     FunctionFieldGenusResult,
     FunctionFieldPlaceEnumerationRequest,
     FunctionFieldPlaceEnumerationResult,
     FunctionFieldPlaceValuationRequest,
     FunctionFieldPlaceValuationResult,
+    FunctionFieldPositiveInfinityValuation,
     FunctionFieldPrincipalDivisorRequest,
     FunctionFieldPrincipalDivisorResult,
     FunctionFieldResidueRequest,
@@ -183,10 +185,15 @@ _X_DIVISOR = {
 def _run_place_valuation(
     request: FunctionFieldPlaceValuationRequest,
 ) -> FunctionFieldPlaceValuationResult:
+    valuation = function_field_place_valuation(request.place, request.element)
     return FunctionFieldPlaceValuationResult(
         place=request.place,
         element=request.element,
-        valuation=function_field_place_valuation(request.place, request.element),
+        valuation=(
+            FunctionFieldPositiveInfinityValuation(kind="POSITIVE_INFINITY")
+            if valuation is None
+            else FunctionFieldFiniteValuation(kind="FINITE", value=valuation)
+        ),
     )
 
 
@@ -441,7 +448,12 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     MathTool(
         operation_id="function_field.place.valuation.compute",
         title="Compute a function-field valuation",
-        description="Compute the exact discrete valuation of a rational-function element at a finite or infinite place; the place and element must share the same rational function field.",
+        description=(
+            "Compute the exact discrete valuation of a rational-function element "
+            "at a finite or infinite place of GF(p)(x). A finite result is tagged "
+            "FINITE and carries an integer (including zero); the zero element has "
+            "the structural POSITIVE_INFINITY result."
+        ),
         request_type=FunctionFieldPlaceValuationRequest,
         result_type=FunctionFieldPlaceValuationResult,
         run=_run_place_valuation,
@@ -473,7 +485,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "an odd-characteristic squarefree model y^2=f(x). The point retains "
             "its curve, coordinates, GF(p) residue parent, and local parameter "
             "(x-x0 off the branch locus, y at a branch point). Infinity and "
-            "points over extension residue fields are not represented."
+            "points over extension residue fields are not represented. Finite "
+            "valuations carry an integer; the zero element returns the structural "
+            "POSITIVE_INFINITY branch without a numeric value."
         ),
         request_type=HyperellipticAffinePlaceValuationRequest,
         result_type=HyperellipticAffinePlaceValuationResult,

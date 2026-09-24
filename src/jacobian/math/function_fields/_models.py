@@ -257,10 +257,29 @@ class HyperellipticAffinePlaceValuationRequest(StrictModel):
         return self
 
 
+class FunctionFieldFiniteValuation(StrictModel):
+    """A finite integer valuation, including finite value zero."""
+
+    kind: Literal["FINITE"]
+    value: int
+
+
+class FunctionFieldPositiveInfinityValuation(StrictModel):
+    """The valuation of the zero field element; it carries no numeric value."""
+
+    kind: Literal["POSITIVE_INFINITY"]
+
+
+FunctionFieldValuation = Annotated[
+    FunctionFieldFiniteValuation | FunctionFieldPositiveInfinityValuation,
+    Field(discriminator="kind"),
+]
+
+
 class HyperellipticAffinePlaceValuationResult(StrictModel):
     place: HyperellipticAffinePlace
     element: FiniteFunctionFieldElement
-    valuation: int | None
+    valuation: FunctionFieldValuation
 
     @model_validator(mode="after")
     def require_shared_parent(self) -> Self:
@@ -312,7 +331,7 @@ class FunctionFieldPlaceValuationRequest(StrictModel):
 class FunctionFieldPlaceValuationResult(StrictModel):
     place: FunctionFieldPlace
     element: FiniteFunctionFieldElement
-    valuation: int | None
+    valuation: FunctionFieldValuation
 
 
 class FunctionFieldPrincipalDivisorRequest(StrictModel):

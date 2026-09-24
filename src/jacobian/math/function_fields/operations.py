@@ -68,14 +68,17 @@ from jacobian.math.function_fields._models import (
     FunctionFieldDivisorEffectivePartsResult,
     FunctionFieldDivisorTerm,
     FunctionFieldElementMultiplyResult,
+    FunctionFieldFiniteValuation,
     FunctionFieldGenusResult,
     FunctionFieldPlace,
     FunctionFieldPlaceEnumerationResult,
+    FunctionFieldPositiveInfinityValuation,
     FunctionFieldPrincipalDivisorResult,
     FunctionFieldProductTerm,
     FunctionFieldReductionStep,
     FunctionFieldResidueResult,
     FunctionFieldRiemannRochSpace,
+    FunctionFieldValuation,
     HyperellipticAffinePlace,
     HyperellipticAffinePlaceValuationResult,
     PrimeFieldPolynomial,
@@ -1252,6 +1255,12 @@ def function_field_place_valuation(
     return _rf_valuation(coordinate, place)
 
 
+def _function_field_valuation(value: int | None) -> FunctionFieldValuation:
+    if value is None:
+        return FunctionFieldPositiveInfinityValuation(kind="POSITIVE_INFINITY")
+    return FunctionFieldFiniteValuation(kind="FINITE", value=value)
+
+
 def _affine_shift(
     polynomial: tuple[int, ...], point: int, length: int, prime: int
 ) -> list[int]:
@@ -1473,7 +1482,9 @@ def function_field_hyperelliptic_affine_valuation(
     norm = poly_sub(poly_mul(u, u, prime), poly_mul(poly_mul(v, v, prime), branch, prime), prime)
     if not norm:
         return HyperellipticAffinePlaceValuationResult(
-            place=place, element=element, valuation=None
+            place=place,
+            element=element,
+            valuation=_function_field_valuation(None),
         )
     order_bound = _affine_point_order(norm, place.x, prime)
     numerator_series = _hyperelliptic_numerator_series(
@@ -1490,7 +1501,9 @@ def function_field_hyperelliptic_affine_valuation(
     return HyperellipticAffinePlaceValuationResult(
         place=place,
         element=element,
-        valuation=numerator_order - ramification_index * denominator_order,
+        valuation=_function_field_valuation(
+            numerator_order - ramification_index * denominator_order
+        ),
     )
 
 

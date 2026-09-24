@@ -2,13 +2,19 @@ from fractions import Fraction
 
 import pytest
 
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
+from jacobian.math.number_theory.algebraic_numbers.complex import ComplexAlgebraicValue
+from jacobian.math.number_theory.algebraic_numbers.real import RealAlgebraicValue
 from jacobian.math.polynomials.local_series.newton_polygon import (
     LocalPolynomialCoefficient,
     LocalPolynomialInSeries,
     NewtonEdgeCharacteristicRequest,
     local_polynomial_newton_polygon,
     newton_edge_characteristic_polynomial,
+    newton_edge_characteristic_roots,
 )
 from jacobian.math.polynomials.local_series.values import TruncatedLaurentWindow
 
@@ -157,3 +163,80 @@ def test_edge_characteristic_rejects_nonexistent_edge() -> None:
             )
         )
     assert error.value.errors()[0]["type"] == "local_series.newton_edge_index"
+
+
+@pytest.mark.parametrize(
+    ("constant", "expected"),
+    [
+        (-2, ("real", (1, 0, -2), 0, 1)),
+        (2, ("complex", (1, 0, 2), 0, 1)),
+        (-1, ("rational_pair", -1, 1)),
+    ],
+)
+def test_quadratic_newton_edge_roots_are_exact(constant, expected) -> None:
+    result = newton_edge_characteristic_roots(
+        NewtonEdgeCharacteristicRequest(
+            polynomial=_polynomial(
+                [
+                    (0, _series(1, (constant, 1))),
+                    (2, _series(0, (1, 1))),
+                ]
+            ),
+            edge_index=0,
+        )
+    )
+    assert result.characteristic.characteristic_polynomial.variables == ("c",)
+    if expected[0] == "real":
+        assert len(result.roots) == 2
+        assert all(isinstance(root.value, RealAlgebraicValue) for root in result.roots)
+        assert [(root.value.polynomial, root.value.real_root_index) for root in result.roots] == [
+            (expected[1], 0),
+            (expected[1], 1),
+        ]
+        # Independent substitution oracle: the selected roots have exact square 2.
+        assert all(root.value.polynomial == (1, 0, -2) for root in result.roots)
+    elif expected[0] == "complex":
+        assert len(result.roots) == 2
+        assert all(isinstance(root.value, ComplexAlgebraicValue) for root in result.roots)
+        assert [(root.value.polynomial, root.value.root_index) for root in result.roots] == [
+            (expected[1], 0),
+            (expected[1], 1),
+        ]
+        assert all(root.value.polynomial == (1, 0, 2) for root in result.roots)
+    else:
+        assert len(result.roots) == 2
+        assert [root.value.as_fraction() for root in result.roots] == [
+            Fraction(-1),
+            Fraction(1),
+        ]
+        assert [root.multiplicity for root in result.roots] == [1, 1]
+
+
+def test_newton_edge_root_operation_rejects_degree_above_two() -> None:
+    source = _polynomial(
+        [
+            (0, _series(1, (1, 1))),
+            (3, _series(0, (1, 1))),
+        ]
+    )
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        newton_edge_characteristic_roots(
+            NewtonEdgeCharacteristicRequest(polynomial=source, edge_index=0)
+        )
+    assert error.value.errors()[0]["type"] == "local_series.newton_edge_root_degree_bound"
+
+
+def test_newton_edge_roots_declared_catalog_example_executes() -> None:
+    from jacobian.catalog.catalog import Catalog
+    from jacobian.dispatch import invoke_operation
+
+    operation = Catalog.open().operation(
+        "local_series.polynomial.newton_edge_characteristic_roots.compute"
+    )
+    assert operation is not None
+    example = operation.examples[0]
+    result = invoke_operation(operation.operation_id, example.input, Catalog.open())
+    assert result.output["characteristic"]["characteristic_polynomial"]["polynomial"]
+    roots = result.output["roots"]
+    assert len(roots) == 2
+    assert all(root["value"]["polynomial"] == ["1", "0", "-2"] for root in roots)

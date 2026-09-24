@@ -120,3 +120,17 @@ class TestRSK:
             "algebraic_combinatorics.rsk_shape_mismatch",
             "algebraic_combinatorics.rsk_lengths_mismatch",
         }
+
+    def test_replay_rejects_mutated_valid_tableau_pair(self) -> None:
+        result = rsk_permutation(RSKPermutationRequest(permutation=(1, 3, 2)))
+        payload = result.model_dump(mode="json")
+        # This is another standard tableau of the same (2, 1) shape, so the
+        # value's structural validator accepts it. It is not the insertion
+        # tableau produced by the retained permutation.
+        payload["p_tableau"] = {"rows": [[1, 3], [2]]}
+        mutated = RSKResult.model_validate(payload)
+
+        assert mutated.shape == result.shape
+        assert mutated.q_tableau == result.q_tableau
+        assert mutated.p_tableau != result.p_tableau
+        assert not verify_rsk(mutated)

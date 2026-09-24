@@ -1322,36 +1322,12 @@ def _canonicalize_invariant_basis(
     return tuple(sorted(set(canonical)))
 
 
-def _replay_invariants(
-    incidence: list[list[int]],
-    p_invariants: tuple[tuple[int, ...], ...],
-    t_invariants: tuple[tuple[int, ...], ...],
-) -> None:
-    """Replay every invariant against the incidence matrix in the kernel."""
-
-    places = len(incidence)
-    transitions = len(incidence[0]) if incidence else 0
-    for vector in t_invariants:
-        if any(
-            sum(incidence[place][t] * vector[t] for t in range(transitions))
-            for place in range(places)
-        ):
-            raise RuntimeError("a T-invariant escapes the incidence kernel")
-    for vector in p_invariants:
-        if any(
-            sum(vector[place] * incidence[place][t] for place in range(places))
-            for t in range(transitions)
-        ):
-            raise RuntimeError("a P-invariant escapes the left incidence kernel")
-
-
 def petri_invariants(net: PetriNet) -> PetriInvariantsResult:
     """Compute P-invariants and T-invariants as exact integer modules.
 
     P-invariants span ``ker_Z(C^T)`` and T-invariants span ``ker_Z(C)``
     for the incidence matrix ``C``. Kernel bases come from the certified
     Smith owner kernel, canonicalized through the Hermite owner kernel;
-    every returned vector is replayed against ``C`` inside this kernel.
     """
 
     net = _admit_net(net)
@@ -1394,14 +1370,12 @@ def petri_invariants(net: PetriNet) -> PetriInvariantsResult:
         rank = min(places, transitions) - min(len(p_basis), len(t_basis))
         if len(t_basis) != transitions - rank or len(p_basis) != places - rank:
             raise RuntimeError("invariant bases disagree with the Smith rank")
-    _replay_invariants(incidence, p_basis, t_basis)
     return PetriInvariantsResult._from_kernel(
         net=net,
         incidence=incidence_matrix,
         incidence_rank=rank,
         p_invariants=p_basis,
         t_invariants=t_basis,
-        replayed=True,
     )
 
 

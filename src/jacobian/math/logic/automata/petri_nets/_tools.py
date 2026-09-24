@@ -531,9 +531,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         description="Return exact integer bases for the P-invariants "
         "(left kernel of the incidence matrix) and T-invariants (right "
         "kernel) with the incidence rank profile. Kernel bases come from "
-        "the certified Smith owner kernel, canonicalized through the "
-        "Hermite owner kernel, and every vector is replayed against the "
-        "incidence matrix inside the kernel.",
+        "the Smith owner kernel and are canonicalized through the "
+        "Hermite owner kernel.",
         request_type=PetriInvariantsRequest,
         result_type=PetriInvariantsResult,
         run=compute_petri_invariants,

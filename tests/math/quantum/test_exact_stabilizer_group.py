@@ -57,6 +57,15 @@ def test_accepts_positive_identity_dependency_and_empty_trivial_group() -> None:
     assert trivial.generators == ()
 
 
+def test_reduces_maximum_dependent_generator_family() -> None:
+    register = QubitRegister(qubit_ids=("q",))
+    z = _pauli(register, (0,), (1,), 0)
+    reduced = stabilizer_group_from_generators(
+        ExactStabilizerGroupRequest(register=register, generators=(z,) * 64)
+    )
+    assert reduced.generators == (z,)
+
+
 @pytest.mark.parametrize(
     "generators",
     (

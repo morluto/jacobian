@@ -401,6 +401,14 @@ def pauli_multiply(left: ExactQubitPauli, right: ExactQubitPauli) -> PauliProduc
     _admit_exact(left, "left")
     _admit_exact(right, "right")
     _admit_pauli_pair(left.phase_free, right.phase_free)
+    product_value = _product_pauli_after_admission(left, right)
+    return PauliProductResult(left=left, right=right, product=product_value)
+
+
+def _product_pauli_after_admission(
+    left: ExactQubitPauli, right: ExactQubitPauli
+) -> ExactQubitPauli:
+    """Multiply same-register Paulis after a caller has admitted both values."""
     phase = (
         left.phase
         + right.phase
@@ -412,9 +420,9 @@ def pauli_multiply(left: ExactQubitPauli, right: ExactQubitPauli) -> PauliProduc
             )
         )
     ) % 4
-    product = ExactQubitPauli(
-        phase_free=PhaseFreeQubitPauli(
-            register=left.register,
+    product_value = ExactQubitPauli.model_construct(
+        phase_free=PhaseFreeQubitPauli.model_construct(
+            qubit_register=left.register,
             x_bits=tuple(
                 (x + y) % 2
                 for x, y in zip(
@@ -430,7 +438,7 @@ def pauli_multiply(left: ExactQubitPauli, right: ExactQubitPauli) -> PauliProduc
         ),
         phase=phase,
     )
-    return PauliProductResult(left=left, right=right, product=product)
+    return product_value
 
 
 def pauli_inverse(value: ExactQubitPauli) -> PauliInverseResult:
@@ -486,11 +494,12 @@ def stabilizer_group_from_generators(
     pair_count = count * (count - 1) // 2
     work_bound = (
         2 * pair_count * width
-        + 3 * count * min(count, width) * width
-        + count * width * (MAX_QUBIT_LABEL_LENGTH + 4)
+        + 8 * count * min(count, width) * width
+        + width * (MAX_QUBIT_LABEL_LENGTH + 4)
+        + 2 * count * width * (MAX_QUBIT_LABEL_LENGTH + 4)
         + count * width
     )
-    if work_bound > 470_000:
+    if work_bound > 1_000_000:
         raise OperationResourceAdmissionError(
             location=("generators",),
             code="quantum.stabilizer.exact_group.over_envelope",
@@ -546,7 +555,7 @@ def stabilizer_group_from_generators(
         for pivot in sorted(echelon):
             if vector[pivot]:
                 row = echelon[pivot]
-                product_pauli = pauli_multiply(reduced, row).product
+                product_pauli = _product_pauli_after_admission(reduced, row)
                 reduced = product_pauli
                 vector = (*reduced.phase_free.x_bits, *reduced.phase_free.z_bits)
         pivot = next((column for column, bit in enumerate(vector) if bit), None)

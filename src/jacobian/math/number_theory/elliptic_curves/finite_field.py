@@ -30,6 +30,7 @@ from jacobian.math.finite_fields.values import (
     FiniteFieldPresentation,
 )
 from jacobian.math.groups.abelian._models import AbelianPresentation
+from jacobian.math.polynomials._models import IntegerPolynomial
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -588,6 +589,35 @@ class FiniteFieldCardinalityResult(StrictModel):
     cardinality: int = Field(ge=1)
     trace: int
     frobenius_polynomial: tuple[int, int, int]
+
+
+class FiniteFieldZetaPolynomialResult(StrictModel):
+    """Numerator of the zeta function of one finite-field elliptic curve.
+
+    ``numerator`` is the dense integral polynomial ``1 - a*T + q*T^2``;
+    ``IntegerPolynomial`` stores coefficients in descending degree order.
+    The curve and count fields retain the source context and state the exact
+    relation from which the numerator was obtained.
+    """
+
+    curve: FiniteFieldShortWeierstrassCurve
+    cardinality: int = Field(ge=1)
+    trace: int
+    numerator: IntegerPolynomial
+
+    @model_validator(mode="after")
+    def require_numerator_identity(self) -> Self:
+        q = int(self.curve.field.characteristic**self.curve.field.degree)
+        if self.trace != q + 1 - self.cardinality or self.numerator.coefficients != (
+            q,
+            -self.trace,
+            1,
+        ):
+            raise _validation_error(
+                "zeta_polynomial_identity",
+                "zeta numerator must be 1 - trace*T + q*T^2 for the exact curve count",
+            )
+        return self
 
 
 class FiniteFieldGroupStructureResult(StrictModel):
@@ -1738,7 +1768,10 @@ def finite_field_curve_base_change(
     sample = FiniteFieldCurveBaseChangeResult.model_construct(
         curve=sample_curve, point=sample_point
     )
-    if len(rfc8785.dumps(sample.model_dump(mode="json"))) > CanonicalLimits().max_output_bytes:
+    if (
+        len(rfc8785.dumps(sample.model_dump(mode="json")))
+        > CanonicalLimits().max_output_bytes
+    ):
         raise OperationResourceAdmissionError(
             location=("embedding", "target"),
             code="elliptic_curve.finite_field.base_change_output_bound",
@@ -1764,9 +1797,7 @@ def finite_field_curve_base_change(
                 embed_field_element(point.y, embedding),
             )
             target_point = _point_admit_with_curve(target_curve, target_point)
-    return FiniteFieldCurveBaseChangeResult(
-        curve=target_curve, point=target_point
-    )
+    return FiniteFieldCurveBaseChangeResult(curve=target_curve, point=target_point)
 
 
 def finite_field_cardinality(
@@ -1776,6 +1807,23 @@ def finite_field_cardinality(
     curve = points.curve
     q = curve.field.characteristic**curve.field.degree
     return _cardinality_from_points(curve, points, q)
+
+
+def finite_field_zeta_polynomial(
+    curve: FiniteFieldShortWeierstrassCurve,
+) -> FiniteFieldZetaPolynomialResult:
+    """Return ``1 - a*T + q*T^2`` from one admitted exact base-field count."""
+    curve = _curve_admit(curve)
+    q = _admit_extension_count_growth(curve, 1)
+    count = _cardinality_from_character_sum(curve, q)
+    return FiniteFieldZetaPolynomialResult(
+        curve=count.curve,
+        cardinality=count.cardinality,
+        trace=count.trace,
+        numerator=IntegerPolynomial(
+            coefficients=(q, -count.trace, 1),
+        ),
+    )
 
 
 def finite_field_group_structure(

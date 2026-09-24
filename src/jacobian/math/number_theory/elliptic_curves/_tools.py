@@ -36,6 +36,7 @@ from jacobian.math.number_theory.elliptic_curves.finite_field import (
     FiniteFieldPointSet,
     FiniteFieldScalarRequest,
     FiniteFieldShortWeierstrassCurve,
+    FiniteFieldZetaPolynomialResult,
     finite_field_cardinality,
     finite_field_curve_base_change,
     finite_field_discriminant,
@@ -50,6 +51,7 @@ from jacobian.math.number_theory.elliptic_curves.finite_field import (
     finite_field_point_scalar,
     finite_field_points,
     finite_field_quadratic_twist,
+    finite_field_zeta_polynomial,
 )
 from jacobian.math.number_theory.elliptic_curves.operations import (
     add_points,
@@ -361,9 +363,34 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
     ),
     MathTool(
+        operation_id="elliptic_curve.finite_field.zeta_polynomial.compute",
+        title="Compute a finite-field elliptic zeta numerator",
+        description=(
+            "Return the exact numerator 1 - a*T + q*T^2 of the zeta function "
+            "for a nonsingular short-Weierstrass curve over a bounded finite "
+            "field, with a = q + 1 - #E(F_q). Coefficients are serialized in "
+            "descending degree order and the result retains the curve, count, "
+            "and trace."
+        ),
+        request_type=FiniteFieldCurveRequest,
+        result_type=FiniteFieldZetaPolynomialResult,
+        run=lambda request: finite_field_zeta_polynomial(request.curve),
+        tags=("elliptic-curve", "finite-field", "zeta", "frobenius", "exact"),
+        examples=(
+            OperationExample(
+                name="zeta_numerator_over_five",
+                description=(
+                    "For y^2 = x^3 + x + 1 over F5, return "
+                    "1 + 3*T + 5*T^2 in descending coefficient order."
+                ),
+                input={"curve": _finite_curve()},
+            ),
+        ),
+    ),
+    MathTool(
         operation_id="elliptic_curve.finite_field.extension_counts.compute",
         title="Count finite-field elliptic curve extensions",
-        description="Compute exact point counts over F_(q^n) for a bounded degree prefix from the Frobenius recurrence, deriving the base trace by exhaustive exact point enumeration.",
+        description="Compute exact point counts over F_(q^n) for a bounded degree prefix from the Frobenius recurrence, deriving the base trace by an admitted exact quadratic-character sum.",
         request_type=FiniteFieldExtensionCountsRequest,
         result_type=FiniteFieldExtensionCountsResult,
         run=lambda request: finite_field_extension_counts(

@@ -18,6 +18,7 @@ from jacobian.math.logic.automata.petri_nets._models import (
     MAX_MARKING_COMMUTATION_PROFILE_OUTPUT_BYTES,
     MAX_MARKING_COMMUTATION_PROFILE_WORK,
     MAX_MARKING_CONFLICT_PROFILE_OUTPUT_BYTES,
+    MAX_REACHABLE_DEAD_MARKINGS_OUTPUT_BYTES,
     MAX_SIPHON_TRAP_FAMILY_OUTPUT_BYTES,
     MAX_SIPHON_TRAP_PLACES,
     MAX_SIPHON_TRAP_WORK,
@@ -39,6 +40,7 @@ from jacobian.math.logic.automata.petri_nets._models import (
     PlaceSetSupportResult,
     PumpingWitnessResult,
     ReachabilityResult,
+    ReachableDeadMarkingsResult,
     SiphonTrapFamilyResult,
     SiphonTrapResult,
     StateEquationResult,
@@ -75,6 +77,7 @@ __all__ = [
     "place_set_initial_marking_profile",
     "place_set_support",
     "reachability_graph",
+    "reachable_dead_markings",
     "replay_firing_sequence",
     "reverse_petri_net",
     "siphon_trap",
@@ -716,19 +719,13 @@ def state_equation_target(
     )
 
 
-def reachability_graph(
+def _explore_reachability(
     net: PetriNet,
     initial_marking: Marking,
-    max_states: int = 10000,
-) -> ReachabilityResult:
-    """Compute the bounded reachability graph via BFS.
-
-    Returns (states, edges, truncated).
-    Each edge is (source_index, transition, target_index).
-    """
-    net = _admit_net(net)
-    initial_marking = _require_marking_size(net, initial_marking)
-    require_reachability_bounds(net, max_states)
+    max_states: int,
+    *,
+    collect_edges: bool = True,
+) -> tuple[list[tuple[int, ...]], list[tuple[int, int, int]], bool]:
     initial = tuple(initial_marking.tokens)
     state_list: list[tuple[int, ...]] = [initial]
     state_index: dict[tuple[int, ...], int] = {initial: 0}
@@ -753,7 +750,23 @@ def reachability_graph(
                 state_index[new_tokens] = len(state_list)
                 state_list.append(new_tokens)
                 queue.append(len(state_list) - 1)
-            edges.append((idx, t, state_index[new_tokens]))
+            if collect_edges:
+                edges.append((idx, t, state_index[new_tokens]))
+    return state_list, edges, truncated
+
+
+def reachability_graph(
+    net: PetriNet,
+    initial_marking: Marking,
+    max_states: int = 10000,
+) -> ReachabilityResult:
+    """Compute the bounded reachability graph via BFS."""
+    net = _admit_net(net)
+    initial_marking = _require_marking_size(net, initial_marking)
+    require_reachability_bounds(net, max_states)
+    state_list, edges, truncated = _explore_reachability(
+        net, initial_marking, max_states
+    )
     return ReachabilityResult(
         net=net,
         initial_marking=initial_marking,
@@ -772,6 +785,55 @@ def reachability_graph(
             )
             for source, transition, target in edges
         ),
+        truncated=truncated,
+    )
+
+
+def reachable_dead_markings(
+    net: PetriNet,
+    initial_marking: Marking,
+    max_states: int = 10000,
+) -> ReachableDeadMarkingsResult:
+    """List dead markings among states found by bounded reachability.
+
+    Deadness is checked from transition enabledness, not inferred from absent
+    edges: a firing can be omitted when a state or marking limit truncates the
+    reachability exploration.
+    """
+
+    net = _admit_net(net)
+    initial_marking = _require_marking_size(net, initial_marking)
+    require_reachability_bounds(net, max_states)
+    output_bound = (
+        len(net.model_dump_json().encode("utf-8"))
+        + len(initial_marking.model_dump_json().encode("utf-8"))
+        + max_states * (5 * net.place_count + 3)
+        + 1024
+    )
+    if output_bound > MAX_REACHABLE_DEAD_MARKINGS_OUTPUT_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("net", "max_states"),
+            code="petri_net.dead_markings_output_bound",
+            message="reachable dead-marking profile exceeds the serialized output bound",
+        )
+
+    state_list, _, truncated = _explore_reachability(
+        net, initial_marking, max_states, collect_edges=False
+    )
+    dead = tuple(
+        sorted(
+            tokens
+            for tokens in state_list
+            if not _enabled_transition_indices(
+                net, _bound_marking(net, initial_marking, tokens)
+            )
+        )
+    )
+    return ReachableDeadMarkingsResult._from_kernel(
+        net=net,
+        initial_marking=initial_marking,
+        max_states=max_states,
+        dead_markings=dead,
         truncated=truncated,
     )
 

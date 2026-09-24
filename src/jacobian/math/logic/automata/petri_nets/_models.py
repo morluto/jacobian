@@ -36,6 +36,7 @@ MAX_MARKING_CONFLICT_PROFILE_PAIRS = (
 )
 MAX_MARKING_COMMUTATION_PROFILE_OUTPUT_BYTES = 10 * 1024 * 1024
 MAX_MARKING_COMMUTATION_PROFILE_WORK = 100_000
+MAX_REACHABLE_DEAD_MARKINGS_OUTPUT_BYTES = 10 * 1024 * 1024
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -599,6 +600,66 @@ class ReachabilityResult(StrictModel):
                 "edge_axis", "reachability edges must use declared axes"
             )
         return self
+
+
+class ReachableDeadMarkingsRequest(StrictModel):
+    """List dead markings found in the bounded reachability exploration."""
+
+    net: PetriNet
+    initial_marking: Marking
+    max_states: int = Field(default=10000, ge=1, le=MAX_REACHABILITY_STATES)
+
+    @model_validator(mode="after")
+    def require_valid_marking_size(self) -> Self:
+        _require_marking_parent(self.net, self.initial_marking)
+        if len(self.initial_marking.tokens) != self.net.place_count:
+            raise _validation_error(
+                "marking_length", "marking length must match place_count"
+            )
+        return self
+
+
+class ReachableDeadMarkingsResult(StrictModel):
+    """Dead markings among discovered states, with exploration truncation."""
+
+    net: PetriNet
+    initial_marking: Marking
+    max_states: int = Field(ge=1, le=MAX_REACHABILITY_STATES)
+    dead_markings: tuple[tuple[int, ...], ...] = Field(
+        max_length=MAX_REACHABILITY_STATES
+    )
+    truncated: bool
+
+    @model_validator(mode="after")
+    def require_canonical_profile(self) -> Self:
+        _require_result_marking(self.net, self.initial_marking)
+        if any(len(marking) != self.net.place_count for marking in self.dead_markings):
+            raise _validation_error(
+                "dead_marking_axis", "dead markings must match the net place axis"
+            )
+        if len(self.dead_markings) > self.max_states:
+            raise _validation_error(
+                "dead_marking_count", "dead-marking count exceeds explored states"
+            )
+        if self.dead_markings != tuple(sorted(set(self.dead_markings))):
+            raise _validation_error(
+                "dead_markings", "dead markings must be sorted and unique"
+            )
+        if any(
+            type(token) is not int or not 0 <= token <= MAX_PETRI_MARKING
+            for marking in self.dead_markings
+            for token in marking
+        ):
+            raise _validation_error(
+                "dead_marking_token", "dead-marking tokens exceed the marking bound"
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(cls, **values: Any) -> Self:
+        """Build an admitted bounded profile without replaying enabledness."""
+
+        return cls.model_construct(**values)
 
 
 class MarkingReachabilityRequest(StrictModel):
@@ -1249,6 +1310,7 @@ __all__ = [
     "MAX_FIRING_SEQUENCE_LENGTH",
     "MAX_MARKING_COMMUTATION_PROFILE_OUTPUT_BYTES",
     "MAX_MARKING_COMMUTATION_PROFILE_WORK",
+    "MAX_REACHABLE_DEAD_MARKINGS_OUTPUT_BYTES",
     "MAX_SIPHON_TRAP_FAMILY_OUTPUT_BYTES",
     "MAX_SIPHON_TRAP_WORK",
     "MAX_STATE_EQUATION_OCCURRENCES",
@@ -1278,6 +1340,8 @@ __all__ = [
     "PlaceSetSupportResult",
     "ReachabilityRequest",
     "ReachabilityResult",
+    "ReachableDeadMarkingsRequest",
+    "ReachableDeadMarkingsResult",
     "SiphonTrapFamilyRequest",
     "SiphonTrapFamilyResult",
     "SiphonTrapRequest",

@@ -21,6 +21,10 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.finite_fields._admission import require_field
+from jacobian.math.finite_fields._algebraic_sets import (
+    FieldEmbedding,
+    embed_field_element,
+)
 from jacobian.math.finite_fields.values import (
     FiniteFieldElement,
     FiniteFieldPresentation,
@@ -469,6 +473,17 @@ class FiniteFieldEllipticPoint(StrictModel):
 
 class FiniteFieldCurveRequest(StrictModel):
     curve: FiniteFieldShortWeierstrassCurve
+
+
+class FiniteFieldCurveBaseChangeRequest(StrictModel):
+    curve: FiniteFieldShortWeierstrassCurve
+    embedding: FieldEmbedding
+    point: FiniteFieldEllipticPoint | None = None
+
+
+class FiniteFieldCurveBaseChangeResult(StrictModel):
+    curve: FiniteFieldShortWeierstrassCurve
+    point: FiniteFieldEllipticPoint | None = None
 
 
 class FiniteFieldPointRequest(StrictModel):
@@ -1678,6 +1693,82 @@ def finite_field_points(curve: FiniteFieldShortWeierstrassCurve) -> FiniteFieldP
     return _enumerate_admitted_points(curve, q)
 
 
+def finite_field_curve_base_change(
+    curve: FiniteFieldShortWeierstrassCurve,
+    embedding: FieldEmbedding,
+    point: FiniteFieldEllipticPoint | None = None,
+) -> FiniteFieldCurveBaseChangeResult:
+    """Transport a curve and optional point along an explicit field embedding."""
+    curve = _curve_admit(curve)
+    try:
+        embedding = FieldEmbedding.model_validate(embedding.model_dump())
+    except (AttributeError, TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("embedding",),
+            code="elliptic_curve.finite_field.base_change_embedding_invalid",
+            message="embedding must be a canonical finite-field embedding value",
+        ) from exc
+    require_field(embedding.source)
+    require_field(embedding.target)
+    if curve.field != embedding.source:
+        raise OperationDomainValidationError(
+            location=("curve", "embedding"),
+            code="elliptic_curve.finite_field.base_change_source_mismatch",
+            message="curve field must equal the embedding source presentation",
+        )
+    if point is not None:
+        point = _point_admit_with_curve(curve, point)
+
+    target_field = embedding.target
+    maximum = _element(
+        target_field, (target_field.characteristic - 1,) * target_field.degree
+    )
+    sample_curve = FiniteFieldShortWeierstrassCurve.model_construct(
+        field=target_field, coefficient_a=maximum, coefficient_b=maximum
+    )
+    sample_point = (
+        FiniteFieldEllipticPoint.model_construct(
+            curve=sample_curve, at_infinity=False, x=maximum, y=maximum
+        )
+        if point is not None and not point.at_infinity
+        else FiniteFieldEllipticPoint.infinity(sample_curve)
+        if point is not None
+        else None
+    )
+    sample = FiniteFieldCurveBaseChangeResult.model_construct(
+        curve=sample_curve, point=sample_point
+    )
+    if len(rfc8785.dumps(sample.model_dump(mode="json"))) > CanonicalLimits().max_output_bytes:
+        raise OperationResourceAdmissionError(
+            location=("embedding", "target"),
+            code="elliptic_curve.finite_field.base_change_output_bound",
+            message="transported curve and point exceed the canonical output-byte envelope",
+        )
+
+    target_curve = FiniteFieldShortWeierstrassCurve.model_construct(
+        field=target_field,
+        coefficient_a=embed_field_element(curve.coefficient_a, embedding),
+        coefficient_b=embed_field_element(curve.coefficient_b, embedding),
+        model=curve.model,
+    )
+    target_curve = _curve_admit(target_curve)
+    target_point = None
+    if point is not None:
+        if point.at_infinity:
+            target_point = FiniteFieldEllipticPoint.infinity(target_curve)
+        else:
+            assert point.x is not None and point.y is not None
+            target_point = FiniteFieldEllipticPoint.affine(
+                target_curve,
+                embed_field_element(point.x, embedding),
+                embed_field_element(point.y, embedding),
+            )
+            target_point = _point_admit_with_curve(target_curve, target_point)
+    return FiniteFieldCurveBaseChangeResult(
+        curve=target_curve, point=target_point
+    )
+
+
 def finite_field_cardinality(
     curve: FiniteFieldShortWeierstrassCurve,
 ) -> FiniteFieldCardinalityResult:
@@ -1756,6 +1847,8 @@ def finite_field_group_structure(
 
 __all__ = [
     "FiniteFieldCardinalityResult",
+    "FiniteFieldCurveBaseChangeRequest",
+    "FiniteFieldCurveBaseChangeResult",
     "FiniteFieldCurveRequest",
     "FiniteFieldDiscriminantRequest",
     "FiniteFieldDiscriminantResult",
@@ -1779,6 +1872,7 @@ __all__ = [
     "FiniteFieldScalarRequest",
     "FiniteFieldShortWeierstrassCurve",
     "finite_field_cardinality",
+    "finite_field_curve_base_change",
     "finite_field_discriminant",
     "finite_field_extension_counts",
     "finite_field_group_structure",

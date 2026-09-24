@@ -15,6 +15,8 @@ from jacobian.math.number_theory.elliptic_curves._models import (
 )
 from jacobian.math.number_theory.elliptic_curves.finite_field import (
     FiniteFieldCardinalityResult,
+    FiniteFieldCurveBaseChangeRequest,
+    FiniteFieldCurveBaseChangeResult,
     FiniteFieldCurveRequest,
     FiniteFieldDiscriminantRequest,
     FiniteFieldDiscriminantResult,
@@ -35,6 +37,7 @@ from jacobian.math.number_theory.elliptic_curves.finite_field import (
     FiniteFieldScalarRequest,
     FiniteFieldShortWeierstrassCurve,
     finite_field_cardinality,
+    finite_field_curve_base_change,
     finite_field_discriminant,
     finite_field_extension_counts,
     finite_field_group_structure,
@@ -329,6 +332,17 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 input={"curve": _finite_curve()},
             ),
         ),
+    ),
+    MathTool(
+        operation_id="elliptic_curve.finite_field.base_change.compute",
+        title="Transport a finite-field elliptic curve along an embedding",
+        description="Transport a nonsingular short-Weierstrass curve and optional curve-bound point along an explicit finite-field embedding whose source-generator root relation is checked exactly.",
+        request_type=FiniteFieldCurveBaseChangeRequest,
+        result_type=FiniteFieldCurveBaseChangeResult,
+        run=lambda request: finite_field_curve_base_change(
+            request.curve, request.embedding, request.point
+        ),
+        tags=("elliptic-curve", "finite-field", "base-change", "exact"),
     ),
     MathTool(
         operation_id="elliptic_curve.finite_field.cardinality.exhaustive.compute",

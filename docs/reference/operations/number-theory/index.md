@@ -1,6 +1,7 @@
 # Number theory operations
 
 - [Finite-field elliptic extension counts](elliptic-curve-extension-counts.md)
+- [Finite-field elliptic curve base change](elliptic-curve-base-change.md)
 - [Finite-field elliptic model isomorphism](elliptic-curve-isomorphism.md)
 - [Finite-field elliptic isogeny classes](elliptic-curve-isogeny-class.md)
 - [Finite-field elliptic point orders](elliptic-curve-point-order.md)

@@ -22,12 +22,14 @@ from jacobian.math.number_theory.elliptic_curves.finite_field import (
     FiniteFieldEllipticPoint,
     FiniteFieldShortWeierstrassCurve,
     finite_field_cardinality,
+    finite_field_curve_base_change,
     finite_field_discriminant,
     finite_field_extension_counts,
     finite_field_group_structure,
     finite_field_isogeny_class,
     finite_field_isomorphism,
     finite_field_point_add,
+    finite_field_point_check,
     finite_field_point_negate,
     finite_field_point_order,
     finite_field_point_scalar,
@@ -751,6 +753,74 @@ def test_point_enumeration_over_directly_presented_extension_field() -> None:
     # returned affine point through the public group operation.
     for point in result.points:
         assert finite_field_point_scalar(curve, point, 27).point.at_infinity
+
+
+def test_curve_and_point_transport_along_explicit_f5_to_f25_embedding() -> None:
+    base = FiniteFieldPresentation(
+        characteristic=5, modulus_coefficients=(0, 1), generator="a"
+    )
+    extension = FiniteFieldPresentation(
+        characteristic=5, modulus_coefficients=(2, 0, 1), generator="b"
+    )
+    curve = FiniteFieldShortWeierstrassCurve(
+        field=base,
+        coefficient_a=FiniteFieldElement(presentation=base, coordinates=(1,)),
+        coefficient_b=FiniteFieldElement(presentation=base, coordinates=(1,)),
+    )
+    point = FiniteFieldEllipticPoint.affine(
+        curve,
+        FiniteFieldElement(presentation=base, coordinates=(0,)),
+        FiniteFieldElement(presentation=base, coordinates=(1,)),
+    )
+    # The source modulus is X, so its generator maps to zero in F25.
+    embedding = finite_field_module.FieldEmbedding(
+        source=base,
+        target=extension,
+        generator_image=FiniteFieldElement(
+            presentation=extension, coordinates=(0, 0)
+        ),
+    )
+    result = finite_field_curve_base_change(curve, embedding, point)
+    assert result.curve.field == extension
+    assert result.curve.coefficient_a.coordinates == (1, 0)
+    assert result.curve.coefficient_b.coordinates == (1, 0)
+    assert result.point is not None
+    assert result.point.curve == result.curve
+    assert result.point.x is not None and result.point.x.coordinates == (0, 0)
+    assert result.point.y is not None and result.point.y.coordinates == (1, 0)
+    assert finite_field_point_check(result.curve, result.point).on_curve
+    assert finite_field_point_scalar(result.curve, result.point, 9).point.at_infinity
+
+    operation = Catalog.open().operation(
+        "elliptic_curve.finite_field.base_change.compute"
+    )
+    assert operation is not None
+    wire_result = invoke_operation(
+        operation.operation_id,
+        {
+            "curve": curve.model_dump(mode="json"),
+            "embedding": embedding.model_dump(mode="json"),
+            "point": point.model_dump(mode="json"),
+        },
+        Catalog.open(),
+    )
+    assert wire_result.output["curve"]["field"] == extension.model_dump(
+        mode="json"
+    )
+    assert wire_result.output["point"]["y"]["coordinates"] == ["1", "0"]
+
+    invalid = finite_field_module.FieldEmbedding(
+        source=base,
+        target=extension,
+        generator_image=FiniteFieldElement(
+            presentation=extension, coordinates=(1, 0)
+        ),
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        finite_field_curve_base_change(curve, invalid)
+    assert error.value.errors()[0]["type"] == (
+        "finite_field.embedding_generator_not_root"
+    )
 
 
 @pytest.mark.parametrize(("prime", "a", "b"), [(5, 1, 1), (7, 2, 3), (11, 0, 4)])

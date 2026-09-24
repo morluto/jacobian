@@ -8,6 +8,7 @@ from jacobian.math.logic.automata.transducers._models import (
     ComposeResult,
     MinimizeRequest,
     MinimizeResult,
+    RationalRelationFiberRequest,
     RationalRelationInverseRequest,
     RationalRelationProjectionRequest,
     ReachableStatesRequest,
@@ -27,6 +28,7 @@ from jacobian.math.logic.automata.transducers.operations import (
     invert_rational,
     minimize_subsequential,
     project_rational_relation,
+    rational_relation_outputs_for_input,
     reachable_state_witnesses,
     replay_rational_path,
     run_subsequential,
@@ -106,6 +108,10 @@ def compute_relation_projection(
     request: RationalRelationProjectionRequest,
 ) -> NFA:
     return project_rational_relation(request.transducer, request.tape)
+
+
+def compute_relation_fiber(request: RationalRelationFiberRequest) -> NFA:
+    return rational_relation_outputs_for_input(request.transducer, request.input_word)
 
 
 _IDENTITY = {
@@ -462,6 +468,54 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                     "transducer": _RELATION,
                     "initial_state": 0,
                     "edge_path": [0, 1],
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="transducer.relation.outputs_for_input_automaton.compute",
+        title="Represent a rational-relation output fiber",
+        description=(
+            "Fix one input word and return an epsilon-NFA accepting exactly all "
+            "outputs on accepting paths with that input. Input labels are matched "
+            "as complete words; empty input labels preserve epsilon-input cycles. "
+            "The result retains output alphabet context and represents infinite "
+            "fibers as automata rather than enumerating words. Product, matching, "
+            "intermediate, transition, work, and output bounds are admitted before "
+            "NFA construction."
+        ),
+        request_type=RationalRelationFiberRequest,
+        result_type=NFA,
+        run=compute_relation_fiber,
+        tags=("transducer", "rational-relation", "fiber", "exact"),
+        discovery_terms=(
+            "fixed input outputs",
+            "output fiber",
+            "rational relation section",
+        ),
+        examples=(
+            OperationExample(
+                name="finite_output_fiber",
+                description="The accepted input word (0) has the sole output (1).",
+                input={
+                    "input_word": [0],
+                    "transducer": {
+                        "input_alphabet_size": 2,
+                        "output_alphabet_size": 2,
+                        "input_alphabet": {"symbols": ["a", "b"]},
+                        "output_alphabet": {"symbols": ["x", "y"]},
+                        "state_count": 2,
+                        "initial_states": [0],
+                        "accepting_states": [1],
+                        "edges": [
+                            {
+                                "source": 0,
+                                "target": 1,
+                                "input_label": [0],
+                                "output_label": [1],
+                            }
+                        ],
+                    },
                 },
             ),
         ),

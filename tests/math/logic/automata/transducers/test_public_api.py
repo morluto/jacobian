@@ -20,6 +20,7 @@ def test_exact_public_api_symbols() -> None:
         "invert_rational",
         "minimize_subsequential",
         "project_rational_relation",
+        "rational_relation_outputs_for_input",
         "reachable_state_witnesses",
         "reachable_states",
         "replay_rational_path",

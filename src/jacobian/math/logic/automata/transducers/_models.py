@@ -752,6 +752,16 @@ class RationalRelationProjectionRequest(StrictModel):
     tape: Literal["input", "output"]
 
 
+class RationalRelationFiberRequest(StrictModel):
+    """Fix one input word and represent all related output words as an NFA."""
+
+    transducer: RationalTransducer
+    input_word: tuple[int, ...] = Field(
+        max_length=MAX_FST_WORD_LENGTH,
+        description="The exact input-alphabet word whose output fiber is requested.",
+    )
+
+
 class RelationPathReplayResult(RelationPathReplayRequest):
     status: Literal["ACCEPTING_PAIR", "INVALID_PATH"]
     input_word: tuple[int, ...] = Field(max_length=MAX_FST_RESULT_WORD_LENGTH)
@@ -823,6 +833,7 @@ __all__ = [
     "ComposeResult",
     "MinimizeRequest",
     "MinimizeResult",
+    "RationalRelationFiberRequest",
     "RationalRelationInverseRequest",
     "RationalRelationProjectionRequest",
     "RelationPathReplayRequest",

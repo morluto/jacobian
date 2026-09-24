@@ -192,6 +192,8 @@ def _weyl_parent(element: WeylElement) -> CartanMatrix:
         )
     try:
         cartan = _as_cartan(element_matrix)
+    except OperationDomainValidationError:
+        raise
     except (AttributeError, TypeError, ValueError, ValidationError) as error:
         raise OperationDomainValidationError(
             location=("element", "matrix"),
@@ -204,6 +206,8 @@ def _weyl_parent(element: WeylElement) -> CartanMatrix:
 def _admitted_root_action(element: WeylElement) -> tuple[tuple[int, ...], ...]:
     try:
         return _admit_weyl_element_value(element)
+    except OperationDomainValidationError:
+        raise
     except (AttributeError, TypeError, ValueError, ValidationError) as error:
         raise OperationDomainValidationError(
             location=("element", "root_action"),
@@ -256,6 +260,8 @@ def _canonical_weight(
         return _canonical_lattice_vector(
             weight, WeightLatticeVector, output_bound=True
         )
+    except OperationDomainValidationError:
+        raise
     except (AttributeError, TypeError, ValueError, ValidationError) as error:
         raise OperationDomainValidationError(
             location=("weight",),

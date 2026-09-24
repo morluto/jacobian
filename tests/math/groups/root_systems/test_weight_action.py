@@ -176,6 +176,21 @@ def test_malformed_nested_weight_shapes_are_domain_errors(weight):
         weyl_element_act_on_weight(request)
 
 
+def test_oversized_input_weight_preserves_resource_admission_code():
+    request = WeylElementWeightActionRequest.model_construct(
+        element=weyl_element_from_word(_A2, (0,)),
+        weight=WeightLatticeVector.model_construct(
+            datum=cartan_datum(_A2), coordinates=(1 << 200, 0)
+        ),
+    )
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        weyl_element_act_on_weight(request)
+    assert (
+        error.value.errors()[0]["type"]
+        == "root_system.lattice_coordinates_over_envelope"
+    )
+
+
 def test_output_coordinate_growth_is_rejected_before_vector_construction(monkeypatch):
     element = weyl_element_from_word(_A2, (0,))
     source = WeightLatticeVector.model_construct(

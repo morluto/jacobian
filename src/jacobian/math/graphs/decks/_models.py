@@ -23,6 +23,8 @@ MAX_EDGE_DECK_EDGES = 130_000
 MAX_UNLABELLED_DECK_VERTICES = 10
 MAX_UNLABELLED_DECK_ISOMORPHISM_WORK = 2_000_000
 MAX_UNLABELLED_EDGE_DECK_RESULT_BYTES = 1_000_000
+MAX_ANONYMOUS_CARD_CANONICALIZATION_WORK = 2_000_000
+MAX_ANONYMOUS_CARD_RESULT_BYTES = 1_000_000
 """Admission cap on aggregate card edges across the whole family."""
 MAX_VERTEX_DECK_SOURCE_EDGES = comb(MAX_UNLABELLED_DECK_VERTICES, 2)
 MAX_VERTEX_DECK_CARD_EDGE_TOTAL = MAX_UNLABELLED_DECK_VERTICES * comb(
@@ -37,6 +39,69 @@ MAX_KELLY_RESULT_BYTES = 1_000_000
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"graph_deck.{reason}", message)
+
+
+class AnonymousGraphCardMultisetRequest(StrictModel):
+    """Unordered finite multiset input; card_order disambiguates the empty case."""
+
+    card_order: int = Field(ge=0, le=MAX_UNLABELLED_DECK_VERTICES)
+    cards: tuple[SimpleUndirectedGraph, ...] = Field(
+        description=(
+            "An unordered list of simple graphs, each with exactly card_order "
+            "vertices. Repeated isomorphic cards encode multiplicity. An empty "
+            "list is the empty multiset of cards of the declared order."
+        )
+    )
+
+    @model_validator(mode="after")
+    def require_declared_order(self) -> Self:
+        if any(len(card.vertices) != self.card_order for card in self.cards):
+            raise _validation_error(
+                "anonymous_card_order", "every card must have the declared card_order"
+            )
+        return self
+
+
+class AnonymousGraphCardClass(StrictModel):
+    """One canonically relabelled isomorphism class and its exact multiplicity."""
+
+    representative: SimpleUndirectedGraph
+    multiplicity: Annotated[int, DecimalIntegerEncoding(max_digits=12)] = Field(ge=1)
+
+
+class AnonymousGraphCardMultiset(StrictModel):
+    """Anonymous card multiset; it carries no source graph or deletion keys."""
+
+    card_order: int = Field(ge=0, le=MAX_UNLABELLED_DECK_VERTICES)
+    classes: tuple[AnonymousGraphCardClass, ...]
+
+    @model_validator(mode="after")
+    def require_structural_canonical_form(self) -> Self:
+        keys: list[tuple[tuple[str, str], ...]] = []
+        expected_vertices = tuple(f"v{i:02d}" for i in range(self.card_order))
+        for item in self.classes:
+            graph = item.representative
+            if type(graph) is not SimpleUndirectedGraph or graph.vertices != expected_vertices:
+                raise _validation_error(
+                    "anonymous_card_labels",
+                    "representative labels must be the canonical fixed-width axis",
+                )
+            if tuple(sorted(graph.edges)) != graph.edges:
+                raise _validation_error(
+                    "anonymous_card_edges", "representative edges must be lexicographically ordered"
+                )
+            keys.append(graph.edges)
+        if keys != sorted(set(keys)):
+            raise _validation_error(
+                "anonymous_card_classes", "classes must be unique and lexicographically ordered"
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls, card_order: int, classes: tuple[AnonymousGraphCardClass, ...]
+    ) -> Self:
+        return cls.model_construct(card_order=card_order, classes=classes)
 
 
 class VertexDeckRequest(StrictModel):

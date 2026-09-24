@@ -5,6 +5,8 @@ from typing import Any
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.graphs.decks._models import (
     MAX_KELLY_DECK_TOTAL_WORK,
+    AnonymousGraphCardMultiset,
+    AnonymousGraphCardMultisetRequest,
     EdgeDeckRequest,
     EdgeDeletionFamily,
     UnlabelledDeck,
@@ -24,6 +26,7 @@ from jacobian.math.graphs.decks._models import (
     VertexDeletionFamily,
 )
 from jacobian.math.graphs.decks.operations import (
+    anonymous_graph_card_multiset,
     edge_deletion_family,
     edge_unlabelled_deck,
     unlabelled_deck,
@@ -92,6 +95,41 @@ def _run_vertex_deck_degree_multiset(
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
+    MathTool(
+        operation_id="graph.deck.from_cards.construct",
+        title="Canonicalize an anonymous multiset of graph cards",
+        description=(
+            "Take an explicitly ordered multiset of simple graph cards, quotient "
+            "by exact isomorphism, and return canonical representatives and exact "
+            "positive multiplicities. This value retains no source graph or "
+            "deletion identifiers and makes no claim that the multiset is "
+            "realizable as a graph deck. The empty multiset retains its declared "
+            "card_order. Exact vertex-permutation work and output are admitted "
+            "before canonicalization."
+        ),
+        request_type=AnonymousGraphCardMultisetRequest,
+        result_type=AnonymousGraphCardMultiset,
+        run=lambda request: anonymous_graph_card_multiset(request),
+        tags=("graph", "deck", "anonymous", "multiset", "isomorphism", "exact"),
+        discovery_terms=("anonymous graph card multiset", "unlabelled graph cards", "deck realizability input"),
+        examples=(
+            OperationExample(
+                name="anonymous_two_vertex_cards",
+                description=(
+                    "Canonicalize two relabelings of the same one-edge graph into "
+                    "one class of multiplicity two; each card must have the "
+                    "declared order two."
+                ),
+                input={
+                    "card_order": 2,
+                    "cards": [
+                        {"vertices": ["a", "b"], "edges": [["a", "b"]]},
+                        {"vertices": ["x", "y"], "edges": [["x", "y"]]},
+                    ],
+                },
+            ),
+        ),
+    ),
     MathTool(
         operation_id="graph.deck.vertex_deleted.compute",
         title="Compute the complete vertex-deletion family of a graph",

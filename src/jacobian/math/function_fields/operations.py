@@ -16,6 +16,7 @@ from jacobian.math.finite_fields.values import (
     FiniteFieldPresentation,
 )
 from jacobian.math.function_fields._gfpx import (
+    ONE_POLY,
     RF,
     ZERO_RF,
     KPoly,
@@ -26,7 +27,9 @@ from jacobian.math.function_fields._gfpx import (
     kp_gcd,
     kp_normalize,
     kp_xgcd,
+    poly_derivative,
     poly_divmod,
+    poly_gcd,
     poly_mul,
     poly_powmod,
     rf_add,
@@ -1703,29 +1706,63 @@ def function_field_divisor_effective_parts(
 
 
 def function_field_genus(field: FiniteFunctionField) -> FunctionFieldGenusResult:
-    """Return genus zero for the explicitly represented rational field GF(p)(x)."""
+    """Return genus for GF(p)(x) or a squarefree odd-characteristic hyperelliptic model."""
 
     field = _validated_field(field)
-    if not _is_prime(field.characteristic):
-        raise OperationDomainValidationError(
-            location=("field", "characteristic"),
-            code="function_field.characteristic_not_prime",
-            message="the constant field characteristic must be prime",
-        )
+    # The shape and work envelope are admitted before recognizing either
+    # supported model. A squarefree branch polynomial proves irreducibility
+    # and separability for the accepted hyperelliptic family below.
+    _admit_field_resources(field)
     rational_field = len(field.defining_polynomial) == 1 and (
         field.defining_polynomial[0].numerator.is_one()
         and field.defining_polynomial[0].denominator.is_one()
     )
-    if not rational_field:
+    if rational_field:
+        return FunctionFieldGenusResult(field=field, genus=0)
+
+    polynomial = _hyperelliptic_branch_polynomial(field)
+    if polynomial is None:
         raise OperationDomainValidationError(
             location=("field", "defining_polynomial"),
-            code="function_field.genus_requires_rational_field",
+            code="function_field.genus_requires_supported_model",
             message=(
-                "genus is currently supported only for the rational function "
-                "field GF(p)(x), represented by the defining polynomial 1"
+                "genus is supported for GF(p)(x), or for an odd-characteristic "
+                "quadratic extension y^2=f(x) with squarefree polynomial f "
+                "of degree 3 through the admitted polynomial bound"
             ),
         )
-    return FunctionFieldGenusResult(field=field, genus=0)
+    return FunctionFieldGenusResult(field=field, genus=(len(polynomial) - 2) // 2)
+
+
+def _hyperelliptic_branch_polynomial(
+    field: FiniteFunctionField,
+) -> tuple[int, ...] | None:
+    """Recognize ``y^2=f(x)`` with squarefree nonconstant polynomial ``f``.
+
+    For odd characteristic such an f has a simple zero over the algebraic
+    closure, so it is not a square in the rational function field. This makes
+    the quadratic extension geometrically integral. The smooth projective
+    model is the degree-two cover of P1 branched at the roots of f and, when
+    deg(f) is odd, infinity; Riemann-Hurwitz gives floor((deg(f)-1)/2).
+    """
+
+    prime = field.characteristic
+    if prime == 2 or field.degree != 2:
+        return None
+    defining = _field_kpoly(_canonical_field(field))
+    if len(defining) != 3 or defining[1] != ZERO_RF:
+        return None
+    constant = defining[0]
+    if constant[1] != ONE_POLY or not constant[0]:
+        return None
+    branch = tuple((-coefficient) % prime for coefficient in constant[0])
+    while branch and branch[-1] == 0:
+        branch = branch[:-1]
+    if not 3 <= len(branch) - 1 <= MAX_POLYNOMIAL_X_DEGREE:
+        return None
+    if poly_gcd(branch, poly_derivative(branch, prime), prime) != ONE_POLY:
+        return None
+    return branch
 
 
 def _preflight_riemann_roch_input(

@@ -131,6 +131,25 @@ _RATIONAL_FIELD = {
         }
     ],
 }
+_GF5_HYPERELLIPTIC_FIELD = {
+    "characteristic": 5,
+    "variable": "x",
+    "generator": "y",
+    "defining_polynomial": [
+        {
+            "numerator": {"characteristic": 5, "coefficients": [0, 1, 0, 4]},
+            "denominator": {"characteristic": 5, "coefficients": [1]},
+        },
+        {
+            "numerator": {"characteristic": 5, "coefficients": [0]},
+            "denominator": {"characteristic": 5, "coefficients": [1]},
+        },
+        {
+            "numerator": {"characteristic": 5, "coefficients": [1]},
+            "denominator": {"characteristic": 5, "coefficients": [1]},
+        },
+    ],
+}
 _RATIONAL_X = {
     "field": _RATIONAL_FIELD,
     "coordinates": [
@@ -375,12 +394,11 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     ),
     MathTool(
         operation_id="function_field.genus.compute",
-        title="Compute the genus of a rational function field",
+        title="Compute the genus of a supported function field",
         description=(
-            "Return the exact genus of the rational function field GF(p)(x), "
-            "which is 0. The field must be represented with defining "
-            "polynomial 1 over a prime field; nontrivial algebraic extensions "
-            "are outside this operation's domain."
+            "Return the exact genus of GF(p)(x), or of an odd-characteristic "
+            "quadratic extension y^2=f(x) where f is a squarefree polynomial "
+            "of degree 3 through 12. The exact field presentation is retained."
         ),
         request_type=FunctionFieldGenusRequest,
         result_type=FunctionFieldGenusResult,
@@ -395,6 +413,15 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                     "polynomial 1."
                 ),
                 input={"field": _RATIONAL_FIELD},
+            ),
+            OperationExample(
+                name="genus_of_y_squared_x_cubed_minus_x",
+                description=(
+                    "Compute genus 1 for y^2=x^3-x over GF(5)(x); its "
+                    "squarefree cubic branch polynomial gives four branch "
+                    "points counting infinity."
+                ),
+                input={"field": _GF5_HYPERELLIPTIC_FIELD},
             ),
         ),
     ),

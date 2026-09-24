@@ -171,6 +171,30 @@ def test_oversized_vector_field_rejected_before_component_parsing() -> None:
     assert not oversized.iterated
 
 
+def test_vector_field_iteration_cannot_exceed_component_bound() -> None:
+    from jacobian.math.polynomials.derivations.operations import (
+        derivation_from_vector_field,
+    )
+
+    class _LyingSequence(Sequence[Any]):
+        # A Sequence whose __len__ passes the early bound check but whose
+        # iterator yields one component beyond the admitted count.
+        def __len__(self) -> int:
+            return 1
+
+        def __getitem__(self, index: int) -> Any:
+            raise AssertionError
+
+        def __iter__(self) -> Iterator[Any]:
+            yield from (_poly(XY, ((1, (0, 1)),)).model_dump() for _ in range(8))
+            yield "ninth-component"
+
+    with pytest.raises(OperationDomainValidationError) as error:
+        derivation_from_vector_field(_LyingSequence())
+    assert error.value.errors()[0]["type"] == "polynomial_derivation.vector_field_shape"
+    assert "bounded by 8" in error.value.errors()[0]["msg"]
+
+
 @pytest.mark.parametrize(
     "invalid",
     [

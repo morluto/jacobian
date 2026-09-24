@@ -749,7 +749,22 @@ def derivation_from_vector_field(
             ),
         )
     images: list[RationalPolynomial] = []
-    for index, component in enumerate(payload):
+    absent = object()
+    supplier = iter(payload)
+    while True:
+        component: Any = next(supplier, absent)
+        if component is absent:
+            break
+        index = len(images)
+        if index >= MAX_DERIVATION_VARIABLES:
+            raise OperationDomainValidationError(
+                location=("components", index),
+                code="polynomial_derivation.vector_field_shape",
+                message=(
+                    "a vector field supplies at most one component per derivation "
+                    f"variable, bounded by {MAX_DERIVATION_VARIABLES}"
+                ),
+            )
         try:
             value = (
                 component.model_dump()

@@ -1670,14 +1670,99 @@ def _face_lattice_work_bound(vertex_count: int) -> int:
     )
 
 
-def _admit_face_lattice_source(polytope_value: RationalVPolytope) -> RationalVPolytope:
-    """Revalidate and admit a canonical source before facet enumeration."""
+def _preflight_face_lattice_source(polytope_value: RationalVPolytope) -> int:
+    """Bound raw same-class fields before any recursive model serialization."""
+
     if not isinstance(polytope_value, RationalVPolytope):
         raise OperationDomainValidationError(
             location=("polytope",),
             code="polytope.face_lattice.source_not_a_v_polytope",
             message="face-lattice source must be a labelled rational V-polytope",
         )
+
+    space = getattr(polytope_value, "space", None)
+    axes = getattr(space, "axes", None)
+    if (
+        not isinstance(space, RationalCoordinateSpace)
+        or not isinstance(axes, tuple)
+        or len(axes) != 3
+        or any(
+            not isinstance(axis, str) or len(axis) > MAX_COORDINATE_LABEL_LENGTH
+            for axis in axes
+        )
+    ):
+        raise OperationDomainValidationError(
+            location=("polytope", "space", "axes"),
+            code="polytope.face_lattice.dimension_not_three",
+            message="face-lattice construction requires three bounded coordinate axes",
+        )
+    vertices = getattr(polytope_value, "vertices", None)
+    if not isinstance(vertices, tuple) or len(vertices) > MAX_VERTICES:
+        raise OperationResourceAdmissionError(
+            location=("polytope", "vertices"),
+            code="polytope.face_lattice.vertex_bound_exceeded",
+            message=f"face-lattice input exceeds {MAX_VERTICES} source vertices",
+        )
+    if len(vertices) < 4:
+        raise OperationDomainValidationError(
+            location=("polytope", "vertices"),
+            code="polytope.face_lattice.extreme_vertices_invalid",
+            message="a full-dimensional 3-polytope must have at least four source vertices",
+        )
+    source_chars_bound = 256 + 6 * sum(len(axis) for axis in axes)
+    for vertex in vertices:
+        if not isinstance(vertex, RationalPolytopeVertex):
+            raise OperationDomainValidationError(
+                location=("polytope", "vertices"),
+                code="polytope.face_lattice.source_structure_invalid",
+                message="every source row must be a canonical labelled polytope vertex",
+            )
+        vertex_id = getattr(vertex, "vertex_id", None)
+        coordinates = getattr(vertex, "coordinates", None)
+        if (
+            not isinstance(vertex_id, str)
+            or not 0 < len(vertex_id) <= MAX_COORDINATE_LABEL_LENGTH
+            or not isinstance(coordinates, tuple)
+            or len(coordinates) != 3
+        ):
+            raise OperationDomainValidationError(
+                location=("polytope", "vertices"),
+                code="polytope.face_lattice.source_structure_invalid",
+                message="source row labels and coordinates must fit the rank-three contract",
+            )
+        source_chars_bound += 6 * len(vertex_id) + 64
+        for coordinate in coordinates:
+            if (
+                not isinstance(coordinate, CanonicalRational)
+                or type(coordinate.num) is not int
+                or type(coordinate.den) is not int
+                or coordinate.den <= 0
+            ):
+                raise OperationDomainValidationError(
+                    location=("polytope", "vertices"),
+                    code="polytope.face_lattice.source_structure_invalid",
+                    message="source coordinates must be canonical rational values",
+                )
+            try:
+                require_bounded_rational(
+                    coordinate,
+                    max_digits=MAX_FACET_COORDINATE_DIGITS,
+                    label="face-lattice source coordinate",
+                )
+            except ValueError as exc:
+                raise OperationResourceAdmissionError(
+                    location=("polytope", "vertices"),
+                    code="polytope.face_lattice.coordinate_height_exceeded",
+                    message=str(exc),
+                ) from exc
+            source_chars_bound += 2 * MAX_FACET_COORDINATE_DIGITS + 24
+    return source_chars_bound
+
+
+def _admit_face_lattice_source(polytope_value: RationalVPolytope) -> RationalVPolytope:
+    """Revalidate and admit a bounded canonical source before facet enumeration."""
+
+    source_chars_bound = _preflight_face_lattice_source(polytope_value)
     try:
         polytope = RationalVPolytope.model_validate(
             polytope_value.model_dump(mode="python", warnings=False), strict=True
@@ -1738,9 +1823,8 @@ def _admit_face_lattice_source(polytope_value: RationalVPolytope) -> RationalVPo
                 f"limit is {MAX_POLYTOPE_FACE_LATTICE_WORK}"
             ),
         )
-    source_chars = len(polytope.model_dump_json(warnings=False))
     output_chars_bound = (
-        source_chars
+        source_chars_bound
         + MAX_POLYTOPE_FACE_LATTICE_FACES * 256
         + MAX_POLYTOPE_FACE_LATTICE_COVERS * 64
         + 64_000

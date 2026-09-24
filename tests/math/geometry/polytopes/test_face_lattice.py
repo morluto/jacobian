@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import json
 from collections import Counter
 from itertools import product
 
 import pytest
+from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.catalog import Catalog
@@ -125,6 +127,55 @@ def test_cube_and_non_simple_square_pyramid_face_lattices() -> None:
     )
 
 
+def test_result_json_rejects_missing_face_or_hasse_cover() -> None:
+    cube = polytope_face_lattice(_cube())
+    payload = json.loads(cube.model_dump_json())
+
+    missing_cover = json.loads(cube.model_dump_json())
+    missing_cover["covers"].pop()
+    with pytest.raises(ValidationError, match="every dimension-adjacent"):
+        PolytopeFaceLatticeResult.model_validate_json(json.dumps(missing_cover))
+
+    missing_edge = next(
+        index for index, face in enumerate(payload["faces"]) if face["dimension"] == 1
+    )
+    payload["faces"].pop(missing_edge)
+    adjusted_covers = []
+    for cover in payload["covers"]:
+        lower = cover["lower_face_index"]
+        upper = cover["upper_face_index"]
+        if missing_edge in (lower, upper):
+            continue
+        if lower > missing_edge:
+            cover["lower_face_index"] -= 1
+        if upper > missing_edge:
+            cover["upper_face_index"] -= 1
+        adjusted_covers.append(cover)
+    payload["covers"] = adjusted_covers
+    with pytest.raises(ValidationError, match="every vertex, edge, facet"):
+        PolytopeFaceLatticeResult.model_validate_json(json.dumps(payload))
+
+    payload = json.loads(cube.model_dump_json())
+    missing_facet = next(
+        index for index, face in enumerate(payload["faces"]) if face["dimension"] == 2
+    )
+    payload["faces"].pop(missing_facet)
+    adjusted_covers = []
+    for cover in payload["covers"]:
+        lower = cover["lower_face_index"]
+        upper = cover["upper_face_index"]
+        if missing_facet in (lower, upper):
+            continue
+        if lower > missing_facet:
+            cover["lower_face_index"] -= 1
+        if upper > missing_facet:
+            cover["upper_face_index"] -= 1
+        adjusted_covers.append(cover)
+    payload["covers"] = adjusted_covers
+    with pytest.raises(ValidationError, match="Euler identity"):
+        PolytopeFaceLatticeResult.model_validate_json(json.dumps(payload))
+
+
 def test_redundant_source_rows_are_retained_but_not_called_faces() -> None:
     cube = _cube()
     with_redundant_center = RationalVPolytope(
@@ -194,6 +245,52 @@ def test_face_lattice_revalidates_source_and_rejects_bad_dimensions() -> None:
         polytope_face_lattice(four_dimensional)
     assert (
         error.value.errors()[0]["type"] == "polytope.face_lattice.dimension_not_three"
+    )
+
+
+def test_source_preflight_bounds_raw_size_before_model_dump(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    valid = _cube()
+
+    def forbidden_dump(*_args: object, **_kwargs: object) -> str:
+        raise AssertionError("source was serialized before raw admission")
+
+    monkeypatch.setattr(RationalVPolytope, "model_dump", forbidden_dump)
+    oversized = RationalVPolytope.model_construct(
+        space=valid.space,
+        vertices=(valid.vertices * 9)[:65],
+    )
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        polytope_face_lattice(oversized)
+    assert (
+        error.value.errors()[0]["type"] == "polytope.face_lattice.vertex_bound_exceeded"
+    )
+
+
+def test_source_preflight_bounds_raw_rational_height_before_model_dump(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    valid = _tetrahedron()
+
+    def forbidden_dump(*_args: object, **_kwargs: object) -> str:
+        raise AssertionError("source was serialized before raw admission")
+
+    monkeypatch.setattr(RationalVPolytope, "model_dump", forbidden_dump)
+    huge_coordinate = CanonicalRational.model_construct(num=10**10000, den=1)
+    first_vertex = RationalPolytopeVertex.model_construct(
+        vertex_id=valid.vertices[0].vertex_id,
+        coordinates=(huge_coordinate, *valid.vertices[0].coordinates[1:]),
+    )
+    oversized = RationalVPolytope.model_construct(
+        space=valid.space,
+        vertices=(first_vertex, *valid.vertices[1:]),
+    )
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        polytope_face_lattice(oversized)
+    assert (
+        error.value.errors()[0]["type"]
+        == "polytope.face_lattice.coordinate_height_exceeded"
     )
 
 

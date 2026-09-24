@@ -1,5 +1,20 @@
 # Polynomial operations
 
+## Holonomic formal series
+
+`holonomic.differential_series.construct` represents the unique formal Taylor
+series at (x=0) determined by a nonzero differential operator over
+\(\mathbb{Q}(x)\) and the exact initial derivatives
+\(f(0),\ldots,f^{(r-1)}(0)\), where (r) is the operator order. Every
+coefficient must be regular at the center and the leading coefficient must be
+nonzero there. This ordinary-point condition lets coefficient comparison
+determine each later Taylor coefficient uniquely. The returned
+`DFinitePowerSeries` retains the operator, initial derivatives, and center as
+one composable value. It denotes a formal series and makes no convergence or
+analytic-continuation claim. The ordinary-point coefficient-comparison
+principle is described in [DLMF §2.7](https://dlmf.nist.gov/2.7). Singular-center
+solutions and coefficient-prefix materialization are separate operations.
+
 ## Rational polynomial ideals
 
 `polynomial.ideal.containment.decide` decides the directed relation

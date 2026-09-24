@@ -96,6 +96,80 @@ class DifferentialOreOperator(StrictModel):
         return max((term.order for term in self.terms), default=-1)
 
 
+class DFinitePowerSeries(StrictModel):
+    """A formal power series fixed by an ODE at the ordinary point x=0."""
+
+    operator: DifferentialOreOperator
+    initial_derivatives: FiniteRationalSequence = Field(
+        description=(
+            "Exact values f(0), f'(0), ..., f^(r-1)(0), where r is the "
+            "differential-operator order."
+        )
+    )
+    center: Literal[0] = 0
+
+    @model_validator(mode="after")
+    def require_ordinary_initial_value_problem(self) -> Self:
+        if not self.operator.terms:
+            raise _validation_error(
+                "zero_differential_operator",
+                "a D-finite series requires a nonzero differential operator",
+            )
+        if len(self.initial_derivatives.values) != self.operator.order:
+            raise _validation_error(
+                "differential_initial_data",
+                "initial_derivatives must contain exactly order(operator) values",
+            )
+        leading = next(
+            term.coefficient
+            for term in self.operator.terms
+            if term.order == self.operator.order
+        )
+        for term in self.operator.terms:
+            denominator_at_zero = sum(
+                (
+                    coefficient.coefficient.as_fraction()
+                    for coefficient in term.coefficient.denominator.terms
+                    if coefficient.exponents == (0,)
+                ),
+                start=0,
+            )
+            if denominator_at_zero == 0:
+                raise _validation_error(
+                    "differential_coefficient_pole",
+                    "every differential coefficient must be regular at x=0",
+                )
+        leading_at_zero = sum(
+            (
+                coefficient.coefficient.as_fraction()
+                for coefficient in leading.numerator.terms
+                if coefficient.exponents == (0,)
+            ),
+            start=0,
+        ) / sum(
+            (
+                coefficient.coefficient.as_fraction()
+                for coefficient in leading.denominator.terms
+                if coefficient.exponents == (0,)
+            ),
+            start=0,
+        )
+        if leading_at_zero == 0:
+            raise _validation_error(
+                "differential_singular_center",
+                "the leading differential coefficient must be nonzero at x=0",
+            )
+        return self
+
+
+class DFinitePowerSeriesRequest(StrictModel):
+    """Input data for an ordinary-point D-finite formal-series value."""
+
+    operator: DifferentialOreOperator
+    initial_derivatives: FiniteRationalSequence
+    center: Literal[0] = 0
+
+
 class DifferentialOperatorMultiplyRequest(StrictModel):
     left: DifferentialOreOperator
     right: DifferentialOreOperator

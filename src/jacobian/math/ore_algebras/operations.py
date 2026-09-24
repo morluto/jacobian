@@ -41,6 +41,8 @@ from jacobian.math.ore_algebras._models import (
     MAX_SHIFT_RESULT_DIGITS,
     MAX_SHIFT_RESULT_ORDER,
     MAX_SHIFT_TERMS,
+    DFinitePowerSeries,
+    DFinitePowerSeriesRequest,
     DifferentialOperatorAddResult,
     DifferentialOperatorApplyResult,
     DifferentialOperatorMultiplyResult,
@@ -1739,6 +1741,60 @@ def _admit_differential_operator(
                 message=str(exc),
             ) from exc
     return value
+
+
+def differential_series_construct(
+    operator: DifferentialOreOperator | Mapping[str, Any],
+    initial_derivatives: FiniteRationalSequence | Mapping[str, Any],
+) -> DFinitePowerSeries:
+    """Bind an ordinary-point differential equation to complete initial data."""
+    try:
+        request = DFinitePowerSeriesRequest.model_validate(
+            {
+                "operator": operator.model_dump()
+                if isinstance(operator, DifferentialOreOperator)
+                else operator,
+                "initial_derivatives": initial_derivatives.model_dump()
+                if isinstance(initial_derivatives, FiniteRationalSequence)
+                else initial_derivatives,
+                "center": 0,
+            }
+        )
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="ore_algebra.dfinite_series_initial_value_problem",
+            message=(
+                "the differential equation must be nonzero, regular at x=0, "
+                "and have complete initial derivatives at its ordinary center"
+            ),
+        ) from exc
+
+    admitted_operator = _admit_differential_operator(request.operator)
+    output_bytes = len(request.model_dump_json().encode("utf-8")) + 32
+    if output_bytes > MAX_DIFFERENTIAL_ADDITIVE_OUTPUT_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("operator",),
+            code="ore_algebra.dfinite_series_output_bytes",
+            message="the D-finite formal-series value exceeds its serialized byte budget",
+        )
+    try:
+        return DFinitePowerSeries.model_validate(
+            {
+                "operator": admitted_operator,
+                "initial_derivatives": request.initial_derivatives,
+                "center": 0,
+            }
+        )
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("operator",),
+            code="ore_algebra.dfinite_series_initial_value_problem",
+            message=(
+                "the differential equation must be regular at x=0 and have a "
+                "nonzero leading coefficient at its ordinary center x=0"
+            ),
+        ) from exc
 
 
 def _admit_differential_function(value: RationalFunction) -> RationalFunction:

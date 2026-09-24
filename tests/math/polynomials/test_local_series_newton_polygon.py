@@ -226,6 +226,39 @@ def test_newton_edge_root_operation_rejects_degree_above_two() -> None:
     assert error.value.errors()[0]["type"] == "local_series.newton_edge_root_degree_bound"
 
 
+def test_newton_edge_roots_cover_linear_and_repeated_rational_roots() -> None:
+    linear = newton_edge_characteristic_roots(
+        NewtonEdgeCharacteristicRequest(
+            polynomial=_polynomial(
+                [
+                    (0, _series(1, (-2, 1))),
+                    (1, _series(0, (1, 1))),
+                ]
+            ),
+            edge_index=0,
+        )
+    )
+    assert len(linear.roots) == 1
+    assert linear.roots[0].value.as_fraction() == Fraction(2)
+    assert linear.roots[0].multiplicity == 1
+
+    repeated = newton_edge_characteristic_roots(
+        NewtonEdgeCharacteristicRequest(
+            polynomial=_polynomial(
+                [
+                    (0, _series(2, (1, 1))),
+                    (1, _series(1, (-2, 1))),
+                    (2, _series(0, (1, 1))),
+                ]
+            ),
+            edge_index=0,
+        )
+    )
+    assert len(repeated.roots) == 1
+    assert repeated.roots[0].value.as_fraction() == Fraction(1)
+    assert repeated.roots[0].multiplicity == 2
+
+
 def test_newton_edge_roots_declared_catalog_example_executes() -> None:
     from jacobian.catalog.catalog import Catalog
     from jacobian.dispatch import invoke_operation

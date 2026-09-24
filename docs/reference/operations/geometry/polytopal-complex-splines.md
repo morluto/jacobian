@@ -14,6 +14,23 @@ minimum over interior facets, or the requested maximum when there are no such
 facets. This reports continuity across codimension-one interfaces; it does not
 claim geometric (`G^r`) continuity under reparameterization.
 
+## Coordinates in an exact spline space
+
+`polyhedral_complex.spline.coordinates.compute` takes a piecewise-polynomial
+value, a total-degree bound, and a smoothness order. It recomputes the cell
+coefficient vector from the supplied polynomials, checks the exact shared-facet
+compatibility matrix, and returns coordinates in the canonical nullspace basis
+along with the source-bound spline space. The result round-trips without losing
+the complex, coefficient axis, matrix, or basis that gives those coordinates
+their meaning. Caller-supplied continuity ledgers are not used as evidence.
+
+These coordinates feed `polyhedral_complex.spline.evaluate.compute` unchanged.
+The operation admits the complete retained spline space and coordinate result
+against the canonical output limit before nullspace materialization. It also
+bounds matrix-vector work and exact rational growth. Piece degree or smoothness
+that violates the requested space is a domain error; requests exceeding work,
+height, or output bounds are resource errors.
+
 The divisibility criterion is standard for multivariate polynomial splines on
 face-to-face partitions; see the [AlgebraicSplines package documentation](https://www.macaulay2.com/doc/Macaulay2/share/doc/Macaulay2/AlgebraicSplines/html/index.html)
 and the discussion of the classical analytic approach in this

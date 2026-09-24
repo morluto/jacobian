@@ -446,6 +446,30 @@ class SplineSpaceResult(StrictModel):
     nullspace_basis: RationalMatrix
 
 
+class SplineCoordinatesRequest(StrictModel):
+    """Express one exact piecewise-polynomial value in a bounded spline basis."""
+
+    function: PiecewisePolynomialResult
+    degree: int = Field(ge=0, le=12)
+    smoothness: int = Field(ge=-1, le=4)
+
+
+class SplineCoordinatesResult(StrictModel):
+    """A source-bound spline space and coordinates of one spline element."""
+
+    spline_space: SplineSpaceResult
+    basis_coordinates: tuple[CanonicalRational, ...] = Field(max_length=4096)
+
+    @model_validator(mode="after")
+    def require_basis_coordinate_shape(self) -> Self:
+        if len(self.basis_coordinates) != self.spline_space.nullity:
+            raise _validation_error(
+                "spline_basis_coordinates",
+                "basis coordinates must match the retained spline nullity",
+            )
+        return self
+
+
 class SplineDimensionRequest(StrictModel):
     """Compute only the exact dimension profile of a bounded spline space."""
 
@@ -792,6 +816,8 @@ __all__ = [
     "PolytopalComplexClosureRequest",
     "PolytopalComplexClosureResult",
     "SourceCellTransport",
+    "SplineCoordinatesRequest",
+    "SplineCoordinatesResult",
     "SplineEvaluationRequest",
     "SplineEvaluationResult",
     "SplineSpaceRequest",

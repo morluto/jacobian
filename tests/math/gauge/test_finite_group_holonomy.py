@@ -14,6 +14,7 @@ from jacobian.math.gauge import (
     OrientedGaugePath,
     finite_group_gauge_holonomy,
 )
+from jacobian.math.gauge import finite_group as finite_group_kernel
 from jacobian.math.groups._table_models import (
     FiniteGroupTableElement,
     FiniteGroupTableRequest,
@@ -197,12 +198,32 @@ def test_output_expansion_is_admitted_before_contribution_construction():
         )
 
 
-def test_aggregate_parent_table_output_is_admitted_for_many_edges_and_steps():
+def test_aggregate_parent_table_output_is_admitted_before_result_construction(
+    monkeypatch,
+):
     group = _s4_group()
     field = _loop_field(group, 128)
     path = OrientedGaugePath.model_construct(
         steps=tuple(GaugePathStep(edge_id="edge-000", forward=True) for _ in range(50)),
         basepoint=None,
+    )
+
+    def output_construction_is_too_late(*args, **kwargs):
+        pytest.fail("output admission must precede ledger and result construction")
+
+    monkeypatch.setattr(
+        finite_group_kernel,
+        "FiniteGroupGaugeContribution",
+        output_construction_is_too_late,
+    )
+    monkeypatch.setattr(
+        finite_group_kernel,
+        "FiniteGroupGaugeHolonomyResult",
+        type(
+            "ForbiddenResultConstruction",
+            (),
+            {"model_construct": staticmethod(output_construction_is_too_late)},
+        ),
     )
     with pytest.raises(OperationResourceAdmissionError):
         finite_group_gauge_holonomy(

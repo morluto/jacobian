@@ -59,19 +59,18 @@ exact space parents and carries the character pullback and identity map of
 requires each character's explicit modulus to equal its space level. The
 operation returns target coordinates and the exact q-prefix through the target
 Sturm precision for levels 26 and 39, extending the source basis while
-retaining its canonical q-Sturm RREF normalization when needed. For targets 13
-and 78,
-it retains the explicit source inclusion and returns the source form's exact
-q-prefix through the target Sturm precision (3 coefficients at level 13, 29
-at level 78). At level 13 this also avoids relabeling the legacy level-13
-coordinate value as a level-26/39-family coordinate type. Identity pullback
-preserves each expansion, and the explicit character map proves membership
-in the common target. The level-78 path intentionally does not construct
-target coordinates: the current backend's level-78 basis failed exact
-reconstruction of an admitted included form, so those coordinates lack a
-sound canonical basis contract. Equality admits both source expansions and
-compares every coefficient through the target Sturm bound after validating
-their common parent and lcm target. Before either source basis is materialized,
+retaining its canonical q-Sturm RREF normalization when needed. At targets 13
+and 78, it retains the explicit source inclusion and returns a typed Sturm
+prefix rather than target basis coordinates. The common q-expansion principle
+gives the same equality postcondition in either case: the explicit character
+map establishes membership in the target, identity pullback preserves the
+source q-expansion, and equality compares every coefficient through the
+target Sturm bound (3 coefficients at level 13, 29 at level 78). Level 13
+uses the same prefix representation to keep one equality postcondition and
+avoid relabeling the legacy level-13 coordinate value as a level-26/39-family
+coordinate type. At level 78, the current basis adapter failed exact
+reconstruction of an admitted included form, so target coordinates lack a
+sound canonical basis contract. Before either source basis is materialized,
 it bounds exact cyclotomic expansion and target-solve coefficient growth
 against the canonical 256-digit field-element limit. This bound is based on
 the represented source dimension, target dimension, and submitted coordinate

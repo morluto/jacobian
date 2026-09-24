@@ -16,8 +16,6 @@ from jacobian.dispatch import invoke_operation
 from jacobian.math.matrices.cyclic_linear import (
     CyclotomicElementMapRequest,
     CyclotomicFieldInclusion,
-    CyclotomicFieldInclusionCompositionRequest,
-    CyclotomicFieldInclusionRequest,
     RationalCyclotomicElement,
     RationalCyclotomicField,
     apply_cyclotomic_field_inclusion,
@@ -38,10 +36,7 @@ def _element(order: int, *coordinates: tuple[int, int]) -> RationalCyclotomicEle
 
 def test_standard_inclusion_has_reduced_generator_image_and_maps_exactly() -> None:
     inclusion = cyclotomic_field_inclusion(
-        CyclotomicFieldInclusionRequest(
-            source=RationalCyclotomicField(order=3),
-            target=RationalCyclotomicField(order=6),
-        )
+        RationalCyclotomicField(order=3), RationalCyclotomicField(order=6)
     )
     assert tuple(value.as_fraction() for value in inclusion.generator_image) == (
         Fraction(-1),
@@ -49,10 +44,7 @@ def test_standard_inclusion_has_reduced_generator_image_and_maps_exactly() -> No
     )
 
     mapped = apply_cyclotomic_field_inclusion(
-        CyclotomicElementMapRequest(
-            inclusion=inclusion,
-            element=_element(3, (1, 1), (2, 1)),
-        )
+        inclusion, _element(3, (1, 1), (2, 1))
     )
     assert tuple(value.as_fraction() for value in mapped.coefficients_ascending) == (
         Fraction(-1),
@@ -67,18 +59,14 @@ def test_element_map_matches_independent_polynomial_substitution(
     source_order: int, target_order: int
 ) -> None:
     inclusion = cyclotomic_field_inclusion(
-        CyclotomicFieldInclusionRequest(
-            source=RationalCyclotomicField(order=source_order),
-            target=RationalCyclotomicField(order=target_order),
-        )
+        RationalCyclotomicField(order=source_order),
+        RationalCyclotomicField(order=target_order),
     )
     degree = inclusion.source.degree
     element = _element(
         source_order, *((index - 2, index + 1) for index in range(degree))
     )
-    actual = apply_cyclotomic_field_inclusion(
-        CyclotomicElementMapRequest(inclusion=inclusion, element=element)
-    )
+    actual = apply_cyclotomic_field_inclusion(inclusion, element)
 
     x = symbols("x")
     modulus = Poly(cyclotomic_poly(target_order, x), x, domain="QQ")
@@ -103,20 +91,12 @@ def test_standard_inclusions_compose_and_apply_after_json_round_trip() -> None:
         catalog,
     ).output
     first = cyclotomic_field_inclusion(
-        CyclotomicFieldInclusionRequest(
-            source=RationalCyclotomicField(order=3),
-            target=RationalCyclotomicField(order=6),
-        )
+        RationalCyclotomicField(order=3), RationalCyclotomicField(order=6)
     )
     second = cyclotomic_field_inclusion(
-        CyclotomicFieldInclusionRequest(
-            source=RationalCyclotomicField(order=6),
-            target=RationalCyclotomicField(order=12),
-        )
+        RationalCyclotomicField(order=6), RationalCyclotomicField(order=12)
     )
-    composed = compose_cyclotomic_field_inclusions(
-        CyclotomicFieldInclusionCompositionRequest(first=first, second=second)
-    )
+    composed = compose_cyclotomic_field_inclusions(first, second)
     assert composed.model_dump(mode="json") == direct
 
     request = CyclotomicElementMapRequest(
@@ -126,7 +106,7 @@ def test_standard_inclusions_compose_and_apply_after_json_round_trip() -> None:
     decoded = CyclotomicElementMapRequest.model_validate_json(
         encode_strict_json(request.model_dump(mode="json")), strict=True
     )
-    mapped = apply_cyclotomic_field_inclusion(decoded)
+    mapped = apply_cyclotomic_field_inclusion(decoded.inclusion, decoded.element)
     assert tuple(value.as_fraction() for value in mapped.coefficients_ascending) == (
         Fraction(-1),
         Fraction(0),

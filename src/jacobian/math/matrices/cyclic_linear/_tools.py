@@ -40,7 +40,7 @@ def _compute(
 
 def _inclusion(request: CyclotomicFieldInclusionRequest) -> CyclotomicFieldInclusion:
     try:
-        return cyclotomic_field_inclusion(request)
+        return cyclotomic_field_inclusion(request.source, request.target)
     except CyclicRankKernelAdmissionError as error:
         raise OperationDomainValidationError(
             location=("source",),
@@ -53,7 +53,7 @@ def _compose(
     request: CyclotomicFieldInclusionCompositionRequest,
 ) -> CyclotomicFieldInclusion:
     try:
-        return compose_cyclotomic_field_inclusions(request)
+        return compose_cyclotomic_field_inclusions(request.first, request.second)
     except CyclicRankKernelAdmissionError as error:
         raise OperationDomainValidationError(
             location=("first",),
@@ -64,7 +64,7 @@ def _compose(
 
 def _map_element(request: CyclotomicElementMapRequest) -> RationalCyclotomicElement:
     try:
-        return apply_cyclotomic_field_inclusion(request)
+        return apply_cyclotomic_field_inclusion(request.inclusion, request.element)
     except CyclicRankKernelAdmissionError as error:
         raise OperationDomainValidationError(
             location=("inclusion",),

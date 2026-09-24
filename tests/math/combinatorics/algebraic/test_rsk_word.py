@@ -107,6 +107,72 @@ def test_row_insertion_known_values(
     assert inverse_row_insertion_rsk(pair) == word
 
 
+def test_plactic_normal_form_is_canonical_row_reading_and_knuth_invariant() -> None:
+    alphabet = ("1", "2", "3")
+    source = FiniteWord(alphabet=alphabet, letters=("1", "3", "2"))
+    equivalent = FiniteWord(alphabet=alphabet, letters=("3", "1", "2"))
+
+    result = algebraic_combinatorics.plactic_normal_form(source)
+    moved = algebraic_combinatorics.plactic_normal_form(equivalent)
+
+    assert result.insertion_tableau.rows == ((1, 2), (3,))
+    assert result.normal_form.letters == ("3", "1", "2")
+    assert result.insertion_tableau == moved.insertion_tableau
+    assert result.normal_form == moved.normal_form
+    assert (
+        algebraic_combinatorics.row_insertion_rsk(result.normal_form).insertion_tableau
+        == result.insertion_tableau
+    )
+
+
+def test_plactic_normal_form_empty_word_keeps_its_empty_alphabet() -> None:
+    result = algebraic_combinatorics.plactic_normal_form(
+        FiniteWord(alphabet=(), letters=())
+    )
+
+    assert result.source_word == FiniteWord(alphabet=(), letters=())
+    assert result.normal_form == FiniteWord(alphabet=(), letters=())
+    assert result.insertion_tableau.rows == ()
+
+
+def test_plactic_normal_form_matches_independent_row_insertion_on_small_words() -> None:
+    alphabet = ("z", "a", "m")
+
+    def reference_insertion(letters: tuple[str, ...]) -> tuple[tuple[int, ...], ...]:
+        ranks = {letter: index + 1 for index, letter in enumerate(alphabet)}
+        rows: list[list[int]] = []
+        for letter in letters:
+            bumped = ranks[letter]
+            row_index = 0
+            while True:
+                if row_index == len(rows):
+                    rows.append([bumped])
+                    break
+                row = rows[row_index]
+                column = next(
+                    (index for index, value in enumerate(row) if value > bumped),
+                    len(row),
+                )
+                if column == len(row):
+                    row.append(bumped)
+                    break
+                row[column], bumped = bumped, row[column]
+                row_index += 1
+        return tuple(tuple(row) for row in rows)
+
+    for length in range(5):
+        for letters in itertools.product(alphabet, repeat=length):
+            source = FiniteWord(alphabet=alphabet, letters=letters)
+            result = algebraic_combinatorics.plactic_normal_form(source)
+            expected_rows = reference_insertion(letters)
+            assert result.insertion_tableau.rows == expected_rows
+            expected_reading = tuple(
+                alphabet[entry - 1] for row in reversed(expected_rows) for entry in row
+            )
+            assert result.normal_form.letters == expected_reading
+            assert reference_insertion(result.normal_form.letters) == expected_rows
+
+
 def test_first_strictly_greater_rule_preserves_repeated_letters_in_a_row() -> None:
     pair = _pair(_word(("b", "b", "a"), ("a", "b")))
     assert pair.insertion_tableau.rows == ((1, 2), (2,))
@@ -193,6 +259,49 @@ def test_all_short_ternary_words_round_trip_both_directions() -> None:
             reconstructed = inverse_row_insertion_rsk(pair)
             assert reconstructed == word
             assert row_insertion_rsk(reconstructed) == pair
+
+
+def test_forward_pair_matches_independent_scan_oracle_exhaustively() -> None:
+    """Compare both tableaux to direct first-greater row scans.
+
+    Round trips alone can let mutually consistent forward/reverse errors pass,
+    so this checks P and Q against a small independent insertion oracle.
+    """
+    alphabet = ("a", "b", "c")
+
+    def reference_pair(letters: tuple[str, ...]):
+        insertion: list[list[int]] = []
+        recording: list[list[int]] = []
+        ranks = {letter: index + 1 for index, letter in enumerate(alphabet)}
+        for position, letter in enumerate(letters, start=1):
+            carried = ranks[letter]
+            row_index = 0
+            while row_index < len(insertion):
+                row = insertion[row_index]
+                column = next(
+                    (index for index, value in enumerate(row) if value > carried),
+                    len(row),
+                )
+                if column == len(row):
+                    row.append(carried)
+                    recording[row_index].append(position)
+                    break
+                row[column], carried = carried, row[column]
+                row_index += 1
+            else:
+                insertion.append([carried])
+                recording.append([position])
+        return tuple(map(tuple, insertion)), tuple(map(tuple, recording))
+
+    for length in range(7):
+        for letters in itertools.product(alphabet, repeat=length):
+            source = FiniteWord(alphabet=alphabet, letters=letters)
+            pair = row_insertion_rsk(source)
+            expected_p, expected_q = reference_pair(letters)
+            assert pair.insertion_tableau.rows == expected_p
+            assert pair.recording_tableau.rows == expected_q
+            assert pair.shape.parts == tuple(map(len, expected_p))
+            assert inverse_row_insertion_rsk(pair) == source
 
 
 def test_permutation_operation_agrees_with_word_specialization() -> None:
@@ -498,3 +607,31 @@ def test_public_operations_are_admitted_and_examples_execute() -> None:
         for operation_example in tool.examples:
             request = tool.request_type.model_validate(operation_example.input)
             tool.result_type.model_validate(tool.run(request))
+
+
+def test_strict_lds_matches_independent_subsequence_enumeration() -> None:
+    from itertools import combinations
+
+    from jacobian.math.combinatorics.algebraic import longest_decreasing_subsequence
+    from jacobian.math.combinatorics.algebraic._models import (
+        LongestDecreasingSubsequenceRequest,
+    )
+
+    alphabet = ("a", "b", "c")
+    for length in range(7):
+        for letters in itertools.product(alphabet, repeat=length):
+            source = FiniteWord(alphabet=alphabet, letters=letters)
+            result = longest_decreasing_subsequence(
+                LongestDecreasingSubsequenceRequest(word=source)
+            )
+            feasible_lengths = [
+                len(indices)
+                for size in range(length + 1)
+                for indices in combinations(range(length), size)
+                if all(
+                    letters[left] > letters[right]
+                    for left, right in itertools.pairwise(indices)
+                )
+            ]
+            assert result.length == max(feasible_lengths, default=0)
+            assert result.values == tuple(letters[index] for index in result.indices)

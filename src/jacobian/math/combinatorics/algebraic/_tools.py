@@ -15,8 +15,16 @@ from jacobian.math.combinatorics.algebraic._models import (
     HookLengthResult,
     KnuthMovesRequest,
     KnuthMovesResult,
+    LongestDecreasingSubsequenceRequest,
+    LongestDecreasingSubsequenceResult,
+    LongestIncreasingSubsequenceRequest,
+    LongestIncreasingSubsequenceResult,
     PartitionDominanceRequest,
     PartitionDominanceResult,
+    PlacticEquivalenceRequest,
+    PlacticEquivalenceResult,
+    PlacticNormalFormRequest,
+    PlacticNormalFormResult,
     RSKInverseWordRequest,
     RSKPermutationRequest,
     RSKResult,
@@ -31,6 +39,7 @@ from jacobian.math.combinatorics.algebraic._models import (
     StandardTableauCheckResult,
     StandardYoungTableauCountRequest,
     StandardYoungTableauCountResult,
+    TableauRowReadingWordRequest,
 )
 from jacobian.math.combinatorics.algebraic.biword import (
     Biword,
@@ -40,6 +49,8 @@ from jacobian.math.combinatorics.algebraic.biword import (
     BiwordRSKRequest,
     GreeneRequest,
     GreeneResult,
+    GreeneWitnessRequest,
+    GreeneWitnessResult,
     InverseBiwordRSKRequest,
     InverseMatrixRSKRequest,
     MatrixRSKRequest,
@@ -52,6 +63,13 @@ from jacobian.math.combinatorics.algebraic.biword_ops import (
     matrix_biword,
     normalize_biword,
     rsk_biword,
+)
+from jacobian.math.combinatorics.algebraic.greene_witnesses import (
+    compute_greene_witnesses,
+)
+from jacobian.math.combinatorics.algebraic.subsequences import (
+    longest_decreasing_subsequence,
+    longest_increasing_subsequence,
 )
 from jacobian.math.combinatorics.algebraic.values import RSKTableauPair
 from jacobian.math.logic.languages.words.values import FiniteWord
@@ -142,6 +160,20 @@ def knuth_moves(request: KnuthMovesRequest) -> KnuthMovesResult:
     return KnuthMovesResult._from_kernel(
         request, neighbors=native.knuth_moves(request.word)
     )
+
+
+def plactic_normal_form(request: PlacticNormalFormRequest) -> PlacticNormalFormResult:
+    return native.plactic_normal_form(request.word)
+
+
+def plactic_equivalence(
+    request: PlacticEquivalenceRequest,
+) -> PlacticEquivalenceResult:
+    return native.plactic_equivalence(request)
+
+
+def tableau_row_reading_word(request: TableauRowReadingWordRequest) -> FiniteWord:
+    return native.tableau_row_reading_word(request.pair)
 
 
 def check_skew_littlewood_richardson(
@@ -507,7 +539,179 @@ def _greene_run(request: GreeneRequest) -> GreeneResult:
         ) from exc
 
 
+def _greene_witness_run(request: GreeneWitnessRequest) -> GreeneWitnessResult:
+    return compute_greene_witnesses(request)
+
+
+def _longest_increasing_subsequence_run(
+    request: LongestIncreasingSubsequenceRequest,
+) -> LongestIncreasingSubsequenceResult:
+    return longest_increasing_subsequence(request)
+
+
+def _longest_decreasing_subsequence_run(
+    request: LongestDecreasingSubsequenceRequest,
+) -> LongestDecreasingSubsequenceResult:
+    return longest_decreasing_subsequence(request)
+
+
 TOOLS = TOOLS + (  # noqa: RUF005
+    MathTool(
+        operation_id="word.longest_increasing_subsequence.compute",
+        title="Compute a strict longest increasing subsequence",
+        description=(
+            "Return the exact maximum length and one deterministic source-index "
+            "witness for a word over its explicit ordered alphabet. Strict means "
+            "each selected letter is strictly greater than the previous one, "
+            "so duplicate letters cannot both occur. Admission bounds the UTF-8 "
+            "payload, output size, word length, and the complete O(n^2) "
+            "predecessor-pair scan."
+        ),
+        request_type=LongestIncreasingSubsequenceRequest,
+        result_type=LongestIncreasingSubsequenceResult,
+        run=_longest_increasing_subsequence_run,
+        tags=("combinatorics", "words", "subsequences", "increasing", "exact"),
+        discovery_terms=(
+            "longest strictly increasing subsequence of a finite word",
+            "strict LIS length and source-index witness",
+        ),
+        examples=(
+            OperationExample(
+                name="strict_lis_with_duplicates",
+                description=(
+                    "Find a longest strictly increasing subsequence of (b,a,b,c); "
+                    "equal letters cannot both be selected."
+                ),
+                input={
+                    "word": {
+                        "alphabet": ["a", "b", "c"],
+                        "letters": ["b", "a", "b", "c"],
+                    }
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="word.longest_decreasing_subsequence.compute",
+        title="Compute a strict longest decreasing subsequence",
+        description=(
+            "Return the exact maximum length and one deterministic source-index "
+            "witness for a word over its explicit ordered alphabet. Strict means "
+            "each selected letter is strictly smaller than the previous one. "
+            "Admission bounds payload bytes, word length, output bytes, and the "
+            "complete O(n^2) predecessor-pair scan."
+        ),
+        request_type=LongestDecreasingSubsequenceRequest,
+        result_type=LongestDecreasingSubsequenceResult,
+        run=_longest_decreasing_subsequence_run,
+        tags=("combinatorics", "words", "subsequences", "decreasing", "exact"),
+        discovery_terms=(
+            "longest strictly decreasing subsequence of a finite word",
+            "strict LDS length and source-index witness",
+        ),
+        examples=(
+            OperationExample(
+                name="strict_lds_with_duplicates",
+                description=(
+                    "Find a longest strictly decreasing subsequence of (c,a,b,a); "
+                    "equal letters cannot both be selected."
+                ),
+                input={
+                    "word": {
+                        "alphabet": ["a", "b", "c"],
+                        "letters": ["c", "a", "b", "a"],
+                    }
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="word.plactic_normal_form.compute",
+        title="Compute the canonical plactic representative of a word",
+        description="Insert a bounded ordered word under ROW_INSERTION_RSK_V1 and return its insertion tableau with the canonical representative read left-to-right from the bottom row to the top row.",
+        request_type=PlacticNormalFormRequest,
+        result_type=PlacticNormalFormResult,
+        run=plactic_normal_form,
+        tags=("combinatorics", "words", "plactic", "rsk", "exact"),
+        discovery_terms=(
+            "plactic normal form",
+            "canonical row reading word",
+            "plactic class",
+        ),
+        examples=(
+            OperationExample(
+                name="word_plactic_normal_form",
+                description="The word (3,1,2) is already the canonical row reading of its insertion tableau.",
+                input={
+                    "word": {"alphabet": ["1", "2", "3"], "letters": ["3", "1", "2"]}
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="word.plactic_equivalence.compute",
+        title="Compare two words in the plactic monoid",
+        description=(
+            "For words over the same explicit ordered alphabet, return both "
+            "ROW_INSERTION_RSK_V1 insertion tableaux and canonical row-reading "
+            "forms, together with whether the tableaux agree. Equality of "
+            "insertion tableaux is the exact plactic-equivalence criterion."
+        ),
+        request_type=PlacticEquivalenceRequest,
+        result_type=PlacticEquivalenceResult,
+        run=plactic_equivalence,
+        tags=("combinatorics", "words", "plactic", "rsk", "exact"),
+        discovery_terms=(
+            "plactic equivalence",
+            "Knuth equivalent words",
+            "compare plactic classes",
+        ),
+        examples=(
+            OperationExample(
+                name="knuth_equivalent_words",
+                description="The words (1,3,2) and (3,1,2) have the same insertion tableau.",
+                input={
+                    "left": {"alphabet": ["1", "2", "3"], "letters": ["1", "3", "2"]},
+                    "right": {"alphabet": ["1", "2", "3"], "letters": ["3", "1", "2"]},
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="tableau.row_reading_word.compute",
+        title="Read an RSK insertion tableau as a word",
+        description=(
+            "Read the insertion tableau bottom row to top row and each row "
+            "left to right (TABLEAU_ROW_READING_BOTTOM_TO_TOP_LEFT_TO_RIGHT_V1), "
+            "retaining the exact ordered alphabet from its RSK pair."
+        ),
+        request_type=TableauRowReadingWordRequest,
+        result_type=FiniteWord,
+        run=tableau_row_reading_word,
+        tags=("combinatorics", "tableaux", "words", "rsk", "exact"),
+        discovery_terms=(
+            "tableau row reading word",
+            "bottom to top tableau word",
+            "RSK insertion tableau to word",
+        ),
+        examples=(
+            OperationExample(
+                name="tableau_row_reading_word",
+                description=(
+                    "Read P with rows [1,2] and [3] bottom-to-top, "
+                    "left-to-right over its retained alphabet."
+                ),
+                input={
+                    "pair": {
+                        "alphabet": ["a", "b", "c"],
+                        "insertion_tableau": {"rows": [[1, 2], [3]]},
+                        "recording_tableau": {"rows": [[1, 3], [2]]},
+                        "shape": {"parts": [2, 1]},
+                    }
+                },
+            ),
+        ),
+    ),
     MathTool(
         operation_id="tableau.biword.normalize.compute",
         title="Normalize a labelled biword",
@@ -640,6 +844,30 @@ TOOLS = TOOLS + (  # noqa: RUF005
                 description="Compute Greene invariants of (c,a,b) over a<b<c; the word alphabet supplies the order.",
                 input={
                     "word": {"alphabet": ["a", "b", "c"], "letters": ["c", "a", "b"]},
+                    "k": 2,
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="word.greene_witnesses.compute",
+        title="Compute disjoint witnesses for Greene invariants",
+        description="For a bounded ordered word, return pairwise-disjoint weakly increasing and strictly decreasing subsequence witnesses attaining the first k Greene invariants under ROW_INSERTION_RSK_V1. Indices are zero-based source positions. This witness operation accepts words of length at most 32 and k at most 8.",
+        request_type=GreeneWitnessRequest,
+        result_type=GreeneWitnessResult,
+        run=_greene_witness_run,
+        tags=("combinatorics", "greene", "subsequences", "rsk", "exact"),
+        discovery_terms=(
+            "Greene subsequence witnesses",
+            "disjoint increasing subsequences",
+            "disjoint decreasing subsequences",
+        ),
+        examples=(
+            OperationExample(
+                name="greene_witnesses_213",
+                description="Witness the first two Greene totals of the word (2,1,3).",
+                input={
+                    "word": {"alphabet": ["1", "2", "3"], "letters": ["2", "1", "3"]},
                     "k": 2,
                 },
             ),

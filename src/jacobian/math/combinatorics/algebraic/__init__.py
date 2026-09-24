@@ -2,6 +2,8 @@
 
 from jacobian.math.combinatorics.algebraic._models import (
     PartitionDominanceResult,
+    PlacticEquivalenceRequest,
+    PlacticEquivalenceResult,
     SemistandardTableauCheckResult,
     SemistandardYoungTableauCountResult,
     StandardTableauCheckResult,
@@ -19,6 +21,9 @@ from jacobian.math.combinatorics.algebraic.biword_ops import (
     normalize_biword,
     rsk_biword,
 )
+from jacobian.math.combinatorics.algebraic.greene_witnesses import (
+    compute_greene_witnesses,
+)
 from jacobian.math.combinatorics.algebraic.operations import (
     check_semistandard_tableau,
     check_standard_tableau,
@@ -27,10 +32,17 @@ from jacobian.math.combinatorics.algebraic.operations import (
     inverse_row_insertion_rsk,
     knuth_moves,
     partition_dominance,
+    plactic_equivalence,
+    plactic_normal_form,
     row_insertion_rsk,
     semistandard_young_tableaux_count,
     standard_young_tableaux_count,
+    tableau_row_reading_word,
     verify_rsk,
+)
+from jacobian.math.combinatorics.algebraic.subsequences import (
+    longest_decreasing_subsequence,
+    longest_increasing_subsequence,
 )
 from jacobian.math.combinatorics.algebraic.values import RSKTableauPair
 from jacobian.math.combinatorics.algebraic.weighted_monotone._models import (
@@ -49,6 +61,8 @@ __all__ = [
     "EndpointProfileResult",
     "NonnegativeIntegerMatrix",
     "PartitionDominanceResult",
+    "PlacticEquivalenceRequest",
+    "PlacticEquivalenceResult",
     "RSKTableauPair",
     "SemistandardTableauCheckResult",
     "SemistandardYoungTableauCountResult",
@@ -57,6 +71,7 @@ __all__ = [
     "check_semistandard_tableau",
     "check_standard_tableau",
     "compute_endpoint_profile",
+    "compute_greene_witnesses",
     "conjugate_partition",
     "greene",
     "hook_lengths",
@@ -64,12 +79,17 @@ __all__ = [
     "inverse_matrix",
     "inverse_row_insertion_rsk",
     "knuth_moves",
+    "longest_decreasing_subsequence",
+    "longest_increasing_subsequence",
     "matrix_biword",
     "normalize_biword",
     "partition_dominance",
+    "plactic_equivalence",
+    "plactic_normal_form",
     "row_insertion_rsk",
     "rsk_biword",
     "semistandard_young_tableaux_count",
     "standard_young_tableaux_count",
+    "tableau_row_reading_word",
     "verify_rsk",
 ]

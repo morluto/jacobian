@@ -26,6 +26,9 @@ from jacobian.math.combinatorics.algebraic._models import (
     KnuthMovesResult,
     KnuthNeighbor,
     PartitionDominanceResult,
+    PlacticEquivalenceRequest,
+    PlacticEquivalenceResult,
+    PlacticNormalFormResult,
     RSKResult,
     SemistandardTableauCheckResult,
     SemistandardYoungTableauCountResult,
@@ -35,6 +38,7 @@ from jacobian.math.combinatorics.algebraic._models import (
 )
 from jacobian.math.combinatorics.algebraic._rsk import (
     _row_insert,
+    word_payload_bytes,
 )
 from jacobian.math.combinatorics.algebraic._rsk import (
     inverse_row_insertion_rsk as _inverse_row_insertion_rsk,
@@ -42,7 +46,12 @@ from jacobian.math.combinatorics.algebraic._rsk import (
 from jacobian.math.combinatorics.algebraic._rsk import (
     row_insertion_rsk as _row_insertion_rsk,
 )
-from jacobian.math.combinatorics.algebraic.values import RSKTableauPair
+from jacobian.math.combinatorics.algebraic.values import (
+    MAX_RSK_WORD_BYTES,
+    MAX_RSK_WORD_LENGTH,
+    MAX_RSK_WORD_OUTPUT_BYTES,
+    RSKTableauPair,
+)
 from jacobian.math.combinatorics.symmetric_functions.values import (
     MAX_PARTITION_PARTS,
     MAX_PARTITION_SIZE,
@@ -55,6 +64,13 @@ from jacobian.math.combinatorics.symmetric_functions.values import (
 )
 from jacobian.math.logic.languages.words.values import FiniteWord
 
+MAX_PLACTIC_EQUIVALENCE_WORK = (
+    2 * MAX_RSK_WORD_LENGTH * MAX_RSK_WORD_LENGTH * MAX_RSK_WORD_LENGTH.bit_length()
+)
+MAX_PLACTIC_EQUIVALENCE_OUTPUT_BYTES = 2 * (
+    24 * MAX_RSK_WORD_BYTES + 32 * MAX_RSK_WORD_LENGTH + 4096
+)
+
 __all__ = [
     "check_semistandard_tableau",
     "check_skew_littlewood_richardson",
@@ -64,9 +80,12 @@ __all__ = [
     "inverse_row_insertion_rsk",
     "knuth_moves",
     "partition_dominance",
+    "plactic_equivalence",
+    "plactic_normal_form",
     "row_insertion_rsk",
     "semistandard_young_tableaux_count",
     "standard_young_tableaux_count",
+    "tableau_row_reading_word",
     "verify_knuth_moves",
     "verify_rsk",
     "verify_skew_littlewood_richardson",
@@ -560,6 +579,143 @@ def knuth_moves(word: FiniteWord) -> tuple[KnuthNeighbor, ...]:
             )
         )
     return tuple(neighbors)
+
+
+def plactic_normal_form(word: FiniteWord) -> PlacticNormalFormResult:
+    """Return the canonical bottom-to-top row-reading word of the RSK tableau."""
+
+    pair = _row_insertion_rsk(word)
+    normal_letters = tuple(
+        pair.alphabet[entry - 1]
+        for row in reversed(pair.insertion_tableau.rows)
+        for entry in row
+    )
+    return PlacticNormalFormResult(
+        source_word=word,
+        insertion_tableau=pair.insertion_tableau,
+        normal_form=FiniteWord(alphabet=pair.alphabet, letters=normal_letters),
+    )
+
+
+def plactic_equivalence(
+    request: PlacticEquivalenceRequest,
+) -> PlacticEquivalenceResult:
+    """Return canonical forms and equality in the row-insertion plactic monoid.
+
+    Both finite inputs are admitted together before either RSK insertion. An
+    n-letter insertion performs at most n rows of ceil(log2(n+1)) comparisons
+    for each of its n letters; combined output is bounded from both source
+    payloads before either normal form is constructed.
+    """
+    try:
+        canonical = PlacticEquivalenceRequest.model_validate(
+            request.model_dump(mode="python")
+        )
+    except (AttributeError, TypeError, ValidationError) as exc:
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="algebraic_combinatorics.plactic_equivalence_request",
+            message="plactic equivalence requires two canonical words over one ordered alphabet",
+        ) from exc
+
+    words = (canonical.left, canonical.right)
+    source_bytes = tuple(word_payload_bytes(word) for word in words)
+    if any(
+        len(word.letters) > MAX_RSK_WORD_LENGTH or size > MAX_RSK_WORD_BYTES
+        for word, size in zip(words, source_bytes, strict=True)
+    ):
+        raise OperationResourceAdmissionError(
+            location=("request",),
+            code="algebraic_combinatorics.plactic_equivalence_source",
+            message="each source word must fit the ordinary RSK size and byte bounds",
+        )
+    work = sum(
+        len(word.letters) ** 2 * max(1, len(word.letters).bit_length())
+        for word in words
+    )
+    if work > MAX_PLACTIC_EQUIVALENCE_WORK:
+        raise OperationResourceAdmissionError(
+            location=("request",),
+            code="algebraic_combinatorics.plactic_equivalence_work",
+            message="combined RSK insertion work exceeds its admitted bound",
+        )
+    # Every resulting row-reading word contains no more letters than its
+    # source. The fixed carrier envelopes bound each nested exact result.
+    output_bound = sum(
+        24 * size + 32 * len(word.letters) + 4096
+        for word, size in zip(words, source_bytes, strict=True)
+    )
+    if output_bound > MAX_PLACTIC_EQUIVALENCE_OUTPUT_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("request",),
+            code="algebraic_combinatorics.plactic_equivalence_output",
+            message="combined canonical-form output exceeds its admitted bound",
+        )
+    left = plactic_normal_form(canonical.left)
+    right = plactic_normal_form(canonical.right)
+    return PlacticEquivalenceResult(
+        left=left,
+        right=right,
+        equivalent=left.insertion_tableau == right.insertion_tableau,
+    )
+
+
+def tableau_row_reading_word(pair: RSKTableauPair) -> FiniteWord:
+    """Read P bottom-to-top, each row left-to-right, retaining its alphabet."""
+
+    if type(pair) is not RSKTableauPair:
+        raise OperationDomainValidationError(
+            location=("pair",),
+            code="algebraic_combinatorics.rsk_pair_required",
+            message="row reading requires an alphabet-bound RSK tableau pair",
+        )
+    try:
+        canonical = RSKTableauPair.model_validate(pair.model_dump())
+    except (TypeError, ValueError, ValidationError) as exc:
+        raise OperationDomainValidationError(
+            location=("pair",),
+            code="algebraic_combinatorics.invalid_rsk_pair",
+            message="row reading requires valid semistandard and standard tableaux",
+        ) from exc
+    cell_count = sum(canonical.shape.parts)
+    if cell_count > MAX_RSK_WORD_LENGTH:
+        raise OperationResourceAdmissionError(
+            location=("pair", "shape"),
+            code="algebraic_combinatorics.rsk_tableau_size",
+            message="tableau exceeds the admitted row-reading cell bound",
+        )
+    worst_output_bytes = 12 * sum(map(len, canonical.alphabet)) * (cell_count + 1) + 256
+    if worst_output_bytes > MAX_RSK_WORD_OUTPUT_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("pair",),
+            code="algebraic_combinatorics.row_reading_output_size",
+            message="row-reading output exceeds its admitted byte bound",
+        )
+    try:
+        require_semistandard(canonical.insertion_tableau)
+        require_standard(canonical.recording_tableau)
+    except (TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("pair",),
+            code="algebraic_combinatorics.invalid_rsk_pair",
+            message="row reading requires valid semistandard and standard tableaux",
+        ) from exc
+    if any(
+        entry > len(canonical.alphabet)
+        for row in canonical.insertion_tableau.rows
+        for entry in row
+    ):
+        raise OperationDomainValidationError(
+            location=("pair", "insertion_tableau"),
+            code="algebraic_combinatorics.rsk_entry_outside_alphabet",
+            message="insertion-tableau ranks must index the retained alphabet",
+        )
+    letters = tuple(
+        canonical.alphabet[entry - 1]
+        for row in reversed(canonical.insertion_tableau.rows)
+        for entry in row
+    )
+    return FiniteWord.model_construct(alphabet=canonical.alphabet, letters=letters)
 
 
 def verify_knuth_moves(claim: KnuthMovesResult) -> bool:

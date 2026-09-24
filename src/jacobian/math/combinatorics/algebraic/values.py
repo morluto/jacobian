@@ -30,6 +30,14 @@ MAX_RSK_ROW_SEARCH_COMPARISONS = MAX_RSK_WORD_LENGTH.bit_length()
 # can use MAX_SYMBOL_LENGTH Unicode scalar values per symbol, each encoded in
 # four UTF-8 bytes.
 MAX_RSK_WORD_BYTES = (MAX_RSK_WORD_LENGTH + MAX_ALPHABET_SIZE) * MAX_SYMBOL_LENGTH * 4
+# A row-reading word serializes at most one alphabet and MAX_RSK_WORD_LENGTH
+# copies of an alphabet symbol. With ensure_ascii JSON, one supplementary
+# Unicode scalar may occupy twelve escaped bytes; three extra bytes per symbol
+# cover quotes and separators. The final allowance covers the object keys and
+# array delimiters.
+MAX_RSK_WORD_OUTPUT_BYTES = (MAX_RSK_WORD_LENGTH + MAX_ALPHABET_SIZE) * (
+    12 * MAX_SYMBOL_LENGTH + 3
+) + 256
 RSKConvention = Literal["ROW_INSERTION_RSK_V1"]
 
 
@@ -86,6 +94,7 @@ __all__ = [
     "MAX_RSK_ROW_SEARCH_COMPARISONS",
     "MAX_RSK_WORD_BYTES",
     "MAX_RSK_WORD_LENGTH",
+    "MAX_RSK_WORD_OUTPUT_BYTES",
     "RSKConvention",
     "RSKTableauPair",
 ]

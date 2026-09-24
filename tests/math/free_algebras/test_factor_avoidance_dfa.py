@@ -103,3 +103,11 @@ def test_factor_family_rejects_dfa_larger_than_shared_carrier() -> None:
     request = _request(["x"], [["x"] * 64])
     with pytest.raises(OperationResourceAdmissionError, match="64-state"):
         factor_avoidance_dfa(request)
+
+
+def test_prefix_state_preflight_accounts_for_shared_pattern_prefixes() -> None:
+    alphabet = [f"g{index:02}" for index in range(26)]
+    shared_prefix = alphabet[:3]
+    patterns = [[*shared_prefix, letter] for letter in alphabet]
+    result = factor_avoidance_dfa(_request(alphabet, patterns))
+    assert result.dfa.state_count == 5

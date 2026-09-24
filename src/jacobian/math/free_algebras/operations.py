@@ -24,6 +24,7 @@ from jacobian.math.free_algebras._models import (
     MAX_FREE_ALGEBRA_ADDITION_TERMS,
     MAX_FREE_ALGEBRA_COEFFICIENT_DIGITS,
     MAX_FREE_ALGEBRA_FACTOR_DFA_OUTPUT_CELLS,
+    MAX_FREE_ALGEBRA_FACTOR_DFA_PREFIX_CANDIDATES,
     MAX_FREE_ALGEBRA_FACTOR_DFA_STATES,
     MAX_FREE_ALGEBRA_FACTOR_DFA_WORK,
     MAX_FREE_ALGEBRA_FORBIDDEN_WORD_LETTERS,
@@ -1874,6 +1875,50 @@ def _factor_avoidance_states(
     return ordered_prefixes, dead_state, state_count, tuple(range(dead_state))
 
 
+def _preflight_factor_prefix_states(
+    patterns: tuple[tuple[int, ...], ...],
+    state_bound: int,
+    prefix_candidate_bound: int,
+) -> int:
+    """Admit a conservative prefix bound, then count trie nodes without expansion.
+
+    The length sum bounds every distinct proper-prefix node. Because
+    ``patterns`` is a factor antichain, it is also prefix-free; adjacent words
+    in lexical order therefore give the exact number of shared proper-prefix
+    nodes from their lengths and longest common prefixes.
+    """
+
+    if patterns == ((),):
+        return 1
+    prefix_upper_bound = 1 + sum(max(0, len(word) - 1) for word in patterns)
+    state_upper_bound = prefix_upper_bound + (1 if patterns else 0)
+    if state_upper_bound > prefix_candidate_bound:
+        _reject_resource(
+            ("forbidden_factors",),
+            "factor_avoidance_prefix_bound",
+            "factor-avoidance prefix candidates exceed the admitted intermediate bound",
+        )
+
+    prefix_count = 1
+    previous: tuple[int, ...] | None = None
+    for word in sorted(patterns):
+        common = 0
+        if previous is not None:
+            limit = min(len(previous), len(word))
+            while common < limit and previous[common] == word[common]:
+                common += 1
+        prefix_count += max(0, len(word) - 1 - common)
+        previous = word
+    predicted_states = prefix_count + (1 if patterns else 0)
+    if predicted_states > state_bound:
+        _reject_resource(
+            ("forbidden_factors",),
+            "factor_avoidance_state_bound",
+            f"factor-avoidance DFA exceeds the {state_bound}-state carrier bound",
+        )
+    return predicted_states
+
+
 def _factor_avoidance_target(
     prefix: tuple[int, ...],
     symbol: int,
@@ -1974,9 +2019,16 @@ def factor_avoidance_dfa(
         sorted(set(supplied), key=lambda word: (len(word), word))
     )
     labels = tuple(value.alphabet)
+    predicted_state_count = _preflight_factor_prefix_states(
+        minimal_tuple,
+        MAX_FREE_ALGEBRA_FACTOR_DFA_STATES,
+        MAX_FREE_ALGEBRA_FACTOR_DFA_PREFIX_CANDIDATES,
+    )
     state_prefixes, dead_state, state_count, accepting = _factor_avoidance_states(
         minimal_tuple, MAX_FREE_ALGEBRA_FACTOR_DFA_STATES
     )
+    if state_count != predicted_state_count:
+        raise RuntimeError("factor-avoidance prefix preflight disagrees with trie size")
     alphabet_size = len(labels)
     transition_count = state_count * alphabet_size
     if transition_count > 4096:

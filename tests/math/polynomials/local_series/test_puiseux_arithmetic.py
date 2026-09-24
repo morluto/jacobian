@@ -83,14 +83,14 @@ def test_puiseux_residue_returns_zero_only_when_minus_one_is_known_absent() -> N
     assert residue_puiseux(source).residue.as_fraction() == 0
 
 
-@pytest.mark.parametrize(
-    ("lower", "precision"),
-    [(Fraction(0), Fraction(2)), (Fraction(-2), Fraction(-1))],
-)
-def test_puiseux_residue_rejects_windows_that_do_not_determine_minus_one(
-    lower: Fraction, precision: Fraction
-) -> None:
-    source = window((), lower=lower, precision=precision)
+def test_puiseux_residue_returns_zero_below_the_known_lower_bound() -> None:
+    source = window(((Fraction(1, 2), 1),), lower=Fraction(0), precision=Fraction(2))
+
+    assert residue_puiseux(source).residue.as_fraction() == 0
+
+
+def test_puiseux_residue_rejects_windows_that_do_not_determine_minus_one() -> None:
+    source = window((), lower=Fraction(-2), precision=Fraction(-1))
 
     with pytest.raises(
         OperationDomainValidationError, match="must contain exponent -1"
@@ -344,7 +344,9 @@ def test_product_rejects_pair_work_before_convolution() -> None:
         multiply_puiseux(left, left)
 
 
-def test_add_result_byte_preflight_accepts_at_boundary_and_rejects_above() -> None:
+def test_add_result_envelope_accepts_sparse_terms_and_rejects_above_term_bound() -> (
+    None
+):
     left_at_boundary = window(
         tuple((Fraction(2 * i), 1) for i in range(619)),
         precision=Fraction(2_000),
@@ -355,12 +357,22 @@ def test_add_result_byte_preflight_accepts_at_boundary_and_rejects_above() -> No
     )
     assert len(add_puiseux(left_at_boundary, right_at_boundary).terms) == 1_238
 
+    # Small coefficients use their actual widths, so a sparse sum below the
+    # retained-term bound is admitted even though a worst-case digit estimate
+    # would reject it.
     left_over = window(
         tuple((Fraction(2 * i), 1) for i in range(620)),
         precision=Fraction(2_000),
     )
-    right_over = right_at_boundary
-    with pytest.raises(
-        OperationResourceAdmissionError, match="serialized-size envelope"
-    ):
-        add_puiseux(left_over, right_over)
+    assert len(add_puiseux(left_over, right_at_boundary).terms) == 1_239
+
+    left_huge = window(
+        tuple((Fraction(2 * i), 1) for i in range(2_500)),
+        precision=Fraction(6_000),
+    )
+    right_huge = window(
+        tuple((Fraction(2 * i + 1), 1) for i in range(2_500)),
+        precision=Fraction(6_000),
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="retained-term bound"):
+        add_puiseux(left_huge, right_huge)

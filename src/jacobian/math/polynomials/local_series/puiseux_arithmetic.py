@@ -5,11 +5,12 @@ from __future__ import annotations
 from collections import defaultdict
 from fractions import Fraction
 from math import ceil, floor, gcd, lcm, log2
+from typing import NoReturn
 
 from pydantic import TypeAdapter, ValidationError
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
-from jacobian.canonical import CanonicalLimits
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -27,16 +28,18 @@ from jacobian.math.polynomials.local_series.values import (
 from jacobian.math.polynomials.values import PolynomialVariable
 
 MAX_PUISEUX_ARITHMETIC_WORK = 1_000_000
-MAX_PUISEUX_OUTPUT_BYTES = CanonicalLimits().max_output_bytes
+MAX_PUISEUX_RESULT_DIGITS = MAX_LOCAL_SERIES_TERMS * (
+    2 * MAX_LOCAL_SERIES_COEFFICIENT_DIGITS + 64
+)
 _MAX_SCALAR_BITS = floor(MAX_LOCAL_SERIES_COEFFICIENT_DIGITS * log2(10))
 _VARIABLE_ADAPTER = TypeAdapter(PolynomialVariable)
 
 
-def _domain(code: str, message: str, location: tuple[str, ...]) -> None:
+def _domain(code: str, message: str, location: tuple[str, ...]) -> NoReturn:
     raise OperationDomainValidationError(location=location, code=code, message=message)
 
 
-def _resource(code: str, message: str, location: tuple[str, ...]) -> None:
+def _resource(code: str, message: str, location: tuple[str, ...]) -> NoReturn:
     raise OperationResourceAdmissionError(location=location, code=code, message=message)
 
 
@@ -47,10 +50,12 @@ def _canonical(value: Fraction) -> CanonicalRational:
 def _check_rational(value: object, *, label: str, exponent: bool = False) -> Fraction:
     if not isinstance(value, CanonicalRational):
         _domain("puiseux_value_type", f"{label} must be a canonical rational", (label,))
-    num = getattr(value, "num", None)
-    den = getattr(value, "den", None)
-    if type(num) is not int or type(den) is not int or den <= 0:
+    num_raw = getattr(value, "num", None)
+    den_raw = getattr(value, "den", None)
+    if type(num_raw) is not int or type(den_raw) is not int or den_raw <= 0:
         _domain("puiseux_value", f"{label} must be a valid rational", (label,))
+    num: int = num_raw
+    den: int = den_raw
     if max(abs(num), den).bit_length() > _MAX_SCALAR_BITS:
         _resource(
             "puiseux_scalar_bound", f"{label} exceeds the scalar digit bound", (label,)
@@ -179,7 +184,13 @@ def _check(
     return center, lower, tuple(terms), precision
 
 
-def _pair(left: TruncatedPuiseuxWindow, right: TruncatedPuiseuxWindow):
+def _pair(
+    left: TruncatedPuiseuxWindow, right: TruncatedPuiseuxWindow
+) -> tuple[
+    tuple[Fraction, Fraction, tuple[tuple[Fraction, Fraction], ...], Fraction],
+    tuple[Fraction, Fraction, tuple[tuple[Fraction, Fraction], ...], Fraction],
+    int,
+]:
     left_data = _check(left)
     right_data = _check(right)
     if (left.variable, left_data[0]) != (right.variable, right_data[0]):
@@ -331,12 +342,12 @@ def add(
         if lower <= exponent < precision:
             grouped[exponent].append(coefficient)
     _admit_support(len(grouped))
-    _admit_output_bytes(len(grouped), left)
     for values in grouped.values():
         _admit_sum_growth(values)
     coefficients = {
         exponent: sum(values, Fraction()) for exponent, values in grouped.items()
     }
+    _admit_result_envelope(coefficients, left.variable)
     return _make(left, lower, precision, coefficients, ramification)
 
 
@@ -358,12 +369,12 @@ def subtract(
         if lower <= exponent < precision:
             grouped[exponent].append(-coefficient)
     _admit_support(len(grouped))
-    _admit_output_bytes(len(grouped), left)
     for values in grouped.values():
         _admit_sum_growth(values)
     coefficients = {
         exponent: sum(values, Fraction()) for exponent, values in grouped.items()
     }
+    _admit_result_envelope(coefficients, left.variable)
     return _make(left, lower, precision, coefficients, ramification)
 
 
@@ -388,21 +399,29 @@ def _admit_support(term_count: int) -> None:
         )
 
 
-def _admit_output_bytes(term_count: int, source: TruncatedPuiseuxWindow) -> None:
-    # Coefficients can each use the full scalar digit envelope. Exponents have
-    # denominator <= 256 and absolute value <= 1e6, so their numerator and
-    # denominator need at most 12 decimal digits together. The fixed allowance
-    # covers JSON keys, quoting, commas, center, window bounds, and parent data.
-    estimate = term_count * (2 * MAX_LOCAL_SERIES_COEFFICIENT_DIGITS + 12 + 256)
-    estimate += (
-        2 * MAX_LOCAL_SERIES_COEFFICIENT_DIGITS + 24 + len(source.variable) + 512
-    )
-    if estimate > MAX_PUISEUX_OUTPUT_BYTES:
-        _resource(
-            "puiseux_output_bound",
-            "Puiseux result exceeds its serialized-size envelope",
-            ("result",),
+def _admit_result_envelope(
+    coefficients: dict[Fraction, Fraction], variable: str
+) -> None:
+    # Estimate the result envelope from admitted input widths and bounded
+    # sum/product growth instead of charging every term at the worst-case
+    # scalar digit bound. Exponents have denominator <= 256 and absolute
+    # value <= 1e6; the fixed allowance covers mapping keys, center, window
+    # bounds, and parent data as decimal digits plus structural overhead.
+    total = len(variable.encode("utf-8")) + 512
+    for exponent, value in coefficients.items():
+        total += (
+            len(format_canonical_integer(exponent.numerator))
+            + len(format_canonical_integer(exponent.denominator))
+            + len(format_canonical_integer(value.numerator))
+            + len(format_canonical_integer(value.denominator))
+            + 64
         )
+        if total > MAX_PUISEUX_RESULT_DIGITS:
+            _resource(
+                "puiseux_result_envelope",
+                "Puiseux result exceeds its admitted digit envelope",
+                ("result",),
+            )
 
 
 def multiply(
@@ -440,19 +459,14 @@ def multiply(
             exponent = exponent_a + exponent_b
             if lower <= exponent < precision:
                 contributions[exponent].append((coefficient_a, coefficient_b))
-    if len(contributions) > MAX_LOCAL_SERIES_TERMS:
-        _resource(
-            "puiseux_terms",
-            "product support exceeds the result term bound",
-            ("result", "terms"),
-        )
-    _admit_output_bytes(len(contributions), left)
+    _admit_support(len(contributions))
     for values in contributions.values():
         _admit_product_sum_growth(values)
     coefficients = {
         exponent: sum((left * right for left, right in values), Fraction())
         for exponent, values in contributions.items()
     }
+    _admit_result_envelope(coefficients, left.variable)
     return _make(left, lower, precision, coefficients, ramification)
 
 
@@ -479,12 +493,12 @@ def derivative(series: TruncatedPuiseuxWindow) -> TruncatedPuiseuxWindow:
     for exponent, coefficient in terms:
         if exponent:
             _admit_product_sum_growth([(coefficient, exponent)])
-    _admit_output_bytes(len(terms), series)
     coefficients = {
         exponent - 1: coefficient * exponent
         for exponent, coefficient in terms
         if exponent
     }
+    _admit_result_envelope(coefficients, series.variable)
     return _make(
         series,
         output_lower,
@@ -532,7 +546,6 @@ def _inverse_geometry(
 
 
 def _admit_inverse_work(
-    series: TruncatedPuiseuxWindow,
     coefficient_count: int,
     unit_term_count: int,
 ) -> None:
@@ -545,7 +558,6 @@ def _admit_inverse_work(
             "Puiseux inverse exceeds the admitted coefficient recurrence work",
             ("series", "terms"),
         )
-    _admit_output_bytes(output_terms, series)
 
 
 def _inverse_integer_weights(
@@ -619,8 +631,10 @@ def _inverse_integer_weights(
         )
 
     weights: dict[int, int] = {}
-    for index, coefficient in integer_coefficients:
-        weights[index] = coefficient * common_denominator ** (index - 1)
+    for lattice_index, integer_value in integer_coefficients:
+        weights[lattice_index] = integer_value * common_denominator ** (
+            lattice_index - 1
+        )
     return weights, common_denominator
 
 
@@ -672,7 +686,7 @@ def inverse(series: TruncatedPuiseuxWindow) -> TruncatedPuiseuxWindow:
     lower, precision, count, unit_terms = _inverse_geometry(
         source_precision, terms, series.ramification_index
     )
-    _admit_inverse_work(series, count, len(unit_terms))
+    _admit_inverse_work(count, len(unit_terms))
     if not unit_terms:
         reciprocal = Fraction(1, 1) / leading
         if (
@@ -697,12 +711,13 @@ def inverse(series: TruncatedPuiseuxWindow) -> TruncatedPuiseuxWindow:
             lower,
             series.ramification_index,
         )
+    _admit_result_envelope(coefficients, series.variable)
     return _make(series, lower, precision, coefficients, series.ramification_index)
 
 
 __all__ = [
     "MAX_PUISEUX_ARITHMETIC_WORK",
-    "MAX_PUISEUX_OUTPUT_BYTES",
+    "MAX_PUISEUX_RESULT_DIGITS",
     "add",
     "derivative",
     "inverse",

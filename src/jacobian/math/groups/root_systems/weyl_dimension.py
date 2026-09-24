@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from math import gcd
 
-from jacobian.canonical import CanonicalLimits
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -25,7 +24,7 @@ from jacobian.math.groups.root_systems.operations import (
     _positive_coroots_from_admitted,
 )
 
-_MAX_DIMENSION_OUTPUT_BYTES = 64_000
+_MAX_DIMENSION_OUTPUT_CELLS = 64_000
 _MAX_FORMULA_WORK = 100_000_000
 
 
@@ -83,8 +82,7 @@ def weyl_dimension(
         root_count_bound > MAX_POSITIVE_ROOTS
         or dimension_bits_bound > MAX_WEYL_DIMENSION_BITS
         or work_bound > _MAX_FORMULA_WORK
-        or output_bytes_bound
-        > min(_MAX_DIMENSION_OUTPUT_BYTES, CanonicalLimits().max_output_bytes)
+        or output_bytes_bound > _MAX_DIMENSION_OUTPUT_CELLS
     ):
         raise OperationResourceAdmissionError(
             location=("highest_weight",),

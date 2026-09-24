@@ -25,12 +25,14 @@ MAX_WEYL_GROUP_ORDER = 696_729_600
 # Lagrange bounds every element order by the largest admitted Weyl-group order.
 MAX_WEYL_ELEMENT_ORDER = MAX_WEYL_GROUP_ORDER
 MAX_WEIGHT_ORBIT_SIZE = 4096
+# Each admitted orbit value holds rank coordinates of at most 18 decimal digits.
+MAX_WEIGHT_ORBIT_OUTPUT_DIGITS = 1_000_000
 MAX_ROOT_POSET_ROOTS = 64
 MAX_HIGHEST_WEIGHT_BITS = 64
 MAX_WEYL_DIMENSION_BITS = 10_000
 MAX_LATTICE_COORDINATE_BITS = 128
 MAX_LATTICE_OUTPUT_COORDINATE_BITS = MAX_LATTICE_COORDINATE_BITS + 5
-MAX_LATTICE_VECTOR_OUTPUT_BYTES = 8_192
+MAX_LATTICE_VECTOR_OUTPUT_CELLS = 8_192
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -460,12 +462,12 @@ class WeylExponentComponent(StrictModel):
         if (
             tuple(sorted(set(self.simple_root_indices))) != self.simple_root_indices
             or len(self.exponents) != len(self.simple_root_indices)
-            or tuple(sorted(set(self.exponents))) != self.exponents
+            or tuple(sorted(self.exponents)) != self.exponents
             or self.exponents[0] < 1
         ):
             raise _validation_error(
                 "weyl_exponent_component",
-                "Weyl exponents must be strictly increasing and match the component rank",
+                "Weyl exponents must be nondecreasing and match the component rank",
             )
         return self
 

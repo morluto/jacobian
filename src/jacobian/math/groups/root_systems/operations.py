@@ -10,7 +10,6 @@ from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
 from jacobian._execution import BackendFailureReason, OperationBackendError
-from jacobian.canonical import CanonicalLimits
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -45,19 +44,20 @@ from jacobian.math.groups.root_systems._cartan import (
     weyl_word_inversions as _weyl_word_inversions_kernel,
 )
 from jacobian.math.groups.root_systems._dynkin_models import (
-    MAX_DYNKIN_DIAGRAM_OUTPUT_BYTES,
+    MAX_DYNKIN_DIAGRAM_OUTPUT_CELLS,
     DynkinEdge,
     FiniteDynkinDiagram,
 )
 from jacobian.math.groups.root_systems._models import (
     MAX_LATTICE_COORDINATE_BITS,
     MAX_LATTICE_OUTPUT_COORDINATE_BITS,
-    MAX_LATTICE_VECTOR_OUTPUT_BYTES,
+    MAX_LATTICE_VECTOR_OUTPUT_CELLS,
     MAX_POSITIVE_ROOTS,
     MAX_RANK,
     MAX_REFLECTION_REPRESENTABLE,
     MAX_ROOT_COORDINATE,
     MAX_ROOT_POSET_ROOTS,
+    MAX_WEIGHT_ORBIT_OUTPUT_DIGITS,
     MAX_WEIGHT_ORBIT_SIZE,
     MAX_WEYL_GROUP_ORDER,
     MAX_WEYL_WORD_LENGTH,
@@ -65,10 +65,8 @@ from jacobian.math.groups.root_systems._models import (
     CartanType,
     CartanTypeResult,
     CorootLatticeVector,
-    CorootToCoweightLatticeRequest,
     CoweightLatticeVector,
     FiniteCartanDatum,
-    LatticeVectorCreateRequest,
     PositiveCorootsResult,
     PositiveRootComponentProfile,
     PositiveRootProfileEntry,
@@ -83,7 +81,6 @@ from jacobian.math.groups.root_systems._models import (
     RootPosetResult,
     RootSystemDataResult,
     RootToCorootResult,
-    RootToWeightLatticeRequest,
     SimpleReflectionResult,
     SimpleReflectionsResult,
     WeightLatticeVector,
@@ -99,6 +96,7 @@ from jacobian.math.groups.root_systems._models import (
     WeylPoincarePolynomialResult,
     WeylVectorActionResult,
     WeylWeightOrbitResult,
+    _FiniteCartanLatticeVector,
 )
 from jacobian.math.polynomials._models import IntegerPolynomial
 from jacobian.math.polynomials.values import MAX_POLYNOMIAL_TERMS
@@ -116,15 +114,15 @@ MAX_ROOT_POSET_OUTPUT_CELLS = (
     + 3 * MAX_ROOT_POSET_OUTPUT_PAIRS
 )
 MAX_ROOT_PROFILE_WORK = 120_000
-MAX_ROOT_PROFILE_OUTPUT_BYTES = 64_000
+MAX_ROOT_PROFILE_OUTPUT_CELLS = 64_000
 MAX_COXETER_POLYNOMIAL_WORK = 200_000
-MAX_COXETER_POLYNOMIAL_OUTPUT_BYTES = 4_096
+MAX_COXETER_POLYNOMIAL_OUTPUT_CELLS = 4_096
 MAX_ROOT_TO_COROOT_WORK = 10_000
-MAX_ROOT_TO_COROOT_OUTPUT_BYTES = 1_024
+MAX_ROOT_TO_COROOT_OUTPUT_CELLS = 1_024
 MAX_ROOT_LENGTH_PROFILE_WORK = 120_000
-MAX_ROOT_LENGTH_PROFILE_OUTPUT_BYTES = 64_000
+MAX_ROOT_LENGTH_PROFILE_OUTPUT_CELLS = 64_000
 MAX_WEYL_ELEMENT_ORDER_WORK = 2_000_000
-MAX_WEYL_ELEMENT_ORDER_OUTPUT_BYTES = 8_192
+MAX_WEYL_ELEMENT_ORDER_OUTPUT_CELLS = 8_192
 MAX_DYNKIN_DIAGRAM_WORK = 5_000
 
 
@@ -149,7 +147,7 @@ def coxeter_polynomial(
     output_bytes_bound = (rank + 1) * (len(str(coefficient_bound)) + 2)
     if (
         work > MAX_COXETER_POLYNOMIAL_WORK
-        or output_bytes_bound > MAX_COXETER_POLYNOMIAL_OUTPUT_BYTES
+        or output_bytes_bound > MAX_COXETER_POLYNOMIAL_OUTPUT_CELLS
     ):
         raise OperationResourceAdmissionError(
             location=("matrix",),
@@ -231,7 +229,7 @@ def _admit_lattice_coordinates(
         )
     digit_bound = (max_bits * 30103) // 100_000 + 2
     output_bytes_bound = rank * (digit_bound + 3) + MAX_RANK**2 * 16 + 1024
-    if output_bytes_bound > MAX_LATTICE_VECTOR_OUTPUT_BYTES:
+    if output_bytes_bound > MAX_LATTICE_VECTOR_OUTPUT_CELLS:
         raise OperationResourceAdmissionError(
             location=("coordinates",),
             code="root_system.lattice_output_over_envelope",
@@ -239,42 +237,56 @@ def _admit_lattice_coordinates(
         )
 
 
-def _create_lattice_vector(
-    request: LatticeVectorCreateRequest, result_type: type
-) -> object:
-    cartan = _as_cartan(request.matrix)
+def _create_lattice_vector[LatticeVectorT: _FiniteCartanLatticeVector](
+    matrix: CartanMatrix | tuple[tuple[int, ...], ...],
+    coordinates: tuple[int, ...] | list[int],
+    result_type: type[LatticeVectorT],
+) -> LatticeVectorT:
+    cartan = _as_cartan(matrix)
     _admit_cartan_finite_type(cartan.entries)
-    _admit_lattice_coordinates(request.coordinates, len(cartan))
+    coords = tuple(coordinates)
+    _admit_lattice_coordinates(coords, len(cartan))
     datum = _cartan_datum_from_admitted(cartan)
-    return result_type.model_construct(datum=datum, coordinates=request.coordinates)
+    return result_type.model_construct(datum=datum, coordinates=coords)
 
 
-def root_lattice_vector(request: LatticeVectorCreateRequest) -> RootLatticeVector:
+def root_lattice_vector(
+    matrix: CartanMatrix | tuple[tuple[int, ...], ...],
+    coordinates: tuple[int, ...] | list[int],
+) -> RootLatticeVector:
     """Construct a root-lattice vector in simple-root coordinates."""
-    return _create_lattice_vector(request, RootLatticeVector)
+    return _create_lattice_vector(matrix, coordinates, RootLatticeVector)
 
 
 def coroot_lattice_vector(
-    request: LatticeVectorCreateRequest,
+    matrix: CartanMatrix | tuple[tuple[int, ...], ...],
+    coordinates: tuple[int, ...] | list[int],
 ) -> CorootLatticeVector:
     """Construct a coroot-lattice vector in simple-coroot coordinates."""
-    return _create_lattice_vector(request, CorootLatticeVector)
+    return _create_lattice_vector(matrix, coordinates, CorootLatticeVector)
 
 
-def weight_lattice_vector(request: LatticeVectorCreateRequest) -> WeightLatticeVector:
+def weight_lattice_vector(
+    matrix: CartanMatrix | tuple[tuple[int, ...], ...],
+    coordinates: tuple[int, ...] | list[int],
+) -> WeightLatticeVector:
     """Construct a weight-lattice vector in fundamental-weight coordinates."""
-    return _create_lattice_vector(request, WeightLatticeVector)
+    return _create_lattice_vector(matrix, coordinates, WeightLatticeVector)
 
 
 def coweight_lattice_vector(
-    request: LatticeVectorCreateRequest,
+    matrix: CartanMatrix | tuple[tuple[int, ...], ...],
+    coordinates: tuple[int, ...] | list[int],
 ) -> CoweightLatticeVector:
     """Construct a coweight-lattice vector in fundamental-coweight coordinates."""
-    return _create_lattice_vector(request, CoweightLatticeVector)
+    return _create_lattice_vector(matrix, coordinates, CoweightLatticeVector)
 
 
 def _canonical_lattice_vector(
-    vector: object, expected_type: type, *, output_bound: bool
+    vector: _FiniteCartanLatticeVector,
+    expected_type: type[_FiniteCartanLatticeVector],
+    *,
+    output_bound: bool,
 ) -> tuple[FiniteCartanDatum, tuple[int, ...]]:
     if type(vector) is not expected_type:
         raise OperationDomainValidationError(
@@ -304,13 +316,13 @@ def _canonical_lattice_vector(
     return canonical_datum, coordinates
 
 
-def _lattice_inclusion(
-    vector: object,
-    expected_type: type,
-    result_type: type,
+def _lattice_inclusion[ResultVectorT: _FiniteCartanLatticeVector](
+    vector: _FiniteCartanLatticeVector,
+    expected_type: type[_FiniteCartanLatticeVector],
+    result_type: type[ResultVectorT],
     *,
     transpose: bool,
-) -> object:
+) -> ResultVectorT:
     if type(vector) is not expected_type:
         raise OperationDomainValidationError(
             location=("vector",),
@@ -352,11 +364,11 @@ def _lattice_inclusion(
 
 
 def root_to_weight_lattice(
-    request: RootToWeightLatticeRequest,
+    vector: RootLatticeVector,
 ) -> WeightLatticeVector:
     """Embed Q in P using the exact Cartan matrix in the datum's ordered bases."""
     return _lattice_inclusion(
-        request.vector,
+        vector,
         RootLatticeVector,
         WeightLatticeVector,
         transpose=False,
@@ -364,11 +376,11 @@ def root_to_weight_lattice(
 
 
 def coroot_to_coweight_lattice(
-    request: CorootToCoweightLatticeRequest,
+    vector: CorootLatticeVector,
 ) -> CoweightLatticeVector:
     """Embed Q^vee in P^vee using the transpose Cartan basis map."""
     return _lattice_inclusion(
-        request.vector,
+        vector,
         CorootLatticeVector,
         CoweightLatticeVector,
         transpose=True,
@@ -386,10 +398,9 @@ def dynkin_diagram(
     # The largest value has eight named nodes and 28 labeled edges. Reserve
     # complete result space before scanning entries or constructing the datum.
     work_bound = 8 * rank**3 + rank**2
-    output_bound = MAX_DYNKIN_DIAGRAM_OUTPUT_BYTES
-    if (
-        work_bound > MAX_DYNKIN_DIAGRAM_WORK
-        or output_bound > CanonicalLimits().max_output_bytes
+    output_bound = MAX_DYNKIN_DIAGRAM_OUTPUT_CELLS
+    if work_bound > MAX_DYNKIN_DIAGRAM_WORK or output_bound > (
+        MAX_DYNKIN_DIAGRAM_OUTPUT_CELLS
     ):
         raise OperationResourceAdmissionError(
             location=("matrix",),
@@ -757,8 +768,8 @@ def positive_root_profile(
         + MAX_POSITIVE_ROOTS * (128 + 24 * rank)
         + rank * (128 + 4 * MAX_POSITIVE_ROOTS + 4 * rank)
     )
-    if profile_work_bound > MAX_ROOT_PROFILE_WORK or output_byte_bound > min(
-        MAX_ROOT_PROFILE_OUTPUT_BYTES, CanonicalLimits().max_output_bytes
+    if profile_work_bound > MAX_ROOT_PROFILE_WORK or output_byte_bound > (
+        MAX_ROOT_PROFILE_OUTPUT_CELLS
     ):
         raise OperationDomainValidationError(
             location=("matrix",),
@@ -833,8 +844,8 @@ def _admit_weyl_exponent_work(rows: tuple[tuple[int, ...], ...]) -> None:
     rank = len(rows)
     work_bound = MAX_POSITIVE_ROOTS * (rank + MAX_RANK * MAX_ROOT_COORDINATE)
     output_bytes_bound = 4_096 + rank * (128 + 12 * rank)
-    if work_bound > MAX_ROOT_PROFILE_WORK or output_bytes_bound > min(
-        MAX_ROOT_PROFILE_OUTPUT_BYTES, CanonicalLimits().max_output_bytes
+    if work_bound > MAX_ROOT_PROFILE_WORK or output_bytes_bound > (
+        MAX_ROOT_PROFILE_OUTPUT_CELLS
     ):
         raise OperationResourceAdmissionError(
             location=("matrix",),
@@ -924,7 +935,7 @@ def weyl_poincare_polynomial(
     if (
         degree_bound >= MAX_POLYNOMIAL_TERMS
         or work_bound > 50_000
-        or output_bytes_bound > CanonicalLimits().max_output_bytes
+        or output_bytes_bound > MAX_COXETER_POLYNOMIAL_OUTPUT_CELLS
     ):
         raise OperationResourceAdmissionError(
             location=("matrix",),
@@ -997,8 +1008,8 @@ def root_length_profile(
         + MAX_POSITIVE_ROOTS * (128 + 24 * rank)
         + rank * (128 + 4 * MAX_POSITIVE_ROOTS)
     )
-    if work_bound > MAX_ROOT_LENGTH_PROFILE_WORK or output_bound > min(
-        MAX_ROOT_LENGTH_PROFILE_OUTPUT_BYTES, CanonicalLimits().max_output_bytes
+    if work_bound > MAX_ROOT_LENGTH_PROFILE_WORK or output_bound > (
+        MAX_ROOT_LENGTH_PROFILE_OUTPUT_CELLS
     ):
         raise OperationResourceAdmissionError(
             location=("matrix",),
@@ -1013,9 +1024,12 @@ def root_length_profile(
     )
     squared_lengths = {
         root: sum(
-            Fraction(root[i]) * bilinear[i][j] * root[j]
-            for i in range(rank)
-            for j in range(rank)
+            (
+                Fraction(root[i]) * bilinear[i][j] * root[j]
+                for i in range(rank)
+                for j in range(rank)
+            ),
+            start=Fraction(0),
         )
         for root in roots
     }
@@ -1079,9 +1093,12 @@ def _positive_root_coroot_pair(
 
     rank = len(root)
     squared_length = sum(
-        Fraction(root[i]) * bilinear[i][j] * root[j]
-        for i in range(rank)
-        for j in range(rank)
+        (
+            Fraction(root[i]) * bilinear[i][j] * root[j]
+            for i in range(rank)
+            for j in range(rank)
+        ),
+        start=Fraction(0),
     )
     if squared_length <= 0:
         raise RuntimeError("finite root has nonpositive squared length")
@@ -1131,7 +1148,7 @@ def root_to_coroot(
     output_bytes_bound = 256 + 64 * rank
     if (
         work_bound > MAX_ROOT_TO_COROOT_WORK
-        or output_bytes_bound > MAX_ROOT_TO_COROOT_OUTPUT_BYTES
+        or output_bytes_bound > MAX_ROOT_TO_COROOT_OUTPUT_CELLS
     ):
         raise OperationResourceAdmissionError(
             location=("matrix",),
@@ -1301,10 +1318,9 @@ def weyl_element_order(
         + signed_root_count * len(admitted_word) * rank
         + signed_root_count * 4
     )
-    output_bound = MAX_WEYL_ELEMENT_ORDER_OUTPUT_BYTES
-    if (
-        work_bound > MAX_WEYL_ELEMENT_ORDER_WORK
-        or output_bound > CanonicalLimits().max_output_bytes
+    output_bound = MAX_WEYL_ELEMENT_ORDER_OUTPUT_CELLS
+    if work_bound > MAX_WEYL_ELEMENT_ORDER_WORK or output_bound > (
+        MAX_WEYL_ELEMENT_ORDER_OUTPUT_CELLS
     ):
         raise OperationResourceAdmissionError(
             location=("word",),
@@ -1769,10 +1785,11 @@ def weyl_weight_orbit(
             code="root_system.weight_orbit_size_bound",
             message=f"the complete weight orbit has {orbit_size} values; maximum is {MAX_WEIGHT_ORBIT_SIZE}",
         )
-    # Each value stores rank safe integers. The fixed digit ceiling is used
-    # here so the complete wire-size bound precedes the BFS.
-    max_result_bytes = orbit_size * rank * 18 + rank * 18
-    if max_result_bytes > 1_000_000:
+    # Each value stores rank bounded safe integers, whose decimal form has a
+    # fixed digit width, so the admitted output digit volume precedes the BFS.
+    coordinate_digit_bound = 18
+    max_output_digits = (orbit_size + 1) * rank * coordinate_digit_bound
+    if max_output_digits > MAX_WEIGHT_ORBIT_OUTPUT_DIGITS:
         raise OperationDomainValidationError(
             location=("weight",),
             code="root_system.weight_orbit_output_bound",
@@ -1873,7 +1890,7 @@ def weyl_parabolic(
         for row in simple_root_indices
     )
     output_bytes_bound = 256 + len(simple_root_indices) ** 2 * 12
-    if output_bytes_bound > min(4_096, CanonicalLimits().max_output_bytes):
+    if output_bytes_bound > 4_096:
         raise OperationResourceAdmissionError(
             location=("simple_root_indices",),
             code="root_system.parabolic_output_bounds",

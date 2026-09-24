@@ -8,7 +8,10 @@ from jacobian.math.groups.root_systems._models import (
     WeylExponentsResult,
 )
 from jacobian.math.groups.root_systems._tools import TOOLS
-from jacobian.math.groups.root_systems.operations import weyl_exponents
+from jacobian.math.groups.root_systems.operations import (
+    cartan_matrix_from_type,
+    weyl_exponents,
+)
 
 
 @pytest.mark.parametrize(
@@ -48,6 +51,17 @@ def test_reducible_exponents_preserve_component_axes_and_multiplicity():
         (1,),
         (1, 2),
     )
+
+
+def test_d4_repeated_exponent_multiset_is_returned_not_rejected():
+    result = weyl_exponents(cartan_matrix_from_type("D", 4).matrix)
+    assert tuple(component.simple_root_indices for component in result.components) == (
+        (0, 1, 2, 3),
+    )
+    assert tuple(component.exponents for component in result.components) == (
+        (1, 3, 3, 5),
+    )
+    assert WeylExponentsResult.model_validate_json(result.model_dump_json()) == result
 
 
 def test_e8_exponents_are_computed_from_the_full_root_height_profile():

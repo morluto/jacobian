@@ -94,37 +94,37 @@ def _run_cartan_datum(request: CartanDatumRequest) -> FiniteCartanDatum:
 
 
 def _run_root_lattice_vector(request: LatticeVectorCreateRequest) -> RootLatticeVector:
-    return root_lattice_vector(request)
+    return root_lattice_vector(request.matrix, request.coordinates)
 
 
 def _run_coroot_lattice_vector(
     request: LatticeVectorCreateRequest,
 ) -> CorootLatticeVector:
-    return coroot_lattice_vector(request)
+    return coroot_lattice_vector(request.matrix, request.coordinates)
 
 
 def _run_weight_lattice_vector(
     request: LatticeVectorCreateRequest,
 ) -> WeightLatticeVector:
-    return weight_lattice_vector(request)
+    return weight_lattice_vector(request.matrix, request.coordinates)
 
 
 def _run_coweight_lattice_vector(
     request: LatticeVectorCreateRequest,
 ) -> CoweightLatticeVector:
-    return coweight_lattice_vector(request)
+    return coweight_lattice_vector(request.matrix, request.coordinates)
 
 
 def _run_root_to_weight_lattice(
     request: RootToWeightLatticeRequest,
 ) -> WeightLatticeVector:
-    return root_to_weight_lattice(request)
+    return root_to_weight_lattice(request.vector)
 
 
 def _run_coroot_to_coweight_lattice(
     request: CorootToCoweightLatticeRequest,
 ) -> CoweightLatticeVector:
-    return coroot_to_coweight_lattice(request)
+    return coroot_to_coweight_lattice(request.vector)
 
 
 def _run_cartan_matrix_from_type(request: CartanTypeRequest) -> CartanTypeResult:

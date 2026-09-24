@@ -94,7 +94,7 @@ def test_output_bound_is_checked_before_root_enumeration(
     def unexpected(_matrix: object) -> object:
         raise AssertionError("root enumeration ran before output admission")
 
-    monkeypatch.setattr(operation, "_MAX_DIMENSION_OUTPUT_BYTES", 1)
+    monkeypatch.setattr(operation, "_MAX_DIMENSION_OUTPUT_CELLS", 1)
     monkeypatch.setattr(operation, "_positive_coroots_from_admitted", unexpected)
     with pytest.raises(OperationResourceAdmissionError) as caught:
         operation.weyl_dimension(A2, (1, 0))

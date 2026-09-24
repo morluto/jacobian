@@ -9,10 +9,8 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.groups.root_systems._models import (
     CartanMatrix,
     CorootLatticeVector,
-    CorootToCoweightLatticeRequest,
     CoweightLatticeVector,
     FiniteCartanDatum,
-    LatticeVectorCreateRequest,
     RootLatticeVector,
     RootToWeightLatticeRequest,
     WeightLatticeVector,
@@ -34,22 +32,16 @@ def _cartan(rows: tuple[tuple[int, ...], ...]) -> CartanMatrix:
 
 def test_a2_vectors_and_canonical_inclusion_q_into_p() -> None:
     matrix = _cartan(((2, -1), (-1, 2)))
-    roots = root_lattice_vector(
-        LatticeVectorCreateRequest(matrix=matrix, coordinates=(3, -2))
-    )
-    coroots = coroot_lattice_vector(
-        LatticeVectorCreateRequest(matrix=matrix, coordinates=(-1, 4))
-    )
+    roots = root_lattice_vector(matrix, (3, -2))
+    coroots = coroot_lattice_vector(matrix, (-1, 4))
 
     assert roots.coordinates == (3, -2)
     assert coroots.coordinates == (-1, 4)
     assert isinstance(roots, RootLatticeVector)
     assert isinstance(coroots, CorootLatticeVector)
 
-    weights = root_to_weight_lattice(RootToWeightLatticeRequest(vector=roots))
-    coweights = coroot_to_coweight_lattice(
-        CorootToCoweightLatticeRequest(vector=coroots)
-    )
+    weights = root_to_weight_lattice(roots)
+    coweights = coroot_to_coweight_lattice(coroots)
     assert isinstance(weights, WeightLatticeVector)
     assert isinstance(coweights, CoweightLatticeVector)
     assert weights.coordinates == (8, -7)
@@ -72,23 +64,11 @@ def test_nonsymmetric_root_and_coroot_inclusions_keep_orientation(
     coroot_image: tuple[int, int],
 ) -> None:
     matrix = _cartan(rows)
-    root = root_lattice_vector(
-        LatticeVectorCreateRequest(matrix=matrix, coordinates=(3, -1))
-    )
-    coroot = coroot_lattice_vector(
-        LatticeVectorCreateRequest(matrix=matrix, coordinates=(3, -1))
-    )
+    root = root_lattice_vector(matrix, (3, -1))
+    coroot = coroot_lattice_vector(matrix, (3, -1))
 
-    assert (
-        root_to_weight_lattice(RootToWeightLatticeRequest(vector=root)).coordinates
-        == root_image
-    )
-    assert (
-        coroot_to_coweight_lattice(
-            CorootToCoweightLatticeRequest(vector=coroot)
-        ).coordinates
-        == coroot_image
-    )
+    assert root_to_weight_lattice(root).coordinates == root_image
+    assert coroot_to_coweight_lattice(coroot).coordinates == coroot_image
 
 
 def test_reducible_datum_maps_each_component_without_reordering() -> None:
@@ -100,18 +80,10 @@ def test_reducible_datum_maps_each_component_without_reordering() -> None:
             (0, -1, 2),
         )
     )
-    root = root_lattice_vector(
-        LatticeVectorCreateRequest(matrix=matrix, coordinates=(4, 3, -2))
-    )
-    coroot = coroot_lattice_vector(
-        LatticeVectorCreateRequest(matrix=matrix, coordinates=(-2, 1, 5))
-    )
-    assert root_to_weight_lattice(
-        RootToWeightLatticeRequest(vector=root)
-    ).coordinates == (8, 8, -7)
-    assert coroot_to_coweight_lattice(
-        CorootToCoweightLatticeRequest(vector=coroot)
-    ).coordinates == (-4, -3, 9)
+    root = root_lattice_vector(matrix, (4, 3, -2))
+    coroot = coroot_lattice_vector(matrix, (-2, 1, 5))
+    assert root_to_weight_lattice(root).coordinates == (8, 8, -7)
+    assert coroot_to_coweight_lattice(coroot).coordinates == (-4, -3, 9)
 
 
 @pytest.mark.parametrize(
@@ -126,11 +98,7 @@ def test_reducible_datum_maps_each_component_without_reordering() -> None:
 def test_lattice_vectors_roundtrip_with_their_datum_parent(
     constructor, carrier
 ) -> None:
-    vector = constructor(
-        LatticeVectorCreateRequest(
-            matrix=_cartan(((2, -1), (-1, 2))), coordinates=(2, -3)
-        )
-    )
+    vector = constructor(_cartan(((2, -1), (-1, 2))), (2, -3))
     restored = carrier.model_validate_json(vector.model_dump_json())
     assert restored == vector
     assert restored.datum.cartan_matrix.entries == ((2, -1), (-1, 2))
@@ -140,15 +108,11 @@ def test_lattice_vectors_roundtrip_with_their_datum_parent(
 def test_coordinate_axis_must_match_rank_and_coordinates_are_bounded() -> None:
     matrix = _cartan(((2, -1), (-1, 2)))
     with pytest.raises((ValidationError, OperationDomainValidationError)):
-        root_lattice_vector(LatticeVectorCreateRequest(matrix=matrix, coordinates=(1,)))
+        root_lattice_vector(matrix, (1,))
     with pytest.raises((ValidationError, OperationDomainValidationError)):
-        root_lattice_vector(
-            LatticeVectorCreateRequest(matrix=matrix, coordinates=(1, 2, 3))
-        )
+        root_lattice_vector(matrix, (1, 2, 3))
     with pytest.raises((ValidationError, OperationDomainValidationError)):
-        root_lattice_vector(
-            LatticeVectorCreateRequest(matrix=matrix, coordinates=(1 << 128, 0))
-        )
+        root_lattice_vector(matrix, (1 << 128, 0))
 
 
 def test_rank_above_admitted_cartan_bound_is_rejected() -> None:
@@ -156,17 +120,14 @@ def test_rank_above_admitted_cartan_bound_is_rejected() -> None:
     rows = tuple(tuple(2 if i == j else 0 for j in range(rank)) for i in range(rank))
     with pytest.raises((ValidationError, OperationDomainValidationError)):
         root_lattice_vector(
-            LatticeVectorCreateRequest(
-                matrix=CartanMatrix.model_validate(rows), coordinates=(0,) * rank
-            )
+            CartanMatrix.model_validate(rows),
+            (0,) * rank,
         )
 
 
 def test_map_rejects_forged_datum_and_malformed_nested_cartan() -> None:
     matrix = _cartan(((2, -1), (-1, 2)))
-    honest = root_lattice_vector(
-        LatticeVectorCreateRequest(matrix=matrix, coordinates=(1, 0))
-    )
+    honest = root_lattice_vector(matrix, (1, 0))
     malformed_matrix = IntegerMatrix.model_construct(
         row_count=2,
         column_count=2,
@@ -187,9 +148,7 @@ def test_map_rejects_forged_datum_and_malformed_nested_cartan() -> None:
         coordinates=(1, 0),
     )
     with pytest.raises(OperationDomainValidationError):
-        root_to_weight_lattice(
-            RootToWeightLatticeRequest.model_construct(vector=forged)
-        )
+        root_to_weight_lattice(forged)
 
     forged_datum = FiniteCartanDatum.model_construct(
         cartan_matrix=matrix,
@@ -208,15 +167,13 @@ def test_map_rejects_forged_datum_and_malformed_nested_cartan() -> None:
         coordinates=(1, 0),
     )
     with pytest.raises(OperationDomainValidationError):
-        root_to_weight_lattice(
-            RootToWeightLatticeRequest.model_construct(vector=forged)
-        )
+        root_to_weight_lattice(forged)
 
 
 def test_map_request_rejects_a_vector_from_a_different_lattice() -> None:
     matrix = _cartan(((2, -1), (-1, 2)))
-    coroot = coroot_lattice_vector(
-        LatticeVectorCreateRequest(matrix=matrix, coordinates=(1, 0))
-    )
+    coroot = coroot_lattice_vector(matrix, (1, 0))
+    with pytest.raises(OperationDomainValidationError):
+        root_to_weight_lattice(coroot)  # type: ignore[arg-type]
     with pytest.raises(ValidationError):
         RootToWeightLatticeRequest(vector=coroot)  # type: ignore[arg-type]

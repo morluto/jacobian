@@ -15,10 +15,14 @@ from jacobian.catalog.models import (
 from jacobian.math.topology.chain_complexes.values import MAX_OPERATION_MATRIX_CELLS
 from jacobian.math.topology.cubical_complexes._models import (
     MAX_CELLS,
+    MAX_CUBICAL_BITMAP_RESULT_BYTES,
     MAX_CUBICAL_CHAIN_GROUP,
     MAX_TRIANGULATION_CELL_SIMPLICES,
     MAX_TRIANGULATION_POINTS,
     MAX_TRIANGULATION_SIMPLICES,
+    CubicalBitmapPixelCell,
+    CubicalBitmapRequest,
+    CubicalBitmapResult,
     CubicalCell,
     CubicalComplex,
 )
@@ -100,6 +104,97 @@ def _strictly_contains(container: CubicalCell, cell: CubicalCell) -> bool:
         for (outer_start, outer_end), (inner_start, inner_end) in zip(
             container.intervals, cell.intervals, strict=True
         )
+    )
+
+
+def bitmap_to_complex(request: CubicalBitmapRequest) -> CubicalBitmapResult:
+    """Convert true pixels to closed unit squares on the (column, row) grid.
+
+    Rows increase downward and columns increase rightward.  Foreground pixel
+    ``(r, c)`` denotes the closed 2-cell ``([c,c+1], [r,r+1])``.  The full
+    cubical face closure is returned; false pixels contribute no cells.
+    """
+    row_count = len(request.pixels)
+    column_count = len(request.pixels[0])
+    selected_count = sum(pixel for row in request.pixels for pixel in row)
+    if selected_count == 0:
+        raise OperationDomainValidationError(
+            location=("pixels",),
+            code="cubical_complex.bitmap_empty_foreground",
+            message=(
+                "an all-background bitmap has no value in the current nonempty "
+                "CubicalComplex representation"
+            ),
+        )
+    if selected_count > MAX_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("pixels",),
+            code="cubical_complex.bitmap_top_cell_budget",
+            message=f"bitmap foreground exceeds the {MAX_CELLS}-pixel top-cell bound",
+        )
+
+    pixels = request.pixels
+    horizontal_edges = sum(
+        (row > 0 and pixels[row - 1][column])
+        or (row < row_count and pixels[row][column])
+        for row in range(row_count + 1)
+        for column in range(column_count)
+    )
+    vertical_edges = sum(
+        (column > 0 and pixels[row][column - 1])
+        or (column < column_count and pixels[row][column])
+        for row in range(row_count)
+        for column in range(column_count + 1)
+    )
+    vertices = sum(
+        any(
+            pixels[adjacent_row][adjacent_column]
+            for adjacent_row in (row - 1, row)
+            for adjacent_column in (column - 1, column)
+            if 0 <= adjacent_row < row_count and 0 <= adjacent_column < column_count
+        )
+        for row in range(row_count + 1)
+        for column in range(column_count + 1)
+    )
+    closed_cell_count = selected_count + horizontal_edges + vertical_edges + vertices
+    if closed_cell_count > MAX_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("pixels",),
+            code="cubical_complex.bitmap_face_budget",
+            message=(
+                "the exact bitmap face closure exceeds the "
+                f"{MAX_CELLS}-cell composable complex bound"
+            ),
+        )
+    # A 2D cell record with bounded 8-bit coordinates occupies fewer than 96
+    # JSON bytes.  Bound complete closure output before constructing any cells.
+    output_bytes_bound = 128 + closed_cell_count * 96 + selected_count * 256
+    if output_bytes_bound > MAX_CUBICAL_BITMAP_RESULT_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("pixels",),
+            code="cubical_complex.bitmap_result_size",
+            message=(
+                "the bitmap cubical complex exceeds the "
+                f"{MAX_CUBICAL_BITMAP_RESULT_BYTES}-byte result bound"
+            ),
+        )
+
+    pixel_to_cell = tuple(
+        CubicalBitmapPixelCell(
+            row=row,
+            column=column,
+            cell=CubicalCell(intervals=((column, column + 1), (row, row + 1))),
+        )
+        for row, row_values in enumerate(request.pixels)
+        for column, foreground in enumerate(row_values)
+        if foreground
+    )
+    complex_, _ = _canonical_complex(tuple(entry.cell for entry in pixel_to_cell))
+    return CubicalBitmapResult(
+        complex=complex_,
+        row_count=row_count,
+        column_count=column_count,
+        pixel_to_cell=pixel_to_cell,
     )
 
 
@@ -311,6 +406,9 @@ def _cube_choices(cell: CubicalCell) -> list[tuple[int, ...]]:
 
 
 __all__ = [
+    "CubicalBitmapPixelCell",
+    "CubicalBitmapRequest",
+    "CubicalBitmapResult",
     "CubicalBoundaryRequest",
     "CubicalBoundaryResult",
     "CubicalBoundaryTerm",
@@ -318,6 +416,7 @@ __all__ = [
     "CubicalTriangulationResult",
     "RelativeCubicalHomologyRequest",
     "RelativeCubicalHomologyResult",
+    "bitmap_to_complex",
     "boundary",
     "relative_homology",
     "triangulate",

@@ -23,6 +23,14 @@ The polynomial expression normalizer is available natively as
 same function runs. It never parses or evaluates caller-authored source
 strings.
 
+Finite-dimensional Lie algebras expose exact operations from
+`jacobian.math.lie_algebras`. The adjoint representation, Killing form,
+derived and lower-central series, centralizers, and generated subalgebras and
+ideals use the algebra's ordered basis and exact structure constants. The
+upper central series returns subspaces on that basis, beginning with zero; it
+reaches the whole algebra exactly when the algebra is nilpotent and otherwise
+stops at its first stable proper term.
+
 Each public `jacobian.math.<domain>` module declares its supported names in
 `__all__`; that is the authoritative native API. Functions accept domain values
 or a maintained backend type when it already carries the complete mathematical

@@ -9,7 +9,11 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.gauge._models import (
+    FiniteGroupGaugeComplex,
     FiniteGroupGaugeContribution,
+    FiniteGroupGaugeCurvatureRequest,
+    FiniteGroupGaugeCurvatureResult,
+    FiniteGroupGaugeFaceCurvature,
     FiniteGroupGaugeField,
     FiniteGroupGaugeHolonomyRequest,
     FiniteGroupGaugeHolonomyResult,
@@ -297,10 +301,13 @@ def finite_group_gauge_holonomy(
     # constructing the contribution ledger.
     parent_copies = len(edges) + len(steps) + 2
     output_units = parent_copies * order**2 + len(edges) + len(vertices) + len(steps)
-    if (
-        work > MAX_FINITE_GROUP_GAUGE_WORK
-        or output_units > MAX_FINITE_GROUP_GAUGE_OUTPUT_UNITS
-    ):
+    if work > MAX_FINITE_GROUP_GAUGE_WORK:
+        raise OperationResourceAdmissionError(
+            location=("request",),
+            code="lattice_gauge.finite_group.curvature_work_bound",
+            message="finite-group curvature work exceeds the admitted envelope",
+        )
+    if output_units > MAX_FINITE_GROUP_GAUGE_OUTPUT_UNITS:
         raise OperationResourceAdmissionError(
             location=("request",),
             code="lattice_gauge.finite_group.output_bound",
@@ -325,4 +332,100 @@ def finite_group_gauge_holonomy(
         contributions=tuple(contributions),
         start=start,
         end=end,
+    )
+
+
+def finite_group_gauge_curvature(
+    request: FiniteGroupGaugeCurvatureRequest,
+) -> FiniteGroupGaugeCurvatureResult:
+    """Return ordered face holonomies and whether every face is flat.
+
+    Face curvature is the path-ordered product around each oriented attaching
+    walk. Reversing the face therefore takes the group inverse, including for
+    noncommutative groups. Flatness means every represented 2-cell has identity
+    boundary product; it makes no claim about cells absent from the complex.
+    """
+    if not isinstance(request, FiniteGroupGaugeCurvatureRequest):
+        _reject(
+            "request",
+            "lattice_gauge.finite_group.curvature_request_type",
+            "expected a finite-group gauge curvature request",
+        )
+    complex_value, field = request.complex, request.field
+    if not isinstance(complex_value, FiniteGroupGaugeComplex) or not isinstance(
+        field, FiniteGroupGaugeField
+    ):
+        _reject(
+            "request",
+            "lattice_gauge.finite_group.curvature_request_shape",
+            "complex and field must be typed values",
+        )
+    group = complex_value.group
+    if (
+        not isinstance(group, FiniteGroupTable)
+        or complex_value.lattice != field.lattice
+        or group != field.group
+    ):
+        _reject(
+            "request",
+            "lattice_gauge.finite_group.curvature_parent_mismatch",
+            "complex and field must share the exact lattice and group parent",
+        )
+    table, inverse, identity, order = _admit_group(group)
+    vertices, edges, values = _admit_field(field, group, order)
+    # The complex is caller-supplied; re-admit its faces at the consuming
+    # boundary rather than trusting constructor provenance.
+    from jacobian.math.gauge.finite_group_complex import _admit_faces, _admit_lattice
+
+    _, _, vertex_set, edge_by_id, _ = _admit_lattice(complex_value.lattice)
+    _admit_faces(complex_value.faces, vertex_set, edge_by_id)
+    total_steps = sum(len(face.boundary.steps) for face in complex_value.faces)
+    work = (
+        order**3
+        + (len(edges) + 2) * order**2
+        + len(edges)
+        + total_steps
+        + len(complex_value.faces)
+    )
+    # Returned values retain both source parents, the field's edge-bound table
+    # elements, and one table-bound curvature element per face.
+    parent_copies = len(edges) + len(complex_value.faces) + 3
+    output_units = (
+        parent_copies * order**2
+        + len(vertices)
+        + len(edges) * 4
+        + total_steps * 2
+        + len(complex_value.faces) * 4
+    )
+    if (
+        work > MAX_FINITE_GROUP_GAUGE_WORK
+        or output_units > MAX_FINITE_GROUP_GAUGE_OUTPUT_UNITS
+    ):
+        raise OperationResourceAdmissionError(
+            location=("request",),
+            code="lattice_gauge.finite_group.curvature_output_bound",
+            message="finite-group curvature result exceeds admitted work or output",
+        )
+    face_values = []
+    edge_by_id = {edge.edge_id: edge for edge in edges}
+    for face in complex_value.faces:
+        product = identity
+        path = face.boundary
+        if path.steps:
+            for step in path.steps:
+                index = values[step.edge_id]
+                if not step.forward:
+                    index = inverse[index]
+                product = table[product][index]
+        face_values.append(
+            FiniteGroupGaugeFaceCurvature(
+                face_id=face.face_id,
+                value=FiniteGroupTableElement(group=group, index=product),
+            )
+        )
+    return FiniteGroupGaugeCurvatureResult.model_construct(
+        complex=complex_value,
+        field=field,
+        face_values=tuple(face_values),
+        flat=all(value.value.index == identity for value in face_values),
     )

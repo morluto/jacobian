@@ -4,6 +4,8 @@ from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.gauge._models import (
     FiniteGroupGaugeComplex,
     FiniteGroupGaugeComplexRequest,
+    FiniteGroupGaugeCurvatureRequest,
+    FiniteGroupGaugeCurvatureResult,
     FiniteGroupGaugeHolonomyRequest,
     FiniteGroupGaugeHolonomyResult,
     GaugeTransformRequest,
@@ -22,7 +24,10 @@ from jacobian.math.gauge._su2_models import (
     SU2HolonomyResult,
     SU2WilsonTraceResult,
 )
-from jacobian.math.gauge.finite_group import finite_group_gauge_holonomy
+from jacobian.math.gauge.finite_group import (
+    finite_group_gauge_curvature,
+    finite_group_gauge_holonomy,
+)
 from jacobian.math.gauge.finite_group_complex import (
     construct_finite_group_gauge_complex,
 )
@@ -79,6 +84,12 @@ def _run_finite_group_complex(
     request: FiniteGroupGaugeComplexRequest,
 ) -> FiniteGroupGaugeComplex:
     return construct_finite_group_gauge_complex(request)
+
+
+def _run_finite_group_curvature(
+    request: FiniteGroupGaugeCurvatureRequest,
+) -> FiniteGroupGaugeCurvatureResult:
+    return finite_group_gauge_curvature(request)
 
 
 _TRIANGLE_FIELD = {
@@ -410,6 +421,112 @@ TOOLS = (
                             "boundary": {"steps": [], "basepoint": "v"},
                         },
                     ],
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="lattice_gauge.finite_group.curvature.compute",
+        title="Compute finite-group face curvature and flatness",
+        description=(
+            "Multiply the edge values along every oriented face attaching walk "
+            "in its exact finite group table. Reversed steps use inverses, and "
+            "flatness means every represented face product is the identity."
+        ),
+        request_type=FiniteGroupGaugeCurvatureRequest,
+        result_type=FiniteGroupGaugeCurvatureResult,
+        run=_run_finite_group_curvature,
+        tags=("lattice-gauge", "finite-group", "curvature", "flatness", "exact"),
+        discovery_terms=(
+            "finite group plaquette curvature",
+            "flat finite group lattice gauge field",
+            "2-complex face holonomy table group",
+        ),
+        examples=(
+            OperationExample(
+                name="cyclic_two_nonflat_triangle",
+                description=(
+                    "One nonidentity edge value gives nonidentity face curvature "
+                    "in the cyclic group of order two."
+                ),
+                input={
+                    "complex": {
+                        "lattice": {
+                            "vertices": ["a", "b", "c"],
+                            "edges": [
+                                {"edge_id": "ab", "tail": "a", "head": "b"},
+                                {"edge_id": "bc", "tail": "b", "head": "c"},
+                                {"edge_id": "ca", "tail": "c", "head": "a"},
+                            ],
+                        },
+                        "group": {
+                            "multiplication": [[0, 1], [1, 0]],
+                            "identity": 0,
+                            "inverse": [0, 1],
+                        },
+                        "faces": [
+                            {
+                                "face_id": "triangle",
+                                "boundary": {
+                                    "steps": [
+                                        {"edge_id": "ab", "forward": True},
+                                        {"edge_id": "bc", "forward": True},
+                                        {"edge_id": "ca", "forward": True},
+                                    ]
+                                },
+                            }
+                        ],
+                    },
+                    "field": {
+                        "lattice": {
+                            "vertices": ["a", "b", "c"],
+                            "edges": [
+                                {"edge_id": "ab", "tail": "a", "head": "b"},
+                                {"edge_id": "bc", "tail": "b", "head": "c"},
+                                {"edge_id": "ca", "tail": "c", "head": "a"},
+                            ],
+                        },
+                        "group": {
+                            "multiplication": [[0, 1], [1, 0]],
+                            "identity": 0,
+                            "inverse": [0, 1],
+                        },
+                        "edge_values": [
+                            {
+                                "edge_id": "ab",
+                                "value": {
+                                    "group": {
+                                        "multiplication": [[0, 1], [1, 0]],
+                                        "identity": 0,
+                                        "inverse": [0, 1],
+                                    },
+                                    "index": 1,
+                                },
+                            },
+                            {
+                                "edge_id": "bc",
+                                "value": {
+                                    "group": {
+                                        "multiplication": [[0, 1], [1, 0]],
+                                        "identity": 0,
+                                        "inverse": [0, 1],
+                                    },
+                                    "index": 0,
+                                },
+                            },
+                            {
+                                "edge_id": "ca",
+                                "value": {
+                                    "group": {
+                                        "multiplication": [[0, 1], [1, 0]],
+                                        "identity": 0,
+                                        "inverse": [0, 1],
+                                    },
+                                    "index": 0,
+                                },
+                            },
+                        ],
+                    },
                 },
             ),
         ),

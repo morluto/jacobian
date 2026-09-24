@@ -496,6 +496,31 @@ class FiniteGroupGaugeComplexRequest(StrictModel):
         return _json_arrays_to_tuples(value)
 
 
+class FiniteGroupGaugeCurvatureRequest(StrictModel):
+    """Evaluate every oriented 2-cell boundary in a source-bound complex."""
+
+    complex: FiniteGroupGaugeComplex
+    field: FiniteGroupGaugeField
+
+
+class FiniteGroupGaugeFaceCurvature(StrictModel):
+    """The ordered boundary product attached to one oriented face."""
+
+    face_id: GaugeLabel
+    value: FiniteGroupTableElement
+
+
+class FiniteGroupGaugeCurvatureResult(StrictModel):
+    """Face holonomies and flatness, bound to their complex and edge field."""
+
+    complex: FiniteGroupGaugeComplex
+    field: FiniteGroupGaugeField
+    face_values: tuple[FiniteGroupGaugeFaceCurvature, ...] = Field(
+        min_length=1, max_length=MAX_GAUGE_FACES
+    )
+    flat: StrictBool
+
+
 class FiniteGroupGaugeHolonomyRequest(StrictModel):
     field: FiniteGroupGaugeField
     path: OrientedGaugePath

@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
+from pydantic import ValidationError
 
 from jacobian.math.combinatorics.greedoids import FiniteFeasibleSetSystem
 from jacobian.math.combinatorics.matroids import delta as delta_matroids
@@ -109,6 +112,46 @@ def test_relabel_composes_to_identity_and_handles_empty_ground() -> None:
         ).relabelled
         == empty
     )
+
+
+def test_relabel_request_map_rejects_boolean_indices_in_python_and_json() -> None:
+    source = FiniteDeltaMatroid(ground=("a", "b"), feasible=((),))
+    request = DeltaMatroidRelabelRequest(
+        delta_matroid=source,
+        target_ground=("A", "B"),
+        target_to_source=(0, 1),
+    )
+    python_payload = request.model_dump(mode="python")
+    python_payload["target_to_source"] = (True, False)
+    with pytest.raises(ValidationError):
+        DeltaMatroidRelabelRequest.model_validate(python_payload)
+
+    json_payload = request.model_dump(mode="json")
+    json_payload["target_to_source"] = [True, False]
+    with pytest.raises(ValidationError):
+        DeltaMatroidRelabelRequest.model_validate_json(json.dumps(json_payload))
+
+
+@pytest.mark.parametrize("field", ["target_to_source", "source_to_target"])
+def test_relabel_result_maps_reject_boolean_indices_in_python_and_json(
+    field: str,
+) -> None:
+    result = relabel(
+        DeltaMatroidRelabelRequest(
+            delta_matroid=FiniteDeltaMatroid(ground=("a", "b"), feasible=((),)),
+            target_ground=("A", "B"),
+            target_to_source=(0, 1),
+        )
+    )
+    python_payload = result.model_dump(mode="python")
+    python_payload[field] = (True, False)
+    with pytest.raises(ValidationError):
+        DeltaMatroidRelabelling.model_validate(python_payload)
+
+    json_payload = result.model_dump(mode="json")
+    json_payload[field] = [True, False]
+    with pytest.raises(ValidationError):
+        DeltaMatroidRelabelling.model_validate_json(json.dumps(json_payload))
 
 
 def test_relabel_requires_a_bijection_and_distinct_bounded_labels() -> None:

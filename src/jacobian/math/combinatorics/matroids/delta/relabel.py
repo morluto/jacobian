@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Self
 
-from pydantic import ConfigDict, Field, model_validator
+from pydantic import ConfigDict, Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
@@ -83,7 +83,7 @@ class DeltaMatroidRelabelRequest(StrictModel):
             f"{MAX_DELTA_LABEL_BYTES} aggregate UTF-8 bytes."
         ),
     )
-    target_to_source: tuple[int, ...] = Field(
+    target_to_source: tuple[StrictInt, ...] = Field(
         max_length=MAX_DELTA_RELABEL_GROUND,
         description=(
             "Permutation specifying the source-axis index at each target-axis "
@@ -133,8 +133,8 @@ class DeltaMatroidRelabelling(StrictModel):
 
     source: FiniteDeltaMatroid
     relabelled: FiniteDeltaMatroid
-    target_to_source: tuple[int, ...]
-    source_to_target: tuple[int, ...]
+    target_to_source: tuple[StrictInt, ...]
+    source_to_target: tuple[StrictInt, ...]
 
     @model_validator(mode="after")
     def require_inverse_axis_maps(self) -> Self:

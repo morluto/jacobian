@@ -89,6 +89,32 @@ def test_supplied_split_certificate_round_trips_and_recomputes() -> None:
     assert verify_weighted_intersection_result(decoded)
 
 
+def test_all_negative_weights_certify_empty_optimum_and_round_trip() -> None:
+    labels = ("a", "b", "c")
+    first = _matroid(((1, 1, 0),), labels)
+    second = _matroid(((0, 1, 1),), labels)
+    objective = _weight(labels, (-1, -2, -3))
+    zero = _weight(labels, (0, 0, 0))
+    result = weighted_intersection_certificate(
+        MatroidWeightedIntersectionCertificateRequest(
+            first=first,
+            second=second,
+            weight_function=objective,
+            common_independent=(),
+            first_split=objective,
+            second_split=zero,
+        )
+    )
+
+    assert result.total_weight == 0
+    assert result.first_maximizer.independent_set == ()
+    assert result.second_maximizer.independent_set == ()
+    decoded = MatroidWeightedIntersectionResult.model_validate_json(
+        result.model_dump_json()
+    )
+    assert verify_weighted_intersection_result(decoded)
+
+
 def test_owner_manifest_example_executes_through_its_declared_types() -> None:
     from jacobian.math.combinatorics.matroids._tools import TOOLS
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fractions import Fraction
+from math import factorial
 
 from pydantic import ValidationError
 
@@ -15,6 +16,7 @@ from jacobian.math.groups.root_systems._models import (
     MAX_LATTICE_OUTPUT_COORDINATE_BITS,
     MAX_POSITIVE_ROOTS,
     MAX_RANK,
+    MAX_ROOT_COORDINATE,
     CartanMatrix,
     FiniteCartanDatum,
     WeightLatticeVector,
@@ -30,7 +32,8 @@ from jacobian.math.groups.root_systems.operations import (
 from jacobian.math.matrices.values import IntegerMatrix
 
 MAX_WEYL_WEIGHT_ACTION_WORK = 150_000
-MAX_WEYL_WEIGHT_ACTION_OUTPUT_BYTES = 8_192
+MAX_WEYL_WEIGHT_ACTION_ALLOCATION_CELLS = 12 * MAX_RANK**2 + 4 * MAX_RANK
+MAX_WEYL_WEIGHT_ACTION_RATIONAL_BITS = 64
 
 
 def _integer_matrix_children_are_bounded(value: IntegerMatrix) -> bool:
@@ -142,6 +145,22 @@ def _weight_action_matrix(
             message="the root action must preserve the integral weight lattice",
         )
     return tuple(tuple(int(value) for value in row) for row in rational)
+
+
+def _weight_action_preflight(rank: int) -> tuple[int, int]:
+    """Bound matrix cells and exact rational digits before matrix expansion.
+
+    Finite Cartan entries have absolute value at most 3 and Weyl root-action
+    entries at most 6. Cramer's rule bounds inverse numerators by cofactors and
+    denominators by determinants; the additional rank factors bound the two
+    matrix products and their partial sums.
+    """
+    allocation_cells = 12 * rank**2 + 4 * rank
+    determinant_bound = factorial(rank) * 3**rank
+    cofactor_bound = factorial(rank - 1) * 3 ** (rank - 1)
+    numerator_bound = 3 * MAX_ROOT_COORDINATE * rank**2 * cofactor_bound
+    rational_bits = max(determinant_bound.bit_length(), numerator_bound.bit_length())
+    return allocation_cells, rational_bits
 
 
 def _request_inputs(
@@ -292,6 +311,20 @@ def weyl_element_act_on_weight(
             code="root_system.weyl_weight_action_work_bound",
             message="exact weight-action validation and matrix work exceed the admitted bound",
         )
+    rank = len(cartan)
+    allocation_cells, rational_bits = _weight_action_preflight(rank)
+    if allocation_cells > MAX_WEYL_WEIGHT_ACTION_ALLOCATION_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("weight", "datum"),
+            code="root_system.weyl_weight_action_allocation_bound",
+            message="the exact weight-action matrices exceed the admitted cell bound",
+        )
+    if rational_bits > MAX_WEYL_WEIGHT_ACTION_RATIONAL_BITS:
+        raise OperationResourceAdmissionError(
+            location=("element", "matrix"),
+            code="root_system.weyl_weight_action_digit_bound",
+            message="exact Cartan inverse intermediates exceed the admitted integer-digit bound",
+        )
     root_action = _admitted_root_action(element)
     datum, coordinates = _canonical_weight(weight)
     if datum.cartan_matrix != cartan:
@@ -300,8 +333,6 @@ def weyl_element_act_on_weight(
             code="root_system.weyl_weight_parent_mismatch",
             message="the Weyl element and weight must use the same ordered Cartan datum",
         )
-
-    rank = len(cartan)
     action = _weight_action_matrix(rows, root_action)
     max_coordinate = max((abs(value) for value in coordinates), default=0)
     coordinate_bound = max(
@@ -317,14 +348,6 @@ def weyl_element_act_on_weight(
             code="root_system.weyl_weight_action_output_bound",
             message="some exact weight-action coordinate may exceed the output bound",
         )
-    output_bytes_bound = rank * 48 + 3 * rank**2 * 16 + 1_024
-    if output_bytes_bound > MAX_WEYL_WEIGHT_ACTION_OUTPUT_BYTES:
-        raise OperationResourceAdmissionError(
-            location=("weight",),
-            code="root_system.weyl_weight_action_output_bytes",
-            message="the exact weight-action result exceeds the output-byte bound",
-        )
-
     image = tuple(
         sum(action[row][column] * coordinates[column] for column in range(rank))
         for row in range(rank)

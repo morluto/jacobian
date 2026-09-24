@@ -35,8 +35,10 @@ from .newton_polygon import (
     LocalPolynomialNewtonPolygonResult,
     NewtonEdgeCharacteristicRequest,
     NewtonEdgeCharacteristicResult,
+    NewtonEdgeCharacteristicRootsResult,
     local_polynomial_newton_polygon,
     newton_edge_characteristic_polynomial,
+    newton_edge_characteristic_roots,
 )
 from .operations import (
     add_puiseux,
@@ -136,6 +138,62 @@ def _rational_function_at_infinity(
 
 
 TOOLS: MathTools = (
+    MathTool(
+        operation_id="local_series.polynomial.newton_edge_characteristic_roots.compute",
+        title="Solve a quadratic Newton edge characteristic equation",
+        description=(
+            "Compute every distinct exact rational or algebraic root, with its "
+            "multiplicity, for a selected Newton edge characteristic polynomial "
+            "of degree at most two over QQ. Higher degrees are rejected before "
+            "root computation. Roots are possible leading coefficients only; "
+            "this operation does not lift a Puiseux branch."
+        ),
+        request_type=NewtonEdgeCharacteristicRequest,
+        result_type=NewtonEdgeCharacteristicRootsResult,
+        run=newton_edge_characteristic_roots,
+        tags=("local-series", "polynomial", "newton-polygon", "algebraic-roots", "exact"),
+        examples=(
+            OperationExample(
+                name="quadratic_edge_roots",
+                description=(
+                    "For y^2 - 2t, the edge characteristic polynomial is "
+                    "c^2 - 2 and its two exact roots are ±sqrt(2)."
+                ),
+                input={
+                    "polynomial": {
+                        "variable": "t",
+                        "place": "FINITE",
+                        "center": {"num": "0", "den": "1"},
+                        "coefficients": [
+                            {
+                                "y_degree": 0,
+                                "series": {
+                                    "variable": "t",
+                                    "place": "FINITE",
+                                    "center": {"num": "0", "den": "1"},
+                                    "valuation_lower": 1,
+                                    "precision": 2,
+                                    "coefficients": [{"num": "-2", "den": "1"}],
+                                },
+                            },
+                            {
+                                "y_degree": 2,
+                                "series": {
+                                    "variable": "t",
+                                    "place": "FINITE",
+                                    "center": {"num": "0", "den": "1"},
+                                    "valuation_lower": 0,
+                                    "precision": 1,
+                                    "coefficients": [{"num": "1", "den": "1"}],
+                                },
+                            },
+                        ],
+                    },
+                    "edge_index": 0,
+                },
+            ),
+        ),
+    ),
     MathTool(
         operation_id="local_series.polynomial.newton_edge_characteristic.compute",
         title="Compute a Newton edge characteristic polynomial",

@@ -453,8 +453,9 @@ TOOLS = TOOLS + (  # noqa: RUF005
             "Compute one exact maximum-weight set independent in both "
             "represented matroids. The empty set is a candidate, so the "
             "result can be empty when every feasible nonempty set has lower "
-            "weight. Separate weighted certificate operations check "
-            "caller-authored optimality witnesses."
+            "weight. The result retains an integral split-weight witness and "
+            "both single-matroid maximizers, so it composes with the supplied "
+            "certificate checker and can be independently replayed."
         ),
         request_type=MatroidWeightedIntersectionOptimizationRequest,
         result_type=MatroidWeightedIntersectionOptimizationResult,

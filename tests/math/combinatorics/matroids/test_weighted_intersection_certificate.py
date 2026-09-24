@@ -206,6 +206,25 @@ def test_certificate_rejects_inexact_split() -> None:
         )
 
 
+def test_split_witness_supports_bounded_extra_digits_for_cancellation() -> None:
+    labels = ("loop",)
+    loop = _matroid(((0,),), labels)
+    certificate = weighted_intersection_certificate(
+        MatroidWeightedIntersectionCertificateRequest(
+            first=loop,
+            second=loop,
+            weight_function=_weight(labels, (0,)),
+            common_independent=(),
+            first_split=_weight(labels, (10**12,)),
+            second_split=_weight(labels, (-(10**12),)),
+        )
+    )
+
+    assert certificate.total_weight == 0
+    assert certificate.first_maximizer.total_weight == 0
+    assert certificate.second_maximizer.total_weight == 0
+
+
 def test_certificate_rejects_a_feasible_but_nonoptimal_candidate() -> None:
     labels = ("a", "b")
     matroid = _matroid(((1, 0), (0, 1)), labels)

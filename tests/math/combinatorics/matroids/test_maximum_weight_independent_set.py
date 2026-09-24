@@ -17,6 +17,7 @@ from jacobian.math.combinatorics.matroids import (
     verify_maximum_weight_independent_set,
 )
 from jacobian.math.combinatorics.matroids._models import (
+    MAX_SPLIT_WEIGHT_DIGITS,
     MaximumWeightIndependentSetRequest,
     MaximumWeightIndependentSetResult,
 )
@@ -181,8 +182,15 @@ def test_weight_digit_and_ground_bound_edges() -> None:
     )
     accepted = maximum_weight_independent_set_result(one_loop, accepted_weights)
     assert accepted.independent_set == ()
+    wider_split_carrier = MatroidWeightFunction(
+        ground_axis=one_loop.ground_axis, values=(10**12,)
+    )
+    with pytest.raises(OperationDomainValidationError, match="decimal digits"):
+        maximum_weight_independent_set_result(one_loop, wider_split_carrier)
     with pytest.raises(ValidationError, match="decimal digits"):
-        MatroidWeightFunction(ground_axis=one_loop.ground_axis, values=(10**12,))
+        MatroidWeightFunction(
+            ground_axis=one_loop.ground_axis, values=(10 ** (MAX_SPLIT_WEIGHT_DIGITS),)
+        )
 
     max_ground = _matroid(2, ((0,) * 256,))
     result = maximum_weight_independent_set_result(

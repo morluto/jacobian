@@ -130,7 +130,10 @@ def verify_closure(claim: MatroidClosureResult) -> bool:
 
 
 def _canonical_weight_function(
-    matroid: LinearMatroid, weight_function: MatroidWeightFunction
+    matroid: LinearMatroid,
+    weight_function: MatroidWeightFunction,
+    *,
+    max_digits: int = MAX_WEIGHT_DIGITS,
 ) -> tuple[tuple[int, ...], MatroidWeightFunction]:
     """Admit exact keyed coverage and normalize values to the source axis."""
     if not isinstance(weight_function, MatroidWeightFunction):
@@ -159,12 +162,11 @@ def _canonical_weight_function(
             code="matroid.weights.integer",
             message="matroid weights must be exact integers",
         )
-    if any(abs(weight) >= 10**MAX_WEIGHT_DIGITS for weight in weights):
+    if any(abs(weight) >= 10**max_digits for weight in weights):
         raise OperationDomainValidationError(
             location=("weights",),
             code="matroid.weights.digits",
-            message="matroid weights must have fewer than "
-            f"{MAX_WEIGHT_DIGITS} decimal digits",
+            message=f"matroid weights must have fewer than {max_digits} decimal digits",
         )
     canonical_function = MatroidWeightFunction(
         ground_axis=matroid.ground_axis, values=weights
@@ -343,11 +345,14 @@ def maximum_weight_independent_set_result(
 
 
 def _prepare_maximum_weight_independent_set(
-    matroid: LinearMatroid, weight_function: MatroidWeightFunction
+    matroid: LinearMatroid,
+    weight_function: MatroidWeightFunction,
+    *,
+    max_digits: int = MAX_WEIGHT_DIGITS,
 ) -> tuple[tuple[int, ...], MatroidWeightFunction, int, int]:
     """Canonicalize and measure one greedy phase without rank expansion."""
     canonical_weights, canonical_function = _canonical_weight_function(
-        matroid, weight_function
+        matroid, weight_function, max_digits=max_digits
     )
     rows = len(matroid.matrix.entries)
     n = matroid.ground_size

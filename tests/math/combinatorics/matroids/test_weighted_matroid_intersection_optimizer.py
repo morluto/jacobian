@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+import json
 from itertools import combinations, product
 
 import pytest
 
+from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
+from jacobian.dispatch import invoke_operation
 from jacobian.math.combinatorics.matroids._models import (
     LinearMatroid,
     MatroidRankMultiplier,
@@ -20,6 +23,7 @@ from jacobian.math.combinatorics.matroids._models import (
 from jacobian.math.combinatorics.matroids.intersection import (
     maximum_weight_matroid_intersection,
     verify_weighted_intersection_rank_certificate,
+    verify_weighted_intersection_result,
     weighted_intersection_certificate,
     weighted_intersection_rank_certificate,
 )
@@ -93,6 +97,23 @@ def _request(
     )
 
 
+def test_catalog_optimizer_example_returns_replayable_checker_result() -> None:
+    catalog = Catalog.open()
+    operation = catalog.operation("matroid.intersection.maximum_weight.compute")
+    assert operation is not None
+    example = operation.examples[0]
+
+    result = invoke_operation(operation.operation_id, example.input, catalog)
+    decoded = operation.result_type.model_validate_json(json.dumps(result.output))
+
+    assert decoded.common_independent == (0,)
+    assert (
+        decoded.first_maximizer.total_weight + decoded.second_maximizer.total_weight
+        == 5
+    )
+    assert verify_weighted_intersection_result(decoded)
+
+
 def test_weighted_intersection_matches_exhaustive_gf2_instances() -> None:
     """Compare all small represented matroid pairs with a coefficient oracle."""
     labels = ("a", "b", "c")
@@ -146,6 +167,7 @@ def test_finite_unit_slack_reweights_before_stopping() -> None:
         result.model_dump_json()
     )
     assert decoded == result
+    assert verify_weighted_intersection_result(result)
 
 
 def test_loop_counterexample_has_rank_dual_even_when_terminal_split_does_not() -> None:
@@ -182,9 +204,25 @@ def test_loop_counterexample_has_rank_dual_even_when_terminal_split_does_not() -
     )
 
     assert optimum.common_independent == ()
+    assert (
+        optimum.first_maximizer.total_weight + optimum.second_maximizer.total_weight
+        == 0
+    )
     assert split_error.value.errors()[0]["type"] == (
         "matroid.weighted_intersection.optimality"
     )
+    supplied = weighted_intersection_certificate(
+        MatroidWeightedIntersectionCertificateRequest(
+            first=first,
+            second=second,
+            weight_function=weight_function,
+            common_independent=optimum.common_independent,
+            first_split=optimum.first_maximizer.weight_function,
+            second_split=optimum.second_maximizer.weight_function,
+        )
+    )
+    assert supplied == optimum
+    assert verify_weighted_intersection_result(optimum)
     assert certificate.total_weight == 0
     assert verify_weighted_intersection_rank_certificate(certificate)
 
@@ -272,6 +310,19 @@ def test_every_two_element_gf2_optimum_has_an_exhaustively_found_rank_dual() -> 
                 optimum = maximum_weight_matroid_intersection(
                     _request(first, second, weights)
                 )
+                split_certificate = weighted_intersection_certificate(
+                    MatroidWeightedIntersectionCertificateRequest(
+                        first=first,
+                        second=second,
+                        weight_function=MatroidWeightFunction(
+                            ground_axis=labels, values=weights
+                        ),
+                        common_independent=optimum.common_independent,
+                        first_split=optimum.first_maximizer.weight_function,
+                        second_split=optimum.second_maximizer.weight_function,
+                    )
+                )
+                assert split_certificate == optimum
                 matching_terms = _find_tiny_rank_dual(
                     first, second, weights, optimum.total_weight, chains
                 )

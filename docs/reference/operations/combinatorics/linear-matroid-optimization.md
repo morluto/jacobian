@@ -92,14 +92,36 @@ arbitrary common-independent-set contract.
 
 The request and result retain the original weights, both split-weight
 single-matroid maximizers, and the candidate. The ground and row limits are
-256; each weight entry follows the existing fewer-than-12-decimal-digit
-contract. One aggregate 50,000,000-unit envelope covers both greedy scans and
+256; objective entries follow the fewer-than-12-digit contract, while split
+entries allow fewer than 15 digits. One aggregate 50,000,000-unit envelope covers both greedy scans and
 both candidate feasibility ranks; the source-bound result also has a
 conservative 8 MiB serialized-size bound that includes repeated axis labels.
 A serialized result can be independently recomputed with
 `verify_weighted_intersection_result`.
 This operation checks a supplied split; it does not find an optimum candidate
 or construct the split.
+
+## Computed maximum-weight intersection
+
+`matroid.intersection.maximum_weight.compute` computes an optimum and returns
+the same source-bound result type as the supplied split checker. After the
+augmenting optimizer selects its best common independent set, the operation
+builds its final exchange inequalities and solves their integer difference
+constraints with Bellman–Ford. The resulting split makes the selected set a
+maximum-weight independent set in each source separately; the two exact
+greedy maximizers are retained so `verify_weighted_intersection_result` can
+replay the witness. This constructs the split witness, not the rank-multiplier
+chains accepted by the separate rank-dual checker.
+
+The witness phase admits at most a quadratic number of additional exchange
+rank probes and a cubic number of exact Bellman–Ford relaxations. A simple
+shortest path bounds each split coordinate by `(2n+1)W`, where `n` is the
+ground size and `W` is the largest absolute input weight. Requests whose
+conservative split bound exceeds the fewer-than-15-digit split-witness
+envelope fail admission before rank expansion; caller objective weights keep
+the existing fewer-than-12-digit limit. Its aggregate work and output
+bounds include witness synthesis, both greedy scans, and the retained source
+matrices and axes.
 
 ## Supplied rank-dual certificate
 

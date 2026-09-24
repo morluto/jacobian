@@ -9,6 +9,7 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.combinatorics.matroids._models import (
+    MAX_SPLIT_WEIGHT_DIGITS,
     MAX_WEIGHTED_INTERSECTION_OPT_DUAL_DIGITS,
     LinearMatroid,
     MatroidCommonBasisResult,
@@ -85,14 +86,29 @@ def _weighted_intersection_optimization_admission(
     # and at most |X| removal tests for each matroid. Include final feasibility
     # ranks; all requests are admitted before the first such test.
     calls_per_source = n * (n + 1) ** 2 + 1
-    rank_work = calls_per_source * (rank_cost_first + rank_cost_second)
+    # The final-candidate witness rebuilds its exchange graph once; charge its
+    # addability and all possible single-element exchange rank probes too.
+    witness_rank_calls = 2 * n * (n + 1)
+    greedy_rank_calls = 2 * (n + 1)
+    rank_work = (calls_per_source + witness_rank_calls + greedy_rank_calls) * (
+        rank_cost_first + rank_cost_second
+    )
     # The rank estimate dominates each selected-column copy and residue
     # validation (rows*n*min(rows,n) >= rows*k for every k <= n). Prime
     # validation is performed once per operation and charged separately.
     prime_validation_work = 1024
 
     update_rounds = n * (n + 1)
-    scan_visits = 16 * n * n * update_rounds + 4 * n * n * (n + 1) + 2 * n * n
+    witness_vertices = n + 1
+    witness_edges = 2 * n * n + 4 * n
+    witness_relaxations = witness_vertices * witness_edges
+    scan_visits = (
+        16 * n * n * update_rounds
+        + 4 * n * n * (n + 1)
+        + 2 * n * n
+        + witness_edges
+        + witness_relaxations
+    )
     weight_digits = max(
         (len(str(abs(value))) for value in objective),
         default=1,
@@ -115,12 +131,20 @@ def _weighted_intersection_optimization_admission(
     # comparisons, additions, and subtractions independently of wall time.
     arithmetic_work = scan_visits * max(1, ceil(dual_digits / 9))
 
-    output_bytes = (
-        _intersection_output_bound_bytes(first, second)
-        + sum(12 * len(label) + 3 for label in first.ground_axis)
-        + sum(len(str(abs(value))) + 3 for value in objective)
-        + 8 * n
-        + 512
+    maximum_weight = max((abs(value) for value in objective), default=0)
+    witness_bound = (2 * n + 1) * maximum_weight
+    if witness_bound >= 10**MAX_SPLIT_WEIGHT_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("weight_function", "values"),
+            code="matroid.weighted_intersection.optimize.witness_growth_bound",
+            message=(
+                "the exact split witness may exceed the "
+                f"{MAX_SPLIT_WEIGHT_DIGITS}-digit split envelope"
+            ),
+        )
+    split_bound = [witness_bound] * n
+    output_bytes = _weighted_intersection_output_bound_bytes(
+        first, second, objective, split_bound, split_bound, n
     )
     if (
         rank_work + arithmetic_work + prime_validation_work
@@ -590,6 +614,74 @@ def _weighted_exchange_graph(
     return first_arcs, second_arcs, sources, sinks
 
 
+def _optimal_weight_split_from_exchange_constraints(
+    first: LinearMatroid,
+    second: LinearMatroid,
+    chosen: tuple[int, ...],
+    weights: tuple[int, ...],
+) -> tuple[tuple[int, ...], tuple[int, ...]]:
+    """Construct an exact split making ``chosen`` optimal in both matroids.
+
+    Each arc ``(p, q, c)`` encodes the difference constraint
+    ``u[q] <= u[p] + c`` for the first-side split ``u``; the second split is
+    ``weights - u``. At a true optimum the system is feasible by the
+    matroid-intersection LP dual. Integer arc costs let Bellman--Ford return
+    an integer solution. The local add/delete/exchange inequalities are the
+    matroid greedy optimality criterion for arbitrary independent sets.
+    """
+    n = first.ground_size
+    root = n
+    first_arcs, second_arcs, sources, sinks = _weighted_exchange_graph(
+        first, second, chosen, n
+    )
+    edges: list[tuple[int, int, int]] = []
+
+    # M1: selected elements have nonnegative u; addable outside elements
+    # have nonpositive u; an exchange cannot improve u.
+    for element in chosen:
+        edges.append((element, root, 0))
+    for element in sources:
+        edges.append((root, element, 0))
+    edges.extend((inside, outside, 0) for inside, outside in first_arcs)
+
+    # M2: the corresponding conditions apply to v = w-u.
+    for element in chosen:
+        edges.append((root, element, weights[element]))
+    for element in sinks:
+        edges.append((element, root, -weights[element]))
+    edges.extend(
+        (outside, inside, weights[inside] - weights[outside])
+        for outside, inside in second_arcs
+    )
+
+    # Initializing every vertex to zero is equivalent to adding a zero-cost
+    # super-source edge to every vertex. All edge costs are integral and
+    # bounded by 2*max(abs(w)); feasible shortest paths can be made simple.
+    distances = [0] * (n + 1)
+    vertex_count = n + 1
+    for iteration in range(vertex_count):
+        changed = False
+        for source, target, cost in edges:
+            candidate = distances[source] + cost
+            if candidate < distances[target]:
+                distances[target] = candidate
+                changed = True
+        if not changed:
+            break
+        if iteration == vertex_count - 1:
+            raise OperationDomainValidationError(
+                location=("first", "second", "common_independent"),
+                code="matroid.weighted_intersection.optimizer_invariant",
+                message=(
+                    "optimal candidate exchange inequalities contain a negative cycle"
+                ),
+            )
+
+    first_split = tuple(distances[index] - distances[root] for index in range(n))
+    second_split = tuple(weights[index] - first_split[index] for index in range(n))
+    return first_split, second_split
+
+
 def _weighted_independent(matroid: LinearMatroid, subset: Sequence[int]) -> bool:
     return len(subset) == _weighted_rank(matroid, subset)
 
@@ -713,6 +805,23 @@ def maximum_weight_matroid_intersection(
     _weighted_intersection_optimization_admission(first, second, weights)
     _admit_prime(first.matrix.prime)
     selected = _weighted_matroid_intersection_admitted(first, second, weights)
+    first_split_values, second_split_values = (
+        _optimal_weight_split_from_exchange_constraints(
+            first, second, selected, weights
+        )
+    )
+    first_split_function = MatroidWeightFunction(
+        ground_axis=first.ground_axis, values=first_split_values
+    )
+    second_split_function = MatroidWeightFunction(
+        ground_axis=second.ground_axis, values=second_split_values
+    )
+    first_values, first_function, _, _ = _prepare_maximum_weight_independent_set(
+        first, first_split_function, max_digits=MAX_SPLIT_WEIGHT_DIGITS
+    )
+    second_values, second_function, _, _ = _prepare_maximum_weight_independent_set(
+        second, second_split_function, max_digits=MAX_SPLIT_WEIGHT_DIGITS
+    )
     rank_first = _weighted_rank(first, selected)
     rank_second = _weighted_rank(second, selected)
     if rank_first != len(selected) or rank_second != len(selected):
@@ -722,15 +831,24 @@ def maximum_weight_matroid_intersection(
             message="weighted-intersection kernel did not return a common independent set",
         )
     total_weight = sum(weights[index] for index in selected)
-    canonical_request = MatroidWeightedIntersectionOptimizationRequest.model_construct(
-        first=first,
-        second=second,
-        weight_function=canonical_function,
+    first_maximizer = _maximum_weight_independent_set_admitted(
+        first, first_values, first_function
     )
-    return MatroidWeightedIntersectionOptimizationResult._from_kernel(
-        request=canonical_request,
+    second_maximizer = _maximum_weight_independent_set_admitted(
+        second, second_values, second_function
+    )
+    if first_maximizer.total_weight + second_maximizer.total_weight != total_weight:
+        raise OperationDomainValidationError(
+            location=("first", "second", "common_independent"),
+            code="matroid.weighted_intersection.optimizer_invariant",
+            message="synthesized split does not certify the selected optimum",
+        )
+    return MatroidWeightedIntersectionResult._from_kernel(
+        weight_function=canonical_function,
         common_independent=selected,
         total_weight=total_weight,
+        first_maximizer=first_maximizer,
+        second_maximizer=second_maximizer,
     )
 
 
@@ -844,10 +962,10 @@ def weighted_intersection_certificate(
     first, second = _admit_pair(request.first, request.second)
     objective, _ = _canonical_weight_function(first, request.weight_function)
     first_split, first_split_function = _canonical_weight_function(
-        first, request.first_split
+        first, request.first_split, max_digits=MAX_SPLIT_WEIGHT_DIGITS
     )
     second_split, second_split_function = _canonical_weight_function(
-        second, request.second_split
+        second, request.second_split, max_digits=MAX_SPLIT_WEIGHT_DIGITS
     )
     if (
         tuple(a + b for a, b in zip(first_split, second_split, strict=True))
@@ -865,10 +983,14 @@ def weighted_intersection_certificate(
     first_rank_work = _rank_work(len(first.matrix.entries), candidate_size)
     second_rank_work = _rank_work(len(second.matrix.entries), candidate_size)
     first_values, first_function, first_work, first_output = (
-        _prepare_maximum_weight_independent_set(first, first_split_function)
+        _prepare_maximum_weight_independent_set(
+            first, first_split_function, max_digits=MAX_SPLIT_WEIGHT_DIGITS
+        )
     )
     second_values, second_function, second_work, second_output = (
-        _prepare_maximum_weight_independent_set(second, second_split_function)
+        _prepare_maximum_weight_independent_set(
+            second, second_split_function, max_digits=MAX_SPLIT_WEIGHT_DIGITS
+        )
     )
     total_work = first_work + second_work + first_rank_work + second_rank_work
     output_bytes = _weighted_intersection_output_bound_bytes(

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal, Self
+from typing import Annotated, Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
@@ -62,6 +62,224 @@ class DirichletCharacter(StrictModel):
                 "character coordinates must match the group's dual coordinate axes",
             )
         return self
+
+
+class DirichletCharacterKernel(StrictModel):
+    """Complete kernel of one character as canonical unit residues."""
+
+    character: DirichletCharacter
+    residues: tuple[StrictInt, ...] = Field(
+        min_length=1, max_length=MAX_CHARACTER_GROUP_MODULUS
+    )
+    index: StrictInt = Field(ge=1, le=MAX_CHARACTER_GROUP_MODULUS)
+
+    @model_validator(mode="after")
+    def require_canonical_kernel_shape(self) -> Self:
+        group = self.character.group
+        if self.residues != tuple(sorted(set(self.residues))) or not set(
+            self.residues
+        ).issubset(group.unit_residues):
+            raise _validation_error(
+                "kernel_residue_shape",
+                "kernel residues must be increasing distinct canonical units",
+            )
+        if self.index * len(self.residues) != group.character_count:
+            raise _validation_error(
+                "kernel_index_mismatch",
+                "kernel index must equal the character image size",
+            )
+        return self
+
+
+class DirichletCharacterInflation(StrictModel):
+    """An inflated target character with its source and unit reduction map."""
+
+    source: DirichletCharacter
+    target: DirichletCharacter
+    target_unit_residues: tuple[StrictInt, ...] = Field(
+        min_length=1, max_length=MAX_CHARACTER_GROUP_MODULUS
+    )
+    source_unit_residues: tuple[StrictInt, ...] = Field(
+        min_length=1, max_length=MAX_CHARACTER_GROUP_MODULUS
+    )
+
+    @model_validator(mode="after")
+    def require_canonical_reduction_shape(self) -> Self:
+        source_modulus = self.source.group.modulus
+        target_group = self.target.group
+        if target_group.modulus % source_modulus:
+            raise _validation_error(
+                "inflation_modulus_not_multiple",
+                "target modulus must be a multiple of the source modulus",
+            )
+        if self.target_unit_residues != target_group.unit_residues:
+            raise _validation_error(
+                "inflation_target_units_mismatch",
+                "target residues must list every target unit in canonical order",
+            )
+        expected_source_residues = tuple(
+            residue % source_modulus for residue in self.target_unit_residues
+        )
+        if self.source_unit_residues != expected_source_residues or any(
+            residue not in self.source.group.unit_residues
+            for residue in self.source_unit_residues
+        ):
+            raise _validation_error(
+                "inflation_reduction_mismatch",
+                "source residues must be the canonical reductions of target units",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        source: DirichletCharacter,
+        target: DirichletCharacter,
+        target_unit_residues: tuple[int, ...],
+        source_unit_residues: tuple[int, ...],
+    ) -> Self:
+        return cls.model_construct(
+            source=source,
+            target=target,
+            target_unit_residues=target_unit_residues,
+            source_unit_residues=source_unit_residues,
+        )
+
+
+class DirichletCharacterRestrictionObstruction(StrictModel):
+    """Two units in one reduction fiber with different character values."""
+
+    target_group: DirichletCharacterGroup
+    target_unit_residue: StrictInt = Field(ge=0)
+    source_unit_residues: tuple[StrictInt, StrictInt]
+    values: tuple[CyclotomicValue, CyclotomicValue]
+
+    @model_validator(mode="after")
+    def require_fiber_witness(self) -> Self:
+        if self.target_unit_residue not in self.target_group.unit_residues:
+            raise _validation_error(
+                "restriction_obstruction_target_residue",
+                "obstruction residue must be a canonical target unit",
+            )
+        first, second = self.source_unit_residues
+        if (
+            first == second
+            or first % self.target_group.modulus != self.target_unit_residue
+            or second % self.target_group.modulus != self.target_unit_residue
+            or self.values[0] == self.values[1]
+        ):
+            raise _validation_error(
+                "restriction_obstruction_invalid",
+                "obstruction needs distinct source units in one fiber with distinct values",
+            )
+        if self.values[0].order != self.values[1].order:
+            raise _validation_error(
+                "restriction_obstruction_parent_mismatch",
+                "obstruction values must use one exact cyclotomic parent",
+            )
+        return self
+
+
+class DirichletCharacterRestrictionResult(StrictModel):
+    """Exact factor-down result or an explicit same-fiber obstruction."""
+
+    status: Literal["descended", "does_not_factor"]
+    source: DirichletCharacter
+    target_modulus: StrictInt = Field(ge=1, le=MAX_CHARACTER_GROUP_MODULUS)
+    target: DirichletCharacter | None = None
+    target_unit_residues: tuple[StrictInt, ...] | None = None
+    source_unit_lifts: tuple[StrictInt, ...] | None = None
+    obstruction: DirichletCharacterRestrictionObstruction | None = None
+
+    @model_validator(mode="after")
+    def require_exact_outcome_shape(self) -> Self:
+        source_modulus = self.source.group.modulus
+        if source_modulus % self.target_modulus:
+            raise _validation_error(
+                "restriction_modulus_not_divisor",
+                "target modulus must divide the source modulus",
+            )
+        if self.status == "descended":
+            if (
+                self.target is None
+                or self.target.group.modulus != self.target_modulus
+                or self.target_unit_residues != self.target.group.unit_residues
+                or self.source_unit_lifts is None
+                or self.obstruction is not None
+                or len(self.source_unit_lifts) != len(self.target_unit_residues)
+                or any(
+                    lift not in self.source.group.unit_residues
+                    or lift % self.target_modulus != target_residue
+                    for target_residue, lift in zip(
+                        self.target_unit_residues,
+                        self.source_unit_lifts,
+                        strict=True,
+                    )
+                )
+            ):
+                raise _validation_error(
+                    "restriction_success_shape",
+                    "descended result needs a target character and complete aligned unit lifts",
+                )
+        elif (
+            self.target is not None
+            or self.target_unit_residues is not None
+            or self.source_unit_lifts is not None
+            or self.obstruction is None
+            or self.obstruction.target_group.modulus != self.target_modulus
+            or any(
+                residue not in self.source.group.unit_residues
+                for residue in self.obstruction.source_unit_residues
+            )
+            or any(
+                value.order != self.source.group.exponent
+                for value in self.obstruction.values
+            )
+        ):
+            raise _validation_error(
+                "restriction_obstruction_shape",
+                "nonfactor result must carry only a matching obstruction witness",
+            )
+        return self
+
+    @classmethod
+    def _descended_from_kernel(
+        cls,
+        *,
+        source: DirichletCharacter,
+        target_modulus: int,
+        target: DirichletCharacter,
+        target_unit_residues: tuple[int, ...],
+        source_unit_lifts: tuple[int, ...],
+    ) -> Self:
+        return cls.model_construct(
+            status="descended",
+            source=source,
+            target_modulus=target_modulus,
+            target=target,
+            target_unit_residues=target_unit_residues,
+            source_unit_lifts=source_unit_lifts,
+            obstruction=None,
+        )
+
+    @classmethod
+    def _obstructed_from_kernel(
+        cls,
+        *,
+        source: DirichletCharacter,
+        target_modulus: int,
+        obstruction: DirichletCharacterRestrictionObstruction,
+    ) -> Self:
+        return cls.model_construct(
+            status="does_not_factor",
+            source=source,
+            target_modulus=target_modulus,
+            target=None,
+            target_unit_residues=None,
+            source_unit_lifts=None,
+            obstruction=obstruction,
+        )
 
 
 class PrincipalDirichletCharacter(StrictModel):
@@ -142,7 +360,7 @@ class DirichletCharacterGroup(StrictModel):
         min_length=1, max_length=MAX_CHARACTER_GROUP_MODULUS
     )
     character_count: StrictInt = Field(ge=1, le=MAX_CHARACTER_GROUP_MODULUS)
-    invariant_factors: tuple[StrictInt, ...] = Field(
+    invariant_factors: tuple[Annotated[StrictInt, Field(ge=2)], ...] = Field(
         max_length=32,
         description=(
             "Divisibility chain of the finite Abelian unit group; empty exactly "
@@ -273,11 +491,165 @@ class DirichletCharacterGroup(StrictModel):
         )
 
 
+class DirichletCharacterFamily(StrictModel):
+    """The complete dual of one finite unit-group parent.
+
+    ``coordinates`` lists each character once in lexicographic order on the
+    group's canonical cyclic dual axes. The parent is serialized once, so this
+    carrier remains bounded when a family is large.
+    """
+
+    group: DirichletCharacterGroup
+    coordinates: tuple[tuple[StrictInt, ...], ...] = Field(
+        min_length=1,
+        max_length=MAX_CHARACTER_GROUP_MODULUS,
+    )
+
+    @model_validator(mode="after")
+    def require_complete_dual_coordinates(self) -> Self:
+        if not isinstance(self.group, DirichletCharacterGroup):
+            raise _validation_error(
+                "family_parent", "family needs a canonical character group"
+            )
+        orders = self.group.generator_orders
+        if type(self.group.character_count) is not int or type(orders) is not tuple:
+            raise _validation_error(
+                "family_parent", "family parent must have canonical finite dual axes"
+            )
+        if any(type(order) is not int or order < 1 for order in orders):
+            raise _validation_error(
+                "family_axis_order", "dual axes must have positive integer orders"
+            )
+        expected_count = 1
+        for order in orders:
+            if order > MAX_CHARACTER_GROUP_MODULUS // expected_count:
+                raise _validation_error(
+                    "family_axis_order",
+                    "dual axes exceed the admitted character-family size",
+                )
+            expected_count *= order
+        if (
+            expected_count != self.group.character_count
+            or len(self.coordinates) != expected_count
+        ):
+            raise _validation_error(
+                "family_size",
+                "the family must contain exactly one row per dual coordinate",
+            )
+        if any(
+            len(row) != len(orders)
+            or any(
+                coordinate < 0 or coordinate >= order
+                for coordinate, order in zip(row, orders, strict=False)
+            )
+            for row in self.coordinates
+        ):
+            raise _validation_error(
+                "family_coordinate",
+                "every character coordinate must lie on the declared dual axes",
+            )
+        if self.coordinates != tuple(sorted(set(self.coordinates))):
+            raise _validation_error(
+                "family_order",
+                "dual coordinates must enumerate every character once in lexicographic order",
+            )
+        return self
+
+
+class DirichletCharacterFourierMatrix(StrictModel):
+    """Exact complete character table on the canonical unit residues.
+
+    Entries are exponents in the shared cyclotomic parent: entry ``e`` means
+    ``zeta_order**e``. Rows follow lexicographic dual coordinates and columns
+    follow the group's increasing canonical unit residues.
+    """
+
+    group: DirichletCharacterGroup
+    character_coordinates: tuple[tuple[StrictInt, ...], ...] = Field(
+        min_length=1, max_length=MAX_CHARACTER_GROUP_MODULUS
+    )
+    unit_residues: tuple[StrictInt, ...] = Field(
+        min_length=1, max_length=MAX_CHARACTER_GROUP_MODULUS
+    )
+    cyclotomic_order: StrictInt = Field(ge=1, le=MAX_CHARACTER_GROUP_MODULUS)
+    entries: tuple[tuple[StrictInt, ...], ...] = Field(
+        min_length=1, max_length=MAX_CHARACTER_GROUP_MODULUS
+    )
+
+    @model_validator(mode="after")
+    def require_canonical_axes(self) -> Self:
+        if self.cyclotomic_order != self.group.exponent:
+            raise _validation_error(
+                "fourier_parent", "matrix cyclotomic order must match its group"
+            )
+        if self.unit_residues != self.group.unit_residues:
+            raise _validation_error(
+                "fourier_unit_axis",
+                "matrix columns must be the canonical unit residues",
+            )
+        rank = len(self.group.generator_orders)
+        count = self.group.character_count
+        if len(self.character_coordinates) != count or len(self.entries) != count:
+            raise _validation_error(
+                "fourier_row_count", "matrix needs one row per character"
+            )
+        if self.character_coordinates != tuple(sorted(set(self.character_coordinates))):
+            raise _validation_error(
+                "fourier_character_axis",
+                "character rows must be unique and lexicographically ordered",
+            )
+        if any(
+            len(row) != rank
+            or any(
+                c < 0 or c >= order
+                for c, order in zip(row, self.group.generator_orders, strict=True)
+            )
+            for row in self.character_coordinates
+        ):
+            raise _validation_error(
+                "fourier_character_axis",
+                "character coordinates must lie on the declared dual axes",
+            )
+        if any(
+            len(row) != count
+            or any(value < 0 or value >= self.cyclotomic_order for value in row)
+            for row in self.entries
+        ):
+            raise _validation_error(
+                "fourier_entry_shape",
+                "entries must be reduced cyclotomic exponents on the declared axes",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        group: DirichletCharacterGroup,
+        character_coordinates: tuple[tuple[int, ...], ...],
+        unit_residues: tuple[int, ...],
+        cyclotomic_order: int,
+        entries: tuple[tuple[int, ...], ...],
+    ) -> Self:
+        return cls.model_construct(
+            group=group,
+            character_coordinates=character_coordinates,
+            unit_residues=unit_residues,
+            cyclotomic_order=cyclotomic_order,
+            entries=entries,
+        )
+
+
 __all__ = [
     "MAX_CHARACTER_GROUP_MODULUS",
     "MAX_PRINCIPAL_CHARACTER_MODULUS",
     "CyclotomicValue",
     "DirichletCharacter",
+    "DirichletCharacterFamily",
     "DirichletCharacterGroup",
+    "DirichletCharacterInflation",
+    "DirichletCharacterKernel",
+    "DirichletCharacterRestrictionObstruction",
+    "DirichletCharacterRestrictionResult",
     "PrincipalDirichletCharacter",
 ]

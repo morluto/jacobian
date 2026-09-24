@@ -12,7 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from fractions import Fraction
 from itertools import combinations, product
-from math import factorial, floor
+from math import factorial, floor, isqrt
 
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.lattices._lattice_ops import hermite_basis
@@ -21,9 +21,26 @@ from jacobian.math.matrices._flint import integer_smith_normal_form
 # One exact row ``coefficients . x (rel) rhs`` with ``rel`` in ``eq``/``ge``/``gt``.
 _LpRow = tuple[tuple[Fraction, ...], str, Fraction]
 
-MAX_PERIODIC_FM_ROWS = 4_096
 MAX_PERIODIC_FM_GENERATED_ROWS = 65_536
+# The deduplicated tableau cap is the exact square root of the generated-row
+# cap, so every elimination step that starts within the tableau cap pairs at
+# most its square rows and the generated-row bound can never be crossed while
+# computing.  The structural initial-tableau bound ``fm_structural_bound`` is
+# preflighted against this cap during request admission.
+MAX_PERIODIC_FM_ROWS = isqrt(MAX_PERIODIC_FM_GENERATED_ROWS)
 MAX_PERIODIC_TRANSLATION_ENUMERATION = 200_000
+
+
+def fm_structural_bound(rank: int) -> int:
+    """Bound the rows entering any exact feasibility tableau of rank ``rank``.
+
+    Recognition derives every feasibility problem from the cells: barycentric
+    containment uses ``2 * rank + 2`` rows, pairwise nonempty intersection
+    ``3 * rank + 4``, and strict lambda common-face ``3 * rank + 5``; rank-two
+    polygon paths use exact clipping instead of a tableau.
+    """
+
+    return 3 * rank + 5
 
 
 def _reject_budget(message: str) -> None:
@@ -32,15 +49,6 @@ def _reject_budget(message: str) -> None:
         code="geometry.periodic_fan.resource_budget_exceeded",
         message=message,
     )
-
-
-def _admit_fm_expansion(positive: int, negative: int, neutral: int) -> None:
-    generated = positive * negative + neutral
-    if generated > MAX_PERIODIC_FM_GENERATED_ROWS:
-        _reject_budget(
-            "exact periodic fan feasibility tableau expansion exceeds "
-            f"{MAX_PERIODIC_FM_GENERATED_ROWS} generated rows"
-        )
 
 
 # ---------------------------------------------------------------------------
@@ -52,11 +60,18 @@ def _fm_feasible(rows: list[_LpRow], variables: int) -> bool:
     """Decide exact rational feasibility by Fourier--Motzkin elimination.
 
     Equalities are substituted first; remaining variables are eliminated by
-    pairing positive and negative coefficients.  The tableau is deduplicated
-    after every step and bounded by ``MAX_PERIODIC_FM_ROWS``.
+    pairing positive and negative coefficients.  The tableau entering every
+    step is bounded by ``MAX_PERIODIC_FM_ROWS``, whose square is the
+    generated-row cap preflighted at admission, so each step's expansion is
+    bounded before any pairing happens.
     """
 
     for index in range(variables):
+        if len(rows) > MAX_PERIODIC_FM_ROWS:
+            _reject_budget(
+                "exact periodic fan feasibility tableau exceeds "
+                f"{MAX_PERIODIC_FM_ROWS} rows"
+            )
         rows = _substitute_equalities(rows, index)
         positive: list[_LpRow] = []
         negative: list[_LpRow] = []
@@ -69,7 +84,6 @@ def _fm_feasible(rows: list[_LpRow], variables: int) -> bool:
                 negative.append(row)
             else:
                 neutral.append(row)
-        _admit_fm_expansion(len(positive), len(negative), len(neutral))
         combined: list[_LpRow] = list(neutral)
         for upper in positive:
             scale_up = upper[0][index]
@@ -88,11 +102,6 @@ def _fm_feasible(rows: list[_LpRow], variables: int) -> bool:
                     )
                 )
         rows = _deduplicate_rows(combined)
-        if len(rows) > MAX_PERIODIC_FM_ROWS:
-            _reject_budget(
-                "exact periodic fan feasibility tableau exceeds "
-                f"{MAX_PERIODIC_FM_ROWS} rows"
-            )
     for coefficients, kind, rhs in rows:
         if all(value == 0 for value in coefficients):
             if kind == "eq":
@@ -294,17 +303,26 @@ def _affinely_independent(coordinates: tuple[tuple[int, ...], ...]) -> bool:
 def _strictly_convex_ccw_polygon(
     coordinates: tuple[tuple[int, ...], ...],
 ) -> bool:
+    """Decide the global supporting-line property of a closed vertex cycle.
+
+    Every directed boundary edge must strictly support the cycle: all other
+    listed vertices lie strictly to its left.  This global condition rules out
+    star-ordered self-intersecting cycles, whose every local turn is positive.
+    """
+
     if len(coordinates) < 4 or len(coordinates[0]) != 2:
         return False
     size = len(coordinates)
-    turns = tuple(
-        (coordinates[(index + 1) % size][0] - coordinates[index][0])
-        * (coordinates[(index + 2) % size][1] - coordinates[(index + 1) % size][1])
-        - (coordinates[(index + 1) % size][1] - coordinates[index][1])
-        * (coordinates[(index + 2) % size][0] - coordinates[(index + 1) % size][0])
-        for index in range(size)
-    )
-    return all(turn > 0 for turn in turns)
+    for index in range(size):
+        start = coordinates[index]
+        end = coordinates[(index + 1) % size]
+        edge_x = end[0] - start[0]
+        edge_y = end[1] - start[1]
+        for offset in range(2, size):
+            point = coordinates[(index + offset) % size]
+            if (edge_x * (point[1] - start[1]) - edge_y * (point[0] - start[0])) <= 0:
+                return False
+    return True
 
 
 def _cell_face_positions(
@@ -513,14 +531,16 @@ def _intersection_is_common_face(
                 return False
         unique = tuple(dict.fromkeys(intersection))
         integer_points = {
-            point
+            tuple(map(int, point))
             for point in unique
             if point[0].denominator == 1 and point[1].denominator == 1
         }
         first_vertices = set(first)
         second_vertices = set(second)
         if len(unique) == 1:
-            point = next(iter(integer_points), None)
+            if not integer_points:
+                return False
+            point = next(iter(integer_points))
             return point in first_vertices and point in second_vertices
         if len(integer_points) != len(unique):
             return False
@@ -968,11 +988,13 @@ def _build_quotient(
 
 
 __all__ = [
+    "MAX_PERIODIC_FM_GENERATED_ROWS",
     "MAX_PERIODIC_FM_ROWS",
     "MAX_PERIODIC_TRANSLATION_ENUMERATION",
     "OrbitRowData",
     "PeriodicObstruction",
     "QuotientCellData",
     "RecognizedPeriodicFan",
+    "fm_structural_bound",
     "recognize_periodic_fan",
 ]

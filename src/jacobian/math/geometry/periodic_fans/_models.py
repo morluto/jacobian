@@ -252,7 +252,7 @@ class PeriodicQuotientCell(StrictModel):
     dimension: StrictInt = Field(ge=0)
     representative_cell: StrictInt = Field(ge=0)
     representative_vertices: tuple[StrictInt, ...] = Field(
-        min_length=1, max_length=MAX_PERIODIC_LATTICE_RANK + 2
+        min_length=1, max_length=MAX_PERIODIC_POLYGON_VERTICES
     )
     member_count: StrictInt = Field(ge=1)
     stabilizer_rank: StrictInt = Field(ge=0)

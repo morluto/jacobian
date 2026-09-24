@@ -10,9 +10,12 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.geometry.periodic_fans._kernel import (
+    MAX_PERIODIC_FM_GENERATED_ROWS,
+    MAX_PERIODIC_FM_ROWS,
     MAX_PERIODIC_TRANSLATION_ENUMERATION,
     _translation_count,
     _translations_between,
+    fm_structural_bound,
     recognize_periodic_fan,
 )
 from jacobian.math.geometry.periodic_fans._models import (
@@ -46,12 +49,12 @@ def _digit_weight(value: int | Fraction) -> int:
 
 
 def _admit_periodic_fan(fan: PeriodicFanPresentation) -> None:  # noqa: C901
-    """Enforce the published envelope and preflight overlap enumeration.
+    """Enforce the published envelope and preflight enumeration and expansion.
 
     Catalog requests are already bounded by the presentation model, but native
-    callers can bypass wire validation, so the same envelope and the derived
-    translation-enumeration count are checked here before any exact arithmetic
-    starts.
+    callers can bypass wire validation, so the same envelope, the derived
+    translation-enumeration count, and the structural bound on every exact
+    feasibility tableau are checked here before any exact arithmetic starts.
     """
 
     rank = fan.lattice_rank
@@ -160,6 +163,15 @@ def _admit_periodic_fan(fan: PeriodicFanPresentation) -> None:  # noqa: C901
     if _digit_weight(period_determinant) > MAX_PERIODIC_INDEX_DIGITS:
         _reject_envelope(
             f"the period index is limited to {MAX_PERIODIC_INDEX_DIGITS} decimal digits"
+        )
+    fm_rows = fm_structural_bound(rank)
+    if (
+        fm_rows > MAX_PERIODIC_FM_ROWS
+        or fm_rows * fm_rows > MAX_PERIODIC_FM_GENERATED_ROWS
+    ):
+        _reject_envelope(
+            "periodic fan feasibility tableau expansion exceeds the preflighted "
+            f"{MAX_PERIODIC_FM_ROWS} row cap"
         )
     enumeration = 0
     cell_coordinates = [

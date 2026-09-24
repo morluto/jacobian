@@ -10,11 +10,18 @@ from pydantic import ValidationError
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.math.geometry.periodic_fans._kernel import (
+    MAX_PERIODIC_FM_GENERATED_ROWS,
+    MAX_PERIODIC_FM_ROWS,
+    fm_structural_bound,
+)
 from jacobian.math.geometry.periodic_fans._models import (
+    MAX_PERIODIC_LATTICE_RANK,
     PeriodicFanPresentation,
     PeriodicFanValidationRequest,
     PeriodicFanValidationResult,
     PeriodicOverlapCandidate,
+    PeriodicQuotientCell,
 )
 from jacobian.math.geometry.periodic_fans._tools import (
     PERIODIC_FAN_VALIDATE_OPERATION,
@@ -143,6 +150,114 @@ def non_face_to_face_fan() -> PeriodicFanPresentation:
     )
 
 
+def _closed_segments_meet(
+    first: tuple[tuple[int, ...], ...], second: tuple[tuple[int, ...], ...]
+) -> bool:
+    # Exact separating-axis test for closed convex lattice polygons: they fail
+    # to meet iff some boundary-edge normal separates their projections.
+    axes = []
+    for polygon in (first, second):
+        size = len(polygon)
+        axes.extend(
+            (
+                polygon[(index + 1) % size][1] - polygon[index][1],
+                polygon[index][0] - polygon[(index + 1) % size][0],
+            )
+            for index in range(size)
+        )
+    for axis_x, axis_y in axes:
+        first_values = [axis_x * x + axis_y * y for x, y in first]
+        second_values = [axis_x * x + axis_y * y for x, y in second]
+        if max(first_values) < min(second_values) or max(second_values) < min(
+            first_values
+        ):
+            return False
+    return True
+
+
+OCTAGON_FAN_VERTICES = (
+    (0, 0),
+    (1, 0),
+    (2, 0),
+    (3, 0),
+    (0, 1),
+    (0, 2),
+    (1, 3),
+    (2, 3),
+    (3, 3),
+    (3, 2),
+    (3, 1),
+    (0, 3),
+)
+OCTAGON_FAN_CELLS = (
+    (0, 1, 4),
+    (1, 2, 10, 9, 7, 6, 5, 4),
+    (2, 3, 10),
+    (5, 6, 11),
+    (7, 8, 9),
+)
+
+
+def octagon_and_corner_fan() -> PeriodicFanPresentation:
+    # A strictly convex eight-vertex polygon plus four corner triangles tile
+    # the 3x3 fundamental parallelotope. The complete candidate set lists, per
+    # cell pair, exactly the translations whose closed hulls meet.
+    coordinates = [
+        tuple(OCTAGON_FAN_VERTICES[index] for index in cell)
+        for cell in OCTAGON_FAN_CELLS
+    ]
+    candidates = []
+    for first in range(len(coordinates)):
+        for second in range(first, len(coordinates)):
+            first_x = [point[0] for point in coordinates[first]]
+            first_y = [point[1] for point in coordinates[first]]
+            second_x = [point[0] for point in coordinates[second]]
+            second_y = [point[1] for point in coordinates[second]]
+            for shift_x in range(
+                min(first_x) - max(second_x), max(first_x) - min(second_x) + 1
+            ):
+                for shift_y in range(
+                    min(first_y) - max(second_y),
+                    max(first_y) - min(second_y) + 1,
+                ):
+                    shifted = tuple(
+                        (x + shift_x, y + shift_y) for x, y in coordinates[second]
+                    )
+                    if _closed_segments_meet(coordinates[first], shifted):
+                        candidates.append(overlap(first, second, (shift_x, shift_y)))
+    return PeriodicFanPresentation(
+        lattice_rank=2,
+        period_basis=((q(3), q(0)), (q(0), q(3))),
+        vertices=OCTAGON_FAN_VERTICES,
+        cells=OCTAGON_FAN_CELLS,
+        overlap_candidates=tuple(candidates),
+    )
+
+
+def overlapping_rank_simplex_fan(rank: int) -> PeriodicFanPresentation:
+    # Two full-dimensional simplices over a common base whose interiors meet:
+    # recognition must decide the overlap through exact feasibility tableaux.
+    unit_vectors = tuple(
+        tuple(1 if coordinate == position else 0 for coordinate in range(rank))
+        for position in range(rank - 1)
+    )
+    low_apex = tuple(2 if coordinate == rank - 1 else 0 for coordinate in range(rank))
+    high_apex = tuple(2 if coordinate == rank - 1 else 1 for coordinate in range(rank))
+    return PeriodicFanPresentation(
+        lattice_rank=rank,
+        period_basis=tuple(
+            tuple(q(value) for value in row) for row in (*unit_vectors, low_apex)
+        ),
+        vertices=((0,) * rank, *unit_vectors, low_apex, high_apex),
+        cells=(tuple(range(rank + 1)), (*range(rank), rank + 1)),
+        overlap_candidates=(
+            PeriodicOverlapCandidate(
+                first_cell=0, second_cell=1, translation=(0,) * rank
+            ),
+        ),
+    )
+
+
 def test_catalog_contains_the_periodic_fan_validator() -> None:
     assert {tool.operation_id for tool in TOOLS} == {"periodic_fan.quotient.validate"}
 
@@ -229,6 +344,40 @@ def test_periodic_quadrilateral_rejects_nonconvex_vertex_cycle() -> None:
     assert result.obstruction_code == (
         "geometry.periodic_fan.polygon_not_strictly_convex"
     )
+
+
+def test_star_ordered_pentagon_cycle_is_rejected_as_nonconvex() -> None:
+    # The cycle traverses every second vertex of a convex lattice pentagon.
+    # Every consecutive turn is left, yet the closed boundary self-intersects,
+    # so recognition must reject it rather than trust the local turn signs.
+    fan = PeriodicFanPresentation(
+        lattice_rank=2,
+        period_basis=((q(2), q(0)), (q(0), q(2))),
+        vertices=((0, 0), (2, 0), (2, 1), (1, 2), (0, 2)),
+        cells=((0, 2, 4, 1, 3),),
+    )
+    result = validate_periodic_fan(fan)
+    assert result.status == "INVALID"
+    assert result.obstruction_code == (
+        "geometry.periodic_fan.polygon_not_strictly_convex"
+    )
+
+
+def test_convex_ccw_pentagon_cycle_passes_the_convexity_test() -> None:
+    # The same five vertices listed counterclockwise satisfy the global
+    # supporting-line test; the presentation then fails only for the
+    # undeclared periodic overlaps of its own translates.
+    fan = PeriodicFanPresentation(
+        lattice_rank=2,
+        period_basis=((q(2), q(0)), (q(0), q(2))),
+        vertices=((0, 0), (2, 0), (2, 1), (1, 2), (0, 2)),
+        cells=((0, 1, 2, 3, 4),),
+    )
+    result = validate_periodic_fan(fan)
+    assert result.obstruction_code != (
+        "geometry.periodic_fan.polygon_not_strictly_convex"
+    )
+    assert result.obstruction_code == "geometry.periodic_fan.undeclared_overlap"
 
 
 def test_unimodularity_claim_is_rejected_for_a_polygon_cell() -> None:
@@ -428,3 +577,40 @@ def test_example_payload_carries_expected_candidate_count() -> None:
         "overlap_candidates"
     ]
     assert len(candidates) == 27
+
+
+def test_eight_vertex_polygon_quotient_composes_through_serialization() -> None:
+    fan = octagon_and_corner_fan()
+    result = validate_periodic_fan(fan)
+    assert result.status == "VALID"
+    assert result.period_index == 9
+    octagon_cell = next(
+        cell
+        for cell in result.quotient_cells
+        if cell.dimension == 2 and len(cell.representative_vertices) == 8
+    )
+    assert octagon_cell.representative_vertices == (1, 2, 10, 9, 7, 6, 5, 4)
+    for cell in result.quotient_cells:
+        PeriodicQuotientCell.model_validate(cell.model_dump())
+    replayed = PeriodicFanValidationResult.model_validate_json(result.model_dump_json())
+    assert replayed == result
+
+
+@pytest.mark.parametrize("rank", [3, 4])
+def test_higher_rank_overlap_is_decided_under_preflighted_expansion(
+    rank: int,
+) -> None:
+    # Admitted before recognition, the structural feasibility-tableau bound
+    # covers every problem these rank-three and rank-four requests generate;
+    # the exact routine must decide the non-face-to-face overlap within it.
+    result = validate_periodic_fan(overlapping_rank_simplex_fan(rank))
+    assert result.status == "INVALID"
+    assert result.obstruction_code == ("geometry.periodic_fan.overlap_not_face_to_face")
+
+
+def test_fm_structural_bound_is_preflighted_below_work_caps() -> None:
+    for rank in range(1, MAX_PERIODIC_LATTICE_RANK + 1):
+        bound = fm_structural_bound(rank)
+        assert bound <= MAX_PERIODIC_FM_ROWS
+        assert bound * bound <= MAX_PERIODIC_FM_GENERATED_ROWS
+    assert MAX_PERIODIC_FM_ROWS * MAX_PERIODIC_FM_ROWS <= MAX_PERIODIC_FM_GENERATED_ROWS

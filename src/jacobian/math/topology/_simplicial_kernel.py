@@ -471,8 +471,6 @@ def barycentric_subdivision(
             canonical_complex(
                 tuple(sorted(subdivision.vertices)), facets, closure=closure
             )
-            if facets
-            else None
         ),
         subdivision_vertex_faces=subdivision.vertex_faces,
         subdivision_facet_face_chains=facet_face_chains,

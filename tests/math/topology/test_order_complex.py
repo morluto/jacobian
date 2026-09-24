@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from itertools import combinations, pairwise
 
 import pytest
@@ -15,6 +16,7 @@ from jacobian.math.combinatorics.posets.core._models import (
 )
 from jacobian.math.combinatorics.posets.core.operations import materialize_finite_poset
 from jacobian.math.topology._models import SimplicialComplexRequest
+from jacobian.math.topology._structural import FVectorRequest, compute_f_vector
 from jacobian.math.topology.operations import barycentric_subdivision
 from jacobian.math.topology.release import (
     FacePosetRequest,
@@ -79,8 +81,82 @@ def test_antichain_singleton_and_empty_poset_contract() -> None:
     assert singleton.maximal_chains == (("x",),)
 
     empty = _poset((), ())
-    with pytest.raises(OperationDomainValidationError, match="empty poset"):
-        order_complex(OrderComplexRequest(poset=empty))
+    empty_result = order_complex(OrderComplexRequest(poset=empty))
+    assert empty_result.complex.vertices == ()
+    assert empty_result.complex.maximal_simplices == ()
+    assert empty_result.complex.faces_by_dimension == ()
+    assert empty_result.complex.f_vector == ()
+    assert empty_result.complex.dimension == -1
+    assert empty_result.complex.closure_size == 0
+    assert empty_result.maximal_chains == ()
+
+
+def test_empty_order_complex_json_composes_with_downstream_consumers() -> None:
+    encoded = order_complex(
+        OrderComplexRequest(poset=_poset((), ()))
+    ).model_dump_json()
+    decoded = OrderComplexResult.model_validate_json(encoded)
+
+    graph = one_skeleton(
+        OneSkeletonRequest.model_validate_json(
+            OneSkeletonRequest(complex=decoded.complex).model_dump_json()
+        )
+    )
+    subdivision = barycentric_subdivision(decoded.complex)
+    assert graph.graph.vertex_count == 0
+    assert graph.graph.edges == ()
+    assert graph.vertex_labels == ()
+    assert subdivision.subdivision_complex is not None
+    assert subdivision.subdivision_complex == decoded.complex
+    assert subdivision.original_dimension == -1
+    assert compute_f_vector(FVectorRequest(complex={"vertices": (), "facets": ()})).f_vector == (1,)
+
+    face_result = FacePosetResult.model_validate_json(
+        face_poset(
+            FacePosetRequest(
+                complex=SimplicialComplexRequest(vertices=(), facets=())
+            )
+        ).model_dump_json()
+    )
+    assert face_result.faces == ()
+    assert face_result.poset is not None
+    assert face_result.order_complex.dimension == -1
+
+
+def test_order_complex_result_rejects_forged_axis_bindings() -> None:
+    result = order_complex(OrderComplexRequest(poset=_poset(("a",), ())))
+    forged = result.model_dump()
+    forged["vertex_elements"] = ()
+    with pytest.raises(ValueError, match="vertex_elements"):
+        OrderComplexResult.model_validate(forged)
+
+    forged = result.model_dump()
+    forged["complex"].update(
+        vertices=[],
+        maximal_simplices=[],
+        faces_by_dimension=[],
+        dimension=-1,
+        f_vector=[],
+        closure_size=0,
+    )
+    with pytest.raises(ValueError, match="complex vertices"):
+        OrderComplexResult.model_validate(forged)
+    with pytest.raises(ValueError, match="complex vertices"):
+        OrderComplexResult.model_validate_json(json.dumps(forged))
+
+
+def test_face_poset_result_rejects_forged_positional_labels() -> None:
+    result = face_poset(
+        FacePosetRequest(
+            complex=SimplicialComplexRequest(vertices=("a",), facets=(("a",),))
+        )
+    )
+    forged = result.model_dump()
+    forged["face_element_labels"] = ["wrong"]
+    with pytest.raises(ValueError, match="face-element labels"):
+        FacePosetResult.model_validate(forged)
+    with pytest.raises(ValueError, match="face-element labels"):
+        FacePosetResult.model_validate_json(json.dumps(forged))
 
 
 def test_order_complex_json_composes_with_one_skeleton() -> None:

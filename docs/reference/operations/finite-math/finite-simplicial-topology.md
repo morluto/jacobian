@@ -88,11 +88,11 @@ nonfaces are precisely the squarefree generators used to define the
 Stanley–Reisner ideal, but this operation returns subsets and does not construct
 a polynomial ring or ideal.
 
-The canonical carrier requires at least one vertex and one nonempty maximal
-simplex, and stores no empty simplex. It therefore represents neither the
-void complex nor the zero-vertex complex `{∅}`. Those values are rejected by
-the existing carrier rather than assigned a new convention here. On the
-represented domain, a full simplex has an empty minimal-nonface antichain.
+The canonical carrier stores nonempty faces only. The zero-vertex complex
+`{∅}` uses empty vertex, facet, and face axes, `f_vector = ()`, and dimension
+`-1`; its empty face remains implicit. The void complex, which has no faces
+including the empty face, is not represented. On the represented domain, a
+full simplex has an empty minimal-nonface antichain.
 
 The cardinality bound follows from Sperner's theorem: an antichain of subsets
 of an `n`-element set has at most `binom(n, floor(n/2))` members ([MIT OCW

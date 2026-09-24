@@ -27,6 +27,7 @@ from jacobian.math.topology._pseudomanifold import (
 from jacobian.math.topology._structural import (
     ElementaryCollapseRequest,
     ElementaryCollapseResult,
+    InducedSubcomplexRequest,
     JoinRequest,
     JoinResult,
     SkeletonRequest,
@@ -36,6 +37,7 @@ from jacobian.math.topology._structural import (
     VertexDeletionRequest,
     VertexDeletionResult,
     compute_elementary_collapse,
+    compute_induced_subcomplex,
     compute_join,
     compute_skeleton,
     compute_star,
@@ -115,6 +117,23 @@ class TestStar:
         assert StarResult.model_validate(result.model_dump()) == result
 
 
+def test_empty_induced_subcomplex_and_skeleton_use_canonical_carrier() -> None:
+    source = canonical_complex(("a",), (("a",),))
+    induced = compute_induced_subcomplex(
+        InducedSubcomplexRequest(complex=source, selected_vertices=())
+    )
+    assert induced.induced_complex.dimension == -1
+    assert induced.induced_complex.vertices == ()
+    assert induced.induced_complex.faces_by_dimension == ()
+    assert induced.face_images[0].induced_face is None
+
+    empty_skeleton = compute_skeleton(
+        SkeletonRequest(complex={"vertices": (), "facets": ()}, k=0)
+    )
+    assert empty_skeleton.skeleton_complex.dimension == -1
+    assert empty_skeleton.skeleton_complex.vertices == ()
+
+
 class TestVertexDeletion:
     def test_delete_vertex_from_triangle(self) -> None:
         result = compute_vertex_deletion(
@@ -140,26 +159,21 @@ class TestVertexDeletion:
                 )
             )
 
-    def test_delete_all_vertices_rejected(self) -> None:
-        """A deletion whose induced subcomplex is empty is out of contract;
-        the canonical complex value cannot represent the empty complex."""
-        with pytest.raises(ValueError):
-            compute_vertex_deletion(
-                VertexDeletionRequest(
-                    complex=_complex({"vertices": ["a"], "facets": [["a"]]}),
-                    vertices_to_delete=("a",),
-                )
+    def test_delete_all_vertices_returns_canonical_empty_complex(self) -> None:
+        result = compute_vertex_deletion(
+            VertexDeletionRequest(
+                complex=_complex({"vertices": ["a"], "facets": [["a"]]}),
+                vertices_to_delete=("a",),
             )
+        )
+        assert result.remaining_complex.dimension == -1
+        assert result.remaining_complex.vertices == ()
+        assert result.remaining_complex.faces_by_dimension == ()
 
-    def test_nonempty_residual_precondition_is_schema_visible(self) -> None:
-        """The reviewer counterexample: deleting 'a' from the singleton {a}
-        satisfies the generated field schema, so the nonempty-residual
-        restriction must be stated in the published schema guidance rather
-        than discovered only through a failed invocation."""
+    def test_deletion_schema_describes_empty_value(self) -> None:
         schema = VertexDeletionRequest.model_json_schema()
         field_schema = schema["properties"]["vertices_to_delete"]
-        assert "at least one simplex" in field_schema["description"]
-        assert "empty complex" in field_schema["description"]
+        assert "returns {∅}" in field_schema["description"]
 
     def test_deletion_discovery_metadata_states_precondition(self) -> None:
         tool = next(
@@ -167,9 +181,10 @@ class TestVertexDeletion:
             for t in TOOLS
             if t.operation_id == "topology.simplicial_complex.deletion.compute"
         )
-        assert "leave at least one simplex" in tool.description
+        assert "returns the canonical zero-vertex complex {∅}" in tool.description
         assert all(
-            "at least one simplex" in example.description for example in tool.examples
+            "returns the canonical zero-vertex complex {∅}" in example.description
+            for example in tool.examples
         )
 
     def test_delete_leaving_single_vertex_admitted(self) -> None:

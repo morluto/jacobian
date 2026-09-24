@@ -24,11 +24,16 @@ too many chains is rejected before chain materialization; no prefix is
 returned.
 
 An antichain has one singleton facet per element, and a one-element poset has
-one vertex. An empty relation is therefore supported. The empty poset is
-outside the current `FiniteSimplicialComplex` carrier, which requires at least
-one vertex and one facet, so it is rejected explicitly. The existing
-face-poset operation includes a reusable `FinitePoset` output when its face
-count fits the finite-poset carrier's 64-element bound; its `face_element_labels`
-map each such poset vertex back to the exact source face. This lets callers
-compose the face-poset result through JSON with this operation. The resulting
-complex can then be passed unchanged to the simplicial one-skeleton operation.
+one vertex. For the empty poset, the only chain is the empty chain, so its order
+complex is `{∅}`. Jacobian represents it with empty vertex, facet, and
+nonempty-face axes, `f_vector = ()`, and dimension `-1`; the empty face remains
+implicit. This agrees with the standard convention that the empty simplex has
+dimension `-1` and belongs to every abstract simplicial complex ([Wachs,
+*Poset Topology: Tools and Applications*](https://users.math.msu.edu/users/magyarp/math880/Wachs-Poset-Topology.pdf)).
+
+The existing face-poset operation includes a reusable `FinitePoset` output when
+its face count fits the finite-poset carrier's 64-element bound; its
+`face_element_labels` map each such poset vertex back to the exact source face.
+This lets callers compose the face-poset result through JSON with this
+operation. The resulting complex can then be passed unchanged to the simplicial
+one-skeleton or barycentric-subdivision operation.

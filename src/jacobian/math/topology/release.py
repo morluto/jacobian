@@ -248,6 +248,32 @@ class FacePosetResult(StrictModel):
     poset: FinitePoset | None
     order_complex: FiniteSimplicialComplex
 
+    @model_validator(mode="after")
+    def require_face_label_axes(self) -> FacePosetResult:
+        expected_faces = tuple(
+            sorted(
+                (face for group in self.complex.faces_by_dimension for face in group.faces),
+                key=lambda face: (len(face), face),
+            )
+        )
+        expected_labels = tuple(f"f{index:04d}" for index in range(len(expected_faces)))
+        if self.faces != expected_faces:
+            raise ValueError("faces must be the canonical nonempty face axis")
+        if self.face_element_labels != expected_labels:
+            raise ValueError("face-element labels must index the canonical face axis")
+        if self.order_complex.vertices != expected_labels:
+            raise ValueError("order-complex vertices must equal the face-label axis")
+        if self.poset is not None:
+            if self.poset.elements != expected_labels:
+                raise ValueError("poset elements must equal the face-label axis")
+            expected_relations = tuple(
+                (expected_labels.index(pair.lower), expected_labels.index(pair.upper))
+                for pair in self.poset.strict_order_pairs
+            )
+            if self.order_relations != expected_relations:
+                raise ValueError("order relations must match the labeled face poset")
+        return self
+
 
 class OrderComplexRequest(StrictModel):
     poset: FinitePoset
@@ -258,6 +284,19 @@ class OrderComplexResult(StrictModel):
     complex: FiniteSimplicialComplex
     vertex_elements: tuple[ElementLabel, ...]
     maximal_chains: tuple[tuple[ElementLabel, ...], ...]
+
+    @model_validator(mode="after")
+    def require_poset_and_complex_axes(self) -> OrderComplexResult:
+        if self.vertex_elements != self.poset.elements:
+            raise ValueError("vertex_elements must equal the poset element axis")
+        if self.complex.vertices != self.vertex_elements:
+            raise ValueError("complex vertices must equal the poset element axis")
+        expected_facets = tuple(
+            sorted(tuple(sorted(chain)) for chain in self.maximal_chains)
+        )
+        if self.complex.maximal_simplices != expected_facets:
+            raise ValueError("complex facets must equal the maximal-chain axis")
+        return self
 
 
 class CliqueRequest(StrictModel):
@@ -405,16 +444,6 @@ def order_complex(request: OrderComplexRequest) -> OrderComplexResult:
             message="poset claims do not describe its canonical finite poset",
         )
     elements = poset.elements
-    if not elements:
-        raise OperationDomainValidationError(
-            location=("poset", "elements"),
-            code="topology.order_complex.empty_poset",
-            message=(
-                "the empty poset has no nonempty order-complex faces and is not "
-                "representable by FiniteSimplicialComplex"
-            ),
-        )
-
     plan = _order_complex_plan(poset)
     closure, ordered_facets = _enumerate_order_complex_chains(elements, plan)
     complex_ = canonical_complex(elements, ordered_facets, closure=closure)

@@ -88,7 +88,10 @@ def face_closure(facets: tuple[Simplex, ...]) -> tuple[tuple[Simplex, ...], ...]
     for facet in facets:
         for size in range(1, len(facet) + 1):
             faces[size - 1].update(combinations(facet, size))
-    highest = max(index for index, values in enumerate(faces) if values)
+    populated = [index for index, values in enumerate(faces) if values]
+    if not populated:
+        return ()
+    highest = max(populated)
     return tuple(tuple(sorted(values)) for values in faces[: highest + 1])
 
 
@@ -195,11 +198,11 @@ class SimplicialComplexRequest(StrictModel):
     """
 
     vertices: tuple[VertexLabel, ...] = Field(
-        min_length=1,
+        min_length=0,
         max_length=MAX_TOPOLOGY_VERTICES,
     )
     facets: tuple[Simplex, ...] = Field(
-        min_length=1,
+        min_length=0,
         max_length=MAX_TOPOLOGY_FACETS,
     )
 
@@ -265,26 +268,30 @@ class FacesInDimension(StrictModel):
 
 
 class FiniteSimplicialComplex(StrictModel):
-    """Canonical non-empty faces of one finite abstract simplicial complex."""
+    """Canonical non-empty faces of one finite abstract simplicial complex.
+
+    The empty complex ``{∅}`` is represented by empty axes and dimension -1;
+    the empty face is implicit in every value.
+    """
 
     vertices: tuple[VertexLabel, ...] = Field(
-        min_length=1,
+        min_length=0,
         max_length=MAX_TOPOLOGY_VERTICES,
     )
     maximal_simplices: tuple[Simplex, ...] = Field(
-        min_length=1,
+        min_length=0,
         max_length=MAX_TOPOLOGY_FACETS,
     )
     faces_by_dimension: tuple[FacesInDimension, ...] = Field(
-        min_length=1,
+        min_length=0,
         max_length=MAX_TOPOLOGY_DIMENSION + 1,
     )
-    dimension: StrictInt = Field(ge=0, le=MAX_TOPOLOGY_DIMENSION)
+    dimension: StrictInt = Field(ge=-1, le=MAX_TOPOLOGY_DIMENSION)
     f_vector: tuple[StrictInt, ...] = Field(
-        min_length=1,
+        min_length=0,
         max_length=MAX_TOPOLOGY_DIMENSION + 1,
     )
-    closure_size: StrictInt = Field(ge=1, le=MAX_TOPOLOGY_FACES)
+    closure_size: StrictInt = Field(ge=0, le=MAX_TOPOLOGY_FACES)
     orientation_convention: Literal["LEXICOGRAPHIC_VERTEX_ORDER"] = (
         "LEXICOGRAPHIC_VERTEX_ORDER"
     )
@@ -306,6 +313,19 @@ class FiniteSimplicialComplex(StrictModel):
                 "maximal simplices must be canonical",
             )
         expected_f_vector = tuple(len(item.faces) for item in self.faces_by_dimension)
+        if not self.vertices:
+            if (
+                self.maximal_simplices
+                or self.faces_by_dimension
+                or self.f_vector
+                or self.dimension != -1
+                or self.closure_size != 0
+            ):
+                raise _validation_error(
+                    "topology.require_complete_canonical_complex_3",
+                    "the empty complex has empty non-empty-face axes and dimension -1",
+                )
+            return self
         if (
             self.dimension != len(self.faces_by_dimension) - 1
             or self.f_vector != expected_f_vector
@@ -589,14 +609,14 @@ class BarycentricSubdivisionResult(StrictModel):
     """A barycentric subdivision with source-face and source-chain provenance."""
 
     original_vertices: tuple[VertexLabel, ...] = Field(max_length=MAX_TOPOLOGY_VERTICES)
-    original_dimension: StrictInt = Field(ge=0, le=MAX_TOPOLOGY_DIMENSION)
+    original_dimension: StrictInt = Field(ge=-1, le=MAX_TOPOLOGY_DIMENSION)
     subdivision_vertices: tuple[str, ...] = Field(max_length=MAX_TOPOLOGY_FACES)
     subdivision_facets: tuple[tuple[str, ...], ...] = Field(
         max_length=MAX_TOPOLOGY_FACETS
     )
     num_new_vertices: StrictInt = Field(ge=0, le=MAX_TOPOLOGY_FACES)
     complex: FiniteSimplicialComplex
-    subdivision_complex: FiniteSimplicialComplex | None = None
+    subdivision_complex: FiniteSimplicialComplex
     subdivision_vertex_faces: tuple[Simplex, ...] = Field(max_length=MAX_TOPOLOGY_FACES)
     subdivision_facet_face_chains: tuple[tuple[Simplex, ...], ...] = Field(
         max_length=MAX_TOPOLOGY_FACETS
@@ -612,17 +632,17 @@ class BarycentricSubdivisionResult(StrictModel):
         self._require_source_face_axis()
         self._require_facet_chain_provenance()
         if not self.subdivision_facets:
-            if self.subdivision_complex is not None:
+            if (
+                self.subdivision_complex.vertices
+                or self.subdivision_complex.maximal_simplices
+                or self.subdivision_complex.faces_by_dimension
+                or self.subdivision_complex.dimension != -1
+            ):
                 raise _validation_error(
                     "topology.require_subdivision_canonical_2",
-                    "empty subdivision must have no complex",
+                    "empty subdivision must use the canonical empty complex",
                 )
         else:
-            if self.subdivision_complex is None:
-                raise _validation_error(
-                    "topology.require_subdivision_canonical_3",
-                    "non-empty subdivision requires subdivision_complex",
-                )
             if tuple(sorted(self.subdivision_complex.maximal_simplices)) != tuple(
                 sorted(tuple(sorted(f)) for f in self.subdivision_facets)
             ):

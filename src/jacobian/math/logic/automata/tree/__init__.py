@@ -12,6 +12,8 @@ from jacobian.math.logic.automata.tree._models import (
     TreeAutomatonCompletionResult,
     TreeAutomatonMinimizeRequest,
     TreeAutomatonMinimizeResult,
+    TreeLanguageProfile,
+    TreeLanguageProfileRequest,
 )
 from jacobian.math.logic.automata.tree.operations import (
     accepted_tree_count,
@@ -24,6 +26,7 @@ from jacobian.math.logic.automata.tree.operations import (
     ranked_tree_subtree,
     reachable_state_profile,
     run_tree_automaton,
+    tree_language_profile,
     trim_tree_automaton,
     verify_accepted_tree_count,
     verify_determinization,
@@ -58,6 +61,8 @@ __all__ = [
     "TreeAutomatonMinimizeRequest",
     "TreeAutomatonMinimizeResult",
     "TreeAutomatonTransition",
+    "TreeLanguageProfile",
+    "TreeLanguageProfileRequest",
     "accepted_tree_count",
     "boolean_product_tree_automata",
     "complement_tree_automaton",
@@ -68,6 +73,7 @@ __all__ = [
     "ranked_tree_subtree",
     "reachable_state_profile",
     "run_tree_automaton",
+    "tree_language_profile",
     "trim_tree_automaton",
     "verify_accepted_tree_count",
     "verify_determinization",

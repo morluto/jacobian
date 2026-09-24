@@ -57,7 +57,12 @@ exact space parents and carries the character pullback and identity map of
 requires each character's explicit modulus to equal its space level. The
 operation returns target coordinates and the exact q-prefix through the target
 Sturm precision, extending the source basis while retaining its canonical
-q-Sturm RREF normalization when needed.
+q-Sturm RREF normalization when needed. Before either basis is materialized,
+it bounds exact cyclotomic expansion and target-solve coefficient growth
+against the canonical 256-digit field-element limit. This bound is based on
+the represented source dimension, target dimension, and submitted coordinate
+height; values whose full expansion or reconstruction could exceed the limit
+are rejected before PARI work.
 
 `modular_form.character.equal.check` compares two transported forms only when
 they land in the identical target space and coefficient field. It recomputes

@@ -9,7 +9,10 @@ import pytest
 from pydantic import TypeAdapter
 
 from jacobian.catalog.catalog import Catalog
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.matrices.cyclic_linear._models import (
     RationalCyclotomicElement,
     RationalCyclotomicField,
@@ -242,3 +245,53 @@ def test_transport_request_model_round_trip() -> None:
     assert TypeAdapter(ModularCharacterCoordinatesTransportRequest).validate_json(
         request.model_dump_json()
     ) == request
+
+
+def test_transport_height_boundary_is_admitted_before_basis_materialization(
+    monkeypatch,
+) -> None:
+    from jacobian.math.number_theory.modular_forms import character_basis
+
+    source_character = dirichlet_character(character_group(13), (2,))
+    target_character = _inflate(source_character, 26)
+    source_space = _space(13, source_character)
+    target_space = _space(26, target_character)
+    inclusion = _inclusion(source_space, target_space)
+
+    def backend_must_not_run(*args, **kwargs):
+        raise AssertionError("PARI basis work ran before height admission")
+
+    monkeypatch.setattr(character_basis, "pari_character_basis", backend_must_not_run)
+    for coefficient in (10**29, 10**42):
+        oversized = ModularFormCoordinates(
+            space=source_space,
+            basis_id=_LEGACY_BASIS,
+            coordinates=(_element(coefficient),),
+        )
+        with pytest.raises(
+            OperationResourceAdmissionError,
+            match="expansion or target solve exceeds",
+        ):
+            modular_character_coordinates_transport(oversized, inclusion)
+
+
+def test_transport_accepts_admitted_height_boundary_through_exact_expansion() -> None:
+    source_character = dirichlet_character(character_group(13), (2,))
+    target_character = _inflate(source_character, 26)
+    source_space = _space(13, source_character)
+    target_space = _space(26, target_character)
+    coefficient = 10**28  # 29 digits; the next digit is rejected above.
+    form = ModularFormCoordinates(
+        space=source_space,
+        basis_id=_LEGACY_BASIS,
+        coordinates=(_element(coefficient),),
+    )
+
+    transported = modular_character_coordinates_transport(
+        form, _inclusion(source_space, target_space)
+    )
+
+    assert transported.target_form.coordinates == (
+        _element(coefficient),
+        _element(-coefficient, -coefficient),
+    )

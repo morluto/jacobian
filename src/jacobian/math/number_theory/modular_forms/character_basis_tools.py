@@ -137,7 +137,8 @@ TOOLS: MathTools = (
             "level-26 or level-39 cusp space. The request carries the explicit "
             "Dirichlet-character inflation and identity Q(zeta_6) field map. "
             "The result retains both parents, target coordinates, and the exact "
-            "q-prefix through the target Sturm bound."
+            "q-prefix through the target Sturm bound. Expansion and solve "
+            "coefficient growth is admitted before PARI basis materialization."
         ),
         request_type=ModularCharacterCoordinatesTransportRequest,
         result_type=ModularCharacterTransportedForm,

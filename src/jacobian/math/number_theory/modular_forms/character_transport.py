@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from fractions import Fraction
 from math import gcd
 
 from jacobian._execution import request_checkpoint
@@ -44,6 +45,7 @@ from jacobian.math.number_theory.modular_forms.values import (
 
 _MAX_TRANSPORT_WORK = 5_000_000
 _MAX_TRANSPORT_OUTPUT_BYTES = 1_000_000
+_MAX_TRANSPORT_BASIS_DIGITS = 1
 
 
 @dataclass(frozen=True)
@@ -58,13 +60,17 @@ class _AdmittedTransport:
     target_character_dimensions: tuple[int, int]
 
 
-def _zero(field: RationalCyclotomicField) -> RationalCyclotomicElement:
-    return RationalCyclotomicElement(
-        field=field,
-        coefficients_ascending=tuple(
-            {"num": 0, "den": 1} for _ in range(field.degree)
-        ),
-    )
+def _linear_combination_digit_bound(coordinate_digits: int, terms: int) -> int:
+    """Bound a cyclotomic linear combination with integral, one-digit basis rows.
+
+    In Q(zeta_6), multiplication by an integral basis coefficient combines
+    at most three products of scalar coordinates. Clearing the two scalar
+    denominators costs at most twice their digit height; summing ``terms``
+    coordinates multiplies that common-denominator envelope by ``terms``.
+    The extra two digits cover the coefficients (whose absolute values are
+    at most 9) and the final numerator addition.
+    """
+    return terms * (2 * coordinate_digits + 2) + 1
 
 
 def _is_zero(value: RationalCyclotomicElement) -> bool:
@@ -205,10 +211,30 @@ def _admit_transport(
         ),
         default=1,
     )
+    same_space = source_space == inclusion.target_space
+    source_expansion_digits = _linear_combination_digit_bound(
+        coordinate_digits, source_cusp
+    )
+    target_coordinate_digits = (
+        coordinate_digits if same_space else source_expansion_digits
+    )
+    target_expansion_digits = (
+        source_expansion_digits
+        if same_space
+        else _linear_combination_digit_bound(
+            source_expansion_digits, target_cusp
+        )
+    )
+    if max(source_expansion_digits, target_expansion_digits) > MAX_CYCLIC_FIELD_ELEMENT_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("form",),
+            code="modular_form.character_transport_height_admission",
+            message="character transport expansion or target solve exceeds the exact coefficient-height bound",
+        )
     work = target_precision * (source_cusp + target_cusp**2 + source_cusp * target_cusp)
     output_bytes = target_precision * field.degree * (
         2 * MAX_CYCLIC_FIELD_ELEMENT_DIGITS + 32
-    ) + target_cusp * field.degree * (2 * coordinate_digits + 32)
+    ) + target_cusp * field.degree * (2 * target_coordinate_digits + 32)
     if work > _MAX_TRANSPORT_WORK or output_bytes > _MAX_TRANSPORT_OUTPUT_BYTES:
         raise OperationResourceAdmissionError(
             location=("form",),
@@ -247,16 +273,41 @@ def _expand_coordinates(
     basis,
     field: RationalCyclotomicField,
 ) -> tuple[RationalCyclotomicElement, ...]:
-    coordinates = form.coordinates
+    return _expand_coordinate_tuple(form.coordinates, basis, field)
+
+
+def _expand_coordinate_tuple(
+    coordinates: tuple[RationalCyclotomicElement, ...], basis, field
+) -> tuple[RationalCyclotomicElement, ...]:
     if len(coordinates) != len(basis.elements):
         _domain("character coordinate count differs from its exact basis dimension")
-    result = [_zero(field) for _ in range(basis.precision)]
+    _require_integral_transport_basis(basis)
+    result = [[Fraction(0), Fraction(0)] for _ in range(basis.precision)]
     for scalar, element in zip(coordinates, basis.elements, strict=True):
+        a, b = (
+            Fraction(coefficient.num, coefficient.den)
+            for coefficient in scalar.coefficients_ascending
+        )
         for index, coefficient in enumerate(element.expansion.coefficients):
-            result[index] = cyclotomic.add(
-                result[index], cyclotomic.multiply(scalar, coefficient)
-            )
-    return tuple(result)
+            c, d = (int(value.num) for value in coefficient.coefficients_ascending)
+            result[index][0] += a * c - b * d
+            result[index][1] += a * d + b * c + b * d
+    return tuple(cyclotomic._canonical(field, tuple(pair)) for pair in result)
+
+
+def _require_integral_transport_basis(basis) -> None:
+    for element in basis.elements:
+        for coefficient in element.expansion.coefficients:
+            if any(
+                value.den != 1
+                or len(str(abs(int(value.num)))) > _MAX_TRANSPORT_BASIS_DIGITS
+                for value in coefficient.coefficients_ascending
+            ):
+                raise OperationResourceAdmissionError(
+                    location=("inclusion", "source_space"),
+                    code="modular_form.character_transport_basis_height",
+                    message="this transport slice requires integral one-digit q-Sturm basis coefficients",
+                )
 
 
 def _coordinates_from_prefix(
@@ -273,13 +324,8 @@ def _coordinates_from_prefix(
         for element in basis.elements
     )
     coordinates = tuple(prefix[pivot] for pivot in pivots)
-    reconstructed = [_zero(basis.space.coefficient_domain) for _ in range(basis.precision)]
-    for scalar, element in zip(coordinates, basis.elements, strict=True):
-        for index, coefficient in enumerate(element.expansion.coefficients):
-            reconstructed[index] = cyclotomic.add(
-                reconstructed[index], cyclotomic.multiply(scalar, coefficient)
-            )
-    if tuple(reconstructed) != prefix:
+    reconstructed = _linear_combination_from_coordinates(coordinates, basis)
+    if reconstructed != prefix:
         raise OperationDomainValidationError(
             location=("inclusion", "target_space"),
             code="modular_form.character_transport_not_in_target",
@@ -292,14 +338,27 @@ def _coordinates_from_prefix(
     )
 
 
+def _linear_combination_from_coordinates(coordinates, basis):
+    return _expand_coordinate_tuple(
+        coordinates, basis, basis.space.coefficient_domain
+    )
+
+
 def _transport_from_bases(
     admitted: _AdmittedTransport, source_basis, target_basis
 ) -> ModularCharacterTransportedForm:
     source_prefix = _expand_coordinates(admitted.form, source_basis, admitted.field)
     if len(source_prefix) != admitted.precision:
         _domain("source basis must extend through the target Sturm precision")
-    target_form = _coordinates_from_prefix(source_prefix, target_basis)
-    target_expansion = _expand_coordinates(target_form, target_basis, admitted.field)
+    if admitted.inclusion.source_space == admitted.inclusion.target_space:
+        if type(admitted.form) is ModularCharacterCoordinates:
+            target_form = admitted.form
+        else:
+            _domain("identity transport requires generalized character coordinates")
+        target_expansion = source_prefix
+    else:
+        target_form = _coordinates_from_prefix(source_prefix, target_basis)
+        target_expansion = source_prefix
     return ModularCharacterTransportedForm(
         source_form=admitted.form,
         inclusion=admitted.inclusion,

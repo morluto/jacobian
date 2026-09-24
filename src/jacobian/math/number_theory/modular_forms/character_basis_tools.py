@@ -137,6 +137,83 @@ def _character_form_example(coordinate: int = 2) -> dict[str, object]:
     }
 
 
+def _character_u_form_example() -> dict[str, object]:
+    """One serialized generalized-coordinate value in S2(Gamma0(26), chi)."""
+    field = {
+        "domain": "QQ_CYCLOTOMIC",
+        "order": 6,
+        "generator": "CLASS_OF_X",
+    }
+    return {
+        "form": {
+            "space": {
+                "group": "GAMMA0",
+                "level": 26,
+                "weight": 2,
+                "kind": "S",
+                "character": {
+                    "group": {
+                        "modulus": 26,
+                        "unit_residues": [
+                            1,
+                            3,
+                            5,
+                            7,
+                            9,
+                            11,
+                            15,
+                            17,
+                            19,
+                            21,
+                            23,
+                            25,
+                        ],
+                        "character_count": 12,
+                        "invariant_factors": [12],
+                        "generators": [15],
+                        "generator_orders": [12],
+                        "unit_coordinates": [
+                            [0],
+                            [4],
+                            [9],
+                            [11],
+                            [8],
+                            [7],
+                            [1],
+                            [2],
+                            [5],
+                            [3],
+                            [10],
+                            [6],
+                        ],
+                        "exponent": 12,
+                    },
+                    "coordinates": [2],
+                },
+                "coefficient_domain": field,
+            },
+            "basis_id": "gamma0-cyclotomic-character-sturm-rref-v1",
+            "coordinates": [
+                {
+                    "field": field,
+                    "coefficients_ascending": [
+                        {"num": "1", "den": "1"},
+                        {"num": "0", "den": "1"},
+                    ],
+                },
+                {
+                    "field": field,
+                    "coefficients_ascending": [
+                        {"num": "0", "den": "1"},
+                        {"num": "0", "den": "1"},
+                    ],
+                },
+            ],
+        },
+        "prime": 2,
+    }
+
+
 TOOLS: MathTools = (
     MathTool(
         operation_id="modular_form.character_coordinates.transport.compute",
@@ -191,6 +268,16 @@ TOOLS: MathTools = (
         result_type=ModularCharacterCoordinates,
         run=_u_prime,
         tags=("modular-forms", "characters", "u-operator", "exact"),
+        examples=(
+            OperationExample(
+                name="u2_on_level26_character_form",
+                description=(
+                    "Apply U_2 to the first Sturm-basis form in the represented "
+                    "S2(Gamma0(26), chi) space."
+                ),
+                input=_character_u_form_example(),
+            ),
+        ),
     ),
     MathTool(
         operation_id="modular_form.character_hecke_matrix.compute",

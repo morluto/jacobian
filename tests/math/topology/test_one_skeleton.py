@@ -1,3 +1,4 @@
+from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
 from jacobian.math.topology.release import (
     GraphCliqueRequest,
     OneSkeletonRequest,
@@ -97,3 +98,26 @@ def test_decoded_one_skeleton_rejects_forged_source_face_axis() -> None:
         assert "source 1-face axis must match its maximal facets" in str(error)
     else:
         raise AssertionError("a forged source face axis was accepted")
+
+
+def test_one_skeleton_provenance_check_rejects_oversized_facets_before_pairs() -> None:
+    labels = tuple("abcdefghi")
+    result = one_skeleton(
+        OneSkeletonRequest(complex={"vertices": labels[:-1], "facets": [labels[:-1]]})
+    )
+    forged_source = result.source.model_copy(
+        update={"vertices": labels, "maximal_simplices": (labels,)}
+    )
+    forged_result = OneSkeletonResult.model_construct(
+        source=forged_source,
+        graph=IndexedSimpleUndirectedGraph(vertex_count=len(labels), edges=()),
+        vertex_labels=labels,
+        edge_faces=(),
+    )
+
+    try:
+        forged_result.require_source_axes()
+    except ValueError as error:
+        assert "source facets exceed the admitted dimension bound" in str(error)
+    else:
+        raise AssertionError("an oversized source facet was accepted")

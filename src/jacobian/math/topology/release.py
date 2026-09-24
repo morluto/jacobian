@@ -14,6 +14,7 @@ from jacobian.catalog.models import (
 )
 from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
 from jacobian.math.topology._models import (
+    MAX_TOPOLOGY_DIMENSION,
     MAX_TOPOLOGY_VERTICES,
     FiniteSimplicialComplex,
     HomologyConvention,
@@ -93,6 +94,11 @@ class OneSkeletonResult(StrictModel):
         # The carrier's JSON decoder checks face-axis shape, but does not replay
         # facet closure. This operation relies specifically on the 1-face axis,
         # so check that bounded relation against at most 128 facets of size 8.
+        if any(
+            len(facet) > MAX_TOPOLOGY_DIMENSION + 1
+            for facet in self.source.maximal_simplices
+        ):
+            raise ValueError("source facets exceed the admitted dimension bound")
         facet_edges = {
             tuple(sorted(pair))
             for facet in self.source.maximal_simplices

@@ -5,7 +5,10 @@ from itertools import product
 
 import pytest
 
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.polynomials.derivations._weight_models import (
     PolynomialWeightAction,
     PolynomialWeightActionRequest,
@@ -77,6 +80,42 @@ def test_invariants_compose_through_existing_coaction() -> None:
         assert coaction.components[0].weight == 0
         assert coaction.weight_zero == invariant
         assert all(term.exponents[-1] == 0 for term in coaction.coaction.terms)
+
+
+def test_invariant_slice_composition_follows_the_seven_variable_envelope() -> None:
+    # An eight-variable invariant slice is exact arithmetic but its diagonal
+    # coaction would need a ninth Laurent axis, so the documented direct
+    # composition applies exactly within the seven-variable envelope.
+    eight = PolynomialWeightAction(
+        variables=tuple(f"x{i}" for i in range(8)),
+        weights=(1, -1, 0, 0, 0, 0, 0, 0),
+    )
+    eight_slice = gm_invariants_through_degree(
+        PolynomialWeightInvariantRequest(action=eight, degree=1)
+    )
+    assert eight_slice.dimension == 7  # 1 plus the six zero-weight variables
+    with pytest.raises(OperationDomainValidationError):
+        diagonal_weight_action(
+            {
+                "action": eight.model_dump(),
+                "polynomial": eight_slice.basis[1].model_dump(),
+            }
+        )
+
+    seven = PolynomialWeightAction(
+        variables=tuple(f"x{i}" for i in range(7)),
+        weights=(1, -1, 0, 0, 0, 0, 0),
+    )
+    seven_slice = gm_invariants_through_degree(
+        PolynomialWeightInvariantRequest(action=seven, degree=2)
+    )
+    assert seven_slice.dimension > 0
+    for invariant in seven_slice.basis:
+        coaction = diagonal_weight_action(
+            PolynomialWeightActionRequest(action=seven, polynomial=invariant)
+        )
+        assert tuple(component.weight for component in coaction.components) == (0,)
+        assert coaction.weight_zero == invariant
 
 
 def test_combinatorial_work_is_admitted_before_enumeration() -> None:

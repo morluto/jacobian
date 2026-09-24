@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from fractions import Fraction
+from typing import Any
 
 import pytest
 from pydantic import ValidationError
@@ -272,6 +273,24 @@ def test_ga_action_catalog_example_and_request_are_publishable() -> None:
         {"coefficient": {"num": "1", "den": "1"}, "exponents": [1, 0, 0]},
         {"coefficient": {"num": "1", "den": "1"}, "exponents": [0, 1, 1]},
     ]
+
+
+@pytest.mark.parametrize(
+    "invalid",
+    [
+        None,
+        5,
+        (None, None, None),
+        (5, 5, 5),
+    ],
+)
+def test_native_action_rejects_malformed_chains_as_domain_errors(
+    invalid: Any,
+) -> None:
+    derivation, _ = _derivation()
+    with pytest.raises(OperationDomainValidationError) as error:
+        ga_action_from_derivation(derivation, invalid)
+    assert error.value.errors()[0]["type"] == "polynomial_derivation.certificate_shape"
 
 
 def test_action_input_chain_shape_is_bounded() -> None:

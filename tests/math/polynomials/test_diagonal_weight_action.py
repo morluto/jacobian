@@ -1,6 +1,7 @@
 """Exact diagonal G_m polynomial coaction and weight-slice tests."""
 
 from fractions import Fraction
+from typing import Any
 
 import pytest
 
@@ -159,6 +160,23 @@ def test_native_weight_helpers_take_canonical_values() -> None:
     assert result.coaction.variables == ("x", "y", "t")
     assert result.weight_zero == invariant
     assert package_invariants(action, 2).dimension == 2
+
+
+@pytest.mark.parametrize("bad_parameter", ["bad-name", "", "t" * 40, 1, None])
+def test_malformed_parameter_is_rejected_before_expansion(bad_parameter: Any) -> None:
+    action = PolynomialWeightAction(variables=("x",), weights=(1,))
+    source = _poly(("x",), ((1, (64,)),))
+    with pytest.raises(OperationDomainValidationError) as error:
+        diagonal_weight_action(action, source, bad_parameter)
+    assert error.value.errors()[0]["type"] == "polynomial_weight_action.request_shape"
+
+
+def test_native_surface_excludes_wire_request_envelopes() -> None:
+    import jacobian.math.polynomials.derivations as surface
+
+    assert "PolynomialWeightInvariantRequest" not in surface.__all__
+    assert not hasattr(surface, "PolynomialWeightInvariantRequest")
+    assert "PolynomialWeightActionRequest" not in surface.__all__
 
 
 def test_weight_action_is_catalogued_with_valid_example() -> None:

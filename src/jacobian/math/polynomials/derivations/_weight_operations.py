@@ -6,7 +6,7 @@ from collections.abc import Iterator, Mapping
 from math import comb
 from typing import Any
 
-from pydantic import ValidationError
+from pydantic import TypeAdapter, ValidationError
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
@@ -35,6 +35,8 @@ from jacobian.math.polynomials.values import (
     RationalPolynomialTerm,
     SparseRationalPolynomial,
 )
+
+_WEIGHT_PARAMETER_TYPE = TypeAdapter(PolynomialVariable)
 
 
 def _as_weight_action(
@@ -74,6 +76,14 @@ def _admit_weight_request(
     source: RationalPolynomial,
     parameter: PolynomialVariable,
 ) -> None:
+    try:
+        _WEIGHT_PARAMETER_TYPE.validate_python(parameter, strict=True)
+    except ValidationError as exc:
+        raise OperationDomainValidationError(
+            location=("parameter",),
+            code="polynomial_weight_action.request_shape",
+            message="the Laurent parameter must be a strict polynomial variable name",
+        ) from exc
     if source.variables != action.variables:
         raise OperationDomainValidationError(
             location=("polynomial",),

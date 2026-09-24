@@ -152,9 +152,7 @@ def apply_cyclotomic_field_inclusion(
         )
     _require_standard_inclusion_image(inclusion)
     expected = _inclusion_poly(inclusion.source.order, inclusion.target.order)
-    coordinates = tuple(
-        value.as_fraction() for value in element.coefficients_ascending
-    )
+    coordinates = tuple(value.as_fraction() for value in element.coefficients_ascending)
     from sympy import Poly, cyclotomic_poly, symbols
 
     variable = symbols("x")

@@ -43,9 +43,7 @@ def test_standard_inclusion_has_reduced_generator_image_and_maps_exactly() -> No
         Fraction(1),
     )
 
-    mapped = apply_cyclotomic_field_inclusion(
-        inclusion, _element(3, (1, 1), (2, 1))
-    )
+    mapped = apply_cyclotomic_field_inclusion(inclusion, _element(3, (1, 1), (2, 1)))
     assert tuple(value.as_fraction() for value in mapped.coefficients_ascending) == (
         Fraction(-1),
         Fraction(2),

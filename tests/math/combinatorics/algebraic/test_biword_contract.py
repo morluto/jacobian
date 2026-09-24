@@ -129,6 +129,11 @@ def test_matrix_transposition_swaps_tableaux_against_independent_reference(
         column_labels, row_labels, transposed_entries
     )
 
+    assert source_pair.top_alphabet == row_labels
+    assert source_pair.bottom_alphabet == column_labels
+    assert transpose_pair.top_alphabet == column_labels
+    assert transpose_pair.bottom_alphabet == row_labels
+    assert source_pair.source_kind == transpose_pair.source_kind == "MATRIX"
     assert source_pair.insertion_tableau.rows == expected_p
     assert source_pair.recording_tableau.rows == expected_q
     assert transpose_pair.insertion_tableau.rows == expected_transpose_p

@@ -46,6 +46,7 @@ from jacobian.math.free_algebras.operations import (
     multiply,
     power_word,
     quotient_normal_word_profile,
+    reverse_polynomial_antiautomorphism,
     reverse_word,
     substitute_polynomial,
     substitute_word,
@@ -64,6 +65,12 @@ def _run_multiply(
 
 def _run_add(request: FreeAlgebraPolynomialAddRequest) -> FreeAlgebraPolynomial:
     return add(request.left, request.right)
+
+
+def _run_polynomial_reverse_antiautomorphism(
+    request: FreeAlgebraPolynomial,
+) -> FreeAlgebraPolynomial:
+    return reverse_polynomial_antiautomorphism(request)
 
 
 def _run_word_concatenate(
@@ -275,6 +282,45 @@ TOOLS = (
                     "remain distinct words over the same ordered alphabet."
                 ),
                 input=_ADD_EXAMPLE,
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="free_algebra.polynomial.reverse_antiautomorphism.compute",
+        title="Reverse words in a free-algebra polynomial",
+        description=(
+            "Extend word reversal linearly to a sparse polynomial in QQ<X>: "
+            "each coefficient is fixed, each monomial word is reversed, and "
+            "the same ordered generator alphabet is retained. The map is "
+            "involutive and satisfies rev(fg) = rev(g)rev(f). Admission "
+            "bounds reversal work and a 2 MB serialized output before creating "
+            "the reversed support."
+        ),
+        request_type=FreeAlgebraPolynomial,
+        result_type=FreeAlgebraPolynomial,
+        run=_run_polynomial_reverse_antiautomorphism,
+        tags=("algebra", "free-algebra", "noncommutative", "involution", "exact"),
+        discovery_terms=(
+            "reverse a noncommutative polynomial",
+            "free algebra anti-automorphism",
+            "reverse monomial words coefficientwise",
+        ),
+        examples=(
+            OperationExample(
+                name="reverse_a_sparse_polynomial",
+                description=(
+                    "Reverse each word in 2xy + 3yx + 4x while retaining its "
+                    "rational coefficient; words use the declared ordered "
+                    "alphabet [x, y]."
+                ),
+                input={
+                    "alphabet": ["x", "y"],
+                    "terms": [
+                        {"coefficient": {"num": "3", "den": "1"}, "word": ["y", "x"]},
+                        {"coefficient": {"num": "2", "den": "1"}, "word": ["x", "y"]},
+                        {"coefficient": {"num": "4", "den": "1"}, "word": ["x"]},
+                    ],
+                },
             ),
         ),
     ),

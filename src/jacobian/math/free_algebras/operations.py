@@ -38,6 +38,7 @@ from jacobian.math.free_algebras._models import (
     MAX_FREE_ALGEBRA_QUOTIENT_PROFILE_CANDIDATES,
     MAX_FREE_ALGEBRA_QUOTIENT_PROFILE_OUTPUT_BYTES,
     MAX_FREE_ALGEBRA_RESULT_TERMS,
+    MAX_FREE_ALGEBRA_RESULT_WORD_LENGTH,
     MAX_FREE_ALGEBRA_SUBSTITUTION_EXPANSIONS,
     MAX_FREE_ALGEBRA_SUBSTITUTION_OUTPUT_BYTES,
     MAX_FREE_ALGEBRA_SUBSTITUTION_WORK,
@@ -82,6 +83,9 @@ from jacobian.math.free_algebras._models import (
     GroebnerShirshovResult,
     canonical_word_key,
 )
+
+MAX_FREE_ALGEBRA_ANTIAUTOMORPHISM_WORK = 4_000_000
+MAX_FREE_ALGEBRA_ANTIAUTOMORPHISM_OUTPUT_BYTES = 2_000_000
 
 
 def _reject_resource(location: tuple[str | int, ...], code: str, message: str) -> None:
@@ -338,6 +342,70 @@ def add(
 
     left, right = _admit_add(left, right)
     return add_sparse(left, right)
+
+
+def reverse_polynomial_antiautomorphism(
+    polynomial: FreeAlgebraPolynomial,
+) -> FreeAlgebraPolynomial:
+    """Extend word reversal linearly to the free algebra over QQ.
+
+    This map fixes every scalar coefficient and reverses each monomial word.
+    Consequently it is involutive and reverses multiplication order.
+    """
+
+    polynomial = _admit_polynomial(polynomial, label="polynomial")
+    term_cells = sum(len(term.word) for term in polynomial.terms)
+    maximum_cells = MAX_FREE_ALGEBRA_RESULT_TERMS * MAX_FREE_ALGEBRA_RESULT_WORD_LENGTH
+    if term_cells > maximum_cells:
+        _reject_resource(
+            ("polynomial", "terms"),
+            "antiautomorphism_work_budget",
+            "polynomial word support exceeds the admitted reversal work bound",
+        )
+    work = max(1, term_cells) * max(1, len(polynomial.terms).bit_length())
+    if work > MAX_FREE_ALGEBRA_ANTIAUTOMORPHISM_WORK:
+        _reject_resource(
+            ("polynomial", "terms"),
+            "antiautomorphism_work_budget",
+            "polynomial reversal and canonical ordering exceed the work bound",
+        )
+
+    # Reversal preserves each word's serialized size and each coefficient is
+    # unchanged. Bound the result before creating the reversed support.
+    alphabet_bytes = len(
+        json.dumps(polynomial.alphabet, ensure_ascii=True, separators=(",", ":"))
+    )
+    predicted_output_bytes = alphabet_bytes + 64
+    for term in polynomial.terms:
+        word_bytes = len(
+            json.dumps(term.word, ensure_ascii=True, separators=(",", ":"))
+        )
+        coefficient_digits = canonical_rational_component_digits(term.coefficient)
+        predicted_output_bytes += 64 + word_bytes + 2 * (coefficient_digits + 1)
+        if predicted_output_bytes > MAX_FREE_ALGEBRA_ANTIAUTOMORPHISM_OUTPUT_BYTES:
+            _reject_resource(
+                ("polynomial",),
+                "antiautomorphism_output_budget",
+                "predicted reversed-polynomial output exceeds the "
+                f"{MAX_FREE_ALGEBRA_ANTIAUTOMORPHISM_OUTPUT_BYTES}-byte bound",
+            )
+
+    reversed_terms = tuple(
+        FreeAlgebraTerm(coefficient=term.coefficient, word=tuple(reversed(term.word)))
+        for term in polynomial.terms
+    )
+    letter_rank = {letter: index for index, letter in enumerate(polynomial.alphabet)}
+    canonical_terms = tuple(
+        sorted(
+            reversed_terms,
+            key=lambda term: (
+                len(term.word),
+                tuple(letter_rank[letter] for letter in term.word),
+            ),
+            reverse=True,
+        )
+    )
+    return FreeAlgebraPolynomial(alphabet=polynomial.alphabet, terms=canonical_terms)
 
 
 def multiply(
@@ -1818,6 +1886,7 @@ __all__ = [
     "multiply",
     "power_word",
     "quotient_normal_word_profile",
+    "reverse_polynomial_antiautomorphism",
     "reverse_word",
     "substitute_word",
     "word_factors",

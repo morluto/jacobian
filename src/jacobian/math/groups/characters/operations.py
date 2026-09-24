@@ -11,7 +11,6 @@ from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational, canonical_rational_component_digits
 from jacobian._execution import BackendFailureReason, OperationBackendError
-from jacobian.canonical import CanonicalLimits
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -43,19 +42,14 @@ from jacobian.math.groups.characters._models import (
     CharacterTableResult,
     ClassAxis,
     ClassContribution,
-    ClassFunctionInductionRequest,
     ClassFunctionInductionResult,
     ClassFunctionInnerProductResult,
-    ClassFunctionRestrictionRequest,
     ClassFunctionRestrictionResult,
-    ClassPowerMapRequest,
     ClassPowerMapResult,
     ConjugacyClassPartition,
-    CyclicCharacterRestrictionRequest,
     CyclicCharacterRestrictionResult,
     CyclotomicValue,
     FiniteClassFunction,
-    FrobeniusSchurIndicatorRequest,
     FrobeniusSchurIndicatorResult,
 )
 
@@ -281,9 +275,135 @@ def _reject_derived_height(
         )
 
 
+def _admit_class_function(
+    value: object, *, location: tuple[str, ...], name: str
+) -> FiniteClassFunction:
+    """Enforce the class-function contract at a native boundary.
+
+    A ``model_construct`` value can bypass the declared axis/value and
+    cyclotomic-degree contracts, so every native consumer re-validates its
+    class-function inputs before relying on their structure.  The checks are
+    explicit rather than a pydantic round-trip: a merely over-envelope but
+    self-consistent value remains a resource admission for the caller, while
+    a structurally malformed value is domain-invalid.  A group-bound axis also
+    validates its concrete parent group and representative coordinates.
+    """
+
+    def reject() -> OperationDomainValidationError:
+        return OperationDomainValidationError(
+            location=location,
+            code="groups.characters.invalid_class_function",
+            message=f"{name} has malformed axis or exact cyclotomic values",
+        )
+
+    if not isinstance(value, FiniteClassFunction):
+        raise OperationDomainValidationError(
+            location=location,
+            code="groups.characters.class_function_type",
+            message=f"{name} must be an exact finite class-function value",
+        )
+    axis = value.axis
+    values = value.values
+    if not isinstance(axis, ClassAxis) or not isinstance(values, tuple):
+        raise reject()
+    class_sizes = axis.class_sizes
+    order = axis.cyclotomic_order
+    group_order = axis.group_order
+    if (
+        not isinstance(class_sizes, tuple)
+        or not class_sizes
+        or type(order) is not int
+        or order < 1
+        or type(group_order) is not int
+        or any(type(size) is not int or size < 1 for size in class_sizes)
+        or sum(class_sizes) != group_order
+        or len(values) != len(class_sizes)
+    ):
+        raise reject()
+    degree = euler_phi(order) if order <= MAX_CYCLOTOMIC_ORDER else None
+    for one in values:
+        if (
+            not isinstance(one, CyclotomicValue)
+            or one.order != order
+            or not isinstance(one.coefficients, tuple)
+            or (degree is not None and len(one.coefficients) != degree)
+            or any(
+                not isinstance(coefficient, CanonicalRational)
+                or type(coefficient.num) is not int
+                or type(coefficient.den) is not int
+                or coefficient.den < 1
+                for coefficient in one.coefficients
+            )
+        ):
+            raise reject()
+    if (axis.group is None) != (axis.class_representatives is None):
+        raise reject()
+    if axis.group is not None:
+        group = _admit_permutation_group(
+            axis.group, location=(*location, "axis", "group")
+        )
+        representatives = axis.class_representatives
+        if (
+            not isinstance(representatives, tuple)
+            or len(representatives) != len(class_sizes)
+            or any(
+                not isinstance(representative, tuple)
+                or len(representative) != group.degree
+                or any(type(point) is not int for point in representative)
+                for representative in representatives
+            )
+        ):
+            raise reject()
+    return value
+
+
+def _admit_permutation_group(
+    value: object, *, location: tuple[str, ...]
+) -> PermutationGroup:
+    """Re-admit a concrete permutation group at a native boundary."""
+
+    if not isinstance(value, PermutationGroup):
+        raise OperationDomainValidationError(
+            location=location,
+            code="groups.characters.permutation_group_type",
+            message="group input must be a typed permutation group",
+        )
+    try:
+        return PermutationGroup.model_validate(value.model_dump())
+    except (ValidationError, AttributeError, KeyError, TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=location,
+            code="groups.characters.permutation_group_shape",
+            message="permutation group has malformed degree or generators",
+        ) from exc
+
+
+def _admit_cyclotomic_value(
+    value: object, *, location: tuple[str, ...], name: str
+) -> CyclotomicValue:
+    """Re-admit one exact cyclotomic value at a native boundary."""
+
+    if not isinstance(value, CyclotomicValue):
+        raise OperationDomainValidationError(
+            location=location,
+            code="groups.characters.scalar_type",
+            message=f"{name} must be an exact cyclotomic value",
+        )
+    try:
+        return CyclotomicValue.model_validate(value.model_dump())
+    except (ValidationError, AttributeError, KeyError, TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=location,
+            code="groups.characters.invalid_cyclotomic_value",
+            message=f"{name} has malformed cyclotomic coefficients",
+        ) from exc
+
+
 def _admit_inner_product(phi: FiniteClassFunction, psi: FiniteClassFunction) -> None:
     """Shared native/catalog admission for the Hermitian inner product."""
 
+    phi = _admit_class_function(phi, location=("phi",), name="phi")
+    psi = _admit_class_function(psi, location=("psi",), name="psi")
     if phi.axis != psi.axis:
         raise OperationDomainValidationError(
             location=("psi", "axis"),
@@ -682,10 +802,12 @@ def character_table(
 
 
 def restrict_cyclic_character(
-    request: CyclicCharacterRestrictionRequest,
+    partition: GroupConjugacyClassesResult,
+    row_index: int,
+    subgroup_order: int,
 ) -> CyclicCharacterRestrictionResult:
     """Restrict an irreducible character of C_n to its unique subgroup C_d."""
-    partition = _admit_character_partition(request.partition)
+    partition = _admit_character_partition(partition)
     order = sum(len(cls) for cls in partition.classes)
     if order > MAX_CYCLOTOMIC_ORDER or len(partition.classes) != order:
         raise OperationDomainValidationError(
@@ -693,7 +815,15 @@ def restrict_cyclic_character(
             code="groups.characters.restriction_requires_cyclic_group",
             message="this restriction operation admits only supported cyclic groups",
         )
-    subgroup_order = request.subgroup_order
+    if (
+        type(subgroup_order) is not int
+        or not 1 <= subgroup_order <= MAX_CYCLOTOMIC_ORDER
+    ):
+        raise OperationDomainValidationError(
+            location=("subgroup_order",),
+            code="groups.characters.subgroup_order_not_divisor",
+            message="subgroup_order must divide the cyclic source group order",
+        )
     if order % subgroup_order:
         raise OperationDomainValidationError(
             location=("subgroup_order",),
@@ -719,7 +849,7 @@ def restrict_cyclic_character(
                 f"{MAX_CYCLIC_RESTRICTION_WORK:,}-unit envelope"
             ),
         )
-    if not 0 <= request.row_index < order:
+    if type(row_index) is not int or not 0 <= row_index < order:
         raise OperationDomainValidationError(
             location=("row_index",),
             code="groups.characters.restriction_row_out_of_range",
@@ -768,7 +898,7 @@ def restrict_cyclic_character(
         group=target_group,
         class_representatives=tuple(cls[0] for cls in target_partition.classes),
     )
-    row = table.rows[request.row_index]
+    row = table.rows[row_index]
     restricted = FiniteClassFunction._from_kernel(
         axis=target_axis,
         values=tuple(row.values[index] for index in class_map),
@@ -776,7 +906,7 @@ def restrict_cyclic_character(
     return CyclicCharacterRestrictionResult(
         source_table=table,
         target_partition=target_partition,
-        row_index=request.row_index,
+        row_index=row_index,
         source_class_indices=class_map,
         restricted_character=restricted,
     )
@@ -820,24 +950,44 @@ def _cyclic_restriction_work(order: int, degree: int, subgroup_order: int) -> in
     return permutation_coordinate_work + permutation_validation_work + output_cells
 
 
-def class_power_map(request: ClassPowerMapRequest) -> ClassPowerMapResult:
+MAX_CLASS_POWER_MAP_EXPONENT = 1_000_000
+
+
+def class_power_map(
+    partition: GroupConjugacyClassesResult, exponent: int
+) -> ClassPowerMapResult:
     """Compute the class image induced by ``g -> g**k``."""
     from jacobian.math.groups.operations import group_order
 
-    source_order = group_order(request.partition.source)
+    if not isinstance(partition, GroupConjugacyClassesResult):
+        raise OperationDomainValidationError(
+            location=("partition",),
+            code="groups.characters.partition_type",
+            message="partition must be a complete group class partition",
+        )
+    if type(exponent) is not int or not 1 <= exponent <= MAX_CLASS_POWER_MAP_EXPONENT:
+        raise OperationDomainValidationError(
+            location=("exponent",),
+            code="groups.characters.power_map_exponent",
+            message=(
+                "exponent must be an integer between 1 and "
+                f"{MAX_CLASS_POWER_MAP_EXPONENT:,}"
+            ),
+        )
+    source_order = group_order(partition.source)
     if source_order > 256:
         raise OperationResourceAdmissionError(
             location=("partition", "source"),
             code="groups.characters.power_map_group_order_exceeds_envelope",
             message="class power maps admit groups of order at most 256",
         )
-    if len(request.partition.classes) > MAX_CLASS_COUNT:
+    if len(partition.classes) > MAX_CLASS_COUNT:
         raise OperationResourceAdmissionError(
             location=("partition", "classes"),
             code="groups.characters.power_map_class_count_exceeds_envelope",
             message=f"class power maps admit at most {MAX_CLASS_COUNT} classes",
         )
-    partition = _admit_character_partition(request.partition)
+    partition = _admit_character_partition(partition)
     elements = {
         tuple(element): class_index
         for class_index, conjugacy_class in enumerate(partition.classes)
@@ -847,13 +997,13 @@ def class_power_map(request: ClassPowerMapRequest) -> ClassPowerMapResult:
     images: list[int] = []
     for conjugacy_class in partition.classes:
         base = tuple(conjugacy_class[0])
-        exponent = request.exponent
+        remaining = exponent
         result = identity
-        while exponent:
-            if exponent & 1:
+        while remaining:
+            if remaining & 1:
                 result = _permutation_compose(result, base)
-            exponent >>= 1
-            if exponent:
+            remaining >>= 1
+            if remaining:
                 base = _permutation_compose(base, base)
         try:
             images.append(elements[result])
@@ -862,13 +1012,14 @@ def class_power_map(request: ClassPowerMapRequest) -> ClassPowerMapResult:
     parent = ConjugacyClassPartition._from_group_result(partition)
     return ClassPowerMapResult._from_kernel(
         partition=parent,
-        exponent=request.exponent,
+        exponent=exponent,
         image_class_indices=tuple(images),
     )
 
 
 def frobenius_schur_indicator(
-    request: FrobeniusSchurIndicatorRequest,
+    table: CharacterTableResult,
+    row_index: int,
 ) -> FrobeniusSchurIndicatorResult:
     """Compute the ordinary second Frobenius-Schur indicator of one row.
 
@@ -876,7 +1027,13 @@ def frobenius_schur_indicator(
     deliberately restricted to ordinary irreducible rows, not modular or
     higher indicators.
     """
-    supplied = request.table
+    supplied = table
+    if not isinstance(supplied, CharacterTableResult):
+        raise OperationDomainValidationError(
+            location=("table",),
+            code="groups.characters.indicator_table_type",
+            message="table must be a complete exact character-table value",
+        )
     # Rebuild the table from a re-established complete group partition. This
     # checks caller-supplied rows against the exact-table owner's contract.
     partition = _admit_character_partition(supplied.partition)
@@ -887,8 +1044,7 @@ def frobenius_schur_indicator(
             code="groups.characters.indicator_incomplete_table",
             message="indicator input must be the complete canonical table of its group",
         )
-    row_index = request.row_index
-    if row_index >= len(table.rows):
+    if type(row_index) is not int or not 0 <= row_index < len(table.rows):
         raise OperationDomainValidationError(
             location=("row_index",),
             code="groups.characters.indicator_row_out_of_range",
@@ -1035,24 +1191,20 @@ def class_function_inner_product(
 
 
 def class_function_restrict_to_subgroup(
-    request: ClassFunctionRestrictionRequest,
+    class_function: FiniteClassFunction,
+    subgroup: PermutationGroup,
 ) -> ClassFunctionRestrictionResult:
     """Restrict one exact class function along an explicit subgroup inclusion."""
     from sympy.combinatorics import Permutation
 
     from jacobian.math.groups.operations import group_conjugacy_classes, group_order
 
-    if not isinstance(request, ClassFunctionRestrictionRequest):
-        raise OperationDomainValidationError(
-            location=("request",),
-            code="groups.characters.restriction_request_type",
-            message="request must be a class-function restriction request",
-        )
-    request = ClassFunctionRestrictionRequest.model_validate(request.model_dump())
-    function = request.class_function
+    function = _admit_class_function(
+        class_function, location=("class_function",), name="class_function"
+    )
+    subgroup = _admit_permutation_group(subgroup, location=("subgroup",))
     axis = function.axis
     source = axis.group
-    subgroup = request.subgroup
     if source is None or axis.class_representatives is None:
         raise OperationDomainValidationError(
             location=("class_function", "axis"),
@@ -1107,15 +1259,13 @@ def class_function_restrict_to_subgroup(
         for value in function.values
         for coefficient in value.coefficients
     )
-    value_wire_bound = (
-        (len(function.values) + min(subgroup_order, MAX_CLASS_COUNT))
-        * euler_phi(axis.cyclotomic_order)
-        * (2 * largest_component_digits + 24)
-    )
-    output_byte_bound = value_wire_bound + subgroup_order * subgroup.degree * 3 + 65_536
+    output_cells = (
+        len(function.values) + min(subgroup_order, MAX_CLASS_COUNT)
+    ) * euler_phi(axis.cyclotomic_order)
     if (
         partition_work_bound > partition_work_limit
-        or output_byte_bound > CanonicalLimits().max_output_bytes
+        or output_cells > MAX_CHARACTER_TABLE_CELLS
+        or largest_component_digits > MAX_VALUE_COEFFICIENT_DIGITS
     ):
         raise OperationResourceAdmissionError(
             location=("subgroup",),
@@ -1198,20 +1348,16 @@ MAX_CLASS_FUNCTION_INDUCTION_WORK = 50_000_000
 
 
 def _admit_class_function_induction(
-    request: ClassFunctionInductionRequest,
-) -> tuple[ClassFunctionInductionRequest, int, int]:
+    class_function: FiniteClassFunction,
+    parent_group: PermutationGroup,
+) -> tuple[FiniteClassFunction, PermutationGroup, int, int]:
     from jacobian.math.groups.operations import group_order
 
-    if not isinstance(request, ClassFunctionInductionRequest):
-        raise OperationDomainValidationError(
-            location=("request",),
-            code="groups.characters.induction_request_type",
-            message="request must be a class-function induction request",
-        )
-    request = ClassFunctionInductionRequest.model_validate(request.model_dump())
-    function = request.class_function
+    function = _admit_class_function(
+        class_function, location=("class_function",), name="class_function"
+    )
+    parent = _admit_permutation_group(parent_group, location=("parent_group",))
     subgroup = function.axis.group
-    parent = request.parent_group
     axis = function.axis
     if subgroup is None or axis.class_representatives is None:
         raise OperationDomainValidationError(
@@ -1288,18 +1434,16 @@ def _admit_class_function_induction(
             ),
         )
     output_cells = (len(function.values) + MAX_CLASS_COUNT) * dimension
-    output_byte_bound = (
-        output_cells * (2 * largest_output_digits + 24)
-        + (subgroup_order + parent_order) * degree * 3
-        + 131_072
-    )
-    if output_byte_bound > CanonicalLimits().max_output_bytes:
+    if (
+        output_cells > MAX_CHARACTER_TABLE_CELLS
+        or largest_output_digits > MAX_VALUE_COEFFICIENT_DIGITS
+    ):
         raise OperationResourceAdmissionError(
             location=("class_function", "values"),
             code="groups.characters.induction_output_bound",
-            message="predicted induced class function exceeds the output-byte envelope",
+            message="predicted induced class function exceeds the output envelope",
         )
-    return request, subgroup_order, parent_order
+    return function, parent, subgroup_order, parent_order
 
 
 def _admit_induction_coefficient_growth(
@@ -1473,7 +1617,8 @@ def _partition_from_classes(
 
 
 def class_function_induce_from_subgroup(
-    request: ClassFunctionInductionRequest,
+    class_function: FiniteClassFunction,
+    parent_group: PermutationGroup,
 ) -> ClassFunctionInductionResult:
     """Induce an exact class function along a same-domain subgroup inclusion.
 
@@ -1482,10 +1627,10 @@ def class_function_induce_from_subgroup(
     conjugate belongs to ``H``. The subgroup-to-parent class map is retained
     alongside the induced class function.
     """
-    request, subgroup_order, _parent_order = _admit_class_function_induction(request)
-    function = request.class_function
+    function, parent, subgroup_order, _parent_order = _admit_class_function_induction(
+        class_function, parent_group
+    )
     subgroup = cast(PermutationGroup, function.axis.group)
-    parent = request.parent_group
     axis = function.axis
     order = axis.cyclotomic_order
     from sympy.combinatorics import Permutation
@@ -1535,11 +1680,11 @@ def class_function_induce_from_subgroup(
 
 
 MAX_POINTWISE_PRODUCT_WORK = 50_000_000
-MAX_POINTWISE_PRODUCT_OUTPUT_BYTES = 2_000_000
+MAX_POINTWISE_PRODUCT_OUTPUT_DIGITS = 2_000_000
 MAX_CLASS_FUNCTION_CONJUGATE_WORK = 50_000_000
-MAX_CLASS_FUNCTION_CONJUGATE_OUTPUT_BYTES = 2_000_000
+MAX_CLASS_FUNCTION_CONJUGATE_OUTPUT_DIGITS = 2_000_000
 MAX_CLASS_FUNCTION_ADD_WORK = 50_000_000
-MAX_CLASS_FUNCTION_ADD_OUTPUT_BYTES = 2_000_000
+MAX_CLASS_FUNCTION_ADD_OUTPUT_DIGITS = 2_000_000
 
 
 def class_function_conjugate(function: FiniteClassFunction) -> FiniteClassFunction:
@@ -1550,21 +1695,7 @@ def class_function_conjugate(function: FiniteClassFunction) -> FiniteClassFuncti
     assert that the input is a character or irreducible character.
     """
 
-    if not isinstance(function, FiniteClassFunction):
-        raise OperationDomainValidationError(
-            location=("function",),
-            code="groups.characters.class_function_type",
-            message="function must be an exact finite class-function value",
-        )
-    try:
-        function = FiniteClassFunction.model_validate(function.model_dump())
-    except (ValidationError, AttributeError, KeyError, TypeError, ValueError) as exc:
-        raise OperationDomainValidationError(
-            location=("function",),
-            code="groups.characters.invalid_class_function",
-            message="function has malformed axis or exact cyclotomic values",
-        ) from exc
-
+    function = _admit_class_function(function, location=("function",), name="function")
     axis = function.axis
     class_count = len(axis.class_sizes)
     order = axis.cyclotomic_order
@@ -1651,12 +1782,14 @@ def class_function_conjugate(function: FiniteClassFunction) -> FiniteClassFuncti
                 f"{MAX_CLASS_FUNCTION_CONJUGATE_WORK} unit envelope"
             ),
         )
-    output_bytes = output_cells * (2 * output_digits + 24) + 65_536
-    if output_bytes > MAX_CLASS_FUNCTION_CONJUGATE_OUTPUT_BYTES:
+    # Every retained coefficient contributes its numerator and denominator
+    # decimal widths; the envelope bounds the exact output digits before
+    # cyclotomic arithmetic.
+    if output_cells * 2 * output_digits > MAX_CLASS_FUNCTION_CONJUGATE_OUTPUT_DIGITS:
         raise OperationResourceAdmissionError(
             location=("function", "values"),
             code="groups.characters.conjugate_output_exceeds_envelope",
-            message="predicted conjugated class-function output exceeds its byte envelope",
+            message="predicted conjugated class-function output exceeds its digit envelope",
         )
 
     values = tuple(
@@ -1679,8 +1812,10 @@ def class_function_add(
 
     Addition is defined for arbitrary class functions and retains their shared
     class axis and cyclotomic parent. Input, coefficient growth, work, and
-    serialized output are admitted before exact rational addition.
+    exact output digits are admitted before exact rational addition.
     """
+    phi = _admit_class_function(phi, location=("phi",), name="phi")
+    psi = _admit_class_function(psi, location=("psi",), name="psi")
     if phi.axis != psi.axis:
         raise OperationDomainValidationError(
             location=("psi", "axis"),
@@ -1770,12 +1905,11 @@ def class_function_add(
                 f"{MAX_CLASS_FUNCTION_ADD_WORK} unit envelope"
             ),
         )
-    output_bytes = output_cells * (2 * output_digits + 24) + 65_536
-    if output_bytes > MAX_CLASS_FUNCTION_ADD_OUTPUT_BYTES:
+    if output_cells * 2 * output_digits > MAX_CLASS_FUNCTION_ADD_OUTPUT_DIGITS:
         raise OperationResourceAdmissionError(
             location=("phi", "values"),
             code="groups.characters.add_output_exceeds_envelope",
-            message="predicted exact class-function sum exceeds its 2,000,000-byte envelope",
+            message="predicted exact class-function sum exceeds its 2,000,000-digit envelope",
         )
 
     values = tuple(
@@ -1913,14 +2047,14 @@ def _admit_pointwise_output(
             maximum_output_digits, output_numerator_digits, output_denominator_digits
         )
 
-    # A rational coefficient serializes to two decimal strings plus bounded
-    # JSON punctuation. Reserve 64 KiB for the axis and outer value structure.
-    output_bytes = output_cells * (2 * maximum_output_digits + 24) + 65_536
-    if output_bytes > MAX_POINTWISE_PRODUCT_OUTPUT_BYTES:
+    # Every retained coefficient contributes its numerator and denominator
+    # decimal widths; the envelope bounds the exact output digits before
+    # cyclotomic arithmetic.
+    if output_cells * 2 * maximum_output_digits > MAX_POINTWISE_PRODUCT_OUTPUT_DIGITS:
         raise OperationResourceAdmissionError(
             location=("phi", "values"),
             code="groups.characters.product_output_exceeds_envelope",
-            message="predicted exact class-function product exceeds the 2,000,000-byte envelope",
+            message="predicted exact class-function product exceeds the 2,000,000-digit envelope",
         )
 
 
@@ -1933,6 +2067,8 @@ def class_function_pointwise_product(
     power-basis product is admitted for coefficient growth and work before
     cyclotomic expansion; its class axis and order are retained unchanged.
     """
+    phi = _admit_class_function(phi, location=("phi",), name="phi")
+    psi = _admit_class_function(psi, location=("psi",), name="psi")
     axis, order, dimension = _admit_pointwise_axis(phi, psi)
     output_cells = len(axis.class_sizes) * dimension
     heights = _admit_pointwise_inputs(
@@ -1972,18 +2108,8 @@ def class_function_scale(
     coefficient/output growth; representing the scalar as a constant class
     function applies exactly that admitted multiplication kernel.
     """
-    if not isinstance(function, FiniteClassFunction):
-        raise OperationDomainValidationError(
-            location=("function",),
-            code="groups.characters.class_function_type",
-            message="function must be an exact finite class-function value",
-        )
-    if not isinstance(scalar, CyclotomicValue):
-        raise OperationDomainValidationError(
-            location=("scalar",),
-            code="groups.characters.scalar_type",
-            message="scalar must be an exact cyclotomic value",
-        )
+    function = _admit_class_function(function, location=("function",), name="function")
+    scalar = _admit_cyclotomic_value(scalar, location=("scalar",), name="scalar")
     if scalar.order != function.axis.cyclotomic_order:
         raise OperationDomainValidationError(
             location=("scalar", "order"),

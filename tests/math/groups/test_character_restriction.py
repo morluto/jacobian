@@ -5,7 +5,6 @@ import pytest
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.groups._models import PermutationGroup
 from jacobian.math.groups.characters._models import (
-    ClassFunctionRestrictionRequest,
     FiniteClassFunction,
 )
 from jacobian.math.groups.characters.operations import (
@@ -39,12 +38,9 @@ def _s3_standard_class_function() -> FiniteClassFunction:
 
 def test_s3_standard_restricts_to_transposition_subgroup_with_class_map():
     function = _s3_standard_class_function()
-    request = ClassFunctionRestrictionRequest(
-        class_function=function,
-        subgroup=PermutationGroup(degree=3, generators=((1, 0, 2),)),
+    result = class_function_restrict_to_subgroup(
+        function, PermutationGroup(degree=3, generators=((1, 0, 2),))
     )
-
-    result = class_function_restrict_to_subgroup(request)
 
     assert result.target_class_to_source_class == (0, 1)
     assert result.subgroup_partition.classes == (
@@ -68,12 +64,9 @@ def test_s3_standard_restricts_to_transposition_subgroup_with_class_map():
 
 def test_s3_standard_restricts_to_three_cycle_subgroup():
     function = _s3_standard_class_function()
-    request = ClassFunctionRestrictionRequest(
-        class_function=function,
-        subgroup=PermutationGroup(degree=3, generators=((1, 2, 0),)),
+    result = class_function_restrict_to_subgroup(
+        function, PermutationGroup(degree=3, generators=((1, 2, 0),))
     )
-
-    result = class_function_restrict_to_subgroup(request)
 
     assert result.target_class_to_source_class == (0, 2, 2)
     assert tuple(
@@ -116,11 +109,52 @@ def test_restriction_rejects_a_generator_outside_the_source_group():
 
     with pytest.raises(OperationDomainValidationError) as exc_info:
         class_function_restrict_to_subgroup(
-            ClassFunctionRestrictionRequest(
-                class_function=function,
-                subgroup=PermutationGroup(degree=3, generators=((1, 0, 2),)),
-            )
+            function, PermutationGroup(degree=3, generators=((1, 0, 2),))
         )
     assert exc_info.value.errors()[0]["type"] == (
         "groups.characters.restriction_not_subgroup"
+    )
+
+
+def test_native_restriction_composes_from_canonical_values():
+    # Thread follow-up: the native API composes canonical mathematical values
+    # directly, without constructing the wire-only request model.
+    function = _s3_standard_class_function()
+    result = class_function_restrict_to_subgroup(
+        function, PermutationGroup(degree=3, generators=((1, 0, 2),))
+    )
+    assert result.target_class_to_source_class == (0, 1)
+
+
+def test_native_restriction_rejects_forged_class_function():
+    from jacobian.math.groups.characters._models import ClassAxis
+
+    forged = FiniteClassFunction.model_construct(
+        axis=ClassAxis(class_sizes=(1, 3, 2), group_order=6, cyclotomic_order=1),
+        values=(),
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        class_function_restrict_to_subgroup(
+            forged, PermutationGroup(degree=3, generators=((1, 0, 2),))
+        )
+    assert error.value.errors()[0]["type"] == (
+        "groups.characters.invalid_class_function"
+    )
+
+
+def test_native_restriction_rejects_malformed_subgroup_without_pydantic_leak():
+    function = _s3_standard_class_function()
+    with pytest.raises(OperationDomainValidationError) as error:
+        class_function_restrict_to_subgroup(
+            function, {"degree": 3, "generators": [(1, 0, 2)]}
+        )
+    assert error.value.errors()[0]["type"] == (
+        "groups.characters.permutation_group_type"
+    )
+
+    forged_group = PermutationGroup.model_construct(degree=3, generators=((4, 5, 6),))
+    with pytest.raises(OperationDomainValidationError) as error:
+        class_function_restrict_to_subgroup(function, forged_group)
+    assert error.value.errors()[0]["type"] == (
+        "groups.characters.permutation_group_shape"
     )

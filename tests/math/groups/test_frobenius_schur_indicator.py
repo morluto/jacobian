@@ -7,9 +7,6 @@ import pytest
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.groups._models import GroupConjugacyClassesRequest
 from jacobian.math.groups._tools import compute_group_conjugacy_classes
-from jacobian.math.groups.characters._models import (
-    FrobeniusSchurIndicatorRequest,
-)
 from jacobian.math.groups.characters.operations import (
     character_table,
     frobenius_schur_indicator,
@@ -41,9 +38,7 @@ def test_second_indicator_matches_elementwise_square_oracle(
         GroupConjugacyClassesRequest(degree=degree, generators=generators)
     )
     table = character_table(partition)
-    result = frobenius_schur_indicator(
-        FrobeniusSchurIndicatorRequest(table=table, row_index=row_index)
-    )
+    result = frobenius_schur_indicator(table, row_index)
 
     class_of = {
         tuple(element): class_index
@@ -76,9 +71,7 @@ def test_second_indicator_rejects_a_forged_incomplete_character_table() -> None:
     with pytest.raises(
         OperationDomainValidationError, match="complete canonical table"
     ):
-        frobenius_schur_indicator(
-            FrobeniusSchurIndicatorRequest(table=forged, row_index=2)
-        )
+        frobenius_schur_indicator(forged, 2)
 
 
 def test_second_indicator_rejects_nonexistent_row() -> None:
@@ -87,9 +80,7 @@ def test_second_indicator_rejects_nonexistent_row() -> None:
     )
     table = character_table(partition)
     with pytest.raises(OperationDomainValidationError, match="row_index"):
-        frobenius_schur_indicator(
-            FrobeniusSchurIndicatorRequest(table=table, row_index=3)
-        )
+        frobenius_schur_indicator(table, 3)
 
 
 def test_catalog_example_is_runnable() -> None:
@@ -104,3 +95,16 @@ def test_catalog_example_is_runnable() -> None:
 
     request = tool.request_type.model_validate_json(json.dumps(tool.examples[0].input))
     assert tool.run(request).indicator == 1
+
+
+def test_native_indicator_rejects_malformed_inputs_without_pydantic_leak() -> None:
+    partition = compute_group_conjugacy_classes(
+        GroupConjugacyClassesRequest(degree=3, generators=((1, 2, 0),))
+    )
+    table = character_table(partition)
+    with pytest.raises(OperationDomainValidationError, match="row_index"):
+        frobenius_schur_indicator(table, -1)
+    with pytest.raises(OperationDomainValidationError, match="row_index"):
+        frobenius_schur_indicator(table, True)
+    with pytest.raises(OperationDomainValidationError, match="table"):
+        frobenius_schur_indicator({"partition": None}, 0)

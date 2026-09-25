@@ -700,15 +700,15 @@ def _admit_nfa_subsequential_image(
     """Bound the full product and expanded output NFA before construction."""
     request_checkpoint("before NFA subsequential image admission")
     pair_bound = nfa.state_count * transducer.state_count
-    epsilon_edges = sum(edge.symbol is None for edge in nfa.transitions)
+    epsilon_edges = sum(nfa_edge.symbol is None for nfa_edge in nfa.transitions)
     symbol_edge_counts = [0] * nfa.alphabet_size
-    for edge in nfa.transitions:
-        if edge.symbol is not None:
-            symbol_edge_counts[edge.symbol] += 1
+    for nfa_edge in nfa.transitions:
+        if nfa_edge.symbol is not None:
+            symbol_edge_counts[nfa_edge.symbol] += 1
     transducer_edges_by_symbol: dict[int, list[int]] = {}
-    for edge in transducer.transitions:
-        transducer_edges_by_symbol.setdefault(edge.input_symbol, []).append(
-            len(edge.output)
+    for transducer_edge in transducer.transitions:
+        transducer_edges_by_symbol.setdefault(transducer_edge.input_symbol, []).append(
+            len(transducer_edge.output)
         )
     product_edge_bound = epsilon_edges * transducer.state_count + sum(
         source_count * len(transducer_edges_by_symbol.get(symbol, ()))

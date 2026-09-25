@@ -192,7 +192,9 @@ def test_nfa_image_requires_exact_alphabet_context() -> None:
         SubsequentialNFAImageRequest(nfa=wrong_parent, transducer=transducer)
 
 
-def test_nfa_image_rejects_oversized_product_before_expansion(monkeypatch) -> None:
+def test_nfa_image_rejects_oversized_product_before_expansion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     import jacobian.math.logic.languages.regular.operations as operations
 
     alphabet = FiniteAlphabet(symbols=("x",))
@@ -218,7 +220,7 @@ def test_nfa_image_rejects_oversized_product_before_expansion(monkeypatch) -> No
         final_outputs=(),
     )
 
-    def expansion_must_not_start(*args, **kwargs):
+    def expansion_must_not_start(*args: object, **kwargs: object) -> None:
         pytest.fail("product construction ran before resource admission")
 
     monkeypatch.setattr(
@@ -229,7 +231,7 @@ def test_nfa_image_rejects_oversized_product_before_expansion(monkeypatch) -> No
 
 
 def test_nfa_image_admits_accepting_lookup_before_product_expansion(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import jacobian.math.logic.languages.regular.operations as operations
 
@@ -256,7 +258,7 @@ def test_nfa_image_admits_accepting_lookup_before_product_expansion(
         final_outputs=(),
     )
 
-    def expansion_must_not_start(*args, **kwargs):
+    def expansion_must_not_start(*args: object, **kwargs: object) -> None:
         pytest.fail("accepting lookup allocation ran before resource admission")
 
     monkeypatch.setattr(

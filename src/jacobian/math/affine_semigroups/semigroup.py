@@ -965,6 +965,14 @@ def _preflight_normality_work(semigroup: PositiveAffineSemigroup) -> None:
             )
     if lattice_index == 0:
         raise ValueError("normality requires a full-rank generated lattice")
+    ambient_ray_determinant = abs(lower[0] * upper[1] - lower[1] * upper[0])
+    # The lattice ray vectors are multiples of these primitive ambient rays,
+    # each by at most the quotient-group order (the lattice index). Their
+    # determinant in the generated lattice is therefore at most Δ * index.
+    candidate_bound = min(
+        MAX_AFFINE_NORMALITY_CANDIDATES,
+        ambient_ray_determinant * lattice_index + 1,
+    )
     ray_grades = tuple(
         sum(grading[row] * ray[row] for row in range(2)) for ray in (lower, upper)
     )
@@ -990,9 +998,7 @@ def _preflight_normality_work(semigroup: PositiveAffineSemigroup) -> None:
     per_candidate_overhead = (
         configuration.columns**2 + configuration.rows * configuration.columns + 2
     )
-    total_work = MAX_AFFINE_NORMALITY_CANDIDATES * (
-        candidate_work + per_candidate_overhead
-    )
+    total_work = candidate_bound * (candidate_work + per_candidate_overhead)
     if total_work > MAX_AFFINE_NORMALITY_WORK:
         raise OperationResourceAdmissionError(
             location=("semigroup",),

@@ -447,7 +447,10 @@ def _preflight_substitution_expansion(
                 )
             expansion_count += expansion
             source_expansion_count += expansion
-            maximum_output_word_length = max(maximum_output_word_length, output_length)
+            if expansion:
+                maximum_output_word_length = max(
+                    maximum_output_word_length, output_length
+                )
             source_maximum_contribution_digits = max(
                 source_maximum_contribution_digits, contribution_digits
             )

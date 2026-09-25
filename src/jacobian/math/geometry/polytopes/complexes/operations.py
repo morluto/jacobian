@@ -81,6 +81,7 @@ from jacobian.math.geometry.polytopes.complexes._spline import (
     spline_coordinates,
     spline_dimension,
     spline_evaluate,
+    spline_refinement_map,
     spline_space,
 )
 from jacobian.math.geometry.polytopes.operations import facet_incidence
@@ -99,6 +100,7 @@ __all__ = [
     "spline_coordinates",
     "spline_dimension",
     "spline_evaluate",
+    "spline_refinement_map",
     "spline_space",
 ]
 

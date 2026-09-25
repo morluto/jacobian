@@ -25,6 +25,8 @@ from jacobian.math.geometry.polytopes.complexes._models import (
     SplineDimensionResult,
     SplineEvaluationRequest,
     SplineEvaluationResult,
+    SplineRefinementMapRequest,
+    SplineRefinementMapResult,
     SplineSpaceRequest,
     SplineSpaceResult,
 )
@@ -41,6 +43,7 @@ from jacobian.math.geometry.polytopes.complexes.operations import (
     spline_coordinates,
     spline_dimension,
     spline_evaluate,
+    spline_refinement_map,
     spline_space,
 )
 
@@ -162,6 +165,12 @@ def _run_spline_coordinates(
     request: SplineCoordinatesRequest,
 ) -> SplineCoordinatesResult:
     return spline_coordinates(request)
+
+
+def _run_spline_refinement_map(
+    request: SplineRefinementMapRequest,
+) -> SplineRefinementMapResult:
+    return spline_refinement_map(request)
 
 
 def _run_common_refinement(request: CommonRefinementRequest) -> CommonRefinementResult:
@@ -637,6 +646,42 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                         "compatibility": [],
                         "status": "COMPATIBLE",
                     },
+                    "degree": 0,
+                    "smoothness": 0,
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="polyhedral_complex.spline.refinement_map.compute",
+        title="Map exact spline coefficients through a complex refinement",
+        description=(
+            "Compute the exact coefficient-block injection from a bounded "
+            "rational spline space to a face-to-face refinement with equal "
+            "support. The result retains the common-refinement cell lineage, "
+            "both coefficient axes, the source spline basis, and the refined "
+            "compatibility matrix; every mapped source basis vector is checked "
+            "against the refined constraints."
+        ),
+        request_type=SplineRefinementMapRequest,
+        result_type=SplineRefinementMapResult,
+        run=_run_spline_refinement_map,
+        tags=("geometry", "spline", "refinement", "exact-rational"),
+        discovery_terms=(
+            "spline refinement map",
+            "refine polynomial spline coefficients",
+            "nested spline spaces",
+        ),
+        examples=(
+            OperationExample(
+                name="identity_refinement_of_segment_splines",
+                description=(
+                    "The unit segment refines itself, so its single cell is its "
+                    "own exact coefficient-block parent."
+                ),
+                input={
+                    "coarse": _COMPLEX,
+                    "refined": _COMPLEX,
                     "degree": 0,
                     "smoothness": 0,
                 },

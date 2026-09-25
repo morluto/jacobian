@@ -19,6 +19,7 @@ Conventions fixed by this owner:
 
 from __future__ import annotations
 
+from math import comb
 from typing import Literal, Self
 
 from pydantic import Field, model_validator
@@ -477,6 +478,141 @@ class SplineCoordinatesResult(StrictModel):
         return self
 
 
+class SplineRefinementMapRequest(StrictModel):
+    """Compute the exact inclusion induced by a finite complex refinement."""
+
+    coarse: PolytopalComplexClosureResult
+    refined: PolytopalComplexClosureResult
+    degree: int = Field(ge=0, le=12)
+    smoothness: int = Field(ge=-1, le=4)
+
+
+class SplineCellRefinementLineage(StrictModel):
+    """One fine cell and its coarse parent through the common overlay."""
+
+    coarse_cell_id: str = Field(min_length=1, max_length=64)
+    refined_cell_id: str = Field(min_length=1, max_length=64)
+    common_refinement_cell_id: str = Field(min_length=1, max_length=64)
+
+
+class SplineRefinementMapResult(StrictModel):
+    """Exact coefficient-block injection between source-bound spline spaces.
+
+    The columns of ``coarse_nullspace_basis`` are interpreted using
+    ``coarse_coefficient_axis``. For each refined top cell, the operation
+    copies the polynomial block of its named coarse parent. The resulting
+    vectors use ``refined_coefficient_axis`` and lie in the kernel of
+    ``refined_compatibility_matrix``.
+    """
+
+    coarse_complex: PolytopalComplexClosureResult
+    refined_complex: PolytopalComplexClosureResult
+    degree: int = Field(ge=0, le=12)
+    smoothness: int = Field(ge=-1, le=4)
+    coarse_coefficient_axis: tuple[tuple[str, tuple[int, ...]], ...] = Field(
+        min_length=1, max_length=4096
+    )
+    coarse_compatibility_matrix: RationalMatrix
+    coarse_rank: int = Field(ge=0)
+    coarse_nullspace_basis: RationalMatrix
+    refined_coefficient_axis: tuple[tuple[str, tuple[int, ...]], ...] = Field(
+        min_length=1, max_length=4096
+    )
+    refined_compatibility_matrix: RationalMatrix
+    refined_rank: int = Field(ge=0)
+    refined_nullity: int = Field(ge=0)
+    cell_lineage: tuple[SplineCellRefinementLineage, ...] = Field(
+        min_length=1, max_length=MAX_COMPLEX_CELLS
+    )
+
+    @model_validator(mode="after")
+    def require_refinement_map_binding(self) -> Self:
+        source = self.coarse_complex
+        target = self.refined_complex
+        source_ids = tuple(cell.cell_id for cell in source.maximal_cells)
+        target_ids = tuple(cell.cell_id for cell in target.maximal_cells)
+        source_width = len(self.coarse_coefficient_axis)
+        target_width = len(self.refined_coefficient_axis)
+        source_nullity = source_width - self.coarse_rank
+        lineage_by_target = {row.refined_cell_id: row for row in self.cell_lineage}
+        if (
+            source.space != target.space
+            or source.dimension != target.dimension
+            or tuple(row.refined_cell_id for row in self.cell_lineage) != target_ids
+            or len(lineage_by_target) != len(self.cell_lineage)
+            or set(lineage_by_target) != set(target_ids)
+            or any(
+                lineage_by_target[cell_id].common_refinement_cell_id != cell_id
+                for cell_id in target_ids
+            )
+            or self.coarse_compatibility_matrix.column_count != source_width
+            or self.coarse_nullspace_basis.column_count != source_width
+            or self.coarse_nullspace_basis.row_count != source_nullity
+            or self.coarse_rank
+            > min(
+                self.coarse_compatibility_matrix.row_count,
+                self.coarse_compatibility_matrix.column_count,
+            )
+            or self.refined_compatibility_matrix.column_count != target_width
+            or self.refined_rank
+            > min(
+                self.refined_compatibility_matrix.row_count,
+                self.refined_compatibility_matrix.column_count,
+            )
+            or self.refined_nullity != target_width - self.refined_rank
+        ):
+            raise _validation_error(
+                "spline_refinement_map_binding",
+                "spline axes, ranks, and exact cell lineage must bind the retained complexes",
+            )
+        dimension = len(source.space.axes)
+        monomial_count = comb(dimension + self.degree, self.degree)
+        if (
+            monomial_count * len(source_ids) != source_width
+            or monomial_count * len(target_ids) != target_width
+        ):
+            raise _validation_error(
+                "spline_refinement_map_axis",
+                "coefficient-axis widths must match the degree and complex cells",
+            )
+        expected_monomials = _bounded_monomials(dimension, self.degree)
+        expected_coarse_axis = tuple(
+            (cell_id, monomial)
+            for cell_id in source_ids
+            for monomial in expected_monomials
+        )
+        expected_refined_axis = tuple(
+            (cell_id, monomial)
+            for cell_id in target_ids
+            for monomial in expected_monomials
+        )
+        if (
+            self.coarse_coefficient_axis != expected_coarse_axis
+            or self.refined_coefficient_axis != expected_refined_axis
+            or any(row.coarse_cell_id not in source_ids for row in self.cell_lineage)
+        ):
+            raise _validation_error(
+                "spline_refinement_map_axis",
+                "coefficient axes and lineage must be complete and use identical monomials",
+            )
+        return self
+
+
+def _bounded_monomials(dimension: int, degree: int) -> tuple[tuple[int, ...], ...]:
+    """Generate total-degree monomials in descending lexicographic order."""
+    result: list[tuple[int, ...]] = []
+
+    def extend(prefix: tuple[int, ...], remaining: int) -> None:
+        if len(prefix) == dimension:
+            result.append(prefix)
+            return
+        for exponent in range(remaining, -1, -1):
+            extend((*prefix, exponent), remaining - exponent)
+
+    extend((), degree)
+    return tuple(result)
+
+
 class SplineDimensionRequest(StrictModel):
     """Compute only the exact dimension profile of a bounded spline space."""
 
@@ -823,10 +959,13 @@ __all__ = [
     "PolytopalComplexClosureRequest",
     "PolytopalComplexClosureResult",
     "SourceCellTransport",
+    "SplineCellRefinementLineage",
     "SplineCoordinatesRequest",
     "SplineCoordinatesResult",
     "SplineEvaluationRequest",
     "SplineEvaluationResult",
+    "SplineRefinementMapRequest",
+    "SplineRefinementMapResult",
     "SplineSpaceRequest",
     "SplineSpaceResult",
 ]

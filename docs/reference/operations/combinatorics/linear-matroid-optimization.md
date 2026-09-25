@@ -52,6 +52,28 @@ The returned value can be independently replayed with
 greedy result against the retained matrix and weights; a feasible but
 suboptimal subset does not verify.
 
+## Maximum-cardinality intersection
+
+`matroid.intersection.compute` returns one exact maximum-cardinality common
+independent set `I` of two represented matroids on the same labelled ground,
+with an Edmonds min-max witness
+`r₁(A) + r₂(E \\ A) = |I|`. The result retains the exact ranks of `I` in
+both sources as `rank_first_common` and `rank_second_common`; each must equal
+`cardinality`. These rank fields extend the serialized result schema while the
+existing operation ID and `{first, second}` request schema remain unchanged.
+
+Deserializing a result checks its shape and the equality of those rank fields
+with the cardinality without replaying matrix computations. Consumers that rely
+on the retained rank claims can call `replay_intersection_result`, which
+recomputes both common-set ranks and both min-max witness ranks against the
+retained matrices. The returned common set and matching min-max upper bound
+establish global maximality independently of the augmenting-path search.
+
+The request admits at most 256 ground elements and a derived 50,000,000-unit
+work envelope covering source ranks, exchange probes, common-set and witness
+rank checks, and result materialization. Requests outside this envelope fail
+admission; they do not establish a smaller maximum.
+
 ## Common basis of two matroids
 
 `matroid.intersection.common_basis.compute` returns the exact maximum common
@@ -63,15 +85,17 @@ has cardinality equal to both source ranks. `NO_COMMON_BASIS` includes a reason:
 maximum intersection cardinality. The latter decision is backed by the exact
 min-max witness.
 
-The result is bound to both represented matroids. Deserializing it replays the
-source ranks, feasibility ranks, and witness ranks against those matrices;
-`verify_common_basis_result` independently checks the same claims for values
-constructed outside the wire path. The admitted ground and work limits match
-maximum-cardinality matroid intersection: admission precomputes both
-source ranks, reuses them for the closed decision, bounds each retained
-ground axis at 65,536 Unicode codepoints, and charges the exchange search at
-the regime those ranks make reachable — at most `min(r₁, r₂) + 2` searches of
-cached probes on matrices of at most `min(r₁, r₂) + 1` columns. A rank-zero
+The result is bound to both represented matroids. Deserialization checks the
+shape and consistency of the returned ranks, status, reason, basis, and witness
+without repeating matrix computations. `verify_common_basis_result` replays
+the source ranks, feasibility ranks, and witness ranks against the retained
+matrices, including for values constructed outside the wire path. The admitted
+ground and work limits match maximum-cardinality matroid intersection:
+admission precomputes both source ranks, reuses them for the closed decision,
+bounds each retained ground axis at 65,536 Unicode codepoints, and charges the
+exchange search at the regime those ranks make reachable — at most
+`min(r₁, r₂) + 2` searches of cached probes on matrices of at most
+`min(r₁, r₂) + 1` columns. A rank-zero
 source is presolved exactly. Requests beyond the exact envelope fail
 admission; they do not produce a negative common-basis conclusion.
 

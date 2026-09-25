@@ -84,7 +84,9 @@ def scalar_multiply(
 
     output_cells = len(source.alphabet) + 64
     output_cells += sum(
-        64 + len(term.word) + 2 * (MAX_FREE_ALGEBRA_COEFFICIENT_DIGITS + 1)
+        64
+        + sum(len(letter) for letter in term.word)
+        + 2 * (MAX_FREE_ALGEBRA_COEFFICIENT_DIGITS + 1)
         for term in source.terms
     )
     if output_cells > MAX_SCALAR_MULTIPLY_OUTPUT_CELLS:
@@ -96,7 +98,9 @@ def scalar_multiply(
 
     intermediate_cells = len(source.alphabet) + 64
     intermediate_cells += sum(
-        64 + len(term.word) + 2 * (scalar_digits + source_digits + 1)
+        64
+        + sum(len(letter) for letter in term.word)
+        + 2 * (scalar_digits + source_digits + 1)
         for term in source.terms
     )
     if intermediate_cells > MAX_SCALAR_MULTIPLY_INTERMEDIATE_CELLS:

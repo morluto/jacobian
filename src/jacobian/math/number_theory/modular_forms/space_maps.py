@@ -59,16 +59,24 @@ def require_modular_character_space_inclusion(
 
     if type(inclusion) is not ModularCharacterSpaceInclusion:
         _domain("a canonical modular-character space inclusion is required")
-    try:
-        canonical = ModularCharacterSpaceInclusion.model_validate(
-            inclusion.model_dump()
-        )
-    except (ValidationError, AttributeError, TypeError, ValueError) as error:
-        raise OperationDomainValidationError(
-            location=("inclusion",),
-            code="modular_form.character_inclusion_invalid",
-            message="the modular-character space inclusion is malformed",
-        ) from error
+    # Values that cross serialization are revalidated here. Native canonical
+    # values have already passed their owner models; rebuilding them would replay
+    # the exhaustive finite-unit group verification before work admission.
+    if type(inclusion.source_space) is not ModularFormSpace or type(
+        inclusion.target_space
+    ) is not ModularFormSpace:
+        try:
+            canonical = ModularCharacterSpaceInclusion.model_validate(
+                inclusion.model_dump()
+            )
+        except (ValidationError, AttributeError, TypeError, ValueError) as error:
+            raise OperationDomainValidationError(
+                location=("inclusion",),
+                code="modular_form.character_inclusion_invalid",
+                message="the modular-character space inclusion is malformed",
+            ) from error
+    else:
+        canonical = inclusion
 
     source = canonical.source_space
     target = canonical.target_space

@@ -190,7 +190,9 @@ def test_mismatched_nonempty_path_basepoint_is_rejected():
     from jacobian.catalog.models import OperationDomainValidationError
 
     with pytest.raises(OperationDomainValidationError, match="basepoint"):
-        finite_group_gauge_holonomy(FiniteGroupGaugeHolonomyRequest(field=field, path=path))
+        finite_group_gauge_holonomy(
+            FiniteGroupGaugeHolonomyRequest(field=field, path=path)
+        )
 
 
 def test_edge_parent_substitution_is_rejected():

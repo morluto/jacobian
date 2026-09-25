@@ -162,9 +162,8 @@ def _admit_field(
         )
     value_by_id = {}
     for item in values:
-        if (
-            not isinstance(item, FiniteGroupGaugeEdgeLabel)
-            or not isinstance(item.value, FiniteGroupTableElement)
+        if not isinstance(item, FiniteGroupGaugeEdgeLabel) or not isinstance(
+            item.value, FiniteGroupTableElement
         ):
             _reject(
                 "field",

@@ -10,6 +10,8 @@ from jacobian.math.quantum._models import (
     CSSCheckSpaceValue,
     CSSDistanceResult,
     CSSLogicalPauliFrame,
+    ExactStabilizerGroup,
+    ExactStabilizerGroupRequest,
     LogicalPauliFrame,
     NormalizerResult,
     PauliFamilyCommutationRequest,
@@ -24,6 +26,8 @@ from jacobian.math.quantum._models import (
     PauliProductResult,
     PauliToLabelsRequest,
     PauliToLabelsResult,
+    StabilizerCodeRequest,
+    StabilizerCodeValue,
     StabilizerDistanceResult,
     StabilizerErasureCorrectabilityRequest,
     StabilizerErasureCorrectabilityResult,
@@ -44,8 +48,10 @@ from jacobian.math.quantum.operations import (
     pauli_pairing,
     pauli_to_labels,
     stabilizer_erasure_correctability,
+    stabilizer_code_compute,
     stabilizer_error_equivalence,
     stabilizer_exact_distance,
+    stabilizer_group_from_generators,
     stabilizer_logical_frame,
     stabilizer_normalizer,
     stabilizer_syndrome,
@@ -135,7 +141,117 @@ def _run_error_equivalence(
     )
 
 
+def _run_exact_stabilizer_group(
+    request: ExactStabilizerGroupRequest,
+) -> ExactStabilizerGroup:
+    return stabilizer_group_from_generators(request)
+
+
 TOOLS = (
+    MathTool(
+        operation_id="quantum.stabilizer.code.compute",
+        title="Select a canonical stabilizer code eigenspace",
+        description=(
+            "Bind an exact commuting Hermitian Pauli group to a character given "
+            "by one +1 or -1 eigenvalue per independent generator. Return the "
+            "selected joint eigenspace as a canonical RREF group whose generators "
+            "all have eigenvalue +1 on that code. With n physical qubits and "
+            "rank r, it encodes n-r logical qubits and has Hilbert-space "
+            "dimension 2^(n-r); no dense state or projector is formed."
+        ),
+        request_type=StabilizerCodeRequest,
+        result_type=StabilizerCodeValue,
+        run=stabilizer_code_compute,
+        tags=("quantum", "stabilizer", "code-space", "character", "exact"),
+        discovery_terms=(
+            "stabilizer code eigenspace",
+            "stabilizer eigenvalue character",
+            "joint Pauli eigenspace",
+        ),
+        examples=(
+            OperationExample(
+                name="bell_state_code_space",
+                description=(
+                    "Select the Bell state stabilized by XX and ZZ; both exact "
+                    "group generators must be independent commuting Hermitian Paulis."
+                ),
+                input={
+                    "group": {
+                        "register": {"qubit_ids": ["q0", "q1"]},
+                        "generators": [
+                            {
+                                "phase_free": {
+                                    "register": {"qubit_ids": ["q0", "q1"]},
+                                    "x_bits": [1, 1],
+                                    "z_bits": [0, 0],
+                                },
+                                "phase": 0,
+                            },
+                            {
+                                "phase_free": {
+                                    "register": {"qubit_ids": ["q0", "q1"]},
+                                    "x_bits": [0, 0],
+                                    "z_bits": [1, 1],
+                                },
+                                "phase": 0,
+                            },
+                        ],
+                    },
+                    "generator_eigenvalues": [1, 1],
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="quantum.stabilizer.exact_group.from_generators.compute",
+        title="Construct an exact qubit stabilizer group",
+        description=(
+            "Validate a supplied family of exact phase-lifted Pauli generators, "
+            "then return an independent generating family for the same group. "
+            "Every generator must be Hermitian, the generators must commute, "
+            "and no binary dependency may multiply to a nonidentity scalar. "
+            "Dependent rows multiplying to +I are accepted and removed."
+        ),
+        request_type=ExactStabilizerGroupRequest,
+        result_type=ExactStabilizerGroup,
+        run=_run_exact_stabilizer_group,
+        tags=("quantum", "stabilizer", "pauli", "phase", "exact"),
+        discovery_terms=(
+            "phase-consistent stabilizer group generators",
+            "reject stabilizer generators whose product is minus identity",
+            "exact Pauli stabilizer subgroup",
+        ),
+        examples=(
+            OperationExample(
+                name="bell_stabilizer_group",
+                description=(
+                    "Construct the two-generator Bell stabilizer group; both "
+                    "exact Hermitian checks commute and are independent."
+                ),
+                input={
+                    "register": {"qubit_ids": ["q0", "q1"]},
+                    "generators": [
+                        {
+                            "phase_free": {
+                                "register": {"qubit_ids": ["q0", "q1"]},
+                                "x_bits": [1, 1],
+                                "z_bits": [0, 0],
+                            },
+                            "phase": 0,
+                        },
+                        {
+                            "phase_free": {
+                                "register": {"qubit_ids": ["q0", "q1"]},
+                                "x_bits": [0, 0],
+                                "z_bits": [1, 1],
+                            },
+                            "phase": 0,
+                        },
+                    ],
+                },
+            ),
+        ),
+    ),
     MathTool(
         operation_id="quantum.stabilizer.logical_frame.compute",
         title="Compute a general stabilizer logical Pauli frame",

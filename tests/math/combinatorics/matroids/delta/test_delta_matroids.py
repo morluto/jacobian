@@ -179,6 +179,22 @@ def test_relabel_rejects_forged_source_that_violates_exchange() -> None:
         relabel(forged, ("A", "B", "C"), (0, 1, 2))
 
 
+def test_relabel_canonicalizes_a_forged_source_before_returning() -> None:
+    forged = FiniteDeltaMatroid.model_construct(
+        ground=["a", "b"], feasible=((), (0,), (0, 1))
+    )
+
+    result = relabel(forged, ("A", "B"), (0, 1))
+
+    assert result.source is not forged
+    assert result.source.ground == ("a", "b")
+    assert isinstance(result.source.ground, tuple)
+    assert isinstance(result.source.feasible, tuple)
+    assert result.source == FiniteDeltaMatroid(
+        ground=("a", "b"), feasible=((), (0,), (0, 1))
+    )
+
+
 def test_relabel_classifies_non_utf8_source_labels_as_domain_errors() -> None:
     from jacobian.catalog.models import OperationDomainValidationError
 

@@ -204,7 +204,11 @@ def relabel(
             code="delta_matroid.source_not_valid",
             message="source feasible rows must be canonical",
         )
-    source = request.delta_matroid
+    # The request may carry a forged ``FiniteDeltaMatroid`` instance whose
+    # fields bypassed validation (for example a list ground). Retain the
+    # canonical carrier reconstructed from the validated feasible system so
+    # the returned source cannot expose noncanonical mutable fields.
+    source = FiniteDeltaMatroid._from_kernel(system)
 
     try:
         require_delta_matroid_envelope(system)

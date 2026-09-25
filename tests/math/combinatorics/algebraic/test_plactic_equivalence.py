@@ -6,10 +6,8 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.combinatorics.algebraic import (
-    PlacticEquivalenceRequest,
-    plactic_equivalence,
-)
+from jacobian.math.combinatorics.algebraic import plactic_equivalence
+from jacobian.math.combinatorics.algebraic._models import PlacticEquivalenceRequest
 from jacobian.math.combinatorics.algebraic._tools import TOOLS
 from jacobian.math.logic.languages.words.values import FiniteWord
 

@@ -10,11 +10,8 @@ from sympy import Poly, cyclotomic_poly, symbols
 
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import encode_strict_json
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.dispatch import invoke_operation
 from jacobian.math.matrices.cyclic_linear import (
-    CyclotomicElementMapRequest,
     CyclotomicFieldInclusion,
     RationalCyclotomicElement,
     RationalCyclotomicField,
@@ -22,6 +19,11 @@ from jacobian.math.matrices.cyclic_linear import (
     compose_cyclotomic_field_inclusions,
     cyclotomic_field_inclusion,
 )
+from jacobian.math.matrices.cyclic_linear._models import (
+    CyclotomicElementMapRequest,
+    CyclotomicFieldInclusionRequest,
+)
+from jacobian.math.matrices.cyclic_linear._tools import TOOLS
 
 
 def _element(order: int, *coordinates: tuple[int, int]) -> RationalCyclotomicElement:
@@ -82,12 +84,16 @@ def test_element_map_matches_independent_polynomial_substitution(
 
 
 def test_standard_inclusions_compose_and_apply_after_json_round_trip() -> None:
-    catalog = Catalog.open()
-    direct = invoke_operation(
-        "matrix.cyclic.cyclotomic_inclusion.compute",
-        {"source": {"order": 3}, "target": {"order": 12}},
-        catalog,
-    ).output
+    tool = next(
+        t
+        for t in TOOLS
+        if t.operation_id == "matrix.cyclic.cyclotomic_inclusion.compute"
+    )
+    direct = tool.run(
+        tool.request_type.model_validate(
+            {"source": {"order": 3}, "target": {"order": 12}}
+        )
+    ).model_dump(mode="json")
     first = cyclotomic_field_inclusion(
         RationalCyclotomicField(order=3), RationalCyclotomicField(order=6)
     )
@@ -114,20 +120,24 @@ def test_standard_inclusions_compose_and_apply_after_json_round_trip() -> None:
 
 
 def test_catalog_examples_run_and_results_pass_strict_json_validation() -> None:
-    catalog = Catalog.open()
     for operation_id in (
         "matrix.cyclic.cyclotomic_inclusion.compute",
         "matrix.cyclic.cyclotomic_inclusion.compose",
         "matrix.cyclic.cyclotomic_element.map",
     ):
-        operation = catalog.operation(operation_id)
-        assert operation is not None and operation.examples
+        operation = next(t for t in TOOLS if t.operation_id == operation_id)
+        assert operation.examples
         for example in operation.examples:
-            result = invoke_operation(operation_id, example.input, catalog)
-            validated = operation.result_type.model_validate_json(
-                encode_strict_json(result.output)
+            result = operation.run(
+                operation.request_type.model_validate_json(
+                    encode_strict_json(example.input)
+                )
             )
-            assert validated.model_dump(mode="json") == result.output
+            output = result.model_dump(mode="json")
+            validated = operation.result_type.model_validate_json(
+                encode_strict_json(output)
+            )
+            assert validated.model_dump(mode="json") == output
 
 
 def test_identity_inclusion_accepts_large_bounded_element() -> None:
@@ -139,11 +149,16 @@ def test_identity_inclusion_accepts_large_bounded_element() -> None:
 
 
 def test_inclusion_rejects_nondividing_parent() -> None:
+    tool = next(
+        t
+        for t in TOOLS
+        if t.operation_id == "matrix.cyclic.cyclotomic_inclusion.compute"
+    )
     with pytest.raises(OperationDomainValidationError):
-        invoke_operation(
-            "matrix.cyclic.cyclotomic_inclusion.compute",
-            {"source": {"order": 4}, "target": {"order": 6}},
-            Catalog.open(),
+        tool.run(
+            CyclotomicFieldInclusionRequest.model_validate(
+                {"source": {"order": 4}, "target": {"order": 6}}
+            )
         )
 
 

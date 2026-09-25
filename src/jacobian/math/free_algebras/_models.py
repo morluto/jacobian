@@ -851,8 +851,15 @@ class FreeAlgebraFactorAvoidanceRequest(StrictModel):
     alphabet: tuple[FreeAlgebraLetter, ...] = Field(
         max_length=MAX_FREE_ALGEBRA_GENERATORS
     )
-    forbidden_factors: tuple[tuple[FreeAlgebraLetter, ...], ...] = Field(
-        max_length=MAX_FREE_ALGEBRA_FORBIDDEN_WORDS
+    forbidden_factors: tuple[
+        Annotated[
+            tuple[FreeAlgebraLetter, ...],
+            Field(max_length=MAX_FREE_ALGEBRA_WORD_VALUE_LENGTH),
+        ],
+        ...,
+    ] = Field(
+        max_length=MAX_FREE_ALGEBRA_FORBIDDEN_WORDS,
+        description="At most 32 factors, each at most 64 letters; aggregate at most 2,048 letters.",
     )
 
     @model_validator(mode="after")
@@ -897,8 +904,15 @@ class FreeAlgebraFactorAvoidanceDFA(StrictModel):
     alphabet: tuple[FreeAlgebraLetter, ...] = Field(
         max_length=MAX_FREE_ALGEBRA_GENERATORS
     )
-    forbidden_factors: tuple[tuple[FreeAlgebraLetter, ...], ...] = Field(
-        max_length=MAX_FREE_ALGEBRA_FORBIDDEN_WORDS
+    forbidden_factors: tuple[
+        Annotated[
+            tuple[FreeAlgebraLetter, ...],
+            Field(max_length=MAX_FREE_ALGEBRA_WORD_VALUE_LENGTH),
+        ],
+        ...,
+    ] = Field(
+        max_length=MAX_FREE_ALGEBRA_FORBIDDEN_WORDS,
+        description="At most 32 factors, each at most 64 letters; aggregate at most 2,048 letters.",
     )
     dfa: DFA
 

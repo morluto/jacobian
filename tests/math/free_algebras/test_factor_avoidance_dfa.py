@@ -26,7 +26,7 @@ def _request(
 
 
 def test_factor_avoidance_dfa_matches_direct_factor_search_and_round_trips() -> None:
-    result = factor_avoidance_dfa(_request(["x", "y"], [["x", "y"], ["y", "x", "y"]]))
+    result = factor_avoidance_dfa(("x", "y"), (("x", "y"), ("y", "x", "y")))
     restored = FreeAlgebraFactorAvoidanceDFA.model_validate(result.model_dump())
     assert restored.forbidden_factors == (("x", "y"), ("y", "x", "y"))
 
@@ -43,12 +43,12 @@ def test_factor_avoidance_dfa_matches_direct_factor_search_and_round_trips() -> 
 
 
 def test_empty_family_and_empty_pattern_have_exact_monoid_edges() -> None:
-    full = factor_avoidance_dfa(_request([], []))
+    full = factor_avoidance_dfa((), ())
     assert full.dfa.state_count == 1
     assert full.dfa.accepting_states == (0,)
     assert dfa_run(full.dfa, ())[0]
 
-    empty = factor_avoidance_dfa(_request(["x"], [[]]))
+    empty = factor_avoidance_dfa(("x",), ((),))
     assert empty.forbidden_factors == ((),)
     assert empty.dfa.state_count == 1
     assert empty.dfa.accepting_states == ()
@@ -68,7 +68,7 @@ def test_published_operation_output_is_usable_by_regular_language_consumer() -> 
 
 
 def test_patterns_containing_another_forbidden_factor_are_removed() -> None:
-    result = factor_avoidance_dfa(_request(["x", "y"], [["x", "y", "x"], ["y"], ["y"]]))
+    result = factor_avoidance_dfa(("x", "y"), (("x", "y", "x"), ("y",), ("y",)))
     assert result.forbidden_factors == (("y",), ("x", "y", "x"))
     for length in range(5):
         for word in product(range(2), repeat=length):
@@ -83,7 +83,7 @@ def test_multiple_pattern_families_match_independent_membership_oracle() -> None
     ]
     for _ in range(50):
         supplied = [list(word) for word in candidates if rng.randrange(4) == 0]
-        result = factor_avoidance_dfa(_request(["a", "b"], supplied))
+        result = factor_avoidance_dfa(("a", "b"), tuple(tuple(w) for w in supplied))
         patterns = tuple(tuple(word) for word in supplied)
         for length in range(6):
             for word in product(range(2), repeat=length):
@@ -97,17 +97,17 @@ def test_multiple_pattern_families_match_independent_membership_oracle() -> None
 
 
 def test_factor_family_rejects_dfa_larger_than_shared_carrier() -> None:
-    accepted = factor_avoidance_dfa(_request(["x"], [["x"] * 63]))
+    accepted = factor_avoidance_dfa(("x",), (("x",) * 63,))
     assert accepted.dfa.state_count == 64
 
     request = _request(["x"], [["x"] * 64])
     with pytest.raises(OperationResourceAdmissionError, match="64-state"):
-        factor_avoidance_dfa(request)
+        factor_avoidance_dfa(request.alphabet, request.forbidden_factors)
 
 
 def test_prefix_state_preflight_accounts_for_shared_pattern_prefixes() -> None:
     alphabet = [f"g{index:02}" for index in range(26)]
     shared_prefix = alphabet[:3]
     patterns = [[*shared_prefix, letter] for letter in alphabet]
-    result = factor_avoidance_dfa(_request(alphabet, patterns))
+    result = factor_avoidance_dfa(tuple(alphabet), tuple(tuple(w) for w in patterns))
     assert result.dfa.state_count == 5

@@ -1975,7 +1975,8 @@ def _factor_avoidance_transitions(
 
 
 def factor_avoidance_dfa(
-    request: FreeAlgebraFactorAvoidanceRequest,
+    alphabet: tuple[str, ...],
+    forbidden_factors: tuple[tuple[str, ...], ...],
 ) -> FreeAlgebraFactorAvoidanceDFA:
     """Build the total DFA for words avoiding a finite set of contiguous factors.
 
@@ -1986,7 +1987,9 @@ def factor_avoidance_dfa(
     """
 
     try:
-        value = FreeAlgebraFactorAvoidanceRequest.model_validate(request.model_dump())
+        value = FreeAlgebraFactorAvoidanceRequest(
+            alphabet=alphabet, forbidden_factors=forbidden_factors
+        )
     except Exception as exc:
         raise OperationDomainValidationError(
             location=("request",),

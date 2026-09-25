@@ -209,7 +209,7 @@ def _run_membership(
 def _run_factor_avoidance(
     request: FreeAlgebraFactorAvoidanceRequest,
 ) -> FreeAlgebraFactorAvoidanceDFA:
-    return factor_avoidance_dfa(request)
+    return factor_avoidance_dfa(request.alphabet, request.forbidden_factors)
 
 
 TOOLS = (

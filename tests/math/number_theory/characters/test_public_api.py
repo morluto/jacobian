@@ -33,6 +33,7 @@ def test_public_api_exports_only_canonical_value_and_native_operations() -> None
         "dirichlet_character_l_value_nonpositive_integer",
         "dirichlet_character_order",
         "dirichlet_character_orthogonality",
+        "dirichlet_character_orthogonality_over_characters",
         "dirichlet_character_parity",
         "dirichlet_character_power",
         "dirichlet_character_primitive_gauss_norm",

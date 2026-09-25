@@ -245,6 +245,58 @@ class DirichletCharacterOrthogonalityResult(StrictModel):
         return cls.model_construct(left=left, right=right, value=value)
 
 
+class DirichletCharacterOrthogonalityOverCharactersRequest(StrictModel):
+    """Sum the full dual group over one source-bound residue pair."""
+
+    group: DirichletCharacterGroup
+    left_integer: DirichletCharacterInteger
+    right_integer: DirichletCharacterInteger
+
+
+class DirichletCharacterOrthogonalityOverCharactersResult(StrictModel):
+    """Exact dual-group pairing, with canonical residue and parent binding."""
+
+    group: DirichletCharacterGroup
+    left_integer: DirichletCharacterInteger
+    right_integer: DirichletCharacterInteger
+    left_residue: StrictInt = Field(ge=0, le=MAX_CHARACTER_GROUP_MODULUS - 1)
+    right_residue: StrictInt = Field(ge=0, le=MAX_CHARACTER_GROUP_MODULUS - 1)
+    value: StrictInt = Field(ge=0, le=MAX_CHARACTER_GROUP_MODULUS)
+
+    @model_validator(mode="after")
+    def require_source_bound_residues(self) -> Self:
+        if (
+            self.left_residue != int(self.left_integer) % self.group.modulus
+            or self.right_residue != int(self.right_integer) % self.group.modulus
+            or self.value > self.group.character_count
+        ):
+            raise _validation_error(
+                "dual_orthogonality_result_shape",
+                "dual orthogonality result must retain canonical source residues and a bounded sum",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        group: DirichletCharacterGroup,
+        left_integer: DirichletCharacterInteger,
+        right_integer: DirichletCharacterInteger,
+        left_residue: int,
+        right_residue: int,
+        value: int,
+    ) -> Self:
+        return cls.model_construct(
+            group=group,
+            left_integer=left_integer,
+            right_integer=right_integer,
+            left_residue=left_residue,
+            right_residue=right_residue,
+            value=value,
+        )
+
+
 class DirichletCharacterGeneralizedBernoulliRequest(StrictModel):
     """Compute one generalized Bernoulli number for a bounded index."""
 

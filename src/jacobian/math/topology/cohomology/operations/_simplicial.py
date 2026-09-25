@@ -305,6 +305,46 @@ def simplicial_cohomology(  # noqa: C901
     require_simplicial_cohomology_admission(complex_, prime, convention)
 
     dimension = complex_.dimension
+    if dimension == -1:
+        if convention is HomologyConvention.UNREDUCED:
+            group = CohomologyGroupResult._from_kernel(
+                dimension=0,
+                cochain_dimension=0,
+                outgoing_coboundary_rank=0,
+                cocycle_dimension=0,
+                incoming_coboundary_rank=0,
+                betti_number=0,
+                cocycle_basis=(),
+                coboundary_basis=(),
+                cohomology_basis=(),
+                quotient_span_rank=0,
+            )
+            return SimplicialCohomologyResult.model_construct(
+                complex=complex_,
+                prime=prime,
+                convention=convention,
+                dimension_range=(0, 0),
+                groups=(group,),
+            )
+        group = CohomologyGroupResult._from_kernel(
+            dimension=-1,
+            cochain_dimension=1,
+            outgoing_coboundary_rank=0,
+            cocycle_dimension=1,
+            incoming_coboundary_rank=0,
+            betti_number=1,
+            cocycle_basis=(ModularVector(coefficients=(1,)),),
+            coboundary_basis=(),
+            cohomology_basis=(ModularVector(coefficients=(1,)),),
+            quotient_span_rank=1,
+        )
+        return SimplicialCohomologyResult.model_construct(
+            complex=complex_,
+            prime=prime,
+            convention=convention,
+            dimension_range=(-1, -1),
+            groups=(group,),
+        )
     cochain_sizes = list(complex_.f_vector)
     boundaries = [
         _dense_boundary(complex_, degree, prime=prime)

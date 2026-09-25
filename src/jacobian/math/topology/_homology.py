@@ -31,7 +31,7 @@ class SimplicialHomologyRequest(StrictModel):
 
 class ModularVector(StrictModel):
     coefficients: tuple[StrictInt, ...] = Field(
-        min_length=1,
+        min_length=0,
         max_length=MAX_TOPOLOGY_CHAIN_GROUP,
     )
 

@@ -91,7 +91,7 @@ class CriticalCellProfile(StrictModel):
     """
 
     counts_by_dimension: tuple[StrictInt, ...] = Field(
-        min_length=1, max_length=MAX_TOPOLOGY_DIMENSION + 1
+        min_length=0, max_length=MAX_TOPOLOGY_DIMENSION + 1
     )
     critical_cells: tuple[Simplex, ...] = Field(default=(), max_length=MAX_MORSE_CELLS)
     euler_characteristic: StrictInt

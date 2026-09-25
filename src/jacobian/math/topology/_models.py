@@ -514,7 +514,23 @@ class ChainComplexResult(StrictModel):
             self.coefficient_ring, self.prime
         )
         dimensions = tuple(item.dimension for item in self.simplex_bases)
-        if dimensions != tuple(range(len(self.simplex_bases))):
+        expected_bases = self.complex.faces_by_dimension
+        if expected_bases:
+            if dimensions != tuple(item.dimension for item in expected_bases) or tuple(
+                item.simplices for item in self.simplex_bases
+            ) != tuple(item.faces for item in expected_bases):
+                raise _validation_error(
+                    "topology.require_coherent_chain_contract_6",
+                    "simplex bases must equal the retained complex face axes",
+                )
+        elif dimensions != (0,) or self.simplex_bases[0].simplices != ():
+            raise _validation_error(
+                "topology.require_coherent_chain_contract_6",
+                "the empty complex has exactly one empty degree-zero basis",
+            )
+        if not self.simplex_bases or dimensions != tuple(
+            range(len(self.simplex_bases))
+        ):
             raise _validation_error(
                 "topology.require_coherent_chain_contract_1",
                 "simplex bases must cover contiguous dimensions",

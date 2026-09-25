@@ -500,8 +500,8 @@ _induced_subcomplex_tool = MathTool(
     operation_id="topology.simplicial_complex.induced_subcomplex.compute",
     title="Compute an induced subcomplex on selected vertices",
     description=(
-        "Take the full subcomplex on a nonempty selected vertex subset of a "
-        "canonical finite simplicial complex. Return its exact face closure "
+        "Take the full subcomplex on any selected vertex subset, including the empty "
+        "subset, of a canonical finite simplicial complex. Return its exact face closure "
         "and the image or deletion status of every source face."
     ),
     request_type=InducedSubcomplexRequest,

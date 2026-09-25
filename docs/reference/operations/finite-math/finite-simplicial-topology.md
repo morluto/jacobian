@@ -65,12 +65,12 @@ chain construction to any admitted `FinitePoset`, retaining the exact element
 labels on the output vertex axis. See the [order-complex contract](../topology/order-complex.md)
 for its exact face, dimension, maximal-chain, work, and output bounds.
 
-`induced_subcomplex.compute` selects a nonempty subset of the canonical
-vertex axis and returns the full subcomplex whose faces are exactly the source
-faces contained in that subset. Its face-image table maps retained faces to
-the same vertex tuple and marks every removed source face with `null`. The
-empty selection is excluded because the canonical finite-complex type has no
-void-complex value.
+`induced_subcomplex.compute` selects any subset of the canonical vertex axis,
+including the empty subset, and returns the full subcomplex whose faces are
+exactly the source faces contained in that subset. The empty selection returns
+`{∅}`, represented by empty nonempty-face axes and dimension `-1`. Its
+face-image table maps retained faces to the same vertex tuple and marks every
+removed source face with `null`.
 
 ## Minimal nonfaces
 

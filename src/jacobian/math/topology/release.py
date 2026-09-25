@@ -252,7 +252,11 @@ class FacePosetResult(StrictModel):
     def require_face_label_axes(self) -> FacePosetResult:
         expected_faces = tuple(
             sorted(
-                (face for group in self.complex.faces_by_dimension for face in group.faces),
+                (
+                    face
+                    for group in self.complex.faces_by_dimension
+                    for face in group.faces
+                ),
                 key=lambda face: (len(face), face),
             )
         )
@@ -263,16 +267,14 @@ class FacePosetResult(StrictModel):
             raise ValueError("face-element labels must index the canonical face axis")
         if self.order_complex.vertices != expected_labels:
             raise ValueError("order-complex vertices must equal the face-label axis")
-        label_index = {label: index for index, label in enumerate(expected_labels)}
+        label_index = {face: index for index, face in enumerate(expected_faces)}
         expected_relations_from_complex = tuple(
             sorted(
-                (label_index[lower], label_index[upper])
-                for edge in (
-                    self.order_complex.faces_by_dimension[1].faces
-                    if self.order_complex.dimension >= 1
-                    else ()
-                )
-                for lower, upper in (edge,)
+                (label_index[lower_face], label_index[upper_face])
+                for lower_face in expected_faces
+                for upper_face in expected_faces
+                if len(lower_face) < len(upper_face)
+                and set(lower_face) < set(upper_face)
             )
         )
         if self.order_relations != expected_relations_from_complex:
@@ -317,9 +319,7 @@ class OrderComplexResult(StrictModel):
         )
         if self.complex.maximal_simplices != expected_facets:
             raise ValueError("complex facets must equal the maximal-chain axis")
-        covers = {
-            (pair.lower, pair.upper) for pair in self.poset.cover_relations
-        }
+        covers = {(pair.lower, pair.upper) for pair in self.poset.cover_relations}
         cover_predecessors = {upper for _, upper in covers}
         cover_successors = {lower for lower, _ in covers}
         for chain in self.maximal_chains:
@@ -327,6 +327,12 @@ class OrderComplexResult(StrictModel):
                 raise ValueError("maximal chains must be nonempty without repeats")
             if any(pair not in covers for pair in pairwise(chain)):
                 raise ValueError("maximal chains must follow poset cover relations")
+        actual_chains = _order_complex_plan(self.poset)
+        _, exhaustive_facets = _enumerate_order_complex_chains(
+            self.poset.elements, actual_chains
+        )
+        if tuple(sorted(self.maximal_chains)) != tuple(sorted(exhaustive_facets)):
+            raise ValueError("maximal_chains must exhaust the poset maximal chains")
             if chain[0] in cover_predecessors or chain[-1] in cover_successors:
                 raise ValueError("maximal chains must begin and end at poset extrema")
         return self

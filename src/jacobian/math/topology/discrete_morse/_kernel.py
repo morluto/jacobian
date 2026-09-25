@@ -63,6 +63,8 @@ def _closure_cells(
 ) -> tuple[tuple[Simplex, ...], ...]:
     """Return the face closure grouped by dimension in canonical order."""
 
+    if not complex_.faces_by_dimension:
+        return ((),)
     return tuple(tuple(group.faces) for group in complex_.faces_by_dimension)
 
 

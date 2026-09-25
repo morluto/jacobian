@@ -2,7 +2,10 @@ from itertools import product
 
 import pytest
 
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.combinatorics.semistandard_tableaux._models import (
     SemistandardTableauEnumerationRequest,
 )
@@ -97,6 +100,14 @@ def test_max_height_column_has_one_tableau_without_dead_prefix_search() -> None:
 
     assert len(result.tableaux) == 1
     assert result.tableaux[0].rows == tuple((entry,) for entry in range(1, 501))
+
+
+@pytest.mark.parametrize("max_entry", [-1, 4_097])
+def test_native_invalid_alphabet_is_rejected_before_count(max_entry: int) -> None:
+    with pytest.raises(OperationDomainValidationError):
+        enumerate_semistandard_young_tableaux(
+            IntegerPartition(parts=(1,)), max_entry=max_entry
+        )
 
 
 def test_catalog_request_keeps_alphabet_bound() -> None:

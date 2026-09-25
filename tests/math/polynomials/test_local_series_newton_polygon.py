@@ -202,7 +202,9 @@ def test_quadratic_newton_edge_roots_are_exact(constant, expected) -> None:
     if expected[0] == "real":
         assert len(result.roots) == 2
         assert all(isinstance(root.value, RealAlgebraicValue) for root in result.roots)
-        assert [(root.value.polynomial, root.value.real_root_index) for root in result.roots] == [
+        assert [
+            (root.value.polynomial, root.value.real_root_index) for root in result.roots
+        ] == [
             (expected[1], 0),
             (expected[1], 1),
         ]
@@ -210,8 +212,12 @@ def test_quadratic_newton_edge_roots_are_exact(constant, expected) -> None:
         assert all(root.value.polynomial == (1, 0, -2) for root in result.roots)
     elif expected[0] == "complex":
         assert len(result.roots) == 2
-        assert all(isinstance(root.value, ComplexAlgebraicValue) for root in result.roots)
-        assert [(root.value.polynomial, root.value.root_index) for root in result.roots] == [
+        assert all(
+            isinstance(root.value, ComplexAlgebraicValue) for root in result.roots
+        )
+        assert [
+            (root.value.polynomial, root.value.root_index) for root in result.roots
+        ] == [
             (expected[1], 0),
             (expected[1], 1),
         ]
@@ -236,7 +242,9 @@ def test_newton_edge_root_operation_rejects_degree_above_two() -> None:
         newton_edge_characteristic_roots(
             NewtonEdgeCharacteristicRequest(polynomial=source, edge_index=0)
         )
-    assert error.value.errors()[0]["type"] == "local_series.newton_edge_root_degree_bound"
+    assert (
+        error.value.errors()[0]["type"] == "local_series.newton_edge_root_degree_bound"
+    )
 
 
 def test_newton_edge_roots_cover_linear_and_repeated_rational_roots() -> None:

@@ -151,7 +151,13 @@ TOOLS: MathTools = (
         request_type=NewtonEdgeCharacteristicRequest,
         result_type=NewtonEdgeCharacteristicRootsResult,
         run=newton_edge_characteristic_roots,
-        tags=("local-series", "polynomial", "newton-polygon", "algebraic-roots", "exact"),
+        tags=(
+            "local-series",
+            "polynomial",
+            "newton-polygon",
+            "algebraic-roots",
+            "exact",
+        ),
         examples=(
             OperationExample(
                 name="quadratic_edge_roots",

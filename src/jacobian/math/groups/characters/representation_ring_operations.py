@@ -1222,8 +1222,19 @@ def _admit_character_center(
             code="groups.characters.center_work_exceeds_envelope",
             message="canonical-table validation and exact center computation exceed the work envelope",
         )
+    # The result retains the full canonical character table. Bound its
+    # coefficient payload, not only the selected scalar values: each class
+    # value has field_degree rational coefficients and there are at most
+    # actual_order classes. Rational JSON encoding needs numerator and
+    # denominator digits plus separators; use a conservative per-digit cost.
+    table_bytes = (
+        actual_order**2
+        * field_degree
+        * (coordinate_digits + table_digits_bound + 8)
+    )
     output_bytes = (
         2_048
+        + table_bytes
         + (len(source.generators) + max(1, actual_order.bit_length()))
         * source.degree
         * 24

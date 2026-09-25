@@ -227,3 +227,15 @@ def test_order_bound_precedes_conjugacy_expansion(monkeypatch):
     )
     with pytest.raises(OperationResourceAdmissionError):
         character_center(CharacterCenterRequest.model_construct(character=character))
+
+
+def test_output_admission_accounts_for_retained_full_character_table():
+    table = _cyclic5_table()
+    character = CharacterRingElement(
+        table=table, irreducible_multiplicities=(1, 0, 0, 0, 0)
+    )
+    # Admission remains comfortably inside the envelope for a small table,
+    # while the quadratic class-table term is included before expansion.
+    result = character_center(CharacterCenterRequest(character=character))
+    assert group_order(result.subgroup) == 5
+    assert len(result.character.table.partition.classes) == 5

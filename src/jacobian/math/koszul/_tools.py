@@ -5,6 +5,7 @@ from typing import Any
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.koszul._models import KoszulComplexRequest
 from jacobian.math.koszul.dga_operations import module_koszul_dga
+from jacobian.math.koszul.homology_map import koszul_homology_map
 from jacobian.math.koszul.module_models import (
     ModuleKoszulChainMap,
     ModuleKoszulComplex,
@@ -16,6 +17,8 @@ from jacobian.math.koszul.module_models import (
     ModuleKoszulDirectSumValue,
     ModuleKoszulExactnessProfile,
     ModuleKoszulHomology,
+    ModuleKoszulHomologyMap,
+    ModuleKoszulHomologyMapRequest,
     ModuleKoszulHomologyRequest,
     ModuleKoszulMapRequest,
     ModuleKoszulRequest,
@@ -114,6 +117,64 @@ _MODULE_EXAMPLE_COMPLEX = {
 }
 
 TOOLS: MathTools = (
+    MathTool(
+        operation_id="homological.koszul.homology_map.compute",
+        title="Induce exact maps on finite-module Koszul homology",
+        description=(
+            "Revalidate a typed module-induced Koszul chain map and compute its "
+            "exact matrices on every homology group in the returned canonical "
+            "homology bases. Combined chain-basis size and rational coefficient "
+            "growth use a deliberately small finite envelope; output includes "
+            "the source and target homology bases for interpreting coordinates."
+        ),
+        request_type=ModuleKoszulHomologyMapRequest,
+        result_type=ModuleKoszulHomologyMap,
+        run=koszul_homology_map,
+        tags=("koszul", "homology", "chain-map", "exact"),
+        discovery_terms=(
+            "induced map on Koszul homology",
+            "functoriality of Koszul homology",
+            "module map homology matrix",
+        ),
+        examples=(
+            OperationExample(
+                name="identity_on_degree_zero_homology",
+                description="The identity map of QQ induces the identity on H0 of the empty-sequence complex.",
+                input={
+                    "chain_map": {
+                        "algebra": _MODULE_EXAMPLE["algebra"],
+                        "source": _MODULE_EXAMPLE["module"],
+                        "target": _MODULE_EXAMPLE["module"],
+                        "sequence": [],
+                        "module_map": [[{"num": "1", "den": "1"}]],
+                        "source_complex": {
+                            "algebra": _MODULE_EXAMPLE["algebra"],
+                            "module": _MODULE_EXAMPLE["module"],
+                            "sequence": [],
+                            "basis_sizes": [1],
+                            "differentials": [],
+                            "square_zero": True,
+                        },
+                        "target_complex": {
+                            "algebra": _MODULE_EXAMPLE["algebra"],
+                            "module": _MODULE_EXAMPLE["module"],
+                            "sequence": [],
+                            "basis_sizes": [1],
+                            "differentials": [],
+                            "square_zero": True,
+                        },
+                        "degree_maps": [
+                            {
+                                "row_count": 1,
+                                "column_count": 1,
+                                "entries": [[0, 0, {"num": "1", "den": "1"}]],
+                            }
+                        ],
+                    }
+                },
+            ),
+        ),
+    ),
     MathTool(
         operation_id="homological.koszul.module_map.compute",
         title="Induce a map between finite-module Koszul complexes",

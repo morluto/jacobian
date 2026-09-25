@@ -1,6 +1,7 @@
 """Exact sequence-derived Koszul complexes over QQ polynomial rings."""
 
 from jacobian.math.koszul.dga_operations import module_koszul_dga
+from jacobian.math.koszul.homology_map import koszul_homology_map
 from jacobian.math.koszul.module_models import (
     BasedFiniteModule,
     FiniteCommutativeAlgebra,
@@ -15,6 +16,8 @@ from jacobian.math.koszul.module_models import (
     ModuleKoszulExactnessProfile,
     ModuleKoszulHomology,
     ModuleKoszulHomologyDegree,
+    ModuleKoszulHomologyMap,
+    ModuleKoszulHomologyMapRequest,
     ModuleKoszulMapRequest,
     ModuleKoszulSequencePermutation,
     ModuleKoszulSequencePermutationRequest,
@@ -62,6 +65,8 @@ __all__ = [
     "ModuleKoszulExactnessProfile",
     "ModuleKoszulHomology",
     "ModuleKoszulHomologyDegree",
+    "ModuleKoszulHomologyMap",
+    "ModuleKoszulHomologyMapRequest",
     "ModuleKoszulMapRequest",
     "ModuleKoszulSequencePermutation",
     "ModuleKoszulSequencePermutationRequest",
@@ -71,6 +76,7 @@ __all__ = [
     "ModuleKoszulZeroExtensionRequest",
     "ModuleQuotientValue",
     "koszul_complex",
+    "koszul_homology_map",
     "module_koszul_append_zero",
     "module_koszul_complex",
     "module_koszul_dga",

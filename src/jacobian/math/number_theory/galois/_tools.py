@@ -71,7 +71,7 @@ def _solvable(request: SolvableRequest) -> SolvableResult:
 
 
 def _splitting(request: SplittingFieldRequest) -> SplittingFieldResult:
-    return splitting_field(request)
+    return splitting_field(request.polynomial)
 
 
 def _automorphisms(request: AutomorphismRequest) -> AutomorphismResult:

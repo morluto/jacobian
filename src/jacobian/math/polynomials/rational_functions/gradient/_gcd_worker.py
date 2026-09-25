@@ -246,9 +246,7 @@ def _gradient_admission(
     denominator_records = payload["denominator"]
     if (
         not isinstance(axes, list)
-        or any(
-            type(axis) is not int or not 0 <= axis < variable_count for axis in axes
-        )
+        or any(type(axis) is not int or not 0 <= axis < variable_count for axis in axes)
         or len(set(axes)) != len(axes)
         or not isinstance(numerator_records, list)
         or not isinstance(denominator_records, list)

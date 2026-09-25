@@ -100,6 +100,18 @@ Admission caps the concrete group order at 60 and jointly bounds class-value
 arithmetic, table validation, subgroup generation, and serialized parent plus
 kernel before conjugacy expansion.
 
+## Character degree
+
+`character.degree.compute` returns the exact degree `chi(1)` for an ordinary
+character represented by nonnegative irreducible multiplicities in a
+`CharacterRingElement`. It sums each multiplicity times the corresponding
+canonical irreducible degree and retains the source character/table with the
+integer value. Signed virtual characters are rejected because their value at
+the identity is a virtual dimension, not the degree of an ordinary
+representation. The operation reconstructs the canonical table from the
+retained concrete group before using row degrees, with source-group order at
+most 60 and bounded table, arithmetic work, and result size.
+
 ## Centers of characters
 
 `character.center.compute` accepts the same table-bound ordinary-character

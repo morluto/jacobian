@@ -23,6 +23,7 @@ MAX_ELEMENT_VALUE_BYTES = 32_768
 MAX_INVERSION_WORK = 2_000_000
 MAX_MULTIPLICATION_WORK = 2_000_000
 MAX_TRACE_WORK = 2_000_000
+MAX_NORM_WORK = 2_000_000
 MAX_DIVISOR_MULTIPLICITY_BITS = 4096
 # 2**4096 needs 1234 decimal digits; divisor degrees combine at most 256
 # places of degree <= 12, needing at most 1237 digits.
@@ -566,6 +567,32 @@ class FunctionFieldTraceResult(StrictModel):
         return self
 
 
+class FunctionFieldNormRequest(StrictModel):
+    """One element whose relative norm to GF(p)(x) is requested."""
+
+    element: FiniteFunctionFieldElement
+
+
+class FunctionFieldNormResult(StrictModel):
+    """The relative norm, retained with its exact extension parent."""
+
+    field: FiniteFunctionField
+    element: FiniteFunctionFieldElement
+    norm: PrimeFieldRationalFunction
+
+    @model_validator(mode="after")
+    def require_parent_and_characteristic(self) -> Self:
+        if (
+            self.element.field != self.field
+            or self.norm.characteristic != self.field.characteristic
+        ):
+            raise _validation_error(
+                "norm_parent",
+                "norm result must retain the element parent and its constant field",
+            )
+        return self
+
+
 class FunctionFieldProductTerm(StrictModel):
     """One nonzero generator-power term of an exact product."""
 
@@ -650,6 +677,7 @@ __all__ = [
     "MAX_INVERSION_WORK",
     "MAX_LEDGER_ROWS",
     "MAX_MULTIPLICATION_WORK",
+    "MAX_NORM_WORK",
     "MAX_POLYNOMIAL_COEFFICIENTS",
     "MAX_POLYNOMIAL_X_DEGREE",
     "MAX_TRACE_WORK",
@@ -670,6 +698,8 @@ __all__ = [
     "FunctionFieldElementInverseRequest",
     "FunctionFieldElementMultiplyRequest",
     "FunctionFieldElementMultiplyResult",
+    "FunctionFieldNormRequest",
+    "FunctionFieldNormResult",
     "FunctionFieldPlace",
     "FunctionFieldPlaceValuationRequest",
     "FunctionFieldPlaceValuationResult",

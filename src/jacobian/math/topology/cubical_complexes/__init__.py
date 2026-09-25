@@ -1,5 +1,10 @@
 """Cubical complex operations."""
 
+from jacobian.math.topology.cubical_complexes._cell_vertices import (
+    CubicalCellVerticesRequest,
+    CubicalCellVerticesResult,
+    cell_vertices,
+)
 from jacobian.math.topology.cubical_complexes._models import (
     CubicalChainProductRequest,
     CubicalChainTerm,
@@ -39,6 +44,8 @@ __all__ = [
     "CubicalCellBoundaryRequest",
     "CubicalCellBoundaryResult",
     "CubicalCellBoundaryTerm",
+    "CubicalCellVerticesRequest",
+    "CubicalCellVerticesResult",
     "CubicalChainProductRequest",
     "CubicalChainTerm",
     "CubicalChainValue",
@@ -49,6 +56,7 @@ __all__ = [
     "bitmap_to_complex",
     "boundary",
     "cell_boundary",
+    "cell_vertices",
     "chain_complex",
     "chain_product",
     "closed_star",

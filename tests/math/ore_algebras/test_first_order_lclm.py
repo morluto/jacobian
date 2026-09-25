@@ -111,12 +111,10 @@ def test_first_order_lclm_witnesses_both_products_and_is_minimal() -> None:
         for order in range(3)
     )
     assert result.common_left_multiple.order == 2
-    assert sp.simplify(
-        _action(result.common_left_multiple, sp.exp(x**2 / 2), x)
-    ) == 0
-    assert sp.simplify(
-        _action(result.common_left_multiple, sp.exp(-x**2 / 2), x)
-    ) == 0
+    assert sp.simplify(_action(result.common_left_multiple, sp.exp(x**2 / 2), x)) == 0
+    assert (
+        sp.simplify(_action(result.common_left_multiple, sp.exp(-(x**2) / 2), x)) == 0
+    )
     assert type(result).model_validate_json(result.model_dump_json()) == result
 
 
@@ -138,8 +136,8 @@ def test_proportional_inputs_have_order_one_lclm() -> None:
 def test_first_order_lclm_rejects_nonpolynomial_coefficients_and_wrong_order() -> None:
     rational_denominator = {
         "terms": [
-                {"coefficient": {"num": 1, "den": 1}, "exponents": [1]},
-                {"coefficient": {"num": 1, "den": 1}, "exponents": [0]},
+            {"coefficient": {"num": 1, "den": 1}, "exponents": [1]},
+            {"coefficient": {"num": 1, "den": 1}, "exponents": [0]},
         ]
     }
     rational = _operator(
@@ -178,3 +176,42 @@ def test_catalog_example_returns_its_declared_lclm_value() -> None:
     request = tool.request_type.model_validate_json(json.dumps(tool.examples[0].input))
     result = tool.run(request)
     assert result.common_left_multiple.order == 2
+
+
+def test_lclm_product_preflight_does_not_repeat_generic_multiply_admission() -> None:
+    left = _operator(
+        (0, [(2, -71), (4, -83)]),
+        (1, [(1, -97), (3, -61)]),
+    )
+    right = _operator(
+        (0, [(0, -89), (1, -67), (4, 67)]),
+        (1, [(1, -89), (3, -83), (4, 73)]),
+    )
+    # Integer fixture uses the reported coefficient pattern and stays in the
+    # declared two-digit input envelope; operation preflight owns admission.
+    result = differential_first_order_lclm(left, right)
+    assert result.common_left_multiple.order == 2
+
+
+def test_noncanonical_rational_input_is_a_domain_error() -> None:
+    denominator = {
+        "terms": [
+            {"coefficient": {"num": 1, "den": 1}, "exponents": [1]},
+            {"coefficient": {"num": 1, "den": 1}, "exponents": [0]},
+        ]
+    }
+    shared_factor = _operator((0, [(1, 1)]), (1, [(0, 1)]))
+    malformed = DifferentialOreOperator.model_validate(
+        {
+            "variable": "x",
+            "terms": [
+                {
+                    "order": 0,
+                    "coefficient": _coefficient([(1, 1)], denominator=denominator),
+                },
+                shared_factor.terms[1].model_dump(),
+            ],
+        }
+    )
+    with pytest.raises(OperationDomainValidationError):
+        differential_first_order_lclm(malformed, shared_factor)

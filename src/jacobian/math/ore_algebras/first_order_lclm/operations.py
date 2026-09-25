@@ -17,7 +17,6 @@ from jacobian.math.ore_algebras.first_order_lclm._models import (
     FirstOrderLCLMRequest,
     FirstOrderLCLMResult,
 )
-from jacobian.math.ore_algebras.operations import differential_operator_multiply
 from jacobian.math.polynomials._conversions import (
     rational_function_from_sympy,
     rational_function_to_sympy,
@@ -88,6 +87,14 @@ def _admit_operator(operator: DifferentialOreOperator, label: str) -> None:
                 label=f"{label} coefficient",
             )
         except Exception as exc:
+            # Canonical recognition errors describe invalid domain values;
+            # only the owner-specific explicit envelope is a resource refusal.
+            if getattr(exc, "type", "").startswith("polynomial.not_coprime"):
+                raise OperationDomainValidationError(
+                    location=(label, "terms", term.order, "coefficient"),
+                    code="ore_algebra.first_order_lclm_noncanonical_coefficient",
+                    message="rational-function coefficients must be canonical",
+                ) from exc
             raise OperationResourceAdmissionError(
                 location=(label, "terms", term.order, "coefficient"),
                 code="ore_algebra.first_order_lclm_input_coefficient_bound",
@@ -120,7 +127,10 @@ def _preflight(request: FirstOrderLCLMRequest) -> None:
             term.exponents[0]
             for operator in (request.left, request.right)
             for value in operator.terms
-            for polynomial in (value.coefficient.numerator, value.coefficient.denominator)
+            for polynomial in (
+                value.coefficient.numerator,
+                value.coefficient.denominator,
+            )
             for term in polynomial.terms
         ),
         default=0,
@@ -164,8 +174,11 @@ def _preflight(request: FirstOrderLCLMRequest) -> None:
     # Two inputs, two order-one multipliers, and one order-two result each have
     # at most two/three coefficients. Every coefficient is bounded above by the
     # 64-term, 64-digit rational-function envelope checked after conversion.
-    maximum_result_bytes = 2 * encoded_bytes + 16_384 + 11 * (
-        256 + 2 * _OUTPUT_COEFFICIENT_TERMS * (128 + 2 * _OUTPUT_COEFFICIENT_DIGITS)
+    maximum_result_bytes = (
+        2 * encoded_bytes
+        + 16_384
+        + 11
+        * (256 + 2 * _OUTPUT_COEFFICIENT_TERMS * (128 + 2 * _OUTPUT_COEFFICIENT_DIGITS))
     )
     if maximum_result_bytes > _OUTPUT_BYTES:
         raise OperationResourceAdmissionError(
@@ -175,7 +188,9 @@ def _preflight(request: FirstOrderLCLMRequest) -> None:
         )
 
 
-def _as_sympy(operator: DifferentialOreOperator, symbols: tuple[Any, ...]) -> dict[int, Any]:
+def _as_sympy(
+    operator: DifferentialOreOperator, symbols: tuple[Any, ...]
+) -> dict[int, Any]:
     return {
         term.order: rational_function_to_sympy(term.coefficient, symbols=symbols)
         for term in operator.terms
@@ -213,10 +228,25 @@ def _operator(coefficients: dict[int, Any]) -> DifferentialOreOperator:
         normalized = cancel(expression)
         if normalized == 0:
             continue
-        terms.append(
-            {"order": order, "coefficient": _encode_coefficient(normalized)}
-        )
+        terms.append({"order": order, "coefficient": _encode_coefficient(normalized)})
     return DifferentialOreOperator.model_validate({"variable": "x", "terms": terms})
+
+
+def _first_order_product(
+    left: DifferentialOreOperator, right: DifferentialOreOperator, variable: Any
+) -> dict[int, Any]:
+    """Apply the Weyl rule to two operators of order at most one."""
+    from sympy import cancel
+
+    p = _as_sympy(left, (variable,))
+    q = _as_sympy(right, (variable,))
+    p0, p1 = p.get(0, 0), p.get(1, 0)
+    q0, q1 = q.get(0, 0), q.get(1, 0)
+    return {
+        0: cancel(p1 * q0.diff(variable) + p0 * q0),
+        1: cancel(p1 * q1.diff(variable) + p1 * q0 + p0 * q1),
+        2: cancel(p1 * q1),
+    }
 
 
 def _constant_operator(value: int) -> DifferentialOreOperator:
@@ -261,9 +291,10 @@ def differential_first_order_lclm(
         v0 = cancel((-a0 * r1 + a1 * r0) / delta)
         left_multiplier = _operator({0: u0, 1: b1})
         right_multiplier = _operator({0: v0, 1: a1})
-        common = differential_operator_multiply(
-            left_multiplier, request.left
-        ).product
+        # The admitted formula has a tighter coefficient envelope than the
+        # generic multiply operation. Construct its product directly so its
+        # independent conservative admission cannot reject this request.
+        common = _operator(_first_order_product(left_multiplier, request.left, x))
 
     if len(common.model_dump_json().encode("utf-8")) > _OUTPUT_BYTES:
         raise OperationResourceAdmissionError(

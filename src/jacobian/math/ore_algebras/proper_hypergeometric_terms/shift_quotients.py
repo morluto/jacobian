@@ -39,7 +39,7 @@ def _term_degree(term: ProperHypergeometricTerm) -> int:
 
 def _shifted_polynomial_term_bound(term: ProperHypergeometricTerm, axis: int) -> int:
     return sum(
-        (monomial.exponents[axis] + 1) * (monomial.exponents[1 - axis] + 1)
+        monomial.exponents[axis] + 1
         for monomial in term.polynomial.polynomial.terms
     )
 
@@ -87,16 +87,13 @@ def _admit_quotient(term: ProperHypergeometricTerm, axis: int) -> None:
             code="ore_algebra.hypergeometric_quotient_expansion_budget",
             message="the exact quotient numerator or denominator may exceed 256 terms",
         )
-    coefficient_digits = max(
-        (
-            max(
-                len(str(abs(numerator))),
-                len(str(denominator)),
-            )
-            for monomial in polynomial.terms
-            for numerator, denominator in (monomial.coefficient.as_integer_ratio(),)
-        ),
-        default=1,
+    coefficient_digits = sum(
+        max(
+            len(str(abs(numerator))),
+            len(str(denominator)),
+        )
+        for monomial in polynomial.terms
+        for numerator, denominator in (monomial.coefficient.as_integer_ratio(),)
     )
     base = term.n_base if axis == 0 else term.k_base
     base_numerator, base_denominator = base.as_integer_ratio()

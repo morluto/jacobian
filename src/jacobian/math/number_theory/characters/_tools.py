@@ -22,7 +22,6 @@ from jacobian.math.number_theory.characters._models import (
     DirichletCharacterGeneralizedGaussSumRequest,
     DirichletCharacterGeneralizedGaussSumResult,
     DirichletCharacterInflationRequest,
-    DirichletCharacterInverseRequest,
     DirichletCharacterJacobiSumRequest,
     DirichletCharacterJacobiSumResult,
     DirichletCharacterKernelRequest,
@@ -201,12 +200,6 @@ def _compute_character_conjugate(
     return native.dirichlet_character_conjugate(request.character)
 
 
-def _compute_character_inverse(
-    request: DirichletCharacterInverseRequest,
-) -> DirichletCharacter:
-    return native.dirichlet_character_inverse(request.character)
-
-
 def _compute_character_table(
     request: DirichletCharacterRequest,
 ) -> DirichletCharacterTableResult:
@@ -354,29 +347,6 @@ TOOLS: MathTools = (
                         "coordinates": [1],
                     }
                 },
-            ),
-        ),
-    ),
-    MathTool(
-        operation_id="dirichlet_character.inverse.compute",
-        title="Invert an exact Dirichlet character",
-        description=(
-            "Return the inverse character in the identical modulus and exact "
-            "unit-group parent. Inversion negates the dual coordinates, and "
-            "character values remain zero off the unit group."
-        ),
-        request_type=DirichletCharacterInverseRequest,
-        result_type=DirichletCharacter,
-        run=_compute_character_inverse,
-        tags=("number-theory", "dirichlet-character", "exact"),
-        examples=(
-            OperationExample(
-                name="inverse_order_four_character_mod5",
-                description=(
-                    "Invert a non-self-inverse character modulo 5 while retaining "
-                    "its exact finite unit-group parent."
-                ),
-                input={"character": {"group": _GROUP_MOD5, "coordinates": [1]}},
             ),
         ),
     ),

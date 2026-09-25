@@ -6,10 +6,6 @@ from jacobian.math.number_theory.characters import (
     dirichlet_character_group_enumerate,
     dirichlet_character_inverse,
 )
-from jacobian.math.number_theory.characters._models import (
-    DirichletCharacterInverseRequest,
-)
-from jacobian.math.number_theory.characters._tools import TOOLS
 from jacobian.math.number_theory.characters.operations import (
     dirichlet_character_product,
 )
@@ -34,19 +30,3 @@ def test_inverse_is_the_dual_group_inverse_and_character_conjugate() -> None:
                 DirichletCharacter.model_validate_json(inverse.model_dump_json())
                 == inverse
             )
-
-
-def test_inverse_operation_is_published_and_composes_from_its_example() -> None:
-    operation = next(
-        tool
-        for tool in TOOLS
-        if tool.operation_id == "dirichlet_character.inverse.compute"
-    )
-    assert operation.request_type is DirichletCharacterInverseRequest
-    assert operation.result_type is DirichletCharacter
-
-    example = operation.examples[0]
-    request = operation.request_type.model_validate(example.input)
-    result = operation.run(request)
-    assert result == dirichlet_character_inverse(request.character)
-    assert dirichlet_character_product(request.character, result).coordinates == (0,)

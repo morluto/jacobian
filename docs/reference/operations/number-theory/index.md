@@ -24,7 +24,6 @@ and finite abelian-group decompositions are separate catalog entries.
 - [Exact finite-sequence autocorrelation](finite-sequence-autocorrelation.md)
 - [Kempner arithmetic-progression decisions](kempner-arithmetic-progressions.md)
 - [Exact conjugation of Dirichlet characters](dirichlet-character-conjugate.md)
-- [Exact inverse of a Dirichlet character](dirichlet-character-inverse.md)
 - [Exact Dirichlet-character order](dirichlet-character-order.md)
 - [Exact Dirichlet-character kernel](dirichlet-character-kernel.md)
 - [Exact Dirichlet-character parity](dirichlet-character-parity.md)

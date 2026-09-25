@@ -1579,7 +1579,13 @@ def _restriction_source_modulus(
             code="dirichlet_character.group.modulus_bound",
             message="source modulus exceeds the 2,048 character-group bound",
         )
-    if not 1 <= target_modulus <= MAX_CHARACTER_GROUP_MODULUS:
+    if target_modulus < 1:
+        raise OperationDomainValidationError(
+            location=("target_modulus",),
+            code="dirichlet_character.restriction.modulus_positive",
+            message="target modulus must be positive",
+        )
+    if target_modulus > MAX_CHARACTER_GROUP_MODULUS:
         raise OperationResourceAdmissionError(
             location=("target_modulus",),
             code="dirichlet_character.group.modulus_bound",
@@ -2183,6 +2189,14 @@ def _admit_sequence_twist_source(
             message="index origin must be a signed 32-bit integer",
         )
     if isinstance(sequence, FiniteCyclotomicSequence):
+        try:
+            sequence = FiniteCyclotomicSequence.model_validate(sequence.model_dump())
+        except (ValidationError, AttributeError, TypeError, ValueError) as exc:
+            raise OperationDomainValidationError(
+                location=("sequence",),
+                code="dirichlet_character.sequence_twist.sequence_invalid",
+                message="cyclotomic source sequence is malformed",
+            ) from exc
         if index_origin is not None and index_origin != sequence.index_origin:
             raise OperationDomainValidationError(
                 location=("index_origin",),
@@ -2382,9 +2396,16 @@ def _compute_generalized_gauss_sum(
             code=f"dirichlet_character.{error_name}.frequency_type",
             message="frequency must be a strict integer",
         )
-    _admit_character_integer(
-        frequency, type_code=f"dirichlet_character.{error_name}.frequency_type"
-    )
+    try:
+        _admit_character_integer(
+            frequency, type_code=f"dirichlet_character.{error_name}.frequency_type"
+        )
+    except PydanticCustomError as exc:
+        raise OperationResourceAdmissionError(
+            location=("frequency",),
+            code=f"dirichlet_character.{error_name}.frequency_digit_bound",
+            message="frequency exceeds the admitted exact integer digit bound",
+        ) from exc
     group = character.group
     modulus = group.modulus
     frequency_residue = frequency % modulus

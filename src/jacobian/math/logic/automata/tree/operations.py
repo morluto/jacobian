@@ -53,6 +53,7 @@ from jacobian.math.logic.automata.tree.values import (
     TreeAutomatonTransition,
     TreeStateChartEntry,
     _build_reachable_state_profile,
+    _reachability_work_preflight,
     _reject_tree,
     accepted_tree_count_work_bound,
     ranked_tree_node_count,
@@ -421,6 +422,18 @@ def tree_context_transformation_monoid(
             message="max_elements must be an integer from 1 through 512",
         )
     _preflight_complete_automaton(automaton)
+    # The reachable-state profile is a mandatory phase, so admit its full
+    # preflight charge from the shared work envelope before the saturation
+    # executes; witness and generator bounds are checked afterwards.
+    reachability_work = _reachability_work_preflight(automaton)
+    if reachability_work > MAX_TREE_AUTOMATON_WORK:
+        raise OperationResourceAdmissionError(
+            location=("automaton",),
+            code="tree_context.monoid.reachability_work_bound",
+            message=(
+                "the mandatory reachable-state profile exceeds the monoid work bound"
+            ),
+        )
     profile = _build_reachable_state_profile(automaton)
     witness_trees = {witness.state: witness.tree for witness in profile.witnesses}
     reachable = profile.reachable_states
@@ -446,7 +459,7 @@ def tree_context_transformation_monoid(
                 rank_generators * (len(automaton.transitions) + states * rank)
                 + sibling_tree_nodes
             )
-    if generator_work > MAX_TREE_AUTOMATON_WORK:
+    if reachability_work + generator_work > MAX_TREE_AUTOMATON_WORK:
         raise OperationResourceAdmissionError(
             location=("automaton", "arity"),
             code="tree_context.monoid.generator_work_bound",
@@ -461,7 +474,7 @@ def tree_context_transformation_monoid(
     discovered: dict[tuple[int, ...], FiniteTreeContext] = {identity: identity_context}
     ordered_generators = tuple(sorted(generators.items()))
     frontier = [identity]
-    charged_work = generator_work
+    charged_work = reachability_work + generator_work
     total_context_nodes = 0
     cursor = 0
     while cursor < len(frontier):

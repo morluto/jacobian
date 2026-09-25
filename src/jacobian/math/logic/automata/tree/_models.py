@@ -261,6 +261,13 @@ class TreeContextTransformationMonoidResult(StrictModel):
                 "monoid maps must be unique and lexicographically ordered",
             )
         if any(
+            element.context.arity != self.automaton.arity for element in self.elements
+        ):
+            raise _validation_error(
+                "context_monoid_signature",
+                "every element witness context must match the automaton signature",
+            )
+        if any(
             len(mapping) != states or any(not 0 <= q < states for q in mapping)
             for mapping in maps
         ):

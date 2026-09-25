@@ -432,12 +432,8 @@ def _saturate_choices(
     raise RuntimeError("tree automaton reachability did not reach a fixed point")
 
 
-def _priced_saturation(
-    automaton: BottomUpTreeAutomaton,
-) -> tuple[
-    tuple[TreeAutomatonTransition, ...], int, int, int, list[_WitnessChoice | None]
-]:
-    """Run exactly one sorted least-fixed-point pass and price that same pass."""
+def _saturation_pricing(automaton: BottomUpTreeAutomaton) -> tuple[int, int]:
+    """Price one sorted saturation pass without executing any transition scan."""
 
     transition_count = len(automaton.transitions)
     maximum_arity = max(
@@ -451,6 +447,34 @@ def _priced_saturation(
     per_scan_work = 2 * automaton.state_count + sum(
         6 + 4 * len(row.child_states) for row in automaton.transitions
     )
+    return sort_work, per_scan_work
+
+
+def _reachability_work_preflight(automaton: BottomUpTreeAutomaton) -> int:
+    """Bound one complete reachable-state pass before it executes.
+
+    A schema-valid saturation always converges within ``state_count + 1``
+    scans, so this conservative charge covers transition sorting, every scan,
+    and witness materialization. Consumers sharing the tree-automaton work
+    envelope admit this mandatory phase from the bound before running it.
+    """
+
+    sort_work, per_scan_work = _saturation_pricing(automaton)
+    return (
+        sort_work
+        + (automaton.state_count + 1) * per_scan_work
+        + 3 * MAX_REACHABILITY_WITNESS_NODES
+    )
+
+
+def _priced_saturation(
+    automaton: BottomUpTreeAutomaton,
+) -> tuple[
+    tuple[TreeAutomatonTransition, ...], int, int, int, list[_WitnessChoice | None]
+]:
+    """Run exactly one sorted least-fixed-point pass and price that same pass."""
+
+    sort_work, per_scan_work = _saturation_pricing(automaton)
     sorted_transitions = tuple(sorted(automaton.transitions, key=_transition_key))
     choices, scan_rounds = _saturate_choices(sorted_transitions, automaton.state_count)
     return sorted_transitions, sort_work, per_scan_work, scan_rounds, choices

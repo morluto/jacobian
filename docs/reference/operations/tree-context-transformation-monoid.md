@@ -16,10 +16,13 @@ generate all contexts because every sibling of a one-hole context is a ground
 tree. A witness context is retained for each distinct map so the result
 composes with context plugging and state-map evaluation.
 
-`max_elements` bounds the exact monoid size. The kernel also admits elementary
-generator work, closure work, exact multiplication-table work and cells, and
-the aggregate size and depth of witness contexts. If any bound is exceeded,
-the operation refuses the request without returning a partial monoid.
+`max_elements` bounds the exact monoid size. The kernel first admits the
+mandatory reachable-state profile (transition sorting, bounded saturation
+scans, and witness materialization) from the same fixed work envelope, then
+admits elementary generator work, closure work, exact multiplication-table
+work and cells, and the aggregate size and depth of witness contexts. If any
+bound is exceeded, the operation refuses the request without returning a
+partial monoid.
 
 The context and transformation definitions follow [Tree Automata Techniques
 and Applications, section 1](https://jacquema.gitlabpages.inria.fr/files/tata.pdf).

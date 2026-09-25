@@ -124,7 +124,9 @@ def test_reverse_rejects_before_constructing_an_oversized_result(
         post=((0,),),
     )
     bound = operations._petri_net_reverse_output_bound(net)
-    monkeypatch.setattr(operations, "MAX_PETRI_NET_REVERSE_OUTPUT_BYTES", bound - 1)
+    monkeypatch.setattr(
+        operations, "MAX_PETRI_NET_REVERSE_MATERIALIZED_BYTES", bound - 1
+    )
 
     def unexpected_construct(**_values: object) -> PetriNet:
         raise AssertionError("the result should be rejected before construction")

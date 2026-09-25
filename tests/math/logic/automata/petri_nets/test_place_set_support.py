@@ -2,14 +2,19 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
+from pydantic import ValidationError
 
 from jacobian.catalog.catalog import Catalog
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.logic.automata.petri_nets import (
     PetriNet,
     PetriPlaceSubset,
     place_set_support,
 )
+from jacobian.math.logic.automata.petri_nets._models import PlaceSetSupportResult
 
 
 def test_profile_returns_complete_support_and_both_predicates() -> None:
@@ -44,6 +49,64 @@ def test_profile_rejects_a_place_outside_its_net_axis() -> None:
     net = PetriNet(place_count=1, transition_count=0, pre=((),), post=((),))
     with pytest.raises(ValueError, match="subset must use the net place axis"):
         place_set_support(net, PetriPlaceSubset(places=(1,)))
+
+
+@pytest.mark.parametrize("malformed", [None, [0], (0,), {"places": (0,)}, 1])
+def test_native_malformed_place_sets_get_owner_domain_errors(malformed) -> None:
+    net = PetriNet(
+        place_count=2, transition_count=1, pre=((1,), (0,)), post=((0,), (1,))
+    )
+    with pytest.raises(OperationDomainValidationError):
+        place_set_support(net, malformed)
+
+
+def test_native_out_of_axis_place_gets_the_stable_domain_error() -> None:
+    net = PetriNet(
+        place_count=2, transition_count=1, pre=((1,), (0,)), post=((0,), (1,))
+    )
+    with pytest.raises(OperationDomainValidationError) as excinfo:
+        place_set_support(net, PetriPlaceSubset(places=(2,)))
+    assert type(excinfo.value) is OperationDomainValidationError
+    assert excinfo.value.errors()[0]["type"] == "petri_net.place_axis"
+
+
+def test_support_profiles_match_exhaustive_arc_enumeration() -> None:
+    net = PetriNet(
+        place_count=3,
+        transition_count=3,
+        pre=((1, 0, 1), (0, 1, 0), (0, 0, 0)),
+        post=((0, 1, 0), (1, 0, 0), (0, 0, 1)),
+    )
+    for mask in range(1 << 3):
+        places = tuple(p for p in range(3) if mask >> p & 1)
+        result = place_set_support(net, PetriPlaceSubset(places=places))
+        selected = set(places)
+        producers = sorted(
+            {t for t in range(3) for p in selected if net.post[p][t] > 0}
+        )
+        consumers = sorted({t for t in range(3) for p in selected if net.pre[p][t] > 0})
+        assert result.producers_into == tuple(producers)
+        assert result.consumers_from == tuple(consumers)
+        assert result.siphon_offenders == tuple(
+            t for t in producers if t not in consumers
+        )
+        assert result.trap_offenders == tuple(
+            t for t in consumers if t not in producers
+        )
+        assert result.is_siphon == (not result.siphon_offenders)
+        assert result.is_trap == (not result.trap_offenders)
+
+
+def test_serialized_profile_rejects_negative_transition_indices() -> None:
+    # Shared -1 entries keep the offender-set equalities consistent, so only
+    # the transition-axis check can reject the forged wire profile.
+    net = PetriNet(place_count=1, transition_count=2, pre=((0, 0),), post=((0, 0),))
+    result = place_set_support(net, PetriPlaceSubset(places=(0,)))
+    payload = json.loads(result.model_dump_json())
+    payload["producers_into"] = [-1]
+    payload["consumers_from"] = [-1]
+    with pytest.raises(ValidationError):
+        PlaceSetSupportResult.model_validate_json(json.dumps(payload))
 
 
 def test_catalog_declares_the_support_profile_operation() -> None:

@@ -16,12 +16,13 @@ from jacobian.math.lattices.operations import hermite_normal_form
 from jacobian.math.logic.automata.petri_nets._models import (
     MAX_CONCURRENT_STEP_OCCURRENCES,
     MAX_FIRING_SEQUENCE_LENGTH,
-    MAX_MARKING_COMMUTATION_PROFILE_OUTPUT_BYTES,
+    MAX_FIRING_SEQUENCE_REPLAY_MATERIALIZED_BYTES,
+    MAX_MARKING_COMMUTATION_PROFILE_MATERIALIZED_BYTES,
     MAX_MARKING_COMMUTATION_PROFILE_WORK,
-    MAX_MARKING_CONFLICT_PROFILE_OUTPUT_BYTES,
-    MAX_PETRI_NONNEGATIVE_INVARIANT_OUTPUT_BYTES,
+    MAX_MARKING_CONFLICT_PROFILE_MATERIALIZED_BYTES,
     MAX_PETRI_NONNEGATIVE_INVARIANT_WORK,
-    MAX_SIPHON_TRAP_FAMILY_OUTPUT_BYTES,
+    MAX_PUMPING_WITNESS_MATERIALIZED_BYTES,
+    MAX_SIPHON_TRAP_FAMILY_MATERIALIZED_BYTES,
     MAX_SIPHON_TRAP_PLACES,
     MAX_SIPHON_TRAP_WORK,
     MAX_STATE_EQUATION_OCCURRENCES,
@@ -32,6 +33,7 @@ from jacobian.math.logic.automata.petri_nets._models import (
     IncidenceMatrixResult,
     MarkingCommutationProfileResult,
     MarkingConflictProfileResult,
+    MarkingReachabilityLimit,
     MarkingReachabilityResult,
     PetriInvariantsResult,
     PetriMarkingState,
@@ -39,15 +41,16 @@ from jacobian.math.logic.automata.petri_nets._models import (
     PetriPlaceSubset,
     PetriReachabilityEdge,
     PlaceSetInitialMarkingProfileResult,
-    PlaceSetSupportRequest,
     PlaceSetSupportResult,
     PumpingWitnessResult,
     ReachabilityResult,
     SiphonTrapFamilyResult,
     SiphonTrapResult,
     StateEquationResult,
+    _firing_sequence_replay_output_bound,
     _marking_commutation_profile_output_bound,
     _marking_conflict_profile_output_bound,
+    _pumping_witness_output_bound,
 )
 from jacobian.math.logic.automata.petri_nets.values import (
     MAX_PETRI_MARKING,
@@ -93,7 +96,7 @@ __all__ = [
     "verify_siphon_trap",
 ]
 
-MAX_PETRI_NET_REVERSE_OUTPUT_BYTES = 10 * 1024 * 1024
+MAX_PETRI_NET_REVERSE_MATERIALIZED_BYTES = 10 * 1024 * 1024
 
 
 def _petri_net_reverse_output_bound(net: PetriNet) -> int:
@@ -170,8 +173,8 @@ def reverse_petri_net(net: PetriNet) -> PetriNet:
     """Reverse every transition by exchanging its input and output arcs."""
 
     admitted = _admit_net(net)
-    output_bytes = _petri_net_reverse_output_bound(admitted)
-    if output_bytes > MAX_PETRI_NET_REVERSE_OUTPUT_BYTES:
+    materialized_bytes = _petri_net_reverse_output_bound(admitted)
+    if materialized_bytes > MAX_PETRI_NET_REVERSE_MATERIALIZED_BYTES:
         raise OperationResourceAdmissionError(
             location=("net",),
             code="petri_net.reverse_output_bound",
@@ -283,7 +286,7 @@ def marking_conflict_profile(
     output_bound = _marking_conflict_profile_output_bound(
         net, marking, enabled_count=len(enabled), pair_count=pair_count
     )
-    if output_bound > MAX_MARKING_CONFLICT_PROFILE_OUTPUT_BYTES:
+    if output_bound > MAX_MARKING_CONFLICT_PROFILE_MATERIALIZED_BYTES:
         raise OperationResourceAdmissionError(
             location=("net", "marking"),
             code="petri_net.conflict_profile_output_bound",
@@ -359,6 +362,18 @@ def fire_transition(
     )
 
 
+def _require_step_container(transition_counts: object, code: str) -> tuple[int, ...]:
+    """Require the canonical tuple container before inspecting its length."""
+
+    if type(transition_counts) is not tuple:
+        raise OperationDomainValidationError(
+            location=("transition_counts",),
+            code=code,
+            message="transition counts must be a tuple on the net transition axis",
+        )
+    return transition_counts
+
+
 def concurrent_step(
     net: PetriNet, marking: Marking, transition_counts: tuple[int, ...]
 ) -> ConcurrentStepResult:
@@ -371,15 +386,18 @@ def concurrent_step(
 
     net = _admit_net(net)
     marking = _require_marking_size(net, marking)
-    if len(transition_counts) != net.transition_count or any(
-        type(count) is not int or count < 0 for count in transition_counts
+    counts = _require_step_container(
+        transition_counts, "petri_net.step_transition_axis"
+    )
+    if len(counts) != net.transition_count or any(
+        type(count) is not int or count < 0 for count in counts
     ):
         raise OperationDomainValidationError(
             location=("transition_counts",),
             code="petri_net.step_transition_axis",
             message="transition counts must be nonnegative integers on the net axis",
         )
-    total = sum(transition_counts)
+    total = sum(counts)
     if total > MAX_CONCURRENT_STEP_OCCURRENCES:
         raise OperationResourceAdmissionError(
             location=("transition_counts",),
@@ -388,7 +406,7 @@ def concurrent_step(
         )
     required = tuple(
         sum(
-            net.pre[place][transition] * transition_counts[transition]
+            net.pre[place][transition] * counts[transition]
             for transition in range(net.transition_count)
         )
         for place in range(net.place_count)
@@ -400,7 +418,7 @@ def concurrent_step(
         return ConcurrentStepResult(
             net=net,
             marking=marking,
-            transition_counts=transition_counts,
+            transition_counts=counts,
             required=required,
             deficit=deficit,
             status="NOT_ENABLED",
@@ -409,7 +427,7 @@ def concurrent_step(
         marking.tokens[place]
         + sum(
             (net.post[place][transition] - net.pre[place][transition])
-            * transition_counts[transition]
+            * counts[transition]
             for transition in range(net.transition_count)
         )
         for place in range(net.place_count)
@@ -418,7 +436,7 @@ def concurrent_step(
         return ConcurrentStepResult(
             net=net,
             marking=marking,
-            transition_counts=transition_counts,
+            transition_counts=counts,
             required=required,
             deficit=deficit,
             status="ESCAPES_DECLARED_ENVELOPE",
@@ -427,7 +445,7 @@ def concurrent_step(
     return ConcurrentStepResult(
         net=net,
         marking=marking,
-        transition_counts=transition_counts,
+        transition_counts=counts,
         required=required,
         deficit=deficit,
         status="FIRED",
@@ -469,6 +487,15 @@ def _replay_firing_sequence_admitted(
 ) -> FiringSequenceReplayResult:
     """Replay a sequence after the shared net, marking, and axis admission."""
 
+    # Every retained prefix serializes its source context, so the whole
+    # ledger is admitted before the first prefix marking is constructed.
+    output_bound = _firing_sequence_replay_output_bound(net, marking, len(sequence))
+    if output_bound > MAX_FIRING_SEQUENCE_REPLAY_MATERIALIZED_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("net", "sequence"),
+            code="petri_net.firing_sequence_output_bound",
+            message="firing-sequence replay ledger exceeds the serialized output bound",
+        )
     current = list(marking.tokens)
     prefix: list[Marking] = []
     parikh = [0] * net.transition_count
@@ -556,6 +583,15 @@ def check_pumping_witness(
     net = _admit_net(net)
     marking = _require_marking_size(net, marking)
     _require_sequence_axes(net, sequence)
+    # The retained ledger serializes its source context once per step, so the
+    # outer result and every retained prefix are admitted before replay.
+    output_bound = _pumping_witness_output_bound(net, marking, len(sequence))
+    if output_bound > MAX_PUMPING_WITNESS_MATERIALIZED_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("net", "sequence"),
+            code="petri_net.pumping_witness_output_bound",
+            message="pumping witness replay ledger exceeds the serialized output bound",
+        )
     replay = _replay_firing_sequence_admitted(net, marking, sequence)
     if replay.status == "BLOCKED":
         return PumpingWitnessResult(
@@ -565,7 +601,12 @@ def check_pumping_witness(
             replay=replay,
             status="BLOCKED",
         )
-    assert replay.final_marking is not None
+    if replay.final_marking is None:  # pragma: no cover - kernel invariant.
+        raise OperationDomainValidationError(
+            location=("net", "sequence"),
+            code="petri_net.pumping_witness_missing_final",
+            message="a firing replay must retain its final marking",
+        )
     delta = tuple(
         final - initial
         for initial, final in zip(
@@ -626,7 +667,7 @@ def marking_commutation_profile(
     output_bound = _marking_commutation_profile_output_bound(
         admitted_net, admitted_marking
     )
-    if output_bound > MAX_MARKING_COMMUTATION_PROFILE_OUTPUT_BYTES:
+    if output_bound > MAX_MARKING_COMMUTATION_PROFILE_MATERIALIZED_BYTES:
         raise OperationResourceAdmissionError(
             location=("net", "marking"),
             code="petri_net.commutation_profile_output_bound",
@@ -688,15 +729,18 @@ def state_equation_target(
     """Compute M0 + (Post - Pre)y over Z, without asserting reachability."""
     net = _admit_net(net)
     marking = _require_marking_size(net, marking)
-    if len(transition_counts) != net.transition_count or any(
-        type(count) is not int or count < 0 for count in transition_counts
+    counts = _require_step_container(
+        transition_counts, "petri_net.state_equation_transition_axis"
+    )
+    if len(counts) != net.transition_count or any(
+        type(count) is not int or count < 0 for count in counts
     ):
         raise OperationDomainValidationError(
             location=("transition_counts",),
             code="petri_net.state_equation_transition_axis",
             message="transition counts must be nonnegative integers on the net axis",
         )
-    if sum(transition_counts) > MAX_STATE_EQUATION_OCCURRENCES:
+    if sum(counts) > MAX_STATE_EQUATION_OCCURRENCES:
         raise OperationResourceAdmissionError(
             location=("transition_counts",),
             code="petri_net.state_equation_occurrence_bound",
@@ -708,7 +752,7 @@ def state_equation_target(
         marking.tokens[place]
         + sum(
             (net.post[place][transition] - net.pre[place][transition])
-            * transition_counts[transition]
+            * counts[transition]
             for transition in range(net.transition_count)
         )
         for place in range(net.place_count)
@@ -716,7 +760,7 @@ def state_equation_target(
     return StateEquationResult(
         net=net,
         marking=marking,
-        transition_counts=transition_counts,
+        transition_counts=counts,
         target=target,
     )
 
@@ -817,14 +861,15 @@ def marking_reachability(
     # Each entry stores (parent state index, transition fired).
     predecessor: list[tuple[int, int] | None] = [None]
     queue: deque[int] = deque([0])
-    incomplete_reasons: set[str] = set()
+    incomplete_reasons: set[MarkingReachabilityLimit] = set()
 
     def witness(state: int) -> tuple[int, ...]:
         transitions: list[int] = []
-        while predecessor[state] is not None:
-            parent, transition = predecessor[state]
+        entry = predecessor[state]
+        while entry is not None:
+            parent, transition = entry
             transitions.append(transition)
-            state = parent
+            entry = predecessor[parent]
         transitions.reverse()
         return tuple(transitions)
 
@@ -1059,12 +1104,12 @@ def siphon_trap_family(net: PetriNet) -> SiphonTrapFamilyResult:
         )
     index_digits = max(1, len(str(max(0, places - 1))))
     bytes_per_subset = 32 + places * (index_digits + 1)
-    output_bytes = (
+    materialized_bytes = (
         2 * subsets * bytes_per_subset
         + len(net.model_dump_json().encode("utf-8"))
         + 256
     )
-    if output_bytes > MAX_SIPHON_TRAP_FAMILY_OUTPUT_BYTES:
+    if materialized_bytes > MAX_SIPHON_TRAP_FAMILY_MATERIALIZED_BYTES:
         raise OperationResourceAdmissionError(
             location=("net",),
             code="petri_net.siphon_trap_family_output_bound",
@@ -1111,10 +1156,29 @@ def place_set_support(net: PetriNet, places: PetriPlaceSubset) -> PlaceSetSuppor
     inclusion.
     """
     net = _admit_net(net)
-    request = PlaceSetSupportRequest.model_validate(
-        {"net": net, "places": places}, strict=True
-    )
-    return _place_set_support_admitted(net, request.places)
+    if not isinstance(places, PetriPlaceSubset):
+        raise OperationDomainValidationError(
+            location=("places",),
+            code="petri_net.place_subset_type",
+            message="places must be a PetriPlaceSubset value",
+        )
+    try:
+        admitted_places = PetriPlaceSubset.model_validate(
+            places.model_dump(), strict=True
+        )
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("places",),
+            code="petri_net.place_subset_shape",
+            message="places must be a canonical PetriPlaceSubset value",
+        ) from exc
+    if any(place >= net.place_count for place in admitted_places.places):
+        raise OperationDomainValidationError(
+            location=("places",),
+            code="petri_net.place_axis",
+            message="subset must use the net place axis",
+        )
+    return _place_set_support_admitted(net, admitted_places)
 
 
 def _place_set_support_admitted(
@@ -1393,6 +1457,12 @@ def _nonnegative_kernel_admission(
         return (0, 0, 0)
     if row_count == 0 or not any(any(row) for row in matrix):
         return (0, dimension * dimension, dimension * (dimension + 2))
+    # A strict-sign row forces every nonnegative kernel vector to vanish.
+    if any(
+        all(value > 0 for value in row) or all(value < 0 for value in row)
+        for row in matrix
+    ):
+        return (0, 0, 0)
     # A nonzero 1-dimensional vector lies in the kernel only when every
     # coefficient vanishes, handled above.
     if dimension == 1:
@@ -1435,8 +1505,12 @@ def _nonnegative_integer_kernel_generators(
         return ()
     if not matrix or not any(any(row) for row in matrix):
         return tuple(
-            tuple(1 if coordinate == index else 0 for coordinate in range(dimension))
-            for index in range(dimension)
+            sorted(
+                tuple(
+                    1 if coordinate == index else 0 for coordinate in range(dimension)
+                )
+                for index in range(dimension)
+            )
         )
     if dimension == 1:
         return ()
@@ -1444,7 +1518,9 @@ def _nonnegative_integer_kernel_generators(
     generators: list[tuple[int, ...]] = []
     for norm in range(1, height + 1):
         for vector in _weak_compositions(norm, dimension):
-            if any(sum(a * x for a, x in zip(row, vector, strict=True)) for row in matrix):
+            if any(
+                sum(a * x for a, x in zip(row, vector, strict=True)) for row in matrix
+            ):
                 continue
             kernel_vectors.append(vector)
             if not any(
@@ -1479,23 +1555,11 @@ def petri_nonnegative_invariant_generators(
     t_bound = _nonnegative_kernel_admission(incidence, net.transition_count)
     p_bound = _nonnegative_kernel_admission(transposed, net.place_count)
     total_work = t_bound[1] + p_bound[1]
-    total_output = (
-        t_bound[2]
-        + p_bound[2]
-        + _petri_net_reverse_output_bound(net)
-        + 512
-    )
     if total_work > MAX_PETRI_NONNEGATIVE_INVARIANT_WORK:
         raise OperationResourceAdmissionError(
             location=("net",),
             code="petri_net.nonnegative_invariant_work",
             message="nonnegative invariant Hilbert-basis search exceeds its exact work bound",
-        )
-    if total_output > MAX_PETRI_NONNEGATIVE_INVARIANT_OUTPUT_BYTES:
-        raise OperationResourceAdmissionError(
-            location=("net",),
-            code="petri_net.nonnegative_invariant_output",
-            message="nonnegative invariant Hilbert-basis output exceeds its bound",
         )
     return PetriNonnegativeInvariantResult._from_kernel(
         net=net,

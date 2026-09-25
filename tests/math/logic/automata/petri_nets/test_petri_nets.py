@@ -161,6 +161,32 @@ def test_state_equation_rejects_foreign_marking_and_unbounded_count_vector() -> 
         )
 
 
+@pytest.mark.parametrize(
+    "malformed",
+    [None, [0, 0], "ab", 1, {0: 0, 1: 0}, (0, 0, 0), (0.0, 0), (0, -1), (True, 0)],
+)
+def test_state_equation_rejects_malformed_count_containers(malformed) -> None:
+    # The exported native face admits the same canonical tuple as the wire
+    # model before taking the vector's length, so malformed containers get
+    # the stable domain error instead of a TypeError or lax coercion.
+    net = _simple_net()
+    with pytest.raises(OperationDomainValidationError):
+        petri_nets.state_equation_target(net, Marking(tokens=(1, 0)), malformed)
+
+
+def test_state_equation_canonical_vector_still_matches_direct_arithmetic() -> None:
+    net = _token_passing_net()
+    tokens = (2, 0)
+    result = petri_nets.state_equation_target(
+        net, Marking(tokens=tokens, net=net), (1, 0)
+    )
+    expected = tuple(
+        tokens[p] + (net.post[p][0] - net.pre[p][0]) for p in range(net.place_count)
+    )
+    assert result.target == expected
+    assert result.transition_counts == (1, 0)
+
+
 def test_empty_net_preserves_empty_axes_across_json() -> None:
     net = PetriNet(place_count=0, transition_count=0, pre=(), post=())
     marking = Marking(tokens=())

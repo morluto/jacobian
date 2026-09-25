@@ -47,7 +47,7 @@ def test_conservative_cycle_and_zero_incidence_axes() -> None:
         post=((), ()),
     )
     result = petri_nonnegative_invariant_generators(isolated)
-    assert result.p_generators == ((1, 0), (0, 1))
+    assert result.p_generators == ((0, 1), (1, 0))
     assert result.t_generators == ()
 
 

@@ -25,19 +25,21 @@ from jacobian.math.matrices.values import IntegerMatrix
 
 MAX_SIPHON_TRAP_WORK = 20_000_000
 MAX_SIPHON_TRAP_PLACES = 20
-MAX_SIPHON_TRAP_FAMILY_OUTPUT_BYTES = 4_000_000
+MAX_SIPHON_TRAP_FAMILY_MATERIALIZED_BYTES = 4_000_000
 MAX_FIRING_SEQUENCE_LENGTH = 1024
 MAX_CONCURRENT_STEP_OCCURRENCES = 1000
 MAX_STATE_EQUATION_OCCURRENCES = 1000
 MAX_STATE_EQUATION_TARGET_ABS = 64_001_000
-MAX_MARKING_CONFLICT_PROFILE_OUTPUT_BYTES = 10 * 1024 * 1024
+MAX_MARKING_CONFLICT_PROFILE_MATERIALIZED_BYTES = 10 * 1024 * 1024
 MAX_MARKING_CONFLICT_PROFILE_PAIRS = (
     MAX_PETRI_TRANSITIONS * (MAX_PETRI_TRANSITIONS - 1) // 2
 )
-MAX_MARKING_COMMUTATION_PROFILE_OUTPUT_BYTES = 10 * 1024 * 1024
+MAX_MARKING_COMMUTATION_PROFILE_MATERIALIZED_BYTES = 10 * 1024 * 1024
 MAX_MARKING_COMMUTATION_PROFILE_WORK = 100_000
 MAX_PETRI_NONNEGATIVE_INVARIANT_WORK = 2_000_000
 MAX_PETRI_NONNEGATIVE_INVARIANT_OUTPUT_BYTES = 4_000_000
+MAX_FIRING_SEQUENCE_REPLAY_MATERIALIZED_BYTES = 10 * 1024 * 1024
+MAX_PUMPING_WITNESS_MATERIALIZED_BYTES = 10 * 1024 * 1024
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -166,7 +168,7 @@ class MarkingConflictProfileResult(StrictModel):
             enabled_count=len(enabled),
             pair_count=pair_bound,
         )
-        if output_bound > MAX_MARKING_CONFLICT_PROFILE_OUTPUT_BYTES:
+        if output_bound > MAX_MARKING_CONFLICT_PROFILE_MATERIALIZED_BYTES:
             raise _validation_error(
                 "conflict_profile_output",
                 "marking conflict profile exceeds the serialized result bound",
@@ -265,6 +267,54 @@ def _marking_conflict_profile_output_bound(
     # the extra byte accounts for array separators. The fixed allowance covers
     # object keys, array delimiters, and the empty source fields.
     return source_bytes + 512 + enabled_count * 4 + pair_count * 10
+
+
+def _firing_sequence_replay_output_bound(
+    net: PetriNet, marking: Marking, sequence_length: int
+) -> int:
+    """Bound the retained replay ledger before any prefix marking is built."""
+
+    net_bytes = len(net.model_dump_json().encode("utf-8"))
+    source_marking_bytes = len(marking.model_dump_json().encode("utf-8"))
+    # Every produced marking follows the parent convention of the source
+    # marking and can widen each token spelling to four decimal digits
+    # (MAX_PETRI_MARKING is 1000). A parent-bound source marking already
+    # serializes the whole net, so retained prefixes cost this same width.
+    derived_marking_bytes = source_marking_bytes + 3 * net.place_count
+    prefix_bytes = sequence_length * derived_marking_bytes
+    # Sequence entries use at most two digits, Parikh and deficit entries at
+    # most five, and the blocked residual the admitted signed envelope.
+    numeric_bytes = 10 * (
+        1 + sequence_length + net.transition_count + 2 * net.place_count
+    )
+    return (
+        net_bytes
+        + source_marking_bytes
+        + derived_marking_bytes
+        + prefix_bytes
+        + numeric_bytes
+        + 1024
+    )
+
+
+def _pumping_witness_output_bound(
+    net: PetriNet, marking: Marking, sequence_length: int
+) -> int:
+    """Bound the outer pumping result on top of its embedded replay ledger."""
+
+    net_bytes = len(net.model_dump_json().encode("utf-8"))
+    source_marking_bytes = len(marking.model_dump_json().encode("utf-8"))
+    ledger_bytes = _firing_sequence_replay_output_bound(net, marking, sequence_length)
+    # The outer result re-serializes net, marking, and sequence beside the
+    # embedded replay and adds one bounded growth vector.
+    return (
+        ledger_bytes
+        + net_bytes
+        + source_marking_bytes
+        + 4 * sequence_length
+        + 6 * net.place_count
+        + 1024
+    )
 
 
 class FireTransitionRequest(StrictModel):
@@ -603,6 +653,9 @@ class ReachabilityResult(StrictModel):
         return self
 
 
+MarkingReachabilityLimit = Literal["MARKING_LIMIT", "SEQUENCE_LIMIT", "STATE_LIMIT"]
+
+
 class MarkingReachabilityRequest(StrictModel):
     """Find a firing sequence from an initial marking to a target marking."""
 
@@ -635,9 +688,7 @@ class MarkingReachabilityResult(StrictModel):
     status: Literal["REACHABLE", "UNREACHABLE", "INCOMPLETE"]
     sequence: FiringSequence | None = None
     explored_state_count: int = Field(ge=1, le=MAX_REACHABILITY_STATES)
-    incomplete_reasons: tuple[
-        Literal["MARKING_LIMIT", "SEQUENCE_LIMIT", "STATE_LIMIT"], ...
-    ] = ()
+    incomplete_reasons: tuple[MarkingReachabilityLimit, ...] = ()
 
     @model_validator(mode="after")
     def require_result_shape(self) -> Self:
@@ -785,7 +836,7 @@ class PlaceSetSupportResult(StrictModel):
         ):
             values = getattr(self, name)
             if values != tuple(sorted(set(values))) or any(
-                transition >= self.net.transition_count for transition in values
+                not 0 <= transition < self.net.transition_count for transition in values
             ):
                 raise _validation_error(
                     "transition_axis",
@@ -1160,7 +1211,7 @@ class MarkingCommutationProfileResult(StrictModel):
             )
         if (
             _marking_commutation_profile_output_bound(first.net, first.marking)
-            > MAX_MARKING_COMMUTATION_PROFILE_OUTPUT_BYTES
+            > MAX_MARKING_COMMUTATION_PROFILE_MATERIALIZED_BYTES
         ):
             raise _validation_error(
                 "commutation_profile_output",
@@ -1294,9 +1345,11 @@ class PetriNonnegativeInvariantResult(PetriNonnegativeInvariantRequest):
 __all__ = [
     "MAX_CONCURRENT_STEP_OCCURRENCES",
     "MAX_FIRING_SEQUENCE_LENGTH",
-    "MAX_MARKING_COMMUTATION_PROFILE_OUTPUT_BYTES",
+    "MAX_FIRING_SEQUENCE_REPLAY_MATERIALIZED_BYTES",
+    "MAX_MARKING_COMMUTATION_PROFILE_MATERIALIZED_BYTES",
     "MAX_MARKING_COMMUTATION_PROFILE_WORK",
-    "MAX_SIPHON_TRAP_FAMILY_OUTPUT_BYTES",
+    "MAX_PUMPING_WITNESS_MATERIALIZED_BYTES",
+    "MAX_SIPHON_TRAP_FAMILY_MATERIALIZED_BYTES",
     "MAX_SIPHON_TRAP_WORK",
     "MAX_STATE_EQUATION_OCCURRENCES",
     "MAX_STATE_EQUATION_TARGET_ABS",

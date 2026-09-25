@@ -143,6 +143,25 @@ def test_token_envelope_cut_is_incomplete_not_unreachable() -> None:
     assert result.explored_state_count == 1
 
 
+def test_multiple_envelope_cuts_report_sorted_limit_names() -> None:
+    # Two independent pumps: one successor crosses the token envelope while
+    # further new states hit the state cap, so both limit names must appear,
+    # sorted and unique.
+    net = PetriNet(
+        place_count=2,
+        transition_count=2,
+        pre=((0, 0), (0, 0)),
+        post=((1, 0), (0, 1)),
+    )
+    result = marking_reachability(
+        net, Marking(tokens=(999, 0)), Marking(tokens=(0, 0)), max_states=3
+    )
+    assert result.status == "INCOMPLETE"
+    assert result.sequence is None
+    assert result.incomplete_reasons == ("MARKING_LIMIT", "STATE_LIMIT")
+    assert result.explored_state_count == 3
+
+
 def test_witness_longer_than_replay_bound_is_incomplete() -> None:
     net = PetriNet.model_validate(
         {

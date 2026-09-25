@@ -288,7 +288,12 @@ def _validate_relation_edges(
 def _validate_inputs(
     request: RestrictRationalOutputRequest,
 ) -> tuple[
-    dict[tuple[int, int], int], tuple[tuple[int, ...], ...], tuple[tuple[int, ...], ...]
+    dict[tuple[int, int], int],
+    tuple[tuple[int, ...], ...],
+    tuple[
+        tuple[tuple[int, ...], ...],
+        tuple[tuple[int, ...], ...],
+    ],
 ]:
     relation = request.transducer
     if not isinstance(relation, RationalTransducer):

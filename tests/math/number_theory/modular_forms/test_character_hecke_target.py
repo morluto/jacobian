@@ -111,6 +111,21 @@ def test_character_hecke_action_preserves_rref_target_and_matches_pari() -> None
     assert result.coordinates[0] == _element(expected)
 
 
+def test_character_hecke_scales_nonunit_coordinate_once() -> None:
+    form = _form().model_copy(update={"coordinates": (_element(2),)})
+    unit_result = modular_character_coordinates_hecke(_form(), 5)
+    result = modular_character_coordinates_hecke(form, 5)
+
+    unit = unit_result.coordinates[0].coefficients_ascending
+    doubled = result.coordinates[0].coefficients_ascending
+    assert tuple(value.num for value in doubled) == tuple(
+        2 * value.num for value in unit
+    )
+    assert doubled != tuple(
+        type(value)(num=4 * value.num, den=value.den) for value in unit
+    )
+
+
 def test_character_hecke_rejects_bad_prime_for_its_exact_level() -> None:
     with pytest.raises(OperationDomainValidationError, match="gcd"):
         modular_character_coordinates_hecke(_form(), 2)

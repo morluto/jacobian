@@ -866,9 +866,9 @@ def _rref_character_coordinates_hecke(
     ):
         raise RuntimeError("Hecke image failed exact RREF Sturm reconstruction")
 
-    result_coordinate = _coefficient(
-        field, _order_six_product_coordinates(eigenvalue_coordinates, scalar)
-    )
+    # The source was scaled before applying T_n, so the pivot already equals
+    # the complete output coordinate c*lambda (not merely lambda).
+    result_coordinate = eigenvalue
     request_checkpoint("after canonical character Hecke reconstruction")
     return ModularFormCoordinates(
         space=space,

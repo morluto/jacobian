@@ -104,6 +104,7 @@ to another polynomial operation.
 
 - [Differential Ore operator addition](ore-differential-addition.md)
 - [First-order differential Ore operator LCLM](ore-first-order-lclm.md)
+- [Monic right division of differential Ore operators](ore-differential-right-division.md)
 - [Polynomial-coefficient Ore operators](ore-shift-polynomial-algebra.md)
 - [Shift Ore operator powers](ore-shift-operator-powers.md)
 - [Finite prefixes from polynomial recurrences](ore-shift-finite-recurrence.md)

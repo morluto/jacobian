@@ -10,6 +10,7 @@ from jacobian.catalog.models import (
 )
 from jacobian.math.finite_categories._models import FiniteCategoryNerve
 from jacobian.math.finite_categories.values import (
+    MAX_CATEGORY_IDENTIFIER_CHARACTERS,
     CategoryIdentifier,
     FiniteCategory,
     MorphismSpec,
@@ -23,6 +24,10 @@ from jacobian.math.topology.simplicial_sets._models import (
 from jacobian.math.topology.simplicial_sets.operations import from_tables
 
 NERVE_IDENTITY_WORK_BOUND = 100_000
+NERVE_IDENTIFIER_CELL_BOUND = 96 * 11 * MAX_CATEGORY_IDENTIFIER_CHARACTERS
+# Derived cell envelope: at most 96 simplices, each transports at most 5
+# morphism/6 object identifiers; identifiers are bounded to 4096 characters.
+NERVE_IDENTIFIER_CELL_BOUND = 96 * 11 * 4_096
 
 
 def _category_tables(
@@ -112,6 +117,28 @@ def _admit(category: FiniteCategory, degree: int) -> None:
         sizes[n] * ((n + 1) * (n + 2) // 2) for n in range(max(0, degree - 1))
     )
     identity_work += sum(sizes[n] * ((n + 1) * (n + 2)) for n in range(degree))
+    # Bound retained identifier payload by domain cells, not serialized bytes.
+    # Every identifier occurrence is at most MAX_CATEGORY_IDENTIFIER_CHARACTERS.
+    identifier_cells = sum(sizes) * (2 * degree + 3)
+    if (
+        identifier_cells * MAX_CATEGORY_IDENTIFIER_CHARACTERS
+        > NERVE_IDENTIFIER_CELL_BOUND
+    ):
+        raise OperationResourceAdmissionError(
+            location=("max_degree",),
+            code="finite_category.nerve_identifier_budget",
+            message="nerve transport exceeds the admitted identifier-cell bound",
+        )
+    identifier_cells = sum(sizes) * (2 * degree + 3)
+    if (
+        identifier_cells * MAX_CATEGORY_IDENTIFIER_CHARACTERS
+        > NERVE_IDENTIFIER_CELL_BOUND
+    ):
+        raise OperationResourceAdmissionError(
+            location=("max_degree",),
+            code="finite_category.nerve_identifier_budget",
+            message="nerve transport exceeds the admitted identifier-cell bound",
+        )
     if identity_work > NERVE_IDENTITY_WORK_BOUND:
         raise OperationResourceAdmissionError(
             location=("max_degree",),

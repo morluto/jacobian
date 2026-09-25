@@ -272,8 +272,8 @@ TOOLS = (
             OperationExample(
                 name="single_qubit_erasure_of_repetition_code",
                 description=(
-                    "The three-qubit bit-flip code cannot correct erasure of one "
-                    "qubit because a logical Z has support there."
+                    "The three-qubit phase-flip repetition checks cannot correct "
+                    "erasure of q0 because logical X on q0 has support there."
                 ),
                 input={
                     "check_space": {

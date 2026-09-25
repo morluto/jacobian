@@ -1417,7 +1417,8 @@ def stabilizer_erasure_correctability(
             "quantum.stabilizer.erasure.invalid_request",
             "erasure correctability requires a typed request",
         )
-    check_space = request.check_space
+    check_space = getattr(request, "check_space", None)
+    erased = getattr(request, "erased_qubit_ids", None)
     if not isinstance(check_space, CheckSpaceValue):
         _reject(
             "check_space",
@@ -1444,7 +1445,6 @@ def stabilizer_erasure_correctability(
             )
         rows.append([*row.x_bits, *row.z_bits])
     m = len(rows)
-    erased = request.erased_qubit_ids
     if (
         not isinstance(erased, tuple)
         or len(erased) > n

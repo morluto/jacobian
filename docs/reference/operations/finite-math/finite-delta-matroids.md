@@ -56,3 +56,20 @@ and symmetric-exchange bounds. These limits are separate: a small feasible
 family over too many ground elements exceeds the state bound, and a larger
 family on an otherwise admissible ground set can exceed the distance-work
 bound. The empty-ground delta-matroid has one mask and distance zero.
+
+`delta_matroid.binary.from_matrix_twist.compute` constructs `D(A)*T` from a
+labelled symmetric matrix `A` over GF(2) and a sorted ground-index subset `T`.
+The convention is `X` feasible in `D(A)` exactly when the principal matrix
+`A[X]` is nonsingular, with the empty principal matrix nonsingular; the twist
+then maps each feasible index set `X` to `X symmetric_difference T`. The
+returned binary presentation retains `A`, `T`, and the complete resulting
+`FiniteDeltaMatroid` on the same labelled ground axis.
+
+The principal-minor kernel admits at most eight ground elements and 250,000
+elimination work units before enumerating subsets. The twist transport is
+bounded by `2^n (1 + 2n + n^2)` work units, at most 256 rows, and at most
+`n 2^(n-1) <= 1,024` feasible-row memberships (`0` memberships for the empty
+ground). The retained result has at most 1,352 matrix, row, membership, and
+twist cells and at most 4,096 aggregate ground-label bytes across its matrix
+and delta-matroid axes. These are mathematical allocation bounds; they are not
+a deployment wire-byte ceiling.

@@ -7,6 +7,12 @@ from jacobian.catalog.models import (
 from jacobian.math.combinatorics.greedoids.values import FiniteFeasibleSetSystem
 from jacobian.math.combinatorics.matroids.delta.extra import (
     MAX_BINARY_GROUND,
+    MAX_BINARY_LABEL_BYTES,
+    MAX_BINARY_PRINCIPAL_MINOR_WORK,
+    MAX_BINARY_TWIST_OUTPUT_CELLS,
+    MAX_BINARY_TWIST_OUTPUT_MEMBERSHIPS,
+    MAX_BINARY_TWIST_STATES,
+    MAX_BINARY_TWIST_TRANSPORT_WORK,
     BinaryMatrixResult,
     BinarySymmetricMatrix,
 )
@@ -164,7 +170,7 @@ def _det2(a: list[list[int]]) -> int:
     return 1
 
 
-def binary(matrix: BinarySymmetricMatrix) -> BinaryMatrixResult:
+def _canonical_binary_matrix(matrix: BinarySymmetricMatrix) -> BinarySymmetricMatrix:
     if type(matrix) is not BinarySymmetricMatrix:
         raise OperationDomainValidationError(
             location=("matrix",),
@@ -181,6 +187,10 @@ def binary(matrix: BinarySymmetricMatrix) -> BinaryMatrixResult:
             code="delta_matroid.binary_carrier",
             message="matrix is not a canonical symmetric binary matrix",
         ) from exc
+    return matrix
+
+
+def _admit_binary_matrix(matrix: BinarySymmetricMatrix) -> int:
     n = len(matrix.ground)
     if n > MAX_BINARY_GROUND:
         raise OperationResourceAdmissionError(
@@ -189,12 +199,20 @@ def binary(matrix: BinarySymmetricMatrix) -> BinaryMatrixResult:
             message="binary principal-minor work exceeds its envelope",
         )
     subsets = 1 << n
-    if subsets * max(1, n) ** 3 > 250_000:
+    elimination_work = subsets * max(1, n) ** 3
+    if elimination_work > MAX_BINARY_PRINCIPAL_MINOR_WORK:
         raise OperationResourceAdmissionError(
             location=("matrix",),
             code="delta_matroid.binary_work",
             message="binary principal-minor work exceeds its envelope",
         )
+    return elimination_work
+
+
+def _binary_family(matrix: BinarySymmetricMatrix) -> BinaryMatrixResult:
+    """Construct after the matrix and principal-minor work were admitted."""
+
+    n = len(matrix.ground)
     rows = []
     for mask in range(1 << n):
         idx = [i for i in range(n) if mask >> i & 1]
@@ -211,4 +229,82 @@ def binary(matrix: BinarySymmetricMatrix) -> BinaryMatrixResult:
     )
 
 
-__all__ = ["binary", "dual", "minor"]
+def binary(matrix: BinarySymmetricMatrix) -> BinaryMatrixResult:
+    """Return D(A), whose feasible sets are its nonsingular principal axes."""
+
+    matrix = _canonical_binary_matrix(matrix)
+    _admit_binary_matrix(matrix)
+    return _binary_family(matrix)
+
+
+def binary_matrix_twist(
+    matrix: BinarySymmetricMatrix, subset: tuple[int, ...] = ()
+) -> BinaryMatrixResult:
+    """Return D(A)*T with the matrix presentation and twist retained."""
+
+    if type(subset) is not tuple or any(type(index) is not int for index in subset):
+        raise OperationDomainValidationError(
+            location=("subset",),
+            code="delta_matroid.binary_twist_subset",
+            message="twist indices must be a tuple of exact integers",
+        )
+    matrix = _canonical_binary_matrix(matrix)
+    n = len(matrix.ground)
+    if subset != tuple(sorted(set(subset))) or any(
+        index < 0 or index >= n for index in subset
+    ):
+        raise OperationDomainValidationError(
+            location=("subset",),
+            code="delta_matroid.binary_twist_subset",
+            message="twist indices must be sorted, distinct, and in range",
+        )
+    principal_work = _admit_binary_matrix(matrix)
+    label_bytes = sum(len(label.encode("utf-8")) for label in matrix.ground)
+    states = 1 << n
+    max_output_memberships = (n * states) // 2
+    transport_work = states * (1 + 2 * n + n**2)
+    output_cells = n**2 + states + max_output_memberships + n
+    output_label_bytes = 2 * label_bytes
+    if (
+        states > MAX_BINARY_TWIST_STATES
+        or max_output_memberships > MAX_BINARY_TWIST_OUTPUT_MEMBERSHIPS
+        or transport_work > MAX_BINARY_TWIST_TRANSPORT_WORK
+        or output_cells > MAX_BINARY_TWIST_OUTPUT_CELLS
+        or output_label_bytes > 2 * MAX_BINARY_LABEL_BYTES
+        or principal_work > MAX_BINARY_PRINCIPAL_MINOR_WORK
+    ):
+        raise OperationResourceAdmissionError(
+            location=("matrix",),
+            code="delta_matroid.binary_twist_work",
+            message="binary matrix twist exceeds its admitted work or output envelope",
+        )
+
+    source = _binary_family(matrix)
+    twist_mask = sum(1 << index for index in subset)
+    source_masks = tuple(
+        sum(1 << index for index in row) for row in source.delta_matroid.feasible
+    )
+    target_masks = tuple(mask ^ twist_mask for mask in source_masks)
+    target_memberships = sum(mask.bit_count() for mask in target_masks)
+    if target_memberships > MAX_BINARY_TWIST_OUTPUT_MEMBERSHIPS:
+        raise OperationResourceAdmissionError(
+            location=("matrix",),
+            code="delta_matroid.binary_twist_output",
+            message="twisted feasible-family memberships exceed the admitted output bound",
+        )
+    target_rows = tuple(
+        sorted(
+            tuple(index for index in range(n) if mask >> index & 1)
+            for mask in target_masks
+        )
+    )
+    return BinaryMatrixResult(
+        matrix=matrix,
+        twist=subset,
+        delta_matroid=FiniteDeltaMatroid._from_kernel(
+            FiniteFeasibleSetSystem(ground=matrix.ground, feasible=target_rows)
+        ),
+    )
+
+
+__all__ = ["binary", "binary_matrix_twist", "dual", "minor"]

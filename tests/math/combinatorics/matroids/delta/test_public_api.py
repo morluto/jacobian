@@ -10,6 +10,7 @@ def test_public_api_is_small_and_canonical() -> None:
         "DeltaMatroidDistanceProfile",
         "FiniteDeltaMatroid",
         "binary",
+        "binary_matrix_twist",
         "distance_profile",
         "dual",
         "from_feasible_sets",

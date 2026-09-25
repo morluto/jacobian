@@ -836,26 +836,23 @@ def conjugate_partition(partition: IntegerPartition) -> IntegerPartition:
     """
     partition = _require_canonical_partition(partition)
     parts = partition.parts
+    return IntegerPartition(parts=_conjugate_parts(parts))
+
+
+def _conjugate_parts(parts: tuple[int, ...]) -> tuple[int, ...]:
+    """Conjugate parts already admitted by ``_require_canonical_partition``."""
     if not parts:
-        return IntegerPartition(parts=())
+        return ()
     max_column = parts[0]
-    return IntegerPartition(
-        parts=tuple(
-            sum(1 for part in parts if part >= column)
-            for column in range(1, max_column + 1)
-        )
+    return tuple(
+        sum(1 for part in parts if part >= column)
+        for column in range(1, max_column + 1)
     )
 
 
-def hook_lengths(partition: IntegerPartition) -> tuple[tuple[int, ...], ...]:
-    """Return the hook length of every cell of a canonical partition.
-
-    The hook length of cell ``(i, j)`` (0-indexed) is
-    ``lambda_i - j + lambda'_j - i - 1``: one arm step plus the cell itself
-    plus the number of cells below it in its column.
-    """
-    parts = partition.parts
-    conjugate = conjugate_partition(partition).parts
+def _hook_lengths_canonical(parts: tuple[int, ...]) -> tuple[tuple[int, ...], ...]:
+    """Compute hooks from parts admitted by ``_require_canonical_partition``."""
+    conjugate = _conjugate_parts(parts)
     hooks: list[list[int]] = []
     for row, length in enumerate(parts):
         row_hooks: list[int] = []
@@ -865,6 +862,17 @@ def hook_lengths(partition: IntegerPartition) -> tuple[tuple[int, ...], ...]:
             row_hooks.append(right + below + 1)
         hooks.append(row_hooks)
     return tuple(tuple(row) for row in hooks)
+
+
+def hook_lengths(partition: IntegerPartition) -> tuple[tuple[int, ...], ...]:
+    """Return the hook length of every cell of a canonical partition.
+
+    The hook length of cell ``(i, j)`` (0-indexed) is
+    ``lambda_i - j + lambda'_j - i - 1``: one arm step plus the cell itself
+    plus the number of cells below it in its column.
+    """
+    partition = _require_canonical_partition(partition)
+    return _hook_lengths_canonical(partition.parts)
 
 
 def _hook_length_product(hooks: tuple[tuple[int, ...], ...]) -> int:
@@ -879,7 +887,8 @@ def standard_young_tableaux_count(partition: IntegerPartition) -> int:
     ``n! / prod_{(i,j) in lambda} h(i,j)`` where ``n = |lambda|`` and
     ``h(i,j)`` is the cell's hook length.
     """
-    hooks = hook_lengths(partition)
+    partition = _require_canonical_partition(partition)
+    hooks = _hook_lengths_canonical(partition.parts)
     n = sum(partition.parts)
     return factorial(n) // _hook_length_product(hooks)
 
@@ -900,7 +909,7 @@ def semistandard_young_tableaux_count(
             alphabet_size=alphabet_size,
             count=resolved,
         )
-    hooks = hook_lengths(partition)
+    hooks = _hook_lengths_canonical(partition.parts)
     numerators = tuple(
         alphabet_size + column - row
         for row, length in enumerate(partition.parts)

@@ -8,7 +8,6 @@ from pydantic import ConfigDict, Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
-from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -32,11 +31,16 @@ MAX_DELTA_RELABEL_TRANSPORT_WORK = (
     + 4 * MAX_DELTA_RELABEL_GROUND * ((MAX_DELTA_RELABEL_GROUND).bit_length() + 2)
     + MAX_DELTA_LABEL_BYTES
 )
-MAX_DELTA_RELABEL_OUTPUT_BYTES = 2_000_000
+# Count retained labels, map entries, feasible-set rows, and memberships in the
+# source-bound result. This bounds mathematical materialization rather than a
+# particular transport encoding.
+MAX_DELTA_RELABEL_OUTPUT_CELLS = (
+    4 * MAX_DELTA_MEMBERSHIPS + 4 * MAX_DELTA_RELABEL_GROUND + 8
+)
 MAX_DELTA_RELABEL_WORK = (
     MAX_DELTA_RELABEL_TRANSPORT_WORK
     + 2 * MAX_DELTA_EXCHANGE_CANDIDATE_CHECKS
-    + MAX_DELTA_RELABEL_OUTPUT_BYTES
+    + MAX_DELTA_RELABEL_OUTPUT_CELLS
 )
 
 
@@ -54,9 +58,9 @@ class DeltaMatroidRelabelRequest(StrictModel):
                 "bijection between ground axes. The operation admits at most "
                 f"{MAX_DELTA_RELABEL_GROUND} ground elements, "
                 f"{MAX_DELTA_LABEL_BYTES} UTF-8 target-label bytes, "
-                f"{MAX_DELTA_RELABEL_TRANSPORT_WORK} transport work units, "
+                f"{MAX_DELTA_RELABEL_TRANSPORT_WORK} relabelling work units, "
                 f"{MAX_DELTA_RELABEL_WORK} total work units, and "
-                f"{MAX_DELTA_RELABEL_OUTPUT_BYTES} output bytes."
+                f"{MAX_DELTA_RELABEL_OUTPUT_CELLS} materialized result cells."
             ),
             "admission_limits": {
                 "max_ground_elements": MAX_DELTA_RELABEL_GROUND,
@@ -64,7 +68,7 @@ class DeltaMatroidRelabelRequest(StrictModel):
                 "max_feasible_set_memberships": MAX_DELTA_MEMBERSHIPS,
                 "max_transport_work_units": MAX_DELTA_RELABEL_TRANSPORT_WORK,
                 "max_total_work_units": MAX_DELTA_RELABEL_WORK,
-                "max_output_bytes": MAX_DELTA_RELABEL_OUTPUT_BYTES,
+                "max_output_cells": MAX_DELTA_RELABEL_OUTPUT_CELLS,
             },
         }
     )
@@ -158,51 +162,29 @@ class DeltaMatroidRelabelling(StrictModel):
         return self
 
 
-def _output_estimate(
-    source: FiniteDeltaMatroid,
-    target_ground: tuple[str, ...],
-    target_to_source: tuple[int, ...],
-    source_to_target: tuple[int, ...],
-) -> tuple[int, int]:
-    """Bound serialized output and the linear admission-encoding work."""
+def _output_cell_count(source: FiniteDeltaMatroid) -> int:
+    """Count scalar and row allocations in the source-bound result."""
 
     memberships = sum(len(row) for row in source.feasible)
     rows = len(source.feasible)
     n = len(source.ground)
-    index_digits = max(1, len(str(max(0, n - 1))))
-    transported_rows = (
-        2 * rows + memberships * index_digits + max(0, memberships - rows)
-    )
-    source_wire = {
-        "ground": list(source.ground),
-        "feasible": [list(row) for row in source.feasible],
-    }
-    source_bytes = len(encode_strict_json(source_wire))
-    labels_bytes = len(encode_strict_json(list(target_ground)))
-    forward_map_bytes = len(encode_strict_json(list(target_to_source)))
-    inverse_map_bytes = len(encode_strict_json(list(source_to_target)))
-    return (
-        source_bytes
-        + labels_bytes
-        + forward_map_bytes
-        + inverse_map_bytes
-        + transported_rows
-        + 256
-    ), source_bytes + labels_bytes + forward_map_bytes + inverse_map_bytes
+    # Both source and target retain their ground labels, feasible row
+    # containers, and memberships; the result also retains two n-entry maps.
+    return 2 * n + 2 * rows + 2 * memberships + 2 * n + 4
 
 
-def relabel(request: DeltaMatroidRelabelRequest) -> DeltaMatroidRelabelling:
+def relabel(
+    delta_matroid: FiniteDeltaMatroid,
+    target_ground: tuple[str, ...],
+    target_to_source: tuple[int, ...],
+) -> DeltaMatroidRelabelling:
     """Transport a complete feasible family through a ground-axis bijection."""
 
-    if type(request) is not DeltaMatroidRelabelRequest:
-        raise OperationDomainValidationError(
-            location=("request",),
-            code="delta_matroid.relabel_request",
-            message="request must be a canonical relabeling request",
-        )
     try:
-        request = DeltaMatroidRelabelRequest.model_validate(
-            request.model_dump(mode="python")
+        request = DeltaMatroidRelabelRequest(
+            delta_matroid=delta_matroid,
+            target_ground=target_ground,
+            target_to_source=target_to_source,
         )
     except Exception as exc:
         raise OperationDomainValidationError(
@@ -232,7 +214,12 @@ def relabel(request: DeltaMatroidRelabelRequest) -> DeltaMatroidRelabelling:
     try:
         require_delta_matroid_envelope(system)
     except DeltaMatroidAdmissionError as exc:
-        raise OperationResourceAdmissionError(
+        error_type = (
+            OperationResourceAdmissionError
+            if exc.reason in {"memberships_exceeded", "label_bytes_exceeded"}
+            else OperationDomainValidationError
+        )
+        raise error_type(
             location=("delta_matroid",),
             code=f"delta_matroid.{exc.reason}",
             message=str(exc),
@@ -256,31 +243,22 @@ def relabel(request: DeltaMatroidRelabelRequest) -> DeltaMatroidRelabelling:
             code="delta_matroid.relabel_work",
             message="ground-axis transport exceeds its admitted work bound",
         )
-    output_bytes, admission_encoding_work = _output_estimate(
-        source,
-        request.target_ground,
-        request.target_to_source,
-        source_to_target,
-    )
+    output_cells = _output_cell_count(source)
     # Reserve the full source-exchange envelope for both bounded admission and
     # recognition scans; the exact source request may use less, but this keeps
     # all mandatory phases within one operation-specific ceiling.
-    total_work = (
-        transport_work
-        + admission_encoding_work
-        + 2 * MAX_DELTA_EXCHANGE_CANDIDATE_CHECKS
-    )
+    total_work = transport_work + output_cells + 2 * MAX_DELTA_EXCHANGE_CANDIDATE_CHECKS
     if total_work > MAX_DELTA_RELABEL_WORK:
         raise OperationResourceAdmissionError(
             location=("delta_matroid",),
             code="delta_matroid.relabel_work",
             message="ground-axis transport and output admission exceed their work bound",
         )
-    if output_bytes > MAX_DELTA_RELABEL_OUTPUT_BYTES:
+    if output_cells > MAX_DELTA_RELABEL_OUTPUT_CELLS:
         raise OperationResourceAdmissionError(
             location=("delta_matroid",),
             code="delta_matroid.relabel_output",
-            message="relabelling result exceeds its admitted output bound",
+            message="relabelling result exceeds its admitted allocation bound",
         )
 
     try:
@@ -318,7 +296,7 @@ def relabel(request: DeltaMatroidRelabelRequest) -> DeltaMatroidRelabelling:
 
 __all__ = [
     "MAX_DELTA_RELABEL_GROUND",
-    "MAX_DELTA_RELABEL_OUTPUT_BYTES",
+    "MAX_DELTA_RELABEL_OUTPUT_CELLS",
     "MAX_DELTA_RELABEL_TRANSPORT_WORK",
     "MAX_DELTA_RELABEL_WORK",
     "DeltaMatroidRelabelRequest",

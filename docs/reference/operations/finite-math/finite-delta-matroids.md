@@ -47,9 +47,9 @@ inverse `source_to_target` map, with its indices sorted in the target axis; the
 result retains both source and target delta-matroids and both maps. The empty
 ground set and the identity permutation are valid. The operation admits at most
 2,049 ground positions, 16,384 source feasible-set memberships, 2,048 UTF-8
-bytes of target labels, 329,784 units of axis-check and row-transport work, 2,000,000
-estimated output bytes, and 2,829,784 total reserved work units, including two
-250,000-candidate source-exchange passes for admission and recognition. Source
-exchange checks and relabelling work are admitted before target feasible rows
-are materialized. Relabelling preserves the symmetric-exchange axiom because
+bytes of target labels, 329,784 units of axis-check and row-transport work,
+73,740 materialized result cells (retained labels, rows, memberships, and axis
+maps), and 903,524 total reserved work units, including two 250,000-candidate
+source-exchange passes for admission and recognition. Source exchange checks and
+relabelling work are admitted before target feasible rows are materialized. Relabelling preserves the symmetric-exchange axiom because
 a bijection preserves symmetric difference and membership.

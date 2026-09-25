@@ -112,6 +112,14 @@ def _run_binary(request: BinaryMatrixRequest) -> BinaryMatrixResult:
         raise _extra_domain(("matrix",), "delta_matroid.binary_invalid", exc) from exc
 
 
+def _run_relabel(request: DeltaMatroidRelabelRequest) -> DeltaMatroidRelabelling:
+    return relabel(
+        request.delta_matroid,
+        request.target_ground,
+        request.target_to_source,
+    )
+
+
 def _width(request: DeltaMatroidWidthRequest) -> DeltaMatroidWidthResult:
     try:
         return DeltaMatroidWidthResult._from_kernel(
@@ -284,12 +292,12 @@ TOOLS: MathTools = (  # noqa: RUF005
             "Apply a bijection from the target ground axis to the source axis, "
             "transport every feasible subset to the target indices, and retain "
             "both inverse axis maps. The complete source family is checked "
-            "before transport; memberships, ground labels, work, and output "
-            "bytes are bounded."
+            "before transport; memberships, ground labels, work, and result "
+            "allocations are bounded."
         ),
         request_type=DeltaMatroidRelabelRequest,
         result_type=DeltaMatroidRelabelling,
-        run=relabel,
+        run=_run_relabel,
         tags=("delta-matroid", "relabel", "isomorphism", "exact"),
         examples=(
             OperationExample(

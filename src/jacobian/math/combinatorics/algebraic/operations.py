@@ -846,6 +846,8 @@ def inverse_permutation_rsk(pair: object) -> FinitePermutation:
         canonical = PermutationRSKPair.model_validate(
             pair.model_dump(mode="python"), strict=True
         )
+        require_standard(canonical.p_tableau)
+        require_standard(canonical.q_tableau)
     except (AttributeError, TypeError, ValueError, ValidationError) as exc:
         raise OperationDomainValidationError(
             location=("pair",),

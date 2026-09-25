@@ -17,6 +17,7 @@ from jacobian.math.matrices.cyclic_linear._models import (
     RationalCyclotomicElement,
     RationalCyclotomicField,
 )
+from jacobian.math.matrices.cyclic_linear.operations import cyclotomic_field_inclusion
 from jacobian.math.number_theory.characters.operations import (
     character_group,
     dirichlet_character,
@@ -25,10 +26,10 @@ from jacobian.math.number_theory.characters.operations import (
 from jacobian.math.number_theory.modular_forms import cyclotomic
 from jacobian.math.number_theory.modular_forms.character_basis import (
     modular_character_basis_q_expansions,
+    modular_character_coordinates_q_expansion,
 )
 from jacobian.math.number_theory.modular_forms.character_basis_models import (
     CyclotomicCharacterMap,
-    CyclotomicIdentityFieldMap,
     ModularCharacterCoordinates,
     ModularCharacterCoordinatesTransportRequest,
     ModularCharacterEqualityRequest,
@@ -65,13 +66,13 @@ def _inflate(source_character, target_level: int):
     raise AssertionError("no exact character inflation fixture was found")
 
 
-def _space(level: int, character) -> ModularFormSpace:
+def _space(level: int, character, field=_FIELD) -> ModularFormSpace:
     return ModularFormSpace(
         level=level,
         weight=2,
         kind="S",
         character=character,
-        coefficient_domain=_FIELD,
+        coefficient_domain=field,
     )
 
 
@@ -100,9 +101,8 @@ def _inclusion(source_space: ModularFormSpace, target_space: ModularFormSpace):
             source=source_space.character,
             target=target_space.character,
         ),
-        coefficient_field_map=CyclotomicIdentityFieldMap(
-            source=source_space.coefficient_domain,
-            target=target_space.coefficient_domain,
+        coefficient_field_map=cyclotomic_field_inclusion(
+            source_space.coefficient_domain, target_space.coefficient_domain
         ),
     )
 
@@ -224,9 +224,7 @@ def test_nonnested_26_39_forms_compare_in_their_level_78_common_space() -> None:
         (source_26, form_26, left),
         (source_39, form_39, right),
     ):
-        source_basis = modular_character_basis_q_expansions(
-            source_space, precision=29
-        )
+        source_basis = modular_character_basis_q_expansions(source_space, precision=29)
         direct_prefix = tuple(
             _sum_cyclotomic(
                 cyclotomic.multiply(
@@ -357,16 +355,13 @@ def test_global_equality_requires_the_least_common_source_level() -> None:
         modular_character_coordinates_equal_in_common_space(first, first)
     assert identity.target_form is None
     assert len(identity.target_q_expansion.coefficients) == 3
-    assert modular_character_coordinates_equal_in_common_space(
-        identity, identity
-    ).equal
+    assert modular_character_coordinates_equal_in_common_space(identity, identity).equal
     assert modular_character_coordinates_equal_in_common_space(second, second).equal
 
 
-def test_transport_rejects_wrong_inflation_and_nonidentity_field_map() -> None:
+def test_transport_rejects_wrong_inflation() -> None:
     source_character = dirichlet_character(character_group(13), (2,))
     source_space = _space(13, source_character)
-    wrong_target = _space(26, _inflate(source_character, 26))
     wrong_character = dirichlet_character(character_group(26), (10,))
     wrong_character_space = _space(26, wrong_character)
     bad_map = _inclusion(source_space, wrong_character_space)
@@ -375,31 +370,101 @@ def test_transport_rejects_wrong_inflation_and_nonidentity_field_map() -> None:
     ):
         modular_character_coordinates_transport(_level_13_form(source_space), bad_map)
 
-    larger_field = RationalCyclotomicField(order=12)
-    mismatched_target = ModularFormSpace(
-        level=26,
-        weight=2,
-        kind="S",
-        character=wrong_target.character,
-        coefficient_domain=larger_field,
+
+def test_nonidentity_field_transport_and_sturm_equality_round_trip() -> None:
+    source_character = dirichlet_character(character_group(13), (2,))
+    source_space = _space(13, source_character)
+    target_field = RationalCyclotomicField(order=12)
+    target_space = _space(13, source_character, target_field)
+    inclusion = _inclusion(source_space, target_space)
+    form = _level_13_form(source_space)
+
+    transported = modular_character_coordinates_transport(form, inclusion)
+    assert transported.target_form is None
+    assert transported.target_q_expansion.space == target_space
+    assert len(transported.target_q_expansion.coefficients) == 3
+    assert all(
+        coefficient.field == target_field
+        for coefficient in transported.target_q_expansion.coefficients
     )
-    bad_field_map = ModularCharacterSpaceInclusion.model_construct(
-        source_space=source_space,
-        target_space=mismatched_target,
-        character_map=CyclotomicCharacterMap(
-            source=source_character, target=wrong_target.character
-        ),
-        coefficient_field_map=CyclotomicIdentityFieldMap(
-            source=_FIELD, target=larger_field
-        ),
+    # For the standard map Q(zeta_6) -> Q(zeta_12), zeta_6 maps to zeta_12^2.
+    source_prefix = modular_character_coordinates_q_expansion(form).coefficients
+    zero = {"num": 0, "den": 1}
+    assert transported.target_q_expansion.coefficients == tuple(
+        RationalCyclotomicElement(
+            field=target_field,
+            coefficients_ascending=(
+                value.coefficients_ascending[0],
+                zero,
+                value.coefficients_ascending[1],
+                zero,
+            ),
+        )
+        for value in source_prefix
+    )
+    restored = TypeAdapter(ModularCharacterTransportedForm).validate_json(
+        transported.model_dump_json()
+    )
+    restored_request = TypeAdapter(
+        ModularCharacterCoordinatesTransportRequest
+    ).validate_json(
+        ModularCharacterCoordinatesTransportRequest(
+            form=form, inclusion=inclusion
+        ).model_dump_json()
+    )
+    assert restored_request.inclusion == inclusion
+    transport_tool = Catalog.open().operation(
+        "modular_form.character_coordinates.transport.compute"
+    )
+    strict_request = transport_tool.request_type.model_validate_json(
+        restored_request.model_dump_json(), strict=True
+    )
+    public_result = transport_tool.run(strict_request)
+    assert (
+        transport_tool.result_type.model_validate_json(
+            public_result.model_dump_json(), strict=True
+        )
+        == transported
+    )
+    assert modular_character_coordinates_equal_in_common_space(restored, restored).equal
+    equality_tool = Catalog.open().operation("modular_form.character.equal.check")
+    equality_request = ModularCharacterEqualityRequest(left=restored, right=restored)
+    strict_equality_request = equality_tool.request_type.model_validate_json(
+        equality_request.model_dump_json(), strict=True
+    )
+    equality_result = equality_tool.run(strict_equality_request)
+    assert equality_tool.result_type.model_validate_json(
+        equality_result.model_dump_json(), strict=True
+    ).equal
+
+    unequal = ModularFormCoordinates(
+        space=source_space,
+        basis_id=_LEGACY_BASIS,
+        coordinates=(_element(2),),
+    )
+    transported_unequal = modular_character_coordinates_transport(unequal, inclusion)
+    assert not modular_character_coordinates_equal_in_common_space(
+        transported, transported_unequal
+    ).equal
+
+    malformed_map = inclusion.coefficient_field_map.model_copy(
+        update={
+            "generator_image": (
+                {"num": 0, "den": 1},
+                {"num": 1, "den": 1},
+                {"num": 0, "den": 1},
+                {"num": 0, "den": 1},
+            )
+        }
+    )
+    malformed_inclusion = inclusion.model_copy(
+        update={"coefficient_field_map": malformed_map}
     )
     with pytest.raises(
         OperationDomainValidationError,
-        match="explicit character-space inclusion is malformed",
+        match="coefficient field map is not the canonical standard inclusion",
     ):
-        modular_character_coordinates_transport(
-            _level_13_form(source_space), bad_field_map
-        )
+        modular_character_coordinates_transport(form, malformed_inclusion)
 
 
 def test_transport_request_model_round_trip() -> None:

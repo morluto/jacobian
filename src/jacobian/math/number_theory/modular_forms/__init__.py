@@ -31,7 +31,6 @@ from jacobian.math.number_theory.modular_forms.character_basis import (
 )
 from jacobian.math.number_theory.modular_forms.character_basis_models import (
     CyclotomicCharacterMap,
-    CyclotomicIdentityFieldMap,
     ModularCharacterBasis,
     ModularCharacterBasisElement,
     ModularCharacterBasisRequest,
@@ -84,7 +83,6 @@ from jacobian.math.number_theory.modular_forms.values import (
 
 __all__ = [
     "CyclotomicCharacterMap",
-    "CyclotomicIdentityFieldMap",
     "LevelOneModularQExpansion",
     "ModularCharacterBasis",
     "ModularCharacterBasisElement",

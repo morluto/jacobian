@@ -53,19 +53,24 @@ For the order-6 `S_2` slice, `modular_form.character_coordinates.transport.compu
 supports explicit nested-level inclusion from level 13, 26, or 39 into level
 26 or 39 when the source level divides the target, and identity inclusion at
 level 13. It also supports a common level-78 target for the nonnested 26-vs-39
-case. The request preserves both
-exact space parents and carries the character pullback and identity map of
-`Q(zeta_6)` parents. It checks the character map on every target unit and
-requires each character's explicit modulus to equal its space level. The
+case. The request preserves both exact space parents and carries the character
+pullback plus the [canonical cyclotomic inclusion](cyclotomic-field-inclusions.md)
+`Q(zeta_6) -> Q(zeta_6)` or `Q(zeta_6) -> Q(zeta_12)`. It checks the
+character pullback on every target
+unit and verifies that the coefficient-field map carries the source character
+values to their target values. Each character's explicit modulus must equal
+its space level. The
 operation returns target coordinates and the exact q-prefix through the target
 Sturm precision for levels 26 and 39, extending the source basis while
 retaining its canonical q-Sturm RREF normalization when needed. At targets 13
 and 78, it retains the explicit source inclusion and returns a typed Sturm
-prefix rather than target basis coordinates. The common q-expansion principle
-gives the same equality postcondition in either case: the explicit character
-map establishes membership in the target, identity pullback preserves the
-source q-expansion, and equality compares every coefficient through the
-target Sturm bound (3 coefficients at level 13, 29 at level 78). Level 13
+prefix rather than target basis coordinates. For a nonidentity field map,
+the transformed prefix is also retained as a common-target prefix; no target
+basis reconstruction is claimed. The common q-expansion principle gives the
+same equality postcondition in either case: the explicit character and field
+maps establish membership in the target, and equality compares every
+coefficient through the target Sturm bound (3 coefficients at level 13, 29 at
+level 78). Level 13
 uses the same prefix representation to keep one equality postcondition and
 avoid relabeling the legacy level-13 coordinate value as a level-26/39-family
 coordinate type. At level 78, the current basis adapter failed exact
@@ -93,7 +98,7 @@ coordinates and q-prefix, and compares all coefficients through the target
 Sturm bound. This is a narrow global-equality decision for these represented
 spaces, including the exact 26-vs-39 comparison at common level 78; it does
 not add arbitrary-character transport, implicit character inflation,
-coefficient-field embeddings, or Hecke support. The dimension
+arbitrary coefficient-field embeddings, or Hecke support. The dimension
 formula and PARI cross-check boundaries above remain unchanged.
 
 For this represented character slice,

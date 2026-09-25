@@ -221,12 +221,14 @@ TOOLS: MathTools = (
         description=(
             "Map an S2 character form from level 13, 26, or 39 into an explicit "
             "level-13 identity, nested level-26/39, or level-78 cusp space. The request carries "
-            "the explicit Dirichlet-character inflation and identity Q(zeta_6) "
-            "field map. For level 26 or 39, return target coordinates and the "
-            "exact q-prefix; for levels 13 and 78, return a typed target-bound "
-            "q-prefix through its exact Sturm precision without claiming target basis "
-            "coordinates. Source expansion height, work, and output are admitted "
-            "before any PARI basis materialization."
+            "the explicit Dirichlet-character inflation and standard cyclotomic "
+            "field inclusion Q(zeta_6) -> Q(zeta_6) or Q(zeta_12). For same-field "
+            "targets at levels 26 or 39, return target coordinates and the exact "
+            "q-prefix; at levels 13 and 78, or after a nonidentity field map, "
+            "return a typed target-bound q-prefix through its exact Sturm "
+            "precision without claiming target basis coordinates. Source "
+            "expansion height, field-map work, and output are admitted before "
+            "basis materialization."
         ),
         request_type=ModularCharacterCoordinatesTransportRequest,
         result_type=ModularCharacterTransportedForm,
@@ -238,12 +240,14 @@ TOOLS: MathTools = (
         title="Check global equality in a common character space",
         description=(
             "Compare two source forms after checking their explicit order-six "
-            "character inflations and identical Q(zeta_6) maps into their least "
+            "character inflations and standard Q(zeta_6) -> Q(zeta_6) or "
+            "Q(zeta_6) -> Q(zeta_12) maps into their least "
             "common S2 target at level 13, 26, 39, or 78. Recompute each source "
-            "expansion through the common target's full Sturm precision and "
-            "compare exact coefficients; the retained target prefix must match "
-            "the source inclusion. Levels 13 and 78 use typed target-bound prefixes, "
-            "not unvalidated target coordinates."
+            "expansion through the common target's full Sturm precision, map "
+            "coefficients exactly, and compare; the retained target prefix must "
+            "match the source inclusion. Levels 13 and 78, and every nonidentity "
+            "field map, use typed target-bound prefixes, not unvalidated target "
+            "coordinates."
         ),
         request_type=ModularCharacterEqualityRequest,
         result_type=ModularCharacterEqualityResult,

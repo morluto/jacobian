@@ -213,3 +213,54 @@ def test_widened_split_domain_replays_at_maximum_ground() -> None:
     assert result.independent_set == (0,)
     assert result.total_weight == 10**14
     assert verify_maximum_weight_independent_set(result)
+
+
+def test_retained_labels_are_admitted_before_the_rank_kernel(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The result retains both the source matroid axis and the canonicalized
+    # weight-function axis, so a native operand with unbounded label text is
+    # refused on its allocation before any independence probe runs.
+    import jacobian.catalog.models as catalog_models
+    import jacobian.math.combinatorics.matroids.operations as operations
+    from jacobian.math.combinatorics.matroids._models import (
+        MAX_GROUND_AXIS_CODEPOINTS,
+    )
+
+    huge_label = "x" * (MAX_GROUND_AXIS_CODEPOINTS + 1)
+    matroid = LinearMatroid(
+        matrix=PrimeFieldMatrix(prime=2, entries=((1,),), columns=1),
+        ground_labels=(huge_label,),
+    )
+    weight_function = MatroidWeightFunction(ground_axis=(huge_label,), values=(1,))
+
+    def unexpected(*_args: object, **_kwargs: object) -> int:
+        raise AssertionError("rank kernel ran before retained-output admission")
+
+    monkeypatch.setattr(operations, "pf_rank", unexpected)
+    with pytest.raises(catalog_models.OperationResourceAdmissionError) as error:
+        maximum_weight_independent_set_result(matroid, weight_function)
+    assert (
+        error.value.errors()[0]["type"]
+        == "matroid.maximum_weight_independent_set.work_bound"
+    )
+
+
+def test_axis_inside_the_allocation_bound_returns_the_exact_optimum() -> None:
+    from jacobian.math.combinatorics.matroids._models import (
+        MAX_GROUND_AXIS_CODEPOINTS,
+    )
+
+    first_label = "a" * 3
+    second_label = "b" * (MAX_GROUND_AXIS_CODEPOINTS - 3)
+    matroid = LinearMatroid(
+        matrix=PrimeFieldMatrix(prime=2, entries=((1, 0), (0, 1)), columns=2),
+        ground_labels=(first_label, second_label),
+    )
+    weight_function = MatroidWeightFunction(
+        ground_axis=(first_label, second_label), values=(1, 2)
+    )
+    result = maximum_weight_independent_set_result(matroid, weight_function)
+    assert result.independent_set == (0, 1)
+    assert result.total_weight == 3
+    assert verify_maximum_weight_independent_set(result)

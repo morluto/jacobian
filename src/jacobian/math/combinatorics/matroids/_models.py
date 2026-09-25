@@ -47,6 +47,35 @@ def _require_objective_weight_digits(weight_function: MatroidWeightFunction) -> 
 MAX_WEIGHTED_INTERSECTION_OPT_DUAL_DIGITS = 1024
 """Maximum decimal digits admitted for private integral split intermediates."""
 
+MAX_GROUND_AXIS_CODEPOINTS = 65_536
+"""Allocation cap on the Unicode codepoints of one retained ground axis."""
+
+MAX_INDEPENDENT_SET_OUTPUT_UNITS = (
+    3 * MAX_GROUND_SIZE
+    + MAX_SPLIT_WEIGHT_DIGITS * MAX_GROUND_SIZE
+    + 2 * MAX_GROUND_AXIS_CODEPOINTS
+)
+"""Retained-index, weight-digit, and repeated-axis materialization budget for
+one maximum-weight independent-set phase: the selected-set, greedy-order, and
+witness index charges plus one sign-and-digit charge per weight, and the
+ground axis codepoints retained by both the source matroid and the canonical
+weight function. The weight-digit term uses the widest admitted carrier
+(``MAX_SPLIT_WEIGHT_DIGITS``) so a nested split-domain maximizer stays
+consumable; the public single-matroid domain still admits only
+``MAX_WEIGHT_DIGITS`` objective digits."""
+
+
+def ground_axis_codepoints(matroid: LinearMatroid) -> int:
+    """Total Unicode codepoints of one matroid's retained ground axis.
+
+    Matrix residues and index tuples are cardinality- and digit-bounded by the
+    canonical model contracts above; the label text is the only quantity a
+    well-formed operand can carry without an explicit native bound, so result
+    admission charges it in codepoints rather than transport bytes.
+    """
+
+    return sum(len(label) for label in matroid.ground_axis)
+
 
 class GraphicMatroidRequest(StrictModel):
     """Construct the GF(2) incidence representation of a simple graph."""
@@ -509,9 +538,7 @@ class MatroidWeightedIntersectionCertificateRequest(StrictModel):
                 "w=u+v; each source matroid's maximum-weight independent-set "
                 "value for its split is recomputed by the bounded greedy "
                 "rank kernel. This operation checks a certificate and does "
-                "not search for an optimum or produce a split. Rank terms "
-                "are ordered in nested chains, with unique terms and a "
-                "combined count no greater than twice the ground size."
+                "not search for an optimum or produce a split."
             ),
             "admission_limits": {
                 "max_ground_elements": MAX_GROUND_SIZE,
@@ -519,11 +546,13 @@ class MatroidWeightedIntersectionCertificateRequest(StrictModel):
                 "max_weight_digits": MAX_WEIGHT_DIGITS,
                 "max_split_weight_digits": MAX_SPLIT_WEIGHT_DIGITS,
                 "max_aggregate_rank_work": 50_000_000,
-                "max_result_bytes": 8 * 1024 * 1024,
+                "max_ground_axis_codepoints": MAX_GROUND_AXIS_CODEPOINTS,
+                "max_independent_set_output_units": MAX_INDEPENDENT_SET_OUTPUT_UNITS,
                 "work_includes": [
                     "both split-weight greedy scans",
                     "both candidate feasibility ranks",
-                    "source-bound certificate result serialization",
+                    "the source ranks precomputed during admission",
+                    "source-bound certificate result materialization",
                 ],
             },
         }
@@ -585,7 +614,7 @@ class MatroidWeightedIntersectionOptimizationRequest(StrictModel):
                 "max_dual_intermediate_digits": MAX_WEIGHTED_INTERSECTION_OPT_DUAL_DIGITS,
                 "max_split_witness_digits": MAX_SPLIT_WEIGHT_DIGITS,
                 "max_aggregate_exact_work": 50_000_000,
-                "max_result_bytes": 8 * 1024 * 1024,
+                "max_ground_axis_codepoints": MAX_GROUND_AXIS_CODEPOINTS,
                 "work_includes": [
                     "rank-oracle exchange-circuit construction",
                     "reachable-set, tight-edge, and dual-slack scans",
@@ -652,7 +681,11 @@ class MatroidWeightedIntersectionRankCertificateRequest(StrictModel):
                 "dual multipliers on the two matroids' rank inequalities. The "
                 "operation recomputes only the listed exact ranks, verifies the "
                 "elementwise dual cover and equality of primal and dual values, "
-                "and does not search for an optimum or construct the multipliers."
+                "and does not search for an optimum or construct the multipliers. "
+                "Each rank-term family is a nested chain: nonempty, sorted, "
+                "unique subsets ordered by increasing size then lexicographically, "
+                "with each subset contained in the next. The combined count of "
+                "both families is at most twice the ground size."
             ),
             "admission_limits": {
                 "max_ground_elements": MAX_GROUND_SIZE,
@@ -660,11 +693,12 @@ class MatroidWeightedIntersectionRankCertificateRequest(StrictModel):
                 "max_weight_digits": MAX_WEIGHT_DIGITS,
                 "max_total_rank_terms": 2 * MAX_GROUND_SIZE,
                 "max_aggregate_rank_work": 50_000_000,
-                "max_result_bytes": 8 * 1024 * 1024,
+                "max_ground_axis_codepoints": MAX_GROUND_AXIS_CODEPOINTS,
                 "work_includes": [
                     "both candidate feasibility ranks",
                     "each supplied rank-inequality rank",
                     "elementwise dual cover and objective checks",
+                    "one bounded source-field primality check",
                     "source-bound certificate result serialization",
                 ],
             },
@@ -676,10 +710,19 @@ class MatroidWeightedIntersectionRankCertificateRequest(StrictModel):
     weight_function: MatroidWeightFunction
     common_independent: tuple[StrictInt, ...] = Field(max_length=MAX_GROUND_SIZE)
     first_rank_terms: tuple[MatroidRankMultiplier, ...] = Field(
-        max_length=MAX_GROUND_SIZE
+        max_length=MAX_GROUND_SIZE,
+        description=(
+            "Nested chain of first-source rank-inequality multipliers: nonempty, "
+            "sorted, unique subsets ordered by increasing size then "
+            "lexicographically, each contained in the next."
+        ),
     )
     second_rank_terms: tuple[MatroidRankMultiplier, ...] = Field(
-        max_length=MAX_GROUND_SIZE
+        max_length=MAX_GROUND_SIZE,
+        description=(
+            "Nested chain of second-source rank-inequality multipliers with the "
+            "same ordering and containment rules as first_rank_terms."
+        ),
     )
 
     @model_validator(mode="after")
@@ -921,15 +964,19 @@ class MatroidIntersectionRequest(StrictModel):
             "description": (
                 "Compute a maximum common independent set for two linear "
                 "matroids on one labelled ground. The exact exchange kernel "
-                "admits at most 256 ground elements and a derived "
-                "50,000,000-unit bound covering rank probes, min-max witness "
+                "admits at most 256 ground elements, a 65,536-codepoint "
+                "retained ground axis, and a derived 50,000,000-unit bound "
+                "covering the two precomputed source ranks, exchange probes "
+                "in the regime those ranks make reachable, min-max witness "
                 "work, representation rows, and O(n) result materialization "
                 "for the returned independent set and rank partition."
             ),
             "admission_limits": {
                 "max_ground_elements": 256,
                 "max_work_units": 50_000_000,
+                "max_retained_axis_codepoints": MAX_GROUND_AXIS_CODEPOINTS,
                 "work_includes": [
+                    "both precomputed source ranks",
                     "exchange rank probes",
                     "representation rows",
                     "min-max witness ranks",

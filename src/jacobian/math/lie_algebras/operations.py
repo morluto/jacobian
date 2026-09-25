@@ -832,13 +832,42 @@ def lie_generated_subalgebra(
     # output checks, so its canonical rank is known before closure. Each
     # closure round either strictly increases the rank or terminates, so at
     # most dimension - rank + 1 rounds of worst-case growth can occur.
-    _admit_generated_closure_height(
-        dimension=dimension,
-        rank_lower_bound=len(rows),
-        initial_height=initial_rref_height,
-        term_count=term_count,
-        structure_digits=structure_digits,
-    )
+    # A one-round closure probe distinguishes an already-closed proper span
+    # from the worst-case rank-growth envelope. Admit each actual round before
+    # expanding it; retain the conservative bound only after observed growth.
+    if len(rows) > 1:
+        first_brackets = _subspace_bracket_vectors(rows, rows, table, dimension)
+        first_reduced = None
+        if first_brackets:
+            first_reduced = rref_result(
+                rational_matrix_from_fractions(
+                    rows + first_brackets, column_count=dimension
+                )
+            )
+            first_rows = tuple(
+                tuple(v.as_fraction() for v in row)
+                for row in first_reduced.reduced_matrix.entries[: first_reduced.rank]
+            )
+        else:
+            first_rows = rows
+        if first_rows == rows:
+            _admit_generated_closure_height(
+                dimension=dimension,
+                rank_lower_bound=dimension,
+                initial_height=initial_rref_height,
+                term_count=0,
+                structure_digits=structure_digits,
+            )
+            rows = first_rows
+        else:
+            _admit_generated_closure_height(
+                dimension=dimension,
+                rank_lower_bound=len(rows),
+                initial_height=initial_rref_height,
+                term_count=term_count,
+                structure_digits=structure_digits,
+            )
+            rows = first_rows
 
     while len(rows) > 1:
         brackets = _subspace_bracket_vectors(rows, rows, table, dimension)

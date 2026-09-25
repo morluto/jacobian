@@ -22,7 +22,6 @@ from jacobian.math.number_theory.elliptic_curves.finite_field import (
     FiniteFieldDiscriminantResult,
     FiniteFieldExtensionCountsRequest,
     FiniteFieldExtensionCountsResult,
-    FiniteFieldFrobeniusResult,
     FiniteFieldGroupStructureResult,
     FiniteFieldIsogenyClassRequest,
     FiniteFieldIsogenyClassResult,
@@ -43,7 +42,6 @@ from jacobian.math.number_theory.elliptic_curves.finite_field import (
     finite_field_curve_base_change,
     finite_field_discriminant,
     finite_field_extension_counts,
-    finite_field_frobenius,
     finite_field_group_structure,
     finite_field_isogeny_class,
     finite_field_isomorphism,
@@ -434,33 +432,6 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 name="count_extensions_five_field",
                 description="Count the curve over F5 and its first two extension fields using exact Frobenius recurrence.",
                 input={"curve": _finite_curve(), "max_degree": 2},
-            ),
-        ),
-    ),
-    MathTool(
-        operation_id="elliptic_curve.finite_field.frobenius.compute",
-        title="Compute finite-field elliptic Frobenius data",
-        description=(
-            "Return the exact cardinality, trace, characteristic polynomial, "
-            "discriminant, and ordinary or supersingular classification for "
-            "a short-Weierstrass curve over a bounded finite field."
-        ),
-        request_type=FiniteFieldCurveRequest,
-        result_type=FiniteFieldFrobeniusResult,
-        run=lambda request: finite_field_frobenius(request.curve),
-        tags=("elliptic-curve", "finite-field", "frobenius", "exact"),
-        discovery_terms=(
-            "elliptic curve ordinary or supersingular classification",
-            "finite-field Frobenius trace and characteristic polynomial",
-        ),
-        examples=(
-            OperationExample(
-                name="frobenius_over_five",
-                description=(
-                    "Compute the Frobenius trace and ordinary/supersingular "
-                    "class for y²=x³+x+1 over F5."
-                ),
-                input={"curve": _finite_curve()},
             ),
         ),
     ),

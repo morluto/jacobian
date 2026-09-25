@@ -604,7 +604,7 @@ class FiniteFieldFrobeniusResult(StrictModel):
     cardinality: int = Field(ge=1)
     trace: int
     determinant: int = Field(ge=1)
-    characteristic_polynomial: tuple[int, int, int]
+    characteristic_polynomial: IntegerPolynomial
     discriminant: int
     classification: Literal["ORDINARY", "SUPERSINGULAR"]
 
@@ -614,10 +614,14 @@ class FiniteFieldFrobeniusResult(StrictModel):
         if (
             self.determinant != q
             or self.trace != q + 1 - self.cardinality
-            or self.characteristic_polynomial != (1, -self.trace, q)
+            or self.characteristic_polynomial.coefficients != (q, -self.trace, 1)
             or self.discriminant != self.trace * self.trace - 4 * q
             or self.classification
-            != ("SUPERSINGULAR" if self.trace % self.curve.field.characteristic == 0 else "ORDINARY")
+            != (
+                "SUPERSINGULAR"
+                if self.trace % self.curve.field.characteristic == 0
+                else "ORDINARY"
+            )
         ):
             raise _validation_error(
                 "frobenius_claim_mismatch",
@@ -728,7 +732,6 @@ class FiniteFieldGroupStructureResult(StrictModel):
 
 MAX_FROBENIUS_EXTENSION_DEGREE = 64
 MAX_FROBENIUS_EXTENSION_INTEGER_DIGITS = 4096
-MAX_FROBENIUS_FIELD_ORDER = 4096
 MAX_FROBENIUS_CHARACTER_SUM_WORK = 4_000_000
 MAX_ISOGENY_PAIR_CHARACTER_SUM_WORK = 8_000_000
 MAX_FINITE_FIELD_POINT_ENUMERATION_WORK = 20_000_000
@@ -1906,15 +1909,6 @@ def finite_field_frobenius(
     """
     curve = _curve_admit(curve)
     q = int(curve.field.characteristic**curve.field.degree)
-    if q > MAX_FROBENIUS_FIELD_ORDER:
-        raise OperationResourceAdmissionError(
-            location=("curve", "field"),
-            code="elliptic_curve.finite_field.frobenius_field_order_bound",
-            message=(
-                "Frobenius data require finite-field order at most "
-                f"{MAX_FROBENIUS_FIELD_ORDER}"
-            ),
-        )
     character_sum_work = q * curve.field.degree**2 * (8 + 2 * q.bit_length())
     if character_sum_work > MAX_FROBENIUS_CHARACTER_SUM_WORK:
         raise OperationResourceAdmissionError(
@@ -1926,17 +1920,8 @@ def finite_field_frobenius(
             ),
         )
     trace_bound = 2 * (isqrt(q) + 1)
-    output_sample = FiniteFieldFrobeniusResult.model_construct(
-        curve=curve,
-        cardinality=q + 1 + trace_bound,
-        trace=-trace_bound,
-        determinant=q,
-        characteristic_polynomial=(1, trace_bound, q),
-        discriminant=trace_bound * trace_bound - 4 * q,
-        classification="SUPERSINGULAR",
-    )
     if (
-        len(rfc8785.dumps(output_sample.model_dump(mode="json")))
+        128 + 8 * (q.bit_length() + trace_bound.bit_length())
         > CanonicalLimits().max_output_bytes
     ):
         raise OperationResourceAdmissionError(
@@ -1951,7 +1936,9 @@ def finite_field_frobenius(
         cardinality=count.cardinality,
         trace=trace,
         determinant=q,
-        characteristic_polynomial=(1, -trace, q),
+        characteristic_polynomial=IntegerPolynomial(
+            coefficients=(q, -trace, 1),
+        ),
         discriminant=trace * trace - 4 * q,
         classification=(
             "SUPERSINGULAR"

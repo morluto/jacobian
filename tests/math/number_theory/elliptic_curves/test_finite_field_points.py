@@ -92,56 +92,25 @@ def test_frobenius_data_and_supersingularity_match_direct_f5_oracle() -> None:
         assert result.cardinality == count
         assert result.trace == trace
         assert result.determinant == 5
-        assert result.characteristic_polynomial == (1, -trace, 5)
+        assert result.characteristic_polynomial.coefficients == (5, -trace, 1)
         assert result.discriminant == trace * trace - 20
         assert result.classification == (
             "SUPERSINGULAR" if trace % 5 == 0 else "ORDINARY"
         )
 
 
-def test_frobenius_field_order_is_rejected_before_character_sum(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_frobenius_accepts_field_5003_with_admitted_character_sum() -> None:
     field = FiniteFieldPresentation(
         characteristic=5003, modulus_coefficients=(0, 1), generator="a"
     )
     one = FiniteFieldElement(presentation=field, coordinates=(1,))
-    curve = FiniteFieldShortWeierstrassCurve(
-        field=field, coefficient_a=one, coefficient_b=one
-    )
-
-    def forbidden_sum(*args: object, **kwargs: object) -> object:
-        raise AssertionError("Frobenius trace work ran before field-order rejection")
-
-    monkeypatch.setattr(
-        finite_field_module, "_cardinality_from_character_sum", forbidden_sum
-    )
-    with pytest.raises(OperationResourceAdmissionError) as error:
-        finite_field_frobenius(curve)
-    assert error.value.errors()[0]["type"] == (
-        "elliptic_curve.finite_field.frobenius_field_order_bound"
-    )
-
-
-def test_frobenius_public_example_dispatch_and_json_round_trip() -> None:
-    catalog = Catalog.open()
-    operation = catalog.operation("elliptic_curve.finite_field.frobenius.compute")
-    assert operation is not None
-    invocation = invoke_operation(
-        operation.operation_id, operation.examples[0].input, catalog
-    )
-    assert invocation.output["trace"] == -3
-    assert invocation.output["classification"] == "ORDINARY"
-    decoded = operation.result_type.model_validate_json(json.dumps(invocation.output))
-    field = FiniteFieldPresentation(
-        characteristic=5, modulus_coefficients=(0, 1), generator="a"
-    )
-    one = FiniteFieldElement(presentation=field, coordinates=(1,))
-    assert decoded == finite_field_frobenius(
+    result = finite_field_frobenius(
         FiniteFieldShortWeierstrassCurve(
             field=field, coefficient_a=one, coefficient_b=one
         )
     )
+    assert result.cardinality > 0
+    assert result.characteristic_polynomial.coefficients[0] == 5003
 
 
 def test_isogeny_class_decision_matches_independent_finite_field_counts() -> None:

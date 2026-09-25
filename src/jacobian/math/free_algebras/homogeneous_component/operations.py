@@ -44,7 +44,11 @@ def homogeneous_component(
         )
     try:
         if len(polynomial.terms) > MAX_HOMOGENEOUS_COMPONENT_WORK // 2:
-            _reject_resource(("polynomial", "terms"), "work_bound", "polynomial exceeds homogeneous-component scan bound")
+            _reject_resource(
+                ("polynomial", "terms"),
+                "work_bound",
+                "polynomial exceeds homogeneous-component scan bound",
+            )
         polynomial = FreeAlgebraPolynomial.model_validate(polynomial.model_dump())
     except OperationResourceAdmissionError:
         raise
@@ -67,7 +71,6 @@ def homogeneous_component(
             "work_bound",
             "homogeneous-component scan exceeds the admitted work bound",
         )
-
 
     terms = tuple(term for term in polynomial.terms if len(term.word) == degree)
     component_polynomial = FreeAlgebraPolynomial.model_construct(

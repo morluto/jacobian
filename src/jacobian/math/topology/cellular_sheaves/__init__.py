@@ -52,6 +52,10 @@ from jacobian.math.topology.cellular_sheaves.morphism_cokernel import (
     SheafMorphismCokernelResult,
     cokernel_of_morphism,
 )
+from jacobian.math.topology.cellular_sheaves.morphism_identity import (
+    SheafMorphismIdentityRequest,
+    identity_morphism,
+)
 from jacobian.math.topology.cellular_sheaves.morphism_image import (
     SheafMorphismImageRequest,
     SheafMorphismImageResult,
@@ -88,6 +92,7 @@ __all__ = [
     "SheafMorphismCokernelRequest",
     "SheafMorphismCokernelResult",
     "SheafMorphismComposeRequest",
+    "SheafMorphismIdentityRequest",
     "SheafMorphismImageRequest",
     "SheafMorphismImageResult",
     "SheafMorphismKernelRequest",
@@ -112,6 +117,7 @@ __all__ = [
     "direct_sum",
     "from_cover_maps",
     "hodge_laplacians",
+    "identity_morphism",
     "image_of_morphism",
     "kernel_of_morphism",
     "morphism",

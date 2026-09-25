@@ -23,6 +23,11 @@ the intermediate sheaf values to agree exactly, and returns the original
 source, final target, and composed component matrices. This makes the result
 usable after serialization without relying on unchecked caller claims.
 
+`cellular_sheaf.morphism.identity.compute` constructs the canonical identity
+natural transformation on one checked sheaf. It returns an identity matrix in
+each retained stalk basis, including the correctly shaped empty matrix for a
+zero-dimensional stalk. The source and target are the same source-bound sheaf.
+
 `cellular_sheaf.morphism.cochain_map` turns a natural morphism into its
 degreewise maps on cellular sheaf cochains. Each returned dense matrix is
 block diagonal in the canonical simplex order: its block at a simplex is the

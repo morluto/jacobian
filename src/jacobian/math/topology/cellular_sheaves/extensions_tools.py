@@ -17,6 +17,10 @@ from jacobian.math.topology.cellular_sheaves.hodge import (
     SheafHodgeResult,
     compute_hodge,
 )
+from jacobian.math.topology.cellular_sheaves.morphism_identity import (
+    SheafMorphismIdentityRequest,
+    identity_morphism,
+)
 
 
 def _sections(r: Any) -> Any:
@@ -33,6 +37,10 @@ def _restriction(r: Any) -> Any:
 
 def _morphism(r: Any) -> Any:
     return morphism(r.source, r.target, r.components)
+
+
+def _identity_morphism(r: Any) -> Any:
+    return identity_morphism(r.sheaf)
 
 
 def _compose_morphisms(r: Any) -> Any:
@@ -93,6 +101,29 @@ _S = {
     "comparable_pairs": 2,
 }
 TOOLS = (
+    MathTool(
+        operation_id="cellular_sheaf.morphism.identity.compute",
+        title="Construct the identity cellular sheaf morphism",
+        description=(
+            "Return the canonical identity natural transformation on a finite "
+            "cellular sheaf, with one exact identity matrix in each stalk basis."
+        ),
+        request_type=SheafMorphismIdentityRequest,
+        result_type=SheafMorphismResult,
+        run=_identity_morphism,
+        tags=("topology", "cellular-sheaf", "morphism", "exact"),
+        discovery_terms=(
+            "identity cellular sheaf morphism",
+            "identity natural transformation",
+        ),
+        examples=(
+            OperationExample(
+                name="identity_on_interval_sheaf",
+                description="Construct the identity map on a rank-one sheaf over an interval.",
+                input={"sheaf": _S},
+            ),
+        ),
+    ),
     MathTool(
         operation_id="cellular_sheaf.direct_sum.compute",
         title="Form the pointwise direct sum of two cellular sheaves",

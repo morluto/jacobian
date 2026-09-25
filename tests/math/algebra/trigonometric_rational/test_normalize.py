@@ -740,6 +740,7 @@ def test_locus_divisibility_uses_the_laurent_ring() -> None:
     assert len(result.denominator_nonzero.terms) == 2
 
 
+@pytest.mark.scale
 def test_shared_locus_factor_is_charged_once() -> None:
     """A factor shared by two loci is a single atom of the zero locus.
 

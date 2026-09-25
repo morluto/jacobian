@@ -76,6 +76,7 @@ def test_unsupported_complete_group_is_rejected_not_partial() -> None:
         character_table(_partition(4, ((1, 0, 3, 2), (0, 2, 1, 3))))
 
 
+@pytest.mark.scale
 def test_cyclic_table_admits_interior_and_rejects_aggregate_boundary() -> None:
     interior = character_table(_partition(30, ((*range(1, 30), 0),)))
     assert len(interior.rows) == 30

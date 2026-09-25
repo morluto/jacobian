@@ -147,6 +147,7 @@ def test_output_bound() -> None:
         decompose_chordal_psd(matrix, graph)
 
 
+@pytest.mark.scale
 def test_retained_source_counts_toward_output_bits() -> None:
     n = 1024
     matrix, graph = _case([[0] * n for _ in range(n)], ())
@@ -154,6 +155,7 @@ def test_retained_source_counts_toward_output_bits() -> None:
         decompose_chordal_psd(matrix, graph)
 
 
+@pytest.mark.scale
 def test_serialized_zero_matrix_scaffolding_is_bounded() -> None:
     n = 875
     matrix, graph = _case([[0] * n for _ in range(n)], ())

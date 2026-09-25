@@ -45,6 +45,7 @@ def test_graph_metric_operations_are_published_and_exact() -> None:
     )
 
 
+@pytest.mark.scale
 def test_invariant_requests_retain_256_vertex_result_envelope() -> None:
     girth = _operation("graph.invariant.girth.compute")
     matching = _operation("graph.invariant.maximum_matching.compute")

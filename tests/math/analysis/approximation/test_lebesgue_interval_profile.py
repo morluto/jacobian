@@ -148,6 +148,7 @@ def test_inherited_deadline_is_not_replaced() -> None:
             lebesgue_interval_profile(request)
 
 
+@pytest.mark.scale
 def test_sixteen_node_complete_profile_remains_accepted() -> None:
     result = lebesgue_interval_profile(source(tuple(range(16)), 0, 15))
     assert len(result.cells) == 15

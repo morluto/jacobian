@@ -8,7 +8,6 @@ from jacobian.math.free_algebras._models import (
     FreeAlgebraWord,
     GroebnerShirshovResult,
 )
-from jacobian.math.free_algebras.homogeneous_component import homogeneous_component
 from jacobian.math.free_algebras.operations import (
     groebner_shirshov_through_degree,
     ideal_generated_prefix,
@@ -23,7 +22,6 @@ __all__ = [
     "FreeAlgebraWord",
     "GroebnerShirshovResult",
     "groebner_shirshov_through_degree",
-    "homogeneous_component",
     "ideal_generated_prefix",
     "multiply",
 ]

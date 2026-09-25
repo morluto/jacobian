@@ -2,7 +2,6 @@
 
 from jacobian.math.free_algebras.homogeneous_component._models import (
     FreeAlgebraHomogeneousComponent,
-    FreeAlgebraHomogeneousComponentRequest,
 )
 from jacobian.math.free_algebras.homogeneous_component.operations import (
     homogeneous_component,
@@ -10,6 +9,5 @@ from jacobian.math.free_algebras.homogeneous_component.operations import (
 
 __all__ = [
     "FreeAlgebraHomogeneousComponent",
-    "FreeAlgebraHomogeneousComponentRequest",
     "homogeneous_component",
 ]

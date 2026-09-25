@@ -259,20 +259,20 @@ def _admit_add(
         )
 
     for side, polynomial in (("left", left), ("right", right)):
-        if len(polynomial.terms) > MAX_FREE_ALGEBRA_OPERAND_TERMS:
+        if len(polynomial.terms) > MAX_FREE_ALGEBRA_ADDITION_TERMS:
             _reject_resource(
                 (side, "terms"),
                 "addition_operand_term_budget",
                 f"{side} operand exceeds the "
-                f"{MAX_FREE_ALGEBRA_OPERAND_TERMS}-term addition budget",
+                f"{MAX_FREE_ALGEBRA_ADDITION_TERMS}-term canonical support bound",
             )
         for index, term in enumerate(polynomial.terms):
-            if len(term.word) > MAX_FREE_ALGEBRA_WORD_LENGTH:
+            if len(term.word) > MAX_FREE_ALGEBRA_WORD_VALUE_LENGTH:
                 _reject_resource(
                     (side, "terms", index, "word"),
                     "addition_operand_word_length_budget",
                     "addition operand words are limited to "
-                    f"{MAX_FREE_ALGEBRA_WORD_LENGTH} letters",
+                    f"{MAX_FREE_ALGEBRA_WORD_VALUE_LENGTH} letters",
                 )
     left_by_word = {term.word: term for term in left.terms}
     right_by_word = {term.word: term for term in right.terms}
@@ -652,7 +652,14 @@ def compare_words(
 ) -> FreeAlgebraWordCompareResult:
     """Compare words in the algebra's degree-lexicographic monomial order."""
 
-    left_value, right_value = _admit_word_pair(left, right)
+    left_value = _admit_word(left, label="left")
+    right_value = _admit_word(right, label="right")
+    if left_value.alphabet != right_value.alphabet:
+        raise OperationDomainValidationError(
+            location=("right", "alphabet"),
+            code="free_algebra.word_alphabet_mismatch",
+            message="both words must use the same ordered generator alphabet",
+        )
     degree_comparison = cast(
         Literal[-1, 0, 1],
         (left_value.length > right_value.length)

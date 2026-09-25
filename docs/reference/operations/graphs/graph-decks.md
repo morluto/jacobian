@@ -67,6 +67,15 @@ graph can be reconstructed from its deck.
 
 ## Anonymous card multiset equality
 
+`graph.deck.vertex.anonymous.compute` is the typed bridge from
+`VertexDeletionFamily` to `AnonymousGraphCardMultiset`. It authenticates the
+complete source-bound family, forgets source vertex labels and deletion keys,
+then returns fixed-axis canonical isomorphism-class representatives with exact
+card multiplicities. The result composes unchanged with anonymous-deck
+operations, including equality; it retains no source graph and makes no deck
+realizability or reconstruction claim. Canonicalization work and result size
+are admitted before family replay or permutation search.
+
 `graph.deck.anonymous.equal.decide` compares two
 `AnonymousGraphCardMultiset` values. It returns true exactly when both values
 have the same card order and the same multiplicity for every graph-isomorphism

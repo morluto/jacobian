@@ -27,6 +27,7 @@ from jacobian.math.logic.relational_structures._models import (
     MAX_CSP_SCOPE_ENTRIES,
     CspAssignmentProfile,
     CspConstraintEvaluation,
+    CspSolutions,
     EmbeddingSearchResult,
     FiniteCspConstraint,
     FiniteCspInstance,
@@ -398,21 +399,15 @@ def csp_instance_to_source_structure(
     equivalent to preserving every source relation tuple.
     """
 
-    if not isinstance(instance, FiniteCspInstance):
-        raise OperationDomainValidationError(
-            location=("instance",),
-            code="relational.csp.instance_type",
-            message="instance must be a finite CSP instance",
-        )
-    _preflight_csp_instance(instance)
-    try:
-        admitted = FiniteCspInstance.model_validate(instance.model_dump(), strict=True)
-    except Exception as exc:
-        raise OperationDomainValidationError(
-            location=("instance",),
-            code="relational.csp.instance_shape",
-            message="instance must have valid variables, constraints, and template relations",
-        ) from exc
+    admitted = _admit_csp_instance(instance)
+    return _csp_source_from_admitted(admitted)
+
+
+def _csp_source_from_admitted(
+    admitted: FiniteCspInstance,
+) -> FiniteRelationalStructure:
+    """Construct the canonical source after the instance is admitted."""
+
     table_by_symbol: dict[str, set[tuple[int, ...]]] = {
         symbol.symbol_id: set() for symbol in admitted.template.signature
     }
@@ -426,6 +421,26 @@ def csp_instance_to_source_structure(
             for symbol in admitted.template.signature
         ),
     )
+
+
+def _admit_csp_instance(instance: FiniteCspInstance) -> FiniteCspInstance:
+    """Preflight and canonicalize an instance once for a CSP operation."""
+
+    if not isinstance(instance, FiniteCspInstance):
+        raise OperationDomainValidationError(
+            location=("instance",),
+            code="relational.csp.instance_type",
+            message="instance must be a finite CSP instance",
+        )
+    _preflight_csp_instance(instance)
+    try:
+        return FiniteCspInstance.model_validate(instance.model_dump(), strict=True)
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("instance",),
+            code="relational.csp.instance_shape",
+            message="instance must have valid variables, constraints, and template relations",
+        ) from exc
 
 
 def profile_csp_assignment(
@@ -504,6 +519,25 @@ def profile_csp_assignment(
         assignment=assignment,
         evaluations=evaluations,
         first_violation=first_violation,
+    )
+
+
+def enumerate_csp_solutions(instance: FiniteCspInstance) -> CspSolutions:
+    """Enumerate every satisfying assignment on the instance variable axis.
+
+    The canonical source-structure conversion turns each constraint scope into
+    a relation row. Complete homomorphism enumeration into the instance's
+    template is therefore exactly complete CSP solution enumeration; the
+    returned value retains the original instance and named occurrences.
+    """
+
+    admitted = _admit_csp_instance(instance)
+    source = _csp_source_from_admitted(admitted)
+    family = enumerate_homomorphisms(source, admitted.template)
+    return CspSolutions._from_kernel(
+        instance=admitted,
+        assignments=family.carrier_maps,
+        total_candidates=family.total_candidates,
     )
 
 

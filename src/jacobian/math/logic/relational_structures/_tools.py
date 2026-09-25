@@ -12,6 +12,7 @@ from jacobian.math.logic.relational_structures._admission import (
 from jacobian.math.logic.relational_structures._models import (
     CspAssignmentProfile,
     CspAssignmentRequest,
+    CspSolutions,
     EmbeddingSearchRequest,
     EmbeddingSearchResult,
     FiniteCspInstance,
@@ -40,6 +41,7 @@ from jacobian.math.logic.relational_structures.operations import (
     compute_core,
     count_homomorphisms,
     csp_instance_to_source_structure,
+    enumerate_csp_solutions,
     enumerate_homomorphisms,
     induced_substructure,
     profile_csp_assignment,
@@ -117,6 +119,10 @@ def _csp_assignment_profile(
     request: CspAssignmentRequest,
 ) -> CspAssignmentProfile:
     return profile_csp_assignment(request.instance, request.assignment)
+
+
+def _csp_solutions(request: FiniteCspInstance) -> CspSolutions:
+    return enumerate_csp_solutions(request)
 
 
 def _induced_substructure(
@@ -408,6 +414,47 @@ TOOLS: MathTools = (
                         ],
                     },
                     "assignment": [1, 0],
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="csp.solutions.enumerate.compute",
+        title="Enumerate every solution of a finite CSP instance",
+        description=(
+            "Return the complete lexicographically ordered family of satisfying "
+            "assignments on the instance variable axis, retaining the original "
+            "instance and its named constraint occurrences. This is exhaustive: "
+            "the carrier-map space and tuple-replay work are admitted before "
+            "search, and an over-budget request is rejected rather than truncated. "
+            "The assignments agree with homomorphisms from the canonical CSP "
+            "source structure into its template, including repeated-variable "
+            "scopes, duplicate occurrences, nullary relations, and empty axes."
+        ),
+        request_type=FiniteCspInstance,
+        result_type=CspSolutions,
+        run=_csp_solutions,
+        tags=("csp", "solutions", "relational-structures", "exact"),
+        discovery_terms=(
+            "enumerate all CSP solutions",
+            "complete satisfying assignments",
+            "finite constraint satisfaction solution relation",
+            "CSP solutions as homomorphisms",
+        ),
+        examples=(
+            OperationExample(
+                name="two_color_one_edge",
+                description="Enumerate the two assignments satisfying one disequality constraint.",
+                input={
+                    "template": {
+                        "carrier_size": 2,
+                        "signature": [{"symbol_id": "E", "arity": 2}],
+                        "relation_tables": [[[0, 1], [1, 0]]],
+                    },
+                    "variable_count": 2,
+                    "constraints": [
+                        {"constraint_id": "edge", "symbol_id": "E", "scope": [0, 1]}
+                    ],
                 },
             ),
         ),

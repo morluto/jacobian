@@ -241,6 +241,17 @@ def shortest_firing_sequences(
             sequences=(),
         )
 
+    try:
+        source_graph = ReachabilityResult.model_validate(
+            source_graph.model_dump(), strict=True
+        )
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("source_graph",),
+            code="petri_net.shortest_sequences.graph_shape",
+            message="source graph must satisfy its bounded canonical axes",
+        ) from exc
+
     labeled = _labeled_adjacency(source_graph)
     distance = _shortest_distances(labeled)
     shortest_length = distance[target]
@@ -289,7 +300,14 @@ def shortest_firing_sequences(
             code="petri_net.shortest_sequences.output_bound",
             message="complete shortest-sequence family exceeds its admitted output bound",
         )
-    if work + total_steps[0] > MAX_SHORTEST_PATH_WORK:
+    # Enumeration scans each state's whole outgoing list once per shortest
+    # prefix reaching it; count those scans before materializing the family.
+    scan_work = sum(
+        counts[state] * len(labeled[state])
+        for state in range(len(labeled))
+        if state != target and counts[state]
+    )
+    if work + total_steps[0] + scan_work > MAX_SHORTEST_PATH_WORK:
         raise OperationResourceAdmissionError(
             location=("target_marking",),
             code="petri_net.shortest_sequences.work_bound",

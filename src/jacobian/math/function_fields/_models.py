@@ -244,10 +244,30 @@ class FunctionFieldPlaceValuationRequest(StrictModel):
     element: FiniteFunctionFieldElement
 
 
+class FunctionFieldUniformizerRequest(StrictModel):
+    place: FunctionFieldPlace
+
+
 class FunctionFieldPlaceValuationResult(StrictModel):
     place: FunctionFieldPlace
     element: FiniteFunctionFieldElement
     valuation: int | None
+
+
+class FunctionFieldUniformizerResult(StrictModel):
+    """An exact function-field element with valuation one at its bound place."""
+
+    place: FunctionFieldPlace
+    uniformizer: FiniteFunctionFieldElement
+
+    @model_validator(mode="after")
+    def require_same_function_field(self) -> Self:
+        if self.place.field != self.uniformizer.field:
+            raise _validation_error(
+                "uniformizer_parent",
+                "place and uniformizer must share the exact function field",
+            )
+        return self
 
 
 class FunctionFieldPrincipalDivisorRequest(StrictModel):

@@ -6,7 +6,7 @@ import re
 from fractions import Fraction
 from itertools import combinations
 from math import comb, gcd
-from typing import NoReturn
+from typing import NoReturn, TypeGuard
 
 from jacobian._exact import CanonicalRational
 from jacobian._execution import BackendFailureReason, OperationBackendError
@@ -160,7 +160,7 @@ def _admit_polynomial(polynomial: RationalPolynomial) -> int:
     return degree
 
 
-def _is_canonical_rational(value: object) -> bool:
+def _is_canonical_rational(value: object) -> TypeGuard[CanonicalRational]:
     if not isinstance(value, CanonicalRational):
         return False
     numerator = getattr(value, "num", None)

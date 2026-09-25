@@ -3,6 +3,7 @@
 from jacobian.math.logic.relational_structures._models import (
     CspAssignmentProfile,
     CspConstraintEvaluation,
+    CspSolutions,
     EmbeddingSearchResult,
     FiniteCspConstraint,
     FiniteCspInstance,
@@ -32,6 +33,7 @@ from jacobian.math.logic.relational_structures.operations import (
     compute_core,
     count_homomorphisms,
     csp_instance_to_source_structure,
+    enumerate_csp_solutions,
     enumerate_homomorphisms,
     induced_substructure,
     profile_csp_assignment,
@@ -51,6 +53,7 @@ from jacobian.math.logic.relational_structures.values import (
 __all__ = [
     "CspAssignmentProfile",
     "CspConstraintEvaluation",
+    "CspSolutions",
     "EmbeddingSearchResult",
     "FiniteCspConstraint",
     "FiniteCspInstance",
@@ -80,6 +83,7 @@ __all__ = [
     "compute_core",
     "count_homomorphisms",
     "csp_instance_to_source_structure",
+    "enumerate_csp_solutions",
     "enumerate_homomorphisms",
     "induced_substructure",
     "profile_csp_assignment",

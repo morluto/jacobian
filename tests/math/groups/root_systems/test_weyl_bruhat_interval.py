@@ -151,6 +151,30 @@ def test_parent_mismatch_invalid_weyl_action_and_group_admission_are_rejected() 
         weyl_bruhat_interval(identity, identity)
 
 
+def test_bruhat_endpoint_bounds_raw_values_and_reports_endpoint_location() -> None:
+    from jacobian.math.matrices.values import IntegerMatrix
+
+    valid = weyl_element_from_word(A2, ())
+    oversized = WeylElement.model_construct(
+        matrix=valid.matrix,
+        root_action=IntegerMatrix.model_construct(
+            row_count=2, column_count=2, entries=[[0, 0]] * 100_000
+        ),
+    )
+    with pytest.raises(OperationDomainValidationError):
+        weyl_bruhat_interval(oversized, valid)
+
+    non_weyl = WeylElement.model_construct(
+        matrix=valid.matrix,
+        root_action=IntegerMatrix.model_construct(
+            row_count=2, column_count=2, entries=((2, 0), (0, 1))
+        ),
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        weyl_bruhat_interval(valid, non_weyl)
+    assert error.value.errors()[0]["loc"][:1] == ("upper",)
+
+
 def test_catalog_example_executes_the_declared_operation() -> None:
     from jacobian.canonical import encode_strict_json
     from jacobian.math.groups.root_systems._tools import TOOLS

@@ -61,12 +61,18 @@ def _admit_multiset(
             )
         representative = getattr(item, "representative", None)
         multiplicity = getattr(item, "multiplicity", None)
+        # Read the representative's fields with getattr: a forged model_construct
+        # value may be the exact carrier type while omitting ``vertices`` or
+        # ``edges``, and direct reads would raise AttributeError instead of the
+        # operation's typed domain error.
+        representative_vertices = getattr(representative, "vertices", None)
+        representative_edges = getattr(representative, "edges", None)
         if (
             type(representative) is not SimpleUndirectedGraph
-            or type(representative.vertices) is not tuple
-            or representative.vertices != expected_vertices
-            or type(representative.edges) is not tuple
-            or len(representative.edges) > pair_count
+            or type(representative_vertices) is not tuple
+            or representative_vertices != expected_vertices
+            or type(representative_edges) is not tuple
+            or len(representative_edges) > pair_count
             or type(multiplicity) is not int
             or not 1 <= multiplicity < 10**12
         ):
@@ -75,7 +81,7 @@ def _admit_multiset(
                 code="graph_deck.equality_class",
                 message="each class must have a bounded representative and positive multiplicity",
             )
-        for edge in representative.edges:
+        for edge in representative_edges:
             if (
                 type(edge) is not tuple
                 or len(edge) != 2
@@ -89,7 +95,7 @@ def _admit_multiset(
                     code="graph_deck.equality_edges",
                     message="representative edges must be canonical pairs on the fixed card axis",
                 )
-        if tuple(sorted(set(representative.edges))) != representative.edges:
+        if tuple(sorted(set(representative_edges))) != representative_edges:
             raise OperationDomainValidationError(
                 location=(name, "classes", index, "representative", "edges"),
                 code="graph_deck.equality_edges",

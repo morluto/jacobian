@@ -3,7 +3,10 @@ from itertools import permutations
 
 import pytest
 
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.graphs.decks._models import (
     AnonymousGraphCardClass,
     AnonymousGraphCardMultiset,
@@ -27,9 +30,11 @@ def _multiset(*cards: SimpleUndirectedGraph) -> AnonymousGraphCardMultiset:
     )
 
 
-def _independent_orbit_edges(graph: SimpleUndirectedGraph):
+def _independent_orbit_edges(
+    graph: SimpleUndirectedGraph,
+) -> tuple[tuple[str, ...], ...]:
     labels = graph.vertices
-    rows = []
+    rows: list[tuple[tuple[str, ...], ...]] = []
     for order in permutations(labels):
         renamed = tuple(
             sorted(
@@ -41,7 +46,7 @@ def _independent_orbit_edges(graph: SimpleUndirectedGraph):
     return min(rows, default=())
 
 
-def test_independent_card_relabelling_preserves_multiset_equality():
+def test_independent_card_relabelling_preserves_multiset_equality() -> None:
     path = SimpleUndirectedGraph(
         vertices=("a", "b", "c", "d"),
         edges=(("a", "b"), ("b", "c"), ("c", "d")),
@@ -61,7 +66,7 @@ def test_independent_card_relabelling_preserves_multiset_equality():
     ).equal
 
 
-def test_equality_checks_noncanonical_wire_representatives_by_isomorphism():
+def test_equality_checks_noncanonical_wire_representatives_by_isomorphism() -> None:
     canonical = _multiset(
         SimpleUndirectedGraph(
             vertices=("a", "b", "c"),
@@ -88,7 +93,7 @@ def test_equality_checks_noncanonical_wire_representatives_by_isomorphism():
     ).equal
 
 
-def test_equal_underlying_sets_with_different_multiplicity_are_not_equal():
+def test_equal_underlying_sets_with_different_multiplicity_are_not_equal() -> None:
     vertices = ("a", "b", "c")
     edge = SimpleUndirectedGraph(vertices=vertices, edges=(("a", "b"),))
     empty = SimpleUndirectedGraph(vertices=vertices, edges=())
@@ -98,7 +103,7 @@ def test_equal_underlying_sets_with_different_multiplicity_are_not_equal():
     ).equal
 
 
-def test_empty_multisets_retain_and_compare_their_card_order():
+def test_empty_multisets_retain_and_compare_their_card_order() -> None:
     zero = _multiset()
     order_two = AnonymousGraphCardMultiset(card_order=2, classes=())
     assert anonymous_deck_equality(
@@ -109,7 +114,7 @@ def test_empty_multisets_retain_and_compare_their_card_order():
     ).equal
 
 
-def test_published_catalog_example_executes():
+def test_published_catalog_example_executes() -> None:
     tool = next(
         item
         for item in TOOLS
@@ -121,7 +126,31 @@ def test_published_catalog_example_executes():
     assert tool.run(request).equal
 
 
-def test_admits_aggregate_work_before_canonicalization(monkeypatch):
+@pytest.mark.parametrize("missing_field", ["vertices", "edges"])
+def test_forged_fieldless_representatives_are_rejected_at_admission(
+    missing_field: str,
+) -> None:
+    valid = _multiset(SimpleUndirectedGraph(vertices=("v00",), edges=()))
+    if missing_field == "vertices":
+        fieldless = SimpleUndirectedGraph.model_construct(edges=())
+    else:
+        fieldless = SimpleUndirectedGraph.model_construct(vertices=("v00",))
+    forged_class = AnonymousGraphCardClass.model_construct(
+        representative=fieldless,
+        multiplicity=1,
+    )
+    forged = AnonymousGraphCardMultiset.model_construct(
+        card_order=1, classes=(forged_class,)
+    )
+    with pytest.raises(OperationDomainValidationError, match="bounded representative"):
+        anonymous_deck_equality(
+            AnonymousDeckEqualityRequest.model_construct(left=forged, right=valid)
+        )
+
+
+def test_admits_aggregate_work_before_canonicalization(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     one_class = AnonymousGraphCardClass(
         representative=SimpleUndirectedGraph(vertices=("v00",), edges=()),
         multiplicity=1,
@@ -136,7 +165,7 @@ def test_admits_aggregate_work_before_canonicalization(monkeypatch):
     )
     calls = 0
 
-    def should_not_canonicalize(*_args):
+    def should_not_canonicalize(*_args: object) -> None:
         nonlocal calls
         calls += 1
         raise AssertionError("canonicalization must follow aggregate admission")

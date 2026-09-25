@@ -224,3 +224,26 @@ def test_catalog_example_is_a_direct_composable_polynomial_value() -> None:
         ("x",): Fraction(4),
     }
     assert add(result, _polynomial(result.alphabet, {})) == result
+
+
+def test_full_alphabet_long_monomial_admitted_and_malformed_labels_rejected() -> None:
+    alphabet = tuple("abcdefghijklmnopqrstuvwxyz")
+    word = alphabet[:16] * 4
+    value = _polynomial(alphabet, {word: 1})
+    result = reverse_polynomial_antiautomorphism(value)
+    assert _coefficient_map(result) == {tuple(reversed(word)): Fraction(1)}
+
+    malformed_term = FreeAlgebraTerm.model_construct(
+        coefficient=CanonicalRational.from_fraction(Fraction(1))
+    )
+    malformed = FreeAlgebraPolynomial.model_construct(
+        alphabet=("x",), terms=(malformed_term,)
+    )
+    with pytest.raises(OperationResourceAdmissionError):
+        reverse_polynomial_antiautomorphism(malformed)
+
+    oversized = FreeAlgebraPolynomial.model_construct(
+        alphabet=("x" * 100_000,), terms=()
+    )
+    with pytest.raises(OperationResourceAdmissionError):
+        reverse_polynomial_antiautomorphism(oversized)

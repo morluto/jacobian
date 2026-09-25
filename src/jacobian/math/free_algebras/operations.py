@@ -116,23 +116,52 @@ def _antiautomorphism_admission_work(value: FreeAlgebraPolynomial) -> int:
             "polynomial reversal input is outside the admitted work envelope",
         )
 
+    for label in alphabet:
+        if (
+            type(label) is not str
+            or not 1 <= len(label) <= MAX_FREE_ALGEBRA_LETTER_LENGTH
+        ):
+            _reject_resource(
+                ("polynomial", "alphabet"),
+                "antiautomorphism_work_budget",
+                "polynomial reversal input is outside the admitted work envelope",
+            )
     term_count = len(terms)
     total_cells = 0
     maximum_word_length = 0
+    word_label_cost = 0
     for term in terms:
-        if type(term) is not FreeAlgebraTerm or type(term.word) is not tuple:
+        if type(term) is not FreeAlgebraTerm:
             _reject_resource(
                 ("polynomial", "terms"),
                 "antiautomorphism_work_budget",
                 "polynomial reversal input is outside the admitted work envelope",
             )
-        word_length = len(term.word)
+        word = getattr(term, "word", None)
+        if type(word) is not tuple:
+            _reject_resource(
+                ("polynomial", "terms"),
+                "antiautomorphism_work_budget",
+                "polynomial reversal input is outside the admitted work envelope",
+            )
+        word_length = len(word)
         if word_length > MAX_FREE_ALGEBRA_RESULT_WORD_LENGTH:
             _reject_resource(
                 ("polynomial", "terms"),
                 "antiautomorphism_work_budget",
                 "polynomial reversal input is outside the admitted work envelope",
             )
+        for label in word:
+            if (
+                type(label) is not str
+                or not 1 <= len(label) <= MAX_FREE_ALGEBRA_LETTER_LENGTH
+            ):
+                _reject_resource(
+                    ("polynomial", "alphabet"),
+                    "antiautomorphism_work_budget",
+                    "polynomial reversal input is outside the admitted work envelope",
+                )
+            word_label_cost += 12 * len(label)
         total_cells += word_length
         maximum_word_length = max(maximum_word_length, word_length)
 
@@ -146,11 +175,8 @@ def _antiautomorphism_admission_work(value: FreeAlgebraPolynomial) -> int:
     # Letter labels may contain 64 code points, so include their hashing,
     # equality, JSON sizing, strict validation, and serialization costs.
     # JSON's ASCII escaping may emit up to twelve bytes per Unicode scalar.
-    label_cost = 12 * MAX_FREE_ALGEBRA_LETTER_LENGTH
-    validation_and_reversal = (
-        4 * (len(alphabet) + 1) * total_cells * label_cost
-        + 4 * len(alphabet) * label_cost
-    )
+    label_cost = sum(12 * len(label) for label in alphabet)
+    validation_and_reversal = 4 * ((len(alphabet) + 1) * word_label_cost + label_cost)
     sorting = 2 * term_count * maximum_word_length * sort_levels * 2
     coefficient_cost = 4 * term_count * MAX_FREE_ALGEBRA_COEFFICIENT_DIGITS
     return max(1, validation_and_reversal + sorting + coefficient_cost + 4 * term_count)

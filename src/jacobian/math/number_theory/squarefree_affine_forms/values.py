@@ -15,7 +15,7 @@ from jacobian.math.number_theory.affine_forms.values import (
 )
 
 MAX_SQUAREFREE_FORMS = 8
-MAX_SQUAREFREE_COMPONENT_DIGITS = 10
+MAX_SQUAREFREE_COMPONENT_DIGITS = 8
 
 SquarefreeComponentInteger = Annotated[
     int,

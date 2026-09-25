@@ -479,8 +479,8 @@ def stabilizer_group_from_generators(
             "quantum.stabilizer.exact_group.invalid_request",
             "request must contain a register and exact Pauli generators",
         )
-    register = _admit_register(request.qubit_register, "register")
-    values = request.generators
+    register = _admit_register(getattr(request, "qubit_register", None), "register")
+    values = getattr(request, "generators", None)
     if not isinstance(values, tuple) or len(values) > MAX_CHECK_ROWS:
         _reject(
             "generators",
@@ -710,7 +710,10 @@ def stabilizer_code_compute(request: StabilizerCodeRequest) -> StabilizerCodeVal
             vector, pauli = rows[index]
             product_pauli = _product_pauli_after_admission(pauli, pivot_pauli)
             rows[index] = (
-                [(left + right) % 2 for left, right in zip(vector, pivot_vector, strict=True)],
+                [
+                    (left + right) % 2
+                    for left, right in zip(vector, pivot_vector, strict=True)
+                ],
                 product_pauli,
             )
         target += 1

@@ -413,7 +413,10 @@ def _admit_tensor_partition_shape(
             message="permutation degree exceeds the tensor-product envelope",
         )
     generators = getattr(source, "generators", None)
-    if not isinstance(generators, tuple) or len(generators) > MAX_GROUP_DEGREE:
+    if (
+        not isinstance(generators, tuple)
+        or not 1 <= len(generators) <= MAX_GROUP_DEGREE
+    ):
         raise OperationResourceAdmissionError(
             location=(name, "table", "partition", "source", "generators"),
             code="groups.characters.tensor_product_generators_exceed_envelope",
@@ -557,7 +560,7 @@ def _admit_ring_element_shape(element: CharacterRingElement, name: str) -> None:
             "input must retain a character table",
             (name, "table"),
         )
-    _admit_tensor_partition_shape(table.partition, name)
+    _admit_tensor_partition_shape(getattr(table, "partition", None), name)
     _admit_tensor_table_rows(table, name)
     coords = getattr(element, "irreducible_multiplicities", None)
     if not isinstance(coords, tuple) or len(coords) != len(table.rows):
@@ -764,7 +767,7 @@ def character_tensor_product(
             "request must contain two table-bound virtual characters",
             ("request",),
         )
-    left, right = request.left, request.right
+    left, right = getattr(request, "left", None), getattr(request, "right", None)
     if not isinstance(left, CharacterRingElement) or not isinstance(
         right, CharacterRingElement
     ):

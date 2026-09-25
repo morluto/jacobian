@@ -21,6 +21,9 @@ from jacobian.math.gauge._models import (
     GaugeField,
     GaugeFieldEdgeLabel,
     GaugeLattice,
+    GaugeLoopFamilyHolonomies,
+    GaugeLoopFamilyRequest,
+    GaugeLoopHolonomy,
     GaugePathStep,
     GaugeTransformResult,
     GaugeVertexValue,
@@ -53,6 +56,7 @@ from jacobian.math.gauge.finite_group_complex import (
 from jacobian.math.gauge.observables import permutation_wilson_trace
 from jacobian.math.gauge.operations import (
     gauge_transform,
+    loop_family_holonomies,
     path_holonomy,
     plaquette_curvature,
 )
@@ -83,6 +87,9 @@ __all__ = [
     "GaugeField",
     "GaugeFieldEdgeLabel",
     "GaugeLattice",
+    "GaugeLoopFamilyHolonomies",
+    "GaugeLoopFamilyRequest",
+    "GaugeLoopHolonomy",
     "GaugePathStep",
     "GaugeTransformResult",
     "GaugeVertexValue",
@@ -106,6 +113,7 @@ __all__ = [
     "finite_group_gauge_holonomy",
     "finite_group_gauge_transform",
     "gauge_transform",
+    "loop_family_holonomies",
     "path_holonomy",
     "permutation_wilson_trace",
     "plaquette_curvature",

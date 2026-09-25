@@ -12,6 +12,8 @@ from jacobian.math.gauge._models import (
     FiniteGroupGaugeHolonomyResult,
     FiniteGroupGaugeTransformRequest,
     FiniteGroupGaugeTransformResult,
+    GaugeLoopFamilyHolonomies,
+    GaugeLoopFamilyRequest,
     GaugeTransformRequest,
     GaugeTransformResult,
     HolonomyRequest,
@@ -40,6 +42,7 @@ from jacobian.math.gauge.finite_group_complex import (
 from jacobian.math.gauge.observables import permutation_wilson_trace
 from jacobian.math.gauge.operations import (
     gauge_transform,
+    loop_family_holonomies,
     path_holonomy,
     plaquette_curvature,
 )
@@ -60,6 +63,12 @@ def _run_plaquette(request: PlaquetteRequest) -> PlaquetteResult:
 
 def _run_holonomy(request: HolonomyRequest) -> HolonomyResult:
     return path_holonomy(request.field, request.path)
+
+
+def _run_loop_family(
+    request: GaugeLoopFamilyRequest,
+) -> GaugeLoopFamilyHolonomies:
+    return loop_family_holonomies(request.field, request.loops)
 
 
 def _run_permutation_wilson(
@@ -132,6 +141,15 @@ _TRIANGLE_PATH = {
         {"edge_id": "bc", "forward": True},
         {"edge_id": "ca", "forward": True},
     ]
+}
+_LOOP_FAMILY_FIELD = {
+    "lattice": _TRIANGLE_FIELD["lattice"],
+    "degree": 3,
+    "edge_labels": [
+        {"edge_id": "ab", "label": {"degree": 3, "image": [1, 0, 2]}},
+        {"edge_id": "bc", "label": {"degree": 3, "image": [0, 2, 1]}},
+        {"edge_id": "ca", "label": {"degree": 3, "image": [0, 1, 2]}},
+    ],
 }
 _TRIVIAL_FIELD = {
     "lattice": {
@@ -376,6 +394,47 @@ TOOLS = (
                 input={
                     "field": _TRIVIAL_FIELD,
                     "path": {"steps": [], "basepoint": "v"},
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="lattice_gauge.loop_family.holonomies.compute",
+        title="Compute holonomies for an explicit finite family of loops",
+        description=(
+            "For one permutation-valued lattice gauge field and an explicit "
+            "bounded family of based closed paths, return each exact holonomy "
+            "with its path and basepoint. The result retains the source field "
+            "once; no loop search or family generation is performed."
+        ),
+        request_type=GaugeLoopFamilyRequest,
+        result_type=GaugeLoopFamilyHolonomies,
+        run=_run_loop_family,
+        tags=("lattice-gauge", "loop-family", "holonomy", "exact"),
+        discovery_terms=(
+            "finite family of lattice Wilson loops",
+            "multiple loop holonomies",
+            "lattice gauge loop profile",
+        ),
+        examples=(
+            OperationExample(
+                name="triangle_loop_family",
+                description=(
+                    "Evaluate the triangle loop and its reverse; the output "
+                    "keeps the shared field once and records each basepoint."
+                ),
+                input={
+                    "field": _LOOP_FAMILY_FIELD,
+                    "loops": [
+                        _TRIANGLE_PATH,
+                        {
+                            "steps": [
+                                {"edge_id": "ca", "forward": False},
+                                {"edge_id": "bc", "forward": False},
+                                {"edge_id": "ab", "forward": False},
+                            ]
+                        },
+                    ],
                 },
             ),
         ),

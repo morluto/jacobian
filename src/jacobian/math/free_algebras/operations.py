@@ -1853,6 +1853,34 @@ def _is_reducible_word(
     )
 
 
+def _reduction_ratio_component_digits(
+    basis: tuple[FreeAlgebraPolynomial, ...],
+) -> int:
+    """Bound component digits of one reducer tail-to-leading coefficient ratio.
+
+    A normal-form rewrite replaces the accumulated coefficient ``C`` by
+    ``-C * tail / leading`` for every tail term of the reducer.  The quotient
+    between the reducer's coefficients, not either coefficient's individual
+    width, drives component growth, so bind the cross-product components of
+    each leading term and its tail terms before any reduction executes.
+    """
+
+    digits = 1
+    for polynomial in basis:
+        leading = _leading(polynomial)
+        if leading is None:
+            continue
+        _, leading_coefficient = leading
+        for term in polynomial.terms[1:]:
+            tail = term.coefficient.as_fraction()
+            digits = max(
+                digits,
+                len(str(abs(tail.numerator * leading_coefficient.denominator))),
+                len(str(abs(tail.denominator * leading_coefficient.numerator))),
+            )
+    return digits
+
+
 def _admit_truncated_table(
     ideal: FreeAlgebraIdeal,
     completion: GroebnerShirshovResult,
@@ -1911,11 +1939,14 @@ def _admit_truncated_table(
         ),
         default=1,
     )
-    # A normal-form rewrite can multiply the coefficient already accumulated
-    # by another reducer coefficient. Across an at-most-degree-long chain,
-    # bound the product of every possible coefficient contribution before
-    # constructing the multiplication table.
-    predicted_coefficient_digits = (degree + 1) * coefficient_digits
+    # A normal-form rewrite replaces the accumulated coefficient C by
+    # -C * (tail / leading) for every reducer tail term.  The quotient between
+    # the reducer coefficients, not their individual component widths, drives
+    # growth: a leading coefficient 1/10^8 beside a 10^8 tail multiplies by
+    # 10^16 per crossing.  Across an at-most-degree-long reduction chain, bound
+    # every such ratio before constructing the multiplication table.
+    ratio_digits = _reduction_ratio_component_digits(completion.basis)
+    predicted_coefficient_digits = (degree + 1) * max(coefficient_digits, ratio_digits)
     if predicted_coefficient_digits > MAX_FREE_ALGEBRA_COEFFICIENT_DIGITS:
         _reject_resource(
             ("degree",),

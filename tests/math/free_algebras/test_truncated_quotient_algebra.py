@@ -236,6 +236,47 @@ def test_chained_reduction_coefficient_growth_is_admitted_before_table(
     )
 
 
+def test_reducer_coefficient_ratio_is_admitted_before_table(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import jacobian.math.free_algebras.operations as operations
+
+    alphabet = ("x", "y")
+    # Each crossing multiplies the coefficient by the 16-digit ratio between
+    # the 10^8 tail and the 1/10^8 leading coefficient, even though every
+    # individual component is only 9 digits wide.
+    relation = _polynomial(
+        alphabet,
+        {("y", "x"): Fraction(1, 10**8), ("x", "y"): -(10**8)},
+    )
+
+    def no_table(*args: Any, **kwargs: Any) -> None:
+        raise AssertionError("table construction began before coefficient admission")
+
+    monkeypatch.setattr(operations, "_truncated_multiplication_table", no_table)
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
+        truncated_quotient_algebra(_ideal(alphabet, (relation,)), 4)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "free_algebra.gs_coefficient_growth_budget"
+    )
+
+
+def test_admitted_reducer_ratio_still_builds_the_table() -> None:
+    alphabet = ("x", "y")
+    # A ratio of 4 per crossing stays inside the coefficient envelope, so the
+    # strengthened admission must not reject it.
+    relation = _polynomial(
+        alphabet,
+        {("y", "x"): Fraction(1, 2), ("x", "y"): -2},
+    )
+    algebra = truncated_quotient_algebra(_ideal(alphabet, (relation,)), 3)
+    positions = {word: index for index, word in enumerate(algebra.basis_words)}
+
+    product = algebra.multiplication[positions[("y",)]][positions[("x",)]]
+    assert _coordinates(product) == {("x", "y"): Fraction(4)}
+
+
 def test_catalog_example_round_trips_and_is_discoverable() -> None:
     operation_id = "free_algebra.two_sided_quotient.truncated_algebra.compute"
     tool = next(tool for tool in BUILTIN_TOOLS if tool.operation_id == operation_id)

@@ -289,10 +289,14 @@ class PeriodicQuotientCell(StrictModel):
                 "stabilizer_index_positive",
                 "a finite stabilizer index must be strictly positive",
             )
-        if len(self.representative_vertices) < self.dimension + 1:
+        expected_vertices = self.dimension + 1
+        if len(self.representative_vertices) != expected_vertices and not (
+            self.dimension == 2
+            and len(self.representative_vertices) > expected_vertices
+        ):
             raise _validation_error(
                 "quotient_cell_representative_dimension",
-                "a quotient representative must have at least dimension + 1 vertices",
+                "only a two-dimensional polygon may have more than dimension + 1 vertices",
             )
         return self
 

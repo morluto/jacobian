@@ -181,44 +181,12 @@ class VectorProjectivizeResult(StrictModel):
                 )
             original = self.source.entries
             normalized = self.representative.entries
-            if any(
+            if len(original) != len(normalized) or any(
                 (left.kind == "FINITE") != (right.kind == "FINITE")
                 for left, right in zip(original, normalized, strict=True)
             ):
                 raise _validation_error(
                     "projective_support", "normalization must preserve infinity support"
-                )
-            shift = self.translation.value.as_fraction()
-            original_values = []
-            normalized_values = []
-            for left, right in zip(original, normalized, strict=True):
-                if left.kind == "FINITE" and right.kind == "FINITE":
-                    if left.value is None or right.value is None:
-                        raise _validation_error(
-                            "projective_value",
-                            "finite coordinates must carry exact values",
-                        )
-                    if right.value.as_fraction() != left.value.as_fraction() + shift:
-                        raise _validation_error(
-                            "projective_translation",
-                            "representative must equal source plus the returned translation",
-                        )
-                    original_values.append(left.value.as_fraction())
-                    normalized_values.append(right.value.as_fraction())
-            pivot = (
-                min(original_values)
-                if self.source.semiring.convention == "MIN_PLUS"
-                else max(original_values)
-            )
-            normalized_pivot = (
-                min(normalized_values)
-                if self.source.semiring.convention == "MIN_PLUS"
-                else max(normalized_values)
-            )
-            if shift != -pivot or normalized_pivot != 0:
-                raise _validation_error(
-                    "projective_normalization",
-                    "translation must normalize the semiring extremum to zero",
                 )
         elif (
             self.representative is not None

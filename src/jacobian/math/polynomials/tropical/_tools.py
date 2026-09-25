@@ -413,7 +413,7 @@ TOOLS: MathTools = (
         examples=(
             OperationExample(
                 name="min_plus_newton_polygon",
-                description="For min-plus terms (0,0), (1,2), (3,0), return the lower coefficient hull and its two exact roots; the polynomial must be univariate.",
+                description="For min-plus terms (0,0), (1,2), (3,0), return the lower coefficient hull and its one exact root of multiplicity 3; the polynomial must be univariate.",
                 input={
                     "polynomial": {
                         "semiring": _s(),

@@ -258,12 +258,13 @@ def _h_to_v_expand(
 
 
 def _lattice_length(poly: TropicalPolynomial, active: tuple[int, ...]) -> int:
-    anchor = poly.terms[active[0]].exponents
-    length = 0
-    for index in active[1:]:
-        exponent = poly.terms[index].exponents
-        length = gcd(length, abs(exponent[0] - anchor[0]))
-        length = gcd(length, abs(exponent[1] - anchor[1]))
+    endpoints = [poly.terms[index].exponents for index in active]
+    # A one-dimensional dual face's geometric lattice length is the gcd of
+    # the coordinate differences between its extreme points, not all source
+    # term spacings along the face.
+    delta = max(endpoints, key=lambda point: (point[0], point[1]))
+    anchor = min(endpoints, key=lambda point: (point[0], point[1]))
+    length = gcd(abs(delta[0] - anchor[0]), abs(delta[1] - anchor[1]))
     if length <= 0:
         raise RuntimeError("one-dimensional dual face has zero lattice length")
     return length

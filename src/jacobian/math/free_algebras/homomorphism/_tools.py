@@ -7,6 +7,13 @@ from jacobian.math.free_algebras.homomorphism._models import (
 )
 from jacobian.math.free_algebras.homomorphism.operations import apply
 
+
+def _run_apply(
+    request: FreeAlgebraHomomorphismApplyRequest,
+) -> FreeAlgebraHomomorphismApplyResult:
+    return apply(request.homomorphism, request.polynomial)
+
+
 TOOLS = (
     MathTool(
         operation_id="free_algebra.homomorphism.apply.compute",
@@ -17,7 +24,7 @@ TOOLS = (
         ),
         request_type=FreeAlgebraHomomorphismApplyRequest,
         result_type=FreeAlgebraHomomorphismApplyResult,
-        run=apply,
+        run=_run_apply,
         tags=("algebra", "free-algebra", "homomorphism", "noncommutative", "exact"),
         discovery_terms=(
             "free algebra homomorphism",

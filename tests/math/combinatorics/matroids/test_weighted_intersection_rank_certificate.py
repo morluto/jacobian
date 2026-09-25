@@ -233,6 +233,23 @@ def test_owner_manifest_example_runs_through_declared_types() -> None:
     assert result.first_split.values == (5, 3)
 
 
+def test_rank_certificate_validates_shared_prime_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import jacobian.math.combinatorics.matroids.intersection as intersection
+
+    calls = 0
+
+    def count_prime_checks(_prime: int) -> None:
+        nonlocal calls
+        calls += 1
+
+    monkeypatch.setattr(intersection, "_admit_prime", count_prime_checks)
+    weighted_intersection_rank_certificate(*_rank_one_arguments())
+
+    assert calls == 1
+
+
 def test_forged_dual_value_fails_after_serialization() -> None:
     result = weighted_intersection_rank_certificate(*_rank_one_arguments())
     raw = result.model_dump(mode="python")

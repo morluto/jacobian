@@ -69,8 +69,15 @@ for its exact face, dimension, maximal-chain, work, and output bounds.
 vertex axis and returns the full subcomplex whose faces are exactly the source
 faces contained in that subset. Its face-image table maps retained faces to
 the same vertex tuple and marks every removed source face with `null`. The
-empty selection is excluded because the canonical finite-complex type has no
-void-complex value.
+empty selection is outside this operation's request domain.
+
+The `link` and `star` operations accept the implicit empty face as well as
+nonempty faces. Its link and closed star are both the source complex. The
+result carries the exact canonical target complex; in particular, the link of
+a maximal face is the zero-vertex complex `{∅}`, represented by empty
+nonempty-face axes and dimension `-1`. `link_is_empty` identifies that
+canonical value; Jacobian's finite-complex carrier does not represent the
+void complex.
 
 ## Minimal nonfaces
 

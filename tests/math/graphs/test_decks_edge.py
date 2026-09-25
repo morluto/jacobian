@@ -7,18 +7,20 @@ from itertools import combinations, permutations
 import pytest
 from pydantic import ValidationError
 
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.graphs.decks._models import (
     EdgeDeckRequest,
     EdgeDeletionFamily,
     SourceBoundEdgeCard,
-    UnlabelledEdgeDeck,
-    UnlabelledEdgeDeckRequest,
+    UnlabelledDeck,
+    UnlabelledDeckRequest,
 )
 from jacobian.math.graphs.decks._tools import TOOLS, _run_edge_deleted
 from jacobian.math.graphs.decks.operations import (
     edge_deletion_family,
-    edge_unlabelled_deck,
     unlabelled_deck,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
@@ -54,14 +56,14 @@ def test_serialized_family_composes_unchanged_into_unlabelled_quotient() -> None
 def test_serialized_unlabelled_quotient_does_not_replay_isomorphism(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import networkx as nx
+    import jacobian.math.graphs.decks.operations as deck_operations
 
     quotient = unlabelled_deck(edge_deletion_family(_triangle()))
 
     def fail(*_args: object, **_kwargs: object) -> None:
-        raise AssertionError("result validation must not replay graph isomorphism")
+        raise AssertionError("result validation must not replay canonicalization")
 
-    monkeypatch.setattr(nx, "is_isomorphic", fail)
+    monkeypatch.setattr(deck_operations, "_canonical_adjacency_signature", fail)
 
     assert type(quotient).model_validate_json(quotient.model_dump_json()) == quotient
 
@@ -125,17 +127,6 @@ def test_published_edge_deck_operations_have_executable_examples() -> None:
     )
     assert quotient_tool.run(quotient_request).card_count == 2
 
-    exact_tool = next(
-        tool
-        for tool in TOOLS
-        if tool.operation_id == "graph.deck.edge.unlabelled.compute"
-    )
-    exact_request = exact_tool.request_type.model_validate(exact_tool.examples[0].input)
-    exact_result = exact_tool.run(exact_request)
-    assert exact_result.card_count == 3
-    assert exact_result.classes[0].multiplicity == 3
-    assert exact_result.classes[0].deleted_edges == _triangle().edges
-
 
 def _oracle_signature(graph: SimpleUndirectedGraph) -> tuple[int, ...]:
     """Independent adjacency-matrix permutation oracle for tiny graphs."""
@@ -165,14 +156,20 @@ def test_edge_deck_classes_match_exhaustive_graph_permutation_oracle() -> None:
             )
             graph = SimpleUndirectedGraph(vertices=vertices, edges=edges)
             family = edge_deletion_family(graph)
-            result = edge_unlabelled_deck(family)
+            result = unlabelled_deck(family)
             oracle_groups: dict[tuple[int, ...], list[int]] = {}
             for index, card in enumerate(family.cards):
                 oracle_groups.setdefault(_oracle_signature(card.card), []).append(index)
             assert [item.card_indices for item in result.classes] == [
                 tuple(indices) for indices in oracle_groups.values()
             ]
-            assert [item.deleted_edges for item in result.classes] == [
+            assert [item.multiplicity for item in result.classes] == [
+                len(indices) for indices in oracle_groups.values()
+            ]
+            assert [
+                tuple(result.source.edges[index] for index in item.card_indices)
+                for item in result.classes
+            ] == [
                 tuple(family.cards[index].deleted_edge for index in indices)
                 for indices in oracle_groups.values()
             ]
@@ -184,39 +181,56 @@ def test_edge_deck_canonicalization_is_relabeling_invariant_and_round_trips() ->
         vertices=("z", "x", "y"),
         edges=(("x", "y"), ("x", "z"), ("y", "z")),
     )
-    first = edge_unlabelled_deck(edge_deletion_family(graph))
-    second = edge_unlabelled_deck(edge_deletion_family(renamed))
+    family = edge_deletion_family(graph)
+    first = unlabelled_deck(family)
+    second = unlabelled_deck(edge_deletion_family(renamed))
     assert [
         (item.multiplicity, len(item.representative.edges)) for item in first.classes
     ] == [
         (item.multiplicity, len(item.representative.edges)) for item in second.classes
     ]
-    decoded_family = EdgeDeletionFamily.model_validate_json(
-        first.family.model_dump_json()
-    )
-    request = UnlabelledEdgeDeckRequest(deck=decoded_family)
+    decoded_family = EdgeDeletionFamily.model_validate_json(family.model_dump_json())
+    request = UnlabelledDeckRequest(deck=decoded_family)
     tool = next(
-        tool
-        for tool in TOOLS
-        if tool.operation_id == "graph.deck.edge.unlabelled.compute"
+        tool for tool in TOOLS if tool.operation_id == "graph.deck.unlabelled.compute"
     )
     result = tool.run(request)
-    decoded = UnlabelledEdgeDeck.model_validate_json(result.model_dump_json())
+    decoded = UnlabelledDeck.model_validate_json(result.model_dump_json())
     assert decoded == result
     assert decoded.classes[0].card_indices == (0, 1, 2)
-    assert decoded.classes[0].deleted_edges == graph.edges
+    assert (
+        tuple(decoded.source.edges[index] for index in decoded.classes[0].card_indices)
+        == graph.edges
+    )
 
 
-def test_edge_unlabelled_catalog_operation_is_published() -> None:
+def test_edge_deck_quotient_has_exactly_one_published_operation() -> None:
+    """One postcondition, one operation: no competing edge-quotient IDs."""
     from jacobian.catalog.builtins import BUILTIN_TOOLS
 
-    tool = next(
-        item
-        for item in BUILTIN_TOOLS
-        if item.operation_id == "graph.deck.edge.unlabelled.compute"
+    quotients = sorted(
+        tool.operation_id
+        for tool in BUILTIN_TOOLS
+        if tool.request_type.model_fields.get("deck") is not None
+        and tool.request_type.model_fields["deck"].annotation is EdgeDeletionFamily
+        and tool.result_type is UnlabelledDeck
     )
-    assert tool.result_type is UnlabelledEdgeDeck
-    assert (
-        tool.run(tool.request_type.model_validate(tool.examples[0].input)).card_count
-        == 3
-    )
+    assert quotients == ["graph.deck.unlabelled.compute"]
+
+
+def test_edge_quotient_admits_exact_permutation_work_before_expansion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The n^2 pairwise estimate must not admit 45 ten-vertex canonicalizations."""
+    import jacobian.math.graphs.decks.operations as operations
+
+    def fail(*_args: object, **_kwargs: object) -> int:
+        raise AssertionError("canonicalization ran before exact work admission")
+
+    monkeypatch.setattr(operations, "_canonical_adjacency_signature", fail)
+    vertices = tuple(f"v{i}" for i in range(10))
+    edges = tuple(combinations(vertices, 2))
+    family = edge_deletion_family(SimpleUndirectedGraph(vertices=vertices, edges=edges))
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
+        unlabelled_deck(family)
+    assert exc_info.value.errors()[0]["type"] == "graph_deck.isomorphism_work_bound"

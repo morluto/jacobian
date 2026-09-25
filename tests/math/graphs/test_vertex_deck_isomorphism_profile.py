@@ -265,6 +265,116 @@ def test_catalog_example_executes_and_returns_exact_maps() -> None:
         result = VertexDeckIsomorphismProfile.model_validate_json(
             json.dumps(invocation.output)
         )
-        assert calls == 0
+        assert calls == len(result.classes)
     assert result.class_indices == (1, 0, 1)
     _assert_maps_are_isomorphisms(result)
+
+
+def _valid_profile_payload() -> dict:
+    profile = vertex_deck_isomorphism_profile(
+        VertexDeckIsomorphismProfileRequest(deck=vertex_deletion_family(_path3()))
+    )
+    return profile.model_dump(mode="python")
+
+
+def test_request_rejects_overlong_source_labels_before_parsing() -> None:
+    payload = {
+        "deck": {
+            "source": {"vertices": ["x" * 65, "b", "c"], "edges": []},
+            "cards": "malformed",
+        }
+    }
+    with pytest.raises(ValidationError, match="64-byte scalar bound"):
+        VertexDeckIsomorphismProfileRequest.model_validate(payload)
+
+
+def test_catalog_rejects_overlong_labels_before_nested_parsing() -> None:
+    tool_id = "graph.deck.isomorphism_classes.compute"
+    payload = {
+        "deck": {
+            "source": {"vertices": ["x" * 65, "b", "c"], "edges": []},
+            "cards": "malformed but over the admitted label",
+        }
+    }
+    operation = Catalog.open().operation(tool_id)
+    assert operation is not None
+    with pytest.raises(OperationRequestValidationError) as error:
+        invoke_operation(tool_id, payload, Catalog.open())
+    assert "64-byte scalar bound" in str(error.value.cause)
+
+
+@pytest.mark.parametrize("field", ["edge_appearances", "vertex_appearances"])
+def test_request_rejects_oversized_appearance_ledgers_before_normalization(
+    monkeypatch, field: str
+) -> None:
+    def fail(*_args: object) -> object:
+        raise AssertionError("ledger admission must precede tuple normalization")
+
+    monkeypatch.setattr(deck_models, "_normalize_vertex_family_json", fail)
+    payload = {
+        "deck": {
+            "source": {
+                "vertices": ["a", "b", "c"],
+                "edges": [["a", "b"], ["b", "c"]],
+            },
+            field: [0] * 10_000,
+        }
+    }
+    with pytest.raises(ValidationError, match="appearances must align"):
+        VertexDeckIsomorphismProfileRequest.model_validate(payload)
+
+
+def test_wire_profile_rejects_oversized_appearance_ledgers_before_normalization(
+    monkeypatch,
+) -> None:
+    payload = _valid_profile_payload()
+    payload["family"]["edge_appearances"] = (0,) * 10_000
+
+    def fail(*_args: object) -> object:
+        raise AssertionError("ledger admission must precede tuple normalization")
+
+    monkeypatch.setattr(deck_models, "_normalize_vertex_family_json", fail)
+    with pytest.raises(ValidationError, match="edge appearances must align"):
+        VertexDeckIsomorphismProfile.model_validate(payload)
+
+
+@pytest.mark.parametrize(
+    ("field", "message"),
+    [
+        ("multiplicity", "class multiplicity must be an exact integer"),
+        ("card_indices", "class card_indices must contain exact integers"),
+        ("class_indices", "class_indices must contain exact integers"),
+        ("vertex_maps", "vertex_maps must contain exact integers"),
+    ],
+)
+def test_wire_profile_rejects_coerced_integer_scalars(field: str, message: str) -> None:
+    payload = _valid_profile_payload()
+    if field == "multiplicity":
+        payload["classes"][0]["multiplicity"] = True
+    elif field == "card_indices":
+        payload["classes"][0]["card_indices"] = (True,)
+    elif field == "class_indices":
+        payload["class_indices"] = (True, 0, 1)
+    else:
+        payload["vertex_maps"] = ((True, 1), (0, 1), (0, 1))
+    with pytest.raises(ValidationError, match=message):
+        VertexDeckIsomorphismProfile.model_validate(payload)
+
+
+def test_wire_profile_rejects_noncanonical_representative() -> None:
+    source = SimpleUndirectedGraph(
+        vertices=("a", "b", "c", "d"),
+        edges=(("a", "b"), ("b", "c"), ("c", "d")),
+    )
+    profile = vertex_deck_isomorphism_profile(
+        VertexDeckIsomorphismProfileRequest(deck=vertex_deletion_family(source))
+    )
+    payload = profile.model_dump(mode="python")
+    for row in payload["classes"]:
+        if row["representative"]["edges"] == (("v01", "v02"),):
+            row["representative"]["edges"] = (("v00", "v01"),)
+            break
+    else:
+        raise AssertionError("expected a single-edge class representative")
+    with pytest.raises(ValidationError, match="vertex_iso_profile_class"):
+        VertexDeckIsomorphismProfile.model_validate(payload)

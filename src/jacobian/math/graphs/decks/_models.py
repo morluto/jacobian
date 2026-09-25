@@ -11,15 +11,18 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import DecimalIntegerEncoding
 from jacobian._models import StrictModel
+from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.graphs.patterns._models import (
     MAX_INDUCED_PATTERN_TOTAL_WORK_UNITS,
 )
+from jacobian.math.graphs.realization._models import DegreeSequence
 from jacobian.math.graphs.values import MAX_GRAPH_LABEL_BYTES, SimpleUndirectedGraph
 
 MAX_DECK_VERTICES = 64
 """Admission cap on source vertices so the complete card family fits output."""
 
 MAX_DECK_CARD_EDGES = 130_000
+"""Admission cap on aggregate card edges across the whole family."""
 MAX_EDGE_DECK_EDGES = 130_000
 MAX_UNLABELLED_DECK_VERTICES = 10
 MAX_UNLABELLED_DECK_ISOMORPHISM_WORK = 2_000_000
@@ -41,7 +44,17 @@ MAX_VERTEX_DECK_CARD_EDGE_TOTAL = MAX_UNLABELLED_DECK_VERTICES * comb(
 MAX_KELLY_DECK_TOTAL_WORK = MAX_INDUCED_PATTERN_TOTAL_WORK_UNITS
 MAX_KELLY_COUNT_DIGITS = 3
 MAX_KELLY_SUBGRAPH_COUNT_DIGITS = 12
-MAX_KELLY_RESULT_BYTES = 1_000_000
+MAX_DECK_ECHO_ALLOCATION = 1_000_000
+"""Bound on vertex-label characters a Kelly deck result may echo.
+
+A deck result echoes its source family, one class representative per deck
+class, and one contribution representative per class. Each label appears at
+most once per incident graph record, so bounding the aggregate label
+allocation before canonicalization bounds the exact output growth.
+"""
+
+MAX_DEGREE_MULTISET_DIGITS = 64
+"""Aggregate decimal digits the reconstructed degree multiset may allocate."""
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -129,7 +142,9 @@ class AnonymousGraphCardClass(StrictModel):
     """One canonically relabelled isomorphism class and its exact multiplicity."""
 
     representative: SimpleUndirectedGraph
-    multiplicity: Annotated[int, DecimalIntegerEncoding(max_digits=12)] = Field(ge=1)
+    multiplicity: Annotated[int, DecimalIntegerEncoding(max_digits=12)] = Field(
+        ge=1, json_schema_extra={"pattern": "^[1-9][0-9]*$"}
+    )
 
 
 class AnonymousGraphCardMultiset(StrictModel):
@@ -154,13 +169,15 @@ class AnonymousGraphCardMultiset(StrictModel):
             raise _validation_error(
                 "anonymous_card_classes", "classes exceed the carrier bound"
             )
-        pair_count = comb(n, 2)
-        work = _anonymous_canonicalization_work(n, len(self.classes))
-        if work > MAX_ANONYMOUS_CARD_CANONICALIZATION_WORK:
+        if (
+            _anonymous_canonicalization_work(n, len(self.classes))
+            > MAX_ANONYMOUS_CARD_CANONICALIZATION_WORK
+        ):
             raise _validation_error(
                 "anonymous_card_validation_bound",
                 "canonical class validation exceeds its bounded permutation work",
             )
+        pair_count = comb(n, 2)
         output_bytes = len(self.classes) * (64 + 16 * pair_count)
         if output_bytes > MAX_ANONYMOUS_CARD_RESULT_BYTES:
             raise _validation_error(
@@ -243,16 +260,14 @@ class AnonymousGraphCardMultiset(StrictModel):
 class AnonymousCardDegreeFrequency(StrictModel):
     """One sorted degree multiset and its exact total card multiplicity."""
 
-    degrees: tuple[int, ...] = Field(
-        max_length=MAX_UNLABELLED_DECK_VERTICES,
-        description="Nonincreasing vertex degrees, with one coordinate per card vertex.",
-    )
+    degrees: DegreeSequence
     multiplicity: Annotated[int, DecimalIntegerEncoding(max_digits=20)] = Field(ge=1)
 
 
 class AnonymousCardDegreeProfile(StrictModel):
-    """Degree-multiset histogram for an anonymous card multiset."""
+    """Degree-multiset histogram bound to its anonymous card multiset."""
 
+    source: AnonymousGraphCardMultiset
     card_order: int = Field(ge=0, le=MAX_UNLABELLED_DECK_VERTICES)
     total_card_multiplicity: Annotated[int, DecimalIntegerEncoding(max_digits=20)] = (
         Field(ge=0)
@@ -263,7 +278,16 @@ class AnonymousCardDegreeProfile(StrictModel):
 
     @model_validator(mode="after")
     def require_canonical_degree_profile(self) -> Self:
+        if type(self.source) is not AnonymousGraphCardMultiset:
+            raise _validation_error(
+                "card_profile_source", "profile source has the wrong carrier"
+            )
         order = self.card_order
+        if order != self.source.card_order:
+            raise _validation_error(
+                "card_profile_source_order",
+                "card_order must match the retained source card_order",
+            )
         if type(order) is not int or not 0 <= order <= MAX_UNLABELLED_DECK_VERTICES:
             raise _validation_error(
                 "card_profile_order", "card_order is outside its bound"
@@ -278,13 +302,16 @@ class AnonymousCardDegreeProfile(StrictModel):
         output_bytes = 128 + len(self.degree_multisets) * (64 + 16 * order)
         cells = len(self.degree_multisets) * max(order, 1)
         if output_bytes > MAX_ANONYMOUS_CARD_PROFILE_RESULT_BYTES:
-            raise _validation_error(
-                "card_profile_output_bound",
-                "degree-profile values exceed the byte bound",
+            raise OperationResourceAdmissionError(
+                location=("degree_multisets",),
+                code="graph_deck.card_profile_output_bound",
+                message="degree-profile values exceed the output bound",
             )
         if cells > MAX_ANONYMOUS_CARD_PROFILE_CELLS:
-            raise _validation_error(
-                "card_profile_cell_bound", "degree-profile values exceed the cell bound"
+            raise OperationResourceAdmissionError(
+                location=("degree_multisets",),
+                code="graph_deck.card_profile_cell_bound",
+                message="degree-profile values exceed the cell bound",
             )
         previous: tuple[int, ...] | None = None
         total = 0
@@ -293,10 +320,12 @@ class AnonymousCardDegreeProfile(StrictModel):
                 raise _validation_error(
                     "card_profile_row_type", "profile rows have the wrong carrier"
                 )
-            degrees = getattr(row, "degrees", None)
+            sequence = getattr(row, "degrees", None)
             multiplicity = getattr(row, "multiplicity", None)
+            degrees = getattr(sequence, "degrees", None)
             if (
-                type(degrees) is not tuple
+                type(sequence) is not DegreeSequence
+                or type(degrees) is not tuple
                 or len(degrees) != order
                 or any(
                     type(degree) is not int or degree < 0 or degree >= max(order, 1)
@@ -338,12 +367,13 @@ class AnonymousCardDegreeProfile(StrictModel):
     @classmethod
     def _from_kernel(
         cls,
-        card_order: int,
+        source: AnonymousGraphCardMultiset,
         total_card_multiplicity: int,
         degree_multisets: tuple[AnonymousCardDegreeFrequency, ...],
     ) -> Self:
         return cls.model_construct(
-            card_order=card_order,
+            source=source,
+            card_order=source.card_order,
             total_card_multiplicity=total_card_multiplicity,
             degree_multisets=degree_multisets,
         )
@@ -381,9 +411,12 @@ def _admit_anonymous_profile_wire_resources(value: Any) -> None:
         or type(classes) not in (list, tuple)
     ):
         return
+    assert isinstance(classes, (list, tuple))
     if len(classes) > MAX_ANONYMOUS_CARD_CLASSES:
-        raise _validation_error(
-            "card_profile_class_bound", "profile input has too many card classes"
+        raise OperationResourceAdmissionError(
+            location=("multiset", "classes"),
+            code="graph_deck.card_profile_class_bound",
+            message="profile input has too many card classes",
         )
     canonical_work, total_work, cells, output_bytes = (
         _anonymous_profile_resource_estimates(order, len(classes))
@@ -392,19 +425,22 @@ def _admit_anonymous_profile_wire_resources(value: Any) -> None:
         canonical_work > MAX_ANONYMOUS_CARD_CANONICALIZATION_WORK
         or total_work > MAX_ANONYMOUS_CARD_PROFILE_WORK
     ):
-        raise _validation_error(
-            "card_profile_work_bound",
-            "canonical validation and degree profiling exceed the shared work bound",
+        raise OperationResourceAdmissionError(
+            location=("multiset", "classes"),
+            code="graph_deck.card_profile_work_bound",
+            message="canonical validation and degree profiling exceed the shared work bound",
         )
     if cells > MAX_ANONYMOUS_CARD_PROFILE_CELLS:
-        raise _validation_error(
-            "card_profile_cell_bound",
-            "degree-profile cells exceed the materialization bound",
+        raise OperationResourceAdmissionError(
+            location=("multiset", "classes"),
+            code="graph_deck.card_profile_cell_bound",
+            message="degree-profile cells exceed the materialization bound",
         )
     if output_bytes > MAX_ANONYMOUS_CARD_PROFILE_RESULT_BYTES:
-        raise _validation_error(
-            "card_profile_output_bound",
-            "degree-profile output exceeds the byte bound",
+        raise OperationResourceAdmissionError(
+            location=("multiset", "classes"),
+            code="graph_deck.card_profile_output_bound",
+            message="degree-profile output exceeds the byte bound",
         )
 
 
@@ -722,8 +758,9 @@ class UnlabelledDeckRequest(StrictModel):
     deck: EdgeDeletionFamily = Field(
         description=(
             "A complete source-bound edge deck; quotient is admitted for at most "
-            "10 source vertices and 2000000 units of pairwise isomorphism work."
-        )
+            "10 source vertices and 2000000 units of exact permutation "
+            "canonicalization work."
+        ),
     )
 
 
@@ -795,84 +832,6 @@ class UnlabelledDeck(StrictModel):
                     "quotient_source_cards",
                     "each quotient representative must be the first source card",
                 )
-        return self
-
-    @classmethod
-    def _from_kernel(cls, **values: Any) -> Self:
-        return cls.model_construct(**values)
-
-
-class UnlabelledEdgeDeckRequest(StrictModel):
-    """Consume a complete source-bound edge-deletion family."""
-
-    deck: EdgeDeletionFamily = Field(
-        description=(
-            "A complete source-bound edge deck; exact permutation canonicalization "
-            "is admitted by source order, aggregate work, and result bytes."
-        )
-    )
-
-
-class UnlabelledEdgeDeckClass(StrictModel):
-    """One graph-isomorphism class with exact source-edge provenance."""
-
-    representative: SimpleUndirectedGraph
-    multiplicity: int = Field(ge=1)
-    card_indices: tuple[int, ...]
-    deleted_edges: tuple[tuple[str, str], ...]
-
-
-class UnlabelledEdgeDeck(StrictModel):
-    """Exact multiset quotient of a source-bound edge-deletion family."""
-
-    family: EdgeDeletionFamily
-    classes: tuple[UnlabelledEdgeDeckClass, ...]
-    card_count: int = Field(ge=0)
-
-    @model_validator(mode="after")
-    def require_partition(self) -> Self:
-        order = len(self.family.source.vertices)
-        work = len(self.family.cards) * factorial(order) * (1 + order + comb(order, 2))
-        if (
-            order > MAX_UNLABELLED_DECK_VERTICES
-            or work > MAX_UNLABELLED_DECK_ISOMORPHISM_WORK
-        ):
-            raise _validation_error(
-                "edge_quotient_bound",
-                "unlabelled edge deck exceeds its exact canonicalization envelope",
-            )
-        if self.card_count != len(self.family.cards) or self.card_count != len(
-            self.family.source.edges
-        ):
-            raise _validation_error(
-                "edge_quotient_card_count", "deck must retain every source edge card"
-            )
-        seen: list[int] = []
-        for item in self.classes:
-            if (
-                item.multiplicity != len(item.card_indices)
-                or item.multiplicity != len(item.deleted_edges)
-                or not item.card_indices
-                or tuple(sorted(item.card_indices)) != item.card_indices
-                or any(
-                    index < 0 or index >= self.card_count for index in item.card_indices
-                )
-                or item.deleted_edges
-                != tuple(
-                    self.family.cards[index].deleted_edge for index in item.card_indices
-                )
-                or item.representative != self.family.cards[item.card_indices[0]].card
-            ):
-                raise _validation_error(
-                    "edge_quotient_class_provenance",
-                    "each class must retain aligned card indices, source edges, and its first source card",
-                )
-            seen.extend(item.card_indices)
-        if sorted(seen) != list(range(self.card_count)):
-            raise _validation_error(
-                "edge_quotient_indices",
-                "class indices must partition the edge-card axis",
-            )
         return self
 
     @classmethod
@@ -968,8 +927,8 @@ class VertexDeckIsomorphismProfileRequest(StrictModel):
             return value
         deck = value.get("deck")
         source = deck.get("source") if type(deck) is dict else None
-        vertices = source.get("vertices") if type(source) is dict else None
-        edges = source.get("edges") if type(source) is dict else None
+        vertices: Any = source.get("vertices") if type(source) is dict else None
+        edges: Any = source.get("edges") if type(source) is dict else None
         if type(vertices) not in (list, tuple):
             return value
         order = len(vertices)
@@ -985,7 +944,8 @@ class VertexDeckIsomorphismProfileRequest(StrictModel):
                 "vertex_iso_profile_source_edges",
                 "source edge list exceeds the simple-graph order bound",
             )
-        cards = deck.get("cards") if type(deck) is dict else None
+        _preflight_vertex_profile_labels(vertices, edges)
+        cards: Any = deck.get("cards") if type(deck) is dict else None
         if type(cards) in (list, tuple):
             if len(cards) != order:
                 raise _validation_error(
@@ -995,12 +955,13 @@ class VertexDeckIsomorphismProfileRequest(StrictModel):
             for card in cards:
                 if type(card) is not dict:
                     continue
+                _preflight_vertex_profile_labels(card.get("deleted_vertex"))
                 graph = card.get("card")
                 if type(graph) is not dict:
                     continue
-                card_vertices = graph.get("vertices")
-                card_edges = graph.get("edges")
-                retained_vertices = card.get("retained_vertices")
+                card_vertices: Any = graph.get("vertices")
+                card_edges: Any = graph.get("edges")
+                retained_vertices: Any = card.get("retained_vertices")
                 if (
                     (
                         type(card_vertices) in (list, tuple)
@@ -1019,7 +980,11 @@ class VertexDeckIsomorphismProfileRequest(StrictModel):
                         "vertex_iso_profile_card_shape",
                         "a card exceeds the declared source-order shape bound",
                     )
+                _preflight_vertex_profile_labels(
+                    card_vertices, card_edges, retained_vertices
+                )
         source_edges = len(edges) if type(edges) in (list, tuple) else pair_count
+        _preflight_vertex_family_ledgers(deck, order, source_edges)
         _, total_work, output_bytes = _vertex_iso_profile_resource_estimates(
             order, source_edges, order
         )
@@ -1105,6 +1070,8 @@ class VertexDeckIsomorphismProfile(StrictModel):
                     for index in item.card_indices
                 )
                 or representative.vertices != canonical_axis
+                or _canonical_card_edges(representative.vertices, representative.edges)
+                != representative.edges
                 or (
                     previous_edges is not None
                     and representative.edges <= previous_edges
@@ -1236,12 +1203,16 @@ def _admit_and_normalize_vertex_iso_profile_result(value: Any) -> Any:
                 "vertex_iso_profile_bound",
                 "vertex-deck isomorphism profile exceeds its source-order bound",
             )
-        classes = value.get("classes")
+        family = value.get("family")
+        _preflight_vertex_family_labels(family)
+        _preflight_vertex_family_ledgers(family, order, edge_count)
+        classes: Any = value.get("classes")
+        _require_exact_vertex_iso_profile_wire_integers(value, classes)
         if type(classes) in (list, tuple):
             card_order = max(order - 1, 0)
             card_pair_count = comb(card_order, 2)
             family = value.get("family")
-            raw_cards = (
+            raw_cards: Any = (
                 family.get("cards")
                 if type(family) is dict
                 else getattr(family, "cards", None)
@@ -1253,12 +1224,12 @@ def _admit_and_normalize_vertex_iso_profile_result(value: Any) -> Any:
                         if type(card) is dict
                         else getattr(card, "card", None)
                     )
-                    vertices = (
+                    vertices: Any = (
                         graph.get("vertices")
                         if type(graph) is dict
                         else getattr(graph, "vertices", None)
                     )
-                    edges = (
+                    edges: Any = (
                         graph.get("edges")
                         if type(graph) is dict
                         else getattr(graph, "edges", None)
@@ -1295,6 +1266,7 @@ def _admit_and_normalize_vertex_iso_profile_result(value: Any) -> Any:
                         "vertex_iso_profile_card_shape",
                         "a representative exceeds the declared source-order shape bound",
                     )
+                _preflight_vertex_profile_labels(vertices, edges)
         if (
             type(classes) in (list, tuple)
             and len(cast(list[Any] | tuple[Any, ...], classes)) > order
@@ -1590,6 +1562,8 @@ class EdgeDeckIsomorphismProfile(StrictModel):
                     family.cards[index].deleted_edge for index in item.card_indices
                 )
                 or representative.vertices != canonical_axis
+                or _canonical_card_edges(representative.vertices, representative.edges)
+                != representative.edges
                 or (
                     previous_edges is not None
                     and representative.edges <= previous_edges
@@ -1681,27 +1655,23 @@ def _edge_iso_profile_resource_estimates(
 def _admit_and_normalize_edge_iso_profile_result(value: Any) -> Any:
     if type(value) is not dict:
         return value
-    family: Any = value.get("family")
-    raw_source: Any = family.get("source") if type(family) is dict else None
-    vertices: Any = raw_source.get("vertices") if type(raw_source) is dict else None
-    edges: Any = raw_source.get("edges") if type(raw_source) is dict else None
-    if type(vertices) not in (list, tuple):
-        return value
-    order = len(vertices)
+    dimensions = _edge_iso_profile_dimensions(value.get("family"), value.get("classes"))
+    if dimensions is None:
+        return _normalize_edge_iso_profile_result(value)
+    order, edge_count, class_count = dimensions
     if order > MAX_UNLABELLED_DECK_VERTICES:
         raise _validation_error(
             "edge_iso_profile_bound",
             "edge-deck isomorphism profile exceeds its source-order bound",
         )
     pair_count = comb(order, 2)
-    edge_count = len(edges) if type(edges) in (list, tuple) else pair_count
     if edge_count > pair_count:
         raise _validation_error(
             "edge_iso_profile_source_edges",
             "source edge list exceeds the simple-graph order bound",
         )
+    family: Any = value.get("family")
     classes: Any = value.get("classes")
-    class_count = len(classes) if type(classes) in (list, tuple) else edge_count
     if class_count > edge_count:
         raise _validation_error(
             "edge_iso_profile_class_count",
@@ -1724,6 +1694,34 @@ def _admit_and_normalize_edge_iso_profile_result(value: Any) -> Any:
             "edge-deck isomorphism profile exceeds the serialized byte bound",
         )
     return _normalize_edge_iso_profile_result(value)
+
+
+def _edge_iso_profile_dimensions(
+    family: Any, classes: Any
+) -> tuple[int, int, int] | None:
+    """Derive edge-profile dimensions from either a typed or wire family."""
+    if type(family) is EdgeDeletionFamily:
+        source = family.source
+        vertices = getattr(source, "vertices", None)
+        edges = getattr(source, "edges", None)
+    elif type(family) is dict:
+        raw_source: Any = family.get("source")
+        if type(raw_source) is not dict:
+            return None
+        vertices = raw_source.get("vertices")
+        edges = raw_source.get("edges")
+    else:
+        return None
+    if type(vertices) not in (list, tuple):
+        return None
+    order = len(cast(list[Any] | tuple[Any, ...], vertices))
+    edge_count = (
+        len(cast(list[Any] | tuple[Any, ...], edges))
+        if type(edges) in (list, tuple)
+        else comb(order, 2)
+    )
+    class_count = len(classes) if type(classes) in (list, tuple) else edge_count
+    return order, edge_count, class_count
 
 
 def _preflight_edge_profile_family_wire(
@@ -1784,21 +1782,112 @@ def _preflight_raw_edge_pairs(value: Any, maximum: int) -> None:
         )
 
 
-def _preflight_edge_profile_labels(*collections: Any) -> None:
+def _preflight_graph_labels(code: str, *collections: Any) -> None:
+    """Reject over-long scalar labels before nested graph parsing copies them."""
     for collection in collections:
+        if type(collection) is str:
+            collection = (collection,)
         if type(collection) not in (list, tuple):
             continue
         for item in collection:
             labels = item if type(item) in (list, tuple) else (item,)
             if any(
-                type(label) is str
-                and (not label or len(label) > MAX_GRAPH_LABEL_BYTES)
+                type(label) is str and (not label or len(label) > MAX_GRAPH_LABEL_BYTES)
                 for label in labels
             ):
                 raise _validation_error(
-                    "edge_iso_profile_label_bound",
+                    code,
                     "graph labels exceed the 64-byte scalar bound",
                 )
+
+
+def _preflight_edge_profile_labels(*collections: Any) -> None:
+    _preflight_graph_labels("edge_iso_profile_label_bound", *collections)
+
+
+def _preflight_vertex_profile_labels(*collections: Any) -> None:
+    _preflight_graph_labels("vertex_iso_profile_label_bound", *collections)
+
+
+def _preflight_vertex_family_ledgers(family: Any, order: int, edge_count: int) -> None:
+    """Bound appearance-ledger lengths before tuple normalization copies them."""
+    if type(family) is not dict:
+        return
+    raw_edges: Any = family.get("edge_appearances")
+    if type(raw_edges) in (list, tuple) and len(raw_edges) != edge_count:
+        raise _validation_error(
+            "vertex_iso_profile_ledger_bound",
+            "edge appearances must align with the source edge axis",
+        )
+    raw_vertices: Any = family.get("vertex_appearances")
+    if type(raw_vertices) in (list, tuple) and len(raw_vertices) != order:
+        raise _validation_error(
+            "vertex_iso_profile_ledger_bound",
+            "vertex appearances must align with the source vertex axis",
+        )
+
+
+def _preflight_vertex_family_labels(family: Any) -> None:
+    """Bound scalar labels on every nested vertex-family graph."""
+    if type(family) is not dict:
+        return
+    source: Any = family.get("source")
+    if type(source) is dict:
+        _preflight_vertex_profile_labels(source.get("vertices"), source.get("edges"))
+    raw_cards: Any = family.get("cards")
+    if type(raw_cards) in (list, tuple):
+        for card in raw_cards:
+            if type(card) is not dict:
+                continue
+            _preflight_vertex_profile_labels(card.get("deleted_vertex"))
+            graph: Any = card.get("card")
+            if type(graph) is dict:
+                _preflight_vertex_profile_labels(
+                    graph.get("vertices"), graph.get("edges")
+                )
+            _preflight_vertex_profile_labels(card.get("retained_vertices"))
+
+
+def _require_exact_vertex_iso_profile_wire_integers(
+    value: dict[str, Any], classes: Any
+) -> None:
+    """Reject Pydantic-coerced booleans and floats in profile integer fields."""
+    class_indices: Any = value.get("class_indices")
+    if type(class_indices) in (list, tuple) and any(
+        type(index) is not int for index in class_indices
+    ):
+        raise _validation_error(
+            "vertex_iso_profile_integer_type",
+            "class_indices must contain exact integers",
+        )
+    vertex_maps: Any = value.get("vertex_maps")
+    if type(vertex_maps) in (list, tuple) and any(
+        type(row) in (list, tuple)
+        and any(type(position) is not int for position in row)
+        for row in vertex_maps
+    ):
+        raise _validation_error(
+            "vertex_iso_profile_integer_type",
+            "vertex_maps must contain exact integers",
+        )
+    if type(classes) not in (list, tuple):
+        return
+    for item in classes:
+        if type(item) is not dict:
+            continue
+        if type(item.get("multiplicity")) is not int:
+            raise _validation_error(
+                "vertex_iso_profile_integer_type",
+                "class multiplicity must be an exact integer",
+            )
+        card_indices: Any = item.get("card_indices")
+        if type(card_indices) in (list, tuple) and any(
+            type(index) is not int for index in card_indices
+        ):
+            raise _validation_error(
+                "vertex_iso_profile_integer_type",
+                "class card_indices must contain exact integers",
+            )
 
 
 def _preflight_edge_profile_result_rows(
@@ -2240,11 +2329,12 @@ class VertexDeckEdgeCount(StrictModel):
 
 __all__ = [
     "MAX_DECK_CARD_EDGES",
+    "MAX_DECK_ECHO_ALLOCATION",
     "MAX_DECK_VERTICES",
+    "MAX_DEGREE_MULTISET_DIGITS",
     "MAX_EDGE_DECK_EDGES",
     "MAX_KELLY_COUNT_DIGITS",
     "MAX_KELLY_DECK_TOTAL_WORK",
-    "MAX_KELLY_RESULT_BYTES",
     "MAX_KELLY_SUBGRAPH_COUNT_DIGITS",
     "MAX_UNLABELLED_DECK_ISOMORPHISM_WORK",
     "MAX_UNLABELLED_DECK_VERTICES",

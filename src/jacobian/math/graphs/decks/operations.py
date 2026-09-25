@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import unicodedata
 from itertools import combinations, permutations
 from math import comb, factorial
@@ -22,19 +21,17 @@ from jacobian.math.graphs.decks._models import (
     MAX_ANONYMOUS_CARD_PROFILE_WORK,
     MAX_ANONYMOUS_CARD_RESULT_BYTES,
     MAX_DECK_CARD_EDGES,
+    MAX_DECK_ECHO_ALLOCATION,
     MAX_DECK_VERTICES,
+    MAX_DEGREE_MULTISET_DIGITS,
     MAX_EDGE_DECK_EDGES,
     MAX_EDGE_DECK_ISOMORPHISM_PROFILE_RESULT_BYTES,
     MAX_KELLY_DECK_TOTAL_WORK,
-    MAX_KELLY_RESULT_BYTES,
-    MAX_KELLY_SUBGRAPH_COUNT_DIGITS,
     MAX_UNLABELLED_DECK_ISOMORPHISM_WORK,
     MAX_UNLABELLED_DECK_VERTICES,
-    MAX_UNLABELLED_EDGE_DECK_RESULT_BYTES,
     MAX_VERTEX_DECK_ISOMORPHISM_PROFILE_RESULT_BYTES,
     AnonymousCardDegreeFrequency,
     AnonymousCardDegreeProfile,
-    AnonymousCardDegreeProfileRequest,
     AnonymousGraphCardClass,
     AnonymousGraphCardMultiset,
     AnonymousGraphCardMultisetRequest,
@@ -46,8 +43,6 @@ from jacobian.math.graphs.decks._models import (
     SourceBoundVertexCard,
     UnlabelledDeck,
     UnlabelledDeckClass,
-    UnlabelledEdgeDeck,
-    UnlabelledEdgeDeckClass,
     UnlabelledVertexDeck,
     UnlabelledVertexDeckClass,
     VertexDeckEdgeCount,
@@ -78,7 +73,6 @@ __all__ = [
     "anonymous_graph_card_multiset",
     "edge_deck_isomorphism_profile",
     "edge_deletion_family",
-    "edge_unlabelled_deck",
     "unlabelled_deck",
     "unlabelled_vertex_deck",
     "verify_edge_deletion_family",
@@ -101,35 +95,42 @@ def _admit_anonymous_card_request(
             code="graph_deck.anonymous_request_carrier",
             message="request must be an AnonymousGraphCardMultisetRequest",
         )
-    n = request.card_order
+    n = getattr(request, "card_order", None)
+    cards = getattr(request, "cards", None)
+    if cards is None:
+        raise OperationDomainValidationError(
+            location=("cards",),
+            code="graph_deck.anonymous_cards_missing",
+            message="cards field is required",
+        )
     if type(n) is not int or n < 0 or n > MAX_UNLABELLED_DECK_VERTICES:
         raise OperationResourceAdmissionError(
             location=("card_order",),
             code="graph_deck.anonymous_order_bound",
             message="anonymous cards support orders from zero through the isomorphism bound",
         )
-    if type(request.cards) is not tuple:
+    if type(cards) is not tuple:
         raise OperationDomainValidationError(
             location=("cards",),
             code="graph_deck.anonymous_cards_tuple",
             message="cards must be an immutable tuple",
         )
     pair_count = comb(n, 2)
-    work = _anonymous_canonicalization_work(n, len(request.cards))
+    work = _anonymous_canonicalization_work(n, len(cards))
     if work > MAX_ANONYMOUS_CARD_CANONICALIZATION_WORK:
         raise OperationResourceAdmissionError(
             location=("cards",),
             code="graph_deck.anonymous_canonicalization_bound",
             message="exact permutation canonicalization exceeds the admitted work bound",
         )
-    output_bytes = len(request.cards) * (64 + 16 * pair_count)
+    output_bytes = len(cards) * (64 + 16 * pair_count)
     if output_bytes > MAX_ANONYMOUS_CARD_RESULT_BYTES:
         raise OperationResourceAdmissionError(
             location=("cards",),
             code="graph_deck.anonymous_result_bound",
             message="canonical anonymous card output exceeds the byte bound",
         )
-    for index, graph in enumerate(request.cards):
+    for index, graph in enumerate(cards):
         _admit_anonymous_card(graph, n, pair_count, index)
     return request
 
@@ -312,7 +313,7 @@ def _admit_anonymous_profile_input(multiset: AnonymousGraphCardMultiset) -> None
                 code="graph_deck.card_profile_multiplicity",
                 message="card-class multiplicities must be positive bounded exact integers",
             )
-        graph = getattr(item, "representative", None)
+        graph = item.representative
         _admit_anonymous_card(graph, order, pair_count, index)
         if graph.vertices != expected_vertices:
             raise OperationDomainValidationError(
@@ -361,24 +362,18 @@ def _profile_from_admitted_multiset(
         total += item.multiplicity
     rows = tuple(
         AnonymousCardDegreeFrequency.model_construct(
-            degrees=degrees, multiplicity=counts[degrees]
+            degrees=DegreeSequence.model_construct(degrees=degrees),
+            multiplicity=counts[degrees],
         )
         for degrees in sorted(counts)
     )
-    return AnonymousCardDegreeProfile._from_kernel(order, total, rows)
+    return AnonymousCardDegreeProfile._from_kernel(multiset, total, rows)
 
 
 def anonymous_card_degree_profile(
-    request: AnonymousCardDegreeProfileRequest,
+    multiset: AnonymousGraphCardMultiset,
 ) -> AnonymousCardDegreeProfile:
-    """Compute degree-multiset frequencies without a source-deck claim."""
-    if type(request) is not AnonymousCardDegreeProfileRequest:
-        raise OperationDomainValidationError(
-            location=("request",),
-            code="graph_deck.card_profile_request_carrier",
-            message="request must be an AnonymousCardDegreeProfileRequest",
-        )
-    multiset = getattr(request, "multiset", None)
+    """Compute degree-multiset frequencies for a canonical card multiset."""
     return _compute_anonymous_card_degree_profile(multiset)
 
 
@@ -454,18 +449,6 @@ def verify_edge_deletion_family(claim: EdgeDeletionFamily) -> bool:
     return edge_deletion_family(claim.source) == claim
 
 
-def _isomorphic(left: SimpleUndirectedGraph, right: SimpleUndirectedGraph) -> bool:
-    import networkx as nx
-
-    first: nx.Graph[str] = nx.Graph()
-    first.add_nodes_from(left.vertices)
-    first.add_edges_from(left.edges)
-    second: nx.Graph[str] = nx.Graph()
-    second.add_nodes_from(right.vertices)
-    second.add_edges_from(right.edges)
-    return nx.is_isomorphic(first, second)
-
-
 def _admit_edge_deletion_family(family: EdgeDeletionFamily) -> EdgeDeletionFamily:
     """Re-establish the exact source-minus-edge relation at a consumer boundary."""
     if type(family) is not EdgeDeletionFamily:
@@ -507,49 +490,13 @@ def _admit_edge_deletion_family(family: EdgeDeletionFamily) -> EdgeDeletionFamil
 
 
 def unlabelled_deck(family: EdgeDeletionFamily) -> UnlabelledDeck:
-    """Quotient an edge deck into exact unlabeled isomorphism classes."""
-    family = _admit_edge_deletion_family(family)
-    n = len(family.source.vertices)
-    if n > MAX_UNLABELLED_DECK_VERTICES:
-        raise OperationResourceAdmissionError(
-            location=("deck",),
-            code="graph_deck.isomorphism_vertex_bound",
-            message="unlabelled quotient exceeds the isomorphism envelope",
-        )
-    if len(family.cards) * max(n, 1) * max(n, 1) > MAX_UNLABELLED_DECK_ISOMORPHISM_WORK:
-        raise OperationResourceAdmissionError(
-            location=("deck",),
-            code="graph_deck.isomorphism_work_bound",
-            message="unlabelled quotient exceeds the isomorphism work envelope",
-        )
-    classes: list[UnlabelledDeckClass] = []
-    for index, card in enumerate(family.cards):
-        for class_index, item in enumerate(classes):
-            if _isomorphic(card.card, item.representative):
-                classes[class_index] = item.model_copy(
-                    update={
-                        "multiplicity": item.multiplicity + 1,
-                        "card_indices": (*item.card_indices, index),
-                    }
-                )
-                break
-        else:
-            classes.append(
-                UnlabelledDeckClass.model_construct(
-                    representative=card.card, multiplicity=1, card_indices=(index,)
-                )
-            )
-    return UnlabelledDeck._from_kernel(
-        source=family.source, classes=tuple(classes), card_count=len(family.cards)
-    )
-
-
-def edge_unlabelled_deck(family: EdgeDeletionFamily) -> UnlabelledEdgeDeck:
-    """Canonicalize every edge card and return its exact multiset quotient.
+    """Quotient an edge deck into exact unlabeled isomorphism classes.
 
     Each card is assigned the least adjacency bit word over all vertex
     permutations. Equal words are equivalent exactly under graph isomorphism;
-    unlike pairwise similarity checks, this key is a complete invariant.
+    unlike pairwise similarity searches, this key is a complete invariant, so
+    the aggregate permutation work is admitted before any canonical form is
+    computed.
     """
     family = _admit_edge_deletion_family(family)
     source_order = len(family.source.vertices)
@@ -557,8 +504,8 @@ def edge_unlabelled_deck(family: EdgeDeletionFamily) -> UnlabelledEdgeDeck:
     if source_order > MAX_UNLABELLED_DECK_VERTICES:
         raise OperationResourceAdmissionError(
             location=("deck",),
-            code="graph_deck.edge_quotient_vertex_bound",
-            message="unlabelled edge deck exceeds the exact canonicalization order bound",
+            code="graph_deck.isomorphism_vertex_bound",
+            message="unlabelled quotient exceeds the isomorphism envelope",
         )
     work = (
         card_count
@@ -568,44 +515,19 @@ def edge_unlabelled_deck(family: EdgeDeletionFamily) -> UnlabelledEdgeDeck:
     if work > MAX_UNLABELLED_DECK_ISOMORPHISM_WORK:
         raise OperationResourceAdmissionError(
             location=("deck",),
-            code="graph_deck.edge_quotient_work_bound",
-            message="unlabelled edge deck exceeds exact permutation canonicalization work",
+            code="graph_deck.isomorphism_work_bound",
+            message="unlabelled quotient exceeds the exact permutation work envelope",
         )
-    # Every output representative is one of the source cards, and each source
-    # card can represent at most one class. Bound their aggregate bytes by the
-    # sum over all card graphs, then account for the duplicated edge map and
-    # class/index JSON framing.
-    family_bytes = len(family.model_dump_json().encode("utf-8"))
-    representative_bytes = sum(
-        len(card.card.model_dump_json().encode("utf-8")) for card in family.cards
-    )
-    edge_map_bytes = sum(
-        len(json.dumps(card.deleted_edge, ensure_ascii=True).encode("ascii"))
-        for card in family.cards
-    )
-    output_bound = (
-        family_bytes + representative_bytes + edge_map_bytes + 128 * card_count + 128
-    )
-    if output_bound > MAX_KELLY_RESULT_BYTES:
-        raise OperationResourceAdmissionError(
-            location=("deck",),
-            code="graph_deck.edge_quotient_result_bytes",
-            message="unlabelled edge deck exceeds its serialized result byte bound",
-        )
-
+    classes: list[UnlabelledDeckClass] = []
     signatures: dict[int, int] = {}
-    classes: list[UnlabelledEdgeDeckClass] = []
     for index, card in enumerate(family.cards):
         signature = _canonical_adjacency_signature(card.card)
         class_index = signatures.get(signature)
         if class_index is None:
             signatures[signature] = len(classes)
             classes.append(
-                UnlabelledEdgeDeckClass.model_construct(
-                    representative=card.card,
-                    multiplicity=1,
-                    card_indices=(index,),
-                    deleted_edges=(card.deleted_edge,),
+                UnlabelledDeckClass.model_construct(
+                    representative=card.card, multiplicity=1, card_indices=(index,)
                 )
             )
         else:
@@ -614,11 +536,10 @@ def edge_unlabelled_deck(family: EdgeDeletionFamily) -> UnlabelledEdgeDeck:
                 update={
                     "multiplicity": item.multiplicity + 1,
                     "card_indices": (*item.card_indices, index),
-                    "deleted_edges": (*item.deleted_edges, card.deleted_edge),
                 }
             )
-    return UnlabelledEdgeDeck._from_kernel(
-        family=family, classes=tuple(classes), card_count=card_count
+    return UnlabelledDeck._from_kernel(
+        source=family.source, classes=tuple(classes), card_count=card_count
     )
 
 
@@ -1086,6 +1007,37 @@ def _canonical_adjacency_signature(graph: SimpleUndirectedGraph) -> int:
     return 0 if least is None else least
 
 
+def _require_kelly_echo_allocation(
+    source: SimpleUndirectedGraph,
+    pattern: SimpleUndirectedGraph,
+    *,
+    code: str,
+) -> None:
+    """Bound the label allocation a Kelly count result can echo.
+
+    The result embeds the source family, one class representative per deck
+    class, and one contribution representative per class: at most ``3n + 1``
+    graph echoes over ``n`` source vertices. Each label is echoed at most once
+    per incident record, so one graph echo allocates at most ``n`` copies of
+    the aggregate source label characters. Ledger, index, and multiplicity
+    integers are cardinality-bounded by ``n``, and count digits are bounded by
+    the result encodings, so this bound governs the only unbounded growth.
+    """
+    source_order = len(source.vertices)
+    pattern_order = len(pattern.vertices)
+    source_characters = sum(len(label) for label in source.vertices)
+    pattern_characters = sum(len(label) for label in pattern.vertices)
+    echo_allocation = (3 * source_order + 1) * max(
+        source_order, 1
+    ) * source_characters + (pattern_order + 1) * pattern_characters
+    if echo_allocation > MAX_DECK_ECHO_ALLOCATION:
+        raise OperationResourceAdmissionError(
+            location=("deck", "pattern"),
+            code=code,
+            message="Kelly deck count exceeds the exact result echo allocation bound",
+        )
+
+
 def vertex_deck_induced_subgraph_count(
     deck: UnlabelledVertexDeck,
     pattern: SimpleUndirectedGraph,
@@ -1174,6 +1126,9 @@ def vertex_deck_induced_subgraph_count(
                 f"the {MAX_KELLY_DECK_TOTAL_WORK:,}-unit total work bound"
             ),
         )
+    _require_kelly_echo_allocation(
+        source, pattern, code="graph_deck.kelly_result_allocation_bound"
+    )
 
     # This replays the complete family and exact class quotient before relying
     # on caller-supplied card multiplicities.
@@ -1355,23 +1310,9 @@ def vertex_deck_subgraph_count(
                 f"the {MAX_KELLY_DECK_TOTAL_WORK:,}-unit total work bound"
             ),
         )
-    output_bound = (
-        len(deck.model_dump_json().encode("utf-8"))
-        + len(pattern.model_dump_json().encode("utf-8"))
-        + sum(
-            len(card_class.representative.model_dump_json().encode("utf-8"))
-            for card_class in deck.classes
-        )
-        + 256 * n
-        + 2 * MAX_KELLY_SUBGRAPH_COUNT_DIGITS
-        + 128
+    _require_kelly_echo_allocation(
+        source, pattern, code="graph_deck.kelly_subgraph_result_allocation"
     )
-    if output_bound > MAX_UNLABELLED_EDGE_DECK_RESULT_BYTES:
-        raise OperationResourceAdmissionError(
-            location=("deck",),
-            code="graph_deck.kelly_subgraph_result_bytes",
-            message="Kelly subgraph count exceeds its serialized result byte bound",
-        )
 
     # Validation and quotient construction occur only after aggregate work and
     # output have been admitted. The budget includes these complete passes.
@@ -1586,17 +1527,12 @@ def vertex_deck_degree_multiset(
             code="graph_deck.degree_multiset_output_bound",
             message="degree multiset output exceeds the exact deck envelope",
         )
-    output_bytes = (
-        len('{"degrees":[]}')
-        + source_order * len(str(source_order - 1))
-        + source_order
-        - 1
-    )
-    if output_bytes > 64:
+    degree_digit_bound = source_order * len(str(source_order - 1))
+    if degree_digit_bound > MAX_DEGREE_MULTISET_DIGITS:
         raise OperationResourceAdmissionError(
             location=("deck",),
-            code="graph_deck.degree_multiset_result_bytes",
-            message="degree multiset serialized output exceeds its byte bound",
+            code="graph_deck.degree_multiset_result_digits",
+            message="degree multiset exceeds its exact decimal digit bound",
         )
 
     # The existing operation admits all family validation and exact

@@ -186,6 +186,12 @@ Its invariant factors and all element coordinates are exact Python integers.
 `model_validate_json()` validates and decodes that encoding back into the same
 value type. Native construction does not accept numeric strings, and JSON
 decoding does not accept numbers for these fields.
+Finite based chain complexes and filtered chain data use Python `int` and
+`fractions.Fraction` coefficients. Their JSON representation uses canonical
+integer strings and reduced rational strings such as `"-3/7"`; read those
+wire values with `model_validate_json()`. Differential matrices, chain maps,
+mapping cones, tensor products, filtered subspaces, and producer results retain
+the same native coefficient types in Python.
 
 `reduce_element(group, coordinates)` returns an `ElementReduceResult` retaining
 the source coordinates and an `AbelianElement` with canonical coordinates.

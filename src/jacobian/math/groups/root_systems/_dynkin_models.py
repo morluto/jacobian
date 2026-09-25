@@ -14,7 +14,7 @@ from jacobian.math.groups.root_systems._models import (
 )
 
 MAX_DYNKIN_EDGES = MAX_RANK * (MAX_RANK - 1) // 2
-MAX_DYNKIN_DIAGRAM_OUTPUT_BYTES = 16_384
+MAX_DYNKIN_DIAGRAM_OUTPUT_CELLS = 16_384
 
 
 class DynkinEdge(StrictModel):

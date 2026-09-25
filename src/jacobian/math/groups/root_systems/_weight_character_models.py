@@ -5,6 +5,8 @@ from __future__ import annotations
 from typing import Self
 
 from pydantic import Field, StrictInt, model_validator
+
+from jacobian._exact import ExactInteger
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
@@ -41,7 +43,7 @@ class WeightMultiplicity(StrictModel):
     """One weight and its positive multiplicity in an irreducible module."""
 
     weight: tuple[StrictInt, ...] = Field(min_length=1, max_length=MAX_RANK)
-    multiplicity: StrictInt = Field(ge=1)
+    multiplicity: ExactInteger = Field(ge=1)
 
     @model_validator(mode="after")
     def require_bounded_coordinates_and_multiplicity(self) -> Self:

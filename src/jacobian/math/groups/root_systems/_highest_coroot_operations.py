@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from jacobian._execution import BackendFailureReason, OperationBackendError
-from jacobian.canonical import CanonicalLimits
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.groups.root_systems._cartan import connected_components
 from jacobian.math.groups.root_systems._highest_coroot_models import (
@@ -24,7 +23,7 @@ from jacobian.math.groups.root_systems.operations import (
 )
 
 MAX_HIGHEST_COROOT_WORK = 160_000
-MAX_HIGHEST_COROOT_OUTPUT_BYTES = 128_000
+MAX_HIGHEST_COROOT_OUTPUT_CELLS = 128_000
 
 
 def highest_coroots(
@@ -50,8 +49,8 @@ def highest_coroots(
         + MAX_POSITIVE_ROOTS * (200 + 56 * MAX_RANK)
         + MAX_RANK * (512 + 20 * MAX_RANK)
     )
-    if work_bound > MAX_HIGHEST_COROOT_WORK or output_bound > min(
-        MAX_HIGHEST_COROOT_OUTPUT_BYTES, CanonicalLimits().max_output_bytes
+    if work_bound > MAX_HIGHEST_COROOT_WORK or output_bound > (
+        MAX_HIGHEST_COROOT_OUTPUT_CELLS
     ):
         raise OperationResourceAdmissionError(
             location=("matrix",),

@@ -24,7 +24,6 @@ that need more context than an operation card:
 - [Coxeter polynomials](groups/coxeter-polynomials.md)
 - [Integral Weyl weight orbits](groups/weyl-weight-orbits.md)
 - [Weyl dimensions](groups/weyl-dimensions.md)
-- [Type-A highest-weight characters](groups/highest-weight-characters.md)
 - [Weyl exponents](groups/weyl-exponents.md)
 - [Weyl-group Poincare polynomials](groups/weyl-poincare-polynomial.md)
 - [Standard parabolic Weyl subgroups](groups/weyl-parabolic.md)

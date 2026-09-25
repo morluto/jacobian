@@ -15,7 +15,7 @@ from jacobian.math.groups.root_systems._models import (
     WeylGroupOrderResult,
 )
 from jacobian.math.groups.root_systems.operations import (
-    MAX_ROOT_PROFILE_OUTPUT_BYTES,
+    MAX_ROOT_PROFILE_OUTPUT_CELLS,
     positive_root_profile,
     positive_roots,
     root_system_data,
@@ -226,7 +226,7 @@ class TestPositiveRootProfile:
         result = positive_root_profile(E8)
         encoded = canonicalize_json(result.model_dump(mode="json"))
         assert len(result.positive_roots) == 120
-        assert len(encoded) <= MAX_ROOT_PROFILE_OUTPUT_BYTES
+        assert len(encoded) <= MAX_ROOT_PROFILE_OUTPUT_CELLS
         highest = result.positive_roots[result.components[0].highest_root_index]
         assert highest.height == 29
 

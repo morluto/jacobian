@@ -164,3 +164,73 @@ def test_kernel_work_is_admitted_before_exact_elimination(monkeypatch) -> None:
     )
     with pytest.raises(OperationResourceAdmissionError, match="work budget"):
         ga_fixed_subspace(stable)
+
+
+def test_hadamard_bound_rejects_exact_matrix_before_kernel_elimination() -> None:
+    primes = (
+        2,
+        3,
+        5,
+        7,
+        11,
+        13,
+        17,
+        19,
+        23,
+        29,
+        31,
+        37,
+        41,
+        43,
+        47,
+        53,
+        59,
+        61,
+        67,
+        71,
+        73,
+        79,
+        83,
+        89,
+        97,
+        101,
+        103,
+        107,
+        109,
+        113,
+        127,
+        131,
+    )
+    denominators = []
+    for prime in primes:
+        denominator = prime
+        while len(str(denominator * prime)) <= 15:
+            denominator *= prime
+        denominators.append(denominator)
+    row = [Fraction(1, denominator) for denominator in denominators]
+    matrix = [row.copy() for _ in primes]
+
+    with pytest.raises(OperationResourceAdmissionError, match="Hadamard bound"):
+        _stable_operations._admit_and_integerize_kernel_matrix(matrix)
+
+
+def test_aggregate_polynomial_support_is_admitted_before_expansion(monkeypatch) -> None:
+    zero_action = PolynomialGaAction(
+        source_variables=("x",),
+        parameter="t",
+        generator_images=(_poly(("x", "t"), ((1, 0),)),),
+    )
+    basis = (_poly(("x",), ((0,),)), _poly(("x",), ((1,),)))
+    stable = ga_stable_subrepresentation(zero_action, basis)
+    monkeypatch.setattr(_stable_operations, "MAX_GA_FIXED_SUPPORT_TERMS", 1)
+
+    def expansion_must_not_start(*_args, **_kwargs):
+        raise AssertionError(
+            "polynomial representatives were expanded before support admission"
+        )
+
+    monkeypatch.setattr(
+        _stable_operations, "_fixed_polynomial_basis", expansion_must_not_start
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="aggregate support"):
+        ga_fixed_subspace(stable)

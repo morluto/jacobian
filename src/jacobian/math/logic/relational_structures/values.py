@@ -44,6 +44,9 @@ MAX_PP_EVALUATION_ASSIGNMENTS = 1_048_576
 MAX_PP_EVALUATION_ATOM_CHECKS = 8_388_608
 MAX_PP_EVALUATION_COORDINATE_WORK = 16_777_216
 MAX_PP_DEFINED_TUPLES = 65_536
+MAX_RELATIONAL_INVARIANT_CLOSURE_TUPLES = 4_096
+MAX_RELATIONAL_INVARIANT_CLOSURE_WORK = 8_388_608
+MAX_RELATIONAL_INVARIANT_CLOSURE_OUTPUT_BYTES = 8 * 1_048_576
 
 RelationSymbolId = Annotated[
     str,
@@ -258,7 +261,9 @@ class PrimitivePositiveFormula(StrictModel):
             if isinstance(atom, PPRelationAtom):
                 symbol_id = atom.symbol_id
                 variables = atom.variables
-                if type(symbol_id) is not str or any(type(v) is not int for v in variables):
+                if type(symbol_id) is not str or any(
+                    type(v) is not int for v in variables
+                ):
                     return data
                 key = ("relation", symbol_id, tuple(variables), 0, 0)
                 value: object = {
@@ -314,16 +319,11 @@ class PrimitivePositiveFormula(StrictModel):
 
         normalized = tuple(
             value
-            for _, value in sorted(
-                dict(keyed_atoms).items(), key=lambda item: item[0]
-            )
+            for _, value in sorted(dict(keyed_atoms).items(), key=lambda item: item[0])
         )
         canonical = dict(data)
         free_variables = canonical.get("free_variables")
-        if (
-            isinstance(free_variables, list)
-            and len(free_variables) <= MAX_PP_VARIABLES
-        ):
+        if isinstance(free_variables, list) and len(free_variables) <= MAX_PP_VARIABLES:
             canonical["free_variables"] = tuple(free_variables)
         canonical["atoms"] = normalized
         return canonical
@@ -334,7 +334,9 @@ class PrimitivePositiveFormula(StrictModel):
             raise _validation_error(
                 "pp.free_variables", "free-variable axes must be distinct"
             )
-        if any(not 0 <= variable < self.variable_count for variable in self.free_variables):
+        if any(
+            not 0 <= variable < self.variable_count for variable in self.free_variables
+        ):
             raise _validation_error(
                 "pp.free_variable_range", "free variables must name declared variables"
             )
@@ -360,9 +362,7 @@ class PPDefinedRelation(StrictModel):
 
     structure: FiniteRelationalStructure
     formula: PrimitivePositiveFormula
-    tuples: tuple[tuple[StrictInt, ...], ...] = Field(
-        max_length=MAX_PP_DEFINED_TUPLES
-    )
+    tuples: tuple[tuple[StrictInt, ...], ...] = Field(max_length=MAX_PP_DEFINED_TUPLES)
 
     @model_validator(mode="after")
     def require_exact_relation_shape(self) -> Self:
@@ -390,6 +390,9 @@ __all__ = [
     "MAX_PP_VARIABLES",
     "MAX_RELATIONAL_ARITY",
     "MAX_RELATIONAL_CARRIER",
+    "MAX_RELATIONAL_INVARIANT_CLOSURE_OUTPUT_BYTES",
+    "MAX_RELATIONAL_INVARIANT_CLOSURE_TUPLES",
+    "MAX_RELATIONAL_INVARIANT_CLOSURE_WORK",
     "MAX_RELATIONAL_OPERATION_TABLE_CELLS",
     "MAX_RELATIONAL_POLYMORPHISM_ARITY",
     "MAX_RELATIONAL_POLYMORPHISM_FAMILY_SIZE",

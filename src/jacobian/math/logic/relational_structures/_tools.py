@@ -30,6 +30,8 @@ from jacobian.math.logic.relational_structures._models import (
     InducedSubstructureRequest,
     InducedSubstructureResult,
     PPFormulaEvaluationRequest,
+    RelationalInvariantClosure,
+    RelationalInvariantClosureRequest,
     RelationalPolymorphismCheckResult,
     RelationalPolymorphismEnumerationRequest,
     RelationalPolymorphismFamily,
@@ -44,6 +46,7 @@ from jacobian.math.logic.relational_structures._models import (
 from jacobian.math.logic.relational_structures.operations import (
     check_homomorphism,
     check_polymorphism,
+    close_relation_under_polymorphisms,
     compute_core,
     count_homomorphisms,
     csp_instance_to_source_structure,
@@ -61,6 +64,9 @@ from jacobian.math.logic.relational_structures.operations import (
 from jacobian.math.logic.relational_structures.values import (
     MAX_RELATIONAL_ARITY,
     MAX_RELATIONAL_CARRIER,
+    MAX_RELATIONAL_INVARIANT_CLOSURE_OUTPUT_BYTES,
+    MAX_RELATIONAL_INVARIANT_CLOSURE_TUPLES,
+    MAX_RELATIONAL_INVARIANT_CLOSURE_WORK,
     MAX_RELATIONAL_OPERATION_TABLE_CELLS,
     MAX_RELATIONAL_POLYMORPHISM_ARITY,
     MAX_RELATIONAL_POLYMORPHISM_FAMILY_SIZE,
@@ -153,6 +159,12 @@ def _polymorphism_check(
     request: RelationalPolymorphismRequest,
 ) -> RelationalPolymorphismCheckResult:
     return check_polymorphism(request)
+
+
+def _invariant_relation_closure(
+    request: RelationalInvariantClosureRequest,
+) -> RelationalInvariantClosure:
+    return close_relation_under_polymorphisms(request)
 
 
 def _polymorphism_enumeration(
@@ -478,6 +490,53 @@ TOOLS: MathTools = (
                         "relation_tables": [[[0]]],
                     },
                     "arity": 1,
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="relation.closure_under_operations.compute",
+        title="Close a finite relation under supplied polymorphisms",
+        description=(
+            "Return the least subset of A^r containing the supplied seed rows "
+            "and closed under coordinatewise application of every supplied "
+            "operation. Every operation table is checked against every basic "
+            "relation of the exact source before closure. Admission bounds the "
+            f"power to {MAX_RELATIONAL_INVARIANT_CLOSURE_TUPLES} rows, all "
+            f"preservation and incremental closure work to {MAX_RELATIONAL_INVARIANT_CLOSURE_WORK} "
+            "steps, and a conservative result size to "
+            f"{MAX_RELATIONAL_INVARIANT_CLOSURE_OUTPUT_BYTES} bytes before expansion. This "
+            "computes closure under the supplied finite operations; it does not "
+            "claim the input is a complete polymorphism clone."
+        ),
+        request_type=RelationalInvariantClosureRequest,
+        result_type=RelationalInvariantClosure,
+        run=_invariant_relation_closure,
+        tags=("relational-structures", "polymorphism", "invariant-relation", "exact"),
+        discovery_terms=(
+            "polymorphism invariant relation",
+            "relation closure under polymorphisms",
+            "generated subalgebra of a finite power",
+            "coordinatewise operation closure",
+        ),
+        examples=(
+            OperationExample(
+                name="constant_operation_generates_full_unary_relation",
+                description=(
+                    "On the empty-signature two-element structure, closure of "
+                    "{0} under the constant-one operation is {0,1}."
+                ),
+                input={
+                    "source": {"carrier_size": 2},
+                    "relation_arity": 1,
+                    "generator_tuples": [[0]],
+                    "polymorphisms": [
+                        {
+                            "source": {"carrier_size": 2},
+                            "arity": 1,
+                            "operation_table": [1, 1],
+                        }
+                    ],
                 },
             ),
         ),

@@ -18,12 +18,16 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
+from jacobian.math.logic.relational_structures._models import RelationalPolymorphism
 from jacobian.math.logic.relational_structures.values import (
     MAX_PP_DEFINED_TUPLES,
     MAX_PP_EVALUATION_ASSIGNMENTS,
     MAX_PP_EVALUATION_ATOM_CHECKS,
     MAX_PP_EVALUATION_COORDINATE_WORK,
     MAX_RELATIONAL_CARRIER,
+    MAX_RELATIONAL_INVARIANT_CLOSURE_OUTPUT_BYTES,
+    MAX_RELATIONAL_INVARIANT_CLOSURE_TUPLES,
+    MAX_RELATIONAL_INVARIANT_CLOSURE_WORK,
     MAX_RELATIONAL_OPERATION_TABLE_CELLS,
     MAX_RELATIONAL_POLYMORPHISM_ARITY,
     MAX_RELATIONAL_POLYMORPHISM_FAMILY_SIZE,
@@ -57,6 +61,91 @@ MAX_POLYMORPHISM_FAMILY_OUTPUT_BYTES = 8 * 1_048_576
 MAX_INDUCED_SUBSTRUCTURE_WORK = 81_920
 MAX_RELATIONAL_REDUCT_WORK = 81_920
 MAX_RELATIONAL_PRODUCT_WORK = 1_048_576
+
+
+def admit_invariant_relation_closure(
+    source: FiniteRelationalStructure,
+    relation_arity: int,
+    generator_tuples: Sequence[tuple[int, ...]],
+    polymorphisms: Sequence[RelationalPolymorphism],
+) -> tuple[int, int]:
+    """Preflight closure state cardinality and full preservation/closure work.
+
+    The returned values are (relation-state bound, coordinate-work bound).
+    Every supplied operation is required to preserve the source relations;
+    this check is charged here before any relation or power is expanded.
+    """
+
+    if not 0 <= relation_arity <= 4:
+        raise OperationDomainValidationError(
+            location=("relation_arity",),
+            code="relational.invariant_closure.arity",
+            message="the generated relation arity must be between 0 and 4",
+        )
+    state_count = source.carrier_size**relation_arity
+    if state_count > MAX_RELATIONAL_INVARIANT_CLOSURE_TUPLES:
+        raise OperationResourceAdmissionError(
+            location=("relation_arity",),
+            code="relational.invariant_closure.state_bound",
+            message=(
+                f"the generated relation has at most {state_count} tuples, exceeding "
+                f"the {MAX_RELATIONAL_INVARIANT_CLOSURE_TUPLES}-tuple envelope"
+            ),
+        )
+
+    # The queue sorts the current tuple set once per discovered row. The
+    # factor eight covers up to log2(4096) comparisons for every row reference.
+    work = 8 * state_count * state_count
+    for operation in polymorphisms:
+        arity = operation.arity
+        table_cells, check_work = admit_polymorphism_check(source, arity)
+        del table_cells
+        preservation_combinations = sum(
+            len(table) ** arity for table in source.relation_tables
+        )
+        # Each discovered tuple is combined with every possible tuple in the
+        # other m-1 coordinates, in each argument position. This bounds the
+        # incremental fixed-point algorithm without rescanning old products.
+        closure_work = arity * arity * relation_arity * state_count**arity
+        work += check_work + preservation_combinations + closure_work
+    retained_source_bytes = len(
+        encode_strict_json({"source": source.model_dump(mode="json")})
+    )
+    operation_bytes = sum(
+        len(encode_strict_json(operation.model_dump(mode="json")))
+        for operation in polymorphisms
+    )
+    generator_bytes = len(encode_strict_json([list(row) for row in generator_tuples]))
+    # Charge one conservative row frame per possible tuple, including the
+    # widest supported relation coordinate and JSON punctuation.
+    closure_bytes = state_count * (3 * relation_arity + 3) + 2
+    output_bound = (
+        retained_source_bytes
+        + operation_bytes
+        + generator_bytes
+        + closure_bytes
+        + 2_048
+    )
+    if output_bound > MAX_RELATIONAL_INVARIANT_CLOSURE_OUTPUT_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("polymorphisms",),
+            code="relational.invariant_closure.output_bound",
+            message=(
+                f"the complete closure result has a conservative {output_bound}-byte "
+                f"bound, exceeding the {MAX_RELATIONAL_INVARIANT_CLOSURE_OUTPUT_BYTES}-byte envelope"
+            ),
+        )
+    if work > MAX_RELATIONAL_INVARIANT_CLOSURE_WORK:
+        raise OperationResourceAdmissionError(
+            location=("polymorphisms",),
+            code="relational.invariant_closure.work_bound",
+            message=(
+                "complete operation-preservation and generated-relation closure "
+                f"requires at most {work} coordinate steps, exceeding the "
+                f"{MAX_RELATIONAL_INVARIANT_CLOSURE_WORK}-step envelope"
+            ),
+        )
+    return state_count, work
 
 
 def admit_pp_evaluation(

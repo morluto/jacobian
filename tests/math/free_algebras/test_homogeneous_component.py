@@ -3,9 +3,13 @@
 import json
 from collections import Counter
 from itertools import islice, product
+from typing import Literal
 
 import pytest
+from jsonschema import Draft202012Validator
+from pydantic import ValidationError
 
+from jacobian._exact import MAX_CANONICAL_INTEGER_DIGITS
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -13,6 +17,7 @@ from jacobian.catalog.models import (
 from jacobian.math.free_algebras._models import FreeAlgebraPolynomial
 from jacobian.math.free_algebras.homogeneous_component._models import (
     FreeAlgebraHomogeneousComponent,
+    FreeAlgebraHomogeneousComponentRequest,
 )
 from jacobian.math.free_algebras.homogeneous_component.operations import (
     homogeneous_component,
@@ -112,3 +117,85 @@ def test_native_operation_rejects_invalid_or_over_bound_degree() -> None:
     )
     with pytest.raises(OperationResourceAdmissionError, match="scan bound"):
         homogeneous_component(oversized, 0)
+
+
+def _component_wire(degree: str) -> dict[str, object]:
+    return {
+        "degree": degree,
+        "polynomial": _polynomial().model_dump(mode="json"),
+    }
+
+
+def test_degree_wire_encoding_preserves_integers_beyond_json_numbers() -> None:
+    degree = (1 << 53) + 1
+    result = homogeneous_component(_polynomial(), degree)
+    wire = json.loads(result.model_dump_json())
+    assert wire["degree"] == str(degree)
+    restored = FreeAlgebraHomogeneousComponent.model_validate_json(
+        json.dumps(wire), strict=True
+    )
+    assert restored.degree == degree
+    assert restored.polynomial.is_zero
+
+
+def test_request_degree_wire_encoding_round_trips_exactly() -> None:
+    degree = (1 << 53) + 1
+    payload = {
+        "polynomial": _polynomial().model_dump(mode="json"),
+        "degree": str(degree),
+    }
+    request = FreeAlgebraHomogeneousComponentRequest.model_validate_json(
+        json.dumps(payload), strict=True
+    )
+    assert request.degree == degree
+    assert request.model_dump()["degree"] == degree
+
+
+@pytest.mark.parametrize("mode", ["validation", "serialization"])
+def test_degree_schema_publishes_canonical_nonnegative_decimal_strings(
+    mode: Literal["validation", "serialization"],
+) -> None:
+    schema = FreeAlgebraHomogeneousComponent.model_json_schema(mode=mode)
+    degree_schema = schema["properties"]["degree"]
+    assert degree_schema["type"] == "string"
+    assert degree_schema["maxLength"] == MAX_CANONICAL_INTEGER_DIGITS
+    validator = Draft202012Validator(degree_schema)
+    for value in ("0", "42", "9" * MAX_CANONICAL_INTEGER_DIGITS):
+        assert validator.is_valid(value)
+    for invalid in (
+        "9" * (MAX_CANONICAL_INTEGER_DIGITS + 1),
+        "-1",
+        "01",
+        "-0",
+        "+1",
+        "1\n",
+        42,
+    ):
+        assert not validator.is_valid(invalid)
+
+
+def test_degree_wire_validation_matches_the_published_schema() -> None:
+    degree_schema = FreeAlgebraHomogeneousComponent.model_json_schema(
+        mode="validation"
+    )["properties"]["degree"]
+    validator = Draft202012Validator(degree_schema)
+    for value in ("0", "1", str((1 << 53) + 1)):
+        assert validator.is_valid(value)
+        restored = FreeAlgebraHomogeneousComponent.model_validate_json(
+            json.dumps(_component_wire(value)), strict=True
+        )
+        assert restored.degree == int(value)
+    for invalid in ("-1", "01", "1\n"):
+        assert not validator.is_valid(invalid)
+        with pytest.raises(ValidationError):
+            FreeAlgebraHomogeneousComponent.model_validate_json(
+                json.dumps(_component_wire(invalid)), strict=True
+            )
+
+
+def test_native_degree_envelope_matches_the_exact_integer_wire_bound() -> None:
+    polynomial = _polynomial()
+    boundary = 10**MAX_CANONICAL_INTEGER_DIGITS - 1
+    assert homogeneous_component(polynomial, boundary).degree == boundary
+    with pytest.raises(OperationDomainValidationError, match="decimal digits"):
+        homogeneous_component(polynomial, 10**MAX_CANONICAL_INTEGER_DIGITS)

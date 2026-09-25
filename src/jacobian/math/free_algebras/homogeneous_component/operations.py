@@ -1,5 +1,7 @@
 """Exact projection onto one word-degree component."""
 
+from jacobian._exact import MAX_CANONICAL_INTEGER_DIGITS
+from jacobian.canonical import decimal_digit_width
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -35,6 +37,21 @@ def homogeneous_component(
             location=("degree",),
             code="free_algebra.homogeneous_component.degree",
             message="degree must be a nonnegative integer",
+        )
+    # Match the request and result fields' exact-integer wire envelope so a
+    # native call and a wire call classify an oversized degree the same way.
+    # The bit-length shortcut avoids materializing 10**32768 for ordinary
+    # degrees; only a value beyond it is measured exactly.
+    if degree.bit_length() > 3 * MAX_CANONICAL_INTEGER_DIGITS and (
+        decimal_digit_width(degree) > MAX_CANONICAL_INTEGER_DIGITS
+    ):
+        raise OperationDomainValidationError(
+            location=("degree",),
+            code="free_algebra.homogeneous_component.degree",
+            message=(
+                "degree must have at most "
+                f"{MAX_CANONICAL_INTEGER_DIGITS} decimal digits"
+            ),
         )
     if not isinstance(polynomial, FreeAlgebraPolynomial):
         raise OperationDomainValidationError(

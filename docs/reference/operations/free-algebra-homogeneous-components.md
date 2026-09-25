@@ -13,7 +13,10 @@ coefficients and creates no new words or coefficient arithmetic.
 
 Degrees are arbitrary nonnegative integers; degrees above the source carrier
 maximum return zero. The helper bounds its scan at 600,000 work units. Missing degrees return
-the canonical zero polynomial bound to the same alphabet.
+the canonical zero polynomial bound to the same alphabet. The requested degree
+is preserved exactly on the wire: the JSON encoding is a canonical decimal
+string within the shared 32,768-digit exact-integer envelope, so a degree beyond
+the interoperable JSON-number range is not rounded.
 
 This helper exposes one graded projection. It does not claim ideal
 membership, quotient normal forms, or homogeneous decomposition of a

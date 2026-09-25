@@ -109,10 +109,9 @@ def _admit(
             "complex must be a canonical finite simplicial complex",
             ("complex",),
         )
-    if (
-        not isinstance(request.basis, tuple)
-        or len(request.basis) > MAX_SHEAF_STALK_RANK
-    ):
+    if not isinstance(request.basis, tuple):
+        _domain("basis_invalid", "basis identifiers must be an ordered tuple", ("basis",))
+    if len(request.basis) > MAX_SHEAF_STALK_RANK:
         _resource(
             "basis_rank_bound",
             f"the common stalk basis exceeds the {MAX_SHEAF_STALK_RANK}-dimension limit",

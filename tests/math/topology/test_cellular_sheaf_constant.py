@@ -190,3 +190,20 @@ def test_constant_sheaf_manifest_publishes_one_canonical_result() -> None:
 def test_constant_sheaf_request_requires_unique_ordered_basis_ids() -> None:
     with pytest.raises(ValidationError, match="basis identifiers must be unique"):
         ConstantSheafRequest(complex=_POINT, basis=("x", "x"))
+
+
+def test_constant_sheaf_revalidates_untrusted_native_complex_updates() -> None:
+    from jacobian.catalog.models import OperationDomainValidationError
+
+    malformed = _POINT.model_copy(update={"dimension": 1})
+    request = ConstantSheafRequest.model_construct(complex=malformed, basis=("e",))
+    with pytest.raises(OperationDomainValidationError):
+        constant_sheaf(request)
+
+
+def test_constant_sheaf_classifies_untrusted_non_tuple_basis_as_domain_error() -> None:
+    from jacobian.catalog.models import OperationDomainValidationError
+
+    request = ConstantSheafRequest.model_construct(complex=_POINT, basis=["e"])
+    with pytest.raises(OperationDomainValidationError):
+        constant_sheaf(request)

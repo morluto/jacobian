@@ -928,6 +928,82 @@ def _fiber_has_member(
     return visit(0, target_grade)
 
 
+def _preflight_normality_work(semigroup: PositiveAffineSemigroup) -> None:
+    """Price every possible Hilbert-generator fiber before enumerating them.
+
+    The generated lattice has index equal to the gcd of its 2x2 minors. Each
+    primitive ambient cone ray enters that lattice after multiplication by at
+    most this index. Every other Hilbert generator lies in the semi-open
+    parallelogram of the resulting lattice rays, so a positive linear grading
+    bounds its grade by the sum of their grades. The determinant bounds the
+    number of generators. This input-only envelope precedes HNF and Hilbert
+    basis construction.
+    """
+    semigroup = _admit_semigroup(semigroup)
+    configuration = semigroup.configuration
+    if configuration.rows != 2 or configuration.columns < 2:
+        raise ValueError("normality currently requires a two-row configuration")
+
+    lower, upper = _hilbert_rays(configuration)
+    grading = (upper[1] - lower[1], lower[0] - upper[0])
+    grades = tuple(
+        sum(grading[row] * configuration.entries[row][column] for row in range(2))
+        for column in range(configuration.columns)
+    )
+    if any(grade <= 0 for grade in grades):
+        raise ArithmeticError("extreme-ray covector is not positive on the semigroup")
+
+    lattice_index = 0
+    for left in range(configuration.columns):
+        for right in range(left + 1, configuration.columns):
+            lattice_index = gcd(
+                lattice_index,
+                abs(
+                    configuration.entries[0][left] * configuration.entries[1][right]
+                    - configuration.entries[1][left] * configuration.entries[0][right]
+                ),
+            )
+    if lattice_index == 0:
+        raise ValueError("normality requires a full-rank generated lattice")
+    ray_grades = tuple(
+        sum(grading[row] * ray[row] for row in range(2)) for ray in (lower, upper)
+    )
+    target_grade_bound = lattice_index * sum(ray_grades)
+    if target_grade_bound < 0:
+        raise ArithmeticError("normalization Hilbert generators lie outside the cone")
+
+    candidate_work = 1
+    for grade in grades:
+        candidate_work *= target_grade_bound // grade + 1
+        if candidate_work > MAX_AFFINE_FIBER_WORK:
+            raise OperationResourceAdmissionError(
+                location=("semigroup",),
+                code="affine_semigroup.normality_candidate_fiber_bound",
+                message=(
+                    "the conservative normalization coefficient box exceeds "
+                    f"the {MAX_AFFINE_FIBER_WORK}-tuple candidate bound"
+                ),
+            )
+    candidate_work *= (
+        configuration.columns + 1 + configuration.rows * configuration.columns
+    )
+    per_candidate_overhead = (
+        configuration.columns**2 + configuration.rows * configuration.columns + 2
+    )
+    total_work = MAX_AFFINE_NORMALITY_CANDIDATES * (
+        candidate_work + per_candidate_overhead
+    )
+    if total_work > MAX_AFFINE_NORMALITY_WORK:
+        raise OperationResourceAdmissionError(
+            location=("semigroup",),
+            code="affine_semigroup.normality_work_bound",
+            message=(
+                "normality membership and witness checks exceed the "
+                f"{MAX_AFFINE_NORMALITY_WORK}-unit work envelope"
+            ),
+        )
+
+
 def normality(semigroup: PositiveAffineSemigroup) -> AffineSemigroupNormality:
     """Decide normality for a full-rank, positive two-dimensional semigroup.
 
@@ -937,6 +1013,8 @@ def normality(semigroup: PositiveAffineSemigroup) -> AffineSemigroupNormality:
     every normalization generator gives the reverse inclusion. A missing
     generator is returned as an exact hole.
     """
+    semigroup = _admit_semigroup(semigroup)
+    _preflight_normality_work(semigroup)
     normalized = normalization(semigroup)
     source = normalized.semigroup
     candidates = normalized.generators

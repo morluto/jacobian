@@ -124,7 +124,9 @@ def test_normality_manifest_example_round_trips() -> None:
     assert type(result).model_validate_json(result.model_dump_json()) == result
 
 
-def test_normality_bounds_all_membership_candidates_before_search(monkeypatch) -> None:
+def test_normality_bounds_all_membership_candidates_before_search(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     import jacobian.math.affine_semigroups.semigroup as semigroup_module
 
     monkeypatch.setattr(semigroup_module, "MAX_AFFINE_NORMALITY_WORK", 0)
@@ -132,6 +134,21 @@ def test_normality_bounds_all_membership_candidates_before_search(monkeypatch) -
         semigroup_module,
         "_fiber_has_member",
         lambda *_args: pytest.fail("candidate search started before batch admission"),
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="normality membership"):
+        normality(_semigroup(((2, 0), (0, 2), (2, 2))))
+
+
+def test_normality_admits_combined_work_before_hilbert_expansion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import jacobian.math.affine_semigroups.semigroup as semigroup_module
+
+    monkeypatch.setattr(semigroup_module, "MAX_AFFINE_NORMALITY_WORK", 0)
+    monkeypatch.setattr(
+        semigroup_module,
+        "_hilbert_basis_admitted",
+        lambda *_args: pytest.fail("Hilbert normalization expanded before admission"),
     )
     with pytest.raises(OperationResourceAdmissionError, match="normality membership"):
         normality(_semigroup(((2, 0), (0, 2), (2, 2))))

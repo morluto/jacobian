@@ -7,12 +7,10 @@ import json
 import pytest
 from pydantic import ValidationError
 
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.dispatch import invoke_operation
 from jacobian.math.groups.root_systems._models import CartanMatrix
 from jacobian.math.groups.root_systems.connection_index._models import (
     RootSystemConnectionIndexResult,
@@ -155,10 +153,23 @@ def test_raw_rank_bound_is_checked_before_smith_expansion(
     )
 
 
-def test_catalog_operation_runs_example() -> None:
-    catalog = Catalog.open()
-    operation = catalog.operation(_OPERATION_ID)
-    assert operation is not None
-    result = invoke_operation(_OPERATION_ID, operation.examples[0].input, catalog)
-    assert result.output["invariant_factors"] == ["3"]
-    assert result.output["connection_index"] == "3"
+def test_manifest_operation_runs_example() -> None:
+    from jacobian.math.groups.root_systems.connection_index._tools import TOOLS
+
+    tool = next(tool for tool in TOOLS if tool.operation_id == _OPERATION_ID)
+    request = tool.request_type.model_validate(
+        {
+            "matrix": {
+                "matrix": {
+                    "domain": "ZZ",
+                    "row_count": 2,
+                    "column_count": 2,
+                    "entries": [[2, -1], [-1, 2]],
+                },
+                "simple_root_axis": [0, 1],
+            }
+        }
+    )
+    result = tool.run(request)
+    assert result.invariant_factors == (3,)
+    assert result.connection_index == 3

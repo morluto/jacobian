@@ -17,7 +17,7 @@ from jacobian.math.groups.root_systems.operations import _admit_cartan_finite_ty
 from jacobian.math.matrices.operations import smith_normal_form_result
 from jacobian.math.matrices.values import IntegerMatrix
 
-MAX_CONNECTION_INDEX_OUTPUT_BYTES = 8_192
+MAX_CONNECTION_INDEX_OUTPUT_CELLS = 8_192
 
 
 def _admit_connection_cartan(value: CartanMatrix) -> CartanMatrix:
@@ -97,12 +97,12 @@ def root_system_connection_index(
     _admit_cartan_finite_type(rows)
 
     rank = len(rows)
-    output_bytes_bound = 512 + 2 * rank * rank * 32 + 64 * rank
-    if output_bytes_bound > MAX_CONNECTION_INDEX_OUTPUT_BYTES:
+    output_cells = 4 * rank * rank + 4 * rank + 8
+    if output_cells > MAX_CONNECTION_INDEX_OUTPUT_CELLS:
         raise OperationResourceAdmissionError(
             location=("result",),
             code="root_system.connection_index.result_size_exceeded",
-            message="root-system connection-index result exceeds its byte bound",
+            message="root-system connection-index result exceeds its cell bound",
         )
 
     root_to_weight = IntegerMatrix(
@@ -128,4 +128,4 @@ def root_system_connection_index(
     )
 
 
-__all__ = ["MAX_CONNECTION_INDEX_OUTPUT_BYTES", "root_system_connection_index"]
+__all__ = ["MAX_CONNECTION_INDEX_OUTPUT_CELLS", "root_system_connection_index"]

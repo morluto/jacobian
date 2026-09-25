@@ -64,8 +64,8 @@ from jacobian.math.topology.simplicial_sets.standard import standard_simplex
 def test_standard_simplex_normalized_prefix_has_square_zero_boundary() -> None:
     simplex = standard_simplex(1, 2)
     normalized = normalized_chains(simplex)
-    assert normalized.differential_squared_zero is True
-    assert normalized.nondegenerate_counts == (2, 1, 0)
+    assert normalized.chain_complex.basis_sizes == (2, 1, 0)
+    assert normalized.nondegenerate_bases[0] == simplex.sets[0]
 
 
 def test_face_poset_and_clique_reconstruct_small_triangle() -> None:

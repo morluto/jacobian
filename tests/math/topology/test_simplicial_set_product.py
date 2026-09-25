@@ -3,6 +3,9 @@ from __future__ import annotations
 import pytest
 
 from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.math.topology.chain_complexes.operations import (
+    differential_squares_to_zero,
+)
 from jacobian.math.topology.simplicial_sets.maps import (
     SimplicialMapCompositionRequest,
     SimplicialMapRequest,
@@ -55,7 +58,8 @@ def test_delta_one_product_has_exact_componentwise_tables_and_factor_axes() -> N
             assert actual == expected
 
     assert product.checked_identities > 0
-    assert normalized_chains(product).differential_squared_zero
+    normalized = normalized_chains(product)
+    assert differential_squares_to_zero(normalized.chain_complex).is_valid
 
 
 def test_product_projections_are_simplicial_maps() -> None:

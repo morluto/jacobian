@@ -750,6 +750,8 @@ def _admit_nfa_subsequential_image(
         + output_transition_bound
         + final_output_transitions
         + state_bound
+        + nfa.state_count
+        + len(nfa.accepting_states)
     )
     intermediate_bytes_bound = (
         pair_bound * 128
@@ -757,6 +759,7 @@ def _admit_nfa_subsequential_image(
         + terminal_pair_bound * 96
         + state_bound * 256
         + transition_bound * 128
+        + nfa.state_count
     )
     output_bytes_bound = 4096 + state_bound * 24 + transition_bound * 72
     if (
@@ -786,6 +789,10 @@ def _build_nfa_subsequential_image(
     transition_bound: int,
 ) -> NFA:
     ledger = OperationWorkLedger(work_bound)
+    ledger.charge(nfa.state_count + len(nfa.accepting_states))
+    accepting_states = bytearray(nfa.state_count)
+    for state in nfa.accepting_states:
+        accepting_states[state] = 1
     outgoing: list[list[tuple[int | None, int]]] = [[] for _ in range(nfa.state_count)]
     for edge in nfa.transitions:
         outgoing[edge.source].append((edge.symbol, edge.target))
@@ -803,7 +810,7 @@ def _build_nfa_subsequential_image(
         request_checkpoint("during subsequential NFA image product exploration")
         source_state, transducer_state = pairs[cursor]
         final_output = final_outputs.get(transducer_state)
-        if source_state in nfa.accepting_states and final_output is not None:
+        if accepting_states[source_state] and final_output is not None:
             terminal_pairs.append((cursor, final_output))
         for input_symbol, source_target in outgoing[source_state]:
             ledger.charge()

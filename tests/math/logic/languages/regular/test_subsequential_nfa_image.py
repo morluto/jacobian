@@ -138,6 +138,52 @@ def test_identity_image_preserves_nfa_language_and_empty_language_stays_empty() 
         assert not nfa_membership(empty_image, word)
 
 
+def test_nfa_image_preserves_noncontiguous_accepting_state_membership() -> None:
+    input_alphabet = FiniteAlphabet(symbols=("x", "y"))
+    output_alphabet = FiniteAlphabet(symbols=("a", "b", "c", "d", "e"))
+    source = NFA(
+        state_count=5,
+        alphabet_size=2,
+        alphabet_id="input",
+        alphabet=input_alphabet,
+        transitions=(
+            NFATransition(transition_id=0, source=0, symbol=0, target=1),
+            NFATransition(transition_id=1, source=1, symbol=1, target=2),
+            NFATransition(transition_id=2, source=2, symbol=0, target=3),
+            NFATransition(transition_id=3, source=3, symbol=1, target=4),
+        ),
+        initial_state=0,
+        accepting_states=(0, 2, 4),
+    )
+    transducer = SubsequentialTransducer(
+        input_alphabet_size=2,
+        output_alphabet_size=5,
+        input_alphabet_id="input",
+        output_alphabet_id="output",
+        input_alphabet=input_alphabet,
+        output_alphabet=output_alphabet,
+        state_count=5,
+        initial_state=0,
+        transitions=(
+            SubseqTransition(source=0, input_symbol=0, target=1, output=()),
+            SubseqTransition(source=1, input_symbol=1, target=2, output=()),
+            SubseqTransition(source=2, input_symbol=0, target=3, output=()),
+            SubseqTransition(source=3, input_symbol=1, target=4, output=()),
+        ),
+        final_outputs=tuple(
+            SubseqFinalOutput(state=state, output=(state,)) for state in range(5)
+        ),
+    )
+
+    image = nfa_subsequential_image(source, transducer)
+
+    assert tuple(state for state in range(5) if nfa_membership(image, (state,))) == (
+        0,
+        2,
+        4,
+    )
+
+
 def test_nfa_image_requires_exact_alphabet_context() -> None:
     source, alphabet = finite_nfa()
     transducer = sample_transducer(alphabet)
@@ -175,6 +221,49 @@ def test_nfa_image_rejects_oversized_product_before_expansion(monkeypatch) -> No
     def expansion_must_not_start(*args, **kwargs):
         pytest.fail("product construction ran before resource admission")
 
+    monkeypatch.setattr(
+        operations, "_build_nfa_subsequential_image", expansion_must_not_start
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="product or output-NFA"):
+        nfa_subsequential_image(source, transducer)
+
+
+def test_nfa_image_admits_accepting_lookup_before_product_expansion(
+    monkeypatch,
+) -> None:
+    import jacobian.math.logic.languages.regular.operations as operations
+
+    alphabet = FiniteAlphabet(symbols=("x",))
+    source = NFA(
+        state_count=100_000,
+        alphabet_size=1,
+        alphabet_id="input",
+        alphabet=alphabet,
+        transitions=(),
+        initial_state=0,
+        accepting_states=(),
+    )
+    transducer = SubsequentialTransducer(
+        input_alphabet_size=1,
+        output_alphabet_size=1,
+        input_alphabet_id="input",
+        output_alphabet_id="output",
+        input_alphabet=alphabet,
+        output_alphabet=FiniteAlphabet(symbols=("a",)),
+        state_count=1,
+        initial_state=0,
+        transitions=(),
+        final_outputs=(),
+    )
+
+    def expansion_must_not_start(*args, **kwargs):
+        pytest.fail("accepting lookup allocation ran before resource admission")
+
+    monkeypatch.setattr(
+        operations,
+        "MAX_SUBSEQUENTIAL_IMAGE_INTERMEDIATE_BYTES",
+        38_499_999,
+    )
     monkeypatch.setattr(
         operations, "_build_nfa_subsequential_image", expansion_must_not_start
     )

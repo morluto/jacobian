@@ -16,6 +16,9 @@ from jacobian.math.topology.simplicial_sets.degeneracy_tools import (
     TOOLS as DEGENERACY_TOOLS,
 )
 from jacobian.math.topology.simplicial_sets.image_tools import TOOLS as IMAGE_TOOLS
+from jacobian.math.topology.simplicial_sets.map_preimage_tools import (
+    TOOLS as MAP_PREIMAGE_TOOLS,
+)
 from jacobian.math.topology.simplicial_sets.maps_tools import TOOLS as MAP_TOOLS
 from jacobian.math.topology.simplicial_sets.operations import from_tables
 from jacobian.math.topology.simplicial_sets.product_tools import TOOLS as PRODUCT_TOOLS
@@ -51,6 +54,7 @@ TOOLS = (
     *COPRODUCT_TOOLS,
     *DEGENERACY_TOOLS,
     *IMAGE_TOOLS,
+    *MAP_PREIMAGE_TOOLS,
     *MAP_TOOLS,
     *TRUNCATE_TOOLS,
     *SUBSET_TOOLS,

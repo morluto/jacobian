@@ -28,6 +28,11 @@ from jacobian.math.topology.simplicial_sets.image import (
     SimplicialMapImageResult,
     simplicial_map_image,
 )
+from jacobian.math.topology.simplicial_sets.map_preimage import (
+    SimplicialMapPreimageRequest,
+    SimplicialMapPreimageResult,
+    simplicial_map_preimage,
+)
 from jacobian.math.topology.simplicial_sets.maps import (
     TruncatedSimplicialMap,
     compose_simplicial_maps,
@@ -62,12 +67,11 @@ __all__ = [
     "SimplicialComplexPrefixResult",
     "SimplicialIdentityObstruction",
     "SimplicialMapImageResult",
+    "SimplicialMapPreimageRequest",
+    "SimplicialMapPreimageResult",
     "SimplicialSetCoproductResult",
     "SimplicialSetProductResult",
     "SimplicialSetTablesResult",
-    "SimplicialSetTruncateRequest",
-    "SimplicialSubsetPrefix",
-    "SimplicialSubsetRequest",
     "SimplicialSetTruncateRequest",
     "SimplicialSubsetPrefix",
     "SimplicialSubsetRequest",
@@ -82,6 +86,7 @@ __all__ = [
     "simplex_horn",
     "simplicial_map",
     "simplicial_map_image",
+    "simplicial_map_preimage",
     "simplicial_set_coproduct",
     "simplicial_set_from_complex",
     "simplicial_set_product",

@@ -12,6 +12,7 @@ and finite abelian-group decompositions are separate catalog entries.
 - [Integer prime factorization](integer-prime-factorization-verification.md)
 - [Simple number-field embeddings](number-field-embeddings.md)
 - [Exact simple number-field map](exact-number-field-map.md)
+- [Composita of quadratic splitting fields](galois-compositum.md)
 - [Real-embedded binary power-sum gap profiles](binary-power-sum-gap-profile.md)
 - [Exact finite-sequence autocorrelation](finite-sequence-autocorrelation.md)
 - [Kempner arithmetic-progression decisions](kempner-arithmetic-progressions.md)

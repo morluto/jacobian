@@ -1539,7 +1539,9 @@ def _validated_weyl_element(element: WeylElement, location: str) -> WeylElement:
 
         matrix = element.matrix
         action = element.root_action
-        if not isinstance(matrix, CartanMatrix) or not isinstance(action, IntegerMatrix):
+        if not isinstance(matrix, CartanMatrix) or not isinstance(
+            action, IntegerMatrix
+        ):
             raise TypeError("non-canonical nested Weyl value")
         rank = len(matrix.entries)
         if rank > MAX_RANK or action.row_count != rank or action.column_count != rank:
@@ -1547,7 +1549,10 @@ def _validated_weyl_element(element: WeylElement, location: str) -> WeylElement:
         if (
             not isinstance(action.entries, (tuple, list))
             or len(action.entries) != rank
-            or any(not isinstance(row, (tuple, list)) or len(row) != rank for row in action.entries)
+            or any(
+                not isinstance(row, (tuple, list)) or len(row) != rank
+                for row in action.entries
+            )
         ):
             raise ValueError("Weyl endpoint has an invalid bounded matrix")
         return WeylElement.model_validate(element.model_dump(mode="python"))

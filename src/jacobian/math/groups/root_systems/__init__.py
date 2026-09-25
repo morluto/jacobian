@@ -34,6 +34,7 @@ from jacobian.math.groups.root_systems._models import (
     WeylDimensionResult,
     WeylElement,
     WeylElementOrderResult,
+    WeylElementRootActionRequest,
     WeylElementWeightActionRequest,
     WeylExponentComponent,
     WeylExponentsResult,
@@ -79,6 +80,7 @@ from jacobian.math.groups.root_systems.operations import (
     weyl_weight_orbit,
     weyl_word_act_on_root_vector,
 )
+from jacobian.math.groups.root_systems.root_actions import weyl_element_act_on_root
 from jacobian.math.groups.root_systems.weight_actions import weyl_element_act_on_weight
 from jacobian.math.groups.root_systems.weyl_dimension import weyl_dimension
 
@@ -111,6 +113,7 @@ __all__ = [
     "WeylDimensionResult",
     "WeylElement",
     "WeylElementOrderResult",
+    "WeylElementRootActionRequest",
     "WeylElementWeightActionRequest",
     "WeylExponentComponent",
     "WeylExponentsResult",
@@ -142,6 +145,7 @@ __all__ = [
     "simple_reflections",
     "weight_lattice_vector",
     "weyl_dimension",
+    "weyl_element_act_on_root",
     "weyl_element_act_on_weight",
     "weyl_element_compose",
     "weyl_element_descents",

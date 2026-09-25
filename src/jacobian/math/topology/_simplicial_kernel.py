@@ -433,8 +433,8 @@ def barycentric_subdivision(
             location=("complex",),
             code="topology.require_barycentric_work_bounds_1",
             message=(
-                "barycentric subdivision requires at most 31 faces; "
-                f"input would produce more than {MAX_TOPOLOGY_FACETS} subdivision facets"
+                "barycentric subdivision would produce more than "
+                f"{MAX_TOPOLOGY_FACETS} subdivision facets"
             ),
         ) from exc
     facets = tuple(sorted(tuple(sorted(facet)) for facet in subdivision.facets))

@@ -825,6 +825,15 @@ def compute_face_enumerator(request: FaceEnumeratorRequest) -> IntegerPolynomial
         ),
         location=("complex",),
     )
+    if any(len(facet) > MAX_TOPOLOGY_DIMENSION + 1 for facet in canonical_facets):
+        raise OperationResourceAdmissionError(
+            location=("complex", "facets"),
+            code="topology.face_enumerator.admission.dimension",
+            message=(
+                "face-enumerator facets exceed the "
+                f"{MAX_TOPOLOGY_DIMENSION + 1}-vertex dimension bound"
+            ),
+        )
     candidates = sum((1 << len(facet)) - 1 for facet in canonical_facets)
     if candidates > MAX_FACE_ENUMERATOR_CANDIDATES:
         raise OperationResourceAdmissionError(

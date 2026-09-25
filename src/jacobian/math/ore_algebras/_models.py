@@ -495,6 +495,18 @@ class PolynomialRecurrencePrefix(StrictModel):
     @model_validator(mode="after")
     def require_prefix_structure(self) -> Self:
         order = self.operator.order
+        if (
+            not self.operator.terms
+            or order < 1
+            or any(
+                not _is_polynomial_coefficient(term.coefficient)
+                for term in self.operator.terms
+            )
+        ):
+            raise _validation_error(
+                "polynomial_recurrence_shape",
+                "prefix values require a positive-order polynomial recurrence operator",
+            )
         if self.recurrence_indices != tuple(
             range(self.start_index, self.start_index + len(self.recurrence_indices))
         ):

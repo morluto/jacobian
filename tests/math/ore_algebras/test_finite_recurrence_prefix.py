@@ -77,6 +77,31 @@ def test_prefix_deserialization_enforces_interval_and_value_count() -> None:
         type(result).model_validate(payload)
 
 
+def test_rationally_scaled_fibonacci_has_linear_height_bound() -> None:
+    result = polynomial_recurrence_generate_prefix(
+        _op([(0, [(-1, 0)]), (1, [(-1, 0)]), (2, [(1, 0)])]),
+        0,
+        FiniteRationalSequence.model_validate({"values": [0, {"num": 1, "den": 2}]}),
+        11,
+    )
+    assert [value.as_fraction() for value in result.values.values][-1] == Fraction(
+        72, 1
+    )
+
+
+def test_prefix_deserialization_rejects_nonrecurrence_operator() -> None:
+    payload = {
+        "operator": {"terms": []},
+        "start_index": 0,
+        "recurrence_indices": [0],
+        "values": {"values": []},
+    }
+    with pytest.raises(ValueError, match="positive-order polynomial recurrence"):
+        from jacobian.math.ore_algebras._models import PolynomialRecurrencePrefix
+
+        PolynomialRecurrencePrefix.model_validate(payload)
+
+
 def test_alternating_recurrence_preserves_rational_values() -> None:
     result = polynomial_recurrence_generate_prefix(
         _op([(0, [(1, 0)]), (1, [(1, 0)])]),

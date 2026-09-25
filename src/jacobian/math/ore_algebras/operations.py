@@ -1438,21 +1438,13 @@ def _preflight_recurrence_coefficients(
         ),
         default=1,
     )
-    integral_regime = all(
-        value.denominator == 1
-        for poly in coefficients.values()
-        for value in poly.values()
-    ) and all(value.den == 1 for value in request.initial_values.values)
+    # Clearing coefficient denominators gives an integer recurrence. With
+    # rational initial values, every subsequent term is an integer linear
+    # combination of those initial values; its common denominator therefore
+    # never grows. Bound numerator height additively in all cases.
     height = initial_height
     for _ in range(request.steps):
-        # Integer linear combinations grow at most linearly in digit height
-        # plus coefficient magnitude; rational recurrences retain conservative
-        # multiplicative denominator accounting.
-        height = (
-            height + c_digits + order.bit_length() + 2
-            if integral_regime
-            else order * height + (order + 1) * c_digits + order.bit_length() + 2
-        )
+        height = height + c_digits + order.bit_length() + 2
         if height > MAX_CANONICAL_RATIONAL_DIGITS:
             raise OperationResourceAdmissionError(
                 location=("steps",),

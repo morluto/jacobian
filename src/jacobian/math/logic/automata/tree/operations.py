@@ -1186,7 +1186,9 @@ def accepted_tree_height_profile(
             code="tree_automata.height_count_output_bound",
             message="the source automaton and height count profile exceed the output bound",
         )
-    if not automaton.final_states:
+    if not automaton.final_states or not any(
+        not transition.child_states for transition in automaton.transitions
+    ):
         return (0,) * (max_height + 1)
 
     counts = [0] * automaton.state_count

@@ -117,6 +117,21 @@ def test_height_zero_counts_only_nullary_symbols() -> None:
     assert accepted_tree_height_profile(automaton, 0) == (0,)
 
 
+def test_no_nullary_symbols_short_circuit_transition_work() -> None:
+    automaton = CompleteDeterministicBottomUpTreeAutomaton(
+        state_count=2,
+        arity=(12,),
+        transitions=tuple(
+            TreeAutomatonTransition(
+                symbol=0, child_states=children, target_state=0
+            )
+            for children in product(range(2), repeat=12)
+        ),
+        final_states=(0,),
+    )
+    assert accepted_tree_height_profile(automaton, 100) == (0,) * 101
+
+
 def test_empty_final_set_has_zero_profile_without_integer_growth() -> None:
     automaton = CompleteDeterministicBottomUpTreeAutomaton(
         state_count=1,

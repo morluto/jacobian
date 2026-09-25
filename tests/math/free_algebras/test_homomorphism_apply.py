@@ -37,9 +37,7 @@ def test_apply_preserves_order_and_matches_independent_matrix_evaluation():
     source = polynomial(
         ("x", "y"), (("y", "x"), Fraction(-1)), (("x", "y"), Fraction(1))
     )
-    result = apply(
-        FreeAlgebraHomomorphismApplyRequest(homomorphism=hom, polynomial=source)
-    )
+    result = apply(hom, source)
     assert [
         (term.word, term.coefficient.as_fraction()) for term in result.image.terms
     ] == [
@@ -95,9 +93,7 @@ def test_empty_axes_zero_and_unit_are_preserved():
     zero = polynomial(
         (),
     )
-    result = apply(
-        FreeAlgebraHomomorphismApplyRequest(homomorphism=hom, polynomial=zero)
-    )
+    result = apply(hom, zero)
     assert result.image.alphabet == ("z",)
     assert result.image.terms == ()
 
@@ -107,9 +103,7 @@ def test_empty_axes_zero_and_unit_are_preserved():
         generator_images=(polynomial((), ((), Fraction(2))),),
     )
     unit = polynomial(("x",), ((), Fraction(3)))
-    image = apply(
-        FreeAlgebraHomomorphismApplyRequest(homomorphism=unit_hom, polynomial=unit)
-    ).image
+    image = apply(unit_hom, unit).image
     assert [(term.word, term.coefficient.as_fraction()) for term in image.terms] == [
         ((), Fraction(3))
     ]
@@ -124,9 +118,7 @@ def test_equal_generator_images_are_collected_exactly():
         generator_images=(u, u),
     )
     source = polynomial(("x", "y"), (("y",), Fraction(-1)), (("x",), Fraction(1)))
-    image = apply(
-        FreeAlgebraHomomorphismApplyRequest(homomorphism=hom, polynomial=source)
-    ).image
+    image = apply(hom, source).image
     assert image.terms == ()
 
 

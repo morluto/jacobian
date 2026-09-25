@@ -21,7 +21,6 @@ from jacobian.math.free_algebras._models import (
 )
 from jacobian.math.free_algebras.homomorphism._models import (
     FreeAlgebraHomomorphism,
-    FreeAlgebraHomomorphismApplyRequest,
     FreeAlgebraHomomorphismApplyResult,
 )
 
@@ -33,14 +32,14 @@ def _resource(code: str, message: str) -> None:
 
 
 def _admit(
-    request: FreeAlgebraHomomorphismApplyRequest,
+    hom: FreeAlgebraHomomorphism,
+    polynomial: FreeAlgebraPolynomial,
 ) -> tuple[
     FreeAlgebraHomomorphism,
     FreeAlgebraPolynomial,
     dict[str, FreeAlgebraPolynomial],
 ]:
     """Establish all substitution growth bounds before distributive expansion."""
-    hom, polynomial = request.homomorphism, request.polynomial
     try:
         polynomial = FreeAlgebraPolynomial.model_validate(polynomial.model_dump())
         hom = type(hom).model_validate(hom.model_dump())
@@ -160,10 +159,11 @@ def _substitute(
 
 
 def apply(
-    request: FreeAlgebraHomomorphismApplyRequest,
+    homomorphism: FreeAlgebraHomomorphism,
+    polynomial: FreeAlgebraPolynomial,
 ) -> FreeAlgebraHomomorphismApplyResult:
     """Substitute generator images in word order and collect exact terms."""
-    hom, polynomial, image_by_letter = _admit(request)
+    hom, polynomial, image_by_letter = _admit(homomorphism, polynomial)
     image = _substitute(polynomial, hom, image_by_letter)
     return FreeAlgebraHomomorphismApplyResult.model_construct(
         homomorphism=hom, polynomial=polynomial, image=image

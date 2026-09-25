@@ -68,6 +68,19 @@ def test_oriented_square_and_reversed_face_round_trip_with_same_parents():
     assert decoded == result
 
 
+def test_empty_face_tuple_round_trips_as_a_finite_complex():
+    lattice, _, _ = _square()
+    request = FiniteGroupGaugeComplexRequest(lattice=lattice, group=_group(), faces=())
+    result = construct_finite_group_gauge_complex(request)
+    assert result.faces == ()
+    assert (
+        FiniteGroupGaugeComplex.model_validate_json(
+            result.model_dump_json(), strict=True
+        )
+        == result
+    )
+
+
 def test_constant_and_backtracking_attaching_maps_are_distinct_degenerate_faces():
     lattice = GaugeLattice(
         vertices=("v",), edges=(GaugeEdge(edge_id="loop", tail="v", head="v"),)

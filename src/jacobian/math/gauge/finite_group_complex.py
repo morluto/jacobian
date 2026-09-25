@@ -98,7 +98,7 @@ def _admit_faces(
 ) -> int:
     if (
         not isinstance(faces, tuple)
-        or not 1 <= len(faces) <= MAX_GAUGE_FACES
+        or len(faces) > MAX_GAUGE_FACES
         or any(not isinstance(face, FiniteGroupGaugeFace) for face in faces)
     ):
         _reject("faces", "lattice_gauge.complex.face_shape", "faces are malformed")
@@ -218,7 +218,7 @@ def _admit(request: FiniteGroupGaugeComplexRequest) -> None:
         _reject(
             "lattice", "lattice_gauge.complex.lattice_shape", "lattice is malformed"
         )
-    table, inverse, identity, order = _admit_group(group)
+    table, inverse, identity, order = _admit_group(group, location="group")
     del table, inverse, identity
     _, _, vertex_set, edge_by_id, output_bytes = _admit_lattice(lattice)
     face_bytes = _admit_faces(faces, vertex_set, edge_by_id)

@@ -391,9 +391,7 @@ class FiniteGroupGaugeComplex(StrictModel):
 
     lattice: GaugeLattice
     group: FiniteGroupTable
-    faces: tuple[FiniteGroupGaugeFace, ...] = Field(
-        min_length=1, max_length=MAX_GAUGE_FACES
-    )
+    faces: tuple[FiniteGroupGaugeFace, ...] = Field(max_length=MAX_GAUGE_FACES)
 
     @model_validator(mode="before")
     @classmethod
@@ -485,9 +483,7 @@ class FiniteGroupGaugeComplexRequest(StrictModel):
 
     lattice: GaugeLattice
     group: FiniteGroupTable
-    faces: tuple[FiniteGroupGaugeFace, ...] = Field(
-        min_length=1, max_length=MAX_GAUGE_FACES
-    )
+    faces: tuple[FiniteGroupGaugeFace, ...] = Field(max_length=MAX_GAUGE_FACES)
 
     @model_validator(mode="before")
     @classmethod

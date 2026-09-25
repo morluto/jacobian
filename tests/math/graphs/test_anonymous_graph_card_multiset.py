@@ -87,6 +87,22 @@ def test_deserialization_keeps_representative_validation_structural() -> None:
     assert result.classes[0].representative.edges == (("v00", "v01"),)
 
 
+def test_multiplicity_schema_matches_runtime_bounds_and_anchoring() -> None:
+    schema = AnonymousGraphCardMultiset.model_json_schema()
+    multiplicity = schema["$defs"]["AnonymousGraphCardClass"]["properties"][
+        "multiplicity"
+    ]
+    assert multiplicity["maxLength"] == 12
+    assert multiplicity["pattern"] == r"^[1-9][0-9]{0,11}(?![\s\S])"
+    for value in ("0", "-1", "1000000000000", "1\n"):
+        with pytest.raises(ValidationError):
+            AnonymousGraphCardMultiset.model_validate_json(
+                '{"card_order":0,"classes":[{"representative":{"vertices":[],"edges":[]},"multiplicity":"'
+                + value
+                + '"}]}'
+            )
+
+
 def test_deserialization_rejects_duplicate_isomorphism_classes() -> None:
     one_edge = {"vertices": ["v00", "v01", "v02"], "edges": [["v01", "v02"]]}
     with pytest.raises(ValidationError, match="classes must be unique"):

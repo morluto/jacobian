@@ -109,7 +109,12 @@ class AnonymousGraphCardClass(StrictModel):
 
     representative: SimpleUndirectedGraph
     multiplicity: Annotated[int, DecimalIntegerEncoding(max_digits=12)] = Field(
-        ge=1, json_schema_extra={"pattern": "^[1-9][0-9]*$"}
+        ge=1,
+        json_schema_extra={
+            "pattern": "^[1-9][0-9]{0,11}(?![\\s\\S])",
+            "maxLength": 12,
+            "maximum": 999_999_999_999,
+        },
     )
 
 

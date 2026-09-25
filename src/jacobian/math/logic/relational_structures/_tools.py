@@ -213,7 +213,10 @@ TOOLS: MathTools = (
         examples=(
             OperationExample(
                 name="product_of_two_directed_edges",
-                description="The edge relation is the coordinatewise product relation.",
+                description=(
+                    "Form the edge relation by coordinatewise pairing; both "
+                    "factors must have identical ordered ranked signatures."
+                ),
                 input={
                     "left": _DIRECTED_EDGE_STRUCTURE,
                     "right": _DIRECTED_EDGE_STRUCTURE,

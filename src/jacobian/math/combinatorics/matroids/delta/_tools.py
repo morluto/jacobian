@@ -28,10 +28,6 @@ from jacobian.math.combinatorics.matroids.delta.operations import (
     twist,
     width,
 )
-from jacobian.math.combinatorics.matroids.delta.relabel import (
-    DeltaMatroidRelabelRequest,
-    relabel,
-)
 from jacobian.math.combinatorics.matroids.delta.values import (
     DeltaMatroidAdmissionError,
     DeltaMatroidDistanceProfile,
@@ -146,23 +142,6 @@ def _distance_profile(
         ) from exc
 
 
-def _relabel(request: DeltaMatroidRelabelRequest) -> FiniteDeltaMatroid:
-    try:
-        return relabel(request.delta_matroid, request.target_ground)
-    except DeltaMatroidAdmissionError as exc:
-        raise OperationResourceAdmissionError(
-            location=("delta_matroid",),
-            code=f"delta_matroid.{exc.reason}",
-            message=str(exc),
-        ) from exc
-    except ValueError as exc:
-        raise OperationDomainValidationError(
-            location=("delta_matroid",),
-            code="delta_matroid.source_not_valid",
-            message=str(exc),
-        ) from exc
-
-
 TOOLS: MathTools = (  # noqa: RUF005
     MathTool(
         operation_id="delta_matroid.from_feasible_sets.compute",
@@ -245,40 +224,6 @@ TOOLS: MathTools = (  # noqa: RUF005
                         "ground": ["a", "b"],
                         "feasible": [[], [0], [0, 1], [1]],
                     }
-                },
-            ),
-        ),
-    ),
-    MathTool(
-        operation_id="delta_matroid.relabel.compute",
-        title="Relabel a finite delta-matroid ground set",
-        description=(
-            "Apply a total bijection from each source ground position to the "
-            "corresponding unique target label, preserving the complete feasible "
-            "family. The source family is admitted under the existing "
-            "16,384-membership, 2,048-source-label-byte, and "
-            "250,000 symmetric-exchange-candidate-per-pass limits, including "
-            "one source exchange replay; target labels are limited to 2,048 "
-            "UTF-8 bytes."
-        ),
-        request_type=DeltaMatroidRelabelRequest,
-        result_type=FiniteDeltaMatroid,
-        run=_relabel,
-        tags=("delta-matroid", "ground-relabeling", "exact"),
-        discovery_terms=("delta-matroid relabeling", "ground-set bijection"),
-        examples=(
-            OperationExample(
-                name="rename_two_ground_elements",
-                description=(
-                    "Map a to x and b to y while keeping each feasible subset's "
-                    "corresponding element membership."
-                ),
-                input={
-                    "delta_matroid": {
-                        "ground": ["a", "b"],
-                        "feasible": [[], [0], [0, 1], [1]],
-                    },
-                    "target_ground": ["x", "y"],
                 },
             ),
         ),

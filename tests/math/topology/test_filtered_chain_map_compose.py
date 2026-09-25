@@ -174,6 +174,17 @@ def test_composition_rejects_a_caller_supplied_non_chain_map() -> None:
         )
 
 
+def test_identity_composition_accepts_maximum_bounded_coefficient() -> None:
+    large_scalar = 10**4095
+    result = filtered_chain_map_compose(
+        FilteredChainMapCompositionRequest(
+            first=filtered_map(_map(1)),
+            second=filtered_map(_map(large_scalar)),
+        )
+    )
+    assert result.maps == (((large_scalar,),), ((large_scalar,),))
+
+
 def test_composition_admits_exact_coefficient_growth_before_multiplication() -> None:
     large_scalar = 10**3000
     with pytest.raises(

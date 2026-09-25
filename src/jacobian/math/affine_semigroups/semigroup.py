@@ -917,7 +917,6 @@ def _hilbert_basis_admitted(
     configuration: AffineConfiguration,
     rays: tuple[tuple[int, int], tuple[int, int]],
 ) -> AffineHilbertBasis:
-    """Compute a Hilbert basis from configuration and rays already admitted."""
     """Compute the complete Hilbert basis of a bounded pointed 2D cone.
 
     Every indecomposable lattice point other than a primitive boundary ray lies

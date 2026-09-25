@@ -118,7 +118,9 @@ def _normalization(
 ) -> AffineSemigroupNormalization:
     try:
         return normalization(r.semigroup)
-    except OperationResourceAdmissionError:
+    except OperationDomainValidationError:
+        # The native boundary already exposes the stable owner diagnostic;
+        # preserve it so direct Python and catalog invocations agree.
         raise
     except (TypeError, ValueError, IndexError, OverflowError) as e:
         raise OperationDomainValidationError(

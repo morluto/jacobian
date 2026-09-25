@@ -141,6 +141,31 @@ def test_normalization_reports_expected_native_domain_failures(
     assert exc_info.value.errors()[0]["type"] == "affine_semigroup.normalization_domain"
 
 
+def test_normalization_catalog_preserves_native_owner_diagnostic() -> None:
+    tool = next(
+        tool
+        for tool in TOOLS
+        if tool.operation_id == "affine_semigroup.normalization.compute"
+    )
+    run_normalization = cast(
+        Callable[
+            [AffineSemigroupNormalizationRequest],
+            AffineSemigroupNormalization,
+        ],
+        tool.run,
+    )
+    # Domain and resource failures must keep the same owner diagnostic whether
+    # the caller uses the exported Python operation or the catalog wrapper.
+    cases = (((1, 0),), ((1, 0), (2, 0)), ((1, 0), (1, 1001), (2, 1)))
+    for vectors in cases:
+        semigroup = _semigroup(vectors)
+        with pytest.raises(OperationDomainValidationError) as native_info:
+            normalization(semigroup)
+        with pytest.raises(OperationDomainValidationError) as catalog_info:
+            run_normalization(AffineSemigroupNormalizationRequest(semigroup=semigroup))
+        assert catalog_info.value.errors() == native_info.value.errors()
+
+
 def test_normalization_matches_exhaustive_small_pointed_semigroups() -> None:
     # Exhaust every two- and three-generator subset of this small positive
     # quadrant grid. The brute oracle checks lattice membership by minor gcds

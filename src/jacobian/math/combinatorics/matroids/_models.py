@@ -509,7 +509,9 @@ class MatroidWeightedIntersectionCertificateRequest(StrictModel):
                 "w=u+v; each source matroid's maximum-weight independent-set "
                 "value for its split is recomputed by the bounded greedy "
                 "rank kernel. This operation checks a certificate and does "
-                "not search for an optimum or produce a split."
+                "not search for an optimum or produce a split. Rank terms "
+                "are ordered in nested chains, with unique terms and a "
+                "combined count no greater than twice the ground size."
             ),
             "admission_limits": {
                 "max_ground_elements": MAX_GROUND_SIZE,

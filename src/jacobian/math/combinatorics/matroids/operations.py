@@ -26,6 +26,14 @@ from jacobian.math.matrices.finite_fields.linear_algebra import (
 )
 
 MAX_CLOSURE_RANK_WORK = 50_000_000
+# A canonical maximum-weight independent-set result charges ``3 * n`` fixed
+# units plus one unit per weight digit. The widest admitted weight table is the
+# split-witness domain, so the envelope must cover ``(3 + D) * n`` digits; the
+# narrower 12-digit objective domain still bounds every public single-matroid
+# request below this cap.
+MAX_MAXIMUM_WEIGHT_INDEPENDENT_SET_OUTPUT_UNITS = (
+    3 + MAX_SPLIT_WEIGHT_DIGITS
+) * MAX_GROUND_SIZE
 
 
 def _rank_work(rows: int, columns: int) -> int:
@@ -368,7 +376,10 @@ def _prepare_maximum_weight_independent_set(
 
 
 def _admit_maximum_weight_independent_set(work: int, output_units: int) -> None:
-    if work > MAX_CLOSURE_RANK_WORK or output_units > 16 * MAX_GROUND_SIZE:
+    if (
+        work > MAX_CLOSURE_RANK_WORK
+        or output_units > MAX_MAXIMUM_WEIGHT_INDEPENDENT_SET_OUTPUT_UNITS
+    ):
         raise OperationResourceAdmissionError(
             location=("matroid", "weights"),
             code="matroid.maximum_weight_independent_set.work_bound",

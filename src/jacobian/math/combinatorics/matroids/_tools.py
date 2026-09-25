@@ -312,8 +312,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             OperationExample(
                 name="rank_one_pair_rank_dual",
                 description=(
-                    "Certify the weight-5 singleton in two identical rank-one "
-                    "matroids using a rank inequality from the first source."
+                    "Certify a weight-5 singleton in identical rank-one matroids. "
+                    "The first-source rank terms form the nested chain {0} "
+                    "subset {0, 1}; the second-source family is empty."
                 ),
                 input={
                     "first": {
@@ -329,7 +330,10 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                         "values": [5, 3],
                     },
                     "common_independent": [0],
-                    "first_rank_terms": [{"subset": [0, 1], "multiplier": 5}],
+                    "first_rank_terms": [
+                        {"subset": [0], "multiplier": 2},
+                        {"subset": [0, 1], "multiplier": 3},
+                    ],
                     "second_rank_terms": [],
                 },
             ),

@@ -199,3 +199,17 @@ def test_weight_digit_and_ground_bound_edges() -> None:
     assert result.independent_set == ()
     with pytest.raises(ValidationError):
         MatroidWeightFunction(ground_axis=max_ground.ground_axis, values=(1,) * 257)
+
+
+def test_widened_split_domain_replays_at_maximum_ground() -> None:
+    """A 15-digit split table stays consumable at the ground envelope."""
+    max_ground = _matroid(2, ((1,) + (0,) * 255,))
+    split_weights = _weights(max_ground, (10**14,) * 256)
+
+    result = maximum_weight_independent_set_result(
+        max_ground, split_weights, max_digits=MAX_SPLIT_WEIGHT_DIGITS
+    )
+
+    assert result.independent_set == (0,)
+    assert result.total_weight == 10**14
+    assert verify_maximum_weight_independent_set(result)

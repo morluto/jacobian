@@ -85,6 +85,25 @@ def test_rank_dual_round_trips_and_composes_with_weight_split_checker() -> None:
     assert split_result.total_weight == decoded.total_weight
 
 
+def test_empty_rank_certificate_rejects_composite_field_characteristic() -> None:
+    labels = ("a", "b")
+    source = LinearMatroid(
+        matrix=PrimeFieldMatrix(prime=4, entries=((1, 0), (0, 1)), columns=2),
+        ground_labels=labels,
+    )
+    request = MatroidWeightedIntersectionRankCertificateRequest(
+        first=source,
+        second=source,
+        weight_function=_weights(labels, (-2, -5)),
+        common_independent=(),
+        first_rank_terms=(),
+        second_rank_terms=(),
+    )
+
+    with pytest.raises(OperationDomainValidationError):
+        weighted_intersection_rank_certificate(request)
+
+
 def test_all_negative_objective_certifies_empty_optimum_and_round_trips() -> None:
     labels = ("a", "b")
     free = _matroid(((1, 0), (0, 1)), labels)

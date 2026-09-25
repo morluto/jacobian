@@ -18,6 +18,7 @@ from jacobian.math.logic.automata.transducers.values import (
     SubsequentialTransducer,
     alphabet_parent_mismatch,
 )
+from jacobian.math.logic.languages.regular.values import DFA
 from jacobian.math.logic.languages.words.values import WordMorphism
 
 
@@ -762,6 +763,71 @@ class RationalRelationFiberRequest(StrictModel):
     )
 
 
+class RationalRelationRestrictInputRequest(StrictModel):
+    """Keep relation pairs whose input belongs to one exact DFA language."""
+
+    transducer: RationalTransducer
+    dfa: DFA
+
+
+class RationalRelationRestrictInputResult(StrictModel):
+    """Input-restricted relation and explicit product-axis transport."""
+
+    transducer: RationalTransducer
+    dfa: DFA
+    restricted: RationalTransducer
+    product_states: tuple[tuple[int, int], ...] = Field(max_length=MAX_FST_STATES)
+    source_edge_indices: tuple[int, ...] = Field(max_length=4096)
+
+    @model_validator(mode="after")
+    def require_product_transport_shape(self) -> Self:
+        if len(self.product_states) != self.restricted.state_count:
+            raise _validation_error(
+                "restriction_state_transport_shape",
+                "product-state transport must cover each restricted state",
+            )
+        if len(set(self.product_states)) != len(self.product_states):
+            raise _validation_error(
+                "restriction_state_transport_duplicate",
+                "product-state transport entries must be distinct",
+            )
+        if any(
+            not 0 <= source < self.transducer.state_count
+            or not 0 <= dfa_state < self.dfa.state_count
+            for source, dfa_state in self.product_states
+        ):
+            raise _validation_error(
+                "restriction_state_transport_range",
+                "product-state transport references an undeclared source state",
+            )
+        if len(self.source_edge_indices) != len(self.restricted.edges) or any(
+            not 0 <= source < len(self.transducer.edges)
+            for source in self.source_edge_indices
+        ):
+            raise _validation_error(
+                "restriction_edge_transport_shape",
+                "edge transport must identify one source edge per result edge",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: RationalRelationRestrictInputRequest,
+        *,
+        restricted: RationalTransducer,
+        product_states: tuple[tuple[int, int], ...],
+        source_edge_indices: tuple[int, ...],
+    ) -> Self:
+        return cls.model_construct(
+            transducer=request.transducer,
+            dfa=request.dfa,
+            restricted=restricted,
+            product_states=product_states,
+            source_edge_indices=source_edge_indices,
+        )
+
+
 class RelationPathReplayResult(RelationPathReplayRequest):
     status: Literal["ACCEPTING_PAIR", "INVALID_PATH"]
     input_word: tuple[int, ...] = Field(max_length=MAX_FST_RESULT_WORD_LENGTH)
@@ -836,6 +902,8 @@ __all__ = [
     "RationalRelationFiberRequest",
     "RationalRelationInverseRequest",
     "RationalRelationProjectionRequest",
+    "RationalRelationRestrictInputRequest",
+    "RationalRelationRestrictInputResult",
     "RelationPathReplayRequest",
     "RelationPathReplayResult",
     "StatePairDistinguishability",

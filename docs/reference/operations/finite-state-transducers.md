@@ -65,6 +65,19 @@ same reusable alphabet parent expected by regular-language operations. The
 finite cases are checked against direct accepting-path
 enumeration, and an epsilon-output-loop fixture checks an infinite fiber.
 
+`transducer.relation.restrict_input.compute` intersects the relation's input
+tape with a total DFA and returns the restricted rational relation. A product
+state records the source relation state and DFA state. Each complete input edge
+label advances the DFA before the target product state is selected; an empty
+input label leaves the DFA state unchanged. Output labels, parallel edges, and
+accepting-path alternatives are preserved. The result includes the exact
+product-state pairs and source edge index for every result edge. The DFA must
+carry the same explicit ordered alphabet and optional identity as the
+relation's input side. Product exploration has an admitted work and memory
+envelope, and the reachable output product must fit the rational-transducer
+state and edge limits. A finite acyclic path enumerator checks the relation
+identity on bounded fixtures.
+
 This construction is the fixed-word section of a rational relation: fixing the
 input to a singleton regular language and retaining the output tape produces a
 regular language. It follows the classical finite-transducer and rational

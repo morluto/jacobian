@@ -30,6 +30,7 @@ from jacobian.math.logic.automata.transducers._models import (
 from jacobian.math.logic.automata.transducers.values import (
     MAX_FST_ALPHABET,
     MAX_FST_ALPHABET_ID_LENGTH,
+    MAX_FST_EDGES,
     MAX_FST_REACHABLE_RESULT_BYTES,
     MAX_FST_RESULT_WORD_LENGTH,
     MAX_FST_RUN_RESULT_BYTES,
@@ -44,6 +45,7 @@ from jacobian.math.logic.automata.transducers.values import (
     alphabet_parent_mismatch,
 )
 from jacobian.math.logic.languages.regular.values import (
+    DFA,
     MAX_NFA_OUTPUT_BYTES,
     MAX_NFA_STATES,
     MAX_NFA_TRANSITIONS,
@@ -83,6 +85,7 @@ __all__ = [
     "reachable_state_witnesses",
     "reachable_states",
     "replay_rational_path",
+    "restrict_rational_input",
     "run_subsequential",
     "trim_subsequential",
     "verify_composition",
@@ -99,6 +102,9 @@ MAX_FST_IDENTITY_RESULT_BYTES = 64 * 1024
 MAX_RATIONAL_PROJECTION_WORK = 4_000_000
 MAX_RATIONAL_FIBER_WORK = 25_000_000
 MAX_RATIONAL_FIBER_INTERMEDIATE_BYTES = 128_000_000
+MAX_RATIONAL_RESTRICTION_WORK = 4_000_000
+MAX_RATIONAL_RESTRICTION_INTERMEDIATE_BYTES = 64_000_000
+MAX_RATIONAL_RESTRICTION_OUTPUT_BYTES = 128_000_000
 
 
 def _reject(code: str, message: str, *location: str) -> None:
@@ -1016,6 +1022,160 @@ def project_rational_relation(
         transitions=tuple(transitions),
         initial_state=initial_state,
         accepting_states=tuple(sorted(transducer.accepting_states)),
+    )
+
+
+def restrict_rational_input(
+    transducer: RationalTransducer, dfa: DFA
+) -> tuple[RationalTransducer, tuple[tuple[int, int], ...], tuple[int, ...]]:
+    """Intersect a relation's input tape with a total DFA language.
+
+    Product states are reachable pairs ``(relation_state, dfa_state)``. Each
+    complete edge input label advances the DFA before the product edge target
+    is chosen; empty labels leave its state unchanged. Output labels and
+    nondeterministic edge multiplicity are preserved verbatim.
+    """
+    transducer = _admit_rational_transducer(transducer)
+    if type(dfa) is not DFA:
+        _reject("restriction_dfa_type", "dfa must be a canonical DFA", "dfa")
+    try:
+        dfa = DFA.model_validate(dfa.model_dump(), strict=True)
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("dfa",),
+            code="finite_state_transducer.restriction_dfa_shape",
+            message="dfa must satisfy its complete canonical carrier shape",
+        ) from exc
+    if (
+        transducer.input_alphabet is None
+        or dfa.alphabet is None
+        or transducer.input_alphabet != dfa.alphabet
+        or transducer.input_alphabet_id != dfa.alphabet_id
+        or dfa.alphabet_size != transducer.input_alphabet_size
+    ):
+        _reject(
+            "restriction_alphabet_mismatch",
+            "input restriction requires the same explicit alphabet context and identity",
+            "dfa",
+        )
+
+    # This upper bound covers every product pair and every relation edge at
+    # every DFA state, including the per-symbol DFA scans of multi-symbol
+    # labels. The much smaller result limits are checked after reachable-pair
+    # discovery but before result edges are allocated.
+    product_bound = transducer.state_count * dfa.state_count
+    edge_scan_bound = len(transducer.edges) * dfa.state_count
+    label_work_bound = sum(len(edge.input_label) for edge in transducer.edges)
+    work_bound = product_bound + edge_scan_bound + dfa.state_count * label_work_bound
+    intermediate_bytes = product_bound * 48 + edge_scan_bound * 8
+    if (
+        work_bound > MAX_RATIONAL_RESTRICTION_WORK
+        or intermediate_bytes > MAX_RATIONAL_RESTRICTION_INTERMEDIATE_BYTES
+    ):
+        raise OperationResourceAdmissionError(
+            location=("transducer", "dfa"),
+            code="finite_state_transducer.restriction_work_bound_exceeded",
+            message="input restriction exceeds its product exploration bound",
+        )
+    request_checkpoint("after rational relation input restriction admission")
+    ledger = OperationWorkLedger(work_bound)
+    dfa_edges = {(edge.source, edge.symbol): edge.target for edge in dfa.transitions}
+    outgoing: list[list[tuple[int, RationalEdge]]] = [
+        [] for _ in range(transducer.state_count)
+    ]
+    for edge_index, edge in enumerate(transducer.edges):
+        outgoing[edge.source].append((edge_index, edge))
+
+    initial_pairs = tuple(
+        (state, dfa.initial_state) for state in transducer.initial_states
+    )
+    product_states: list[tuple[int, int]] = list(initial_pairs)
+    product_index = {pair: index for index, pair in enumerate(product_states)}
+    product_edges: list[tuple[int, int, int]] = []
+    for source_index, (relation_state, dfa_state) in enumerate(product_states):
+        for edge_index, edge in outgoing[relation_state]:
+            next_dfa_state = dfa_state
+            for symbol in edge.input_label:
+                ledger.charge()
+                next_dfa_state = dfa_edges[(next_dfa_state, symbol)]
+            ledger.charge()
+            target_pair = (edge.target, next_dfa_state)
+            target_index = product_index.get(target_pair)
+            if target_index is None:
+                target_index = len(product_states)
+                product_index[target_pair] = target_index
+                product_states.append(target_pair)
+            product_edges.append((source_index, target_index, edge_index))
+            if len(product_states) > MAX_FST_STATES:
+                raise OperationResourceAdmissionError(
+                    location=("transducer", "dfa"),
+                    code="finite_state_transducer.restriction_state_bound_exceeded",
+                    message="reachable input-restriction product exceeds the transducer state bound",
+                )
+            if len(product_edges) > MAX_FST_EDGES:
+                raise OperationResourceAdmissionError(
+                    location=("transducer", "dfa"),
+                    code="finite_state_transducer.restriction_edge_bound_exceeded",
+                    message="input-restriction product exceeds the transducer edge bound",
+                )
+
+    result_label_cells = sum(
+        len(transducer.edges[edge_index].input_label)
+        + len(transducer.edges[edge_index].output_label)
+        for _, _, edge_index in product_edges
+    )
+    retained_request_bytes = len(
+        encode_strict_json(
+            {
+                "transducer": transducer.model_dump(mode="json"),
+                "dfa": dfa.model_dump(mode="json"),
+            }
+        )
+    )
+    output_bytes_bound = (
+        retained_request_bytes * 2
+        + len(product_states) * 64
+        + len(product_edges) * 256
+        + result_label_cells * 8
+        + 4096
+    )
+    if output_bytes_bound > MAX_RATIONAL_RESTRICTION_OUTPUT_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("transducer", "dfa"),
+            code="finite_state_transducer.restriction_output_bound_exceeded",
+            message="input-restriction result exceeds its serialized-size bound",
+        )
+
+    accepting_source = set(transducer.accepting_states)
+    accepting_dfa = set(dfa.accepting_states)
+    restricted = RationalTransducer(
+        input_alphabet_size=transducer.input_alphabet_size,
+        output_alphabet_size=transducer.output_alphabet_size,
+        input_alphabet_id=transducer.input_alphabet_id,
+        output_alphabet_id=transducer.output_alphabet_id,
+        input_alphabet=transducer.input_alphabet,
+        output_alphabet=transducer.output_alphabet,
+        state_count=len(product_states),
+        initial_states=tuple(range(len(initial_pairs))),
+        accepting_states=tuple(
+            index
+            for index, (relation_state, dfa_state) in enumerate(product_states)
+            if relation_state in accepting_source and dfa_state in accepting_dfa
+        ),
+        edges=tuple(
+            RationalEdge(
+                source=source,
+                target=target,
+                input_label=transducer.edges[edge_index].input_label,
+                output_label=transducer.edges[edge_index].output_label,
+            )
+            for source, target, edge_index in product_edges
+        ),
+    )
+    return (
+        restricted,
+        tuple(product_states),
+        tuple(edge_index for _, _, edge_index in product_edges),
     )
 
 

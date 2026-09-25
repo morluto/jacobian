@@ -7,10 +7,9 @@ from jacobian.math.matrices.finite_fields._models import (
 )
 from jacobian.math.matrices.finite_fields.linear_algebra import PrimeFieldMatrix
 from jacobian.math.matrices.finite_fields.quotient_spaces import (
-    PrimeFieldQuotientRequest,
     PrimeFieldQuotientSpace,
     PrimeFieldQuotientVector,
-    PrimeFieldVectorProjectionRequest,
+    PrimeFieldSubspace,
 )
 
 __all__ = [
@@ -67,9 +66,8 @@ def matrix_nullspace(matrix: PrimeFieldMatrix) -> tuple[tuple[int, ...], ...]:
     return linear_algebra.nullspace(matrix)
 
 
-def quotient_space(request: PrimeFieldQuotientRequest) -> PrimeFieldQuotientSpace:
+def quotient_space(subspace: PrimeFieldSubspace) -> PrimeFieldQuotientSpace:
     """Construct V/W and its exact ambient-to-quotient coordinate map over GF(p)."""
-    subspace = request.subspace
     dimension = subspace.ambient_dimension
     prime = subspace.prime
     linear_algebra._admit_prime(prime)
@@ -152,17 +150,17 @@ def quotient_space(request: PrimeFieldQuotientRequest) -> PrimeFieldQuotientSpac
 
 
 def project_quotient_vector(
-    request: PrimeFieldVectorProjectionRequest,
+    quotient: PrimeFieldQuotientSpace, vector: tuple[int, ...]
 ) -> PrimeFieldQuotientVector:
     """Map an ambient vector to coordinates in its source-bound quotient."""
-    _admit_quotient_projection(request.quotient)
-    projection = request.quotient.projection
+    _admit_quotient_projection(quotient)
+    projection = quotient.projection
     coordinates = tuple(
-        sum(row[index] * request.vector[index] for index in range(projection.columns))
+        sum(row[index] * vector[index] for index in range(projection.columns))
         % projection.prime
         for row in projection.entries
     )
-    return PrimeFieldQuotientVector._from_kernel(request.quotient, coordinates)
+    return PrimeFieldQuotientVector._from_kernel(quotient, coordinates)
 
 
 def _admit_quotient_projection(quotient: PrimeFieldQuotientSpace) -> None:

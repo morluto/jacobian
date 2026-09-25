@@ -53,13 +53,13 @@ def compute_nullspace(request: PrimeFieldMatrixRequest) -> PrimeFieldNullspaceRe
 def compute_quotient_space(
     request: PrimeFieldQuotientRequest,
 ) -> PrimeFieldQuotientSpace:
-    return native.quotient_space(request)
+    return native.quotient_space(request.subspace)
 
 
 def project_quotient_vector(
     request: PrimeFieldVectorProjectionRequest,
 ) -> PrimeFieldQuotientVector:
-    return native.project_quotient_vector(request)
+    return native.project_quotient_vector(request.quotient, request.vector)
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (

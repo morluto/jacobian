@@ -40,6 +40,12 @@ from jacobian.math.number_theory.modular_forms.character_basis_models import (
     ModularCharacterHeckeRequest,
     ModularCharacterQExpansion,
 )
+from jacobian.math.number_theory.modular_forms.character_degeneracy import (
+    modular_character_coordinates_v_degeneracy,
+)
+from jacobian.math.number_theory.modular_forms.character_degeneracy_models import (
+    ModularCharacterVDegeneracyRequest,
+)
 from jacobian.math.number_theory.modular_forms.field_coordinates import (
     modular_form_coordinates_extend_field,
     modular_form_field_coordinates_q_expansion,
@@ -84,6 +90,7 @@ __all__ = [
     "ModularCharacterHeckeRequest",
     "ModularCharacterQExpansion",
     "ModularCharacterSpaceInclusion",
+    "ModularCharacterVDegeneracyRequest",
     "ModularFormBasis",
     "ModularFormChangeOfBasisFrame",
     "ModularFormCoordinates",
@@ -104,6 +111,7 @@ __all__ = [
     "modular_character_coordinates_hecke",
     "modular_character_coordinates_product",
     "modular_character_coordinates_q_expansion",
+    "modular_character_coordinates_v_degeneracy",
     "modular_character_hecke_matrix",
     "modular_form_basis_frame",
     "modular_form_basis_q_expansions",

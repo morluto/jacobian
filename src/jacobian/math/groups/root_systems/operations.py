@@ -1725,6 +1725,22 @@ def weyl_dominant_representative(
             ),
         )
 
+    if all(coordinate >= 0 for coordinate in weight):
+        dominant_value = weight_lattice_vector(cartan, weight)
+        element = WeylElement.model_construct(
+            matrix=cartan,
+            root_action=IntegerMatrix(
+                row_count=rank,
+                column_count=rank,
+                entries=tuple(
+                    tuple(int(i == j) for j in range(rank)) for i in range(rank)
+                ),
+            ),
+        )
+        return WeylDominantRepresentativeResult._from_kernel(
+            cartan, dominant_value, dominant_value, element
+        )
+
     # Every prefix remains in the finite orbit. Admit its exact coordinate,
     # matrix-work, and output envelopes before performing any reflections.
     coordinate_bounds = _weight_coordinate_bounds(rows, weight)
@@ -1770,7 +1786,10 @@ def weyl_dominant_representative(
         ),
     )
     return WeylDominantRepresentativeResult._from_kernel(
-        cartan, weight, dominant, element
+        cartan,
+        weight_lattice_vector(cartan, weight),
+        weight_lattice_vector(cartan, dominant),
+        element,
     )
 
 

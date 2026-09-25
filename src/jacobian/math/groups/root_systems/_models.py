@@ -1235,22 +1235,27 @@ class WeylDominantRepresentativeResult(StrictModel):
     """The dominant orbit representative and a Weyl element mapping to it."""
 
     matrix: CartanMatrix
-    weight: tuple[StrictInt, ...] = Field(min_length=1, max_length=MAX_RANK)
-    dominant_weight: tuple[StrictInt, ...] = Field(min_length=1, max_length=MAX_RANK)
+    weight: WeightLatticeVector
+    dominant_weight: WeightLatticeVector
     element: WeylElement
 
     @model_validator(mode="after")
     def require_dominant_representative_shape(self) -> Self:
         rank = len(self.matrix)
         if (
-            len(self.weight) != rank
-            or len(self.dominant_weight) != rank
+            self.weight.datum.cartan_matrix != self.matrix
+            or self.dominant_weight.datum.cartan_matrix != self.matrix
+            or len(self.weight.coordinates) != rank
+            or len(self.dominant_weight.coordinates) != rank
             or self.element.matrix != self.matrix
             or any(
                 abs(value) > MAX_REFLECTION_REPRESENTABLE
-                for value in (*self.weight, *self.dominant_weight)
+                for value in (
+                    *self.weight.coordinates,
+                    *self.dominant_weight.coordinates,
+                )
             )
-            or any(value < 0 for value in self.dominant_weight)
+            or any(value < 0 for value in self.dominant_weight.coordinates)
         ):
             raise _validation_error(
                 "dominant_representative_shape",
@@ -1262,8 +1267,8 @@ class WeylDominantRepresentativeResult(StrictModel):
     def _from_kernel(
         cls,
         matrix: CartanMatrix,
-        weight: tuple[int, ...],
-        dominant_weight: tuple[int, ...],
+        weight: WeightLatticeVector,
+        dominant_weight: WeightLatticeVector,
         element: WeylElement,
     ) -> Self:
         return cls.model_construct(

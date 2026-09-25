@@ -89,15 +89,15 @@ def test_dominant_representative_and_transporter_match_exhaustive_oracle(
 
     result = weyl_dominant_representative(matrix, weight)
 
-    assert result.dominant_weight == dominant[0]
+    assert result.dominant_weight.coordinates == dominant[0]
     assert result.element.matrix.entries == matrix
     assert result.element.root_action.entries in orbit[dominant[0]]
 
 
 def test_already_dominant_identity_weight_returns_identity_element() -> None:
-    result = weyl_dominant_representative(((2, -1), (-1, 2)), (0, 0))
+    result = weyl_dominant_representative(((2, -1), (-1, 2)), ((1 << 53) - 1, 0))
 
-    assert result.dominant_weight == (0, 0)
+    assert result.dominant_weight.coordinates == ((1 << 53) - 1, 0)
     assert result.element.root_action.entries == _identity(2)
     assert type(result).model_validate_json(result.model_dump_json()) == result
 

@@ -3,7 +3,6 @@ from __future__ import annotations
 from math import lcm
 
 import pytest
-from pydantic_core import PydanticCustomError
 from sympy import I, Rational, exp, pi, to_number_field
 
 from jacobian.catalog.catalog import Catalog
@@ -97,7 +96,7 @@ def test_generalized_gauss_sum_preserves_principal_nonunit_frequency() -> None:
 
 def test_generalized_gauss_sum_admits_frequency_and_field_before_sum() -> None:
     character = dirichlet_character(character_group(3), (0,))
-    with pytest.raises(PydanticCustomError):
+    with pytest.raises(OperationResourceAdmissionError):
         dirichlet_character_generalized_gauss_sum(character, 10**256)
 
     large_character = dirichlet_character(character_group(257), (0,))

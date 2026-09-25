@@ -6,7 +6,7 @@ import math
 from fractions import Fraction
 from itertools import product
 from math import gcd
-from typing import cast
+from typing import Literal, cast
 
 from pydantic import ValidationError
 from pydantic_core import PydanticCustomError
@@ -85,6 +85,7 @@ __all__ = [
     "dirichlet_character_generalized_gauss_sum",
     "dirichlet_character_group_enumerate",
     "dirichlet_character_inflate",
+    "dirichlet_character_inverse",
     "dirichlet_character_jacobi_sum",
     "dirichlet_character_kernel",
     "dirichlet_character_l_value_nonpositive_integer",
@@ -259,7 +260,7 @@ def dirichlet_character_jacobi_sum(
     value = RationalCyclotomicElement(
         field=RationalCyclotomicField(order=order),
         coefficients_ascending=tuple(
-            CanonicalRational.from_fraction(value) for value in reduced[:degree]
+            CanonicalRational.from_integer_ratio(value, 1) for value in reduced[:degree]
         ),
     )
     return DirichletCharacterJacobiSumResult(
@@ -695,7 +696,7 @@ def dirichlet_character_parity(
     if value is None:
         raise RuntimeError("minus one must be a unit modulo every positive modulus")
     if value.exponent == 0:
-        parity = "EVEN"
+        parity: Literal["EVEN", "ODD"] = "EVEN"
     elif (
         character.group.exponent % 2 == 0
         and value.exponent == character.group.exponent // 2
@@ -2189,7 +2190,7 @@ def _sequence_twist_input_digit_bounds(
     max_denominator_digits = 1
     for value in sequence.values:
         coefficients = _sequence_twist_source_coefficients(sequence, value)
-        if isinstance(sequence, FiniteCyclotomicSequence):
+        if isinstance(value, RationalCyclotomicElement):
             coordinates = value.coefficients_ascending
         else:
             coordinates = (CanonicalRational.from_fraction(coefficients[0]),)
@@ -2537,7 +2538,7 @@ def _compute_generalized_gauss_sum(
     value = RationalCyclotomicElement(
         field=RationalCyclotomicField(order=order),
         coefficients_ascending=tuple(
-            CanonicalRational.from_fraction(coefficient)
+            CanonicalRational.from_integer_ratio(coefficient, 1)
             for coefficient in values[:degree]
         ),
     )

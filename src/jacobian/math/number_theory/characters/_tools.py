@@ -14,20 +14,29 @@ from jacobian.math.number_theory.characters._models import (
     DirichletCharacterEnumerationRequest,
     DirichletCharacterFourierMatrixRequest,
     DirichletCharacterGaussSumRequest,
+    DirichletCharacterGaussSumResult,
     DirichletCharacterGeneralizedBernoulliPrefix,
     DirichletCharacterGeneralizedBernoulliPrefixRequest,
     DirichletCharacterGeneralizedBernoulliRequest,
+    DirichletCharacterGeneralizedBernoulliResult,
     DirichletCharacterGeneralizedGaussSumRequest,
+    DirichletCharacterGeneralizedGaussSumResult,
     DirichletCharacterInflationRequest,
     DirichletCharacterInverseRequest,
     DirichletCharacterJacobiSumRequest,
+    DirichletCharacterJacobiSumResult,
     DirichletCharacterKernelRequest,
     DirichletCharacterLValueNonpositiveRequest,
+    DirichletCharacterLValueNonpositiveResult,
     DirichletCharacterOrderRequest,
+    DirichletCharacterOrderResult,
     DirichletCharacterOrthogonalityRequest,
+    DirichletCharacterOrthogonalityResult,
     DirichletCharacterParityRequest,
+    DirichletCharacterParityResult,
     DirichletCharacterPowerRequest,
     DirichletCharacterPrimitiveGaussNormRequest,
+    DirichletCharacterPrimitiveGaussNormResult,
     DirichletCharacterProductRequest,
     DirichletCharacterRequest,
     DirichletCharacterResidueIndicatorExpansion,
@@ -162,19 +171,27 @@ def _compute_character_product(
     return native.dirichlet_character_product(request.left, request.right)
 
 
-def _compute_character_order(request: DirichletCharacterOrderRequest):
+def _compute_character_order(
+    request: DirichletCharacterOrderRequest,
+) -> DirichletCharacterOrderResult:
     return native.dirichlet_character_order(request.character)
 
 
-def _compute_character_kernel(request: DirichletCharacterKernelRequest):
+def _compute_character_kernel(
+    request: DirichletCharacterKernelRequest,
+) -> DirichletCharacterKernel:
     return native.dirichlet_character_kernel(request.character)
 
 
-def _compute_character_parity(request: DirichletCharacterParityRequest):
+def _compute_character_parity(
+    request: DirichletCharacterParityRequest,
+) -> DirichletCharacterParityResult:
     return native.dirichlet_character_parity(request.character)
 
 
-def _compute_character_power(request: DirichletCharacterPowerRequest):
+def _compute_character_power(
+    request: DirichletCharacterPowerRequest,
+) -> DirichletCharacter:
     return native.dirichlet_character_power(request.character, int(request.exponent))
 
 
@@ -204,17 +221,21 @@ def _compute_character_conductor(
     return native.dirichlet_character_conductor(request.character)
 
 
-def _compute_gauss_sum(request: DirichletCharacterGaussSumRequest):
+def _compute_gauss_sum(
+    request: DirichletCharacterGaussSumRequest,
+) -> DirichletCharacterGaussSumResult:
     return native.dirichlet_character_gauss_sum(request.character)
 
 
-def _compute_primitive_gauss_norm(request: DirichletCharacterPrimitiveGaussNormRequest):
+def _compute_primitive_gauss_norm(
+    request: DirichletCharacterPrimitiveGaussNormRequest,
+) -> DirichletCharacterPrimitiveGaussNormResult:
     return native.dirichlet_character_primitive_gauss_norm(request.character)
 
 
 def _compute_generalized_gauss_sum(
     request: DirichletCharacterGeneralizedGaussSumRequest,
-):
+) -> DirichletCharacterGeneralizedGaussSumResult:
     return native.dirichlet_character_generalized_gauss_sum(
         request.character, int(request.frequency)
     )
@@ -222,13 +243,13 @@ def _compute_generalized_gauss_sum(
 
 def _compute_jacobi_sum(
     request: DirichletCharacterJacobiSumRequest,
-):
+) -> DirichletCharacterJacobiSumResult:
     return native.dirichlet_character_jacobi_sum(request.left, request.right)
 
 
 def _compute_orthogonality(
     request: DirichletCharacterOrthogonalityRequest,
-):
+) -> DirichletCharacterOrthogonalityResult:
     return native.dirichlet_character_orthogonality(request.left, request.right)
 
 
@@ -240,7 +261,7 @@ def _compute_sequence_twist(
 
 def _compute_generalized_bernoulli(
     request: DirichletCharacterGeneralizedBernoulliRequest,
-):
+) -> DirichletCharacterGeneralizedBernoulliResult:
     return native.dirichlet_character_generalized_bernoulli(
         request.character, request.index
     )
@@ -254,7 +275,9 @@ def _compute_generalized_bernoulli_prefix(
     )
 
 
-def _compute_l_value_nonpositive(request: DirichletCharacterLValueNonpositiveRequest):
+def _compute_l_value_nonpositive(
+    request: DirichletCharacterLValueNonpositiveRequest,
+) -> DirichletCharacterLValueNonpositiveResult:
     return native.dirichlet_character_l_value_nonpositive_integer(
         request.character, request.bernoulli_index
     )
@@ -327,6 +350,29 @@ TOOLS: MathTools = (
                         "coordinates": [1],
                     }
                 },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="dirichlet_character.inverse.compute",
+        title="Invert an exact Dirichlet character",
+        description=(
+            "Return the inverse character in the identical modulus and exact "
+            "unit-group parent. Inversion negates the dual coordinates, and "
+            "character values remain zero off the unit group."
+        ),
+        request_type=DirichletCharacterInverseRequest,
+        result_type=DirichletCharacter,
+        run=_compute_character_inverse,
+        tags=("number-theory", "dirichlet-character", "exact"),
+        examples=(
+            OperationExample(
+                name="inverse_order_four_character_mod5",
+                description=(
+                    "Invert a non-self-inverse character modulo 5 while retaining "
+                    "its exact finite unit-group parent."
+                ),
+                input={"character": {"group": _GROUP_MOD5, "coordinates": [1]}},
             ),
         ),
     ),
@@ -414,7 +460,7 @@ TOOLS: MathTools = (
             "has order m/gcd(c,m), and the character order is their lcm."
         ),
         request_type=DirichletCharacterOrderRequest,
-        result_type=native.DirichletCharacterOrderResult,
+        result_type=DirichletCharacterOrderResult,
         run=_compute_character_order,
         tags=("number-theory", "dirichlet-character", "exact"),
         examples=(
@@ -483,7 +529,7 @@ TOOLS: MathTools = (
             "whether that value is 1 or -1."
         ),
         request_type=DirichletCharacterParityRequest,
-        result_type=native.DirichletCharacterParityResult,
+        result_type=DirichletCharacterParityResult,
         run=_compute_character_parity,
         tags=("number-theory", "dirichlet-character", "exact"),
         examples=(
@@ -759,7 +805,7 @@ TOOLS: MathTools = (
             "and equals the modulus. Caller-supplied primitive labels are not used."
         ),
         request_type=DirichletCharacterPrimitiveGaussNormRequest,
-        result_type=native.DirichletCharacterPrimitiveGaussNormResult,
+        result_type=DirichletCharacterPrimitiveGaussNormResult,
         run=_compute_primitive_gauss_norm,
         tags=("number-theory", "dirichlet-character", "gauss-sum", "exact"),
         examples=(
@@ -781,7 +827,7 @@ TOOLS: MathTools = (
             "growth are admitted before cyclotomic construction and summation."
         ),
         request_type=DirichletCharacterGaussSumRequest,
-        result_type=native.DirichletCharacterGaussSumResult,
+        result_type=DirichletCharacterGaussSumResult,
         run=_compute_gauss_sum,
         tags=("number-theory", "dirichlet-character", "gauss-sum", "exact"),
         examples=(
@@ -805,7 +851,7 @@ TOOLS: MathTools = (
             "are bounded before the finite sum is expanded."
         ),
         request_type=DirichletCharacterGeneralizedGaussSumRequest,
-        result_type=native.DirichletCharacterGeneralizedGaussSumResult,
+        result_type=DirichletCharacterGeneralizedGaussSumResult,
         run=_compute_generalized_gauss_sum,
         tags=("number-theory", "dirichlet-character", "gauss-sum", "exact"),
         examples=(
@@ -833,7 +879,7 @@ TOOLS: MathTools = (
             "are bounded before summation."
         ),
         request_type=DirichletCharacterJacobiSumRequest,
-        result_type=native.DirichletCharacterJacobiSumResult,
+        result_type=DirichletCharacterJacobiSumResult,
         run=_compute_jacobi_sum,
         tags=("number-theory", "dirichlet-character", "jacobi-sum", "exact"),
         examples=(
@@ -885,7 +931,7 @@ TOOLS: MathTools = (
             "characters or zero for distinct characters."
         ),
         request_type=DirichletCharacterOrthogonalityRequest,
-        result_type=native.DirichletCharacterOrthogonalityResult,
+        result_type=DirichletCharacterOrthogonalityResult,
         run=_compute_orthogonality,
         tags=("number-theory", "dirichlet-character", "orthogonality", "exact"),
         examples=(
@@ -913,7 +959,7 @@ TOOLS: MathTools = (
             "result bytes are admitted before the finite sum is expanded."
         ),
         request_type=DirichletCharacterGeneralizedBernoulliRequest,
-        result_type=native.DirichletCharacterGeneralizedBernoulliResult,
+        result_type=DirichletCharacterGeneralizedBernoulliResult,
         run=_compute_generalized_bernoulli,
         tags=("number-theory", "dirichlet-character", "bernoulli", "exact"),
         examples=(
@@ -964,7 +1010,7 @@ TOOLS: MathTools = (
             "operation does not numerically evaluate the analytic L-function."
         ),
         request_type=DirichletCharacterLValueNonpositiveRequest,
-        result_type=native.DirichletCharacterLValueNonpositiveResult,
+        result_type=DirichletCharacterLValueNonpositiveResult,
         run=_compute_l_value_nonpositive,
         tags=("number-theory", "dirichlet-character", "l-value", "exact"),
         examples=(

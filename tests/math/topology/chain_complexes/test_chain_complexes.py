@@ -2634,6 +2634,20 @@ class TestNativeWrappersCallKernelsDirectly:
         assert verdict.chain_map is not None
         assert verdict.chain_map == chain_map
 
+    def test_native_verifier_revalidates_constructed_carrier(self) -> None:
+        point = ChainComplexValue(
+            coefficient_ring=CoefficientRing.RATIONAL,
+            degree_min=0,
+            degree_max=0,
+            basis_sizes=(1,),
+            differential_matrices=(),
+        )
+        forged = ChainMapValue.model_construct(
+            source=point, target=point, map_matrices=()
+        )
+        with pytest.raises(ValidationError):
+            chain_map_commutes(forged)
+
 
 class TestWorkstreamDEulerAndDegenerateInvariants:
     def _euler(self, result: HomologyResult) -> int:

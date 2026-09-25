@@ -1022,6 +1022,7 @@ def chain_map_commutes(
     chain_map: ChainMapValue,
 ) -> VerificationResult:
     """Verify that a component-wise chain map commutes with differentials."""
+    chain_map = ChainMapValue.model_validate(chain_map.model_dump())
     source, target, map_matrices = (
         chain_map.source,
         chain_map.target,

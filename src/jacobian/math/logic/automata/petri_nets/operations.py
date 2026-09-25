@@ -452,6 +452,12 @@ def concurrent_step(
 def _require_sequence_axes(net: PetriNet, sequence: tuple[int, ...]) -> None:
     """Share the catalog sequence-axis admission with native callers."""
 
+    if type(sequence) is not tuple:
+        raise OperationDomainValidationError(
+            location=("sequence",),
+            code="petri_net.firing_sequence_container",
+            message="firing sequence must be a tuple",
+        )
     if len(sequence) > MAX_FIRING_SEQUENCE_LENGTH:
         raise OperationResourceAdmissionError(
             location=("sequence",),

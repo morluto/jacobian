@@ -9,7 +9,10 @@ import json
 import pytest
 from pydantic import ValidationError
 
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.logic.automata import petri_nets
 from jacobian.math.logic.automata.petri_nets._models import (
     MAX_SIPHON_TRAP_PLACES,
@@ -153,11 +156,14 @@ def test_state_equation_rejects_foreign_marking_and_unbounded_count_vector() -> 
             marking=Marking(tokens=(1, 0), net=foreign),
             transition_counts=(0, 0),
         )
-    with pytest.raises(ValidationError):
-        StateEquationRequest(
-            net=net,
-            marking=Marking(tokens=(1, 0)),
-            transition_counts=(1001, 0),
+    parsed = StateEquationRequest(
+        net=net,
+        marking=Marking(tokens=(1, 0)),
+        transition_counts=(1001, 0),
+    )
+    with pytest.raises(OperationResourceAdmissionError):
+        petri_nets.state_equation_target(
+            parsed.net, parsed.marking, parsed.transition_counts
         )
 
 

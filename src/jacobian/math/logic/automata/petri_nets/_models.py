@@ -541,11 +541,6 @@ class StateEquationRequest(StrictModel):
             raise _validation_error(
                 "state_equation_count_sign", "transition counts must be nonnegative"
             )
-        if sum(self.transition_counts) > MAX_STATE_EQUATION_OCCURRENCES:
-            raise _validation_error(
-                "state_equation_occurrence_bound",
-                "total transition count exceeds the admitted bound",
-            )
         return self
 
 

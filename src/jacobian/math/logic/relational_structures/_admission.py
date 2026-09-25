@@ -18,9 +18,11 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.logic.relational_structures.values import (
+    MAX_RELATIONAL_ARITY,
     MAX_RELATIONAL_OPERATION_TABLE_CELLS,
     MAX_RELATIONAL_POLYMORPHISM_ARITY,
     MAX_RELATIONAL_SYMBOLS,
+    MAX_RELATIONAL_TABLE_ROWS,
     MAX_RELATIONAL_TRANSPORT_TUPLES,
     FiniteRelationalStructure,
 )
@@ -45,6 +47,50 @@ MAX_POLYMORPHISM_RELATION_COMBINATIONS = 65_536
 MAX_POLYMORPHISM_COORDINATE_WORK = 1_000_000
 MAX_INDUCED_SUBSTRUCTURE_WORK = 81_920
 MAX_RELATIONAL_REDUCT_WORK = 81_920
+# A transformed structure reconstructs every complete relation table. This
+# exact schema-derived limit admits the maximum legal source plus the selected
+# binary table's coordinate swap without importing a transport byte ceiling.
+MAX_RELATIONAL_STRUCTURE_TRANSFORM_WORK = (
+    MAX_RELATIONAL_SYMBOLS
+    * (1 + MAX_RELATIONAL_TABLE_ROWS * (MAX_RELATIONAL_ARITY + 1))
+    + 2 * MAX_RELATIONAL_TABLE_ROWS
+)
+
+
+def admit_binary_relation_transpose(
+    source: FiniteRelationalStructure, symbol_index: int
+) -> int:
+    """Admit whole-structure reconstruction and selected coordinate work."""
+
+    if not 0 <= symbol_index < len(source.signature):
+        raise OperationDomainValidationError(
+            location=("symbol_id",),
+            code="relational.structure.transpose_symbol_unknown",
+            message="symbol_id must belong to the source signature",
+        )
+    symbol = source.signature[symbol_index]
+    if symbol.arity != 2:
+        raise OperationDomainValidationError(
+            location=("symbol_id",),
+            code="relational.structure.transpose_arity",
+            message="the selected relation symbol must have arity two",
+        )
+    work = sum(
+        1 + len(table) * (relation_symbol.arity + 1)
+        for relation_symbol, table in zip(
+            source.signature, source.relation_tables, strict=True
+        )
+    ) + 2 * len(source.relation_tables[symbol_index])
+    if work > MAX_RELATIONAL_STRUCTURE_TRANSFORM_WORK:
+        raise OperationResourceAdmissionError(
+            location=("source", "relation_tables"),
+            code="relational.structure.transpose_work_bound",
+            message=(
+                "binary relation transposition exceeds the admitted "
+                "whole-structure reconstruction bound"
+            ),
+        )
+    return work
 
 
 def candidate_space(source_size: int, target_size: int) -> int:

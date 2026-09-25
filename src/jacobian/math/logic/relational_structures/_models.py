@@ -193,6 +193,28 @@ class RelationalReductResult(StrictModel):
         )
 
 
+class BinaryRelationTransposeRequest(StrictModel):
+    """Select one binary symbol whose relation table is to be transposed."""
+
+    source: FiniteRelationalStructure
+    symbol_id: RelationSymbolId
+
+    @model_validator(mode="after")
+    def require_binary_symbol(self) -> Self:
+        for symbol in self.source.signature:
+            if symbol.symbol_id == self.symbol_id:
+                if symbol.arity != 2:
+                    raise PydanticCustomError(
+                        "relational.structure.transpose_arity",
+                        "the selected relation symbol must have arity two",
+                    )
+                return self
+        raise PydanticCustomError(
+            "relational.structure.transpose_symbol",
+            "the selected relation symbol must belong to the source signature",
+        )
+
+
 class HomomorphismViolationWitness(StrictModel):
     """The first source tuple whose image is absent from the target relation.
 

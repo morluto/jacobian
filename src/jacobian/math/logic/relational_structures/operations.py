@@ -13,6 +13,7 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.logic.relational_structures._admission import (
+    admit_binary_relation_transpose,
     admit_core_computation,
     admit_embedding_search,
     admit_homomorphism_check,
@@ -138,6 +139,50 @@ def reduct_structure(
         source=source,
         reduct=reduct,
         source_symbol_indices=indices,
+    )
+
+
+def transpose_binary_relation(
+    source: FiniteRelationalStructure, symbol_id: str
+) -> FiniteRelationalStructure:
+    """Transpose one binary relation and preserve every other symbol table.
+
+    For the selected binary symbol ``R``, the output has
+    ``R' = {(y, x) : (x, y) in R}``. The carrier and ranked signature stay
+    fixed, so the returned canonical structure can be passed directly to
+    other relational operations.
+    """
+
+    source = _admit_structure(source, "source")
+    if type(symbol_id) is not str:
+        raise OperationDomainValidationError(
+            location=("symbol_id",),
+            code="relational.structure.transpose_symbol_type",
+            message="symbol_id must be an exact relation-symbol ID string",
+        )
+    symbol_index = next(
+        (
+            index
+            for index, symbol in enumerate(source.signature)
+            if symbol.symbol_id == symbol_id
+        ),
+        None,
+    )
+    if symbol_index is None:
+        raise OperationDomainValidationError(
+            location=("symbol_id",),
+            code="relational.structure.transpose_symbol_unknown",
+            message="symbol_id must belong to the source signature",
+        )
+    admit_binary_relation_transpose(source, symbol_index)
+    table = source.relation_tables[symbol_index]
+    request_checkpoint("before binary relation transposition")
+    tables = list(source.relation_tables)
+    tables[symbol_index] = tuple((right, left) for left, right in table)
+    return FiniteRelationalStructure(
+        carrier_size=source.carrier_size,
+        signature=source.signature,
+        relation_tables=tuple(tables),
     )
 
 

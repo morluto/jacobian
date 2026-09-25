@@ -1125,7 +1125,10 @@ def link_state_circles(
             cycle = min(candidates)
             circle_rows.append(cycle)
             unseen.difference_update(cycle)
-        circles = tuple(LinkSmoothedCircle(darts=row) for row in sorted(circle_rows))
+        circles = tuple(
+            [LinkSmoothedCircle(darts=row) for row in sorted(circle_rows)]
+            + [LinkSmoothedCircle(darts=()) for _ in range(diagram.free_loops)]
+        )
     return LinkStateCirclesResult(
         state=admitted,
         circles=circles,

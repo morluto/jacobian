@@ -107,6 +107,15 @@ def link_orientation_reverse(
     oriented identity in the current value and therefore cannot be selected.
     """
     admitted = _admit_components(diagram)
+    if not isinstance(component_representatives, tuple) or any(
+        not isinstance(value, str) or not value or len(value) > 64
+        for value in component_representatives
+    ):
+        _reject(
+            "component_representatives",
+            "link_diagram.orientation_reverse.representatives_shape",
+            "component representatives must be a tuple of valid link labels",
+        )
     source_components = link_components(admitted)
     dart_component = {
         dart: component.component_id

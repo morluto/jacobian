@@ -9,7 +9,6 @@ import pytest
 from jsonschema import Draft202012Validator
 
 from jacobian.canonical import encode_strict_json
-from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import MathTool
 from jacobian.dispatch import OperationRequestValidationError, invoke_operation
@@ -31,11 +30,11 @@ _FACTOR_WORKER_OPERATION_IDS = frozenset({"polynomial.multivariate.factor.comput
 
 
 def _builtin_operations() -> tuple[MathTool[Any, Any], ...]:
-    # Do not build every input and output JSON schema while pytest is merely
-    # collecting this parametrized test. The selected operation's request
-    # schema is validated inside the test itself; Catalog.open() still supplies
-    # the full dispatch catalog for the public invocation check.
-    return BUILTIN_TOOLS
+    return tuple(
+        operation
+        for descriptor in _CATALOG.snapshot().operations
+        if (operation := _CATALOG.operation(descriptor.operation_id)) is not None
+    )
 
 
 def _builtin_operation_parameters() -> tuple[Any, ...]:
@@ -69,11 +68,10 @@ def test_advertised_invocation_example_executes_when_backend_is_available(
         )
     examples = operation.examples
     assert examples, f"{operation_id} must advertise one executable example"
-    request_schema = operation.request_type.model_json_schema()
-    Draft202012Validator.check_schema(request_schema)
-    request_validator = Draft202012Validator(request_schema)
     for invocation_example in examples:
-        request_validator.validate(invocation_example.input)
+        schema = operation.request_type.model_json_schema()
+        Draft202012Validator.check_schema(schema)
+        Draft202012Validator(schema).validate(invocation_example.input)
         operation.request_type.model_validate_json(
             encode_strict_json(invocation_example.input), strict=True
         )

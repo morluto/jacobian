@@ -9,7 +9,6 @@ from jsonschema import Draft202012Validator
 
 from jacobian._models import StrictModel
 from jacobian.catalog import catalog as catalog_module
-from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import MathTool, OperationMatchRequest
 from jacobian.catalog.search import browse_operations, match_operations
@@ -67,10 +66,6 @@ def test_catalog_inspects_determinant_without_sqlite() -> None:
     assert descriptor.operation_id == "matrix.determinant.compute"
 
 
-def test_open_reuses_the_compiled_builtin_catalog() -> None:
-    assert Catalog.open() is Catalog.open()
-
-
 def test_output_schema_describes_serialized_exact_integers() -> None:
     descriptor = Catalog.open().inspect(
         "number_theory.euler_phi.preimage_power_sums.compute"
@@ -82,11 +77,11 @@ def test_output_schema_describes_serialized_exact_integers() -> None:
 def test_every_served_operation_publishes_request_valid_examples() -> None:
     catalog = Catalog.open()
 
-    for declaration in BUILTIN_TOOLS:
-        operation = catalog.operation(declaration.operation_id)
-        assert operation is declaration
+    for descriptor in catalog.snapshot().operations:
+        operation = catalog.operation(descriptor.operation_id)
+        assert operation is not None
         assert operation.examples, (
-            f"{declaration.operation_id} must publish an invocation example"
+            f"{descriptor.operation_id} must publish an invocation example"
         )
         for invocation_example in operation.examples:
             parse_operation_input(operation.request_type, invocation_example.input)

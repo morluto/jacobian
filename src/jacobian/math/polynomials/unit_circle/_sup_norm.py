@@ -23,7 +23,6 @@ point.
 from __future__ import annotations
 
 import time
-from bisect import bisect_left
 from fractions import Fraction
 from itertools import pairwise
 from math import gcd, isqrt, lcm
@@ -643,11 +642,7 @@ def unit_circle_sup_norm_squared(  # noqa: C901
         _expression(derivative, symbol), symbol, domain=sympy.QQ
     )
     numerator_expression = _expression(numerator, symbol)
-    isolating = tuple(
-        derivative_polynomial.intervals(
-            eps=_sympy_rational(_REFINEMENT_TARGETS[-1]), fast=True
-        )
-    )
+    isolating = tuple(derivative_polynomial.intervals())
     checkpoint()
 
     # The resultant of the derivative numerator and the level relation defines
@@ -666,7 +661,7 @@ def unit_circle_sup_norm_squared(  # noqa: C901
     )
     value_roots = tuple(
         (Fraction(int(lower.p), int(lower.q)), Fraction(int(upper.p), int(upper.q)))
-        for (lower, upper), _multiplicity in resultant_polynomial.intervals(fast=True)
+        for (lower, upper), _multiplicity in resultant_polynomial.intervals()
     )
     checkpoint()
 
@@ -728,10 +723,12 @@ def unit_circle_sup_norm_squared(  # noqa: C901
     greater_keys = {
         key: sum(1 for other in distinct_keys if other > key) for key in distinct_keys
     }
-    all_endpoint_comparisons = _compare_rational_to_value_roots(
-        resultant_polynomial, resultant_factors, value_roots, endpoint_value
-    )
-    endpoint_comparison = {key: all_endpoint_comparisons[key] for key in distinct_keys}
+    endpoint_comparison = {
+        key: _compare_rational_to_value_root(
+            resultant_polynomial, value_roots[key], endpoint_value
+        )
+        for key in distinct_keys
+    }
     endpoint_rank = sum(1 for key in distinct_keys if endpoint_comparison[key] > 0)
 
     critical_points: list[UnitCircleCriticalPoint] = []
@@ -801,62 +798,28 @@ def unit_circle_sup_norm_squared(  # noqa: C901
     )
 
 
-def _compare_rational_to_value_roots(
+def _compare_rational_to_value_root(
     polynomial: Any,
-    factors: tuple[Any, ...],
-    root_intervals: tuple[tuple[Fraction, Fraction], ...],
+    root_interval: tuple[Fraction, Fraction],
     value: Fraction,
-) -> tuple[int, ...]:
-    """Order one rational endpoint against sorted resultant-root intervals.
+) -> int:
+    """Return the sign of ``critical_value - value`` for one resultant root."""
 
-    The isolated intervals are disjoint and ordered.  Binary search locates
-    the sole interval that can contain ``value``.  When it does, an exact sign
-    change in its irreducible resultant factor determines which side of the
-    root contains ``value`` without a Sturm count on the full resultant.
-    """
-
-    if not root_intervals:
-        return ()
-    position = bisect_left([upper for _lower, upper in root_intervals], value)
-    comparisons = [-1] * min(position, len(root_intervals))
-    if position == len(root_intervals):
-        return tuple(comparisons)
-    lower, upper = root_intervals[position]
-    if value < lower:
-        return (*comparisons, *(1 for _ in root_intervals[position:]))
+    lower, upper = root_interval
     if lower == upper:
-        comparison = 0 if value == lower else (1 if lower > value else -1)
-    elif value == lower:
-        comparison = 1
-    elif value == upper:
-        comparison = -1
-    elif polynomial.eval(_sympy_rational(value)) == 0:
-        comparison = 0
-    else:
-        lower_point = _sympy_rational(lower)
-        upper_point = _sympy_rational(upper)
-        value_point = _sympy_rational(value)
-        carrying_factors = tuple(
-            factor
-            for factor in factors
-            if factor.eval(lower_point) * factor.eval(upper_point) < 0
-        )
-        if len(carrying_factors) == 1:
-            factor = carrying_factors[0]
-            value_sign = factor.eval(value_point)
-            comparison = (
-                0
-                if value_sign == 0
-                else (-1 if factor.eval(lower_point) * value_sign < 0 else 1)
-            )
-        else:
-            count = strict_root_count(polynomial, lower_point, value_point)
-            comparison = -1 if count else 1
-    return (
-        *comparisons,
-        comparison,
-        *(1 for _ in root_intervals[position + 1 :]),
+        if value == lower:
+            return 0
+        return 1 if lower > value else -1
+    if value <= lower:
+        return 1
+    if value >= upper:
+        return -1
+    if polynomial.eval(_sympy_rational(value)) == 0:
+        return 0
+    count = strict_root_count(
+        polynomial, _sympy_rational(lower), _sympy_rational(value)
     )
+    return -1 if count else 1
 
 
 def verify_unit_circle_sup_norm_squared(

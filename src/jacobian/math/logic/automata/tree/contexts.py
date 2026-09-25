@@ -10,7 +10,6 @@ from pydantic_core import PydanticCustomError
 from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.catalog.models import (
     OperationDomainValidationError,
-    OperationResourceAdmissionError,
 )
 from jacobian.math.logic.automata.tree.values import (
     MAX_RUN_TREE_DEPTH,
@@ -64,10 +63,15 @@ class FiniteTreeContext(StrictModel):
 
     @model_validator(mode="before")
     @classmethod
-    def bound_raw_context(cls, value: object) -> object:
+    def bound_raw_context(cls, value: object) -> object:  # noqa: C901
         """Reject oversized JSON trees before Pydantic builds nested values."""
         if not isinstance(value, dict):
             return value
+        if set(value) != {"arity", "frames"}:
+            raise _error("shape", "context must contain only arity and frames")
+        raw_arity = value.get("arity")
+        if not isinstance(raw_arity, (tuple, list)) or len(raw_arity) > MAX_TA_SYMBOLS:
+            raise _error("signature", "context arity exceeds the supported bound")
         frames = value.get("frames")
         if not isinstance(frames, (tuple, list)):
             return value
@@ -75,14 +79,23 @@ class FiniteTreeContext(StrictModel):
             raise _error("depth", "context spine exceeds the supported depth")
         nodes = len(frames)
         for frame_index, frame in enumerate(frames):
-            if not isinstance(frame, dict):
-                return value
+            if not isinstance(frame, dict) or set(frame) != {
+                "symbol",
+                "hole_child",
+                "siblings",
+            }:
+                raise _error("shape", "context frame has invalid fields")
             siblings = frame.get("siblings")
             if not isinstance(siblings, (tuple, list)):
                 return value
+            if len(siblings) > MAX_TA_ARITY - 1:
+                raise _error("arity", "context frame has too many siblings")
             for sibling in siblings:
-                if not isinstance(sibling, dict):
-                    return value
+                if not isinstance(sibling, dict) or set(sibling) != {
+                    "symbol",
+                    "children",
+                }:
+                    raise _error("shape", "context sibling has invalid fields")
                 stack = [(sibling, frame_index + 2)]
                 while stack:
                     node, depth = stack.pop()
@@ -99,11 +112,11 @@ class FiniteTreeContext(StrictModel):
                         raise _error(
                             "depth", "context exceeds the supported tree depth"
                         )
-                    stack.extend(
-                        (child, depth + 1)
-                        for child in children
-                        if isinstance(child, dict)
-                    )
+                    if len(children) > MAX_TA_ARITY:
+                        raise _error("arity", "tree node has too many children")
+                    if any(not isinstance(child, dict) for child in children):
+                        raise _error("shape", "tree children must be objects")
+                    stack.extend((child, depth + 1) for child in children)
         return canonicalize_json_containers(value)
 
     @model_validator(mode="after")
@@ -159,25 +172,11 @@ def _context_size(context: FiniteTreeContext) -> int:
 
 def _plug_tree_context(context: FiniteTreeContext, tree: RankedTree) -> RankedTree:
     """Substitute a ground tree into the unique hole of a context."""
-    tree_nodes = ranked_tree_node_count(tree)
     if not _tree_matches(context.arity, tree):
         raise OperationDomainValidationError(
             location=("tree",),
             code="tree_context.plug.alphabet_mismatch",
             message="plugged tree must match the context ranked alphabet",
-        )
-    output_nodes = _context_size(context) + tree_nodes
-    if output_nodes > MAX_RUN_TREE_NODES:
-        raise OperationResourceAdmissionError(
-            location=("context",),
-            code="tree_context.plug.node_bound",
-            message="plugged tree would exceed the supported node bound",
-        )
-    if len(context.frames) + _tree_depth(tree) > MAX_RUN_TREE_DEPTH:
-        raise OperationResourceAdmissionError(
-            location=("context",),
-            code="tree_context.plug.depth_bound",
-            message="plugged tree would exceed the supported depth bound",
         )
     current = tree
     for frame in reversed(context.frames):

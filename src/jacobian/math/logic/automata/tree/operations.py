@@ -328,10 +328,7 @@ def plug_tree_context_operation(
     tree: RankedTree,
 ) -> TreeContextPlugResult:
     """Plug a ranked tree into a canonical one-hole ranked-tree context."""
-    if (
-        type(context) is not FiniteTreeContext
-        or type(tree) is not RankedTree
-    ):
+    if type(context) is not FiniteTreeContext or type(tree) is not RankedTree:
         raise OperationDomainValidationError(
             location=("request",),
             code="tree_context.plug.input_type",

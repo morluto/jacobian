@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from itertools import product
 
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.logic.automata.tree.values import (
     CompleteDeterministicBottomUpTreeAutomaton,
 )
@@ -28,6 +31,44 @@ def deterministic_tree_automaton_state_algebra(
     Each operation table uses the universal-algebra row-major Cartesian order,
     which agrees with lexicographic tuples of child-state positions.
     """
+
+    if not isinstance(automaton, CompleteDeterministicBottomUpTreeAutomaton):
+        try:
+            automaton = CompleteDeterministicBottomUpTreeAutomaton.model_validate(
+                automaton, strict=True
+            )
+        except (TypeError, ValueError) as exc:
+            raise OperationDomainValidationError(
+                location=("automaton",),
+                code="tree_automata.state_algebra.invalid_automaton",
+                message="expected a complete deterministic bottom-up tree automaton",
+            ) from exc
+    else:
+        # Revalidate even instances: model_construct and mutable nested state can
+        # otherwise bypass the completeness and structural invariants.
+        try:
+            automaton = CompleteDeterministicBottomUpTreeAutomaton.model_validate(
+                {
+                    "state_count": automaton.state_count,
+                    "arity": automaton.arity,
+                    "transitions": tuple(
+                        {
+                            "symbol": row.symbol,
+                            "child_states": row.child_states,
+                            "target_state": row.target_state,
+                        }
+                        for row in automaton.transitions
+                    ),
+                    "final_states": automaton.final_states,
+                },
+                strict=True,
+            )
+        except (AttributeError, TypeError, ValueError) as exc:
+            raise OperationDomainValidationError(
+                location=("automaton",),
+                code="tree_automata.state_algebra.invalid_automaton",
+                message="expected a complete deterministic bottom-up tree automaton",
+            ) from exc
 
     carrier_size = automaton.state_count
     symbol_count = len(automaton.arity)

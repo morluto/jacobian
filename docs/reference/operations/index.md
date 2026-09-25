@@ -34,6 +34,7 @@ that need more context than an operation card:
 - [Homogeneous monomial systems on algebraic tori](algebraic-torus-monomial-systems.md)
 - [Free associative algebra homomorphism application](free-algebra-homomorphism-apply.md)
 - [Free associative algebra homomorphism composition](free-algebra-homomorphism-composition.md)
+- [Free associative algebra polynomial powers](free-algebra-polynomial-power.md)
 - [Free-algebra polynomial scalar multiplication](free-algebra-scalar-multiplication.md)
 - [Exact trigonometric-rational normalization](trigonometric-rational.md)
 - [Prime-field homogeneous fixed subspaces](prime-field-homogeneous-fixed-subspaces.md)

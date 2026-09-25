@@ -35,6 +35,8 @@ from jacobian.math.free_algebras._models import (
     MAX_FREE_ALGEBRA_IDEAL_PREFIX_TOTAL_TERMS,
     MAX_FREE_ALGEBRA_LETTER_LENGTH,
     MAX_FREE_ALGEBRA_OPERAND_TERMS,
+    MAX_FREE_ALGEBRA_POLYNOMIAL_POWER_EXPONENT,
+    MAX_FREE_ALGEBRA_PRODUCT_OUTPUT_CELLS,
     MAX_FREE_ALGEBRA_QUOTIENT_PROFILE_CANDIDATES,
     MAX_FREE_ALGEBRA_QUOTIENT_PROFILE_OUTPUT_CELLS,
     MAX_FREE_ALGEBRA_RESULT_TERMS,
@@ -218,6 +220,22 @@ def _admit_product(
             "predicted product coefficient growth exceeds the "
             f"{MAX_FREE_ALGEBRA_COEFFICIENT_DIGITS}-digit multiplication budget",
         )
+    maximum_output_word_length = max(
+        (len(term.word) for term in left.terms), default=0
+    ) + max((len(term.word) for term in right.terms), default=0)
+    maximum_letter_scalars = max((len(letter) for letter in left.alphabet), default=0)
+    output_cell_bound = term_pair_count * (
+        128
+        + maximum_output_word_length * (maximum_letter_scalars + 4)
+        + 2 * (predicted_coefficient_digits + 1)
+    )
+    if output_cell_bound > MAX_FREE_ALGEBRA_PRODUCT_OUTPUT_CELLS:
+        _reject_resource(
+            ("left", "right"),
+            "product_output_cells_budget",
+            "predicted product output exceeds the admitted "
+            f"{MAX_FREE_ALGEBRA_PRODUCT_OUTPUT_CELLS}-cell allocation bound",
+        )
     return left, right
 
 
@@ -360,6 +378,49 @@ def multiply(
         product=product,
         ledger=ledger,
     )
+
+
+def power_polynomial(
+    polynomial: FreeAlgebraPolynomial, exponent: int
+) -> FreeAlgebraPolynomial:
+    """Return a bounded nonnegative power using admitted squaring products."""
+
+    value = _admit_polynomial(polynomial, label="polynomial")
+    if (
+        not isinstance(exponent, int)
+        or isinstance(exponent, bool)
+        or not 0 <= exponent <= MAX_FREE_ALGEBRA_POLYNOMIAL_POWER_EXPONENT
+    ):
+        _reject_resource(
+            ("exponent",),
+            "polynomial_power_exponent",
+            "polynomial power exponent must be an integer from 0 through 64",
+        )
+    unit = FreeAlgebraPolynomial(
+        alphabet=value.alphabet,
+        terms=(
+            FreeAlgebraTerm(
+                coefficient=CanonicalRational.from_fraction(Fraction(1)), word=()
+            ),
+        ),
+    )
+    if exponent == 0:
+        return unit
+    if exponent == 1:
+        return value
+    if value.is_zero:
+        return value
+
+    result: FreeAlgebraPolynomial | None = None
+    factor = value
+    remaining = exponent
+    while remaining:
+        if remaining & 1:
+            result = factor if result is None else multiply(result, factor).product
+        remaining >>= 1
+        if remaining:
+            factor = multiply(factor, factor).product
+    return unit if result is None else result
 
 
 def _admit_substitution_images(
@@ -1896,6 +1957,7 @@ __all__ = [
     "ideal_generated_prefix",
     "ideal_membership",
     "multiply",
+    "power_polynomial",
     "power_word",
     "quotient_normal_word_profile",
     "reverse_word",

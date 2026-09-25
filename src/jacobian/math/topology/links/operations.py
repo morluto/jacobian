@@ -160,11 +160,11 @@ def link_orientation_reverse(
                 "sign": (
                     -crossing.sign
                     if (
-                        dart_component[crossing.half_edges[crossing.over_pair[0]]]
+                        dart_component[crossing.half_edges[min(crossing.over_pair)]]
                         in selected
                     )
                     != (
-                        dart_component[crossing.half_edges[crossing.under_pair[0]]]
+                        dart_component[crossing.half_edges[min(crossing.under_pair)]]
                         in selected
                     )
                     else crossing.sign
@@ -417,8 +417,8 @@ def link_linking_matrix(diagram: OrientedLinkDiagram) -> LinkingMatrixResult:
     position = {identifier: index for index, identifier in enumerate(ids)}
     matrix = [[Fraction(0) for _ in ids] for _ in ids]
     for crossing in diagram.crossings:
-        over_id = dart_component[crossing.half_edges[crossing.over_pair[0]]]
-        under_id = dart_component[crossing.half_edges[crossing.under_pair[0]]]
+        over_id = dart_component[crossing.half_edges[min(crossing.over_pair)]]
+        under_id = dart_component[crossing.half_edges[min(crossing.under_pair)]]
         if over_id != under_id:
             i, j = position[over_id], position[under_id]
             matrix[i][j] += Fraction(crossing.sign, 2)
@@ -506,8 +506,8 @@ def link_components(diagram: OrientedLinkDiagram) -> LinkComponentsResult:
     for loop in range(diagram.free_loops):
         components.append(
             LinkComponent(
-                component_id=f"free_loop_{loop:03d}",
-                darts=(f"free_loop_{loop:03d}:dart",),
+                component_id=f"~free_loop_{loop:03d}",
+                darts=(f"~free_loop_{loop:03d}:dart",),
                 visits=(),
                 length=1,
             )

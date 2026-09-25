@@ -57,8 +57,8 @@ def crossing_sign(crossing: LinkCrossing, tails: set[str], heads: set[str]) -> i
         if dart in heads:
             x, y = -x, -y
         tangents[index] = (x, y)
-    over_x, over_y = tangents[crossing.over_pair[0]]
-    under_x, under_y = tangents[crossing.under_pair[0]]
+    over_x, over_y = tangents[min(crossing.over_pair)]
+    under_x, under_y = tangents[min(crossing.under_pair)]
     return 1 if under_x * over_y - under_y * over_x > 0 else -1
 
 

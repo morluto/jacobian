@@ -229,7 +229,7 @@ class LinkStateCirclesResult(StrictModel):
 
     state: LinkDiagramSmoothingState
     circles: tuple[LinkSmoothedCircle, ...]
-    circle_count: StrictInt = Field(ge=1, le=2 * MAX_LINK_CROSSINGS)
+    circle_count: StrictInt = Field(ge=1, le=3 * MAX_LINK_CROSSINGS)
 
     @model_validator(mode="after")
     def require_complete_cyclic_partition(self) -> Self:
@@ -248,11 +248,6 @@ class LinkStateCirclesResult(StrictModel):
                 "state_circle_partition",
                 "smoothed circles must partition every source dart exactly once",
             )
-        if diagram.crossings and any(not circle.darts for circle in self.circles):
-            raise _validation_error(
-                "state_circle_empty",
-                "a crossing-bearing state circle must contain darts",
-            )
         if not diagram.crossings and any(circle.darts for circle in self.circles):
             raise _validation_error(
                 "state_circle_free_loop", "crossing-free circles have no dart labels"
@@ -265,7 +260,10 @@ class LinkStateCirclesResult(StrictModel):
                 "state_circle_rotation",
                 "each cyclic dart sequence must start at its least dart",
             )
-        expected_count = len(self.circles) if diagram.crossings else diagram.free_loops
+        expected_count = (
+            len({circle.darts for circle in self.circles if circle.darts})
+            + diagram.free_loops
+        )
         if self.circle_count != expected_count or len(self.circles) != expected_count:
             raise _validation_error(
                 "state_circle_count", "circle count must equal the retained circle axis"

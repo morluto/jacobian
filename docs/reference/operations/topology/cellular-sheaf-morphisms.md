@@ -57,3 +57,16 @@ zero-dimensional stalks and correctly shaped empty matrices. This follows the
 cellular-sheaf convention as a functor from the face poset to vector spaces;
 see Hansen and Ghrist, [Toward a Spectral Theory of Cellular
 Sheaves](https://doi.org/10.1007/s41468-019-00038-7).
+
+## Pointwise cokernels
+
+`cellular_sheaf.morphism.cokernel.compute` returns the pointwise quotient
+sheaf `coker(phi)` and its canonical projection from the target sheaf. At each
+simplex, the quotient stalk is `G(sigma) / im(phi_sigma)`. Naturality of `phi`
+ensures each target restriction carries the source image into the target image,
+so it induces a well-defined map on quotient stalks. The operation binds the
+quotient to the same complex and coefficient field and returns explicit based
+quotient coordinates, including zero-dimensional quotients. A target-stalk
+representative for each quotient basis vector is retained at every simplex;
+these representatives define the stalk basis and need not assemble into a
+natural map of sheaves.

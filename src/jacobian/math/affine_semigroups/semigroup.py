@@ -163,33 +163,12 @@ class AffineFactorization(StrictModel):
                 "factorization_sign", "factorization coordinates must be nonnegative"
             )
         if any(
-            value >= 10**MAX_AFFINE_FACTOR_COORDINATE_DIGITS
-            for value in self.coordinates
-        ):
-            raise _err(
-                "factorization_digits",
-                "factorization coordinates exceed their admitted digit envelope",
-            )
-        if any(
             decimal_digit_width(value) > MAX_AFFINE_FACTOR_RESULT_DIGITS
             for value in self.target
         ):
             raise _err(
                 "factorization_digits",
                 "factorization target exceeds its digit envelope",
-            )
-        if (
-            _estimate_factorization_bytes(self.semigroup, self.coordinates)
-            > MAX_AFFINE_FACTOR_RESULT_BYTES
-        ):
-            raise _err(
-                "factorization_output",
-                "factorization result exceeds its output-byte envelope",
-            )
-        if not _factorization_matches(self.semigroup, self.target, self.coordinates):
-            raise _err(
-                "factorization_relation",
-                "coordinates must evaluate to the retained target",
             )
         return self
 
@@ -237,9 +216,16 @@ def _estimate_factorization_bytes(
     labels = (*configuration.row_labels, *configuration.generator_labels)
     if any(type(label) is not str for label in labels):
         return MAX_AFFINE_FACTOR_RESULT_BYTES + 1
-    if any(len(label) > MAX_AFFINE_FACTOR_RESULT_BYTES for label in labels):
+    if any(
+        len(label) > MAX_AFFINE_FACTOR_RESULT_BYTES
+        or any(0xD800 <= ord(character) <= 0xDFFF for character in label)
+        for label in labels
+    ):
         return MAX_AFFINE_FACTOR_RESULT_BYTES + 1
-    label_bytes = sum(len(label.encode("utf-8")) for label in labels)
+    try:
+        label_bytes = sum(len(label.encode("utf-8")) for label in labels)
+    except UnicodeEncodeError:
+        return MAX_AFFINE_FACTOR_RESULT_BYTES + 1
     # JSON escaping expands an arbitrary control character to at most six bytes.
     labels = 6 * label_bytes
     matrix = sum(

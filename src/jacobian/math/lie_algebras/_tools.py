@@ -51,6 +51,7 @@ from jacobian.math.lie_algebras.operations import (
     lie_killing_form_radical,
     lie_lower_central_series,
     lie_quotient,
+    lie_solvable_radical,
     lie_subalgebra,
     lie_subalgebra_centralizer,
     lie_upper_central_series,
@@ -101,6 +102,10 @@ def _run_lie_derived_series(request: LieAlgebraRequest) -> LieDerivedSeriesResul
 
 def _run_lie_derived_subalgebra(request: LieAlgebraRequest) -> LieIdeal:
     return lie_derived_subalgebra(request.algebra)
+
+
+def _run_lie_solvable_radical(request: LieAlgebraRequest) -> LieIdeal:
+    return lie_solvable_radical(request.algebra)
 
 
 def _run_lie_lower_central_series(
@@ -968,6 +973,50 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                     "left": _SL2_ALGEBRA,
                     "right": {"basis": ["t"], "structure_constants": []},
                     "basis": ["e", "f", "h", "t"],
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="lie_algebra.solvable_radical.compute",
+        title="Compute the exact solvable radical of a Lie algebra",
+        description=(
+            "Return the largest solvable ideal of a finite-dimensional Lie "
+            "algebra over QQ as a canonical, source-bound LieIdeal. In "
+            "characteristic zero it is the Killing-orthogonal complement of "
+            "the derived ideal [g,g]. The operation admits coefficient growth, "
+            "exact linear-algebra work, and the serialized result before "
+            "expansion."
+        ),
+        request_type=LieAlgebraRequest,
+        result_type=LieIdeal,
+        run=_run_lie_solvable_radical,
+        tags=("lie-algebra", "solvable-radical", "ideal", "exact", "rational"),
+        discovery_terms=(
+            "largest solvable ideal of a Lie algebra",
+            "solvable radical over the rational numbers",
+            "Killing orthogonal complement of the derived algebra",
+        ),
+        examples=(
+            OperationExample(
+                name="affine_two_dimensional_radical",
+                description=(
+                    "The affine Lie algebra [h,e]=e is solvable, so its "
+                    "solvable radical is the whole algebra even though its "
+                    "Killing-form radical is only the line spanned by e."
+                ),
+                input={
+                    "algebra": {
+                        "basis": ["h", "e"],
+                        "structure_constants": [
+                            {
+                                "i": 0,
+                                "j": 1,
+                                "k": 1,
+                                "coefficient": {"num": "1", "den": "1"},
+                            }
+                        ],
+                    }
                 },
             ),
         ),

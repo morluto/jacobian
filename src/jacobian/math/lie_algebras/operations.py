@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 from fractions import Fraction
-from math import factorial
+from math import factorial, lcm
 from typing import Any
 
 from pydantic_core import PydanticCustomError
@@ -80,6 +80,10 @@ class _BracketPlan:
     pairs: tuple[_BracketPairPlan, ...]
     totals: tuple[Fraction, ...]
     work: int
+
+
+MAX_SOLVABLE_RADICAL_WORK = 20_000_000
+MAX_SOLVABLE_RADICAL_OUTPUT_BYTES = 4 * 1024 * 1024
 
 
 def _as_algebra(
@@ -535,6 +539,218 @@ def lie_killing_form_radical(
     )
     radical = LieSubspace(basis=killing.algebra.basis, generators=generators)
     return LieKillingRadicalResult._from_kernel(killing, radical)
+
+
+def _solvable_radical_admission(algebra: FiniteDimensionalLieAlgebra) -> int:
+    """Bound the Killing-orthogonal complement computation before expansion."""
+    dimension = len(algebra.basis)
+    coefficients = tuple(
+        item.coefficient.as_fraction() for item in algebra.structure_constants
+    )
+    input_digits = max(
+        (
+            max(
+                decimal_digit_width(abs(value.numerator)),
+                decimal_digit_width(value.denominator),
+            )
+            for value in coefficients
+        ),
+        default=1,
+    )
+    if input_digits > MAX_STRUCTURE_COEFFICIENT_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("algebra", "structure_constants"),
+            code="lie_algebra.solvable_radical_input_coefficient_bound",
+            message=(
+                "solvable-radical inputs require structure coefficients with at "
+                f"most {MAX_STRUCTURE_COEFFICIENT_DIGITS} digits"
+            ),
+        )
+    common_denominator = lcm(*(value.denominator for value in coefficients))
+    scaled_digits = max(
+        (
+            decimal_digit_width(
+                abs(value.numerator) * (common_denominator // value.denominator)
+            )
+            for value in coefficients
+        ),
+        default=1,
+    )
+    denominator_digits = decimal_digit_width(common_denominator)
+    factorial_digits = decimal_digit_width(factorial(dimension))
+    derived_digits = dimension * scaled_digits + factorial_digits + 1
+    killing_numerator_digits = 2 * scaled_digits + decimal_digit_width(dimension**2) + 1
+    killing_denominator_digits = 2 * denominator_digits
+    constraint_digits = max(
+        dimension * derived_digits
+        + killing_numerator_digits
+        + decimal_digit_width(dimension),
+        dimension * derived_digits + killing_denominator_digits,
+    )
+    result_digits = dimension**2 * constraint_digits + factorial_digits + 1
+    result_bytes = (
+        len(algebra.model_dump_json().encode("utf-8"))
+        + dimension**2 * (2 * result_digits + 64)
+        + 2_048
+    )
+    work = dimension**5 + dimension**4 * (
+        input_digits + scaled_digits + killing_numerator_digits + constraint_digits
+    )
+    if (
+        derived_digits > MAX_CANONICAL_RATIONAL_DIGITS
+        or killing_numerator_digits > MAX_CANONICAL_RATIONAL_DIGITS
+        or killing_denominator_digits > MAX_CANONICAL_RATIONAL_DIGITS
+        or constraint_digits > MAX_CANONICAL_RATIONAL_DIGITS
+        or result_digits > MAX_CANONICAL_RATIONAL_DIGITS
+        or result_bytes > MAX_SOLVABLE_RADICAL_OUTPUT_BYTES
+        or work > MAX_SOLVABLE_RADICAL_WORK
+    ):
+        raise OperationResourceAdmissionError(
+            location=("algebra",),
+            code="lie_algebra.solvable_radical_bound",
+            message=(
+                "solvable-radical input growth, exact linear algebra, or output "
+                "exceeds its admitted coefficient, work, or byte bound"
+            ),
+        )
+    return work
+
+
+def _rref_growth_bound(
+    rows: tuple[tuple[Fraction, ...], ...], dimension: int
+) -> tuple[int, int, int]:
+    """Bound RREF height, backend work, and serialized cells for exact rows."""
+    if not rows:
+        return 1, 0, 0
+    row_digits = []
+    for row in rows:
+        denominator = lcm(*(value.denominator for value in row))
+        row_digits.append(
+            max(
+                decimal_digit_width(
+                    abs(value.numerator) * (denominator // value.denominator)
+                )
+                for value in row
+            )
+        )
+    rank_bound = min(len(rows), dimension)
+    factorial_digits = decimal_digit_width(factorial(rank_bound))
+    result_digits = (
+        sum(sorted(row_digits, reverse=True)[:rank_bound]) + factorial_digits + 1
+    )
+    input_digits = max(
+        max(
+            decimal_digit_width(abs(value.numerator)),
+            decimal_digit_width(value.denominator),
+        )
+        for row in rows
+        for value in row
+    )
+    work = len(rows) * dimension * rank_bound * input_digits
+    cells = min(len(rows), dimension) * dimension
+    return result_digits, work, cells
+
+
+def lie_solvable_radical(
+    algebra: FiniteDimensionalLieAlgebra | Mapping[str, Any],
+) -> LieIdeal:
+    """Return the exact solvable radical over ``QQ`` as a source-bound ideal.
+
+    In characteristic zero, ``rad(g) = [g, g]^perp`` for the Killing form.
+    The implementation computes that orthogonal complement as an exact right
+    nullspace and returns the existing canonical ``LieIdeal`` value.
+    """
+    from jacobian.math.matrices._flint import rational_rref
+
+    algebra_value = _as_algebra(algebra)
+    admitted_work = _solvable_radical_admission(algebra_value)
+    table = _admit_lie_algebra(algebra_value)
+    dimension = len(algebra_value.basis)
+    identity = _identity_rows(dimension)
+    derived_rows = _subspace_bracket_rows(identity, identity, table, dimension)
+    adjoints = _adjoint_matrices(algebra_value)
+    killing = tuple(
+        tuple(
+            sum(
+                (
+                    adjoints[first][row][column] * adjoints[second][column][row]
+                    for row in range(dimension)
+                    for column in range(dimension)
+                ),
+                start=Fraction(0),
+            )
+            for second in range(dimension)
+        )
+        for first in range(dimension)
+    )
+    constraints = tuple(
+        tuple(
+            sum(
+                (row[index] * killing[index][column] for index in range(dimension)),
+                start=Fraction(0),
+            )
+            for column in range(dimension)
+        )
+        for row in derived_rows
+    )
+    if constraints:
+        reduced, rank = rational_rref(constraints)
+    else:
+        reduced, rank = (), 0
+    pivots = tuple(
+        next(column for column, value in enumerate(row) if value)
+        for row in reduced[:rank]
+    )
+    free_columns = tuple(column for column in range(dimension) if column not in pivots)
+    nullspace_rows = []
+    for free_column in free_columns:
+        vector = [Fraction(0)] * dimension
+        vector[free_column] = Fraction(1)
+        for pivot_row, pivot_column in enumerate(pivots):
+            vector[pivot_column] = -reduced[pivot_row][free_column]
+        nullspace_rows.append(tuple(vector))
+    if nullspace_rows:
+        candidate_rows = tuple(nullspace_rows)
+        nullspace_height, nullspace_work, nullspace_cells = _rref_growth_bound(
+            candidate_rows, dimension
+        )
+        input_bytes = len(algebra_value.model_dump_json().encode("utf-8"))
+        result_bytes = (
+            input_bytes + nullspace_cells * (2 * nullspace_height + 64) + 2_048
+        )
+        if (
+            nullspace_height > MAX_CANONICAL_RATIONAL_DIGITS
+            or result_bytes > MAX_SOLVABLE_RADICAL_OUTPUT_BYTES
+            or admitted_work + nullspace_work > MAX_SOLVABLE_RADICAL_WORK
+        ):
+            raise OperationResourceAdmissionError(
+                location=("result", "generators"),
+                code="lie_algebra.solvable_radical_result_bound",
+                message=(
+                    "the exact canonical solvable-radical basis exceeds its "
+                    "coefficient, work, or byte bound"
+                ),
+            )
+        nullspace_rref, _ = rational_rref(candidate_rows)
+        radical_rows = nullspace_rref[: len(nullspace_rows)]
+    else:
+        radical_rows = ()
+    generators = rational_matrix_from_fractions(radical_rows, column_count=dimension)
+    radical = LieIdeal.model_construct(
+        algebra=algebra_value,
+        basis=algebra_value.basis,
+        generators=generators,
+    )
+    if (
+        len(radical.model_dump_json().encode("utf-8"))
+        > MAX_SOLVABLE_RADICAL_OUTPUT_BYTES
+    ):
+        raise OperationResourceAdmissionError(
+            location=("result",),
+            code="lie_algebra.solvable_radical_output_bytes",
+            message="the solvable-radical ideal exceeds its admitted output-byte bound",
+        )
+    return radical
 
 
 def lie_algebra_is_semisimple(

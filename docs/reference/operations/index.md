@@ -14,6 +14,7 @@ that need more context than an operation card:
 - [Set systems and sunflower hypergraphs](combinatorics/index.md)
 - [Geometry](geometry/index.md)
 - [Regular languages](regular-languages.md)
+- [Accepted ranked trees by height](tree-automaton-height-count.md)
 - [Deterministic tree-automaton complement](tree-automaton-complement.md)
 - [Boolean products of deterministic tree automata](tree-automaton-boolean-products.md)
 - [Deterministic tree-automaton minimization](tree-automaton-minimize.md)

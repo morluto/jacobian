@@ -18,6 +18,7 @@ from jacobian.math.logic.automata.tree.values import (
     MAX_TA_SYMBOLS,
     MAX_TA_TRANSITIONS,
     MAX_TREE_AUTOMATON_REACHABILITY_WORK,
+    MAX_TREE_COUNT_HEIGHT,
     BottomUpTreeAutomaton,
     CompleteDeterministicBottomUpTreeAutomaton,
     DeterministicBottomUpTreeAutomaton,
@@ -200,6 +201,47 @@ class AcceptedTreeCountResult(AcceptedTreeCountRequest):
             tree_size=request.tree_size,
             count=count,
             estimated_work_bound=estimated_work_bound,
+        )
+
+
+class AcceptedTreeHeightProfileRequest(StrictModel):
+    """Count trees in a complete deterministic automaton through a height."""
+
+    automaton: CompleteDeterministicBottomUpTreeAutomaton
+    max_height: int = Field(ge=0, le=MAX_TREE_COUNT_HEIGHT)
+
+
+class AcceptedTreeHeightProfileResult(AcceptedTreeHeightProfileRequest):
+    """Counts of accepted trees of height at most each index, starting at zero."""
+
+    counts_by_height: tuple[ExactInteger, ...] = Field(
+        min_length=1, max_length=MAX_TREE_COUNT_HEIGHT + 1
+    )
+
+    @model_validator(mode="after")
+    def bind_profile_length(self) -> Self:
+        if len(self.counts_by_height) != self.max_height + 1:
+            raise _validation_error(
+                "height_profile_length",
+                "the profile must include exactly heights zero through max_height",
+            )
+        if any(int(count) < 0 for count in self.counts_by_height):
+            raise _validation_error(
+                "height_profile_negative", "tree counts must be nonnegative"
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: AcceptedTreeHeightProfileRequest,
+        *,
+        counts_by_height: tuple[int, ...],
+    ) -> Self:
+        return cls.model_construct(
+            automaton=request.automaton,
+            max_height=request.max_height,
+            counts_by_height=counts_by_height,
         )
 
 

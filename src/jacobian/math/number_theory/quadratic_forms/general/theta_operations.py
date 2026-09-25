@@ -5,7 +5,7 @@ from __future__ import annotations
 from itertools import permutations, product
 from math import factorial, isqrt
 
-from jacobian._exact import canonical_rational_component_digits
+from jacobian._exact import CanonicalRational, canonical_rational_component_digits
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -26,6 +26,7 @@ from jacobian.math.number_theory.quadratic_forms.general._extra_models import (
     ThetaSeriesPrefixResult,
 )
 from jacobian.math.number_theory.quadratic_forms.general.values import (
+    RationalCoordinateVector,
     RationalQuadraticForm,
 )
 
@@ -343,7 +344,7 @@ def theta_representing_vectors(
         diagonal_cofactors,
     )
 
-    vectors_by_value: dict[int, list[tuple[int, ...]]] = {
+    vectors_by_value: dict[int, list[RationalCoordinateVector]] = {
         index: [] for index in request.indices
     }
     diagonal = tuple(value.num for value in form.diagonal_coefficients)
@@ -362,15 +363,12 @@ def theta_representing_vectors(
         )
         selected = vectors_by_value.get(value)
         if selected is not None:
-            from jacobian.math.number_theory.quadratic_forms.general.values import (
-                RationalCoordinateVector,
-            )
-
             selected.append(
                 RationalCoordinateVector(
                     axis=form.axis,
                     coordinates=tuple(
-                        {"num": coordinate, "den": 1} for coordinate in vector
+                        CanonicalRational.from_integer_ratio(coordinate, 1)
+                        for coordinate in vector
                     ),
                 )
             )

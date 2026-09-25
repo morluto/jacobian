@@ -313,6 +313,7 @@ class ModularFormCoordinates(StrictModel):
         "gamma0-four-chi4-weight-three-v1",
         "gamma0-rational-gamma0-sturm-rref-v1",
         "gamma0-13-even-order6-character-sturm-v1",
+        "gamma0-cyclotomic-character-sturm-rref-v1",
     ]
     coordinates: tuple[CanonicalRational | RationalCyclotomicElement, ...] = Field(
         max_length=MAX_LEVEL_ONE_BASIS_COORDINATES

@@ -139,14 +139,42 @@ def test_degree_four_trace_obeys_newton_identity() -> None:
         variable="x",
         generator="y",
         defining_polynomial=(
-            _rational(3, (1,)), _rational(3, (0,)),
-            _rational(3, (1,)), _rational(3, (2,)), _rational(3, (1,)),
+            _rational(3, (1,)),
+            _rational(3, (0,)),
+            _rational(3, (1,)),
+            _rational(3, (2,)),
+            _rational(3, (1,)),
         ),
     )
-    element = _element(field, (_rational(3, (0,)), _rational(3, (0,)),
-                               _rational(3, (0,)), _rational(3, (1,))))
+    element = _element(
+        field,
+        (
+            _rational(3, (0,)),
+            _rational(3, (0,)),
+            _rational(3, (0,)),
+            _rational(3, (1,)),
+        ),
+    )
     result = function_field_element_trace(element)
     assert result.trace == _rational(3, (1,))
+
+
+def test_trace_of_one_skips_unused_high_power_sums() -> None:
+    # The x^12 coefficient would make s_2 exceed the trace envelope, but 1
+    # only needs s_0, whose trace is the extension degree modulo 2.
+    field = FiniteFunctionField(
+        characteristic=2,
+        variable="x",
+        generator="y",
+        defining_polynomial=(
+            _rational(2, (0, 1)),
+            _rational(2, (0,)),
+            _rational(2, (0,) * 12 + (1,)),
+            _rational(2, (1,)),
+        ),
+    )
+    one, zero = _rational(2, (1,)), _rational(2, (0,))
+    assert function_field_element_trace(_element(field, (one, zero, zero))).trace == one
 
 
 def test_trace_growth_admission_precedes_rational_function_expansion(
@@ -162,7 +190,7 @@ def test_trace_growth_admission_precedes_rational_function_expansion(
     monkeypatch.setattr(operations, "_admit_field", lambda _field: None)
     monkeypatch.setattr(operations, "MAX_TRACE_WORK", 0)
 
-    def unexpected_expansion(*_args, **_kwargs):
+    def unexpected_expansion(*_args: object, **_kwargs: object) -> None:
         raise AssertionError("trace admission must precede rational-function expansion")
 
     monkeypatch.setattr(operations, "rf_mul", unexpected_expansion)

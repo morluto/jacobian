@@ -870,7 +870,11 @@ def _admit_trace_growth(
                 ),
             )
 
-    for power in range(1, degree):
+    highest_power = max(
+        (index for index, value in enumerate(element_degrees) if value != (-1, 0)),
+        default=0,
+    )
+    for power in range(1, highest_power + 1):
         # Newton's identity: s_k + c_(n-1)s_(k-1) + ... +
         # c_(n-k+1)s_1 + k*c_(n-k) = 0.
         total = (-1, 0)
@@ -891,7 +895,7 @@ def _admit_trace_growth(
 
     trace_degree = (-1, 0)
     for coordinate_degree, power_sum_degree in zip(
-        element_degrees, power_sum_degrees, strict=True
+        element_degrees[: highest_power + 1], power_sum_degrees, strict=True
     ):
         if coordinate_degree == (-1, 0) or power_sum_degree == (-1, 0):
             continue
@@ -908,7 +912,6 @@ def function_field_element_trace(
     """Compute the exact relative trace to the rational function field GF(p)(x)."""
 
     field, canonical = _preflight_inverse_operand(element)
-    _admit_field(field)
     trace_degree = _admit_trace_growth(field, canonical)
     trace_coefficient_count = trace_degree[0] + 1 if trace_degree[0] >= 0 else 1
     trace_denominator_count = trace_degree[1] + 1 if trace_degree[0] >= 0 else 1
@@ -935,6 +938,7 @@ def function_field_element_trace(
                 f"{MAX_ELEMENT_VALUE_BYTES}-byte output envelope"
             ),
         )
+    _admit_field_algebra(field)
     prime = field.characteristic
     if field.degree == 1:
         trace = _to_internal_rational_function(canonical.coordinates[0])
@@ -942,7 +946,15 @@ def function_field_element_trace(
         coefficients = _field_kpoly(field)
         degree = field.degree
         power_sums: list[RF] = [rf_normalize((degree % prime,), (1,), prime)]
-        for power in range(1, degree):
+        highest_power = max(
+            (
+                index
+                for index, coordinate in enumerate(_internal_coordinates(canonical))
+                if not rf_is_zero(coordinate)
+            ),
+            default=0,
+        )
+        for power in range(1, highest_power + 1):
             total = ZERO_RF
             for previous_power in range(1, power):
                 total = rf_add(
@@ -964,7 +976,9 @@ def function_field_element_trace(
             power_sums.append(rf_sub(ZERO_RF, total, prime))
         trace = ZERO_RF
         for coordinate, power_sum in zip(
-            _internal_coordinates(canonical), power_sums, strict=True
+            _internal_coordinates(canonical)[: highest_power + 1],
+            power_sums,
+            strict=True,
         ):
             trace = rf_add(trace, rf_mul(coordinate, power_sum, prime), prime)
     return FunctionFieldTraceResult(

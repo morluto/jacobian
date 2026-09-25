@@ -192,22 +192,16 @@ def test_oversized_input_weight_preserves_resource_admission_code():
     )
 
 
-def test_output_coordinate_growth_is_rejected_before_vector_construction(monkeypatch):
+def test_cancellation_keeps_admissible_output_coordinates():
     element = weyl_element_from_word(_A2, (0,))
     source = WeightLatticeVector.model_construct(
         datum=cartan_datum(_A2),
-        coordinates=((1 << 132), (1 << 132)),
+        coordinates=((1 << 132), -(1 << 132)),
     )
     request = WeylElementWeightActionRequest(element=element, weight=source)
 
-    def construction_is_too_late(*args, **kwargs):
-        pytest.fail("weight output must be admitted before result construction")
-
-    monkeypatch.setattr(
-        WeightLatticeVector, "model_construct", construction_is_too_late
-    )
-    with pytest.raises(OperationResourceAdmissionError):
-        weyl_element_act_on_weight(request)
+    result = weyl_element_act_on_weight(request)
+    assert result.coordinates == (-(1 << 132), 0)
 
 
 def test_rank_eight_fraction_preflight_accepts_identity_action():

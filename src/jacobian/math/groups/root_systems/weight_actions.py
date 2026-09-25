@@ -13,7 +13,6 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.groups.root_systems._models import (
-    MAX_LATTICE_OUTPUT_COORDINATE_BITS,
     MAX_POSITIVE_ROOTS,
     MAX_RANK,
     MAX_ROOT_COORDINATE,
@@ -275,6 +274,7 @@ def _canonical_weight(
         or any(not isinstance(value, CanonicalRational) for value in symmetrizer)
         or not isinstance(coordinates_value, tuple)
         or len(coordinates_value) != len(weight_cartan)
+        or any(type(value) is not int for value in coordinates_value)
     ):
         raise OperationDomainValidationError(
             location=("weight", "datum"),
@@ -330,6 +330,18 @@ def weyl_element_act_on_weight(
             code="root_system.weyl_weight_action_digit_bound",
             message="exact Cartan inverse intermediates exceed the admitted integer-digit bound",
         )
+    # Rebuild the complete nested value through its validated model before the
+    # admission helper dereferences fields (model_construct is caller-accessible).
+    try:
+        element = WeylElement.model_validate(
+            {"matrix": element.matrix, "root_action": element.root_action}
+        )
+    except (AttributeError, TypeError, ValueError, ValidationError) as error:
+        raise OperationDomainValidationError(
+            location=("element",),
+            code="root_system.invalid_weyl_element",
+            message="the supplied Weyl element must have canonical nested values",
+        ) from error
     root_action = _admitted_root_action(element)
     datum, coordinates = _canonical_weight(weight)
     if datum.cartan_matrix != cartan:
@@ -339,20 +351,8 @@ def weyl_element_act_on_weight(
             message="the Weyl element and weight must use the same ordered Cartan datum",
         )
     action = _weight_action_matrix(rows, root_action)
-    max_coordinate = max((abs(value) for value in coordinates), default=0)
-    coordinate_bound = max(
-        (
-            sum(abs(action[row][column]) for column in range(rank)) * max_coordinate
-            for row in range(rank)
-        ),
-        default=0,
-    )
-    if coordinate_bound.bit_length() > MAX_LATTICE_OUTPUT_COORDINATE_BITS:
-        raise OperationResourceAdmissionError(
-            location=("weight",),
-            code="root_system.weyl_weight_action_output_bound",
-            message="some exact weight-action coordinate may exceed the output bound",
-        )
+    # Rank is at most eight and both operands have admitted bounds; calculate
+    # the exact bounded image so cancellations are not mistaken for growth.
     image = tuple(
         sum(action[row][column] * coordinates[column] for column in range(rank))
         for row in range(rank)

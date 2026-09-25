@@ -60,6 +60,23 @@ def test_fibonacci_prefix_obeys_finite_declared_recurrence() -> None:
     assert type(result).model_validate_json(result.model_dump_json()) == result
 
 
+def test_prefix_deserialization_enforces_interval_and_value_count() -> None:
+    result = polynomial_recurrence_generate_prefix(
+        _op([(0, [(-1, 0)]), (1, [(-1, 0)]), (2, [(1, 0)])]),
+        0,
+        FiniteRationalSequence.model_validate({"values": [0, 1]}),
+        1,
+    )
+    payload = result.model_dump()
+    payload["recurrence_indices"] = [99]
+    with pytest.raises(ValueError, match="consecutive from start_index"):
+        type(result).model_validate(payload)
+    payload = result.model_dump()
+    payload["values"]["values"] = [0, 1]
+    with pytest.raises(ValueError, match="prefix values must cover"):
+        type(result).model_validate(payload)
+
+
 def test_alternating_recurrence_preserves_rational_values() -> None:
     result = polynomial_recurrence_generate_prefix(
         _op([(0, [(1, 0)]), (1, [(1, 0)])]),

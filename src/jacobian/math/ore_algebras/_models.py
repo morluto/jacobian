@@ -492,6 +492,23 @@ class PolynomialRecurrencePrefix(StrictModel):
     recurrence_indices: tuple[StrictInt, ...]
     values: FiniteRationalSequence
 
+    @model_validator(mode="after")
+    def require_prefix_structure(self) -> Self:
+        order = self.operator.order
+        if self.recurrence_indices != tuple(
+            range(self.start_index, self.start_index + len(self.recurrence_indices))
+        ):
+            raise _validation_error(
+                "recurrence_indices",
+                "recurrence indices must be consecutive from start_index",
+            )
+        if len(self.values.values) != order + len(self.recurrence_indices):
+            raise _validation_error(
+                "prefix_value_count",
+                "prefix values must cover the initial values and recurrence interval",
+            )
+        return self
+
     @classmethod
     def _from_kernel(
         cls,

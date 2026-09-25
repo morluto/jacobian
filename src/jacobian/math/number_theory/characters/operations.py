@@ -440,7 +440,7 @@ def _admit_principal_modulus(modulus: int) -> None:
 def _require_character(character: DirichletCharacter) -> DirichletCharacter:
     if not isinstance(character, DirichletCharacter):
         raise OperationDomainValidationError(
-            location=("primitive_character",),
+            location=("character",),
             code="dirichlet_character.character_type",
             message="character must be a Dirichlet character value",
         )
@@ -2552,8 +2552,14 @@ def dirichlet_character_primitive_gauss_norm(
             primitive_character
         )
     character = _require_character(primitive_character.character)
-    exact_conductor = dirichlet_character_conductor(character).conductor
     modulus = character.group.modulus
+    if primitive_character.conductor != modulus:
+        raise OperationDomainValidationError(
+            location=("primitive_character", "conductor"),
+            code="dirichlet_character.primitive_character_modulus_mismatch",
+            message="primitive character modulus must equal its claimed conductor",
+        )
+    exact_conductor = dirichlet_character_conductor(character).conductor
     if exact_conductor != primitive_character.conductor:
         raise OperationDomainValidationError(
             location=("character",),

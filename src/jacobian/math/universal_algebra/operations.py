@@ -604,6 +604,7 @@ def _admit_countermodel_find(
                 code="variable_count_bound",
                 message="an equation may use at most eight variables",
             )
+    equations = (*_deduplicate_premises(premises), target)
     per_table_work, aggregate_work = _countermodel_search_work(
         equations, min_order, max_order, table_budget
     )

@@ -493,7 +493,12 @@ class CountermodelFindRequest(StrictModel):
                 "Bounded countermodel search over finite magma tables. "
                 "Orders enumerate increasingly; tables enumerate row-major "
                 "with ascending cell values. A negative conclusion follows "
-                "only from completed search within the declared orders."
+                "only from completed search within the declared orders. "
+                "Admission also limits table_budget times the complete "
+                "assignment-evaluation work (sum over distinct premises and "
+                "target of order^variables * term-node-count at each searched "
+                "order) to 50,000,000; requests beyond this aggregate envelope "
+                "are rejected."
             )
         }
     )

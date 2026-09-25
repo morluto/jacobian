@@ -1559,7 +1559,8 @@ def _gs_prefix_generators(
             )
         if generator_degree <= degree:
             if len(generator.terms) > MAX_FREE_ALGEBRA_OPERAND_TERMS or any(
-                len(term.word) > MAX_FREE_ALGEBRA_WORD_LENGTH for term in generator.terms
+                len(term.word) > MAX_FREE_ALGEBRA_WORD_LENGTH
+                for term in generator.terms
             ):
                 raise OperationResourceAdmissionError(
                     location=("ideal", "generators", index),

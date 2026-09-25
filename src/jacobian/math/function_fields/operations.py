@@ -985,7 +985,10 @@ def _admit_norm_growth(
     coordinates = tuple(_trace_degree(value) for value in element.coordinates)
     if degree == 1:
         return coordinates[0]
-    coefficients = tuple(_trace_degree(value) for value in field.defining_polynomial)
+    canonical_field = _canonical_field(field)
+    coefficients = tuple(
+        _trace_degree(value) for value in canonical_field.defining_polynomial
+    )
     work = 0
 
     def admit(value: tuple[int, int]) -> None:
@@ -1012,8 +1015,10 @@ def _admit_norm_growth(
 
     matrix_columns: list[tuple[tuple[int, int], ...]] = []
     column = coordinates
-    for _ in range(degree):
+    for column_index in range(degree):
         matrix_columns.append(column)
+        if column_index == degree - 1:
+            break
         next_column = [(-1, 0), *column[:-1]]
         for row in range(degree):
             product_degree = _trace_multiply_degree(column[-1], coefficients[row])
@@ -1079,8 +1084,10 @@ def function_field_element_norm(
         degree = field.degree
         columns: list[tuple[RF, ...]] = []
         column = list(_internal_coordinates(canonical))
-        for _ in range(degree):
+        for column_index in range(degree):
             columns.append(tuple(column))
+            if column_index == degree - 1:
+                break
             next_column = [ZERO_RF, *column[:-1]]
             for row in range(degree):
                 next_column[row] = rf_sub(

@@ -63,6 +63,32 @@ def test_quadratic_norm_matches_independent_multiplication_matrix() -> None:
     assert result.element.coordinates == (one, one)
 
 
+def test_norm_skips_unused_final_column_growth_and_canonicalizes_field() -> None:
+    x12 = _rational(5, (0,) * 12 + (1,))
+    field = FiniteFunctionField(
+        characteristic=5,
+        variable="x",
+        generator="y",
+        defining_polynomial=(_rational(5, (0, 1)), x12, _rational(5, (1,))),
+    )
+    y = _element(field, (_rational(5, (0,)), _rational(5, (1,))))
+    assert function_field_element_norm(y).norm == _rational(5, (0, 1))
+
+    noncanonical_one = _rational(5, (1,) + (0,) * 10 + (1,), (1,) + (0,) * 10 + (1,))
+    noncanonical_x = _rational(5, (0, 1) + (0,) * 10 + (1,), (1,) + (0,) * 10 + (1,))
+    canonicalized_field = FiniteFunctionField(
+        characteristic=5,
+        variable="x",
+        generator="y",
+        defining_polynomial=(noncanonical_x, noncanonical_one, _rational(5, (1,))),
+    )
+    element = _element(
+        canonicalized_field,
+        (_rational(5, (1,)), _rational(5, (1,))),
+    )
+    assert function_field_element_norm(element).norm == _rational(5, (0, 1))
+
+
 def test_generator_norm_and_rational_field_identity() -> None:
     field = _field()
     zero = _rational(5, (0,))

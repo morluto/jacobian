@@ -19,6 +19,7 @@ from jacobian.math.number_theory.modular_forms.space_maps import (
     require_modular_character_space_inclusion,
 )
 from jacobian.math.number_theory.modular_forms.values import (
+    MAX_MODULAR_CHARACTER_INCLUSION_LEVEL,
     ModularCharacterSpaceInclusion,
     ModularFormSpace,
 )
@@ -147,3 +148,17 @@ def test_character_space_inclusion_contract_and_structural_bound() -> None:
         )
     )
     assert isinstance(result, ModularCharacterSpaceInclusion)
+
+
+def test_character_inclusion_accepts_maximum_admitted_level() -> None:
+    level = MAX_MODULAR_CHARACTER_INCLUSION_LEVEL
+    group = character_group(level)
+    principal = _character(group, (0,) * len(group.generator_orders))
+
+    inclusion = modular_form_character_space_inclusion(
+        _space(level, principal), _space(level, principal)
+    )
+
+    assert inclusion.source_space.level == level
+    assert inclusion.target_space.level == level
+    assert len(group.unit_residues) == group.character_count

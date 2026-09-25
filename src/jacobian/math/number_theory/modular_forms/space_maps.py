@@ -29,15 +29,17 @@ def _domain(
     )
 
 
-def _character_angle(character: DirichletCharacter, residue: int) -> Fraction | None:
+def _character_angle(
+    character: DirichletCharacter,
+    residue: int,
+    rows_by_residue: tuple[tuple[int, ...] | None, ...],
+) -> Fraction | None:
     """Return the exact rational angle of a character value on a unit."""
 
     group = character.group
-    try:
-        row_index = group.unit_residues.index(residue % group.modulus)
-    except ValueError:
+    row = rows_by_residue[residue % group.modulus]
+    if row is None:
         return None
-    row = group.unit_coordinates[row_index]
     exponent = (
         sum(
             coordinate * (group.exponent // axis_order) * unit_coordinate
@@ -99,11 +101,14 @@ def require_modular_character_space_inclusion(
     # ModularFormSpace canonicalization validates each supplied finite-unit
     # presentation. This check is the sole additional character-map pass.
     target_units = target_character.group.unit_residues
+    source_units = source_character.group.unit_residues
     source_rank = len(source_character.group.generator_orders)
     target_rank = len(target_character.group.generator_orders)
     work = (
         source_level
         + target_level
+        + len(source_units)
+        + len(target_units)
         + len(target_units) * (source_rank + target_rank + 2)
     )
     if work > MAX_CHARACTER_INCLUSION_WORK:
@@ -113,9 +118,28 @@ def require_modular_character_space_inclusion(
             message="exact character-inclusion comparison exceeds its admitted work bound",
         )
 
+    # Index rows by canonical residue after admission. This makes each exact
+    # character lookup constant-time, including at the maximum admitted level.
+    source_rows: list[tuple[int, ...] | None] = [None] * source_level
+    target_rows: list[tuple[int, ...] | None] = [None] * target_level
+    for residue, row in zip(
+        source_units, source_character.group.unit_coordinates, strict=True
+    ):
+        source_rows[residue] = row
+    for residue, row in zip(
+        target_units, target_character.group.unit_coordinates, strict=True
+    ):
+        target_rows[residue] = row
+    source_rows_by_residue = tuple(source_rows)
+    target_rows_by_residue = tuple(target_rows)
+
     for residue in target_units:
-        source_angle = _character_angle(source_character, residue)
-        target_angle = _character_angle(target_character, residue)
+        source_angle = _character_angle(
+            source_character, residue, source_rows_by_residue
+        )
+        target_angle = _character_angle(
+            target_character, residue, target_rows_by_residue
+        )
         if source_angle is None or target_angle is None or source_angle != target_angle:
             _domain(
                 "target character must equal the source character pulled back along reduction of units",

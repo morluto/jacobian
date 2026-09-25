@@ -1911,7 +1911,12 @@ def _admit_truncated_table(
         ),
         default=1,
     )
-    if 2 * coefficient_digits > MAX_FREE_ALGEBRA_COEFFICIENT_DIGITS:
+    # A normal-form rewrite can multiply the coefficient already accumulated
+    # by another reducer coefficient. Across an at-most-degree-long chain,
+    # bound the product of every possible coefficient contribution before
+    # constructing the multiplication table.
+    predicted_coefficient_digits = (degree + 1) * coefficient_digits
+    if predicted_coefficient_digits > MAX_FREE_ALGEBRA_COEFFICIENT_DIGITS:
         _reject_resource(
             ("degree",),
             "gs_coefficient_growth_budget",

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from fractions import Fraction
+from typing import Any
 
 import pytest
 
@@ -52,7 +53,7 @@ def _coordinates(value: FreeAlgebraPolynomial) -> dict[tuple[str, ...], Fraction
 
 
 def _multiply_coordinates(
-    algebra,
+    algebra: TruncatedFreeAlgebraQuotient,
     left: dict[tuple[str, ...], Fraction],
     right: dict[tuple[str, ...], Fraction],
 ) -> dict[tuple[str, ...], Fraction]:
@@ -182,10 +183,12 @@ def test_nonhomogeneous_ideal_is_rejected() -> None:
         truncated_quotient_algebra(_ideal(alphabet, (nonhomogeneous,)), 2)
 
 
-def test_output_bound_precedes_multiplication_table_construction(monkeypatch) -> None:
+def test_output_bound_precedes_multiplication_table_construction(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     import jacobian.math.free_algebras.operations as operations
 
-    def no_table(*args, **kwargs):
+    def no_table(*args: Any, **kwargs: Any) -> None:
         raise AssertionError("multiplication table construction began before admission")
 
     monkeypatch.setattr(operations, "_encode", no_table)
@@ -197,11 +200,11 @@ def test_output_bound_precedes_multiplication_table_construction(monkeypatch) ->
 
 
 def test_table_term_bound_precedes_multiplication_table_construction(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import jacobian.math.free_algebras.operations as operations
 
-    def no_table(*args, **kwargs):
+    def no_table(*args: Any, **kwargs: Any) -> None:
         raise AssertionError("multiplication table construction began before admission")
 
     monkeypatch.setattr(operations, "_truncated_multiplication_table", no_table)
@@ -210,6 +213,26 @@ def test_table_term_bound_precedes_multiplication_table_construction(
         truncated_quotient_algebra(_ideal(("x", "y"), (monomial,)), 6)
     assert exc_info.value.errors()[0]["type"] == (
         "free_algebra.truncated_quotient_table_terms"
+    )
+
+
+def test_chained_reduction_coefficient_growth_is_admitted_before_table(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import jacobian.math.free_algebras.operations as operations
+
+    alphabet = ("x", "y")
+    relation = _polynomial(alphabet, {("y", "x"): 1, ("x", "y"): -(10**16)})
+
+    def no_table(*args: Any, **kwargs: Any) -> None:
+        raise AssertionError("table construction began before coefficient admission")
+
+    monkeypatch.setattr(operations, "_truncated_multiplication_table", no_table)
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
+        truncated_quotient_algebra(_ideal(alphabet, (relation,)), 4)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "free_algebra.gs_coefficient_growth_budget"
     )
 
 

@@ -513,9 +513,9 @@ class DirichletCharacterPrimitiveGaussNormResult(StrictModel):
                 "gauss_norm_field", "Gauss sum and norm must use one cyclotomic parent"
             )
         expected = (
-            CanonicalRational.from_fraction(self.conductor),
+            CanonicalRational.from_integer_ratio(self.conductor, 1),
             *(
-                CanonicalRational.from_fraction(0)
+                CanonicalRational.from_integer_ratio(0, 1)
                 for _ in range(self.norm_squared.field.degree - 1)
             ),
         )

@@ -714,13 +714,35 @@ def _divides(candidate: Polynomial, target: Polynomial) -> bool:
     from sympy.polys.polyerrors import CoercionFailed
 
     symbol = Symbol("z0")
+    shifted_candidate = _shift_to_zero(candidate, axis)
+    shifted_target = _shift_to_zero(target, axis)
+    if axis == 1 and max(shifted_candidate) > max(shifted_target):
+        return False
     try:
-        candidate_expr = _to_sympy_poly(_shift_to_zero(candidate, axis)).as_expr()
-        target_expr = _to_sympy_poly(_shift_to_zero(target, axis)).as_expr()
+        candidate_polynomial = _to_sympy_poly(shifted_candidate)
+        target_polynomial = _to_sympy_poly(shifted_target)
     except (ValueError, TypeError, CoercionFailed):
         return False
-    if candidate_expr == 0:
-        return bool(target_expr == 0)
+    if candidate_polynomial.is_zero:
+        return bool(target_polynomial.is_zero)
+    if axis == 1:
+        # In one variable, Laurent divisibility is ordinary polynomial
+        # divisibility after shifting each operand's minimum exponent to zero.
+        # A degree check rejects sparse high-frequency factors immediately;
+        # a finite-field remainder cheaply rejects most nondivisors before
+        # exact division, which can otherwise scan a long dense degree range.
+        if _univariate_modular_remainder_nonzero(shifted_candidate, shifted_target):
+            return False
+        # exact polynomial division then avoids ``cancel(target/candidate)``,
+        # which computes a full subresultant GCD even though only divisibility
+        # is needed.
+        if candidate_polynomial.degree() > target_polynomial.degree():
+            return False
+        _quotient, remainder = target_polynomial.div(candidate_polynomial)
+        return bool(remainder.is_zero)
+
+    candidate_expr = candidate_polynomial.as_expr()
+    target_expr = target_polynomial.as_expr()
     _numerator, denominator = fraction(cancel(target_expr / candidate_expr))
     # The quotient is a Laurent polynomial exactly when the residual denominator
     # is a monomial ``z0**k``.
@@ -728,6 +750,86 @@ def _divides(candidate: Polynomial, target: Polynomial) -> bool:
         return bool(Poly(denominator, symbol, domain=QQ_I).is_monomial)
     except CoercionFailed:
         return False
+
+
+def _univariate_modular_remainder_nonzero(
+    candidate: Polynomial, target: Polynomial
+) -> bool:
+    """Prove univariate nondivisibility from one good reduction modulo p.
+
+    The map ``QQ(i) -> F_p`` sending ``i`` to a square root of ``-1`` is a
+    ring homomorphism for primes ``p == 1 mod 4``. If an exact quotient existed,
+    it would remain a quotient after every specialization where the candidate
+    keeps its degree. A nonzero remainder therefore proves exact
+    nondivisibility; zero only falls through to the exact check.
+    """
+    for prime in (5, 13, 17):
+        imaginary = _sqrt_minus_one_mod_prime(prime)
+        if imaginary is None:
+            continue
+        divisor = _reduce_univariate_polynomial_mod_prime(candidate, prime, imaginary)
+        dividend = _reduce_univariate_polynomial_mod_prime(target, prime, imaginary)
+        if divisor is None or dividend is None:
+            continue
+        remainder_nonzero = _modular_remainder_nonzero(divisor, dividend, prime)
+        if remainder_nonzero is True:
+            return True
+    return False
+
+
+def _sqrt_minus_one_mod_prime(prime: int) -> int | None:
+    return next(
+        (value for value in range(prime) if value * value % prime == prime - 1),
+        None,
+    )
+
+
+def _reduce_univariate_polynomial_mod_prime(
+    polynomial: Polynomial, prime: int, imaginary: int
+) -> dict[int, int] | None:
+    reduced: dict[int, int] = {}
+    for (exponent,), coefficient in polynomial.items():
+        components = []
+        for component in coefficient:
+            if component.denominator % prime == 0:
+                return None
+            components.append(
+                component.numerator * pow(component.denominator, -1, prime) % prime
+            )
+        value = (components[0] + imaginary * components[1]) % prime
+        if value:
+            reduced[exponent] = value
+    return reduced
+
+
+def _modular_remainder_nonzero(
+    divisor: dict[int, int], dividend: dict[int, int], prime: int
+) -> bool | None:
+    if not divisor or not dividend:
+        return None
+    leading_exponent = max(divisor)
+    if leading_exponent > max(dividend):
+        return True
+    inverse_leading = pow(divisor[leading_exponent], -1, prime)
+    remainder = dividend
+    steps = 0
+    while remainder and max(remainder) >= leading_exponent:
+        exponent = max(remainder)
+        quotient = remainder[exponent] * inverse_leading % prime
+        shift = exponent - leading_exponent
+        for divisor_exponent, divisor_coefficient in divisor.items():
+            position = shift + divisor_exponent
+            value = (
+                remainder.get(position, 0) - quotient * divisor_coefficient
+            ) % prime
+            if value:
+                remainder[position] = value
+            else:
+                remainder.pop(position, None)
+            steps += 1
+            if steps > _MAX_LOCUS_DIVISIBILITY_TERMS:
+                return None
+    return bool(remainder)
 
 
 def _shift_to_zero(polynomial: Polynomial, axis: int) -> Polynomial:

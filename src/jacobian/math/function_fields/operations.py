@@ -56,6 +56,7 @@ from jacobian.math.function_fields._models import (
     MAX_RATIONAL_PLACE_WORK,
     MAX_RIEMANN_ROCH_BASIS_DIMENSION,
     MAX_RIEMANN_ROCH_CONSTRUCTION_WORK,
+    MAX_TRACE_WORK,
     FiniteFunctionField,
     FiniteFunctionFieldElement,
     FunctionFieldBaseEmbedding,
@@ -74,6 +75,7 @@ from jacobian.math.function_fields._models import (
     FunctionFieldReductionStep,
     FunctionFieldResidueResult,
     FunctionFieldRiemannRochSpace,
+    FunctionFieldTraceResult,
     PrimeFieldPolynomial,
     PrimeFieldRationalFunction,
 )
@@ -798,6 +800,177 @@ def function_field_element_add(
     return FiniteFunctionFieldElement.model_construct(
         field=field,
         coordinates=coordinates,
+    )
+
+
+def _trace_add_degree(left: tuple[int, int], right: tuple[int, int]) -> tuple[int, int]:
+    """Bound numerator/denominator degrees of a reduced rational sum."""
+
+    if left == (-1, 0):
+        return right
+    if right == (-1, 0):
+        return left
+    return max(left[0] + right[1], right[0] + left[1]), left[1] + right[1]
+
+
+def _trace_multiply_degree(
+    left: tuple[int, int], right: tuple[int, int]
+) -> tuple[int, int]:
+    if left == (-1, 0) or right == (-1, 0):
+        return (-1, 0)
+    return left[0] + right[0], left[1] + right[1]
+
+
+def _trace_degree(value: PrimeFieldRationalFunction) -> tuple[int, int]:
+    if value.numerator.is_zero():
+        return (-1, 0)
+    return value.numerator.degree, value.denominator.degree
+
+
+def _admit_trace_growth(
+    field: FiniteFunctionField, element: FiniteFunctionFieldElement
+) -> tuple[int, int]:
+    """Bound exact Newton-sum intermediates before rational-function work."""
+
+    degree = field.degree
+    if degree == 1:
+        return _trace_degree(element.coordinates[0])
+    coefficient_degrees = tuple(
+        _trace_degree(coefficient) for coefficient in field.defining_polynomial
+    )
+    element_degrees = tuple(
+        _trace_degree(coordinate) for coordinate in element.coordinates
+    )
+    prime = field.characteristic
+    power_sum_degrees: list[tuple[int, int]] = [(0, 0) if degree % prime else (-1, 0)]
+    work = 0
+
+    def admit(value: tuple[int, int], location: tuple[str | int, ...]) -> None:
+        nonlocal work
+        if value == (-1, 0):
+            return
+        numerator_degree, denominator_degree = value
+        output_degree = max(numerator_degree, denominator_degree)
+        if output_degree > MAX_POLYNOMIAL_X_DEGREE:
+            raise OperationResourceAdmissionError(
+                location=location,
+                code="function_field.trace_coefficient_growth_exceeds_envelope",
+                message=(
+                    "the exact function-field trace can exceed the "
+                    f"{MAX_POLYNOMIAL_X_DEGREE}-degree coefficient envelope"
+                ),
+            )
+        work += 3 * (output_degree + 1) ** 3
+        if work > MAX_TRACE_WORK:
+            raise OperationResourceAdmissionError(
+                location=location,
+                code="function_field.trace_work_exceeds_envelope",
+                message=(
+                    f"function-field trace work exceeds the {MAX_TRACE_WORK} unit envelope"
+                ),
+            )
+
+    for power in range(1, degree):
+        # Newton's identity: s_k + c_(n-1)s_(k-1) + ... +
+        # c_(n-k+1)s_1 + k*c_(n-k) = 0.
+        total = (-1, 0)
+        for previous_power in range(1, power):
+            product_degree = _trace_multiply_degree(
+                coefficient_degrees[degree - previous_power],
+                power_sum_degrees[previous_power],
+            )
+            admit(product_degree, ("element", "field", "defining_polynomial"))
+            total = _trace_add_degree(total, product_degree)
+            admit(total, ("element", "field", "defining_polynomial"))
+        scalar_coefficient = coefficient_degrees[degree - power]
+        if power % prime == 0:
+            scalar_coefficient = (-1, 0)
+        total = _trace_add_degree(total, scalar_coefficient)
+        admit(total, ("element", "field", "defining_polynomial"))
+        power_sum_degrees.append(total)
+
+    trace_degree = (-1, 0)
+    for coordinate_degree, power_sum_degree in zip(
+        element_degrees, power_sum_degrees, strict=True
+    ):
+        if coordinate_degree == (-1, 0) or power_sum_degree == (-1, 0):
+            continue
+        product_degree = _trace_multiply_degree(coordinate_degree, power_sum_degree)
+        admit(product_degree, ("element", "coordinates"))
+        trace_degree = _trace_add_degree(trace_degree, product_degree)
+        admit(trace_degree, ("element", "coordinates"))
+    return trace_degree
+
+
+def function_field_element_trace(
+    element: FiniteFunctionFieldElement,
+) -> FunctionFieldTraceResult:
+    """Compute the exact relative trace to the rational function field GF(p)(x)."""
+
+    field, canonical = _preflight_inverse_operand(element)
+    _admit_field(field)
+    trace_degree = _admit_trace_growth(field, canonical)
+    trace_coefficient_count = trace_degree[0] + 1 if trace_degree[0] >= 0 else 1
+    trace_denominator_count = trace_degree[1] + 1 if trace_degree[0] >= 0 else 1
+    output_template = {
+        "field": field.model_dump(mode="json"),
+        "element": canonical.model_dump(mode="json"),
+        "trace": {
+            "numerator": {
+                "characteristic": field.characteristic,
+                "coefficients": [field.characteristic - 1] * trace_coefficient_count,
+            },
+            "denominator": {
+                "characteristic": field.characteristic,
+                "coefficients": [field.characteristic - 1] * trace_denominator_count,
+            },
+        },
+    }
+    if len(encode_strict_json(output_template)) > MAX_ELEMENT_VALUE_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("element", "coordinates"),
+            code="function_field.trace_output_exceeds_envelope",
+            message=(
+                "the exact function-field trace result exceeds the "
+                f"{MAX_ELEMENT_VALUE_BYTES}-byte output envelope"
+            ),
+        )
+    prime = field.characteristic
+    if field.degree == 1:
+        trace = _to_internal_rational_function(canonical.coordinates[0])
+    else:
+        coefficients = _field_kpoly(field)
+        degree = field.degree
+        power_sums: list[RF] = [rf_normalize((degree % prime,), (1,), prime)]
+        for power in range(1, degree):
+            total = ZERO_RF
+            for previous_power in range(1, power):
+                total = rf_add(
+                    total,
+                    rf_mul(
+                        coefficients[degree - previous_power],
+                        power_sums[previous_power],
+                        prime,
+                    ),
+                    prime,
+                )
+            scalar = power % prime
+            if scalar:
+                total = rf_add(
+                    total,
+                    rf_mul(((scalar,), (1,)), coefficients[degree - power], prime),
+                    prime,
+                )
+            power_sums.append(rf_sub(ZERO_RF, total, prime))
+        trace = ZERO_RF
+        for coordinate, power_sum in zip(
+            _internal_coordinates(canonical), power_sums, strict=True
+        ):
+            trace = rf_add(trace, rf_mul(coordinate, power_sum, prime), prime)
+    return FunctionFieldTraceResult(
+        field=field,
+        element=canonical,
+        trace=_from_internal_rational_function(trace, prime),
     )
 
 
@@ -2076,6 +2249,7 @@ __all__ = [
     "function_field_element_add",
     "function_field_element_inverse",
     "function_field_element_multiply",
+    "function_field_element_trace",
     "function_field_genus",
     "function_field_place_valuation",
     "function_field_principal_divisor",

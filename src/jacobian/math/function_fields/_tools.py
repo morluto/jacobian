@@ -31,6 +31,8 @@ from jacobian.math.function_fields._models import (
     FunctionFieldResidueResult,
     FunctionFieldRiemannRochSpace,
     FunctionFieldRiemannRochSpaceRequest,
+    FunctionFieldTraceRequest,
+    FunctionFieldTraceResult,
 )
 from jacobian.math.function_fields.operations import (
     function_field_base_embedding,
@@ -43,6 +45,7 @@ from jacobian.math.function_fields.operations import (
     function_field_element_add,
     function_field_element_inverse,
     function_field_element_multiply,
+    function_field_element_trace,
     function_field_genus,
     function_field_place_residue,
     function_field_place_valuation,
@@ -68,6 +71,10 @@ def _run_element_inverse(
     request: FunctionFieldElementInverseRequest,
 ) -> FiniteFunctionFieldElement:
     return function_field_element_inverse(request.element)
+
+
+def _run_element_trace(request: FunctionFieldTraceRequest) -> FunctionFieldTraceResult:
+    return function_field_element_trace(request.element)
 
 
 def _rational_function(numerator: list[int], denominator: list[int]) -> dict[str, Any]:
@@ -705,6 +712,37 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                     "in the ledger."
                 ),
                 input={"left": _GF2_Y, "right": _GF2_Y},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="function_field.element.trace.compute",
+        title="Compute the relative trace of a function-field element",
+        description=(
+            "Compute the exact field trace from a presented finite separable "
+            "extension GF(p)(x)[y]/(f) to GF(p)(x), retaining the source field "
+            "and element alongside the rational-function result. The trace is "
+            "computed from Newton sums of the monic defining polynomial; "
+            "coefficient degree, intermediate work, and output size are "
+            "admitted before exact rational-function expansion."
+        ),
+        request_type=FunctionFieldTraceRequest,
+        result_type=FunctionFieldTraceResult,
+        run=_run_element_trace,
+        tags=("algebra", "function-field", "trace", "exact"),
+        discovery_terms=(
+            "function field trace",
+            "relative trace to GF(p)(x)",
+            "trace of algebraic function",
+        ),
+        examples=(
+            OperationExample(
+                name="trace_of_generator_in_characteristic_two",
+                description=(
+                    "In GF(2)(x)[y]/(y^2+y+x), the two conjugates of y are "
+                    "y and y+1, so their sum and the field trace are 1."
+                ),
+                input={"element": _GF2_Y},
             ),
         ),
     ),

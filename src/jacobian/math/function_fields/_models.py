@@ -22,6 +22,7 @@ MAX_ELEMENT_ADDITION_WORK = 2_000_000
 MAX_ELEMENT_VALUE_BYTES = 32_768
 MAX_INVERSION_WORK = 2_000_000
 MAX_MULTIPLICATION_WORK = 2_000_000
+MAX_TRACE_WORK = 2_000_000
 MAX_DIVISOR_MULTIPLICITY_BITS = 4096
 # 2**4096 needs 1234 decimal digits; divisor degrees combine at most 256
 # places of degree <= 12, needing at most 1237 digits.
@@ -539,6 +540,32 @@ class FunctionFieldElementInverseRequest(StrictModel):
     element: FiniteFunctionFieldElement
 
 
+class FunctionFieldTraceRequest(StrictModel):
+    """One element whose field trace to GF(p)(x) is requested."""
+
+    element: FiniteFunctionFieldElement
+
+
+class FunctionFieldTraceResult(StrictModel):
+    """The relative trace, retained with its exact extension parent."""
+
+    field: FiniteFunctionField
+    element: FiniteFunctionFieldElement
+    trace: PrimeFieldRationalFunction
+
+    @model_validator(mode="after")
+    def require_parent_and_characteristic(self) -> Self:
+        if (
+            self.element.field != self.field
+            or self.trace.characteristic != self.field.characteristic
+        ):
+            raise _validation_error(
+                "trace_parent",
+                "trace result must retain the element parent and its constant field",
+            )
+        return self
+
+
 class FunctionFieldProductTerm(StrictModel):
     """One nonzero generator-power term of an exact product."""
 
@@ -625,6 +652,7 @@ __all__ = [
     "MAX_MULTIPLICATION_WORK",
     "MAX_POLYNOMIAL_COEFFICIENTS",
     "MAX_POLYNOMIAL_X_DEGREE",
+    "MAX_TRACE_WORK",
     "DivisorDegree",
     "DivisorMultiplicity",
     "FiniteFunctionField",
@@ -651,6 +679,8 @@ __all__ = [
     "FunctionFieldReductionStep",
     "FunctionFieldResidueRequest",
     "FunctionFieldResidueResult",
+    "FunctionFieldTraceRequest",
+    "FunctionFieldTraceResult",
     "PrimeFieldPolynomial",
     "PrimeFieldRationalFunction",
 ]

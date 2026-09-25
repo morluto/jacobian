@@ -7,6 +7,22 @@ with a cyclic order of four darts at each crossing, explicit over/under strands,
 directed arcs, and checked crossing signs. The diagram is a presentation; these
 operations do not decide whether two presentations are isotopic.
 
+## Disjoint union
+
+`link_diagram.disjoint_union.compute` combines one to 64 source diagrams into
+one diagram. It assigns deterministic labels on source-indexed crossing and
+dart axes, preserves crossing signs and directed arc pairings, and returns
+complete source-to-target maps for crossings, darts, arcs, and crossing-free
+components. The source index and each source label together identify a crossing
+or dart even when input diagrams reuse the same labels. Crossing-free loops
+have no labels in `OrientedLinkDiagram`, so the result maps each loop by its
+source index and local loop index.
+
+Admission bounds the union to at most 64 crossings, 64 free loops, and an
+estimated 8 MiB serialized result before output construction. Work is linear in
+the admitted source diagram and transport axes. A one-input union is allowed
+and produces the same canonical tagged relabeling.
+
 ## Signed checkerboard graph
 
 `link_diagram.blackboard_graph.compute` returns the source-bound signed Tait

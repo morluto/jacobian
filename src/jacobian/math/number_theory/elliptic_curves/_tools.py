@@ -181,6 +181,12 @@ _F5_PRESENTATION: dict[str, Any] = {
     "generator": "a",
 }
 
+_F25_PRESENTATION: dict[str, Any] = {
+    "characteristic": "5",
+    "modulus_coefficients": ["2", "0", "1"],
+    "generator": "b",
+}
+
 
 def _finite_field_element(coordinate: int) -> dict[str, Any]:
     return {
@@ -207,6 +213,18 @@ def _finite_point(x: int, y: int) -> dict[str, Any]:
 
 
 _FINITE_INFINITY = {"curve": _finite_curve(), "at_infinity": True, "x": None, "y": None}
+
+_FINITE_FIELD_BASE_CHANGE_EXAMPLE: dict[str, Any] = {
+    "curve": _finite_curve(),
+    "embedding": {
+        "source": _F5_PRESENTATION,
+        "target": _F25_PRESENTATION,
+        "generator_image": {
+            "presentation": _F25_PRESENTATION,
+            "coordinates": ["0", "0"],
+        },
+    },
+}
 
 _FINITE_FIELD_DISCRIMINANT_EXAMPLE: dict[str, Any] = {
     "field": _F5_PRESENTATION,
@@ -347,6 +365,16 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             request.curve, request.embedding, request.point
         ),
         tags=("elliptic-curve", "finite-field", "base-change", "exact"),
+        examples=(
+            OperationExample(
+                name="base_change_f5_to_f25",
+                description=(
+                    "Transport the curve over F5 to F25 along the explicit "
+                    "embedding that sends the source generator to zero."
+                ),
+                input=_FINITE_FIELD_BASE_CHANGE_EXAMPLE,
+            ),
+        ),
     ),
     MathTool(
         operation_id="elliptic_curve.finite_field.cardinality.exhaustive.compute",

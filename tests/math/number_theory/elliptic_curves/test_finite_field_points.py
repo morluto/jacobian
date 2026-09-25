@@ -974,6 +974,23 @@ def test_curve_and_point_transport_along_explicit_f5_to_f25_embedding() -> None:
     )
 
 
+def test_base_change_public_example_is_advertised_and_runs() -> None:
+    operation = Catalog.open().operation(
+        "elliptic_curve.finite_field.base_change.compute"
+    )
+    assert operation is not None
+    assert operation.examples[0].name == "base_change_f5_to_f25"
+    result = invoke_operation(
+        operation.operation_id, operation.examples[0].input, Catalog.open()
+    )
+    assert result.output["curve"]["field"]["modulus_coefficients"] == [
+        "2",
+        "0",
+        "1",
+    ]
+    assert result.output["point"] is None
+
+
 @pytest.mark.parametrize(("prime", "a", "b"), [(5, 1, 1), (7, 2, 3), (11, 0, 4)])
 def test_character_sum_count_matches_independent_point_enumeration(
     prime: int, a: int, b: int

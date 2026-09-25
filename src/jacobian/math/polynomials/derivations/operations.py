@@ -600,8 +600,9 @@ def construct_locally_nilpotent_certificate(
             message="one chain is required per generator",
         )
     canonical: list[tuple[RationalPolynomial, ...]] = []
+    expected_chain_count = len(derivation_value.variables)
     for index, chain in enumerate(chains):
-        if index >= len(derivation_value.variables):
+        if index >= expected_chain_count:
             raise OperationDomainValidationError(
                 location=("chains", index),
                 code="polynomial_derivation.certificate_shape",
@@ -631,6 +632,12 @@ def construct_locally_nilpotent_certificate(
                     message="generator chain exceeds the admitted bound",
                 )
             canonical_values.append(_as_polynomial(value))
+        if len(canonical_values) != len(chain) or not canonical_values:
+            raise OperationDomainValidationError(
+                location=("chains", index),
+                code="polynomial_derivation.certificate_shape",
+                message="each generator chain must yield its declared nonempty length",
+            )
         canonical_chain = tuple(canonical_values)
         if not canonical_chain:
             raise OperationDomainValidationError(
@@ -660,6 +667,12 @@ def construct_locally_nilpotent_certificate(
                 message="each generator chain must end at zero",
             )
         canonical.append(canonical_chain)
+    if len(canonical) != expected_chain_count or len(chains) != expected_chain_count:
+        raise OperationDomainValidationError(
+            location=("chains",),
+            code="polynomial_derivation.certificate_shape",
+            message="one chain is required per generator",
+        )
     return LocallyNilpotentCertificate.model_construct(
         derivation=derivation_value, generator_iterates=tuple(canonical)
     )

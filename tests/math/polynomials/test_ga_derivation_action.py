@@ -192,6 +192,20 @@ def test_action_rejects_lying_outer_and_empty_inner_sequences() -> None:
         ga_action_from_derivation(derivation, TooMany())
     assert error.value.errors()[0]["type"] == "polynomial_derivation.certificate_shape"
 
+    class ShortOuter(Sequence[Any]):
+        def __len__(self) -> int:
+            return len(chains)
+
+        def __getitem__(self, index: int) -> Any:
+            return chains[index] if index == 0 else (_ for _ in ()).throw(IndexError)
+
+        def __iter__(self):
+            yield chains[0]
+
+    with pytest.raises(OperationDomainValidationError) as error:
+        ga_action_from_derivation(derivation, ShortOuter())
+    assert error.value.errors()[0]["type"] == "polynomial_derivation.certificate_shape"
+
     class EmptyChain(Sequence[Any]):
         def __len__(self) -> int:
             return 1

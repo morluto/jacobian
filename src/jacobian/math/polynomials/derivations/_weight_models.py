@@ -90,7 +90,7 @@ class PolynomialWeightActionResult(StrictModel):
         if self.weight_zero.variables != self.action.variables:
             raise ValueError("weight-zero projection must retain the source ring")
         if tuple(c.weight for c in self.components) != tuple(
-            sorted(c.weight for c in self.components)
+            sorted({c.weight for c in self.components})
         ):
             raise ValueError("weight components must be ordered by increasing weight")
         if any(

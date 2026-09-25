@@ -21,15 +21,17 @@ from jacobian.math.topology.cellular_sheaves import (
     SheafCochainMapRequest,
     SheafCochainMapResult,
     SheafField,
-    SheafMorphismRequest,
     SheafMorphismResult,
     SheafStalk,
     from_cover_maps,
     morphism,
 )
-from jacobian.math.topology.cellular_sheaves._models import CoverRestrictionMatrix
+from jacobian.math.topology.cellular_sheaves._models import (
+    CoverRestrictionMatrix,
+)
 from jacobian.math.topology.cellular_sheaves.extensions import (
     SheafMorphismComposeRequest,
+    SheafMorphismRequest,
     cochain_map,
     compose_morphisms,
 )

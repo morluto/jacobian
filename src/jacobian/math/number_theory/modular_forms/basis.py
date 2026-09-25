@@ -35,12 +35,12 @@ from jacobian.math.number_theory.modular_forms.pari_backend import (
 from jacobian.math.number_theory.modular_forms.transforms import sturm_bound
 from jacobian.math.number_theory.modular_forms.values import (
     MAX_GAMMA0_OPERATION_LEVEL,
-    MAX_MODULAR_FORM_WEIGHT,
     MAX_GAMMA0_THREE_BASIS_PRECISION,
     MAX_LEVEL_ONE_BASIS_COEFFICIENT_DIGITS,
     MAX_LEVEL_ONE_BASIS_COORDINATES,
     MAX_LEVEL_ONE_BASIS_PRECISION,
     MAX_LEVEL_ONE_BASIS_WEIGHT,
+    MAX_MODULAR_FORM_WEIGHT,
     MAX_Q_TRANSFORM_OUTPUT_PRECISION,
     MAX_Q_TRANSFORM_SOURCE_ORDER,
     ModularFormBasis,

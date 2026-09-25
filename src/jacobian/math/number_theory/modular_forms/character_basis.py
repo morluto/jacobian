@@ -411,8 +411,7 @@ def modular_character_coordinates_product(
                 for value in left_scalar.coefficients_ascending
             )
             + tuple(
-                _coefficient(field, (Fraction(0),) * field.degree)
-                for _ in range(2)
+                _coefficient(field, (Fraction(0),) * field.degree) for _ in range(2)
             ),
         )
     if not any(value.num for value in left_scalar.coefficients_ascending) or not any(

@@ -25,6 +25,8 @@ from jacobian.math.logic.automata.petri_nets._models import (
     MarkingReachabilityResult,
     PetriInvariantsRequest,
     PetriInvariantsResult,
+    PetriNetDisjointUnionRequest,
+    PetriNetDisjointUnionResult,
     PlaceSetInitialMarkingProfileRequest,
     PlaceSetInitialMarkingProfileResult,
     PlaceSetSupportRequest,
@@ -44,6 +46,7 @@ from jacobian.math.logic.automata.petri_nets.operations import (
     check_pumping_witness,
     compute_incidence_matrix,
     concurrent_step,
+    disjoint_union,
     enabled_transitions,
     fire_transition,
     marking_commutation_profile,
@@ -60,6 +63,17 @@ from jacobian.math.logic.automata.petri_nets.operations import (
     state_equation_target,
 )
 from jacobian.math.logic.automata.petri_nets.values import PetriNet
+
+
+def compute_disjoint_union(
+    request: PetriNetDisjointUnionRequest,
+) -> PetriNetDisjointUnionResult:
+    return disjoint_union(
+        request.left_net,
+        request.right_net,
+        request.left_marking,
+        request.right_marking,
+    )
 
 
 def compute_enabled_transitions(
@@ -182,6 +196,46 @@ _PRODUCER_CONSUMER_NET = {
 }
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
+    MathTool(
+        operation_id="petri_net.disjoint_union.compute",
+        title="Form the disjoint union of Petri nets",
+        description=(
+            "Concatenate the place and transition axes of two weighted P/T nets "
+            "and form block-diagonal input/output matrices. Optional source "
+            "markings are concatenated on the union place axis."
+        ),
+        request_type=PetriNetDisjointUnionRequest,
+        result_type=PetriNetDisjointUnionResult,
+        run=compute_disjoint_union,
+        tags=("petri-net", "net-transform", "exact"),
+        discovery_terms=("disjoint union Petri nets", "Petri net sum"),
+        examples=(
+            OperationExample(
+                name="marked_disjoint_union",
+                description="Combine two weighted nets and their source markings.",
+                input={
+                    "left_net": {
+                        "place_count": 1,
+                        "transition_count": 1,
+                        "place_ids": ["buffer"],
+                        "transition_ids": ["produce"],
+                        "pre": [[0]],
+                        "post": [[2]],
+                    },
+                    "right_net": {
+                        "place_count": 1,
+                        "transition_count": 1,
+                        "place_ids": ["buffer"],
+                        "transition_ids": ["consume"],
+                        "pre": [[1]],
+                        "post": [[0]],
+                    },
+                    "left_marking": {"tokens": [1]},
+                    "right_marking": {"tokens": [2]},
+                },
+            ),
+        ),
+    ),
     MathTool(
         operation_id="petri_net.reverse.compute",
         title="Reverse a Petri net",

@@ -35,6 +35,7 @@ from jacobian.math.logic.automata.petri_nets._models import (
     MarkingReachabilityResult,
     PetriInvariantsResult,
     PetriMarkingState,
+    PetriNetDisjointUnionResult,
     PetriPlaceSubset,
     PetriReachabilityEdge,
     PlaceSetInitialMarkingProfileResult,
@@ -51,6 +52,8 @@ from jacobian.math.logic.automata.petri_nets._models import (
 )
 from jacobian.math.logic.automata.petri_nets.values import (
     MAX_PETRI_MARKING,
+    MAX_PETRI_PLACES,
+    MAX_PETRI_TRANSITIONS,
     FiringSequence,
     Marking,
     PetriNet,
@@ -68,6 +71,7 @@ __all__ = [
     "check_pumping_witness",
     "compute_incidence_matrix",
     "concurrent_step",
+    "disjoint_union",
     "enabled_transitions",
     "find_minimal_siphons",
     "find_minimal_traps",
@@ -93,6 +97,219 @@ __all__ = [
 ]
 
 MAX_PETRI_NET_REVERSE_MATERIALIZED_BYTES = 10 * 1024 * 1024
+MAX_PETRI_NET_DISJOINT_UNION_OUTPUT_BYTES = 10 * 1024 * 1024
+MAX_PETRI_NET_DISJOINT_UNION_WORK = 2 * MAX_PETRI_PLACES * MAX_PETRI_TRANSITIONS
+
+
+def _petri_net_union_output_bound(
+    left: PetriNet, right: PetriNet, *, include_markings: bool
+) -> tuple[int, int]:
+    """Conservatively admit serialized output and matrix-entry work."""
+
+    def matrix_bound(rows: int, columns: int) -> int:
+        row = 2 + max(0, columns - 1) + 4 * columns
+        return 2 + max(0, rows - 1) + rows * row
+
+    def raw_ids_bound(ids: tuple[str, ...] | None) -> int:
+        if ids is None:
+            return 4
+        return 2 + max(0, len(ids) - 1) + sum(6 * len(item) + 2 for item in ids)
+
+    def source_bound(net: PetriNet) -> int:
+        return (
+            256
+            + 2 * matrix_bound(net.place_count, net.transition_count)
+            + raw_ids_bound(net.place_ids)
+            + raw_ids_bound(net.transition_ids)
+        )
+
+    def union_ids_bound(
+        left_ids: tuple[str, ...] | None,
+        right_ids: tuple[str, ...] | None,
+        left_count: int,
+        right_count: int,
+    ) -> int:
+        if left_ids is None and right_ids is None:
+            return 8
+        size = 2 + max(0, left_count + right_count - 1)
+        for side, ids, count in (
+            ("L", left_ids, left_count),
+            ("R", right_ids, right_count),
+        ):
+            for index in range(count):
+                identifier = "" if ids is None else ids[index]
+                label_length = (
+                    len(side)
+                    + 1
+                    + len(str(index))
+                    + (1 + len(identifier) if ids is not None else 0)
+                )
+                size += 6 * label_length + 2
+        return size
+
+    places = left.place_count + right.place_count
+    transitions = left.transition_count + right.transition_count
+    union_bound = (
+        256
+        + 2 * matrix_bound(places, transitions)
+        + union_ids_bound(
+            left.place_ids, right.place_ids, left.place_count, right.place_count
+        )
+        + union_ids_bound(
+            left.transition_ids,
+            right.transition_ids,
+            left.transition_count,
+            right.transition_count,
+        )
+    )
+    mappings_bound = 128 + 12 * (places + transitions)
+    markings_bound = 128 + 15 * places if include_markings else 0
+    output_bound = (
+        source_bound(left)
+        + source_bound(right)
+        + union_bound
+        + mappings_bound
+        + markings_bound
+    )
+    return output_bound, 2 * places * transitions
+
+
+def disjoint_union(
+    left_net: PetriNet,
+    right_net: PetriNet,
+    left_marking: Marking | None = None,
+    right_marking: Marking | None = None,
+) -> PetriNetDisjointUnionResult:
+    """Return the block-disjoint union of two weighted place/transition nets.
+
+    The place and transition axes are concatenated in left-then-right order.
+    Each source marking may be supplied as a pair; the result then includes
+    their concatenation on the union place axis.
+    """
+
+    left_net = _admit_net(left_net)
+    right_net = _admit_net(right_net)
+    if (left_marking is None) != (right_marking is None):
+        raise OperationDomainValidationError(
+            location=("marking",),
+            code="petri_net.union_marking_pair",
+            message="both source markings must be supplied together",
+        )
+    if left_marking is not None and right_marking is not None:
+        left_marking = _require_marking_size(left_net, left_marking)
+        right_marking = _require_marking_size(right_net, right_marking)
+
+    place_count = left_net.place_count + right_net.place_count
+    transition_count = left_net.transition_count + right_net.transition_count
+    if place_count > MAX_PETRI_PLACES or transition_count > MAX_PETRI_TRANSITIONS:
+        raise OperationResourceAdmissionError(
+            location=("net",),
+            code="petri_net.union_axis_bound",
+            message=(
+                "disjoint union exceeds the "
+                f"{MAX_PETRI_PLACES}-place or {MAX_PETRI_TRANSITIONS}-transition carrier bound"
+            ),
+        )
+    output_bound, work = _petri_net_union_output_bound(
+        left_net, right_net, include_markings=left_marking is not None
+    )
+    if work > MAX_PETRI_NET_DISJOINT_UNION_WORK:
+        raise OperationResourceAdmissionError(
+            location=("net",),
+            code="petri_net.union_work_bound",
+            message="disjoint-union matrix expansion exceeds its admitted work bound",
+        )
+    if output_bound > MAX_PETRI_NET_DISJOINT_UNION_OUTPUT_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("net",),
+            code="petri_net.union_output_bound",
+            message="disjoint-union result exceeds its admitted serialized-output bound",
+        )
+
+    # The serialized-size preflight has bounded the remaining string scan.
+    # Reject unpaired surrogates before generated axis labels are built.
+    for ids in (
+        left_net.place_ids,
+        left_net.transition_ids,
+        right_net.place_ids,
+        right_net.transition_ids,
+    ):
+        if ids is not None and any(
+            0xD800 <= ord(character) <= 0xDFFF for item in ids for character in item
+        ):
+            raise OperationDomainValidationError(
+                location=("net", "axis_ids"),
+                code="petri_net.net_axis_encoding",
+                message="place and transition IDs must be valid Unicode strings",
+            )
+
+    def combine_ids(
+        left_ids: tuple[str, ...] | None,
+        right_ids: tuple[str, ...] | None,
+        left_count: int,
+        right_count: int,
+    ) -> tuple[str, ...] | None:
+        if left_ids is None and right_ids is None:
+            return None
+        left_names = tuple(
+            f"L:{index}:{identifier}" if left_ids is not None else f"L:{index}"
+            for index, identifier in enumerate(left_ids or range(left_count))
+        )
+        right_names = tuple(
+            f"R:{index}:{identifier}" if right_ids is not None else f"R:{index}"
+            for index, identifier in enumerate(right_ids or range(right_count))
+        )
+        return left_names + right_names
+
+    left_zeroes = (0,) * left_net.transition_count
+    right_zeroes = (0,) * right_net.transition_count
+    pre = tuple(
+        tuple(left_net.pre[row]) + right_zeroes for row in range(left_net.place_count)
+    ) + tuple(
+        left_zeroes + tuple(right_net.pre[row]) for row in range(right_net.place_count)
+    )
+    post = tuple(
+        tuple(left_net.post[row]) + right_zeroes for row in range(left_net.place_count)
+    ) + tuple(
+        left_zeroes + tuple(right_net.post[row]) for row in range(right_net.place_count)
+    )
+    union_net = PetriNet(
+        place_count=place_count,
+        transition_count=transition_count,
+        place_ids=combine_ids(
+            left_net.place_ids,
+            right_net.place_ids,
+            left_net.place_count,
+            right_net.place_count,
+        ),
+        transition_ids=combine_ids(
+            left_net.transition_ids,
+            right_net.transition_ids,
+            left_net.transition_count,
+            right_net.transition_count,
+        ),
+        pre=pre,
+        post=post,
+    )
+    union_marking = None
+    if left_marking is not None and right_marking is not None:
+        union_marking = Marking(
+            tokens=left_marking.tokens + right_marking.tokens, net=union_net
+        )
+    return PetriNetDisjointUnionResult(
+        left_net=left_net,
+        right_net=right_net,
+        net=union_net,
+        left_place_embedding=tuple(range(left_net.place_count)),
+        right_place_embedding=tuple(range(left_net.place_count, place_count)),
+        left_transition_embedding=tuple(range(left_net.transition_count)),
+        right_transition_embedding=tuple(
+            range(left_net.transition_count, transition_count)
+        ),
+        left_marking=left_marking,
+        right_marking=right_marking,
+        marking=union_marking,
+    )
 
 
 def _petri_net_reverse_output_bound(net: PetriNet) -> int:

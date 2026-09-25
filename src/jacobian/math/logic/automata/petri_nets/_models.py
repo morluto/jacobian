@@ -1295,6 +1295,101 @@ class PetriInvariantsResult(PetriInvariantsRequest):
         return cls.model_construct(**values)
 
 
+class PetriNetDisjointUnionRequest(StrictModel):
+    """Two nets and, optionally, one marking on each source place axis."""
+
+    left_net: PetriNet
+    right_net: PetriNet
+    left_marking: Marking | None = None
+    right_marking: Marking | None = None
+
+    @model_validator(mode="after")
+    def require_pair_of_markings(self) -> Self:
+        if (self.left_marking is None) != (self.right_marking is None):
+            raise _validation_error(
+                "union_marking_pair", "both source markings must be supplied together"
+            )
+        for net, marking in (
+            (self.left_net, self.left_marking),
+            (self.right_net, self.right_marking),
+        ):
+            if marking is not None:
+                _require_result_marking(net, marking)
+        return self
+
+
+class PetriNetDisjointUnionResult(StrictModel):
+    """A disjoint union retaining its source nets and axis embeddings."""
+
+    left_net: PetriNet
+    right_net: PetriNet
+    net: PetriNet
+    left_place_embedding: tuple[int, ...]
+    right_place_embedding: tuple[int, ...]
+    left_transition_embedding: tuple[int, ...]
+    right_transition_embedding: tuple[int, ...]
+    left_marking: Marking | None = None
+    right_marking: Marking | None = None
+    marking: Marking | None = None
+
+    @model_validator(mode="after")
+    def require_canonical_embeddings(self) -> Self:
+        if (
+            self.net.place_count
+            != self.left_net.place_count + self.right_net.place_count
+        ):
+            raise _validation_error(
+                "union_place_count", "union place count must add its source axes"
+            )
+        if (
+            self.net.transition_count
+            != self.left_net.transition_count + self.right_net.transition_count
+        ):
+            raise _validation_error(
+                "union_transition_count",
+                "union transition count must add its source axes",
+            )
+        if self.left_place_embedding != tuple(range(self.left_net.place_count)):
+            raise _validation_error(
+                "union_left_place_axis", "left place embedding is not canonical"
+            )
+        if self.right_place_embedding != tuple(
+            range(self.left_net.place_count, self.net.place_count)
+        ):
+            raise _validation_error(
+                "union_right_place_axis", "right place embedding is not canonical"
+            )
+        if self.left_transition_embedding != tuple(
+            range(self.left_net.transition_count)
+        ):
+            raise _validation_error(
+                "union_left_transition_axis",
+                "left transition embedding is not canonical",
+            )
+        if self.right_transition_embedding != tuple(
+            range(self.left_net.transition_count, self.net.transition_count)
+        ):
+            raise _validation_error(
+                "union_right_transition_axis",
+                "right transition embedding is not canonical",
+            )
+        if (self.left_marking is None) != (self.right_marking is None) or (
+            self.left_marking is None
+        ) != (self.marking is None):
+            raise _validation_error(
+                "union_marking_pair",
+                "source markings and union marking must appear together",
+            )
+        for source, marking in (
+            (self.left_net, self.left_marking),
+            (self.right_net, self.right_marking),
+            (self.net, self.marking),
+        ):
+            if marking is not None:
+                _require_result_marking(source, marking)
+        return self
+
+
 __all__ = [
     "MAX_CONCURRENT_STEP_OCCURRENCES",
     "MAX_FIRING_SEQUENCE_LENGTH",
@@ -1323,6 +1418,8 @@ __all__ = [
     "PetriInvariantsRequest",
     "PetriInvariantsResult",
     "PetriMarkingState",
+    "PetriNetDisjointUnionRequest",
+    "PetriNetDisjointUnionResult",
     "PetriPlaceSubset",
     "PetriReachabilityEdge",
     "PlaceSetInitialMarkingProfileRequest",

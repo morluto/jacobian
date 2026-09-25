@@ -22,8 +22,14 @@ from jacobian.math.function_fields.operations import (
     _validated_field,
 )
 
-MAX_AFFINE_PLACE_ENUMERATION_WORK = 100_000
+MAX_AFFINE_PLACE_ENUMERATION_WORK = 5_000_000
 MAX_AFFINE_PLACE_ENUMERATION_OUTPUT = 514
+MAX_AFFINE_PLACE_ENUMERATION_RESULT_BYTES = 2_000_000
+# The place's non-field JSON fields (coordinates, local parameter, and GF(p)
+# residue presentation), including object punctuation, fit within this cap.
+_PLACE_RESULT_OVERHEAD_BYTES = 256
+_PLACE_RESULT_FIXED_WORK = 64
+_FIELD_COEFFICIENT_VALIDATION_WORK = 4
 
 
 class HyperellipticAffinePlacesRequest(StrictModel):
@@ -42,11 +48,16 @@ class HyperellipticAffinePlacesResult(StrictModel):
 
     @model_validator(mode="after")
     def require_parent_and_canonical_order(self) -> HyperellipticAffinePlacesResult:
-        coordinates = tuple((place.x, place.y) for place in self.places)
-        if any(place.field != self.field for place in self.places):
-            raise ValueError("every affine place must retain the result function field")
-        if coordinates != tuple(sorted(set(coordinates))):
-            raise ValueError("affine places must be unique and ordered by (x,y)")
+        previous: tuple[int, int] | None = None
+        for place in self.places:
+            if place.field != self.field:
+                raise ValueError(
+                    "every affine place must retain the result function field"
+                )
+            coordinate = (place.x, place.y)
+            if previous is not None and coordinate <= previous:
+                raise ValueError("affine places must be unique and ordered by (x,y)")
+            previous = coordinate
         return self
 
 
@@ -77,14 +88,45 @@ def enumerate_hyperelliptic_affine_places(
         )
 
     prime = field.characteristic
-    # Build the square table once and evaluate f at each x by Horner. The
-    # count bounds those exact loops before either result collection is built.
-    work = prime * (len(branch) + 1)
+    # Admission includes the square table and Horner scan, up to two output
+    # records per x, structural validation of each repeated field/residue, and
+    # the maximum serialized output size. All estimates precede either result
+    # collection, so transport serialization cannot exceed the admitted bound.
+    output_count_bound = 2 * prime
+    field_json_bytes = len(field.model_dump_json().encode("utf-8"))
+    result_bytes_bound = (
+        field_json_bytes
+        + output_count_bound * (field_json_bytes + _PLACE_RESULT_OVERHEAD_BYTES)
+        + _PLACE_RESULT_OVERHEAD_BYTES
+    )
+    field_coefficient_count = sum(
+        len(polynomial.coefficients)
+        for coefficient in field.defining_polynomial
+        for polynomial in (coefficient.numerator, coefficient.denominator)
+    )
+    work = (
+        prime * (len(branch) + 1)
+        + output_count_bound
+        * (
+            _PLACE_RESULT_FIXED_WORK
+            + _FIELD_COEFFICIENT_VALIDATION_WORK * field_coefficient_count
+        )
+        + result_bytes_bound
+    )
+    if result_bytes_bound > MAX_AFFINE_PLACE_ENUMERATION_RESULT_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("result",),
+            code="function_field.affine_enumeration_output_exceeds_envelope",
+            message="affine place output exceeds its admitted serialized-byte bound",
+        )
     if work > MAX_AFFINE_PLACE_ENUMERATION_WORK:
         raise OperationResourceAdmissionError(
             location=("field",),
             code="function_field.affine_enumeration_work_exceeds_envelope",
-            message="affine place enumeration exceeds its admitted work bound",
+            message=(
+                "affine place scan, result construction, validation, and output "
+                "work exceed the admitted bound"
+            ),
         )
     roots: dict[int, list[int]] = {}
     for y in range(prime):

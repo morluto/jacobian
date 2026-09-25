@@ -12,7 +12,11 @@ enumerate points at infinity or places with larger residue fields, and so it is
 not a complete place enumeration for the global function field. The operation
 scans each `x` in `GF(p)`, evaluates `f(x)`, and returns the one or two square
 roots in `GF(p)` (or none). Its work is bounded by `p` times the polynomial
-length, and its output contains at most `2p` places.
+length. Before constructing places, admission also reserves work for at most
+`2p` result records, repeated field/residue validation, linear canonical-order
+validation, and a conservative serialized-result byte estimate. The output cap
+is independently `2p` places (514 at the maximum admitted `p=257`) and 2 MB of
+serialized JSON.
 
 The affine/projective distinction follows the standard hyperelliptic model:
 for odd degree, the smooth projective curve also has a rational point at

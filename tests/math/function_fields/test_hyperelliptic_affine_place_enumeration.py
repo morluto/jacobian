@@ -7,6 +7,7 @@ from jacobian.math.function_fields._models import (
 )
 from jacobian.math.function_fields._tools import TOOLS
 from jacobian.math.function_fields.hyperelliptic_affine_places import (
+    MAX_AFFINE_PLACE_ENUMERATION_RESULT_BYTES,
     HyperellipticAffinePlacesRequest,
     enumerate_hyperelliptic_affine_places,
 )
@@ -86,9 +87,42 @@ def test_enumeration_accepts_the_maximum_admitted_prime_characteristic():
     )
     result = enumerate_hyperelliptic_affine_places(field)
     assert len(result.places) <= 2 * prime
+    assert len(result.places) <= 514
+    assert (
+        len(result.model_dump_json().encode("utf-8"))
+        <= MAX_AFFINE_PLACE_ENUMERATION_RESULT_BYTES
+    )
     assert len(result.places) == sum(
         (y * y - (x**3 - x)) % prime == 0 for x in range(prime) for y in range(prime)
     )
+
+
+def test_output_byte_bound_accepts_maximum_supported_field_shape():
+    prime = 257
+
+    def rational(coefficients: tuple[int, ...]) -> PrimeFieldRationalFunction:
+        return PrimeFieldRationalFunction(
+            numerator=PrimeFieldPolynomial(
+                characteristic=prime, coefficients=coefficients
+            ),
+            denominator=PrimeFieldPolynomial(characteristic=prime, coefficients=(1,)),
+        )
+
+    constant_coefficients = (0, prime - 1, *([0] * 10), prime - 1)
+    field = FiniteFunctionField(
+        characteristic=prime,
+        variable="coordinate_var_1",
+        generator="extension_gen1",
+        defining_polynomial=(
+            rational(constant_coefficients),
+            rational((0,)),
+            rational((1,)),
+        ),
+    )
+    result = enumerate_hyperelliptic_affine_places(field)
+    serialized_size = len(result.model_dump_json().encode("utf-8"))
+    assert serialized_size <= MAX_AFFINE_PLACE_ENUMERATION_RESULT_BYTES
+    assert serialized_size < MAX_AFFINE_PLACE_ENUMERATION_RESULT_BYTES
 
 
 def test_tool_is_published_and_advertised_example_is_valid_json():

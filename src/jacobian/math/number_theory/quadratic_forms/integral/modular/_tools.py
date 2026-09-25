@@ -9,7 +9,7 @@ from jacobian.math.number_theory.quadratic_forms.integral.modular import (
 from jacobian.math.number_theory.quadratic_forms.integral.modular._models import (
     ModularEvaluationRequest,
     ModularInteger,
-    ModularQuadraticPolynomial,
+    ModularQuadraticReduction,
     ModularReductionRequest,
 )
 
@@ -24,7 +24,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "not a canonical classification of functions on the finite module."
         ),
         request_type=ModularReductionRequest,
-        result_type=ModularQuadraticPolynomial,
+        result_type=ModularQuadraticReduction,
         run=native.reduce_integral_form_modulus,
         tags=("quadratic-form", "modular", "coefficient-map", "exact"),
         discovery_terms=(

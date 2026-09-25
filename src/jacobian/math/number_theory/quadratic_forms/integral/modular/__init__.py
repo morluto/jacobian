@@ -5,6 +5,7 @@ from jacobian.math.number_theory.quadratic_forms.integral.modular._models import
     ModularEvaluationRequest,
     ModularInteger,
     ModularQuadraticPolynomial,
+    ModularQuadraticReduction,
     ModularReductionRequest,
 )
 from jacobian.math.number_theory.quadratic_forms.integral.modular.operations import (
@@ -17,6 +18,7 @@ __all__ = [
     "ModularEvaluationRequest",
     "ModularInteger",
     "ModularQuadraticPolynomial",
+    "ModularQuadraticReduction",
     "ModularReductionRequest",
     "evaluate_modular_form",
     "reduce_integral_form_modulus",

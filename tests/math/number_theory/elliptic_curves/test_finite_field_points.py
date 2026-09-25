@@ -4,6 +4,7 @@ from fractions import Fraction
 
 import pytest
 import rfc8785
+from pydantic import ValidationError
 
 from jacobian.canonical import CanonicalLimits
 from jacobian.catalog.catalog import Catalog
@@ -11,7 +12,6 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from pydantic import ValidationError
 from jacobian.dispatch import invoke_operation
 from jacobian.math.finite_fields.values import (
     FiniteFieldElement,

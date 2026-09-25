@@ -65,6 +65,24 @@ serialization.
 These operations construct and summarize decks. They do not decide whether a
 graph can be reconstructed from its deck.
 
+## Cardwise connected-component profile
+
+`graph.deck.card_component_profile.compute` maps each card isomorphism class
+to its sorted component orders, then returns a histogram weighted by the
+anonymous card multiplicities. For example, a triangle plus an isolated
+vertex has component orders `(1, 3)`, while a connected four-vertex card has
+`(4,)`. Zero-order cards use the empty component tuple.
+
+The operation computes exact permutation canonical forms for supplied class
+representatives before grouping them, because structural decoding does not
+prove representative minimality. It admits the combined canonicalization and
+connectivity work, canonical-input scratch, and output size before either
+canonicalization or connectivity traversal. The supported card order is at
+most ten, under a 2,000,000-unit aggregate work limit. This is a cardwise
+invariant; it does not determine or return the source graph's component
+profile, and it makes no claim that an arbitrary multiset is realizable as a
+complete deck.
+
 ## Anonymous card multiset equality
 
 `graph.deck.anonymous.equal.decide` compares two

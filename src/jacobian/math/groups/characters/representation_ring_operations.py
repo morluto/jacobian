@@ -34,6 +34,8 @@ from jacobian.math.groups.characters._models import (
     MAX_CYCLOTOMIC_ORDER,
     MAX_GROUP_ORDER,
     MAX_VALUE_COEFFICIENT_DIGITS,
+    CharacterCenter,
+    CharacterCenterRequest,
     CharacterExteriorSquareRequest,
     CharacterKernel,
     CharacterKernelRequest,
@@ -63,6 +65,8 @@ MAX_CHARACTER_TENSOR_PRODUCT_WORK = 50_000_000
 MAX_CHARACTER_TENSOR_PRODUCT_OUTPUT_BYTES = 10_000_000
 MAX_CHARACTER_KERNEL_WORK = 50_000_000
 MAX_CHARACTER_KERNEL_OUTPUT_BYTES = 1_000_000
+MAX_CHARACTER_CENTER_WORK = 50_000_000
+MAX_CHARACTER_CENTER_OUTPUT_BYTES = 1_000_000
 
 
 def _invalid(
@@ -1046,7 +1050,7 @@ def _admit_character_kernel(
         )
 
 
-def _character_values_for_kernel(
+def _character_values_on_classes(
     element: CharacterRingElement, table: CharacterTableResult
 ) -> tuple[tuple[Fraction, ...], ...]:
     """Expand an authenticated ordinary character on its exact class axis."""
@@ -1174,7 +1178,7 @@ def character_kernel(request: CharacterKernelRequest) -> CharacterKernel:
             "input must retain the exact canonical character table for its group",
             ("character", "table"),
         )
-    class_values = _character_values_for_kernel(element, table)
+    class_values = _character_values_on_classes(element, table)
     identity_class = next(
         index
         for index, conjugacy_class in enumerate(table.partition.classes)
@@ -1191,12 +1195,159 @@ def character_kernel(request: CharacterKernelRequest) -> CharacterKernel:
     return CharacterKernel._from_kernel(ambient_group=source, subgroup=subgroup)
 
 
+def _admit_character_center(
+    element: CharacterRingElement,
+    source: PermutationGroup,
+    actual_order: int,
+    source_work: int,
+) -> None:
+    """Admit table expansion, exact character norms, and subgroup output."""
+    coordinate_digits = max(
+        1, *(len(str(abs(value))) for value in element.irreducible_multiplicities)
+    )
+    field_degree = euler_phi(actual_order)
+    table_digits_bound = len(str(actual_order)) + 2
+    class_value_digits = coordinate_digits + table_digits_bound
+    work = (
+        actual_order**2 * field_degree * coordinate_digits * table_digits_bound
+        + actual_order * field_degree**2 * class_value_digits**2
+        + actual_order**2 * source.degree * max(1, len(source.generators))
+        + actual_order**3 * source.degree
+        + MAX_CHARACTER_TABLE_CELLS
+        + source_work
+    )
+    if work > MAX_CHARACTER_CENTER_WORK:
+        raise OperationResourceAdmissionError(
+            location=("character",),
+            code="groups.characters.center_work_exceeds_envelope",
+            message="canonical-table validation and exact center computation exceed the work envelope",
+        )
+    output_bytes = (
+        2_048
+        + (len(source.generators) + max(1, actual_order.bit_length()))
+        * source.degree
+        * 24
+        + actual_order * field_degree * (coordinate_digits + table_digits_bound) * 8
+    )
+    if (
+        output_bytes > MAX_CHARACTER_CENTER_OUTPUT_BYTES
+        or output_bytes > CanonicalLimits().max_output_bytes
+    ):
+        raise OperationResourceAdmissionError(
+            location=("character",),
+            code="groups.characters.center_output_exceeds_envelope",
+            message="character center values and subgroup exceed the output envelope",
+        )
+
+
+def character_center(request: CharacterCenterRequest) -> CharacterCenter:
+    r"""Return the subgroup on which an ordinary representation is scalar.
+
+    A finite-dimensional complex representation can be made unitary. For
+    each group element, ``chi(g) * conjugate(chi(g)) = chi(1)^2`` exactly
+    iff all eigenvalues of its representing matrix agree, so its normalized
+    trace is a root of unity and the element acts as a scalar.
+    """
+    if not isinstance(request, CharacterCenterRequest):
+        raise _invalid(
+            "groups.characters.center_request_type",
+            "request must contain one table-bound ordinary character",
+            ("request",),
+        )
+    element = request.character
+    if not isinstance(element, CharacterRingElement):
+        raise _invalid(
+            "groups.characters.center_input_type",
+            "input must be a table-bound ordinary character",
+            ("character",),
+        )
+    _admit_ring_element_shape(element, "character")
+    if any(multiplicity < 0 for multiplicity in element.irreducible_multiplicities):
+        raise _invalid(
+            "groups.characters.center_requires_ordinary_character",
+            "character center is defined here only for nonnegative irreducible multiplicities",
+            ("character", "irreducible_multiplicities"),
+        )
+    source = element.table.partition.source
+    actual_order, source_work = _admit_source_group_order(source)
+    if actual_order > MAX_CYCLOTOMIC_ORDER:
+        raise OperationResourceAdmissionError(
+            location=("character", "table", "partition", "source"),
+            code="groups.characters.center_group_order_exceeds_envelope",
+            message="character centers admit groups of order at most 60",
+        )
+    _admit_character_center(element, source, actual_order, source_work)
+    raw_classes = group_conjugacy_classes(
+        source.degree, [list(generator) for generator in source.generators]
+    )
+    partition = GroupConjugacyClassesResult._from_kernel(
+        source, tuple(tuple(tuple(g) for g in cls) for cls in raw_classes)
+    )
+    table = character_table(partition)
+    if element.table != table:
+        raise _invalid(
+            "groups.characters.center_noncanonical_table",
+            "input must retain the exact canonical character table for its group",
+            ("character", "table"),
+        )
+    class_values = _character_values_on_classes(element, table)
+    identity = tuple(range(source.degree))
+    identity_class = next(
+        index
+        for index, conjugacy_class in enumerate(table.partition.classes)
+        if identity in conjugacy_class
+    )
+    degree_value = class_values[identity_class]
+    degree = degree_value[0]
+    if degree.denominator != 1 or any(degree_value[1:]) or degree <= 0:
+        raise _invalid(
+            "groups.characters.center_invalid_degree",
+            "canonical ordinary character must have a positive integral degree",
+            ("character",),
+        )
+
+    field_order = table.axis.cyclotomic_order
+    target_norm = (degree * degree,) + (Fraction(0),) * (euler_phi(field_order) - 1)
+    selected_indices: list[int] = []
+    scalar_values: list[CyclotomicValue] = []
+    scalar_classes: set[tuple[int, ...]] = set()
+    for class_index, class_value in enumerate(class_values):
+        norm = multiply_values(
+            field_order,
+            class_value,
+            conjugate_value(field_order, class_value),
+        )
+        if norm != target_norm:
+            continue
+        selected_indices.append(class_index)
+        scalar_values.append(
+            _make_value(
+                field_order,
+                scale_value(field_order, Fraction(1, degree), class_value),
+            )
+        )
+        scalar_classes.update(
+            tuple(group_element)
+            for group_element in table.partition.classes[class_index]
+        )
+    subgroup = _permutation_group_generated_by(source, scalar_classes)
+    return CharacterCenter._from_kernel(
+        character=element,
+        subgroup=subgroup,
+        scalar_class_indices=tuple(selected_indices),
+        scalar_values=tuple(scalar_values),
+    )
+
+
 __all__ = [
+    "MAX_CHARACTER_CENTER_OUTPUT_BYTES",
+    "MAX_CHARACTER_CENTER_WORK",
     "MAX_CHARACTER_KERNEL_OUTPUT_BYTES",
     "MAX_CHARACTER_KERNEL_WORK",
     "MAX_CHARACTER_RING_DECOMPOSITION_OUTPUT_BYTES",
     "MAX_CHARACTER_RING_DECOMPOSITION_WORK",
     "MAX_CHARACTER_TENSOR_PRODUCT_WORK",
+    "character_center",
     "character_exterior_square",
     "character_kernel",
     "character_symmetric_square",

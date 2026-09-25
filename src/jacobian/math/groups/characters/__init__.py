@@ -1,6 +1,8 @@
 """Finite class-function operations."""
 
 from jacobian.math.groups.characters._models import (
+    CharacterCenter,
+    CharacterCenterRequest,
     CharacterExteriorSquareRequest,
     CharacterKernel,
     CharacterKernelRequest,
@@ -43,6 +45,7 @@ from jacobian.math.groups.characters.operations import (
     frobenius_schur_indicator,
 )
 from jacobian.math.groups.characters.representation_ring_operations import (
+    character_center,
     character_exterior_square,
     character_kernel,
     character_symmetric_square,
@@ -51,6 +54,8 @@ from jacobian.math.groups.characters.representation_ring_operations import (
 )
 
 __all__ = [
+    "CharacterCenter",
+    "CharacterCenterRequest",
     "CharacterExteriorSquareRequest",
     "CharacterKernel",
     "CharacterKernelRequest",
@@ -79,6 +84,7 @@ __all__ = [
     "FiniteClassFunction",
     "FrobeniusSchurIndicatorRequest",
     "FrobeniusSchurIndicatorResult",
+    "character_center",
     "character_exterior_square",
     "character_kernel",
     "character_symmetric_square",

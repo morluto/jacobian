@@ -564,7 +564,14 @@ def _canonical_automorphism(
             code="galois_theory.invalid_automorphism",
             message="automorphism has malformed basis images or root permutation",
         ) from exc
-    _require_automorphism(canonical, field)
+    try:
+        _require_automorphism(canonical, field)
+    except ValidationError as exc:
+        raise OperationDomainValidationError(
+            location=("automorphism",),
+            code="galois_theory.automorphism_image_over_envelope",
+            message="automorphism image exceeds the admitted exact arithmetic envelope",
+        ) from exc
     return canonical, field
 
 
@@ -619,6 +626,24 @@ def _require_automorphism(
     automorphism: QQFieldAutomorphism, field: QQSplittingField
 ) -> None:
     presentation = field.extension
+    # Bound authored coordinates before relation checks multiply them.  In a
+    # quadratic field, squaring a carrier-sized image can otherwise overflow
+    # the canonical value model before we can report a typed domain error.
+    from jacobian.math.number_theory.number_fields.values import (
+        MAX_SIMPLE_NUMBER_FIELD_ELEMENT_DIGITS,
+    )
+
+    for index, image in enumerate(automorphism.basis_images):
+        if any(
+            len(str(abs(value.numerator))) > MAX_SIMPLE_NUMBER_FIELD_ELEMENT_DIGITS
+            or len(str(value.denominator)) > MAX_SIMPLE_NUMBER_FIELD_ELEMENT_DIGITS
+            for value in _coords(image)
+        ):
+            raise OperationDomainValidationError(
+                location=("automorphism", "basis_images", index),
+                code="galois_theory.automorphism_image_over_envelope",
+                message="automorphism image coordinates exceed the admitted digit envelope",
+            )
     if automorphism.basis_images[0] != _one(presentation):
         raise OperationDomainValidationError(
             location=("automorphism", "basis_images", 0),

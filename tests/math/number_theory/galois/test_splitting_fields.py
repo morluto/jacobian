@@ -143,6 +143,26 @@ def test_automorphism_applies_to_arbitrary_field_elements_with_exact_oracle() ->
     assert _coordinates(catalog_result) == (Fraction(3), Fraction(-2))
 
 
+def test_automorphism_rejects_carrier_sized_image_before_relation_arithmetic() -> None:
+    from jacobian.math.number_theory.number_fields.values import (
+        MAX_SIMPLE_NUMBER_FIELD_ELEMENT_DIGITS,
+    )
+
+    split = _split((-2, 0, 1))
+    identity = automorphisms(split.field).automorphisms[0]
+    huge = _element(
+        split.field.extension,
+        (Fraction(10**MAX_SIMPLE_NUMBER_FIELD_ELEMENT_DIGITS - 1), Fraction(0)),
+    )
+    forged = identity.model_copy(update={"basis_images": (identity.basis_images[0], huge)})
+    with pytest.raises(
+        OperationDomainValidationError, match="exceeds the admitted exact arithmetic envelope"
+    ):
+        apply_automorphism_to_element(
+            forged, _element(split.field.extension, (Fraction(1), Fraction(1)))
+        )
+
+
 def test_automorphism_element_application_rejects_a_different_parent() -> None:
     split = _split((-2, 0, 1))
     identity = automorphisms(split.field).automorphisms[0]

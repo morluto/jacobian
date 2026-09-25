@@ -89,11 +89,14 @@ For every common independent set `J`,
 w(J)=u(J)+v(J)\leq \max_{K\in\mathcal I_1}u(K)+\max_{L\in\mathcal I_2}v(L)=w(I),
 \]
 
-so the returned candidate is maximum-weight. This is the integral
-weight-splitting optimality criterion for matroid intersection; see Frank's
-[weight-splitting proof](https://egres.elte.hu/qp/egresqp-08-03.pdf) and the
-matroid-intersection polytope's total-dual-integrality statement in the
-[UIUC combinatorial optimization notes](https://courses.physics.illinois.edu/cs586/sp2022/main.pdf).
+so the returned candidate is maximum-weight, including when all input weights
+are negative and the empty set is optimal. The general integral
+weight-splitting criterion follows from box total dual integrality of the
+common-independent-set polytope; see Schrijver, *Combinatorial Optimization*,
+Chapter 41, §41.4, Theorem 41.12. Frank's
+[weight-splitting proof](https://egres.elte.hu/qp/egresqp-08-03.pdf) treats the
+common-basis (equal-rank) setting, so it is not the sole basis for this
+arbitrary common-independent-set contract.
 
 The request and result retain the original weights, both split-weight
 single-matroid maximizers, and the candidate. The ground and row limits are

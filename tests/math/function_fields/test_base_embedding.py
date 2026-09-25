@@ -99,6 +99,84 @@ def test_base_embedding_value_rejects_wrong_variable_image() -> None:
         )
 
 
+def test_base_embedding_value_rejects_linear_degree_one_source() -> None:
+    target = _field()
+    linear_source = FiniteFunctionField(
+        characteristic=2,
+        variable="x",
+        generator="z",
+        defining_polynomial=(_rf((1,)), _rf((1,))),
+    )
+    element = FiniteFunctionFieldElement(
+        field=target, coordinates=(_rf((0, 1)), _rf((0,)))
+    )
+    with pytest.raises(ValidationError) as error:
+        FunctionFieldBaseEmbedding(
+            source=linear_source, target=target, variable_image=element
+        )
+    assert error.value.errors()[0]["type"] == ("function_field.base_embedding_parent")
+
+
+def test_base_embedding_value_rejects_sentinel_source_with_other_generator() -> None:
+    target = _field()
+    other_sentinel_source = FiniteFunctionField(
+        characteristic=2,
+        variable="x",
+        generator="q",
+        defining_polynomial=(_rf((1,)),),
+    )
+    element = FiniteFunctionFieldElement(
+        field=target, coordinates=(_rf((0, 1)), _rf((0,)))
+    )
+    with pytest.raises(ValidationError) as error:
+        FunctionFieldBaseEmbedding(
+            source=other_sentinel_source, target=target, variable_image=element
+        )
+    assert error.value.errors()[0]["type"] == ("function_field.base_embedding_parent")
+
+
+def test_apply_rejects_malformed_native_embedding() -> None:
+    target = _field()
+    embedding = function_field_base_embedding(target).embedding
+    malformed_source = FiniteFunctionField.model_construct(
+        characteristic=2,
+        variable="x",
+        generator="y",
+        defining_polynomial=(
+            PrimeFieldRationalFunction.model_construct(
+                numerator=PrimeFieldPolynomial(characteristic=2, coefficients=(1,)),
+                denominator=PrimeFieldPolynomial(characteristic=2, coefficients=(0,)),
+            ),
+        ),
+    )
+    forged = FunctionFieldBaseEmbedding.model_construct(
+        source=malformed_source,
+        target=embedding.target,
+        variable_image=embedding.variable_image,
+    )
+    element = FiniteFunctionFieldElement(
+        field=embedding.source, coordinates=(_rf((1,)),)
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        function_field_base_embedding_apply(forged, element)
+    assert error.value.errors()[0]["type"] == ("function_field.invalid_base_embedding")
+
+
+def test_apply_rejects_malformed_native_element() -> None:
+    target = _field()
+    embedding = function_field_base_embedding(target).embedding
+    malformed_coordinate = PrimeFieldRationalFunction.model_construct(
+        numerator=PrimeFieldPolynomial(characteristic=2, coefficients=(1,)),
+        denominator=PrimeFieldPolynomial(characteristic=2, coefficients=(0,)),
+    )
+    forged_element = FiniteFunctionFieldElement.model_construct(
+        field=embedding.source, coordinates=(malformed_coordinate,)
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        function_field_base_embedding_apply(embedding, forged_element)
+    assert error.value.errors()[0]["type"] == "function_field.invalid_element"
+
+
 def test_apply_inclusion_preserves_rational_function_and_composes() -> None:
     target = _field()
     embedding = function_field_base_embedding(target).embedding

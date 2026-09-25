@@ -178,6 +178,20 @@ def test_riemann_roch_multiplicity_bound_is_checked_before_place_admission() -> 
     )
 
 
+def test_riemann_roch_accepts_nonmonic_associate_of_x_place() -> None:
+    field = _field()
+    two_x_place = _finite_place(field, (0, 2))
+    divisor = _divisor(field, ((two_x_place, 1),))
+
+    space = function_field_riemann_roch_space(divisor)
+
+    assert space.divisor.terms[0].place.prime_polynomial.coefficients == (0, 1)
+    assert space.dimension == 2
+    assert len(space.basis) == 2
+    for element in space.basis:
+        assert function_field_place_valuation(two_x_place, element) + 1 >= 0
+
+
 def test_riemann_roch_rejects_algebraic_extension_fields() -> None:
     def rf(numerator: tuple[int, ...]) -> PrimeFieldRationalFunction:
         return PrimeFieldRationalFunction(

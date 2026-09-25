@@ -230,6 +230,7 @@ class HyperellipticAffinePlace(StrictModel):
         if (
             self.residue_field.characteristic != prime
             or self.residue_field.modulus_coefficients != (0, 1)
+            or self.residue_field.generator != "z"
         ):
             raise _validation_error(
                 "affine_place_residue_parent",
@@ -473,11 +474,19 @@ class FunctionFieldBaseEmbedding(StrictModel):
 
     @model_validator(mode="after")
     def require_canonical_base_inclusion(self) -> Self:
+        # The source must be the rational-field sentinel itself, not a merely
+        # degree-one linear presentation, so that applying this embedding is
+        # the canonical inclusion and never an implicit change of parent.
+        rational_sentinel = len(self.source.defining_polynomial) == 1 and (
+            self.source.defining_polynomial[0].numerator.is_one()
+            and self.source.defining_polynomial[0].denominator.is_one()
+        )
         if (
-            self.source.degree != 1
+            not rational_sentinel
             or self.target.degree <= 1
             or self.source.characteristic != self.target.characteristic
             or self.source.variable != self.target.variable
+            or self.source.generator != self.target.generator
         ):
             raise _validation_error(
                 "base_embedding_parent",

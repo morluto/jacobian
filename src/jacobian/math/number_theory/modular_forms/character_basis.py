@@ -293,15 +293,21 @@ def _character_basis_from_admission(
 
     # The adapter canonicalizes character coordinates once; the isolated PARI
     # worker independently compares that character on every unit residue.
-    # A q-Sturm elimination can clear at most a dimension-by-degree pivot
-    # minor. Admit that exact intermediate envelope before the backend runs;
-    # canonical result values retain the separate 256-digit coefficient cap.
+    # Row reduction performs at most dimension pivots. Each pivot normalizes
+    # one dimension-by-precision row, then eliminates at most dimension - 1
+    # rows across that same precision. `work` above bounds these coefficient
+    # updates with a conservative field-degree factor. Pivot columns are all
+    # inside the Sturm prefix, so the height of every transformed coefficient
+    # is controlled by a dimension-by-degree pivot minor and is independent of
+    # the retained trailing prefix length. Admit that exact intermediate
+    # envelope before the backend runs; canonical result values retain the
+    # separate 256-digit coefficient cap.
     intermediate_digits = 2 * (dimension * field.degree) ** 2 * 30 + 128
-    if intermediate_digits > 100_000 or work * precision > 5_000_000:
+    if intermediate_digits > 100_000:
         raise OperationResourceAdmissionError(
             location=("space",),
             code="modular_form.character_basis_height_admission",
-            message="cyclotomic Sturm row reduction exceeds its exact intermediate envelope",
+            message="cyclotomic Sturm row reduction exceeds its exact intermediate height envelope",
         )
     raw_basis = pari_character_basis(
         space,

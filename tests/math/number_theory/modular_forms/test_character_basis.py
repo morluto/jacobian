@@ -353,6 +353,29 @@ def test_extended_character_basis_preserves_zero_dimensional_space() -> None:
     )
 
 
+def test_maximum_prefix_is_admitted_for_largest_character_basis() -> None:
+    space = ModularFormSpace(
+        level=39,
+        weight=2,
+        kind="M",
+        character=_inflated_character(39, 2),
+        coefficient_domain=RationalCyclotomicField(order=6),
+    )
+
+    basis = modular_character_basis_q_expansions(space, 128)
+
+    assert len(basis.elements) == 7
+    assert basis.precision == 128
+    assert all(len(item.expansion.coefficients) == 128 for item in basis.elements)
+    restored = TypeAdapter(ModularCharacterBasis).validate_json(basis.model_dump_json())
+    assert restored == basis
+
+
+def test_precision_above_maximum_is_rejected_by_request_model() -> None:
+    with pytest.raises(ValidationError):
+        ModularCharacterBasisRequest(space=_space(), precision=129)
+
+
 @pytest.mark.parametrize("coordinates", [(12,), ("2",)])
 def test_forged_character_coordinates_are_rejected_before_pari(
     monkeypatch: pytest.MonkeyPatch, coordinates: tuple[object, ...]

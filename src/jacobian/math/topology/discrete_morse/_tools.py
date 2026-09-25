@@ -27,7 +27,6 @@ from jacobian.math.topology.discrete_morse._models import (
     MorseComplexRequest,
     MorseComplexResult,
 )
-from jacobian.math.topology.discrete_morse.extensions import minimum_matching
 from jacobian.math.topology.discrete_morse.extensions_tools import (
     TOOLS as EXTENSION_TOOLS,
 )
@@ -35,6 +34,7 @@ from jacobian.math.topology.discrete_morse.operations import (
     compute_chain_contraction,
     compute_gradient_paths,
     compute_integer_morse_complex,
+    compute_minimum_matching,
     compute_morse_complex,
     construct_matching,
 )
@@ -76,7 +76,8 @@ def _run_compute_integer_morse_complex(
 def _run_minimum_matching(
     request: MinimumMorseMatchingRequest,
 ) -> MinimumMorseMatchingResult:
-    return minimum_matching(request)
+    canonical = canonicalize(request.complex.vertices, request.complex.facets).complex
+    return compute_minimum_matching(canonical)
 
 
 def _run_compute_chain_contraction(

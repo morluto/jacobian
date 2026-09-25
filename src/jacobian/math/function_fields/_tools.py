@@ -19,6 +19,7 @@ from jacobian.math.function_fields._models import (
     FunctionFieldElementInverseRequest,
     FunctionFieldElementMultiplyRequest,
     FunctionFieldElementMultiplyResult,
+    FunctionFieldElementPowerRequest,
     FunctionFieldGenusRequest,
     FunctionFieldGenusResult,
     FunctionFieldPlaceEnumerationRequest,
@@ -43,6 +44,7 @@ from jacobian.math.function_fields.operations import (
     function_field_element_add,
     function_field_element_inverse,
     function_field_element_multiply,
+    function_field_element_power,
     function_field_genus,
     function_field_place_residue,
     function_field_place_valuation,
@@ -68,6 +70,12 @@ def _run_element_inverse(
     request: FunctionFieldElementInverseRequest,
 ) -> FiniteFunctionFieldElement:
     return function_field_element_inverse(request.element)
+
+
+def _run_element_power(
+    request: FunctionFieldElementPowerRequest,
+) -> FiniteFunctionFieldElement:
+    return function_field_element_power(request.element, request.exponent)
 
 
 def _rational_function(numerator: list[int], denominator: list[int]) -> dict[str, Any]:
@@ -705,6 +713,35 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                     "in the ledger."
                 ),
                 input={"left": _GF2_Y, "right": _GF2_Y},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="function_field.element.power.compute",
+        title="Raise a finite function-field element to a nonnegative power",
+        description=(
+            "Compute an exact nonnegative integral power in the element's "
+            "GF(p)(x)[y]/(f) parent by binary powering. The result retains "
+            "the exact field identity. Coefficient growth, aggregate exact "
+            "work, and serialized output are admitted before arithmetic; "
+            "exponent zero returns the parent unit, including for zero."
+        ),
+        request_type=FunctionFieldElementPowerRequest,
+        result_type=FiniteFunctionFieldElement,
+        run=_run_element_power,
+        tags=("algebra", "function-field", "function-field-element", "exact"),
+        discovery_terms=(
+            "function field element power",
+            "algebraic function field exponentiation",
+            "GF(p)(x)[y] binary powering",
+        ),
+        examples=(
+            OperationExample(
+                name="quadratic_generator_square",
+                description=(
+                    "Compute y^2 in GF(2)(x)[y]/(y^2+y+x), reducing it to y+x."
+                ),
+                input={"element": _GF2_Y, "exponent": "2"},
             ),
         ),
     ),

@@ -7,8 +7,10 @@ from typing import Literal, Self
 from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
+from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
-from jacobian.math.matrices.values import IntegerMatrix
+from jacobian.math.matrices.analysis._models import InertiaResult
+from jacobian.math.matrices.values import IntegerMatrix, RationalMatrix
 from jacobian.math.polynomials.values import RationalLaurentPolynomial
 from jacobian.math.topology.edge_paths._models import (
     FiniteGroupPresentation,
@@ -30,6 +32,9 @@ MAX_LINK_DISJOINT_UNION_OUTPUT_BYTES = 8 * 1024 * 1024
 MAX_CONWAY_CENTERED_DEGREE = 64
 MAX_CONWAY_COEFFICIENT_DIGITS = 4_096
 MAX_CONWAY_OUTPUT_BYTES = 1024 * 1024
+MAX_LINK_SIGNATURE_CROSSINGS = 32
+MAX_LINK_SIGNATURE_OUTPUT_BYTES = 2 * 1024 * 1024
+MAX_LINK_SIGNATURE_WORK = 50_000_000
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -260,7 +265,9 @@ class LinkDisjointUnionResult(StrictModel):
         for crossing_row in self.crossing_map:
             source = self.sources[crossing_row.source_index]
             source_crossing = next(
-                c for c in source.crossings if c.crossing_id == crossing_row.source_crossing_id
+                c
+                for c in source.crossings
+                if c.crossing_id == crossing_row.source_crossing_id
             )
             target = crossings.get(crossing_row.target_crossing_id)
             if target is None or (target.over_pair, target.under_pair, target.sign) != (
@@ -666,6 +673,111 @@ class GoeritzDataResult(StrictModel):
         return self
 
 
+class GoeritzCorrectionContribution(StrictModel):
+    """One crossing's oriented type and Gordon-Litherland correction value."""
+
+    crossing_id: LinkLabel
+    crossing_sign: Literal[-1, 1]
+    incidence_number: Literal[-1, 1]
+    crossing_type: Literal["TYPE_I", "TYPE_II"]
+    correction_contribution: StrictInt
+
+
+class LinkSignatureRequest(StrictModel):
+    """Compute the oriented link signature from one bounded diagram."""
+
+    diagram: OrientedLinkDiagram
+
+
+class LinkSignatureResult(StrictModel):
+    """Gordon-Litherland signature with its exact matrix and correction data."""
+
+    diagram: OrientedLinkDiagram
+    goeritz_data: GoeritzDataResult | None
+    goeritz_inertia: InertiaResult
+    correction_contributions: tuple[GoeritzCorrectionContribution, ...] = Field(
+        max_length=MAX_LINK_SIGNATURE_CROSSINGS
+    )
+    correction_term: StrictInt
+    signature: StrictInt
+
+    @model_validator(mode="after")
+    def require_source_bound_signature(self) -> Self:
+        goeritz_data = self.goeritz_data
+        graph = goeritz_data.blackboard_graph if goeritz_data is not None else None
+        if graph is None:
+            if self.diagram.crossings or not self.diagram.free_loops:
+                raise _validation_error(
+                    "signature_empty_projection",
+                    "only crossing-free unlinks may omit Goeritz data",
+                )
+            matrix_entries: tuple[tuple[int, ...], ...] = ()
+        else:
+            if graph.diagram != self.diagram:
+                raise _validation_error(
+                    "signature_diagram_source",
+                    "Goeritz data must retain the exact signature source diagram",
+                )
+            assert goeritz_data is not None
+            matrix_entries = goeritz_data.reduced_matrix.entries
+        expected_rational = RationalMatrix(
+            entries=tuple(
+                tuple(CanonicalRational(num=value, den=1) for value in row)
+                for row in matrix_entries
+            ),
+            row_count=len(matrix_entries),
+            column_count=len(matrix_entries),
+        )
+        if self.goeritz_inertia.matrix != expected_rational:
+            raise _validation_error(
+                "signature_inertia_source",
+                "inertia must retain the exact reduced Goeritz matrix over QQ",
+            )
+        if len(self.correction_contributions) != len(self.diagram.crossings) or tuple(
+            row.crossing_id for row in self.correction_contributions
+        ) != tuple(crossing.crossing_id for crossing in self.diagram.crossings):
+            raise _validation_error(
+                "signature_correction_axis",
+                "correction rows must cover the complete diagram crossing axis",
+            )
+        correction = 0
+        edges = () if graph is None else graph.edges
+        for crossing, edge, row in zip(
+            self.diagram.crossings, edges, self.correction_contributions, strict=True
+        ):
+            crossing_type = (
+                "TYPE_I" if crossing.sign * edge.tait_sign == 1 else "TYPE_II"
+            )
+            if (
+                row.crossing_sign != crossing.sign
+                or row.incidence_number != edge.tait_sign
+                or row.crossing_type != crossing_type
+                or row.correction_contribution
+                != (edge.tait_sign if crossing_type == "TYPE_II" else 0)
+            ):
+                raise _validation_error(
+                    "signature_correction_source",
+                    "crossing type and incidence must match source orientation and shading",
+                )
+            correction += row.correction_contribution
+        if correction != self.correction_term:
+            raise _validation_error(
+                "signature_correction_sum",
+                "correction term must sum incidence numbers at type-II crossings",
+            )
+        expected_signature = (
+            self.goeritz_inertia.n_positive
+            - self.goeritz_inertia.n_negative
+            - correction
+        )
+        if self.signature != expected_signature:
+            raise _validation_error(
+                "signature_identity",
+                "link signature must equal Goeritz inertia signature minus correction",
+            )
+        return self
+
+
 class LinkDeterminantResult(StrictModel):
     """The nonnegative knot determinant with its Alexander source value."""
 
@@ -877,6 +989,9 @@ class WirtingerPresentationResult(StrictModel):
 __all__ = [
     "MAX_BRAID_STRANDS",
     "MAX_BRAID_WORD_LENGTH",
+    "MAX_LINK_SIGNATURE_CROSSINGS",
+    "MAX_LINK_SIGNATURE_OUTPUT_BYTES",
+    "MAX_LINK_SIGNATURE_WORK",
     "MAX_WIRTINGER_GENERATORS",
     "AlexanderPolynomialRequest",
     "AlexanderPolynomialResult",
@@ -887,12 +1002,15 @@ __all__ = [
     "BraidWord",
     "BraidWordRequest",
     "CheckerboardRegion",
+    "GoeritzCorrectionContribution",
     "GoeritzDataRequest",
     "GoeritzDataResult",
     "LinkBlackboardEdge",
     "LinkBlackboardGraph",
     "LinkDeterminantRequest",
     "LinkDeterminantResult",
+    "LinkSignatureRequest",
+    "LinkSignatureResult",
     "SeifertCircle",
     "SeifertCircleRequest",
     "SeifertCircleResult",

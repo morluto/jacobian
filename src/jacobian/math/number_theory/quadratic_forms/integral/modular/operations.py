@@ -12,6 +12,9 @@ from jacobian.math.number_theory.quadratic_forms.integral._models import (
     IntegralQuadraticCrossTerm,
     IntegralQuadraticForm,
 )
+from jacobian.math.number_theory.quadratic_forms.integral.modular._kernel import (
+    evaluate_modular_polynomial_value,
+)
 from jacobian.math.number_theory.quadratic_forms.integral.modular._models import (
     MAX_MODULAR_QUADRATIC_FORM_AXIS,
     MAX_MODULAR_QUADRATIC_FORM_INTEGER_DIGITS,
@@ -160,50 +163,104 @@ def reduce_integral_form_modulus(
     )
 
 
-def _check_modular_values(
+def _check_modular_polynomial(
     polynomial: ModularQuadraticPolynomial,
-    vector: ModularCoordinateVector,
 ) -> tuple[int, int]:
     if not isinstance(polynomial, ModularQuadraticPolynomial):
         raise _domain_error(
             "polynomial_type", "expected a canonical modular quadratic polynomial"
         )
-    if not isinstance(vector, ModularCoordinateVector):
-        raise _domain_error(
-            "vector_type", "expected a canonical modular coordinate vector"
-        )
-    modulus_digits = _admit_modulus(polynomial.modulus)
-    if vector.modulus != polynomial.modulus:
-        raise _domain_error(
-            "parent_mismatch", "polynomial and vector moduli must agree"
-        )
-    n = len(polynomial.axis)
     if (
-        n > MAX_MODULAR_QUADRATIC_FORM_AXIS
-        or len(polynomial.diagonal_residues) != n
-        or vector.axis != polynomial.axis
-        or len(vector.coordinates) != n
-        or len(set(polynomial.axis)) != n
-        or any(
-            not 0 <= value < polynomial.modulus
-            for value in polynomial.diagonal_residues
-        )
-        or any(not 0 <= value < polynomial.modulus for value in vector.coordinates)
+        not isinstance(polynomial.axis, tuple)
+        or not isinstance(polynomial.diagonal_residues, tuple)
+        or not isinstance(polynomial.cross_terms, tuple)
     ):
         raise _domain_error(
-            "target_shape", "polynomial and vector must use one canonical target space"
+            "polynomial_shape", "modular polynomial must use canonical tuple fields"
+        )
+    modulus_digits = _admit_modulus(polynomial.modulus)
+    n = len(polynomial.axis)
+    if (
+        polynomial.domain != "Z_MOD_N"
+        or n > MAX_MODULAR_QUADRATIC_FORM_AXIS
+        or any(
+            not isinstance(label, str) or not label or len(label) > 128
+            for label in polynomial.axis
+        )
+        or len(polynomial.diagonal_residues) != n
+        or len(set(polynomial.axis)) != n
+        or any(
+            not isinstance(value, int)
+            or isinstance(value, bool)
+            or not 0 <= value < polynomial.modulus
+            for value in polynomial.diagonal_residues
+        )
+    ):
+        raise _domain_error(
+            "polynomial_shape", "modular polynomial must use one canonical target space"
+        )
+    if any(
+        not isinstance(term, ModularQuadraticCrossTerm)
+        or not isinstance(term.left, int)
+        or isinstance(term.left, bool)
+        or not isinstance(term.right, int)
+        or isinstance(term.right, bool)
+        or not isinstance(term.coefficient, int)
+        or isinstance(term.coefficient, bool)
+        for term in polynomial.cross_terms
+    ):
+        raise _domain_error(
+            "polynomial_shape", "modular polynomial support must be canonical"
         )
     positions = tuple((term.left, term.right) for term in polynomial.cross_terms)
     if (
         len(polynomial.cross_terms) + n > MAX_MODULAR_QUADRATIC_FORM_TERMS
         or positions != tuple(sorted(set(positions)))
         or any(
-            term.right >= n or not 0 < term.coefficient < polynomial.modulus
+            term.left < 0
+            or term.left >= term.right
+            or term.right >= n
+            or not 0 < term.coefficient < polynomial.modulus
             for term in polynomial.cross_terms
         )
     ):
         raise _domain_error(
             "polynomial_shape", "modular polynomial support must be canonical"
+        )
+    return n, modulus_digits
+
+
+def _check_modular_values(
+    polynomial: ModularQuadraticPolynomial,
+    vector: ModularCoordinateVector,
+) -> tuple[int, int]:
+    n, modulus_digits = _check_modular_polynomial(polynomial)
+    if not isinstance(vector, ModularCoordinateVector):
+        raise _domain_error(
+            "vector_type", "expected a canonical modular coordinate vector"
+        )
+    if (
+        isinstance(vector.modulus, bool)
+        or not isinstance(vector.modulus, int)
+        or vector.modulus != polynomial.modulus
+    ):
+        raise _domain_error(
+            "parent_mismatch", "polynomial and vector moduli must agree"
+        )
+    if (
+        not isinstance(vector.axis, tuple)
+        or not isinstance(vector.coordinates, tuple)
+        or vector.axis != polynomial.axis
+        or len(vector.coordinates) != n
+        or any(
+            not isinstance(value, int)
+            or isinstance(value, bool)
+            or not 0 <= value < polynomial.modulus
+            for value in vector.coordinates
+        )
+    ):
+        raise _domain_error(
+            "target_shape", "polynomial and vector must use one canonical target space"
         )
     return n, modulus_digits
 
@@ -226,19 +283,7 @@ def evaluate_modular_form(request: ModularEvaluationRequest) -> ModularInteger:
         )
 
     modulus = polynomial.modulus
-    value = 0
-    for coefficient, coordinate in zip(
-        polynomial.diagonal_residues, vector.coordinates, strict=True
-    ):
-        if coefficient:
-            value = (
-                value + coefficient * (coordinate * coordinate % modulus)
-            ) % modulus
-    for term in polynomial.cross_terms:
-        product = (
-            vector.coordinates[term.left] * vector.coordinates[term.right]
-        ) % modulus
-        value = (value + term.coefficient * product) % modulus
+    value = evaluate_modular_polynomial_value(polynomial, vector.coordinates)
     return ModularInteger(modulus=modulus, residue=value)
 
 

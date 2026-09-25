@@ -75,11 +75,18 @@ def _as_value(
     )
 
 
-def _scalar_value(polynomial: SparsePolynomial) -> Fraction:
+def _scalar_coefficient(polynomial: SparsePolynomial) -> ChainCoefficient:
+    """Return one constant polynomial as a native canonical chain coefficient.
+
+    The conversion exists only for the variable-free ambient ring, so each
+    polynomial holds at most one term; a unit denominator is spelled as the
+    integer the canonical grammar would parse back.
+    """
+
     if not polynomial:
-        return Fraction(0)
+        return 0
     coefficient = next(iter(polynomial.values()))
-    return coefficient
+    return coefficient.numerator if coefficient.denominator == 1 else coefficient
 
 
 def _converted_chain_complex(
@@ -106,9 +113,11 @@ def _converted_chain_complex(
         return None
     matrices: list[tuple[tuple[ChainCoefficient, ...], ...]] = []
     for matrix in differentials:
-        dense = [[Fraction(0)] * matrix.column_count for _ in range(matrix.row_count)]
+        dense: list[list[ChainCoefficient]] = [
+            [0] * matrix.column_count for _ in range(matrix.row_count)
+        ]
         for entry in matrix.entries:
-            dense[entry.row][entry.column] = _scalar_value(
+            dense[entry.row][entry.column] = _scalar_coefficient(
                 {
                     term.exponents: Fraction(term.coefficient.num, term.coefficient.den)
                     for term in entry.polynomial.polynomial.terms

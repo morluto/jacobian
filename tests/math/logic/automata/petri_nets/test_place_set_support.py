@@ -7,7 +7,6 @@ import json
 import pytest
 from pydantic import ValidationError
 
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.logic.automata.petri_nets import (
     PetriNet,
@@ -15,6 +14,7 @@ from jacobian.math.logic.automata.petri_nets import (
     place_set_support,
 )
 from jacobian.math.logic.automata.petri_nets._models import PlaceSetSupportResult
+from jacobian.math.logic.automata.petri_nets._tools import TOOLS
 
 
 def test_profile_returns_complete_support_and_both_predicates() -> None:
@@ -110,7 +110,11 @@ def test_serialized_profile_rejects_negative_transition_indices() -> None:
 
 
 def test_catalog_declares_the_support_profile_operation() -> None:
-    tool = Catalog.open().operation("petri_net.place_set.support_profile.compute")
+    tool = next(
+        t
+        for t in TOOLS
+        if t.operation_id == "petri_net.place_set.support_profile.compute"
+    )
     assert tool is not None
     result = tool.run(
         tool.request_type.model_validate(

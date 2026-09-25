@@ -7,13 +7,13 @@ from itertools import product
 
 import pytest
 
-from jacobian.catalog.catalog import Catalog
 from jacobian.math.logic.automata.petri_nets import (
     Marking,
     PetriNet,
     PetriPlaceSubset,
     place_set_initial_marking_profile,
 )
+from jacobian.math.logic.automata.petri_nets._tools import TOOLS
 
 
 def _manual_support(net: PetriNet, places: tuple[int, ...]) -> tuple[bool, bool]:
@@ -120,8 +120,10 @@ def test_profile_rejects_mismatched_parent_and_place_axis() -> None:
 
 
 def test_catalog_publishes_the_marking_profile_operation() -> None:
-    tool = Catalog.open().operation(
-        "petri_net.place_set.initial_marking_profile.compute"
+    tool = next(
+        t
+        for t in TOOLS
+        if t.operation_id == "petri_net.place_set.initial_marking_profile.compute"
     )
     assert tool is not None
     request = tool.request_type.model_validate_json(json.dumps(tool.examples[0].input))

@@ -5,7 +5,6 @@ from itertools import product
 import pytest
 from pydantic import ValidationError
 
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -15,6 +14,7 @@ from jacobian.math.logic.automata.petri_nets._models import (
     MarkingCommutationProfileRequest,
     MarkingCommutationProfileResult,
 )
+from jacobian.math.logic.automata.petri_nets._tools import TOOLS
 from jacobian.math.logic.automata.petri_nets.operations import (
     marking_commutation_profile,
 )
@@ -141,7 +141,11 @@ def test_result_rejects_authored_flags_that_disagree_with_replays() -> None:
 
 
 def test_catalog_publishes_the_sequential_profile_separately_from_conflicts() -> None:
-    tool = Catalog.open().operation("petri_net.marking.commutation_profile.compute")
+    tool = next(
+        t
+        for t in TOOLS
+        if t.operation_id == "petri_net.marking.commutation_profile.compute"
+    )
     assert tool is not None
     request = tool.request_type.model_validate(
         {
@@ -162,7 +166,11 @@ def test_catalog_publishes_the_sequential_profile_separately_from_conflicts() ->
     catalog_example = tool.request_type.model_validate(tool.examples[0].input)
     assert tool.run(catalog_example) == result
     # This is a local sequential-order result, not the simultaneous profile.
-    conflict = Catalog.open().operation("petri_net.marking.conflict_profile.compute")
+    conflict = next(
+        t
+        for t in TOOLS
+        if t.operation_id == "petri_net.marking.conflict_profile.compute"
+    )
     assert conflict is not None
     assert "sequential commutation" in conflict.description
     assert "global" in tool.description

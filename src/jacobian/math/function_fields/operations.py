@@ -545,6 +545,29 @@ def _admit_multiplication_resources(
                 code="function_field.multiplication_work_exceeds_envelope",
                 message="rational-function multiplication exceeds its work envelope",
             )
+        degree_bound = max(
+            (
+                a.numerator.degree + b.numerator.degree
+                for a, b in zip(left.coordinates, right.coordinates, strict=True)
+            ),
+            default=0,
+        )
+        degree_bound = max(
+            degree_bound,
+            max(
+                (
+                    a.denominator.degree + b.denominator.degree
+                    for a, b in zip(left.coordinates, right.coordinates, strict=True)
+                ),
+                default=0,
+            ),
+        )
+        if degree_bound > MAX_POLYNOMIAL_X_DEGREE:
+            raise OperationResourceAdmissionError(
+                location=("left", "coordinates"),
+                code="function_field.coefficient_growth_exceeds_envelope",
+                message="the rational-function product exceeds the coefficient envelope",
+            )
         return
     max_terms = 1
     total_degree = 0
@@ -1634,6 +1657,21 @@ def function_field_divisor_add(
                     code="function_field.divisor_parent",
                     message="every divisor place must belong to divisor.field",
                 )
+            if place.kind == "FINITE":
+                polynomial = place.prime_polynomial
+                if polynomial is None:
+                    raise OperationDomainValidationError(
+                        location=("divisor", "terms", "place"),
+                        code="function_field.invalid_place",
+                        message="finite places require a prime polynomial",
+                    )
+                canonical_polynomial = _monic_polynomial(polynomial)
+                place = FunctionFieldPlace(
+                    field=place.field,
+                    kind=place.kind,
+                    prime_polynomial=canonical_polynomial,
+                    degree=canonical_polynomial.degree,
+                )
             key = place.model_dump_json()
             previous = raw_support.get(key)
             raw_support[key] = (
@@ -1710,6 +1748,38 @@ def function_field_divisor_scale(
             code="function_field.divisor_scalar_exceeds_envelope",
             message=f"divisor scalars may use at most {MAX_DIVISOR_MULTIPLICITY_BITS} bits",
         )
+    if not isinstance(divisor, FunctionFieldDivisor):
+        raise OperationDomainValidationError(
+            location=("divisor",),
+            code="function_field.divisor_type",
+            message="divisor must be a function-field divisor value",
+        )
+    field = _validated_field(getattr(divisor, "field", None))
+    _admit_field_resources(field)
+    raw_terms = getattr(divisor, "terms", None)
+    if type(raw_terms) is not tuple or len(raw_terms) > 256:
+        raise OperationDomainValidationError(
+            location=("divisor", "terms"),
+            code="function_field.divisor_shape",
+            message="divisor terms must be a bounded canonical tuple",
+        )
+    for index, term in enumerate(raw_terms):
+        if (
+            not isinstance(term, FunctionFieldDivisorTerm)
+            or type(term.multiplicity) is not int
+        ):
+            raise OperationDomainValidationError(
+                location=("divisor", "terms", index),
+                code="function_field.divisor_term_type",
+                message="divisor terms must be typed place/multiplicity values",
+            )
+        product = term.multiplicity * scalar
+        if product.bit_length() > MAX_DIVISOR_MULTIPLICITY_BITS:
+            raise OperationResourceAdmissionError(
+                location=("result", "terms", index, "multiplicity"),
+                code="function_field.divisor_result_multiplicity_exceeds_envelope",
+                message="the exact scaled divisor exceeds the 4096-bit result envelope",
+            )
     divisor = _admit_divisor(divisor)
     terms = tuple(
         FunctionFieldDivisorTerm(place=t.place, multiplicity=t.multiplicity * scalar)

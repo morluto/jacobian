@@ -76,6 +76,19 @@ def _recursive_oracle(
     return result
 
 
+def test_surrogate_label_is_rejected_before_result_serialization() -> None:
+    configuration = AffineConfiguration(
+        row_labels=("\ud800",), generator_labels=("g",), entries=((1,),)
+    )
+    semigroup = PositiveAffineSemigroup(
+        configuration=configuration,
+        grading=(CanonicalRational.from_fraction(Fraction(1)),),
+    )
+
+    with pytest.raises(OperationResourceAdmissionError, match="labels"):
+        factorization_count(semigroup, (1,))
+
+
 def test_one_row_duplicate_columns_and_zero_target() -> None:
     semigroup = _semigroup(((1,), (1,)), (Fraction(1),))
 

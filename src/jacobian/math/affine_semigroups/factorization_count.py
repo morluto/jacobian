@@ -95,7 +95,11 @@ def _admit_count_source(value: object) -> PositiveAffineSemigroup:
         )
     labels = (*configuration.row_labels, *configuration.generator_labels)
     if (
-        any(type(label) is not str for label in labels)
+        any(
+            type(label) is not str
+            or any(0xD800 <= ord(character) <= 0xDFFF for character in label)
+            for label in labels
+        )
         or sum(len(label) for label in labels) > MAX_AFFINE_FACTOR_COUNT_LABEL_CHARS
     ):
         raise OperationResourceAdmissionError(

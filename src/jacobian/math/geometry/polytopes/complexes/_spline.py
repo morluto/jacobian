@@ -1051,6 +1051,11 @@ def _admit_spline(
     cells = tuple(sorted(complex_value.maximal_cells, key=lambda cell: cell.cell_id))
     _require_pure_spline_complex(complex_value, smoothness)
     dimension = len(complex_value.space.axes)
+    if any(cell.dimension != dimension for cell in cells):
+        _reject(
+            "spline_ambient_dimension",
+            "spline coordinates require maximal cells full-dimensional in the ambient space",
+        )
     monomial_count = comb(dimension + degree, degree)
     width = len(cells) * monomial_count
     if width > 4096:

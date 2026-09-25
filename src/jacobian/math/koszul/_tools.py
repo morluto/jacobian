@@ -13,7 +13,6 @@ from jacobian.math.koszul.module_models import (
     ModuleKoszulDifferentialValue,
     ModuleKoszulDirectSumRequest,
     ModuleKoszulDirectSumValue,
-    ModuleKoszulExactnessProfile,
     ModuleKoszulHomology,
     ModuleKoszulHomologyRequest,
     ModuleKoszulRequest,
@@ -30,7 +29,6 @@ from jacobian.math.koszul.module_operations import (
     module_koszul_complex,
     module_koszul_differential,
     module_koszul_direct_sum,
-    module_koszul_exactness_profile,
     module_koszul_homology,
     module_koszul_quotient,
     module_koszul_sequence_permute,
@@ -393,45 +391,6 @@ TOOLS: MathTools = (
                         "sequence": [],
                         "basis_sizes": [1],
                         "differentials": [],
-                    }
-                },
-            ),
-        ),
-    ),
-    MathTool(
-        operation_id="homological.koszul.exactness_profile.compute",
-        title="Compute positive-degree Koszul exactness profile",
-        description=(
-            "Return every homology dimension and whether this supplied finite "
-            "Koszul complex is acyclic above degree zero. If higher homology is "
-            "nonzero, include a concrete first-degree class representative in "
-            "the retained chain basis. This does not infer a theorem-level "
-            "regular-sequence property."
-        ),
-        request_type=ModuleKoszulHomologyRequest,
-        result_type=ModuleKoszulExactnessProfile,
-        run=module_koszul_exactness_profile,
-        tags=("koszul", "homology", "exactness", "exact"),
-        examples=(
-            OperationExample(
-                name="unit_sequence_is_acyclic_above_zero",
-                description=(
-                    "The unit sequence on the regular module gives an exact "
-                    "positive-degree profile for this finite complex."
-                ),
-                input={
-                    "complex": {
-                        "algebra": _MODULE_EXAMPLE["algebra"],
-                        "module": _MODULE_EXAMPLE["module"],
-                        "sequence": _MODULE_EXAMPLE["sequence"],
-                        "basis_sizes": [1, 1],
-                        "differentials": [
-                            {
-                                "row_count": 1,
-                                "column_count": 1,
-                                "entries": [[0, 0, {"num": "1", "den": "1"}]],
-                            }
-                        ],
                     }
                 },
             ),

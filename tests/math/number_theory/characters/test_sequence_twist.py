@@ -29,10 +29,20 @@ def _coefficients(value: RationalCyclotomicElement) -> tuple[Fraction, ...]:
     return tuple(Fraction(item.num, item.den) for item in value.coefficients_ascending)
 
 
+def _twist_request(
+    request: DirichletCharacterSequenceTwistRequest,
+) -> FiniteCyclotomicSequence:
+    return dirichlet_character_sequence_twist(
+        request.sequence,
+        request.character,
+        index_origin=request.index_origin,
+    )
+
+
 def test_quartic_character_twist_matches_independent_gaussian_value_table() -> None:
     group = character_group(5)
     character = dirichlet_character(group, (1,))
-    result = dirichlet_character_sequence_twist(
+    result = _twist_request(
         DirichletCharacterSequenceTwistRequest(
             sequence=FiniteIntegerSequence(values=(1, 1, 1, 1)),
             character=character,
@@ -53,7 +63,7 @@ def test_quartic_character_twist_matches_independent_gaussian_value_table() -> N
 def test_twists_compose_and_preserve_the_authored_axis_through_json() -> None:
     group = character_group(5)
     character = dirichlet_character(group, (1,))
-    first = dirichlet_character_sequence_twist(
+    first = _twist_request(
         DirichletCharacterSequenceTwistRequest(
             sequence=FiniteIntegerSequence(values=(1, 1, 1, 1)),
             character=character,
@@ -63,14 +73,14 @@ def test_twists_compose_and_preserve_the_authored_axis_through_json() -> None:
     roundtripped = FiniteCyclotomicSequence.model_validate_json(first.model_dump_json())
     assert roundtripped == first
 
-    twice = dirichlet_character_sequence_twist(
+    twice = _twist_request(
         DirichletCharacterSequenceTwistRequest(
             sequence=roundtripped,
             character=character,
         )
     )
     squared_character = dirichlet_character_product(character, character)
-    direct = dirichlet_character_sequence_twist(
+    direct = _twist_request(
         DirichletCharacterSequenceTwistRequest(
             sequence=FiniteIntegerSequence(values=(1, 1, 1, 1)),
             character=squared_character,
@@ -113,7 +123,7 @@ def test_twisting_existing_cyclotomic_sequence_uses_exact_common_field_embedding
         ),
     )
     quadratic_mod5 = dirichlet_character(character_group(5), (2,))
-    result = dirichlet_character_sequence_twist(
+    result = _twist_request(
         DirichletCharacterSequenceTwistRequest(
             sequence=source, character=quadratic_mod5
         )
@@ -126,10 +136,10 @@ def test_twisting_existing_cyclotomic_sequence_uses_exact_common_field_embedding
     assert _coefficients(result.values[0]) == (Fraction(-1), Fraction(1))
 
 
-def test_twist_preflights_field_order_and_serialized_output_size() -> None:
+def test_twist_preflights_field_and_result_allocation() -> None:
     too_large_field_character = dirichlet_character(character_group(509), (1,))
     with pytest.raises(OperationResourceAdmissionError) as field_error:
-        dirichlet_character_sequence_twist(
+        _twist_request(
             DirichletCharacterSequenceTwistRequest(
                 sequence=FiniteIntegerSequence(values=(1,)),
                 character=too_large_field_character,
@@ -141,17 +151,17 @@ def test_twist_preflights_field_order_and_serialized_output_size() -> None:
         == "dirichlet_character.sequence_twist.field_order_bound"
     )
 
-    quartic_character = dirichlet_character(character_group(5), (1,))
-    oversized_sequence = FiniteIntegerSequence(values=(1,) * 30_000)
+    high_degree_character = dirichlet_character(character_group(257), (2,))
+    oversized_sequence = FiniteIntegerSequence(values=(1,) * 16_000)
     with pytest.raises(OperationResourceAdmissionError) as size_error:
-        dirichlet_character_sequence_twist(
+        _twist_request(
             DirichletCharacterSequenceTwistRequest(
                 sequence=oversized_sequence,
-                character=quartic_character,
+                character=high_degree_character,
                 index_origin=1,
             )
         )
     assert (
         size_error.value.errors()[0]["type"]
-        == "dirichlet_character.sequence_twist.result_bytes_bound"
+        == "dirichlet_character.sequence_twist.coefficient_cells_bound"
     )

@@ -256,7 +256,11 @@ def _compute_orthogonality(
 def _compute_sequence_twist(
     request: DirichletCharacterSequenceTwistRequest,
 ) -> FiniteCyclotomicSequence:
-    return native.dirichlet_character_sequence_twist(request)
+    return native.dirichlet_character_sequence_twist(
+        request.sequence,
+        request.character,
+        index_origin=request.index_origin,
+    )
 
 
 def _compute_generalized_bernoulli(

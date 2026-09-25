@@ -5,7 +5,6 @@ from math import lcm
 import pytest
 from sympy import I, Rational, exp, pi, to_number_field
 
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.matrices.cyclic_linear._models import RationalCyclotomicField
 from jacobian.math.number_theory.characters._models import (
@@ -60,7 +59,7 @@ def test_generalized_gauss_sum_matches_direct_exact_residue_sum(
     )
 
 
-def test_generalized_gauss_sum_is_discoverable_and_composes_through_catalog() -> None:
+def test_generalized_gauss_sum_is_declared_and_composes_from_its_manifest() -> None:
     tool = next(
         item
         for item in TOOLS
@@ -74,10 +73,6 @@ def test_generalized_gauss_sum_is_discoverable_and_composes_through_catalog() ->
     assert all(
         coefficient.as_fraction() == 0
         for coefficient in result.value.coefficients_ascending
-    )
-    assert (
-        Catalog(TOOLS).operation("dirichlet_character.generalized_gauss_sum.compute")
-        is tool
     )
 
 

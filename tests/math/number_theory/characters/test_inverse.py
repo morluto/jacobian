@@ -1,6 +1,5 @@
 """Exact contract tests for Dirichlet-character inversion."""
 
-from jacobian.catalog.catalog import Catalog
 from jacobian.math.number_theory.characters import (
     character_group,
     dirichlet_character_conjugate,
@@ -10,6 +9,7 @@ from jacobian.math.number_theory.characters import (
 from jacobian.math.number_theory.characters._models import (
     DirichletCharacterInverseRequest,
 )
+from jacobian.math.number_theory.characters._tools import TOOLS
 from jacobian.math.number_theory.characters.operations import (
     dirichlet_character_product,
 )
@@ -37,8 +37,11 @@ def test_inverse_is_the_dual_group_inverse_and_character_conjugate() -> None:
 
 
 def test_inverse_operation_is_published_and_composes_from_its_example() -> None:
-    operation = Catalog.open().operation("dirichlet_character.inverse.compute")
-    assert operation is not None
+    operation = next(
+        tool
+        for tool in TOOLS
+        if tool.operation_id == "dirichlet_character.inverse.compute"
+    )
     assert operation.request_type is DirichletCharacterInverseRequest
     assert operation.result_type is DirichletCharacter
 

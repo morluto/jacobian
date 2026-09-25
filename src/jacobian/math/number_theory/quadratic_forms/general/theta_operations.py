@@ -15,7 +15,6 @@ from jacobian.math.number_theory.quadratic_forms.general._extra_models import (
     MAX_THETA_PREFIX_OUTPUT_DIGITS,
     MAX_THETA_PREFIX_VECTORS,
     MAX_THETA_PREFIX_WORK,
-    MAX_THETA_REPRESENTATION_OUTPUT_BYTES,
     MAX_THETA_REPRESENTATION_VECTOR_COUNT,
     ThetaRepresentingVectorsRequest,
     ThetaRepresentingVectorsResult,
@@ -25,7 +24,6 @@ from jacobian.math.number_theory.quadratic_forms.general._extra_models import (
     ThetaSelectedCoefficientsResult,
     ThetaSeriesPrefixRequest,
     ThetaSeriesPrefixResult,
-    _theta_representation_output_upper_bytes,
 )
 from jacobian.math.number_theory.quadratic_forms.general.values import (
     RationalQuadraticForm,
@@ -223,20 +221,11 @@ def _admit_box_and_output(
         else sum(len(str(index)) for index in request.indices)
     )
     if isinstance(request, ThetaRepresentingVectorsRequest):
-        output_bound = _theta_representation_output_upper_bytes(
-            form,
-            row_count=len(request.indices),
-            vector_count=vector_count,
-            coordinate_abs_bound=max(radii, default=0),
-        )
-        if (
-            vector_count > MAX_THETA_REPRESENTATION_VECTOR_COUNT
-            or output_bound > MAX_THETA_REPRESENTATION_OUTPUT_BYTES
-        ):
+        if vector_count > MAX_THETA_REPRESENTATION_VECTOR_COUNT:
             raise OperationResourceAdmissionError(
                 location=request_location,
-                code="quadratic_form.theta_representation_output_bound",
-                message="representation vectors exceed their admitted output envelope",
+                code="quadratic_form.theta_representation_vector_bound",
+                message="representation vectors exceed their admitted cardinality bound",
             )
     else:
         output_digits = (
@@ -373,7 +362,18 @@ def theta_representing_vectors(
         )
         selected = vectors_by_value.get(value)
         if selected is not None:
-            selected.append(tuple(vector))
+            from jacobian.math.number_theory.quadratic_forms.general.values import (
+                RationalCoordinateVector,
+            )
+
+            selected.append(
+                RationalCoordinateVector(
+                    axis=form.axis,
+                    coordinates=tuple(
+                        {"num": coordinate, "den": 1} for coordinate in vector
+                    ),
+                )
+            )
     return ThetaRepresentingVectorsResult(
         form=form,
         rows=tuple(

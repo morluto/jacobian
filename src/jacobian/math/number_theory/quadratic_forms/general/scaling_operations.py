@@ -8,7 +8,6 @@ from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.number_theory.quadratic_forms.general.scaling_models import (
     MAX_QUADRATIC_SCALE_AXIS,
-    MAX_QUADRATIC_SCALE_OUTPUT_BYTES,
     MAX_QUADRATIC_SCALE_SUPPORT,
     QuadraticFormScaleRequest,
     QuadraticFormScaleResult,
@@ -22,25 +21,13 @@ from jacobian.math.number_theory.quadratic_forms.general.values import (
 _MAX_COMPONENT = 10**MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS - 1
 
 
-def _output_size_upper_bound(*, axis: int, support: int) -> int:
-    """Bound source and result JSON before coefficient products are formed."""
-
-    # Each retained rational uses at most 512 decimal digits plus punctuation.
-    # The extra 80 bytes also covers cross-term indices and object keys. A
-    # 64-character Unicode label can expand to 12 ASCII bytes per code point
-    # when JSON escapes a supplementary-plane character as a surrogate pair.
-    return 2 * support * 600 + 2 * axis * 800 + 4_096
-
-
 def _scaled_factors(
     value: CanonicalRational, factor: CanonicalRational
 ) -> tuple[int, int, int, int]:
     """Return canceled numerator/denominator factors without multiplying."""
 
-    numerator = int(value.num)
-    denominator = int(value.den)
-    factor_numerator = int(factor.num)
-    factor_denominator = int(factor.den)
+    numerator, denominator = value.as_integer_ratio()
+    factor_numerator, factor_denominator = factor.as_integer_ratio()
     if numerator == 0 or factor_numerator == 0:
         return (0, 1, 1, 1)
 
@@ -90,16 +77,6 @@ def require_scale_budget(request: QuadraticFormScaleRequest) -> None:
             code="quadratic_form.scale_factor_bound",
             message=str(error),
         ) from error
-    output_bytes = _output_size_upper_bound(axis=axis, support=support)
-    if output_bytes > MAX_QUADRATIC_SCALE_OUTPUT_BYTES:
-        raise OperationResourceAdmissionError(
-            location=("form",),
-            code="quadratic_form.scale_output_bound",
-            message=(
-                "source-bound scaled form exceeds the "
-                f"{MAX_QUADRATIC_SCALE_OUTPUT_BYTES}-byte output envelope"
-            ),
-        )
 
     # Cancellation lets the preflight check the exact product-height bound
     # using integer division. No coefficient product is formed until every

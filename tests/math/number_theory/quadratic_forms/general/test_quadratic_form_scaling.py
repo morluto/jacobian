@@ -18,7 +18,7 @@ from jacobian.math.number_theory.quadratic_forms.general._tools import (
     compute_scale,
 )
 from jacobian.math.number_theory.quadratic_forms.general.scaling_models import (
-    MAX_QUADRATIC_SCALE_OUTPUT_BYTES,
+    MAX_QUADRATIC_SCALE_SUPPORT,
     QuadraticFormScaleRequest,
     QuadraticFormScaleResult,
 )
@@ -137,12 +137,14 @@ def test_scale_preflight_uses_exact_cancellation_and_rejects_true_growth() -> No
     )
 
 
-def test_scale_output_bound_admits_ceiling_and_rejects_next_support_size() -> None:
+def test_scale_admits_support_ceiling_and_rejects_next_support_size() -> None:
     axis = tuple("😀" * 60 + f"{index:03d}" for index in range(128))
     coefficient = _q(10 ** (MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS - 1) - 1)
     crosses = tuple(
         QuadraticCrossTerm(left=left, right=right, coefficient=coefficient)
-        for left, right in islice(combinations(range(128), 2), 947)
+        for left, right in islice(
+            combinations(range(128), 2), MAX_QUADRATIC_SCALE_SUPPORT - 128
+        )
     )
     form = RationalQuadraticForm(
         axis=axis,
@@ -152,21 +154,20 @@ def test_scale_output_bound_admits_ceiling_and_rejects_next_support_size() -> No
     result = scale_rational_quadratic_form(
         QuadraticFormScaleRequest(form=form, factor=_q(1))
     )
-    assert len(result.model_dump_json().encode("utf-8")) <= (
-        MAX_QUADRATIC_SCALE_OUTPUT_BYTES
+    assert len(result.form.diagonal_coefficients) + len(result.form.cross_terms) == (
+        MAX_QUADRATIC_SCALE_SUPPORT
     )
+    assert result.form.diagonal_coefficients == (coefficient,) * 128
+    assert result.form.cross_terms == crosses
 
     over_limit = RationalQuadraticForm(
         axis=axis,
         diagonal_coefficients=(coefficient,) * 128,
-        cross_terms=(
-            *crosses,
-            *(
-                QuadraticCrossTerm(
-                    left=left, right=right, coefficient=coefficient
-                )
-                for left, right in islice(combinations(range(128), 2), 947, 4_096)
-            ),
+        cross_terms=tuple(
+            QuadraticCrossTerm(left=left, right=right, coefficient=coefficient)
+            for left, right in islice(
+                combinations(range(128), 2), MAX_QUADRATIC_SCALE_SUPPORT
+            )
         ),
     )
     with pytest.raises(OperationResourceAdmissionError) as error:

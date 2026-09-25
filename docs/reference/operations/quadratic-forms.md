@@ -137,13 +137,14 @@ representation operations, which independently enforce their stronger
 domain conditions.
 
 Admission limits the axis to 128 coordinates, diagonal and cross-term support
-to 4,096 coefficients, each scalar component to 256 decimal digits, and the
-source-retaining JSON result to a conservative 1,500,000-byte bound. Before
+to 4,096 coefficients, and each scalar component to 256 decimal digits. Before
 forming any coefficient product, the kernel cancels numerator/denominator
 factors and uses integer division to check whether each exact reduced product
 fits the form carrier's 256-digit coefficient limit. It then constructs each
-accepted product once. A zero factor produces zero diagonal coefficients and
-omits zero cross terms, matching the canonical polynomial representation.
+accepted product once. This bounds the retained result intrinsically by
+cardinality and component digits rather than by transport bytes. A zero factor
+produces zero diagonal coefficients and omits zero cross terms, matching the
+canonical polynomial representation.
 
 ## Proper classes of positive-definite integral binary forms
 
@@ -247,8 +248,7 @@ The form must be integral and positive definite. With `C` the integral polar
 matrix, the exact adjugate bound `x_i^2 <= 2*N*(C^-1)_ii`, where `N` is the
 largest requested index, yields a complete search box. The kernel admits the
 box size and term-evaluation work before enumeration. It also uses that box as
-a sound upper bound on the number of vectors that could be returned, and
-admits the worst-case coordinate spellings, retained form, row structure, and
-aggregate output bytes before building vectors. At most 100,000 vectors and
-8 MiB of result bytes are allowed. This is a finite fiber operation; it does
-not decide representability beyond the requested indices.
+a sound upper bound on the number of vectors that could be returned. At most
+100,000 vectors are allowed, with the schema's intrinsic coordinate bounds.
+This is a finite fiber operation; it does not decide representability beyond
+the requested indices.

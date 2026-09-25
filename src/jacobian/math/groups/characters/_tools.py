@@ -5,6 +5,8 @@ from typing import Any
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.groups.characters._models import (
     CharacterExteriorSquareRequest,
+    CharacterKernel,
+    CharacterKernelRequest,
     CharacterRingDecompositionRequest,
     CharacterRingDecompositionResult,
     CharacterRingElement,
@@ -48,6 +50,7 @@ from jacobian.math.groups.characters.operations import (
 )
 from jacobian.math.groups.characters.representation_ring_operations import (
     character_exterior_square,
+    character_kernel,
     character_symmetric_square,
     character_tensor_product,
     class_function_character_decomposition,
@@ -86,6 +89,10 @@ def _run_character_exterior_square(
     request: CharacterExteriorSquareRequest,
 ) -> CharacterRingElement:
     return character_exterior_square(request)
+
+
+def _run_character_kernel(request: CharacterKernelRequest) -> CharacterKernel:
+    return character_kernel(request)
 
 
 def _run_tensor_decomposition(
@@ -692,6 +699,35 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 name="s3_standard_exterior_square",
                 description="Lambda^2 of the standard S3 representation is sign.",
                 input={"character": _s3_ring_element([0, 0, 1])},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="character.kernel.compute",
+        title="Compute the kernel of a bounded ordinary character",
+        description=(
+            "Return the subgroup on which an exact ordinary character has "
+            "value equal to its degree. Input coordinates must be nonnegative "
+            "in the canonical irreducible basis, and the canonical character "
+            "table is rebuilt from its concrete group. The exact cyclotomic "
+            "trace equality is equivalent to identity action. Supported "
+            "groups are trivial, cyclic of order at most 60, and S3. The "
+            "result retains both the ambient group and its kernel subgroup."
+        ),
+        request_type=CharacterKernelRequest,
+        result_type=CharacterKernel,
+        run=_run_character_kernel,
+        tags=("finite-group", "character", "kernel", "exact"),
+        discovery_terms=(
+            "kernel subgroup of a finite group character",
+            "normal subgroup where a representation acts trivially",
+            "character kernel from exact irreducible multiplicities",
+        ),
+        examples=(
+            OperationExample(
+                name="s3_sign_character_kernel",
+                description="The sign character of S3 has kernel A3.",
+                input={"character": _s3_ring_element([0, 1, 0])},
             ),
         ),
     ),

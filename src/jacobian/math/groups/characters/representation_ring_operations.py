@@ -8,6 +8,7 @@ from fractions import Fraction
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational, canonical_rational_component_digits
+from jacobian._execution import BackendFailureReason, OperationBackendError
 from jacobian.canonical import CanonicalLimits
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -34,6 +35,8 @@ from jacobian.math.groups.characters._models import (
     MAX_GROUP_ORDER,
     MAX_VALUE_COEFFICIENT_DIGITS,
     CharacterExteriorSquareRequest,
+    CharacterKernel,
+    CharacterKernelRequest,
     CharacterRingDecompositionRequest,
     CharacterRingDecompositionResult,
     CharacterRingElement,
@@ -58,6 +61,8 @@ MAX_CHARACTER_RING_DECOMPOSITION_WORK = 50_000_000
 MAX_CHARACTER_RING_DECOMPOSITION_OUTPUT_BYTES = 10_000_000
 MAX_CHARACTER_TENSOR_PRODUCT_WORK = 50_000_000
 MAX_CHARACTER_TENSOR_PRODUCT_OUTPUT_BYTES = 10_000_000
+MAX_CHARACTER_KERNEL_WORK = 50_000_000
+MAX_CHARACTER_KERNEL_OUTPUT_BYTES = 1_000_000
 
 
 def _invalid(
@@ -997,11 +1002,203 @@ def character_exterior_square(
     return _character_lambda_square(request, adams_sign=-1)
 
 
+def _admit_character_kernel(
+    element: CharacterRingElement,
+    source: PermutationGroup,
+    actual_order: int,
+    source_work: int,
+) -> None:
+    """Admit character arithmetic, source enumeration, and returned groups."""
+    coordinate_digits = max(
+        1, *(len(str(abs(value))) for value in element.irreducible_multiplicities)
+    )
+    # A canonical irreducible value is a sum of at most sqrt(|G|) roots of
+    # unity. This bound is independent of an untrusted serialized table.
+    table_digits_bound = len(str(actual_order)) + 2
+    kernel_work = (
+        actual_order**2
+        * euler_phi(actual_order)
+        * coordinate_digits
+        * table_digits_bound
+        + actual_order**2 * source.degree * max(1, len(source.generators))
+        + actual_order**3 * source.degree
+        + MAX_CHARACTER_TABLE_CELLS
+        + source_work
+    )
+    if kernel_work > MAX_CHARACTER_KERNEL_WORK:
+        raise OperationResourceAdmissionError(
+            location=("character",),
+            code="groups.characters.kernel_work_exceeds_envelope",
+            message="canonical-table validation and kernel generation exceed the work envelope",
+        )
+    generator_count_bound = max(1, actual_order.bit_length())
+    output_bytes = (
+        2_048 + (len(source.generators) + generator_count_bound) * source.degree * 24
+    )
+    if (
+        output_bytes > MAX_CHARACTER_KERNEL_OUTPUT_BYTES
+        or output_bytes > CanonicalLimits().max_output_bytes
+    ):
+        raise OperationResourceAdmissionError(
+            location=("character",),
+            code="groups.characters.kernel_output_exceeds_envelope",
+            message="ambient group and kernel generators exceed the output envelope",
+        )
+
+
+def _character_values_for_kernel(
+    element: CharacterRingElement, table: CharacterTableResult
+) -> tuple[tuple[Fraction, ...], ...]:
+    """Expand an authenticated ordinary character on its exact class axis."""
+    field_order = table.axis.cyclotomic_order
+    class_count = len(table.partition.classes)
+    phi_dimension = euler_phi(field_order)
+    class_values: list[tuple[Fraction, ...]] = []
+    for class_index in range(class_count):
+        coefficients = [Fraction(0) for _ in range(phi_dimension)]
+        for multiplicity, row in zip(
+            element.irreducible_multiplicities, table.rows, strict=True
+        ):
+            for power, value in enumerate(row.values[class_index].coefficients):
+                coefficients[power] += multiplicity * value.as_fraction()
+        class_values.append(tuple(coefficients))
+
+    identity = tuple(range(table.partition.source.degree))
+    identity_class = next(
+        index
+        for index, conjugacy_class in enumerate(table.partition.classes)
+        if identity in conjugacy_class
+    )
+    degree_value = class_values[identity_class]
+    identity_degree = degree_value[0]
+    if identity_degree.denominator != 1 or any(degree_value[1:]):
+        raise _invalid(
+            "groups.characters.kernel_invalid_degree",
+            "canonical character has a nonintegral degree",
+            ("character",),
+        )
+    return tuple(class_values)
+
+
+def _permutation_compose(
+    left: tuple[int, ...], right: tuple[int, ...]
+) -> tuple[int, ...]:
+    """Compose two permutations in image-list form."""
+    return tuple(left[right[index]] for index in range(len(left)))
+
+
+def _permutation_group_generated_by(
+    source: PermutationGroup,
+    subgroup_elements: set[tuple[int, ...]],
+) -> PermutationGroup:
+    """Return a deterministic generating set for an admitted subgroup."""
+    identity = tuple(range(source.degree))
+
+    def compose(left: tuple[int, ...], right: tuple[int, ...]) -> tuple[int, ...]:
+        return _permutation_compose(left, right)
+
+    def generated(generators: tuple[tuple[int, ...], ...]) -> set[tuple[int, ...]]:
+        members = {identity}
+        pending = [identity]
+        while pending:
+            current = pending.pop()
+            for generator in generators:
+                candidate = compose(current, generator)
+                if candidate not in members:
+                    members.add(candidate)
+                    pending.append(candidate)
+        return members
+
+    if identity not in subgroup_elements:
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+    generators: list[tuple[int, ...]] = []
+    members = {identity}
+    for candidate in sorted(subgroup_elements):
+        if candidate not in members:
+            generators.append(candidate)
+            members = generated(tuple(generators))
+    if members != subgroup_elements:
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+    if not generators:
+        generators = [identity]
+    return PermutationGroup(degree=source.degree, generators=tuple(generators))
+
+
+def character_kernel(request: CharacterKernelRequest) -> CharacterKernel:
+    """Return the exact kernel of a supported ordinary virtual-table character.
+
+    The accepted coordinates must be nonnegative, so they describe an actual
+    finite-dimensional representation. For a finite-dimensional unitary
+    representation, ``chi(g) == chi(1)`` exactly iff every eigenvalue of
+    ``rho(g)`` is 1, hence iff ``g`` is in the kernel.
+    """
+    if not isinstance(request, CharacterKernelRequest):
+        raise _invalid(
+            "groups.characters.kernel_request_type",
+            "request must contain one table-bound ordinary character",
+            ("request",),
+        )
+    element = request.character
+    if not isinstance(element, CharacterRingElement):
+        raise _invalid(
+            "groups.characters.kernel_input_type",
+            "input must be a table-bound ordinary character",
+            ("character",),
+        )
+    _admit_ring_element_shape(element, "character")
+    if any(multiplicity < 0 for multiplicity in element.irreducible_multiplicities):
+        raise _invalid(
+            "groups.characters.kernel_requires_ordinary_character",
+            "kernel is defined here only for nonnegative irreducible multiplicities",
+            ("character", "irreducible_multiplicities"),
+        )
+    source = element.table.partition.source
+    actual_order, source_work = _admit_source_group_order(source)
+    if actual_order > MAX_CYCLOTOMIC_ORDER:
+        raise OperationResourceAdmissionError(
+            location=("character", "table", "partition", "source"),
+            code="groups.characters.kernel_group_order_exceeds_envelope",
+            message="character kernels admit groups of order at most 60",
+        )
+    _admit_character_kernel(element, source, actual_order, source_work)
+    raw_classes = group_conjugacy_classes(
+        source.degree, [list(generator) for generator in source.generators]
+    )
+    partition = GroupConjugacyClassesResult._from_kernel(
+        source, tuple(tuple(tuple(g) for g in cls) for cls in raw_classes)
+    )
+    table = character_table(partition)
+    if element.table != table:
+        raise _invalid(
+            "groups.characters.kernel_noncanonical_table",
+            "input must retain the exact canonical character table for its group",
+            ("character", "table"),
+        )
+    class_values = _character_values_for_kernel(element, table)
+    identity_class = next(
+        index
+        for index, conjugacy_class in enumerate(table.partition.classes)
+        if tuple(range(source.degree)) in conjugacy_class
+    )
+    degree_value = class_values[identity_class]
+    kernel_elements = {
+        tuple(group_element)
+        for class_index, value in enumerate(class_values)
+        if value == degree_value
+        for group_element in table.partition.classes[class_index]
+    }
+    subgroup = _permutation_group_generated_by(source, kernel_elements)
+    return CharacterKernel._from_kernel(ambient_group=source, subgroup=subgroup)
+
+
 __all__ = [
+    "MAX_CHARACTER_KERNEL_OUTPUT_BYTES",
+    "MAX_CHARACTER_KERNEL_WORK",
     "MAX_CHARACTER_RING_DECOMPOSITION_OUTPUT_BYTES",
     "MAX_CHARACTER_RING_DECOMPOSITION_WORK",
     "MAX_CHARACTER_TENSOR_PRODUCT_WORK",
     "character_exterior_square",
+    "character_kernel",
     "character_symmetric_square",
     "character_tensor_product",
     "class_function_character_decomposition",

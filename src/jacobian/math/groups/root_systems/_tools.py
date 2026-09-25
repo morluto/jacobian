@@ -35,6 +35,8 @@ from jacobian.math.groups.root_systems._models import (
     WeylDescentsResult,
     WeylDimensionRequest,
     WeylDimensionResult,
+    WeylDominantRepresentativeRequest,
+    WeylDominantRepresentativeResult,
     WeylElement,
     WeylElementComposeRequest,
     WeylElementInverseRequest,
@@ -71,6 +73,7 @@ from jacobian.math.groups.root_systems.operations import (
     simple_reflection,
     simple_reflections,
     weight_lattice_vector,
+    weyl_dominant_representative,
     weyl_element_compose,
     weyl_element_descents,
     weyl_element_from_word,
@@ -237,6 +240,12 @@ def _run_weyl_weight_orbit(
     request: WeylWeightOrbitRequest,
 ) -> WeylWeightOrbitResult:
     return weyl_weight_orbit(request.matrix, request.weight)
+
+
+def _run_weyl_dominant_representative(
+    request: WeylDominantRepresentativeRequest,
+) -> WeylDominantRepresentativeResult:
+    return weyl_dominant_representative(request.matrix, request.weight)
 
 
 def _run_weyl_dimension(request: WeylDimensionRequest) -> WeylDimensionResult:
@@ -1134,6 +1143,35 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                     "ordered simple coroots."
                 ),
                 input={**_A2, "weight": [1, 0]},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="weyl_group.dominant_representative.compute",
+        title="Compute the dominant representative of a Weyl weight orbit",
+        description=(
+            "Return the unique dominant integral weight in the orbit of the "
+            "supplied weight, together with the exact Weyl element mapping "
+            "the source to that representative. The finite Cartan datum and "
+            "all transporter reflections are bounded before execution."
+        ),
+        request_type=WeylDominantRepresentativeRequest,
+        result_type=WeylDominantRepresentativeResult,
+        run=_run_weyl_dominant_representative,
+        tags=("algebra", "root-system", "weyl-group", "weight", "normal-form", "exact"),
+        discovery_terms=(
+            "dominant representative of a Weyl orbit",
+            "move weight to dominant chamber",
+            "Weyl orbit dominant weight",
+        ),
+        examples=(
+            OperationExample(
+                name="a2_dominant_representative",
+                description=(
+                    "Map the A2 weight (-1, 1) to its dominant orbit "
+                    "representative (1, 0)."
+                ),
+                input={**_A2, "weight": [-1, 1]},
             ),
         ),
     ),

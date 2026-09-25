@@ -1225,6 +1225,55 @@ class WeylWeightOrbitResult(StrictModel):
         return cls.model_construct(matrix=matrix, weight=weight, orbit=orbit)
 
 
+class WeylDominantRepresentativeRequest(CartanMatrixRequest):
+    """An integral weight in fundamental-weight coordinates."""
+
+    weight: tuple[StrictInt, ...] = Field(min_length=1, max_length=MAX_RANK)
+
+
+class WeylDominantRepresentativeResult(StrictModel):
+    """The dominant orbit representative and a Weyl element mapping to it."""
+
+    matrix: CartanMatrix
+    weight: tuple[StrictInt, ...] = Field(min_length=1, max_length=MAX_RANK)
+    dominant_weight: tuple[StrictInt, ...] = Field(min_length=1, max_length=MAX_RANK)
+    element: WeylElement
+
+    @model_validator(mode="after")
+    def require_dominant_representative_shape(self) -> Self:
+        rank = len(self.matrix)
+        if (
+            len(self.weight) != rank
+            or len(self.dominant_weight) != rank
+            or self.element.matrix != self.matrix
+            or any(
+                abs(value) > MAX_REFLECTION_REPRESENTABLE
+                for value in (*self.weight, *self.dominant_weight)
+            )
+            or any(value < 0 for value in self.dominant_weight)
+        ):
+            raise _validation_error(
+                "dominant_representative_shape",
+                "the source, dominant weight, and Weyl element must share the Cartan axis",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        matrix: CartanMatrix,
+        weight: tuple[int, ...],
+        dominant_weight: tuple[int, ...],
+        element: WeylElement,
+    ) -> Self:
+        return cls.model_construct(
+            matrix=matrix,
+            weight=weight,
+            dominant_weight=dominant_weight,
+            element=element,
+        )
+
+
 class WeylDimensionRequest(CartanMatrixRequest):
     """An integral dominant weight in fundamental-weight coordinates."""
 

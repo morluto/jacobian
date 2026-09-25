@@ -760,7 +760,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "return the induced structure-constant algebra in the candidate "
             "row basis, together with the row-coordinate inclusion into the "
             "source. The induced basis labels are supplied in candidate row "
-            "order. Exact Jacobi, dimensions, rational heights, closure work, "
+            "order; the zero subalgebra is represented by no rows and no "
+            "labels. Exact Jacobi, dimensions, rational heights, closure work, "
             "and output are bounded before result construction."
         ),
         request_type=LieSubalgebraConstructionRequest,

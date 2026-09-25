@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import pytest
 
+from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.dispatch import invoke_operation
 from jacobian.math.groups.root_systems._models import FiniteCartanDatum
 from jacobian.math.groups.root_systems.lattice_presentations import (
     RootWeightLatticePresentation,
@@ -115,6 +117,9 @@ def test_catalog_tool_consumes_canonical_cartan_datum():
     result = tool.run(request)
 
     assert result == root_weight_lattice_presentation(datum)
-    example_request = tool.request_type.model_validate(tool.examples[0].input)
-    example_result = tool.run(example_request)
-    assert example_result.root_lattice.basis.entries == ((2, -1), (-1, 2))
+    example_result = invoke_operation(
+        tool.operation_id, tool.examples[0].input, Catalog.open()
+    )
+    assert example_result.output["root_lattice"]["basis"]["entries"] == [
+        ["2", "-1"], ["-1", "2"]
+    ]

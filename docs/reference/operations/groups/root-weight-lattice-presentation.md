@@ -23,4 +23,4 @@ non-finite Cartan data before materializing the lattice bases.
 For type A2 the index of `Q` in `P` is 3; composing the returned values with
 the generic exact sublattice-index operation yields the quotient `P/Q`.
 
-[Root-system operations](index.md) · [Tool surface](../../tools.md)
+[Root-system operations](root-coroots.md) · [Tool surface](../../tools.md)

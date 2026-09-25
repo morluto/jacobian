@@ -15,22 +15,22 @@ _A2_DATUM = {
             "domain": "ZZ",
             "row_count": 2,
             "column_count": 2,
-            "entries": [[2, -1], [-1, 2]],
+            "entries": [["2", "-1"], ["-1", "2"]],
         },
         "simple_root_axis": [0, 1],
     },
-    "symmetrizer": [{"num": 1, "den": 1}, {"num": 1, "den": 1}],
+    "symmetrizer": [{"num": "1", "den": "1"}, {"num": "1", "den": "1"}],
     "root_to_weight": {
         "domain": "ZZ",
         "row_count": 2,
         "column_count": 2,
-        "entries": [[2, -1], [-1, 2]],
+        "entries": [["2", "-1"], ["-1", "2"]],
     },
     "coroot_to_coweight": {
         "domain": "ZZ",
         "row_count": 2,
         "column_count": 2,
-        "entries": [[2, -1], [-1, 2]],
+        "entries": [["2", "-1"], ["-1", "2"]],
     },
 }
 

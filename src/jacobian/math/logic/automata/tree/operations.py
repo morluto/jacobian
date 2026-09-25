@@ -1109,6 +1109,24 @@ def _accepted_tree_count_admitted(
     )
 
 
+def _admit_tree_height(max_height: object) -> int:
+    """Admit a native height argument before recurrence work."""
+
+    if type(max_height) is not int:
+        raise OperationDomainValidationError(
+            location=("max_height",),
+            code="tree_automata.height_count_height_type",
+            message="max_height must be an integer",
+        )
+    if not 0 <= max_height <= MAX_TREE_COUNT_HEIGHT:
+        raise OperationResourceAdmissionError(
+            location=("max_height",),
+            code="tree_automata.height_count_height_bound",
+            message=f"max_height must be between 0 and {MAX_TREE_COUNT_HEIGHT}",
+        )
+    return max_height
+
+
 def accepted_tree_height_profile(
     automaton: CompleteDeterministicBottomUpTreeAutomaton,
     max_height: int,
@@ -1119,12 +1137,7 @@ def accepted_tree_height_profile(
     state, so the recurrence counts distinct input trees without counting runs.
     """
 
-    if type(max_height) is not int or not 0 <= max_height <= MAX_TREE_COUNT_HEIGHT:
-        raise OperationResourceAdmissionError(
-            location=("max_height",),
-            code="tree_automata.height_count_height_bound",
-            message=f"max_height must be between 0 and {MAX_TREE_COUNT_HEIGHT}",
-        )
+    max_height = _admit_tree_height(max_height)
     if not isinstance(automaton, CompleteDeterministicBottomUpTreeAutomaton):
         raise OperationDomainValidationError(
             location=("automaton",),

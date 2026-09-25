@@ -283,9 +283,13 @@ def test_edgeless_order_boundary_preserves_not_a_tree_envelope() -> None:
         )
     with pytest.raises(
         OperationDomainValidationError,
-        match=f"at most {MAX_SIMPLE_GRAPH_VERTICES} vertices",
-    ):
+    ) as exc_info:
         construct_fine_partition(oversized, oversized.vertices[0], 1)
+
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graph.rooted_tree.fine_partition.vertex_bound"
+    )
 
 
 def test_result_parsing_rejects_constructed_rows_not_bound_to_source() -> None:

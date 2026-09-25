@@ -7,7 +7,6 @@ from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
-    MAX_EDGES,
     MAX_VERTICES,
     MinimumTransversalRequest,
 )
@@ -92,10 +91,13 @@ def test_admits_256_vertex_edgeless_source_and_rejects_larger_order() -> None:
     oversized = _graph([str(index) for index in range(MAX_VERTICES + 1)], [])
     with pytest.raises(ValidationError, match=f"at most {MAX_VERTICES} vertices"):
         MaximalCliqueHypergraphRequest(graph=oversized)
-    with pytest.raises(
-        OperationDomainValidationError, match=f"at most {MAX_VERTICES} vertices"
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         construct_maximal_clique_hypergraph(oversized)
+
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graph.maximal_clique_hypergraph.vertex_bound"
+    )
 
 
 def test_single_edge() -> None:
@@ -278,9 +280,13 @@ def test_rejects_complete_family_above_hypergraph_edge_bound() -> None:
     )
     with pytest.raises(
         OperationDomainValidationError,
-        match=f"{MAX_EDGES:,}-edge hypergraph bound",
-    ):
+    ) as exc_info:
         construct_maximal_clique_hypergraph(graph)
+
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graph.maximal_clique_hypergraph.edge_bound"
+    )
 
 
 def test_wire_adapter_does_not_impose_an_unconfigured_transport_limit() -> None:

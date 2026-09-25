@@ -95,6 +95,7 @@ def test_path_profile_admits_256_vertices_and_rejects_orders_above_row_bound() -
         PathProfileRequest(graph=oversized, path_length=1)
     with pytest.raises(
         OperationDomainValidationError,
-        match=f"at most {MAX_SIMPLE_GRAPH_VERTICES} vertices",
-    ):
+    ) as exc_info:
         path_profile(oversized, 1)
+
+    assert exc_info.value.errors()[0]["type"] == "graph.path_profile.row_bound"

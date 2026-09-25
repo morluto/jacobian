@@ -3,6 +3,8 @@ from typing import Any
 
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.topology._models import canonical_complex
+from jacobian.math.topology.cohomology.operations._models import SimplicialMap
+from jacobian.math.topology.edge_paths._models import FundamentalGroupMapRequest
 from jacobian.math.topology.edge_paths.presentation_maps import *
 
 
@@ -19,8 +21,20 @@ def _run_compose(r: Any) -> Any:
 
 
 _P = {"generators": ["x"], "relators": []}
-_CIRCLE = canonical_complex(
+_CIRCLE_COMPLEX = canonical_complex(
     ("a", "b", "c"), (("a", "b"), ("a", "c"), ("b", "c"))
+)
+_CIRCLE = _CIRCLE_COMPLEX.model_dump(mode="json")
+_IDENTITY_MAP_RESULT = induced_fundamental_group_map(
+    FundamentalGroupMapRequest(
+        map=SimplicialMap(
+            source=_CIRCLE_COMPLEX,
+            target=_CIRCLE_COMPLEX,
+            vertex_map=("a", "b", "c"),
+        ),
+        source_base_vertex="a",
+        target_base_vertex="a",
+    )
 ).model_dump(mode="json")
 TOOLS = (
     MathTool(
@@ -50,11 +64,14 @@ TOOLS = (
         title="Compose based fundamental-group presentation maps",
         description=(
             "Compose two exact induced presentation maps when the complete middle "
-            "presentation carriers agree. Return reduced outer-axis generator words "
-            "and the corresponding integer matrix on abelianizations."
+            "presentation carriers agree. Return the canonical induced-map carrier "
+            "between the outer presentations, with reduced outer-axis generator "
+            "words, composed relator-conjugacy witnesses, and the corresponding "
+            "integer matrix on abelianizations, so the composite is again a valid "
+            "operand."
         ),
         request_type=PresentationMapCompositionRequest,
-        result_type=PresentationMapCompositionResult,
+        result_type=FundamentalGroupMapResult,
         run=_run_compose,
         tags=("topology", "fundamental-group", "composition", "exact"),
         discovery_terms=(
@@ -62,7 +79,20 @@ TOOLS = (
             "compose presentation homomorphisms",
             "fundamental group functoriality",
         ),
-        examples=(),
+        examples=(
+            OperationExample(
+                name="identity_circle_composition",
+                description=(
+                    "Compose the identity induced map of the 3-edge circle with "
+                    "itself; the composite fixes the canonical generator and is "
+                    "again a composable presentation map."
+                ),
+                input={
+                    "first": _IDENTITY_MAP_RESULT,
+                    "second": _IDENTITY_MAP_RESULT,
+                },
+            ),
+        ),
     ),
     MathTool(
         operation_id="topology.simplicial.fundamental_group.induced_map.compute",

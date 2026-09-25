@@ -422,39 +422,3 @@ class PresentationMapCompositionRequest(StrictModel):
 
     first: FundamentalGroupMapResult
     second: FundamentalGroupMapResult
-
-
-class PresentationMapCompositionResult(StrictModel):
-    """The exact composite between the outer presentation generator axes."""
-
-    source_presentation: FundamentalGroupPresentationResult
-    intermediate_presentation: FundamentalGroupPresentationResult
-    target_presentation: FundamentalGroupPresentationResult
-    generator_images: tuple[FiniteGroupWord, ...] = Field(
-        max_length=MAX_PRESENTATION_GENERATORS
-    )
-    abelianization_map: IntegerMatrix
-
-    @model_validator(mode="after")
-    def require_axes(self) -> Self:
-        source_count = len(self.source_presentation.presentation.generators)
-        target_count = len(self.target_presentation.presentation.generators)
-        if (
-            len(self.generator_images) != source_count
-            or self.abelianization_map.row_count != target_count
-            or self.abelianization_map.column_count != source_count
-            or any(
-                letter.generator >= target_count
-                for word in self.generator_images
-                for letter in word.letters
-            )
-        ):
-            raise _validation_error(
-                "fundamental_group_map.composition_axes",
-                "the composite words and matrix must bind the outer presentation axes",
-            )
-        return self
-
-    @classmethod
-    def _from_kernel(cls, **values: Any) -> Self:
-        return cls.model_construct(**values)

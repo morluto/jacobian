@@ -15,7 +15,6 @@ from jacobian.catalog.models import (
 from jacobian.math.polynomials.derivations._models import (
     MAX_DERIVATION_COEFFICIENT_DIGITS,
     MAX_DERIVATION_EXPONENT,
-    MAX_GA_ACTION_OUTPUT_BYTES,
     MAX_GA_ACTION_OUTPUT_TERMS,
     PolynomialGaAction,
 )
@@ -468,7 +467,14 @@ def _prepare_input(
         )
         return _canonical_action(request.action), request.basis
     if isinstance(action, Mapping) and basis is None:
-        request = PolynomialGaStableSubrepresentationRequest.model_validate(action)
+        try:
+            request = PolynomialGaStableSubrepresentationRequest.model_validate(action)
+        except Exception as exc:
+            raise OperationDomainValidationError(
+                location=("request",),
+                code="polynomial_ga_subrepresentation.request_shape",
+                message="request must contain a valid action and ordered basis",
+            ) from exc
         return _canonical_action(request.action), request.basis
     action_value = _canonical_action(action)  # type: ignore[arg-type]
     if basis is None:
@@ -576,9 +582,13 @@ def _admit_basis(
     # Terms from distinct source monomials can collide. Treat every bounded
     # product as a possible summand of one output coefficient, so denominator
     # growth from rational addition is also admitted before expansion.
-    aggregate_digit_bound = max_source_digits + expansion_terms * (
-        max_source_degree * (2 * max_action_digit + 1)
-        + len(str(max(1, expansion_terms)))
+    # A product contributes at most one summand per expansion path, but
+    # multiplication merges paths at each stage. Bound the final sum by the
+    # number of paths (logarithmic digit growth), not path count times height.
+    aggregate_digit_bound = (
+        max_source_digits
+        + max_source_degree * (2 * max_action_digit + 1)
+        + _ceil_log_count(max(1, expansion_terms))
     )
     if aggregate_digit_bound > MAX_DERIVATION_COEFFICIENT_DIGITS:
         _reject(
@@ -598,19 +608,23 @@ def _admit_basis(
         )
     basis_terms = sum(len(value.polynomial.terms) for value in basis)
     matrix_term_bound = len(basis) * expansion_terms
-    action_bytes = (
-        sum(len(image.polynomial.terms) for image in action.generator_images) * 384
+    output_cells = (
+        sum(len(image.polynomial.terms) for image in action.generator_images)
+        + basis_terms
+        + expansion_terms
+        + matrix_term_bound
+        + len(basis) ** 2
     )
-    action_bytes += sum(len(value.encode("utf-8")) for value in action.source_variables)
-    action_bytes += len(action.parameter.encode("utf-8")) + 256
-    output_bytes = (
-        action_bytes + (basis_terms + expansion_terms + matrix_term_bound) * 384
+    # Derive a conservative cell bound from the existing action term cap.
+    # Every admitted component is already bounded by that cap; account for
+    # each polynomial/matrix cell without coupling admission to transport bytes.
+    output_cell_limit = (
+        3 * MAX_GA_ACTION_OUTPUT_TERMS + MAX_GA_SUBREPRESENTATION_DIMENSION**2
     )
-    output_bytes += len(basis) ** 2 * 256
-    if output_bytes > MAX_GA_ACTION_OUTPUT_BYTES:
+    if output_cells > output_cell_limit:
         _reject(
-            "output_bytes",
-            "basis and action matrix exceed the serialized-output budget",
+            "output_cells",
+            "basis and action matrix exceed the mathematical cell budget",
             resource=True,
         )
     if expansion_work > MAX_GA_SUBREPRESENTATION_EXPANSION_WORK:

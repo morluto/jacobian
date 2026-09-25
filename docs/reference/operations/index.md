@@ -22,4 +22,5 @@ that need more context than an operation card:
 - [Prime-field homogeneous fixed subspaces](prime-field-homogeneous-fixed-subspaces.md)
 - [Affine-semigroup Hilbert bases](affine-semigroup-hilbert-bases.md)
 - [Parent-bound affine-semigroup factorizations](affine-semigroup-factorizations.md)
+- [Exact affine-semigroup factorization counts](affine-semigroup-factorization-count.md)
 - [Integer-configuration Graver bases](integer-configuration-graver-bases.md)

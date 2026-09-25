@@ -50,5 +50,5 @@ value. This is the distance specialization in [Brijder and Hoogeboom's
 delta-matroid interlace-polynomial treatment](https://arxiv.org/abs/1010.4678),
 with the variable shift fixed as `y = x - 1`; it does not imply any other
 interlace polynomial convention. Admission validates the complete source,
-then bounds `2^|E| * |F| * max(1, |E|)` distance comparisons and a conservative
-serialized result size before enumerating subsets.
+then bounds `2^|E| * |F| * max(1, |E|)` distance comparisons, the number of
+output terms, and coefficient bit lengths before enumerating subsets.

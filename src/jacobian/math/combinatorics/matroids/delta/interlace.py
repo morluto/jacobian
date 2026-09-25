@@ -14,7 +14,8 @@ from jacobian.math.combinatorics.matroids.delta.values import FiniteDeltaMatroid
 from jacobian.math.polynomials._models import IntegerPolynomial
 
 MAX_DISTANCE_INTERLACE_WORK = 250_000
-MAX_DISTANCE_INTERLACE_RESULT_BYTES = 1_000_000
+MAX_DISTANCE_INTERLACE_TERMS = 64
+MAX_DISTANCE_INTERLACE_COEFFICIENT_BITS = 256
 
 
 class DistanceInterlaceRequest(StrictModel):
@@ -25,11 +26,13 @@ class DistanceInterlaceRequest(StrictModel):
                 "sum_X (x - 1)^d_D(X) for a canonical finite delta-matroid. "
                 "Admission permits at most "
                 f"{MAX_DISTANCE_INTERLACE_WORK} subset-feasible comparisons "
-                f"and {MAX_DISTANCE_INTERLACE_RESULT_BYTES} serialized result bytes."
+                f"{MAX_DISTANCE_INTERLACE_TERMS} polynomial terms and "
+                f"{MAX_DISTANCE_INTERLACE_COEFFICIENT_BITS}-bit coefficients."
             ),
             "admission_limits": {
                 "max_subset_feasible_comparisons": MAX_DISTANCE_INTERLACE_WORK,
-                "max_serialized_result_bytes": MAX_DISTANCE_INTERLACE_RESULT_BYTES,
+                "max_polynomial_terms": MAX_DISTANCE_INTERLACE_TERMS,
+                "max_coefficient_bits": MAX_DISTANCE_INTERLACE_COEFFICIENT_BITS,
             },
         }
     )
@@ -44,7 +47,9 @@ class DistanceInterlaceRequest(StrictModel):
 
 class DistanceInterlaceResult(StrictModel):
     source: FiniteDeltaMatroid
-    distance_counts: tuple[int, ...] = Field(min_length=1, max_length=2_049)
+    distance_counts: tuple[int, ...] = Field(
+        min_length=1, max_length=MAX_DISTANCE_INTERLACE_TERMS
+    )
     polynomial: IntegerPolynomial
     formula: Literal["SUM_SUBSETS_(X_MINUS_1)_TO_DISTANCE"] = (
         "SUM_SUBSETS_(X_MINUS_1)_TO_DISTANCE"
@@ -71,26 +76,27 @@ def distance_interlace_polynomial(
             ),
         )
 
-    # The coefficient of x^k is bounded by 2^n * 2^n: there are 2^n
-    # subsets, and each (x-1)^d coefficient has magnitude at most 2^n.
-    # Bound the echoed source from its already-admitted labels and memberships,
-    # then account for every histogram and polynomial coefficient before
-    # enumerating the subset space.
-    label_bytes = sum(len(label.encode("utf-8")) for label in family.ground)
-    memberships = sum(len(row) for row in family.feasible)
-    source_bytes = 16 * label_bytes + 8 * memberships + 3 * row_count + 128
-    coefficient_digits = len(str(1 << (2 * n)))
-    count_digits = len(str(subset_count))
-    result_bound = (
-        source_bytes + (n + 1) * (coefficient_digits + count_digits + 16) + 256
-    )
-    if result_bound > MAX_DISTANCE_INTERLACE_RESULT_BYTES:
+    # There are n+1 histogram entries and polynomial terms. Each polynomial
+    # coefficient is bounded in magnitude by 2^n subsets times a coefficient
+    # of (x-1)^d, itself at most 2^n. Admit those mathematical allocations
+    # before constructing either output or visiting any subsets.
+    if n + 1 > MAX_DISTANCE_INTERLACE_TERMS:
         raise OperationResourceAdmissionError(
             location=("delta_matroid",),
-            code="delta_matroid.distance_interlace_output",
+            code="delta_matroid.distance_interlace_terms",
             message=(
-                "distance interlace result exceeds the "
-                f"{MAX_DISTANCE_INTERLACE_RESULT_BYTES}-byte admission bound"
+                "distance interlace polynomial exceeds the "
+                f"{MAX_DISTANCE_INTERLACE_TERMS}-term output bound"
+            ),
+        )
+    coefficient_bits = 2 * n + 1
+    if coefficient_bits > MAX_DISTANCE_INTERLACE_COEFFICIENT_BITS:
+        raise OperationResourceAdmissionError(
+            location=("delta_matroid",),
+            code="delta_matroid.distance_interlace_coefficient_bits",
+            message=(
+                "distance interlace coefficients exceed the "
+                f"{MAX_DISTANCE_INTERLACE_COEFFICIENT_BITS}-bit bound"
             ),
         )
 
@@ -119,7 +125,8 @@ def distance_interlace_polynomial(
 
 
 __all__ = [
-    "MAX_DISTANCE_INTERLACE_RESULT_BYTES",
+    "MAX_DISTANCE_INTERLACE_COEFFICIENT_BITS",
+    "MAX_DISTANCE_INTERLACE_TERMS",
     "MAX_DISTANCE_INTERLACE_WORK",
     "DistanceInterlaceRequest",
     "DistanceInterlaceResult",

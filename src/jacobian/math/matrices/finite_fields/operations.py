@@ -1,6 +1,14 @@
 """Native exact operations over an explicit prime field."""
 
-from jacobian.math.matrices.finite_fields import linear_algebra
+from collections.abc import Callable
+from typing import NoReturn
+
+from pydantic_core import PydanticCustomError
+
+from jacobian.math.matrices.finite_fields import linear_algebra, quotient_spaces
+from jacobian.math.matrices.finite_fields._bounds import (
+    MAX_PRIME_FIELD_ELIMINATION_WORK,
+)
 from jacobian.math.matrices.finite_fields._models import (
     PrimeFieldMatrixRankResult,
     PrimeFieldRrefResult,
@@ -68,9 +76,9 @@ def matrix_nullspace(matrix: PrimeFieldMatrix) -> tuple[tuple[int, ...], ...]:
 
 def quotient_space(subspace: PrimeFieldSubspace) -> PrimeFieldQuotientSpace:
     """Construct V/W and its exact ambient-to-quotient coordinate map over GF(p)."""
+    subspace = _admit_subspace(subspace)
     dimension = subspace.ambient_dimension
     prime = subspace.prime
-    linear_algebra._admit_prime(prime)
 
     if dimension == 0:
         return PrimeFieldQuotientSpace._from_kernel(
@@ -153,7 +161,7 @@ def project_quotient_vector(
     quotient: PrimeFieldQuotientSpace, vector: tuple[int, ...]
 ) -> PrimeFieldQuotientVector:
     """Map an ambient vector to coordinates in its source-bound quotient."""
-    _admit_quotient_projection(quotient)
+    _admit_projection_request(quotient, vector)
     projection = quotient.projection
     coordinates = tuple(
         sum(row[index] * vector[index] for index in range(projection.columns))
@@ -163,15 +171,143 @@ def project_quotient_vector(
     return PrimeFieldQuotientVector._from_kernel(quotient, coordinates)
 
 
-def _admit_quotient_projection(quotient: PrimeFieldQuotientSpace) -> None:
-    """Check the caller-supplied quotient map before relying on its coordinates."""
+def _domain_rejection(
+    location: tuple[str | int, ...], code: str, message: str
+) -> NoReturn:
     from jacobian.catalog.models import OperationDomainValidationError
 
+    raise OperationDomainValidationError(location=location, code=code, message=message)
+
+
+def _run_admission(
+    admission: Callable[[], None], *, location: tuple[str | int, ...]
+) -> None:
+    """Run a shared structural check, normalizing its wire error for native callers."""
+    from jacobian.catalog.models import OperationDomainValidationError
+
+    try:
+        admission()
+    except OperationDomainValidationError:
+        raise
+    except PydanticCustomError as exc:
+        raise OperationDomainValidationError(
+            location=location, code=exc.type, message=exc.message()
+        ) from exc
+
+
+def _admit_subspace(subspace: object) -> PrimeFieldSubspace:
+    """Admit a possibly forged source subspace before elimination runs.
+
+    ``model_copy`` and ``model_construct`` bypass Pydantic's nested validators,
+    so native callers must establish the carrier invariants themselves rather
+    than trusting an already-instantiated ``PrimeFieldSubspace``.
+    """
+    if type(subspace) is not PrimeFieldSubspace:
+        _domain_rejection(
+            ("subspace",),
+            "prime_field_quotient.subspace_type",
+            "quotient construction requires a PrimeFieldSubspace value",
+        )
+    _run_admission(
+        lambda: quotient_spaces._require_canonical_generators(
+            subspace.prime, subspace.ambient_dimension, subspace.generators
+        ),
+        location=("subspace",),
+    )
+    _run_admission(
+        lambda: quotient_spaces._require_quotient_envelope(
+            subspace.ambient_dimension, len(subspace.generators)
+        ),
+        location=("subspace",),
+    )
+    linear_algebra._admit_prime(subspace.prime)
+    return subspace
+
+
+def _admit_projection_request(
+    quotient: object, vector: object
+) -> None:
+    """Admit a quotient carrier, its authored relation, and the ambient vector.
+
+    The quotient value is caller-supplied and may have been built by
+    ``model_copy`` or ``model_construct``, so re-establish its field, axis,
+    residue, and kernel invariants instead of trusting decoding.
+    """
+    if type(quotient) is not PrimeFieldQuotientSpace:
+        _domain_rejection(
+            ("quotient",),
+            "prime_field_quotient.quotient_type",
+            "projection requires a PrimeFieldQuotientSpace value",
+        )
+    source = quotient.source
+    if type(source) is not PrimeFieldSubspace:
+        _domain_rejection(
+            ("quotient", "source"),
+            "prime_field_quotient.subspace_type",
+            "quotient source must be a PrimeFieldSubspace value",
+        )
+    _run_admission(
+        lambda: quotient_spaces._require_canonical_generators(
+            source.prime, source.ambient_dimension, source.generators
+        ),
+        location=("quotient", "source"),
+    )
+    _run_admission(
+        lambda: quotient_spaces._require_quotient_structure(
+            source, quotient.quotient_basis, quotient.projection
+        ),
+        location=("quotient",),
+    )
+    prime = source.prime
+    dimension = source.ambient_dimension
+    linear_algebra._admit_prime(prime)
+    _admit_projection_vector(vector, dimension=dimension, prime=prime)
+    _admit_projection_relation(quotient)
+
+
+def _admit_projection_vector(
+    vector: object, *, dimension: int, prime: int
+) -> None:
+    """Admit the ambient vector against the quotient's declared axis and field."""
+    if type(vector) is not tuple:
+        _domain_rejection(
+            ("vector",),
+            "prime_field_quotient.vector_type",
+            "vector must be a tuple of GF(p) coordinates",
+        )
+    if len(vector) != dimension:
+        _domain_rejection(
+            ("vector",),
+            "prime_field_quotient.vector_axis",
+            "vector must match the quotient ambient axis",
+        )
+    if any(type(entry) is not int or not 0 <= entry < prime for entry in vector):
+        _domain_rejection(
+            ("vector",),
+            "prime_field_quotient.vector_residue",
+            "vector entries must be canonical residues in GF(p)",
+        )
+
+
+def _admit_projection_relation(quotient: PrimeFieldQuotientSpace) -> None:
+    """Check the caller-supplied quotient map before relying on its coordinates."""
     subspace = quotient.source
     dimension = subspace.ambient_dimension
     prime = subspace.prime
-    linear_algebra._admit_prime(prime)
     generator_count = len(subspace.generators)
+    quotient_dimension = len(quotient.quotient_basis)
+    validation_work = (
+        dimension * generator_count * min(dimension, generator_count)
+        + dimension * quotient_dimension * min(dimension, quotient_dimension)
+        + quotient_dimension * dimension * generator_count
+        + quotient_dimension * dimension * quotient_dimension
+    )
+    if validation_work > MAX_PRIME_FIELD_ELIMINATION_WORK:
+        _domain_rejection(
+            ("quotient",),
+            "prime_field_quotient.projection_validation_work",
+            "quotient proof exceeds the elimination work bound",
+        )
     if generator_count:
         generator_columns = PrimeFieldMatrix(
             prime=prime,
@@ -186,7 +322,6 @@ def _admit_quotient_projection(quotient: PrimeFieldQuotientSpace) -> None:
     else:
         denominator_rank = 0
 
-    quotient_dimension = len(quotient.quotient_basis)
     quotient_basis_matrix = PrimeFieldMatrix(
         prime=prime,
         entries=quotient.quotient_basis,
@@ -197,10 +332,10 @@ def _admit_quotient_projection(quotient: PrimeFieldQuotientSpace) -> None:
         denominator_rank + quotient_dimension != dimension
         or len(basis_pivots) != quotient_dimension
     ):
-        raise OperationDomainValidationError(
-            location=("quotient",),
-            code="prime_field_quotient.dimension_invalid",
-            message="denominator rank and quotient basis must span the full ambient dimension",
+        _domain_rejection(
+            ("quotient",),
+            "prime_field_quotient.dimension_invalid",
+            "denominator rank and quotient basis must span the full ambient dimension",
         )
 
     for generator in subspace.generators:
@@ -212,10 +347,10 @@ def _admit_quotient_projection(quotient: PrimeFieldQuotientSpace) -> None:
             % prime
             for row in quotient.projection.entries
         ):
-            raise OperationDomainValidationError(
-                location=("quotient", "projection"),
-                code="prime_field_quotient.denominator_not_kernel",
-                message="projection must annihilate every denominator generator",
+            _domain_rejection(
+                ("quotient", "projection"),
+                "prime_field_quotient.denominator_not_kernel",
+                "projection must annihilate every denominator generator",
             )
     for quotient_index, basis_vector in enumerate(quotient.quotient_basis):
         for row_index, row in enumerate(quotient.projection.entries):
@@ -227,8 +362,8 @@ def _admit_quotient_projection(quotient: PrimeFieldQuotientSpace) -> None:
                 % prime
             )
             if coordinate != int(row_index == quotient_index):
-                raise OperationDomainValidationError(
-                    location=("quotient", "projection"),
-                    code="prime_field_quotient.basis_coordinates_invalid",
-                    message="projection must send its quotient basis to standard coordinates",
+                _domain_rejection(
+                    ("quotient", "projection"),
+                    "prime_field_quotient.basis_coordinates_invalid",
+                    "projection must send its quotient basis to standard coordinates",
                 )

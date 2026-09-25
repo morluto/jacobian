@@ -5,15 +5,17 @@ from pydantic import ValidationError
 
 from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.matrices.finite_fields._tools import (
-    compute_quotient_space,
+from jacobian.math.matrices import finite_fields
+from jacobian.math.matrices.finite_fields._tools import compute_quotient_space
+from jacobian.math.matrices.finite_fields.linear_algebra import PrimeFieldMatrix
+from jacobian.math.matrices.finite_fields.operations import (
     project_quotient_vector,
+    quotient_space,
 )
 from jacobian.math.matrices.finite_fields.quotient_spaces import (
     PrimeFieldQuotientRequest,
     PrimeFieldQuotientSpace,
     PrimeFieldSubspace,
-    PrimeFieldVectorProjectionRequest,
 )
 
 
@@ -64,9 +66,7 @@ def test_projection_has_denominator_kernel_and_coordinates_in_returned_basis(
         assert _mat_vec(quotient.projection.entries, representative, prime) == (1,)
 
     vector = (2 % prime, 1 % prime, 2 % prime)
-    projected = project_quotient_vector(
-        PrimeFieldVectorProjectionRequest(quotient=quotient, vector=vector)
-    )
+    projected = project_quotient_vector(quotient, vector)
     assert projected.quotient == quotient
     assert projected.coordinates == _mat_vec(quotient.projection.entries, vector, prime)
 
@@ -77,9 +77,7 @@ def test_quotient_and_projected_vector_roundtrip_unchanged_through_json():
         quotient.model_dump_json()
     )
     assert decoded_quotient == quotient
-    projected = project_quotient_vector(
-        PrimeFieldVectorProjectionRequest(quotient=decoded_quotient, vector=(2, 0))
-    )
+    projected = project_quotient_vector(decoded_quotient, (2, 0))
     assert projected.coordinates == (2,)
     assert projected.quotient == quotient
 
@@ -89,20 +87,13 @@ def test_zero_subspace_is_identity_quotient_and_full_subspace_is_zero_quotient()
     assert identity.quotient_basis == ((1, 0), (0, 1))
     assert identity.projection.entries == ((1, 0), (0, 1))
     vector = (4, 3)
-    assert (
-        project_quotient_vector(
-            PrimeFieldVectorProjectionRequest(quotient=identity, vector=vector)
-        ).coordinates
-        == vector
-    )
+    assert project_quotient_vector(identity, vector).coordinates == vector
 
     zero = _quotient(5, 2, ((1, 0), (0, 1)))
     assert zero.quotient_basis == ()
     assert zero.projection.entries == ()
     assert zero.projection.columns == 2
-    projected_zero = project_quotient_vector(
-        PrimeFieldVectorProjectionRequest(quotient=zero, vector=(4, 3))
-    )
+    projected_zero = project_quotient_vector(zero, (4, 3))
     assert projected_zero.coordinates == ()
     assert projected_zero.quotient == zero
 
@@ -112,12 +103,7 @@ def test_zero_ambient_axis_retains_empty_projection_shape():
     assert zero.quotient_basis == ()
     assert zero.projection.entries == ()
     assert zero.projection.columns == 0
-    assert (
-        project_quotient_vector(
-            PrimeFieldVectorProjectionRequest(quotient=zero, vector=())
-        ).coordinates
-        == ()
-    )
+    assert project_quotient_vector(zero, ()).coordinates == ()
 
 
 def test_quotient_projection_is_invariant_under_adding_denominator_vectors():
@@ -128,14 +114,8 @@ def test_quotient_projection_is_invariant_under_adding_denominator_vectors():
         for entry, basis_entry in zip(vector, (1, 2, 0), strict=True)
         for scale in [3]
     )
-    first = project_quotient_vector(
-        PrimeFieldVectorProjectionRequest(quotient=quotient, vector=vector)
-    )
-    second = project_quotient_vector(
-        PrimeFieldVectorProjectionRequest(
-            quotient=quotient, vector=representative_in_same_class
-        )
-    )
+    first = project_quotient_vector(quotient, vector)
+    second = project_quotient_vector(quotient, representative_in_same_class)
     assert first.coordinates == second.coordinates
 
 
@@ -150,9 +130,7 @@ def test_projection_classes_match_exhaustive_cosets_in_gf2_cubed():
         for third in range(2)
     )
     projected = {
-        vector: project_quotient_vector(
-            PrimeFieldVectorProjectionRequest(quotient=quotient, vector=vector)
-        ).coordinates
+        vector: project_quotient_vector(quotient, vector).coordinates
         for vector in vectors
     }
     for left in vectors:
@@ -163,10 +141,10 @@ def test_projection_classes_match_exhaustive_cosets_in_gf2_cubed():
 
 def test_projection_rejects_wrong_parent_axis_and_noncanonical_values():
     quotient = _quotient(3, 2, ((1, 0),))
-    with pytest.raises(ValidationError):
-        PrimeFieldVectorProjectionRequest(quotient=quotient, vector=(0,))
-    with pytest.raises(ValidationError):
-        PrimeFieldVectorProjectionRequest(quotient=quotient, vector=(3, 0))
+    with pytest.raises(OperationDomainValidationError):
+        project_quotient_vector(quotient, (0,))
+    with pytest.raises(OperationDomainValidationError):
+        project_quotient_vector(quotient, (3, 0))
     with pytest.raises(ValidationError):
         PrimeFieldQuotientSpace.model_validate(
             {
@@ -191,9 +169,58 @@ def test_projection_rechecks_caller_authored_quotient_relation():
     forged_payload["projection"]["entries"] = [[1, 0]]
     forged = PrimeFieldQuotientSpace.model_validate(forged_payload)
     with pytest.raises(OperationDomainValidationError):
-        project_quotient_vector(
-            PrimeFieldVectorProjectionRequest(quotient=forged, vector=(2, 1))
+        project_quotient_vector(forged, (2, 1))
+
+
+def test_native_quotient_admission_rejects_a_forged_subspace_carrier():
+    """A copied carrier cannot skip the generator-axis invariant."""
+    forged = PrimeFieldSubspace(prime=2, ambient_dimension=0, generators=()).model_copy(
+        update={"generators": ((1,),)}
+    )
+    with pytest.raises(OperationDomainValidationError):
+        quotient_space(forged)
+
+
+def test_native_projection_admission_rejects_a_forged_field_mix():
+    """An unchecked projection field must not silently drive GF(p) arithmetic."""
+    quotient = _quotient(3, 2, ((1, 1),))
+    forged = quotient.model_copy(
+        update={
+            "projection": PrimeFieldMatrix(prime=5, entries=((1, 2),), columns=2),
+        }
+    )
+    with pytest.raises(OperationDomainValidationError):
+        project_quotient_vector(forged, (0, 2))
+
+
+def test_native_projection_admission_rejects_a_forged_basis_carrier():
+    """An unchecked quotient basis must match the retained ambient axis."""
+    quotient = _quotient(3, 2, ((1, 1),))
+    forged = quotient.model_copy(update={"quotient_basis": ((1,),)})
+    with pytest.raises(OperationDomainValidationError):
+        project_quotient_vector(forged, (2, 1))
+
+
+def test_subspace_preflight_rejects_oversized_generator_count():
+    with pytest.raises(ValidationError) as exc_info:
+        PrimeFieldSubspace.model_validate(
+            {"prime": 2, "ambient_dimension": 1, "generators": [[]] * 1025}
         )
+    assert any(
+        error["type"] == "prime_field_quotient.generator_count"
+        for error in exc_info.value.errors()
+    )
+
+
+def test_subspace_preflight_rejects_an_overlong_generator_row():
+    with pytest.raises(ValidationError) as exc_info:
+        PrimeFieldSubspace.model_validate(
+            {"prime": 2, "ambient_dimension": 1, "generators": [[0] * 1025]}
+        )
+    assert any(
+        error["type"] == "prime_field_quotient.generator_axis"
+        for error in exc_info.value.errors()
+    )
 
 
 def test_quotient_operation_rejects_a_composite_characteristic():
@@ -208,13 +235,13 @@ def test_quotient_admission_counts_parented_output_coordinates():
         )
 
 
-def test_quotient_space_tools_are_published_with_parented_value_contracts():
+def test_quotient_construction_is_the_only_published_quotient_operation():
     tools = {tool.operation_id: tool for tool in BUILTIN_TOOLS}
     assert (
         tools["prime_field.vector_space.quotient.compute"].result_type
         is PrimeFieldQuotientSpace
     )
-    assert (
-        tools["prime_field.vector_space.quotient.project"].result_type.__name__
-        == "PrimeFieldQuotientVector"
-    )
+    # Projection is a cheap deterministic map of an existing public result, so
+    # it stays a native package export instead of a discovery entry.
+    assert "prime_field.vector_space.quotient.project" not in tools
+    assert finite_fields.project_quotient_vector is project_quotient_vector

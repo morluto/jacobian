@@ -18,15 +18,19 @@ while the abstract quotient is independent of that choice. See MIT's
 [multilinear algebra notes, §1.2](https://math.mit.edu/classes/18.952/spring2011/chapter1.pdf),
 especially the quotient projection and basis-extension exercises on pp. 6–7.
 
-`prime_field.vector_space.quotient.project` consumes the serialized quotient
-value unchanged. Before using caller-supplied projection data, it checks that
-the projection annihilates the denominator, sends the retained quotient basis
-to standard coordinates, and that denominator and quotient dimensions span
-the ambient space. This establishes that the projection kernel is exactly
-`W`; structural decoding alone does not certify a caller-authored relation.
-The result is a `PrimeFieldQuotientVector` parented by the same quotient value.
+The native helper `jacobian.math.matrices.finite_fields.project_quotient_vector`
+consumes the serialized quotient value unchanged. Because it is a deterministic
+projection of the public `quotient.compute` result, it remains a native package
+export rather than a catalog discovery entry. Before using caller-supplied
+projection data, it checks that the projection annihilates the denominator,
+sends the retained quotient basis to standard coordinates, and that denominator
+and quotient dimensions span the ambient space. This establishes that the
+projection kernel is exactly `W`; structural decoding alone does not certify a
+caller-authored relation. The result is a `PrimeFieldQuotientVector` parented by
+the same quotient value.
 
-Both operations use exact arithmetic over prime fields. The request admits the
+The published construction and the native projection consumer use exact
+arithmetic over prime fields. The request admits the
 prime before elimination, caps ambient dimension plus generator count at 1024,
 and bounds elimination work and combined basis/projection cells. The
 projection consumer applies the corresponding bound to the exact checks it

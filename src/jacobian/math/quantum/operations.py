@@ -29,6 +29,8 @@ from jacobian.math.quantum._models import (
     LogicalPauliFrame,
     NonCommutingWitness,
     NormalizerResult,
+    PauliFamilyCommutationRequest,
+    PauliFamilyCommutationResult,
     PauliFamilyEntry,
     PauliInverseResult,
     PauliPairingResult,
@@ -347,8 +349,8 @@ def pauli_to_labels(pauli: ExactQubitPauli) -> PauliToLabelsResult:
 
 def pauli_family_commutation_matrix(
     family: tuple[PauliFamilyEntry, ...] | list[PauliFamilyEntry],
-) -> tuple[tuple[int, ...], ...]:
-    """Return all pairwise symplectic pairings on an explicitly named axis."""
+) -> PauliFamilyCommutationResult:
+    """Return all pairwise symplectic pairings on the retained named axis."""
     if not isinstance(family, (tuple, list)) or not 1 <= len(family) <= MAX_CHECK_ROWS:
         _reject(
             "family",
@@ -414,7 +416,15 @@ def pauli_family_commutation_matrix(
         )
         for _, first in entries
     )
-    return matrix
+    source = PauliFamilyCommutationRequest(
+        family=tuple(
+            PauliFamilyEntry(pauli_id=pauli_id, pauli=pauli)
+            for pauli_id, pauli in entries
+        )
+    )
+    return PauliFamilyCommutationResult.model_construct(
+        source=source, commutation_matrix=matrix
+    )
 
 
 def pauli_multiply(left: ExactQubitPauli, right: ExactQubitPauli) -> PauliProductResult:

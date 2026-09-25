@@ -570,15 +570,6 @@ class PauliFamilyCommutationResult(StrictModel):
             raise _validation_error(
                 "commutation_matrix_bits", "commutation matrix entries must be binary"
             )
-        if any(matrix[i][i] != 0 for i in range(count)) or any(
-            matrix[i][j] != matrix[j][i]
-            for i in range(count)
-            for j in range(i + 1, count)
-        ):
-            raise _validation_error(
-                "commutation_matrix_form",
-                "commutation matrix must be alternating and symmetric over GF(2)",
-            )
         return self
 
 

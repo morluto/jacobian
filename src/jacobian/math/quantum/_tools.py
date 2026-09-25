@@ -97,10 +97,7 @@ def _run_pairing(request: PauliPairingRequest) -> PauliPairingResult:
 def _run_family_commutation(
     request: PauliFamilyCommutationRequest,
 ) -> PauliFamilyCommutationResult:
-    return PauliFamilyCommutationResult(
-        source=request,
-        commutation_matrix=pauli_family_commutation_matrix(request.family),
-    )
+    return pauli_family_commutation_matrix(request.family)
 
 
 def _run_inverse(request: PauliInverseRequest) -> PauliInverseResult:

@@ -17,6 +17,7 @@ from jacobian.math.logic.relational_structures.values import (
     MAX_RELATIONAL_POLYMORPHISM_ARITY,
     MAX_RELATIONAL_SYMBOLS,
     FiniteRelationalStructure,
+    RelationalHomomorphism,
     RelationSymbolId,
 )
 
@@ -516,6 +517,19 @@ class HomomorphismCheckRequest(StrictModel):
                 "every carrier map image must belong to the target carrier",
             )
         return self
+
+
+class RelationalHomomorphismIdentityRequest(StrictModel):
+    """Construct the identity homomorphism of one exact structure."""
+
+    structure: FiniteRelationalStructure
+
+
+class RelationalHomomorphismCompositionRequest(StrictModel):
+    """Compose ``second`` after ``first`` over an exact shared structure."""
+
+    first: RelationalHomomorphism
+    second: RelationalHomomorphism
 
 
 class HomomorphismSearchStatus(StrEnum):
@@ -1595,6 +1609,8 @@ __all__ = [
     "InducedRelationProfile",
     "InducedSubstructureRequest",
     "InducedSubstructureResult",
+    "RelationalHomomorphismCompositionRequest",
+    "RelationalHomomorphismIdentityRequest",
     "RelationalPolymorphism",
     "RelationalPolymorphismCheckResult",
     "RelationalPolymorphismRelationProfile",

@@ -179,6 +179,72 @@ class FiniteRelationalStructure(StrictModel):
         return self
 
 
+class RelationalCarrierMap(StrictModel):
+    """One total map between canonical carriers over an identical signature.
+
+    ``mapping[a]`` is the target label assigned to source label ``a``. The
+    value binds both exact structures; equal carrier sizes or matching tuple
+    shapes alone do not make maps interchangeable.
+    """
+
+    source: FiniteRelationalStructure
+    target: FiniteRelationalStructure
+    mapping: tuple[StrictInt, ...] = Field(max_length=MAX_RELATIONAL_CARRIER)
+
+    @model_validator(mode="after")
+    def require_total_signature_bound_map(self) -> Self:
+        if self.source.signature != self.target.signature:
+            raise _validation_error(
+                "map_signature_mismatch",
+                "source and target must have the same ordered ranked signature",
+            )
+        if len(self.mapping) != self.source.carrier_size:
+            raise _validation_error(
+                "map_source_axis",
+                "mapping must contain one target label per source carrier label",
+            )
+        if any(not 0 <= image < self.target.carrier_size for image in self.mapping):
+            raise _validation_error(
+                "map_target_axis",
+                "every mapping image must belong to the exact target carrier",
+            )
+        return self
+
+    @property
+    def injective(self) -> bool:
+        return len(set(self.mapping)) == len(self.mapping)
+
+    @property
+    def surjective(self) -> bool:
+        return set(self.mapping) == set(range(self.target.carrier_size))
+
+    @property
+    def image(self) -> tuple[int, ...]:
+        return tuple(sorted(set(self.mapping)))
+
+
+class RelationalHomomorphism(RelationalCarrierMap):
+    """A source- and target-bound map checked to preserve every relation.
+
+    Structural decoding validates the endpoint structures and total map, but
+    does not replay relation preservation. Producers establish that invariant
+    in their admitted kernel; a consumer rechecks a caller-supplied value when
+    its result relies on the homomorphism claim.
+    """
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        source: FiniteRelationalStructure,
+        target: FiniteRelationalStructure,
+        mapping: tuple[int, ...],
+    ) -> Self:
+        """Construct after the owning kernel establishes preservation."""
+
+        return cls.model_construct(source=source, target=target, mapping=mapping)
+
+
 __all__ = [
     "MAX_RELATIONAL_ARITY",
     "MAX_RELATIONAL_CARRIER",
@@ -190,4 +256,6 @@ __all__ = [
     "FiniteRelationSymbol",
     "FiniteRelationalStructure",
     "RelationSymbolId",
+    "RelationalCarrierMap",
+    "RelationalHomomorphism",
 ]

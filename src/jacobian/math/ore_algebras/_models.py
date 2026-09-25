@@ -42,6 +42,8 @@ MAX_RECURRENCE_PREFIX_STEPS = 512
 MAX_RECURRENCE_PREFIX_INDEX = 100_000
 MAX_RECURRENCE_PREFIX_OUTPUT_BYTES = 2 * 1024 * 1024
 MAX_RECURRENCE_PREFIX_WORK_CELLS = 1_000_000
+MAX_COEFFICIENT_RECURRENCE_WORK_CELLS = 100_000
+MAX_COEFFICIENT_RECURRENCE_OUTPUT_BYTES = 2 * 1024 * 1024
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -98,6 +100,82 @@ class DifferentialOreOperator(StrictModel):
     @property
     def order(self) -> int:
         return max((term.order for term in self.terms), default=-1)
+
+
+class DifferentialCoefficientRecurrenceRequest(StrictModel):
+    """Convert a polynomial-coefficient ODE to its Taylor coefficient rows."""
+
+    operator: DifferentialOreOperator
+
+
+class CoefficientRecurrenceTerm(StrictModel):
+    """One coefficient p(n) multiplying a_(n+shift) in a recurrence."""
+
+    shift: StrictInt = Field(ge=0, le=80)
+    coefficient: RationalFunction
+
+    @model_validator(mode="after")
+    def require_polynomial_coefficient(self) -> Self:
+        if not _is_polynomial_coefficient(self.coefficient):
+            raise _validation_error(
+                "coefficient_recurrence_coefficient",
+                "recurrence coefficients must be nonzero polynomials in QQ[n]",
+            )
+        return self
+
+
+class CoefficientRecurrenceBoundaryTerm(StrictModel):
+    """One exact coefficient of a_k in an exceptional initial row."""
+
+    index: StrictInt = Field(ge=0, le=80)
+    coefficient: CanonicalRational
+
+
+class CoefficientRecurrenceBoundaryRow(StrictModel):
+    """The coefficient equation at one Taylor degree before stable recurrence."""
+
+    degree: StrictInt = Field(ge=0, le=63)
+    terms: tuple[CoefficientRecurrenceBoundaryTerm, ...] = Field(max_length=80)
+
+    @model_validator(mode="after")
+    def require_sorted_indices(self) -> Self:
+        indices = tuple(term.index for term in self.terms)
+        if indices != tuple(sorted(indices)) or len(set(indices)) != len(indices):
+            raise _validation_error(
+                "coefficient_recurrence_boundary_order",
+                "boundary row indices must be strictly increasing",
+            )
+        return self
+
+
+class DifferentialCoefficientRecurrence(StrictModel):
+    """Exact coefficient equations for an ODE at x=0, including boundary rows."""
+
+    operator: DifferentialOreOperator
+    recurrence: tuple[CoefficientRecurrenceTerm, ...] = Field(max_length=81)
+    valid_from: StrictInt = Field(ge=0, le=80)
+    boundary_rows: tuple[CoefficientRecurrenceBoundaryRow, ...] = Field(max_length=64)
+
+    @model_validator(mode="after")
+    def require_recurrence_order(self) -> Self:
+        shifts = tuple(term.shift for term in self.recurrence)
+        degrees = tuple(row.degree for row in self.boundary_rows)
+        if shifts != tuple(sorted(shifts)) or len(set(shifts)) != len(shifts):
+            raise _validation_error(
+                "coefficient_recurrence_order",
+                "coefficient recurrence shifts must be strictly increasing",
+            )
+        if degrees != tuple(range(len(degrees))):
+            raise _validation_error(
+                "coefficient_recurrence_boundary_order",
+                "boundary rows must include consecutive degrees starting at zero",
+            )
+        if not self.recurrence:
+            raise _validation_error(
+                "coefficient_recurrence_empty",
+                "a nonzero differential operator must produce a nonzero recurrence",
+            )
+        return self
 
 
 class DFinitePowerSeries(StrictModel):

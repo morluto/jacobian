@@ -25,51 +25,64 @@ from jacobian._models import StrictModel
 # representation, not one operation's resource envelope.
 MAX_FREE_ALGEBRA_GENERATORS = 26
 MAX_FREE_ALGEBRA_LETTER_LENGTH = 64
-# A declared word (and therefore an operand term) is bounded by this length.
+# A growing-operation source word (and therefore an operand term) is bounded
+# by this length.
 MAX_FREE_ALGEBRA_WORD_LENGTH = 32
 # The product of two declared words has length at most twice that bound.
 MAX_FREE_ALGEBRA_RESULT_WORD_LENGTH = 2 * MAX_FREE_ALGEBRA_WORD_LENGTH
+# One canonical word value: results and non-growing single-word consumers may
+# carry this many letters.
 MAX_FREE_ALGEBRA_WORD_VALUE_LENGTH = MAX_FREE_ALGEBRA_RESULT_WORD_LENGTH
 MAX_FREE_WORD_POWER_EXPONENT = 64
-MAX_FREE_WORD_SPLITS = MAX_FREE_ALGEBRA_WORD_LENGTH + 1
-MAX_FREE_WORD_SPLIT_LETTER_CELLS = MAX_FREE_ALGEBRA_WORD_LENGTH * MAX_FREE_WORD_SPLITS
+# Prefix/suffix/factor families are bounded over canonical word values, since
+# those non-growing consumers admit producers through the full 64-letter range.
+MAX_FREE_WORD_SPLITS = MAX_FREE_ALGEBRA_WORD_VALUE_LENGTH + 1
+MAX_FREE_WORD_SPLIT_LETTER_CELLS = (
+    MAX_FREE_ALGEBRA_WORD_VALUE_LENGTH * MAX_FREE_WORD_SPLITS
+)
 MAX_FREE_WORD_FACTOR_OCCURRENCES = (
-    (MAX_FREE_ALGEBRA_WORD_LENGTH + 1) * (MAX_FREE_ALGEBRA_WORD_LENGTH + 2) // 2
+    (MAX_FREE_ALGEBRA_WORD_VALUE_LENGTH + 1)
+    * (MAX_FREE_ALGEBRA_WORD_VALUE_LENGTH + 2)
+    // 2
 )
 MAX_FREE_WORD_FACTOR_LETTER_CELLS = (
-    MAX_FREE_ALGEBRA_WORD_LENGTH
-    * (MAX_FREE_ALGEBRA_WORD_LENGTH + 1)
-    * (MAX_FREE_ALGEBRA_WORD_LENGTH + 2)
+    MAX_FREE_ALGEBRA_WORD_VALUE_LENGTH
+    * (MAX_FREE_ALGEBRA_WORD_VALUE_LENGTH + 1)
+    * (MAX_FREE_ALGEBRA_WORD_VALUE_LENGTH + 2)
     // 6
 )
 MAX_FREE_WORD_FACTOR_DISTINCT = (
-    MAX_FREE_ALGEBRA_WORD_LENGTH * (MAX_FREE_ALGEBRA_WORD_LENGTH + 1) // 2 + 1
+    MAX_FREE_ALGEBRA_WORD_VALUE_LENGTH * (MAX_FREE_ALGEBRA_WORD_VALUE_LENGTH + 1) // 2
+    + 1
 )
 MAX_FREE_WORD_OVERLAP_ALIGNMENTS = 2 * MAX_FREE_ALGEBRA_WORD_LENGTH - 1
 MAX_FREE_WORD_OVERLAP_LETTER_CELLS = 14_000
 MAX_FREE_WORD_OVERLAP_WORK = 4_096
 MAX_FREE_ALGEBRA_OPERAND_TERMS = 64
 MAX_FREE_ALGEBRA_ADDITION_TERMS = 2 * MAX_FREE_ALGEBRA_OPERAND_TERMS
-MAX_FREE_ALGEBRA_ADDITION_OUTPUT_BYTES = 2_000_000
+# Aggregate output allocation bounds count stored Unicode scalar cells and
+# coefficient digit cells plus fixed per-record allowances.  They bound the
+# canonical result's allocation, not any transport serialization.
+MAX_FREE_ALGEBRA_ADDITION_OUTPUT_CELLS = 150_000
 MAX_FREE_ALGEBRA_RESULT_TERMS = 4_096
 MAX_FREE_ALGEBRA_TERM_PAIRS = MAX_FREE_ALGEBRA_OPERAND_TERMS**2
 MAX_FREE_ALGEBRA_COEFFICIENT_DIGITS = 64
 MAX_FREE_ALGEBRA_SUBSTITUTION_EXPANSIONS = 65_536
 MAX_FREE_ALGEBRA_SUBSTITUTION_WORK = 1_000_000
-MAX_FREE_ALGEBRA_SUBSTITUTION_OUTPUT_BYTES = 2_000_000
+MAX_FREE_ALGEBRA_SUBSTITUTION_OUTPUT_CELLS = 150_000
 # Ideal-prefix output is an aggregate carrier: unlike multiplication, it
 # returns many basis polynomials at once. Keep that envelope independent from
 # the per-polynomial result bound.
 MAX_FREE_ALGEBRA_IDEAL_PREFIX_BASIS = MAX_FREE_ALGEBRA_RESULT_TERMS // 4
 MAX_FREE_ALGEBRA_IDEAL_PREFIX_TOTAL_TERMS = MAX_FREE_ALGEBRA_RESULT_TERMS // 2
-MAX_FREE_ALGEBRA_IDEAL_PREFIX_SERIALIZED_BYTES = 2_000_000
+MAX_FREE_ALGEBRA_IDEAL_PREFIX_CELLS = 150_000
 # A direct homogeneous ideal-component calculation is a dense exact row-space
 # problem.  Keep its ambient word axis and returned basis small enough for a
 # single request-scoped rational elimination.
 MAX_FREE_ALGEBRA_IDEAL_COMPONENT_WORDS = 128
 MAX_FREE_ALGEBRA_IDEAL_COMPONENT_CONTEXTS = 256
 MAX_FREE_ALGEBRA_IDEAL_COMPONENT_MATRIX_CELLS = 32_768
-MAX_FREE_ALGEBRA_IDEAL_COMPONENT_SERIALIZED_BYTES = 2_000_000
+MAX_FREE_ALGEBRA_IDEAL_COMPONENT_CELLS = 150_000
 # GS completion checks every ordered basis pair at each fixed-point round.
 # These are execution-envelope bounds; COMPLETE_THROUGH_DEGREE is returned only
 # after the bounded rounds reach a genuine zero-composition fixed point.
@@ -79,6 +92,7 @@ MAX_FREE_ALGEBRA_GS_REDUCTION_STEPS = (
     MAX_FREE_ALGEBRA_RESULT_TERMS * MAX_FREE_ALGEBRA_WORD_LENGTH
 )
 MAX_FREE_ALGEBRA_QUOTIENT_PROFILE_CANDIDATES = 16_384
+MAX_FREE_ALGEBRA_QUOTIENT_PROFILE_OUTPUT_CELLS = 150_000
 MAX_FREE_ALGEBRA_QUOTIENT_PROFILE_OUTPUT_BYTES = 2_000_000
 # Truncated quotient multiplication is dense in its basis-pair axis and can
 # have a full basis expansion at each pair. Keep its exact table bounded
@@ -153,8 +167,8 @@ class FreeAlgebraWord(StrictModel):
         max_length=MAX_FREE_ALGEBRA_WORD_VALUE_LENGTH,
         description=(
             "Ordered generator labels spelling one word; the empty tuple is the "
-            "multiplicative unit. Source requests admit at most 32 letters; "
-            "bounded word results may contain up to 64."
+            "multiplicative unit. Growing-operation sources admit at most 32 "
+            "letters; canonical word values contain up to 64."
         ),
     )
 
@@ -213,21 +227,37 @@ class FreeAlgebraWordPairResult(StrictModel):
 
 
 class FreeAlgebraWordRequest(StrictModel):
-    """One source word subject to the 32-letter operation input bound."""
+    """One word subject to the 64-letter canonical value bound.
 
-    word: FreeAlgebraWord = Field(description="Source word of at most 32 letters.")
+    Non-growing single-word consumers (reversal, prefix/suffix/factor
+    families) admit producer words through the full canonical value range.
+    """
+
+    word: FreeAlgebraWord = Field(description="Word of at most 64 letters.")
 
     @model_validator(mode="after")
-    def require_bounded_source(self) -> Self:
-        if self.word.length > MAX_FREE_ALGEBRA_WORD_LENGTH:
+    def require_bounded_value(self) -> Self:
+        if self.word.length > MAX_FREE_ALGEBRA_WORD_VALUE_LENGTH:
             raise _validation_error(
-                "word_source_length", "source words may contain at most 32 letters"
+                "word_value_length",
+                "words may contain at most 64 letters",
             )
         return self
 
 
 class FreeAlgebraWordPowerRequest(FreeAlgebraWordRequest):
+    """One source word for a growing power, subject to the 32-letter bound."""
+
     exponent: int = Field(ge=0, le=MAX_FREE_WORD_POWER_EXPONENT)
+
+    @model_validator(mode="after")
+    def require_bounded_power_source(self) -> Self:
+        if self.word.length > MAX_FREE_ALGEBRA_WORD_LENGTH:
+            raise _validation_error(
+                "word_source_length",
+                "power source words may contain at most 32 letters",
+            )
+        return self
 
 
 class FreeAlgebraWordPowerResult(StrictModel):
@@ -265,10 +295,10 @@ class FreeAlgebraWordPrefixSplit(StrictModel):
     """One prefix and its complementary suffix."""
 
     prefix_letters: tuple[FreeAlgebraLetter, ...] = Field(
-        max_length=MAX_FREE_ALGEBRA_WORD_LENGTH
+        max_length=MAX_FREE_ALGEBRA_WORD_VALUE_LENGTH
     )
     completing_suffix_letters: tuple[FreeAlgebraLetter, ...] = Field(
-        max_length=MAX_FREE_ALGEBRA_WORD_LENGTH
+        max_length=MAX_FREE_ALGEBRA_WORD_VALUE_LENGTH
     )
 
 
@@ -276,24 +306,24 @@ class FreeAlgebraWordSuffixSplit(StrictModel):
     """One suffix and its complementary prefix."""
 
     completing_prefix_letters: tuple[FreeAlgebraLetter, ...] = Field(
-        max_length=MAX_FREE_ALGEBRA_WORD_LENGTH
+        max_length=MAX_FREE_ALGEBRA_WORD_VALUE_LENGTH
     )
     suffix_letters: tuple[FreeAlgebraLetter, ...] = Field(
-        max_length=MAX_FREE_ALGEBRA_WORD_LENGTH
+        max_length=MAX_FREE_ALGEBRA_WORD_VALUE_LENGTH
     )
 
 
 class FreeAlgebraWordPrefixesResult(StrictModel):
     word: FreeAlgebraWord
     splits: tuple[FreeAlgebraWordPrefixSplit, ...] = Field(
-        max_length=MAX_FREE_ALGEBRA_WORD_LENGTH + 1
+        max_length=MAX_FREE_WORD_SPLITS
     )
 
 
 class FreeAlgebraWordSuffixesResult(StrictModel):
     word: FreeAlgebraWord
     splits: tuple[FreeAlgebraWordSuffixSplit, ...] = Field(
-        max_length=MAX_FREE_ALGEBRA_WORD_LENGTH + 1
+        max_length=MAX_FREE_WORD_SPLITS
     )
 
 
@@ -301,9 +331,11 @@ class FreeAlgebraWordFactorOccurrences(StrictModel):
     """One distinct factor and every start position where it occurs."""
 
     letters: tuple[FreeAlgebraLetter, ...] = Field(
-        max_length=MAX_FREE_ALGEBRA_WORD_LENGTH
+        max_length=MAX_FREE_ALGEBRA_WORD_VALUE_LENGTH
     )
-    positions: tuple[int, ...] = Field(max_length=MAX_FREE_ALGEBRA_WORD_LENGTH + 1)
+    positions: tuple[int, ...] = Field(
+        max_length=MAX_FREE_ALGEBRA_WORD_VALUE_LENGTH + 1
+    )
 
 
 class FreeAlgebraWordFactorsResult(StrictModel):
@@ -1070,7 +1102,7 @@ TwoSidedIdealPresentation = FreeAlgebraIdeal
 DegreeBoundedGroebnerShirshovBasis = GroebnerShirshovResult
 
 __all__ = [
-    "MAX_FREE_ALGEBRA_ADDITION_OUTPUT_BYTES",
+    "MAX_FREE_ALGEBRA_ADDITION_OUTPUT_CELLS",
     "MAX_FREE_ALGEBRA_ADDITION_TERMS",
     "MAX_FREE_ALGEBRA_COEFFICIENT_DIGITS",
     "MAX_FREE_ALGEBRA_GENERATORS",
@@ -1080,7 +1112,7 @@ __all__ = [
     "MAX_FREE_ALGEBRA_LETTER_LENGTH",
     "MAX_FREE_ALGEBRA_OPERAND_TERMS",
     "MAX_FREE_ALGEBRA_QUOTIENT_PROFILE_CANDIDATES",
-    "MAX_FREE_ALGEBRA_QUOTIENT_PROFILE_OUTPUT_BYTES",
+    "MAX_FREE_ALGEBRA_QUOTIENT_PROFILE_OUTPUT_CELLS",
     "MAX_FREE_ALGEBRA_RESULT_TERMS",
     "MAX_FREE_ALGEBRA_RESULT_WORD_LENGTH",
     "MAX_FREE_ALGEBRA_TERM_PAIRS",

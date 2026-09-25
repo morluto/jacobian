@@ -964,30 +964,21 @@ class VerificationResult(StrictModel):
     is_valid: bool
     detail: str
     complex: ChainComplexValue | None = None
-    source: ChainComplexValue | None = None
-    target: ChainComplexValue | None = None
-    map_matrices: tuple[tuple[tuple[ChainCoefficient, ...], ...], ...] | None = None
+    chain_map: ChainMapValue | None = None
 
     @model_validator(mode="after")
     def require_complete_source(self) -> Self:
         """Require exactly one structurally complete checked relation."""
-        if self.complex is not None and (
-            self.source or self.target or self.map_matrices
-        ):
+        if self.complex is not None and self.chain_map is not None:
             raise _validation_error(
                 "verification_inputs_conflict",
                 "a differential verification result must not carry chain-map inputs",
             )
-        has_complete_map = (
-            self.source is not None
-            and self.target is not None
-            and self.map_matrices is not None
-        )
-        if self.complex is None and not has_complete_map:
+        if self.complex is None and self.chain_map is None:
             raise _validation_error(
                 "verification_inputs_missing",
                 "a verification result must retain the complete checked "
-                "input (the complex, or both endpoints with their map)",
+                "input (the complex or source-bound chain map)",
             )
         return self
 
@@ -1005,14 +996,8 @@ class VerificationResult(StrictModel):
         *,
         is_valid: bool,
         detail: str,
-        source: ChainComplexValue,
-        target: ChainComplexValue,
-        map_matrices: tuple[tuple[tuple[ChainCoefficient, ...], ...], ...],
+        chain_map: ChainMapValue,
     ) -> Self:
         return cls.model_construct(
-            is_valid=is_valid,
-            detail=detail,
-            source=source,
-            target=target,
-            map_matrices=map_matrices,
+            is_valid=is_valid, detail=detail, chain_map=chain_map
         )

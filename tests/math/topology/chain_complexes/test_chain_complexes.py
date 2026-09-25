@@ -2624,10 +2624,15 @@ class TestNativeWrappersCallKernelsDirectly:
         circle = self._circle()
         # One component per chain group: the identity chain map.
         identity = (((1,),), ((1,),))
-        verdict = chain_map_commutes(
-            ChainMapValue(source=circle, target=circle, map_matrices=identity)
+        chain_map = ChainMapValue(
+            source=circle, target=circle, map_matrices=identity,
+            source_basis_labels=(("source",), ("edge",)),
+            target_basis_labels=(("target",), ("edge-target",)),
         )
+        verdict = chain_map_commutes(chain_map)
         assert verdict.is_valid is True
+        assert verdict.chain_map is not None
+        assert verdict.chain_map == chain_map
 
 
 class TestWorkstreamDEulerAndDegenerateInvariants:

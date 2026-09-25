@@ -1038,9 +1038,7 @@ def chain_map_commutes(
     return VerificationResult._from_chain_map_kernel(
         is_valid=is_valid,
         detail=detail,
-        source=source,
-        target=target,
-        map_matrices=map_matrices,
+        chain_map=chain_map,
     )
 
 

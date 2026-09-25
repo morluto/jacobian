@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fractions import Fraction
+from math import gcd
 
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import CanonicalLimits, encode_strict_json
@@ -15,6 +16,7 @@ from jacobian.math.number_theory.modular_forms.values import (
     MAX_LEVEL_ONE_BASIS_COEFFICIENT_DIGITS,
     MAX_LEVEL_ONE_BASIS_COORDINATES,
     ModularFormCoordinates,
+    ModularFormSpace,
 )
 
 MAX_COORDINATE_ADDITION_DIGITS = MAX_LEVEL_ONE_BASIS_COEFFICIENT_DIGITS
@@ -30,6 +32,14 @@ def _digits(value: int) -> int:
 def _require_same_parent(
     left: ModularFormCoordinates, right: ModularFormCoordinates
 ) -> None:
+    if not isinstance(left.space, ModularFormSpace) or not isinstance(
+        right.space, ModularFormSpace
+    ):
+        raise OperationDomainValidationError(
+            location=("left", "space"),
+            code="modular_form.coordinate_add_space_invalid",
+            message="both coordinate values must contain valid modular spaces",
+        )
     if left.space != right.space:
         raise OperationDomainValidationError(
             location=("right", "space"),
@@ -51,12 +61,14 @@ def _require_same_parent(
 
 
 def _projected_digit_bound(left: Fraction, right: Fraction) -> int:
+    # Reduced Fraction inputs allow a gcd-aware addition: the resulting
+    # denominator divides lcm(d1, d2), hence never exceeds max(d1, d2).
+    common = gcd(left.denominator, right.denominator)
     numerator_bound = max(
-        _digits(left.numerator) + _digits(right.denominator),
-        _digits(right.numerator) + _digits(left.denominator),
+        _digits(left.numerator) + _digits(right.denominator // common),
+        _digits(right.numerator) + _digits(left.denominator // common),
     ) + 1
-    denominator_bound = _digits(left.denominator) + _digits(right.denominator)
-    return max(numerator_bound, denominator_bound)
+    return max(numerator_bound, _digits(left.denominator), _digits(right.denominator))
 
 
 def modular_form_coordinates_add(
@@ -111,8 +123,8 @@ def modular_form_coordinates_add(
         (
             max(
                 _projected_digit_bound(a, b),
-                len(str(abs((a + b).numerator))),
-                len(str((a + b).denominator)),
+                _digits((a + b).numerator),
+                _digits((a + b).denominator),
             )
             for a, b in zip(left_values, right_values, strict=True)
         ),

@@ -102,6 +102,31 @@ def test_coordinate_addition_handles_the_zero_dimensional_space() -> None:
     assert result == zero_cusp
 
 
+def test_coordinate_addition_composes_for_large_shared_denominator() -> None:
+    denominator = 10**127 + 1
+    left = _form((Fraction(1, denominator), 0))
+    right = _form((Fraction(1, denominator), 0))
+
+    result = modular_form_coordinates_add(left, right)
+
+    assert result.coordinates[0].as_fraction() == Fraction(2, denominator)
+    assert modular_form_coordinates_add(result, left).coordinates[0].as_fraction() == Fraction(
+        3, denominator
+    )
+    assert modular_form_coordinates_q_expansion(result, 1).q_expansion.coefficients[0] == _q(
+        Fraction(2, denominator)
+    )
+
+
+def test_coordinate_addition_rejects_forged_missing_space() -> None:
+    forged = ModularFormCoordinates.model_construct(
+        space=None, basis_id=_BASIS, coordinates=(_q(1), _q(0))
+    )
+    with pytest.raises(OperationDomainValidationError) as refusal:
+        modular_form_coordinates_add(forged, forged)
+    assert refusal.value.errors()[0]["type"] == "modular_form.coordinate_add_space_invalid"
+
+
 def test_coordinate_addition_rejects_result_outside_consumer_digit_envelope() -> None:
     first_denominator = 10**128 - 1
     second_denominator = 10**128 - 2

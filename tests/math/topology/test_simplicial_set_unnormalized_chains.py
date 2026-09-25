@@ -129,9 +129,9 @@ def test_normalized_homology_of_triangle_boundary_has_circle_group():
     # degree-0..2 simplicial-set prefix contains the differential needed for
     # both groups, while the unused formal top group is not returned.
     from jacobian.math.topology.operations import canonicalize
-    from jacobian.math.topology.simplicial_sets import (
+    from jacobian.math.topology.simplicial_sets import simplicial_set_from_complex
+    from jacobian.math.topology.simplicial_sets.complex_conversion_models import (
         SimplicialComplexPrefixRequest,
-        simplicial_set_from_complex,
     )
 
     circle = canonicalize(("a", "b", "c"), (("a", "b"), ("a", "c"), ("b", "c"))).complex

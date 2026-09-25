@@ -369,6 +369,37 @@ def test_kelly_operation_example_and_proper_order_boundary() -> None:
         )
 
 
+def test_kelly_induced_count_rejects_oversized_label_echo_before_expansion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Unbounded vertex labels must not expand into an oversized deck echo."""
+    import jacobian.math.graphs.decks.operations as operations
+
+    big = "x" * 200_000
+    source = _graph((big, "b", "c"), (("b", "c"), ("b", big), ("c", big)))
+    deck = unlabelled_vertex_deck(vertex_deletion_family(source))
+    pattern = _graph(("p",), ())
+
+    def fail(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("result expansion ran before the echo admission gate")
+
+    monkeypatch.setattr(operations, "unlabelled_vertex_deck", fail)
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
+        vertex_deck_induced_subgraph_count(deck, pattern)
+    assert (
+        exc_info.value.errors()[0]["type"] == "graph_deck.kelly_result_allocation_bound"
+    )
+
+
+def test_kelly_induced_count_admits_bounded_label_echo() -> None:
+    big = "x" * 2_000
+    source = _graph((big, "b", "c"), (("b", "c"), ("b", big), ("c", big)))
+    deck = unlabelled_vertex_deck(vertex_deletion_family(source))
+    result = vertex_deck_induced_subgraph_count(deck, _graph(("p",), ()))
+    assert result.occurrence_count == 3
+    assert result.overcount_divisor == 2
+
+
 def test_kelly_count_rejects_forged_deck_class_multiplicity() -> None:
     source = _path_3()
     deck = unlabelled_vertex_deck(vertex_deletion_family(source))

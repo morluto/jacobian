@@ -45,9 +45,11 @@ parameter axis.
 The admitted envelope allows at most 16 generators, 64 terms per generator,
 256 combined source terms, dimension 256 for the generated span, degree 64,
 and 8 decimal digits per source coefficient. Exact normalized basis
-coefficients are bounded to 4096 digits. The operation preflights weight
-projection support, row-reduction work, and a conservative serialized-output
-bound before constructing projections. This is a finite generated subspace;
+coefficients are bounded to 2300 digits. The operation preflights weight
+projection support and row-reduction work. It clears exact row denominators
+and uses a Hadamard minor bound to admit coefficient growth and the complete
+serialized result before RREF. Output, including echoed inputs, is bounded by
+the canonical 10 MiB output limit. This is a finite generated subspace;
 it makes no claim about an invariant ring or a global classification of
 representations.
 

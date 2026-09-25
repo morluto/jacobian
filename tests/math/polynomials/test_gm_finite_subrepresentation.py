@@ -5,11 +5,16 @@ import pytest
 from jacobian.canonical import CanonicalLimits, encode_strict_json
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.math.polynomials.derivations import _weight_operations
 from jacobian.math.polynomials.derivations._weight_models import (
+    PolynomialWeightAction,
     PolynomialWeightSubrepresentationRequest,
     PolynomialWeightSubrepresentationResult,
 )
 from jacobian.math.polynomials.derivations._weight_operations import (
+    _admit_subrepresentation_support,
+    _project_generators_by_weight,
+    _rref_coefficient_digit_bound,
     _subrepresentation_result_size_bound,
     diagonal_weight_action,
     gm_generated_subrepresentation,
@@ -43,6 +48,55 @@ def _coefficient_map(polynomial: RationalPolynomial) -> dict[tuple[int, ...], Fr
         tuple(term.exponents): term.coefficient.as_fraction()
         for term in polynomial.polynomial.terms
     }
+
+
+def _poly_with_denominators(
+    variables: tuple[str, ...], terms: tuple[tuple[int, tuple[int, ...]], ...]
+) -> RationalPolynomial:
+    return RationalPolynomial.model_validate(
+        {
+            "variables": variables,
+            "polynomial": {
+                "terms": [
+                    {
+                        "coefficient": {"num": 1, "den": denominator},
+                        "exponents": exponents,
+                    }
+                    for denominator, exponents in sorted(
+                        terms, key=lambda item: item[1], reverse=True
+                    )
+                ]
+            },
+        }
+    )
+
+
+def _prime_denominators(start: int, count: int) -> tuple[int, ...]:
+    primes = []
+    candidate = start
+    while len(primes) < count:
+        if all(candidate % divisor for divisor in range(2, int(candidate**0.5) + 1)):
+            primes.append(candidate)
+        candidate += 1
+    return tuple(primes)
+
+
+def _sparse_same_weight_seeds(
+    denominators: tuple[int, ...],
+) -> tuple[PolynomialWeightAction, tuple[RationalPolynomial, ...]]:
+    variables = tuple(f"x{index}" for index in range(7))
+    action = PolynomialWeightAction(variables=variables, weights=(0,) * len(variables))
+    generators = tuple(
+        _poly_with_denominators(
+            variables,
+            tuple(
+                (denominators[column], (row, column, 0, 0, 0, 0, 0))
+                for column in range(16)
+            ),
+        )
+        for row in range(16)
+    )
+    return action, generators
 
 
 def test_mixed_weight_seed_generates_exact_minimal_stable_span_and_action() -> None:
@@ -124,17 +178,80 @@ def test_output_admission_covers_all_serialized_result_fields() -> None:
         }
     )
     actual_size = len(encode_strict_json(result.model_dump(mode="json")))
+    support, _ = _admit_subrepresentation_support(
+        result.action, result.generators, result.parameter
+    )
+    projections = _project_generators_by_weight(result.action, result.generators)
     admitted_bound = _subrepresentation_result_size_bound(
         result.action,
         result.generators,
         result.parameter,
         basis_terms=sum(
-            len(polynomial.polynomial.terms) for polynomial in result.basis
+            len(support[weight]) * len(rows) for weight, rows in projections.items()
         ),
-        dimension=len(result.basis),
+        dimension=sum(len(rows) for rows in projections.values()),
+        coefficient_digits=_rref_coefficient_digit_bound(projections, support),
     )
     assert actual_size <= admitted_bound
     assert admitted_bound <= CanonicalLimits().max_output_bytes
+
+
+def test_output_preflight_boundary_and_pre_rref_rejection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    parameter = "lambda"
+    accepted_action, accepted_generators = _sparse_same_weight_seeds(
+        _prime_denominators(10_009, 16)
+    )
+    support, sources = _admit_subrepresentation_support(
+        accepted_action, accepted_generators, parameter
+    )
+    projections = _project_generators_by_weight(accepted_action, accepted_generators)
+    coefficient_digits = _rref_coefficient_digit_bound(projections, support)
+    basis_terms = sum(
+        len(support[weight]) * len(rows) for weight, rows in sources.items()
+    )
+    dimension = sum(len(rows) for rows in sources.values())
+    admitted_bound = _subrepresentation_result_size_bound(
+        accepted_action,
+        accepted_generators,
+        parameter,
+        basis_terms=basis_terms,
+        dimension=dimension,
+        coefficient_digits=coefficient_digits,
+    )
+    assert 8 * 1024 * 1024 < admitted_bound <= CanonicalLimits().max_output_bytes
+    result = gm_generated_subrepresentation(
+        {
+            "action": accepted_action.model_dump(),
+            "generators": [generator.model_dump() for generator in accepted_generators],
+            "parameter": parameter,
+        }
+    )
+    actual_size = len(encode_strict_json(result.model_dump(mode="json")))
+    assert actual_size <= admitted_bound
+
+    rejected_action, rejected_generators = _sparse_same_weight_seeds(
+        _prime_denominators(100_003, 16)
+    )
+
+    def fail_if_rref_runs(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("serialized-output admission must precede RREF")
+
+    monkeypatch.setattr(
+        _weight_operations, "_weight_projection_rref", fail_if_rref_runs
+    )
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        gm_generated_subrepresentation(
+            {
+                "action": rejected_action.model_dump(),
+                "generators": [
+                    generator.model_dump() for generator in rejected_generators
+                ],
+                "parameter": parameter,
+            }
+        )
+    assert error.value.errors()[0]["type"] == "gm_subrepresentation.output_budget"
 
 
 def test_empty_zero_and_duplicate_generators_have_canonical_degenerate_results() -> (

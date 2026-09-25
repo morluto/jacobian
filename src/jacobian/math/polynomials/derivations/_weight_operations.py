@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator, Mapping
 from fractions import Fraction
-from math import comb
+from math import comb, lcm
 from typing import Any
 
 from pydantic import TypeAdapter, ValidationError
@@ -13,6 +13,7 @@ from pydantic_core import PydanticCustomError
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian.canonical import (
     CanonicalLimits,
+    decimal_digit_width,
     encode_strict_json,
     strict_json_object_size,
 )
@@ -24,6 +25,7 @@ from jacobian.math.polynomials.derivations._weight_models import (
     MAX_DIAGONAL_WEIGHT,
     MAX_GM_INVARIANT_DEGREE,
     MAX_GM_INVARIANT_MONOMIALS,
+    MAX_GM_SUBREP_BASIS_COEFFICIENT_DIGITS,
     MAX_GM_SUBREP_DIMENSION,
     MAX_GM_SUBREP_TOTAL_TERMS,
     MAX_WEIGHT_ACTION_DEGREE,
@@ -408,27 +410,6 @@ def _admit_subrepresentation_support(
             code="gm_subrepresentation.rref_budget",
             message="weight-projection row reduction exceeds its admitted work envelope",
         )
-    predicted_basis_terms = sum(
-        len(support) * len(grouped_sources[weight])
-        for weight, support in grouped_support.items()
-    )
-    dimension_bound = sum(len(sources) for sources in grouped_sources.values())
-    predicted_output_bytes = _subrepresentation_result_size_bound(
-        action,
-        generators,
-        parameter,
-        basis_terms=predicted_basis_terms,
-        dimension=dimension_bound,
-    )
-    if predicted_output_bytes > CanonicalLimits().max_output_bytes:
-        raise OperationResourceAdmissionError(
-            location=("generators",),
-            code="gm_subrepresentation.output_budget",
-            message=(
-                "the exact stable-basis and representation result exceeds the "
-                f"{CanonicalLimits().max_output_bytes}-byte canonical output envelope"
-            ),
-        )
     return (
         {
             weight: tuple(sorted(support, reverse=True))
@@ -445,6 +426,7 @@ def _subrepresentation_result_size_bound(
     *,
     basis_terms: int,
     dimension: int,
+    coefficient_digits: int,
 ) -> int:
     """Bound canonical result bytes from exact source and worst-case values."""
     source_sizes = (
@@ -464,7 +446,10 @@ def _subrepresentation_result_size_bound(
     maximum_term = len(
         encode_strict_json(
             {
-                "coefficient": {"num": "-" + "9" * 4_096, "den": "9" * 4_096},
+                "coefficient": {
+                    "num": "-" + "9" * coefficient_digits,
+                    "den": "9" * coefficient_digits,
+                },
                 "exponents": [MAX_WEIGHT_ACTION_DEGREE] * len(variables),
             }
         )
@@ -527,6 +512,47 @@ def _subrepresentation_result_size_bound(
             ("matrix", matrix_size),
         )
     )
+
+
+def _rref_coefficient_digit_bound(
+    projected_generators: dict[int, dict[int, dict[tuple[int, ...], Fraction]]],
+    monomials_by_weight: dict[int, tuple[tuple[int, ...], ...]],
+) -> int:
+    """Bound RREF coefficients by exact row clearing and Hadamard minors.
+
+    For each projected row, clear its exact common denominator. Row scaling
+    multiplies every minor using that row by the same factor, so it cancels in
+    the minor ratios that give RREF entries. Hadamard bounds each integer
+    minor by ``k**k`` times the product of its row maximum entries. The digit
+    estimate below uses the largest ``k`` row maxima, where ``k`` is the
+    smaller of row count and support width.
+    """
+    maximum_digits = 1
+    for weight, rows in projected_generators.items():
+        minor_order = min(len(rows), len(monomials_by_weight[weight]))
+        if minor_order == 0:
+            continue
+        row_maxima = []
+        for row in rows.values():
+            common_denominator = lcm(
+                *(coefficient.denominator for coefficient in row.values())
+            )
+            row_maxima.append(
+                max(
+                    abs(
+                        coefficient.numerator
+                        * (common_denominator // coefficient.denominator)
+                    )
+                    for coefficient in row.values()
+                )
+            )
+        largest_row_digits = sum(
+            decimal_digit_width(maximum)
+            for maximum in sorted(row_maxima, reverse=True)[:minor_order]
+        )
+        hadamard_digits = largest_row_digits + minor_order * len(str(minor_order)) + 1
+        maximum_digits = max(maximum_digits, hadamard_digits)
+    return maximum_digits
 
 
 def _weight_projection_rref(
@@ -600,10 +626,42 @@ def gm_generated_subrepresentation(
     reduced to a deterministic RREF basis in the source monomial coordinates.
     """
     checked, action, generators = _parse_subrepresentation_request(request)
-    monomials_by_weight, _ = _admit_subrepresentation_support(
+    monomials_by_weight, sources_by_weight = _admit_subrepresentation_support(
         action, generators, checked.parameter
     )
     projections = _project_generators_by_weight(action, generators)
+    coefficient_digits = _rref_coefficient_digit_bound(projections, monomials_by_weight)
+    if coefficient_digits > MAX_GM_SUBREP_BASIS_COEFFICIENT_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("generators",),
+            code="gm_subrepresentation.basis_coefficient_digits",
+            message=(
+                "Hadamard's exact row-denominator bound exceeds the "
+                f"{MAX_GM_SUBREP_BASIS_COEFFICIENT_DIGITS}-digit basis coefficient envelope"
+            ),
+        )
+    basis_term_bound = sum(
+        len(monomials_by_weight[weight]) * len(sources)
+        for weight, sources in sources_by_weight.items()
+    )
+    dimension_bound = sum(len(sources) for sources in sources_by_weight.values())
+    predicted_output_bytes = _subrepresentation_result_size_bound(
+        action,
+        generators,
+        checked.parameter,
+        basis_terms=basis_term_bound,
+        dimension=dimension_bound,
+        coefficient_digits=coefficient_digits,
+    )
+    if predicted_output_bytes > CanonicalLimits().max_output_bytes:
+        raise OperationResourceAdmissionError(
+            location=("generators",),
+            code="gm_subrepresentation.output_budget",
+            message=(
+                "the exact stable-basis and representation result exceeds the "
+                f"{CanonicalLimits().max_output_bytes}-byte canonical output envelope"
+            ),
+        )
     basis_by_weight = _weight_projection_rref(projections, monomials_by_weight)
 
     dimension = sum(len(rows) for rows in basis_by_weight.values())
@@ -616,15 +674,6 @@ def gm_generated_subrepresentation(
     for weight, rows in basis_by_weight.items():
         monomials = monomials_by_weight[weight]
         for pivot, row in rows:
-            if any(
-                max(len(str(abs(value.numerator))), len(str(value.denominator))) > 4_096
-                for value in row
-            ):
-                raise OperationResourceAdmissionError(
-                    location=("generators",),
-                    code="gm_subrepresentation.basis_coefficient_digits",
-                    message="exact stable-basis coefficients exceed the admitted envelope",
-                )
             terms = tuple(
                 RationalPolynomialTerm(
                     coefficient=_canonical_rational(coefficient), exponents=monomial

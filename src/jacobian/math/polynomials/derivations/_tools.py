@@ -194,7 +194,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "coordinates and the diagonal Laurent representation matrix retain "
             "the source ring and parameter axes. Generator count is at most 16, "
             "combined support at most 256 terms, output dimension at most 256, "
-            "and projection row-reduction work is admitted before expansion."
+            "and projection row-reduction work is admitted before expansion. "
+            "The complete serialized result, including echoed inputs, is "
+            "bounded by the canonical 10 MiB output limit."
         ),
         request_type=PolynomialWeightSubrepresentationRequest,
         result_type=PolynomialWeightSubrepresentationResult,

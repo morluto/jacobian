@@ -1,5 +1,6 @@
 """Exact maximal-cell facet adjacency graphs."""
 
+from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -9,6 +10,7 @@ from jacobian.math.geometry.polytopes.complexes._models import (
     MAX_COMPLEX_CELLS,
 )
 from jacobian.math.geometry.polytopes.complexes.adjacency._models import (
+    MAX_ADJACENCY_RESULT_COMPONENT_DIGITS,
     PolytopalAdjacencyCell,
     PolytopalComplexAdjacencyGraph,
     PolytopalFacetAdjacency,
@@ -24,6 +26,22 @@ MAX_POLYTOPAL_ADJACENCY_RESULT_DIGITS = 2_500_000
 
 def _digits(value: int) -> int:
     return len(str(abs(value)))
+
+
+def _result_coordinate_digits(value: CanonicalRational) -> int:
+    try:
+        require_bounded_rational(
+            value,
+            max_digits=MAX_ADJACENCY_RESULT_COMPONENT_DIGITS,
+            label="adjacency result coordinate",
+        )
+    except ValueError as exc:
+        raise OperationResourceAdmissionError(
+            location=("cells",),
+            code="polytopal_complex.adjacency.coordinate_digits_over_envelope",
+            message=str(exc),
+        ) from exc
+    return _digits(value.num) + _digits(value.den)
 
 
 def polytopal_complex_adjacency_graph(
@@ -98,12 +116,12 @@ def polytopal_complex_adjacency_graph(
             message="cell and shared-facet coordinate output exceeds its allocation bound",
         )
     result_digits = sum(
-        _digits(coordinate.num) + _digits(coordinate.den)
+        _result_coordinate_digits(coordinate)
         for cell in complex_value.maximal_cells
         for point in cell.vertices
         for coordinate in point.coordinates
     ) + sum(
-        _digits(coordinate.num) + _digits(coordinate.den)
+        _result_coordinate_digits(coordinate)
         for _, face in adjacent_rows
         for point in face.vertices
         for coordinate in point.coordinates

@@ -15,8 +15,10 @@ Canonical cell IDs label graph vertices. Each labelled graph edge names its
 shared facet ID, dimension, support cells, and exact vertices. The result is
 bounded by the face-closure limit of 16 cells in dimension at most 4, at most
 120 edges, 34,816 output coordinate values, and 2.5 million exact coefficient
-digits. The closure's face-enumeration and pairwise-intersection limits are
-applied before graph construction.
+digits, with at most 1,024 digits in any individual coordinate component. The
+closure's face-enumeration and pairwise-intersection limits are applied before
+graph construction. The result value also admits exact vertex and supporting
+facet validation under a 10-million-bit aggregate coordinate-work bound.
 
 This is top-cell facet adjacency. It does not construct the full incidence graph
 between cells of different dimensions.

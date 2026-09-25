@@ -8,9 +8,12 @@ from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 from sympy import Matrix, Rational
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
-from jacobian.math.geometry.polytopes._models import RationalCoordinateSpace
+from jacobian.math.geometry.polytopes._models import (
+    RationalCoordinateSpace,
+    _filter_redundant_vertices,
+)
 from jacobian.math.geometry.polytopes.complexes._models import (
     MAX_COMPLEX_DIMENSION,
     ComplexFace,
@@ -18,13 +21,19 @@ from jacobian.math.geometry.polytopes.complexes._models import (
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
+MAX_ADJACENCY_RESULT_COMPONENT_DIGITS = 1_024
+"""Maximum exact coordinate component size admitted before geometric checks."""
+
+MAX_ADJACENCY_RESULT_COORDINATE_BITS = 10_000_000
+"""Aggregate exact-coordinate bit budget for result-value validation."""
+
 
 def _facet_support_sides(
     facet_points: set[tuple[CanonicalRational, ...]],
     cell_points: set[tuple[CanonicalRational, ...]],
     dimension: int,
-) -> set[int] | None:
-    """Return exact nonzero sides of the facet plane on one cell hull."""
+) -> tuple[set[int], set[tuple[CanonicalRational, ...]]] | None:
+    """Return exact support sides and all vertices on the facet plane."""
 
     ordered_points = tuple(
         sorted(
@@ -43,6 +52,7 @@ def _facet_support_sides(
         return None
     coefficients = plane_space[0]
     sides: set[int] = set()
+    zero_points: set[tuple[CanonicalRational, ...]] = set()
     for point in cell_points:
         rational = [Rational(value.num, value.den) for value in point]
         evaluation = (
@@ -58,7 +68,130 @@ def _facet_support_sides(
             sides.add(1)
         elif evaluation < 0:
             sides.add(-1)
-    return sides
+        else:
+            zero_points.add(point)
+    return sides, zero_points
+
+
+def _validate_cell_geometry(cell: PolytopalAdjacencyCell, dimension: int) -> None:
+    points = tuple(point.coordinates for point in cell.vertices)
+    ordered_points = tuple(
+        sorted(
+            points,
+            key=lambda point: tuple(Rational(value.num, value.den) for value in point),
+        )
+    )
+    if points != ordered_points:
+        raise PydanticCustomError(
+            "polytopal_complex.adjacency_cell_vertex_order",
+            "maximal-cell vertices must use canonical coordinate order",
+        )
+    exact_points = [
+        [Rational(value.num, value.den) for value in point] for point in points
+    ]
+    differences = [
+        [coordinate - exact_points[0][axis] for axis, coordinate in enumerate(point)]
+        for point in exact_points[1:]
+    ]
+    if Matrix(differences).rank() != dimension:
+        raise PydanticCustomError(
+            "polytopal_complex.adjacency_cell_dimension",
+            "every maximal cell must be full-dimensional in the shared space",
+        )
+    if len(_filter_redundant_vertices(exact_points, dimension)) != len(exact_points):
+        raise PydanticCustomError(
+            "polytopal_complex.adjacency_cell_extreme_vertices",
+            "maximal-cell coordinates must all be extreme hull vertices",
+        )
+
+
+def _validate_value_coordinates(
+    cells: tuple[PolytopalAdjacencyCell, ...],
+    facet_edges: tuple[PolytopalFacetAdjacency, ...],
+    dimension: int,
+) -> dict[str, set[tuple[CanonicalRational, ...]]]:
+    point_maps: dict[str, set[tuple[CanonicalRational, ...]]] = {}
+    coordinate_bits = 0
+    for cell in cells:
+        points = tuple(point.coordinates for point in cell.vertices)
+        if len(set(points)) != len(points) or any(
+            len(point) != dimension for point in points
+        ):
+            raise PydanticCustomError(
+                "polytopal_complex.adjacency_cell_coordinates",
+                "maximal-cell coordinates must be unique and use the ambient dimension",
+            )
+        for cell_point in points:
+            for coordinate in cell_point:
+                _validate_coordinate_bound(coordinate)
+                coordinate_bits += (
+                    coordinate.num.bit_length() + coordinate.den.bit_length()
+                )
+        point_maps[cell.cell_id] = set(points)
+    for edge in facet_edges:
+        for facet_point in edge.facet.vertices:
+            for coordinate in facet_point.coordinates:
+                _validate_coordinate_bound(coordinate)
+                coordinate_bits += (
+                    coordinate.num.bit_length() + coordinate.den.bit_length()
+                )
+    if coordinate_bits > MAX_ADJACENCY_RESULT_COORDINATE_BITS:
+        raise PydanticCustomError(
+            "polytopal_complex.adjacency_coordinate_work",
+            "exact adjacency coordinate validation exceeds its bit budget",
+        )
+    for cell in cells:
+        _validate_cell_geometry(cell, dimension)
+    return point_maps
+
+
+def _validate_coordinate_bound(coordinate: CanonicalRational) -> None:
+    try:
+        require_bounded_rational(
+            coordinate,
+            max_digits=MAX_ADJACENCY_RESULT_COMPONENT_DIGITS,
+            label="adjacency result coordinate",
+        )
+    except ValueError as exc:
+        raise PydanticCustomError(
+            "polytopal_complex.adjacency_coordinate_digits",
+            str(exc),
+        ) from exc
+
+
+def _validate_facet_edge(
+    edge: PolytopalFacetAdjacency,
+    point_maps: dict[str, set[tuple[CanonicalRational, ...]]],
+    dimension: int,
+) -> None:
+    if edge.facet.dimension != dimension - 1:
+        raise PydanticCustomError(
+            "polytopal_complex.adjacency_facet_dimension",
+            "each graph edge must carry a codimension-one face",
+        )
+    facet_points = {point.coordinates for point in edge.facet.vertices}
+    left_points = point_maps[edge.left_cell_id]
+    right_points = point_maps[edge.right_cell_id]
+    if facet_points != left_points & right_points:
+        raise PydanticCustomError(
+            "polytopal_complex.adjacency_facet_vertices",
+            "shared facet vertices must be exactly the common cell vertices",
+        )
+    left_support = _facet_support_sides(facet_points, left_points, dimension)
+    right_support = _facet_support_sides(facet_points, right_points, dimension)
+    if (
+        left_support is None
+        or right_support is None
+        or len(left_support[0]) != 1
+        or len(right_support[0]) != 1
+        or left_support[0] == right_support[0]
+        or left_support[1] != facet_points
+        or right_support[1] != facet_points
+    ):
+        raise PydanticCustomError(
+            "polytopal_complex.adjacency_facet_support",
+            "shared vertices must span a supporting facet on opposite sides of both cell hulls",
+        )
 
 
 class PolytopalAdjacencyCell(StrictModel):
@@ -125,17 +258,9 @@ class PolytopalComplexAdjacencyGraph(StrictModel):
                 "polytopal_complex.adjacency_vertex_binding",
                 "graph vertices must be exactly the canonical maximal-cell IDs",
             )
-        point_maps: dict[str, set[tuple[CanonicalRational, ...]]] = {}
-        for cell in self.cells:
-            points = tuple(point.coordinates for point in cell.vertices)
-            if len(set(points)) != len(points) or any(
-                len(point) != self.dimension for point in points
-            ):
-                raise PydanticCustomError(
-                    "polytopal_complex.adjacency_cell_coordinates",
-                    "maximal-cell coordinates must be unique and use the ambient dimension",
-                )
-            point_maps[cell.cell_id] = set(points)
+        point_maps = _validate_value_coordinates(
+            self.cells, self.facet_edges, self.dimension
+        )
         edge_keys = tuple(
             (edge.left_cell_id, edge.right_cell_id) for edge in self.facet_edges
         )
@@ -164,35 +289,7 @@ class PolytopalComplexAdjacencyGraph(StrictModel):
                 "each shared facet may label at most one adjacency edge",
             )
         for edge in self.facet_edges:
-            if edge.facet.dimension != self.dimension - 1:
-                raise PydanticCustomError(
-                    "polytopal_complex.adjacency_facet_dimension",
-                    "each graph edge must carry a codimension-one face",
-                )
-            facet_points = {point.coordinates for point in edge.facet.vertices}
-            left_points = point_maps[edge.left_cell_id]
-            right_points = point_maps[edge.right_cell_id]
-            common_points = left_points & right_points
-            if facet_points != common_points:
-                raise PydanticCustomError(
-                    "polytopal_complex.adjacency_facet_vertices",
-                    "shared facet vertices must be exactly the common cell vertices",
-                )
-            left_sides = _facet_support_sides(facet_points, left_points, self.dimension)
-            right_sides = _facet_support_sides(
-                facet_points, right_points, self.dimension
-            )
-            if (
-                left_sides is None
-                or right_sides is None
-                or len(left_sides) != 1
-                or len(right_sides) != 1
-                or left_sides == right_sides
-            ):
-                raise PydanticCustomError(
-                    "polytopal_complex.adjacency_facet_support",
-                    "shared vertices must span a supporting facet on opposite sides of both cell hulls",
-                )
+            _validate_facet_edge(edge, point_maps, self.dimension)
         return self
 
 

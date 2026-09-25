@@ -101,3 +101,31 @@ def test_three_character_jacobi_sum_matches_gaussian_integer_oracle() -> None:
         (oracle_real, 1),
         (oracle_imaginary, 1),
     )
+
+
+def test_serialized_mixed_jacobi_result_binds_source_parent_and_field() -> None:
+    from pydantic import ValidationError
+
+    from jacobian._exact import CanonicalRational
+    from jacobian.math.matrices.cyclic_linear import (
+        RationalCyclotomicElement,
+        RationalCyclotomicField,
+    )
+    from jacobian.math.number_theory.characters._models import (
+        DirichletCharacterMixedJacobiSumResult,
+    )
+
+    character = _principal_character(5)
+    result = dirichlet_character_mixed_jacobi_sum((character,) * 3)
+    payload = result.model_dump()
+    payload["characters"] = (character, character, _principal_character(3))
+    with pytest.raises(ValidationError, match="parent_mismatch"):
+        DirichletCharacterMixedJacobiSumResult.model_validate(payload)
+
+    payload = result.model_dump()
+    payload["value"] = RationalCyclotomicElement(
+        field=RationalCyclotomicField(order=2),
+        coefficients_ascending=(CanonicalRational(num=13, den=1),),
+    )
+    with pytest.raises(ValidationError, match="field_parent_mismatch"):
+        DirichletCharacterMixedJacobiSumResult.model_validate(payload)

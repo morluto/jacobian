@@ -464,6 +464,21 @@ class DirichletCharacterMixedJacobiSumResult(StrictModel):
     characters: tuple[DirichletCharacter, DirichletCharacter, DirichletCharacter]
     value: RationalCyclotomicElement
 
+    @model_validator(mode="after")
+    def require_source_bound_cyclotomic_parent(self) -> Self:
+        first = self.characters[0].group
+        if any(character.group != first for character in self.characters[1:]):
+            raise _validation_error(
+                "mixed_jacobi_sum.parent_mismatch",
+                "all source characters must have the same group parent",
+            )
+        if self.value.field.order != first.exponent:
+            raise _validation_error(
+                "mixed_jacobi_sum.field_parent_mismatch",
+                "the result field order must equal the source group exponent",
+            )
+        return self
+
 
 class DirichletCharacterGaussSumRequest(StrictModel):
     """Compute the additive Gauss sum of one source-bound character."""

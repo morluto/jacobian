@@ -36,6 +36,10 @@ from jacobian.math.groups.root_systems._models import (
     WeylVectorActionResult,
     WeylWeightOrbitResult,
 )
+from jacobian.math.groups.root_systems._weight_character_models import (
+    IrreducibleWeightCharacter,
+    WeightMultiplicity,
+)
 from jacobian.math.groups.root_systems.operations import (
     cartan_datum,
     cartan_matrix_from_type,
@@ -82,6 +86,7 @@ __all__ = [
     "FiniteDynkinDiagram",
     "HighestCorootComponent",
     "HighestCorootsResult",
+    "IrreducibleWeightCharacter",
     "PositiveCorootsResult",
     "PositiveRootComponentProfile",
     "PositiveRootProfileEntry",
@@ -94,6 +99,7 @@ __all__ = [
     "RootPosetResult",
     "RootToCorootResult",
     "WeightLatticeVector",
+    "WeightMultiplicity",
     "WeylDimensionResult",
     "WeylElement",
     "WeylElementOrderResult",

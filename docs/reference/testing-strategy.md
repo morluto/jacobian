@@ -346,6 +346,14 @@ consumer round trips. A success on one surface does not establish the others:
 transport and shaped validation establish projection and schema agreement, not
 mathematical truth.
 
+Keep scalar codec conformance in its owner: native construction, Python dump
+and revalidation, JSON round trips, schema agreement, malformed encodings, and
+large exact values. Domain tests add representative nested, empty, and
+producer-consumer cases rather than duplicating the entire scalar suite for
+every operation. A raw preflight change must exercise both Python and JSON
+validation modes; passing one does not establish the other. See the
+[codec boundary contract](value-interoperability.md#requirements-for-a-native-integer-codec).
+
 Treat a verifier as independent evidence only when it checks the claimed
 relation by a different route. If it recomputes the producer result with the
 producer's own helper or backend, pair it with an independently defined
@@ -358,7 +366,9 @@ Keep process and transport evidence focused on their boundaries. Prove worker
 startup, isolation, cancellation, timeout, codec, and result projection with
 the smallest discriminating cases; do not make a broad mathematical sweep pay
 for repeated worker or transport setup merely to duplicate evidence already
-owned by those cases. When startup dominates an otherwise useful sweep, retain
+owned by those cases. Moving a slow case into an optional lane changes coverage
+scheduling, not its computational cost; report it as such rather than as an
+algorithmic speedup. When startup dominates an otherwise useful sweep, retain
 a deliberately varied public corpus and use direct kernel cases only for
 additional internal evidence.
 

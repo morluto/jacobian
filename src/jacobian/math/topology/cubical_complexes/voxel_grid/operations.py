@@ -6,8 +6,6 @@ from itertools import product
 from math import ceil, log2
 from typing import NoReturn, cast
 
-from pydantic import ValidationError
-
 from jacobian._execution import OperationWorkLedger, request_checkpoint
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -37,7 +35,10 @@ def _reject(code: str, message: str, *location: str) -> NoReturn:
     )
 
 
-def _validate_raw_shape(request: object) -> BinaryVoxels3DRequest:
+def _validate_raw_shape(
+    request: object,
+    ledger: OperationWorkLedger,
+) -> tuple[BinaryVoxels3DRequest, int, int, int, int]:
     if type(request) is not BinaryVoxels3DRequest:
         _reject("voxel_grid_request_type", "request must be a BinaryVoxels3DRequest")
     voxels = request.voxels
@@ -48,7 +49,9 @@ def _validate_raw_shape(request: object) -> BinaryVoxels3DRequest:
     height: int | None = None
     width: int | None = None
     volume = 0
+    occupied_count = 0
     for plane in voxels:
+        ledger.charge()
         if (
             type(plane) is not tuple
             or not 1 <= len(plane) <= MAX_CUBICAL_VOXEL_GRID_SIDE
@@ -67,6 +70,7 @@ def _validate_raw_shape(request: object) -> BinaryVoxels3DRequest:
                 "voxels",
             )
         for row in plane:
+            ledger.charge()
             if (
                 type(row) is not tuple
                 or not 1 <= len(row) <= MAX_CUBICAL_VOXEL_GRID_SIDE
@@ -91,31 +95,17 @@ def _validate_raw_shape(request: object) -> BinaryVoxels3DRequest:
                     "voxel grid exceeds the admitted volume",
                     "voxels",
                 )
-    try:
-        return BinaryVoxels3DRequest.model_validate(request.model_dump(), strict=True)
-    except ValidationError as exc:
-        raise OperationDomainValidationError(
-            location=("voxels",),
-            code="cubical_complex.voxel_grid_carrier_shape",
-            message="voxels must be strict Boolean values in a rectangular 3D grid",
-        ) from exc
-
-
-def _voxel_dimensions(request: BinaryVoxels3DRequest) -> tuple[int, int, int]:
-    depth = len(request.voxels)
-    height = len(request.voxels[0])
-    width = len(request.voxels[0][0])
-    return width, height, depth
-
-
-def _occupied_count(request: BinaryVoxels3DRequest, ledger: OperationWorkLedger) -> int:
-    occupied = 0
-    for plane in request.voxels:
-        for row in plane:
             for voxel in row:
                 ledger.charge()
-                occupied += int(voxel)
-    return occupied
+                if type(voxel) is not bool:
+                    _reject(
+                        "voxel_grid_carrier_shape",
+                        "voxels must be strict Boolean values in a rectangular 3D grid",
+                        "voxels",
+                    )
+                occupied_count += int(voxel)
+    assert width is not None and height is not None
+    return request, width, height, len(voxels), occupied_count
 
 
 def _face_keys(
@@ -148,12 +138,18 @@ def _face_keys(
 def binary_voxels_to_complex(request: BinaryVoxels3DRequest) -> CubicalComplex:
     """Return the closure of occupied unit voxels on the ordered (x,y,z) lattice."""
 
-    request = _validate_raw_shape(request)
-    width, height, depth = _voxel_dimensions(request)
+    request_checkpoint("before cubical voxel request validation")
+    ledger = OperationWorkLedger(
+        MAX_CUBICAL_VOXEL_GRID_VOLUME
+        + MAX_CUBICAL_VOXEL_GRID_SIDE
+        + MAX_CUBICAL_VOXEL_GRID_SIDE**2
+        + MAX_CUBICAL_VOXEL_WORK
+    )
+    request, width, height, depth, occupied_count = _validate_raw_shape(
+        request, ledger
+    )
     voxel_count = width * height * depth
-    ledger = OperationWorkLedger(voxel_count + MAX_CUBICAL_VOXEL_WORK)
-    request_checkpoint("before cubical voxel occupancy scan")
-    occupied_count = _occupied_count(request, ledger)
+    request_checkpoint("after cubical voxel request validation")
     candidate_bound = 27 * occupied_count
     if candidate_bound > MAX_CUBICAL_VOXEL_FACE_CANDIDATES:
         raise OperationResourceAdmissionError(

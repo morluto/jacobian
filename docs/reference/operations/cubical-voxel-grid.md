@@ -16,10 +16,12 @@ coordinate axes. The empty value uses the same canonical carrier as other
 cubical operations.
 
 Each side is at most 64 and the complete input grid at most `64³` Boolean
-entries. The kernel first counts occupied voxels. It then admits at most
-200,000 possible cubical-face insertions, a maximum result of
-`MAX_FACE_CELLS`, and the scan, deduplication, canonical sort, and value-check
-work before generating face keys. A single occupied voxel produces 27 cells;
+entries. The kernel validates shape and strict Boolean values while counting
+occupied voxels in one accounted pass, including for typed values created
+without normal model validation. It then admits at most 200,000 possible
+cubical-face insertions, a maximum result of `MAX_FACE_CELLS`, and the face
+generation, deduplication, canonical sort, and value-check work before
+generating face keys. A single occupied voxel produces 27 cells;
 a full `18 × 18 × 18` block produces 50,653 distinct cells and fits the
 canonical result carrier. Larger grids are admitted or refused from the
 actual occupancy and exact distinct face count, rather than the grid volume

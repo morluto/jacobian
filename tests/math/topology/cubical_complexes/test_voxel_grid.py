@@ -9,7 +9,10 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.catalog.catalog import Catalog
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.dispatch import invoke_operation
 from jacobian.math.topology.cubical_complexes._models import (
     CubicalComplex,
@@ -115,6 +118,33 @@ def test_ragged_and_non_boolean_grids_are_rejected() -> None:
         BinaryVoxels3DRequest(voxels=(((True,),), ((True, False),)))
     with pytest.raises(ValidationError):
         BinaryVoxels3DRequest.model_validate_json('{"voxels": [[[1]]]}')
+
+
+def test_model_construct_forged_grid_is_checked_without_pydantic_replay(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request = BinaryVoxels3DRequest.model_construct(voxels=(((1,),),))
+
+    def unexpected_replay(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("kernel replayed request through Pydantic")
+
+    monkeypatch.setattr(BinaryVoxels3DRequest, "model_dump", unexpected_replay)
+    with pytest.raises(OperationDomainValidationError) as error:
+        binary_voxels_to_complex(request)
+    assert error.value.errors()[0]["type"] == (
+        "cubical_complex.voxel_grid_carrier_shape"
+    )
+
+
+def test_forged_ragged_grid_is_rejected_without_model_validation() -> None:
+    request = BinaryVoxels3DRequest.model_construct(
+        voxels=(((True,),), ((True, False),))
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        binary_voxels_to_complex(request)
+    assert error.value.errors()[0]["type"] == (
+        "cubical_complex.voxel_grid_not_rectangular"
+    )
 
 
 def test_tool_example_executes_through_catalog() -> None:

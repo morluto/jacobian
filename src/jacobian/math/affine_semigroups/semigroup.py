@@ -28,6 +28,7 @@ MAX_AFFINE_GRAPH_EDGE_CHECKS = 2_000_000
 MAX_AFFINE_GRAPH_EDGES = 100_000
 MAX_HILBERT_BASIS_DETERMINANT = 1_000
 MAX_HILBERT_BASIS_WORK = 1_010_000
+MAX_AFFINE_NORMALIZATION_OUTPUT_DIGITS = 64
 
 
 def _err(reason: str, message: str) -> PydanticCustomError:
@@ -128,6 +129,26 @@ class PositiveAffineSemigroup(StrictModel):
                     "grading_not_positive",
                     "every generator must have strictly positive grading",
                 )
+        return self
+
+
+class AffineSemigroupNormalization(StrictModel):
+    """The normalization generators, in the source semigroup's ambient axes."""
+
+    semigroup: PositiveAffineSemigroup
+    generators: tuple[tuple[ExactInteger, ExactInteger], ...] = Field(
+        max_length=MAX_HILBERT_BASIS_DETERMINANT + 1
+    )
+
+    @model_validator(mode="after")
+    def _normalization_shape(self) -> Self:
+        if self.semigroup.configuration.rows != 2:
+            raise _err("normalization_shape", "normalization values require two rows")
+        if self.generators != tuple(sorted(set(self.generators))):
+            raise _err(
+                "normalization_order",
+                "normalization generators must be sorted and unique",
+            )
         return self
 
 
@@ -730,6 +751,108 @@ def hilbert_basis(configuration: AffineConfiguration) -> AffineHilbertBasis:
     )
 
 
+def normalization(semigroup: PositiveAffineSemigroup) -> AffineSemigroupNormalization:
+    """Compute ``cone(S) intersect gp(S)`` for a full-rank 2D semigroup.
+
+    The generated group is first put in a canonical integer basis. In those
+    coordinates the normalization is the ordinary two-dimensional cone
+    Hilbert basis; its generators are then transported back to the retained
+    ambient row axis.
+    """
+    semigroup = _admit_semigroup(semigroup)
+    configuration = semigroup.configuration
+    if configuration.rows != 2 or configuration.columns < 2:
+        raise ValueError("normalization currently requires a two-row configuration")
+
+    maximum = max(abs(value) for row in configuration.entries for value in row)
+    minor_bound = max(
+        1, 2 * (configuration.columns * (configuration.columns - 1) // 2) * maximum**2
+    )
+    if len(str(minor_bound)) > MAX_AFFINE_NORMALIZATION_OUTPUT_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("semigroup", "configuration"),
+            code="affine_semigroup.normalization_intermediate_digits",
+            message="column-lattice intermediate bound exceeds the normalization digit envelope",
+        )
+
+    from sympy import Matrix
+    from sympy.matrices.normalforms import hermite_normal_form
+
+    matrix = Matrix([[int(value) for value in row] for row in configuration.entries])
+    hnf = hermite_normal_form(matrix)
+    if hnf.shape != (2, 2):
+        raise ValueError("normalization requires a full-rank generated lattice in Z^2")
+    a, b = int(hnf[0, 0]), int(hnf[0, 1])
+    c, d = int(hnf[1, 0]), int(hnf[1, 1])
+    determinant = a * d - b * c
+    if determinant == 0:
+        raise ValueError("normalization requires a full-rank generated lattice in Z^2")
+
+    coordinate_columns: list[tuple[int, int]] = []
+    for x, y in configuration.columns_vectors:
+        numerators = (d * x - b * y, -c * x + a * y)
+        if any(value % determinant for value in numerators):
+            raise ArithmeticError("column-lattice HNF failed to contain a generator")
+        coordinate_columns.append(
+            (
+                numerators[0] // determinant,
+                numerators[1] // determinant,
+            )
+        )
+
+    coordinate_maximum = max(
+        abs(value) for vector in coordinate_columns for value in vector
+    )
+    if coordinate_maximum >= 10**MAX_AFFINE_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("semigroup", "configuration"),
+            code="affine_semigroup.normalization_coordinate_digits",
+            message="generated-lattice coordinates exceed the 8-digit cone envelope",
+        )
+    coordinate_configuration = AffineConfiguration(
+        row_labels=configuration.row_labels,
+        generator_labels=configuration.generator_labels,
+        entries=tuple(
+            tuple(
+                coordinate_columns[column][row]
+                for column in range(configuration.columns)
+            )
+            for row in range(2)
+        ),
+    )
+    rays = _hilbert_rays(coordinate_configuration)
+    ray_determinant = rays[0][0] * rays[1][1] - rays[0][1] * rays[1][0]
+    if ray_determinant > MAX_HILBERT_BASIS_DETERMINANT:
+        raise OperationResourceAdmissionError(
+            location=("semigroup", "configuration"),
+            code="affine_semigroup.normalization_hilbert_determinant",
+            message=(
+                f"normalization Hilbert determinant {ray_determinant} exceeds "
+                f"the limit {MAX_HILBERT_BASIS_DETERMINANT}"
+            ),
+        )
+    # Hilbert points lie in the cone spanned by primitive input rays. Bound
+    # their ambient coordinates before running the finite parallelogram search.
+    coordinate_bound = max(abs(value) for ray in rays for value in ray)
+    output_bound = 4 * minor_bound * max(1, coordinate_bound)
+    if len(str(output_bound)) > MAX_AFFINE_NORMALIZATION_OUTPUT_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("semigroup", "configuration"),
+            code="affine_semigroup.normalization_output_digits",
+            message="normalization output bound exceeds the 64-digit result envelope",
+        )
+
+    basis = hilbert_basis(coordinate_configuration).basis
+    transported = tuple(sorted({(a * x + b * y, c * x + d * y) for x, y in basis}))
+    if any(
+        len(str(abs(value))) > MAX_AFFINE_NORMALIZATION_OUTPUT_DIGITS
+        for v in transported
+        for value in v
+    ):
+        raise ArithmeticError("normalization output exceeded its admitted digit bound")
+    return AffineSemigroupNormalization(semigroup=semigroup, generators=transported)
+
+
 def fiber(semigroup: PositiveAffineSemigroup, target: tuple[int, ...]) -> AffineFiber:
     semigroup = _admit_semigroup(semigroup)
     rows = _fiber(semigroup, target)
@@ -899,11 +1022,13 @@ __all__ = [
     "AffineFiber",
     "AffineFiberGraph",
     "AffineMembershipResult",
+    "AffineSemigroupNormalization",
     "PositiveAffineSemigroup",
     "PositiveGradingResult",
     "construct",
     "fiber",
     "fiber_graph",
     "membership",
+    "normalization",
     "positive_grading",
 ]

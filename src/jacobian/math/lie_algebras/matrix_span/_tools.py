@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from jacobian.catalog.models import MathTool
+from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.lie_algebras.matrix_span._models import (
     LieMatrixSpanRealization,
     LieMatrixSpanRequest,
@@ -38,7 +38,17 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "induced bracket on rational matrices",
             "commutator closed matrix basis",
         ),
-        examples=(),
+        examples=(
+            OperationExample(
+                name="sl2_matrices",
+                description="Construct the Lie algebra on the standard rational sl2 matrix basis.",
+                input={"matrices": [
+                    {"domain": "QQ", "entries": [[{"num": "0", "den": "1"}, {"num": "1", "den": "1"}], [{"num": "0", "den": "1"}, {"num": "0", "den": "1"}]]},
+                    {"domain": "QQ", "entries": [[{"num": "0", "den": "1"}, {"num": "0", "den": "1"}], [{"num": "1", "den": "1"}, {"num": "0", "den": "1"}]]},
+                    {"domain": "QQ", "entries": [[{"num": "1", "den": "1"}, {"num": "0", "den": "1"}], [{"num": "0", "den": "1"}, {"num": "-1", "den": "1"}]]},
+                ]},
+            ),
+        ),
     ),
 )
 

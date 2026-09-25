@@ -29,6 +29,13 @@ from jacobian.math.matrices.values import RationalMatrix, rational_matrix_from_f
 def _admit(request: LieMatrixSpanRequest) -> tuple[int, int, int]:
     dimension = len(request.matrices)
     order = request.matrices[0].row_count
+    if not 1 <= order <= 8 or any(
+        matrix.row_count < 1 or matrix.row_count > 8 for matrix in request.matrices
+    ):
+        raise OperationDomainValidationError(
+            location=("matrices",), code="lie_algebra.matrix_span_order",
+            message="matrix order must be 1..8",
+        )
     if any(
         matrix.row_count != order or matrix.column_count != order
         for matrix in request.matrices
@@ -54,7 +61,9 @@ def _admit(request: LieMatrixSpanRequest) -> tuple[int, int, int]:
     # Bound products, sums, exact row reduction and coordinate solving before
     # any matrix multiplication or RREF expansion. Cramer's rule gives a
     # conservative determinant-height ceiling for the d by d pivot system.
-    commutator_digits = 2 * input_digits + decimal_digit_width(order) + 2
+    # A sum of 2*order rational products may require a product of their
+    # denominators; charge that full rational-height growth, not integer growth.
+    commutator_digits = 2 * order * input_digits + decimal_digit_width(2 * order) + 2
     determinant_digits = (
         dimension * dimension * input_digits
         + decimal_digit_width(factorial(dimension))
@@ -67,6 +76,13 @@ def _admit(request: LieMatrixSpanRequest) -> tuple[int, int, int]:
         + 2
     )
     coordinate_digits = determinant_digits + replacement_digits + 2
+    # Output coefficients are rational coordinates in the pivot basis. Refuse
+    # conservatively before any RREF or commutator expansion.
+    if coordinate_digits > MAX_MATRIX_SPAN_RESULT_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("matrices",), code="lie_algebra.matrix_span_result_height",
+            message="induced structure constants may exceed the 64-digit result bound",
+        )
     work = (
         dimension * order**2 * dimension * input_digits
         + 2 * pairs * order**3

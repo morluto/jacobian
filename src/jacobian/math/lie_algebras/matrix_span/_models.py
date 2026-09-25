@@ -28,7 +28,7 @@ def _decimal_width(component: object) -> int:
 class LieMatrixSpanRequest(StrictModel):
     """An independent ordered basis for a commutator-closed QQ matrix span."""
 
-    matrices: tuple[RationalMatrix, ...] = Field(min_length=1, max_length=8)
+    matrices: tuple[RationalMatrix, ...] = Field(min_length=1, max_length=8, strict=False)
 
     @model_validator(mode="before")
     @classmethod
@@ -43,6 +43,7 @@ class LieMatrixSpanRequest(StrictModel):
                 "lie_algebra.matrix_span_dimension",
                 "matrix span dimension must be 1..8",
             )
+        value = {**value, "matrices": tuple(matrices)}
         for matrix in matrices:
             if not isinstance(matrix, dict):
                 continue
@@ -78,12 +79,25 @@ class LieMatrixSpanRequest(StrictModel):
                         )
         return value
 
+    @model_validator(mode="after")
+    def bound_canonical_matrices(self) -> Self:
+        if any(
+            matrix.row_count < 1
+            or matrix.row_count > MAX_MATRIX_ORDER
+            or matrix.column_count != matrix.row_count
+            for matrix in self.matrices
+        ):
+            raise PydanticCustomError(
+                "lie_algebra.matrix_span_order", "matrix order must be 1..8"
+            )
+        return self
+
 
 class LieMatrixSpanRealization(StrictModel):
     """A Lie algebra basis together with its exact ordered matrix realization."""
 
     algebra: FiniteDimensionalLieAlgebra
-    matrix_basis: tuple[RationalMatrix, ...] = Field(min_length=1, max_length=8)
+    matrix_basis: tuple[RationalMatrix, ...] = Field(min_length=1, max_length=8, strict=False)
 
     @model_validator(mode="after")
     def require_aligned_basis(self) -> Self:

@@ -56,3 +56,12 @@ and symmetric-exchange bounds. These limits are separate: a small feasible
 family over too many ground elements exceeds the state bound, and a larger
 family on an otherwise admissible ground set can exceed the distance-work
 bound. The empty-ground delta-matroid has one mask and distance zero.
+
+`delta_matroid.relabel.compute` maps source label `ground[i]` to
+`target_ground[i]` for every ground position `i`. The target labels must be
+unique and have the same cardinality as the source ground. Feasible rows retain
+their positions, so this operation applies the induced bijection to every
+feasible set without changing symmetric differences or delta-matroid axioms.
+The source membership, UTF-8 label, and exchange-work envelopes are checked
+before transport; the target labels have a separate 2,048-byte UTF-8 bound.
+Applying the inverse label map recovers the source value exactly.

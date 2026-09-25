@@ -100,7 +100,7 @@ def _reference_matrix_rsk(
     ("row_labels", "column_labels", "entries"),
     [
         (("r0", "r1"), ("c0", "c1"), ((1, 2), (0, 1))),
-        (("north", "south", "west"), ("x", "y"), ((0, 1), (2, 0), (1, 1))),
+        (("west", "north", "south"), ("y", "x"), ((0, 1), (2, 0), (1, 1))),
         (("only-row",), ("first", "second", "third"), ((2, 1, 0),)),
     ],
 )

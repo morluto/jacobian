@@ -1487,7 +1487,8 @@ def function_field_hyperelliptic_affine_valuation(
             code="function_field.invalid_element",
             message="element has malformed coordinate data",
         ) from exc
-    if element.field != field:
+    element_field = _canonical_field(_validated_field(element.field))
+    if element_field != field:
         raise OperationDomainValidationError(
             location=("element", "field"),
             code="function_field.parent_mismatch",

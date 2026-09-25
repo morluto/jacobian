@@ -11,12 +11,15 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.matrices.cyclic_linear._models import (
+    MAX_CYCLIC_FIELD_ELEMENT_DIGITS,
     RationalCyclotomicElement,
     RationalCyclotomicField,
 )
 from jacobian.math.polynomials.cyclotomic_coefficients._models import (
+    MAX_CYCLOTOMIC_POLYNOMIAL_COORDINATES,
     CyclotomicPolynomial,
     CyclotomicPolynomialTerm,
+    RationalPolynomialCyclotomicEmbeddingRequest,
 )
 from jacobian.math.polynomials.cyclotomic_coefficients._tools import TOOLS
 from jacobian.math.polynomials.cyclotomic_coefficients.operations import (
@@ -135,7 +138,11 @@ def test_public_manifest_declares_composable_typed_coefficient_map() -> None:
         "polynomial.cyclotomic_coefficient.embed.compute",
     )
     tool = TOOLS[0]
-    request = tool.request_type.model_validate_json(json.dumps(tool.examples[0].input))
+    # Mirror the strict JSON dispatch path: a raw preflight validator must return
+    # canonical containers so JSON arrays satisfy the typed tuple fields.
+    request = tool.request_type.model_validate_json(
+        json.dumps(tool.examples[0].input), strict=True
+    )
     assert isinstance(tool.run(request), CyclotomicPolynomial)
 
 
@@ -179,6 +186,74 @@ def test_raw_nested_parent_coordinates_are_admitted_before_model_construction() 
     }
     with pytest.raises(ValidationError, match="coefficient coordinates"):
         CyclotomicPolynomial.model_validate(raw)
+
+
+def test_request_preflights_raw_coefficient_digits_before_parsing() -> None:
+    # The nested carrier admits far wider coefficient text than this operation.
+    # One digit past the shared coordinate height bound must be refused without
+    # parsing the exact integer.
+    polynomial = {
+        "variables": ["x"],
+        "polynomial": {
+            "terms": [
+                {
+                    "coefficient": {
+                        "num": "1" + "0" * MAX_CYCLIC_FIELD_ELEMENT_DIGITS,
+                        "den": "1",
+                    },
+                    "exponents": [0],
+                }
+            ]
+        },
+    }
+    raw = {"polynomial": polynomial, "field": {"order": 1}}
+
+    with pytest.raises(ValidationError) as digit_error:
+        RationalPolynomialCyclotomicEmbeddingRequest.model_validate_json(
+            json.dumps(raw), strict=True
+        )
+    assert (
+        digit_error.value.errors()[0]["type"]
+        == "polynomial.cyclotomic.source_coefficient_digits"
+    )
+
+    # The same exact scalar still parses on its own, so this rejection is the
+    # request's raw preflight rather than nested coefficient validation.
+    RationalPolynomial.model_validate_json(json.dumps(polynomial), strict=True)
+
+
+def test_request_preflights_raw_coordinate_envelope_before_parsing() -> None:
+    # One monomial past the derived coordinate budget (field degree times source
+    # term count) must be refused before any exact element is constructed.
+    field_order = 128
+    degree = RationalCyclotomicField(order=field_order).degree
+    term_count = MAX_CYCLOTOMIC_POLYNOMIAL_COORDINATES // degree + 1
+    polynomial = {
+        "variables": ["x"],
+        "polynomial": {
+            "terms": [
+                {
+                    "coefficient": {"num": "1", "den": "1"},
+                    "exponents": [exponent],
+                }
+                for exponent in range(term_count - 1, -1, -1)
+            ]
+        },
+    }
+    raw = {"polynomial": polynomial, "field": {"order": field_order}}
+
+    with pytest.raises(ValidationError) as coordinate_error:
+        RationalPolynomialCyclotomicEmbeddingRequest.model_validate_json(
+            json.dumps(raw), strict=True
+        )
+    assert (
+        coordinate_error.value.errors()[0]["type"]
+        == "polynomial.cyclotomic.source_coordinate_bound"
+    )
+
+    # The nested source polynomial is structurally valid but over this
+    # operation's derived coordinate budget.
+    RationalPolynomial.model_validate_json(json.dumps(polynomial), strict=True)
 
 
 def test_embedding_native_boundary_rejects_untyped_and_forged_values() -> None:

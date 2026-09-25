@@ -176,11 +176,90 @@ class CyclotomicPolynomial(StrictModel):
         return self
 
 
+def _raw_component_digit_width(component: object) -> int:
+    """Return one raw exact-scalar component's decimal width cheaply.
+
+    Wire components are already canonical decimal text.  Native integers are
+    measured from their bit length so an over-bound value never reaches the
+    interpreter-wide decimal conversion limit.
+    """
+    if isinstance(component, str):
+        return len(component.lstrip("-"))
+    if type(component) is int:
+        magnitude = abs(component)
+        if magnitude == 0:
+            return 1
+        minimum_digits = ((magnitude.bit_length() - 1) * 30_102) // 100_000 + 1
+        if minimum_digits > MAX_CYCLIC_FIELD_ELEMENT_DIGITS:
+            return MAX_CYCLIC_FIELD_ELEMENT_DIGITS + 1
+        return len(str(magnitude))
+    return 0
+
+
+def _preflight_raw_embedding(data: object) -> None:
+    """Reject an over-envelope raw embedding payload before nested parsing.
+
+    ``RationalPolynomial`` admits far wider coefficient text than this
+    operation's exact coordinate budget.  Counting raw monomials and
+    coefficient digits here avoids materializing every exact integer and
+    ``Fraction`` before the same request is refused.
+    """
+    if not isinstance(data, Mapping):
+        return
+    polynomial = data.get("polynomial")
+    if not isinstance(polynomial, Mapping):
+        return
+    sparse = polynomial.get("polynomial")
+    if not isinstance(sparse, Mapping):
+        return
+    terms = sparse.get("terms")
+    if not isinstance(terms, (list, tuple)):
+        return
+
+    field = data.get("field")
+    order = field.get("order") if isinstance(field, Mapping) else None
+    if (
+        type(order) is int
+        and 1 <= order <= MAX_CYCLIC_PERIOD
+        and len(terms) * _euler_phi(order) > MAX_CYCLOTOMIC_POLYNOMIAL_COORDINATES
+    ):
+        raise _validation_error(
+            "source_coordinate_bound",
+            "raw polynomial coefficient coordinates exceed the admitted "
+            "embedding bound before parsing",
+        )
+
+    for term in terms:
+        if not isinstance(term, Mapping):
+            continue
+        coefficient = term.get("coefficient")
+        if not isinstance(coefficient, Mapping):
+            continue
+        if any(
+            _raw_component_digit_width(coefficient.get(part))
+            > MAX_CYCLIC_FIELD_ELEMENT_DIGITS
+            for part in ("num", "den")
+        ):
+            raise _validation_error(
+                "source_coefficient_digits",
+                "raw polynomial coefficient digits exceed the admitted "
+                "cyclotomic coordinate height bound before parsing",
+            )
+
+
 class RationalPolynomialCyclotomicEmbeddingRequest(StrictModel):
     """Embed one rational polynomial in an explicitly selected cyclotomic field."""
 
     polynomial: RationalPolynomial
     field: RationalCyclotomicField
+
+    @model_validator(mode="before")
+    @classmethod
+    def admit_raw_embedding_envelope(cls, data: object) -> object:
+        """Bound raw coefficient text before the nested polynomial is parsed."""
+
+        _preflight_raw_embedding(data)
+        return canonicalize_json_containers(data)
 
 
 __all__ = [

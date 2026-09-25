@@ -592,25 +592,25 @@ def _contains_sorted_relation_row(
 
 
 def enumerate_polymorphisms(
-    request: RelationalPolymorphismEnumerationRequest,
+    source: FiniteRelationalStructure, arity: int
 ) -> RelationalPolymorphismFamily:
     """Return every fixed-arity polymorphism of one exact structure."""
 
-    if not isinstance(request, RelationalPolymorphismEnumerationRequest):
+    source = _admit_structure(source, "source")
+    if type(arity) is not int:
         raise OperationDomainValidationError(
-            location=("request",),
-            code="relational.polymorphism.enumeration_request_type",
-            message="request must name a structure and positive operation arity",
+            location=("arity",),
+            code="relational.polymorphism.enumeration_arity_type",
+            message="arity must be an exact positive integer",
         )
-    source = _admit_structure(request.source, "source")
     try:
         admitted = RelationalPolymorphismEnumerationRequest.model_validate(
-            {"source": source.model_dump(), "arity": request.arity},
+            {"source": source.model_dump(), "arity": arity},
             strict=True,
         )
     except Exception as exc:
         raise OperationDomainValidationError(
-            location=("request",),
+            location=("arity",),
             code="relational.polymorphism.enumeration_request_shape",
             message="request must contain a bounded positive arity and exact structure",
         ) from exc

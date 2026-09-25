@@ -366,6 +366,22 @@ class PPDefinedRelation(StrictModel):
 
     @model_validator(mode="after")
     def require_exact_relation_shape(self) -> Self:
+        symbol_arities = {
+            symbol.symbol_id: symbol.arity for symbol in self.structure.signature
+        }
+        for index, atom in enumerate(self.formula.atoms):
+            if isinstance(atom, PPRelationAtom):
+                arity = symbol_arities.get(atom.symbol_id)
+                if arity is None:
+                    raise _validation_error(
+                        "pp.unknown_symbol",
+                        f"formula atom {index} names no symbol in the retained structure",
+                    )
+                if len(atom.variables) != arity:
+                    raise _validation_error(
+                        "pp.atom_arity",
+                        f"formula atom {index} has the wrong relation arity",
+                    )
         axis_width = len(self.formula.free_variables)
         if self.tuples != tuple(sorted(set(self.tuples))):
             raise _validation_error(

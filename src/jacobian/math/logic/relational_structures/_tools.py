@@ -170,7 +170,7 @@ def _invariant_relation_closure(
 def _polymorphism_enumeration(
     request: RelationalPolymorphismEnumerationRequest,
 ) -> RelationalPolymorphismFamily:
-    return enumerate_polymorphisms(request)
+    return enumerate_polymorphisms(request.source, request.arity)
 
 
 def _pp_formula_evaluation(request: PPFormulaEvaluationRequest) -> PPDefinedRelation:

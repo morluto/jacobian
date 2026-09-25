@@ -73,6 +73,34 @@ For example, substituting `0 ⊕ t` for `x` in `0 ⊕ x` over min-plus returns
 `0 ⊕ t`; the repeated constant exponent is merged by taking its tropical
 minimum.
 
+## Tie-inclusive attained polynomial part
+
+`tropical.polynomial.essential_part.compute` returns the source terms that
+attain the minimum or maximum somewhere on the finite affine domain. This
+issue-defined contract includes terms that tie only on a lower-dimensional
+set. It is distinct from the stricter unique-region convention for essential
+terms and from any minimal functional normal form. For example, with the four
+corners `(0,0)`, `(0,2)`, `(2,0)`, `(2,2)` and center `(1,1)`, all at height
+zero, all five terms are retained because they tie at the origin; the center
+does not have a region where it is the unique extremizer.
+
+The result retains the source polynomial, the functionally equivalent
+subpolynomial, the essential/inessential source-index partition, all lifted
+hull facet incidences, affine equations for a rank-deficient lift, and the
+complete incidence of finite-normal lower/upper faces. Min-plus selects lower
+faces and max-plus selects upper faces. Exact rational inequality feasibility
+defines attained support; hull incidence provides the finite certificate
+returned by the operation.
+
+The current exact hull slice admits at most four variables, 64 terms, and
+32-digit coefficient components. The shared DD kernel admits candidate-pair
+work and coefficient height before hull expansion; for a five-dimensional
+lift, 50 input points fit its 20-million-pair envelope while 64 exceed it and
+are rejected. Face incidence and the serialized result have separate
+two-million-work, 10,000-face, and 10 MiB limits. Empty and one-term
+polynomials have explicit exact results. This operation does not provide the
+unique-region functional normal form.
+
 ## Tropical assignment profiles
 
 `tropical.matrix.add.compute` applies tropical addition to each pair of entries

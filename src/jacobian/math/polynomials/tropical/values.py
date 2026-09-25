@@ -31,6 +31,11 @@ MAX_TROPICAL_NEWTON_RESULT_BYTES = 16 * 1024 * 1024
 MAX_TROPICAL_SUBDIVISION_TERMS = 10
 MAX_TROPICAL_SUBDIVISION_COEFFICIENT_DIGITS = 32
 MAX_TROPICAL_SUBDIVISION_RESULT_BYTES = 4 * 1024 * 1024
+MAX_TROPICAL_ESSENTIAL_VARIABLES = 4
+MAX_TROPICAL_ESSENTIAL_TERMS = 64
+MAX_TROPICAL_ESSENTIAL_FACES = 10_000
+MAX_TROPICAL_ESSENTIAL_WORK = 2_000_000
+MAX_TROPICAL_ESSENTIAL_RESULT_BYTES = 10 * 1024 * 1024
 MAX_TROPICAL_HYPERSURFACE_CELLS = 40
 MAX_TROPICAL_HYPERSURFACE_RESULT_BYTES = 10 * 1024 * 1024
 MAX_TROPICAL_ACTIVE_TERM_WORK = 250_000_000
@@ -486,6 +491,141 @@ class TropicalRegularSubdivision(StrictModel):
         return self
 
 
+class TropicalEssentialLiftedFace(StrictModel):
+    """One finite-normal lifted hull face, bound to source terms."""
+
+    face_index: int | None = Field(
+        default=None, ge=0, le=MAX_TROPICAL_ESSENTIAL_FACES - 1
+    )
+    dimension: int = Field(ge=0, le=6)
+    normal: tuple[CanonicalRational, ...] = Field(min_length=1, max_length=7)
+    offset: CanonicalRational
+    source_term_indices: tuple[int, ...] = Field(
+        min_length=1, max_length=MAX_TROPICAL_ESSENTIAL_TERMS
+    )
+
+
+class TropicalEssentialHullFace(StrictModel):
+    """Source incidence for a complete finite-normal lower/upper face."""
+
+    face_index: int = Field(ge=0, le=MAX_TROPICAL_ESSENTIAL_FACES - 1)
+    dimension: int = Field(ge=0, le=6)
+    source_term_indices: tuple[int, ...] = Field(
+        min_length=1, max_length=MAX_TROPICAL_ESSENTIAL_TERMS
+    )
+    maximal_finite_face_indices: tuple[int, ...] = Field(
+        min_length=1, max_length=MAX_TROPICAL_ESSENTIAL_FACES
+    )
+
+
+class TropicalPolynomialEssentialPart(StrictModel):
+    """Tie-inclusive attained support and its finite-normal hull incidence."""
+
+    source: TropicalPolynomial
+    polynomial: TropicalPolynomial
+    essential_term_indices: tuple[int, ...]
+    inessential_term_indices: tuple[int, ...]
+    variable_indices: tuple[int, ...] = Field(max_length=6)
+    lifted_affine_dimension: int = Field(ge=0, le=7)
+    affine_equalities: tuple[tuple[CanonicalRational, ...], ...] = Field(
+        max_length=7,
+        description=(
+            "Rows of exact lifted affine equations: variable coefficients, the "
+            "coefficient-height component, then the right-hand side."
+        ),
+    )
+    hull_facets: tuple[TropicalEssentialLiftedFace, ...] = Field(
+        max_length=MAX_TROPICAL_ESSENTIAL_FACES
+    )
+    finite_faces: tuple[TropicalEssentialLiftedFace, ...] = Field(
+        max_length=MAX_TROPICAL_ESSENTIAL_FACES
+    )
+    face_incidence: tuple[TropicalEssentialHullFace, ...] = Field(
+        max_length=MAX_TROPICAL_ESSENTIAL_FACES
+    )
+
+    @model_validator(mode="after")
+    def require_source_partition(self) -> Self:
+        all_indices = tuple(range(len(self.source.terms)))
+        if (
+            self.polynomial.semiring != self.source.semiring
+            or self.polynomial.variables != self.source.variables
+            or self.variable_indices != tuple(range(len(self.source.variables)))
+            or self.lifted_affine_dimension > len(self.source.variables) + 1
+            or any(
+                len(face.normal) != len(self.source.variables) + 1
+                for face in (*self.hull_facets, *self.finite_faces)
+            )
+            or any(
+                len(row) != len(self.source.variables) + 2
+                for row in self.affine_equalities
+            )
+            or tuple(
+                sorted((*self.essential_term_indices, *self.inessential_term_indices))
+            )
+            != all_indices
+            or set(self.essential_term_indices) & set(self.inessential_term_indices)
+            or tuple(sorted(self.essential_term_indices)) != self.essential_term_indices
+            or tuple(sorted(self.inessential_term_indices))
+            != self.inessential_term_indices
+            or tuple(face.face_index for face in self.hull_facets)
+            != tuple(range(len(self.hull_facets)))
+            or tuple(face.face_index for face in self.face_incidence)
+            != tuple(range(len(self.face_incidence)))
+        ):
+            raise _validation_error(
+                "essential_part_source_shape",
+                "essential result must preserve its polynomial axes, partition, and indexed hull faces",
+            )
+        expected_terms = tuple(
+            self.source.terms[index] for index in self.essential_term_indices
+        )
+        if self.polynomial.terms != expected_terms:
+            raise _validation_error(
+                "essential_part_polynomial",
+                "returned polynomial must contain exactly the attained source terms in source order",
+            )
+        if self.essential_term_indices and not set(
+            self.essential_term_indices
+        ).issubset(
+            {index for face in self.finite_faces for index in face.source_term_indices}
+        ):
+            raise _validation_error(
+                "essential_part_face_coverage",
+                "every attained source term must lie on a finite-normal lifted face",
+            )
+        if any(
+            tuple(sorted(set(face.source_term_indices))) != face.source_term_indices
+            or any(
+                index >= len(self.source.terms) for index in face.source_term_indices
+            )
+            for face in (*self.hull_facets, *self.finite_faces)
+        ):
+            raise _validation_error(
+                "essential_part_incidence",
+                "lifted face incidence must use ordered source term indices",
+            )
+        if any(
+            not face.maximal_finite_face_indices
+            or any(
+                index >= len(self.finite_faces)
+                for index in face.maximal_finite_face_indices
+            )
+            or tuple(sorted(set(face.maximal_finite_face_indices)))
+            != face.maximal_finite_face_indices
+            or tuple(sorted(set(face.source_term_indices))) != face.source_term_indices
+            or any(
+                index >= len(self.source.terms) for index in face.source_term_indices
+            )
+            for face in self.face_incidence
+        ):
+            raise _validation_error(
+                "essential_part_face_incidence",
+                "each lifted source face must map to its finite-normal parent faces",
+            )
+        return self
+
+
 class TropicalHypersurfaceCell(StrictModel):
     """One exact corner cell bound to its dual subdivision face."""
 
@@ -605,6 +745,11 @@ class TropicalHypersurface(StrictModel):
 __all__ = [
     "MAX_TROPICAL_ACTIVE_RESULT_BYTES",
     "MAX_TROPICAL_ACTIVE_TERM_WORK",
+    "MAX_TROPICAL_ESSENTIAL_FACES",
+    "MAX_TROPICAL_ESSENTIAL_RESULT_BYTES",
+    "MAX_TROPICAL_ESSENTIAL_TERMS",
+    "MAX_TROPICAL_ESSENTIAL_VARIABLES",
+    "MAX_TROPICAL_ESSENTIAL_WORK",
     "MAX_TROPICAL_EXPONENT",
     "MAX_TROPICAL_HYPERSURFACE_CELLS",
     "MAX_TROPICAL_HYPERSURFACE_RESULT_BYTES",
@@ -619,6 +764,8 @@ __all__ = [
     "MAX_TROPICAL_SUBDIVISION_RESULT_BYTES",
     "MAX_TROPICAL_SUBDIVISION_TERMS",
     "MAX_TROPICAL_VECTOR_DIMENSION",
+    "TropicalEssentialHullFace",
+    "TropicalEssentialLiftedFace",
     "TropicalHypersurface",
     "TropicalHypersurfaceCell",
     "TropicalLiftedSubdivisionFace",
@@ -627,6 +774,7 @@ __all__ = [
     "TropicalNewtonPolygonProfile",
     "TropicalNewtonPolygonVertex",
     "TropicalPolynomial",
+    "TropicalPolynomialEssentialPart",
     "TropicalPolynomialTerm",
     "TropicalRegularSubdivision",
     "TropicalRootBreakpoint",

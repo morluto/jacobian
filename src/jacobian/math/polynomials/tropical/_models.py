@@ -513,6 +513,12 @@ class BivariateRegularSubdivisionRequest(StrictModel):
         return self
 
 
+class EssentialPartRequest(StrictModel):
+    """Compute the bounded exact attained-term transform."""
+
+    polynomial: TropicalPolynomial
+
+
 class BivariateHypersurfaceRequest(StrictModel):
     """Compute the complete bounded exact corner complex of one polynomial."""
 
@@ -729,6 +735,7 @@ __all__ = [
     "AssignmentResult",
     "BivariateHypersurfaceRequest",
     "BivariateRegularSubdivisionRequest",
+    "EssentialPartRequest",
     "FinitePowerSumResult",
     "InfinityCase",
     "MatrixAddRequest",

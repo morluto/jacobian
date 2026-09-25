@@ -114,9 +114,20 @@ def test_negative_and_zero_degree_profiles_are_empty(degree: int) -> None:
     assert holes_through_degree(_PARITY_SEMIGROUP, degree).holes == ()
 
 
-def test_degenerate_cone_is_rejected() -> None:
-    with pytest.raises(ValueError, match="full-dimensional"):
-        holes_through_degree(_semigroup(((1, 0), (2, 0))), 3)
+def test_degenerate_cone_is_rejected_at_native_and_catalog_boundaries() -> None:
+    semigroup = _semigroup(((1, 0), (2, 0)))
+    with pytest.raises(OperationDomainValidationError) as error:
+        holes_through_degree(semigroup, 3)
+    assert error.value.errors()[0]["type"] == "affine_semigroup.hole_profile_cone"
+
+    request = AffineSemigroupHolesRequest(semigroup=semigroup, max_degree=3)
+    tool = next(
+        item
+        for item in TOOLS
+        if item.operation_id == "affine_semigroup.holes_through_degree.compute"
+    )
+    with pytest.raises(OperationDomainValidationError):
+        tool.run(request)
 
 
 def test_candidate_box_is_admitted_before_lattice_point_enumeration(

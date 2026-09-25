@@ -283,7 +283,14 @@ def holes_through_degree(
     """
     source, degree_bound = _preflight_source(semigroup, max_degree)
     # Validate the requested geometric envelope even for a negative cutoff.
-    lower, upper = _hilbert_rays(source.configuration)
+    try:
+        lower, upper = _hilbert_rays(source.configuration)
+    except (TypeError, ValueError, IndexError, OverflowError) as exc:
+        raise OperationDomainValidationError(
+            location=("semigroup", "configuration"),
+            code="affine_semigroup.hole_profile_cone",
+            message=str(exc),
+        ) from exc
     source_grading = tuple(value.as_fraction() for value in source.grading)
     if any(
         sum(source_grading[row] * ray[row] for row in range(2)) <= 0

@@ -74,12 +74,16 @@ class CoaccessibleStateWitnesses(CoaccessibleStatesRequest):
                     "finite_state_transducer.coaccessible_trace_state_out_of_range",
                     "witness trace state is outside the source",
                 )
-            if any(symbol >= source.input_alphabet_size for symbol in witness.input_suffix):
+            if any(
+                symbol >= source.input_alphabet_size for symbol in witness.input_suffix
+            ):
                 raise PydanticCustomError(
                     "finite_state_transducer.coaccessible_input_symbol_out_of_range",
                     "witness input symbol is outside the source alphabet",
                 )
-            if any(symbol >= source.output_alphabet_size for symbol in witness.output_word):
+            if any(
+                symbol >= source.output_alphabet_size for symbol in witness.output_word
+            ):
                 raise PydanticCustomError(
                     "finite_state_transducer.coaccessible_output_symbol_out_of_range",
                     "witness output symbol is outside the source alphabet",

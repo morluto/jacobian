@@ -37,6 +37,19 @@ remove monomials that are inessential as piecewise-linear functions and does
 not establish functional equality. For example, the cube of `0 ⊕ x` in
 min-plus has formal terms `0 ⊙ x^k` for `k = 0, 1, 2, 3`.
 
+## Tropical assignment profiles
+
+`tropical.matrix.assignment_profile.compute` accepts an `n × n` tropical
+matrix, with `n ≤ 8`. Row and column axes are distinct labelled sets; they
+must have equal lengths, but their labels need not agree. Each returned
+permutation is an `n`-tuple of column indices, one per row in source row-axis
+order. The result gives the minimum assignment weight in min-plus or maximum
+assignment weight in max-plus, together with every tied optimal permutation.
+It is an assignment optimum, not an ordinary signed determinant. The fixed
+eight-row bound admits at most `8!` candidate permutations before enumeration.
+If every permutation uses at least one infinite entry, the optimum is the
+semiring additive identity and every permutation is returned as tied.
+
 ## Univariate polynomial roots
 
 `tropical.polynomial.univariate_roots.compute` accepts exactly one variable.

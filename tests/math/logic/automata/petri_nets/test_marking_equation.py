@@ -6,7 +6,10 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.catalog.catalog import Catalog
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.dispatch import invoke_operation
 from jacobian.math.logic.automata.petri_nets import marking_equation
 from jacobian.math.logic.automata.petri_nets._models import MarkingEquationRequest
@@ -144,6 +147,10 @@ def test_occurrence_bound_is_admitted_before_matrix_vector_expansion():
     assert at_limit.satisfies_equation
     with pytest.raises(OperationResourceAdmissionError):
         marking_equation(net, Marking(tokens=(0,)), Marking(tokens=(0,)), (1001,))
+    with pytest.raises(OperationDomainValidationError):
+        marking_equation(net, Marking(tokens=(0,)), Marking(tokens=(0,)), None)
+    with pytest.raises(OperationDomainValidationError):
+        marking_equation(net, Marking(tokens=(0,)), Marking(tokens=(0,)), [0])
 
 
 def test_transition_counts_reject_approximate_numeric_input():

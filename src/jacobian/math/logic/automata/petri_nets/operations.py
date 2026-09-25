@@ -1016,8 +1016,10 @@ def marking_equation(
     net = _admit_net(net)
     source_marking = _require_marking_size(net, source_marking)
     target_marking = _require_marking_size(net, target_marking)
-    if len(transition_counts) != net.transition_count or any(
-        type(count) is not int or count < 0 for count in transition_counts
+    if (
+        not isinstance(transition_counts, tuple)
+        or len(transition_counts) != net.transition_count
+        or any(type(count) is not int or count < 0 for count in transition_counts)
     ):
         raise OperationDomainValidationError(
             location=("transition_counts",),

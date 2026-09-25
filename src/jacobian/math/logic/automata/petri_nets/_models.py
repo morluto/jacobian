@@ -584,7 +584,8 @@ class MarkingEquationRequest(StrictModel):
     transition_counts: tuple[StrictInt, ...] = Field(
         max_length=MAX_PETRI_TRANSITIONS,
         description=(
-            "Nonnegative transition counts; equality is only a necessary "
+            "Nonnegative transition counts with total at most "
+            f"{MAX_STATE_EQUATION_OCCURRENCES}; equality is only a necessary "
             "reachability condition, not a firing witness."
         ),
     )

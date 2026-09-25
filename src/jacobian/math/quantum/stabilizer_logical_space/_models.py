@@ -211,10 +211,12 @@ class LogicalPauliSpace(StrictModel):
                 "symplectic_form_axes",
                 "induced form must be a GF(2) matrix on the quotient coordinate axis",
             )
-        self.require_semantic_relations(width, normalizer_dimension, quotient_dimension)
+        self._require_semantic_relations(
+            width, normalizer_dimension, quotient_dimension
+        )
         return self
 
-    def require_semantic_relations(
+    def _require_semantic_relations(
         self, width: int, normalizer_dimension: int, quotient_dimension: int
     ) -> None:
         check_count = len(self.check_space.basis)

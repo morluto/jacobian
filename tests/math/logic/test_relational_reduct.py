@@ -13,7 +13,6 @@ from jacobian.math.logic.relational_structures import (
     FiniteRelationalStructure,
     FiniteRelationSymbol,
     HomomorphismStatus,
-    RelationalReductRequest,
     RelationalReductResult,
     check_homomorphism,
     reduct_structure,
@@ -22,6 +21,7 @@ from jacobian.math.logic.relational_structures._admission import (
     MAX_RELATIONAL_REDUCT_WORK,
     admit_relational_reduct,
 )
+from jacobian.math.logic.relational_structures._models import RelationalReductRequest
 from jacobian.math.logic.relational_structures._tools import TOOLS
 
 

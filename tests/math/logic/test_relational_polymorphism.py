@@ -16,13 +16,15 @@ from jacobian.math.logic.relational_structures import (
     FiniteRelationSymbol,
     RelationalPolymorphism,
     RelationalPolymorphismCheckResult,
-    RelationalPolymorphismRequest,
     RelationalPolymorphismStatus,
     check_polymorphism,
     operations,
 )
 from jacobian.math.logic.relational_structures._admission import (
     MAX_POLYMORPHISM_COORDINATE_WORK,
+)
+from jacobian.math.logic.relational_structures._models import (
+    RelationalPolymorphismRequest,
 )
 from jacobian.math.logic.relational_structures.values import (
     MAX_RELATIONAL_OPERATION_TABLE_CELLS,

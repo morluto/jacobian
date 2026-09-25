@@ -59,14 +59,6 @@ class QuarticCubicResolventRequest(StrictModel):
                 "polynomial.quartic_resolvent.degree",
                 "cubic resolvent requires a degree-four source polynomial",
             )
-        if any(
-            _coefficient_digits(coefficient) > MAX_QUARTIC_RESOLVENT_INPUT_DIGITS
-            for coefficient in (term.coefficient for term in source_terms)
-        ):
-            raise PydanticCustomError(
-                "polynomial.quartic_resolvent.input_digits",
-                "quartic coefficient components exceed the admitted input-digit bound",
-            )
         return self
 
 
@@ -120,7 +112,8 @@ def _preflight(
     work_bound = 32 * digits * digits
     output_bound = 8 * digits + 32
     if (
-        work_bound > MAX_QUARTIC_RESOLVENT_WORK
+        digits > MAX_QUARTIC_RESOLVENT_INPUT_DIGITS
+        or work_bound > MAX_QUARTIC_RESOLVENT_WORK
         or output_bound > MAX_QUARTIC_RESOLVENT_OUTPUT_DIGITS
     ):
         raise OperationResourceAdmissionError(

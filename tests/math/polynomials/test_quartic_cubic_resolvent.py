@@ -234,6 +234,21 @@ def test_galois_group_consequences_match_classical_criteria() -> None:
         )
 
 
+def test_coefficient_beyond_digit_admission_is_resource_refusal() -> None:
+    from jacobian.catalog.models import OperationResourceAdmissionError
+    from jacobian.math.polynomials._quartic_resolvent import (
+        MAX_QUARTIC_RESOLVENT_INPUT_DIGITS,
+    )
+
+    value = 10**MAX_QUARTIC_RESOLVENT_INPUT_DIGITS
+    with pytest.raises(OperationResourceAdmissionError):
+        compute_quartic_cubic_resolvent(
+            _monic(
+                (Fraction(value), Fraction(0), Fraction(0), Fraction(0), Fraction(1))
+            )
+        )
+
+
 def test_maximally_admitted_coefficient_digits_fit_preflight() -> None:
     from jacobian.math.polynomials._quartic_resolvent import (
         MAX_QUARTIC_RESOLVENT_INPUT_DIGITS,

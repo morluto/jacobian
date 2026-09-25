@@ -159,6 +159,37 @@ def test_preimage_accepts_tiny_reachable_product_with_large_unreachable_carriers
     assert result.transitions[0].target == 0
 
 
+def test_preimage_admits_reachable_final_output_work() -> None:
+    output_alphabet = FiniteAlphabet(symbols=("a",))
+    dfa = DFA(
+        state_count=2,
+        alphabet_size=1,
+        alphabet_id="out",
+        alphabet=output_alphabet,
+        transitions=(
+            DFATransition(source=0, symbol=0, target=1),
+            DFATransition(source=1, symbol=0, target=1),
+        ),
+        initial_state=0,
+        accepting_states=(1,),
+    )
+    transducer = SubsequentialTransducer(
+        input_alphabet_size=1,
+        output_alphabet_size=1,
+        input_alphabet_id="in",
+        output_alphabet_id="out",
+        input_alphabet=FiniteAlphabet(symbols=("x",)),
+        output_alphabet=output_alphabet,
+        state_count=1,
+        initial_state=0,
+        transitions=(SubseqTransition(source=0, input_symbol=0, target=0),),
+        final_outputs=(SubseqFinalOutput(state=0, output=(0,)),),
+    )
+    result = dfa_subsequential_preimage(dfa, transducer)
+    assert result.state_count == 1
+    assert dfa_run(result, (0,))[0]
+
+
 def test_preimage_revalidates_model_constructed_carriers() -> None:
     dfa, transducer = carriers()
     malformed_dfa = DFA.model_construct(

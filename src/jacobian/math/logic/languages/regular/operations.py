@@ -444,9 +444,14 @@ def _admit_subsequential_preimage(
     cursor = 0
     undefined = False
     output_work = 0
+    final_outputs = {item.state: item.output for item in transducer.final_outputs}
+    final_output_work = 0
     while cursor < len(pairs):
         request_checkpoint("during subsequential preimage admission presolve")
         state, dstate = pairs[cursor]
+        final_output = final_outputs.get(state)
+        if final_output is not None:
+            final_output_work += len(final_output)
         for symbol in range(input_size):
             edge = edges.get((state, symbol))
             if edge is None:
@@ -474,7 +479,7 @@ def _admit_subsequential_preimage(
         cursor += 1
     product_bound = len(pairs) + int(undefined)
     transition_bound = product_bound * input_size
-    work_bound = product_bound * input_size + output_work
+    work_bound = product_bound * input_size + output_work + final_output_work
     if (
         product_bound > MAX_DFA_PREIMAGE_PRODUCT_STATES
         or transition_bound > MAX_DFA_PREIMAGE_PRODUCT_TRANSITIONS

@@ -387,7 +387,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 name="sl2_is_semisimple",
                 description=(
                     "The Killing form of sl2(QQ) is nondegenerate, so Cartan's "
-                    "criterion gives a zero radical and a semisimple profile."
+                    "criterion says this algebra is semisimple."
                 ),
                 input={"algebra": _SL2_ALGEBRA},
             ),

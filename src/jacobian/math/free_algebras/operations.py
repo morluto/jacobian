@@ -13,6 +13,7 @@ from math import factorial, gcd, lcm
 from typing import Any, Literal, cast
 
 from jacobian._exact import CanonicalRational, canonical_rational_component_digits
+from jacobian._execution import request_checkpoint
 from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -1848,7 +1849,9 @@ def _minimal_forbidden_factors(
             "forbidden-factor normalization exceeds the admitted work bound",
         )
     minimal: list[tuple[int, ...]] = []
-    for word in ordered:
+    for index, word in enumerate(ordered):
+        if index % 16 == 0:
+            request_checkpoint("during factor-avoidance normalization")
         if not any(_contains_factor(word, factor) for factor in minimal):
             minimal.append(word)
     return tuple(sorted(minimal, key=lambda word: (len(word), word)))
@@ -1950,22 +1953,25 @@ def _factor_avoidance_transitions(
         )
     prefix_index = {word: index for index, word in enumerate(prefixes)}
     max_prefix_length = max(map(len, prefixes), default=0)
-    transitions = [
-        DFATransition(
-            source=state,
-            symbol=symbol,
-            target=_factor_avoidance_target(
-                prefix,
-                symbol,
-                patterns,
-                prefix_index,
-                dead_state,
-                max_prefix_length,
-            ),
-        )
-        for state, prefix in enumerate(prefixes)
-        for symbol in range(alphabet_size)
-    ]
+    transitions: list[DFATransition] = []
+    for state, prefix in enumerate(prefixes):
+        if state % 16 == 0:
+            request_checkpoint("during factor-avoidance transition construction")
+        for symbol in range(alphabet_size):
+            transitions.append(
+                DFATransition(
+                    source=state,
+                    symbol=symbol,
+                    target=_factor_avoidance_target(
+                        prefix,
+                        symbol,
+                        patterns,
+                        prefix_index,
+                        dead_state,
+                        max_prefix_length,
+                    ),
+                )
+            )
     if patterns:
         transitions.extend(
             DFATransition(source=dead_state, symbol=symbol, target=dead_state)

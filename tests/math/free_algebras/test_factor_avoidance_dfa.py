@@ -12,6 +12,7 @@ from jacobian.math.free_algebras._models import (
     FreeAlgebraFactorAvoidanceDFA,
     FreeAlgebraFactorAvoidanceRequest,
 )
+from jacobian.math.free_algebras import operations
 from jacobian.math.free_algebras.operations import factor_avoidance_dfa
 from jacobian.math.logic.languages.regular.operations import dfa_run
 
@@ -94,6 +95,20 @@ def test_multiple_pattern_families_match_independent_membership_oracle() -> None
                     for start in range(len(named) - len(pattern) + 1)
                 )
                 assert dfa_run(result.dfa, word)[0] is expected
+
+
+def test_factor_avoidance_checks_cancellation_during_normalization_and_transitions(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    observed: list[str] = []
+
+    def checkpoint(stage: str) -> None:
+        observed.append(stage)
+
+    monkeypatch.setattr(operations, "request_checkpoint", checkpoint)
+    factor_avoidance_dfa(("x",), tuple(("x",) * i for i in range(1, 21)))
+    assert "during factor-avoidance normalization" in observed
+    assert "during factor-avoidance transition construction" in observed
 
 
 def test_factor_family_rejects_dfa_larger_than_shared_carrier() -> None:

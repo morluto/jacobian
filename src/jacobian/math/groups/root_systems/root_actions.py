@@ -173,6 +173,25 @@ def _canonical_vector(
             code="root_system.invalid_lattice_vector_datum",
             message="vector datum must retain its Cartan matrix",
         ) from error
+    # CartanMatrix equality deliberately ignores its axis annotation. Validate
+    # the complete nested parent before comparing it with the action's parent.
+    try:
+        datum_rank = len(datum_cartan)
+        if (
+            type(datum_cartan) is not CartanMatrix
+            or datum_cartan.simple_root_axis != tuple(range(datum_rank))
+            or type(datum_cartan.matrix) is not IntegerMatrix
+            or datum_cartan.matrix.domain != "ZZ"
+            or datum_cartan.matrix.row_count != datum_rank
+            or datum_cartan.matrix.column_count != datum_rank
+        ):
+            raise ValueError("noncanonical Cartan matrix axis or shape")
+    except (AttributeError, TypeError, ValueError) as error:
+        raise OperationDomainValidationError(
+            location=("vector", "datum", "cartan_matrix"),
+            code="root_system.invalid_lattice_vector_datum",
+            message="vector datum must retain a canonical ordered Cartan axis",
+        ) from error
     if datum_cartan != element.matrix:
         raise OperationDomainValidationError(
             location=("vector", "datum"),

@@ -162,6 +162,26 @@ def test_oversized_caller_constructed_vector_is_resource_rejected() -> None:
     )
 
 
+def test_caller_constructed_vector_with_noncanonical_cartan_axis_is_rejected() -> None:
+    datum = _datum(_A2)
+    malformed_cartan = CartanMatrix.model_construct(
+        matrix=datum.cartan_matrix.matrix, simple_root_axis=(1, 0)
+    )
+    malformed_datum = FiniteCartanDatum.model_construct(
+        cartan_matrix=malformed_cartan,
+        symmetrizer=datum.symmetrizer,
+        root_to_weight=datum.root_to_weight,
+        coroot_to_coweight=datum.coroot_to_coweight,
+    )
+    vector = RootLatticeVector.model_construct(datum=malformed_datum, coordinates=(1, 0))
+    request = WeylElementRootActionRequest.model_construct(
+        element=weyl_element_from_word(_A2, ()), vector=vector
+    )
+
+    with pytest.raises(OperationDomainValidationError, match="canonical ordered Cartan axis"):
+        weyl_element_act_on_root(request)
+
+
 def test_caller_constructed_vector_with_wrong_axis_length_is_rejected() -> None:
     vector = RootLatticeVector.model_construct(datum=_datum(_A2), coordinates=(1,))
     request = WeylElementRootActionRequest.model_construct(

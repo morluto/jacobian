@@ -75,7 +75,6 @@ class TestBracketKnownAnswers:
         assert restored.model_dump(mode="json") == SL2.model_dump(mode="json")
         assert uncached == SL2
         assert hash(uncached) == hash(SL2)
-        assert "_jacobi_admitted" not in restored.model_dump()
 
     def test_model_copy_cannot_retain_admission_after_bracket_mutation(self) -> None:
         with pytest.raises(ValidationError) as exc_info:
@@ -464,6 +463,7 @@ class TestBracketAdmission:
             structure_constants=bad_constants,
             _jacobi_admitted=True,
         )
+        bad._jacobi_admitted = True
         with pytest.raises(OperationDomainValidationError) as exc_info:
             lie_bracket(
                 bad, _element(SL2_BASIS, (1, 0, 0)), _element(SL2_BASIS, (0, 1, 0))

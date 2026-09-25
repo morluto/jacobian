@@ -57,6 +57,7 @@ from jacobian.math.lie_algebras._models import (
     LieSubspace,
     LieUpperCentralSeriesResult,
     StructureConstant,
+    has_jacobi_admission,
 )
 from jacobian.math.matrices.values import (
     RationalMatrix,
@@ -103,7 +104,7 @@ def _as_algebra(
     # Native callers can pass Pydantic's trusted `model_construct` result.
     # Reparse only unvalidated instances; values from ordinary construction or
     # wire decoding retain the in-memory Jacobi admission fact and avoid replay.
-    if value._jacobi_admitted:
+    if has_jacobi_admission(value):
         return value
     _admit_lie_algebra_limits(value)
     try:

@@ -187,6 +187,8 @@ MAX_GAUGE_FACES = 128
 MAX_GAUGE_TOTAL_FACE_STEPS = 4096
 """Maximum aggregate attaching-walk steps in one gauge complex."""
 
+"""Maximum conservative serialized size of one finite gauge complex."""
+
 MAX_GAUGE_LABEL_LENGTH = 64
 """Maximum length of a vertex or edge identifier."""
 

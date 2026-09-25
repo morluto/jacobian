@@ -41,7 +41,7 @@ def _is_label(value: object) -> bool:
 
 def _admit_lattice(
     lattice: GaugeLattice,
-) -> tuple[tuple[str, ...], tuple[GaugeEdge, ...], set[str], dict[str, GaugeEdge], int]:
+) -> tuple[tuple[str, ...], tuple[GaugeEdge, ...], set[str], dict[str, GaugeEdge]]:
     vertices = getattr(lattice, "vertices", None)
     edges = getattr(lattice, "edges", None)
     if (
@@ -83,18 +83,14 @@ def _admit_lattice(
             "edge IDs must be unique and ordered",
         )
     edge_by_id = {edge.edge_id: edge for edge in edges}
-    output_bytes = 2048 + sum(6 * len(value) + 32 for value in vertices)
-    output_bytes += sum(
-        6 * (len(edge.edge_id) + len(edge.tail) + len(edge.head)) + 80 for edge in edges
-    )
-    return vertices, edges, vertex_set, edge_by_id, output_bytes
+    return vertices, edges, vertex_set, edge_by_id
 
 
 def _admit_faces(
     faces: object,
     vertex_set: set[str],
     edge_by_id: dict[str, GaugeEdge],
-) -> int:
+) -> None:
     if (
         not isinstance(faces, tuple)
         or len(faces) > MAX_GAUGE_FACES
@@ -103,7 +99,6 @@ def _admit_faces(
         _reject("faces", "lattice_gauge.complex.face_shape", "faces are malformed")
     face_ids: list[str] = []
     total_steps = 0
-    output_bytes = 0
     for face in faces:
         face_id = getattr(face, "face_id", None)
         path = getattr(face, "boundary", None)
@@ -125,14 +120,11 @@ def _admit_faces(
                 code="lattice_gauge.complex.total_face_steps",
                 message="aggregate face boundary exceeds 4096 oriented edge steps",
             )
-        output_bytes += 6 * len(cast(str, face_id)) + 64
-        total_steps, output_bytes = _admit_one_face(
+        _admit_one_face(
             steps,
             basepoint,
             vertex_set,
             edge_by_id,
-            total_steps,
-            output_bytes,
         )
     if tuple(sorted(face_ids)) != tuple(face_ids) or len(set(face_ids)) != len(
         face_ids
@@ -142,7 +134,6 @@ def _admit_faces(
             "lattice_gauge.complex.face_ids",
             "face IDs must be unique and ordered",
         )
-    return output_bytes
 
 
 def _admit_one_face(
@@ -151,8 +142,7 @@ def _admit_one_face(
     vertex_set: set[str],
     edge_by_id: dict[str, GaugeEdge],
     total_steps: int,
-    output_bytes: int,
-) -> tuple[int, int]:
+ ) -> None:
     if not steps:
         if not _is_label(basepoint) or basepoint not in vertex_set:
             _reject(
@@ -160,7 +150,7 @@ def _admit_one_face(
                 "lattice_gauge.complex.empty_face_basepoint",
                 "constant face attachment must name a source lattice vertex",
             )
-        return total_steps, output_bytes + 6 * len(basepoint) + 16
+        return
     first: str | None = None
     cursor: str | None = None
     for step in steps:
@@ -190,14 +180,12 @@ def _admit_one_face(
         if first is None:
             first = tail
         cursor = head
-        output_bytes += 6 * len(edge_id) + 48
     if first != cursor or (basepoint is not None and basepoint != first):
         _reject(
             "faces",
             "lattice_gauge.complex.face_closed",
             "each oriented face boundary must be closed",
         )
-    return total_steps, output_bytes
 
 
 def _admit(request: FiniteGroupGaugeComplexRequest) -> None:

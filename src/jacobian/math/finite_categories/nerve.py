@@ -46,7 +46,13 @@ def _category_tables(
 
 
 def _admit(category: FiniteCategory, degree: int) -> None:
-    if isinstance(degree, bool) or not 0 <= degree <= MAX_SIMPLICIAL_SET_DEGREE:
+    if not isinstance(degree, int) or isinstance(degree, bool):
+        raise OperationDomainValidationError(
+            location=("max_degree",),
+            code="finite_category.nerve_degree_type",
+            message="max_degree must be an integer",
+        )
+    if not 0 <= degree <= MAX_SIMPLICIAL_SET_DEGREE:
         raise OperationResourceAdmissionError(
             location=("max_degree",),
             code="finite_category.nerve_degree_out_of_bounds",

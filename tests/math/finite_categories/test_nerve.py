@@ -33,6 +33,12 @@ def _interval() -> FiniteCategory:
     )
 
 
+def test_native_nerve_rejects_non_integer_degrees() -> None:
+    for degree in (1.0, "1", True):
+        with pytest.raises(OperationDomainValidationError):
+            nerve_prefix(_interval(), degree)  # type: ignore[arg-type]
+
+
 def test_interval_nerve_is_a_reusable_prefix_with_canonical_transport() -> None:
     nerve = nerve_prefix(_interval(), 2)
     simplicial_set = nerve.simplicial_set

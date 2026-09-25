@@ -38,6 +38,9 @@ from jacobian.math.function_fields._models import (
     HyperellipticInfinityPlaceValuationRequest,
     HyperellipticInfinityPlaceValuationResult,
 )
+from jacobian.math.function_fields.hyperelliptic_infinity_riemann_roch import (
+    HYPERELLIPTIC_INFINITY_RIEMANN_ROCH_TOOL,
+)
 from jacobian.math.function_fields.operations import (
     function_field_base_embedding,
     function_field_base_embedding_apply,
@@ -252,6 +255,7 @@ _GF2_Y = {
 }
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
+    HYPERELLIPTIC_INFINITY_RIEMANN_ROCH_TOOL,
     MathTool(
         operation_id="function_field.base_embedding.apply",
         title="Apply the rational base-field inclusion",

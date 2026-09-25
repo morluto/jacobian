@@ -31,6 +31,9 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
 MAX_WEIGHT_DIGITS = 12
 """Schema-visible cap on decimal digits of one matroid weight entry."""
 
+MAX_WEIGHTED_INTERSECTION_OPT_DUAL_DIGITS = 1024
+"""Maximum decimal digits admitted for private integral split intermediates."""
+
 
 class GraphicMatroidRequest(StrictModel):
     """Construct the GF(2) incidence representation of a simple graph."""
@@ -544,6 +547,105 @@ class MatroidWeightedIntersectionCertificateRequest(StrictModel):
                 "candidate indices must be sorted, distinct, and in range",
             )
         return self
+
+
+class MatroidWeightedIntersectionOptimizationRequest(StrictModel):
+    """Compute a maximum-weight common independent set of two matroids."""
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "description": (
+                "Compute one exact maximum-weight common independent set of "
+                "two linear matroids over the same prime field and labelled "
+                "ground axis. The input weights are exact integers."
+            ),
+            "admission_limits": {
+                "max_ground_elements": MAX_GROUND_SIZE,
+                "max_representation_rows": MAX_REPRESENTATION_ROWS,
+                "max_weight_digits": MAX_WEIGHT_DIGITS,
+                "max_dual_intermediate_digits": MAX_WEIGHTED_INTERSECTION_OPT_DUAL_DIGITS,
+                "max_aggregate_exact_work": 50_000_000,
+                "max_result_bytes": 8 * 1024 * 1024,
+                "work_includes": [
+                    "rank-oracle exchange-circuit construction",
+                    "reachable-set, tight-edge, and dual-slack scans",
+                    "integral weight-split intermediate arithmetic",
+                    "one bounded source-field primality check",
+                    "selected-matrix copies and residue validation",
+                    "final common-set feasibility ranks",
+                    "source-bound result serialization",
+                ],
+            },
+        }
+    )
+
+    first: LinearMatroid
+    second: LinearMatroid
+    weight_function: MatroidWeightFunction
+
+    @model_validator(mode="after")
+    def require_optimizer_axes(self) -> Self:
+        if (
+            self.first.matrix.prime != self.second.matrix.prime
+            or self.first.ground_axis != self.second.ground_axis
+            or self.weight_function.ground_axis != self.first.ground_axis
+        ):
+            raise _validation_error(
+                "weighted_intersection.ground",
+                "sources and objective must share one labelled ground and field",
+            )
+        return self
+
+
+class MatroidWeightedIntersectionOptimizationResult(StrictModel):
+    """One exact source-bound maximum-weight common independent set."""
+
+    first: LinearMatroid
+    second: LinearMatroid
+    weight_function: MatroidWeightFunction
+    common_independent: tuple[StrictInt, ...] = Field(max_length=MAX_GROUND_SIZE)
+    total_weight: StrictInt
+
+    @model_validator(mode="after")
+    def require_result_context(self) -> Self:
+        request = MatroidWeightedIntersectionOptimizationRequest(
+            first=self.first,
+            second=self.second,
+            weight_function=self.weight_function,
+        )
+        n = request.first.ground_size
+        if self.common_independent != tuple(
+            sorted(set(self.common_independent))
+        ) or any(not 0 <= index < n for index in self.common_independent):
+            raise _validation_error(
+                "weighted_intersection.common_set",
+                "candidate indices must be sorted, distinct, and in range",
+            )
+        expected_weight = sum(
+            self.weight_function.values[index] for index in self.common_independent
+        )
+        if self.total_weight != expected_weight:
+            raise _validation_error(
+                "weighted_intersection.objective",
+                "candidate total must equal its exact source weight",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        request: MatroidWeightedIntersectionOptimizationRequest,
+        common_independent: tuple[int, ...],
+        total_weight: int,
+    ) -> Self:
+        return cls.model_construct(
+            first=request.first,
+            second=request.second,
+            weight_function=request.weight_function,
+            common_independent=common_independent,
+            total_weight=total_weight,
+        )
 
 
 class MatroidRankMultiplier(StrictModel):
@@ -1154,6 +1256,8 @@ __all__ = [
     "MatroidRankMultiplier",
     "MatroidWeightFunction",
     "MatroidWeightedIntersectionCertificateRequest",
+    "MatroidWeightedIntersectionOptimizationRequest",
+    "MatroidWeightedIntersectionOptimizationResult",
     "MatroidWeightedIntersectionRankCertificateRequest",
     "MatroidWeightedIntersectionRankCertificateResult",
     "MatroidWeightedIntersectionResult",

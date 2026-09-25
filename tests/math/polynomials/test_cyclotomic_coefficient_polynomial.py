@@ -170,13 +170,12 @@ def test_raw_nested_parent_coordinates_are_admitted_before_model_construction() 
             {
                 "coefficient": {
                     "field": {"order": 128},
-                    "coefficients_ascending": [
-                        {"num": 1, "den": 1}
-                    ] * 65,
+                    "coefficients_ascending": [{"num": 1, "den": 1}] * 65,
                 },
                 "exponents": [0],
             }
-        ] * 253,
+        ]
+        * 253,
     }
     with pytest.raises(ValidationError, match="coefficient coordinates"):
         CyclotomicPolynomial.model_validate(raw)

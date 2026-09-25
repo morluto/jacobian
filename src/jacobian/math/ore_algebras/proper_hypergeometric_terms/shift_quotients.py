@@ -51,6 +51,23 @@ def _factorial_ratio_degree(term: ProperHypergeometricTerm, axis: int) -> int:
     )
 
 
+def _factorial_offset_excess_digits(term: ProperHypergeometricTerm, axis: int) -> int:
+    """Bound decimal growth from affine offsets wider than three digits.
+
+    ``factorial_degree * 5`` already reserves three decimal digits of affine
+    coefficient per unit of quotient degree.  An integer offset is unbounded in
+    the carrier and multiplies through every shifted affine factor, so charge
+    its excess width on the factor that carries it.
+    """
+
+    return sum(
+        abs((factor.n_coefficient, factor.k_coefficient)[axis])
+        * abs(factor.power)
+        * max(0, decimal_digit_width(factor.offset) - 3)
+        for factor in term.factorial_factors
+    )
+
+
 def _admit_quotient(term: ProperHypergeometricTerm, axis: int) -> None:
     """Bound rational expansion before constructing backend polynomials."""
     if term.is_zero:
@@ -105,6 +122,7 @@ def _admit_quotient(term: ProperHypergeometricTerm, axis: int) -> None:
         2 * coefficient_digits
         + 2 * base_digits
         + factorial_degree * 5
+        + _factorial_offset_excess_digits(term, axis)
         + _term_degree(term)
         + len(str(max(1, shifted_terms * factorial_terms)))
     )

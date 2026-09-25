@@ -193,3 +193,26 @@ def test_oversized_exact_components_raise_admission_error(component):
     )
     with pytest.raises(OperationResourceAdmissionError):
         proper_hypergeometric_shift_quotients(term)
+
+
+def test_unbounded_affine_offset_is_charged_before_expansion():
+    """Charge an uncapped affine offset against the output digit envelope.
+
+    ``IntegerAffineFactorial.offset`` accepts arbitrary-size integers, so a
+    many-thousand-digit offset would otherwise survive admission and fail inside
+    the ``RationalFunction`` coefficient validator during cancellation.
+    """
+
+    term = ProperHypergeometricTerm(
+        polynomial=polynomial([((0, 0), 1)]),
+        factorial_factors=(
+            IntegerAffineFactorial(
+                n_coefficient=1,
+                k_coefficient=0,
+                offset=10**5000 + 12345,
+                power=1,
+            ),
+        ),
+    )
+    with pytest.raises(OperationResourceAdmissionError):
+        proper_hypergeometric_shift_quotients(term)

@@ -3,14 +3,18 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any, Self
+from typing import Annotated, Any, Self
 
 from pydantic import Field, model_validator
+from pydantic.json_schema import WithJsonSchema
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math._labels import OpaqueLabel
-from jacobian.math.matrices.values import IntegerMatrix
+from jacobian.math.matrices.values import (
+    IntegerMatrix,
+    integer_matrix_axis_schema,
+)
 from jacobian.math.number_theory.quadratic_forms.integral._models import (
     IntegralQuadraticForm,
 )
@@ -26,7 +30,10 @@ class UnimodularChangeRequest(StrictModel):
     """A supplied integral basis map from target coordinates to source ones."""
 
     form: IntegralQuadraticForm
-    matrix: IntegerMatrix = Field(
+    matrix: Annotated[
+        IntegerMatrix,
+        WithJsonSchema(integer_matrix_axis_schema(MAX_UNIMODULAR_CHANGE_AXIS)),
+    ] = Field(
         description=(
             "Square integer matrix M mapping target coordinates y to source "
             "coordinates x=M*y. At most 32 rows/columns and 128 decimal "

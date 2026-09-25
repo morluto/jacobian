@@ -1336,6 +1336,7 @@ def element_embedding_orbit(
 
     orbit_size = len(images)
     coordinates = _coords(element)
+    polynomial_coefficients: tuple[Fraction, ...]
     if field.extension.degree == 1 or coordinates[1] == 0:
         polynomial_coefficients = (-coordinates[0], Fraction(1))
     elif orbit_size == 2:

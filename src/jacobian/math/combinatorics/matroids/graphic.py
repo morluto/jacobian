@@ -68,7 +68,10 @@ def graphic_matroid(request: GraphicMatroidRequest) -> LinearMatroid:
     # pair of endpoint labels, so the retained result grows only with the two
     # cardinality bounds admitted above plus the endpoint label text each
     # pair repeats. Charge that text in Unicode codepoints, not encoded bytes.
-    retained_axis_codepoints = sum(len(left) + len(right) for left, right in edges)
+    retained_axis_codepoints = sum(
+        len(json.dumps(edge, ensure_ascii=False, separators=(",", ":")))
+        for edge in edges
+    )
     if retained_axis_codepoints > MAX_GROUND_AXIS_CODEPOINTS:
         _refuse(
             ("graph",),

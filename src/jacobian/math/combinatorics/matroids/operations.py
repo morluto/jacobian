@@ -261,6 +261,11 @@ def maximum_weight_basis_result(
     that the selection is a basis and that no valid single-element exchange
     strictly improves the total weight.
     """
+    require_bounded_retained_axis(
+        matroid,
+        location=("matroid", "weights"),
+        code="matroid.maximum_weight_basis.work_bound",
+    )
     canonical_weights, canonical_function = _admit_weight_basis(
         matroid, weight_function
     )

@@ -111,8 +111,24 @@ def direct_sum(
             "memberships_exceeded",
             "direct-sum feasible memberships exceed the delta-matroid envelope",
         )
-    # The two source envelopes above bound every retained ground label, and
-    # the pair and membership bounds above exactly bound the result family's
+    try:
+        combined_label_bytes = sum(
+            len(label.encode("utf-8")) for label in (*left.ground, *right.ground)
+        )
+    except UnicodeEncodeError as exc:
+        raise OperationDomainValidationError(
+            location=("ground",),
+            code="delta_matroid.labels_not_utf8",
+            message="direct-sum labels must be UTF-8-representable",
+        ) from exc
+    from jacobian.math.combinatorics.matroids.delta.values import MAX_DELTA_LABEL_BYTES
+
+    if combined_label_bytes > MAX_DELTA_LABEL_BYTES:
+        raise DeltaMatroidAdmissionError(
+            "label_bytes_exceeded",
+            "direct-sum ground labels exceed the delta-matroid label envelope",
+        )
+    # The pair and membership bounds above exactly bound the result family's
     # rows and index positions, so the direct sum materializes within the
     # carrier's declared cardinality envelopes without estimating encoded
     # bytes and without charging a symmetric-exchange replay this operation
@@ -194,6 +210,7 @@ def twist(
     caller-authored rather than trusted producer output.
     """
 
+    delta_matroid = _admit_direct_sum_source(delta_matroid, "delta_matroid")
     require_twist_subset(delta_matroid, subset)
     system = FiniteFeasibleSetSystem(
         ground=delta_matroid.ground, feasible=delta_matroid.feasible
@@ -258,6 +275,7 @@ def distance(
     linear in the retained family after source delta-matroid admission.
     """
 
+    delta_matroid = _admit_direct_sum_source(delta_matroid, "delta_matroid")
     require_twist_subset(delta_matroid, subset)
     try:
         system = FiniteFeasibleSetSystem(

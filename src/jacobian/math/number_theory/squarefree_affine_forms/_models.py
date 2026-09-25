@@ -12,6 +12,7 @@ from jacobian.math.number_theory.squarefree_affine_forms.values import (
     MAX_SQUAREFREE_COMPONENT_DIGITS,
     MAX_SQUAREFREE_FORMS,
     SquarefreeAffineFamily,
+    SquarefreeAffineForm,
 )
 
 MAX_LOCAL_FACTOR_PRIME = 1_000
@@ -46,6 +47,21 @@ def _resource_error(code: str, message: str) -> OperationResourceAdmissionError:
 def admit_family(source: SquarefreeAffineFamily) -> None:
     """Re-check caller-supplied family claims against the owner envelope."""
 
+    if not isinstance(source, SquarefreeAffineFamily):
+        raise _domain_error(
+            "family_source", "family must be a square-free affine family"
+        )
+    if not isinstance(source.forms, tuple) or any(
+        not isinstance(form, SquarefreeAffineForm)
+        or type(form.form_id) is not str
+        or type(form.coefficient) is not int
+        or type(form.constant) is not int
+        for form in source.forms
+    ):
+        raise _domain_error(
+            "family_form_source",
+            "family forms must be labelled bounded integer affine forms",
+        )
     if not 1 <= len(source.forms) <= MAX_SQUAREFREE_FORMS:
         raise _resource_error(
             "family_budget",

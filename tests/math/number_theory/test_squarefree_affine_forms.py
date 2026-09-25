@@ -648,6 +648,65 @@ def test_family_claim_verification() -> None:
         local_factor(malformed, 2)
 
 
+def test_constructed_malformed_sources_reject_stably() -> None:
+    malformed_sources = (
+        SquarefreeAffineFamily.model_construct(
+            forms=(
+                SquarefreeAffineForm.model_construct(
+                    form_id="n", coefficient="1", constant=0
+                ),
+            )
+        ),
+        SquarefreeAffineFamily.model_construct(
+            forms=(
+                SquarefreeAffineForm.model_construct(
+                    form_id="n", coefficient=1, constant=True
+                ),
+            )
+        ),
+        SquarefreeAffineFamily.model_construct(
+            forms=(
+                SquarefreeAffineForm.model_construct(
+                    form_id=7, coefficient=1, constant=0
+                ),
+            )
+        ),
+        SquarefreeAffineFamily.model_construct(forms=(object(),)),
+        SquarefreeAffineFamily.model_construct(forms=object()),
+    )
+    boundary_codes = {
+        "number_theory.squarefree_affine.family_source",
+        "number_theory.squarefree_affine.family_form_source",
+    }
+    for malformed in malformed_sources:
+        for call in (
+            lambda source: local_factor(source, 2),
+            lambda source: euler_product(source, (2,)),
+            lambda source: infinite_product_enclosure(source, 100),
+            lambda source: local_admissibility(source),
+            lambda source: interval_count(source, 1, 10),
+        ):
+            with pytest.raises(OperationDomainValidationError) as exc_info:
+                call(malformed)
+            assert exc_info.value.errors()[0]["type"] in boundary_codes
+
+    def is_squarefree(value: int) -> bool:
+        value = abs(value)
+        return all(
+            value % (prime * prime) != 0 for prime in primerange(2, isqrt(value) + 1)
+        )
+
+    twin_pair = _family(_form("n", 1, 0), _form("n_plus_2", 1, 2))
+    result = interval_count(twin_pair, 1, 30)
+    assert result.count == sum(
+        1 for n in range(1, 31) if is_squarefree(n) and is_squarefree(n + 2)
+    )
+    assert result.count > 0
+    assert local_admissibility(twin_pair).status == "LOCALLY_ADMISSIBLE"
+    enclosure = infinite_product_enclosure(twin_pair, 100).enclosure
+    assert 0 < enclosure.lower.as_fraction() <= enclosure.upper.as_fraction() <= 1
+
+
 def test_tool_declarations_are_published() -> None:
     operation_ids = {tool.operation_id for tool in TOOLS}
     assert operation_ids == {

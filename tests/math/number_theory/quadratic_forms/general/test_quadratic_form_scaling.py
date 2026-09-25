@@ -156,14 +156,16 @@ def test_scale_output_bound_admits_ceiling_and_rejects_next_support_size() -> No
         MAX_QUADRATIC_SCALE_OUTPUT_BYTES
     )
 
-    extra_left, extra_right = next(islice(combinations(range(128), 2), 947, None))
     over_limit = RationalQuadraticForm(
         axis=axis,
         diagonal_coefficients=(coefficient,) * 128,
         cross_terms=(
             *crosses,
-            QuadraticCrossTerm(
-                left=extra_left, right=extra_right, coefficient=coefficient
+            *(
+                QuadraticCrossTerm(
+                    left=left, right=right, coefficient=coefficient
+                )
+                for left, right in islice(combinations(range(128), 2), 947, 4_096)
             ),
         ),
     )
@@ -171,7 +173,7 @@ def test_scale_output_bound_admits_ceiling_and_rejects_next_support_size() -> No
         scale_rational_quadratic_form(
             QuadraticFormScaleRequest(form=over_limit, factor=_q(1))
         )
-    assert error.value.errors()[0]["type"] == "quadratic_form.scale_output_bound"
+    assert error.value.errors()[0]["type"] == "quadratic_form.scale_support_bound"
 
 
 def test_scaling_operation_is_published_in_owner_manifest() -> None:

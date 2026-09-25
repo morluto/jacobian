@@ -572,18 +572,18 @@ TOOLS = (
                     "form": {
                         "axis": ["x", "y"],
                         "diagonal_coefficients": [
-                            {"num": 1, "den": 1},
-                            {"num": 3, "den": 1},
+                            {"num": "1", "den": "1"},
+                            {"num": "3", "den": "1"},
                         ],
                         "cross_terms": [
                             {
                                 "left": 0,
                                 "right": 1,
-                                "coefficient": {"num": 2, "den": 1},
+                                "coefficient": {"num": "2", "den": "1"},
                             }
                         ],
                     },
-                    "factor": {"num": 3, "den": 2},
+                    "factor": {"num": "3", "den": "2"},
                 },
             ),
         ),

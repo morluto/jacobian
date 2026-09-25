@@ -15,7 +15,8 @@ from jacobian.math.number_theory.quadratic_forms.general.values import (
 
 MAX_QUADRATIC_SCALE_AXIS = 128
 MAX_QUADRATIC_SCALE_SUPPORT = 4_096
-MAX_QUADRATIC_SCALE_OUTPUT_BYTES = 1_500_000
+# Keep the conservative source/result estimate below the canonical transport ceiling.
+MAX_QUADRATIC_SCALE_OUTPUT_BYTES = 10 * 1024 * 1024
 
 
 class QuadraticFormScaleRequest(StrictModel):

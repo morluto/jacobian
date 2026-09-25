@@ -29,6 +29,8 @@ from jacobian.math.topology.cellular_sheaves.operations import sheaf_cohomology
 _MAX_HODGE_MATRIX_CELLS = 65_536
 _MAX_HODGE_CUBIC_WORK = 4_000_000
 
+__all__ = ["SheafHodgeRequest", "SheafHodgeResult", "compute_hodge", "hodge_laplacians"]
+
 
 def _admit_hodge_work(sheaf: FiniteCellularSheaf, dimensions: tuple[int, ...]) -> None:
     if sum(dimensions) > MAX_SHEAF_TOTAL_STALK_RANK:
@@ -151,7 +153,15 @@ def hodge_laplacians(sheaf: FiniteCellularSheaf) -> SheafHodgeResult:
 
     cohomology = sheaf_cohomology(sheaf)
     differentials = [
-        [[Fraction(entry.num, entry.den) for entry in row] for row in matrix]
+        [
+            [
+                Fraction(entry.num, entry.den)
+                if isinstance(entry, CanonicalRational)
+                else Fraction(entry)
+                for entry in row
+            ]
+            for row in matrix
+        ]
         for matrix in cohomology.coboundary_matrices
     ]
     up_laplacians: list[tuple[tuple[SheafScalar, ...], ...]] = []
@@ -160,7 +170,9 @@ def hodge_laplacians(sheaf: FiniteCellularSheaf) -> SheafHodgeResult:
     harmonic_bases: list[tuple[tuple[SheafScalar, ...], ...]] = []
     for degree, size in enumerate(dimensions):
         up, down = _laplacian_parts(degree, size, differentials)
-        matrix = [[up[i][j] + down[i][j] for j in range(size)] for i in range(size)]
+        matrix: list[list[Fraction | int]] = [
+            [up[i][j] + down[i][j] for j in range(size)] for i in range(size)
+        ]
         # Validate the mathematical consequence with exact arithmetic: the
         # kernel of the Hodge Laplacian has the sheaf-cohomology dimension.
         harmonic = _cochain_nullspace(field, matrix, size)

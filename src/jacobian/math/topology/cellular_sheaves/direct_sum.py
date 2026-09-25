@@ -11,6 +11,7 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
+from jacobian.math.topology._models import Simplex
 from jacobian.math.topology.cellular_sheaves._kernel import _admit_field, _ExactField
 from jacobian.math.topology.cellular_sheaves._models import (
     MAX_SHEAF_COVER_MAPS,
@@ -29,6 +30,10 @@ from jacobian.math.topology.cellular_sheaves._models import (
     sheaf_scalar_digits,
     sheaf_scalar_json_bound,
 )
+
+RestrictionKey = tuple[Simplex, Simplex]
+RestrictionMap = dict[RestrictionKey, SheafRestriction]
+StalkMap = dict[Simplex, SheafStalk]
 
 
 class SheafDirectSumRequest(StrictModel):
@@ -111,7 +116,9 @@ def _domain(code: str, message: str) -> OperationDomainValidationError:
     )
 
 
-def _admit_diagram(sheaf: FiniteCellularSheaf, field: _ExactField) -> tuple[dict, dict]:
+def _admit_diagram(
+    sheaf: FiniteCellularSheaf, field: _ExactField
+) -> tuple[StalkMap, RestrictionMap]:
     cells = sheaf.canonical_face_order
     if len(cells) > MAX_SHEAF_SIMPLICES:
         raise _resource(
@@ -287,7 +294,16 @@ def direct_sum(  # noqa: C901
             SheafDirectSumStalkInclusion(simplex=simplex, left=lmat, right=rmat)
         )
 
-    def sum_maps(mapping_left: dict, mapping_right: dict, pairs: tuple) -> tuple:
+    def sum_maps(
+        mapping_left: RestrictionMap,
+        mapping_right: RestrictionMap,
+        pairs: tuple[RestrictionKey, ...],
+    ) -> tuple[
+        tuple[
+            Simplex, Simplex, tuple[tuple[SheafScalar, ...], ...], tuple[Simplex, ...]
+        ],
+        ...,
+    ]:
         out = []
         for source, target in pairs:
             ml = mapping_left[(source, target)]

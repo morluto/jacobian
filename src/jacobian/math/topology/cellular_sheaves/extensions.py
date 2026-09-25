@@ -14,8 +14,9 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.math.topology._models import FiniteSimplicialComplex
+from jacobian.math.topology._models import FiniteSimplicialComplex, Simplex
 from jacobian.math.topology.cellular_sheaves._kernel import (
+    Scalar,
     _admit_field,
     _cochain_nullspace,
     _cochain_rref,
@@ -51,6 +52,8 @@ from jacobian.math.topology.cellular_sheaves._models import (
     sheaf_scalar_json_bound,
 )
 from jacobian.math.topology.cellular_sheaves.subcomplex import restrict_to_subcomplex
+
+RestrictionKey = tuple[Simplex, Simplex]
 
 
 class SheafSectionsRequest(StrictModel):
@@ -248,21 +251,19 @@ def _admit_section_plan(sheaf: FiniteCellularSheaf) -> _SectionPlan:
 def _parse_section_restrictions(
     plan: _SectionPlan,
 ) -> tuple[
-    dict[tuple[tuple[str, ...], tuple[str, ...]], tuple[tuple[object, ...], ...]],
+    dict[RestrictionKey, tuple[tuple[Scalar, ...], ...]],
     int,
     int,
     int,
 ]:
-    parsed: dict[
-        tuple[tuple[str, ...], tuple[str, ...]], tuple[tuple[object, ...], ...]
-    ] = {}
+    parsed: dict[RestrictionKey, tuple[tuple[Scalar, ...], ...]] = {}
     max_input_digits = 1
     max_input_chars = 1
     input_chars = 0
     for key, restriction in plan.restriction_for.items():
-        matrix: list[tuple[object, ...]] = []
+        matrix: list[tuple[Scalar, ...]] = []
         for row in restriction.entries:
-            parsed_row: list[object] = []
+            parsed_row: list[Scalar] = []
             for entry in row:
                 digits = sheaf_scalar_digits(entry)
                 if digits > MAX_SHEAF_ENTRY_DIGITS:
@@ -316,12 +317,10 @@ def _require_section_height_bound(
 
 def _section_matrix_and_axes(
     plan: _SectionPlan,
-    parsed: dict[
-        tuple[tuple[str, ...], tuple[str, ...]], tuple[tuple[object, ...], ...]
-    ],
+    parsed: dict[RestrictionKey, tuple[tuple[Scalar, ...], ...]],
 ) -> tuple[
     tuple[SheafCochainCoordinate, ...],
-    list[list[object]],
+    list[list[Scalar]],
     tuple[SheafSectionCompatibilityAxis, ...],
     dict[tuple[tuple[str, ...], str], int],
 ]:
@@ -336,7 +335,7 @@ def _section_matrix_and_axes(
 
     zero = plan.field.zero()
     one = plan.field.one()
-    scalar_rows: list[list[object]] = []
+    scalar_rows: list[list[Scalar]] = []
     row_axes: list[SheafSectionCompatibilityAxis] = []
     for source, target in plan.pairs:
         restriction_matrix = parsed[(source, target)]
@@ -362,7 +361,7 @@ def _section_matrix_and_axes(
 def _section_evaluations(
     plan: _SectionPlan,
     offsets: dict[tuple[tuple[str, ...], str], int],
-    section_vectors: list[list[object]],
+    section_vectors: list[list[Scalar]],
     section_basis: tuple[str, ...],
 ) -> tuple[SheafSectionEvaluation, ...]:
     evaluations: list[SheafSectionEvaluation] = []
@@ -530,10 +529,11 @@ def restrict_sections(
             "restriction_output_bound",
             "source, target, and induced section map exceed the aggregate result bound",
         )
-    columns: list[list[object]] = []
-    for restricted in restricted_columns:
+    restriction_columns: list[list[Scalar]] = []
+    for restricted_values in restricted_columns:
         augmented = [
-            [*row, value] for row, value in zip(target_rows, restricted, strict=True)
+            [*row, value]
+            for row, value in zip(target_rows, restricted_values, strict=True)
         ]
         reduced, pivots = _cochain_rref(field, augmented)
         width = target.dimension + 1
@@ -547,9 +547,12 @@ def restrict_sections(
         for row_index, pivot in enumerate(pivots):
             if pivot < target.dimension:
                 coordinates[pivot] = reduced[row_index][width - 1]
-        columns.append(coordinates)
+        restriction_columns.append(coordinates)
     matrix = tuple(
-        tuple(field.typed(columns[column][row]) for column in range(len(columns)))
+        tuple(
+            field.typed(restriction_columns[column][row])
+            for column in range(len(restriction_columns))
+        )
         for row in range(target.dimension)
     )
     return SheafSectionRestriction._from_kernel(
@@ -657,7 +660,7 @@ def _admit_morphism_resources(
     source: FiniteCellularSheaf,
     target: FiniteCellularSheaf,
     components: tuple[Component, ...],
-) -> dict:
+) -> dict[RestrictionKey, SheafRestriction]:
     axis = source.canonical_face_order
     source_stalks = {stalk.simplex: stalk for stalk in source.stalks}
     target_stalks = {stalk.simplex: stalk for stalk in target.stalks}
@@ -925,6 +928,7 @@ def compose_morphisms(
         right = tuple(tuple(field.parse(x) for x in row) for row in by_second[simplex])
         source_rank = source_stalks[simplex]
         final_rank = final_stalks[simplex]
+        matrix: tuple[tuple[Scalar, ...], ...]
         if final_rank == 0:
             matrix = ()
         elif source_rank == 0:

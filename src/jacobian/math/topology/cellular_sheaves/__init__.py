@@ -18,20 +18,15 @@ from jacobian.math.topology.cellular_sheaves._models import (
     SheafSectionRestriction,
     SheafSectionSpace,
     SheafStalk,
-    SheafSubcomplexRequest,
     SheafSubcomplexResult,
 )
 from jacobian.math.topology.cellular_sheaves.direct_sum import (
-    SheafDirectSumRequest,
     SheafDirectSumResult,
     SheafDirectSumStalkInclusion,
     direct_sum,
 )
 from jacobian.math.topology.cellular_sheaves.extensions import (
-    SheafMorphismComposeRequest,
-    SheafMorphismRequest,
     SheafMorphismResult,
-    SheafSectionRestrictionRequest,
     compose_morphisms,
     morphism,
     restrict_sections,
@@ -39,7 +34,6 @@ from jacobian.math.topology.cellular_sheaves.extensions import (
     sections,
 )
 from jacobian.math.topology.cellular_sheaves.hodge import (
-    SheafHodgeRequest,
     SheafHodgeResult,
     hodge_laplacians,
 )
@@ -57,14 +51,10 @@ __all__ = [
     "SheafCochainCoordinate",
     "SheafCohomologyGroup",
     "SheafCohomologyResult",
-    "SheafDirectSumRequest",
     "SheafDirectSumResult",
     "SheafDirectSumStalkInclusion",
     "SheafField",
-    "SheafHodgeRequest",
     "SheafHodgeResult",
-    "SheafMorphismComposeRequest",
-    "SheafMorphismRequest",
     "SheafMorphismResult",
     "SheafObstruction",
     "SheafObstructionCode",
@@ -73,10 +63,8 @@ __all__ = [
     "SheafSectionCompatibilityAxis",
     "SheafSectionEvaluation",
     "SheafSectionRestriction",
-    "SheafSectionRestrictionRequest",
     "SheafSectionSpace",
     "SheafStalk",
-    "SheafSubcomplexRequest",
     "SheafSubcomplexResult",
     "compose_morphisms",
     "direct_sum",

@@ -4,7 +4,10 @@ from collections.abc import Sequence
 from fractions import Fraction
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.matrices.values import (
     RationalMatrix,
     rational_matrix_from_fractions,
@@ -143,6 +146,17 @@ def quadratic_form_restrict_coordinates(
 
     source = request.form
     selected = request.selected_axis
+    if (
+        not isinstance(selected, (tuple, list))
+        or any(not isinstance(label, str) for label in selected)
+        or len(set(selected)) != len(selected)
+        or any(label not in source.axis for label in selected)
+    ):
+        raise OperationDomainValidationError(
+            location=("selected_axis",),
+            code="quadratic_form.coordinate_restriction_subset",
+            message="selected coordinates must be distinct labels from the source axis",
+        )
     require_direct_sum_budget(
         (source,), location=("form",), code_prefix="coordinate_restriction"
     )

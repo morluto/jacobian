@@ -44,6 +44,13 @@ def _form(axis, diagonal, crosses=()):
     )
 
 
+def test_native_boundary_rejects_negative_radius_even_for_zero_dimensional_form():
+    empty = _form((), ())
+    request = FiniteBoxProfileRequest.model_construct(form=empty, radius=-1)
+    with pytest.raises(OperationDomainValidationError):
+        finite_box_value_profile(request)
+
+
 def test_finite_box_profile_matches_independent_polar_matrix_oracle():
     form = _form(("u", "v", "w"), (2, -1, 0), ((0, 1, 3), (1, 2, -2)))
     radius = 2

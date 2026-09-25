@@ -6,6 +6,17 @@ assignment, and finite matrix-power operations return exact results. These
 contracts concern formal tropical polynomials and finite computations; they do
 not imply functional equality or solve tropical systems.
 
+## Scalar duality
+
+`tropical.scalar.dual.compute` maps a scalar between min-plus and max-plus by
+ordinary negation. It maps `+infinity` to `-infinity` and conversely, preserves
+the exact `ZZ` or `QQ` base, and returns both source and target semiring
+identities with the mapped scalar. Applying the map twice recovers the original
+value. It accepts only the infinity licensed by the source semiring; the
+two-infinity completion and its indeterminate addition cases are not part of
+this contract. The isomorphism by negation is the standard min-plus/max-plus
+duality described in [From max-plus algebra to nonexpansive mappings](https://www.jeremy-gunawardena.com/papers/fmpatnm.pdf).
+
 ## Vector projectivization
 
 `tropical.vector.projectivize.compute` takes a vector with a unique labelled

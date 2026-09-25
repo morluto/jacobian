@@ -677,7 +677,11 @@ def _hilbert_rays(
     return pairs[0]
 
 
-def hilbert_basis(configuration: AffineConfiguration) -> AffineHilbertBasis:
+def _hilbert_basis_admitted(
+    configuration: AffineConfiguration,
+    rays: tuple[tuple[int, int], tuple[int, int]],
+) -> AffineHilbertBasis:
+    """Compute a Hilbert basis from configuration and rays already admitted."""
     """Compute the complete Hilbert basis of a bounded pointed 2D cone.
 
     Every indecomposable lattice point other than a primitive boundary ray lies
@@ -685,10 +689,7 @@ def hilbert_basis(configuration: AffineConfiguration) -> AffineHilbertBasis:
     index is the ray determinant, so this operation examines a finite admitted
     set and tests decomposability in increasing positive cone grading.
     """
-    configuration = _admit_configuration(configuration)
-    if configuration.rows != 2:
-        raise ValueError("Hilbert bases require a two-row configuration")
-    u, v = _hilbert_rays(configuration)
+    u, v = rays
     determinant = u[0] * v[1] - u[1] * v[0]
     if determinant > MAX_HILBERT_BASIS_DETERMINANT:
         raise OperationResourceAdmissionError(
@@ -749,6 +750,14 @@ def hilbert_basis(configuration: AffineConfiguration) -> AffineHilbertBasis:
     return AffineHilbertBasis(
         configuration=configuration, basis=tuple(sorted(accepted))
     )
+
+
+def hilbert_basis(configuration: AffineConfiguration) -> AffineHilbertBasis:
+    """Compute the complete Hilbert basis of a bounded pointed 2D cone."""
+    configuration = _admit_configuration(configuration)
+    if configuration.rows != 2:
+        raise ValueError("Hilbert bases require a two-row configuration")
+    return _hilbert_basis_admitted(configuration, _hilbert_rays(configuration))
 
 
 def normalization(semigroup: PositiveAffineSemigroup) -> AffineSemigroupNormalization:
@@ -842,7 +851,7 @@ def normalization(semigroup: PositiveAffineSemigroup) -> AffineSemigroupNormaliz
             message="normalization output bound exceeds the 64-digit result envelope",
         )
 
-    basis = hilbert_basis(coordinate_configuration).basis
+    basis = _hilbert_basis_admitted(coordinate_configuration, rays).basis
     transported = tuple(sorted({(a * x + b * y, c * x + d * y) for x, y in basis}))
     if any(
         len(str(abs(value))) > MAX_AFFINE_NORMALIZATION_OUTPUT_DIGITS

@@ -29,8 +29,21 @@ parent. Backward traversal resolves through the parent's inverse map. A
 zero-step path returns the table identity at its named lattice vertex.
 
 The path convention is `h_0 = 1` and `h_i = h_{i-1} * U_i` in traversal
-order. This matters for noncommutative groups such as S3. Arbitrary table groups
-do not yet have a public vertex gauge transformation or Wilson character.
+order. This matters for noncommutative groups such as S3.
+
+`lattice_gauge.finite_group.gauge_transform.compute` applies the exact vertex
+action `U'_(u->v) = g_u U_(u->v) g_v^-1` to every edge. It requires one
+parent-bound group element for every source vertex and returns a field over the
+same lattice and multiplication-table parent, along with the source field and
+canonical vertex-frame map. An open path's transformed holonomy has endpoint
+covariance `g_s Hol_U(path) g_t^-1`; a based loop is conjugated. Applying `h`
+after `g` composes the frames as `h_v g_v` under the published left-to-right
+table product convention. The accepted work accounts for table associativity,
+per-edge products, and repeated parent-table output size before constructing
+the target field. This is a supplied finite action, not a gauge-equivalence
+search or gauge fixing operation.
+
+Arbitrary table groups do not yet have a public Wilson character.
 
 `lattice_gauge.finite_group.complex.construct.compute` supplies the missing
 source-bound 2-cell carrier for that path operation. Each face stores an

@@ -627,6 +627,58 @@ class FiniteGroupGaugeBasepointTransportResult(StrictModel):
         return self
 
 
+class FiniteGroupGaugeVertexValue(StrictModel):
+    """One exact finite-table group element at a lattice vertex."""
+
+    vertex: GaugeLabel
+    value: FiniteGroupTableElement
+
+
+class FiniteGroupGaugeTransformRequest(StrictModel):
+    """Apply a complete vertex frame map to one finite-table edge field."""
+
+    field: FiniteGroupGaugeField
+    vertex_values: tuple[FiniteGroupGaugeVertexValue, ...] = Field(
+        min_length=1, max_length=MAX_GAUGE_VERTICES
+    )
+
+
+class FiniteGroupGaugeTransformResult(StrictModel):
+    """Exact transformed finite-table field with its source and frame map."""
+
+    source: FiniteGroupGaugeField
+    transformed: FiniteGroupGaugeField
+    vertex_values: tuple[FiniteGroupGaugeVertexValue, ...] = Field(
+        min_length=1, max_length=MAX_GAUGE_VERTICES
+    )
+
+    @model_validator(mode="after")
+    def require_source_binding(self) -> Self:
+        if (
+            not isinstance(self.source, FiniteGroupGaugeField)
+            or not isinstance(self.transformed, FiniteGroupGaugeField)
+            or self.transformed.lattice != self.source.lattice
+            or self.transformed.group != self.source.group
+            or not isinstance(self.vertex_values, tuple)
+            or any(
+                not isinstance(entry, FiniteGroupGaugeVertexValue)
+                for entry in self.vertex_values
+            )
+            or tuple(entry.vertex for entry in self.vertex_values)
+            != self.source.lattice.vertices
+            or any(
+                not isinstance(entry.value, FiniteGroupTableElement)
+                or entry.value.group != self.source.group
+                for entry in self.vertex_values
+            )
+        ):
+            raise _validation_error(
+                "finite_group_transform_binding",
+                "source, target, and vertex frames must share exact parents",
+            )
+        return self
+
+
 class EdgeContribution(StrictModel):
     """The resolved oriented group value of one path step."""
 

@@ -5,6 +5,7 @@ from fractions import Fraction
 import pytest
 from pydantic import ValidationError
 
+import jacobian.math.polynomials.tropical.operations as tropical_operations
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.polynomials.tropical._models import MatrixAddRequest
@@ -111,6 +112,32 @@ def test_matrix_add_manifest_result_round_trips_unchanged() -> None:
 
     restored = type(response).model_validate_json(response.model_dump_json())
     assert restored.result == tropical_matrix_add(left, right)
+
+
+def test_matrix_add_admits_each_input_scalar_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    left = _matrix(
+        "MIN_PLUS",
+        ((Fraction(0), Fraction(5), Fraction(2)), (Fraction(4), Fraction(1), None)),
+    )
+    right = _matrix(
+        "MIN_PLUS",
+        ((Fraction(3), Fraction(2), Fraction(2)), (Fraction(1), Fraction(1), None)),
+    )
+    original_admit_scalar = tropical_operations._admit_scalar
+    admitted_scalars = 0
+
+    def count_admission(scalar: TropicalScalar, semiring: TropicalSemiring) -> None:
+        nonlocal admitted_scalars
+        admitted_scalars += 1
+        original_admit_scalar(scalar, semiring)
+
+    monkeypatch.setattr(tropical_operations, "_admit_scalar", count_admission)
+
+    tropical_matrix_add(left, right)
+
+    assert admitted_scalars == 2 * 2 * 3
 
 
 @pytest.mark.parametrize(

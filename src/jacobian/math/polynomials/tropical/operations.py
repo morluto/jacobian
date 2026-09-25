@@ -268,6 +268,13 @@ def tropical_scalar_add(
 ) -> tuple[TropicalScalar, AddBranch, InfinityCase]:
     _admit_scalar(left, semiring)
     _admit_scalar(right, semiring)
+    return _tropical_scalar_add_admitted(semiring, left, right)
+
+
+def _tropical_scalar_add_admitted(
+    semiring: TropicalSemiring, left: TropicalScalar, right: TropicalScalar
+) -> tuple[TropicalScalar, AddBranch, InfinityCase]:
+    """Select the tropical sum after the caller has admitted both scalars."""
     lv, rv = _order(left), _order(right)
     if lv is None and rv is None:
         branch: AddBranch = "TIE"
@@ -1556,7 +1563,7 @@ def tropical_matrix_add(left: TropicalMatrix, right: TropicalMatrix) -> Tropical
         )
     rows = tuple(
         tuple(
-            tropical_scalar_add(left.semiring, left_entry, right_entry)[0]
+            _tropical_scalar_add_admitted(left.semiring, left_entry, right_entry)[0]
             for left_entry, right_entry in zip(left_row, right_row, strict=True)
         )
         for left_row, right_row in zip(left.entries, right.entries, strict=True)

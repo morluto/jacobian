@@ -114,8 +114,8 @@ def koszul_homology_map(
             message="the supplied Koszul chain map is not canonical",
         ) from exc
 
-    # Reconstruct from the original module map, so serialized producer claims
-    # about module-linearity or chain-map equations are never trusted here.
+    # Check serialized claims structurally against the canonical reconstruction;
+    # do not trust retained complexes or degree maps supplied by the caller.
     verified = module_koszul_map(
         ModuleKoszulMapRequest(
             algebra=supplied.algebra,
@@ -125,6 +125,23 @@ def koszul_homology_map(
             map_matrix=supplied.module_map,
         )
     )
+    if supplied.module_map != verified.module_map:
+        raise OperationDomainValidationError(
+            location=("chain_map",),
+            code="koszul.module.homology_map_chain_relation",
+            message="serialized chain-map data differs from its canonical reconstruction",
+        )
+    if (
+        supplied.degree_maps != verified.degree_maps
+        and sum(verified.source_complex.basis_sizes)
+        + sum(verified.target_complex.basis_sizes)
+        <= MAX_KOSZUL_HOMOLOGY_MAP_BASIS_CELLS
+    ):
+        raise OperationDomainValidationError(
+            location=("chain_map", "degree_maps"),
+            code="koszul.module.homology_map_chain_relation",
+            message="serialized degree maps differ from their canonical reconstruction",
+        )
     if (
         sum(verified.source_complex.basis_sizes)
         + sum(verified.target_complex.basis_sizes)
@@ -135,7 +152,24 @@ def koszul_homology_map(
             code="koszul.module.homology_map_basis_budget",
             message="combined chain bases exceed the induced homology-map envelope",
         )
-    coefficients = [
+    coefficients = [coefficient for row in supplied.module_map for coefficient in row]
+    coefficients.extend(
+        coefficient
+        for module in (supplied.source, supplied.target)
+        for coefficient in (
+            value for action in module.action for row in action for value in row
+        )
+    )
+    coefficients.extend(
+        coefficient
+        for row in supplied.algebra.multiplication
+        for cell in row
+        for coefficient in cell
+    )
+    coefficients.extend(
+        coefficient for element in supplied.sequence for coefficient in element
+    )
+    coefficients.extend(
         coefficient
         for complex_value in (
             verified.source_complex,
@@ -143,7 +177,7 @@ def koszul_homology_map(
         )
         for differential in complex_value.differentials
         for _, _, coefficient in differential.entries
-    ]
+    )
     coefficients.extend(
         coefficient
         for degree_map in verified.degree_maps
@@ -188,14 +222,6 @@ def koszul_homology_map(
             strict=True,
         )
     )
-    if degree_map_cells * (2 * induced_component_digits + 64) > (
-        MAX_KOSZUL_HOMOLOGY_MAP_OUTPUT_BYTES
-    ):
-        raise OperationResourceAdmissionError(
-            location=("degree_maps",),
-            code="koszul.module.homology_map_output_budget",
-            message="induced homology-map output exceeds its preflight byte bound",
-        )
     coordinate_steps = sum(
         source_size * target_size**3
         for source_size, target_size in zip(
@@ -207,6 +233,11 @@ def koszul_homology_map(
     # The solve uses exact RREF on at most target_size rows and columns for
     # every source homology generator. Cramer's/Hadamard bounds on the already
     # admitted homology basis entries bound every transient fraction component.
+    if not any(
+        complex_value.differentials
+        for complex_value in (verified.source_complex, verified.target_complex)
+    ):
+        coordinate_steps = 0
     coordinate_transient_bits = 16 * induced_component_digits
     coordinate_work = coordinate_steps * coordinate_transient_bits**2 * 16
     if coordinate_work > MAX_KOSZUL_HOMOLOGY_MAP_WORK:

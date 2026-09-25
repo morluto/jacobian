@@ -16,6 +16,7 @@ that need more context than an operation card:
 - [Regular languages](regular-languages.md)
 - [SAT and SMT](sat-smt/index.md)
 - [Exact quadratic forms](quadratic-forms.md)
+- [Integral quadratic forms](integral-quadratic-forms.md)
 - [Certified Dickman rho enclosures](dickman-rho.md)
 - [Homogeneous monomial systems on algebraic tori](algebraic-torus-monomial-systems.md)
 - [Exact trigonometric-rational normalization](trigonometric-rational.md)

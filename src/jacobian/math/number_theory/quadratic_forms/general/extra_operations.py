@@ -33,6 +33,7 @@ from jacobian.math.number_theory.quadratic_forms.general._extra_models import (
     MAX_QUADRATIC_DIAGONALIZATION_OUTPUT_DIGITS,
     MAX_QUADRATIC_DIAGONALIZATION_OUTPUT_TOTAL_DIGITS,
     MAX_QUADRATIC_DIAGONALIZATION_WORK,
+    MAX_QUADRATIC_GAUSS_MODULUS,
     MAX_QUADRATIC_GAUSS_OUTPUT_DIGITS,
     MAX_QUADRATIC_GAUSS_STATES,
     MAX_QUADRATIC_GAUSS_SUPPORT_TERMS,
@@ -458,6 +459,16 @@ def finite_quadratic_gauss_sum(request: FiniteGaussSumRequest) -> FiniteGaussSum
     """Compute sum_x zeta_m^Q(x), reducing the full histogram in QQ[zeta_m]."""
 
     form, modulus = request.form, request.modulus
+    if (
+        not isinstance(modulus, int)
+        or isinstance(modulus, bool)
+        or not 1 <= modulus <= MAX_QUADRATIC_GAUSS_MODULUS
+    ):
+        raise OperationDomainValidationError(
+            location=("modulus",),
+            code="quadratic_form.gauss_sum.modulus_bound",
+            message=f"modulus must be an integer from 1 through {MAX_QUADRATIC_GAUSS_MODULUS}",
+        )
     if any(c.den != 1 for c in form.diagonal_coefficients) or any(
         term.coefficient.den != 1 for term in form.cross_terms
     ):

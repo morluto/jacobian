@@ -5,21 +5,15 @@ from jacobian.math.number_theory.quadratic_forms import general as quadratic_for
 
 def test_exact_public_api_symbols() -> None:
     expected = (
-        "FiniteBoxProfileRequest",
         "FiniteBoxProfileResult",
-        "FiniteGaussSumRequest",
         "FiniteGaussSumResult",
         "QuadraticCrossTerm",
-        "QuadraticFormDirectSumRequest",
         "QuadraticFormDirectSumResult",
-        "QuadraticFormRestrictionRequest",
         "QuadraticFormRestrictionResult",
         "RationalCoordinateVector",
         "RationalQuadraticForm",
         "ThetaSelectedCoefficient",
-        "ThetaSelectedCoefficientsRequest",
         "ThetaSelectedCoefficientsResult",
-        "ThetaSeriesPrefixRequest",
         "ThetaSeriesPrefixResult",
         "bilinear_pairing",
         "coefficient_matrix",

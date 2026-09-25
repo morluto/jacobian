@@ -67,6 +67,21 @@ def test_full_polar_pairing_matches_independent_polarization_with_odd_cross_term
     }
 
 
+def test_pairing_rejects_malformed_native_vector_shape() -> None:
+    form = RationalQuadraticForm(
+        axis=("x", "y"),
+        diagonal_coefficients=(_rational(1), _rational(1)),
+        cross_terms=(),
+    )
+    valid = RationalCoordinateVector(
+        axis=("x", "y"), coordinates=(_rational(1), _rational(1))
+    )
+    malformed = valid.model_copy(update={"coordinates": (_rational(1),)})
+    with pytest.raises(OperationDomainValidationError) as error:
+        bilinear_pairing(form, malformed, valid)
+    assert error.value.errors()[0]["type"] == "quadratic_form.vector_shape"
+
+
 def test_pairing_admission_runs_once_in_the_kernel() -> None:
     # An over-budget pairing parses as a request (axis relation only) and is
     # then rejected once by the shared kernel as an admission error.

@@ -228,6 +228,39 @@ class QuadraticFormDirectSumResult(StrictModel):
                 raise ValueError("direct-sum inclusion has inconsistent dimensions")
             if (projection.row_count, projection.column_count) != (dimension, total):
                 raise ValueError("direct-sum projection has inconsistent dimensions")
+
+        offset = 0
+        for source, inclusion, projection in zip(
+            self.source_forms,
+            self.coordinate_inclusions,
+            self.coordinate_projections,
+            strict=True,
+        ):
+            dimension = len(source.axis)
+            expected_inclusion = tuple(
+                tuple(
+                    CanonicalRational.from_integer_ratio(int(column == row - offset), 1)
+                    if offset <= row < offset + dimension
+                    else CanonicalRational.from_integer_ratio(0, 1)
+                    for column in range(dimension)
+                )
+                for row in range(total)
+            )
+            expected_projection = tuple(
+                tuple(
+                    CanonicalRational.from_integer_ratio(int(column == offset + row), 1)
+                    for column in range(total)
+                )
+                for row in range(dimension)
+            )
+            if (
+                inclusion.entries != expected_inclusion
+                or projection.entries != expected_projection
+            ):
+                raise ValueError(
+                    "direct-sum coordinate maps must be standard block maps"
+                )
+            offset += dimension
         return self
 
     @classmethod

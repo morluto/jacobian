@@ -11,12 +11,14 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.number_theory.quadratic_forms.general._extra_models import (
+    MAX_THETA_PREFIX_CUTOFF,
     MAX_THETA_PREFIX_DIMENSION,
     MAX_THETA_PREFIX_OUTPUT_DIGITS,
     MAX_THETA_PREFIX_VECTORS,
     MAX_THETA_PREFIX_WORK,
+    MAX_THETA_SELECTED_INDEX,
+    MAX_THETA_SELECTED_INDICES,
     ThetaSelectedCoefficient,
-    ThetaSelectedCoefficientsRequest,
     ThetaSelectedCoefficientsResult,
     ThetaSeriesPrefixRequest,
     ThetaSeriesPrefixResult,
@@ -157,17 +159,18 @@ def _positive_definite_matrix(
 
 
 def _admit_box_and_output(
-    request: ThetaSeriesPrefixRequest | ThetaSelectedCoefficientsRequest,
+    *,
+    form: RationalQuadraticForm,
+    cutoff: int,
+    request_location: tuple[str, ...],
+    coefficient_count: int,
+    index_digits: int,
     support: int,
     determinant_work: int,
     cofactor_work: int,
     determinant: int,
     diagonal_cofactors: tuple[int, ...],
 ) -> tuple[int, ...]:
-    request_location = (
-        ("cutoff",) if isinstance(request, ThetaSeriesPrefixRequest) else ("indices",)
-    )
-    cutoff = request.cutoff
     radii = tuple(
         isqrt((2 * cutoff * cofactor) // determinant) for cofactor in diagonal_cofactors
     )
@@ -194,23 +197,12 @@ def _admit_box_and_output(
     # The result retains the source form and the coefficient prefix. Bound
     # both by their aggregate decimal digits; per-entry serialization
     # structure scales with the already bounded coefficient count.
-    form = request.form
     source_digits = sum(len(label) for label in form.axis) + 2 * sum(
         canonical_rational_component_digits(value)
         for value in (
             *form.diagonal_coefficients,
             *(term.coefficient for term in form.cross_terms),
         )
-    )
-    coefficient_count = (
-        request.cutoff + 1
-        if isinstance(request, ThetaSeriesPrefixRequest)
-        else len(request.indices)
-    )
-    index_digits = (
-        0
-        if isinstance(request, ThetaSeriesPrefixRequest)
-        else sum(len(str(index)) for index in request.indices)
     )
     output_digits = (
         source_digits + coefficient_count * (count_digits + 1) + index_digits
@@ -235,15 +227,29 @@ def theta_series_prefix(
     Q(x)<=N. The exact adjugate diagonal therefore yields a complete box.
     """
     form = request.form
+    if (
+        not isinstance(request.cutoff, int)
+        or isinstance(request.cutoff, bool)
+        or not 0 <= request.cutoff <= MAX_THETA_PREFIX_CUTOFF
+    ):
+        raise OperationDomainValidationError(
+            location=("cutoff",),
+            code="quadratic_form.theta.cutoff_bound",
+            message=f"cutoff must be an integer from 0 through {MAX_THETA_PREFIX_CUTOFF}",
+        )
     dimension, support, determinant_work, cofactor_work = _require_input_envelope(form)
     _, determinant, diagonal_cofactors = _positive_definite_matrix(form, dimension)
     radii = _admit_box_and_output(
-        request,
-        support,
-        determinant_work,
-        cofactor_work,
-        determinant,
-        diagonal_cofactors,
+        form=form,
+        cutoff=request.cutoff,
+        request_location=("cutoff",),
+        coefficient_count=request.cutoff + 1,
+        index_digits=0,
+        support=support,
+        determinant_work=determinant_work,
+        cofactor_work=cofactor_work,
+        determinant=determinant,
+        diagonal_cofactors=diagonal_cofactors,
     )
 
     table = [0] * (request.cutoff + 1)
@@ -269,36 +275,21 @@ def theta_series_prefix(
 
 
 def theta_selected_coefficients(
-    request: ThetaSelectedCoefficientsRequest,
+    form: RationalQuadraticForm,
+    indices: tuple[int, ...],
 ) -> ThetaSelectedCoefficientsResult:
     """Return only requested r_Q(n), without constructing intervening terms."""
-    if not isinstance(request, ThetaSelectedCoefficientsRequest):
-        raise OperationDomainValidationError(
-            location=("request",),
-            code="quadratic_form.theta_invalid_request",
-            message="selected theta coefficients require a selected-coefficients request",
-        )
-    try:
-        request = ThetaSelectedCoefficientsRequest.model_validate(request.model_dump())
-    except Exception as error:
-        raise OperationDomainValidationError(
-            location=("request",),
-            code="quadratic_form.theta_invalid_request",
-            message="selected theta coefficients received a structurally invalid request",
-        ) from error
-    form = request.form
     if not isinstance(form, RationalQuadraticForm):
         raise OperationDomainValidationError(
             location=("form",),
             code="quadratic_form.theta_invalid_form",
             message="selected theta coefficients require a rational quadratic form",
         )
-    indices = request.indices
     if (
         type(indices) is not tuple
-        or not 1 <= len(indices) <= 128
+        or not 1 <= len(indices) <= MAX_THETA_SELECTED_INDICES
         or any(
-            type(index) is not int or not 0 <= index <= 1_000_000_000
+            type(index) is not int or not 0 <= index <= MAX_THETA_SELECTED_INDEX
             for index in indices
         )
         or tuple(sorted(set(indices))) != indices
@@ -308,15 +299,27 @@ def theta_selected_coefficients(
             code="quadratic_form.theta_invalid_selected_indices",
             message="selected theta indices must be bounded and strictly increasing",
         )
+    try:
+        form = RationalQuadraticForm.model_validate(form.model_dump())
+    except Exception as error:
+        raise OperationDomainValidationError(
+            location=("form",),
+            code="quadratic_form.theta_invalid_form",
+            message="selected theta coefficients received a structurally invalid form",
+        ) from error
     dimension, support, determinant_work, cofactor_work = _require_input_envelope(form)
     _, determinant, diagonal_cofactors = _positive_definite_matrix(form, dimension)
     radii = _admit_box_and_output(
-        request,
-        support,
-        determinant_work,
-        cofactor_work,
-        determinant,
-        diagonal_cofactors,
+        form=form,
+        cutoff=indices[-1],
+        request_location=("indices",),
+        coefficient_count=len(indices),
+        index_digits=sum(len(str(index)) for index in indices),
+        support=support,
+        determinant_work=determinant_work,
+        cofactor_work=cofactor_work,
+        determinant=determinant,
+        diagonal_cofactors=diagonal_cofactors,
     )
 
     wanted = set(indices)

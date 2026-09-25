@@ -23,6 +23,16 @@ from jacobian.math.number_theory.quadratic_forms.general._extra_models import (
 
 def _admit(request: FiniteBoxProfileRequest) -> int:
     form = request.form
+    if (
+        isinstance(request.radius, bool)
+        or not isinstance(request.radius, int)
+        or request.radius < 0
+    ):
+        raise OperationDomainValidationError(
+            location=("radius",),
+            code="quadratic_form.finite_box_radius",
+            message="finite-box radius must be a non-negative integer",
+        )
     if request.radius > MAX_QUADRATIC_BOX_RADIUS:
         raise OperationResourceAdmissionError(
             location=("radius",),

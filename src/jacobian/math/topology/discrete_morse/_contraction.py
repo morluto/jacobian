@@ -36,7 +36,7 @@ from jacobian.math.topology.discrete_morse._models import (
 )
 
 MAX_MORSE_CONTRACTION_WORK = 1_000_000
-MAX_MORSE_CONTRACTION_OUTPUT_BYTES = 1_000_000
+MAX_MORSE_CONTRACTION_OUTPUT_CELLS = 1_000_000
 
 
 def _admission(code: str, message: str) -> OperationResourceAdmissionError:
@@ -462,15 +462,15 @@ def _admit_contraction_work(
         for cell in (pair.face, pair.coface)
         for vertex in cell
     )
-    output_bound = (
+    output_cells = (
         20_000
         + 5 * total_cells**2 * (MAX_MORSE_CONTRACTION_COEFFICIENT_DIGITS + 2)
         + 6 * label_characters
     )
-    if output_bound > MAX_MORSE_CONTRACTION_OUTPUT_BYTES:
+    if output_cells > MAX_MORSE_CONTRACTION_OUTPUT_CELLS:
         raise _admission(
             "output",
-            "chain-contraction endpoints and maps exceed the serialized output bound",
+            "chain-contraction endpoints and maps exceed the mathematical output-cell bound",
         )
 
     try:

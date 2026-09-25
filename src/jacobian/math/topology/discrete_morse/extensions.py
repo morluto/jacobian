@@ -27,7 +27,7 @@ from jacobian.math.topology.discrete_morse._models import (
 from jacobian.math.topology.discrete_morse.operations import construct_matching
 from jacobian.math.topology.operations import canonicalize
 
-MAX_COLLAPSE_SEQUENCE_STEPS = MAX_TOPOLOGY_FACES // 2
+MAX_COLLAPSE_SEQUENCE_STEPS = 2048
 # Bound total face-set visits across all admitted sequence steps.
 MAX_COLLAPSE_SEQUENCE_FACE_WORK = 128_000_000
 MAX_GREEDY_COLLAPSE_WORK = 60_000_000
@@ -122,6 +122,12 @@ def greedy_collapse(complex_: FiniteSimplicialComplex) -> CollapseSequenceResult
         lambda: require_canonical_complex_admission(complex_), location=("complex",)
     )
     source = complex_
+    if source.closure_size > MAX_TOPOLOGY_FACES:
+        raise OperationResourceAdmissionError(
+            location=("complex",),
+            code="topology.greedy_collapse.admission.faces",
+            message="source face closure exceeds the admitted face bound",
+        )
     max_steps = min(MAX_COLLAPSE_SEQUENCE_STEPS, source.closure_size // 2)
     # Per step: at most eight ridge-owner inserts, eight candidate reads, and
     # eight exposed-ridge containment scans over at most source.closure_size

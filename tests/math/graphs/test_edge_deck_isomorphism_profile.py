@@ -234,7 +234,7 @@ def test_catalog_producer_does_not_replay_class_canonicalization(monkeypatch) ->
         decoded = EdgeDeckIsomorphismProfile.model_validate_json(
             json.dumps(invocation.output)
         )
-        assert calls == len(decoded.classes)
+        assert calls == 0
     assert sum(item.multiplicity for item in decoded.classes) == 3
     _assert_maps_are_isomorphisms(decoded)
 

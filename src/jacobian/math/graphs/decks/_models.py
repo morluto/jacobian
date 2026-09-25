@@ -1105,8 +1105,6 @@ class VertexDeckIsomorphismProfile(StrictModel):
                     for index in item.card_indices
                 )
                 or representative.vertices != canonical_axis
-                or _canonical_card_edges(representative.vertices, representative.edges)
-                != representative.edges
                 or (
                     previous_edges is not None
                     and representative.edges <= previous_edges
@@ -1534,8 +1532,6 @@ class EdgeDeckIsomorphismProfile(StrictModel):
                     family.cards[index].deleted_edge for index in item.card_indices
                 )
                 or representative.vertices != canonical_axis
-                or _canonical_card_edges(representative.vertices, representative.edges)
-                != representative.edges
                 or (
                     previous_edges is not None
                     and representative.edges <= previous_edges
@@ -1737,7 +1733,8 @@ def _preflight_edge_profile_labels(*collections: Any) -> None:
         for item in collection:
             labels = item if type(item) in (list, tuple) else (item,)
             if any(
-                type(label) is str and len(label) > MAX_GRAPH_LABEL_BYTES
+                type(label) is str
+                and (not label or len(label) > MAX_GRAPH_LABEL_BYTES)
                 for label in labels
             ):
                 raise _validation_error(

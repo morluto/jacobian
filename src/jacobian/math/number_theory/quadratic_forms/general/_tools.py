@@ -73,7 +73,7 @@ def compute_coefficient_matrix(
 
 
 def compute_integral_content(request: IntegralContentRequest) -> IntegralContentResult:
-    return integral_coefficient_content(request)
+    return integral_coefficient_content(request.form)
 
 
 def compute_signature(request: FormRequest) -> SignatureResult:

@@ -26,7 +26,7 @@ def test_integral_content_and_primitive_part_include_cross_coefficients() -> Non
         cross_terms=(QuadraticCrossTerm(left=0, right=2, coefficient=_q(30)),),
     )
 
-    result = integral_coefficient_content(IntegralContentRequest(form=form))
+    result = integral_coefficient_content(form)
 
     assert result.content == 6
     assert tuple(
@@ -36,9 +36,16 @@ def test_integral_content_and_primitive_part_include_cross_coefficients() -> Non
     assert result.primitive_part.axis == form.axis
 
 
+def test_large_content_uses_decimal_string_json_encoding() -> None:
+    form = RationalQuadraticForm(axis=("x",), diagonal_coefficients=(_q(10**20),))
+    result = integral_coefficient_content(form)
+    assert result.content == 10**20
+    assert result.model_dump(mode="json")["content"] == "100000000000000000000"
+
+
 def test_zero_form_has_zero_content_and_zero_primitive_part() -> None:
     form = RationalQuadraticForm(axis=("x",), diagonal_coefficients=(_q(0),))
-    result = integral_coefficient_content(IntegralContentRequest(form=form))
+    result = integral_coefficient_content(form)
     assert result.content == 0
     assert result.primitive_part == form
 

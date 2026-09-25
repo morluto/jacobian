@@ -8,7 +8,7 @@ from typing import Literal, Self
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalRational, require_bounded_rational
+from jacobian._exact import CanonicalRational, ExactInteger, require_bounded_rational
 from jacobian._models import StrictModel
 from jacobian.math.matrices.values import RationalMatrix
 from jacobian.math.number_theory.quadratic_forms.general._extra_models import (
@@ -266,7 +266,7 @@ class IntegralContentResult(StrictModel):
     """Coefficient gcd and the canonical primitive quotient, source-bound."""
 
     form: RationalQuadraticForm
-    content: int = Field(ge=0)
+    content: ExactInteger = Field(ge=0)
     primitive_part: RationalQuadraticForm
 
     @model_validator(mode="after")

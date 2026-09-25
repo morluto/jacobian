@@ -13,7 +13,7 @@ from jacobian.catalog.models import (
 from jacobian.math.matrices.values import RationalMatrix, rational_matrix_from_fractions
 from jacobian.math.number_theory.quadratic_forms.general._models import (
     MAX_COEFFICIENT_MATRIX_AXIS,
-    IntegralContentRequest,
+    MAX_INTEGRAL_INVARIANT_SUPPORT,
     IntegralContentResult,
 )
 from jacobian.math.number_theory.quadratic_forms.general.values import (
@@ -166,17 +166,39 @@ def coefficient_matrix(form: RationalQuadraticForm) -> RationalMatrix:
 
 
 def integral_coefficient_content(
-    request: IntegralContentRequest,
+    form: RationalQuadraticForm,
 ) -> IntegralContentResult:
     """Return gcd of integral polynomial coefficients and their primitive quotient.
 
     The zero polynomial has content zero and is returned unchanged as its
     primitive part by convention.
     """
-    form = request.form
-    coefficients = tuple(
-        value.as_fraction().numerator for value in form.diagonal_coefficients
-    ) + tuple(term.coefficient.as_fraction().numerator for term in form.cross_terms)
+    if not isinstance(form, RationalQuadraticForm):
+        raise OperationDomainValidationError(
+            location=("form",),
+            code="quadratic_form.form_type",
+            message="form must be a rational quadratic form value",
+        )
+    if (
+        len(form.diagonal_coefficients) + len(form.cross_terms)
+        > MAX_INTEGRAL_INVARIANT_SUPPORT
+    ):
+        raise OperationResourceAdmissionError(
+            location=("form",),
+            code="quadratic_form.invariant_support_bound",
+            message=f"integral form support exceeds {MAX_INTEGRAL_INVARIANT_SUPPORT} terms",
+        )
+    coefficients_q = (
+        *form.diagonal_coefficients,
+        *(term.coefficient for term in form.cross_terms),
+    )
+    if any(value.den != 1 for value in coefficients_q):
+        raise OperationDomainValidationError(
+            location=("form",),
+            code="quadratic_form.nonintegral_form",
+            message="coefficient content requires integer polynomial coefficients",
+        )
+    coefficients = tuple(value.num for value in coefficients_q)
     content = 0
     for coefficient in coefficients:
         content = gcd(content, abs(coefficient))

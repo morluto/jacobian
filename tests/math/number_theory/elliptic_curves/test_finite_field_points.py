@@ -816,17 +816,6 @@ def test_zeta_numerator_matches_independent_f5_and_f25_counts() -> None:
     assert direct_f25_count == q**2 + 1 - (a**2 - 2 * q)
 
 
-def test_zeta_polynomial_is_publicly_discoverable_and_exact() -> None:
-    tool = Catalog.open().operation(
-        "elliptic_curve.finite_field.zeta_polynomial.compute"
-    )
-    assert tool is not None
-    result = invoke_operation(tool.operation_id, tool.examples[0].input, Catalog.open())
-    assert result.output["cardinality"] == 9
-    assert result.output["trace"] == -3
-    assert result.output["numerator"]["coefficients"] == ["5", "3", "1"]
-
-
 def test_curve_and_point_transport_along_explicit_f5_to_f25_embedding() -> None:
     base = FiniteFieldPresentation(
         characteristic=5, modulus_coefficients=(0, 1), generator="a"

@@ -1919,6 +1919,7 @@ __all__ = [
     "FiniteFieldPointSet",
     "FiniteFieldScalarRequest",
     "FiniteFieldShortWeierstrassCurve",
+    "FiniteFieldZetaPolynomialResult",
     "finite_field_cardinality",
     "finite_field_curve_base_change",
     "finite_field_discriminant",
@@ -1933,5 +1934,6 @@ __all__ = [
     "finite_field_point_scalar",
     "finite_field_points",
     "finite_field_quadratic_twist",
+    "finite_field_zeta_polynomial",
     "require_discriminant_admission",
 ]

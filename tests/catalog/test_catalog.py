@@ -67,6 +67,10 @@ def test_catalog_inspects_determinant_without_sqlite() -> None:
     assert descriptor.operation_id == "matrix.determinant.compute"
 
 
+def test_open_reuses_the_compiled_builtin_catalog() -> None:
+    assert Catalog.open() is Catalog.open()
+
+
 def test_output_schema_describes_serialized_exact_integers() -> None:
     descriptor = Catalog.open().inspect(
         "number_theory.euler_phi.preimage_power_sums.compute"

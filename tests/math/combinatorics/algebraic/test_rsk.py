@@ -134,3 +134,16 @@ class TestRSK:
         assert mutated.q_tableau == result.q_tableau
         assert mutated.p_tableau != result.p_tableau
         assert not verify_rsk(mutated)
+
+    def test_replay_rejects_mutated_valid_recording_tableau(self) -> None:
+        result = rsk_permutation(RSKPermutationRequest(permutation=(1, 3, 2)))
+        payload = result.model_dump(mode="json")
+        # Another standard tableau of shape (2, 1), but not the recording
+        # tableau associated with this insertion history.
+        payload["q_tableau"] = {"rows": [[1, 3], [2]]}
+        mutated = RSKResult.model_validate(payload)
+
+        assert mutated.shape == result.shape
+        assert mutated.p_tableau == result.p_tableau
+        assert mutated.q_tableau != result.q_tableau
+        assert not verify_rsk(mutated)

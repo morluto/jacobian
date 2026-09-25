@@ -7,8 +7,10 @@ from jacobian.math.combinatorics.matroids import delta as delta_matroids
 
 def test_public_api_is_small_and_canonical() -> None:
     assert delta_matroids.__all__ == [
+        "DeltaMatroidDistanceProfile",
         "FiniteDeltaMatroid",
         "binary",
+        "distance_profile",
         "dual",
         "from_feasible_sets",
         "minor",

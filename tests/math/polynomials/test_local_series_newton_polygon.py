@@ -149,6 +149,19 @@ def test_edge_characteristic_polynomial_transports_exact_leading_coefficients() 
     assert result.source == polynomial
 
 
+@pytest.mark.parametrize("edge_index", [-1, True, 0.5])
+def test_edge_characteristic_rejects_invalid_native_edge_index(edge_index):
+    request = NewtonEdgeCharacteristicRequest.model_construct(
+        polynomial=_polynomial([(0, _series(1, (1, 1)))]), edge_index=edge_index
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        newton_edge_characteristic_polynomial(request)
+    assert error.value.errors()[0]["type"] == "local_series.newton_edge_index"
+    with pytest.raises(OperationDomainValidationError) as error:
+        newton_edge_characteristic_roots(request)
+    assert error.value.errors()[0]["type"] == "local_series.newton_edge_index"
+
+
 def test_edge_characteristic_rejects_nonexistent_edge() -> None:
     from jacobian.math.polynomials.local_series.newton_polygon import (
         NewtonEdgeCharacteristicRequest,

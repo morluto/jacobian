@@ -188,6 +188,12 @@ def newton_edge_characteristic_polynomial(
             code="local_series.newton_characteristic_request_type",
             message="request must select an edge of a local polynomial",
         )
+    if type(request.edge_index) is not int or request.edge_index < 0:
+        raise OperationDomainValidationError(
+            location=("edge_index",),
+            code="local_series.newton_edge_index",
+            message="edge_index must select an edge in the exact lower Newton polygon",
+        )
     polygon = local_polynomial_newton_polygon(request.polynomial)
     if request.edge_index >= len(polygon.edges):
         raise OperationDomainValidationError(

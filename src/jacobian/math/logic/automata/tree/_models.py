@@ -447,9 +447,16 @@ class TreeAutomatonMinimizeRequest(StrictModel):
 
 
 class TreeAutomatonMinimizeResult(TreeAutomatonMinimizeRequest):
-    """Smallest reachable deterministic quotient and source-state transport."""
+    """Smallest reachable deterministic quotient and source-state transport.
 
-    minimized: DeterministicBottomUpTreeAutomaton
+    A total quotient table is carried as the complete deterministic carrier,
+    so it composes directly with complement and Boolean products; a partial
+    quotient stays on the partial deterministic carrier.
+    """
+
+    minimized: (
+        CompleteDeterministicBottomUpTreeAutomaton | DeterministicBottomUpTreeAutomaton
+    )
     old_to_new: tuple[int, ...] = Field(max_length=MAX_TA_STATES)
     new_to_old: tuple[int | None, ...] = Field(max_length=MAX_TA_STATES)
     reachable_states: tuple[int, ...] = Field(max_length=MAX_TA_STATES)

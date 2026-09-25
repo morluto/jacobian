@@ -364,11 +364,30 @@ def _tree_automaton_minimization_partition(
     rows: dict[tuple[int, tuple[int, ...]], int],
 ) -> dict[int, int]:
     final_states = set(automaton.final_states)
-    classes = {state: int(state in final_states) for state in reachable_states}
+    # Every missing row behaves as a transition to one implicit rejecting
+    # sink (state id -1): a ground-tree context that gets stuck never
+    # accepts, so the sink joins the initial nonfinal block and missing rows
+    # compare by the sink's current class instead of a fixed sentinel.
+    classes: dict[int, int] = {
+        state: int(state in final_states) for state in reachable_states
+    }
+    classes[-1] = 0
+    context_combos = sum(
+        rank * len(reachable_states) ** (rank - 1)
+        for rank in automaton.arity
+        if rank > 0
+    )
+    combos_since_checkpoint = 0
     while True:
+        request_checkpoint("during tree-automaton partition refinement")
+        sink_class = classes[-1]
         refined_by_signature: dict[tuple[object, ...], list[int]] = {}
-        for state in reachable_states:
+        for state in classes:
             signature: list[object] = [state in final_states, classes[state]]
+            if state == -1:
+                signature.extend([sink_class] * context_combos)
+                refined_by_signature.setdefault(tuple(signature), []).append(state)
+                continue
             for symbol, rank in enumerate(automaton.arity):
                 for position in range(rank):
                     other_positions = tuple(
@@ -382,15 +401,47 @@ def _tree_automaton_minimization_partition(
                         ):
                             children[index] = other_state
                         target = rows.get((symbol, tuple(children)))
-                        signature.append(-1 if target is None else classes[target])
+                        signature.append(
+                            sink_class if target is None else classes[target]
+                        )
+                        combos_since_checkpoint += 1
+                        if combos_since_checkpoint >= 8192:
+                            request_checkpoint(
+                                "during tree-automaton partition refinement"
+                            )
+                            combos_since_checkpoint = 0
             refined_by_signature.setdefault(tuple(signature), []).append(state)
         blocks = sorted(refined_by_signature.values(), key=min)
         refined = {
             state: block_id for block_id, block in enumerate(blocks) for state in block
         }
-        if all(refined[state] == classes[state] for state in reachable_states):
-            return refined
+        if all(refined[state] == classes[state] for state in classes):
+            return {state: classes[state] for state in reachable_states}
         classes = refined
+
+
+def _deterministic_quotient_value(
+    *,
+    state_count: int,
+    arity: tuple[int, ...],
+    transitions: tuple[TreeAutomatonTransition, ...],
+    final_states: tuple[int, ...],
+) -> DeterministicBottomUpTreeAutomaton:
+    # A total quotient table carries the established completeness fact on the
+    # complete carrier, so it flows directly into complement and products.
+    if len(transitions) == sum(state_count**rank for rank in arity):
+        return CompleteDeterministicBottomUpTreeAutomaton(
+            state_count=state_count,
+            arity=arity,
+            transitions=transitions,
+            final_states=final_states,
+        )
+    return DeterministicBottomUpTreeAutomaton(
+        state_count=state_count,
+        arity=arity,
+        transitions=transitions,
+        final_states=final_states,
+    )
 
 
 def _tree_automaton_minimized_value(
@@ -423,7 +474,7 @@ def _tree_automaton_minimized_value(
                 "partition refinement did not produce a transition congruence"
             )
     final_states = set(automaton.final_states)
-    minimized = DeterministicBottomUpTreeAutomaton(
+    minimized = _deterministic_quotient_value(
         state_count=len(blocks),
         arity=automaton.arity,
         transitions=tuple(
@@ -476,7 +527,7 @@ def minimize_tree_automaton(
         for row in automaton.transitions
     )
     if not has_ground_tree_seed:
-        minimized = DeterministicBottomUpTreeAutomaton(
+        minimized = _deterministic_quotient_value(
             state_count=1, arity=automaton.arity, transitions=(), final_states=()
         )
         return TreeAutomatonMinimizeResult._from_kernel(

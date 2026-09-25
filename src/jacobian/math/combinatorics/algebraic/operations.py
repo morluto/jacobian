@@ -592,13 +592,21 @@ def knuth_moves(word: FiniteWord) -> tuple[KnuthNeighbor, ...]:
 def plactic_normal_form(word: FiniteWord) -> PlacticNormalFormResult:
     """Return the canonical bottom-to-top row-reading word of the RSK tableau."""
 
+    try:
+        word = FiniteWord.model_validate(word.model_dump(mode="python"))
+    except (AttributeError, TypeError, ValidationError) as exc:
+        raise OperationDomainValidationError(
+            location=("word",),
+            code="algebraic_combinatorics.plactic_normal_form_word",
+            message="plactic normal form requires a canonical finite word",
+        ) from exc
     pair = _row_insertion_rsk(word)
     normal_letters = tuple(
         pair.alphabet[entry - 1]
         for row in reversed(pair.insertion_tableau.rows)
         for entry in row
     )
-    return PlacticNormalFormResult(
+    return PlacticNormalFormResult.model_construct(
         source_word=word,
         insertion_tableau=pair.insertion_tableau,
         normal_form=FiniteWord(alphabet=pair.alphabet, letters=normal_letters),

@@ -71,7 +71,10 @@ def test_groebner_shirshov_checks_reverse_ordered_overlap_and_reaches_fixed_poin
     # reverse ordered pair (ab, bc) has the b overlap.
     ideal = FreeAlgebraIdeal(
         alphabet=("a", "b", "c"),
-        generators=(_nc((1, ("b", "c")), (-1, ())), _nc((1, ("a", "b")), (-1, ()))),
+        generators=(
+            _nc((1, ("b", "c")), (-1, ("a", "c"))),
+            _nc((1, ("a", "b")), (-1, ("a", "c"))),
+        ),
         side="two-sided",
     )
     result = groebner_shirshov_through_degree(ideal, 3)
@@ -95,7 +98,7 @@ def test_groebner_shirshov_preflights_composition_coefficient_growth() -> None:
         alphabet=("a", "b", "c"),
         terms=(
             FreeAlgebraTerm(coefficient=_q(large), word=("a", "b")),
-            FreeAlgebraTerm(coefficient=_q(1), word=("a",)),
+            FreeAlgebraTerm(coefficient=_q(1), word=("c", "c")),
         ),
     )
     second = FreeAlgebraPolynomial(
@@ -105,7 +108,7 @@ def test_groebner_shirshov_preflights_composition_coefficient_growth() -> None:
                 coefficient=CanonicalRational(num=1, den=large),
                 word=("b", "c"),
             ),
-            FreeAlgebraTerm(coefficient=_q(1), word=("b",)),
+            FreeAlgebraTerm(coefficient=_q(1), word=("b", "b")),
         ),
     )
     ideal = FreeAlgebraIdeal(

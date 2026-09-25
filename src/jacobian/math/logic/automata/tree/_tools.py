@@ -22,6 +22,7 @@ from jacobian.math.logic.automata.tree._models import (
     TreeAutomatonMinimizeRequest,
     TreeAutomatonMinimizeResult,
     TreeAutomatonReachabilityRequest,
+    TreeAutomatonStateAlgebraRequest,
     TreeAutomatonTrimRequest,
     TreeAutomatonTrimResult,
     TreeDeterminizeRequest,
@@ -42,12 +43,16 @@ from jacobian.math.logic.automata.tree.operations import (
     reachable_state_profile,
     trim_tree_automaton,
 )
+from jacobian.math.logic.automata.tree.state_algebra import (
+    deterministic_tree_automaton_state_algebra,
+)
 from jacobian.math.logic.automata.tree.values import (
     ReachableStateProfile,
     TreeStateChartEntry,
     accepted_tree_count_work_bound,
     validate_ranked_tree,
 )
+from jacobian.math.universal_algebra.values import FiniteAlgebra
 
 
 def compute_tree_run(request: TreeRunRequest) -> TreeRunResult:
@@ -114,6 +119,14 @@ def compute_tree_automaton_trim(
     """Restrict an automaton to its reachable and productive states."""
 
     return trim_tree_automaton(request.automaton)
+
+
+def compute_tree_automaton_state_algebra(
+    request: TreeAutomatonStateAlgebraRequest,
+) -> FiniteAlgebra:
+    """Interpret each ranked symbol as its complete operation table."""
+
+    return deterministic_tree_automaton_state_algebra(request.automaton)
 
 
 def compute_tree_automaton_determinize(
@@ -551,6 +564,51 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                         ],
                     },
                     "position": [0],
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="tree_automaton.deterministic.state_algebra.compute",
+        title="Construct the transition algebra of a deterministic tree automaton",
+        description=(
+            "Return the finite algebra on the complete automaton state set whose "
+            "operation tree_symbol_j is the transition function for ranked symbol "
+            "j. Carrier positions preserve every state, including unreachable "
+            "states; symbol order and arity are retained in the algebra signature. "
+            "The result represents transition evaluation and does not include the "
+            "automaton's accepting-state subset. Carrier, arity, signature, and "
+            "expanded table-cell bounds are checked before table construction."
+        ),
+        request_type=TreeAutomatonStateAlgebraRequest,
+        result_type=FiniteAlgebra,
+        run=compute_tree_automaton_state_algebra,
+        tags=("tree-automata", "universal-algebra", "exact"),
+        discovery_terms=(
+            "tree automaton state algebra",
+            "finite algebra of tree transitions",
+            "evaluate ranked tree in transition algebra",
+        ),
+        examples=(
+            OperationExample(
+                name="ranked_symbol_operations",
+                description=(
+                    "Interpret the nullary and binary ranked symbols as "
+                    "operations on the exact automaton state set."
+                ),
+                input={
+                    "automaton": {
+                        "state_count": 2,
+                        "arity": [0, 2],
+                        "transitions": [
+                            {"symbol": 0, "child_states": [], "target_state": 1},
+                            {"symbol": 1, "child_states": [0, 0], "target_state": 0},
+                            {"symbol": 1, "child_states": [0, 1], "target_state": 1},
+                            {"symbol": 1, "child_states": [1, 0], "target_state": 1},
+                            {"symbol": 1, "child_states": [1, 1], "target_state": 0},
+                        ],
+                        "final_states": [1],
+                    }
                 },
             ),
         ),

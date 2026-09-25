@@ -24,7 +24,7 @@ from jacobian.math.number_theory.number_fields.values import (
 )
 
 MAX_COMPOSITUM_INPUT_COEFFICIENT = 10**12
-MAX_COMPOSITUM_OUTPUT_BYTES = 32_768
+MAX_COMPOSITUM_OUTPUT_CELLS = 32_768
 
 
 def _element(
@@ -135,15 +135,20 @@ def galois_compositum(
         )
     left = _admit_source(left, "left")
     right = _admit_source(right, "right")
-    # The source carriers cap degree at two and integral coefficients at 10^12.
-    # A conservative 4x input size plus fixed map/model overhead admits every
-    # possible degree-four output before replaying either exact splitting field.
-    input_bytes = len(left.model_dump_json()) + len(right.model_dump_json())
-    if 4 * input_bytes + 8192 > MAX_COMPOSITUM_OUTPUT_BYTES:
+    # Each source has at most three coefficients, each with at most 13 decimal
+    # digits. Bound derived scalar cells (coefficient digits and map entries),
+    # not serialized transport size; degree-four results remain well within cap.
+    input_cells = sum(
+        1 + len(str(abs(term.coefficient.num)))
+        for source in (left, right)
+        for term in source.source.polynomial.terms
+    )
+    output_cells = 4 * input_cells + 256
+    if output_cells > MAX_COMPOSITUM_OUTPUT_CELLS:
         raise OperationResourceAdmissionError(
             location=(),
             code="galois_theory.compositum_output_bound",
-            message="predicted compositum output exceeds the 32768-byte envelope",
+            message="predicted compositum output exceeds the 32768-cell envelope",
         )
     left = _canonical_splitting_field(left, location=("left",))
     right = _canonical_splitting_field(right, location=("right",))

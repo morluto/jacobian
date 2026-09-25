@@ -57,6 +57,7 @@ from jacobian.math.number_theory.characters.values import (
     DirichletCharacterKernel,
     DirichletCharacterRestrictionObstruction,
     DirichletCharacterRestrictionResult,
+    PrimitiveDirichletCharacter,
     PrincipalDirichletCharacter,
 )
 from jacobian.math.number_theory.sequences.core._models import (
@@ -575,7 +576,7 @@ def _admit_principal_modulus(modulus: int) -> None:
 def _require_character(character: DirichletCharacter) -> DirichletCharacter:
     if not isinstance(character, DirichletCharacter):
         raise OperationDomainValidationError(
-            location=("character",),
+            location=("primitive_character",),
             code="dirichlet_character.character_type",
             message="character must be a Dirichlet character value",
         )
@@ -1003,9 +1004,13 @@ def dirichlet_character_conductor(
         if target_exponent % scale:
             raise RuntimeError("induced character value is outside the target field")
         primitive_coordinates.append((target_exponent // scale) % target_order)
-    primitive_character = DirichletCharacter.model_construct(
+    primitive_character_value = DirichletCharacter.model_construct(
         group=primitive_group,
         coordinates=tuple(primitive_coordinates),
+    )
+    primitive_character = PrimitiveDirichletCharacter.model_construct(
+        character=primitive_character_value,
+        conductor=conductor,
     )
     return DirichletCharacterConductorResult._from_kernel(
         character, conductor, primitive_character
@@ -1715,7 +1720,13 @@ def _restriction_source_modulus(
             code="dirichlet_character.group.modulus_bound",
             message="source modulus exceeds the 2,048 character-group bound",
         )
-    if not 1 <= target_modulus <= MAX_CHARACTER_GROUP_MODULUS:
+    if target_modulus < 1:
+        raise OperationDomainValidationError(
+            location=("target_modulus",),
+            code="dirichlet_character.restriction.modulus_positive",
+            message="target modulus must be positive",
+        )
+    if target_modulus > MAX_CHARACTER_GROUP_MODULUS:
         raise OperationResourceAdmissionError(
             location=("target_modulus",),
             code="dirichlet_character.group.modulus_bound",
@@ -2319,6 +2330,14 @@ def _admit_sequence_twist_source(
             message="index origin must be a signed 32-bit integer",
         )
     if isinstance(sequence, FiniteCyclotomicSequence):
+        try:
+            sequence = FiniteCyclotomicSequence.model_validate(sequence.model_dump())
+        except (ValidationError, AttributeError, TypeError, ValueError) as exc:
+            raise OperationDomainValidationError(
+                location=("sequence",),
+                code="dirichlet_character.sequence_twist.sequence_invalid",
+                message="cyclotomic source sequence is malformed",
+            ) from exc
         if index_origin is not None and index_origin != sequence.index_origin:
             raise OperationDomainValidationError(
                 location=("index_origin",),
@@ -2518,9 +2537,16 @@ def _compute_generalized_gauss_sum(
             code=f"dirichlet_character.{error_name}.frequency_type",
             message="frequency must be a strict integer",
         )
-    _admit_character_integer(
-        frequency, type_code=f"dirichlet_character.{error_name}.frequency_type"
-    )
+    try:
+        _admit_character_integer(
+            frequency, type_code=f"dirichlet_character.{error_name}.frequency_type"
+        )
+    except PydanticCustomError as exc:
+        raise OperationResourceAdmissionError(
+            location=("frequency",),
+            code=f"dirichlet_character.{error_name}.frequency_digit_bound",
+            message="frequency exceeds the admitted exact integer digit bound",
+        ) from exc
     group = character.group
     modulus = group.modulus
     frequency_residue = frequency % modulus
@@ -2649,18 +2675,22 @@ def dirichlet_character_gauss_sum(
 
 
 def dirichlet_character_primitive_gauss_norm(
-    character: DirichletCharacter,
+    primitive_character: PrimitiveDirichletCharacter,
 ) -> DirichletCharacterPrimitiveGaussNormResult:
-    """Compute |tau(chi)|^2 after deriving primitivity from the source character.
+    """Compute |tau(chi)|^2 for a typed primitive-character claim.
 
     The complex absolute value is represented exactly as tau(chi) times its
-    cyclotomic conjugate. The operation accepts only characters whose computed
-    conductor equals their modulus and checks that this product is that modulus.
+    cyclotomic conjugate. The operation checks the claimed conductor against
+    the exact least conductor before relying on the primitive-character theorem.
     """
-    character = _require_character(character)
-    conductor = dirichlet_character_conductor(character)
+    if not isinstance(primitive_character, PrimitiveDirichletCharacter):
+        primitive_character = PrimitiveDirichletCharacter.model_validate(
+            primitive_character
+        )
+    character = _require_character(primitive_character.character)
+    exact_conductor = dirichlet_character_conductor(character).conductor
     modulus = character.group.modulus
-    if conductor.conductor != modulus:
+    if exact_conductor != primitive_character.conductor:
         raise OperationDomainValidationError(
             location=("character",),
             code="dirichlet_character.primitive_gauss_norm.requires_primitive",
@@ -2699,8 +2729,7 @@ def dirichlet_character_primitive_gauss_norm(
         ),
     )
     return DirichletCharacterPrimitiveGaussNormResult(
-        character=character,
-        conductor=modulus,
+        primitive_character=primitive_character,
         gauss_sum=gauss_sum,
         norm_squared=norm,
     )

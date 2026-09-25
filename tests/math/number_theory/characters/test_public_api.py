@@ -16,6 +16,7 @@ def test_public_api_exports_only_canonical_value_and_native_operations() -> None
         "DirichletCharacterPrimitiveGaussNormResult",
         "DirichletCharacterRestrictionObstruction",
         "DirichletCharacterRestrictionResult",
+        "PrimitiveDirichletCharacter",
         "PrincipalDirichletCharacter",
         "character_group",
         "dirichlet_character_conductor",

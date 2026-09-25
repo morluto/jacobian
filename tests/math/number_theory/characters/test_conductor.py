@@ -65,9 +65,9 @@ def test_primitive_ancestor_survives_serialization_and_remains_composable() -> N
     restored = type(result).model_validate_json(result.model_dump_json())
 
     assert restored == result
-    assert restored.primitive_character.group.modulus == result.conductor
-    assert dirichlet_character_table(restored.primitive_character) == (
-        dirichlet_character_table(result.primitive_character)
+    assert restored.primitive_character.conductor == result.conductor
+    assert dirichlet_character_table(restored.primitive_character.character) == (
+        dirichlet_character_table(result.primitive_character.character)
     )
 
 
@@ -120,8 +120,9 @@ def test_conductor_matches_independent_minimal_reduction_fiber_oracle(modulus: i
         ]
         assert actual == min(fitting_divisors)
         primitive = result.primitive_character
-        assert primitive.group.modulus == actual
-        assert dirichlet_character_conductor(primitive).conductor == actual
+        assert primitive.conductor == actual
+        assert dirichlet_character_conductor(primitive.character).conductor == actual
+        primitive = primitive.character
         source_table = dirichlet_character_table(character)
         primitive_table = dirichlet_character_table(primitive)
         primitive_values = dict(

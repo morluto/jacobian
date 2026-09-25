@@ -22,7 +22,6 @@ from jacobian.math.number_theory.characters._models import (
     DirichletCharacterGeneralizedGaussSumRequest,
     DirichletCharacterGeneralizedGaussSumResult,
     DirichletCharacterInflationRequest,
-    DirichletCharacterInverseRequest,
     DirichletCharacterJacobiSumRequest,
     DirichletCharacterJacobiSumResult,
     DirichletCharacterKernelRequest,
@@ -203,12 +202,6 @@ def _compute_character_conjugate(
     return native.dirichlet_character_conjugate(request.character)
 
 
-def _compute_character_inverse(
-    request: DirichletCharacterInverseRequest,
-) -> DirichletCharacter:
-    return native.dirichlet_character_inverse(request.character)
-
-
 def _compute_character_table(
     request: DirichletCharacterRequest,
 ) -> DirichletCharacterTableResult:
@@ -232,7 +225,7 @@ def _compute_gauss_sum(
 def _compute_primitive_gauss_norm(
     request: DirichletCharacterPrimitiveGaussNormRequest,
 ) -> DirichletCharacterPrimitiveGaussNormResult:
-    return native.dirichlet_character_primitive_gauss_norm(request.character)
+    return native.dirichlet_character_primitive_gauss_norm(request.primitive_character)
 
 
 def _compute_generalized_gauss_sum(
@@ -362,29 +355,6 @@ TOOLS: MathTools = (
                         "coordinates": [1],
                     }
                 },
-            ),
-        ),
-    ),
-    MathTool(
-        operation_id="dirichlet_character.inverse.compute",
-        title="Invert an exact Dirichlet character",
-        description=(
-            "Return the inverse character in the identical modulus and exact "
-            "unit-group parent. Inversion negates the dual coordinates, and "
-            "character values remain zero off the unit group."
-        ),
-        request_type=DirichletCharacterInverseRequest,
-        result_type=DirichletCharacter,
-        run=_compute_character_inverse,
-        tags=("number-theory", "dirichlet-character", "exact"),
-        examples=(
-            OperationExample(
-                name="inverse_order_four_character_mod5",
-                description=(
-                    "Invert a non-self-inverse character modulo 5 while retaining "
-                    "its exact finite unit-group parent."
-                ),
-                input={"character": {"group": _GROUP_MOD5, "coordinates": [1]}},
             ),
         ),
     ),
@@ -811,10 +781,10 @@ TOOLS: MathTools = (
         operation_id="dirichlet_character.primitive_gauss_norm.compute",
         title="Compute the exact squared norm of a primitive character Gauss sum",
         description=(
-            "Derive the character conductor from its unit-group data, require it "
-            "to equal the source modulus, then compute tau(chi) times its exact "
+            "Validate the typed primitive-character claim against its exact "
+            "conductor, then compute tau(chi) times its exact "
             "cyclotomic conjugate. The returned cyclotomic value is |tau(chi)|^2 "
-            "and equals the modulus. Caller-supplied primitive labels are not used."
+            "and equals the claimed conductor; false claims are rejected."
         ),
         request_type=DirichletCharacterPrimitiveGaussNormRequest,
         result_type=DirichletCharacterPrimitiveGaussNormResult,
@@ -824,7 +794,12 @@ TOOLS: MathTools = (
             OperationExample(
                 name="quadratic_character_mod5_norm",
                 description="Compute the exact squared norm, 5, of its primitive Gauss sum.",
-                input={"character": {"group": _GROUP_MOD5, "coordinates": [2]}},
+                input={
+                    "primitive_character": {
+                        "character": {"group": _GROUP_MOD5, "coordinates": [2]},
+                        "conductor": 5,
+                    }
+                },
             ),
         ),
     ),

@@ -283,9 +283,7 @@ def test_256_element_request_is_accepted_inside_rank_work_envelope() -> None:
     n = 256
     rank_bound = 128
     labels = tuple(f"e{i}" for i in range(n))
-    rows = tuple(
-        tuple(int(i == j) for j in range(n)) for i in range(rank_bound)
-    )
+    rows = tuple(tuple(int(i == j) for j in range(n)) for i in range(rank_bound))
     source = _matroid(rows, labels)
     candidate = tuple(range(rank_bound))
     result = weighted_intersection_rank_certificate(

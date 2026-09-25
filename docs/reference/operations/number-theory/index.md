@@ -7,6 +7,7 @@
 - [Function-field divisor effective parts](function-field-divisor-effective-parts.md)
 - [Rational function-field divisor arithmetic](function-field-divisor-arithmetic.md)
 - [Rational function-field Riemann-Roch spaces](function-field-riemann-roch.md)
+- [Rational function-field Riemann-Roch membership](function-field-riemann-roch-membership.md)
 - [Hyperelliptic Riemann-Roch spaces at infinity](function-field-hyperelliptic-infinity-riemann-roch.md)
 - [Rational function-field places](function-field-rational-place-enumeration.md)
 

@@ -12,6 +12,8 @@ from jacobian.math.function_fields._models import (
     FunctionFieldPositiveInfinityValuation,
     FunctionFieldProductTerm,
     FunctionFieldReductionStep,
+    FunctionFieldRiemannRochMembership,
+    FunctionFieldRiemannRochMembershipRow,
     FunctionFieldRiemannRochSpace,
     FunctionFieldValuation,
     HyperellipticAffinePlace,
@@ -39,6 +41,7 @@ from jacobian.math.function_fields.operations import (
     function_field_hyperelliptic_affine_valuation,
     function_field_hyperelliptic_infinity_valuation,
     function_field_rational_places_degree_bounded,
+    function_field_riemann_roch_membership,
     function_field_riemann_roch_space,
 )
 
@@ -54,6 +57,8 @@ __all__ = [
     "FunctionFieldPositiveInfinityValuation",
     "FunctionFieldProductTerm",
     "FunctionFieldReductionStep",
+    "FunctionFieldRiemannRochMembership",
+    "FunctionFieldRiemannRochMembershipRow",
     "FunctionFieldRiemannRochSpace",
     "FunctionFieldValuation",
     "HyperellipticAffinePlace",
@@ -76,6 +81,7 @@ __all__ = [
     "function_field_hyperelliptic_affine_valuation",
     "function_field_hyperelliptic_infinity_valuation",
     "function_field_rational_places_degree_bounded",
+    "function_field_riemann_roch_membership",
     "function_field_riemann_roch_space",
     "hyperelliptic_infinity_riemann_roch_space",
 ]

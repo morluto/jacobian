@@ -58,6 +58,9 @@ from jacobian.math.function_fields._models import (
     MAX_RATIONAL_PLACE_WORK,
     MAX_RIEMANN_ROCH_BASIS_DIMENSION,
     MAX_RIEMANN_ROCH_CONSTRUCTION_WORK,
+    MAX_RIEMANN_ROCH_MEMBERSHIP_FACTOR_WORK,
+    MAX_RIEMANN_ROCH_MEMBERSHIP_OUTPUT_BYTES,
+    MAX_RIEMANN_ROCH_MEMBERSHIP_PROFILE_ROWS,
     FiniteFunctionField,
     FiniteFunctionFieldElement,
     FunctionFieldBaseEmbedding,
@@ -77,6 +80,8 @@ from jacobian.math.function_fields._models import (
     FunctionFieldProductTerm,
     FunctionFieldReductionStep,
     FunctionFieldResidueResult,
+    FunctionFieldRiemannRochMembership,
+    FunctionFieldRiemannRochMembershipRow,
     FunctionFieldRiemannRochSpace,
     FunctionFieldValuation,
     HyperellipticAffinePlace,
@@ -1322,8 +1327,7 @@ def _hyperelliptic_numerator_series(
         inverse_two_y = pow(2 * place.y, -1, prime)
         for degree in range(1, size):
             lower_terms = sum(
-                y_series[i] * y_series[degree - i]
-                for i in range(1, degree)
+                y_series[i] * y_series[degree - i] for i in range(1, degree)
             )
             y_series[degree] = (
                 (branch_series[degree] - lower_terms) * inverse_two_y
@@ -1340,10 +1344,13 @@ def _hyperelliptic_numerator_series(
         ]
 
     derivative = poly_derivative(branch, prime)
-    slope = sum(
-        coefficient * pow(place.x, degree, prime)
-        for degree, coefficient in enumerate(derivative)
-    ) % prime
+    slope = (
+        sum(
+            coefficient * pow(place.x, degree, prime)
+            for degree, coefficient in enumerate(derivative)
+        )
+        % prime
+    )
     if not slope:
         raise OperationDomainValidationError(
             location=("place",),
@@ -1361,14 +1368,20 @@ def _hyperelliptic_numerator_series(
     # Here y is t and x-x0 starts at t^2. Solve f(x(t))=t^2 in O(d*N^2).
     for degree in range(2, size):
         for exponent in range(2, len(branch)):
-            powers[exponent][degree] = sum(
-                x_series[index] * powers[exponent - 1][degree - index]
-                for index in range(2, degree + 1)
-            ) % prime
-        known = sum(
-            taylor[exponent] * powers[exponent][degree]
-            for exponent in range(2, len(branch))
-        ) % prime
+            powers[exponent][degree] = (
+                sum(
+                    x_series[index] * powers[exponent - 1][degree - index]
+                    for index in range(2, degree + 1)
+                )
+                % prime
+            )
+        known = (
+            sum(
+                taylor[exponent] * powers[exponent][degree]
+                for exponent in range(2, len(branch))
+            )
+            % prime
+        )
         target = 1 if degree == 2 else 0
         x_series[degree] = ((target - known) * inverse_slope) % prime
         powers[1][degree] = x_series[degree]
@@ -1416,10 +1429,13 @@ def function_field_hyperelliptic_affine_valuation(
             message="affine places require an odd-characteristic squarefree y^2=f(x) model",
         )
     prime = field.characteristic
-    curve_value = sum(
-        coefficient * pow(place.x, degree, prime)
-        for degree, coefficient in enumerate(branch)
-    ) % prime
+    curve_value = (
+        sum(
+            coefficient * pow(place.x, degree, prime)
+            for degree, coefficient in enumerate(branch)
+        )
+        % prime
+    )
     if place.y * place.y % prime != curve_value:
         raise OperationDomainValidationError(
             location=("place",),
@@ -1427,10 +1443,13 @@ def function_field_hyperelliptic_affine_valuation(
             message="retained affine coordinates must satisfy y^2=f(x)",
         )
     if place.local_parameter == "y":
-        slope = sum(
-            coefficient * pow(place.x, degree, prime)
-            for degree, coefficient in enumerate(poly_derivative(branch, prime))
-        ) % prime
+        slope = (
+            sum(
+                coefficient * pow(place.x, degree, prime)
+                for degree, coefficient in enumerate(poly_derivative(branch, prime))
+            )
+            % prime
+        )
         if slope == 0:
             raise OperationDomainValidationError(
                 location=("place",),
@@ -1465,13 +1484,18 @@ def function_field_hyperelliptic_affine_valuation(
     u_degree = (len(first[0]) - 1) + (len(second[1]) - 1)
     v_degree = (len(second[0]) - 1) + (len(first[1]) - 1)
     norm_degree_bound = max(2 * u_degree, 2 * v_degree + len(branch) - 1)
-    if max(denominator_degree, u_degree, v_degree, norm_degree_bound) > 4 * MAX_POLYNOMIAL_X_DEGREE + 12:
+    if (
+        max(denominator_degree, u_degree, v_degree, norm_degree_bound)
+        > 4 * MAX_POLYNOMIAL_X_DEGREE + 12
+    ):
         raise OperationResourceAdmissionError(
             location=("element", "coordinates"),
             code="function_field.affine_valuation_growth_exceeds_envelope",
             message="norm and common-coordinate growth exceed the admitted envelope",
         )
-    admitted_work = (len(branch) + max(u_degree, v_degree) + 1) * (norm_degree_bound + 1) ** 2
+    admitted_work = (len(branch) + max(u_degree, v_degree) + 1) * (
+        norm_degree_bound + 1
+    ) ** 2
     if admitted_work > 1_000_000:
         raise OperationResourceAdmissionError(
             location=("element", "coordinates"),
@@ -1481,7 +1505,9 @@ def function_field_hyperelliptic_affine_valuation(
     denominator = poly_mul(first[1], second[1], prime)
     u = poly_mul(first[0], second[1], prime)
     v = poly_mul(second[0], first[1], prime)
-    norm = poly_sub(poly_mul(u, u, prime), poly_mul(poly_mul(v, v, prime), branch, prime), prime)
+    norm = poly_sub(
+        poly_mul(u, u, prime), poly_mul(poly_mul(v, v, prime), branch, prime), prime
+    )
     if not norm:
         return HyperellipticAffinePlaceValuationResult(
             place=place,
@@ -1573,9 +1599,7 @@ def function_field_hyperelliptic_infinity_valuation(
     for coordinate_index, coordinate in enumerate(element.coordinates):
         if coordinate.numerator.is_zero():
             continue
-        rational_order = (
-            coordinate.denominator.degree - coordinate.numerator.degree
-        )
+        rational_order = coordinate.denominator.degree - coordinate.numerator.degree
         term_value = 2 * rational_order
         if coordinate_index == 1:
             term_value -= degree_y
@@ -2380,6 +2404,141 @@ def function_field_riemann_roch_space(
     )
 
 
+def function_field_riemann_roch_membership(
+    element: FiniteFunctionFieldElement,
+    divisor: FunctionFieldDivisor,
+) -> FunctionFieldRiemannRochMembership:
+    """Decide exact membership in ``L(D)`` over the rational field GF(p)(x)."""
+
+    field, terms = _preflight_riemann_roch_input(divisor)
+    _preflight_riemann_roch_profile(field, terms)
+    if not isinstance(element, FiniteFunctionFieldElement):
+        raise OperationDomainValidationError(
+            location=("element",),
+            code="function_field.element_type",
+            message="element must be a finite function-field element value",
+        )
+    try:
+        element = FiniteFunctionFieldElement.model_validate(element.model_dump())
+    except (ValidationError, AttributeError, KeyError, TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("element",),
+            code="function_field.invalid_element",
+            message="element has malformed coordinate or parent data",
+        ) from exc
+    if element.field != field:
+        raise OperationDomainValidationError(
+            location=("element", "field"),
+            code="function_field.parent_mismatch",
+            message="element and divisor must belong to the same exact function field",
+        )
+    canonical_element = _canonical_element(element, field)
+    coordinate = canonical_element.coordinates[0]
+    is_zero = coordinate.numerator.is_zero()
+
+    # A rational function of numerator and denominator degrees at most 12 has
+    # at most their summed number of finite prime factors and one infinity
+    # place. This bounds the complete support union before any factorization.
+    support_rows_bound = len(terms)
+    if not is_zero:
+        support_rows_bound += (
+            coordinate.numerator.degree + coordinate.denominator.degree + 1
+        )
+    if support_rows_bound > MAX_RIEMANN_ROCH_MEMBERSHIP_PROFILE_ROWS:
+        raise OperationResourceAdmissionError(
+            location=("result", "profile"),
+            code="function_field.riemann_roch_membership_profile_exceeds_envelope",
+            message=(
+                "the complete divisor/function support union exceeds the "
+                f"{MAX_RIEMANN_ROCH_MEMBERSHIP_PROFILE_ROWS}-place profile bound"
+            ),
+        )
+
+    input_bytes = len(
+        encode_strict_json(
+            {
+                "element": element.model_dump(mode="json"),
+                "divisor": divisor.model_dump(mode="json"),
+            }
+        )
+    )
+    output_bytes_bound = 4096 + 2 * input_bytes + 4096 * support_rows_bound
+    if output_bytes_bound > MAX_RIEMANN_ROCH_MEMBERSHIP_OUTPUT_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("result",),
+            code="function_field.riemann_roch_membership_output_exceeds_envelope",
+            message=(
+                "the complete exact membership profile exceeds the "
+                f"{MAX_RIEMANN_ROCH_MEMBERSHIP_OUTPUT_BYTES}-byte output envelope"
+            ),
+        )
+
+    prime_bits = field.characteristic.bit_length()
+    factor_work = sum(max(1, term.place.degree**3) * prime_bits for term in terms)
+    if not is_zero:
+        factor_work += (
+            max(1, coordinate.numerator.degree**3)
+            + max(1, coordinate.denominator.degree**3)
+        ) * prime_bits
+    if factor_work > MAX_RIEMANN_ROCH_MEMBERSHIP_FACTOR_WORK:
+        raise OperationResourceAdmissionError(
+            location=("divisor",),
+            code="function_field.riemann_roch_membership_work_exceeds_envelope",
+            message=(
+                "place and element factorization exceed the admitted "
+                f"{MAX_RIEMANN_ROCH_MEMBERSHIP_FACTOR_WORK}-unit work bound"
+            ),
+        )
+
+    admitted_divisor = _admit_divisor(divisor)
+    canonical_element = _canonical_element(element, admitted_divisor.field)
+    if is_zero:
+        return FunctionFieldRiemannRochMembership(
+            element=canonical_element,
+            divisor=admitted_divisor,
+            status="IN_SPACE",
+            profile=(),
+        )
+
+    principal = function_field_principal_divisor(
+        admitted_divisor.field, canonical_element
+    )
+    divisor_multiplicities = {
+        term.place.model_dump_json(): (term.place, term.multiplicity)
+        for term in admitted_divisor.terms
+    }
+    element_valuations = {
+        term.place.model_dump_json(): (term.place, term.multiplicity)
+        for term in principal.divisor.terms
+    }
+    profile: list[FunctionFieldRiemannRochMembershipRow] = []
+    for key in sorted(divisor_multiplicities.keys() | element_valuations.keys()):
+        divisor_row = divisor_multiplicities.get(key)
+        element_row = element_valuations.get(key)
+        if divisor_row is None:
+            assert element_row is not None
+            place = element_row[0]
+            divisor_multiplicity = 0
+        else:
+            place, divisor_multiplicity = divisor_row
+        element_valuation = element_row[1] if element_row is not None else 0
+        total = element_valuation + divisor_multiplicity
+        profile.append(
+            FunctionFieldRiemannRochMembershipRow(
+                place=place,
+                element_valuation=element_valuation,
+                divisor_multiplicity=divisor_multiplicity,
+                sum=total,
+            )
+        )
+    return FunctionFieldRiemannRochMembership(
+        element=principal.element,
+        divisor=admitted_divisor,
+        status=("IN_SPACE" if all(row.sum >= 0 for row in profile) else "NOT_IN_SPACE"),
+        profile=tuple(profile),
+    )
+
+
 __all__ = [
     "_element_inverse",
     "function_field_base_embedding",
@@ -2393,4 +2552,5 @@ __all__ = [
     "function_field_place_valuation",
     "function_field_principal_divisor",
     "function_field_rational_places_degree_bounded",
+    "function_field_riemann_roch_membership",
 ]

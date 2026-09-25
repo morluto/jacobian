@@ -198,16 +198,8 @@ def _admit(request: SimpleNumberFieldEmbeddingRequest) -> None:
         *(len(str(abs(value))) for value in values),
         *(canonical_rational_component_digits(value) for value in rationals),
     )
-    identity_map = (
-        request.source == request.target
-        and request.generator_image.coefficients_ascending
-        == (CanonicalRational(num=0, den=1), CanonicalRational(num=1, den=1))
-    )
-    growth = (
-        input_digits
-        if identity_map
-        else input_digits
-        + request.source.degree * request.target.degree * (3 * input_digits + 3)
+    growth = input_digits + request.source.degree * request.target.degree * (
+        3 * input_digits + 3
     )
     if growth > 256:
         raise OperationResourceAdmissionError(

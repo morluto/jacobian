@@ -1,9 +1,7 @@
 """Dispatch boundaries for high-order bounded QQ splitting fields."""
 
-import pytest
-
 from jacobian.catalog.catalog import Catalog
-from jacobian.dispatch import OperationRequestValidationError, invoke_operation
+from jacobian.dispatch import invoke_operation
 
 _S6 = {
     "polynomial": {
@@ -19,8 +17,10 @@ _S6 = {
 }
 
 
-def test_catalog_dispatch_rejects_degree_six_splitting_field() -> None:
-    with pytest.raises(OperationRequestValidationError):
-        invoke_operation(
-            "number_field.polynomial.splitting_field.compute", _S6, Catalog.open()
-        )
+def test_catalog_dispatch_accepts_the_degree_six_full_symmetric_group() -> None:
+    result = invoke_operation(
+        "number_field.polynomial.splitting_field.compute", _S6, Catalog.open()
+    )
+
+    assert result.output["field"]["degree"] == 720
+    assert len(result.output["field"]["basis_labels"]) == 720

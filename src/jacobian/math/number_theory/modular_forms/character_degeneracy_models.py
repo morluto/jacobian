@@ -62,11 +62,9 @@ class ModularCharacterVDegeneracyImage(StrictModel):
             source_form = ModularFormCoordinates.model_validate(
                 self.source_form.model_dump()
             )
-            from jacobian.math.number_theory.modular_forms.space_maps import (
-                require_modular_character_space_inclusion,
+            inclusion = ModularCharacterSpaceInclusion.model_validate(
+                self.inclusion.model_dump()
             )
-
-            inclusion = require_modular_character_space_inclusion(self.inclusion)
             expansion = ModularFormFieldQExpansion.model_validate(
                 self.q_expansion.model_dump()
             )

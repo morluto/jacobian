@@ -454,19 +454,21 @@ def enclose_kempner_series_decimal(
     lower_units = 0
     upper_units = 0
     enumerated = 0
+    node_visits = 0
 
     for length in range(1, cutoff + 1):
         for first in nonzero:
             stack = [(first, length - 1)]
             while stack:
                 prefix, remaining = stack.pop()
+                node_visits += 1
+                if node_visits % 4_096 == 0:
+                    request_checkpoint("during Kempner fixed-point traversal")
                 if remaining == 0:
                     quotient, remainder = divmod(scale, prefix)
                     lower_units += quotient
                     upper_units += quotient + bool(remainder)
                     enumerated += 1
-                    if enumerated % 4_096 == 0:
-                        request_checkpoint("during Kempner fixed-point recurrence")
                     continue
                 stack.extend(
                     (prefix * base + digit, remaining - 1)

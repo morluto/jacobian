@@ -91,7 +91,9 @@ def test_unnormalized_delta_one_uses_every_simplex_and_is_chain_complex():
         1,
         0,
     ]
-    assert type(normalized).model_validate_json(normalized.model_dump_json()) == normalized
+    assert (
+        type(normalized).model_validate_json(normalized.model_dump_json()) == normalized
+    )
 
 
 def test_unnormalized_chain_result_retains_reusable_canonical_value():

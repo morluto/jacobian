@@ -387,8 +387,7 @@ def normalized_chains(
             message="normalized differential does not square to zero",
         )
     bases = tuple(
-        tuple(s.sets[degree][index] for index in row)
-        for degree, row in enumerate(nd)
+        tuple(s.sets[degree][index] for index in row) for degree, row in enumerate(nd)
     )
     chain = ChainComplexValue(
         coefficient_ring=CoefficientRing.INTEGER,

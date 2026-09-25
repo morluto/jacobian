@@ -102,7 +102,9 @@ def test_conversion_serializes_and_composes_with_normalized_chains():
     assert tuple(map(len, normalized.nondegenerate_bases)) == (2, 1, 0)
     assert normalized.chain_complex.differential_matrices[0] == ((-1,), (1,))
     assert normalized.chain_complex.basis_sizes == (2, 1, 0)
-    assert type(normalized).model_validate_json(normalized.model_dump_json()) == normalized
+    assert (
+        type(normalized).model_validate_json(normalized.model_dump_json()) == normalized
+    )
 
 
 def test_exact_prefix_count_is_admitted_before_materializing_degrees(monkeypatch):

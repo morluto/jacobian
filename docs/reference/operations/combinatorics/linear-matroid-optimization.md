@@ -85,15 +85,17 @@ has cardinality equal to both source ranks. `NO_COMMON_BASIS` includes a reason:
 maximum intersection cardinality. The latter decision is backed by the exact
 min-max witness.
 
-The result is bound to both represented matroids. Deserializing it replays the
-source ranks, feasibility ranks, and witness ranks against those matrices;
-`verify_common_basis_result` independently checks the same claims for values
-constructed outside the wire path. The admitted ground and work limits match
-maximum-cardinality matroid intersection: admission precomputes both
-source ranks, reuses them for the closed decision, bounds each retained
-ground axis at 65,536 Unicode codepoints, and charges the exchange search at
-the regime those ranks make reachable — at most `min(r₁, r₂) + 2` searches of
-cached probes on matrices of at most `min(r₁, r₂) + 1` columns. A rank-zero
+The result is bound to both represented matroids. Deserialization checks the
+shape and consistency of the returned ranks, status, reason, basis, and witness
+without repeating matrix computations. `verify_common_basis_result` replays
+the source ranks, feasibility ranks, and witness ranks against the retained
+matrices, including for values constructed outside the wire path. The admitted
+ground and work limits match maximum-cardinality matroid intersection:
+admission precomputes both source ranks, reuses them for the closed decision,
+bounds each retained ground axis at 65,536 Unicode codepoints, and charges the
+exchange search at the regime those ranks make reachable — at most
+`min(r₁, r₂) + 2` searches of cached probes on matrices of at most
+`min(r₁, r₂) + 1` columns. A rank-zero
 source is presolved exactly. Requests beyond the exact envelope fail
 admission; they do not produce a negative common-basis conclusion.
 

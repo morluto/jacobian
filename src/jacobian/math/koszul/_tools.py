@@ -24,6 +24,8 @@ from jacobian.math.koszul.module_models import (
     ModuleKoszulRequest,
     ModuleKoszulSequencePermutation,
     ModuleKoszulSequencePermutationRequest,
+    ModuleKoszulTopHomology,
+    ModuleKoszulTopHomologyRequest,
     ModuleKoszulUnitContraction,
     ModuleKoszulUnitContractionRequest,
     ModuleKoszulZeroExtension,
@@ -40,6 +42,7 @@ from jacobian.math.koszul.module_operations import (
     module_koszul_map,
     module_koszul_quotient,
     module_koszul_sequence_permute,
+    module_koszul_top_homology,
     module_koszul_unit_contract,
 )
 from jacobian.math.koszul.operations import koszul_complex
@@ -491,6 +494,44 @@ TOOLS: MathTools = (
                         "sequence": [],
                         "basis_sizes": [1],
                         "differentials": [],
+                    }
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="homological.koszul.top_homology.compute",
+        title="Compute top Koszul homology as a module annihilator",
+        description=(
+            "Compute H_r(f; M) in the canonical top wedge coordinates and "
+            "identify it with the simultaneous annihilator {m in M: f_i m=0 "
+            "for every i}. The operation admits and reconstructs only the "
+            "top differential; the empty sequence returns M as H_0."
+        ),
+        request_type=ModuleKoszulTopHomologyRequest,
+        result_type=ModuleKoszulTopHomology,
+        run=module_koszul_top_homology,
+        tags=("koszul", "top-homology", "annihilator", "exact"),
+        discovery_terms=(
+            "top Koszul homology",
+            "simultaneous annihilator of a sequence on a module",
+            "common kernel of Koszul sequence actions",
+        ),
+        examples=(
+            OperationExample(
+                name="empty_sequence_top_homology",
+                description=(
+                    "For the empty sequence the top degree is zero and "
+                    "H_0 is the whole one-dimensional module."
+                ),
+                input={
+                    "complex": {
+                        "algebra": _MODULE_EXAMPLE["algebra"],
+                        "module": _MODULE_EXAMPLE["module"],
+                        "sequence": [],
+                        "basis_sizes": [1],
+                        "differentials": [],
+                        "square_zero": True,
                     }
                 },
             ),

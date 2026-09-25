@@ -510,6 +510,54 @@ class ModuleKoszulHomologyRequest(StrictModel):
     complex: ModuleKoszulComplex
 
 
+class ModuleKoszulTopHomologyRequest(StrictModel):
+    """Compute the top Koszul homology and its module-annihilator model."""
+
+    complex: ModuleKoszulComplex
+
+
+class ModuleKoszulTopHomology(StrictModel):
+    """Top cycles identified with the simultaneous annihilator in the module."""
+
+    algebra: FiniteCommutativeAlgebra
+    module: BasedFiniteModule
+    sequence: tuple[tuple[CanonicalRational, ...], ...] = Field(
+        max_length=MAX_MODULE_SEQUENCE_LENGTH
+    )
+    top_differential: ModuleDifferential | None
+    annihilator_basis: tuple[tuple[CanonicalRational, ...], ...]
+    top_homology_basis: tuple[tuple[CanonicalRational, ...], ...]
+
+    @model_validator(mode="after")
+    def top_axes(self) -> Self:
+        dimension = len(self.module.basis)
+        length = len(self.sequence)
+        if (
+            self.module.algebra != self.algebra
+            or length > MAX_MODULE_SEQUENCE_LENGTH
+            or any(len(element) != len(self.algebra.basis) for element in self.sequence)
+            or (self.top_differential is None) != (length == 0)
+            or (
+                self.top_differential is not None
+                and (
+                    self.top_differential.row_count != dimension * length
+                    or self.top_differential.column_count != dimension
+                )
+            )
+            or len(self.annihilator_basis) != len(self.top_homology_basis)
+            or any(
+                len(vector) != dimension
+                for basis in (self.annihilator_basis, self.top_homology_basis)
+                for vector in basis
+            )
+        ):
+            raise _err(
+                "top_homology_axes",
+                "top homology must retain compatible parents, sequence, differential, and bases",
+            )
+        return self
+
+
 class ModuleKoszulHomologyDegree(StrictModel):
     """Exact bases in one degree, with vectors in the retained chain basis."""
 

@@ -7,8 +7,10 @@ from jacobian.math.topology._models import canonical_complex
 from jacobian.math.topology.cohomology.operations._models import SimplicialMap
 from jacobian.math.topology.edge_paths._models import (
     FundamentalGroupMapRequest,
+    PresentationMapCompositionRequest,
 )
 from jacobian.math.topology.edge_paths.presentation_maps import (
+    compose_fundamental_group_maps,
     induced_fundamental_group_map,
 )
 
@@ -93,6 +95,68 @@ def test_circle_identity_and_reflection_induce_expected_generator_words() -> Non
     assert _letters(reflection.generator_images[0]) == ((0, -1),)
     assert reflection.abelianization_map.entries == ((-1,),)
     _replay_triangle_relations(reflection)
+
+
+def test_vertex_relabeling_transports_presentation_generators_coherently() -> None:
+    # Two three-edge cycles sharing an edge form a rank-two graph. Relabeling
+    # changes the deterministic spanning-tree complement, so the induced map
+    # must transport generator axes instead of treating their indices as fixed.
+    vertices = ("a", "b", "c", "d")
+    edges = (("a", "b"), ("b", "c"), ("a", "c"), ("b", "d"), ("a", "d"))
+    source = _complex(vertices, edges)
+    relabel = {"a": "z", "b": "a", "c": "x", "d": "b"}
+    target = _complex(
+        tuple(relabel[vertex] for vertex in vertices),
+        tuple(tuple(relabel[vertex] for vertex in edge) for edge in edges),
+    )
+
+    forward = induced_fundamental_group_map(
+        FundamentalGroupMapRequest(
+            map=SimplicialMap(
+                source=source,
+                target=target,
+                vertex_map=tuple(relabel[vertex] for vertex in source.vertices),
+            ),
+            source_base_vertex="a",
+            target_base_vertex="z",
+        )
+    )
+    inverse_relabel = {image: vertex for vertex, image in relabel.items()}
+    backward = induced_fundamental_group_map(
+        FundamentalGroupMapRequest(
+            map=SimplicialMap(
+                source=target,
+                target=source,
+                vertex_map=tuple(inverse_relabel[vertex] for vertex in target.vertices),
+            ),
+            source_base_vertex="z",
+            target_base_vertex="a",
+        )
+    )
+
+    # The relabeled presentation has a different deterministic generator
+    # basis. The vertex bijection swaps those axes, and its inverse must
+    # transport them back to the identity on the original presentation.
+    assert forward.source_presentation != forward.target_presentation
+    assert tuple(_letters(word) for word in forward.generator_images) == (
+        ((1, 1),),
+        ((0, 1),),
+    )
+    assert tuple(_letters(word) for word in backward.generator_images) == (
+        ((1, 1),),
+        ((0, 1),),
+    )
+
+    round_trip = compose_fundamental_group_maps(
+        PresentationMapCompositionRequest(first=forward, second=backward)
+    )
+    assert round_trip.source_presentation == forward.source_presentation
+    assert round_trip.target_presentation == forward.source_presentation
+    assert tuple(_letters(word) for word in round_trip.generator_images) == (
+        ((0, 1),),
+        ((1, 1),),
+    )
+    assert round_trip.abelianization_map.entries == ((1, 0), (0, 1))
 
 
 def test_collapsing_circle_to_edge_maps_generator_to_identity() -> None:

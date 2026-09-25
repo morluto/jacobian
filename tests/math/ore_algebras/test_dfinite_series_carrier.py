@@ -86,6 +86,19 @@ def test_sinh_ode_carrier_matches_independent_taylor_recurrence() -> None:
     assert DFinitePowerSeries.model_validate_json(carrier.model_dump_json()) == carrier
 
 
+def test_series_carrier_accepts_representation_degree_above_arithmetic_cap() -> None:
+    operator = DifferentialOreOperator.model_validate(
+        {
+            "terms": [
+                {"order": 0, "coefficient": _rf([(1, 65)]).model_dump()},
+                {"order": 1, "coefficient": _rf([(1, 0)]).model_dump()},
+            ]
+        }
+    )
+    carrier = differential_series_construct(operator, {"values": [1]})
+    assert carrier.operator == operator
+
+
 def test_catalog_operation_returns_the_dfinite_target_value() -> None:
     tool = next(
         tool

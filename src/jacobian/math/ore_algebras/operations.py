@@ -1780,7 +1780,24 @@ def differential_series_construct(
                 "and have complete initial derivatives at its ordinary center"
             ),
         ) from exc
-    admitted_operator = _admit_differential_operator(request.operator)
+    # The carrier preserves rational-function coefficients without differential
+    # arithmetic, so use the representation domain rather than shift limits.
+    admitted_operator = request.operator
+    for index, term in enumerate(admitted_operator.terms):
+        try:
+            require_canonical_rational_function(
+                term.coefficient,
+                maximum_terms=MAX_RATIONAL_FUNCTION_TERMS,
+                maximum_exponent=MAX_RATIONAL_FUNCTION_REPRESENTATION_EXPONENT,
+                maximum_coefficient_digits=MAX_RATIONAL_FUNCTION_COEFFICIENT_DIGITS,
+                label=f"differential coefficient {index}",
+            )
+        except Exception as exc:
+            raise OperationDomainValidationError(
+                location=("operator", "terms", index),
+                code="ore_algebra.differential_coefficient",
+                message=str(exc),
+            ) from exc
     output_bytes = len(request.model_dump_json().encode("utf-8")) + 32
     if output_bytes > MAX_DIFFERENTIAL_ADDITIVE_OUTPUT_BYTES:
         raise OperationResourceAdmissionError(

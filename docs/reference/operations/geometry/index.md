@@ -12,3 +12,4 @@
 - [Bounded regular plane-curve arclength](plane-curve-arclength.md)
 - [Rational coordinate covariant derivatives](rational-covariant-derivatives.md)
 - [Two-dimensional Bieberbach polygon quotient chains](bieberbach-polygon-quotient-chains.md)
+- [Translation torus quotient chains](bieberbach-translation-torus-chains.md)

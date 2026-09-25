@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from fractions import Fraction
 from itertools import combinations
+from math import comb
 from typing import NoReturn
 
 from pydantic import ValidationError
@@ -29,7 +30,7 @@ from jacobian.math.topology.chain_complexes.values import (
 
 MAX_TORUS_SOURCE_BYTES = 256_000
 MAX_TORUS_RESULT_BYTES = 600_000
-_Vector3 = tuple[Fraction, Fraction, Fraction]
+_Vector = tuple[Fraction, ...]
 
 
 def _domain(reason: str, message: str) -> NoReturn:
@@ -49,54 +50,42 @@ def _resource(reason: str, message: str) -> NoReturn:
 
 
 def _parallelepiped_directions(
-    vertices: tuple[_Vector3, ...],
-) -> tuple[_Vector3, _Vector3, _Vector3] | None:
-    """Find the canonical edge triple whose subset sums are the vertex set."""
+    vertices: tuple[_Vector, ...],
+) -> tuple[_Vector, ...] | None:
+    """Find canonical edge vectors whose subset sums are the vertex set."""
     points = frozenset(vertices)
+    dimension = len(vertices[0])
     base = min(points)
     candidates = tuple(sorted(point for point in points if point != base))
-    for endpoints in combinations(candidates, 3):
-        vectors: tuple[_Vector3, _Vector3, _Vector3] = (
-            (
-                endpoints[0][0] - base[0],
-                endpoints[0][1] - base[1],
-                endpoints[0][2] - base[2],
-            ),
-            (
-                endpoints[1][0] - base[0],
-                endpoints[1][1] - base[1],
-                endpoints[1][2] - base[2],
-            ),
-            (
-                endpoints[2][0] - base[0],
-                endpoints[2][1] - base[1],
-                endpoints[2][2] - base[2],
-            ),
+    for endpoints in combinations(candidates, dimension):
+        vectors = tuple(
+            tuple(endpoints[index][axis] - base[axis] for axis in range(dimension))
+            for index in range(dimension)
         )
         sums = frozenset(
             tuple(
                 base[axis]
                 + sum(
-                    (vectors[j][axis] for j in range(3) if mask & (1 << j)), Fraction(0)
+                    (vectors[j][axis] for j in range(dimension) if mask & (1 << j)),
+                    Fraction(0),
                 )
-                for axis in range(3)
+                for axis in range(dimension)
             )
-            for mask in range(8)
+            for mask in range(1 << dimension)
         )
         if sums == points:
-            ordered = tuple(sorted(vectors))
-            return (ordered[0], ordered[1], ordered[2])
+            return tuple(sorted(vectors))
     return None
 
 
 def translation_torus_quotient_chains(
     source: CrystallographicFundamentalDomainResult,
 ) -> BieberbachTranslationTorusChains:
-    """Build integral quotient chains for a verified parallelepiped 3-torus.
+    """Build integral quotient chains for a verified translation torus.
 
-    This operation is intentionally restricted to a rank-three, pure
-    translation action with six opposite facet pairings. It returns the
-    product cell structure on ``(S^1)^3``, not a general three-dimensional
+    This operation is intentionally restricted to rank-one through rank-four
+    pure translation actions with a parallelepiped fundamental domain. It
+    returns the product cell structure on the torus, not a general
     Bieberbach face-orbit complex.
     """
     try:
@@ -113,17 +102,18 @@ def translation_torus_quotient_chains(
     pairing = checked.source
     extension = pairing.affine_realization.source
     profile = pairing.facet_profile
+    dimension = len(extension.action_matrices[0])
     # This strict shape check occurs before the geometric source is rebuilt.
     if (
-        len(extension.action_matrices[0]) != 3
+        not 1 <= dimension <= 4
         or len(extension.multiplication_table) != 1
-        or len(profile.vertices) != 8
-        or len(profile.facets) != 6
-        or len(pairing.pairings) != 6
+        or len(profile.vertices) != 1 << dimension
+        or len(profile.facets) != 2 * dimension
+        or len(pairing.pairings) != 2 * dimension
     ):
         _resource(
             "shape_bound",
-            "input must have rank three, eight vertices, six facets, and six directed pairings",
+            "input must have rank one through four with 2^rank vertices and 2*rank facets and directed pairings",
         )
     input_bytes = len(checked.model_dump_json().encode("utf-8"))
     if input_bytes > MAX_TORUS_SOURCE_BYTES:
@@ -132,15 +122,18 @@ def translation_torus_quotient_chains(
     if predicted_result_bytes > MAX_TORUS_RESULT_BYTES:
         _resource("result_bound", "quotient-chain result exceeds its byte envelope")
 
-    identity = ((1, 0, 0), (0, 1, 0), (0, 0, 1))
+    identity = tuple(
+        tuple(int(row == column) for column in range(dimension))
+        for row in range(dimension)
+    )
     if (
         extension.multiplication_table != ((0,),)
         or extension.action_matrices != (identity,)
-        or extension.factor_set != (((0, 0, 0),),)
+        or extension.factor_set != ((tuple(0 for _ in range(dimension)),),)
     ):
         _domain(
             "not_pure_translation",
-            "the 3-torus slice requires trivial holonomy and zero factor set",
+            "the translation-torus slice requires trivial holonomy and zero factor set",
         )
     if not checked.is_fundamental_domain:
         _domain("source_not_fundamental", "source is not a checked fundamental domain")
@@ -150,18 +143,12 @@ def translation_torus_quotient_chains(
         _domain("stale_source", "source must be a freshly checked fundamental domain")
 
     vertices = tuple(
-        (
-            vertex.coordinates[0].as_fraction(),
-            vertex.coordinates[1].as_fraction(),
-            vertex.coordinates[2].as_fraction(),
-        )
+        tuple(value.as_fraction() for value in vertex.coordinates)
         for vertex in profile.vertices
     )
     directions = _parallelepiped_directions(vertices)
     if directions is None:
-        _domain(
-            "not_parallelepiped", "the eight source vertices are not a parallelepiped"
-        )
+        _domain("not_parallelepiped", "the source vertices are not a parallelepiped")
     if any(value.denominator != 1 for vector in directions for value in vector):
         _domain(
             "nonintegral_translation_cell",
@@ -174,7 +161,7 @@ def translation_torus_quotient_chains(
         for sign in (-1, 1)
     }
     seen_facets: set[int] = set()
-    direction_counts: dict[tuple[int, int, int], int] = {}
+    direction_counts: dict[tuple[int, ...], int] = {}
     for side in pairing.pairings:
         if (
             side.holonomy_element != 0
@@ -187,20 +174,16 @@ def translation_torus_quotient_chains(
                 "each facet must be paired once to its opposite by a signed edge translation",
             )
         seen_facets.add(side.source_facet_index)
-        translated = (
-            side.lattice_translation[0],
-            side.lattice_translation[1],
-            side.lattice_translation[2],
-        )
+        translated = side.lattice_translation
         direction = min(
             translated,
-            (-translated[0], -translated[1], -translated[2]),
+            tuple(-coordinate for coordinate in translated),
         )
         direction_counts[direction] = direction_counts.get(direction, 0) + 1
-    if set(direction_counts.values()) != {2} or len(direction_counts) != 3:
+    if set(direction_counts.values()) != {2} or len(direction_counts) != dimension:
         _domain(
             "side_pairing_directions",
-            "each of the three circle directions must pair exactly one opposite facet pair",
+            "each circle direction must pair exactly one opposite facet pair",
         )
     pairing_by_source = {side.source_facet_index: side for side in pairing.pairings}
     if any(
@@ -220,33 +203,23 @@ def translation_torus_quotient_chains(
             "opposite facet pairings must be inverse translations",
         )
 
-    canonical_directions = (
-        (
-            CanonicalRational.from_fraction(directions[0][0]),
-            CanonicalRational.from_fraction(directions[0][1]),
-            CanonicalRational.from_fraction(directions[0][2]),
-        ),
-        (
-            CanonicalRational.from_fraction(directions[1][0]),
-            CanonicalRational.from_fraction(directions[1][1]),
-            CanonicalRational.from_fraction(directions[1][2]),
-        ),
-        (
-            CanonicalRational.from_fraction(directions[2][0]),
-            CanonicalRational.from_fraction(directions[2][1]),
-            CanonicalRational.from_fraction(directions[2][2]),
-        ),
+    canonical_directions = tuple(
+        tuple(CanonicalRational.from_fraction(value) for value in vector)
+        for vector in directions
     )
+    basis_sizes = tuple(comb(dimension, degree) for degree in range(dimension + 1))
     zero_chain = ChainComplexValue(
         coefficient_ring=CoefficientRing.INTEGER,
         prime=None,
         degree_min=0,
-        degree_max=3,
-        basis_sizes=(1, 3, 3, 1),
-        differential_matrices=(
-            (("0", "0", "0"),),
-            (("0", "0", "0"), ("0", "0", "0"), ("0", "0", "0")),
-            (("0",), ("0",), ("0",)),
+        degree_max=dimension,
+        basis_sizes=basis_sizes,
+        differential_matrices=tuple(
+            tuple(
+                tuple("0" for _ in range(basis_sizes[degree]))
+                for _ in range(basis_sizes[degree - 1])
+            )
+            for degree in range(1, dimension + 1)
         ),
     )
     result = BieberbachTranslationTorusChains(

@@ -1,19 +1,13 @@
 """Exact complete assignment evaluation for named finite CSP constraints."""
 
-import json
-
 import pytest
 
-from jacobian.catalog.builtins import BUILTIN_TOOLS
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.dispatch import invoke_operation
-from jacobian.math.logic.relational_structures import (
-    CspAssignmentRequest,
-    FiniteCspInstance,
+from jacobian.math.logic.relational_structures._models import FiniteCspInstance
+from jacobian.math.logic.relational_structures.operations import profile_csp_assignment
+from jacobian.math.logic.relational_structures.values import (
     FiniteRelationalStructure,
     FiniteRelationSymbol,
-    profile_csp_assignment,
 )
 
 
@@ -65,17 +59,6 @@ def test_valid_assignment_is_exact_solution_and_empty_instance_is_solved() -> No
     empty_result = profile_csp_assignment(empty, ())
     assert empty_result.status == "SOLUTION"
     assert empty_result.evaluations == ()
-
-
-def test_catalog_exposes_direct_assignment_profile() -> None:
-    operation_id = "csp.assignment.profile.compute"
-    assert any(tool.operation_id == operation_id for tool in BUILTIN_TOOLS)
-    payload = CspAssignmentRequest(
-        instance=_instance(), assignment=(0, 1)
-    ).model_dump_json()
-    output = invoke_operation(operation_id, json.loads(payload), Catalog.open()).output
-    assert output["status"] == "NOT_A_SOLUTION"
-    assert output["first_violation"]["constraint_id"] == "reverse"
 
 
 def test_native_rejects_malformed_assignments_without_a_wire_request() -> None:

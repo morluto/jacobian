@@ -6,6 +6,7 @@ from typing import Self
 
 from pydantic import Field, StrictInt, model_validator
 
+from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
 from jacobian.math.polynomials.values import (
     PolynomialVariable,
@@ -22,6 +23,11 @@ MAX_WEIGHT_ACTION_VARIABLES = 7
 MAX_WEIGHT_ACTION_DEGREE = 64
 MAX_GM_INVARIANT_DEGREE = 64
 MAX_GM_INVARIANT_MONOMIALS = 4_096
+MAX_GM_SUBREP_GENERATORS = 16
+MAX_GM_SUBREP_DIMENSION = 256
+MAX_GM_SUBREP_BASIS_TERMS = 64
+MAX_GM_SUBREP_TOTAL_TERMS = 256
+MAX_GM_SUBREP_BASIS_COEFFICIENT_DIGITS = 2_300
 
 
 class PolynomialWeightAction(StrictModel):
@@ -152,5 +158,98 @@ class PolynomialWeightInvariantResult(StrictModel):
         if len(self.basis) != self.dimension:
             raise ValueError(
                 "invariant monomial basis size must equal the exact dimension"
+            )
+        return self
+
+
+class PolynomialWeightSubrepresentationRequest(StrictModel):
+    """Generate the smallest G_m-stable polynomial span containing generators."""
+
+    action: PolynomialWeightAction
+    generators: tuple[RationalPolynomial, ...] = Field(
+        max_length=MAX_GM_SUBREP_GENERATORS
+    )
+    parameter: PolynomialVariable = "t"
+
+    @model_validator(mode="after")
+    def require_bound_polynomial_parent(self) -> Self:
+        if len(self.action.variables) > MAX_WEIGHT_ACTION_VARIABLES:
+            raise ValueError(
+                "the Laurent coaction carrier admits at most seven source variables"
+            )
+        if self.parameter in self.action.variables:
+            raise ValueError(
+                "the Laurent parameter must be distinct from ring variables"
+            )
+        if any(
+            polynomial.variables != self.action.variables
+            for polynomial in self.generators
+        ):
+            raise ValueError("every generator must use the action's ordered ring")
+        return self
+
+
+class PolynomialWeightSubrepresentationResult(StrictModel):
+    """The smallest stable span, represented in a canonical weight basis."""
+
+    action: PolynomialWeightAction
+    generators: tuple[RationalPolynomial, ...] = Field(
+        max_length=MAX_GM_SUBREP_GENERATORS
+    )
+    basis: tuple[RationalPolynomial, ...] = Field(max_length=MAX_GM_SUBREP_DIMENSION)
+    weights: tuple[StrictInt, ...] = Field(max_length=MAX_GM_SUBREP_DIMENSION)
+    generator_coordinates: tuple[tuple[CanonicalRational, ...], ...] = Field(
+        max_length=MAX_GM_SUBREP_GENERATORS
+    )
+    parameter: PolynomialVariable
+    matrix: tuple[tuple[RationalLaurentPolynomial, ...], ...] = Field(
+        max_length=MAX_GM_SUBREP_DIMENSION
+    )
+
+    @model_validator(mode="after")
+    def require_axes_and_shape(self) -> Self:
+        dimension = len(self.basis)
+        if not 0 <= dimension <= MAX_GM_SUBREP_DIMENSION:
+            raise ValueError(
+                "representation basis dimension is outside its admitted range"
+            )
+        if len(self.action.variables) > MAX_WEIGHT_ACTION_VARIABLES:
+            raise ValueError(
+                "the Laurent coaction carrier admits at most seven source variables"
+            )
+        if self.parameter in self.action.variables:
+            raise ValueError(
+                "the Laurent parameter must be distinct from ring variables"
+            )
+        if any(
+            polynomial.variables != self.action.variables
+            for polynomial in (*self.generators, *self.basis)
+        ):
+            raise ValueError("result basis must retain the action's ordered ring")
+        if len(self.weights) != dimension or tuple(self.weights) != tuple(
+            sorted(self.weights)
+        ):
+            raise ValueError(
+                "weight labels must be complete and ordered with the basis"
+            )
+        if len(self.generator_coordinates) != len(self.generators) or any(
+            len(row) != dimension for row in self.generator_coordinates
+        ):
+            raise ValueError("source-to-closure coordinates must match both basis axes")
+        if any(len(entry.terms) > 1 for row in self.matrix for entry in row):
+            raise ValueError(
+                "diagonal representation entries admit at most one Laurent term"
+            )
+        if len(self.matrix) != dimension or any(
+            len(row) != dimension for row in self.matrix
+        ):
+            raise ValueError(
+                "representation matrix must be square in the supplied basis"
+            )
+        if any(
+            entry.variables != (self.parameter,) for row in self.matrix for entry in row
+        ):
+            raise ValueError(
+                "matrix entries must use only the Laurent action parameter"
             )
         return self

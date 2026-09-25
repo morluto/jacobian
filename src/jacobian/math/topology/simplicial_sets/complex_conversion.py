@@ -30,7 +30,9 @@ MAX_COMPLEX_PREFIX_IDENTITY_WORK = 100_000
 MAX_COMPLEX_PREFIX_OUTPUT_BYTES = 1_000_000
 
 
-def _admitted_faces(request: SimplicialComplexPrefixRequest):
+def _admitted_faces(
+    request: SimplicialComplexPrefixRequest,
+) -> tuple[tuple[tuple[str, ...], ...], ...]:
     source = request.complex
     run_topology_admission(
         lambda: require_canonical_complex_admission(source), location=("complex",)
@@ -62,7 +64,11 @@ def _admitted_faces(request: SimplicialComplexPrefixRequest):
     )
 
 
-def _level_labels(faces, degree: int, vertex_index: dict[str, int]):
+def _level_labels(
+    faces: tuple[tuple[tuple[str, ...], ...], ...],
+    degree: int,
+    vertex_index: dict[str, int],
+) -> tuple[tuple[int, ...], ...]:
     """Generate each monotone tuple exactly once, grouped by its support."""
     tuples: set[tuple[int, ...]] = set()
     for level in faces[: degree + 1]:

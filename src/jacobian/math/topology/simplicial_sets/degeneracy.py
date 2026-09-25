@@ -33,7 +33,7 @@ class DegeneracyDegreeProfile(StrictModel):
     immediate_witnesses: tuple[DegeneracyWitness | None, ...]
 
     @model_validator(mode="after")
-    def require_partition(self):
+    def require_partition(self) -> DegeneracyDegreeProfile:
         if tuple(sorted(set(self.nondegenerate_indices))) != self.nondegenerate_indices:
             raise ValueError("nondegenerate indices must be sorted and unique")
         if any(
@@ -56,7 +56,7 @@ class DegeneracyProfileResult(StrictModel):
     degrees: tuple[DegeneracyDegreeProfile, ...]
 
     @model_validator(mode="after")
-    def require_source_axes(self):
+    def require_source_axes(self) -> DegeneracyProfileResult:
         if len(self.degrees) != self.simplicial_set.max_degree + 1:
             raise ValueError("profiles must cover every source degree")
         if any(

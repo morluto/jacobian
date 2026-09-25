@@ -14,6 +14,7 @@ from jacobian.math.topology.simplicial_sets._models import (
 from jacobian.math.topology.simplicial_sets.coproduct_models import (
     SimplicialSetCoproductRequest,
     SimplicialSetCoproductResult,
+    TaggedSimplex,
 )
 from jacobian.math.topology.simplicial_sets.maps import TruncatedSimplicialMap
 from jacobian.math.topology.simplicial_sets.operations import from_tables
@@ -134,7 +135,7 @@ def simplicial_set_coproduct(
         )
         for degree in range(left.max_degree + 1)
     )
-    axes = tuple(
+    axes: tuple[tuple[TaggedSimplex, ...], ...] = tuple(
         tuple(
             [("left", i) for i in range(len(left.sets[degree]))]
             + [("right", i) for i in range(len(right.sets[degree]))]

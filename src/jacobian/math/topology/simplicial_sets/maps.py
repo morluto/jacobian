@@ -73,7 +73,7 @@ class TruncatedSimplicialMap(StrictModel):
     maps: tuple[tuple[int, ...], ...]
 
     @model_validator(mode="after")
-    def require_degreewise_axes(self):
+    def require_degreewise_axes(self) -> TruncatedSimplicialMap:
         if self.source.max_degree != self.target.max_degree:
             raise ValueError("source and target prefixes must have equal degree")
         if len(self.maps) != self.source.max_degree + 1:
@@ -181,7 +181,7 @@ class NormalizedChainsResult(StrictModel):
     chain_complex: ChainComplexValue
 
     @model_validator(mode="after")
-    def require_source_bound_chain_axes(self):
+    def require_source_bound_chain_axes(self) -> NormalizedChainsResult:
         if len(self.nondegenerate_bases) != self.simplicial_set.max_degree + 1:
             raise ValueError("nondegenerate bases must cover every source degree")
         expected_bases = []
@@ -222,7 +222,7 @@ class NormalizedHomologyResult(StrictModel):
     homology_groups: tuple[HomologyGroup, ...]
 
     @model_validator(mode="after")
-    def require_supported_degrees(self):
+    def require_supported_degrees(self) -> NormalizedHomologyResult:
         if len(self.nondegenerate_bases) != self.simplicial_set.max_degree + 1:
             raise ValueError("nondegenerate bases must cover every source degree")
         if tuple(group.degree for group in self.homology_groups) != tuple(

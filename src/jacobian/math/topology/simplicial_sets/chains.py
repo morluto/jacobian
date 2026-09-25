@@ -36,7 +36,7 @@ class UnnormalizedChainsRequest(StrictModel):
     prime: StrictInt | None = Field(default=None, ge=2, le=1_000_003)
 
     @model_validator(mode="after")
-    def require_ring_and_prime_coupling(self):
+    def require_ring_and_prime_coupling(self) -> UnnormalizedChainsRequest:
         if self.coefficient_ring is CoefficientRing.PRIME_FIELD:
             if self.prime is None:
                 raise ValueError("GF_p coefficients require a prime modulus")
@@ -53,7 +53,7 @@ class UnnormalizedChainsResult(StrictModel):
     chain_complex: ChainComplexValue
 
     @model_validator(mode="after")
-    def require_source_bound_chain_axes(self):
+    def require_source_bound_chain_axes(self) -> UnnormalizedChainsResult:
         if self.simplex_bases != self.simplicial_set.sets:
             raise ValueError("simplex bases must retain the source degree axes")
         value = self.chain_complex

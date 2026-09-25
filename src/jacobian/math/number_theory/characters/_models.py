@@ -452,6 +452,19 @@ class DirichletCharacterJacobiSumResult(StrictModel):
     value: RationalCyclotomicElement
 
 
+class DirichletCharacterMixedJacobiSumRequest(StrictModel):
+    """Compute the three-character finite convolution at residue one."""
+
+    characters: tuple[DirichletCharacter, DirichletCharacter, DirichletCharacter]
+
+
+class DirichletCharacterMixedJacobiSumResult(StrictModel):
+    """Exact three-character Jacobi convolution with its source characters."""
+
+    characters: tuple[DirichletCharacter, DirichletCharacter, DirichletCharacter]
+    value: RationalCyclotomicElement
+
+
 class DirichletCharacterGaussSumRequest(StrictModel):
     """Compute the additive Gauss sum of one source-bound character."""
 
@@ -750,6 +763,8 @@ __all__ = [
     "DirichletCharacterJacobiSumRequest",
     "DirichletCharacterJacobiSumResult",
     "DirichletCharacterKernelRequest",
+    "DirichletCharacterMixedJacobiSumRequest",
+    "DirichletCharacterMixedJacobiSumResult",
     "DirichletCharacterOrderRequest",
     "DirichletCharacterOrderResult",
     "DirichletCharacterOrthogonalityRequest",

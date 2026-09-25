@@ -38,6 +38,7 @@ from jacobian.math.number_theory.characters._models import (
     DirichletCharacterGeneralizedGaussSumResult,
     DirichletCharacterJacobiSumResult,
     DirichletCharacterLValueNonpositiveResult,
+    DirichletCharacterMixedJacobiSumResult,
     DirichletCharacterOrderResult,
     DirichletCharacterOrthogonalityResult,
     DirichletCharacterParityResult,
@@ -88,6 +89,7 @@ __all__ = [
     "dirichlet_character_jacobi_sum",
     "dirichlet_character_kernel",
     "dirichlet_character_l_value_nonpositive_integer",
+    "dirichlet_character_mixed_jacobi_sum",
     "dirichlet_character_order",
     "dirichlet_character_orthogonality",
     "dirichlet_character_parity",
@@ -267,6 +269,139 @@ def dirichlet_character_jacobi_sum(
         right=right,
         value=value,
     )
+
+
+def _mixed_jacobi_admission(modulus: int, order: int) -> tuple[int, tuple[int, ...]]:
+    degree = _euler_phi(order)
+    work = modulus * modulus + order * degree
+    if (
+        order > MAX_CYCLIC_PERIOD
+        or work > MAX_CHARACTER_SUM_WORK
+        or work > MAX_CYCLIC_FIELD_WORK
+    ):
+        raise OperationResourceAdmissionError(
+            location=("characters", "0", "group", "modulus"),
+            code="dirichlet_character.mixed_jacobi_sum.work_bound",
+            message="mixed Jacobi sum exceeds the admitted residue and field work envelope",
+        )
+
+    # Bound reductions before constructing the cyclotomic polynomial.
+    coefficient_limit = 10**MAX_CYCLIC_FIELD_ELEMENT_DIGITS - 1
+    coefficient_bound = modulus * modulus
+    reduction_bound = 1 << degree
+    for _ in range(max(0, order - degree)):
+        if coefficient_bound > coefficient_limit // reduction_bound:
+            raise OperationResourceAdmissionError(
+                location=("characters",),
+                code="dirichlet_character.mixed_jacobi_sum.coefficient_bound",
+                message="mixed Jacobi sum may exceed the exact cyclotomic coefficient bound",
+            )
+        coefficient_bound *= reduction_bound
+    if coefficient_bound > coefficient_limit:
+        raise OperationResourceAdmissionError(
+            location=("characters",),
+            code="dirichlet_character.mixed_jacobi_sum.coefficient_bound",
+            message="mixed Jacobi sum may exceed the exact cyclotomic coefficient bound",
+        )
+    x = symbols("x")
+    descending = tuple(
+        int(value) for value in Poly(cyclotomic_poly(order, x), x).all_coeffs()
+    )
+    if len(descending) != degree + 1 or descending[0] != 1:
+        raise RuntimeError("cyclotomic polynomial has an unexpected canonical shape")
+    return degree, tuple(reversed(descending))
+
+
+def _mixed_jacobi_power_coefficients(
+    characters: tuple[DirichletCharacter, DirichletCharacter, DirichletCharacter],
+    order: int,
+) -> list[int]:
+    group = characters[0].group
+    modulus = group.modulus
+    row_by_residue = dict(zip(group.unit_residues, group.unit_coordinates, strict=True))
+
+    def value_exponent(character: DirichletCharacter, row: tuple[int, ...]) -> int:
+        return (
+            sum(
+                coordinate * (order // generator_order) * unit_coordinate
+                for coordinate, generator_order, unit_coordinate in zip(
+                    character.coordinates, group.generator_orders, row, strict=True
+                )
+            )
+            % order
+        )
+
+    powers = [0] * order
+    for first in range(modulus):
+        first_row = row_by_residue.get(first)
+        if first_row is None:
+            continue
+        first_exponent = value_exponent(characters[0], first_row)
+        for second in range(modulus):
+            second_row = row_by_residue.get(second)
+            third_row = row_by_residue.get((1 - first - second) % modulus)
+            if second_row is None or third_row is None:
+                continue
+            exponent = (
+                first_exponent
+                + value_exponent(characters[1], second_row)
+                + value_exponent(characters[2], third_row)
+            ) % order
+            powers[exponent] += 1
+    return powers
+
+
+def _reduce_mixed_jacobi_coefficients(
+    powers: list[int], order: int, degree: int, phi: tuple[int, ...]
+) -> tuple[int, ...]:
+    for power in range(order - 1, degree - 1, -1):
+        coefficient = powers[power]
+        if coefficient:
+            powers[power] = 0
+            for lower_power in range(degree):
+                powers[power - degree + lower_power] -= coefficient * phi[lower_power]
+    coefficients = tuple(powers[:degree])
+    if any(
+        abs(value) > 10**MAX_CYCLIC_FIELD_ELEMENT_DIGITS - 1 for value in coefficients
+    ):
+        raise RuntimeError("admitted mixed Jacobi coefficient bound was violated")
+    return coefficients
+
+
+def dirichlet_character_mixed_jacobi_sum(
+    characters: tuple[DirichletCharacter, DirichletCharacter, DirichletCharacter],
+) -> DirichletCharacterMixedJacobiSumResult:
+    r"""Return sum over a+b+c=1 mod N of chi(a) psi(b) rho(c), exactly."""
+
+    if not isinstance(characters, tuple) or len(characters) != 3:
+        raise OperationDomainValidationError(
+            location=("characters",),
+            code="dirichlet_character.mixed_jacobi_sum.character_count",
+            message="mixed Jacobi sums require exactly three characters",
+        )
+    chars = cast(
+        tuple[DirichletCharacter, DirichletCharacter, DirichletCharacter],
+        tuple(_require_character(character) for character in characters),
+    )
+    group = chars[0].group
+    if any(character.group != group for character in chars[1:]):
+        raise OperationDomainValidationError(
+            location=("characters",),
+            code="dirichlet_character.mixed_jacobi_sum.parent_mismatch",
+            message="mixed Jacobi-sum characters must use the identical group parent",
+        )
+    order = group.exponent
+    degree, phi = _mixed_jacobi_admission(group.modulus, order)
+    powers = _mixed_jacobi_power_coefficients(chars, order)
+    coefficients = _reduce_mixed_jacobi_coefficients(powers, order, degree, phi)
+    value = RationalCyclotomicElement(
+        field=RationalCyclotomicField(order=order),
+        coefficients_ascending=tuple(
+            CanonicalRational.from_fraction(Fraction(coefficient))
+            for coefficient in coefficients
+        ),
+    )
+    return DirichletCharacterMixedJacobiSumResult(characters=chars, value=value)
 
 
 def dirichlet_character_orthogonality(

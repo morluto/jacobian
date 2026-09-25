@@ -30,5 +30,6 @@ and finite abelian-group decompositions are separate catalog entries.
 - [Exact Dirichlet-character parity](dirichlet-character-parity.md)
 - [Exact Dirichlet-character powers](dirichlet-character-power.md)
 - [Exact Dirichlet-character Jacobi sum](dirichlet-character-jacobi-sum.md)
+- [Exact three-character Jacobi convolution](dirichlet-character-mixed-jacobi-sum.md)
 - [Exact Dirichlet-character Gauss sums](dirichlet-character-gauss-sum.md)
 - [Exact finite sequence twist by a Dirichlet character](dirichlet-character-sequence-twist.md)

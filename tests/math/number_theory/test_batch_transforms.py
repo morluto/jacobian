@@ -43,7 +43,9 @@ def test_dense_kempner_prefix_recurrence_is_exact() -> None:
     assert result.partial_sum.as_fraction() == expected
 
 
-def _coordinate_hecke(form: ModularFormCoordinates, index: int) -> ModularFormCoordinates:
+def _coordinate_hecke(
+    form: ModularFormCoordinates, index: int
+) -> ModularFormCoordinates:
     tool = next(
         tool
         for tool in TOOLS
@@ -143,9 +145,7 @@ def test_coordinate_hecke_rejects_index_outside_its_envelope() -> None:
     )
 
     with pytest.raises(OperationResourceAdmissionError) as error:
-        modular_form_coordinates_hecke(
-            form, MAX_Q_TRANSFORM_SOURCE_ORDER + 1
-        )
+        modular_form_coordinates_hecke(form, MAX_Q_TRANSFORM_SOURCE_ORDER + 1)
     assert error.value.errors()[0]["type"] == (
         "modular_form.coordinates_hecke_index_bound"
     )
@@ -160,9 +160,5 @@ def test_coordinate_hecke_weight_zero_uses_inverse_divisor_factor() -> None:
     )
     result = _coordinate_hecke(source, 3)
     assert result.space == space
-    expected_eigenvalue = sum(
-        (Fraction(1, divisor) for divisor in (1, 3)), Fraction(0)
-    )
-    assert result.coordinates == (
-        CanonicalRational.from_fraction(expected_eigenvalue),
-    )
+    expected_eigenvalue = sum((Fraction(1, divisor) for divisor in (1, 3)), Fraction(0))
+    assert result.coordinates == (CanonicalRational.from_fraction(expected_eigenvalue),)

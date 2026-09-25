@@ -32,7 +32,7 @@ from jacobian.math.finite_fields._models import (
     _MAX_PROJECTIVE_POINTS,
 )
 from jacobian.math.finite_fields.values import (
-    MAX_DIRECTION_RANK_PRESENTATION_ORDER,
+    MAX_FINITE_FIELD_PRESENTATION_ORDER,
     MAX_FINITE_MAP_TABLE_ROWS,
     MAX_ORBIT_DISTRIBUTION_COUNT_DIGITS,
     MAX_ORBIT_DISTRIBUTION_TOTAL_DIGITS,
@@ -842,9 +842,9 @@ def _require_orbit_ledger_structure(ledger: DirectionRankLedger) -> None:
         or type(modulus_coefficients) is not tuple
         or not 2 <= len(modulus_coefficients) <= 17
         or type(characteristic) is not int
-        or not 2 <= characteristic <= MAX_DIRECTION_RANK_PRESENTATION_ORDER
+        or not 2 <= characteristic <= MAX_FINITE_FIELD_PRESENTATION_ORDER
         or characteristic ** (len(modulus_coefficients) - 1)
-        > MAX_DIRECTION_RANK_PRESENTATION_ORDER
+        > MAX_FINITE_FIELD_PRESENTATION_ORDER
     ):
         raise OperationDomainValidationError(
             location=("ledger", "subspace", "presentation"),

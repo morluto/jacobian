@@ -165,6 +165,11 @@ class BraidWordRequest(StrictModel):
     word: BraidWord
 
 
+class BraidProductRequest(StrictModel):
+    left: BraidWord
+    right: BraidWord
+
+
 class BraidPermutationResult(StrictModel):
     """The strand permutation and closure-cycle partition of a braid word."""
 

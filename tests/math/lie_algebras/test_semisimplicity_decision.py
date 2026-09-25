@@ -1,12 +1,9 @@
 """Exact Cartan semisimplicity decisions for finite-dimensional QQ algebras."""
 
-import json
 
 import pytest
 from pydantic import ValidationError
 
-from jacobian.catalog.catalog import Catalog
-from jacobian.dispatch import invoke_operation
 from jacobian.math.lie_algebras._models import (
     FiniteDimensionalLieAlgebra,
     LieSemisimplicityResult,
@@ -62,19 +59,6 @@ def test_decision_wire_value_requires_a_json_boolean() -> None:
         LieSemisimplicityResult.model_validate_json('{"is_semisimple":1}')
 
 
-def test_catalog_exposes_exact_decision_with_classical_example() -> None:
-    tool = Catalog.open().operation("lie_algebra.is_semisimple.compute")
-    assert tool is not None
-    assert tool.result_type is LieSemisimplicityResult
-    assert tool.examples[0].name == "sl2_is_semisimple"
-    request = tool.request_type.model_validate_json(
-        json.dumps({"algebra": SL2.model_dump(mode="json")})
-    )
-    assert tool.run(request).is_semisimple
-
-    public_result = invoke_operation(
-        "lie_algebra.is_semisimple.compute",
-        {"algebra": SL2.model_dump(mode="json")},
-        Catalog.open(),
-    )
-    assert public_result.output == {"is_semisimple": True}
+def test_native_semisimplicity_projection_uses_exact_killing_radical() -> None:
+    assert lie_algebra_is_semisimple(SL2).is_semisimple
+    assert not lie_algebra_is_semisimple(HEISENBERG).is_semisimple

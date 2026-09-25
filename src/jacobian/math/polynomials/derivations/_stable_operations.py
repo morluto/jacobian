@@ -462,9 +462,16 @@ def _prepare_input(
                 code="polynomial_ga_subrepresentation.request",
                 message="basis is already carried by request",
             )
-        request = PolynomialGaStableSubrepresentationRequest.model_validate(
-            action.model_dump()
-        )
+        try:
+            request = PolynomialGaStableSubrepresentationRequest.model_validate(
+                action.model_dump()
+            )
+        except Exception as exc:
+            raise OperationDomainValidationError(
+                location=("request",),
+                code="polynomial_ga_subrepresentation.request_shape",
+                message="request must contain a valid action and ordered basis",
+            ) from exc
         return _canonical_action(request.action), request.basis
     if isinstance(action, Mapping) and basis is None:
         try:
@@ -483,6 +490,10 @@ def _prepare_input(
             code="polynomial_ga_subrepresentation.basis_missing",
             message="an ordered basis is required",
         )
+    if not isinstance(basis, tuple):
+        _reject("basis_shape", "basis must be a tuple of typed rational polynomials")
+    if not 1 <= len(basis) <= MAX_GA_SUBREPRESENTATION_DIMENSION:
+        _reject("dimension", "basis dimension exceeds the admitted bound", resource=True)
     try:
         basis_value = tuple(
             RationalPolynomial.model_validate(value.model_dump()) for value in basis

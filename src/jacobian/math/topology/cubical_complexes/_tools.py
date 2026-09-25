@@ -9,12 +9,19 @@ from jacobian.catalog.models import (
 from jacobian.math.topology.chain_complexes._filtered_models import MAX_FILTER_LEVELS
 from jacobian.math.topology.cubical_complexes._models import (
     MAX_CUBICAL_CHAIN_CELLS,
+    MAX_CUBICAL_CHAIN_PRODUCT_RESULT_BYTES,
+    MAX_CUBICAL_CHAIN_PRODUCT_TERMS,
+    MAX_CUBICAL_CHAIN_VALUE_COEFFICIENT_DIGITS,
+    MAX_CUBICAL_CHAIN_VALUE_COORDINATE_DIGITS,
+    MAX_CUBICAL_CHAIN_VALUE_TERMS,
     MAX_CUBICAL_PRODUCT_RESULT_BYTES,
     MAX_DIM,
     MAX_LOWER_STAR_CELLS,
     MAX_LOWER_STAR_VERTICES,
     CubicalChainComplexRequest,
     CubicalChainComplexResult,
+    CubicalChainProductRequest,
+    CubicalChainValue,
     CubicalClosedStarRequest,
     CubicalClosedStarResult,
     CubicalComplexRequest,
@@ -37,6 +44,7 @@ from jacobian.math.topology.cubical_complexes.extensions_tools import (
 )
 from jacobian.math.topology.cubical_complexes.operations import (
     chain_complex,
+    chain_product,
     closed_star,
     f_vector,
     face_closure,
@@ -67,6 +75,10 @@ def _face_poset(request: CubicalComplexRequest) -> CubicalFacePosetResult:
 
 def _chain_complex(request: CubicalChainComplexRequest) -> CubicalChainComplexResult:
     return chain_complex(request.cells, request.coefficient_ring, request.prime)
+
+
+def _chain_product(request: CubicalChainProductRequest) -> CubicalChainValue:
+    return chain_product(request)
 
 
 def _product(request: CubicalProductRequest) -> CubicalProductResult:
@@ -438,6 +450,62 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                     "cells": [{"intervals": [[0, 1], [0, 1]]}],
                     "coefficient_ring": "GF_p",
                     "prime": 2,
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="topology.cubical_chain.external_product.compute",
+        title="Compute the external product of cubical chains",
+        description=(
+            "Multiply two finite homogeneous integral cubical chains by "
+            "concatenating each left cell's coordinates before each right "
+            "cell's coordinates and multiplying coefficients. This uses the "
+            "product orientation induced by factor axis order. Inputs admit "
+            f"at most {MAX_CUBICAL_CHAIN_VALUE_TERMS:,} terms, "
+            f"{MAX_CUBICAL_CHAIN_VALUE_COORDINATE_DIGITS}-digit coordinates, "
+            f"and {MAX_CUBICAL_CHAIN_VALUE_COEFFICIENT_DIGITS}-digit "
+            "coefficients; product expansion is bounded to "
+            f"{MAX_CUBICAL_CHAIN_PRODUCT_TERMS:,} terms and "
+            f"{MAX_CUBICAL_CHAIN_PRODUCT_RESULT_BYTES // 1024**2} MiB."
+        ),
+        request_type=CubicalChainProductRequest,
+        result_type=CubicalChainValue,
+        run=_chain_product,
+        tags=("topology", "cubical", "chain", "product", "exact"),
+        discovery_terms=(
+            "external product of cubical chains",
+            "cubical chain cross product",
+            "tensor product of cubical chains",
+        ),
+        examples=(
+            OperationExample(
+                name="product_of_two_oriented_edges",
+                description=(
+                    "Multiply two integral oriented edges to obtain the "
+                    "product-oriented square."
+                ),
+                input={
+                    "left": {
+                        "ambient_dimension": 1,
+                        "degree": 1,
+                        "terms": [
+                            {
+                                "cell": {"intervals": [[0, 1]]},
+                                "coefficient": 2,
+                            }
+                        ],
+                    },
+                    "right": {
+                        "ambient_dimension": 1,
+                        "degree": 1,
+                        "terms": [
+                            {
+                                "cell": {"intervals": [[3, 4]]},
+                                "coefficient": -3,
+                            }
+                        ],
+                    },
                 },
             ),
         ),

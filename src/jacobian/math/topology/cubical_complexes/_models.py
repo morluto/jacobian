@@ -30,6 +30,11 @@ MAX_FACE_CELLS = 3**MAX_DIM
 
 MAX_CUBICAL_CHAIN_GROUP = 64
 MAX_CUBICAL_CHAIN_CELLS = 16384
+MAX_CUBICAL_CHAIN_PRODUCT_TERMS = 2048
+MAX_CUBICAL_CHAIN_PRODUCT_RESULT_BYTES = 2 * 1024 * 1024
+MAX_CUBICAL_CHAIN_VALUE_TERMS = MAX_CUBICAL_CHAIN_PRODUCT_TERMS
+MAX_CUBICAL_CHAIN_VALUE_COORDINATE_DIGITS = 64
+MAX_CUBICAL_CHAIN_VALUE_COEFFICIENT_DIGITS = 128
 MAX_CUBICAL_PRODUCT_RESULT_BYTES = 8 * 1024 * 1024
 MAX_CUBICAL_BITMAP_SIDE = 256
 MAX_CUBICAL_BITMAP_PIXELS = MAX_CUBICAL_BITMAP_SIDE**2
@@ -510,6 +515,67 @@ class CubicalChainCoefficient(StrEnum):
     PRIME_FIELD = "GF_p"
 
 
+class CubicalChainTerm(StrictModel):
+    """One nonzero integer multiple of a canonically oriented cubical cell."""
+
+    cell: CubicalCell
+    coefficient: StrictInt
+
+
+class CubicalChainValue(StrictModel):
+    """A finite homogeneous integral cubical chain in an ordered lattice."""
+
+    ambient_dimension: StrictInt = Field(ge=1, le=MAX_DIM)
+    degree: StrictInt = Field(ge=0, le=MAX_DIM)
+    terms: tuple[CubicalChainTerm, ...] = Field(max_length=MAX_CUBICAL_CHAIN_VALUE_TERMS)
+
+    @model_validator(mode="after")
+    def require_canonical_terms(self) -> Self:
+        if self.degree > self.ambient_dimension:
+            raise _validation_error(
+                "chain_value_degree_invalid",
+                "chain degree cannot exceed its ambient dimension",
+            )
+        cells = tuple(term.cell for term in self.terms)
+        if (
+            any(
+                len(term.cell.intervals) != self.ambient_dimension
+                or term.cell.dimension != self.degree
+                or term.coefficient == 0
+                for term in self.terms
+            )
+            or cells != tuple(sorted(cells, key=lambda cell: cell.intervals))
+            or len(set(cells)) != len(cells)
+        ):
+            raise _validation_error(
+                "chain_value_terms_invalid",
+                "chain terms must be nonzero, homogeneous, and canonically ordered",
+            )
+        for term in self.terms:
+            if abs(term.coefficient).bit_length() > 426 or len(
+                str(abs(term.coefficient))
+            ) > MAX_CUBICAL_CHAIN_VALUE_COEFFICIENT_DIGITS:
+                raise _validation_error(
+                    "chain_value_coefficient_budget",
+                    "integral chain coefficients are limited to 128 decimal digits",
+                )
+            for interval in term.cell.intervals:
+                for coordinate in interval:
+                    if abs(coordinate).bit_length() > 213 or len(
+                        str(abs(coordinate))
+                    ) > MAX_CUBICAL_CHAIN_VALUE_COORDINATE_DIGITS:
+                        raise _validation_error(
+                            "chain_value_coordinate_budget",
+                            "chain cell coordinates are limited to 64 decimal digits",
+                        )
+        return self
+
+
+class CubicalChainProductRequest(StrictModel):
+    left: CubicalChainValue
+    right: CubicalChainValue
+
+
 class CubicalChainComplexRequest(StrictModel):
     """A finite elementary cubical complex with exact chain coefficients.
 
@@ -770,6 +836,11 @@ __all__ = [
     "MAX_CUBICAL_CELL_BOUNDARY_RESULT_BYTES",
     "MAX_CUBICAL_CHAIN_CELLS",
     "MAX_CUBICAL_CHAIN_GROUP",
+    "MAX_CUBICAL_CHAIN_PRODUCT_RESULT_BYTES",
+    "MAX_CUBICAL_CHAIN_PRODUCT_TERMS",
+    "MAX_CUBICAL_CHAIN_VALUE_COEFFICIENT_DIGITS",
+    "MAX_CUBICAL_CHAIN_VALUE_COORDINATE_DIGITS",
+    "MAX_CUBICAL_CHAIN_VALUE_TERMS",
     "MAX_CUBICAL_CLOSED_STAR_COORDINATE_DIGITS",
     "MAX_CUBICAL_CLOSED_STAR_RESULT_BYTES",
     "MAX_CUBICAL_CLOSED_STAR_WORK",
@@ -801,6 +872,9 @@ __all__ = [
     "CubicalChainCoefficient",
     "CubicalChainComplexRequest",
     "CubicalChainComplexResult",
+    "CubicalChainProductRequest",
+    "CubicalChainTerm",
+    "CubicalChainValue",
     "CubicalClosedStarRequest",
     "CubicalClosedStarResult",
     "CubicalComplex",

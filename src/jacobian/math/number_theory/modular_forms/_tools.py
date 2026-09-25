@@ -54,6 +54,15 @@ from jacobian.math.number_theory.modular_forms.basis import (
 from jacobian.math.number_theory.modular_forms.character_basis_tools import (
     TOOLS as CHARACTER_BASIS_TOOLS,
 )
+from jacobian.math.number_theory.modular_forms.character_basis_tools import (
+    _character_form_example,
+)
+from jacobian.math.number_theory.modular_forms.character_degeneracy import (
+    modular_character_coordinates_v_degeneracy,
+)
+from jacobian.math.number_theory.modular_forms.character_degeneracy_models import (
+    ModularCharacterVDegeneracyRequest,
+)
 from jacobian.math.number_theory.modular_forms.field_coordinates_tools import (
     TOOLS as FIELD_COORDINATE_TOOLS,
 )
@@ -66,6 +75,7 @@ from jacobian.math.number_theory.modular_forms.values import (
     ModularFormBasis,
     ModularFormChangeOfBasisFrame,
     ModularFormCoordinates,
+    ModularFormFieldQExpansion,
     ModularFormFramedCoordinates,
     ModularFormFramedHeckeMatrix,
     ModularFormHeckeMatrix,
@@ -200,6 +210,44 @@ def apply_coordinate_v_degeneracy(
     request: ModularFormCoordinatesVDegeneracyRequest,
 ) -> ModularFormCoordinates:
     return modular_form_coordinates_v_degeneracy(request.form, request.d)
+
+
+def apply_character_coordinate_v_degeneracy(
+    request: ModularCharacterVDegeneracyRequest,
+) -> ModularFormFieldQExpansion:
+    return modular_character_coordinates_v_degeneracy(request)
+
+
+def _character_v_target_space_example() -> dict[str, object]:
+    target = dict(_character_form_example()["space"])
+    target["level"] = 26
+    target["character"] = {
+        "group": {
+            "modulus": 26,
+            "unit_residues": [1, 3, 5, 7, 9, 11, 15, 17, 19, 21, 23, 25],
+            "character_count": 12,
+            "invariant_factors": [12],
+            "generators": [15],
+            "generator_orders": [12],
+            "unit_coordinates": [
+                [0],
+                [4],
+                [9],
+                [11],
+                [8],
+                [7],
+                [1],
+                [2],
+                [5],
+                [3],
+                [10],
+                [6],
+            ],
+            "exponent": 12,
+        },
+        "coordinates": [2],
+    }
+    return target
 
 
 def compute_operator_image(
@@ -1226,6 +1274,34 @@ TOOLS: MathTools = (
                         ],
                     },
                     "d": 2,
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="modular_form.character_coordinates.v_degeneracy.apply",
+        title="Apply character-valued V_d into an exact target space",
+        description=(
+            "Apply V_d(f)(q)=f(q^d) to either normalized form in "
+            "S2(Gamma0(13), chi) for the admitted order-six characters over "
+            "Q(zeta_6), with d=2 or 3. Supply the exact target S2 space at "
+            "level 26 or 39; its character-inflation inclusion is checked. "
+            "Return the exact finite q-prefix through q^(2d), the image of "
+            "the source's Sturm-determining prefix."
+        ),
+        request_type=ModularCharacterVDegeneracyRequest,
+        result_type=ModularFormFieldQExpansion,
+        run=apply_character_coordinate_v_degeneracy,
+        tags=("modular-forms", "characters", "v-operator", "exact"),
+        examples=(
+            OperationExample(
+                name="v2_order6_character_form",
+                description=(
+                    "Apply V_2 with the exact level-26 inflated-character target."
+                ),
+                input={
+                    "form": _character_form_example(),
+                    "target_space": _character_v_target_space_example(),
                 },
             ),
         ),

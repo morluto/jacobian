@@ -3,6 +3,7 @@ from typing import Any
 
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.topology.discrete_morse.extensions import *
+from jacobian.math.topology.operations import canonicalize
 
 
 def _greedy(r: Any) -> Any:
@@ -14,7 +15,8 @@ def _collapse(r: Any) -> Any:
 
 
 def _greedy_collapse(r: Any) -> Any:
-    return greedy_collapse(r)
+    canonical = canonicalize(r.complex.vertices, r.complex.facets).complex
+    return greedy_collapse(canonical)
 
 
 _I = {"vertices": ["a", "b"], "facets": [["a", "b"]]}

@@ -12,11 +12,11 @@ from jacobian.math.topology.discrete_morse._models import (
 )
 from jacobian.math.topology.discrete_morse.extensions import (
     CollapseSequenceRequest,
-    GreedyCollapseRequest,
     collapse_sequence,
     greedy_collapse,
 )
 from jacobian.math.topology.discrete_morse.operations import construct_matching
+from jacobian.math.topology.operations import canonicalize
 
 
 def _all_faces(facets):
@@ -69,9 +69,7 @@ def _oracle(facets):
 )
 def test_greedy_collapse_matches_naive_face_poset_oracle(facets) -> None:
     vertices = tuple(sorted({vertex for facet in facets for vertex in facet}))
-    result = greedy_collapse(
-        GreedyCollapseRequest(complex={"vertices": vertices, "facets": facets})
-    )
+    result = greedy_collapse(canonicalize(vertices, facets).complex)
     expected_pairs, expected_faces = _oracle(tuple(sorted(facets)))
 
     assert tuple((pair.face, pair.coface) for pair in result.pairs) == expected_pairs
@@ -84,11 +82,7 @@ def test_greedy_collapse_matches_naive_face_poset_oracle(facets) -> None:
 
 
 def test_greedy_collapse_composes_with_sequence_and_acyclic_matching() -> None:
-    result = greedy_collapse(
-        GreedyCollapseRequest(
-            complex={"vertices": ("a", "b", "c"), "facets": (("a", "b", "c"),)}
-        )
-    )
+    result = greedy_collapse(canonicalize(("a", "b", "c"), (("a", "b", "c"),)).complex)
     replayed = collapse_sequence(
         CollapseSequenceRequest(complex=result.source, pairs=result.pairs)
     )
@@ -103,7 +97,7 @@ def test_greedy_collapse_composes_with_sequence_and_acyclic_matching() -> None:
     ("limit_name", "limit_value"),
     [
         ("MAX_GREEDY_COLLAPSE_WORK", 1),
-        ("MAX_GREEDY_COLLAPSE_OUTPUT_BYTES", 1),
+        ("MAX_TOPOLOGY_FACES", 1),
     ],
 )
 def test_greedy_collapse_preflight_rejects_before_pair_search(
@@ -117,8 +111,5 @@ def test_greedy_collapse_preflight_rejects_before_pair_search(
         "_first_free_pair",
         lambda facets: pytest.fail("candidate search ran before admission"),
     )
-    request = GreedyCollapseRequest(
-        complex={"vertices": ("a", "b"), "facets": (("a", "b"),)}
-    )
     with pytest.raises(OperationResourceAdmissionError):
-        greedy_collapse(request)
+        greedy_collapse(canonicalize(("a", "b"), (("a", "b"),)).complex)

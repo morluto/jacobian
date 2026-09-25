@@ -5,16 +5,17 @@ from __future__ import annotations
 from pydantic import Field
 
 from jacobian._models import StrictModel
-from jacobian.catalog.models import (
-    OperationResourceAdmissionError,
-)
+from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.topology._models import (
     MAX_TOPOLOGY_DIMENSION,
     MAX_TOPOLOGY_FACES,
-    MAX_TOPOLOGY_VERTICES,
     FiniteSimplicialComplex,
     SimplicialComplexRequest,
     canonical_complex,
+)
+from jacobian.math.topology._request_admission import (
+    require_canonical_complex_admission,
+    run_topology_admission,
 )
 from jacobian.math.topology.discrete_morse._models import (
     DiscreteMorseMatchingResult,
@@ -23,12 +24,10 @@ from jacobian.math.topology.discrete_morse._models import (
 from jacobian.math.topology.discrete_morse.operations import construct_matching
 from jacobian.math.topology.operations import canonicalize
 
-MAX_COLLAPSE_SEQUENCE_STEPS = MAX_TOPOLOGY_FACES // 2
+MAX_COLLAPSE_SEQUENCE_STEPS = 2048
 # Bound total face-set visits across all admitted sequence steps.
 MAX_COLLAPSE_SEQUENCE_FACE_WORK = 128_000_000
 MAX_GREEDY_COLLAPSE_WORK = 60_000_000
-MAX_GREEDY_COLLAPSE_OUTPUT_BYTES = 3_000_000
-_MAX_SIMPLEX_JSON_BYTES = (MAX_TOPOLOGY_DIMENSION + 1) * 34 + MAX_TOPOLOGY_DIMENSION + 3
 
 
 class GreedyMatchingRequest(StrictModel):
@@ -78,20 +77,17 @@ def _first_free_pair(
     facets: set[tuple[str, ...]],
 ) -> tuple[tuple[str, ...], tuple[str, ...]] | None:
     """Return the lexicographically first free face/facet pair."""
-    owners: dict[tuple[str, ...], list[tuple[str, ...]]] = {}
-    for coface in facets:
-        for position in range(len(coface)):
-            face = coface[:position] + coface[position + 1 :]
-            if face:
-                owners.setdefault(face, []).append(coface)
-    return min(
-        (
-            (face, containing[0])
-            for face, containing in owners.items()
-            if len(containing) == 1
-        ),
-        default=None,
+    candidates = sorted(
+        face
+        for coface in facets
+        for position in range(len(coface))
+        if (face := coface[:position] + coface[position + 1 :])
     )
+    for face in candidates:
+        containing = [facet for facet in facets if set(face).issubset(facet)]
+        if len(containing) == 1 and len(containing[0]) == len(face) + 1:
+            return face, containing[0]
+    return None
 
 
 def _remove_free_pair(
@@ -113,13 +109,22 @@ def _remove_free_pair(
             facets.add(ridge)
 
 
-def greedy_collapse(request: GreedyCollapseRequest) -> CollapseSequenceResult:
+def greedy_collapse(complex_: FiniteSimplicialComplex) -> CollapseSequenceResult:
     """Return a canonical lexicographic sequence until no free pair remains.
 
     This is a deterministic maximal collapse, not a minimum-size result or a
     claim of noncollapsibility, contractibility, or any other homotopy theorem.
     """
-    source = canonicalize(request.complex.vertices, request.complex.facets).complex
+    run_topology_admission(
+        lambda: require_canonical_complex_admission(complex_), location=("complex",)
+    )
+    source = complex_
+    if source.closure_size > MAX_TOPOLOGY_FACES:
+        raise OperationResourceAdmissionError(
+            location=("complex",),
+            code="topology.greedy_collapse.admission.faces",
+            message="source face closure exceeds the admitted face bound",
+        )
     max_steps = min(MAX_COLLAPSE_SEQUENCE_STEPS, source.closure_size // 2)
     # Per step: at most eight ridge-owner inserts, eight candidate reads, and
     # eight exposed-ridge containment scans over at most source.closure_size
@@ -135,22 +140,15 @@ def greedy_collapse(request: GreedyCollapseRequest) -> CollapseSequenceResult:
                 f"{work_bound}, above the {MAX_GREEDY_COLLAPSE_WORK}-unit envelope"
             ),
         )
-    # Source and target each serialize at most N faces, N facets, and V
-    # vertices; the pair list contains at most N simplex rows.  ASCII vertex
-    # labels have at most 32 characters, so each simplex JSON row is bounded.
-    output_bound = (
-        (5 * source.closure_size + 2 * MAX_TOPOLOGY_VERTICES) * _MAX_SIMPLEX_JSON_BYTES
-        + MAX_COLLAPSE_SEQUENCE_STEPS * 32
-        + 8192
-    )
-    if output_bound > MAX_GREEDY_COLLAPSE_OUTPUT_BYTES:
+    # Bound the result by its mathematical cardinalities: source/target face
+    # families and matching pairs. Canonicalization also enforces the global
+    # topology face and step limits.
+    output_pairs_bound = max_steps
+    if output_pairs_bound > MAX_COLLAPSE_SEQUENCE_STEPS:
         raise OperationResourceAdmissionError(
             location=("complex",),
-            code="topology.greedy_collapse.admission.output_bytes",
-            message=(
-                f"the greedy collapse result is bounded by {output_bound} bytes, "
-                f"above the {MAX_GREEDY_COLLAPSE_OUTPUT_BYTES}-byte envelope"
-            ),
+            code="topology.greedy_collapse.admission.output_size",
+            message="the greedy collapse result exceeds the admitted pair count",
         )
 
     faces = {face for degree in source.faces_by_dimension for face in degree.faces}
@@ -221,6 +219,10 @@ def collapse_sequence(request: CollapseSequenceRequest) -> CollapseSequenceResul
                 target=canonical_complex(
                     tuple(sorted({vertex for cell in faces for vertex in cell})),
                     tuple(sorted(facets)),
+                    closure=tuple(
+                        tuple(sorted(cell for cell in faces if len(cell) == dim + 1))
+                        for dim in range(max(map(len, faces)))
+                    ),
                 ),
                 pairs=request.pairs,
                 valid=False,
@@ -233,6 +235,10 @@ def collapse_sequence(request: CollapseSequenceRequest) -> CollapseSequenceResul
                 target=canonical_complex(
                     tuple(sorted({vertex for cell in faces for vertex in cell})),
                     tuple(sorted(facets)),
+                    closure=tuple(
+                        tuple(sorted(cell for cell in faces if len(cell) == dim + 1))
+                        for dim in range(max(map(len, faces)))
+                    ),
                 ),
                 pairs=request.pairs,
                 valid=False,
@@ -264,7 +270,14 @@ def collapse_sequence(request: CollapseSequenceRequest) -> CollapseSequenceResul
     remaining_vertices = tuple(sorted({vertex for face in faces for vertex in face}))
     return CollapseSequenceResult(
         source=source,
-        target=canonical_complex(remaining_vertices, tuple(sorted(facets))),
+        target=canonical_complex(
+            remaining_vertices,
+            tuple(sorted(facets)),
+            closure=tuple(
+                tuple(sorted(cell for cell in faces if len(cell) == dim + 1))
+                for dim in range(max(map(len, faces)))
+            ),
+        ),
         pairs=request.pairs,
         valid=True,
         collapsed_steps=steps,

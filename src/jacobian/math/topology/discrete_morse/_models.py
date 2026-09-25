@@ -17,6 +17,7 @@ from typing import Annotated, Any, Literal, Self
 from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
+from jacobian._exact import DecimalIntegerEncoding
 from jacobian._models import StrictModel
 from jacobian.math.topology._models import (
     MAX_TOPOLOGY_DIMENSION,
@@ -48,8 +49,11 @@ MAX_MORSE_CONTRACTION_CELLS = 32
 MAX_MORSE_CONTRACTION_FACE_CANDIDATES = 512
 MAX_MORSE_CONTRACTION_PAIRS = 14
 MAX_MORSE_CONTRACTION_COEFFICIENT_DIGITS = 64
+MorseContractionInteger = Annotated[
+    int, DecimalIntegerEncoding(max_digits=MAX_MORSE_CONTRACTION_COEFFICIENT_DIGITS)
+]
 MorseContractionRow = Annotated[
-    tuple[StrictInt, ...], Field(max_length=MAX_MORSE_CONTRACTION_CELLS)
+    tuple[MorseContractionInteger, ...], Field(max_length=MAX_MORSE_CONTRACTION_CELLS)
 ]
 MorseContractionMatrix = Annotated[
     tuple[MorseContractionRow, ...], Field(max_length=MAX_MORSE_CONTRACTION_CELLS)
@@ -576,10 +580,25 @@ class MorseComplexResult(StrictModel):
         cells = tuple(
             cell for basis in self.critical_cells_by_dimension for cell in basis.cells
         )
-        if tuple(sorted(cells)) != tuple(sorted(self.critical_profile.critical_cells)):
+        source_cells = set(_canonical_cell_order(self.complex))
+        matched_cells: set[Simplex] = set()
+        for pair in self.pairs:
+            if pair.face not in source_cells or pair.coface not in source_cells:
+                raise _validation_error(
+                    "morse_pair_source_binding",
+                    "matched cells must belong to the source closure",
+                )
+            matched_cells.update((pair.face, pair.coface))
+        if (
+            len(set(cells)) != len(cells)
+            or tuple(sorted(cells))
+            != tuple(sorted(self.critical_profile.critical_cells))
+            or not set(cells).issubset(source_cells)
+            or set(cells) != source_cells - matched_cells
+        ):
             raise _validation_error(
                 "morse_basis_partition",
-                "the Morse basis must be exactly the critical-cell family",
+                "critical and matched cells must partition the source closure",
             )
         counts = tuple(len(basis.cells) for basis in self.critical_cells_by_dimension)
         if counts != self.critical_profile.counts_by_dimension:
@@ -637,9 +656,24 @@ class IntegerMorseComplexResult(StrictModel):
                 "integer_morse_coefficient_ring",
                 "the integral Morse chain complex must use ZZ coefficients",
             )
-        if self.chain_complex.basis_sizes != tuple(
-            len(basis.cells) for basis in self.critical_cells_by_dimension
+        if (
+            self.chain_complex.degree_min != 0
+            or self.chain_complex.degree_max
+            != len(self.critical_cells_by_dimension) - 1
         ):
+            raise _validation_error(
+                "integer_morse_degree_axes",
+                "integer Morse chain degrees must match critical-cell dimensions",
+            )
+        axis_counts = tuple(
+            len(basis.cells) for basis in self.critical_cells_by_dimension
+        )
+        if self.critical_profile.counts_by_dimension != axis_counts:
+            raise _validation_error(
+                "integer_morse_profile_counts",
+                "critical profile counts must match the labeled critical-cell axes",
+            )
+        if self.chain_complex.basis_sizes != axis_counts:
             raise _validation_error(
                 "integer_morse_basis_sizes",
                 "integer Morse chain ranks must match the labeled critical-cell axes",

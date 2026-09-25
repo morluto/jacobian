@@ -5,6 +5,10 @@ from __future__ import annotations
 from jacobian.math.topology._models import FiniteSimplicialComplex, Simplex
 from jacobian.math.topology._request_admission import (
     require_canonical_complex_admission,
+    run_topology_admission,
+)
+from jacobian.math.topology.discrete_morse._contraction import (
+    compute_chain_contraction as _compute_chain_contraction,
 )
 from jacobian.math.topology.discrete_morse._contraction import (
     compute_chain_contraction as _compute_chain_contraction,
@@ -42,7 +46,9 @@ def construct_matching(
     validator or transport layer.
     """
 
-    require_canonical_complex_admission(complex_)
+    run_topology_admission(
+        lambda: require_canonical_complex_admission(complex_), location=("complex",)
+    )
     return _construct_matching(complex_, pairs)
 
 
@@ -59,7 +65,9 @@ def compute_gradient_paths(
     critical cell to its critical targets of the adjacent lower dimension.
     """
 
-    require_canonical_complex_admission(complex_)
+    run_topology_admission(
+        lambda: require_canonical_complex_admission(complex_), location=("complex",)
+    )
     return _compute_gradient_paths(complex_, pairs, start, target)
 
 
@@ -74,7 +82,9 @@ def compute_morse_complex(
     gradient-path counts.
     """
 
-    require_canonical_complex_admission(complex_)
+    run_topology_admission(
+        lambda: require_canonical_complex_admission(complex_), location=("complex",)
+    )
     return _compute_morse_complex(complex_, pairs)
 
 
@@ -84,7 +94,9 @@ def compute_integer_morse_complex(
 ) -> IntegerMorseComplexResult:
     """Compute the ZZ Morse chain complex using lex-oriented signed paths."""
 
-    require_canonical_complex_admission(complex_)
+    run_topology_admission(
+        lambda: require_canonical_complex_admission(complex_), location=("complex",)
+    )
     return _compute_integer_morse_complex(complex_, pairs)
 
 

@@ -8,9 +8,9 @@ from jacobian.math.topology.discrete_morse._models import (
     GradientPathCount,
     GradientPathsResult,
     GradientPathStep,
+    IntegerMorseComplexResult,
     MatchingPair,
     MorseBoundaryEntry,
-    MorseChainContractionRequest,
     MorseChainContractionResult,
     MorseComplexResult,
     MorseGradientStepKind,
@@ -18,9 +18,7 @@ from jacobian.math.topology.discrete_morse._models import (
     MorseMatchingOutcome,
 )
 from jacobian.math.topology.discrete_morse.extensions import (
-    CollapseSequenceRequest,
-    GreedyCollapseRequest,
-    GreedyMatchingRequest,
+    CollapseSequenceResult,
     collapse_sequence,
     greedy_collapse,
     greedy_matching,
@@ -28,12 +26,13 @@ from jacobian.math.topology.discrete_morse.extensions import (
 from jacobian.math.topology.discrete_morse.operations import (
     compute_chain_contraction,
     compute_gradient_paths,
+    compute_integer_morse_complex,
     compute_morse_complex,
     construct_matching,
 )
 
 __all__ = [
-    "CollapseSequenceRequest",
+    "CollapseSequenceResult",
     "CriticalCellBasis",
     "CriticalCellProfile",
     "DiscreteMorseMatchingResult",
@@ -41,11 +40,9 @@ __all__ = [
     "GradientPathCount",
     "GradientPathStep",
     "GradientPathsResult",
-    "GreedyCollapseRequest",
-    "GreedyMatchingRequest",
+    "IntegerMorseComplexResult",
     "MatchingPair",
     "MorseBoundaryEntry",
-    "MorseChainContractionRequest",
     "MorseChainContractionResult",
     "MorseComplexResult",
     "MorseGradientStepKind",
@@ -54,6 +51,7 @@ __all__ = [
     "collapse_sequence",
     "compute_chain_contraction",
     "compute_gradient_paths",
+    "compute_integer_morse_complex",
     "compute_morse_complex",
     "construct_matching",
     "greedy_collapse",

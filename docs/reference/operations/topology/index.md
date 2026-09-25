@@ -11,3 +11,4 @@ retained below for that mathematical reference.
 - [Recurrences and rational generating series](recurrences-and-generating-series.md)
 - [Normalized chains of a finite simplicial set](simplicial-set-normalized-chains.md)
 - [Image factorization of a finite simplicial map](simplicial-map-image.md)
+- [Normalized chain map induced by a finite simplicial map](simplicial-set-induced-chain-map.md)

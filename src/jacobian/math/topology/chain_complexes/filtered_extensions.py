@@ -17,32 +17,27 @@ from jacobian.math.topology.chain_complexes._filtered_operations import (
     _in_span,
     _mat_vec,
     _parse_entry,
-    _serialize_scalar,
     admit_filtered,
     spectral_page,
 )
 from jacobian.math.topology.chain_complexes.values import (
-    ChainCoefficient,
     ChainComplexValue,
+    ChainMapValue,
 )
 
 
 class FilteredChainMapRequest(StrictModel):
-    source: ChainComplexValue
+    chain_map: ChainMapValue
     source_filtration: tuple[FiltrationLevel, ...] = Field(min_length=1)
-    target: ChainComplexValue
     target_filtration: tuple[FiltrationLevel, ...] = Field(min_length=1)
-    maps: tuple[tuple[tuple[ChainCoefficient, ...], ...], ...]
 
 
 class FilteredChainMapResult(StrictModel):
-    source: ChainComplexValue
-    target: ChainComplexValue
+    chain_map: ChainMapValue
     source_filtration: tuple[FiltrationLevel, ...]
     target_filtration: tuple[FiltrationLevel, ...]
-    maps: tuple[tuple[tuple[ChainCoefficient, ...], ...], ...]
     filtration_preserving: bool
-    chain_map: bool
+    is_chain_map: bool
 
 
 class SpectralPagesRequest(StrictModel):
@@ -72,32 +67,38 @@ class SpectralAbutmentResult(StrictModel):
 
 
 def filtered_map(request: FilteredChainMapRequest) -> FilteredChainMapResult:
+    chain_map = request.chain_map
+    source, target, matrices = (
+        chain_map.source,
+        chain_map.target,
+        chain_map.map_matrices,
+    )
     if (
-        request.source.coefficient_ring != request.target.coefficient_ring
-        or request.source.prime != request.target.prime
-        or request.source.degree_min != request.target.degree_min
-        or request.source.degree_max != request.target.degree_max
+        source.coefficient_ring != target.coefficient_ring
+        or source.prime != target.prime
+        or source.degree_min != target.degree_min
+        or source.degree_max != target.degree_max
     ):
         raise OperationDomainValidationError(
             location=("target",),
             code="filtered_chain_map.parent_mismatch",
             message="source and target complexes must share coefficient and degree parents",
         )
-    admit_filtered(request.source, request.source_filtration)
-    admit_filtered(request.target, request.target_filtration)
+    admit_filtered(source, request.source_filtration)
+    admit_filtered(target, request.target_filtration)
     if len(request.source_filtration) != len(request.target_filtration) or len(
-        request.maps
-    ) != len(request.source.basis_sizes):
+        matrices
+    ) != len(source.basis_sizes):
         raise OperationDomainValidationError(
             location=("maps",),
             code="filtered_chain_map.axis_mismatch",
             message="map and filtration degree axes must agree",
         )
-    p = request.source.prime
+    p = source.prime
     parsed = []
-    for degree, matrix in enumerate(request.maps):
-        rows = request.target.basis_sizes[degree]
-        cols = request.source.basis_sizes[degree]
+    for degree, matrix in enumerate(matrices):
+        rows = target.basis_sizes[degree]
+        cols = source.basis_sizes[degree]
         if len(matrix) != rows or any(len(row) != cols for row in matrix):
             raise OperationDomainValidationError(
                 location=("maps", degree),
@@ -115,12 +116,12 @@ def filtered_map(request: FilteredChainMapRequest) -> FilteredChainMapResult:
     # f d = d f, with matrix convention d rows lower x upper
     chain_ok = True
     for degree in range(len(parsed) - 1):
-        output_width = request.source.basis_sizes[degree + 1]
+        output_width = source.basis_sizes[degree + 1]
         left = _mul(
             parsed[degree],
             [
                 [_parse_entry(v, p) for v in row]
-                for row in request.source.differential_matrices[degree]
+                for row in source.differential_matrices[degree]
             ],
             p,
             output_width=output_width,
@@ -128,7 +129,7 @@ def filtered_map(request: FilteredChainMapRequest) -> FilteredChainMapResult:
         right = _mul(
             [
                 [_parse_entry(v, p) for v in row]
-                for row in request.target.differential_matrices[degree]
+                for row in target.differential_matrices[degree]
             ],
             parsed[degree + 1],
             p,
@@ -147,18 +148,12 @@ def filtered_map(request: FilteredChainMapRequest) -> FilteredChainMapResult:
                 )
                 if not _in_span(target_basis, image, p):
                     preserving = False
-    canonical_maps = tuple(
-        tuple(tuple(_serialize_scalar(value, p) for value in row) for row in matrix)
-        for matrix in parsed
-    )
     return FilteredChainMapResult(
-        source=request.source,
-        target=request.target,
+        chain_map=chain_map,
         source_filtration=request.source_filtration,
         target_filtration=request.target_filtration,
-        maps=canonical_maps,
         filtration_preserving=preserving,
-        chain_map=chain_ok,
+        is_chain_map=chain_ok,
     )
 
 

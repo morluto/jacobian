@@ -28,11 +28,16 @@ _F = [
     {"subspaces": [{"vectors": [["1"]]}, {"vectors": []}]},
     {"subspaces": [{"vectors": [["1"]]}, {"vectors": [["1"]]}]},
 ]
+_CHAIN_MAP = {
+    "source": _C,
+    "target": _C,
+    "map_matrices": [[["1"]], [["1"]]],
+}
 TOOLS = (
     MathTool(
         operation_id="homological.filtered_chain_map.compute",
         title="Compute a filtered chain-map profile",
-        description="Check an exact degreewise chain map between filtered complexes and return its chain-map and filtration-preservation decisions with all source and target axes retained.",
+        description="Check a source-bound exact ChainMapValue against source and target filtrations, returning whether its chain equation and filtration preservation hold.",
         request_type=FilteredChainMapRequest,
         result_type=FilteredChainMapResult,
         run=_map,
@@ -42,11 +47,9 @@ TOOLS = (
                 name="identity_filtered_map",
                 description="Check the identity map of a two-term filtered complex; source and target filtrations must have matching levels.",
                 input={
-                    "source": _C,
-                    "target": _C,
+                    "chain_map": _CHAIN_MAP,
                     "source_filtration": _F,
                     "target_filtration": _F,
-                    "maps": [[["1"]], [["1"]]],
                 },
             ),
         ),

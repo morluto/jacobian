@@ -9,10 +9,15 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.math.topology.chain_complexes.operations import homology_groups
+from jacobian.math.topology.chain_complexes.operations import (
+    chain_map_commutes,
+    homology_groups,
+)
 from jacobian.math.topology.chain_complexes.values import (
+    MAX_CHAIN_MAP_CELLS,
     MAX_OPERATION_MATRIX_CELLS,
     ChainComplexValue,
+    ChainMapValue,
     CoefficientRing,
     HomologyGroup,
     IntegralHomologyGroupValue,
@@ -21,6 +26,8 @@ from jacobian.math.topology.simplicial_sets._models import FiniteTruncatedSimpli
 from jacobian.math.topology.simplicial_sets.operations import from_tables
 
 MAX_NORMALIZED_CHAIN_OUTPUT_CELLS = 256_000
+MAX_INDUCED_CHAIN_MAP_OUTPUT_CELLS = 600_000
+MAX_INDUCED_CHAIN_MAP_WORK_UNITS = 1_000_000
 _NORMALIZED_CHAIN_OUTPUT_STRUCTURE = 4_096
 
 
@@ -405,6 +412,143 @@ def normalized_chains(
         nondegenerate_bases=bases,
         chain_complex=chain,
     )
+
+
+def induced_normalized_chain_map(
+    map_value: TruncatedSimplicialMap,
+) -> ChainMapValue:
+    """Return the normalized chain map induced by a finite simplicial map.
+
+    The component in degree ``n`` sends a nondegenerate source simplex to its
+    image if that image is nondegenerate, and to zero otherwise. Basis labels
+    retain the exact simplex axes at each endpoint.
+    """
+    source, target = map_value.source, map_value.target
+    source_sizes = tuple(map(len, source.sets))
+    target_sizes = tuple(map(len, target.sets))
+    source_nondegenerate = tuple(
+        tuple(
+            simplex
+            for simplex in range(len(level))
+            if simplex
+            not in {
+                image
+                for row in (source.degeneracy_maps[degree - 1] if degree else ())
+                for image in row
+            }
+        )
+        for degree, level in enumerate(source.sets)
+    )
+    target_nondegenerate = tuple(
+        tuple(
+            simplex
+            for simplex in range(len(level))
+            if simplex
+            not in {
+                image
+                for row in (target.degeneracy_maps[degree - 1] if degree else ())
+                for image in row
+            }
+        )
+        for degree, level in enumerate(target.sets)
+    )
+    map_cells = sum(
+        len(source_basis) * len(target_basis)
+        for source_basis, target_basis in zip(
+            source_nondegenerate, target_nondegenerate, strict=True
+        )
+    )
+    source_chain_cells = sum(
+        source_sizes[degree - 1] * source_sizes[degree]
+        for degree in range(1, len(source_sizes))
+    )
+    target_chain_cells = sum(
+        target_sizes[degree - 1] * target_sizes[degree]
+        for degree in range(1, len(target_sizes))
+    )
+    relation_work = sum(
+        len(target_nondegenerate[degree - 1])
+        * len(target_nondegenerate[degree])
+        * len(source_nondegenerate[degree])
+        + len(target_nondegenerate[degree - 1])
+        * len(source_nondegenerate[degree - 1])
+        * len(source_nondegenerate[degree])
+        for degree in range(1, len(source_nondegenerate))
+    )
+    work_bound = (
+        map_cells
+        + source_chain_cells
+        + target_chain_cells
+        + relation_work
+        + 16 * (source.total_simplices + target.total_simplices)
+    )
+    if work_bound > MAX_INDUCED_CHAIN_MAP_WORK_UNITS:
+        raise OperationResourceAdmissionError(
+            location=("map",),
+            code="simplicial_set.induced_chain_map_work_budget_exceeded",
+            message=(
+                f"normalized chain-map construction estimates {work_bound} work "
+                f"units, exceeding the {MAX_INDUCED_CHAIN_MAP_WORK_UNITS}-unit bound"
+            ),
+        )
+    if map_cells > MAX_CHAIN_MAP_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("map",),
+            code="simplicial_set.induced_chain_map_cell_budget_exceeded",
+            message=(
+                f"normalized map matrices require {map_cells} cells, exceeding "
+                f"the {MAX_CHAIN_MAP_CELLS}-cell chain-map bound"
+            ),
+        )
+    source_chars = sum(len(label) for level in source.sets for label in level)
+    target_chars = sum(len(label) for level in target.sets for label in level)
+    output_bound = (
+        _NORMALIZED_CHAIN_OUTPUT_STRUCTURE * 2
+        + 4 * (source_chain_cells + target_chain_cells + map_cells)
+        + 2 * (source_chars + target_chars)
+    )
+    if output_bound > MAX_INDUCED_CHAIN_MAP_OUTPUT_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("map",),
+            code="simplicial_set.induced_chain_map_output_budget_exceeded",
+            message=(
+                f"estimated normalized chain-map output {output_bound} cells "
+                f"exceeds the {MAX_INDUCED_CHAIN_MAP_OUTPUT_CELLS}-cell bound"
+            ),
+        )
+
+    normalized_source = normalized_chains(source)
+    normalized_target = normalized_chains(target)
+    _require_naturality(map_value, location="map")
+    target_rows = tuple(
+        {simplex: index for index, simplex in enumerate(level)}
+        for level in target_nondegenerate
+    )
+    components = []
+    for degree, source_basis in enumerate(source_nondegenerate):
+        target_basis = target_nondegenerate[degree]
+        matrix = [[0] * len(source_basis) for _ in target_basis]
+        for column, simplex in enumerate(source_basis):
+            image = map_value.maps[degree][simplex]
+            row = target_rows[degree].get(image)
+            if row is not None:
+                matrix[row][column] = 1
+        components.append(tuple(tuple(row) for row in matrix))
+    chain_map = ChainMapValue(
+        source=normalized_source.chain_complex,
+        target=normalized_target.chain_complex,
+        map_matrices=tuple(components),
+        source_basis_labels=normalized_source.nondegenerate_bases,
+        target_basis_labels=normalized_target.nondegenerate_bases,
+    )
+    relation = chain_map_commutes(chain_map)
+    if not relation.is_valid:
+        raise OperationDomainValidationError(
+            location=("map",),
+            code="simplicial_set.induced_chain_map_identity_failed",
+            message="the induced normalized boundary does not commute with the map",
+        )
+    return chain_map
 
 
 def normalized_homology(

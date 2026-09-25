@@ -23,9 +23,9 @@ from jacobian.math.topology.chain_complexes.values import (
     MAX_OPERATION_MATRIX_CELLS,
     ChainCoefficient,
     ChainComplexValue,
+    ChainMapValue,
     CoefficientRing,
     _bounded_integer_digits,
-    _format_chain_coefficient,
 )
 
 type _RawCoefficientEntry = str | int | Fraction
@@ -321,137 +321,22 @@ class VerifyDifferentialRequest(StrictModel):
         return self
 
 
-def _require_component_entry_grammar(
-    coefficient_ring: CoefficientRing,
-    matrix: tuple[tuple[ChainCoefficient, ...], ...],
-    *,
-    prime: int | None = None,
-) -> tuple[int, int]:
-    """Validate one component's entries; return its (cells, characters)."""
-    from jacobian.math.topology.chain_complexes.values import (
-        _require_coefficient_scalar,
-    )
-
-    for row in matrix:
-        for entry in row:
-            # Shape alone does not make an entry parseable: the exact
-            # kernels parse entries with Fraction/int and would turn an
-            # accepted request into a host exception.
-            _require_coefficient_scalar(coefficient_ring, entry, prime=prime)
-    return (
-        sum(len(row) for row in matrix),
-        sum(len(_format_chain_coefficient(entry)) for row in matrix for entry in row),
-    )
-
-
-def _require_chain_map_components(
-    source: ChainComplexValue,
-    target: ChainComplexValue,
-    map_matrices: tuple[tuple[tuple[ChainCoefficient, ...], ...], ...],
-    *,
-    label: str,
-) -> None:
-    """Admit only complete, correctly shaped degree-aligned chain maps.
-
-    One component per source degree is required; component ``i`` must have
-    exactly ``target.basis_sizes[i]`` rows and ``source.basis_sizes[i]``
-    columns. Degree intervals must coincide so tuple indices are actual
-    chain degrees.
-    """
-    if source.coefficient_ring != target.coefficient_ring:
-        raise _validation_error(
-            "chain_map_ring_mismatch",
-            f"{label} requires equal coefficient rings "
-            f"({source.coefficient_ring} vs {target.coefficient_ring})",
-        )
-    if source.prime != target.prime:
-        raise _validation_error(
-            "chain_map_prime_mismatch",
-            f"{label} requires equal prime moduli ({source.prime} vs {target.prime})",
-        )
-    if (source.degree_min, source.degree_max) != (
-        target.degree_min,
-        target.degree_max,
-    ):
-        raise _validation_error(
-            "chain_map_degree_interval_mismatch",
-            f"{label} requires source and target complexes concentrated on "
-            "the same degree interval "
-            f"({source.degree_min}..{source.degree_max} vs "
-            f"{target.degree_min}..{target.degree_max})",
-        )
-    expected_count = len(source.basis_sizes)
-    if len(map_matrices) != expected_count:
-        raise _validation_error(
-            "chain_map_component_count_mismatch",
-            f"{label} requires one map component per chain degree "
-            f"({expected_count}), got {len(map_matrices)}",
-        )
-    from jacobian.math.topology.chain_complexes.values import (
-        MAX_CHAIN_MAP_CELLS,
-        MAX_CHAIN_MAP_ENTRY_CHARS,
-    )
-
-    total_map_cells = 0
-    total_entry_chars = 0
-    for index, matrix in enumerate(map_matrices):
-        rows = target.basis_sizes[index]
-        cols = source.basis_sizes[index]
-        if len(matrix) != rows or any(len(row) != cols for row in matrix):
-            raise _validation_error(
-                "chain_map_component_shape_mismatch",
-                f"{label} map component {index} must have shape "
-                f"{rows}x{cols} (target rows x source columns)",
-            )
-        cells, chars = _require_component_entry_grammar(
-            source.coefficient_ring, matrix, prime=source.prime
-        )
-        total_map_cells += cells
-        total_entry_chars += chars
-    if total_map_cells > MAX_CHAIN_MAP_CELLS:
-        raise _validation_error(
-            "chain_map_cell_budget_exceeded",
-            f"{label} map components total {total_map_cells} cells, "
-            f"exceeding the {MAX_CHAIN_MAP_CELLS}-cell aggregate budget",
-        )
-    if total_entry_chars > MAX_CHAIN_MAP_ENTRY_CHARS:
-        raise _validation_error(
-            "chain_map_entry_budget_exceeded",
-            f"{label} map components total {total_entry_chars} entry "
-            f"characters, exceeding the {MAX_CHAIN_MAP_ENTRY_CHARS}-character aggregate budget",
-        )
-
-
 class VerifyChainMapRequest(StrictModel):
     """Verify that a chain map commutes with differentials."""
 
-    source: ChainComplexValue
-    target: ChainComplexValue
-    map_matrices: tuple[tuple[tuple[ChainCoefficient, ...], ...], ...] = Field(
-        description=(
-            "One dense component per chain degree, each shaped "
-            "(target basis size) x (source basis size). Entries follow the "
-            "same exact coefficient type as differential matrices: Python "
-            "inputs use integers or Fractions; JSON uses canonical decimal "
-            "or reduced rational strings, and GF(p) uses integer residues "
-            "in [0, p)."
-        )
-    )
+    chain_map: ChainMapValue
 
     @model_validator(mode="after")
     def require_admissible_map_components(self) -> Self:
-        for label, complex_value in (("source", self.source), ("target", self.target)):
+        for label, complex_value in (
+            ("source", self.chain_map.source),
+            ("target", self.chain_map.target),
+        ):
             _require_complex_cell_budget(
                 complex_value,
                 maximum=MAX_OPERATION_MATRIX_CELLS,
                 label=f"chain-map {label}",
             )
-        _require_chain_map_components(
-            self.source,
-            self.target,
-            self.map_matrices,
-            label="chain-map verification",
-        )
         return self
 
 
@@ -487,33 +372,19 @@ class ComputeHomologyRequest(StrictModel):
 class MappingConeRequest(StrictModel):
     """Compute the mapping cone of a chain map."""
 
-    source: ChainComplexValue
-    target: ChainComplexValue
-    map_matrices: tuple[tuple[tuple[ChainCoefficient, ...], ...], ...] = Field(
-        description=(
-            "One dense component per chain degree, each shaped "
-            "(target basis size) x (source basis size). Entries follow the "
-            "same exact coefficient type as differential matrices: Python "
-            "inputs use integers or Fractions; JSON uses canonical decimal "
-            "or reduced rational strings, and GF(p) uses integer residues "
-            "in [0, p)."
-        )
-    )
+    chain_map: ChainMapValue
 
     @model_validator(mode="after")
     def require_input_budgets(self) -> Self:
-        for label, complex_value in (("source", self.source), ("target", self.target)):
+        for label, complex_value in (
+            ("source", self.chain_map.source),
+            ("target", self.chain_map.target),
+        ):
             _require_complex_cell_budget(
                 complex_value,
                 maximum=MAX_OPERATION_MATRIX_CELLS,
                 label=f"mapping-cone {label}",
             )
-        _require_chain_map_components(
-            self.source,
-            self.target,
-            self.map_matrices,
-            label="mapping cone",
-        )
         return self
 
 

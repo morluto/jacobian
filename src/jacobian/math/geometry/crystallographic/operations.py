@@ -23,6 +23,7 @@ from jacobian.math.topology.chain_complexes.operations import mapping_cone
 from jacobian.math.topology.chain_complexes.values import (
     MAX_MATRIX_ENTRY_CHARS,
     ChainComplexValue,
+    ChainMapValue,
     CoefficientRing,
 )
 
@@ -293,7 +294,13 @@ def mapping_torus_chain_complex(
             "finite_order_exponent does not satisfy linear_part^m = I",
         )
     torus = _torus_complex(admitted.row_count)
-    return mapping_cone(torus, torus, _mapping_components(rows)).value
+    return mapping_cone(
+        ChainMapValue(
+            source=torus,
+            target=torus,
+            map_matrices=_mapping_components(rows),
+        )
+    ).value
 
 
 __all__ = ["mapping_torus_chain_complex"]

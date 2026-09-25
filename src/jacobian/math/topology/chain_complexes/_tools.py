@@ -80,7 +80,7 @@ def _verify_differential(request: VerifyDifferentialRequest) -> VerificationResu
 
 def _verify_chain_map(request: VerifyChainMapRequest) -> VerificationResult:
     """Project a wire request into the canonical chain-map verifier."""
-    return chain_map_commutes(request.source, request.target, request.map_matrices)
+    return chain_map_commutes(request.chain_map)
 
 
 def _homology(request: ComputeHomologyRequest) -> HomologyResult:
@@ -91,10 +91,10 @@ def _homology(request: ComputeHomologyRequest) -> HomologyResult:
 def _mapping_cone(request: MappingConeRequest) -> MappingConeResult:
     """Project a wire request into the canonical mapping-cone operation."""
     try:
-        return mapping_cone(request.source, request.target, request.map_matrices)
+        return mapping_cone(request.chain_map)
     except ValueError as exc:
         raise OperationDomainValidationError(
-            location=("map_matrices",),
+            location=("chain_map",),
             code="chain_complex.chain_map_relation",
             message=str(exc),
         ) from exc
@@ -194,12 +194,14 @@ TOOLS: MathTools = (
                 name="verify_identity_map",
                 description="Verify the identity map commutes.",
                 input={
-                    "source": _CIRCLE_COMPLEX,
-                    "target": _CIRCLE_COMPLEX,
-                    "map_matrices": [
-                        [["1", "0", "0"], ["0", "1", "0"], ["0", "0", "1"]],
-                        [["1", "0", "0"], ["0", "1", "0"], ["0", "0", "1"]],
-                    ],
+                    "chain_map": {
+                        "source": _CIRCLE_COMPLEX,
+                        "target": _CIRCLE_COMPLEX,
+                        "map_matrices": [
+                            [["1", "0", "0"], ["0", "1", "0"], ["0", "0", "1"]],
+                            [["1", "0", "0"], ["0", "1", "0"], ["0", "0", "1"]],
+                        ],
+                    },
                 },
             ),
         ),
@@ -241,7 +243,7 @@ TOOLS: MathTools = (
     MathTool(
         operation_id="chain_complex.mapping_cone.compute",
         title="Compute the mapping cone",
-        description="Compute the mapping cone of a chain map f: C -> D.",
+        description="Compute the mapping cone of a source-bound ChainMapValue f: C -> D.",
         request_type=MappingConeRequest,
         result_type=MappingConeResult,
         run=_mapping_cone,
@@ -251,12 +253,14 @@ TOOLS: MathTools = (
                 name="identity_mapping_cone",
                 description="Mapping cone of the identity on a circle.",
                 input={
-                    "source": _CIRCLE_COMPLEX,
-                    "target": _CIRCLE_COMPLEX,
-                    "map_matrices": [
-                        [["1", "0", "0"], ["0", "1", "0"], ["0", "0", "1"]],
-                        [["1", "0", "0"], ["0", "1", "0"], ["0", "0", "1"]],
-                    ],
+                    "chain_map": {
+                        "source": _CIRCLE_COMPLEX,
+                        "target": _CIRCLE_COMPLEX,
+                        "map_matrices": [
+                            [["1", "0", "0"], ["0", "1", "0"], ["0", "0", "1"]],
+                            [["1", "0", "0"], ["0", "1", "0"], ["0", "0", "1"]],
+                        ],
+                    },
                 },
             ),
         ),

@@ -34,7 +34,7 @@ MAX_PUISEUX_ARITHMETIC_WORK = 1_000_000
 # that could not be transported instead of only the worst-case product of
 # the retained-term and coefficient-digit representation bounds.
 MAX_PUISEUX_RESULT_DIGITS = 10 * 1024 * 1024
-_MAX_SCALAR_BITS = floor(MAX_LOCAL_SERIES_COEFFICIENT_DIGITS * log2(10))
+_MAX_SCALAR_BITS = floor(MAX_LOCAL_SERIES_COEFFICIENT_DIGITS * log2(10)) + 1
 _VARIABLE_ADAPTER = TypeAdapter(PolynomialVariable)
 
 
@@ -473,13 +473,14 @@ def multiply(
             exponent = exponent_a + exponent_b
             if lower <= exponent < precision:
                 contributions[exponent].append((coefficient_a, coefficient_b))
-    _admit_support(len(contributions))
     for values in contributions.values():
         _admit_product_sum_growth(values)
     coefficients = {
-        exponent: sum((left * right for left, right in values), Fraction())
+        exponent: total
         for exponent, values in contributions.items()
+        if (total := sum((left * right for left, right in values), Fraction()))
     }
+    _admit_support(len(coefficients))
     _admit_result_envelope(coefficients, left.variable, center)
     return _make(left, lower, precision, coefficients, ramification)
 

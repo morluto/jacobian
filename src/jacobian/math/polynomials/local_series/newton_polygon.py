@@ -102,6 +102,12 @@ class LocalPolynomialNewtonPolygonResult(StrictModel):
 
 
 def _admit_parent(source: LocalPolynomialInSeries) -> None:
+    if not isinstance(source.coefficients, tuple):
+        raise OperationDomainValidationError(
+            location=("polynomial", "coefficients"),
+            code="local_series.newton_rows",
+            message="local polynomial coefficients must be a tuple",
+        )
     if len(source.coefficients) > MAX_LOCAL_POLYNOMIAL_ROWS:
         raise OperationResourceAdmissionError(
             location=("polynomial", "coefficients"),
@@ -184,7 +190,15 @@ def _admit_parent(source: LocalPolynomialInSeries) -> None:
             message="an infinity local polynomial has center zero",
         )
     # Native callers can bypass the Pydantic validator with model_construct(),
-    # so re-establish unique increasing row ordering before the hull loop.
+    # so validate row values before reading degrees, then re-establish unique
+    # increasing ordering before the hull loop.
+    for index, row in enumerate(source.coefficients):
+        if not isinstance(row, LocalPolynomialCoefficient):
+            raise OperationDomainValidationError(
+                location=("polynomial", "coefficients", index),
+                code="local_series.newton_row_type",
+                message="local polynomial rows must be coefficient values",
+            )
     degrees = tuple(row.y_degree for row in source.coefficients)
     if degrees != tuple(sorted(set(degrees))):
         raise OperationDomainValidationError(

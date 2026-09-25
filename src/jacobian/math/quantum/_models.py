@@ -311,7 +311,8 @@ class StabilizerCodeRequest(StrictModel):
             )
         if any(value not in (-1, 1) for value in self.generator_eigenvalues):
             raise _validation_error(
-                "code_character_sign", "stabilizer generator eigenvalues must be +1 or -1"
+                "code_character_sign",
+                "stabilizer generator eigenvalues must be +1 or -1",
             )
         return self
 

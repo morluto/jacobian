@@ -10,6 +10,7 @@ def test_exact_public_api_symbols() -> None:
     expected = (
         "Marking",
         "PetriNet",
+        "PetriNonnegativeInvariantResult",
         "PetriPlaceSubset",
         "check_pumping_witness",
         "compute_incidence_matrix",
@@ -22,6 +23,7 @@ def test_exact_public_api_symbols() -> None:
         "marking_conflict_profile",
         "marking_reachability",
         "petri_invariants",
+        "petri_nonnegative_invariant_generators",
         "place_set_initial_marking_profile",
         "place_set_support",
         "reachability_graph",

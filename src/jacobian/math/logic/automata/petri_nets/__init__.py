@@ -1,5 +1,8 @@
 """Supported native Petri-net API."""
 
+from jacobian.math.logic.automata.petri_nets._models import (
+    PetriNonnegativeInvariantResult,
+)
 from jacobian.math.logic.automata.petri_nets.operations import (
     check_pumping_witness,
     compute_incidence_matrix,
@@ -12,6 +15,7 @@ from jacobian.math.logic.automata.petri_nets.operations import (
     marking_conflict_profile,
     marking_reachability,
     petri_invariants,
+    petri_nonnegative_invariant_generators,
     place_set_initial_marking_profile,
     place_set_support,
     reachability_graph,
@@ -35,6 +39,7 @@ from jacobian.math.logic.automata.petri_nets.values import (
 __all__ = [
     "Marking",
     "PetriNet",
+    "PetriNonnegativeInvariantResult",
     "PetriPlaceSubset",
     "check_pumping_witness",
     "compute_incidence_matrix",
@@ -47,6 +52,7 @@ __all__ = [
     "marking_conflict_profile",
     "marking_reachability",
     "petri_invariants",
+    "petri_nonnegative_invariant_generators",
     "place_set_initial_marking_profile",
     "place_set_support",
     "reachability_graph",

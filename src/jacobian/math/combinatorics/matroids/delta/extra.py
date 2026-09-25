@@ -170,6 +170,19 @@ class DeltaMatroidTwistPolynomialResult(StrictModel):
                 "delta_matroid.twist_polynomial_shape",
                 "polynomial must contain one nonnegative coefficient for each width 0 through |E|",
             )
+        if sum(self.coefficients_by_width) != 1 << len(self.ground):
+            raise PydanticCustomError(
+                "delta_matroid.twist_polynomial_total",
+                "twist-width coefficients must sum to the number of ground subsets",
+            )
+        canonical_coefficients = tuple(reversed(self.coefficients_by_width))
+        while len(canonical_coefficients) > 1 and canonical_coefficients[0] == 0:
+            canonical_coefficients = canonical_coefficients[1:]
+        if tuple(self.polynomial.coefficients) != canonical_coefficients:
+            raise PydanticCustomError(
+                "delta_matroid.twist_polynomial_coefficients",
+                "integer polynomial coefficients must equal the canonical width histogram",
+            )
         return self
 
 

@@ -498,6 +498,13 @@ def _oracle_twist_polynomial(n: int, feasible: set[frozenset[int]]) -> tuple[int
     return tuple(coefficients)
 
 
+def _descending_nonzero_polynomial(histogram: tuple[int, ...]) -> tuple[int, ...]:
+    descending = tuple(reversed(histogram))
+    while len(descending) > 1 and descending[0] == 0:
+        descending = descending[1:]
+    return descending
+
+
 def test_twist_polynomial_matches_independent_exhaustive_small_oracle() -> None:
     # Enumerate every nonempty feasible family through a three-element ground
     # and independently apply symmetric exchange and the twist definition.
@@ -519,7 +526,11 @@ def test_twist_polynomial_matches_independent_exhaustive_small_oracle() -> None:
                 feasible=tuple(sorted(tuple(sorted(row)) for row in feasible)),
             )
             result = twist_polynomial(source)
-            assert result.coefficients_by_width == _oracle_twist_polynomial(n, feasible)
+            expected_histogram = _oracle_twist_polynomial(n, feasible)
+            assert result.coefficients_by_width == expected_histogram
+            assert result.polynomial.coefficients == _descending_nonzero_polynomial(
+                expected_histogram
+            )
             assert result.ground == source.ground
             assert sum(result.coefficients_by_width) == 1 << n
 
@@ -558,9 +569,38 @@ def test_twist_polynomial_empty_axis_binary_composition_and_json_roundtrip() -> 
     assert tool.run(example_request).coefficients_by_width == (0, 0, 4)
 
 
-def test_twist_polynomial_rejects_before_expanding_too_many_masks() -> None:
-    too_wide = FiniteDeltaMatroid(
+def test_twist_polynomial_rejects_before_expanding_too_many_masks(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import jacobian.math.combinatorics.matroids.delta.extra_ops as extra_ops
+
+    too_wide = FiniteDeltaMatroid.model_construct(
         ground=tuple(f"e{i}" for i in range(13)), feasible=((),)
     )
+
+    def fail_if_source_validation_runs(_value: object) -> None:
+        raise AssertionError("oversized axis must reject before full source validation")
+
+    monkeypatch.setattr(extra_ops, "_admit_delta", fail_if_source_validation_runs)
     with pytest.raises(OperationResourceAdmissionError):
         twist_polynomial(too_wide)
+
+
+def test_twist_polynomial_result_rejects_inconsistent_wire_claims() -> None:
+    import json
+
+    from pydantic import ValidationError
+
+    source = FiniteDeltaMatroid(ground=("a",), feasible=((), (0,)))
+    result = twist_polynomial(source)
+
+    mismatched_polynomial = result.model_dump(mode="json")
+    mismatched_polynomial["coefficients_by_width"] = [1, 1]
+    with pytest.raises(ValidationError, match="canonical width histogram"):
+        type(result).model_validate_json(json.dumps(mismatched_polynomial))
+
+    nontotal_histogram = result.model_dump(mode="json")
+    nontotal_histogram["coefficients_by_width"] = [0, 1]
+    nontotal_histogram["polynomial"]["coefficients"] = ["1"]
+    with pytest.raises(ValidationError, match="number of ground subsets"):
+        type(result).model_validate_json(json.dumps(nontotal_histogram))

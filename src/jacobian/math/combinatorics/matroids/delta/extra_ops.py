@@ -26,6 +26,23 @@ from jacobian.math.polynomials._models import IntegerPolynomial
 _TWIST_POLYNOMIAL_CHECKPOINT_STRIDE = 4_096
 
 
+def _reject_oversized_twist_polynomial_axis(value: object) -> None:
+    """Reject an over-envelope raw axis before validating its full family."""
+
+    if type(value) is not FiniteDeltaMatroid:
+        return
+    ground = getattr(value, "ground", None)
+    if (
+        type(ground) is tuple
+        and len(ground) > MAX_TWIST_POLYNOMIAL_STATES.bit_length() - 1
+    ):
+        raise OperationResourceAdmissionError(
+            location=("delta_matroid", "ground"),
+            code="delta_matroid.twist_polynomial_work",
+            message="complete twist polynomial exceeds its subset-state envelope",
+        )
+
+
 def _admit_delta(value: object) -> FiniteDeltaMatroid:
     if type(value) is not FiniteDeltaMatroid:
         raise OperationDomainValidationError(
@@ -166,14 +183,9 @@ def twist_polynomial(d: FiniteDeltaMatroid) -> DeltaMatroidTwistPolynomialResult
     and source exchange replay are all admitted before the twist sweep.
     """
 
+    _reject_oversized_twist_polynomial_axis(d)
     d = _admit_delta(d)
     n = len(d.ground)
-    if n > MAX_TWIST_POLYNOMIAL_STATES.bit_length() - 1:
-        raise OperationResourceAdmissionError(
-            location=("delta_matroid", "ground"),
-            code="delta_matroid.twist_polynomial_work",
-            message="complete twist polynomial exceeds its subset-state envelope",
-        )
     state_count = 1 << n
     work = state_count * len(d.feasible)
     try:

@@ -3,6 +3,7 @@
 from collections.abc import Callable
 from typing import Any
 
+from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.polynomials.series._models import TruncatedSeries
 
@@ -33,10 +34,7 @@ from .arithmetic_models import (
 from .newton_polygon import (
     LocalPolynomialInSeries,
     LocalPolynomialNewtonPolygonResult,
-    NewtonEdgeCharacteristicRequest,
-    NewtonEdgeCharacteristicResult,
     local_polynomial_newton_polygon,
-    newton_edge_characteristic_polynomial,
 )
 from .operations import (
     add_puiseux,
@@ -91,13 +89,13 @@ def _example_series() -> dict[str, object]:
 def _example_puiseux(coefficient: int = 1) -> dict[str, object]:
     return TruncatedPuiseuxWindow(
         variable="t",
-        valuation_lower={"num": 0, "den": 1},
-        precision={"num": 2, "den": 1},
+        valuation_lower=CanonicalRational(num=0, den=1),
+        precision=CanonicalRational(num=2, den=1),
         ramification_index=2,
         terms=(
             PuiseuxTerm(
-                exponent={"num": 1, "den": 2},
-                coefficient={"num": coefficient, "den": 1},
+                exponent=CanonicalRational(num=1, den=2),
+                coefficient=CanonicalRational(num=coefficient, den=1),
             ),
         ),
     ).model_dump(mode="json")
@@ -136,58 +134,6 @@ def _rational_function_at_infinity(
 
 
 TOOLS: MathTools = (
-    MathTool(
-        operation_id="local_series.polynomial.newton_edge_characteristic.compute",
-        title="Compute a Newton edge characteristic polynomial",
-        description=(
-            "For one exact lower Newton edge, transport each on-edge local "
-            "series leading coefficient into the characteristic polynomial "
-            "over QQ. The result retains its source and edge; it does not "
-            "select roots or claim a Puiseux branch."
-        ),
-        request_type=NewtonEdgeCharacteristicRequest,
-        result_type=NewtonEdgeCharacteristicResult,
-        run=newton_edge_characteristic_polynomial,
-        tags=("local-series", "polynomial", "newton-polygon", "puiseux", "exact"),
-        examples=(
-            OperationExample(
-                name="leading_coefficient_equation",
-                description="Extract the characteristic polynomial of the first edge.",
-                input={
-                    "polynomial": {
-                        "variable": "t",
-                        "place": "FINITE",
-                        "center": {"num": "0", "den": "1"},
-                        "coefficients": [
-                            {
-                                "y_degree": 0,
-                                "series": {
-                                    "variable": "t",
-                                    "place": "FINITE",
-                                    "center": {"num": "0", "den": "1"},
-                                    "valuation_lower": 2,
-                                    "precision": 3,
-                                    "coefficients": [{"num": "-1", "den": "1"}],
-                                },
-                            },
-                            {
-                                "y_degree": 2,
-                                "series": {
-                                    "variable": "t",
-                                    "place": "FINITE",
-                                    "center": {"num": "0", "den": "1"},
-                                    "valuation_lower": 0,
-                                    "precision": 1,
-                                    "coefficients": [{"num": "1", "den": "1"}],
-                                },
-                            },
-                        ],
-                    },
-                    "edge_index": 0,
-                },
-            ),
-        ),
-    ),
     MathTool(
         operation_id="local_series.polynomial.newton_polygon.compute",
         title="Compute a local polynomial Newton polygon",
@@ -770,13 +716,13 @@ TOOLS: MathTools = (
                 input={
                     "series": TruncatedPuiseuxWindow(
                         variable="t",
-                        valuation_lower={"num": -2, "den": 1},
-                        precision={"num": 1, "den": 1},
+                        valuation_lower=CanonicalRational(num=-2, den=1),
+                        precision=CanonicalRational(num=1, den=1),
                         ramification_index=1,
                         terms=(
                             PuiseuxTerm(
-                                exponent={"num": -1, "den": 1},
-                                coefficient={"num": 3, "den": 2},
+                                exponent=CanonicalRational(num=-1, den=1),
+                                coefficient=CanonicalRational(num=3, den=2),
                             ),
                         ),
                     ).model_dump(mode="json")

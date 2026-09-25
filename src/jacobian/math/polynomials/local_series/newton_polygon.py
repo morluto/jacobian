@@ -6,14 +6,17 @@ from fractions import Fraction
 from itertools import pairwise
 from typing import Literal
 
-from pydantic import Field, StrictInt, model_validator
+from pydantic import Field, StrictInt, TypeAdapter, ValidationError, model_validator
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
-from jacobian.canonical import CanonicalLimits
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
+)
+from jacobian.math.polynomials.local_series.arithmetic import (
+    _check as _check_laurent,
 )
 from jacobian.math.polynomials.local_series.values import (
     MAX_LOCAL_SERIES_COEFFICIENT_DIGITS,
@@ -22,16 +25,18 @@ from jacobian.math.polynomials.local_series.values import (
 )
 from jacobian.math.polynomials.values import (
     PolynomialVariable,
-    RationalPolynomial,
-    RationalPolynomialTerm,
-    SparseRationalPolynomial,
 )
 
 MAX_LOCAL_POLYNOMIAL_ROWS = 256
 MAX_LOCAL_POLYNOMIAL_SERIES_SLOTS = 8192
 MAX_NEWTON_POLYGON_Y_DEGREE = 32_768
 MAX_NEWTON_POLYGON_SCALAR_DIGITS = 256
-MAX_NEWTON_POLYGON_OUTPUT_BYTES = CanonicalLimits().max_output_bytes
+MAX_NEWTON_POLYGON_RESULT_DIGITS = (
+    MAX_LOCAL_POLYNOMIAL_ROWS * 64
+    + MAX_LOCAL_POLYNOMIAL_SERIES_SLOTS * (2 * MAX_NEWTON_POLYGON_SCALAR_DIGITS + 64)
+    + 1024
+)
+_VARIABLE_ADAPTER = TypeAdapter(PolynomialVariable)
 
 
 class LocalPolynomialCoefficient(StrictModel):
@@ -98,101 +103,139 @@ class LocalPolynomialNewtonPolygonResult(StrictModel):
     edges: tuple[NewtonPolygonEdge, ...]
 
 
-class NewtonEdgeCharacteristicRequest(StrictModel):
-    """Select a lower edge of a local polynomial Newton polygon."""
-
-    polynomial: LocalPolynomialInSeries
-    edge_index: StrictInt = Field(ge=0)
-
-
-class NewtonEdgeCharacteristicTerm(StrictModel):
-    """Transport a source coefficient's leading term to the edge polynomial."""
-
-    y_degree: StrictInt = Field(ge=0)
-    characteristic_exponent: StrictInt = Field(ge=0)
-    leading_coefficient: CanonicalRational
-
-
-class NewtonEdgeCharacteristicResult(StrictModel):
-    """Exact rational edge polynomial, with its source coefficients retained."""
-
-    source: LocalPolynomialInSeries
-    edge_index: StrictInt = Field(ge=0)
-    edge: NewtonPolygonEdge
-    terms: tuple[NewtonEdgeCharacteristicTerm, ...]
-    characteristic_polynomial: RationalPolynomial
-
-
-def newton_edge_characteristic_polynomial(
-    request: NewtonEdgeCharacteristicRequest,
-) -> NewtonEdgeCharacteristicResult:
-    """Return the edge polynomial in the leading coefficient variable ``c``.
-
-    Its terms are ``lc(a_j) * c**(j-j_left)`` for source coefficients whose
-    valuation points lie on the selected lower edge. Roots describe possible
-    nonzero leading coefficients after the edge's valuation substitution; this
-    operation does not select or lift roots.
-    """
-    if not isinstance(request, NewtonEdgeCharacteristicRequest):
+def _admit_parent(source: LocalPolynomialInSeries) -> None:
+    if len(source.coefficients) > MAX_LOCAL_POLYNOMIAL_ROWS:
+        raise OperationResourceAdmissionError(
+            location=("polynomial", "coefficients"),
+            code="local_series.newton_rows_bound",
+            message=f"local polynomial exceeds {MAX_LOCAL_POLYNOMIAL_ROWS} coefficient rows",
+        )
+    if type(source.variable) is not str:
         raise OperationDomainValidationError(
-            location=("request",),
-            code="local_series.newton_characteristic_request_type",
-            message="request must select an edge of a local polynomial",
+            location=("polynomial", "variable"),
+            code="local_series.newton_variable",
+            message="local polynomial variable must be a strict identifier",
         )
-    polygon = local_polynomial_newton_polygon(request.polynomial)
-    if request.edge_index >= len(polygon.edges):
+    try:
+        _VARIABLE_ADAPTER.validate_python(source.variable, strict=True)
+    except ValidationError as error:
         raise OperationDomainValidationError(
-            location=("edge_index",),
-            code="local_series.newton_edge_index",
-            message="edge_index must select an edge in the exact lower Newton polygon",
+            location=("polynomial", "variable"),
+            code="local_series.newton_variable",
+            message="local polynomial variable must match the polynomial identifier grammar",
+        ) from error
+    if source.place not in ("FINITE", "INFINITY"):
+        raise OperationDomainValidationError(
+            location=("polynomial", "place"),
+            code="local_series.newton_place",
+            message="local polynomial expansion place must be FINITE or INFINITY",
         )
-    edge = polygon.edges[request.edge_index]
-    left_degree = edge.left.y_degree
-    source_rows = {row.y_degree: row for row in request.polynomial.coefficients}
-    valuations = dict(polygon.coefficient_valuations)
-    transported = []
-    polynomial_terms = []
-    for degree in edge.source_y_degrees:
-        row = source_rows.get(degree)
-        valuation = valuations.get(degree)
-        if row is None or row.series is None or valuation is None:
-            raise OperationDomainValidationError(
-                location=("polynomial", "coefficients"),
-                code="local_series.newton_source_transport",
-                message="the selected edge could not be transported to its source coefficients",
-            )
-        offset = valuation - row.series.valuation_lower
-        coefficient = row.series.coefficients[offset]
-        exponent = degree - left_degree
-        transported.append(
-            NewtonEdgeCharacteristicTerm.model_construct(
-                y_degree=degree,
-                characteristic_exponent=exponent,
-                leading_coefficient=coefficient,
-            )
+    if not isinstance(source.center, CanonicalRational):
+        raise OperationDomainValidationError(
+            location=("polynomial", "center"),
+            code="local_series.newton_center",
+            message="local polynomial center must be a canonical rational",
         )
-        polynomial_terms.append(
-            RationalPolynomialTerm.model_construct(
-                coefficient=coefficient,
-                exponents=(exponent,),
-            )
+    # Native callers can bypass the Pydantic validator with model_construct(),
+    # so re-establish the center's reduced components, denominator
+    # positivity, and scalar bound before the hull consumes it, mirroring the
+    # nested Laurent and Puiseux window admission.
+    center_num = getattr(source.center, "num", None)
+    center_den = getattr(source.center, "den", None)
+    if type(center_num) is not int or type(center_den) is not int:
+        raise OperationDomainValidationError(
+            location=("polynomial", "center"),
+            code="local_series.newton_center",
+            message="local polynomial center components must be strict integers",
         )
-    characteristic = RationalPolynomial.model_construct(
-        domain="QQ",
-        variables=("c",),
-        polynomial=SparseRationalPolynomial.model_construct(
-            terms=tuple(
-                sorted(polynomial_terms, key=lambda term: term.exponents, reverse=True)
-            )
-        ),
-    )
-    return NewtonEdgeCharacteristicResult.model_construct(
-        source=request.polynomial,
-        edge_index=request.edge_index,
-        edge=edge,
-        terms=tuple(transported),
-        characteristic_polynomial=characteristic,
-    )
+    try:
+        center = source.center.as_fraction()
+    except (TypeError, ValueError, ZeroDivisionError) as error:
+        raise OperationDomainValidationError(
+            location=("polynomial", "center"),
+            code="local_series.newton_center",
+            message="local polynomial center must be a valid canonical rational",
+        ) from error
+    if center_den <= 0 or (center_num, center_den) != (
+        center.numerator,
+        center.denominator,
+    ):
+        raise OperationDomainValidationError(
+            location=("polynomial", "center"),
+            code="local_series.newton_center",
+            message=(
+                "local polynomial center must be reduced with a positive denominator"
+            ),
+        )
+    try:
+        require_bounded_rational(
+            source.center,
+            max_digits=MAX_LOCAL_SERIES_COEFFICIENT_DIGITS,
+            label="local polynomial center",
+        )
+    except ValueError as error:
+        raise OperationResourceAdmissionError(
+            location=("polynomial", "center"),
+            code="local_series.newton_center_bound",
+            message=str(error),
+        ) from error
+    if source.place == "INFINITY" and center != 0:
+        raise OperationDomainValidationError(
+            location=("polynomial", "center"),
+            code="local_series.newton_infinity_center",
+            message="an infinity local polynomial has center zero",
+        )
+    # Native callers can bypass the Pydantic validator with model_construct(),
+    # so re-establish unique increasing row ordering before the hull loop.
+    degrees = tuple(row.y_degree for row in source.coefficients)
+    if degrees != tuple(sorted(set(degrees))):
+        raise OperationDomainValidationError(
+            location=("polynomial", "coefficients"),
+            code="local_series.newton_row_order",
+            message="local polynomial rows must have unique increasing y degrees",
+        )
+
+
+def _admit_row(
+    source: LocalPolynomialInSeries,
+    row_index: int,
+) -> None:
+    row = source.coefficients[row_index]
+    if (
+        type(row.y_degree) is not int
+        or not 0 <= row.y_degree <= MAX_NEWTON_POLYGON_Y_DEGREE
+    ):
+        raise OperationDomainValidationError(
+            location=("polynomial", "coefficients", row_index, "y_degree"),
+            code="local_series.newton_row_degree",
+            message="local polynomial row degree is outside its domain",
+        )
+    if row.series is None:
+        return
+    try:
+        _check_laurent(row.series)
+    except OperationResourceAdmissionError as error:
+        raise OperationResourceAdmissionError(
+            location=("polynomial", "coefficients", row_index, "series"),
+            code="local_series.newton_series_bound",
+            message=f"coefficient series exceeds its admitted envelope: {error}",
+        ) from error
+    except OperationDomainValidationError as error:
+        raise OperationDomainValidationError(
+            location=("polynomial", "coefficients", row_index, "series"),
+            code="local_series.newton_series_parent",
+            message=f"coefficient series failed structural admission: {error}",
+        ) from error
+    if (row.series.variable, row.series.place, row.series.center) != (
+        source.variable,
+        source.place,
+        source.center,
+    ):
+        raise OperationDomainValidationError(
+            location=("polynomial", "coefficients", row_index, "series"),
+            code="local_series.newton_parent_mismatch",
+            message="all coefficient series must share the declared local parent",
+        )
 
 
 def _admit(
@@ -204,12 +247,9 @@ def _admit(
             code="local_series.newton_polynomial_type",
             message="polynomial must be a local polynomial in Laurent series",
         )
-    if len(source.coefficients) > MAX_LOCAL_POLYNOMIAL_ROWS:
-        raise OperationResourceAdmissionError(
-            location=("polynomial", "coefficients"),
-            code="local_series.newton_rows_bound",
-            message=f"local polynomial exceeds {MAX_LOCAL_POLYNOMIAL_ROWS} coefficient rows",
-        )
+    _admit_parent(source)
+    for row_index in range(len(source.coefficients)):
+        _admit_row(source, row_index)
     slots = sum(
         len(row.series.coefficients)
         for row in source.coefficients
@@ -235,7 +275,10 @@ def _admit(
         valuation = None
         for offset, coefficient in enumerate(row.series.coefficients):
             value = coefficient.as_fraction()
-            if max(len(str(abs(value.numerator))), len(str(value.denominator))) > min(
+            if max(
+                len(format_canonical_integer(abs(value.numerator))),
+                len(format_canonical_integer(value.denominator)),
+            ) > min(
                 MAX_LOCAL_SERIES_COEFFICIENT_DIGITS,
                 MAX_NEWTON_POLYGON_SCALAR_DIGITS,
             ):
@@ -255,18 +298,21 @@ def _admit(
         valuations.append((row.y_degree, valuation))
         points.append((row.y_degree, valuation))
     center = source.center.as_fraction()
-    center_digits = max(len(str(abs(center.numerator))), len(str(center.denominator)))
-    output_bound = (
+    center_digits = max(
+        len(format_canonical_integer(abs(center.numerator))),
+        len(format_canonical_integer(center.denominator)),
+    )
+    result_digits = (
         512
         + len(source.coefficients) * 192
         + slots * (2 * MAX_NEWTON_POLYGON_SCALAR_DIGITS + 96)
         + center_digits * 2
     )
-    if output_bound > MAX_NEWTON_POLYGON_OUTPUT_BYTES:
+    if result_digits > MAX_NEWTON_POLYGON_RESULT_DIGITS:
         raise OperationResourceAdmissionError(
             location=("polynomial",),
-            code="local_series.newton_output_bound",
-            message="local Newton polygon source and result exceed the canonical output envelope",
+            code="local_series.newton_result_envelope",
+            message="local Newton polygon source and result exceed the admitted digit envelope",
         )
     return valuations, points
 
@@ -327,11 +373,7 @@ __all__ = [
     "LocalPolynomialCoefficient",
     "LocalPolynomialInSeries",
     "LocalPolynomialNewtonPolygonResult",
-    "NewtonEdgeCharacteristicRequest",
-    "NewtonEdgeCharacteristicResult",
-    "NewtonEdgeCharacteristicTerm",
     "NewtonPolygonEdge",
     "NewtonPolygonPoint",
     "local_polynomial_newton_polygon",
-    "newton_edge_characteristic_polynomial",
 ]

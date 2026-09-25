@@ -2,13 +2,15 @@ from fractions import Fraction
 
 import pytest
 
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian._exact import CanonicalRational
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.polynomials.local_series.newton_polygon import (
     LocalPolynomialCoefficient,
     LocalPolynomialInSeries,
-    NewtonEdgeCharacteristicRequest,
     local_polynomial_newton_polygon,
-    newton_edge_characteristic_polynomial,
 )
 from jacobian.math.polynomials.local_series.values import TruncatedLaurentWindow
 
@@ -107,53 +109,112 @@ def test_singleton_and_zero_row_preserve_exact_valuation() -> None:
     assert result.edges == ()
 
 
-def test_edge_characteristic_polynomial_transports_exact_leading_coefficients() -> None:
-    polynomial = _polynomial(
-        [
-            (1, _series(5, (2, 3), (8, 1))),
-            (2, _series(3, (-4, 5), (7, 1))),
-            (4, _series(-1, (3, 7))),
-        ]
+def test_forged_duplicate_row_degrees_are_rejected() -> None:
+    valid = _polynomial([(1, _series(0, (1, 1)))])
+    row = valid.coefficients[0]
+    forged = LocalPolynomialInSeries.model_construct(
+        variable=valid.variable,
+        place=valid.place,
+        center=valid.center,
+        coefficients=(row, row),
     )
-    result = newton_edge_characteristic_polynomial(
-        NewtonEdgeCharacteristicRequest(polynomial=polynomial, edge_index=0)
+    with pytest.raises(OperationDomainValidationError, match="unique increasing"):
+        local_polynomial_newton_polygon(forged)
+
+
+def test_forged_descending_row_degrees_are_rejected() -> None:
+    valid = _polynomial([(1, _series(0, (1, 1))), (2, _series(0, (1, 1)))])
+    forged = LocalPolynomialInSeries.model_construct(
+        variable=valid.variable,
+        place=valid.place,
+        center=valid.center,
+        coefficients=(
+            valid.coefficients[1],
+            valid.coefficients[0],
+        ),
     )
-    assert result.edge.slope.as_fraction() == -2
-    assert [
-        (
-            term.y_degree,
-            term.characteristic_exponent,
-            term.leading_coefficient.as_fraction(),
+    with pytest.raises(OperationDomainValidationError, match="unique increasing"):
+        local_polynomial_newton_polygon(forged)
+
+
+def test_forged_mismatched_parent_is_rejected() -> None:
+    valid = _polynomial([(0, _series(0, (1, 1)))])
+    forged = LocalPolynomialInSeries.model_construct(
+        variable=valid.variable,
+        place=valid.place,
+        center=valid.center,
+        coefficients=(
+            LocalPolynomialCoefficient.model_construct(
+                y_degree=0,
+                series=TruncatedLaurentWindow(
+                    variable="s",
+                    place="FINITE",
+                    center=CanonicalRational(num=0, den=1),
+                    valuation_lower=0,
+                    precision=1,
+                    coefficients=(CanonicalRational(num=1, den=1),),
+                ),
+            ),
+        ),
+    )
+    with pytest.raises(
+        OperationDomainValidationError, match="share the declared local parent"
+    ):
+        local_polynomial_newton_polygon(forged)
+
+
+def test_forged_infinity_center_is_rejected() -> None:
+    forged = LocalPolynomialInSeries.model_construct(
+        variable="t",
+        place="INFINITY",
+        center=CanonicalRational(num=1, den=1),
+        coefficients=(),
+    )
+    with pytest.raises(OperationDomainValidationError, match="center zero"):
+        local_polynomial_newton_polygon(forged)
+
+
+def test_forged_finite_center_is_rejected_before_hull_construction() -> None:
+    for center in (
+        CanonicalRational.model_construct(num=2, den=2),
+        CanonicalRational.model_construct(num=1, den=0),
+        CanonicalRational.model_construct(num="0", den="1"),
+    ):
+        forged = LocalPolynomialInSeries.model_construct(
+            variable="t", place="FINITE", center=center, coefficients=()
         )
-        for term in result.terms
-    ] == [
-        (1, 0, Fraction(2, 3)),
-        (2, 1, Fraction(-4, 5)),
-        (4, 3, Fraction(3, 7)),
-    ]
-    assert result.characteristic_polynomial.variables == ("c",)
-    assert [
-        (term.exponents, term.coefficient.as_fraction())
-        for term in result.characteristic_polynomial.polynomial.terms
-    ] == [
-        ((3,), Fraction(3, 7)),
-        ((1,), Fraction(-4, 5)),
-        ((0,), Fraction(2, 3)),
-    ]
-    assert result.source == polynomial
+        with pytest.raises(OperationDomainValidationError):
+            local_polynomial_newton_polygon(forged)
 
-
-def test_edge_characteristic_rejects_nonexistent_edge() -> None:
-    from jacobian.math.polynomials.local_series.newton_polygon import (
-        NewtonEdgeCharacteristicRequest,
-        newton_edge_characteristic_polynomial,
+    huge = LocalPolynomialInSeries.model_construct(
+        variable="t",
+        place="FINITE",
+        center=CanonicalRational.from_fraction(Fraction(10**4_500 + 7, 3)),
+        coefficients=(),
     )
+    with pytest.raises(OperationResourceAdmissionError, match="digit bound"):
+        local_polynomial_newton_polygon(huge)
 
-    with pytest.raises(OperationDomainValidationError) as error:
-        newton_edge_characteristic_polynomial(
-            NewtonEdgeCharacteristicRequest(
-                polynomial=_polynomial([(0, _series(1, (1, 1)))]),
-                edge_index=0,
-            )
-        )
-    assert error.value.errors()[0]["type"] == "local_series.newton_edge_index"
+
+def test_forged_ragged_series_is_rejected() -> None:
+    valid = _polynomial([(0, _series(0, (1, 1)))])
+    forged = LocalPolynomialInSeries.model_construct(
+        variable=valid.variable,
+        place=valid.place,
+        center=valid.center,
+        coefficients=(
+            LocalPolynomialCoefficient.model_construct(
+                y_degree=0,
+                series=TruncatedLaurentWindow.model_construct(
+                    variable="t",
+                    place="FINITE",
+                    center=CanonicalRational(num=0, den=1),
+                    valuation_lower=0,
+                    precision=3,
+                    coefficients=(CanonicalRational(num=1, den=1),),
+                ),
+            ),
+        ),
+    )
+    with pytest.raises(OperationDomainValidationError, match="structural admission"):
+        local_polynomial_newton_polygon(forged)

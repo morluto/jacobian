@@ -2,7 +2,6 @@
 
 from jacobian.math.combinatorics.algebraic._models import (
     PartitionDominanceResult,
-    PlacticEquivalenceRequest,
     PlacticEquivalenceResult,
     SemistandardTableauCheckResult,
     SemistandardYoungTableauCountResult,
@@ -61,7 +60,6 @@ __all__ = [
     "EndpointProfileResult",
     "NonnegativeIntegerMatrix",
     "PartitionDominanceResult",
-    "PlacticEquivalenceRequest",
     "PlacticEquivalenceResult",
     "RSKTableauPair",
     "SemistandardTableauCheckResult",

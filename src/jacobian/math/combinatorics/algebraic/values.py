@@ -27,17 +27,14 @@ MAX_RSK_WORD_LENGTH = MAX_PARTITION_SIZE
 # most MAX_RSK_WORD_LENGTH entries.
 MAX_RSK_ROW_SEARCH_COMPARISONS = MAX_RSK_WORD_LENGTH.bit_length()
 # A word at the length boundary over an alphabet of MAX_ALPHABET_SIZE symbols
-# can use MAX_SYMBOL_LENGTH Unicode scalar values per symbol, each encoded in
-# four UTF-8 bytes.
-MAX_RSK_WORD_BYTES = (MAX_RSK_WORD_LENGTH + MAX_ALPHABET_SIZE) * MAX_SYMBOL_LENGTH * 4
-# A row-reading word serializes at most one alphabet and MAX_RSK_WORD_LENGTH
-# copies of an alphabet symbol. With ensure_ascii JSON, one supplementary
-# Unicode scalar may occupy twelve escaped bytes; three extra bytes per symbol
-# cover quotes and separators. The final allowance covers the object keys and
-# array delimiters.
-MAX_RSK_WORD_OUTPUT_BYTES = (MAX_RSK_WORD_LENGTH + MAX_ALPHABET_SIZE) * (
-    12 * MAX_SYMBOL_LENGTH + 3
-) + 256
+# carries at most MAX_SYMBOL_LENGTH Unicode scalar values per symbol, so the
+# retained alphabet-plus-letters payload is bounded by a symbol cardinality.
+MAX_RSK_WORD_PAYLOAD_SCALARS = (
+    MAX_RSK_WORD_LENGTH + MAX_ALPHABET_SIZE
+) * MAX_SYMBOL_LENGTH
+# A row reading retains the alphabet once and emits one alphabet symbol per
+# tableau cell, so its payload is bounded by the same word cardinality.
+MAX_RSK_ALPHABET_RANK_DIGITS = len(str(MAX_ALPHABET_SIZE))
 RSKConvention = Literal["ROW_INSERTION_RSK_V1"]
 
 
@@ -91,10 +88,10 @@ class RSKTableauPair(StrictModel):
 
 
 __all__ = [
+    "MAX_RSK_ALPHABET_RANK_DIGITS",
     "MAX_RSK_ROW_SEARCH_COMPARISONS",
-    "MAX_RSK_WORD_BYTES",
     "MAX_RSK_WORD_LENGTH",
-    "MAX_RSK_WORD_OUTPUT_BYTES",
+    "MAX_RSK_WORD_PAYLOAD_SCALARS",
     "RSKConvention",
     "RSKTableauPair",
 ]

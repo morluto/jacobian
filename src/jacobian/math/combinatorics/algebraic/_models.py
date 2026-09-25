@@ -12,8 +12,8 @@ from jacobian._exact import MAX_CANONICAL_INTEGER_DIGITS, ExactInteger
 from jacobian._models import StrictModel
 from jacobian.math.combinatorics.algebraic.values import (
     MAX_RSK_ROW_SEARCH_COMPARISONS,
-    MAX_RSK_WORD_BYTES,
     MAX_RSK_WORD_LENGTH,
+    MAX_RSK_WORD_PAYLOAD_SCALARS,
     RSKConvention,
     RSKTableauPair,
 )
@@ -266,7 +266,7 @@ class RSKWordRequest(StrictModel):
             "every positioned letter must be one of those exact symbols. The "
             f"word has at most {MAX_RSK_WORD_LENGTH} letters and the alphabet "
             "plus positioned letters carry at most "
-            f"{MAX_RSK_WORD_BYTES} UTF-8 bytes."
+            f"{MAX_RSK_WORD_PAYLOAD_SCALARS} Unicode scalar values."
         )
     )
     convention: RSKConvention = "ROW_INSERTION_RSK_V1"
@@ -287,9 +287,17 @@ class RSKInverseWordRequest(StrictModel):
 
 
 MAX_LIS_WORD_LENGTH = MAX_RSK_WORD_LENGTH
-MAX_LIS_WORD_BYTES = MAX_RSK_WORD_BYTES
+MAX_LIS_WORD_PAYLOAD_SCALARS = MAX_RSK_WORD_PAYLOAD_SCALARS
 MAX_LIS_DP_WORK = MAX_LIS_WORD_LENGTH * (MAX_LIS_WORD_LENGTH - 1) // 2
-MAX_LIS_OUTPUT_BYTES = 2 * MAX_LIS_WORD_BYTES + 16 * MAX_LIS_WORD_LENGTH + 4096
+# The exact result retains the source word payload and copies at most n of
+# its own letters as the witness values, so the emitted letter payload is
+# bounded by the second copy of the source envelope; the n witness positions
+# and the one length are integers not exceeding the word length and therefore
+# carry at most MAX_LIS_INDEX_DIGITS decimal digits each.
+MAX_LIS_INDEX_DIGITS = len(str(MAX_LIS_WORD_LENGTH))
+MAX_LIS_OUTPUT_SCALARS = (
+    2 * MAX_LIS_WORD_PAYLOAD_SCALARS + (MAX_LIS_WORD_LENGTH + 1) * MAX_LIS_INDEX_DIGITS
+)
 
 
 class LongestIncreasingSubsequenceRequest(StrictModel):
@@ -299,9 +307,11 @@ class LongestIncreasingSubsequenceRequest(StrictModel):
         description=(
             "A finite ordered-alphabet word. The strict convention requires "
             "each selected letter to be strictly greater than its predecessor. "
-            f"The word has at most {MAX_LIS_WORD_LENGTH} letters and the UTF-8 "
-            f"payload has at most {MAX_LIS_WORD_BYTES} bytes; the exact result "
-            f"fits within {MAX_LIS_OUTPUT_BYTES} estimated UTF-8 bytes."
+            f"The word has at most {MAX_LIS_WORD_LENGTH} letters and its "
+            "alphabet plus positioned letters carry at most "
+            f"{MAX_LIS_WORD_PAYLOAD_SCALARS} Unicode scalar values; the exact "
+            "result is bounded by the same retained-word cardinality plus "
+            f"{MAX_LIS_INDEX_DIGITS}-digit indices."
         )
     )
 
@@ -352,9 +362,11 @@ class LongestDecreasingSubsequenceRequest(StrictModel):
         description=(
             "A finite ordered-alphabet word. Strict decrease requires each "
             "selected letter to be strictly smaller than its predecessor. "
-            f"The word has at most {MAX_LIS_WORD_LENGTH} letters and the UTF-8 "
-            f"payload at most {MAX_LIS_WORD_BYTES} bytes; the exact result "
-            f"fits within {MAX_LIS_OUTPUT_BYTES} estimated UTF-8 bytes."
+            f"The word has at most {MAX_LIS_WORD_LENGTH} letters and its "
+            "alphabet plus positioned letters carry at most "
+            f"{MAX_LIS_WORD_PAYLOAD_SCALARS} Unicode scalar values; the exact "
+            "result is bounded by the same retained-word cardinality plus "
+            f"{MAX_LIS_INDEX_DIGITS}-digit indices."
         )
     )
 
@@ -494,15 +506,6 @@ class PlacticNormalFormRequest(StrictModel):
 
     word: FiniteWord
     convention: RSKConvention = "ROW_INSERTION_RSK_V1"
-
-
-class TableauRowReadingWordRequest(StrictModel):
-    """Read an RSK insertion tableau bottom row first, left to right."""
-
-    pair: RSKTableauPair
-    convention: Literal["TABLEAU_ROW_READING_BOTTOM_TO_TOP_LEFT_TO_RIGHT_V1"] = (
-        "TABLEAU_ROW_READING_BOTTOM_TO_TOP_LEFT_TO_RIGHT_V1"
-    )
 
 
 class PlacticNormalFormResult(StrictModel):
@@ -739,5 +742,4 @@ __all__ = [
     "StandardTableauCheckResult",
     "StandardYoungTableauCountRequest",
     "StandardYoungTableauCountResult",
-    "TableauRowReadingWordRequest",
 ]

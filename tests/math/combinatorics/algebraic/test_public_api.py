@@ -14,7 +14,6 @@ def test_exact_public_api_symbols() -> None:
         "EndpointProfileResult",
         "NonnegativeIntegerMatrix",
         "PartitionDominanceResult",
-        "PlacticEquivalenceRequest",
         "PlacticEquivalenceResult",
         "RSKTableauPair",
         "SemistandardTableauCheckResult",

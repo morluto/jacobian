@@ -32,8 +32,8 @@ from jacobian.math.combinatorics.algebraic._tools import (
 )
 from jacobian.math.combinatorics.algebraic.values import (
     MAX_RSK_ROW_SEARCH_COMPARISONS,
-    MAX_RSK_WORD_BYTES,
     MAX_RSK_WORD_LENGTH,
+    MAX_RSK_WORD_PAYLOAD_SCALARS,
     RSKTableauPair,
 )
 from jacobian.math.combinatorics.symmetric_functions import (
@@ -405,7 +405,7 @@ def _wide_unicode_symbols(count: int) -> tuple[str, ...]:
     return tuple("\U0001f600" * 63 + chr(0x1F600 + index) for index in range(count))
 
 
-def test_word_length_and_utf8_payload_bounds_are_closed() -> None:
+def test_word_length_and_payload_cardinality_bounds_are_closed() -> None:
     length_boundary = FiniteWord(alphabet=("a",), letters=("a",) * MAX_RSK_WORD_LENGTH)
     assert sum(_pair(length_boundary).shape.parts) == MAX_RSK_WORD_LENGTH
 
@@ -441,20 +441,20 @@ def test_word_length_and_utf8_payload_bounds_are_closed() -> None:
         )
 
     boundary_symbols = _wide_unicode_symbols(50)
-    per_symbol_bytes = len(boundary_symbols[0].encode("utf-8"))
-    boundary_letter_count = MAX_RSK_WORD_BYTES // per_symbol_bytes - len(
+    per_symbol_scalars = len(boundary_symbols[0])
+    boundary_letter_count = MAX_RSK_WORD_PAYLOAD_SCALARS // per_symbol_scalars - len(
         boundary_symbols
     )
-    byte_boundary = FiniteWord(
+    payload_boundary = FiniteWord(
         alphabet=boundary_symbols,
         letters=(boundary_symbols[0],) * boundary_letter_count,
     )
-    assert RSKWordRequest(word=byte_boundary).word == byte_boundary
+    assert RSKWordRequest(word=payload_boundary).word == payload_boundary
 
     assert (
-        sum(len(symbol.encode("utf-8")) for symbol in boundary_symbols)
-        + sum(len(letter.encode("utf-8")) for letter in byte_boundary.letters)
-        == MAX_RSK_WORD_BYTES
+        sum(len(symbol) for symbol in boundary_symbols)
+        + sum(len(letter) for letter in payload_boundary.letters)
+        == MAX_RSK_WORD_PAYLOAD_SCALARS
     )
 
 
@@ -566,7 +566,7 @@ def test_comparison_bound_boundary_word_round_trips() -> None:
 
 def test_rsk_request_schema_publishes_convention_and_work_envelope() -> None:
     assert MAX_RSK_ROW_SEARCH_COMPARISONS == 9
-    assert MAX_RSK_WORD_BYTES == 140_800
+    assert MAX_RSK_WORD_PAYLOAD_SCALARS == 35_200
 
     schema = RSKWordRequest.model_json_schema()
     assert schema["properties"]["convention"]["const"] == "ROW_INSERTION_RSK_V1"
@@ -574,7 +574,7 @@ def test_rsk_request_schema_publishes_convention_and_work_envelope() -> None:
     assert "unique strings" in description
     assert "every positioned letter" in description
     assert f"at most {MAX_RSK_WORD_LENGTH} letters" in description
-    assert f"{MAX_RSK_WORD_BYTES} UTF-8 bytes" in description
+    assert f"{MAX_RSK_WORD_PAYLOAD_SCALARS} Unicode scalar values" in description
     class_description = schema["description"]
     assert "2N" in class_description
     assert (

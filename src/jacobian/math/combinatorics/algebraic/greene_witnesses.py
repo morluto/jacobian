@@ -251,7 +251,7 @@ def compute_greene_witnesses(
                 decreasing_total=sum(map(len, dec_paths)),
             )
         )
-    return GreeneWitnessResult(
+    return GreeneWitnessResult._from_kernel(
         word=word,
         shape=shape,
         families=tuple(families),

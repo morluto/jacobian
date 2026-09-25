@@ -257,7 +257,9 @@ class PrimitivePositiveFormula(StrictModel):
             if isinstance(atom, PPRelationAtom):
                 symbol_id = atom.symbol_id
                 variables = atom.variables
-                if type(symbol_id) is not str or any(type(v) is not int for v in variables):
+                if type(symbol_id) is not str or any(
+                    type(v) is not int for v in variables
+                ):
                     return data
                 key = ("relation", symbol_id, tuple(variables), 0, 0)
                 value: object = {
@@ -313,16 +315,11 @@ class PrimitivePositiveFormula(StrictModel):
 
         normalized = tuple(
             value
-            for _, value in sorted(
-                dict(keyed_atoms).items(), key=lambda item: item[0]
-            )
+            for _, value in sorted(dict(keyed_atoms).items(), key=lambda item: item[0])
         )
         canonical = dict(data)
         free_variables = canonical.get("free_variables")
-        if (
-            isinstance(free_variables, list)
-            and len(free_variables) <= MAX_PP_VARIABLES
-        ):
+        if isinstance(free_variables, list) and len(free_variables) <= MAX_PP_VARIABLES:
             canonical["free_variables"] = tuple(free_variables)
         canonical["atoms"] = normalized
         return canonical
@@ -333,7 +330,9 @@ class PrimitivePositiveFormula(StrictModel):
             raise _validation_error(
                 "pp.free_variables", "free-variable axes must be distinct"
             )
-        if any(not 0 <= variable < self.variable_count for variable in self.free_variables):
+        if any(
+            not 0 <= variable < self.variable_count for variable in self.free_variables
+        ):
             raise _validation_error(
                 "pp.free_variable_range", "free variables must name declared variables"
             )
@@ -359,12 +358,26 @@ class PPDefinedRelation(StrictModel):
 
     structure: FiniteRelationalStructure
     formula: PrimitivePositiveFormula
-    tuples: tuple[tuple[StrictInt, ...], ...] = Field(
-        max_length=MAX_PP_DEFINED_TUPLES
-    )
+    tuples: tuple[tuple[StrictInt, ...], ...] = Field(max_length=MAX_PP_DEFINED_TUPLES)
 
     @model_validator(mode="after")
     def require_exact_relation_shape(self) -> Self:
+        symbol_arities = {
+            symbol.symbol_id: symbol.arity for symbol in self.structure.signature
+        }
+        for index, atom in enumerate(self.formula.atoms):
+            if isinstance(atom, PPRelationAtom):
+                arity = symbol_arities.get(atom.symbol_id)
+                if arity is None:
+                    raise _validation_error(
+                        "pp.unknown_symbol",
+                        f"formula atom {index} names no symbol in the retained structure",
+                    )
+                if len(atom.variables) != arity:
+                    raise _validation_error(
+                        "pp.atom_arity",
+                        f"formula atom {index} has the wrong relation arity",
+                    )
         axis_width = len(self.formula.free_variables)
         if self.tuples != tuple(sorted(set(self.tuples))):
             raise _validation_error(

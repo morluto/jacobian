@@ -104,9 +104,11 @@ def admit_pp_evaluation(
             )
         else:
             if atom.left != atom.right:
+                # Equality identifies two coordinates; it removes one free
+                # choice rather than imposing inequality.
                 satisfying_bound = min(
                     satisfying_bound,
-                    max(size - 1, 0) * (size ** (formula.variable_count - 1)),
+                    size ** (formula.variable_count - 1),
                 )
     output_tuples = min(output_tuples, satisfying_bound)
     atom_checks = assignments * len(formula.atoms)

@@ -53,6 +53,19 @@ def test_primitive_gauss_norm_rejects_imprimitive_character():
     )
 
 
+def test_primitive_gauss_norm_revalidates_constructed_carrier():
+    principal = dirichlet_character(character_group(5), (0,))
+    forged = PrimitiveDirichletCharacter.model_construct(
+        character=principal, conductor=1
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        dirichlet_character_primitive_gauss_norm(forged)
+    assert error.value.errors()[0]["loc"] == ("primitive_character", "conductor")
+    assert error.value.errors()[0]["type"] == (
+        "dirichlet_character.primitive_character_modulus_mismatch"
+    )
+
+
 def test_primitive_gauss_norm_is_discoverable_and_runs_from_its_typed_request():
     tool = next(
         item

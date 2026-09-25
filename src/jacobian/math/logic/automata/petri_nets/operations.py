@@ -167,11 +167,7 @@ def _petri_net_union_output_bound(
     # source markings (each with its source net) and one union marking (with the
     # union net), in addition to the explicit net fields above.
     markings_bound = (
-        128
-        + 15 * places
-        + source_bound(left)
-        + source_bound(right)
-        + union_bound
+        128 + 15 * places + source_bound(left) + source_bound(right) + union_bound
         if include_markings
         else 0
     )
@@ -210,6 +206,11 @@ def disjoint_union(
         left_marking = _require_marking_size(left_net, left_marking)
         right_marking = _require_marking_size(right_net, right_marking)
 
+    # Complete canonical validation before any resource envelope is applied, so
+    # the same malformed axis no longer changes error category with its length.
+    _require_valid_axis_encoding(left_net)
+    _require_valid_axis_encoding(right_net)
+
     place_count = left_net.place_count + right_net.place_count
     transition_count = left_net.transition_count + right_net.transition_count
     if place_count > MAX_PETRI_PLACES or transition_count > MAX_PETRI_TRANSITIONS:
@@ -236,23 +237,6 @@ def disjoint_union(
             code="petri_net.union_output_bound",
             message="disjoint-union result exceeds its admitted serialized-output bound",
         )
-
-    # The serialized-size preflight has bounded the remaining string scan.
-    # Reject unpaired surrogates before generated axis labels are built.
-    for ids in (
-        left_net.place_ids,
-        left_net.transition_ids,
-        right_net.place_ids,
-        right_net.transition_ids,
-    ):
-        if ids is not None and any(
-            0xD800 <= ord(character) <= 0xDFFF for item in ids for character in item
-        ):
-            raise OperationDomainValidationError(
-                location=("net", "axis_ids"),
-                code="petri_net.net_axis_encoding",
-                message="place and transition IDs must be valid Unicode strings",
-            )
 
     def combine_ids(
         left_ids: tuple[str, ...] | None,
@@ -391,6 +375,25 @@ def _admit_net(net: object) -> PetriNet:
             code="petri_net.net_shape",
             message="net must satisfy its complete canonical matrix and axis shape",
         ) from exc
+
+
+def _require_valid_axis_encoding(net: PetriNet) -> None:
+    """Reject unpaired surrogates before resource admission and label synthesis.
+
+    Canonical JSON cannot encode unpaired UTF-16 surrogates.  This is a domain
+    property of the representation, so it must be decided independently of any
+    serialized-size or work envelope.
+    """
+
+    for ids in (net.place_ids, net.transition_ids):
+        if ids is not None and any(
+            0xD800 <= ord(character) <= 0xDFFF for item in ids for character in item
+        ):
+            raise OperationDomainValidationError(
+                location=("net", "axis_ids"),
+                code="petri_net.net_axis_encoding",
+                message="place and transition IDs must be valid Unicode strings",
+            )
 
 
 def reverse_petri_net(net: PetriNet) -> PetriNet:

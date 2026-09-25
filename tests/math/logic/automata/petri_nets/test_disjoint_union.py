@@ -6,7 +6,10 @@ from collections import deque
 
 import pytest
 
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.logic.automata.petri_nets import (
     Marking,
     PetriNet,
@@ -229,3 +232,33 @@ def test_output_growth_is_rejected_before_union_matrix_materialization() -> None
         disjoint_union(
             net, PetriNet(place_count=0, transition_count=0, pre=(), post=())
         )
+
+
+def test_malformed_axis_encoding_precedes_union_resource_admission() -> None:
+    # An unpaired surrogate is a canonical-encoding domain failure.  The same
+    # malformed axis must not change error category when its serialized size
+    # crosses the resource envelope.
+    empty = PetriNet(place_count=0, transition_count=0, pre=(), post=())
+
+    short = PetriNet(
+        place_count=1,
+        transition_count=0,
+        place_ids=("\ud800",),
+        pre=((),),
+        post=((),),
+    )
+    with pytest.raises(OperationDomainValidationError) as short_error:
+        disjoint_union(short, empty)
+    assert short_error.value.errors()[0]["type"] == "petri_net.net_axis_encoding"
+
+    oversized = PetriNet(
+        place_count=1,
+        transition_count=0,
+        place_ids=("\ud800" * 1_800_000,),
+        pre=((),),
+        post=((),),
+    )
+    with pytest.raises(OperationDomainValidationError) as long_error:
+        disjoint_union(oversized, empty)
+    assert not isinstance(long_error.value, OperationResourceAdmissionError)
+    assert long_error.value.errors()[0]["type"] == "petri_net.net_axis_encoding"

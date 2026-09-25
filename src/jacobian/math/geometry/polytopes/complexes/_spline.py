@@ -607,10 +607,11 @@ def piecewise_polynomial_scalar_multiply(  # noqa: C901
             "only compatible functions can be scaled",
         )
     scalar = request.scalar.as_fraction()
-    scalar_digits = _decimal_digits_upper(scalar.numerator) + _decimal_digits_upper(
-        scalar.denominator
+    scalar_component_digits = max(
+        _decimal_digits_upper(scalar.numerator),
+        _decimal_digits_upper(scalar.denominator),
     )
-    if scalar_digits > MAX_CANONICAL_RATIONAL_DIGITS:
+    if scalar_component_digits > MAX_CANONICAL_RATIONAL_DIGITS:
         raise OperationResourceAdmissionError(
             location=("scalar",),
             code="polytopal_complex.scalar_multiplication_scalar",
@@ -618,27 +619,28 @@ def piecewise_polynomial_scalar_multiply(  # noqa: C901
         )
     output_digits = 0
     total_terms = 0
-    for piece in function.pieces:
-        terms = piece.polynomial.polynomial.terms
-        total_terms += len(terms)
-        for term in terms:
-            coefficient = term.coefficient.as_fraction()
-            numerator_digits = _decimal_digits_upper(
-                coefficient.numerator
-            ) + _decimal_digits_upper(scalar.numerator)
-            denominator_digits = _decimal_digits_upper(
-                coefficient.denominator
-            ) + _decimal_digits_upper(scalar.denominator)
-            if (
-                max(numerator_digits, denominator_digits)
-                > MAX_CANONICAL_RATIONAL_DIGITS
-            ):
-                raise OperationResourceAdmissionError(
-                    location=("scalar",),
-                    code="polytopal_complex.scalar_multiplication_growth",
-                    message="a scaled coefficient may exceed the canonical rational digit envelope",
-                )
-            output_digits += numerator_digits + denominator_digits
+    if scalar:
+        for piece in function.pieces:
+            terms = piece.polynomial.polynomial.terms
+            total_terms += len(terms)
+            for term in terms:
+                coefficient = term.coefficient.as_fraction()
+                numerator_digits = _decimal_digits_upper(
+                    coefficient.numerator
+                ) + _decimal_digits_upper(scalar.numerator)
+                denominator_digits = _decimal_digits_upper(
+                    coefficient.denominator
+                ) + _decimal_digits_upper(scalar.denominator)
+                if (
+                    max(numerator_digits, denominator_digits)
+                    > MAX_CANONICAL_RATIONAL_DIGITS
+                ):
+                    raise OperationResourceAdmissionError(
+                        location=("scalar",),
+                        code="polytopal_complex.scalar_multiplication_growth",
+                        message="a scaled coefficient may exceed the canonical rational digit envelope",
+                    )
+                output_digits += numerator_digits + denominator_digits
     try:
         input_bytes = len(encode_strict_json(function.model_dump(mode="json")))
     except CanonicalizationError as exc:

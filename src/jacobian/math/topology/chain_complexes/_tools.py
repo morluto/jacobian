@@ -10,7 +10,7 @@ from jacobian.catalog.models import (
 )
 from jacobian.math.topology.chain_complexes._filtered_models import (
     AssociatedGradedResult,
-    FilteredChainComplexRequest,
+    FilteredChainComplex,
     SpectralPageRequest,
     SpectralPageResult,
 )
@@ -105,7 +105,7 @@ def _tensor_product(request: TensorProductRequest) -> TensorProductResult:
     return tensor_product_complex(request.left, request.right)
 
 
-def _associated_graded(request: FilteredChainComplexRequest) -> AssociatedGradedResult:
+def _associated_graded(request: FilteredChainComplex) -> AssociatedGradedResult:
     """Project a wire request into the canonical associated-graded operation."""
     return _associated_graded_native(request.complex, request.filtration)
 
@@ -346,7 +346,7 @@ TOOLS: MathTools = (
             "QQ or GF(p) filtration; the top level must span every chain "
             "group and the differential must preserve each level."
         ),
-        request_type=FilteredChainComplexRequest,
+        request_type=FilteredChainComplex,
         result_type=AssociatedGradedResult,
         run=_associated_graded,
         tags=("chain-complex", "filtered-complex", "associated-graded", "exact"),

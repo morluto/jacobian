@@ -54,7 +54,7 @@ class FiltrationLevel(StrictModel):
     )
 
 
-class FilteredChainComplexRequest(StrictModel):
+class FilteredChainComplex(StrictModel):
     """A finite bounded increasing filtration of a based chain complex.
 
     Level 0 is the bottom of the filtration and the final level must be
@@ -480,7 +480,7 @@ __all__ = [
     "MAX_FILTER_VECTORS_PER_GROUP",
     "MAX_SPECTRAL_PAGE",
     "AssociatedGradedResult",
-    "FilteredChainComplexRequest",
+    "FilteredChainComplex",
     "FilteredSubspace",
     "FiltrationLevel",
     "GradedSquareLedgerEntry",

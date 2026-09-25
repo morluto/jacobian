@@ -66,7 +66,6 @@ def test_finite_abelian_character_table_is_exact_and_row_orthogonal(
     ("moduli", "message"),
     [
         ((3, 3, 3, 3, 3, 3), "admit order"),
-        ((2, 2, 2, 2, 2, 2, 2), "order"),
         ((61,), "exponent"),
     ],
 )

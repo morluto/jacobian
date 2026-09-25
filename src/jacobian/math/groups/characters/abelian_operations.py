@@ -25,6 +25,16 @@ def finite_abelian_character_table(
     request: FiniteAbelianCharacterTableRequest,
 ) -> FiniteAbelianCharacterTableResult:
     """Return the complete exact Fourier table of an admitted product group."""
+    try:
+        request = FiniteAbelianCharacterTableRequest.model_validate(
+            request.model_dump(mode="python"), strict=True
+        )
+    except (AttributeError, TypeError, ValueError) as exc:
+        raise OperationResourceAdmissionError(
+            location=("request",),
+            code="groups.characters.abelian.invalid_request",
+            message="character table request must satisfy its typed contract",
+        ) from exc
     group = request.group
     moduli = group.moduli
     # Every modulus is at least two, so seven coordinates already exceed the

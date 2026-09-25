@@ -7,3 +7,4 @@ and hypergraphs.
 
 - [Complete sunflower hypergraphs](sunflower-hypergraphs.md)
 - [Littlewood–Richardson coefficients](littlewood-richardson-coefficients.md)
+- [Semistandard Young tableau enumeration](semistandard-young-tableau-enumeration.md)

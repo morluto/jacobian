@@ -417,8 +417,46 @@ def _euler_counts(n: int) -> tuple[int, int, int]:
     return e2, e3, cusps
 
 
+def _sturm_space(space: object) -> ModularFormSpace:
+    if type(space) is not ModularFormSpace:
+        raise OperationDomainValidationError(
+            location=("space",),
+            code="modular_form.unsupported_space",
+            message="Sturm bounds require a canonical Gamma0 modular-form space",
+        )
+    raw_level = getattr(space, "level", None)
+    if type(raw_level) is int and raw_level > MAX_GAMMA0_OPERATION_LEVEL:
+        raise OperationResourceAdmissionError(
+            location=("space", "level"),
+            code="modular_form.level_bound",
+            message="modular-form level exceeds the exact Sturm-index envelope",
+        )
+    try:
+        # Re-run the parent validators because a caller can construct a model
+        # without validation and later rely on its character/field claims.
+        space = ModularFormSpace.model_validate(space.model_dump(mode="python"))
+    except (TypeError, ValueError, AttributeError) as error:
+        raise OperationDomainValidationError(
+            location=("space",),
+            code="modular_form.unsupported_space",
+            message="Sturm bounds require a valid exact modular-form parent",
+        ) from error
+    if (
+        space.group != "GAMMA0"
+        or type(space.level) is not int
+        or type(space.weight) is not int
+        or space.kind not in {"M", "S"}
+    ):
+        raise OperationDomainValidationError(
+            location=("space",),
+            code="modular_form.unsupported_space",
+            message="Sturm bounds require a bounded exact Gamma0 space",
+        )
+    return space
+
+
 def sturm_bound(space: ModularFormSpace) -> SturmBoundResult:
-    _space(space)
+    space = _sturm_space(space)
     return SturmBoundResult(
         space=space,
         index=_index(space.level),

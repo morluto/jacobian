@@ -171,6 +171,26 @@ def test_coordinate_scalar_action_matches_vector_and_q_expansion_oracles() -> No
     )
 
 
+def test_scalar_digit_count_and_reusable_coordinate_envelope() -> None:
+    result = modular_form_coordinates_scalar_multiply(_form((1, 0)), _q(9 * 10**127))
+    assert _fractions(result) == (Fraction(9 * 10**127), Fraction(0))
+    with pytest.raises(OperationResourceAdmissionError):
+        modular_form_coordinates_scalar_multiply(_form((10**127, 0)), _q(10**127))
+
+
+def test_forged_noncanonical_scalar_is_rejected_at_native_boundary() -> None:
+    form = _form((1,))
+    forged = CanonicalRational.model_construct(num=2, den=4)
+    with pytest.raises(OperationDomainValidationError) as rejected:
+        modular_form_coordinates_scalar_multiply(form, forged)
+    assert rejected.value.errors()[0]["type"] == (
+        "modular_form.coordinate_scalar_invalid_rational"
+    )
+    zero_denominator = CanonicalRational.model_construct(num=1, den=0)
+    with pytest.raises(OperationDomainValidationError):
+        modular_form_coordinates_scalar_multiply(form, zero_denominator)
+
+
 def test_coordinate_scalar_action_handles_zero_scalar_and_empty_space() -> None:
     form = _form((Fraction(7, 5), -2))
     assert modular_form_coordinates_scalar_multiply(form, _q(0)) == _form((0, 0))

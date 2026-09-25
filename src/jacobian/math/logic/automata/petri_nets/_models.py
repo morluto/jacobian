@@ -1295,6 +1295,103 @@ class PetriInvariantsRequest(StrictModel):
     net: PetriNet
 
 
+class PetriNetRelabelingRequest(StrictModel):
+    """Permute place and transition axes of a weighted Petri net.
+
+    Each map sends a source index to its index on the relabeled axis. Optional
+    labels are carried with their elements; unlabeled axes remain unlabeled.
+    """
+
+    net: PetriNet
+    place_source_to_target: tuple[int, ...] = Field(max_length=MAX_PETRI_PLACES)
+    transition_source_to_target: tuple[int, ...] = Field(
+        max_length=MAX_PETRI_TRANSITIONS
+    )
+
+
+class PetriNetRelabelingResult(StrictModel):
+    """An exact isomorphism between a net and its permuted-axis presentation."""
+
+    source_net: PetriNet
+    target_net: PetriNet
+    place_source_to_target: tuple[int, ...] = Field(max_length=MAX_PETRI_PLACES)
+    transition_source_to_target: tuple[int, ...] = Field(
+        max_length=MAX_PETRI_TRANSITIONS
+    )
+
+    @model_validator(mode="after")
+    def require_source_bound_isomorphism(self) -> Self:
+        source = self.source_net
+        target = self.target_net
+        place_map = self.place_source_to_target
+        transition_map = self.transition_source_to_target
+        if (source.place_count, source.transition_count) != (
+            target.place_count,
+            target.transition_count,
+        ):
+            raise _validation_error(
+                "relabel_axes", "source and target net axes must have equal sizes"
+            )
+        for axis_name, mapping, size in (
+            ("place", place_map, source.place_count),
+            ("transition", transition_map, source.transition_count),
+        ):
+            if len(mapping) != size or tuple(sorted(mapping)) != tuple(range(size)):
+                raise _validation_error(
+                    f"relabel_{axis_name}_bijection",
+                    f"{axis_name} map must be a bijection of its complete axis",
+                )
+        place_inverse = tuple(
+            place_map.index(index) for index in range(source.place_count)
+        )
+        transition_inverse = tuple(
+            transition_map.index(index) for index in range(source.transition_count)
+        )
+        expected_pre = tuple(
+            tuple(
+                source.pre[place_inverse[p]][transition_inverse[t]]
+                for t in range(target.transition_count)
+            )
+            for p in range(target.place_count)
+        )
+        expected_post = tuple(
+            tuple(
+                source.post[place_inverse[p]][transition_inverse[t]]
+                for t in range(target.transition_count)
+            )
+            for p in range(target.place_count)
+        )
+        if target.pre != expected_pre or target.post != expected_post:
+            raise _validation_error(
+                "relabel_incidence",
+                "target arc matrices must follow the supplied axis maps",
+            )
+        expected_place_ids = (
+            None
+            if source.place_ids is None
+            else tuple(source.place_ids[index] for index in place_inverse)
+        )
+        expected_transition_ids = (
+            None
+            if source.transition_ids is None
+            else tuple(source.transition_ids[index] for index in transition_inverse)
+        )
+        if (target.place_ids, target.transition_ids) != (
+            expected_place_ids,
+            expected_transition_ids,
+        ):
+            raise _validation_error(
+                "relabel_ids", "target labels must follow their mapped source elements"
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(cls, **values: Any) -> Self:
+        """Build after the operation has established the exact permutation laws."""
+
+        return cls.model_construct(**values)
+
+
 class PetriInvariantsResult(PetriInvariantsRequest):
     """P/T-invariant bases with their incidence rank profile.
 
@@ -1387,6 +1484,8 @@ __all__ = [
     "PetriInvariantsRequest",
     "PetriInvariantsResult",
     "PetriMarkingState",
+    "PetriNetRelabelingRequest",
+    "PetriNetRelabelingResult",
     "PetriPlaceSubset",
     "PetriReachabilityEdge",
     "PlaceSetInitialMarkingProfileRequest",

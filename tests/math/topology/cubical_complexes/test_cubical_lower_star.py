@@ -51,6 +51,11 @@ def _request(
     return CubicalLowerStarRequest(cells=cells, vertex_values=entries, prime=prime)
 
 
+def _lower_star(request: CubicalLowerStarRequest) -> FilteredCubicalComplex:
+    """Call the native lower-star operation with unpacked domain arguments."""
+    return lower_star_from_vertices(request.cells, request.vertex_values, request.prime)
+
+
 def _vertices(cell: CubicalCell) -> tuple[tuple[int, ...], ...]:
     choices = tuple(
         (lower,) if lower == upper else (lower, upper)
@@ -88,7 +93,7 @@ def test_lower_star_matches_independent_maximum_and_face_monotonicity_oracle() -
         (2, 0): Fraction(1, 2),
         (2, 1): Fraction(-2, 7),
     }
-    result = lower_star_from_vertices(_request(source, vertex_values, prime=3))
+    result = _lower_star(_request(source, vertex_values, prime=3))
     birth_by_cell = _births(result)
 
     expected = {}
@@ -156,7 +161,7 @@ def test_lower_star_commutes_with_integer_translation() -> None:
         (2, 1): Fraction(1, 2),
     }
     offset = (7, -4)
-    original = lower_star_from_vertices(_request(source, values))
+    original = _lower_star(_request(source, values))
     translated_cells = tuple(
         _cell(
             tuple(
@@ -170,7 +175,7 @@ def test_lower_star_commutes_with_integer_translation() -> None:
         tuple(coordinate + offset[i] for i, coordinate in enumerate(vertex)): value
         for vertex, value in values.items()
     }
-    translated = lower_star_from_vertices(_request(translated_cells, translated_values))
+    translated = _lower_star(_request(translated_cells, translated_values))
 
     def shifted(intervals: tuple[tuple[int, int], ...]) -> tuple[tuple[int, int], ...]:
         return tuple(
@@ -214,7 +219,7 @@ def test_lower_star_rejects_missing_or_extra_vertex_values() -> None:
         OperationDomainValidationError,
         match="vertex values must cover exactly",
     ):
-        lower_star_from_vertices(_request(square, values))
+        _lower_star(_request(square, values))
 
     with pytest.raises(ValidationError):
         CubicalVertexFiltrationValue(
@@ -228,9 +233,9 @@ def test_lower_star_preflights_filtered_chain_levels_and_face_growth() -> None:
     with pytest.raises(
         OperationResourceAdmissionError, match="distinct lower-star values"
     ):
-        lower_star_from_vertices(_request(interval_chain, too_many_levels))
+        _lower_star(_request(interval_chain, too_many_levels))
 
     six_cube = (_cell(((0, 1),) * 6),)
     all_vertices = {vertex: Fraction(0) for vertex in product((0, 1), repeat=6)}
     with pytest.raises(OperationResourceAdmissionError, match="256-cell output bound"):
-        lower_star_from_vertices(_request(six_cube, all_vertices))
+        _lower_star(_request(six_cube, all_vertices))

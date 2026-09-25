@@ -19,7 +19,7 @@ from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
 from jacobian.math.topology.chain_complexes._filtered_models import (
     MAX_FILTER_AMBIENT_DIMENSION,
     MAX_FILTER_LEVELS,
-    FilteredChainComplexRequest,
+    FilteredChainComplex,
 )
 from jacobian.math.topology.chain_complexes.values import ChainComplexValue
 
@@ -555,7 +555,7 @@ class FilteredCubicalComplex(StrictModel):
     critical_values: tuple[CanonicalRational, ...] = Field(
         min_length=1, max_length=MAX_FILTER_LEVELS
     )
-    filtered_chain_complex: FilteredChainComplexRequest
+    filtered_chain_complex: FilteredChainComplex
 
     @model_validator(mode="after")
     def require_filtered_chain_axes(self) -> Self:
@@ -664,7 +664,7 @@ class FilteredCubicalComplexFromTopCells(StrictModel):
     critical_values: tuple[CanonicalRational, ...] = Field(
         min_length=1, max_length=MAX_FILTER_LEVELS
     )
-    filtered_chain_complex: FilteredChainComplexRequest
+    filtered_chain_complex: FilteredChainComplex
 
     @model_validator(mode="after")
     def require_top_cell_axes(self) -> Self:

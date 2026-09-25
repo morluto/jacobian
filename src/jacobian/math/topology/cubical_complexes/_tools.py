@@ -58,11 +58,11 @@ def _face_closure(request: FaceClosureRequest) -> FaceClosureResult:
 
 
 def _closed_star(request: CubicalClosedStarRequest) -> CubicalClosedStarResult:
-    return closed_star(request)
+    return closed_star(request.cells, request.cell)
 
 
 def _face_poset(request: CubicalComplexRequest) -> CubicalFacePosetResult:
-    return face_poset(request)
+    return face_poset(request.cells)
 
 
 def _chain_complex(request: CubicalChainComplexRequest) -> CubicalChainComplexResult:
@@ -78,13 +78,13 @@ def _skeleton(request: CubicalSkeletonRequest) -> CubicalSkeletonResult:
 
 
 def _lower_star(request: CubicalLowerStarRequest) -> FilteredCubicalComplex:
-    return lower_star_from_vertices(request)
+    return lower_star_from_vertices(request.cells, request.vertex_values, request.prime)
 
 
 def _top_cell_filtration(
     request: CubicalTopCellFiltrationRequest,
 ) -> Any:
-    return from_top_cell_values(request)
+    return from_top_cell_values(request.cells, request.top_cell_values, request.prime)
 
 
 def _one_skeleton(request: CubicalComplexRequest) -> CubicalOneSkeletonResult:

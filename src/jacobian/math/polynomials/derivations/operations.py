@@ -615,8 +615,17 @@ def construct_locally_nilpotent_certificate(
             )
         generator = _generator(derivation_value.variables, index)
         # The supplied chain is caller-authored; re-admit each polynomial and
-        # replay every transition.
-        canonical_chain = tuple(_as_polynomial(value) for value in chain)
+        # replay every transition. Do not trust iteration to honor __len__.
+        canonical_values: list[RationalPolynomial] = []
+        for item_index, value in enumerate(chain):
+            if item_index >= MAX_DERIVATION_CERTIFICATE_CHAIN:
+                raise OperationResourceAdmissionError(
+                    location=("chains", index),
+                    code="polynomial_derivation.certificate_bound",
+                    message="generator chain exceeds the admitted bound",
+                )
+            canonical_values.append(_as_polynomial(value))
+        canonical_chain = tuple(canonical_values)
         if canonical_chain[0] != generator:
             raise OperationDomainValidationError(
                 location=("chains", index, 0),

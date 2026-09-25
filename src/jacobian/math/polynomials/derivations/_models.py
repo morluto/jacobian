@@ -229,6 +229,7 @@ class PolynomialGaAction(StrictModel):
             )
         if any(
             any(exponent > MAX_DERIVATION_EXPONENT for exponent in term.exponents[:-1])
+            or sum(term.exponents[:-1]) > MAX_DERIVATION_EXPONENT
             or term.exponents[-1] >= MAX_DERIVATION_CERTIFICATE_CHAIN
             or sum(term.exponents)
             > MAX_DERIVATION_EXPONENT + MAX_DERIVATION_CERTIFICATE_CHAIN - 1

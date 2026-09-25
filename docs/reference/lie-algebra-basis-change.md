@@ -17,9 +17,10 @@ convention agrees with the usual tensor transformation law for structure
 constants under a basis change; see Samelson, *Notes on Lie Algebras*, §1.2
 ([Cornell-hosted notes](https://pi.math.cornell.edu/~hatcher/Other/Samelson-LieAlg.pdf)).
 
-The exact rational inverse uses FLINT. Admission bounds the source algebra's
-Jacobi work, dimension, matrix scalar height, inverse growth, every transformed
-bracket intermediate, and result before inversion. The dimension limit is 8;
+The exact rational inverse uses FLINT. Construction of the source value
+establishes Jacobi; operation admission bounds dimension, matrix scalar height,
+inverse growth, every transformed bracket intermediate, and result before
+inversion. The dimension limit is 8;
 matrix entries are limited to 128 decimal digits; output structure constants
 must fit the existing 64-digit Lie-algebra coefficient contract.
 

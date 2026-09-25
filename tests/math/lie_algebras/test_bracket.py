@@ -1,5 +1,6 @@
 """Tests for the exact finite-dimensional Lie bracket."""
 
+import json
 from fractions import Fraction
 
 import pytest
@@ -16,6 +17,7 @@ from jacobian.math.lie_algebras._models import (
     MAX_STRUCTURE_NONZEROS,
     FiniteDimensionalLieAlgebra,
     LieAlgebraElement,
+    LieAlgebraStructureConstant,
     LieBracketRequest,
     StructureConstant,
 )
@@ -61,6 +63,91 @@ AXB = _algebra(AXB_BASIS, ((0, 1, 1, 1),))
 
 
 class TestBracketKnownAnswers:
+    def test_canonical_algebra_constructor_admits_jacobi_and_round_trips(self) -> None:
+        restored = FiniteDimensionalLieAlgebra.model_validate_json(
+            SL2.model_dump_json()
+        )
+        uncached = FiniteDimensionalLieAlgebra.model_construct(
+            basis=SL2.basis, structure_constants=SL2.structure_constants
+        )
+
+        assert restored == SL2
+        assert restored.model_dump(mode="json") == SL2.model_dump(mode="json")
+        assert uncached == SL2
+        assert hash(uncached) == hash(SL2)
+        assert "_jacobi_admitted" not in restored.model_dump()
+
+    def test_model_copy_cannot_retain_admission_after_bracket_mutation(self) -> None:
+        with pytest.raises(ValidationError) as exc_info:
+            SL2.model_copy(
+                update={
+                    "structure_constants": (
+                        LieAlgebraStructureConstant.model_construct(
+                            i=0,
+                            j=1,
+                            k=2,
+                            coefficient=SL2.structure_constants[0].coefficient,
+                        ),
+                        LieAlgebraStructureConstant.model_construct(
+                            i=0,
+                            j=2,
+                            k=0,
+                            coefficient=SL2.structure_constants[
+                                0
+                            ].coefficient.from_integer_ratio(-2, 1),
+                        ),
+                        LieAlgebraStructureConstant.model_construct(
+                            i=1,
+                            j=2,
+                            k=1,
+                            coefficient=SL2.structure_constants[
+                                0
+                            ].coefficient.from_integer_ratio(-2, 1),
+                        ),
+                    )
+                }
+            )
+        assert exc_info.value.errors()[0]["type"] == "lie_algebra.jacobi_identity"
+
+    def test_nested_json_request_rejects_non_lie_structure_constants(self) -> None:
+        payload = {
+            "algebra": {
+                "basis": list(SL2_BASIS),
+                "structure_constants": [
+                    {
+                        "i": i,
+                        "j": j,
+                        "k": k,
+                        "coefficient": {"num": str(value), "den": "1"},
+                    }
+                    for i, j, k, value in (
+                        (0, 1, 2, 1),
+                        (0, 2, 0, -2),
+                        (1, 2, 1, -2),
+                    )
+                ],
+            },
+            "left": {
+                "basis": list(SL2_BASIS),
+                "coordinates": [{"num": "0", "den": "1"}] * len(SL2_BASIS),
+            },
+            "right": {
+                "basis": list(SL2_BASIS),
+                "coordinates": [{"num": "0", "den": "1"}] * len(SL2_BASIS),
+            },
+        }
+        with pytest.raises(ValidationError) as exc_info:
+            LieBracketRequest.model_validate_json(json.dumps(payload))
+        assert exc_info.value.errors()[0]["type"] == "lie_algebra.jacobi_identity"
+
+    def test_canonical_algebra_constructor_rejects_jacobi_violation(self) -> None:
+        with pytest.raises(ValidationError) as exc_info:
+            _algebra(
+                SL2_BASIS,
+                ((0, 1, 2, 1), (0, 2, 0, -2), (1, 2, 1, -2)),
+            )
+        assert exc_info.value.errors()[0]["type"] == "lie_algebra.jacobi_identity"
+
     def test_sl2_bracket_e_f(self) -> None:
         result = lie_bracket(
             SL2, _element(SL2_BASIS, (1, 0, 0)), _element(SL2_BASIS, (0, 1, 0))
@@ -253,13 +340,42 @@ class TestBracketAdmission:
 
     def test_over_bound_structure_coefficient_is_rejected_before_jacobi(self) -> None:
         over_bound = 10**MAX_ELEMENT_COEFFICIENT_DIGITS
-        algebra = _algebra(AXB_BASIS, ((0, 1, 1, over_bound),))
-        with pytest.raises(OperationDomainValidationError, match="64-digit bound"):
-            lie_bracket(
-                algebra,
-                _element(AXB_BASIS, (1, 0)),
-                _element(AXB_BASIS, (0, 1)),
-            )
+        with pytest.raises(ValidationError, match="structure constants must use"):
+            _algebra(AXB_BASIS, ((0, 1, 1, over_bound),))
+
+    def test_maximum_structure_coefficient_height_is_accepted(self) -> None:
+        coefficient = 10**MAX_STRUCTURE_COEFFICIENT_DIGITS - 1
+        algebra = _algebra(AXB_BASIS, ((0, 1, 1, coefficient),))
+
+        assert algebra.structure_constants[0].coefficient.as_fraction() == coefficient
+
+    def test_structure_coefficient_digit_bound_is_published_in_schema(self) -> None:
+        schema = FiniteDimensionalLieAlgebra.model_json_schema()
+        coefficient = schema["$defs"]["LieAlgebraStructureConstant"]["properties"][
+            "coefficient"
+        ]
+
+        assert coefficient["properties"]["num"]["maxLength"] == (
+            MAX_STRUCTURE_COEFFICIENT_DIGITS + 1
+        )
+        assert coefficient["properties"]["den"]["maxLength"] == (
+            MAX_STRUCTURE_COEFFICIENT_DIGITS
+        )
+
+    def test_bracket_ledger_constant_keeps_full_canonical_rational_capacity(
+        self,
+    ) -> None:
+        coefficient = 10 ** (MAX_STRUCTURE_COEFFICIENT_DIGITS + 1)
+        term = StructureConstant.model_validate(
+            {
+                "i": 0,
+                "j": 1,
+                "k": 1,
+                "coefficient": {"num": coefficient, "den": 1},
+            }
+        )
+
+        assert term.coefficient.as_fraction() == coefficient
 
     def test_over_bound_dimension_is_rejected_before_jacobi(self) -> None:
         basis = tuple(f"e{index}" for index in range(MAX_LIE_DIMENSION + 1))
@@ -275,6 +391,17 @@ class TestBracketAdmission:
 
         with pytest.raises(OperationResourceAdmissionError, match="dimension"):
             lie_bracket(algebra, element, element)
+
+    def test_dimension_limit_is_enforced_at_value_construction(self) -> None:
+        basis = tuple(f"e{index}" for index in range(MAX_LIE_DIMENSION))
+        value = FiniteDimensionalLieAlgebra.model_validate(
+            {"basis": list(basis), "structure_constants": []}
+        )
+        assert len(value.basis) == MAX_LIE_DIMENSION
+        with pytest.raises(ValidationError):
+            FiniteDimensionalLieAlgebra.model_validate(
+                {"basis": [*basis, "e8"], "structure_constants": []}
+            )
 
     def test_over_bound_structure_table_is_rejected_before_jacobi(self) -> None:
         constant = StructureConstant.model_construct(
@@ -317,7 +444,26 @@ class TestBracketAdmission:
         assert tuple(replayed) == _coords(result.bracket)
 
     def test_jacobi_violating_table_rejected(self) -> None:
-        bad = _algebra(SL2_BASIS, ((0, 1, 2, 1), (0, 2, 0, -2), (1, 2, 1, -2)))
+        bad_constants = tuple(
+            StructureConstant.model_construct(
+                i=i,
+                j=j,
+                k=k,
+                coefficient=SL2.structure_constants[0].coefficient.from_integer_ratio(
+                    coefficient, 1
+                ),
+            )
+            for i, j, k, coefficient in (
+                (0, 1, 2, 1),
+                (0, 2, 0, -2),
+                (1, 2, 1, -2),
+            )
+        )
+        bad = FiniteDimensionalLieAlgebra.model_construct(
+            basis=SL2_BASIS,
+            structure_constants=bad_constants,
+            _jacobi_admitted=True,
+        )
         with pytest.raises(OperationDomainValidationError) as exc_info:
             lie_bracket(
                 bad, _element(SL2_BASIS, (1, 0, 0)), _element(SL2_BASIS, (0, 1, 0))

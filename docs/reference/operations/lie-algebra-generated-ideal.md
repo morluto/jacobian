@@ -11,10 +11,10 @@ brackets with every ambient basis vector. This computes closure under the
 adjoint action, so the resulting subspace is an ideal and therefore also a Lie
 subalgebra. It does not claim that any larger ambient structure is classified.
 
-The ambient dimension is at most 8, there are at most 8 input vectors, and
-admission establishes Jacobi while bounding exact work, rational coefficient
-growth through iterated brackets and row reduction, and intermediate output
-size before the closure kernel runs. The result composes with
+The ambient dimension is at most 8 and there are at most 8 input vectors. The
+canonical Lie-algebra value establishes Jacobi at construction; this operation
+bounds exact work, rational coefficient growth through iterated brackets and
+row reduction, and intermediate output size before the closure kernel runs. The result composes with
 `lie_algebra.ideal.check`, `lie_algebra.subalgebra.check`, and
 `lie_algebra.quotient.compute`. Those consuming operations establish the
 property they rely on when supplied a serialized value.

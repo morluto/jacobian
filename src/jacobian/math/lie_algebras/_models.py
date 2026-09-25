@@ -2,14 +2,24 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from fractions import Fraction
 from itertools import pairwise
-from typing import Annotated, Self
+from typing import Annotated, Any, Self
 
-from pydantic import Field, StrictBool, StringConstraints, model_validator
+from pydantic import (
+    Field,
+    PrivateAttr,
+    StrictBool,
+    StringConstraints,
+    TypeAdapter,
+    model_validator,
+)
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian._models import StrictModel
+from jacobian.canonical import decimal_digit_width
 from jacobian.math.matrices.values import RationalMatrix
 
 LieBasisLabel = Annotated[
@@ -20,6 +30,19 @@ LieBasisLabel = Annotated[
 MAX_LIE_DIMENSION = 8
 MAX_STRUCTURE_NONZEROS = 256
 MAX_STRUCTURE_COEFFICIENT_DIGITS = 64
+# Jacobi is alternating, so it suffices to check increasing basis triples.
+# For each of three cyclic terms there are at most n choices for the inner
+# bracket output and n for the outer bracket output.
+MAX_LIE_JACOBI_WORK = (
+    3
+    * (MAX_LIE_DIMENSION * (MAX_LIE_DIMENSION - 1) * (MAX_LIE_DIMENSION - 2) // 6)
+    * MAX_LIE_DIMENSION**2
+)
+MAX_LIE_JACOBI_TERMS_PER_TRIPLE = 3 * MAX_LIE_DIMENSION**2
+MAX_LIE_JACOBI_INTERMEDIATE_DIGITS = (
+    2 * MAX_STRUCTURE_COEFFICIENT_DIGITS * MAX_LIE_JACOBI_TERMS_PER_TRIPLE
+    + len(str(MAX_LIE_JACOBI_TERMS_PER_TRIPLE))
+)
 MAX_ELEMENT_COEFFICIENT_DIGITS = 64
 MAX_BRACKET_LEDGER_ROWS = MAX_LIE_DIMENSION * (MAX_LIE_DIMENSION - 1) // 2
 # A bracket pair performs two coordinate products and every retained ledger
@@ -70,20 +93,127 @@ class StructureConstant(StrictModel):
         return self
 
 
+class LieAlgebraStructureConstant(StructureConstant):
+    """A structure coefficient at the finite-dimensional algebra boundary."""
+
+    coefficient: CanonicalRational = Field(
+        description=(
+            "Exact rational with at most 64 decimal digits in each reduced "
+            "numerator and denominator."
+        ),
+        json_schema_extra={
+            "properties": {
+                "num": {
+                    "maxLength": MAX_STRUCTURE_COEFFICIENT_DIGITS + 1,
+                    "pattern": rf"^(?:0|-?[1-9][0-9]{{0,{MAX_STRUCTURE_COEFFICIENT_DIGITS - 1}}})(?![\s\S])",
+                },
+                "den": {
+                    "maxLength": MAX_STRUCTURE_COEFFICIENT_DIGITS,
+                    "pattern": rf"^[1-9][0-9]{{0,{MAX_STRUCTURE_COEFFICIENT_DIGITS - 1}}}(?![\s\S])",
+                },
+            }
+        },
+    )
+
+    @model_validator(mode="after")
+    def require_bounded_coefficient(self) -> Self:
+        if (
+            decimal_digit_width(self.coefficient.num) > MAX_STRUCTURE_COEFFICIENT_DIGITS
+            or decimal_digit_width(self.coefficient.den)
+            > MAX_STRUCTURE_COEFFICIENT_DIGITS
+        ):
+            raise _validation_error(
+                "structure_coefficient_bound",
+                "structure constants must use at most "
+                f"{MAX_STRUCTURE_COEFFICIENT_DIGITS} decimal digits",
+            )
+        return self
+
+
 class FiniteDimensionalLieAlgebra(StrictModel):
     """One finite-dimensional Lie algebra over QQ by ordered structure constants."""
 
+    _jacobi_admitted: bool = PrivateAttr(default=False)
+
+    @classmethod
+    def model_construct(
+        cls, _fields_set: set[str] | None = None, **values: Any
+    ) -> Self:
+        """Never let Pydantic's trusted constructor forge the Jacobi cache."""
+        values.pop("_jacobi_admitted", None)
+        value = super().model_construct(_fields_set=_fields_set, **values)
+        value._jacobi_admitted = False
+        return value
+
+    @classmethod
+    def _from_jacobi_proved_kernel(
+        cls,
+        *,
+        basis: tuple[LieBasisLabel, ...],
+        structure_constants: tuple[StructureConstant, ...],
+    ) -> Self:
+        """Build an internal result after its operation proves Jacobi exactly.
+
+        Public and serialized construction always runs full validation. This
+        path is only for kernels whose defining computation already proves
+        Jacobi, avoiding a second expansion while retaining the private
+        admission fact needed by subsequent consumers.
+        """
+        basis = TypeAdapter(tuple[LieBasisLabel, ...]).validate_python(
+            basis, strict=True
+        )
+        if not 1 <= len(basis) <= MAX_LIE_DIMENSION:
+            raise _validation_error(
+                "dimension_bound", "Lie-algebra dimension is outside 1..8"
+            )
+        if len(set(basis)) != len(basis):
+            raise _validation_error(
+                "duplicate_basis", "Lie-algebra basis labels must be unique"
+            )
+        if len(structure_constants) > MAX_STRUCTURE_NONZEROS:
+            raise _validation_error(
+                "structure_constant_bound", "too many Lie-algebra structure constants"
+            )
+        canonical_constants = tuple(
+            LieAlgebraStructureConstant.model_validate(
+                constant.model_dump(mode="python")
+            )
+            for constant in structure_constants
+        )
+        keys = tuple(
+            (constant.i, constant.j, constant.k) for constant in canonical_constants
+        )
+        if tuple(sorted(keys)) != keys or len(set(keys)) != len(keys):
+            raise _validation_error(
+                "constant_order", "structure constants must be unique and ordered"
+            )
+        if any(
+            constant.i >= len(basis)
+            or constant.j >= len(basis)
+            or constant.k >= len(basis)
+            for constant in canonical_constants
+        ):
+            raise _validation_error(
+                "constant_axis", "structure-constant indices must lie on the basis axis"
+            )
+        value = cls.model_construct(
+            basis=basis, structure_constants=canonical_constants
+        )
+        value._jacobi_admitted = True
+        return value
+
     basis: tuple[LieBasisLabel, ...] = Field(
+        min_length=1,
         max_length=MAX_LIE_DIMENSION,
         description="Ordered basis axis; row order is a transport convention",
     )
-    structure_constants: tuple[StructureConstant, ...] = Field(
+    structure_constants: tuple[LieAlgebraStructureConstant, ...] = Field(
         min_length=0,
         max_length=MAX_STRUCTURE_NONZEROS,
         description=(
             "Sparse nonzero bracket coefficients with i < j in lexicographic "
-            "(i, j, k) order; antisymmetry is canonical and Jacobi is "
-            "established by consuming-operation admission."
+            "(i, j, k) order; antisymmetry is canonical and construction "
+            "checks Jacobi on the complete basis."
         ),
     )
 
@@ -113,7 +243,88 @@ class FiniteDimensionalLieAlgebra(StrictModel):
                 "constant_axis",
                 "structure-constant indices must lie on the basis axis",
             )
+        # The Jacobiator is alternating for an antisymmetric bracket, so
+        # increasing triples prove the identity on every basis triple. The
+        # fixed dimension, nonzero, coefficient-height, work, and rational
+        # intermediate-height ceilings bound this exact check.
+        table: dict[tuple[int, int], dict[int, Fraction]] = {}
+        for constant in self.structure_constants:
+            value = constant.coefficient.as_fraction()
+            table.setdefault((constant.i, constant.j), {})[constant.k] = value
+            table.setdefault((constant.j, constant.i), {})[constant.k] = -value
+        jacobi_work = 0
+        triples = tuple(
+            (first, second, third)
+            for first in range(dimension)
+            for second in range(first + 1, dimension)
+            for third in range(second + 1, dimension)
+        )
+        for first, second, third in triples:
+            for outer_first, outer_second, inner in (
+                (first, second, third),
+                (second, third, first),
+                (third, first, second),
+            ):
+                outer_terms = table.get((outer_first, outer_second), {})
+                jacobi_work += sum(
+                    len(table.get((middle, inner), {})) for middle in outer_terms
+                )
+        if jacobi_work > MAX_LIE_JACOBI_WORK:
+            raise _validation_error(
+                "jacobi_work_bound", "Jacobi validation exceeds its fixed work bound"
+            )
+        if MAX_LIE_JACOBI_INTERMEDIATE_DIGITS > MAX_CANONICAL_RATIONAL_DIGITS:
+            raise _validation_error(
+                "jacobi_height_bound",
+                "Jacobi validation exceeds its exact intermediate-height bound",
+            )
+        for first, second, third in triples:
+            accumulator: dict[int, Fraction] = {}
+            for outer_first, outer_second, inner in (
+                (first, second, third),
+                (second, third, first),
+                (third, first, second),
+            ):
+                for middle, outer_value in table.get(
+                    (outer_first, outer_second), {}
+                ).items():
+                    inner_terms = table.get((middle, inner), {})
+                    for target, inner_value in inner_terms.items():
+                        accumulator[target] = (
+                            accumulator.get(target, 0) + outer_value * inner_value
+                        )
+            if any(value != 0 for value in accumulator.values()):
+                raise _validation_error(
+                    "jacobi_identity",
+                    "structure constants must satisfy the Jacobi identity",
+                )
+        self._jacobi_admitted = True
         return self
+
+    def model_copy(
+        self,
+        *,
+        update: Mapping[str, Any] | None = None,
+        deep: bool = False,
+    ) -> Self:
+        """Keep the internal Jacobi admission fact bound to unchanged fields."""
+        if not update:
+            return super().model_copy(deep=deep)
+        payload = self.model_dump(mode="python")
+        payload.update(update)
+        return type(self).model_validate(payload)
+
+    def __eq__(self, other: object) -> bool:
+        if type(other) is not type(self):
+            return NotImplemented
+        assert isinstance(other, FiniteDimensionalLieAlgebra)
+        return (
+            self.basis == other.basis
+            and self.structure_constants == other.structure_constants
+        )
+
+    def __hash__(self) -> int:
+        return hash((type(self), self.basis, self.structure_constants))
 
 
 class LieAlgebraElement(StrictModel):
@@ -361,9 +572,9 @@ class LieAlgebraRequest(StrictModel):
         description=(
             "Finite-dimensional Lie algebra over QQ of dimension at most "
             f"{MAX_LIE_DIMENSION} by ordered basis labels and sparse "
-            "structure constants; antisymmetry is canonical and every "
-            "basis-triple Jacobi identity is established by operation "
-            "admission before computation."
+            "structure constants with bounded rational entries; "
+            "antisymmetry is canonical and construction checks every "
+            "basis-triple Jacobi identity."
         )
     )
 

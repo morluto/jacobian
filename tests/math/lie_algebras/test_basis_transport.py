@@ -2,8 +2,12 @@ from fractions import Fraction
 
 import pytest
 
+from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.lie_algebras._models import FiniteDimensionalLieAlgebra
+from jacobian.math.lie_algebras._models import (
+    FiniteDimensionalLieAlgebra,
+    StructureConstant,
+)
 from jacobian.math.lie_algebras.basis_transport._models import LieBasisChangeResult
 from jacobian.math.lie_algebras.basis_transport._tools import TOOLS
 from jacobian.math.lie_algebras.basis_transport.operations import (
@@ -174,6 +178,39 @@ def test_identity_basis_change_preserves_source_algebra() -> None:
     )
     assert result.target == SL2
     assert result.target_to_source == result.source_to_target
+
+
+def test_basis_change_revalidates_trusted_model_construct_input() -> None:
+    unsafe = FiniteDimensionalLieAlgebra.model_construct(
+        basis=("e", "f", "h"),
+        _jacobi_admitted=True,
+        structure_constants=tuple(
+            StructureConstant.model_construct(
+                i=i,
+                j=j,
+                k=k,
+                coefficient=CanonicalRational.model_construct(num=value, den=1),
+            )
+            for i, j, k, value in (
+                (0, 1, 2, 1),
+                (0, 2, 0, 1),
+                (1, 2, 0, 1),
+            )
+        ),
+    )
+    with pytest.raises(OperationDomainValidationError) as exc_info:
+        lie_algebra_change_basis(
+            unsafe,
+            SL2.basis,
+            _matrix(
+                [
+                    [(1, 1), (0, 1), (0, 1)],
+                    [(0, 1), (1, 1), (0, 1)],
+                    [(0, 1), (0, 1), (1, 1)],
+                ]
+            ),
+        )
+    assert exc_info.value.errors()[0]["type"] == "lie_algebra.jacobi_identity"
 
 
 def test_singular_basis_change_is_rejected() -> None:

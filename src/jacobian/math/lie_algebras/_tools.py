@@ -185,9 +185,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "Return the exact rational matrix ad_x(y) = [x,y] for one element "
             "x in a finite-dimensional Lie algebra over QQ, acting on column "
             "coordinate vectors in the retained ordered basis. The element must "
-            "use the algebra's basis axis. Dimension is at most 8; admission "
-            "establishes every Jacobi identity and bounds coefficient growth, "
-            "arithmetic work, and matrix output before expansion."
+            "use the algebra's basis axis. Dimension is at most 8; canonical "
+            "construction establishes Jacobi and operation admission bounds "
+            "coefficient growth, arithmetic work, and matrix output."
         ),
         request_type=LieAdjointRequest,
         result_type=LieAdjointResult,
@@ -234,9 +234,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "finite-dimensional Lie algebra over QQ given by ordered basis "
             "labels and sparse structure constants with dimension at most 8, "
             "returning exact bracket coordinates with one ledger row per "
-            "nonzero basis pair. Antisymmetry is canonical in the stored "
-            "table and every basis-triple Jacobi identity is established by "
-            "operation admission before expansion."
+            "nonzero basis pair. The canonical algebra value has already "
+            "established antisymmetry and every basis-triple Jacobi identity."
         ),
         request_type=LieBracketRequest,
         result_type=LieBracketResult,
@@ -271,8 +270,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "Return one exact rational matrix ad(b_i) per ordered basis element "
             "of a finite-dimensional Lie algebra over QQ, acting on column "
             "coordinate vectors. The source algebra and basis order are retained. "
-            "Dimension is at most 8; admission verifies every Jacobi identity, "
-            "establishing [ad(x), ad(y)] = ad([x,y])."
+            "Dimension is at most 8; canonical construction verifies every "
+            "Jacobi identity, establishing [ad(x), ad(y)] = ad([x,y])."
         ),
         request_type=LieAlgebraRequest,
         result_type=LieAdjointRepresentationResult,
@@ -289,7 +288,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 name="sl2_adjoint_representation",
                 description=(
                     "Return ad(e), ad(f), and ad(h) in the declared sl2 basis "
-                    "order after Jacobi admission."
+                    "order after canonical Jacobi validation."
                 ),
                 input={"algebra": _SL2_ALGEBRA},
             ),
@@ -301,8 +300,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         description=(
             "Compute the exact Killing-form Gram matrix tr(ad_x ad_y) of a "
             "finite-dimensional Lie algebra over QQ in its ordered basis, "
-            "retaining the source algebra. Every basis-triple Jacobi "
-            "identity is established by operation admission before the "
+            "retaining the source algebra. The canonical algebra value "
+            "establishes every basis-triple Jacobi identity before the "
             "adjoint traces run, so the matrix is the Killing form of a Lie "
             "algebra. Consuming operations read semisimplicity and the "
             "radical off this matrix."
@@ -415,8 +414,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "over QQ as a canonical RREF subspace of its ordered basis, "
             "retaining the source algebra. Centrality against every basis "
             "element is one exact rational linear system solved through "
-            "maintained nullspace and RREF kernels after operation "
-            "admission establishes every Jacobi identity. Consuming "
+            "maintained nullspace and RREF kernels after the canonical value "
+            "has established Jacobi. Consuming "
             "series, quotient, and nilpotency operations accept the "
             "subspace unchanged."
         ),
@@ -461,8 +460,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "Return the complete common centralizer of up to dim(g) exact "
             "rational vectors in a finite-dimensional Lie algebra over QQ as "
             "a canonical RREF LieSubalgebra bound to the source algebra. The "
-            "empty family has centralizer g. Admission establishes Jacobi, "
-            "bounds coordinate digits and the stacked linear system, and "
+            "empty family has centralizer g. The canonical algebra value "
+            "establishes Jacobi; operation admission bounds coordinate digits "
+            "and the stacked linear system, and "
             "the defining equations are [x,s]=0 for every supplied vector s."
         ),
         request_type=LieCentralizerRequest,
@@ -504,8 +504,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         title="Compute the derived subalgebra",
         description=(
             "Return [g,g] = span{[b_i,b_j]} as a canonical exact LieIdeal "
-            "in the source algebra's ordered basis. Admission establishes "
-            "antisymmetry and every Jacobi identity before bracket expansion; "
+            "in the source algebra's ordered basis. Canonical construction "
+            "establishes antisymmetry and Jacobi before bracket expansion; "
             "the result retains the ambient algebra and composes with ideal "
             "operations such as quotient construction."
         ),
@@ -541,8 +541,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "Compute the derived series D^0 = g, D^{k+1} = [D^k, D^k] of a "
             "finite-dimensional Lie algebra over QQ as canonical RREF "
             "subspaces, stopping at zero or the first fixed term, with the "
-            "solvability decision. Every Jacobi identity is established by "
-            "operation admission first, so each bracket family spans an "
+            "solvability decision. Canonical construction establishes Jacobi, "
+            "so each bracket family spans an "
             "ideal and the series descends."
         ),
         request_type=LieAlgebraRequest,
@@ -585,8 +585,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "Compute the lower central series L^0 = g, L^{k+1} = [g, L^k] "
             "of a finite-dimensional Lie algebra over QQ as canonical RREF "
             "subspaces, stopping at zero or the first fixed term, with the "
-            "nilpotency decision. Every Jacobi identity is established by "
-            "operation admission first, so each bracket family spans an "
+            "nilpotency decision. Canonical construction establishes Jacobi, "
+            "so each bracket family spans an "
             "ideal and the series descends."
         ),
         request_type=LieAlgebraRequest,
@@ -665,8 +665,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "Decide whether an RREF subspace of a finite-dimensional Lie "
             "algebra over QQ absorbs every algebra bracket, retaining the "
             "first escaping bracket in increasing basis and generator order "
-            "on failure. Every Jacobi identity is established by operation "
-            "admission first. Consuming quotient operations accept an IDEAL "
+            "on failure. The canonical algebra value establishes Jacobi, "
+            "and operation admission checks work limits. Consuming quotient "
+            "operations accept an IDEAL "
             "verdict unchanged."
         ),
         request_type=LieIdealRequest,
@@ -765,8 +766,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "return the induced structure-constant algebra in the candidate "
             "row basis, together with the row-coordinate inclusion into the "
             "source. The induced basis labels are supplied in candidate row "
-            "order. Exact Jacobi, dimensions, rational heights, closure work, "
-            "and output are bounded before result construction."
+            "order. The valid source and exact bracket closure imply the "
+            "induced Jacobi identity; dimensions, rational heights, closure "
+            "work, and output are bounded before construction."
         ),
         request_type=LieSubalgebraConstructionRequest,
         result_type=LieSubalgebraResult,
@@ -810,8 +812,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "Return the smallest Lie subalgebra containing up to dim(g) exact "
             "rational vectors in a finite-dimensional Lie algebra over QQ. The "
             "canonical RREF rows retain the exact ambient algebra and ordered "
-            "basis; the empty generator family generates zero. Admission "
-            "establishes Jacobi and bounds closure work and coefficient growth."
+            "basis; the empty generator family generates zero. The canonical "
+            "algebra value establishes Jacobi, and operation admission bounds "
+            "closure work and coefficient growth."
         ),
         request_type=LieGeneratedSubalgebraRequest,
         result_type=LieSubalgebra,
@@ -840,9 +843,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "Return the smallest ideal of a finite-dimensional Lie algebra "
             "over QQ containing up to dim(g) exact rational vectors. The "
             "canonical RREF rows retain the exact ambient algebra and ordered "
-            "basis; the empty family generates the zero ideal. Admission "
-            "establishes Jacobi and bounds closure work, coefficient growth, "
-            "and intermediate output size."
+            "basis; the empty family generates the zero ideal. The canonical "
+            "algebra value establishes Jacobi, and operation admission bounds "
+            "closure work, coefficient growth, and intermediate output size."
         ),
         request_type=LieGeneratedIdealRequest,
         result_type=LieIdeal,

@@ -8,6 +8,7 @@ from fractions import Fraction
 from math import factorial, lcm
 from typing import Any
 
+from pydantic import ValidationError
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import (
@@ -89,11 +90,33 @@ MAX_SOLVABLE_RADICAL_OUTPUT_BYTES = 4 * 1024 * 1024
 def _as_algebra(
     value: FiniteDimensionalLieAlgebra | Mapping[str, Any],
 ) -> FiniteDimensionalLieAlgebra:
-    return (
-        value
-        if isinstance(value, FiniteDimensionalLieAlgebra)
-        else FiniteDimensionalLieAlgebra.model_validate(value)
-    )
+    if not isinstance(value, FiniteDimensionalLieAlgebra):
+        try:
+            return FiniteDimensionalLieAlgebra.model_validate(value)
+        except ValidationError as exc:
+            error = exc.errors()[0]
+            raise OperationDomainValidationError(
+                location=("algebra", *error["loc"]),
+                code=str(error["type"]),
+                message=str(error["msg"]),
+            ) from exc
+    # Native callers can pass Pydantic's trusted `model_construct` result.
+    # Reparse only unvalidated instances; values from ordinary construction or
+    # wire decoding retain the in-memory Jacobi admission fact and avoid replay.
+    if value._jacobi_admitted:
+        return value
+    _admit_lie_algebra_limits(value)
+    try:
+        return FiniteDimensionalLieAlgebra.model_validate(
+            value.model_dump(mode="python")
+        )
+    except ValidationError as exc:
+        error = exc.errors()[0]
+        raise OperationDomainValidationError(
+            location=("algebra", *error["loc"]),
+            code=str(error["type"]),
+            message=str(error["msg"]),
+        ) from exc
 
 
 def _as_element(value: LieAlgebraElement | Mapping[str, Any]) -> LieAlgebraElement:
@@ -133,10 +156,8 @@ def _bracket_table(
     return table
 
 
-def _admit_lie_algebra(
-    algebra: FiniteDimensionalLieAlgebra,
-) -> dict[tuple[int, int], dict[int, Fraction]]:
-    """Establish antisymmetry and every basis-triple Jacobi identity."""
+def _admit_lie_algebra_limits(algebra: FiniteDimensionalLieAlgebra) -> None:
+    """Admit operation-owned dimension, sparsity, and coefficient limits."""
     if not 1 <= len(algebra.basis) <= MAX_LIE_DIMENSION:
         raise OperationResourceAdmissionError(
             location=("algebra", "basis"),
@@ -156,6 +177,10 @@ def _admit_lie_algebra(
             ),
         )
     for index, constant in enumerate(algebra.structure_constants):
+        if not isinstance(constant, StructureConstant):
+            continue
+        if not isinstance(constant.coefficient, CanonicalRational):
+            continue
         _run_admission(
             lambda constant=constant: require_bounded_rational(
                 constant.coefficient,
@@ -164,35 +189,14 @@ def _admit_lie_algebra(
             ),
             location=("algebra", "structure_constants", index),
         )
-    dimension = len(algebra.basis)
+
+
+def _admit_lie_algebra(
+    algebra: FiniteDimensionalLieAlgebra,
+) -> dict[tuple[int, int], dict[int, Fraction]]:
+    """Admit operation limits and expand a value already checked for Jacobi."""
+    _admit_lie_algebra_limits(algebra)
     table = _bracket_table(algebra)
-
-    def _pair(first: int, second: int) -> dict[int, Fraction]:
-        if first == second:
-            return {}
-        return table.get((first, second), {})
-
-    for first in range(dimension):
-        for second in range(dimension):
-            for third in range(dimension):
-                accumulator: dict[int, Fraction] = {}
-                for outer_first, outer_second, inner in (
-                    (first, second, third),
-                    (second, third, first),
-                    (third, first, second),
-                ):
-                    for middle, outer_value in _pair(outer_first, outer_second).items():
-                        for target, inner_value in _pair(middle, inner).items():
-                            accumulator[target] = (
-                                accumulator.get(target, Fraction(0))
-                                + outer_value * inner_value
-                            )
-                if any(value != 0 for value in accumulator.values()):
-                    raise OperationDomainValidationError(
-                        location=("algebra", "structure_constants"),
-                        code="lie_algebra.jacobi_identity",
-                        message="structure constants must satisfy the Jacobi identity",
-                    )
     return table
 
 
@@ -484,10 +488,9 @@ def lie_killing_form(
 ) -> LieKillingResult:
     """Compute the exact Killing-form Gram matrix ``tr(ad_i ad_j)``.
 
-    Operation admission establishes every Jacobi identity first, so the
+    Canonical algebra construction establishes every Jacobi identity, so the
     trace form is the Killing form of a Lie algebra, not of an arbitrary
-    bilinear bracket table. At dimension at most 8 the quartic trace
-    work is a small constant.
+    bilinear bracket table. Operation admission bounds the quartic trace work.
     """
 
     algebra_value = _as_algebra(algebra)
@@ -777,8 +780,8 @@ def lie_center(
 
     Centrality ``[x, b_j] = 0`` for every basis element is one exact
     rational linear system in the coordinates of ``x``; its solution
-    space is the center. Operation admission establishes every Jacobi
-    identity first. At dimension at most 8 the nullspace and RREF work
+    space is the center. Canonical algebra construction establishes every
+    Jacobi identity. At dimension at most 8 the nullspace and RREF work
     through maintained exact kernels is a small constant.
     """
 
@@ -985,12 +988,8 @@ def lie_generated_subalgebra(
         + dimension**4
         + dimension**3
     )
-    jacobi_work = 3 * dimension**5
     generator_rref_work = len(generators_value) * dimension**2 + dimension**3
-    if (
-        closure_work + generator_rref_work + jacobi_work
-        > MAX_SUBALGEBRA_CHECK_WORK * 20
-    ):
+    if closure_work + generator_rref_work > MAX_SUBALGEBRA_CHECK_WORK * 20:
         raise OperationResourceAdmissionError(
             location=("generators",),
             code="lie_algebra.generated_subalgebra_work_bound",
@@ -1144,7 +1143,6 @@ def lie_generated_ideal(
     work = (
         len(generators_value) * dimension**2
         + dimension**3
-        + 3 * dimension**5
         + (dimension + 1)
         * (
             dimension**2 * len(algebra_value.structure_constants)
@@ -1353,8 +1351,8 @@ def lie_derived_series(
     """Compute the derived series with its solvability decision.
 
     ``terms[k+1] = [terms[k], terms[k]]`` from the whole algebra,
-    stopping at zero or the first fixed term. Operation admission
-    establishes every Jacobi identity first, so each bracket family
+    stopping at zero or the first fixed term. Canonical algebra construction
+    establishes every Jacobi identity, so each bracket family
     spans an ideal and the series descends.
     """
 
@@ -1404,8 +1402,8 @@ def lie_lower_central_series(
     """Compute the lower central series with its nilpotency decision.
 
     ``terms[k+1] = [algebra, terms[k]]`` from the whole algebra,
-    stopping at zero or the first fixed term. Operation admission
-    establishes every Jacobi identity first, so each bracket family
+    stopping at zero or the first fixed term. Canonical algebra construction
+    establishes every Jacobi identity, so each bracket family
     spans an ideal and the series descends.
     """
 
@@ -1611,8 +1609,8 @@ def check_ideal(
 
     For every basis element and generator row the bracket is reduced
     against the candidate rows; the first nonzero remainder witnesses
-    non-ideal status in deterministic order. Operation admission
-    establishes every Jacobi identity first.
+    non-ideal status in deterministic order. Canonical algebra construction
+    establishes every Jacobi identity.
     """
 
     algebra_value = _as_algebra(algebra)
@@ -1924,7 +1922,7 @@ def lie_subalgebra(
     induced_constants = _induced_subalgebra_constants(
         rows, table, len(algebra_value.basis)
     )
-    induced = FiniteDimensionalLieAlgebra.model_construct(
+    induced = FiniteDimensionalLieAlgebra._from_jacobi_proved_kernel(
         basis=labels,
         structure_constants=tuple(
             sorted(
@@ -1970,9 +1968,9 @@ def lie_quotient(
 
     Quotient basis labels attach in increasing free-column order of the
     ideal RREF; bracket constants are the ideal-reduced brackets of the
-    corresponding basis vectors. Operation admission establishes every
-    Jacobi identity and verifies ideal absorption first, so the coset
-    bracket is well defined.
+    corresponding basis vectors. Canonical construction establishes every
+    Jacobi identity, and this operation verifies ideal absorption, so the
+    coset bracket is well defined.
     """
 
     algebra_value = _as_algebra(algebra)
@@ -2029,6 +2027,26 @@ def lie_quotient(
             for target in free:
                 value = reduced[target]
                 if value != 0:
+                    if (
+                        decimal_digit_width(value.numerator)
+                        > MAX_STRUCTURE_COEFFICIENT_DIGITS
+                        or decimal_digit_width(value.denominator)
+                        > MAX_STRUCTURE_COEFFICIENT_DIGITS
+                    ):
+                        raise OperationResourceAdmissionError(
+                            location=(
+                                "quotient",
+                                "structure_constants",
+                                left,
+                                right,
+                                rank[target],
+                            ),
+                            code="lie_algebra.quotient_result_height_bound",
+                            message=(
+                                "a quotient structure coefficient exceeds the "
+                                f"{MAX_STRUCTURE_COEFFICIENT_DIGITS}-digit algebra bound"
+                            ),
+                        )
                     constants.append(
                         StructureConstant.model_construct(
                             i=left,
@@ -2037,7 +2055,7 @@ def lie_quotient(
                             coefficient=CanonicalRational.from_fraction(value),
                         )
                     )
-    quotient = FiniteDimensionalLieAlgebra(
+    quotient = FiniteDimensionalLieAlgebra._from_jacobi_proved_kernel(
         basis=labels,
         structure_constants=tuple(
             sorted(constants, key=lambda constant: (constant.i, constant.j, constant.k))
@@ -2054,8 +2072,8 @@ def lie_direct_sum(
     """Assemble the direct sum on concatenated bases (native-only).
 
     The left block keeps its indices and the right block shifts past
-    the left dimension; brackets     across blocks vanish. Both summands
-    pass Jacobi admission, so the sum is a Lie algebra.
+    the left dimension; brackets across blocks vanish. Both summands
+    pass canonical Jacobi validation, so the sum is a Lie algebra.
     """
 
     left_value = _as_algebra(left)
@@ -2091,7 +2109,7 @@ def lie_direct_sum(
         )
         for constant in right_value.structure_constants
     )
-    return FiniteDimensionalLieAlgebra(
+    return FiniteDimensionalLieAlgebra._from_jacobi_proved_kernel(
         basis=labels,
         structure_constants=tuple(
             sorted(constants, key=lambda constant: (constant.i, constant.j, constant.k))
@@ -2106,8 +2124,8 @@ def lie_adjoint_matrices(
 
     Native-only projection of the structure constants: column ``j`` of
     ``ad_i`` holds the coordinates of ``[b_i, b_j]``. Operation
-    admission establishes every Jacobi identity first, so the matrices
-    represent a Lie algebra adjoint action.
+    canonical algebra construction establishes every Jacobi identity, so the
+    matrices represent a Lie algebra adjoint action.
     """
 
     algebra_value = _as_algebra(algebra)

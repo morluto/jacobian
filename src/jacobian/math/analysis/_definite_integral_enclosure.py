@@ -413,20 +413,19 @@ def _sum_dyadics_outward(
     terms = tuple((int(value.mantissa), value.exponent) for value in values)
     if not terms:
         return ExactDyadic(mantissa=0, exponent=0)
-    if any(abs(exponent) > MAX_DEFINITE_INTEGRAL_DYADIC_EXPONENT for _, exponent in terms):
+    if any(
+        abs(exponent) > MAX_DEFINITE_INTEGRAL_DYADIC_EXPONENT for _, exponent in terms
+    ):
         raise _validation_error(
             "definite-integral dyadic exponent exceeds the admitted source bound"
         )
     common_exponent = min(exponent for _, exponent in terms)
-    mantissa = sum(
-        value << (exponent - common_exponent)
-        for value, exponent in terms
-    )
+    mantissa = sum(value << (exponent - common_exponent) for value, exponent in terms)
     if mantissa == 0:
         return ExactDyadic(mantissa=0, exponent=0)
 
-    target_exponent = abs(mantissa).bit_length() - 1 + common_exponent - (
-        precision_bits - 1
+    target_exponent = (
+        abs(mantissa).bit_length() - 1 + common_exponent - (precision_bits - 1)
     )
     shift = common_exponent - target_exponent
     if shift >= 0:

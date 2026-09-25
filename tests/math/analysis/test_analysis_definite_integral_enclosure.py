@@ -85,6 +85,7 @@ def test_dyadic_sum_matches_fraction_oracle_for_signed_and_mixed_scales() -> Non
     )
 
     for precision_bits in (1, 2, 53, 192):
+
         def as_fraction(value: ExactDyadic) -> Fraction:
             if value.exponent >= 0:
                 return Fraction(int(value.mantissa) << value.exponent)
@@ -99,12 +100,8 @@ def test_dyadic_sum_matches_fraction_oracle_for_signed_and_mixed_scales() -> Non
             Fraction(),
         )
         expected = DyadicClosedInterval(
-            lower=_round_fraction_outward(
-                lower, precision_bits, toward_positive=False
-            ),
-            upper=_round_fraction_outward(
-                upper, precision_bits, toward_positive=True
-            ),
+            lower=_round_fraction_outward(lower, precision_bits, toward_positive=False),
+            upper=_round_fraction_outward(upper, precision_bits, toward_positive=True),
         )
         assert _summed_enclosure(contributions, precision_bits) == expected
 

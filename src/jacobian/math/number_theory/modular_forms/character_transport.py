@@ -319,13 +319,18 @@ def _admit_transport(
     target_coordinate_digits = (
         coordinate_digits if same_space else source_expansion_digits
     )
+    mapped_source_expansion_digits = (
+        source_expansion_digits
+        if field == target_field
+        else field.degree * source_expansion_digits
+    )
     target_expansion_digits = (
         source_expansion_digits
-        if same_space or field != target_field
-        else source_expansion_digits
+        if same_space
+        else mapped_source_expansion_digits
         if inclusion.target_space.level in (13, 78)
         else _linear_combination_digit_bound(
-            source_expansion_digits, target_cusp, target_basis_digits
+            mapped_source_expansion_digits, target_cusp, target_basis_digits
         )
     )
     if (

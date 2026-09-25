@@ -13,6 +13,7 @@ def test_public_api_is_small_and_canonical() -> None:
         "from_feasible_sets",
         "minor",
         "twist",
+        "twist_polynomial",
         "verify_from_feasible_sets",
         "width",
     ]

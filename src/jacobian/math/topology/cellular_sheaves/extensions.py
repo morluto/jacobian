@@ -10,6 +10,7 @@ from typing import Any, Self
 from pydantic import Field, model_validator
 
 from jacobian._exact import CanonicalRational
+from jacobian._execution import request_checkpoint
 from jacobian._models import StrictModel
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -1034,9 +1035,70 @@ def cochain_map(morphism_value: SheafMorphismResult) -> SheafCochainMapResult:
     the source and target diagrams and establishes the naturality squares
     before assembling the direct-sum stalk maps in each cochain degree.
     """
-    checked = morphism(
-        morphism_value.source, morphism_value.target, morphism_value.components
+    if not isinstance(morphism_value, SheafMorphismResult):
+        raise _section_domain(
+            "cochain_map_morphism_type",
+            "the cochain map input must be a cellular-sheaf morphism result",
+        )
+    try:
+        morphism_value = SheafMorphismResult.model_validate(morphism_value.model_dump())
+    except (AttributeError, TypeError, ValueError) as error:
+        raise _section_domain(
+            "cochain_map_morphism_invalid", "the cellular-sheaf morphism is malformed"
+        ) from error
+    source = morphism_value.source
+    target = morphism_value.target
+    if source.complex != target.complex:
+        raise _section_domain(
+            "cochain_map_parent_mismatch",
+            "the induced cochain map requires the same source complex",
+        )
+    # Compute matrix dimensions and complete output envelope before naturality
+    # checking, which scans every restriction and exact scalar.
+    source_stalks = {item.simplex: item for item in source.stalks}
+    target_stalks = {item.simplex: item for item in target.stalks}
+    degree_faces = tuple(group.faces for group in source.complex.faces_by_dimension)
+    preflight_dimensions = tuple(
+        (
+            sum(len(source_stalks[face].basis) for face in faces),
+            sum(len(target_stalks[face].basis) for face in faces),
+        )
+        for faces in degree_faces
     )
+    matrix_cells = sum(a * b for a, b in preflight_dimensions)
+    if matrix_cells > MAX_SHEAF_SECTION_MATRIX_CELLS:
+        raise _section_resource(
+            "cochain_map_cells_bound",
+            "the induced degreewise cochain matrices exceed their cell bound",
+        )
+    coordinate_chars = sum(
+        64 + sum(2 + len(vertex) for vertex in stalk.simplex) + len(label)
+        for parent in (source, target)
+        for stalk in parent.stalks
+        for label in stalk.basis
+    )
+    face_chars = sum(
+        64 + sum(2 + len(vertex) for vertex in face)
+        for faces in degree_faces
+        for face in faces
+    )
+    component_cells = sum(
+        len(source_stalks[face].basis) * len(target_stalks[face].basis)
+        for faces in degree_faces
+        for face in faces
+    )
+    complete_chars = (
+        sheaf_scalar_json_bound(matrix_cells + component_cells)
+        + coordinate_chars
+        + face_chars
+        + 256
+    )
+    if complete_chars > MAX_SHEAF_MORPHISM_OUTPUT_CHARS:
+        raise _section_resource(
+            "cochain_map_output_bound",
+            "the induced degreewise cochain matrices exceed their output bound",
+        )
+    checked = morphism(source, target, morphism_value.components)
     if not checked.natural:
         raise _section_domain(
             "cochain_map_non_natural",
@@ -1044,15 +1106,9 @@ def cochain_map(morphism_value: SheafMorphismResult) -> SheafCochainMapResult:
         )
     source = checked.source
     target = checked.target
-    if source.complex != target.complex:
-        raise _section_domain(
-            "cochain_map_parent_mismatch",
-            "the induced cochain map requires the same source complex",
-        )
     source_stalks = {item.simplex: item for item in source.stalks}
     target_stalks = {item.simplex: item for item in target.stalks}
     by_simplex = dict(checked.components)
-    degree_faces = tuple(group.faces for group in source.complex.faces_by_dimension)
     source_bases: list[tuple[SheafCochainCoordinate, ...]] = []
     target_bases: list[tuple[SheafCochainCoordinate, ...]] = []
     dimensions: list[tuple[int, int]] = []
@@ -1070,21 +1126,7 @@ def cochain_map(morphism_value: SheafMorphismResult) -> SheafCochainMapResult:
         source_bases.append(source_basis)
         target_bases.append(target_basis)
         dimensions.append((len(source_basis), len(target_basis)))
-    matrix_cells = sum(source_dim * target_dim for source_dim, target_dim in dimensions)
-    if matrix_cells > MAX_SHEAF_SECTION_MATRIX_CELLS:
-        raise _section_resource(
-            "cochain_map_cells_bound",
-            "the induced degreewise cochain matrices exceed their cell bound",
-        )
-    scalar_count = matrix_cells + sum(
-        len(row) for _face, matrix in checked.components for row in matrix
-    )
-    output_chars = sheaf_scalar_json_bound(scalar_count)
-    if output_chars > MAX_SHEAF_MORPHISM_OUTPUT_CHARS:
-        raise _section_resource(
-            "cochain_map_output_bound",
-            "the induced degreewise cochain matrices exceed their output bound",
-        )
+    request_checkpoint("before cochain map result construction")
     zero: SheafScalar = (
         CanonicalRational.from_fraction(Fraction(0))
         if source.coefficient_field.value == "QQ"

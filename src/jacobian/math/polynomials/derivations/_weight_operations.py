@@ -11,6 +11,11 @@ from pydantic import TypeAdapter, ValidationError
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
+from jacobian.canonical import (
+    CanonicalLimits,
+    encode_strict_json,
+    strict_json_object_size,
+)
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -346,6 +351,7 @@ def _parse_subrepresentation_request(
 def _admit_subrepresentation_support(
     action: PolynomialWeightAction,
     generators: tuple[RationalPolynomial, ...],
+    parameter: PolynomialVariable,
 ) -> tuple[dict[int, tuple[tuple[int, ...], ...]], dict[int, set[int]]]:
     """Preflight projected support, exact elimination work, and output size."""
     grouped_support: dict[int, set[tuple[int, ...]]] = {}
@@ -406,17 +412,22 @@ def _admit_subrepresentation_support(
         len(support) * len(grouped_sources[weight])
         for weight, support in grouped_support.items()
     )
-    predicted_output_bytes = (
-        predicted_basis_terms * (2 * 4_096 + 24)
-        + len(generators) * MAX_GM_SUBREP_DIMENSION * (2 * 8 + 24)
-        + MAX_GM_SUBREP_DIMENSION**2 * 128
-        + 1_000_000
+    dimension_bound = sum(len(sources) for sources in grouped_sources.values())
+    predicted_output_bytes = _subrepresentation_result_size_bound(
+        action,
+        generators,
+        parameter,
+        basis_terms=predicted_basis_terms,
+        dimension=dimension_bound,
     )
-    if predicted_output_bytes > 80_000_000:
+    if predicted_output_bytes > CanonicalLimits().max_output_bytes:
         raise OperationResourceAdmissionError(
             location=("generators",),
             code="gm_subrepresentation.output_budget",
-            message="the exact stable-basis and representation result exceeds its output envelope",
+            message=(
+                "the exact stable-basis and representation result exceeds the "
+                f"{CanonicalLimits().max_output_bytes}-byte canonical output envelope"
+            ),
         )
     return (
         {
@@ -424,6 +435,97 @@ def _admit_subrepresentation_support(
             for weight, support in grouped_support.items()
         },
         grouped_sources,
+    )
+
+
+def _subrepresentation_result_size_bound(
+    action: PolynomialWeightAction,
+    generators: tuple[RationalPolynomial, ...],
+    parameter: PolynomialVariable,
+    *,
+    basis_terms: int,
+    dimension: int,
+) -> int:
+    """Bound canonical result bytes from exact source and worst-case values."""
+    source_sizes = (
+        len(encode_strict_json(action.model_dump(mode="json"))),
+        len(
+            encode_strict_json(
+                [generator.model_dump(mode="json") for generator in generators]
+            )
+        ),
+    )
+    variables = list(action.variables)
+    empty_polynomial = len(
+        encode_strict_json(
+            {"domain": "QQ", "variables": variables, "polynomial": {"terms": []}}
+        )
+    )
+    maximum_term = len(
+        encode_strict_json(
+            {
+                "coefficient": {"num": "-" + "9" * 4_096, "den": "9" * 4_096},
+                "exponents": [MAX_WEIGHT_ACTION_DEGREE] * len(variables),
+            }
+        )
+    )
+    basis_size = (
+        2
+        + max(dimension - 1, 0)
+        + dimension * empty_polynomial
+        + basis_terms * (maximum_term + 1)
+    )
+    coordinate_value = len(encode_strict_json({"num": "-" + "9" * 8, "den": "9" * 8}))
+    coordinate_size = (
+        2
+        + max(len(generators) - 1, 0)
+        + len(generators)
+        * (2 + max(dimension - 1, 0) + dimension * (coordinate_value + 1))
+    )
+    weights_size = len(
+        encode_strict_json(
+            [-MAX_DIAGONAL_WEIGHT * MAX_WEIGHT_ACTION_DEGREE] * dimension
+        )
+    )
+    empty_matrix_entry = len(
+        encode_strict_json({"domain": "QQ", "variables": [parameter], "terms": []})
+    )
+    nonzero_matrix_entry = len(
+        encode_strict_json(
+            {
+                "domain": "QQ",
+                "variables": [parameter],
+                "terms": [
+                    {
+                        "coefficient": {"num": "1", "den": "1"},
+                        "exponents": [-MAX_DIAGONAL_WEIGHT * MAX_WEIGHT_ACTION_DEGREE],
+                    }
+                ],
+            }
+        )
+    )
+    matrix_size = (
+        2
+        + max(dimension - 1, 0)
+        + dimension
+        * (
+            2
+            + max(dimension - 1, 0)
+            + dimension * empty_matrix_entry
+            + max(dimension - 1, 0)
+            + nonzero_matrix_entry
+        )
+    )
+    return strict_json_object_size(
+        (
+            ("action", source_sizes[0]),
+            ("generators", source_sizes[1]),
+            ("basis", basis_size),
+            ("weights", weights_size),
+            ("generator_coordinates", coordinate_size),
+            ("parameter", len(encode_strict_json(parameter))),
+            ("matrix", matrix_size),
+        )
     )
 
 
@@ -498,7 +600,9 @@ def gm_generated_subrepresentation(
     reduced to a deterministic RREF basis in the source monomial coordinates.
     """
     checked, action, generators = _parse_subrepresentation_request(request)
-    monomials_by_weight, _ = _admit_subrepresentation_support(action, generators)
+    monomials_by_weight, _ = _admit_subrepresentation_support(
+        action, generators, checked.parameter
+    )
     projections = _project_generators_by_weight(action, generators)
     basis_by_weight = _weight_projection_rref(projections, monomials_by_weight)
 

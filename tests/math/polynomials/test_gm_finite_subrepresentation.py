@@ -2,6 +2,7 @@ from fractions import Fraction
 
 import pytest
 
+from jacobian.canonical import CanonicalLimits, encode_strict_json
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.polynomials.derivations._weight_models import (
@@ -9,6 +10,7 @@ from jacobian.math.polynomials.derivations._weight_models import (
     PolynomialWeightSubrepresentationResult,
 )
 from jacobian.math.polynomials.derivations._weight_operations import (
+    _subrepresentation_result_size_bound,
     diagonal_weight_action,
     gm_generated_subrepresentation,
 )
@@ -109,6 +111,30 @@ def test_same_weight_generators_are_reduced_to_a_deterministic_basis() -> None:
         [Fraction(1), Fraction(1)],
         [Fraction(1), Fraction(3)],
     ]
+
+
+def test_output_admission_covers_all_serialized_result_fields() -> None:
+    result = gm_generated_subrepresentation(
+        {
+            "action": {"variables": ["x", "y"], "weights": [1, -1]},
+            "generators": [
+                _poly(("x", "y"), (1, (1, 0)), (1, (0, 1))),
+            ],
+            "parameter": "lambda",
+        }
+    )
+    actual_size = len(encode_strict_json(result.model_dump(mode="json")))
+    admitted_bound = _subrepresentation_result_size_bound(
+        result.action,
+        result.generators,
+        result.parameter,
+        basis_terms=sum(
+            len(polynomial.polynomial.terms) for polynomial in result.basis
+        ),
+        dimension=len(result.basis),
+    )
+    assert actual_size <= admitted_bound
+    assert admitted_bound <= CanonicalLimits().max_output_bytes
 
 
 def test_empty_zero_and_duplicate_generators_have_canonical_degenerate_results() -> (

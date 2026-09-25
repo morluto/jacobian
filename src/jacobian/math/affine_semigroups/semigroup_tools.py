@@ -64,9 +64,7 @@ def _fiber(r: AffineFiberRequest) -> AffineFiber:
 
 def _factorization(r: AffineFactorizationRequest) -> AffineFactorization:
     try:
-        return _evaluate_factorization(
-            r.semigroup, r.coordinates, validate_parent=True
-        )
+        return _evaluate_factorization(r.semigroup, r.coordinates, validate_parent=True)
     except OperationResourceAdmissionError:
         raise
     except (TypeError, ValueError, IndexError, OverflowError) as e:

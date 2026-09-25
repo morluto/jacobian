@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from collections.abc import Iterator
 from fractions import Fraction
 from itertools import product as cartesian_product
@@ -26,14 +25,13 @@ from jacobian.math.geometry.crystallographic.extensions._models import (
     MAX_EXTENSION_GROUP_ORDER,
     MAX_EXTENSION_LATTICE_RANK,
     MAX_EXTENSION_PAIRING_DIGITS,
-    MAX_EXTENSION_TORSION_RESULT_BYTES,
+    MAX_EXTENSION_TORSION_RESULT_SIZE,
     MAX_EXTENSION_TORSION_VECTOR_DIGITS,
     CrystallographicAffineRealization,
     CrystallographicAffineSectionMap,
     CrystallographicExtensionTorsionResult,
     CrystallographicFundamentalDomainResult,
     CrystallographicPolytopePairing,
-    CrystallographicPolytopePairingRequest,
     CrystallographicPolytopePairingResult,
     FiniteLatticeExtension,
     NonTorsionLiftObstruction,
@@ -45,6 +43,7 @@ from jacobian.math.geometry.polytopes._models import (
     MAX_FACET_COORDINATE_DIGITS,
     MAX_FACET_INCIDENCES,
     MAX_VERTICES,
+    CoordinateAxis,
     FacetIncidenceResult,
     RationalVPolytope,
     _canonical_v_polytope_vertices,
@@ -73,12 +72,16 @@ _IntMatrix = tuple[tuple[int, ...], ...]
 _IntVector = tuple[int, ...]
 
 MAX_AFFINE_REALIZATION_WORK = 10_000
-MAX_AFFINE_REALIZATION_RESULT_BYTES = 100_000
 MAX_POLYTOPE_PAIRING_WORK = 2_000_000_000
-MAX_POLYTOPE_PAIRING_RESULT_BYTES = 8_000_000
 MAX_FUNDAMENTAL_DOMAIN_CANDIDATES = 20_000
 MAX_FUNDAMENTAL_DOMAIN_WORK = 2_000_000_000
-MAX_FUNDAMENTAL_DOMAIN_RESULT_BYTES = 16_000_000
+# Intrinsic representation-size envelopes for the exact results, measured in
+# scalar digits times count plus fixed structural overhead (see
+# _facet_pairing_result_size and _admit_result_size). These bound the retained
+# mathematical value, not an encoded transport payload.
+MAX_AFFINE_REALIZATION_RESULT_SIZE = 100_000
+MAX_POLYTOPE_PAIRING_RESULT_SIZE = 8_000_000
+MAX_FUNDAMENTAL_DOMAIN_RESULT_SIZE = 16_000_000
 
 
 def _domain(
@@ -322,13 +325,13 @@ def _admit_affine_realization(order: int, rank: int) -> None:
     q_digits = MAX_COCYCLE_ENTRY_DIGITS + len(str(order))
     source_scalars = order * order + order * rank * rank + order * order * rank
     map_scalars = order * (rank * rank + rank)
-    predicted_bytes = (
+    predicted_size = (
         (source_scalars + map_scalars) * (2 * q_digits + 32) + order * order * 16 + 1024
     )
-    if predicted_bytes > MAX_AFFINE_REALIZATION_RESULT_BYTES:
+    if predicted_size > MAX_AFFINE_REALIZATION_RESULT_SIZE:
         _resource(
             "affine_realization_output",
-            "affine realization exceeds its exact result byte envelope",
+            "affine realization exceeds its exact result representation envelope",
         )
 
 
@@ -411,6 +414,34 @@ def _extension_product(
     return translated, source.multiplication_table[left_holonomy][right_holonomy]
 
 
+def _facet_pairing_result_size(
+    *,
+    dimension: int,
+    facet_count: int,
+    incidence_count: int,
+    pairing_count: int,
+    vertex_count: int,
+    coordinate_digits: int,
+) -> int:
+    """Bound a facet-pairing result's exact representation size.
+
+    Counts the result's scalars -- facet halfspace coefficients and offsets,
+    incidence indices, pairing entries, and vertex coordinates -- times their
+    maximum decimal width, plus fixed per-element structural overhead. This is
+    an intrinsic representation/allocation bound on the retained mathematical
+    value; it never serializes the result or measures an encoded transport
+    payload.
+    """
+    facet_digits = 2 * dimension * dimension * MAX_FACET_COORDINATE_DIGITS + 32
+    return (
+        facet_count * (dimension + 1) * (facet_digits + 8)
+        + incidence_count * 8
+        + pairing_count * 256
+        + vertex_count * dimension * (coordinate_digits * 2 + 8)
+        + 32_768
+    )
+
+
 def _admit_polytope_pairing(polytope: RationalVPolytope, pairing_count: int) -> None:
     """Preflight exact pairing work/output before the full facet enumeration."""
     dimension = len(polytope.space.axes)
@@ -452,18 +483,18 @@ def _admit_polytope_pairing(polytope: RationalVPolytope, pairing_count: int) -> 
         )
     # Full profile worst-case: 256 primitive facets and 16,384 incidences.
     # Supporting coefficients use the facet kernel's determinant height bound.
-    facet_digits = 2 * dimension * dimension * MAX_FACET_COORDINATE_DIGITS + 32
-    output_bytes = (
-        MAX_COMPUTED_FACETS * (dimension + 1) * (facet_digits + 8)
-        + MAX_FACET_INCIDENCES * 8
-        + pairing_count * 256
-        + vertices * dimension * (coordinate_digits * 2 + 8)
-        + 32_768
+    output_size = _facet_pairing_result_size(
+        dimension=dimension,
+        facet_count=MAX_COMPUTED_FACETS,
+        incidence_count=MAX_FACET_INCIDENCES,
+        pairing_count=pairing_count,
+        vertex_count=vertices,
+        coordinate_digits=coordinate_digits,
     )
-    if output_bytes > min(MAX_POLYTOPE_PAIRING_RESULT_BYTES, 10_000_000):
+    if output_size > min(MAX_POLYTOPE_PAIRING_RESULT_SIZE, 10_000_000):
         _resource(
             "polytope_pairing_output",
-            "facet profile and pairing value exceed the result byte envelope",
+            "facet profile and pairing value exceed the result representation envelope",
         )
 
 
@@ -481,7 +512,10 @@ def _facet_count_upper_bound(vertex_count: int, dimension: int) -> int:
 
 
 def pair_crystallographic_polytope_facets(
-    request: CrystallographicPolytopePairingRequest,
+    affine_realization: CrystallographicAffineRealization,
+    polytope: RationalVPolytope,
+    lattice_axes: tuple[CoordinateAxis, ...],
+    pairings: tuple[PolytopeFacetPairing, ...],
 ) -> CrystallographicPolytopePairingResult:
     """Validate a complete exact side-pairing ledger on a bounded V-polytope.
 
@@ -490,31 +524,17 @@ def pair_crystallographic_polytope_facets(
     the exact inverse extension element. It does not establish a tiling,
     quotient cell structure, torsion-freeness, or a resolution.
     """
-    try:
-        checked_request = CrystallographicPolytopePairingRequest.model_validate(
-            request.model_dump(mode="python", warnings=False), strict=True
-        )
-    except (AttributeError, TypeError, ValidationError, ValueError) as exc:
-        raise OperationDomainValidationError(
-            location=("request",),
-            code="crystallographic.extension.polytope_pairing_shape",
-            message="request does not satisfy the facet-pairing wire contract",
-        ) from exc
-    polytope = checked_request.polytope
-    realization = checked_request.affine_realization
+    realization = affine_realization
     source, order, rank = _admit_and_validate(realization.source)
-    if (
-        checked_request.lattice_axes != polytope.space.axes
-        or len(checked_request.lattice_axes) != rank
-    ):
+    if lattice_axes != polytope.space.axes or len(lattice_axes) != rank:
         _domain(
             "polytope_pairing_axes",
             "lattice coordinate axes must equal the ordered polytope axes",
             ("lattice_axes",),
         )
-    if len(checked_request.pairings) > MAX_COMPUTED_FACETS:
+    if len(pairings) > MAX_COMPUTED_FACETS:
         _resource("polytope_pairing_facets", "too many proposed facet pairings")
-    _admit_polytope_pairing(polytope, len(checked_request.pairings))
+    _admit_polytope_pairing(polytope, len(pairings))
 
     # Affine realizations are caller-supplied claims; recompute their canonical
     # section maps before relying on them to map any facet.
@@ -532,7 +552,7 @@ def pair_crystallographic_polytope_facets(
     except OperationDomainValidationError:
         raise
     facet_count = len(profile.facets)
-    if len(checked_request.pairings) != facet_count:
+    if len(pairings) != facet_count:
         _domain(
             "polytope_pairing_complete",
             "pairing ledger must contain one entry per computed facet",
@@ -547,7 +567,7 @@ def pair_crystallographic_polytope_facets(
             CrystallographicPolytopePairing.model_validate(
                 item.model_dump(mode="python", warnings=False), strict=True
             )
-            for item in checked_request.pairings
+            for item in pairings
         ),
         order=order,
         rank=rank,
@@ -555,7 +575,7 @@ def pair_crystallographic_polytope_facets(
     return CrystallographicPolytopePairingResult(
         affine_realization=expected_realization,
         polytope=polytope,
-        lattice_axes=checked_request.lattice_axes,
+        lattice_axes=lattice_axes,
         facet_profile=profile,
         pairings=normalized,
     )
@@ -583,17 +603,15 @@ def check_crystallographic_fundamental_domain(
     # Recompute every retained claim that will be used below. This catches a
     # hand-authored/stale facet profile or affine realization in a decoded value.
     rebuilt = pair_crystallographic_polytope_facets(
-        CrystallographicPolytopePairingRequest(
-            affine_realization=checked.affine_realization,
-            polytope=checked.polytope,
-            lattice_axes=checked.lattice_axes,
-            pairings=tuple(
-                PolytopeFacetPairing.model_validate(
-                    item.model_dump(mode="python", warnings=False), strict=True
-                )
-                for item in checked.pairings
-            ),
-        )
+        checked.affine_realization,
+        checked.polytope,
+        checked.lattice_axes,
+        tuple(
+            PolytopeFacetPairing.model_validate(
+                item.model_dump(mode="python", warnings=False), strict=True
+            )
+            for item in checked.pairings
+        ),
     )
     if rebuilt != checked:
         _domain(
@@ -779,15 +797,32 @@ def _admit_fundamental_domain_intersections(
             "fundamental_domain_work",
             "aggregate incremental DD pair and height work exceeds the admitted bound",
         )
-    serialized_size = len(
-        json.dumps(
-            checked.model_dump(mode="json", warnings=False), separators=(",", ":")
-        )
+    # Bound the retained source structurally rather than serializing it: count
+    # the actual facets, incidences, pairings, and vertex coordinates times their
+    # maximum decimal width. The result adds only two exact rationals, an overlap
+    # translation vector, and a holonomy index, so double the source for headroom.
+    coordinate_digits = max(
+        (
+            canonical_rational_component_digits(value)
+            for vertex in profile.vertices
+            for value in vertex.coordinates
+        ),
+        default=1,
     )
-    if serialized_size * 2 + 1024 > MAX_FUNDAMENTAL_DOMAIN_RESULT_BYTES:
+    source_size = _facet_pairing_result_size(
+        dimension=rank,
+        facet_count=len(profile.facets),
+        incidence_count=sum(
+            len(facet.source_vertex_indices) for facet in profile.facets
+        ),
+        pairing_count=len(checked.pairings),
+        vertex_count=len(profile.vertices),
+        coordinate_digits=coordinate_digits,
+    )
+    if source_size * 2 + 1024 > MAX_FUNDAMENTAL_DOMAIN_RESULT_SIZE:
         _resource(
             "fundamental_domain_output",
-            "source-bound result exceeds the output byte envelope",
+            "source-bound result exceeds its representation size envelope",
         )
 
 
@@ -944,7 +979,7 @@ def _validate_pairing_ledger(
 
 
 def _admit_result_size(order: int, rank: int) -> None:
-    """Bound the serialized source and all worst-case exact witness scalars."""
+    """Bound the retained source and all worst-case exact witness scalars."""
     norm_digits = (
         order
         + max(0, order - 1) * ceil(log10(max(2, rank)))
@@ -952,7 +987,7 @@ def _admit_result_size(order: int, rank: int) -> None:
         + 1
     )
     offset_digits = MAX_COCYCLE_ENTRY_DIGITS + ceil(log10(order + 1)) + 1
-    obstruction_bytes = (
+    obstruction_size = (
         rank * rank * (norm_digits + 2)
         + rank * (offset_digits + 2)
         + rank * (MAX_CANONICAL_INTEGER_DIGITS + 2)
@@ -960,20 +995,20 @@ def _admit_result_size(order: int, rank: int) -> None:
         + (MAX_EXTENSION_PAIRING_DIGITS + 2)
         + 512
     )
-    torsion_witness_bytes = (
+    torsion_witness_size = (
         rank * (MAX_EXTENSION_TORSION_VECTOR_DIGITS + 2)
         + rank * rank * (norm_digits + 2)
         + rank * (offset_digits + 2)
         + 512
     )
-    source_bytes = 16_384
-    predicted_bytes = source_bytes + max(
-        max(0, order - 1) * obstruction_bytes, torsion_witness_bytes
+    source_size = 16_384
+    predicted_size = source_size + max(
+        max(0, order - 1) * obstruction_size, torsion_witness_size
     )
-    if predicted_bytes > MAX_EXTENSION_TORSION_RESULT_BYTES:
+    if predicted_size > MAX_EXTENSION_TORSION_RESULT_SIZE:
         _resource(
             "result_size_bound",
-            "source and exact torsion witnesses exceed the result byte envelope",
+            "source and exact torsion witnesses exceed the result representation envelope",
         )
 
 

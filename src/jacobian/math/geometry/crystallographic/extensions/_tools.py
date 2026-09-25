@@ -24,7 +24,12 @@ def _decide(request: FiniteLatticeExtension) -> CrystallographicExtensionTorsion
 def _pair_polytope(
     request: CrystallographicPolytopePairingRequest,
 ) -> CrystallographicPolytopePairingResult:
-    return pair_crystallographic_polytope_facets(request)
+    return pair_crystallographic_polytope_facets(
+        request.affine_realization,
+        request.polytope,
+        request.lattice_axes,
+        request.pairings,
+    )
 
 
 def _check_fundamental_domain(

@@ -26,7 +26,7 @@ MAX_EXTENSION_GROUP_ORDER = 8
 MAX_EXTENSION_LATTICE_RANK = 4
 MAX_ACTION_ENTRY_DIGITS = 1
 MAX_COCYCLE_ENTRY_DIGITS = 4
-MAX_EXTENSION_TORSION_RESULT_BYTES = 2_000_000
+MAX_EXTENSION_TORSION_RESULT_SIZE = 2_000_000
 # The existing certified Smith carrier caps transformation entries at the
 # canonical exact-integer limit. A reconstructed lattice solution multiplies a
 # Smith right-transform entry by a transformed offset, so retain the resulting
@@ -442,7 +442,7 @@ __all__ = [
     "MAX_EXTENSION_GROUP_ORDER",
     "MAX_EXTENSION_LATTICE_RANK",
     "MAX_EXTENSION_PAIRING_DIGITS",
-    "MAX_EXTENSION_TORSION_RESULT_BYTES",
+    "MAX_EXTENSION_TORSION_RESULT_SIZE",
     "MAX_EXTENSION_TORSION_VECTOR_DIGITS",
     "CrystallographicAffineRealization",
     "CrystallographicAffineSectionMap",

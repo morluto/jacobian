@@ -74,8 +74,18 @@ def _request() -> CrystallographicPolytopePairingRequest:
     )
 
 
+def _pair(request: CrystallographicPolytopePairingRequest):
+    """Call the native pairing function with unpacked domain arguments."""
+    return pair_crystallographic_polytope_facets(
+        request.affine_realization,
+        request.polytope,
+        request.lattice_axes,
+        request.pairings,
+    )
+
+
 def test_unit_square_translation_pairings_are_exact_and_source_bound() -> None:
-    result = pair_crystallographic_polytope_facets(_request())
+    result = _pair(_request())
 
     assert result.polytope == _request().polytope
     assert result.affine_realization == _request().affine_realization
@@ -110,7 +120,7 @@ def test_pairing_rejects_wrong_axis_binding() -> None:
     request = _request().model_copy(update={"lattice_axes": ("y", "x")})
 
     with pytest.raises(OperationDomainValidationError, match="ordered polytope axes"):
-        pair_crystallographic_polytope_facets(request)
+        _pair(request)
 
 
 def test_pairing_rejects_noninverse_or_mismatched_facet_map() -> None:
@@ -122,7 +132,7 @@ def test_pairing_rejects_noninverse_or_mismatched_facet_map() -> None:
     with pytest.raises(
         OperationDomainValidationError, match="exact two-sided group inverse"
     ):
-        pair_crystallographic_polytope_facets(request)
+        _pair(request)
 
 
 def test_pairing_rejects_inverse_elements_that_miss_target_facet() -> None:
@@ -136,7 +146,7 @@ def test_pairing_rejects_inverse_elements_that_miss_target_facet() -> None:
         OperationDomainValidationError,
         match="complete source facet vertex set",
     ):
-        pair_crystallographic_polytope_facets(request)
+        _pair(request)
 
 
 def test_pairing_rejects_incomplete_ledger() -> None:
@@ -145,7 +155,7 @@ def test_pairing_rejects_incomplete_ledger() -> None:
     with pytest.raises(
         OperationDomainValidationError, match="one entry per computed facet"
     ):
-        pair_crystallographic_polytope_facets(request)
+        _pair(request)
 
 
 def test_pairing_operation_is_published_with_square_example() -> None:
@@ -163,7 +173,7 @@ def test_pairing_operation_is_published_with_square_example() -> None:
 
 def test_unit_square_is_fundamental_domain_including_boundary_only_contacts() -> None:
     result = check_crystallographic_fundamental_domain(
-        pair_crystallographic_polytope_facets(_request())
+        _pair(_request())
     )
     assert result.is_fundamental_domain
     assert result.polytope_volume.as_fraction() == 1
@@ -202,7 +212,7 @@ def test_width_two_square_fails_with_full_dimensional_translate_witness() -> Non
         update={"polytope": wide_polytope, "pairings": pairings}
     )
     result = check_crystallographic_fundamental_domain(
-        pair_crystallographic_polytope_facets(wide_request)
+        _pair(wide_request)
     )
     assert not result.is_fundamental_domain
     assert result.overlap_translation is not None
@@ -230,7 +240,7 @@ def test_off_origin_rational_square_is_fundamental_domain() -> None:
         update={"polytope": request.polytope.model_copy(update={"vertices": vertices})}
     )
     result = check_crystallographic_fundamental_domain(
-        pair_crystallographic_polytope_facets(moved)
+        _pair(moved)
     )
     assert result.is_fundamental_domain
     assert result.polytope_volume.as_fraction() == 1
@@ -238,7 +248,7 @@ def test_off_origin_rational_square_is_fundamental_domain() -> None:
 
 def test_negative_fundamental_domain_result_requires_explanation() -> None:
     checked = check_crystallographic_fundamental_domain(
-        pair_crystallographic_polytope_facets(_request())
+        _pair(_request())
     )
     forged = checked.model_dump()
     forged["is_fundamental_domain"] = False
@@ -252,7 +262,7 @@ def test_negative_fundamental_domain_result_requires_explanation() -> None:
 
 
 def test_fundamental_domain_check_rejects_stale_facet_profile() -> None:
-    checked = pair_crystallographic_polytope_facets(_request())
+    checked = _pair(_request())
     profile = checked.facet_profile
     first = profile.facets[0]
     stale_facet = first.model_copy(
@@ -271,7 +281,7 @@ def test_fundamental_domain_check_rejects_stale_facet_profile() -> None:
 
 
 def test_fundamental_domain_check_rejects_stale_group_claim() -> None:
-    checked = pair_crystallographic_polytope_facets(_request())
+    checked = _pair(_request())
     source = checked.affine_realization.source.model_copy(
         update={"factor_set": (((1, 0),),)}
     )

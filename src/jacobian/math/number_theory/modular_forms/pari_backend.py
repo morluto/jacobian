@@ -314,8 +314,10 @@ def pari_gamma0_atkin_matrix(
             )
     if execution.deadline is not None:
         deadline = execution.deadline
+        worker_wall_seconds = deadline - execution.started_at
     else:
         deadline = execution.started_at + _WORKER_TIMEOUT_SECONDS
+        worker_wall_seconds = _WORKER_TIMEOUT_SECONDS
     bind_request_deadline(deadline)
     request_checkpoint("before PARI Atkin-Lehner worker")
     payload: dict[str, object] = {
@@ -362,7 +364,7 @@ def pari_gamma0_atkin_matrix(
                 resource_limits=ProcessResourceLimits(
                     cpu_seconds=max(
                         math.ceil(_WORKER_TIMEOUT_SECONDS),
-                        math.ceil(deadline - execution.started_at),
+                        math.ceil(worker_wall_seconds),
                     ),
                     address_space_bytes=_WORKER_ADDRESS_SPACE_BYTES,
                     file_size_bytes=_WORKER_FILE_SIZE_BYTES,
@@ -433,8 +435,10 @@ def _run_basis_worker(
             )
     if execution.deadline is not None:
         deadline = execution.deadline
+        worker_wall_seconds = deadline - execution.started_at
     else:
         deadline = execution.started_at + _WORKER_TIMEOUT_SECONDS
+        worker_wall_seconds = _WORKER_TIMEOUT_SECONDS
     bind_request_deadline(deadline)
     request_checkpoint("before PARI modular-form basis worker")
     payload: dict[str, object] = {
@@ -474,7 +478,7 @@ def _run_basis_worker(
                 resource_limits=ProcessResourceLimits(
                     cpu_seconds=max(
                         math.ceil(_WORKER_TIMEOUT_SECONDS),
-                        math.ceil(deadline - execution.started_at),
+                        math.ceil(worker_wall_seconds),
                     ),
                     address_space_bytes=_WORKER_ADDRESS_SPACE_BYTES,
                     file_size_bytes=_WORKER_FILE_SIZE_BYTES,

@@ -159,8 +159,22 @@ def braid_artin_action(word: BraidWord) -> BraidArtinActionResult:
         (WordLetter(generator=index, exponent=1),)
         for index in range(admitted.strand_count)
     ]
-    total_work = admitted.strand_count
+    # Adjacent inverse braid generators induce mutually inverse substitutions.
+    # Reduce them before expansion: transient images of cancelling prefixes do
+    # not describe the work or output required by the represented automorphism.
+    reduced_braid: list[BraidLetter] = []
     for letter in admitted.letters:
+        if (
+            reduced_braid
+            and reduced_braid[-1].generator == letter.generator
+            and reduced_braid[-1].exponent == -letter.exponent
+        ):
+            reduced_braid.pop()
+        else:
+            reduced_braid.append(letter)
+
+    total_work = admitted.strand_count
+    for letter in reduced_braid:
         i = letter.generator - 1
         first, second = images[i], images[i + 1]
         if letter.exponent == 1:

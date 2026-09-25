@@ -76,3 +76,17 @@ def test_action_is_published_as_one_typed_catalog_operation() -> None:
     operation = tools["braid.word.artin_action.compute"]
     result = operation.run(BraidWordRequest(word=_word(2, (1, 1), (1, -1))))
     assert result.generator_images == (_free_word((0, 1)), _free_word((1, 1)))
+
+
+def test_action_reduces_inverse_braid_prefixes_before_bounded_expansion() -> None:
+    # w=(sigma_2^2 sigma_1^3)^2 sigma_2^2 followed by w^-1.
+    w = ((2, 1), (2, 1), (1, 1), (1, 1), (1, 1)) * 2 + ((2, 1), (2, 1))
+    inverse = tuple(
+        (generator, -exponent)
+        for generator, exponent in reversed(w)
+    )
+    letters = tuple(
+        (generator, 1 if exponent == 1 else -1) for generator, exponent in w + inverse
+    )
+    result = braid_artin_action(_word(3, *letters))
+    assert result.generator_images == tuple(_free_word((i, 1)) for i in range(3))

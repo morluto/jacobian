@@ -3,9 +3,13 @@ import pytest
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.galois._models import (
+    GaloisAutomorphismSubgroup,
     GaloisFixedFieldRequest,
     GaloisSubgroupRequest,
     IntermediateFieldStabilizerRequest,
+    QQFieldAutomorphism,
+    QQSplittingField,
+    SplittingFieldResult,
 )
 from jacobian.math.number_theory.galois.operations import (
     automorphisms,
@@ -42,15 +46,19 @@ def _polynomial(coefficients: tuple[int, ...]) -> RationalPolynomial:
     )
 
 
-def _split(coefficients: tuple[int, ...]):
+def _split(coefficients: tuple[int, ...]) -> SplittingFieldResult:
     return splitting_field(_polynomial(coefficients))
 
 
-def _subgroup(field, maps):
+def _subgroup(
+    field: QQSplittingField, maps: tuple[QQFieldAutomorphism, ...]
+) -> GaloisAutomorphismSubgroup:
     return galois_subgroup(GaloisSubgroupRequest(field=field, elements=tuple(maps)))
 
 
-def _element(presentation, *coordinates: int):
+def _element(
+    presentation: SimpleNumberFieldPresentation, *coordinates: int
+) -> SimpleNumberFieldElement:
     return SimpleNumberFieldElement(
         presentation=presentation,
         coefficients_ascending=tuple(

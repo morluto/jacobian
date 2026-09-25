@@ -7,6 +7,7 @@ from jacobian.catalog.models import MathTool
 from jacobian.math.number_theory.galois._models import (
     GaloisCorrespondenceRequest,
     GaloisCorrespondenceResult,
+    QQSplittingField,
 )
 from jacobian.math.number_theory.galois._tools import TOOLS
 from jacobian.math.number_theory.galois.operations import (
@@ -37,7 +38,7 @@ def _polynomial(coefficients: tuple[int, ...]) -> RationalPolynomial:
     )
 
 
-def _field(coefficients: tuple[int, ...]):
+def _field(coefficients: tuple[int, ...]) -> QQSplittingField:
     return splitting_field(_polynomial(coefficients)).field
 
 
@@ -63,7 +64,9 @@ def _fixed_vector_dimension(subgroup: frozenset[int]) -> int:
     return 1 if 1 in subgroup else 2
 
 
-def _map_sqrt2_element(sign: int, coordinates: tuple[Fraction, Fraction]):
+def _map_sqrt2_element(
+    sign: int, coordinates: tuple[Fraction, Fraction]
+) -> tuple[Fraction, Fraction]:
     constant, radical = coordinates
     return constant, radical if sign == 0 else -radical
 

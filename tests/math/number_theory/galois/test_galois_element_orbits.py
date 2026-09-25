@@ -5,7 +5,10 @@ from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.number_theory.galois._models import ElementEmbeddingOrbitRequest
+from jacobian.math.number_theory.galois._models import (
+    ElementEmbeddingOrbitRequest,
+    QQSplittingField,
+)
 from jacobian.math.number_theory.galois._tools import TOOLS
 from jacobian.math.number_theory.galois.operations import (
     element_embedding_orbit,
@@ -33,7 +36,7 @@ def _poly(coefficients: tuple[int, ...]) -> RationalPolynomial:
     )
 
 
-def _element(field, *coordinates: int) -> SimpleNumberFieldElement:
+def _element(field: QQSplittingField, *coordinates: int) -> SimpleNumberFieldElement:
     return SimpleNumberFieldElement(
         presentation=field.extension,
         coefficients_ascending=tuple(

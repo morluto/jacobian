@@ -2,14 +2,11 @@
 
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.number_theory.kempner._models import (
-    KempnerDecimalEnclosure,
-    KempnerDecimalEnclosureRequest,
     KempnerSeriesEnclosure,
     KempnerSeriesEnclosureRequest,
 )
 from jacobian.math.number_theory.kempner.operations import (
     enclose_kempner_series,
-    enclose_kempner_series_decimal,
 )
 
 
@@ -17,14 +14,6 @@ def _run_enclosure(
     request: KempnerSeriesEnclosureRequest,
 ) -> KempnerSeriesEnclosure:
     return enclose_kempner_series(request.digit_set, request.cutoff)
-
-
-def _run_decimal_enclosure(
-    request: KempnerDecimalEnclosureRequest,
-) -> KempnerDecimalEnclosure:
-    return enclose_kempner_series_decimal(
-        request.digit_set, request.cutoff, request.precision
-    )
 
 
 TOOLS: MathTools = (
@@ -61,44 +50,6 @@ TOOLS: MathTools = (
                 input={
                     "digit_set": {"base": "10", "allowed_digits": ["1"]},
                     "cutoff": "2",
-                },
-            ),
-        ),
-    ),
-    MathTool(
-        operation_id="number_theory.kempner_series.decimal_enclose",
-        title="Enclose a dense Kempner digit-family reciprocal series",
-        description=(
-            "Return an exact rational interval for the infinite reciprocal "
-            "series. Each finite reciprocal is bounded by floor and ceiling "
-            "at the requested decimal precision; an exact geometric bound "
-            "covers every longer numeral. This fixed-point operation admits "
-            "up to 600,000 finite numerals without constructing their large "
-            "common denominator."
-        ),
-        request_type=KempnerDecimalEnclosureRequest,
-        result_type=KempnerDecimalEnclosure,
-        run=_run_decimal_enclosure,
-        tags=("number-theory", "kempner", "reciprocal-series", "enclosure", "exact"),
-        discovery_terms=(
-            "dense Kempner series enclosure",
-            "decimal precision reciprocal sum for restricted digits",
-            "large cutoff Kempner digit set",
-        ),
-        examples=(
-            OperationExample(
-                name="decimal_minus_nine_six_digit_cutoff",
-                description=(
-                    "Enclose the reciprocal sum omitting digit 9 through six "
-                    "digits, at 24 decimal places."
-                ),
-                input={
-                    "digit_set": {
-                        "base": "10",
-                        "allowed_digits": ["0", "1", "2", "3", "4", "5", "6", "7", "8"],
-                    },
-                    "cutoff": "6",
-                    "precision": 24,
                 },
             ),
         ),

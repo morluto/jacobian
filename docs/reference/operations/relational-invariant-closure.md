@@ -14,11 +14,14 @@ For `r = 0`, the ambient power contains only the empty tuple. Positive-arity
 operations on the empty carrier have empty tables and act on the unique nullary
 row in the usual way.
 
-Admission bounds the full power cardinality and the worst-case operation
-preservation plus incremental closure work before any product of tuples is
-expanded. Exceeding the envelope is a resource refusal, never an incomplete
-relation result. The operations are caller-supplied generators; this operation
-does not enumerate or claim a complete polymorphism clone.
+Admission bounds the supplied operation tables, the preservation work, and the
+fixed result frames before any product of tuples is expanded, then charges the
+tuple, work, and output envelopes against the reachable closure as the kernel
+generates it. The reachable closure can be far smaller than the ambient power
+`A^r`, so a small seed set is never refused for the surrounding power.
+Exceeding the envelope is a resource refusal, never an incomplete relation
+result. The operations are caller-supplied generators; this operation does not
+enumerate or claim a complete polymorphism clone.
 
 The mathematical postcondition is the finite generated-subalgebra closure in
 the direct power `A^r`, the same coordinatewise construction used to derive

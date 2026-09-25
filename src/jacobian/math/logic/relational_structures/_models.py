@@ -1453,9 +1453,7 @@ class RelationalInvariantClosureRequest(StrictModel):
     generator_tuples: tuple[tuple[StrictInt, ...], ...] = Field(
         max_length=MAX_RELATIONAL_INVARIANT_CLOSURE_TUPLES
     )
-    polymorphisms: tuple[RelationalPolymorphism, ...] = Field(
-        min_length=1, max_length=8
-    )
+    polymorphisms: tuple[RelationalPolymorphism, ...] = Field(max_length=8)
 
     @model_validator(mode="after")
     def require_source_bound_generators(self) -> Self:
@@ -1502,9 +1500,7 @@ class RelationalInvariantClosure(StrictModel):
     generator_tuples: tuple[tuple[StrictInt, ...], ...] = Field(
         max_length=MAX_RELATIONAL_INVARIANT_CLOSURE_TUPLES
     )
-    polymorphisms: tuple[RelationalPolymorphism, ...] = Field(
-        min_length=1, max_length=8
-    )
+    polymorphisms: tuple[RelationalPolymorphism, ...] = Field(max_length=8)
     tuples: tuple[tuple[StrictInt, ...], ...] = Field(
         max_length=MAX_RELATIONAL_INVARIANT_CLOSURE_TUPLES
     )

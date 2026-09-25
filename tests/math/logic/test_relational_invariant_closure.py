@@ -20,7 +20,13 @@ from jacobian.math.logic.relational_structures import (
     RelationalInvariantClosureRequest,
     RelationalPolymorphism,
     close_relation_under_polymorphisms,
-    operations,
+)
+from jacobian.math.logic.relational_structures._admission import (
+    admit_invariant_closure_growth,
+)
+from jacobian.math.logic.relational_structures.values import (
+    MAX_RELATIONAL_INVARIANT_CLOSURE_TUPLES,
+    MAX_RELATIONAL_INVARIANT_CLOSURE_WORK,
 )
 
 
@@ -188,23 +194,75 @@ def test_empty_closure_admits_large_ambient_power() -> None:
     assert result.source == source
 
 
-def test_admission_refuses_large_nonempty_power_before_expansion(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_reachable_closure_admits_large_ambient_power() -> None:
+    # The least relation generated here is one row, so admission must charge
+    # the reachable closure rather than the 64**3 ambient power.
     source = FiniteRelationalStructure(carrier_size=64)
-    unary = _operation(source, 1, (0,) * 64)
+    unary_identity = _operation(source, 1, tuple(range(64)))
     request = RelationalInvariantClosureRequest(
         source=source,
         relation_arity=3,
         generator_tuples=((0, 0, 0),),
-        polymorphisms=(unary,),
+        polymorphisms=(unary_identity,),
     )
 
-    def forbidden(*_args: object, **_kwargs: object) -> object:
-        raise AssertionError("tuple products were expanded before admission")
+    result = close_relation_under_polymorphisms(request)
 
-    monkeypatch.setattr(operations, "product", forbidden)
+    assert result.tuples == ((0, 0, 0),)
+    assert result.source == source
+
+
+def test_empty_operation_family_returns_generators() -> None:
+    source = FiniteRelationalStructure(carrier_size=3)
+    request = RelationalInvariantClosureRequest(
+        source=source,
+        relation_arity=2,
+        generator_tuples=((0, 1), (1, 2)),
+        polymorphisms=(),
+    )
+
+    result = close_relation_under_polymorphisms(request)
+
+    assert result.polymorphisms == ()
+    assert result.tuples == ((0, 1), (1, 2))
+    restored = RelationalInvariantClosure.model_validate_json(result.model_dump_json())
+    assert restored == result
+
+
+def test_closure_growth_refuses_work_beyond_envelope() -> None:
+    with pytest.raises(
+        OperationResourceAdmissionError, match="generated-relation closure"
+    ):
+        admit_invariant_closure_growth(1, MAX_RELATIONAL_INVARIANT_CLOSURE_WORK + 1)
+
+
+def test_closure_growth_refuses_tuple_beyond_envelope() -> None:
     with pytest.raises(OperationResourceAdmissionError, match="generated relation"):
+        admit_invariant_closure_growth(MAX_RELATIONAL_INVARIANT_CLOSURE_TUPLES + 1, 0)
+
+
+def test_admission_refuses_reachable_closure_beyond_work_envelope() -> None:
+    # Binary addition on Z/9 generates all of (Z/9)^4, so the reachable
+    # closure crosses the work envelope before any ambient power is charged.
+    source = FiniteRelationalStructure(carrier_size=9)
+    addition_table = tuple(
+        (left + right) % 9 for left in range(9) for right in range(9)
+    )
+    addition = _operation(source, 2, addition_table)
+    seeds = tuple(
+        tuple(1 if axis == coordinate else 0 for coordinate in range(4))
+        for axis in range(4)
+    )
+    request = RelationalInvariantClosureRequest(
+        source=source,
+        relation_arity=4,
+        generator_tuples=seeds,
+        polymorphisms=(addition,),
+    )
+
+    with pytest.raises(
+        OperationResourceAdmissionError, match="generated-relation closure"
+    ):
         close_relation_under_polymorphisms(request)
 
 

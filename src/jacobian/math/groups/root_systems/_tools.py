@@ -1258,7 +1258,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 name="a2_antidominant_representative",
                 description=(
                     "Map the A2 weight (-1, 1) to its unique antidominant "
-                    "orbit representative."
+                    "orbit representative. The weight tuple must have one "
+                    "coordinate per row of the Cartan matrix."
                 ),
                 input={**_A2, "weight": [-1, 1]},
             ),

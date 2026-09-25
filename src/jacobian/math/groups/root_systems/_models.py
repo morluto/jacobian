@@ -1348,9 +1348,13 @@ class WeylDominantRepresentativeResult(StrictModel):
 
 
 class WeylAntidominantRepresentativeRequest(CartanMatrixRequest):
-    """An integral weight in fundamental-weight coordinates."""
+    """An integral weight with one fundamental-weight coordinate per Cartan row."""
 
-    weight: tuple[StrictInt, ...] = Field(min_length=1, max_length=MAX_RANK)
+    weight: tuple[StrictInt, ...] = Field(
+        min_length=1,
+        max_length=MAX_RANK,
+        description="Integral fundamental-weight coordinates; length must equal the number of Cartan matrix rows.",
+    )
 
 
 class WeylAntidominantRepresentativeResult(StrictModel):

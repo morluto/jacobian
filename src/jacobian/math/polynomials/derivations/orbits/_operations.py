@@ -228,7 +228,7 @@ def _preflight(request: GaPolynomialOrbitRequest) -> _OrbitPlan:
     candidate_count = 0
     pair_products = 0
     maximum_partial_support = 1
-    global_denominator_digits = 0
+    denominator_digits_by_output: dict[_Monomial, int] = {}
     maximum_contribution_numerator_digits = 1
     target_axis_count = len(action.source_variables) + 1
     for term_index, term in enumerate(source.polynomial.terms):
@@ -252,7 +252,21 @@ def _preflight(request: GaPolynomialOrbitRequest) -> _OrbitPlan:
         maximum_partial_support = max(
             maximum_partial_support, term_plan.maximum_partial_support
         )
-        global_denominator_digits += term_plan.denominator_digits
+        # Terms that cannot land on the same output monomial cannot add their
+        # denominators. Bound each collision group independently; the monomial
+        # image maxima give a conservative shared support for each source term.
+        term_maxima = tuple(
+            sum(
+                exponent * image_axis_maxima[index][axis]
+                for index, exponent in enumerate(term.exponents)
+            )
+            for axis in range(target_axis_count)
+        )
+        collision_key = term_maxima
+        denominator_digits_by_output[collision_key] = (
+            denominator_digits_by_output.get(collision_key, 0)
+            + term_plan.denominator_digits
+        )
         maximum_contribution_numerator_digits = max(
             maximum_contribution_numerator_digits, term_plan.numerator_digits
         )
@@ -272,13 +286,16 @@ def _preflight(request: GaPolynomialOrbitRequest) -> _OrbitPlan:
             ("polynomial",),
         )
 
+    maximum_collision_denominator_digits = max(
+        denominator_digits_by_output.values(), default=0
+    )
     coefficient_digits_bound = (
         maximum_contribution_numerator_digits
-        + global_denominator_digits
+        + maximum_collision_denominator_digits
         + _ceil_log10(candidate_count)
     )
     if (
-        global_denominator_digits > MAX_GA_ORBIT_COEFFICIENT_DIGITS
+        maximum_collision_denominator_digits > MAX_GA_ORBIT_COEFFICIENT_DIGITS
         or coefficient_digits_bound > MAX_GA_ORBIT_COEFFICIENT_DIGITS
     ):
         _reject_resource(

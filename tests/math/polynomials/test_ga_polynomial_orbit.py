@@ -114,6 +114,23 @@ def test_orbit_rejects_wrong_ordered_ring_and_invalid_action() -> None:
         ga_polynomial_orbit(invalid, _polynomial(("x",), {(1,): 1}))
 
 
+def test_invariant_many_terms_bound_denominators_per_output_collision() -> None:
+    action = PolynomialGaAction(
+        source_variables=("x",),
+        parameter="t",
+        generator_images=(_polynomial(("x", "t"), {(1, 0): 1}),),
+    )
+    source = _polynomial(
+        ("x",),
+        {(degree,): Fraction(1, 11) for degree in range(65)},
+    )
+
+    result = ga_polynomial_orbit(action, source)
+
+    assert len(result.polynomial.terms) == 65
+    assert all(term.coefficient.as_fraction() == Fraction(1, 11) for term in result.polynomial.terms)
+
+
 def test_orbit_rejects_expansion_before_substitution(monkeypatch) -> None:
     import jacobian.math.polynomials.derivations.orbits._operations as operations
 

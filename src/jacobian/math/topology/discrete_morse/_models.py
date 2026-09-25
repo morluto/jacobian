@@ -623,6 +623,15 @@ class IntegerMorseComplexResult(StrictModel):
                 "integer_morse_coefficient_ring",
                 "the integral Morse chain complex must use ZZ coefficients",
             )
+        if (
+            self.chain_complex.degree_min != 0
+            or self.chain_complex.degree_max
+            != len(self.critical_cells_by_dimension) - 1
+        ):
+            raise _validation_error(
+                "integer_morse_degree_axes",
+                "integer Morse chain degrees must match critical-cell dimensions",
+            )
         if self.chain_complex.basis_sizes != tuple(
             len(basis.cells) for basis in self.critical_cells_by_dimension
         ):

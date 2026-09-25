@@ -221,6 +221,10 @@ def collapse_sequence(request: CollapseSequenceRequest) -> CollapseSequenceResul
                 target=canonical_complex(
                     tuple(sorted({vertex for cell in faces for vertex in cell})),
                     tuple(sorted(facets)),
+                    closure=tuple(
+                        tuple(sorted(cell for cell in faces if len(cell) == dim + 1))
+                        for dim in range(max(map(len, faces)))
+                    ),
                 ),
                 pairs=request.pairs,
                 valid=False,
@@ -233,6 +237,10 @@ def collapse_sequence(request: CollapseSequenceRequest) -> CollapseSequenceResul
                 target=canonical_complex(
                     tuple(sorted({vertex for cell in faces for vertex in cell})),
                     tuple(sorted(facets)),
+                    closure=tuple(
+                        tuple(sorted(cell for cell in faces if len(cell) == dim + 1))
+                        for dim in range(max(map(len, faces)))
+                    ),
                 ),
                 pairs=request.pairs,
                 valid=False,
@@ -264,7 +272,14 @@ def collapse_sequence(request: CollapseSequenceRequest) -> CollapseSequenceResul
     remaining_vertices = tuple(sorted({vertex for face in faces for vertex in face}))
     return CollapseSequenceResult(
         source=source,
-        target=canonical_complex(remaining_vertices, tuple(sorted(facets))),
+        target=canonical_complex(
+            remaining_vertices,
+            tuple(sorted(facets)),
+            closure=tuple(
+                tuple(sorted(cell for cell in faces if len(cell) == dim + 1))
+                for dim in range(max(map(len, faces)))
+            ),
+        ),
         pairs=request.pairs,
         valid=True,
         collapsed_steps=steps,

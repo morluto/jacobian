@@ -89,8 +89,12 @@ def test_admits_256_vertex_edgeless_source_and_rejects_larger_order() -> None:
     assert restored == result
 
     oversized = _graph([str(index) for index in range(MAX_VERTICES + 1)], [])
-    with pytest.raises(ValidationError, match=f"at most {MAX_VERTICES} vertices"):
+    with pytest.raises(ValidationError) as request_error:
         MaximalCliqueHypergraphRequest(graph=oversized)
+    assert (
+        request_error.value.errors()[0]["type"]
+        == "graph.maximal_clique_hypergraph.vertex_bound"
+    )
     with pytest.raises(OperationDomainValidationError) as exc_info:
         construct_maximal_clique_hypergraph(oversized)
 

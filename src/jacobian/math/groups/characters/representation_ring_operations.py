@@ -36,10 +36,9 @@ from jacobian.math.groups.characters._models import (
 )
 from jacobian.math.groups.characters.operations import (
     _admit_inner_product,
+    _character_table_from_admitted_partition,
     _fractions,
     _make_value,
-    character_table,
-    _character_table_from_admitted_partition,
 )
 from jacobian.math.groups.operations import group_conjugacy_classes, group_order
 

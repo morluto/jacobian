@@ -16,6 +16,7 @@ from jacobian.dispatch import invoke_operation
 from jacobian.math.groups._models import GroupConjugacyClassesResult, PermutationGroup
 from jacobian.math.groups.characters._cyclotomic import euler_phi
 from jacobian.math.groups.characters._models import (
+    CharacterTableResult,
     CharacterRingDecompositionRequest,
     CharacterRingElement,
     ClassAxis,
@@ -40,7 +41,9 @@ def _partition(generators: tuple[tuple[int, ...], ...]) -> GroupConjugacyClasses
     )
 
 
-def _function_from_rows(table, coordinates: tuple[int, ...]) -> FiniteClassFunction:
+def _function_from_rows(
+    table: CharacterTableResult, coordinates: tuple[int, ...]
+) -> FiniteClassFunction:
     order = table.axis.cyclotomic_order
     values: list[CyclotomicValue] = []
     for class_index in range(len(table.axis.class_sizes)):
@@ -158,11 +161,13 @@ def test_nonintegral_class_function_is_not_a_virtual_character() -> None:
         )
 
 
-def test_work_and_height_are_admitted_before_conjugacy_expansion(monkeypatch) -> None:
+def test_work_and_height_are_admitted_before_conjugacy_expansion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     partition = _partition(((1, 2, 0),))
     oversized = _function_on_partition(partition, Fraction(10**511))
 
-    def unexpected_expansion(*args, **kwargs):
+    def unexpected_expansion(*args: object, **kwargs: object) -> None:
         pytest.fail("conjugacy classes expanded before exact arithmetic admission")
 
     monkeypatch.setattr(
@@ -195,9 +200,12 @@ def test_trivial_group_decomposition_and_round_trip() -> None:
         CharacterRingDecompositionRequest(class_function=degree_zero_function)
     )
     assert degree_zero_result.ring_element.irreducible_multiplicities == (7,)
-    assert type(degree_zero_result).model_validate_json(
-        degree_zero_result.model_dump_json()
-    ) == degree_zero_result
+    assert (
+        type(degree_zero_result).model_validate_json(
+            degree_zero_result.model_dump_json()
+        )
+        == degree_zero_result
+    )
 
     partition = _partition(((0,),))
     constant = _function_on_partition(partition, Fraction(7))
@@ -209,7 +217,7 @@ def test_trivial_group_decomposition_and_round_trip() -> None:
 
 
 def test_group_order_above_table_envelope_rejects_before_class_expansion(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     generator = (*range(1, 61), 0)
     source = PermutationGroup(degree=61, generators=(generator,))
@@ -222,7 +230,7 @@ def test_group_order_above_table_envelope_rejects_before_class_expansion(
     one = CyclotomicValue(order=1, coefficients=(CanonicalRational(num=1, den=1),))
     function = FiniteClassFunction(axis=axis, values=(one,) * 61)
 
-    def unexpected_expansion(*args, **kwargs):
+    def unexpected_expansion(*args: object, **kwargs: object) -> None:
         pytest.fail("group-order rejection must precede conjugacy expansion")
 
     monkeypatch.setattr(
@@ -248,4 +256,8 @@ def test_catalog_example_executes() -> None:
     operation = catalog.operation(operation_id)
     assert operation is not None
     result = invoke_operation(operation_id, operation.examples[0].input, catalog)
-    assert result.output["ring_element"]["irreducible_multiplicities"] == [0, 0, 1]
+    assert result.output["ring_element"]["irreducible_multiplicities"] == [
+        "0",
+        "0",
+        "1",
+    ]

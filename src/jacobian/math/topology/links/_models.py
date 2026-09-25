@@ -33,8 +33,14 @@ MAX_LINK_BRACKET_CROSSINGS = 12
 MAX_LINK_BRACKET_WORK = 80_000_000
 """Conservative work-unit ceiling for one bracket state sum."""
 
-MAX_LINK_BRACKET_OUTPUT_BYTES = 4 * 1024 * 1024
-"""Conservative serialized-size ceiling for one bracket/Jones result."""
+MAX_LINK_BRACKET_OUTPUT_CELLS = 4 * 1024 * 1024
+"""Conservative materialization-cell ceiling for one bracket/Jones result.
+
+The bracket output bound counts retained state rows and Laurent term cells
+(``state_count * 256 + polynomial_term_bound * 256`` in ``operations.py``), not
+transport bytes; this ceiling dominates the worst admissible 12-crossing state
+sum, so no valid request is rejected by it.
+"""
 
 
 def _require_scalar_label(value: str) -> str:

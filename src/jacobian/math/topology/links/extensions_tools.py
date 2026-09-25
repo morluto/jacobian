@@ -252,18 +252,23 @@ TOOLS: MathTools = (
     ),
     MathTool(
         operation_id="link_diagram.determinant.compute",
-        title="Compute a knot diagram's determinant",
+        title="Compute a knot determinant from its Alexander polynomial",
         description=(
-            "Return |Delta_K(-1)| as an exact nonnegative integer, together with "
-            "the source-bound normalized Alexander polynomial and its signed "
-            "evaluation. This knot-only operation inherits the eight-crossing "
-            "exact Alexander bound; it does not infer link determinant conventions."
+            "For a classical knot diagram, evaluate the normalized Alexander "
+            "polynomial at -1 to obtain the nonnegative knot invariant, with its "
+            "source-bound polynomial and signed evaluation. Inherits the "
+            "eight-crossing exact Alexander bound; it is a knot invariant, not a "
+            "general matrix operation."
         ),
         request_type=LinkDeterminantRequest,
         result_type=LinkDeterminantResult,
         run=_determinant,
-        tags=("link-diagram", "knot", "determinant", "exact"),
-        discovery_terms=("knot determinant", "determinant from Alexander polynomial"),
+        tags=("link-diagram", "knot", "alexander", "exact"),
+        discovery_terms=(
+            "knot invariant",
+            "Alexander polynomial evaluation",
+            "knot Alexander invariant",
+        ),
         examples=(
             OperationExample(
                 name="unknot_determinant",

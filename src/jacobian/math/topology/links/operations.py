@@ -17,7 +17,7 @@ from jacobian.catalog.models import (
 from jacobian.math.polynomials.values import RationalLaurentPolynomial
 from jacobian.math.topology.links._models import (
     MAX_LINK_BRACKET_CROSSINGS,
-    MAX_LINK_BRACKET_OUTPUT_BYTES,
+    MAX_LINK_BRACKET_OUTPUT_CELLS,
     MAX_LINK_BRACKET_WORK,
     CrossingVisit,
     LinkBracketResult,
@@ -297,9 +297,9 @@ def _admit_bracket(diagram: OrientedLinkDiagram) -> OrientedLinkDiagram:
     delta_power_bound = max(0, 2 * crossing_count + admitted.free_loops - 1)
     polynomial_term_bound = 2 * crossing_count + 4 * delta_power_bound + 1
     # Every state row is bounded by its <=12 binary choices and fixed scalar
-    # fields.  64 KiB covers the source diagram under the label and dart caps.
-    output_bound = state_count * 256 + polynomial_term_bound * 256 + 64 * 1024
-    if output_bound > MAX_LINK_BRACKET_OUTPUT_BYTES:
+    # fields; this counts retained state-row and Laurent-term cells, not bytes.
+    output_cells = state_count * 256 + polynomial_term_bound * 256 + 64 * 1024
+    if output_cells > MAX_LINK_BRACKET_OUTPUT_CELLS:
         raise OperationResourceAdmissionError(
             location=("diagram",),
             code="link_diagram.bracket.output_bound",

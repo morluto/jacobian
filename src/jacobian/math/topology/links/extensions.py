@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from collections.abc import Callable, Iterable
 from math import gcd
 from typing import Literal, NoReturn
@@ -27,9 +26,9 @@ from jacobian.math.topology.edge_paths._models import (
 from jacobian.math.topology.links._extensions_models import (
     MAX_CONWAY_CENTERED_DEGREE,
     MAX_CONWAY_COEFFICIENT_DIGITS,
-    MAX_CONWAY_OUTPUT_BYTES,
+    MAX_CONWAY_OUTPUT_CELLS,
     MAX_STATE_CIRCLE_CROSSINGS,
-    MAX_STATE_CIRCLE_OUTPUT_BYTES,
+    MAX_STATE_CIRCLE_OUTPUT_CELLS,
     MAX_WIRTINGER_GENERATORS,
     AlexanderPolynomialResult,
     BraidClosureResult,
@@ -215,8 +214,8 @@ def braid_closure(word: BraidWord) -> BraidClosureResult:
             LinkCrossing(
                 crossing_id=crossing_id,
                 half_edges=ccw_darts,
-                over_pair=over_pair,
-                under_pair=under_pair,
+                over_pair=(over_pair[0], over_pair[1]),
+                under_pair=(under_pair[0], under_pair[1]),
                 sign=letter.exponent,
             )
         )
@@ -914,14 +913,25 @@ def _admit_conway_expansion(
         maximum_input_digits + 2 * (degree + 1) + len(centered_terms)
     )
     work_bound = 4 * (degree + 1) ** 2
-    alexander_bytes = len(alexander.model_dump_json(warnings=False).encode())
-    output_bytes_bound = (
-        alexander_bytes + 256 + (degree + 1) * (2 * coefficient_digits_bound + 128)
+    alexander_diagram = alexander.diagram
+    # Retained Alexander cells (diagram labels/structure plus polynomial terms)
+    # measured as materialization cells, not transport bytes.
+    alexander_cells = (
+        len(alexander_diagram.crossings)
+        + len(alexander_diagram.arcs)
+        + alexander_diagram.free_loops
+        + 4 * len(alexander_diagram.crossings)
+        + sum(len(c.crossing_id) for c in alexander_diagram.crossings)
+        + sum(len(d) for c in alexander_diagram.crossings for d in c.half_edges)
+        + len(alexander.polynomial.terms)
+    )
+    output_cells = (
+        alexander_cells + 256 + (degree + 1) * (2 * coefficient_digits_bound + 128)
     )
     if (
         coefficient_digits_bound > MAX_CONWAY_COEFFICIENT_DIGITS
         or work_bound > 100_000
-        or output_bytes_bound > MAX_CONWAY_OUTPUT_BYTES
+        or output_cells > MAX_CONWAY_OUTPUT_CELLS
     ):
         raise OperationResourceAdmissionError(
             location=("diagram", "alexander", "polynomial"),
@@ -1049,23 +1059,27 @@ def link_state_circles(
     dart_labels = tuple(
         dart for crossing in diagram.crossings for dart in crossing.half_edges
     )
-    label_bytes = sum(
-        len(json.dumps(dart, ensure_ascii=True, separators=(",", ":")).encode())
-        for dart in dart_labels
+    # Count retained materialization cells (label characters and structural
+    # entries), not transport bytes: the result keeps the source diagram plus
+    # the circle partition and crossing-choice ledger.
+    label_cells = sum(len(dart) for dart in dart_labels) + sum(
+        len(crossing.crossing_id) for crossing in diagram.crossings
     )
-    # The one requested state repeats every dart exactly once, with JSON
-    # delimiters for the circle partition and crossing-choice ledger. Escaped
-    # label lengths account for Unicode scalar labels.
-    output_bound = (
-        len(diagram.model_dump_json(warnings=False).encode())
-        + label_bytes
-        + (20 * len(dart_labels) + 8 * crossing_count + 16 * diagram.free_loops + 128)
+    diagram_cells = (
+        crossing_count
+        + len(diagram.arcs)
+        + diagram.free_loops
+        + len(dart_labels)
+        + label_cells
     )
-    if output_bound > MAX_STATE_CIRCLE_OUTPUT_BYTES:
+    output_cells = diagram_cells + (
+        20 * len(dart_labels) + 8 * crossing_count + 16 * diagram.free_loops + 128
+    )
+    if output_cells > MAX_STATE_CIRCLE_OUTPUT_CELLS:
         raise OperationResourceAdmissionError(
             location=("state",),
             code="link_diagram.state_circles_output_bound",
-            message="the state-circle result exceeds the 8 MiB output bound",
+            message="the state-circle result exceeds its materialization-cell bound",
         )
     if 2 * len(dart_labels) + crossing_count > 4_096:
         raise OperationResourceAdmissionError(

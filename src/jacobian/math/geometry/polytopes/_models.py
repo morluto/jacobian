@@ -13,6 +13,7 @@ from pydantic import (
     AfterValidator,
     ConfigDict,
     Field,
+    StrictInt,
     StringConstraints,
     TypeAdapter,
     ValidationError,
@@ -110,6 +111,14 @@ The private conversion kernel applies output-sensitive ray, candidate-pair,
 and coefficient-growth admission after exact deduplication. Structured box
 and simplex hulls have tighter direct bounds.
 """
+
+MAX_POLYTOPE_FACE_LATTICE_DIMENSION = 3
+MAX_POLYTOPE_FACE_LATTICE_FACETS = 2 * MAX_VERTICES - 4
+MAX_POLYTOPE_FACE_LATTICE_EDGES = 3 * MAX_VERTICES - 6
+MAX_POLYTOPE_FACE_LATTICE_FACES = 6 * MAX_VERTICES - 8
+MAX_POLYTOPE_FACE_LATTICE_COVERS = 15 * MAX_VERTICES - 28
+MAX_POLYTOPE_FACE_LATTICE_WORK = 1_000_000
+MAX_POLYTOPE_FACE_LATTICE_RESULT_CHARS = 2_000_000
 
 MAX_FACETS = 64
 """Absolute upper bound on the number of half-spaces in an H-representation."""
@@ -1471,6 +1480,257 @@ class RationalVPolytope(StrictModel):
         return self
 
 
+class PolytopeFace(StrictModel):
+    """One face of a three-dimensional polytope, including bottom and top."""
+
+    dimension: StrictInt = Field(ge=-1, le=MAX_POLYTOPE_FACE_LATTICE_DIMENSION)
+    source_vertex_indices: tuple[StrictInt, ...] = Field(max_length=MAX_VERTICES)
+
+    @model_validator(mode="after")
+    def require_canonical_face_label(self) -> Self:
+        if tuple(sorted(set(self.source_vertex_indices))) != self.source_vertex_indices:
+            raise _validation_error(
+                "face_lattice_vertex_indices",
+                "face vertex indices must be strictly increasing",
+            )
+        expected_sizes = {-1: 0, 0: 1, 1: 2}
+        if self.dimension in expected_sizes:
+            expected_size = expected_sizes[self.dimension]
+            if len(self.source_vertex_indices) != expected_size:
+                raise _validation_error(
+                    "face_lattice_face_dimension",
+                    "empty, vertex, and edge face labels have invalid sizes",
+                )
+        elif len(self.source_vertex_indices) < self.dimension + 1:
+            raise _validation_error(
+                "face_lattice_face_dimension",
+                "a face must contain at least dimension + 1 vertices",
+            )
+        return self
+
+
+class PolytopeFaceCover(StrictModel):
+    """One Hasse cover, indexed into a canonical face tuple."""
+
+    lower_face_index: StrictInt = Field(ge=0, le=MAX_POLYTOPE_FACE_LATTICE_FACES - 1)
+    upper_face_index: StrictInt = Field(ge=0, le=MAX_POLYTOPE_FACE_LATTICE_FACES - 1)
+
+
+class PolytopeFaceLatticeRequest(StrictModel):
+    """A labelled exact V-representation whose hull is a 3-polytope."""
+
+    polytope: RationalVPolytope = Field(
+        description=(
+            "Full-dimensional rational V-representation in three dimensions. "
+            "The operation proves its complete facet incidence internally, "
+            "then returns the complete face lattice and cover relations."
+        )
+    )
+
+
+def _complete_face_lattice_labels(
+    extreme_vertex_indices: tuple[int, ...],
+    facet_labels: tuple[tuple[int, ...], ...],
+) -> tuple[tuple[tuple[int, tuple[int, ...]], ...], tuple[tuple[int, int], ...]]:
+    """Reconstruct rank-three face labels from bounded facet incidences."""
+
+    if len(facet_labels) > MAX_POLYTOPE_FACE_LATTICE_FACETS:
+        raise _validation_error(
+            "face_lattice_facets",
+            "the stored facet count exceeds the rank-three planar graph bound",
+        )
+    edge_occurrences: dict[tuple[int, int], int] = {}
+    for left, right in combinations(facet_labels, 2):
+        common = tuple(sorted(set(left).intersection(right)))
+        if len(common) == 2:
+            edge_occurrences[common] = edge_occurrences.get(common, 0) + 1
+    if any(count != 1 for count in edge_occurrences.values()):
+        raise _validation_error(
+            "face_lattice_edges",
+            "every edge must be the intersection of exactly two facets",
+        )
+    if len(edge_occurrences) != len(extreme_vertex_indices) + len(facet_labels) - 2:
+        raise _validation_error(
+            "face_lattice_euler_identity",
+            "the stored facets and edges must satisfy the rank-three Euler identity",
+        )
+    if len(edge_occurrences) > MAX_POLYTOPE_FACE_LATTICE_EDGES:
+        raise _validation_error(
+            "face_lattice_edges",
+            "the stored edge count exceeds the rank-three planar graph bound",
+        )
+    face_keys = tuple(
+        sorted(
+            (
+                (-1, ()),
+                *((0, (index,)) for index in extreme_vertex_indices),
+                *((1, edge) for edge in edge_occurrences),
+                *((2, facet) for facet in facet_labels),
+                (3, extreme_vertex_indices),
+            )
+        )
+    )
+    return face_keys, tuple(edge_occurrences)
+
+
+def _complete_face_lattice_covers(
+    face_keys: tuple[tuple[int, tuple[int, ...]], ...],
+    extreme_vertex_indices: tuple[int, ...],
+    facet_labels: tuple[tuple[int, ...], ...],
+    edges: tuple[tuple[int, int], ...],
+) -> tuple[tuple[int, int], ...]:
+    """Reconstruct every rank-adjacent incidence without geometric replay."""
+
+    face_indices = {key: index for index, key in enumerate(face_keys)}
+    bottom_index = face_indices[(-1, ())]
+    top_index = face_indices[(3, extreme_vertex_indices)]
+    vertex_indices = {
+        vertices[0]: index
+        for (dimension, vertices), index in face_indices.items()
+        if dimension == 0
+    }
+    cover_pairs: set[tuple[int, int]] = {
+        (bottom_index, vertex_indices[vertex]) for vertex in extreme_vertex_indices
+    }
+    for edge in edges:
+        edge_index = face_indices[(1, edge)]
+        cover_pairs.update((vertex_indices[vertex], edge_index) for vertex in edge)
+        cover_pairs.update(
+            (edge_index, face_indices[(2, facet)])
+            for facet in facet_labels
+            if edge[0] in facet and edge[1] in facet
+        )
+    cover_pairs.update((face_indices[(2, facet)], top_index) for facet in facet_labels)
+    return tuple(sorted(cover_pairs))
+
+
+class PolytopeFaceLatticeResult(StrictModel):
+    """Complete source-bound face lattice of the convex hull of ``polytope``."""
+
+    polytope: RationalVPolytope
+    extreme_vertex_indices: tuple[StrictInt, ...] = Field(
+        min_length=4, max_length=MAX_VERTICES
+    )
+    faces: tuple[PolytopeFace, ...] = Field(
+        min_length=16, max_length=MAX_POLYTOPE_FACE_LATTICE_FACES
+    )
+    covers: tuple[PolytopeFaceCover, ...] = Field(
+        min_length=32, max_length=MAX_POLYTOPE_FACE_LATTICE_COVERS
+    )
+
+    @model_validator(mode="after")
+    def require_canonical_source_axes(self) -> Self:
+        if len(self.polytope.space.axes) != MAX_POLYTOPE_FACE_LATTICE_DIMENSION:
+            raise _validation_error(
+                "face_lattice_dimension",
+                "polytope face lattices are defined here for dimension three",
+            )
+        if tuple(
+            sorted(set(self.extreme_vertex_indices))
+        ) != self.extreme_vertex_indices or any(
+            index >= len(self.polytope.vertices)
+            for index in self.extreme_vertex_indices
+        ):
+            raise _validation_error(
+                "face_lattice_extreme_vertices",
+                "extreme source vertex indices must be strictly increasing and in range",
+            )
+        face_keys = tuple(
+            (face.dimension, face.source_vertex_indices) for face in self.faces
+        )
+        if tuple(sorted(set(face_keys))) != face_keys:
+            raise _validation_error(
+                "face_lattice_order",
+                "faces must be unique and ordered by dimension and vertex indices",
+            )
+        if any(
+            index >= len(self.polytope.vertices)
+            for face in self.faces
+            for index in face.source_vertex_indices
+        ):
+            raise _validation_error(
+                "face_lattice_vertex_indices",
+                "face vertex indices must refer to retained source vertices",
+            )
+        empty = PolytopeFace(dimension=-1, source_vertex_indices=())
+        top = PolytopeFace(
+            dimension=MAX_POLYTOPE_FACE_LATTICE_DIMENSION,
+            source_vertex_indices=self.extreme_vertex_indices,
+        )
+        if (
+            self.faces[0] != empty
+            or self.faces[-1] != top
+            or tuple(
+                face.source_vertex_indices for face in self.faces if face.dimension == 0
+            )
+            != tuple((index,) for index in self.extreme_vertex_indices)
+        ):
+            raise _validation_error(
+                "face_lattice_extremes",
+                "the lattice must retain its unique bottom, top, and extreme vertices",
+            )
+        facet_labels = tuple(
+            face.source_vertex_indices for face in self.faces if face.dimension == 2
+        )
+        if any(
+            len(facet) < 3 or not set(facet).issubset(self.extreme_vertex_indices)
+            for facet in facet_labels
+        ):
+            raise _validation_error(
+                "face_lattice_facets",
+                "facet labels must contain at least three extreme source vertices",
+            )
+        expected_face_keys, edges = _complete_face_lattice_labels(
+            self.extreme_vertex_indices, facet_labels
+        )
+        if face_keys != expected_face_keys:
+            raise _validation_error(
+                "face_lattice_incomplete_faces",
+                "the face labels must include every vertex, edge, facet, bottom, and top",
+            )
+        cover_pairs = tuple(
+            (cover.lower_face_index, cover.upper_face_index) for cover in self.covers
+        )
+        if tuple(sorted(set(cover_pairs))) != cover_pairs or any(
+            upper >= len(self.faces)
+            or lower >= len(self.faces)
+            or self.faces[upper].dimension != self.faces[lower].dimension + 1
+            or not set(self.faces[lower].source_vertex_indices).issubset(
+                self.faces[upper].source_vertex_indices
+            )
+            for lower, upper in cover_pairs
+        ):
+            raise _validation_error(
+                "face_lattice_cover_relation",
+                "cover relations must be unique, ordered, and respect face incidence",
+            )
+        expected_cover_pairs = _complete_face_lattice_covers(
+            face_keys, self.extreme_vertex_indices, facet_labels, edges
+        )
+        if cover_pairs != expected_cover_pairs:
+            raise _validation_error(
+                "face_lattice_incomplete_covers",
+                "covers must contain every dimension-adjacent face incidence",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        polytope: RationalVPolytope,
+        extreme_vertex_indices: tuple[int, ...],
+        faces: tuple[PolytopeFace, ...],
+        covers: tuple[PolytopeFaceCover, ...],
+    ) -> Self:
+        return cls.model_construct(
+            polytope=polytope,
+            extreme_vertex_indices=extreme_vertex_indices,
+            faces=faces,
+            covers=covers,
+        )
+
+
 class RationalCovector(StrictModel):
     """An exact covector paired with one labelled rational coordinate space."""
 
@@ -2749,6 +3009,13 @@ __all__ = [
     "MAX_FACET_COORDINATE_DIGITS",
     "MAX_FACET_DIMENSION",
     "MAX_FACET_INCIDENCES",
+    "MAX_POLYTOPE_FACE_LATTICE_COVERS",
+    "MAX_POLYTOPE_FACE_LATTICE_DIMENSION",
+    "MAX_POLYTOPE_FACE_LATTICE_EDGES",
+    "MAX_POLYTOPE_FACE_LATTICE_FACES",
+    "MAX_POLYTOPE_FACE_LATTICE_FACETS",
+    "MAX_POLYTOPE_FACE_LATTICE_RESULT_CHARS",
+    "MAX_POLYTOPE_FACE_LATTICE_WORK",
     "MAX_SUPPORT_COMPONENT_DIGITS",
     "MAX_VERTICES",
     "EdgeProfileRequest",
@@ -2760,6 +3027,10 @@ __all__ = [
     "JoinResult",
     "JoinVertexMap",
     "PolytopeEdge",
+    "PolytopeFace",
+    "PolytopeFaceCover",
+    "PolytopeFaceLatticeRequest",
+    "PolytopeFaceLatticeResult",
     "PolytopeSupportRequest",
     "PolytopeSupportResult",
     "PolytopeVolumeRequest",

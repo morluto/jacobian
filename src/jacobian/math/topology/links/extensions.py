@@ -28,6 +28,7 @@ from jacobian.math.topology.links._extensions_models import (
     MAX_CONWAY_CENTERED_DEGREE,
     MAX_CONWAY_COEFFICIENT_DIGITS,
     MAX_CONWAY_OUTPUT_BYTES,
+    MAX_LINK_DISJOINT_UNION_OUTPUT_BYTES,
     MAX_STATE_CIRCLE_CROSSINGS,
     MAX_STATE_CIRCLE_OUTPUT_BYTES,
     MAX_WIRTINGER_GENERATORS,
@@ -45,6 +46,11 @@ from jacobian.math.topology.links._extensions_models import (
     LinkCrossingProfileResult,
     LinkDeterminantResult,
     LinkDiagramSmoothingState,
+    LinkDisjointUnionArcMap,
+    LinkDisjointUnionCrossingMap,
+    LinkDisjointUnionDartMap,
+    LinkDisjointUnionFreeLoopMap,
+    LinkDisjointUnionResult,
     LinkSmoothedCircle,
     LinkStateCirclesResult,
     SeifertCircle,
@@ -102,6 +108,126 @@ def _admit_diagram(value: object) -> OrientedLinkDiagram:
             code="link_diagram.wirtinger_diagram_shape",
             message="diagram must satisfy the complete oriented-link contract",
         ) from exc
+
+
+def link_disjoint_union(
+    diagrams: tuple[OrientedLinkDiagram, ...],
+) -> LinkDisjointUnionResult:
+    """Form a tagged, source-transporting disjoint union of link diagrams."""
+
+    if not isinstance(diagrams, tuple) or not 1 <= len(diagrams) <= 64:
+        _domain_error(
+            ("diagrams",),
+            "disjoint_union_arity",
+            "disjoint union needs between one and 64 diagrams",
+        )
+    admitted = tuple(_admit_diagram(diagram) for diagram in diagrams)
+    crossing_count = sum(len(diagram.crossings) for diagram in admitted)
+    free_loop_count = sum(diagram.free_loops for diagram in admitted)
+    if crossing_count > MAX_LINK_CROSSINGS:
+        raise OperationResourceAdmissionError(
+            location=("diagrams",),
+            code="link_diagram.disjoint_union_crossing_bound",
+            message="the union may contain at most 64 crossings in total",
+        )
+    if free_loop_count > MAX_LINK_CROSSINGS:
+        raise OperationResourceAdmissionError(
+            location=("diagrams",),
+            code="link_diagram.disjoint_union_free_loop_bound",
+            message="the union may contain at most 64 crossing-free components in total",
+        )
+    source_bytes = sum(
+        len(diagram.model_dump_json(warnings=False).encode("utf-8"))
+        for diagram in admitted
+    )
+    if source_bytes * 4 + 16_384 > MAX_LINK_DISJOINT_UNION_OUTPUT_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("diagrams",),
+            code="link_diagram.disjoint_union_output_bound",
+            message="the disjoint union and complete transport exceed the 8 MiB output envelope",
+        )
+
+    output_crossings: list[LinkCrossing] = []
+    output_arcs: list[OrientedDiagramArc] = []
+    crossing_map: list[LinkDisjointUnionCrossingMap] = []
+    dart_map: list[LinkDisjointUnionDartMap] = []
+    arc_map: list[LinkDisjointUnionArcMap] = []
+    free_loop_map: list[LinkDisjointUnionFreeLoopMap] = []
+    loop_offset = 0
+    for source_index, source in enumerate(admitted):
+        source_dart_map: dict[str, str] = {}
+        for crossing_index, crossing in enumerate(source.crossings):
+            target_crossing_id = (
+                f"link_{source_index:02d}_crossing_{crossing_index:03d}"
+            )
+            target_darts: tuple[str, str, str, str] = (
+                f"link_{source_index:02d}_dart_{crossing_index:03d}_0",
+                f"link_{source_index:02d}_dart_{crossing_index:03d}_1",
+                f"link_{source_index:02d}_dart_{crossing_index:03d}_2",
+                f"link_{source_index:02d}_dart_{crossing_index:03d}_3",
+            )
+            crossing_map.append(
+                LinkDisjointUnionCrossingMap(
+                    source_index=source_index,
+                    source_crossing_id=crossing.crossing_id,
+                    target_crossing_id=target_crossing_id,
+                )
+            )
+            for source_dart, target_dart in zip(
+                crossing.half_edges, target_darts, strict=True
+            ):
+                source_dart_map[source_dart] = target_dart
+                dart_map.append(
+                    LinkDisjointUnionDartMap(
+                        source_index=source_index,
+                        source_dart_id=source_dart,
+                        target_dart_id=target_dart,
+                    )
+                )
+            output_crossings.append(
+                LinkCrossing(
+                    crossing_id=target_crossing_id,
+                    half_edges=target_darts,
+                    over_pair=crossing.over_pair,
+                    under_pair=crossing.under_pair,
+                    sign=crossing.sign,
+                )
+            )
+        for arc in source.arcs:
+            target_tail = source_dart_map[arc.tail]
+            target_head = source_dart_map[arc.head]
+            output_arcs.append(OrientedDiagramArc(tail=target_tail, head=target_head))
+            arc_map.append(
+                LinkDisjointUnionArcMap(
+                    source_index=source_index,
+                    source_tail=arc.tail,
+                    source_head=arc.head,
+                    target_tail=target_tail,
+                    target_head=target_head,
+                )
+            )
+        for local_index in range(source.free_loops):
+            free_loop_map.append(
+                LinkDisjointUnionFreeLoopMap(
+                    source_index=source_index,
+                    source_loop_index=local_index,
+                    target_loop_index=loop_offset + local_index,
+                )
+            )
+        loop_offset += source.free_loops
+    output = OrientedLinkDiagram(
+        crossings=tuple(output_crossings),
+        arcs=tuple(sorted(output_arcs, key=lambda arc: (arc.tail, arc.head))),
+        free_loops=loop_offset,
+    )
+    return LinkDisjointUnionResult(
+        sources=admitted,
+        diagram=output,
+        crossing_map=tuple(crossing_map),
+        dart_map=tuple(dart_map),
+        arc_map=tuple(arc_map),
+        free_loop_map=tuple(free_loop_map),
+    )
 
 
 def _cycles(permutation: tuple[int, ...]) -> tuple[tuple[int, ...], ...]:

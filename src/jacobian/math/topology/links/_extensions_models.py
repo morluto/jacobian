@@ -26,6 +26,7 @@ MAX_BRAID_WORD_LENGTH = MAX_LINK_CROSSINGS
 MAX_WIRTINGER_GENERATORS = 64
 MAX_STATE_CIRCLE_CROSSINGS = MAX_LINK_CROSSINGS
 MAX_STATE_CIRCLE_OUTPUT_BYTES = 8 * 1024 * 1024
+MAX_LINK_DISJOINT_UNION_OUTPUT_BYTES = 8 * 1024 * 1024
 MAX_CONWAY_CENTERED_DEGREE = 64
 MAX_CONWAY_COEFFICIENT_DIGITS = 4_096
 MAX_CONWAY_OUTPUT_BYTES = 1024 * 1024
@@ -98,6 +99,57 @@ class ConwayPolynomialResult(StrictModel):
 
 class LinkCrossingProfileRequest(StrictModel):
     diagram: OrientedLinkDiagram
+
+
+class LinkDisjointUnionRequest(StrictModel):
+    """A nonempty finite family of diagrams whose total size is bounded."""
+
+    diagrams: tuple[OrientedLinkDiagram, ...] = Field(min_length=1, max_length=64)
+
+
+class LinkDisjointUnionCrossingMap(StrictModel):
+    source_index: StrictInt = Field(ge=0, le=63)
+    source_crossing_id: LinkLabel
+    target_crossing_id: LinkLabel
+
+
+class LinkDisjointUnionDartMap(StrictModel):
+    source_index: StrictInt = Field(ge=0, le=63)
+    source_dart_id: LinkLabel
+    target_dart_id: LinkLabel
+
+
+class LinkDisjointUnionArcMap(StrictModel):
+    source_index: StrictInt = Field(ge=0, le=63)
+    source_tail: LinkLabel
+    source_head: LinkLabel
+    target_tail: LinkLabel
+    target_head: LinkLabel
+
+
+class LinkDisjointUnionFreeLoopMap(StrictModel):
+    source_index: StrictInt = Field(ge=0, le=63)
+    source_loop_index: StrictInt = Field(ge=0, le=63)
+    target_loop_index: StrictInt = Field(ge=0, le=63)
+
+
+class LinkDisjointUnionResult(StrictModel):
+    """Tagged disjoint union with complete crossing, dart, arc, and loop transport."""
+
+    sources: tuple[OrientedLinkDiagram, ...] = Field(min_length=1, max_length=64)
+    diagram: OrientedLinkDiagram
+    crossing_map: tuple[LinkDisjointUnionCrossingMap, ...] = Field(
+        max_length=MAX_LINK_CROSSINGS
+    )
+    dart_map: tuple[LinkDisjointUnionDartMap, ...] = Field(
+        max_length=4 * MAX_LINK_CROSSINGS
+    )
+    arc_map: tuple[LinkDisjointUnionArcMap, ...] = Field(
+        max_length=2 * MAX_LINK_CROSSINGS
+    )
+    free_loop_map: tuple[LinkDisjointUnionFreeLoopMap, ...] = Field(
+        max_length=MAX_LINK_CROSSINGS
+    )
 
 
 class LinkCrossingProfileEntry(StrictModel):

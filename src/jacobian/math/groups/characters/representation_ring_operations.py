@@ -40,7 +40,10 @@ from jacobian.math.groups.characters.operations import (
     _fractions,
     _make_value,
 )
-from jacobian.math.groups.operations import group_conjugacy_classes, group_order
+from jacobian.math.groups.operations import (
+    _admitted_backend_group,
+    _conjugacy_classes_from_admitted,
+)
 
 MAX_CHARACTER_RING_DECOMPOSITION_WORK = 50_000_000
 MAX_CHARACTER_RING_DECOMPOSITION_OUTPUT_BYTES = 10_000_000
@@ -255,7 +258,7 @@ def class_function_character_decomposition(
 
     # The canonical table operation has a strict order envelope. Check the
     # generated group before materializing its complete class partition.
-    concrete_order = group_order(source)
+    backend, concrete_order = _admitted_backend_group(source)
     if concrete_order > MAX_CYCLOTOMIC_ORDER:
         raise OperationResourceAdmissionError(
             location=("class_function", "axis", "group"),
@@ -266,8 +269,8 @@ def class_function_character_decomposition(
             ),
         )
     _admit_before_class_expansion(function, source, concrete_order)
-    raw_classes = group_conjugacy_classes(
-        source.degree, [list(generator) for generator in source.generators]
+    raw_classes = _conjugacy_classes_from_admitted(
+        backend, source.degree, order=concrete_order
     )
     partition = GroupConjugacyClassesResult._from_kernel(
         source,

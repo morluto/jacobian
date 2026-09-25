@@ -16,9 +16,9 @@ from jacobian.dispatch import invoke_operation
 from jacobian.math.groups._models import GroupConjugacyClassesResult, PermutationGroup
 from jacobian.math.groups.characters._cyclotomic import euler_phi
 from jacobian.math.groups.characters._models import (
-    CharacterTableResult,
     CharacterRingDecompositionRequest,
     CharacterRingElement,
+    CharacterTableResult,
     ClassAxis,
     CyclotomicValue,
     FiniteClassFunction,
@@ -130,6 +130,32 @@ def test_s3_irreducible_and_reducible_virtual_coordinates() -> None:
     assert decomposed.ring_element.irreducible_multiplicities == (1, 0, 1)
 
 
+def test_backend_group_order_is_computed_once_for_decomposition(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from sympy.combinatorics.perm_groups import (
+        PermutationGroup as SympyPermutationGroup,
+    )
+
+    order_calls = 0
+    backend_order = SympyPermutationGroup.order
+
+    def counting_order(self: SympyPermutationGroup) -> object:
+        nonlocal order_calls
+        order_calls += 1
+        return backend_order(self)
+
+    standard = _s3_class_function((Fraction(2), Fraction(0), Fraction(-1)))
+    monkeypatch.setattr(SympyPermutationGroup, "order", counting_order)
+    result = class_function_character_decomposition(
+        CharacterRingDecompositionRequest(class_function=standard)
+    )
+    assert result.ring_element.irreducible_multiplicities == (0, 0, 1)
+    # Admission builds the backend group and computes the Schreier-Sims order
+    # once; class enumeration reuses both instead of replaying the order.
+    assert order_calls == 1
+
+
 def test_s3_virtual_character_keeps_signed_coordinates() -> None:
     virtual = _s3_class_function((Fraction(-1), Fraction(1), Fraction(2)))
     result = class_function_character_decomposition(
@@ -171,7 +197,7 @@ def test_work_and_height_are_admitted_before_conjugacy_expansion(
         pytest.fail("conjugacy classes expanded before exact arithmetic admission")
 
     monkeypatch.setattr(
-        ring_operations, "group_conjugacy_classes", unexpected_expansion
+        ring_operations, "_conjugacy_classes_from_admitted", unexpected_expansion
     )
     with pytest.raises(OperationResourceAdmissionError, match=r"height|envelope"):
         class_function_character_decomposition(
@@ -234,7 +260,7 @@ def test_group_order_above_table_envelope_rejects_before_class_expansion(
         pytest.fail("group-order rejection must precede conjugacy expansion")
 
     monkeypatch.setattr(
-        ring_operations, "group_conjugacy_classes", unexpected_expansion
+        ring_operations, "_conjugacy_classes_from_admitted", unexpected_expansion
     )
     with pytest.raises(OperationResourceAdmissionError, match="group order"):
         class_function_character_decomposition(

@@ -182,6 +182,20 @@ def test_catalog_example_executes_through_the_public_typed_operation():
     )
 
 
+def test_scalar_with_two_maximal_components_is_admitted():
+    function = _function(coefficient=1)
+    numerator = 10**20_000 + 1
+    denominator = 10**20_000 + 3
+    scalar = CanonicalRational.from_integer_ratio(numerator, denominator)
+
+    result = piecewise_polynomial_scalar_multiply(
+        PiecewisePolynomialScalarMultiplicationRequest(function=function, scalar=scalar)
+    )
+
+    coefficient = result.pieces[0].polynomial.polynomial.terms[0].coefficient
+    assert coefficient.as_fraction() == scalar.as_fraction()
+
+
 def test_scalar_growth_is_rejected_before_coefficient_expansion(monkeypatch):
     function = _function(coefficient=10)
     monkeypatch.setattr(spline_kernel, "MAX_CANONICAL_RATIONAL_DIGITS", 3)

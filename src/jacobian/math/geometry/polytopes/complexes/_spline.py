@@ -611,8 +611,9 @@ def piecewise_polynomial_scalar_multiply(  # noqa: C901
             "only compatible functions can be scaled",
         )
     scalar = request.scalar.as_fraction()
-    scalar_digits = _decimal_digits_upper(scalar.numerator) + _decimal_digits_upper(
-        scalar.denominator
+    scalar_digits = max(
+        _decimal_digits_upper(scalar.numerator),
+        _decimal_digits_upper(scalar.denominator),
     )
     if scalar_digits > MAX_CANONICAL_RATIONAL_DIGITS:
         raise OperationResourceAdmissionError(

@@ -295,7 +295,7 @@ def _mixed_jacobi_admission(modulus: int, order: int) -> tuple[int, tuple[int, .
         or work > MAX_CYCLIC_FIELD_WORK
     ):
         raise OperationResourceAdmissionError(
-            location=("characters", "0", "group", "modulus"),
+            location=("characters", 0, "group", "modulus"),
             code="dirichlet_character.mixed_jacobi_sum.work_bound",
             message="mixed Jacobi sum exceeds the admitted residue and field work envelope",
         )

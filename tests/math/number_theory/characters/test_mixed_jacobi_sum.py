@@ -67,6 +67,9 @@ def test_mixed_jacobi_sum_rejects_quadratic_residue_work_before_expansion() -> N
     assert error.value.errors()[0]["type"] == (
         "dirichlet_character.mixed_jacobi_sum.work_bound"
     )
+    assert error.value.errors()[0]["loc"] == (
+        "characters", 0, "group", "modulus"
+    )
 
 
 def test_three_character_jacobi_sum_matches_gaussian_integer_oracle() -> None:

@@ -1191,9 +1191,9 @@ def restrict_rational_input(
     request_checkpoint("before rational relation input restriction result construction")
     accepting_source = set(transducer.accepting_states)
     accepting_dfa = set(dfa.accepting_states)
-    # Conservation admission already bounded the copied label cells; charge
-    # them so result construction and its later rescans stay inside the
-    # request's declared work ledger instead of being replayed for free.
+    # Admission already bounded the result label cells; charge them so result
+    # construction and its later revalidation and serialization stay inside the
+    # request's declared work ledger.
     ledger.charge(result_label_cells)
     restricted = RationalTransducer(
         input_alphabet_size=transducer.input_alphabet_size,

@@ -20,7 +20,7 @@ from jacobian.math.number_theory.modular_forms.values import (
     ModularFormSpace,
 )
 
-MAX_COORDINATE_ADDITION_DIGITS = 2 * MAX_LEVEL_ONE_BASIS_COEFFICIENT_DIGITS + 1
+MAX_COORDINATE_ADDITION_DIGITS = MAX_LEVEL_ONE_BASIS_COEFFICIENT_DIGITS
 MAX_COORDINATE_ADDITION_CELLS = MAX_LEVEL_ONE_BASIS_COORDINATES
 MAX_COORDINATE_ADDITION_WORK = 3 * MAX_LEVEL_ONE_BASIS_COORDINATES
 MAX_COORDINATE_ADDITION_OUTPUT_BYTES = CanonicalLimits().max_output_bytes
@@ -95,11 +95,14 @@ def modular_form_coordinates_add(
         )
     _require_same_parent(left, right)
 
+    # Coordinates describe globally defined forms. Admit the basis at its
+    # determining precision (especially the PARI/Sturm basis), not at q^0.
     plan, left_values = _admit_coordinates(
         left,
         1,
         materialize_pari=False,
         check_expansion_growth=False,
+        allow_short_prefix=True,
     )
     _, right_values = _admit_coordinates(
         right,
@@ -107,6 +110,7 @@ def modular_form_coordinates_add(
         admitted_plan=plan,
         materialize_pari=False,
         check_expansion_growth=False,
+        allow_short_prefix=True,
     )
 
     dimension = plan.dimension
@@ -126,7 +130,11 @@ def modular_form_coordinates_add(
         )
     projected_digits = max(
         (
-            _projected_digit_bound(a, b)
+            max(
+                _projected_digit_bound(a, b),
+                len(str(abs((a + b).numerator))),
+                len(str((a + b).denominator)),
+            )
             for a, b in zip(left_values, right_values, strict=True)
         ),
         default=1,

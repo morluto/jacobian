@@ -81,6 +81,19 @@ def _oracle(automaton: BottomUpTreeAutomaton, max_height: int) -> tuple[int, ...
     return tuple(profile)
 
 
+def test_no_nullary_symbols_short_circuit_work_bound() -> None:
+    automaton = CompleteDeterministicBottomUpTreeAutomaton(
+        state_count=2,
+        arity=(12,),
+        transitions=tuple(
+            TreeAutomatonTransition(symbol=0, child_states=children, target_state=0)
+            for children in product(range(2), repeat=12)
+        ),
+        final_states=(0,),
+    )
+    assert accepted_tree_height_profile(automaton, 100) == (0,) * 101
+
+
 def test_height_profile_matches_complete_tiny_tree_enumeration() -> None:
     automaton = _fixture()
     expected = _oracle(automaton, 3)

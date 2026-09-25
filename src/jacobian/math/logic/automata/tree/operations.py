@@ -1132,10 +1132,11 @@ def accepted_tree_height_profile(
             message="height-prefix counting requires a complete deterministic automaton",
         )
 
+    has_ground_trees = any(rank == 0 for rank in automaton.arity)
     transition_work = sum(len(row.child_states) + 1 for row in automaton.transitions)
     estimated_work = (
         (max_height + 1) * (transition_work + automaton.state_count)
-        if automaton.final_states
+        if automaton.final_states and has_ground_trees
         else 0
     )
     if estimated_work > MAX_TREE_AUTOMATON_WORK:

@@ -196,9 +196,24 @@ def test_scalar_with_two_maximal_components_is_admitted():
     assert coefficient.as_fraction() == scalar.as_fraction()
 
 
+def test_scalar_with_boundary_width_components_is_admitted():
+    function = _function(coefficient=1)
+    limit = spline_kernel.MAX_CANONICAL_RATIONAL_DIGITS
+    numerator = 10**limit - 1
+    denominator = 10**limit - 3
+    scalar = CanonicalRational.from_integer_ratio(numerator, denominator)
+
+    result = piecewise_polynomial_scalar_multiply(
+        PiecewisePolynomialScalarMultiplicationRequest(function=function, scalar=scalar)
+    )
+
+    coefficient = result.pieces[0].polynomial.polynomial.terms[0].coefficient
+    assert coefficient.as_fraction() == scalar.as_fraction()
+
+
 def test_scalar_growth_is_rejected_before_coefficient_expansion(monkeypatch):
     function = _function(coefficient=10)
-    monkeypatch.setattr(spline_kernel, "MAX_CANONICAL_RATIONAL_DIGITS", 3)
+    monkeypatch.setattr(spline_kernel, "MAX_CANONICAL_RATIONAL_DIGITS", 2)
 
     with pytest.raises(OperationResourceAdmissionError, match="scaled coefficient"):
         piecewise_polynomial_scalar_multiply(
@@ -206,3 +221,43 @@ def test_scalar_growth_is_rejected_before_coefficient_expansion(monkeypatch):
                 function=function, scalar=CanonicalRational(num=10, den=1)
             )
         )
+
+
+def test_unit_and_zero_scalars_are_admitted_at_the_digit_boundary(monkeypatch):
+    monkeypatch.setattr(spline_kernel, "MAX_CANONICAL_RATIONAL_DIGITS", 3)
+    function = _function(coefficient=100)
+
+    for numerator in (1, -1):
+        result = piecewise_polynomial_scalar_multiply(
+            PiecewisePolynomialScalarMultiplicationRequest(
+                function=function, scalar=CanonicalRational(num=numerator, den=1)
+            )
+        )
+        assert all(
+            piece.polynomial.polynomial.terms[0].coefficient.as_fraction()
+            == numerator * 100
+            for piece in result.pieces
+        )
+
+    zero = piecewise_polynomial_scalar_multiply(
+        PiecewisePolynomialScalarMultiplicationRequest(
+            function=function, scalar=CanonicalRational(num=0, den=1)
+        )
+    )
+    assert all(not piece.polynomial.polynomial.terms for piece in zero.pieces)
+
+
+def test_cancelling_scalar_uses_the_reduced_product_width(monkeypatch):
+    monkeypatch.setattr(spline_kernel, "MAX_CANONICAL_RATIONAL_DIGITS", 3)
+    function = _function(coefficient=100)
+
+    result = piecewise_polynomial_scalar_multiply(
+        PiecewisePolynomialScalarMultiplicationRequest(
+            function=function, scalar=CanonicalRational(num=1, den=10)
+        )
+    )
+
+    assert all(
+        piece.polynomial.polynomial.terms[0].coefficient.as_fraction() == 10
+        for piece in result.pieces
+    )

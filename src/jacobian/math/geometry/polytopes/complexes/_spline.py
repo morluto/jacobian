@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fractions import Fraction
 from itertools import combinations
-from math import comb
+from math import comb, gcd
 from typing import Any, NoReturn
 
 import sympy as sp
@@ -612,8 +612,8 @@ def piecewise_polynomial_scalar_multiply(  # noqa: C901
         )
     scalar = request.scalar.as_fraction()
     scalar_digits = max(
-        _decimal_digits_upper(scalar.numerator),
-        _decimal_digits_upper(scalar.denominator),
+        decimal_digit_width(scalar.numerator),
+        decimal_digit_width(scalar.denominator),
     )
     if scalar_digits > MAX_CANONICAL_RATIONAL_DIGITS:
         raise OperationResourceAdmissionError(
@@ -628,12 +628,9 @@ def piecewise_polynomial_scalar_multiply(  # noqa: C901
         total_terms += len(terms)
         for term in terms:
             coefficient = term.coefficient.as_fraction()
-            numerator_digits = _decimal_digits_upper(
-                coefficient.numerator
-            ) + _decimal_digits_upper(scalar.numerator)
-            denominator_digits = _decimal_digits_upper(
-                coefficient.denominator
-            ) + _decimal_digits_upper(scalar.denominator)
+            numerator_digits, denominator_digits = _scaled_component_digit_widths(
+                coefficient, scalar
+            )
             if (
                 max(numerator_digits, denominator_digits)
                 > MAX_CANONICAL_RATIONAL_DIGITS
@@ -2200,6 +2197,58 @@ def _decimal_digits_upper(value: int) -> int:
         return 1
     # log10(2) < 30103/100000, so avoid stringifying caller-sized integers.
     return (abs(value).bit_length() * 30_103) // 100_000 + 1
+
+
+def _scaled_component_digit_widths(
+    coefficient: Fraction, scalar: Fraction
+) -> tuple[int, int]:
+    """Bound one scaled coefficient's reduced numerator/denominator widths.
+
+    A cheap additive profile admits the common case.  Only when it crosses the
+    canonical envelope do we pay for the exact cross-cancelled product, which
+    keeps the identity, zero, and cancelling factors at their true width rather
+    than the growing sum of component widths.
+    """
+
+    numerator_digits = _decimal_digits_upper(
+        coefficient.numerator
+    ) + _decimal_digits_upper(scalar.numerator)
+    denominator_digits = _decimal_digits_upper(
+        coefficient.denominator
+    ) + _decimal_digits_upper(scalar.denominator)
+    if max(numerator_digits, denominator_digits) <= MAX_CANONICAL_RATIONAL_DIGITS:
+        return numerator_digits, denominator_digits
+    return _reduced_product_component_digits(coefficient, scalar)
+
+
+def _reduced_product_component_digits(
+    left: Fraction, right: Fraction
+) -> tuple[int, int]:
+    """Return the exact reduced component widths of one rational product.
+
+    Both operands are already canonical, so cross-cancelling the numerator and
+    denominator once leaves the exact reduced product.  Multiplying only the
+    cross-cancelled factors keeps multiplying by ``0`` or ``±1`` (and every
+    cancelling factor) at its unchanged width instead of materializing an
+    over-height intermediate.
+    """
+
+    if left.numerator == 0 or right.numerator == 0:
+        return 1, 1
+    left_numerator = left.numerator
+    left_denominator = left.denominator
+    right_numerator = right.numerator
+    right_denominator = right.denominator
+    cancellation = gcd(abs(left_numerator), right_denominator)
+    left_numerator //= cancellation
+    right_denominator //= cancellation
+    cancellation = gcd(abs(right_numerator), left_denominator)
+    right_numerator //= cancellation
+    left_denominator //= cancellation
+    return (
+        decimal_digit_width(left_numerator * right_numerator),
+        decimal_digit_width(left_denominator * right_denominator),
+    )
 
 
 def _admit_spline_evaluation_growth(

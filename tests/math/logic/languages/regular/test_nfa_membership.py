@@ -40,3 +40,8 @@ def test_membership_rejects_symbols_outside_parented_alphabet() -> None:
         match="word symbols must be in the NFA alphabet",
     ):
         nfa_membership(nfa, (1,))
+
+
+def test_membership_rejects_partially_constructed_nfa() -> None:
+    with pytest.raises(OperationDomainValidationError):
+        nfa_membership(NFA.model_construct(), ())

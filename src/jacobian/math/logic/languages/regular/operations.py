@@ -124,6 +124,14 @@ def _validate_nfa_membership_input(nfa: object, word: object) -> None:
             code="regular_language.nfa_membership.noncanonical_nfa",
             message="membership requires a canonical NFA value",
         )
+    try:
+        nfa = NFA.model_validate(nfa.model_dump(), strict=True)
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("nfa",),
+            code="regular_language.nfa_membership.invalid_nfa",
+            message="membership requires a valid explicitly parented NFA carrier",
+        ) from exc
     if (
         type(nfa.state_count) is not int
         or not 1 <= nfa.state_count <= MAX_NFA_STATES

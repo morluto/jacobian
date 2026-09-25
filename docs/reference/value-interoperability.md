@@ -85,9 +85,17 @@ universal certificate layer or a recursive proof-history checker.
 | --- | --- |
 | Schema and model parsing | Scalar encoding, fields, shape, ordering, and cheap intrinsic consistency. |
 | Native admission and computation | Applicability, work and growth bounds, and mathematical checks required by the operation. |
+| Backend candidate acceptance | Establish the specific relation needed to promote a candidate to the claimed result, within the admitted computation. |
+| Worker protocol boundary | Framing, bounded structure, scalar decoding, and source binding; no implicit trust from a serialized model name. |
 | Trusted result construction | Package the established result without repeating its computation. |
 | SDK output validation and serialization | Check and encode the result's structure. No mathematical backend calls. |
 | Owning tests | Independently check defining identities, reconstruction, and producer-consumer composition. |
+
+Avoiding repeated solves is not a ban on checking. An exact residual check of
+a numerical candidate may be necessary; repeating a factorization merely to
+package its output usually is not. Neither a residual nor a feasible witness
+alone proves optimality, canonicity, or completeness. Reuse facts within an
+execution and admit any mathematical check a new consumer relies on.
 
 For example, checking that a polynomial has one variable and leading
 coefficient one is structural. Proving irreducibility or independence of a
@@ -130,7 +138,8 @@ its standard array persistence uses the
 [binary `.npy` format](https://numpy.org/doc/stable/reference/generated/numpy.save.html).
 Neither library requires mathematical values to be stored as JSON strings.
 
-Each domain owns one mathematical value type with:
+A canonical value uses the same domain-owned type in native and serialized
+composition, with:
 
 - Exact integers in Python.
 - Canonical decimal strings when serialized to JSON.
@@ -143,6 +152,12 @@ parallel native and wire mathematical value classes.
 JSON safety does not require Python-facing fields to store strings. Use native
 constructors and numeric accessors for computation; encode and decode only at
 the JSON boundary.
+Exact rational coefficients follow the same separation. Finite based chain
+complexes and filtered chain values use Python `int` or `fractions.Fraction`;
+JSON encodes an integer as a canonical decimal string and a nonintegral
+fraction as a reduced `numerator/denominator` string. The value codec checks
+spelling and digit bounds before constructing the Python scalar. Keep Python
+`model_dump()` numeric and use `model_validate_json()` for wire decoding.
 
 Producers, consumers, validators, serializers, worker codecs, and schemas share
 this boundary. When changing an exact-integer contract, preserve its canonical
@@ -175,6 +190,15 @@ and JSON-only serialization on the same annotated native type.
 | JSON validation | Accept canonical ASCII decimal strings, validate spelling and digit bounds before conversion, and decode to integers. Reject JSON numbers for these fields even at small magnitudes. |
 | `model_dump(mode="json")` and `model_dump_json()` | Encode integers as canonical decimal strings at every magnitude. |
 
+JSON permits numeric literals beyond the range ordinary binary64 consumers can
+exchange exactly; decimal strings solve that interoperability problem, not a
+Python integer limitation. [RFC 8259](https://www.rfc-editor.org/rfc/rfc8259.html#section-6)
+describes the interoperable range, and
+[ProtoJSON](https://protobuf.dev/programming-guides/json/#int64-strings) also emits
+64-bit integers as strings. Jacobian's strict input spelling and rejection of
+numeric JSON for exact-integer fields are explicit contract choices, not
+requirements imposed by MCP.
+
 The encoding is selected for the field's complete admitted domain, not for the
 magnitude of each value. If a field can contain integers outside JSON's safe
 integer range, every instance uses the string form. Switching between a JSON
@@ -205,6 +229,21 @@ Use the owning wire entry point for decoded transport payloads. Jacobian's
 native callers should not serialize merely to construct native values. Check
 worker request and response codecs explicitly rather than assuming that the
 MCP path covers them.
+
+Raw `mode="before"` preflight guards must preserve scalar representation. They
+can reject excessive dimensions, nesting, or digit counts, but should leave
+scalar conversion to the shared leaf codec. Converting a JSON string to an
+`int` before a JSON-only string decoder runs breaks that decoder; converting a
+native integer to a string instead breaks Python validation.
+
+| Input | Raw preflight | Leaf codec result |
+| --- | --- | --- |
+| Native `{"coefficient": 7}` | Check bounds; retain `7` | Native `int` |
+| JSON `{"coefficient": "7"}` | Check bounds; retain `"7"` | Native `int` |
+
+Test both validation modes when changing nested preflight, not just a scalar
+round trip or a catalog example. Do not fix one mode by silently routing native
+construction through JSON.
 
 Publish request schemas with `mode="validation"` and result schemas with
 `mode="serialization"`; Pydantic documents these as
@@ -393,6 +432,13 @@ Jacobian's direct-tool adapter supplies one. Returning a `CallToolResult`
 therefore does not bypass model validation on this path. Keep those validators
 structural; do not disable output validation to conceal repeated kernel work.
 Test the actual adapter path rather than assuming every SDK API behaves alike.
+An advertised schema without an associated output model is not equivalent to
+that validated path. SDK validation checks the outer tool contract; it does not
+establish the operation-specific mathematics inside an untyped payload.
+
+SDK 2.2.0's function argument validation uses Pydantic Python mode. It does not
+replace Jacobian's `parse_operation_input()` JSON-mode decoding for exact-scalar
+wire payloads. Keep SDK protocol handling and domain codec ownership distinct.
 
 The [tools specification](https://modelcontextprotocol.io/specification/2026-07-28/server/tools)
 distinguishes successful results from execution errors. A mathematical answer

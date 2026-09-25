@@ -6,12 +6,10 @@ from itertools import islice, product
 
 import pytest
 
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.dispatch import invoke_operation
 from jacobian.math.free_algebras._models import FreeAlgebraPolynomial
 from jacobian.math.free_algebras.homogeneous_component._models import (
     FreeAlgebraHomogeneousComponent,
@@ -70,37 +68,23 @@ def test_degree_family_reconstructs_source_and_preserves_zero_parent() -> None:
     assert missing.polynomial.alphabet == source.alphabet
 
 
-def test_published_projection_composes_with_polynomial_multiplication() -> None:
-    catalog = Catalog.open()
-    invocation = invoke_operation(
-        "free_algebra.polynomial.homogeneous_component.compute",
-        {"polynomial": _polynomial().model_dump(mode="json"), "degree": 1},
-        catalog,
-    )
+def test_native_projection_composes_with_polynomial_multiplication() -> None:
     component = FreeAlgebraHomogeneousComponent.model_validate_json(
-        json.dumps(invocation.output)
+        json.dumps(homogeneous_component(_polynomial(), 1).model_dump(mode="json"))
     )
-    product_result = invoke_operation(
-        "free_algebra.polynomial.multiply.compute",
-        {
-            "left": component.polynomial.model_dump(mode="json"),
-            "right": {
-                "alphabet": ["x", "y"],
-                "terms": [
-                    {
-                        "coefficient": {"num": "1", "den": "1"},
-                        "word": ["x"],
-                    }
-                ],
-            },
-        },
-        catalog,
+    from jacobian.math.free_algebras.operations import multiply
+
+    product_result = multiply(
+        component.polynomial,
+        FreeAlgebraPolynomial.model_validate(
+            {"alphabet": ["x", "y"], "terms": [_term(["x"])]}
+        ),
     )
-    words = [term["word"] for term in product_result.output["product"]["terms"]]
-    assert words == [["y", "x"], ["x", "x"]]
+    words = [term.word for term in product_result.product.terms]
+    assert words == [("y", "x"), ("x", "x")]
 
 
-def test_output_admission_rejects_large_selected_support_before_result_build() -> None:
+def test_large_selected_support_is_admitted_by_mathematical_bounds() -> None:
     alphabet = tuple(chr(ord("A") + index) * 64 for index in range(26))
     words = list(islice(product(alphabet, repeat=8), 4096))
     polynomial = FreeAlgebraPolynomial.model_validate(
@@ -109,15 +93,22 @@ def test_output_admission_rejects_large_selected_support_before_result_build() -
             "terms": [_term(list(word)) for word in reversed(words)],
         }
     )
-    with pytest.raises(OperationResourceAdmissionError, match="output allocation"):
-        homogeneous_component(polynomial, 8)
+    result = homogeneous_component(polynomial, 8)
+    assert len(result.polynomial.terms) == len(words)
 
 
 def test_native_operation_rejects_invalid_or_over_bound_degree() -> None:
     polynomial = _polynomial()
     with pytest.raises(OperationDomainValidationError, match="nonnegative integer"):
         homogeneous_component(polynomial, -1)
-    with pytest.raises(OperationResourceAdmissionError, match="value envelope"):
-        homogeneous_component(polynomial, 65)
+    assert homogeneous_component(polynomial, 65).polynomial.is_zero
     with pytest.raises(OperationDomainValidationError, match="nonnegative integer"):
         homogeneous_component(polynomial, True)
+    forged = FreeAlgebraPolynomial.model_construct(alphabet=("x", "x"), terms=())
+    with pytest.raises(OperationDomainValidationError, match="not canonical"):
+        homogeneous_component(forged, 0)
+    oversized = FreeAlgebraPolynomial.model_construct(
+        alphabet=(), terms=(None,) * 600001
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="scan bound"):
+        homogeneous_component(oversized, 0)

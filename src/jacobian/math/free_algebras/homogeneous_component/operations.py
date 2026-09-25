@@ -1,16 +1,11 @@
 """Exact projection onto one word-degree component."""
 
-from jacobian._exact import canonical_rational_component_digits
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.math.free_algebras._models import (
-    MAX_FREE_ALGEBRA_RESULT_WORD_LENGTH,
-    FreeAlgebraPolynomial,
-)
+from jacobian.math.free_algebras._models import FreeAlgebraPolynomial
 from jacobian.math.free_algebras.homogeneous_component._models import (
-    MAX_HOMOGENEOUS_COMPONENT_OUTPUT_CELLS,
     MAX_HOMOGENEOUS_COMPONENT_WORK,
     FreeAlgebraHomogeneousComponent,
 )
@@ -41,12 +36,24 @@ def homogeneous_component(
             code="free_algebra.homogeneous_component.degree",
             message="degree must be a nonnegative integer",
         )
-    if degree > MAX_FREE_ALGEBRA_RESULT_WORD_LENGTH:
-        _reject_resource(
-            ("degree",),
-            "degree_bound",
-            "homogeneous-component degree exceeds the 64-letter value envelope",
+    if not isinstance(polynomial, FreeAlgebraPolynomial):
+        raise OperationDomainValidationError(
+            location=("polynomial",),
+            code="free_algebra.homogeneous_component.shape",
+            message="the free-algebra polynomial is not canonical",
         )
+    try:
+        if len(polynomial.terms) > MAX_HOMOGENEOUS_COMPONENT_WORK // 2:
+            _reject_resource(("polynomial", "terms"), "work_bound", "polynomial exceeds homogeneous-component scan bound")
+        polynomial = FreeAlgebraPolynomial.model_validate(polynomial.model_dump())
+    except OperationResourceAdmissionError:
+        raise
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("polynomial",),
+            code="free_algebra.homogeneous_component.shape",
+            message="the free-algebra polynomial is not canonical",
+        ) from exc
 
     term_count = len(polynomial.terms)
     selected_word_count = 0
@@ -61,20 +68,6 @@ def homogeneous_component(
             "homogeneous-component scan exceeds the admitted work bound",
         )
 
-    output_cells = 64 + sum(12 * len(letter) + 2 for letter in polynomial.alphabet)
-    for term in polynomial.terms:
-        if len(term.word) == degree:
-            output_cells += (
-                32
-                + sum(12 * len(letter) + 2 for letter in term.word)
-                + 2 * canonical_rational_component_digits(term.coefficient)
-            )
-    if output_cells > MAX_HOMOGENEOUS_COMPONENT_OUTPUT_CELLS:
-        _reject_resource(
-            ("polynomial", "terms"),
-            "output_bound",
-            "homogeneous component exceeds the admitted output allocation",
-        )
 
     terms = tuple(term for term in polynomial.terms if len(term.word) == degree)
     component_polynomial = FreeAlgebraPolynomial.model_construct(

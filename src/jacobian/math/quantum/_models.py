@@ -8,6 +8,7 @@ from pydantic import (
     AfterValidator,
     ConfigDict,
     Field,
+    StrictBool,
     StrictInt,
     StringConstraints,
     model_validator,
@@ -1029,6 +1030,77 @@ class StabilizerDistanceResult(StrictModel):
         return self
 
 
+class StabilizerErasureCorrectabilityRequest(StrictModel):
+    """A supplied erasure subset on one register-bound stabilizer check space."""
+
+    check_space: CheckSpaceValue
+    erased_qubit_ids: tuple[QubitId, ...] = Field(max_length=MAX_QUBITS)
+
+    @model_validator(mode="after")
+    def require_erasure_subset(self) -> Self:
+        register = self.check_space.qubit_register
+        if len(set(self.erased_qubit_ids)) != len(self.erased_qubit_ids) or any(
+            qubit_id not in register.qubit_ids for qubit_id in self.erased_qubit_ids
+        ):
+            raise _validation_error(
+                "erasure_subset", "erased qubit IDs must be a unique register subset"
+            )
+        return self
+
+
+class StabilizerErasureCorrectabilityResult(StrictModel):
+    """Exact supported-logical criterion for one erasure subset."""
+
+    source: StabilizerErasureCorrectabilityRequest
+    supported_normalizer_dimension: StrictInt = Field(ge=0, le=2 * MAX_QUBITS)
+    supported_stabilizer_dimension: StrictInt = Field(ge=0, le=MAX_CHECK_ROWS)
+    supported_logical_dimension: StrictInt = Field(ge=0, le=2 * MAX_QUBITS)
+    correctable: StrictBool
+    witness: PhaseFreeQubitPauli | None = None
+
+    @model_validator(mode="after")
+    def require_exact_witness_branch(self) -> Self:
+        if self.supported_logical_dimension != (
+            self.supported_normalizer_dimension - self.supported_stabilizer_dimension
+        ):
+            raise _validation_error(
+                "erasure_logical_dimension",
+                "supported logical dimension must be the normalizer/stabilizer difference",
+            )
+        if self.correctable != (self.supported_logical_dimension == 0):
+            raise _validation_error(
+                "erasure_correctability",
+                "correctability must match the exact dimension",
+            )
+        if self.correctable:
+            if self.witness is not None:
+                raise _validation_error(
+                    "erasure_witness", "a correctable erasure has no logical witness"
+                )
+        else:
+            if self.witness is None:
+                raise _validation_error(
+                    "erasure_witness",
+                    "an uncorrectable erasure needs a supported logical witness",
+                )
+            register = self.source.check_space.qubit_register
+            erased = set(self.source.erased_qubit_ids)
+            if self.witness.qubit_register != register or any(
+                (x or z) and qubit_id not in erased
+                for qubit_id, x, z in zip(
+                    register.qubit_ids,
+                    self.witness.x_bits,
+                    self.witness.z_bits,
+                    strict=True,
+                )
+            ):
+                raise _validation_error(
+                    "erasure_witness",
+                    "logical witness must be supported inside the erasure",
+                )
+        return self
+
+
 __all__ = [
     "MAX_CHECK_ROWS",
     "MAX_QUBITS",
@@ -1058,6 +1130,8 @@ __all__ = [
     "PhaseFreeQubitPauli",
     "QubitId",
     "QubitRegister",
+    "StabilizerErasureCorrectabilityRequest",
+    "StabilizerErasureCorrectabilityResult",
     "StabilizerErrorEquivalenceRequest",
     "StabilizerErrorEquivalenceResult",
     "StabilizerSyndromeRequest",

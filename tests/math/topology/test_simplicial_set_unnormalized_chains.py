@@ -5,9 +5,11 @@ import pytest
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.topology.chain_complexes.operations import (
     differential_squares_to_zero,
+    homology_groups,
 )
 from jacobian.math.topology.chain_complexes.values import CoefficientRing
 from jacobian.math.topology.simplicial_sets import chains as chains_module
+from jacobian.math.topology.simplicial_sets import maps as maps_module
 from jacobian.math.topology.simplicial_sets.chains import (
     UnnormalizedChainsRequest,
     unnormalized_chains,
@@ -75,8 +77,21 @@ def test_unnormalized_delta_one_uses_every_simplex_and_is_chain_complex():
     assert differential_squares_to_zero(value).is_valid
 
     normalized = normalized_chains(source)
-    assert normalized.nondegenerate_counts == (2, 1, 0, 0)
-    assert value.basis_sizes != normalized.nondegenerate_counts
+    assert normalized.chain_complex.basis_sizes == (2, 1, 0, 0)
+    assert value.basis_sizes != normalized.chain_complex.basis_sizes
+    assert normalized.nondegenerate_bases == (
+        ("(0)", "(1)"),
+        ("(0,1)",),
+        (),
+        (),
+    )
+    assert differential_squares_to_zero(normalized.chain_complex).is_valid
+    reusable_homology = homology_groups(normalized.chain_complex)
+    assert [group.free_rank for group in reusable_homology.homology_groups[:2]] == [
+        1,
+        0,
+    ]
+    assert type(normalized).model_validate_json(normalized.model_dump_json()) == normalized
 
 
 def test_unnormalized_chain_result_retains_reusable_canonical_value():
@@ -129,9 +144,9 @@ def test_normalized_homology_of_triangle_boundary_has_circle_group():
     # degree-0..2 simplicial-set prefix contains the differential needed for
     # both groups, while the unused formal top group is not returned.
     from jacobian.math.topology.operations import canonicalize
-    from jacobian.math.topology.simplicial_sets import (
+    from jacobian.math.topology.simplicial_sets import simplicial_set_from_complex
+    from jacobian.math.topology.simplicial_sets.complex_conversion_models import (
         SimplicialComplexPrefixRequest,
-        simplicial_set_from_complex,
     )
 
     circle = canonicalize(("a", "b", "c"), (("a", "b"), ("a", "c"), ("b", "c"))).complex
@@ -184,3 +199,26 @@ def test_output_admission_counts_serialized_tables_and_repeated_basis(monkeypatc
     )
     with pytest.raises(OperationResourceAdmissionError):
         chains_module._preflight(source)
+
+
+def test_normalized_chain_output_is_admitted_before_identity_replay(monkeypatch):
+    source = standard_simplex(1, 2)
+
+    def reject(*_args, **_kwargs):
+        raise AssertionError("identity replay started before output admission")
+
+    monkeypatch.setattr(maps_module, "from_tables", reject)
+    monkeypatch.setattr(
+        maps_module,
+        "MAX_NORMALIZED_CHAIN_OUTPUT_BYTES",
+        maps_module._normalized_output_byte_bound(
+            source,
+            sum(
+                len(source.sets[degree - 1]) * len(source.sets[degree])
+                for degree in range(1, source.max_degree + 1)
+            ),
+        )
+        - 1,
+    )
+    with pytest.raises(OperationResourceAdmissionError):
+        normalized_chains(source)

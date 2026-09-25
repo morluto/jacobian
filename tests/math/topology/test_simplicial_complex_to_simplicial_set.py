@@ -9,11 +9,13 @@ from jacobian.catalog.models import (
 )
 from jacobian.math.topology.operations import canonicalize
 from jacobian.math.topology.simplicial_sets import (
-    SimplicialComplexPrefixRequest,
     complex_conversion,
     simplicial_set_from_complex,
 )
 from jacobian.math.topology.simplicial_sets._tools import TOOLS
+from jacobian.math.topology.simplicial_sets.complex_conversion_models import (
+    SimplicialComplexPrefixRequest,
+)
 from jacobian.math.topology.simplicial_sets.maps import normalized_chains
 
 
@@ -97,9 +99,10 @@ def test_conversion_serializes_and_composes_with_normalized_chains():
     rebuilt = type(result).model_validate_json(result.model_dump_json())
     assert rebuilt == result
     normalized = normalized_chains(rebuilt.simplicial_set)
-    assert normalized.nondegenerate_counts == (2, 1, 0)
-    assert normalized.boundary_matrices[0] == ((-1,), (1,))
-    assert normalized.differential_squared_zero
+    assert tuple(map(len, normalized.nondegenerate_bases)) == (2, 1, 0)
+    assert normalized.chain_complex.differential_matrices[0] == ((-1,), (1,))
+    assert normalized.chain_complex.basis_sizes == (2, 1, 0)
+    assert type(normalized).model_validate_json(normalized.model_dump_json()) == normalized
 
 
 def test_exact_prefix_count_is_admitted_before_materializing_degrees(monkeypatch):

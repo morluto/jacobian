@@ -101,7 +101,13 @@ TOOLS = (
     MathTool(
         operation_id="topology.simplicial_set.normalized_chains.compute",
         title="Compute a finite normalized-chain prefix",
-        description="Remove in-range degeneracies from a finite simplicial-set prefix, assemble the alternating normalized boundary matrices, and report the finite-prefix square-zero identity.",
+        description=(
+            "Remove in-range degeneracies from a finite simplicial-set prefix and "
+            "return the normalized chain complex as the shared ChainComplexValue, "
+            "with exact nondegenerate simplex labels for every degree axis. "
+            "The alternating differential is checked to square to zero; the top "
+            "group is retained without inferring a differential above the prefix."
+        ),
         request_type=NormalizedChainsRequest,
         result_type=NormalizedChainsResult,
         run=_chains,

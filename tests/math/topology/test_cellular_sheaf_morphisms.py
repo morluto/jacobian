@@ -17,10 +17,10 @@ from jacobian.math.topology.cellular_sheaves import (
 )
 from jacobian.math.topology.cellular_sheaves._models import (
     CoverRestrictionMatrix,
-    SheafMorphismRequest,
 )
 from jacobian.math.topology.cellular_sheaves.extensions import (
     SheafMorphismComposeRequest,
+    SheafMorphismRequest,
     compose_morphisms,
 )
 

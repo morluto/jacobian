@@ -168,7 +168,9 @@ def test_forged_typed_chain_bases_are_revalidated_before_admission() -> None:
     assert error.value.errors()[0]["type"] == "koszul.module.homology_map_request"
 
 
-def test_induced_map_envelope_is_preflighted_before_reconstruction(monkeypatch) -> None:
+def test_induced_map_envelope_is_preflighted_before_reconstruction(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     algebra = FiniteCommutativeAlgebra(
         basis=("1",),
         multiplication=(((q(1),),),),
@@ -200,7 +202,7 @@ def test_induced_map_envelope_is_preflighted_before_reconstruction(monkeypatch) 
         )
     )
 
-    def reconstruction_must_not_run(_request):
+    def reconstruction_must_not_run(_request: object) -> None:
         raise AssertionError("reconstruction ran before envelope preflight")
 
     monkeypatch.setattr(
@@ -215,7 +217,7 @@ def test_induced_map_envelope_is_preflighted_before_reconstruction(monkeypatch) 
 
 
 def test_induced_map_coefficient_is_preflighted_before_reconstruction(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     algebra = _dual_numbers()
     module = BasedFiniteModule(
@@ -237,7 +239,7 @@ def test_induced_map_coefficient_is_preflighted_before_reconstruction(
         )
     )
 
-    def reconstruction_must_not_run(_request):
+    def reconstruction_must_not_run(_request: object) -> None:
         raise AssertionError("reconstruction ran before coefficient preflight")
 
     monkeypatch.setattr(
@@ -284,7 +286,9 @@ def test_induced_map_preflights_echoed_algebra_unit() -> None:
     )
 
 
-def test_induced_map_reuses_admitted_complexes(monkeypatch) -> None:
+def test_induced_map_reuses_admitted_complexes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     algebra = _dual_numbers()
     module = BasedFiniteModule(
         algebra=algebra,
@@ -306,7 +310,7 @@ def test_induced_map_reuses_admitted_complexes(monkeypatch) -> None:
     expected_source = module_koszul_homology(chain_map.source_complex)
     expected_target = module_koszul_homology(chain_map.target_complex)
 
-    def admission_must_not_run(*_args, **_kwargs):
+    def admission_must_not_run(*_args: object, **_kwargs: object) -> None:
         raise AssertionError("freshly reconstructed complex was revalidated")
 
     monkeypatch.setattr(

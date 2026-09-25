@@ -10,6 +10,8 @@ from pydantic_core import PydanticCustomError
 from jacobian._models import StrictModel
 from jacobian.math.combinatorics.greedoids.values import FiniteFeasibleSetSystem
 from jacobian.math.combinatorics.matroids.delta.values import (
+    MAX_DELTA_DISTANCE_PROFILE_EVALUATIONS,
+    MAX_DELTA_DISTANCE_PROFILE_STATES,
     MAX_DELTA_EXCHANGE_CANDIDATE_CHECKS,
     MAX_DELTA_LABEL_BYTES,
     MAX_DELTA_MEMBERSHIPS,
@@ -107,6 +109,45 @@ class DeltaMatroidWidthResult(DeltaMatroidWidthRequest):
         return cls.model_construct(delta_matroid=delta_matroid, width=width)
 
 
+class DeltaMatroidDistanceProfileRequest(StrictModel):
+    """Compute distance to feasibility for every subset of the ground set."""
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "description": (
+                "Compute the Hamming distance from every ground subset to the "
+                "complete feasible family, plus nearest-set counts and a "
+                "distance histogram. Ground subsets are ordered by their "
+                "integer bit mask, where bit i denotes ground index i. The "
+                "profile admits at most "
+                f"{MAX_DELTA_DISTANCE_PROFILE_STATES} subset states and "
+                f"{MAX_DELTA_DISTANCE_PROFILE_EVALUATIONS} subset/feasible-row "
+                "distance evaluations."
+            ),
+            "admission_limits": {
+                "max_subset_states": MAX_DELTA_DISTANCE_PROFILE_STATES,
+                "max_subset_feasible_row_evaluations": (
+                    MAX_DELTA_DISTANCE_PROFILE_EVALUATIONS
+                ),
+                "max_feasible_set_memberships": MAX_DELTA_MEMBERSHIPS,
+                "max_ground_label_utf8_bytes": MAX_DELTA_LABEL_BYTES,
+                "max_symmetric_exchange_candidate_checks_per_replay": (
+                    MAX_DELTA_EXCHANGE_CANDIDATE_CHECKS
+                ),
+            },
+        }
+    )
+
+    delta_matroid: FiniteDeltaMatroid = Field(
+        description=(
+            "Complete canonical finite delta-matroid. The source axiom replay "
+            f"is bounded by {MAX_DELTA_EXCHANGE_CANDIDATE_CHECKS} candidate "
+            "checks; profile computation separately admits subset states and "
+            "subset/feasible-row evaluations."
+        )
+    )
+
+
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"delta_matroid.{reason}", message)
 
@@ -191,6 +232,7 @@ class DeltaMatroidRecognitionResult(StrictModel):
 
 
 __all__ = [
+    "DeltaMatroidDistanceProfileRequest",
     "DeltaMatroidFromFeasibleSetsRequest",
     "DeltaMatroidRecognitionResult",
     "DeltaMatroidTwistRequest",

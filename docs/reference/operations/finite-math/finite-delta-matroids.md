@@ -31,12 +31,28 @@ result-binding obstruction check. The aggregate worst case is therefore
 1,000,000 candidate checks per accepted call, which is part of this operation's
 advertised envelope rather than a universal result-construction rule.
 
-This initial operation deliberately does not construct twists, minors, binary
-matrix presentations, graph conversions, or interlace polynomials. Those are
-separate mathematical postconditions rather than fields of the recognition
-result.
+The recognition result itself deliberately does not carry twists, minors,
+binary matrix presentations, graph conversions, or interlace polynomials.
+Those are separate mathematical postconditions rather than fields of the
+recognition result.
 
 `delta_matroid.twist.compute` returns the canonical twisted `FiniteDeltaMatroid`.
-Width `max(|F|)-min(|F|)` is a native projection of the feasible family and is
-not a catalog operation. It scans every retained feasible-row length of the
-canonical value and has no extra row ceiling.
+`delta_matroid.width.compute`, `delta_matroid.dual.compute`,
+`delta_matroid.minor.compute`, and `delta_matroid.from_binary_matrix.compute`
+are separate published operations.
+
+`delta_matroid.distance_profile.compute` returns the distance from every
+ground subset `X` to the nearest feasible set, where
+`d_D(X)=min_{F in feasible(D)} |X symmetric_difference F|`. The profile also
+returns the number of nearest feasible sets for each subset and the histogram
+of distances. Subsets use integer masks in ascending order; bit `i` denotes
+ground index `i`. This is an exact complete profile, not a prefix or a nearest
+set witness.
+
+Admission first limits the complete subset domain to 4,096 masks and the
+product of subset states and feasible rows to 262,144 distance evaluations.
+The source family is then admitted under its existing membership, label-byte,
+and symmetric-exchange bounds. These limits are separate: a small feasible
+family over too many ground elements exceeds the state bound, and a larger
+family on an otherwise admissible ground set can exceed the distance-work
+bound. The empty-ground delta-matroid has one mask and distance zero.

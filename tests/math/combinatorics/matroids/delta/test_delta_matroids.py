@@ -41,6 +41,7 @@ def test_catalog_contains_only_audited_agent_outcome() -> None:
         "delta_matroid.from_feasible_sets.compute",
         "delta_matroid.twist.compute",
         "delta_matroid.width.compute",
+        "delta_matroid.distance_profile.compute",
         "delta_matroid.dual.compute",
         "delta_matroid.minor.compute",
         "delta_matroid.from_binary_matrix.compute",

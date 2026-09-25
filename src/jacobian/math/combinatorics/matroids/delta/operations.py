@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pydantic import ValidationError
 
+from jacobian._execution import request_checkpoint
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.greedoids.values import FiniteFeasibleSetSystem
 from jacobian.math.combinatorics.matroids.delta._models import (
@@ -11,8 +12,11 @@ from jacobian.math.combinatorics.matroids.delta._models import (
     require_twist_subset,
 )
 from jacobian.math.combinatorics.matroids.delta.values import (
+    MAX_DELTA_DISTANCE_PROFILE_EVALUATIONS,
+    MAX_DELTA_DISTANCE_PROFILE_STATES,
     MAX_DELTA_MEMBERSHIPS,
     DeltaMatroidAdmissionError,
+    DeltaMatroidDistanceProfile,
     FiniteDeltaMatroid,
     first_symmetric_exchange_obstruction,
     require_delta_matroid_admission,
@@ -21,6 +25,7 @@ from jacobian.math.combinatorics.matroids.delta.values import (
 )
 
 __all__ = [
+    "distance_profile",
     "from_feasible_sets",
     "twist",
     "verify_from_feasible_sets",
@@ -138,3 +143,81 @@ def width(delta_matroid: FiniteDeltaMatroid) -> int:
         ) from exc
     sizes = tuple(len(row) for row in system.feasible)
     return max(sizes) - min(sizes)
+
+
+def distance_profile(
+    delta_matroid: FiniteDeltaMatroid,
+) -> DeltaMatroidDistanceProfile:
+    """Return exact Hamming distance-to-feasibility data for every subset.
+
+    A mask's bit ``i`` records whether ground index ``i`` is present. The
+    profile is complete over all masks and counts every nearest feasible set.
+    """
+
+    try:
+        system = FiniteFeasibleSetSystem(
+            ground=delta_matroid.ground, feasible=delta_matroid.feasible
+        )
+    except (ValidationError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("delta_matroid",),
+            code="delta_matroid.source_not_valid",
+            message=str(exc),
+        ) from exc
+
+    ground_size = len(system.ground)
+    if ground_size > MAX_DELTA_DISTANCE_PROFILE_STATES.bit_length() - 1:
+        raise DeltaMatroidAdmissionError(
+            "distance_profile_states_exceeded",
+            "the complete ground-subset profile exceeds the subset-state envelope",
+        )
+    state_count = 1 << ground_size
+    if state_count > MAX_DELTA_DISTANCE_PROFILE_STATES:
+        raise DeltaMatroidAdmissionError(
+            "distance_profile_states_exceeded",
+            "the complete ground-subset profile exceeds the subset-state envelope",
+        )
+    distance_evaluations = state_count * len(system.feasible)
+    if distance_evaluations > MAX_DELTA_DISTANCE_PROFILE_EVALUATIONS:
+        raise DeltaMatroidAdmissionError(
+            "distance_profile_work_exceeded",
+            "subset/feasible-set distance work exceeds its admitted envelope",
+        )
+
+    require_delta_matroid_admission(system)
+    obstruction = first_symmetric_exchange_obstruction(system)
+    if obstruction is not None:
+        raise OperationDomainValidationError(
+            location=("delta_matroid",),
+            code="delta_matroid.source_not_valid",
+            message="source feasible family fails symmetric exchange",
+        )
+
+    feasible_masks = tuple(sum(1 << index for index in row) for row in system.feasible)
+    distances: list[int] = []
+    nearest_counts: list[int] = []
+    histogram = [0] * (ground_size + 1)
+    evaluations = 0
+    for subset_mask in range(state_count):
+        minimum = ground_size + 1
+        nearest_count = 0
+        for feasible_mask in feasible_masks:
+            evaluations += 1
+            if evaluations % 4_096 == 0:
+                request_checkpoint("during delta-matroid distance profile")
+            distance = (subset_mask ^ feasible_mask).bit_count()
+            if distance < minimum:
+                minimum = distance
+                nearest_count = 1
+            elif distance == minimum:
+                nearest_count += 1
+        distances.append(minimum)
+        nearest_counts.append(nearest_count)
+        histogram[minimum] += 1
+
+    return DeltaMatroidDistanceProfile._from_kernel(
+        FiniteDeltaMatroid._from_kernel(system),
+        tuple(distances),
+        tuple(nearest_counts),
+        tuple(histogram),
+    )

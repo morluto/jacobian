@@ -50,7 +50,14 @@ def relabel_pauli(
             "quantum.pauli.relabel.invalid_register",
             "source and target must be qubit registers",
         )
-    if relabeling.source_register != source:
+    mapped_source = getattr(relabeling, "source_register", None)
+    if not isinstance(mapped_source, QubitRegister):
+        _reject(
+            "relabeling.source_register",
+            "quantum.pauli.relabel.invalid_register",
+            "source must be a valid qubit register",
+        )
+    if mapped_source != source:
         _reject(
             "relabeling",
             "quantum.pauli.relabel.source_mismatch",
@@ -87,14 +94,15 @@ def relabel_pauli(
         )
     x_bits = getattr(phase_free, "x_bits", None)
     z_bits = getattr(phase_free, "z_bits", None)
+    phase = getattr(pauli, "phase", None)
     if (
         type(x_bits) is not tuple
         or type(z_bits) is not tuple
         or len(x_bits) != len(source_ids)
         or len(z_bits) != len(source_ids)
         or any(type(bit) is not int or bit not in (0, 1) for bit in (*x_bits, *z_bits))
-        or type(pauli.phase) is not int
-        or not 0 <= pauli.phase <= 3
+        or type(phase) is not int
+        or not 0 <= phase <= 3
     ):
         _reject(
             "pauli",
@@ -127,5 +135,5 @@ def relabel_pauli(
             x_bits=tuple(target_x),
             z_bits=tuple(target_z),
         ),
-        phase=pauli.phase,
+        phase=phase,
     )

@@ -100,6 +100,14 @@ def test_relabeling_rejects_forged_native_values() -> None:
         relabel_pauli(pauli, malformed)
     assert error.value.errors()[0]["type"] == "quantum.pauli.relabel.invalid_register"
 
+    missing_source = QubitRegisterRelabeling.model_construct(
+        target_register=source,
+        target_ids_in_source_order=("a",),
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        relabel_pauli(pauli, missing_source)
+    assert error.value.errors()[0]["type"] == "quantum.pauli.relabel.invalid_register"
+
     valid_map = QubitRegisterRelabeling(
         source_register=source,
         target_register=source,
@@ -113,6 +121,11 @@ def test_relabeling_rejects_forged_native_values() -> None:
     )
     with pytest.raises(OperationDomainValidationError) as error:
         relabel_pauli(forged_pauli, valid_map)
+    assert error.value.errors()[0]["type"] == "quantum.pauli.relabel.invalid_pauli"
+
+    missing_phase = ExactQubitPauli.model_construct(phase_free=pauli.phase_free)
+    with pytest.raises(OperationDomainValidationError) as error:
+        relabel_pauli(missing_phase, valid_map)
     assert error.value.errors()[0]["type"] == "quantum.pauli.relabel.invalid_pauli"
 
 

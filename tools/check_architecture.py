@@ -1249,6 +1249,7 @@ def _mathematical_transport_limit_violations(
     allowed_channel_attributes = {
         id(descendant)
         for node in nodes
+        if isinstance(node, (ast.Assign, ast.AnnAssign))
         if is_channel_assignment(node)
         for descendant in ast.walk(node)
         if isinstance(descendant, ast.Attribute)
@@ -1277,6 +1278,20 @@ def _mathematical_transport_limit_violations(
             for target in assignment_targets(node)
         )
 
+    policy_nodes = (
+        node
+        for node in nodes
+        if isinstance(
+            node,
+            (
+                ast.Attribute,
+                ast.FunctionDef,
+                ast.AsyncFunctionDef,
+                ast.Assign,
+                ast.AnnAssign,
+            ),
+        )
+    )
     return tuple(
         _violation(
             relative,
@@ -1284,7 +1299,7 @@ def _mathematical_transport_limit_violations(
             "mathematical-transport-limit",
             "mathematical contracts and admission must use cardinality, digit, or allocation bounds, not transport bytes",
         )
-        for node in nodes
+        for node in policy_nodes
         if owns_transport_policy(node)
     )
 

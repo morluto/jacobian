@@ -403,7 +403,9 @@ def homology(
         prime=prime,
         convention=convention,
         dimension_range=(
-            -1 if convention is HomologyConvention.REDUCED and complex_.dimension == -1 else 0,
+            -1
+            if convention is HomologyConvention.REDUCED and complex_.dimension == -1
+            else 0,
             0 if complex_.dimension == -1 else complex_.dimension,
         ),
         groups=tuple(groups),

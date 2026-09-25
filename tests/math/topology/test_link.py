@@ -1,8 +1,9 @@
 """Tests for simplicial complex link operation."""
 
+from itertools import combinations
 from typing import TypedDict
 
-from jacobian.math.topology._models import SimplicialComplexRequest
+from jacobian.math.topology._models import SimplicialComplexRequest, canonical_complex
 from jacobian.math.topology._structural import (
     FVectorRequest,
     LinkRequest,
@@ -46,6 +47,55 @@ def test_link_of_edge_in_triangle() -> None:
         )
     )
     assert result.link_facets == (("v2",),)
+
+
+def test_link_of_facet_is_the_canonical_empty_face_complex() -> None:
+    result = compute_link(
+        LinkRequest(
+            complex=_complex({"vertices": ["a", "b"], "facets": [["a", "b"]]}),
+            simplex=("a", "b"),
+        )
+    )
+    assert result.link_facets == ()
+    assert result.link_is_empty
+    assert result.link_complex == canonical_complex((), ())
+    assert result.link_complex.dimension == -1
+    assert type(result).model_validate(result.model_dump()) == result
+
+
+def test_empty_face_link_matches_an_independent_face_set_oracle() -> None:
+    source = _complex({"vertices": ["a", "b", "c"], "facets": [["a", "b"], ["b", "c"]]})
+    result = compute_link(LinkRequest(complex=source, simplex=()))
+
+    source_faces = {
+        tuple(sorted(face))
+        for facet in source.facets
+        for size in range(1, len(facet) + 1)
+        for face in combinations(facet, size)
+    }
+    oracle_facets = tuple(
+        sorted(
+            (
+                face
+                for face in source_faces
+                if not any(set(face) < set(other) for other in source_faces)
+            ),
+            key=lambda face: (-len(face), face),
+        )
+    )
+    assert result.link_facets == oracle_facets
+    assert result.link_complex == canonical_complex(source.vertices, source.facets)
+    assert not result.link_is_empty
+
+
+def test_empty_face_link_of_empty_complex_is_empty_complex() -> None:
+    result = compute_link(
+        LinkRequest(complex=_complex({"vertices": [], "facets": []}), simplex=())
+    )
+    assert result.link_is_empty
+    assert result.link_complex.dimension == -1
+    assert result.link_complex.vertices == ()
+    assert result.link_complex.maximal_simplices == ()
 
 
 def test_link_of_vertex_in_discrete_complex() -> None:

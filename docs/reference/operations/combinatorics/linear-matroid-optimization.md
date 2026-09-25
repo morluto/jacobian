@@ -220,8 +220,11 @@ integral split `c₁+c₂=w`. Tight exchange arcs give the shortest augmentation
 When none exists, a positive minimum slack adjusts the split on the reachable
 vertices and the exchange search repeats. An infinite slack proves there is no
 larger common independent set; the operation then chooses the largest objective
-among the cardinality-optimal sets it computed. The split is private algorithm
-state and is not returned as an unrestricted split certificate. Use one of the
+among the cardinality-optimal sets it computed. The split maintained by the
+augmenting search is private algorithm state and is not returned directly;
+after selecting its candidate the operation synthesizes and returns the
+replayable exchange-split witness described in the Computed maximum-weight
+intersection section above. Use one of the
 separate certificate-checking operations when a caller supplies an authored
 optimality witness. The algorithm and its correctness argument are in
 [Schrijver and Korte–Vygen, §13.7](https://www.mathematik.uni-muenchen.de/~kpanagio/KombOpt/book.pdf).
@@ -248,11 +251,13 @@ retained-axis codepoint bound are rejected before rank computation. This favors
 smaller grounds or low-row representations; the bound retains an exact finite
 envelope rather than a wall-clock timeout.
 
-This optimizer currently returns the exact candidate and objective without a
-replayable rank-dual witness. Its internal Frank split only proves optimality
+The optimizer returns a replayable exchange-split witness, not a rank-dual
+witness. The augmenting search's private Frank split only proves optimality
 within each fixed cardinality and can fail the unrestricted split checker,
-including on disjoint loop/nonloop sources. The separate rank-dual checker
-accepts such witnesses, but this kernel does not construct them. Treat this
+including on disjoint loop/nonloop sources; the returned split is synthesized
+separately from final-candidate exchange inequalities and does satisfy that
+checker. The separate rank-dual checker
+accepts multiplier witnesses, but this kernel does not construct them. Treat this
 optimizer as a prerequisite implementation, not completion of issue #1802's
 weighted-intersection acceptance. A follow-up needs a bounded dual-producing
 algorithm; the TDI and chain-support existence proof in [Goemans, Lecture

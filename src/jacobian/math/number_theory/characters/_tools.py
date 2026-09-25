@@ -331,30 +331,6 @@ TOOLS: MathTools = (
         ),
     ),
     MathTool(
-        operation_id="dirichlet_character.inverse.compute",
-        title="Invert an exact Dirichlet character",
-        description=(
-            "Return the group inverse in the identical finite dual-group parent. "
-            "The output multiplied pointwise by the input is the principal "
-            "character; because character values are roots of unity, this value "
-            "also equals the complex-conjugate character."
-        ),
-        request_type=DirichletCharacterInverseRequest,
-        result_type=DirichletCharacter,
-        run=_compute_character_inverse,
-        tags=("number-theory", "dirichlet-character", "exact"),
-        examples=(
-            OperationExample(
-                name="inverse_mod5_character",
-                description=(
-                    "Invert the character with dual coordinate 1 modulo 5; "
-                    "the supplied group fixes its exact dual-coordinate axis."
-                ),
-                input={"character": {"group": _GROUP_MOD5, "coordinates": [1]}},
-            ),
-        ),
-    ),
-    MathTool(
         operation_id="dirichlet_character.table.compute",
         title="Materialize an exact Dirichlet character table",
         description="Materialize the complete extension-by-zero table of one exact character, retaining modulus and cyclotomic parent identity.",

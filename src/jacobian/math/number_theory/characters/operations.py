@@ -2439,7 +2439,9 @@ def _compute_generalized_gauss_sum(
             code=f"dirichlet_character.{error_name}.frequency_type",
             message="frequency must be a strict integer",
         )
-    _require_bounded_digits(frequency)
+    _admit_character_integer(
+        frequency, type_code=f"dirichlet_character.{error_name}.frequency_type"
+    )
     group = character.group
     modulus = group.modulus
     frequency_residue = frequency % modulus

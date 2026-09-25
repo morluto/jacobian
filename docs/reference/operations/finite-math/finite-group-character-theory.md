@@ -65,7 +65,16 @@ coordinates remain valid and can produce signed output coordinates.
 The supported canonical tables are for the trivial group, cyclic groups of
 order at most 60, and `S3`. This is a bounded supported-family contract, not a
 claim about arbitrary finite groups. Symmetric and exterior powers and Adams
-operations remain separate unimplemented capabilities. GAP describes
+operations are separate operations. The second symmetric and exterior powers
+use the exact identities `Sym^2(x) = (x tensor x + psi^2(x))/2` and
+`Lambda^2(x) = (x tensor x - psi^2(x))/2`; `psi^2` evaluates the character at
+the square of each class representative. They accept table-bound virtual
+characters, rebuild the canonical table, derive the squaring map from its
+complete element partition, and return exact integral irreducible coordinates
+only after exact reconstruction. Admission includes tensor arithmetic,
+class-map construction, pairings, and the output bound before class expansion.
+Higher symmetric/exterior powers and general Adams operations remain open.
+GAP describes
 class-function multiplication and scalar products in its
 [class-function reference](https://gap-system.github.io/gap/doc/ref/chap72_mj.html).
 The source permutation presentation has its own work bound before group-order

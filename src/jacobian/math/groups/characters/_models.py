@@ -715,6 +715,20 @@ class CharacterTensorProductRequest(StrictModel):
     right: CharacterRingElement
 
 
+class CharacterLambdaSquareRequest(StrictModel):
+    """Compute one second lambda operation on a table-bound virtual character."""
+
+    character: CharacterRingElement
+
+
+class CharacterSymmetricSquareRequest(CharacterLambdaSquareRequest):
+    """Compute the second symmetric power of a virtual character."""
+
+
+class CharacterExteriorSquareRequest(CharacterLambdaSquareRequest):
+    """Compute the second exterior power of a virtual character."""
+
+
 class CharacterRingDecompositionResult(StrictModel):
     """Virtual-character coordinates of one class function in a complete table."""
 
@@ -837,15 +851,17 @@ __all__ = [
     "MAX_GROUP_ORDER",
     "MAX_INNER_PRODUCT_WORK",
     "MAX_VALUE_COEFFICIENT_DIGITS",
+    "CharacterExteriorSquareRequest",
     "CharacterRingDecompositionRequest",
     "CharacterRingDecompositionResult",
     "CharacterRingElement",
     "CharacterRow",
+    "CharacterSymmetricSquareRequest",
     "CharacterTableRequest",
     "CharacterTableResult",
-    "CharacterTensorProductRequest",
     "CharacterTensorDecompositionRequest",
     "CharacterTensorDecompositionResult",
+    "CharacterTensorProductRequest",
     "ClassAxis",
     "ClassContribution",
     "ClassFunctionConjugateRequest",

@@ -33,10 +33,12 @@ from jacobian.math.groups.characters._models import (
     MAX_CYCLOTOMIC_ORDER,
     MAX_GROUP_ORDER,
     MAX_VALUE_COEFFICIENT_DIGITS,
+    CharacterExteriorSquareRequest,
     CharacterRingDecompositionRequest,
     CharacterRingDecompositionResult,
     CharacterRingElement,
     CharacterRow,
+    CharacterSymmetricSquareRequest,
     CharacterTableResult,
     CharacterTensorProductRequest,
     ConjugacyClassPartition,
@@ -671,6 +673,7 @@ def _admit_tensor_arithmetic(
     source: PermutationGroup,
     source_work: int,
     concrete_order: int,
+    additional_work: int = 0,
 ) -> tuple[int, int, int]:
     """Admit table expansion, product, pairings, reconstruction, and output."""
     # Before authenticating the table, its claimed class count and order may
@@ -720,6 +723,7 @@ def _admit_tensor_arithmetic(
         + order * order * dimension * table_digits**2
         + rows * classes * dimension * table_digits**2
         + source_work
+        + additional_work
     )
     if work > MAX_CHARACTER_TENSOR_PRODUCT_WORK:
         raise OperationResourceAdmissionError(
@@ -840,10 +844,165 @@ def character_tensor_product(
     return decomposed
 
 
+def _character_lambda_square(
+    request: CharacterSymmetricSquareRequest | CharacterExteriorSquareRequest,
+    *,
+    adams_sign: int,
+) -> CharacterRingElement:
+    """Compute (x tensor x +/- psi^2(x))/2 in one admitted table basis."""
+    if not isinstance(
+        request, (CharacterSymmetricSquareRequest, CharacterExteriorSquareRequest)
+    ):
+        raise _invalid(
+            "groups.characters.lambda_square_request_type",
+            "request must contain one table-bound virtual character",
+            ("request",),
+        )
+    element = request.character
+    if not isinstance(element, CharacterRingElement):
+        raise _invalid(
+            "groups.characters.lambda_square_input_type",
+            "input must be a table-bound virtual character",
+            ("character",),
+        )
+    _admit_ring_element_shape(element, "character")
+    source = element.table.partition.source
+    actual_order, source_work = _admit_source_group_order(source)
+    if actual_order > MAX_CYCLOTOMIC_ORDER:
+        raise OperationResourceAdmissionError(
+            location=("character", "table", "partition", "source"),
+            code="groups.characters.lambda_square_group_order_exceeds_envelope",
+            message="symmetric and exterior squares admit group order at most 60",
+        )
+    # Reuse the tensor admission's exact height, basis-pairing, reconstruction,
+    # and serialized-result envelope, then charge for the class squaring map
+    # and the addition/division used by the lambda identity.
+    coordinate_digits = max(
+        1, *(len(str(abs(value))) for value in element.irreducible_multiplicities)
+    )
+    table_digits = max(
+        1,
+        *(
+            max(len(str(abs(value.num))), len(str(value.den)))
+            for row in element.table.rows
+            for class_value in row.values
+            for value in class_value.coefficients
+        ),
+    )
+    lambda_digits = coordinate_digits + table_digits + len(str(actual_order)) + 2
+    lambda_work = (
+        actual_order
+        * euler_phi(actual_order)
+        * euler_phi(actual_order)
+        * lambda_digits**2
+        + actual_order * source.degree * (max(1, actual_order.bit_length()) + 2)
+        + actual_order * euler_phi(actual_order) * lambda_digits**2
+    )
+    order, classes, dimension = _admit_tensor_arithmetic(
+        element,
+        element,
+        source,
+        source_work,
+        actual_order,
+        additional_work=lambda_work,
+    )
+
+    raw_classes = group_conjugacy_classes(
+        source.degree, [list(generator) for generator in source.generators]
+    )
+    partition = GroupConjugacyClassesResult._from_kernel(
+        source, tuple(tuple(tuple(g) for g in cls) for cls in raw_classes)
+    )
+    table = character_table(partition)
+    if element.table != table:
+        raise _invalid(
+            "groups.characters.lambda_square_noncanonical_table",
+            "input must retain the exact canonical character table for its group",
+            ("character", "table"),
+        )
+    order = table.axis.cyclotomic_order
+    classes = len(table.axis.class_sizes)
+    dimension = euler_phi(order)
+
+    # Expand only after admission and table authentication. The class map is
+    # derived from the complete canonical partition, so no caller-supplied
+    # power-map claims enter the exact operation.
+    def expand(value: CharacterRingElement) -> tuple[tuple[Fraction, ...], ...]:
+        result: list[tuple[Fraction, ...]] = []
+        for class_index in range(classes):
+            coefficients = [Fraction(0) for _ in range(dimension)]
+            for multiplicity, row in zip(
+                value.irreducible_multiplicities, table.rows, strict=True
+            ):
+                for power, coefficient in enumerate(
+                    row.values[class_index].coefficients
+                ):
+                    coefficients[power] += multiplicity * coefficient.as_fraction()
+            result.append(tuple(coefficients))
+        return tuple(result)
+
+    values = expand(element)
+    elements_by_class = {
+        tuple(group_element): class_index
+        for class_index, conjugacy_class in enumerate(table.partition.classes)
+        for group_element in conjugacy_class
+    }
+
+    def square(permutation: tuple[int, ...]) -> tuple[int, ...]:
+        return tuple(
+            permutation[permutation[index]] for index in range(len(permutation))
+        )
+
+    class_square_map = tuple(
+        elements_by_class[square(tuple(conjugacy_class[0]))]
+        for conjugacy_class in table.partition.classes
+    )
+    square_values = []
+    for class_index, class_value in enumerate(values):
+        tensor_square = multiply_values(order, class_value, class_value)
+        adams_square = values[class_square_map[class_index]]
+        signed_adams = scale_value(
+            order,
+            Fraction(adams_sign),
+            adams_square,
+        )
+        numerator = add_values(order, tensor_square, signed_adams)
+        square_values.append(scale_value(order, Fraction(1, 2), numerator))
+
+    square_function = FiniteClassFunction._from_kernel(
+        axis=table.axis,
+        values=tuple(_make_value(order, value) for value in square_values),
+    )
+    result = _coordinates_on_authenticated_table(square_function, table)
+    if expand(result) != tuple(square_values):
+        raise _invalid(
+            "groups.characters.lambda_square_reconstruction",
+            "irreducible coordinates failed exact lambda-square reconstruction",
+            ("request",),
+        )
+    return result
+
+
+def character_symmetric_square(
+    request: CharacterSymmetricSquareRequest,
+) -> CharacterRingElement:
+    """Return the exact second symmetric-power virtual character."""
+    return _character_lambda_square(request, adams_sign=1)
+
+
+def character_exterior_square(
+    request: CharacterExteriorSquareRequest,
+) -> CharacterRingElement:
+    """Return the exact second exterior-power virtual character."""
+    return _character_lambda_square(request, adams_sign=-1)
+
+
 __all__ = [
     "MAX_CHARACTER_RING_DECOMPOSITION_OUTPUT_BYTES",
     "MAX_CHARACTER_RING_DECOMPOSITION_WORK",
     "MAX_CHARACTER_TENSOR_PRODUCT_WORK",
+    "character_exterior_square",
+    "character_symmetric_square",
     "character_tensor_product",
     "class_function_character_decomposition",
 ]

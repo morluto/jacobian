@@ -1,10 +1,12 @@
 """Finite class-function operations."""
 
 from jacobian.math.groups.characters._models import (
+    CharacterExteriorSquareRequest,
     CharacterRingDecompositionRequest,
     CharacterRingDecompositionResult,
     CharacterRingElement,
     CharacterRow,
+    CharacterSymmetricSquareRequest,
     CharacterTableResult,
     CharacterTensorDecompositionRequest,
     CharacterTensorDecompositionResult,
@@ -39,15 +41,19 @@ from jacobian.math.groups.characters.operations import (
     frobenius_schur_indicator,
 )
 from jacobian.math.groups.characters.representation_ring_operations import (
+    character_exterior_square,
+    character_symmetric_square,
     character_tensor_product,
     class_function_character_decomposition,
 )
 
 __all__ = [
+    "CharacterExteriorSquareRequest",
     "CharacterRingDecompositionRequest",
     "CharacterRingDecompositionResult",
     "CharacterRingElement",
     "CharacterRow",
+    "CharacterSymmetricSquareRequest",
     "CharacterTableResult",
     "CharacterTensorDecompositionRequest",
     "CharacterTensorDecompositionResult",
@@ -68,6 +74,8 @@ __all__ = [
     "FiniteClassFunction",
     "FrobeniusSchurIndicatorRequest",
     "FrobeniusSchurIndicatorResult",
+    "character_exterior_square",
+    "character_symmetric_square",
     "character_table",
     "character_tensor_decomposition",
     "character_tensor_product",

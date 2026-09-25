@@ -99,10 +99,10 @@ def koszul_homology_map(
     """
 
     try:
-        value = (
-            request
+        value = ModuleKoszulHomologyMapRequest.model_validate(
+            request.model_dump()
             if isinstance(request, ModuleKoszulHomologyMapRequest)
-            else ModuleKoszulHomologyMapRequest.model_validate(request)
+            else request
         )
         supplied = value.chain_map
     except OperationResourceAdmissionError:

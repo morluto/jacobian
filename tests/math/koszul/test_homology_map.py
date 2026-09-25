@@ -74,6 +74,13 @@ def test_induced_homology_maps_use_quotient_class_coordinates() -> None:
     )
 
 
+def test_forged_typed_request_is_revalidated_before_chain_map_access() -> None:
+    request = ModuleKoszulHomologyMapRequest.model_construct(chain_map=None)
+    with pytest.raises(OperationDomainValidationError) as error:
+        koszul_homology_map(request)
+    assert error.value.errors()[0]["type"] == "koszul.module.homology_map_request"
+
+
 def test_consumer_rechecks_serialized_chain_map_relations() -> None:
     algebra = _dual_numbers()
     module = BasedFiniteModule(

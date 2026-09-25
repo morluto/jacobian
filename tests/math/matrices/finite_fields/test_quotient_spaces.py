@@ -19,7 +19,9 @@ from jacobian.math.matrices.finite_fields.quotient_spaces import (
 )
 
 
-def _quotient(prime: int, n: int, generators: tuple[tuple[int, ...], ...]):
+def _quotient(
+    prime: int, n: int, generators: tuple[tuple[int, ...], ...]
+) -> PrimeFieldQuotientSpace:
     return compute_quotient_space(
         PrimeFieldQuotientRequest(
             subspace=PrimeFieldSubspace(
@@ -29,13 +31,15 @@ def _quotient(prime: int, n: int, generators: tuple[tuple[int, ...], ...]):
     )
 
 
-def _mat_vec(matrix: tuple[tuple[int, ...], ...], vector: tuple[int, ...], p: int):
+def _mat_vec(
+    matrix: tuple[tuple[int, ...], ...], vector: tuple[int, ...], p: int
+) -> tuple[int, ...]:
     return tuple(
         sum(a * b for a, b in zip(row, vector, strict=True)) % p for row in matrix
     )
 
 
-def _span(generators: tuple[tuple[int, ...], ...], p: int):
+def _span(generators: tuple[tuple[int, ...], ...], p: int) -> set[tuple[int, ...]]:
     coefficients = range(p)
     vectors = {tuple(0 for _ in (generators[0] if generators else ()))}
     for generator in generators:
@@ -53,7 +57,7 @@ def _span(generators: tuple[tuple[int, ...], ...], p: int):
 @pytest.mark.parametrize("prime", [2, 3, 5])
 def test_projection_has_denominator_kernel_and_coordinates_in_returned_basis(
     prime: int,
-):
+) -> None:
     quotient = _quotient(
         prime,
         3,
@@ -71,7 +75,7 @@ def test_projection_has_denominator_kernel_and_coordinates_in_returned_basis(
     assert projected.coordinates == _mat_vec(quotient.projection.entries, vector, prime)
 
 
-def test_quotient_and_projected_vector_roundtrip_unchanged_through_json():
+def test_quotient_and_projected_vector_roundtrip_unchanged_through_json() -> None:
     quotient = _quotient(3, 2, ((1, 1),))
     decoded_quotient = PrimeFieldQuotientSpace.model_validate_json(
         quotient.model_dump_json()
@@ -82,7 +86,9 @@ def test_quotient_and_projected_vector_roundtrip_unchanged_through_json():
     assert projected.quotient == quotient
 
 
-def test_zero_subspace_is_identity_quotient_and_full_subspace_is_zero_quotient():
+def test_zero_subspace_is_identity_quotient_and_full_subspace_is_zero_quotient() -> (
+    None
+):
     identity = _quotient(5, 2, ())
     assert identity.quotient_basis == ((1, 0), (0, 1))
     assert identity.projection.entries == ((1, 0), (0, 1))
@@ -98,7 +104,7 @@ def test_zero_subspace_is_identity_quotient_and_full_subspace_is_zero_quotient()
     assert projected_zero.quotient == zero
 
 
-def test_zero_ambient_axis_retains_empty_projection_shape():
+def test_zero_ambient_axis_retains_empty_projection_shape() -> None:
     zero = _quotient(2, 0, ())
     assert zero.quotient_basis == ()
     assert zero.projection.entries == ()
@@ -106,7 +112,7 @@ def test_zero_ambient_axis_retains_empty_projection_shape():
     assert project_quotient_vector(zero, ()).coordinates == ()
 
 
-def test_quotient_projection_is_invariant_under_adding_denominator_vectors():
+def test_quotient_projection_is_invariant_under_adding_denominator_vectors() -> None:
     quotient = _quotient(7, 3, ((1, 2, 0),))
     vector = (3, 4, 5)
     representative_in_same_class = tuple(
@@ -119,7 +125,7 @@ def test_quotient_projection_is_invariant_under_adding_denominator_vectors():
     assert first.coordinates == second.coordinates
 
 
-def test_projection_classes_match_exhaustive_cosets_in_gf2_cubed():
+def test_projection_classes_match_exhaustive_cosets_in_gf2_cubed() -> None:
     generators = ((1, 1, 0), (0, 1, 1), (1, 0, 1))
     quotient = _quotient(2, 3, generators)
     denominator = _span(generators, 2)
@@ -139,7 +145,7 @@ def test_projection_classes_match_exhaustive_cosets_in_gf2_cubed():
             assert (projected[left] == projected[right]) == (difference in denominator)
 
 
-def test_projection_rejects_wrong_parent_axis_and_noncanonical_values():
+def test_projection_rejects_wrong_parent_axis_and_noncanonical_values() -> None:
     quotient = _quotient(3, 2, ((1, 0),))
     with pytest.raises(OperationDomainValidationError):
         project_quotient_vector(quotient, (0,))
@@ -163,7 +169,7 @@ def test_projection_rejects_wrong_parent_axis_and_noncanonical_values():
         )
 
 
-def test_projection_rechecks_caller_authored_quotient_relation():
+def test_projection_rechecks_caller_authored_quotient_relation() -> None:
     quotient = _quotient(3, 2, ((1, 1),))
     forged_payload = quotient.model_dump(mode="json")
     forged_payload["projection"]["entries"] = [[1, 0]]
@@ -172,7 +178,7 @@ def test_projection_rechecks_caller_authored_quotient_relation():
         project_quotient_vector(forged, (2, 1))
 
 
-def test_native_quotient_admission_rejects_a_forged_subspace_carrier():
+def test_native_quotient_admission_rejects_a_forged_subspace_carrier() -> None:
     """A copied carrier cannot skip the generator-axis invariant."""
     forged = PrimeFieldSubspace(prime=2, ambient_dimension=0, generators=()).model_copy(
         update={"generators": ((1,),)}
@@ -181,7 +187,7 @@ def test_native_quotient_admission_rejects_a_forged_subspace_carrier():
         quotient_space(forged)
 
 
-def test_native_projection_admission_rejects_a_forged_field_mix():
+def test_native_projection_admission_rejects_a_forged_field_mix() -> None:
     """An unchecked projection field must not silently drive GF(p) arithmetic."""
     quotient = _quotient(3, 2, ((1, 1),))
     forged = quotient.model_copy(
@@ -193,7 +199,7 @@ def test_native_projection_admission_rejects_a_forged_field_mix():
         project_quotient_vector(forged, (0, 2))
 
 
-def test_native_projection_admission_rejects_a_forged_basis_carrier():
+def test_native_projection_admission_rejects_a_forged_basis_carrier() -> None:
     """An unchecked quotient basis must match the retained ambient axis."""
     quotient = _quotient(3, 2, ((1, 1),))
     forged = quotient.model_copy(update={"quotient_basis": ((1,),)})
@@ -201,7 +207,7 @@ def test_native_projection_admission_rejects_a_forged_basis_carrier():
         project_quotient_vector(forged, (2, 1))
 
 
-def test_subspace_preflight_rejects_oversized_generator_count():
+def test_subspace_preflight_rejects_oversized_generator_count() -> None:
     with pytest.raises(ValidationError) as exc_info:
         PrimeFieldSubspace.model_validate(
             {"prime": 2, "ambient_dimension": 1, "generators": [[]] * 1025}
@@ -212,7 +218,7 @@ def test_subspace_preflight_rejects_oversized_generator_count():
     )
 
 
-def test_subspace_preflight_rejects_an_overlong_generator_row():
+def test_subspace_preflight_rejects_an_overlong_generator_row() -> None:
     with pytest.raises(ValidationError) as exc_info:
         PrimeFieldSubspace.model_validate(
             {"prime": 2, "ambient_dimension": 1, "generators": [[0] * 1025]}
@@ -223,19 +229,19 @@ def test_subspace_preflight_rejects_an_overlong_generator_row():
     )
 
 
-def test_quotient_operation_rejects_a_composite_characteristic():
+def test_quotient_operation_rejects_a_composite_characteristic() -> None:
     with pytest.raises(OperationDomainValidationError):
         _quotient(4, 1, ())
 
 
-def test_quotient_admission_counts_parented_output_coordinates():
+def test_quotient_admission_counts_parented_output_coordinates() -> None:
     with pytest.raises(ValidationError):
         PrimeFieldQuotientRequest(
             subspace=PrimeFieldSubspace(prime=2, ambient_dimension=724, generators=())
         )
 
 
-def test_quotient_construction_is_the_only_published_quotient_operation():
+def test_quotient_construction_is_the_only_published_quotient_operation() -> None:
     tools = {tool.operation_id: tool for tool in BUILTIN_TOOLS}
     assert (
         tools["prime_field.vector_space.quotient.compute"].result_type

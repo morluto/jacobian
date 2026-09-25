@@ -60,9 +60,7 @@ def _require_canonical_generators(
         for vector in generators
         for entry in vector
     ):
-        raise _error(
-            "generator_residue", "entries must be canonical residues in GF(p)"
-        )
+        raise _error("generator_residue", "entries must be canonical residues in GF(p)")
 
 
 def _require_quotient_envelope(ambient_dimension: int, generator_count: int) -> None:
@@ -117,7 +115,9 @@ def _require_quotient_structure(
     prime = source.prime
     quotient_dimension = len(quotient_basis)
     if quotient_dimension > ambient_dimension:
-        raise _error("quotient_dimension", "quotient dimension exceeds its ambient axis")
+        raise _error(
+            "quotient_dimension", "quotient dimension exceeds its ambient axis"
+        )
     if any(len(vector) != ambient_dimension for vector in quotient_basis):
         raise _error(
             "basis_axis", "quotient representatives must use ambient coordinates"
@@ -139,7 +139,9 @@ def _require_quotient_structure(
         or projection.columns != ambient_dimension
         or len(projection.entries) != quotient_dimension
     ):
-        raise _error("projection_axes", "projection field and axes must match the bound quotient")
+        raise _error(
+            "projection_axes", "projection field and axes must match the bound quotient"
+        )
     proof_cells = (
         len(source.generators) * ambient_dimension
         + 2 * quotient_dimension * ambient_dimension

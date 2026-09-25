@@ -224,9 +224,7 @@ def _admit_subspace(subspace: object) -> PrimeFieldSubspace:
     return subspace
 
 
-def _admit_projection_request(
-    quotient: object, vector: object
-) -> None:
+def _admit_projection_request(quotient: object, vector: object) -> None:
     """Admit a quotient carrier, its authored relation, and the ambient vector.
 
     The quotient value is caller-supplied and may have been built by
@@ -265,9 +263,7 @@ def _admit_projection_request(
     _admit_projection_relation(quotient)
 
 
-def _admit_projection_vector(
-    vector: object, *, dimension: int, prime: int
-) -> None:
+def _admit_projection_vector(vector: object, *, dimension: int, prime: int) -> None:
     """Admit the ambient vector against the quotient's declared axis and field."""
     if type(vector) is not tuple:
         _domain_rejection(

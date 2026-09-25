@@ -19,8 +19,12 @@ canonical Jacobian input
 Every adapter records the supported backend and version range, converts only
 already-admitted canonical values, preserves the coefficient domain and parent
 identity, and translates expected backend failures into the operation's typed
-outcomes. Backend objects and exceptions must not cross the public request or
-result boundary.
+outcomes. Backend-specific objects must not become public wire request or result
+formats, and backend exceptions must not escape as the operation's outcomes.
+A documented native API may accept a maintained backend type when it already
+carries the complete mathematical meaning; normalize it at the native boundary
+and apply the same owner admission. That convenience does not change the wire
+contract or authorize backend objects in tool results.
 
 An unexpected backend or host failure never establishes a mathematical
 predicate. An adapter may return ``False``, ``UNBOUNDED``, ``UNSAT``, or another
@@ -37,9 +41,11 @@ primal candidate establishes neither infeasibility nor unboundedness. Preserve
 an operational-failure outcome unless a valid mathematical result is obtained.
 
 This is part of producing the certificate, not a universal result-verification
-layer. Do not replay a solve, factorization, or other completed kernel in a
-Pydantic validator, serializer, or result constructor. Consult the
-[known backend defects](backend-known-defects.md) when investigating inconsistent
+layer. Candidate checking is distinct from repeating the producer's solve: it
+may be essential even when the backend is maintained. Keep it bounded and
+explicit in the admitted computation. Do not replay a solve, factorization, or
+other completed kernel in a Pydantic validator, serializer, or result
+constructor. Consult the [known backend defects](backend-known-defects.md) when investigating inconsistent
 candidates; use a maintained alternative or a bounded owner-local repair, with
 regressions for the pinned backend behavior.
 
@@ -50,6 +56,31 @@ may reject malformed backend representation. Defining-invariant evidence
 belongs in the owning tests. If checking caller-supplied mathematical data is a
 public capability, its domain operation owns that check; it is not a universal
 converter obligation or backend replay stage.
+
+## Exact and numerical backend contracts
+
+Choose a backend for the mathematical contract, not merely a matching function
+name. [SymPy's best practices](https://docs.sympy.org/latest/explanation/best-practices.html)
+recommend constructing symbolic objects instead of manipulating expression
+strings, using exact rational inputs where required, and preferring targeted
+transformations to heuristic `simplify()` in programmatic code. Caller-authored
+syntax still goes through Jacobian's bounded non-evaluating grammar; evaluator
+flags such as `evaluate=False` do not provide a sandbox.
+
+[NumPy integers are fixed-width](https://numpy.org/doc/stable/user/basics.types.html#overflow-errors)
+and can overflow. Converting an overflowed result to Python `int` cannot recover
+its value. Floating-point computations likewise do not establish exact rank,
+feasibility, or optimality merely by rounding. Use an exact kernel for an exact
+claim, or establish the required relation from a numerical candidate with an
+admitted exact check. An approximate contract must state its accuracy semantics;
+encoding the computed float as a rational preserves its bits, not mathematical
+exactness. See [operation result semantics](domain-operation-library.md#validated-mathematical-subtypes-and-exact-success-states).
+
+Backend libraries do not supply Jacobian's untrusted-service resource policy.
+[NumPy's security guidance](https://numpy.org/doc/stable/reference/security.html)
+explicitly calls out shape/dtype restrictions, expanded allocations, and resource
+exhaustion. Bound conversions and intermediate representations as well as the
+backend call; a fast benchmark alone does not prove a safe envelope.
 
 ## In-process adapters
 
@@ -174,10 +205,13 @@ When a worker returns a derived projection of canonical source retained by the
 parent, it must not echo or replace that source. Bind the projection to the
 admitted source before trusted result construction. Workers that return a
 self-contained bounded value do not need an artificial source digest.
-Structurally decode projections, but do not pass worker output through the
-complete public result model or any nested validator that replays mathematical
-work. Size stdin and stdout limits for the actual UTF-8 worker payload, not for
-a different public representation. Pass those channel-specific limits to both
+Structurally decode projections and establish any candidate relation required
+by the result contract. Avoid a complete public result model or nested validator
+when it would rerun the worker's computation; use trusted construction only for
+invariants already established. This does not waive framing, source binding,
+shape, scalar, or necessary mathematical candidate checks. Size stdin and stdout
+limits for the actual UTF-8 worker payload, not for a different public
+representation. Pass those channel-specific limits to both
 the process supervisor and any canonical encoder or decoder at that boundary;
 the codec's ordinary unbounded-output mode must not silently substitute a
 different default.

@@ -164,6 +164,23 @@ def test_matrix_add_preserves_empty_axes(
     assert result.entries == left.entries
 
 
+@pytest.mark.parametrize(
+    ("row_axis", "column_axis"),
+    [(("r", "r"), ("c",)), (("r",), ("c", "c")), (tuple(f"r{i}" for i in range(129)), tuple(f"c{i}" for i in range(129)))],
+)
+def test_matrix_add_rejects_malformed_native_axes(
+    row_axis: tuple[str, ...], column_axis: tuple[str, ...]
+) -> None:
+    matrix = TropicalMatrix.model_construct(
+        semiring=TropicalSemiring(convention="MIN_PLUS", base="QQ"),
+        row_axis=row_axis,
+        column_axis=column_axis,
+        entries=tuple(() for _ in row_axis),
+    )
+    with pytest.raises(OperationDomainValidationError):
+        tropical_matrix_add(matrix, matrix)
+
+
 def test_matrix_add_rejects_mismatched_semiring_or_labelled_axes() -> None:
     left = _matrix("MIN_PLUS", ((Fraction(0),),), row_axis=("r",), column_axis=("c",))
     other_convention = _matrix(

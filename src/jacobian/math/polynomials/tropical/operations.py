@@ -127,8 +127,13 @@ def _admit_matrix(matrix: TropicalMatrix) -> None:
             code="tropical.matrix_type",
             message="expected a tropical matrix",
         )
-    if len(matrix.row_axis) != len(matrix.entries) or any(
-        len(row) != len(matrix.column_axis) for row in matrix.entries
+    if (
+        len(matrix.row_axis) != len(matrix.entries)
+        or any(len(row) != len(matrix.column_axis) for row in matrix.entries)
+        or len(set(matrix.row_axis)) != len(matrix.row_axis)
+        or len(set(matrix.column_axis)) != len(matrix.column_axis)
+        or len(matrix.row_axis) > 128
+        or len(matrix.column_axis) > 128
     ):
         raise OperationDomainValidationError(
             location=("matrix",),

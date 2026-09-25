@@ -155,35 +155,11 @@ def braid_artin_action(word: BraidWord) -> BraidArtinActionResult:
     """
 
     admitted = _admit_braid(word)
-    # Bound the unexpanded word substitution using lengths alone. Cancellation
-    # can only reduce these lengths, so this is a sound preflight estimate.
-    lengths = [1] * admitted.strand_count
-    total_work = admitted.strand_count
-    for letter in admitted.letters:
-        i = letter.generator - 1
-        next_lengths = lengths.copy()
-        if letter.exponent == 1:
-            next_lengths[i] = 2 * lengths[i] + lengths[i + 1]
-            next_lengths[i + 1] = lengths[i]
-        else:
-            next_lengths[i] = lengths[i + 1]
-            next_lengths[i + 1] = lengths[i] + 2 * lengths[i + 1]
-        lengths = next_lengths
-        total_work += sum(lengths)
-        if max(lengths) > 128 or total_work > 100_000:
-            raise OperationResourceAdmissionError(
-                location=("word", "letters"),
-                code="link_diagram.artin_action_expansion_bound",
-                message=(
-                    "the admitted braid action exceeds the 128-letter per-image "
-                    "or 100000-letter cumulative substitution envelope"
-                ),
-            )
-
     images: list[tuple[WordLetter, ...]] = [
         (WordLetter(generator=index, exponent=1),)
         for index in range(admitted.strand_count)
     ]
+    total_work = admitted.strand_count
     for letter in admitted.letters:
         i = letter.generator - 1
         first, second = images[i], images[i + 1]
@@ -192,15 +168,29 @@ def braid_artin_action(word: BraidWord) -> BraidArtinActionResult:
                 WordLetter(generator=item.generator, exponent=-item.exponent)
                 for item in reversed(first)
             )
-            images[i] = _reduce_free_word(first + second + inverse_first)
-            images[i + 1] = first
+            candidate = _reduce_free_word(first + second + inverse_first)
+            replacement = first
+            target = i
         else:
             inverse_second = tuple(
                 WordLetter(generator=item.generator, exponent=-item.exponent)
                 for item in reversed(second)
             )
-            images[i] = second
-            images[i + 1] = _reduce_free_word(inverse_second + first + second)
+            candidate = _reduce_free_word(inverse_second + first + second)
+            replacement = second
+            target = i + 1
+        total_work += len(first) + len(second) + len(candidate) + len(replacement)
+        if len(candidate) > 128 or total_work > 100_000:
+            raise OperationResourceAdmissionError(
+                location=("word", "letters"),
+                code="link_diagram.artin_action_expansion_bound",
+                message=(
+                    "the reduced braid action exceeds the 128-letter per-image "
+                    "or 100000-letter cumulative substitution envelope"
+                ),
+            )
+        images[target] = candidate
+        images[i + 1 if target == i else i] = replacement
 
     return BraidArtinActionResult(
         word=admitted,

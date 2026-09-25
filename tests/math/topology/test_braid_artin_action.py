@@ -64,11 +64,11 @@ def test_artin_action_obeys_braid_relation_and_trefoil_closure_permutation() -> 
     assert exponent_vectors == ((0, 1), (1, 0))
 
 
-def test_action_preflights_expansion_before_constructing_large_images() -> None:
-    accepted = braid_artin_action(_word(2, *((1, 1),) * 5))
-    assert max(len(image.letters) for image in accepted.generator_images) <= 128
+def test_action_admits_cancellation_and_bounds_reduced_expansion() -> None:
+    cancelled = braid_artin_action(_word(2, *((1, 1),) * 6))
+    assert tuple(len(image.letters) for image in cancelled.generator_images) == (13, 11)
     with pytest.raises(OperationResourceAdmissionError, match="128-letter"):
-        braid_artin_action(_word(2, *((1, 1),) * 6))
+        braid_artin_action(_word(2, *((1, 1),) * 64))
 
 
 def test_action_is_published_as_one_typed_catalog_operation() -> None:

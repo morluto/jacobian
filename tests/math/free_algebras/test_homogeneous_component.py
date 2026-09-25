@@ -7,12 +7,14 @@ from itertools import islice, product
 import pytest
 
 from jacobian.catalog.catalog import Catalog
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.dispatch import invoke_operation
 from jacobian.math.free_algebras._models import FreeAlgebraPolynomial
 from jacobian.math.free_algebras.homogeneous_component._models import (
     FreeAlgebraHomogeneousComponent,
-    FreeAlgebraHomogeneousComponentRequest,
 )
 from jacobian.math.free_algebras.homogeneous_component.operations import (
     homogeneous_component,
@@ -41,9 +43,7 @@ def _polynomial() -> FreeAlgebraPolynomial:
 
 
 def test_projection_preserves_exact_terms_parent_and_degree_after_round_trip() -> None:
-    result = homogeneous_component(
-        FreeAlgebraHomogeneousComponentRequest(polynomial=_polynomial(), degree=1)
-    )
+    result = homogeneous_component(_polynomial(), 1)
     restored = FreeAlgebraHomogeneousComponent.model_validate(result.model_dump())
     assert restored.degree == 1
     assert restored.polynomial.alphabet == ("x", "y")
@@ -53,12 +53,7 @@ def test_projection_preserves_exact_terms_parent_and_degree_after_round_trip() -
 
 def test_degree_family_reconstructs_source_and_preserves_zero_parent() -> None:
     source = _polynomial()
-    components = [
-        homogeneous_component(
-            FreeAlgebraHomogeneousComponentRequest(polynomial=source, degree=degree)
-        )
-        for degree in range(4)
-    ]
+    components = [homogeneous_component(source, degree) for degree in range(4)]
     projected = Counter(
         (term.word, term.coefficient.num, term.coefficient.den)
         for component in components
@@ -69,9 +64,7 @@ def test_degree_family_reconstructs_source_and_preserves_zero_parent() -> None:
     )
     assert projected == original
 
-    missing = homogeneous_component(
-        FreeAlgebraHomogeneousComponentRequest(polynomial=source, degree=3)
-    )
+    missing = homogeneous_component(source, 3)
     assert missing.degree == 3
     assert missing.polynomial.is_zero
     assert missing.polynomial.alphabet == source.alphabet
@@ -116,9 +109,15 @@ def test_output_admission_rejects_large_selected_support_before_result_build() -
             "terms": [_term(list(word)) for word in reversed(words)],
         }
     )
-    request = FreeAlgebraHomogeneousComponentRequest(
-        polynomial=polynomial,
-        degree=8,
-    )
     with pytest.raises(OperationResourceAdmissionError, match="output allocation"):
-        homogeneous_component(request)
+        homogeneous_component(polynomial, 8)
+
+
+def test_native_operation_rejects_invalid_or_over_bound_degree() -> None:
+    polynomial = _polynomial()
+    with pytest.raises(OperationDomainValidationError, match="nonnegative integer"):
+        homogeneous_component(polynomial, -1)
+    with pytest.raises(OperationResourceAdmissionError, match="value envelope"):
+        homogeneous_component(polynomial, 65)
+    with pytest.raises(OperationDomainValidationError, match="nonnegative integer"):
+        homogeneous_component(polynomial, True)

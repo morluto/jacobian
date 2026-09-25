@@ -9,6 +9,13 @@ from jacobian.math.free_algebras.homogeneous_component.operations import (
     homogeneous_component,
 )
 
+
+def _run_homogeneous_component(
+    request: FreeAlgebraHomogeneousComponentRequest,
+) -> FreeAlgebraHomogeneousComponent:
+    return homogeneous_component(request.polynomial, request.degree)
+
+
 TOOLS = (
     MathTool(
         operation_id="free_algebra.polynomial.homogeneous_component.compute",
@@ -25,7 +32,7 @@ TOOLS = (
         ),
         request_type=FreeAlgebraHomogeneousComponentRequest,
         result_type=FreeAlgebraHomogeneousComponent,
-        run=homogeneous_component,
+        run=_run_homogeneous_component,
         tags=("free-algebra", "polynomial", "graded", "homogeneous-component", "exact"),
         discovery_terms=(
             "noncommutative polynomial homogeneous component",

@@ -134,7 +134,7 @@ def _admit_weighted_maximum(source: WeightedOrderedWord) -> int:
             message="source must retain a canonical explicitly ordered word",
         )
     numerator_digits = 1
-    denominator_product_digits = 0
+    denominators: set[int] = set()
     source_digits = 0
     for weight in source.weights:
         if (
@@ -172,10 +172,14 @@ def _admit_weighted_maximum(source: WeightedOrderedWord) -> int:
             )
         numerator_digits = max(numerator_digits, num_digits)
         if weight.den != 1:
-            denominator_product_digits += den_digits
+            denominators.add(weight.den)
 
+    # A common denominator is the LCM of distinct input denominators. Repeated
+    # equal denominators do not multiply growth; use their product as a safe
+    # bound while retaining this important common-denominator case.
+    denominator_product_digits = sum(decimal_digit_width(d) for d in denominators)
     # Every witness sum is at most n times the largest input numerator over
-    # the product of all nonunit input denominators. This bounds both Fraction
+    # the product of distinct nonunit input denominators. This bounds both Fraction
     # operands before any dynamic-programming state is materialized.
     carry_digits = decimal_digit_width(max(n, 1))
     growth_digits = numerator_digits + denominator_product_digits + carry_digits

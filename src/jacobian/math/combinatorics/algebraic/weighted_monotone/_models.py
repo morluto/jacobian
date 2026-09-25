@@ -64,16 +64,9 @@ def _preflight_weight_payload(value: object) -> None:
         if max(widths) > MAX_WEIGHTED_MONOTONE_COMPONENT_DIGITS:
             raise PydanticCustomError(
                 "weighted_word.component_digits",
-                "each rational numerator and denominator is limited to "
-                f"{MAX_WEIGHTED_MONOTONE_COMPONENT_DIGITS} decimal digits",
+                "each rational numerator and denominator is limited to 256 decimal digits",
             )
         total_digits += sum(widths)
-        if total_digits > MAX_WEIGHTED_MONOTONE_SOURCE_DIGITS:
-            raise PydanticCustomError(
-                "weighted_word.source_digits",
-                "the combined rational source is limited to "
-                f"{MAX_WEIGHTED_MONOTONE_SOURCE_DIGITS} decimal digits",
-            )
 
 
 class WeightedOrderedWord(StrictModel):

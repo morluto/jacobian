@@ -9,13 +9,13 @@ import pytest
 
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.combinatorics.matroids import (
-    GraphicMatroidRequest,
     LinearMatroid,
     MatroidWeightFunction,
     graphic_matroid,
     matroid_rank,
     maximum_weight_basis_result,
 )
+from jacobian.math.combinatorics.matroids._models import GraphicMatroidRequest
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 from jacobian.math.matrices.finite_fields.linear_algebra import PrimeFieldMatrix
 

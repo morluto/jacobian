@@ -425,7 +425,9 @@ def _admit_complex(
         ) from exc
     sequence_length = len(candidate.sequence)
     module_dimension = len(candidate.module.basis)
-    if sequence_length > 6 or module_dimension * (2**sequence_length) > 256:
+    if sequence_length > 6 or (
+        admit_homology and module_dimension * (2**sequence_length) > 256
+    ):
         raise OperationResourceAdmissionError(
             location=("complex", "sequence"),
             code="koszul.module.budget",

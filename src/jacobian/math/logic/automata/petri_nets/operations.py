@@ -818,6 +818,50 @@ def petri_net_matrices(net: PetriNet) -> PetriNetMatricesResult:
             )
         )
 
+    def support_map_size(
+        *,
+        outer_axis: int,
+        inner_axis: int,
+        matrix: tuple[tuple[int, ...], ...],
+        transpose: bool,
+    ) -> int:
+        row_sizes: list[int] = []
+        for outer in range(outer_axis):
+            indices = [
+                index
+                for index in range(inner_axis)
+                if (matrix[index][outer] if transpose else matrix[outer][index]) > 0
+            ]
+            row_sizes.append(array_size([len(str(index)) for index in indices]))
+        return array_size(row_sizes)
+
+    # Pre-admit support-map serialization from bounded input matrices before
+    # allocating any output tuples.
+    input_places_size = support_map_size(
+        outer_axis=transition_count,
+        inner_axis=place_count,
+        matrix=admitted.pre,
+        transpose=True,
+    )
+    output_places_size = support_map_size(
+        outer_axis=transition_count,
+        inner_axis=place_count,
+        matrix=admitted.post,
+        transpose=True,
+    )
+    consumer_transitions_size = support_map_size(
+        outer_axis=place_count,
+        inner_axis=transition_count,
+        matrix=admitted.pre,
+        transpose=False,
+    )
+    producer_transitions_size = support_map_size(
+        outer_axis=place_count,
+        inner_axis=transition_count,
+        matrix=admitted.post,
+        transpose=False,
+    )
+
     output_size = strict_json_object_size(
         (
             ("net", _petri_net_reverse_output_bound(admitted)),
@@ -844,6 +888,10 @@ def petri_net_matrices(net: PetriNet) -> PetriNetMatricesResult:
                     )
                 ),
             ),
+            ("input_places_by_transition", input_places_size),
+            ("output_places_by_transition", output_places_size),
+            ("consumer_transitions_by_place", consumer_transitions_size),
+            ("producer_transitions_by_place", producer_transitions_size),
         )
     )
     if output_size > MAX_PETRI_NET_REVERSE_OUTPUT_BYTES:
@@ -859,9 +907,38 @@ def petri_net_matrices(net: PetriNet) -> PetriNetMatricesResult:
         )
         for place in range(place_count)
     )
-    # The input net is already bounded to 64 by 64 cells and arc weights at
-    # most 1000. Three dense integer matrices therefore have a small fixed
-    # exact representation; no backend expansion or data-dependent search occurs.
+    input_places_by_transition = tuple(
+        tuple(
+            place for place in range(place_count) if admitted.pre[place][transition] > 0
+        )
+        for transition in range(transition_count)
+    )
+    output_places_by_transition = tuple(
+        tuple(
+            place
+            for place in range(place_count)
+            if admitted.post[place][transition] > 0
+        )
+        for transition in range(transition_count)
+    )
+    consumer_transitions_by_place = tuple(
+        tuple(
+            transition
+            for transition in range(transition_count)
+            if admitted.pre[place][transition] > 0
+        )
+        for place in range(place_count)
+    )
+    producer_transitions_by_place = tuple(
+        tuple(
+            transition
+            for transition in range(transition_count)
+            if admitted.post[place][transition] > 0
+        )
+        for place in range(place_count)
+    )
+    # The admitted net bounds matrix and support-map work by four scans of at
+    # most 64 by 64 cells; no backend expansion or data-dependent search occurs.
     return PetriNetMatricesResult.model_construct(
         net=admitted,
         pre=IntegerMatrix.model_construct(
@@ -879,6 +956,10 @@ def petri_net_matrices(net: PetriNet) -> PetriNetMatricesResult:
             column_count=transition_count,
             entries=incidence,
         ),
+        input_places_by_transition=input_places_by_transition,
+        output_places_by_transition=output_places_by_transition,
+        consumer_transitions_by_place=consumer_transitions_by_place,
+        producer_transitions_by_place=producer_transitions_by_place,
     )
 
 

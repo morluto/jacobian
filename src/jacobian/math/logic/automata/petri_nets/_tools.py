@@ -223,7 +223,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     MathTool(
         operation_id="petri_net.matrices.compute",
         title="Compute Petri-net pre, post, and incidence matrices",
-        description="Return exact precondition and postcondition matrices and their incidence difference C = Post - Pre. The source net retains the place and transition axes.",
+        description="Return exact Pre, Post, and C = Post - Pre matrices, plus input/output place supports per transition and producer/consumer transition supports per place. The source net retains the exact axes.",
         request_type=PetriNetMatricesRequest,
         result_type=PetriNetMatricesResult,
         run=compute_petri_net_matrices,

@@ -469,6 +469,10 @@ class PetriNetMatricesResult(StrictModel):
     pre: IntegerMatrix
     post: IntegerMatrix
     incidence: IntegerMatrix
+    input_places_by_transition: tuple[tuple[int, ...], ...]
+    output_places_by_transition: tuple[tuple[int, ...], ...]
+    consumer_transitions_by_place: tuple[tuple[int, ...], ...]
+    producer_transitions_by_place: tuple[tuple[int, ...], ...]
 
 
 class IncidenceMatrixResult(StrictModel):

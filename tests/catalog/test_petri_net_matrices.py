@@ -15,6 +15,10 @@ def test_matrices_example_returns_exact_pre_post_and_incidence() -> None:
     assert result.output["pre"]["entries"] == [["2"], ["0"]]
     assert result.output["post"]["entries"] == [["0"], ["3"]]
     assert result.output["incidence"]["entries"] == [["-2"], ["3"]]
+    assert result.output["input_places_by_transition"] == [[0]]
+    assert result.output["output_places_by_transition"] == [[1]]
+    assert result.output["consumer_transitions_by_place"] == [[0], []]
+    assert result.output["producer_transitions_by_place"] == [[], [0]]
     assert result.output["net"]["place_ids"] is None
     assert result.output["net"]["transition_ids"] is None
     assert result.output["net"]["pre"] == [[2], [0]]

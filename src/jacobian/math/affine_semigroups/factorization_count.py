@@ -68,6 +68,12 @@ def _admit_count_source(value: object) -> PositiveAffineSemigroup:
             code="affine_semigroup.semigroup",
             message="semigroup must be a canonical positive affine semigroup",
         )
+    if not hasattr(value, "configuration") or not hasattr(value, "grading"):
+        raise OperationDomainValidationError(
+            location=("semigroup",),
+            code="affine_semigroup.semigroup",
+            message="semigroup is missing required canonical fields",
+        )
     configuration = value.configuration
     if type(configuration) is not AffineConfiguration:
         raise OperationDomainValidationError(
@@ -95,12 +101,13 @@ def _admit_count_source(value: object) -> PositiveAffineSemigroup:
         )
     labels = (*configuration.row_labels, *configuration.generator_labels)
     if (
-        any(
-            type(label) is not str
-            or any(0xD800 <= ord(character) <= 0xDFFF for character in label)
-            for label in labels
-        )
+        any(type(label) is not str for label in labels)
         or sum(len(label) for label in labels) > MAX_AFFINE_FACTOR_COUNT_LABEL_CHARS
+        or any(
+            0xD800 <= ord(character) <= 0xDFFF
+            for label in labels
+            for character in label
+        )
     ):
         raise OperationResourceAdmissionError(
             location=("semigroup", "configuration"),

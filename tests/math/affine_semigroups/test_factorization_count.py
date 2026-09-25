@@ -89,6 +89,24 @@ def test_surrogate_label_is_rejected_before_result_serialization() -> None:
         factorization_count(semigroup, (1,))
 
 
+def test_overlong_label_is_rejected_before_surrogate_scan() -> None:
+    operation = importlib.import_module(
+        "jacobian.math.affine_semigroups.factorization_count"
+    )
+    semigroup = _semigroup(((1,),), (Fraction(1),))
+    forged_configuration = AffineConfiguration.model_construct(
+        row_labels=("r" * (operation.MAX_AFFINE_FACTOR_COUNT_LABEL_CHARS + 1),),
+        generator_labels=("g",),
+        entries=((1,),),
+    )
+    forged = PositiveAffineSemigroup.model_construct(
+        configuration=forged_configuration, grading=semigroup.grading
+    )
+
+    with pytest.raises(OperationResourceAdmissionError, match="labels"):
+        factorization_count(forged, (1,))
+
+
 def test_one_row_duplicate_columns_and_zero_target() -> None:
     semigroup = _semigroup(((1,), (1,)), (Fraction(1),))
 
@@ -231,6 +249,13 @@ def test_forged_typed_source_is_shaped_before_revalidation_copy(
     )
 
     with pytest.raises(OperationDomainValidationError, match="axes exceed"):
+        factorization_count(forged, (1,))
+
+
+def test_incomplete_forged_semigroup_has_domain_error() -> None:
+    forged = PositiveAffineSemigroup.model_construct()
+
+    with pytest.raises(OperationDomainValidationError, match="missing required"):
         factorization_count(forged, (1,))
 
 

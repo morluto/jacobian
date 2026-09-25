@@ -66,6 +66,17 @@ AXB = _algebra(AXB_BASIS, ((0, 1, 1, 1),))
 
 
 class TestBracketKnownAnswers:
+    def test_zero_dimensional_algebra_round_trips(self) -> None:
+        algebra = FiniteDimensionalLieAlgebra.model_validate(
+            {"basis": [], "structure_constants": []}
+        )
+        restored = FiniteDimensionalLieAlgebra.model_validate_json(
+            algebra.model_dump_json()
+        )
+        assert restored == algebra
+        assert restored.basis == ()
+        assert restored.structure_constants == ()
+
     def test_canonical_algebra_constructor_admits_jacobi_and_round_trips(self) -> None:
         restored = FiniteDimensionalLieAlgebra.model_validate_json(
             SL2.model_dump_json()

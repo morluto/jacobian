@@ -147,9 +147,9 @@ class FiniteDimensionalLieAlgebra(StrictModel):
         basis = TypeAdapter(tuple[LieBasisLabel, ...]).validate_python(
             basis, strict=True
         )
-        if not 1 <= len(basis) <= MAX_LIE_DIMENSION:
+        if len(basis) > MAX_LIE_DIMENSION:
             raise _validation_error(
-                "dimension_bound", "Lie-algebra dimension is outside 1..8"
+                "dimension_bound", "Lie-algebra dimension exceeds 8"
             )
         if len(set(basis)) != len(basis):
             raise _validation_error(
@@ -184,7 +184,6 @@ class FiniteDimensionalLieAlgebra(StrictModel):
         return cls.model_construct(basis=basis, structure_constants=canonical_constants)
 
     basis: tuple[LieBasisLabel, ...] = Field(
-        min_length=1,
         max_length=MAX_LIE_DIMENSION,
         description="Ordered basis axis; row order is a transport convention",
     )
@@ -498,8 +497,8 @@ class LieAlgebraRequest(StrictModel):
             "Finite-dimensional Lie algebra over QQ of dimension at most "
             f"{MAX_LIE_DIMENSION} by ordered basis labels and sparse "
             "structure constants with bounded rational entries; "
-            "antisymmetry is canonical and construction checks every "
-            "basis-triple Jacobi identity."
+            "antisymmetry is canonical; consuming operations admit "
+            "Jacobi before relying on the bracket."
         )
     )
 

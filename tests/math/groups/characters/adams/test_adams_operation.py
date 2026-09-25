@@ -131,6 +131,23 @@ def test_s3_adams_coordinates_match_direct_element_enumeration(s3_table) -> None
     )
 
 
+def test_cyclic_order_eleven_zero_character_is_admitted() -> None:
+    generator = tuple(range(1, 11)) + (0,)
+    source = PermutationGroup(degree=11, generators=(generator,))
+    classes = group_conjugacy_classes(11, [list(generator)])
+    partition = GroupConjugacyClassesResult._from_kernel(
+        source, tuple(tuple(tuple(item) for item in cls) for cls in classes)
+    )
+    table = character_table(partition)
+    zero = CharacterRingElement(
+        table=table, irreducible_multiplicities=(0,) * len(table.rows)
+    )
+    result = adams_operations.character_adams_operation(
+        AdamsOperationRequest(character=zero, exponent=1)
+    )
+    assert result.irreducible_multiplicities == (0,) * len(table.rows)
+
+
 def test_large_cyclic_three_adams_exponent_is_trivial(cyclic_three_table) -> None:
     table = cyclic_three_table
     nontrivial_row = CharacterRingElement(

@@ -27,9 +27,10 @@ from jacobian.math.groups.characters.operations import (
     character_table,
 )
 from jacobian.math.groups.characters.representation_ring_operations import (
+    MAX_CHARACTER_TENSOR_PRODUCT_WORK,
+    MAX_VALUE_COEFFICIENT_DIGITS,
     _admit_ring_element_shape,
     _admit_source_group_order,
-    _admit_tensor_arithmetic,
     _coordinates_on_authenticated_table,
 )
 from jacobian.math.groups.operations import group_conjugacy_classes
@@ -60,14 +61,36 @@ def _admit_adams_work(
     expansion_work = classes * rows * cyclotomic_dimension
     pairing_work = rows * classes * cyclotomic_dimension**2
     additional_work = power_map_work + membership_work + expansion_work + pairing_work
-    _admit_tensor_arithmetic(
-        element,
-        element,
-        table.partition.source,
-        source_work,
-        group_order,
-        additional_work=additional_work,
+    coefficient_digits = max(
+        1, *(len(str(abs(value))) for value in element.irreducible_multiplicities)
     )
+    value_digits = max(
+        1,
+        *(
+            max(len(str(abs(value.num))), len(str(value.den)))
+            for row in table.rows
+            for class_value in row.values
+            for value in class_value.coefficients
+        ),
+    )
+    predicted_digits = coefficient_digits + value_digits + len(str(rows))
+    work = (
+        additional_work
+        + source_work
+        + 2 * rows * classes * cyclotomic_dimension * predicted_digits**2
+    )
+    if work > MAX_CHARACTER_TENSOR_PRODUCT_WORK:
+        raise OperationResourceAdmissionError(
+            location=("request",),
+            code="groups.characters.adams_work_exceeds_envelope",
+            message="Adams class expansion and exact pairings exceed the work envelope",
+        )
+    if predicted_digits > MAX_VALUE_COEFFICIENT_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("request",),
+            code="groups.characters.adams_output_height_exceeds_envelope",
+            message="Adams coordinates exceed the exact coefficient envelope",
+        )
 
 
 def character_adams_operation(request: AdamsOperationRequest) -> CharacterRingElement:

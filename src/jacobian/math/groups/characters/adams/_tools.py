@@ -34,7 +34,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 name="s3_standard_adams_square",
                 description=(
                     "The second Adams operation of the standard S3 character is "
-                    "the trivial character minus the sign character."
+                    "the trivial character minus the sign character plus the standard character."
                 ),
                 input={
                     "character": {

@@ -101,7 +101,7 @@ def _admit_multiset(
                 code="graph_deck.equality_edges",
                 message="representative edges must be unique and ordered",
             )
-        checked.append((representative.edges, multiplicity))
+        checked.append((representative_edges, multiplicity))
 
     return order, tuple(checked), _anonymous_canonicalization_work(order, len(classes))
 

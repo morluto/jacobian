@@ -83,17 +83,15 @@ def _grammar_root_states(
 
 def test_conversion_preserves_grammar_derivations_as_automaton_runs() -> None:
     grammar = _grammar()
-    result = regular_tree_grammar_to_automaton(
-        RegularTreeGrammarToAutomatonRequest(grammar=grammar)
-    )
+    result = regular_tree_grammar_to_automaton(grammar)
 
-    assert result.automaton.state_count == grammar.nonterminal_count
-    assert result.automaton.arity == grammar.arity
-    assert result.automaton.final_states == (grammar.start_nonterminal,)
+    assert result.state_count == grammar.nonterminal_count
+    assert result.arity == grammar.arity
+    assert result.final_states == (grammar.start_nonterminal,)
     assert result.grammar == grammar
     for tree in _trees_by_size(5):
         grammar_states = _grammar_root_states(grammar, tree)
-        automaton_states = tuple(sorted(run_tree_automaton(result.automaton, tree)))
+        automaton_states = tuple(sorted(run_tree_automaton(result, tree)))
         assert automaton_states == tuple(sorted(grammar_states))
         assert (grammar.start_nonterminal in automaton_states) == (
             grammar.start_nonterminal in grammar_states
@@ -120,13 +118,11 @@ def test_empty_grammar_preserves_empty_signature_and_language() -> None:
         productions=(),
     )
 
-    result = regular_tree_grammar_to_automaton(
-        RegularTreeGrammarToAutomatonRequest(grammar=grammar)
-    )
+    result = regular_tree_grammar_to_automaton(grammar)
 
-    assert result.automaton.arity == ()
-    assert result.automaton.transitions == ()
-    assert result.automaton.final_states == (1,)
+    assert result.arity == ()
+    assert result.transitions == ()
+    assert result.final_states == (1,)
     assert result.grammar == grammar
 
 
@@ -141,9 +137,7 @@ def test_conversion_roundtrip_retains_unused_symbol_and_dead_state() -> None:
         ),
     )
 
-    result = regular_tree_grammar_to_automaton(
-        RegularTreeGrammarToAutomatonRequest(grammar=grammar)
-    )
+    result = regular_tree_grammar_to_automaton(grammar)
     roundtrip = RegularTreeGrammarToAutomatonResult.model_validate(result.model_dump())
     profile = reachable_state_profile(roundtrip.automaton)
 
@@ -177,12 +171,10 @@ def test_maximum_admitted_rule_and_rank_shape_converts_within_work_bound() -> No
         productions=productions,
     )
 
-    result = regular_tree_grammar_to_automaton(
-        RegularTreeGrammarToAutomatonRequest(grammar=grammar)
-    )
+    result = regular_tree_grammar_to_automaton(grammar)
 
-    assert len(result.automaton.transitions) == 4096
-    assert result.automaton.transitions[-1].child_states == (63,) + (0,) * 15
+    assert len(result.transitions) == 4096
+    assert result.transitions[-1].child_states == (63,) + (0,) * 15
 
 
 @pytest.mark.parametrize(

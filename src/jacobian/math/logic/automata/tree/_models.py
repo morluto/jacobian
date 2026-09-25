@@ -132,13 +132,13 @@ class RankedTreePositionsResult(RankedTreePositionsRequest):
     @classmethod
     def _from_kernel(
         cls,
-        request: RankedTreePositionsRequest,
         *,
+        tree: RankedTree,
         positions: tuple[tuple[int, ...], ...],
     ) -> Self:
         """Construct the complete position list emitted by the admitted kernel."""
 
-        return cls.model_construct(tree=request.tree, positions=positions)
+        return cls.model_construct(tree=tree, positions=positions)
 
 
 class RankedTreeSubtreeRequest(StrictModel):
@@ -157,11 +157,13 @@ class RankedTreeSubtreeResult(RankedTreeSubtreeRequest):
 
     @classmethod
     def _from_kernel(
-        cls, request: RankedTreeSubtreeRequest, *, subtree: RankedTree
+        cls,
+        *,
+        tree: RankedTree,
+        position: tuple[int, ...],
+        subtree: RankedTree,
     ) -> Self:
-        return cls.model_construct(
-            tree=request.tree, position=request.position, subtree=subtree
-        )
+        return cls.model_construct(tree=tree, position=position, subtree=subtree)
 
 
 class AcceptedTreeCountRequest(StrictModel):
@@ -290,33 +292,12 @@ class RegularTreeGrammarToAutomatonResult(StrictModel):
     grammar: RegularTreeGrammar
     automaton: BottomUpTreeAutomaton
 
-    @model_validator(mode="after")
-    def require_exact_state_and_rule_transport(self) -> Self:
-        grammar = self.grammar
-        machine = self.automaton
-        if (
-            machine.state_count != grammar.nonterminal_count
-            or machine.arity != grammar.arity
-            or machine.final_states != (grammar.start_nonterminal,)
-            or len(machine.transitions) != len(grammar.productions)
-        ):
-            raise _validation_error(
-                "grammar_automaton_binding",
-                "automaton must retain the grammar signature, state axis, and start state",
-            )
-        for production, transition in zip(
-            grammar.productions, machine.transitions, strict=True
-        ):
-            if (
-                transition.symbol != production.symbol
-                or transition.child_states != production.children
-                or transition.target_state != production.nonterminal
-            ):
-                raise _validation_error(
-                    "grammar_rule_transport",
-                    "each grammar production must become its corresponding automaton transition",
-                )
-        return self
+    @classmethod
+    def _from_kernel(
+        cls, *, grammar: RegularTreeGrammar, automaton: BottomUpTreeAutomaton
+    ) -> Self:
+        """Construct the source-bound result emitted by the trusted converter."""
+        return cls.model_construct(grammar=grammar, automaton=automaton)
 
 
 class TreeAutomatonComplementRequest(StrictModel):
@@ -487,9 +468,16 @@ class TreeAutomatonMinimizeRequest(StrictModel):
 
 
 class TreeAutomatonMinimizeResult(TreeAutomatonMinimizeRequest):
-    """Smallest reachable deterministic quotient and source-state transport."""
+    """Smallest reachable deterministic quotient and source-state transport.
 
-    minimized: DeterministicBottomUpTreeAutomaton
+    A total quotient table is carried as the complete deterministic carrier,
+    so it composes directly with complement and Boolean products; a partial
+    quotient stays on the partial deterministic carrier.
+    """
+
+    minimized: (
+        CompleteDeterministicBottomUpTreeAutomaton | DeterministicBottomUpTreeAutomaton
+    )
     old_to_new: tuple[int, ...] = Field(max_length=MAX_TA_STATES)
     new_to_old: tuple[int | None, ...] = Field(max_length=MAX_TA_STATES)
     reachable_states: tuple[int, ...] = Field(max_length=MAX_TA_STATES)
@@ -521,9 +509,16 @@ class TreeAutomatonMinimizeResult(TreeAutomatonMinimizeRequest):
             raise _validation_error(
                 "minimize_signature", "minimization preserves the ranked signature"
             )
+        non_null_representatives = tuple(
+            state for state in self.new_to_old if state is not None
+        )
         if (
             len(self.new_to_old) != self.minimized.state_count
-            or self.new_to_old != tuple(sorted(set(self.new_to_old)))
+            or (
+                len(non_null_representatives) == len(self.new_to_old)
+                and non_null_representatives
+                != tuple(sorted(set(non_null_representatives)))
+            )
             or any(
                 state is not None and not 0 <= state < source.state_count
                 for state in self.new_to_old
@@ -631,7 +626,7 @@ class TreeDeterminizeResult(TreeDeterminizeRequest):
 
     status: Literal["COMPLETE", "TRUNCATED"]
     truncation_reason: Literal["NONE", "STATE_BUDGET", "WORK_BUDGET"]
-    deterministic: BottomUpTreeAutomaton
+    deterministic: DeterministicBottomUpTreeAutomaton
     subset_map: tuple[tuple[int, ...], ...]
     equivalence_claim: bool
     closure_rows_checked: int = Field(ge=0)

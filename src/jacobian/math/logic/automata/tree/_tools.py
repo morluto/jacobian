@@ -83,16 +83,33 @@ def compute_accepted_tree_count(
     )
 
 
+def compute_regular_tree_grammar_to_automaton(
+    request: RegularTreeGrammarToAutomatonRequest,
+) -> RegularTreeGrammarToAutomatonResult:
+    return RegularTreeGrammarToAutomatonResult._from_kernel(
+        grammar=request.grammar,
+        automaton=regular_tree_grammar_to_automaton(request.grammar),
+    )
+
+
 def compute_ranked_tree_positions(
     request: RankedTreePositionsRequest,
 ) -> RankedTreePositionsResult:
-    return ranked_tree_positions(request)
+    return ranked_tree_positions(request.tree)
 
 
 def compute_ranked_tree_subtree(
     request: RankedTreeSubtreeRequest,
 ) -> RankedTreeSubtreeResult:
-    return ranked_tree_subtree(request)
+    return ranked_tree_subtree(request.tree, request.position)
+
+
+def compute_tree_automaton_boolean_product(
+    request: TreeAutomatonBooleanProductRequest,
+) -> TreeAutomatonBooleanProductResult:
+    return boolean_product_tree_automata(
+        request.left, request.right, request.connective
+    )
 
 
 def compute_tree_automaton_reachability(
@@ -204,7 +221,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
         request_type=TreeAutomatonBooleanProductRequest,
         result_type=TreeAutomatonBooleanProductResult,
-        run=boolean_product_tree_automata,
+        run=compute_tree_automaton_boolean_product,
         tags=("tree-automata", "boolean-operations", "product", "exact"),
         discovery_terms=(
             "tree language intersection",
@@ -213,8 +230,12 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
         examples=(
             OperationExample(
-                name="intersect_partial_machines",
-                description="Build an intersection product over one nullary symbol.",
+                name="intersect_complete_nullary_machines",
+                description=(
+                    "Build an intersection product of two complete one-state "
+                    "machines over one nullary symbol; Boolean products "
+                    "require complete deterministic inputs."
+                ),
                 input={
                     "left": {
                         "state_count": 1,
@@ -559,7 +580,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
         request_type=RegularTreeGrammarToAutomatonRequest,
         result_type=RegularTreeGrammarToAutomatonResult,
-        run=regular_tree_grammar_to_automaton,
+        run=compute_regular_tree_grammar_to_automaton,
         tags=("regular-tree-grammar", "tree-automata", "exact"),
         discovery_terms=(
             "convert regular tree grammar",

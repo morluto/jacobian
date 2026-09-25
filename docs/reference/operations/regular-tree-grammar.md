@@ -23,6 +23,8 @@ conversion admits work from production count, comparison-key ranks, and
 child-axis lengths before
 creating the automaton transitions. Its output has exactly one transition per
 production and retains the bounded source grammar, so the same domain limits
-bound the complete result size. The result composes directly with tree runs,
-counting, Boolean operations, and minimization without changing the signature
-or state IDs.
+bound the complete result size. The result composes directly with tree runs and
+counting. Boolean products require complete deterministic automata, while
+minimization requires a deterministic automaton; arbitrary grammar conversions
+may need determinization (and completion for Boolean products), which can change
+state IDs.

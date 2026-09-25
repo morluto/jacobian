@@ -52,7 +52,6 @@ from jacobian.math.number_theory.elliptic_curves.finite_field import (
     finite_field_point_order,
     finite_field_point_scalar,
     finite_field_points,
-    finite_field_quadratic_twist,
     finite_field_quadratic_twist_relation,
     finite_field_zeta_function,
     finite_field_zeta_polynomial,
@@ -96,12 +95,6 @@ def compute_finite_field_discriminant(
     return finite_field_discriminant(
         request.field, request.coefficient_a, request.coefficient_b
     )
-
-
-def compute_finite_field_quadratic_twist(
-    request: FiniteFieldCurveRequest,
-) -> FiniteFieldShortWeierstrassCurve:
-    return finite_field_quadratic_twist(request.curve)
 
 
 def compute_finite_field_group_structure(
@@ -434,31 +427,6 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 name="count_extensions_five_field",
                 description="Count the curve over F5 and its first two extension fields using exact Frobenius recurrence.",
                 input={"curve": _finite_curve(), "max_degree": 2},
-            ),
-        ),
-    ),
-    MathTool(
-        operation_id="elliptic_curve.finite_field.quadratic_twist.compute",
-        title="Construct the canonical nontrivial quadratic twist",
-        description=(
-            "Return the canonical nontrivial quadratic twist of a nonsingular "
-            "short-Weierstrass curve over an admitted finite field. The kernel "
-            "chooses the least encoded nonsquare d and returns y^2 = x^3 + "
-            "d^2 A x + d^3 B. Its point count has the opposite Frobenius trace."
-        ),
-        request_type=FiniteFieldCurveRequest,
-        result_type=FiniteFieldShortWeierstrassCurve,
-        run=compute_finite_field_quadratic_twist,
-        tags=("elliptic-curve", "finite-field", "quadratic-twist", "exact"),
-        discovery_terms=(
-            "quadratic twist over finite fields",
-            "nontrivial elliptic curve twist",
-        ),
-        examples=(
-            OperationExample(
-                name="nontrivial_twist_over_five",
-                description="Return the canonical nontrivial twist over F5.",
-                input={"curve": _finite_curve()},
             ),
         ),
     ),

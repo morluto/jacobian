@@ -24,11 +24,12 @@ the combined source rational payload to 4,096 digits, the conservative
 numerator/denominator growth of any witness sum to 4,096 digits, and the
 quadratic rational-arithmetic estimate to 20,000,000 units. With `n` source
 positions and an admitted `d`-digit bound for every DP rational, the estimate
-is `n(n-1)d² + 12nd²`: it charges two exact rational comparisons per possible
-predecessor pair and a conservative bigint allowance for each endpoint
-addition and exact result scalar. Requests outside that envelope are rejected
-before DP state construction. The source, exact total, indices, and selected
-letters remain available together in the result.
+is `n(n-1)d² + 12nd²`: it charges two bigint-product units for each rational
+comparison across possible predecessor pairs and a conservative bigint
+allowance for each endpoint addition and the exact result scalar. Requests
+outside that envelope are rejected before DP state construction. The source,
+exact total, indices, and selected letters remain available together in the
+result.
 
 This finite sequence operation is related to the weighted monotone-subsequence
 quantity discussed in Terence Tao's account of Erdős problem #1026, where the

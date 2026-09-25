@@ -16,7 +16,13 @@ from enum import StrEnum
 from itertools import pairwise
 from typing import Annotated, Any, Literal, Self
 
-from pydantic import Field, StrictInt, StringConstraints, model_validator
+from pydantic import (
+    Field,
+    StrictInt,
+    StringConstraints,
+    field_validator,
+    model_validator,
+)
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, canonical_rational_component_digits
@@ -58,6 +64,12 @@ BasisLabel = Annotated[
 ]
 
 SheafScalar = CanonicalRational | StrictInt
+CochainScalarRow = Annotated[
+    tuple[SheafScalar, ...], Field(max_length=MAX_SHEAF_TOTAL_STALK_RANK)
+]
+CochainMatrix = Annotated[
+    tuple[CochainScalarRow, ...], Field(max_length=MAX_SHEAF_TOTAL_STALK_RANK)
+]
 
 
 def sheaf_scalar_digits(value: SheafScalar) -> int:
@@ -445,6 +457,12 @@ class SheafCohomologyRequest(StrictModel):
     sheaf: FiniteCellularSheaf
 
 
+class SheafCochainComplexRequest(StrictModel):
+    """Assemble the cellular sheaf cochain complex of a checked sheaf."""
+
+    sheaf: FiniteCellularSheaf
+
+
 class SheafCochainCoordinate(StrictModel):
     """One cochain basis vector: one basis label of one stalk."""
 
@@ -455,6 +473,127 @@ class SheafCochainCoordinate(StrictModel):
     def require_nonempty_simplex(self) -> Self:
         _require_canonical_simplex(self.simplex, label="cochain simplex")
         return self
+
+
+class SheafCochainComplex(StrictModel):
+    """A source-bound cellular sheaf cochain complex over its exact field.
+
+    ``coboundary_matrices[k]`` maps the canonical degree-k cochain basis to
+    degree k+1. The operation establishing this value checks that each
+    consecutive product is zero before constructing it.
+    """
+
+    sheaf: FiniteCellularSheaf
+    cochain_dimensions: tuple[
+        Annotated[StrictInt, Field(ge=0, le=MAX_SHEAF_TOTAL_STALK_RANK)], ...
+    ] = Field(min_length=1, max_length=MAX_SHEAF_SIMPLICES)
+    cochain_bases: tuple[
+        Annotated[
+            tuple[SheafCochainCoordinate, ...],
+            Field(max_length=MAX_SHEAF_TOTAL_STALK_RANK),
+        ],
+        ...,
+    ] = Field(min_length=1, max_length=MAX_SHEAF_SIMPLICES)
+    coboundary_matrices: tuple[CochainMatrix, ...] = Field(
+        default=(), max_length=MAX_SHEAF_SIMPLICES - 1
+    )
+
+    @field_validator("coboundary_matrices", mode="before")
+    @classmethod
+    def admit_matrix_cells_before_parsing(cls, value: Any) -> Any:
+        if not isinstance(value, (tuple, list)):
+            return value
+        matrix_cells = 0
+        for matrix in value:
+            if not isinstance(matrix, (tuple, list)):
+                return value
+            if len(matrix) > MAX_SHEAF_TOTAL_STALK_RANK:
+                raise _validation_error(
+                    "coboundary_shape_exceeded",
+                    "a coboundary has too many rows",
+                )
+            for row in matrix:
+                if not isinstance(row, (tuple, list)):
+                    return value
+                if len(row) > MAX_SHEAF_TOTAL_STALK_RANK:
+                    raise _validation_error(
+                        "coboundary_shape_exceeded",
+                        "a coboundary row has too many coordinates",
+                    )
+                matrix_cells += len(row)
+                if matrix_cells > MAX_SHEAF_COHOMOLOGY_CELLS:
+                    raise _validation_error(
+                        "cochain_matrix_cells_exceeded",
+                        "coboundary matrices exceed their declared cell bound",
+                    )
+        return value
+
+    @model_validator(mode="after")
+    def require_cochain_axes(self) -> Self:
+        dimension = self.sheaf.complex.dimension
+        if (
+            len(self.cochain_dimensions) != dimension + 1
+            or len(self.cochain_bases) != dimension + 1
+        ):
+            raise _validation_error(
+                "cochain_degree_coverage_invalid",
+                "cochain axes must cover every simplex dimension",
+            )
+        expected_faces = self.sheaf.canonical_face_order
+        for degree, (basis, size) in enumerate(
+            zip(self.cochain_bases, self.cochain_dimensions, strict=True)
+        ):
+            expected = tuple(
+                SheafCochainCoordinate(simplex=face, basis_label=label)
+                for face in expected_faces
+                if len(face) == degree + 1
+                for label in next(
+                    stalk.basis for stalk in self.sheaf.stalks if stalk.simplex == face
+                )
+            )
+            if len(basis) != size or basis != expected:
+                raise _validation_error(
+                    "cochain_basis_axis_mismatch",
+                    "cochain basis must bind every cell stalk coordinate in canonical order",
+                )
+        if sum(self.cochain_dimensions) > MAX_SHEAF_TOTAL_STALK_RANK:
+            raise _validation_error(
+                "cochain_total_dimension_exceeded",
+                "total cochain dimension exceeds its declared bound",
+            )
+        matrix_cells = sum(
+            self.cochain_dimensions[degree] * self.cochain_dimensions[degree + 1]
+            for degree in range(dimension)
+        )
+        if matrix_cells > MAX_SHEAF_COHOMOLOGY_CELLS:
+            raise _validation_error(
+                "cochain_matrix_cells_exceeded",
+                "coboundary matrices exceed their declared cell bound",
+            )
+        if len(self.coboundary_matrices) != dimension:
+            raise _validation_error(
+                "coboundary_count_mismatch",
+                "there must be one coboundary matrix per adjacent degree pair",
+            )
+        for degree, matrix in enumerate(self.coboundary_matrices):
+            rows = self.cochain_dimensions[degree + 1]
+            columns = self.cochain_dimensions[degree]
+            if len(matrix) != rows or any(len(row) != columns for row in matrix):
+                raise _validation_error(
+                    "coboundary_shape_mismatch",
+                    f"coboundary {degree} must have shape C^{degree + 1} x C^{degree}",
+                )
+        _require_field_scalars(
+            self.coboundary_matrices,
+            self.sheaf.coefficient_field,
+            self.sheaf.prime,
+            label="cochain complex",
+        )
+        return self
+
+    @classmethod
+    def _from_kernel(cls, **values: Any) -> Self:
+        return cls.model_construct(**values)
 
 
 class SheafSectionCompatibilityAxis(StrictModel):
@@ -1004,6 +1143,8 @@ __all__ = [
     "FromCoverMapsRequest",
     "FromCoverMapsResult",
     "SheafCoboundaryLedgerEntry",
+    "SheafCochainComplex",
+    "SheafCochainComplexRequest",
     "SheafCochainCoordinate",
     "SheafCohomologyGroup",
     "SheafCohomologyRequest",

@@ -41,6 +41,7 @@ from jacobian.math.topology.cellular_sheaves._models import (
     FiniteCellularSheaf,
     FromCoverMapsResult,
     SheafCoboundaryLedgerEntry,
+    SheafCochainComplex,
     SheafCochainCoordinate,
     SheafCohomologyGroup,
     SheafCohomologyResult,
@@ -761,17 +762,10 @@ def _cohomology_admission(sheaf: FiniteCellularSheaf) -> _ExactField:
     return field
 
 
-def sheaf_cohomology(  # noqa: C901
+def _assemble_sheaf_cochain_complex(  # noqa: C901
     sheaf: FiniteCellularSheaf,
-) -> SheafCohomologyResult:
-    """Compute cellular cohomology of a checked finite cellular sheaf.
-
-    The kernel assembles the signed-incidence cochain complex from the
-    complete restriction diagram, replays ``delta^2 = 0`` and the
-    Euler-characteristic identity, and returns Betti numbers with
-    representative cocycles. Diamond commutativity, already established
-    by construction, is what makes the signed coboundary square to zero.
-    """
+) -> tuple[SheafCochainComplex, _ExactField, list[list[list[Scalar]]]]:
+    """Admit once, assemble signed incidence blocks, and establish delta squared zero."""
     field = _cohomology_admission(sheaf)
     basis_for = {stalk.simplex: stalk.basis for stalk in sheaf.stalks}
     parsed: dict[CoverKey, Matrix] = {}
@@ -861,7 +855,6 @@ def sheaf_cohomology(  # noqa: C901
                         ] = _cochain_add(field, current, value)
         scalar_coboundaries.append(block)
 
-    ledger: list[SheafCoboundaryLedgerEntry] = []
     for degree in range(max(0, dimension - 1)):
         product = _cochain_mat_mul(
             field, scalar_coboundaries[degree + 1], scalar_coboundaries[degree]
@@ -872,15 +865,40 @@ def sheaf_cohomology(  # noqa: C901
                 "the cellular coboundary must square to zero",
                 ("sheaf",),
             )
-        ledger.append(
-            SheafCoboundaryLedgerEntry(
-                degree=degree,
-                product_rows=cochain_sizes[degree + 2],
-                product_columns=cochain_sizes[degree],
-                nonzero_entries=0,
-            )
-        )
+    result = SheafCochainComplex._from_kernel(
+        sheaf=sheaf,
+        cochain_dimensions=tuple(cochain_sizes),
+        cochain_bases=tuple(tuple(basis) for basis in cochain_bases),
+        coboundary_matrices=tuple(
+            tuple(tuple(field.typed(value) for value in row) for row in block)
+            for block in scalar_coboundaries
+        ),
+    )
+    return result, field, scalar_coboundaries
 
+
+def sheaf_cochain_complex(sheaf: FiniteCellularSheaf) -> SheafCochainComplex:
+    """Return the checked signed-incidence cellular sheaf cochain complex."""
+    return _assemble_sheaf_cochain_complex(sheaf)[0]
+
+
+def sheaf_cohomology(
+    sheaf: FiniteCellularSheaf,
+) -> SheafCohomologyResult:
+    """Compute cohomology from the checked cellular sheaf cochain complex."""
+    cochain_complex, field, scalar_coboundaries = _assemble_sheaf_cochain_complex(sheaf)
+    cochain_sizes = list(cochain_complex.cochain_dimensions)
+    cochain_bases = [list(basis) for basis in cochain_complex.cochain_bases]
+    dimension = sheaf.complex.dimension
+    ledger = [
+        SheafCoboundaryLedgerEntry(
+            degree=degree,
+            product_rows=cochain_sizes[degree + 2],
+            product_columns=cochain_sizes[degree],
+            nonzero_entries=0,
+        )
+        for degree in range(max(0, dimension - 1))
+    ]
     groups: list[SheafCohomologyGroup] = []
     euler_cohomology = 0
     for degree in range(dimension + 1):
@@ -926,9 +944,7 @@ def sheaf_cohomology(  # noqa: C901
         )
         euler_cohomology += betti if degree % 2 == 0 else -betti
     euler_stalk = sum(
-        (len(basis_for[face]) if degree % 2 == 0 else -len(basis_for[face]))
-        for degree, faces in enumerate(faces_by_degree)
-        for face in faces
+        size if degree % 2 == 0 else -size for degree, size in enumerate(cochain_sizes)
     )
     if euler_stalk != euler_cohomology:
         raise _domain(
@@ -960,7 +976,7 @@ def _transpose_rows(rows: list[list[Scalar]]) -> list[list[Scalar]]:
     ]
 
 
-__all__ = ["from_cover_maps", "sheaf_cohomology"]
+__all__ = ["from_cover_maps", "sheaf_cochain_complex", "sheaf_cohomology"]
 
 
 def from_cover_maps(

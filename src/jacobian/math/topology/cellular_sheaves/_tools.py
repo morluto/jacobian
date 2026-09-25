@@ -6,6 +6,8 @@ from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.topology.cellular_sheaves._models import (
     FromCoverMapsRequest,
     FromCoverMapsResult,
+    SheafCochainComplex,
+    SheafCochainComplexRequest,
     SheafCohomologyRequest,
     SheafCohomologyResult,
     SheafSubcomplexRequest,
@@ -17,6 +19,7 @@ from jacobian.math.topology.cellular_sheaves.extensions_tools import (
 from jacobian.math.topology.cellular_sheaves.operations import (
     from_cover_maps,
     restrict_to_subcomplex,
+    sheaf_cochain_complex,
     sheaf_cohomology,
 )
 
@@ -39,6 +42,12 @@ def _run_sheaf_cohomology(
     request: SheafCohomologyRequest,
 ) -> SheafCohomologyResult:
     return sheaf_cohomology(request.sheaf)
+
+
+def _run_sheaf_cochain_complex(
+    request: SheafCochainComplexRequest,
+) -> SheafCochainComplex:
+    return sheaf_cochain_complex(request.sheaf)
 
 
 def _run_restrict_to_subcomplex(
@@ -163,6 +172,68 @@ TOOLS: MathTools = (
                         "f_vector": [1],
                         "closure_size": 1,
                     },
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="cellular_sheaf.cochain_complex.compute",
+        title="Assemble a cellular sheaf cochain complex",
+        description=(
+            "Return the exact signed-incidence coboundary matrices over the "
+            "sheaf's declared field, in canonical stalk-coordinate bases. "
+            "The operation admits all matrix dimensions before allocation and "
+            "establishes that consecutive coboundaries compose to zero."
+        ),
+        request_type=SheafCochainComplexRequest,
+        result_type=SheafCochainComplex,
+        run=_run_sheaf_cochain_complex,
+        tags=("topology", "cellular-sheaf", "cochain-complex", "exact"),
+        discovery_terms=(
+            "cellular sheaf cochain complex",
+            "cellular sheaf coboundary matrices",
+            "sheaf differential",
+        ),
+        examples=(
+            OperationExample(
+                name="interval_constant_sheaf_cochain_complex",
+                description=(
+                    "The constant rank-one sheaf on an interval has two "
+                    "vertex coordinates, one edge coordinate, and coboundary "
+                    "matrix (-1, 1)."
+                ),
+                input={
+                    "sheaf": {
+                        "complex": _INTERVAL_CANONICAL,
+                        "coefficient_field": "QQ",
+                        "prime": None,
+                        "stalks": [
+                            {"simplex": ["a"], "basis": ["x"]},
+                            {"simplex": ["b"], "basis": ["x"]},
+                            {"simplex": ["a", "b"], "basis": ["x"]},
+                        ],
+                        "cover_restrictions": [
+                            {
+                                "source": ["a"],
+                                "target": ["a", "b"],
+                                "row_basis": ["x"],
+                                "column_basis": ["x"],
+                                "entries": [[{"num": "1", "den": "1"}]],
+                                "cover_path": [["a"], ["a", "b"]],
+                            },
+                            {
+                                "source": ["b"],
+                                "target": ["a", "b"],
+                                "row_basis": ["x"],
+                                "column_basis": ["x"],
+                                "entries": [[{"num": "1", "den": "1"}]],
+                                "cover_path": [["b"], ["a", "b"]],
+                            },
+                        ],
+                        "derived_restrictions": [],
+                        "diamonds": 0,
+                        "comparable_pairs": 2,
+                    }
                 },
             ),
         ),

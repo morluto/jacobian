@@ -17,7 +17,6 @@ MAX_BINARY_GROUND = 8
 MAX_BINARY_LABEL_BYTES = 2_048
 MAX_TWIST_POLYNOMIAL_STATES = 4_096
 MAX_TWIST_POLYNOMIAL_WORK = 262_144
-MAX_TWIST_POLYNOMIAL_OUTPUT_BYTES = 65_536
 MAX_TWIST_POLYNOMIAL_GROUND = MAX_TWIST_POLYNOMIAL_STATES.bit_length() - 1
 MAX_TWIST_POLYNOMIAL_HISTOGRAM_ENTRIES = MAX_TWIST_POLYNOMIAL_GROUND + 1
 MAX_TWIST_POLYNOMIAL_SOURCE_ROWS = MAX_DELTA_MEMBERSHIPS + 1
@@ -141,9 +140,7 @@ class DeltaMatroidTwistPolynomialRequest(StrictModel):
                 f"{MAX_TWIST_POLYNOMIAL_WORK} mask-feasible-set evaluations. "
                 f"The result has at most {MAX_TWIST_POLYNOMIAL_HISTOGRAM_ENTRIES} "
                 "histogram entries and coefficients with at most "
-                f"{MAX_TWIST_POLYNOMIAL_COEFFICIENT_DIGITS} decimal digits, "
-                "and its retained labelled ground axis fits "
-                f"{MAX_TWIST_POLYNOMIAL_OUTPUT_BYTES} encoded result bytes. "
+                f"{MAX_TWIST_POLYNOMIAL_COEFFICIENT_DIGITS} decimal digits. "
                 "The recognition operation's 2,048-byte label envelope does "
                 "not apply: labels do not affect the mask sweep."
             ),
@@ -153,7 +150,6 @@ class DeltaMatroidTwistPolynomialRequest(StrictModel):
                 "max_mask_feasible_set_evaluations": MAX_TWIST_POLYNOMIAL_WORK,
                 "max_histogram_entries": MAX_TWIST_POLYNOMIAL_HISTOGRAM_ENTRIES,
                 "max_polynomial_coefficient_digits": MAX_TWIST_POLYNOMIAL_COEFFICIENT_DIGITS,
-                "max_encoded_output_bytes": MAX_TWIST_POLYNOMIAL_OUTPUT_BYTES,
                 "max_source_memberships": MAX_DELTA_MEMBERSHIPS,
                 "max_source_feasible_rows": MAX_TWIST_POLYNOMIAL_SOURCE_ROWS,
                 "max_source_exchange_candidates": MAX_DELTA_EXCHANGE_CANDIDATE_CHECKS,
@@ -220,7 +216,6 @@ __all__ = [
     "MAX_TWIST_POLYNOMIAL_COEFFICIENT_DIGITS",
     "MAX_TWIST_POLYNOMIAL_GROUND",
     "MAX_TWIST_POLYNOMIAL_HISTOGRAM_ENTRIES",
-    "MAX_TWIST_POLYNOMIAL_OUTPUT_BYTES",
     "MAX_TWIST_POLYNOMIAL_SOURCE_ROWS",
     "MAX_TWIST_POLYNOMIAL_STATES",
     "MAX_TWIST_POLYNOMIAL_WORK",

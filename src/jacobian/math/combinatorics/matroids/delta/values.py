@@ -94,11 +94,11 @@ def _exchange_work(
 def require_delta_matroid_source_size(system: FiniteFeasibleSetSystem) -> int:
     """Bound memberships, require UTF-8 labels, and return their byte count.
 
-    Operations that retain the ground axis and bound their own exact encoded
-    output use this instead of the full recognition envelope, whose 2,048-byte
-    label cap belongs to the recognition result rather than to every consumer
-    of a canonical ``FiniteDeltaMatroid``. A non-UTF-8 label is still rejected
-    because a retained ground axis must remain serializable.
+    Operations that retain the ground axis and bound their own work and result
+    cardinalities use this instead of the full recognition envelope, whose
+    2,048-byte label cap belongs to the recognition result rather than to every
+    consumer of a canonical ``FiniteDeltaMatroid``. A non-UTF-8 label is still
+    rejected because a retained ground axis must remain serializable.
     """
 
     memberships = sum(len(row) for row in system.feasible)

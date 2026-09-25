@@ -564,7 +564,7 @@ def test_twist_polynomial_empty_axis_binary_composition_and_json_roundtrip() -> 
     assert schema["admission_limits"]["max_polynomial_coefficient_digits"] == 4
     assert schema["admission_limits"]["max_source_memberships"] == 16_384
     assert schema["admission_limits"]["max_source_feasible_rows"] == 16_385
-    assert schema["admission_limits"]["max_encoded_output_bytes"] == 65_536
+    assert "max_encoded_output_bytes" not in schema["admission_limits"]
 
     tool = next(
         item
@@ -603,8 +603,7 @@ def test_twist_polynomial_accepts_ground_and_state_cardinality_boundary() -> Non
 
 def test_twist_polynomial_ignores_recognition_label_envelope() -> None:
     # Labels do not enter the mask sweep, so the recognition operation's
-    # 2,048-byte cap must not narrow this operation's advertised domain. A
-    # 2,049-byte label still fits the operation's own encoded-output envelope.
+    # 2,048-byte cap must not narrow this operation's advertised domain.
     label = "a" * 2_049
     source = FiniteDeltaMatroid(ground=(label,), feasible=((),))
 
@@ -613,17 +612,6 @@ def test_twist_polynomial_ignores_recognition_label_envelope() -> None:
     assert result.ground == (label,)
     assert result.coefficients_by_width == (2, 0)
     assert result.polynomial.coefficients == (2,)
-
-
-def test_twist_polynomial_bounds_its_own_encoded_output() -> None:
-    # A label large enough to leave the operation's encoded-output envelope is
-    # still a typed resource refusal, not a recognition-limit rejection.
-    source = FiniteDeltaMatroid(ground=("a" * 11_000,), feasible=((),))
-
-    with pytest.raises(OperationResourceAdmissionError) as error:
-        twist_polynomial(source)
-
-    assert error.value.errors()[0]["type"] == "delta_matroid.twist_polynomial_output"
 
 
 def test_twist_polynomial_result_rejects_duplicate_ground_labels() -> None:

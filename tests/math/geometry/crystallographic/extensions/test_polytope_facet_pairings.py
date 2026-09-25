@@ -236,6 +236,21 @@ def test_off_origin_rational_square_is_fundamental_domain() -> None:
     assert result.polytope_volume.as_fraction() == 1
 
 
+def test_negative_fundamental_domain_result_requires_explanation() -> None:
+    checked = check_crystallographic_fundamental_domain(
+        pair_crystallographic_polytope_facets(_request())
+    )
+    forged = checked.model_dump()
+    forged["is_fundamental_domain"] = False
+
+    from jacobian.math.geometry.crystallographic.extensions._models import (
+        CrystallographicFundamentalDomainResult,
+    )
+
+    with pytest.raises(ValueError, match="negative result requires"):
+        CrystallographicFundamentalDomainResult.model_validate(forged)
+
+
 def test_fundamental_domain_check_rejects_stale_facet_profile() -> None:
     checked = pair_crystallographic_polytope_facets(_request())
     profile = checked.facet_profile

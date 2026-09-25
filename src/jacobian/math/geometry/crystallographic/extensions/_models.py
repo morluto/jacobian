@@ -421,6 +421,14 @@ class CrystallographicFundamentalDomainResult(StrictModel):
                 "fundamental_domain_result",
                 "positive result requires equal covolume and no overlap",
             )
+        if not self.is_fundamental_domain and (
+            self.polytope_volume == self.quotient_covolume
+            and self.overlap_translation is None
+        ):
+            raise _error(
+                "fundamental_domain_result",
+                "negative result requires unequal covolume or an overlap witness",
+            )
         return self
 
 

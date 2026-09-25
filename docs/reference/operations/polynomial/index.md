@@ -103,6 +103,7 @@ to another polynomial operation.
 ## Focused contracts
 
 - [Differential Ore operator addition](ore-differential-addition.md)
+- [First-order differential Ore operator LCLM](ore-first-order-lclm.md)
 - [Polynomial-coefficient Ore operators](ore-shift-polynomial-algebra.md)
 - [Shift Ore operator powers](ore-shift-operator-powers.md)
 - [Finite prefixes from polynomial recurrences](ore-shift-finite-recurrence.md)

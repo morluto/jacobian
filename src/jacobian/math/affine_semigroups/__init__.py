@@ -3,6 +3,11 @@
 from jacobian.math.affine_semigroups._models import (
     IntegerConfigurationCircuitsResult,
 )
+from jacobian.math.affine_semigroups.atoms import (
+    AffineMinimalGenerators,
+    AffineMinimalGeneratorsRequest,
+    minimal_generators,
+)
 from jacobian.math.affine_semigroups.graver import (
     graver_basis,
     markov_basis,
@@ -48,6 +53,8 @@ __all__ = [
     "AffineGroupLattice",
     "AffineHilbertBasis",
     "AffineMembershipResult",
+    "AffineMinimalGenerators",
+    "AffineMinimalGeneratorsRequest",
     "AffineSemigroupHoleProfile",
     "AffineSemigroupHolesRequest",
     "IntegerConfigurationCircuitsResult",
@@ -65,6 +72,7 @@ __all__ = [
     "integer_configuration_circuits",
     "markov_basis",
     "membership",
+    "minimal_generators",
     "positive_grading",
     "relation_lattice",
     "toric_ideal",

@@ -4,6 +4,11 @@ from jacobian.catalog.models import (
     OperationExample,
     OperationResourceAdmissionError,
 )
+from jacobian.math.affine_semigroups.atoms import (
+    AffineMinimalGenerators,
+    AffineMinimalGeneratorsRequest,
+    minimal_generators,
+)
 from jacobian.math.affine_semigroups.group_lattice import (
     AffineGroupLattice,
     compute_group_lattice,
@@ -42,6 +47,21 @@ from jacobian.math.affine_semigroups.semigroup_models import (
 
 def _group_lattice(r: AffineGroupLatticeRequest) -> AffineGroupLattice:
     return compute_group_lattice(r.configuration)
+
+
+def _minimal_generators(
+    request: AffineMinimalGeneratorsRequest,
+) -> AffineMinimalGenerators:
+    try:
+        return minimal_generators(request.semigroup)
+    except (OperationResourceAdmissionError, OperationDomainValidationError):
+        raise
+    except (TypeError, ValueError, IndexError, OverflowError) as exc:
+        raise OperationDomainValidationError(
+            location=("semigroup",),
+            code="affine_semigroup.minimal_generators",
+            message=str(exc),
+        ) from exc
 
 
 def _holes_through_degree(
@@ -125,7 +145,50 @@ def _hilbert_basis(r: AffineHilbertBasisRequest) -> AffineHilbertBasis:
         ) from e
 
 
+_MINIMAL_GENERATOR_TOOL = MathTool(
+    operation_id="affine_semigroup.minimal_generators.compute",
+    title="Compute the minimal generators of a positive affine semigroup",
+    description=(
+        "Return the unique atom vectors as a positive affine semigroup on the "
+        "retained ambient rows, together with one exact factorization of every "
+        "source generator in the atom coordinates. Completeness uses each "
+        "generator's full finite fiber; aggregate work is admitted before enumeration."
+    ),
+    request_type=AffineMinimalGeneratorsRequest,
+    result_type=AffineMinimalGenerators,
+    run=_minimal_generators,
+    tags=("affine-semigroup", "minimal-generators", "atoms", "exact"),
+    discovery_terms=(
+        "minimal additive generators of an affine semigroup",
+        "irreducible elements or atoms of a positive affine semigroup",
+        "remove redundant affine semigroup generators and factor them in atoms",
+    ),
+    examples=(
+        OperationExample(
+            name="redundant_generators",
+            description=(
+                "The generator (2,0) decomposes into two copies of (1,0), "
+                "while duplicate (1,0) columns represent one atom."
+            ),
+            input={
+                "semigroup": {
+                    "configuration": {
+                        "row_labels": ["x", "y"],
+                        "generator_labels": ["a", "a_copy", "b"],
+                        "entries": [["1", "1", "2"], ["0", "0", "0"]],
+                    },
+                    "grading": [
+                        {"num": "1", "den": "1"},
+                        {"num": "1", "den": "1"},
+                    ],
+                }
+            },
+        ),
+    ),
+)
+
 TOOLS = (
+    _MINIMAL_GENERATOR_TOOL,
     MathTool(
         operation_id="affine_semigroup.holes_through_degree.compute",
         title="Enumerate affine-semigroup holes through a positive degree",

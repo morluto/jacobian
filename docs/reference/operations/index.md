@@ -22,5 +22,6 @@ that need more context than an operation card:
 - [Prime-field homogeneous fixed subspaces](prime-field-homogeneous-fixed-subspaces.md)
 - [Affine-semigroup Hilbert bases](affine-semigroup-hilbert-bases.md)
 - [Affine-semigroup group lattice](affine-semigroup-group-lattice.md)
+- [Affine-semigroup minimal generators](affine-semigroup-minimal-generators.md)
 - [Affine-semigroup holes through degree](affine-semigroup-holes.md)
 - [Integer-configuration Graver bases](integer-configuration-graver-bases.md)

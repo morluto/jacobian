@@ -48,7 +48,7 @@ from jacobian.math.lie_algebras._models import (
     LieKillingResult,
     LieLowerCentralSeriesResult,
     LieQuotientResult,
-    LieSemisimplicityProfileResult,
+    LieSemisimplicityResult,
     LieSubalgebra,
     LieSubalgebraCheckResult,
     LieSubalgebraViolationWitness,
@@ -536,20 +536,19 @@ def lie_killing_form_radical(
     return LieKillingRadicalResult._from_kernel(killing, radical)
 
 
-def lie_semisimplicity_profile(
+def lie_algebra_is_semisimple(
     algebra: FiniteDimensionalLieAlgebra | Mapping[str, Any],
-) -> LieSemisimplicityProfileResult:
-    """Return the exact Cartan profile over QQ from the Killing-form radical.
+) -> LieSemisimplicityResult:
+    """Decide semisimplicity over QQ using Cartan's criterion.
 
     For a finite-dimensional Lie algebra over a characteristic-zero field,
     Cartan's criterion says it is semisimple exactly when its Killing form is
-    nondegenerate. The existing radical computation admits the input, computes
-    the form and its exact nullspace, and retains both in the result.
+    nondegenerate. The existing radical computation admits the input and
+    computes the exact nullspace; only the resulting decision is returned.
     """
 
     killing_radical = lie_killing_form_radical(algebra)
-    return LieSemisimplicityProfileResult(
-        killing_radical=killing_radical,
+    return LieSemisimplicityResult(
         is_semisimple=killing_radical.radical.generators.row_count == 0,
     )
 
@@ -1815,6 +1814,7 @@ __all__ = [
     "lie_adjoint",
     "lie_adjoint_matrices",
     "lie_adjoint_representation",
+    "lie_algebra_is_semisimple",
     "lie_bracket",
     "lie_center",
     "lie_derived_series",
@@ -1823,6 +1823,5 @@ __all__ = [
     "lie_killing_form_radical",
     "lie_lower_central_series",
     "lie_quotient",
-    "lie_semisimplicity_profile",
     "lie_upper_central_series",
 ]

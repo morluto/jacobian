@@ -51,6 +51,7 @@ from jacobian.math.logic.automata.tree.values import (
     RankedTree,
     ReachableStateProfile,
     RegularTreeGrammar,
+    RegularTreeProduction,
     TreeAutomatonTransition,
     TreeStateChartEntry,
     _build_reachable_state_profile,
@@ -75,6 +76,7 @@ __all__ = [
     "reachable_state_profile",
     "regular_tree_grammar_to_automaton",
     "run_tree_automaton",
+    "tree_automaton_to_regular_tree_grammar",
     "tree_context_transformation_monoid",
     "tree_state_chart",
     "trim_tree_automaton",
@@ -927,6 +929,7 @@ MAX_RANKED_TREE_POSITIONS_WORK = 600_000
 MAX_RANKED_TREE_POSITIONS_RESULT_CELLS = MAX_RUN_TREE_NODES * (MAX_RUN_TREE_DEPTH + 1)
 MAX_RANKED_TREE_SUBTREE_RESULT_CELLS = 2 * MAX_RUN_TREE_NODES + MAX_RUN_TREE_DEPTH
 MAX_TREE_GRAMMAR_CONVERSION_WORK = 5_000_000
+MAX_TREE_GRAMMAR_CONVERSION_CELLS = 160_000
 
 
 def regular_tree_grammar_to_automaton(
@@ -978,6 +981,176 @@ def regular_tree_grammar_to_automaton(
     )
     request_checkpoint("tree grammar conversion")
     return automaton
+
+
+def tree_automaton_to_regular_tree_grammar(
+    automaton: BottomUpTreeAutomaton,
+) -> RegularTreeGrammar:
+    """Return a single-start unit-free grammar for exactly the accepted trees."""
+    _preflight_tree_automaton_for_grammar(automaton)
+    finals = set(automaton.final_states)
+    has_ground_seed = any(not row.child_states for row in automaton.transitions)
+    if not finals or not has_ground_seed:
+        return RegularTreeGrammar(
+            nonterminal_count=1,
+            arity=automaton.arity,
+            start_nonterminal=0,
+            productions=(),
+        )
+
+    synthetic_start = len(finals) > 1
+    nonterminal_count = automaton.state_count + int(synthetic_start)
+    if nonterminal_count > MAX_TA_STATES:
+        raise OperationResourceAdmissionError(
+            location=("automaton", "final_states"),
+            code="tree_automata.grammar_nonterminal_bound",
+            message=(
+                "a multiple-final-state automaton needs a synthetic grammar start "
+                "nonterminal beyond the grammar carrier bound"
+            ),
+        )
+    root_rules = {
+        (row.symbol, row.child_states)
+        for row in automaton.transitions
+        if synthetic_start and row.target_state in finals
+    }
+    production_count = len(automaton.transitions) + len(root_rules)
+    if production_count > MAX_TA_TRANSITIONS:
+        raise OperationResourceAdmissionError(
+            location=("automaton", "transitions"),
+            code="tree_automata.grammar_production_bound",
+            message="the equivalent single-start grammar exceeds the production bound",
+        )
+
+    production_work = sum(
+        2 + len(row.child_states) for row in automaton.transitions
+    ) + sum(2 + len(children) for _, children in root_rules)
+    sort_work = (
+        4
+        * production_count
+        * (production_count + 1).bit_length()
+        * max(automaton.arity, default=0)
+    )
+    input_work = sum(2 + len(row.child_states) for row in automaton.transitions)
+    work_bound = (
+        input_work
+        + sort_work
+        + 16 * production_work
+        + 8 * nonterminal_count
+        + 4 * len(automaton.arity)
+    )
+    output_cells = (
+        nonterminal_count
+        + len(automaton.arity)
+        + sum(2 + len(row.child_states) for row in automaton.transitions)
+        + sum(2 + len(children) for _, children in root_rules)
+    )
+    if (
+        work_bound > MAX_TREE_GRAMMAR_CONVERSION_WORK
+        or output_cells > MAX_TREE_GRAMMAR_CONVERSION_CELLS
+    ):
+        raise OperationResourceAdmissionError(
+            location=("automaton",),
+            code="tree_automata.grammar_conversion_bound",
+            message="automaton-to-grammar work or output exceeds its admitted envelope",
+        )
+
+    start = automaton.state_count if synthetic_start else next(iter(finals))
+    productions = [
+        RegularTreeProduction(
+            nonterminal=row.target_state,
+            symbol=row.symbol,
+            children=row.child_states,
+        )
+        for row in automaton.transitions
+    ]
+    productions.extend(
+        RegularTreeProduction(
+            nonterminal=start,
+            symbol=symbol,
+            children=children,
+        )
+        for symbol, children in sorted(root_rules)
+    )
+    request_checkpoint("tree automaton to regular tree grammar")
+    return RegularTreeGrammar(
+        nonterminal_count=nonterminal_count,
+        arity=automaton.arity,
+        start_nonterminal=start,
+        productions=tuple(productions),
+    )
+
+
+def _preflight_tree_automaton_for_grammar(
+    automaton: BottomUpTreeAutomaton,
+) -> None:
+    if not isinstance(automaton, BottomUpTreeAutomaton):
+        raise OperationDomainValidationError(
+            location=("automaton",),
+            code="tree_automata.grammar_automaton_type",
+            message="conversion requires a canonical bottom-up tree automaton",
+        )
+    if (
+        type(automaton.state_count) is not int
+        or not 1 <= automaton.state_count <= MAX_TA_STATES
+        or type(automaton.arity) is not tuple
+        or len(automaton.arity) > MAX_TA_SYMBOLS
+        or type(automaton.transitions) is not tuple
+        or len(automaton.transitions) > MAX_TA_TRANSITIONS
+        or type(automaton.final_states) is not tuple
+        or len(automaton.final_states) > automaton.state_count
+    ):
+        raise OperationDomainValidationError(
+            location=("automaton",),
+            code="tree_automata.grammar_automaton_shape",
+            message="automaton axes and rows must satisfy their bounded shapes",
+        )
+    if any(
+        type(rank) is not int or not 0 <= rank <= MAX_TA_ARITY
+        for rank in automaton.arity
+    ):
+        raise OperationDomainValidationError(
+            location=("automaton", "arity"),
+            code="tree_automata.grammar_automaton_arity",
+            message="automaton arities must be integers in the supported range",
+        )
+    if any(
+        type(state) is not int or not 0 <= state < automaton.state_count
+        for state in automaton.final_states
+    ) or len(set(automaton.final_states)) != len(automaton.final_states):
+        raise OperationDomainValidationError(
+            location=("automaton", "final_states"),
+            code="tree_automata.grammar_automaton_finals",
+            message="final states must be unique and in range",
+        )
+    seen = set()
+    for row in automaton.transitions:
+        if (
+            type(row) is not TreeAutomatonTransition
+            or type(row.symbol) is not int
+            or not 0 <= row.symbol < len(automaton.arity)
+            or type(row.target_state) is not int
+            or not 0 <= row.target_state < automaton.state_count
+            or type(row.child_states) is not tuple
+            or len(row.child_states) != automaton.arity[row.symbol]
+            or any(
+                type(state) is not int or not 0 <= state < automaton.state_count
+                for state in row.child_states
+            )
+        ):
+            raise OperationDomainValidationError(
+                location=("automaton", "transitions"),
+                code="tree_automata.grammar_automaton_transition",
+                message="automaton transitions must match declared state and arity axes",
+            )
+        key = row.symbol, row.child_states, row.target_state
+        if key in seen:
+            raise OperationDomainValidationError(
+                location=("automaton", "transitions"),
+                code="tree_automata.grammar_automaton_duplicate",
+                message="duplicate automaton transitions are not canonical",
+            )
+        seen.add(key)
 
 
 def _tree_automaton_minimization_partition(

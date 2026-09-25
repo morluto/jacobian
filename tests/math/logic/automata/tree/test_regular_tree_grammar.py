@@ -8,7 +8,10 @@ from jacobian.math.logic.automata.tree._models import (
     RegularTreeGrammarToAutomatonRequest,
     RegularTreeGrammarToAutomatonResult,
 )
-from jacobian.math.logic.automata.tree._tools import TOOLS
+from jacobian.math.logic.automata.tree._tools import (
+    TOOLS,
+    compute_regular_tree_grammar_to_automaton,
+)
 from jacobian.math.logic.automata.tree.operations import (
     reachable_state_profile,
     regular_tree_grammar_to_automaton,
@@ -88,7 +91,6 @@ def test_conversion_preserves_grammar_derivations_as_automaton_runs() -> None:
     assert result.state_count == grammar.nonterminal_count
     assert result.arity == grammar.arity
     assert result.final_states == (grammar.start_nonterminal,)
-    assert result.grammar == grammar
     for tree in _trees_by_size(5):
         grammar_states = _grammar_root_states(grammar, tree)
         automaton_states = tuple(sorted(run_tree_automaton(result, tree)))
@@ -96,9 +98,14 @@ def test_conversion_preserves_grammar_derivations_as_automaton_runs() -> None:
         assert (grammar.start_nonterminal in automaton_states) == (
             grammar.start_nonterminal in grammar_states
         )
+    catalog_result = compute_regular_tree_grammar_to_automaton(
+        RegularTreeGrammarToAutomatonRequest(grammar=grammar)
+    )
+    assert catalog_result.automaton == result
+    assert catalog_result.grammar == grammar
     assert (
-        RegularTreeGrammarToAutomatonResult.model_validate(result.model_dump())
-        == result
+        RegularTreeGrammarToAutomatonResult.model_validate(catalog_result.model_dump())
+        == catalog_result
     )
 
 
@@ -123,7 +130,6 @@ def test_empty_grammar_preserves_empty_signature_and_language() -> None:
     assert result.arity == ()
     assert result.transitions == ()
     assert result.final_states == (1,)
-    assert result.grammar == grammar
 
 
 def test_conversion_roundtrip_retains_unused_symbol_and_dead_state() -> None:
@@ -137,7 +143,10 @@ def test_conversion_roundtrip_retains_unused_symbol_and_dead_state() -> None:
         ),
     )
 
-    result = regular_tree_grammar_to_automaton(grammar)
+    automaton = regular_tree_grammar_to_automaton(grammar)
+    result = RegularTreeGrammarToAutomatonResult._from_kernel(
+        grammar=grammar, automaton=automaton
+    )
     roundtrip = RegularTreeGrammarToAutomatonResult.model_validate(result.model_dump())
     profile = reachable_state_profile(roundtrip.automaton)
 

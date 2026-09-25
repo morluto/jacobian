@@ -24,6 +24,8 @@ from jacobian.math.logic.automata.tree._models import (
     TreeAutomatonMinimizeRequest,
     TreeAutomatonMinimizeResult,
     TreeAutomatonReachabilityRequest,
+    TreeAutomatonToRegularTreeGrammarRequest,
+    TreeAutomatonToRegularTreeGrammarResult,
     TreeAutomatonTrimRequest,
     TreeAutomatonTrimResult,
     TreeContextPlugRequest,
@@ -50,8 +52,9 @@ from jacobian.math.logic.automata.tree.operations import (
     ranked_tree_positions,
     ranked_tree_subtree,
     reachable_state_profile,
-    tree_context_transformation_monoid,
     regular_tree_grammar_to_automaton,
+    tree_automaton_to_regular_tree_grammar,
+    tree_context_transformation_monoid,
     trim_tree_automaton,
 )
 from jacobian.math.logic.automata.tree.values import (
@@ -98,6 +101,15 @@ def compute_regular_tree_grammar_to_automaton(
     return RegularTreeGrammarToAutomatonResult._from_kernel(
         grammar=request.grammar,
         automaton=regular_tree_grammar_to_automaton(request.grammar),
+    )
+
+
+def compute_tree_automaton_to_regular_tree_grammar(
+    request: TreeAutomatonToRegularTreeGrammarRequest,
+) -> TreeAutomatonToRegularTreeGrammarResult:
+    return TreeAutomatonToRegularTreeGrammarResult._from_kernel(
+        automaton=request.automaton,
+        grammar=tree_automaton_to_regular_tree_grammar(request.automaton),
     )
 
 
@@ -744,6 +756,48 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                             {"nonterminal": 0, "symbol": 0, "children": []},
                             {"nonterminal": 0, "symbol": 1, "children": [0, 0]},
                         ],
+                    }
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="tree_automaton.to_regular_tree_grammar.compute",
+        title="Translate a tree automaton to a regular tree grammar",
+        description=(
+            "Construct a unit-free single-start regular tree grammar whose "
+            "generated ground trees equal the input bottom-up automaton's accepted "
+            "language. One final state is used directly; multiple final states get "
+            "a synthetic start whose productions copy final-target rows. The "
+            "empty-language case returns an empty grammar. Work, production count, "
+            "nonterminal count, and output cells are admitted before productions "
+            "are constructed; unrepresentable results are refused exactly."
+        ),
+        request_type=TreeAutomatonToRegularTreeGrammarRequest,
+        result_type=TreeAutomatonToRegularTreeGrammarResult,
+        run=compute_tree_automaton_to_regular_tree_grammar,
+        tags=("tree-automata", "regular-tree-grammar", "exact"),
+        discovery_terms=(
+            "tree automaton to regular tree grammar",
+            "regular tree grammar from bottom-up automaton",
+            "equivalent tree grammar",
+        ),
+        examples=(
+            OperationExample(
+                name="multiple_final_states",
+                description=(
+                    "A synthetic grammar start represents the union of the two "
+                    "final-state tree languages."
+                ),
+                input={
+                    "automaton": {
+                        "state_count": 2,
+                        "arity": [0],
+                        "transitions": [
+                            {"symbol": 0, "child_states": [], "target_state": 0},
+                            {"symbol": 0, "child_states": [], "target_state": 1},
+                        ],
+                        "final_states": [0, 1],
                     }
                 },
             ),

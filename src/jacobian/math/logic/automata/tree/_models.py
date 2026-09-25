@@ -436,6 +436,25 @@ class RegularTreeGrammarToAutomatonResult(StrictModel):
         return cls.model_construct(grammar=grammar, automaton=automaton)
 
 
+class TreeAutomatonToRegularTreeGrammarRequest(StrictModel):
+    """Construct a unit-free regular grammar for a finite tree automaton."""
+
+    automaton: BottomUpTreeAutomaton
+
+
+class TreeAutomatonToRegularTreeGrammarResult(StrictModel):
+    """Source-bound grammar denoting exactly the source automaton language."""
+
+    automaton: BottomUpTreeAutomaton
+    grammar: RegularTreeGrammar
+
+    @classmethod
+    def _from_kernel(
+        cls, *, automaton: BottomUpTreeAutomaton, grammar: RegularTreeGrammar
+    ) -> Self:
+        return cls.model_construct(automaton=automaton, grammar=grammar)
+
+
 class TreeAutomatonComplementRequest(StrictModel):
     """Complement a complete deterministic automaton over its ranked alphabet."""
 
@@ -872,6 +891,8 @@ __all__ = [
     "TreeAutomatonMinimizeRequest",
     "TreeAutomatonMinimizeResult",
     "TreeAutomatonReachabilityRequest",
+    "TreeAutomatonToRegularTreeGrammarRequest",
+    "TreeAutomatonToRegularTreeGrammarResult",
     "TreeAutomatonTrimRequest",
     "TreeAutomatonTrimResult",
     "TreeDeterminizeRequest",

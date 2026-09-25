@@ -232,8 +232,7 @@ def _bound_marking(net: PetriNet, marking: Marking, tokens: tuple[int, ...]) -> 
 
 
 def _enabled_transition_indices(net: PetriNet, marking: Marking) -> list[int]:
-    """Return indices of all transitions enabled at the given marking."""
-    marking = _require_marking_size(net, marking)
+    """Return indices of all transitions enabled at an admitted marking."""
     result: list[int] = []
     for t in range(net.transition_count):
         enabled = True
@@ -314,7 +313,6 @@ def _fire_transition_tokens(
 ) -> tuple[bool, tuple[int, ...]]:
     """Return whether a transition fired and its successor token tuple."""
 
-    _require_marking_size(net, marking)
     if not 0 <= transition < net.transition_count:
         raise OperationDomainValidationError(
             location=("transition",),
@@ -1243,6 +1241,15 @@ def place_set_initial_marking_profile(
             message="subset must use the net place axis",
         )
 
+    # The nested support profile retains a second complete net copy. Bound both
+    # copies before constructing that nested value.
+    nested_net_bytes = len(net.model_dump_json().encode("utf-8"))
+    if 2 * nested_net_bytes > MAX_MARKING_CONFLICT_PROFILE_MATERIALIZED_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("net",),
+            code="petri_net.initial_profile_output_bound",
+            message="initial marking profile exceeds its output bound",
+        )
     support = _place_set_support_admitted(net, places)
     total = sum(marking.tokens[place] for place in places.places)
     implications: list[

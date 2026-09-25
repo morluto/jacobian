@@ -1080,7 +1080,6 @@ class PumpingWitnessRequest(StrictModel):
     marking: Marking
     sequence: tuple[int, ...] = Field(
         default=(),
-        max_length=MAX_FIRING_SEQUENCE_LENGTH,
         description="A concrete sequence proposed as a repeatable growth witness.",
     )
 

@@ -11,11 +11,11 @@ as a canonical RREF `LieIdeal` in the source algebra's ordered basis. The
 value retains the ambient algebra, including when the derived ideal is zero.
 It composes with ideal consumers such as exact quotient construction.
 
-The canonical Lie-algebra value establishes antisymmetry and every
-basis-triple Jacobi identity at construction. The operation admits its own
-work, then brackets basis vectors and reduces the resulting exact coordinate
-vectors. Jacobi proves that `[g,g]` is an ideal, so the `LieIdeal` result is
-sound without replaying bracket calculations in result construction.
+The operation admits antisymmetry and every basis-triple Jacobi identity at
+its input boundary, admits its own work, then brackets basis vectors and
+reduces the resulting exact coordinate vectors. Jacobi proves that `[g,g]` is
+an ideal, so the `LieIdeal` result is sound without replaying bracket
+calculations in result construction.
 
 For the three-dimensional Heisenberg algebra with `[x,y]=z`, the returned
 ideal has the single RREF row `(0,0,1)`. For an abelian algebra it is the

@@ -6,10 +6,13 @@ from fractions import Fraction
 import pytest
 from pydantic import ValidationError
 
+from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
+from jacobian.dispatch import invoke_operation
+from jacobian.math.lie_algebras import operations as lie_operations
 from jacobian.math.lie_algebras._models import (
     MAX_ELEMENT_COEFFICIENT_DIGITS,
     MAX_LIE_DIMENSION,
@@ -76,39 +79,48 @@ class TestBracketKnownAnswers:
         assert uncached == SL2
         assert hash(uncached) == hash(SL2)
 
-    def test_model_copy_cannot_retain_admission_after_bracket_mutation(self) -> None:
-        with pytest.raises(ValidationError) as exc_info:
-            SL2.model_copy(
-                update={
-                    "structure_constants": (
-                        LieAlgebraStructureConstant.model_construct(
-                            i=0,
-                            j=1,
-                            k=2,
-                            coefficient=SL2.structure_constants[0].coefficient,
-                        ),
-                        LieAlgebraStructureConstant.model_construct(
-                            i=0,
-                            j=2,
-                            k=0,
-                            coefficient=SL2.structure_constants[
-                                0
-                            ].coefficient.from_integer_ratio(-2, 1),
-                        ),
-                        LieAlgebraStructureConstant.model_construct(
-                            i=1,
-                            j=2,
-                            k=1,
-                            coefficient=SL2.structure_constants[
-                                0
-                            ].coefficient.from_integer_ratio(-2, 1),
-                        ),
-                    )
-                }
+    def test_model_copy_bracket_mutation_is_rejected_at_operation_boundary(
+        self,
+    ) -> None:
+        changed = SL2.model_copy(
+            update={
+                "structure_constants": (
+                    LieAlgebraStructureConstant.model_construct(
+                        i=0,
+                        j=1,
+                        k=2,
+                        coefficient=SL2.structure_constants[0].coefficient,
+                    ),
+                    LieAlgebraStructureConstant.model_construct(
+                        i=0,
+                        j=2,
+                        k=0,
+                        coefficient=SL2.structure_constants[
+                            0
+                        ].coefficient.from_integer_ratio(-2, 1),
+                    ),
+                    LieAlgebraStructureConstant.model_construct(
+                        i=1,
+                        j=2,
+                        k=1,
+                        coefficient=SL2.structure_constants[
+                            0
+                        ].coefficient.from_integer_ratio(-2, 1),
+                    ),
+                )
+            }
+        )
+        with pytest.raises(OperationDomainValidationError) as exc_info:
+            lie_bracket(
+                changed,
+                _element(SL2_BASIS, (1, 0, 0)),
+                _element(SL2_BASIS, (0, 1, 0)),
             )
         assert exc_info.value.errors()[0]["type"] == "lie_algebra.jacobi_identity"
 
-    def test_nested_json_request_rejects_non_lie_structure_constants(self) -> None:
+    def test_nested_json_request_rejects_non_lie_at_operation_boundary(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         payload = {
             "algebra": {
                 "basis": list(SL2_BASIS),
@@ -135,15 +147,37 @@ class TestBracketKnownAnswers:
                 "coordinates": [{"num": "0", "den": "1"}] * len(SL2_BASIS),
             },
         }
-        with pytest.raises(ValidationError) as exc_info:
-            LieBracketRequest.model_validate_json(json.dumps(payload))
+        request = LieBracketRequest.model_validate_json(json.dumps(payload))
+        with pytest.raises(OperationDomainValidationError) as exc_info:
+            lie_bracket(request.algebra, request.left, request.right)
         assert exc_info.value.errors()[0]["type"] == "lie_algebra.jacobi_identity"
 
-    def test_canonical_algebra_constructor_rejects_jacobi_violation(self) -> None:
-        with pytest.raises(ValidationError) as exc_info:
-            _algebra(
-                SL2_BASIS,
-                ((0, 1, 2, 1), (0, 2, 0, -2), (1, 2, 1, -2)),
+        admission_count = 0
+        original_admission = lie_operations._require_lie_algebra_jacobi
+
+        def count_admission(algebra: FiniteDimensionalLieAlgebra) -> None:
+            nonlocal admission_count
+            admission_count += 1
+            original_admission(algebra)
+
+        monkeypatch.setattr(
+            lie_operations, "_require_lie_algebra_jacobi", count_admission
+        )
+        with pytest.raises(OperationDomainValidationError) as dispatch_error:
+            invoke_operation("lie_algebra.bracket.compute", payload, Catalog.open())
+        assert dispatch_error.value.errors()[0]["type"] == "lie_algebra.jacobi_identity"
+        assert admission_count == 1
+
+    def test_structural_algebra_claim_is_admitted_by_operations(self) -> None:
+        claim = _algebra(
+            SL2_BASIS,
+            ((0, 1, 2, 1), (0, 2, 0, -2), (1, 2, 1, -2)),
+        )
+        with pytest.raises(OperationDomainValidationError) as exc_info:
+            lie_bracket(
+                claim,
+                _element(SL2_BASIS, (1, 0, 0)),
+                _element(SL2_BASIS, (0, 1, 0)),
             )
         assert exc_info.value.errors()[0]["type"] == "lie_algebra.jacobi_identity"
 

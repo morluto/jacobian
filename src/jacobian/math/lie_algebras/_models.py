@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from fractions import Fraction
 from itertools import pairwise
 from typing import Annotated, Any, Self
 
@@ -130,7 +129,7 @@ class LieAlgebraStructureConstant(StructureConstant):
 
 
 class FiniteDimensionalLieAlgebra(StrictModel):
-    """One finite-dimensional Lie algebra over QQ by ordered structure constants."""
+    """A structurally canonical bracket claim over QQ on an ordered basis."""
 
     @classmethod
     def _from_jacobi_proved_kernel(
@@ -141,10 +140,9 @@ class FiniteDimensionalLieAlgebra(StrictModel):
     ) -> Self:
         """Build an internal result after its operation proves Jacobi exactly.
 
-        Kernel outputs cross the same canonical value boundary as public and
-        serialized construction. The defining operation's proof guides the
-        result construction, and full bounded validation establishes the
-        reusable value invariant.
+        Kernel outputs use the canonical field representation after structural
+        validation. Their defining operation proves Jacobi; consumers re-admit
+        the value at their own operation boundary in case a caller mutates it.
         """
         basis = TypeAdapter(tuple[LieBasisLabel, ...]).validate_python(
             basis, strict=True
@@ -183,9 +181,7 @@ class FiniteDimensionalLieAlgebra(StrictModel):
             raise _validation_error(
                 "constant_axis", "structure-constant indices must lie on the basis axis"
             )
-        return cls.model_validate(
-            {"basis": basis, "structure_constants": canonical_constants}
-        )
+        return cls.model_construct(basis=basis, structure_constants=canonical_constants)
 
     basis: tuple[LieBasisLabel, ...] = Field(
         min_length=1,
@@ -197,8 +193,8 @@ class FiniteDimensionalLieAlgebra(StrictModel):
         max_length=MAX_STRUCTURE_NONZEROS,
         description=(
             "Sparse nonzero bracket coefficients with i < j in lexicographic "
-            "(i, j, k) order; antisymmetry is canonical and construction "
-            "checks Jacobi on the complete basis."
+            "(i, j, k) order; antisymmetry is canonical. Consumers admit "
+            "Jacobi on the complete basis before relying on the bracket."
         ),
     )
 
@@ -228,61 +224,6 @@ class FiniteDimensionalLieAlgebra(StrictModel):
                 "constant_axis",
                 "structure-constant indices must lie on the basis axis",
             )
-        # The Jacobiator is alternating for an antisymmetric bracket, so
-        # increasing triples prove the identity on every basis triple. The
-        # fixed dimension, nonzero, coefficient-height, work, and rational
-        # intermediate-height ceilings bound this exact check.
-        table: dict[tuple[int, int], dict[int, Fraction]] = {}
-        for constant in self.structure_constants:
-            value = constant.coefficient.as_fraction()
-            table.setdefault((constant.i, constant.j), {})[constant.k] = value
-            table.setdefault((constant.j, constant.i), {})[constant.k] = -value
-        jacobi_work = 0
-        triples = tuple(
-            (first, second, third)
-            for first in range(dimension)
-            for second in range(first + 1, dimension)
-            for third in range(second + 1, dimension)
-        )
-        for first, second, third in triples:
-            for outer_first, outer_second, inner in (
-                (first, second, third),
-                (second, third, first),
-                (third, first, second),
-            ):
-                outer_terms = table.get((outer_first, outer_second), {})
-                jacobi_work += sum(
-                    len(table.get((middle, inner), {})) for middle in outer_terms
-                )
-        if jacobi_work > MAX_LIE_JACOBI_WORK:
-            raise _validation_error(
-                "jacobi_work_bound", "Jacobi validation exceeds its fixed work bound"
-            )
-        if MAX_LIE_JACOBI_INTERMEDIATE_DIGITS > MAX_CANONICAL_RATIONAL_DIGITS:
-            raise _validation_error(
-                "jacobi_height_bound",
-                "Jacobi validation exceeds its exact intermediate-height bound",
-            )
-        for first, second, third in triples:
-            accumulator: dict[int, Fraction] = {}
-            for outer_first, outer_second, inner in (
-                (first, second, third),
-                (second, third, first),
-                (third, first, second),
-            ):
-                for middle, outer_value in table.get(
-                    (outer_first, outer_second), {}
-                ).items():
-                    inner_terms = table.get((middle, inner), {})
-                    for target, inner_value in inner_terms.items():
-                        accumulator[target] = (
-                            accumulator.get(target, 0) + outer_value * inner_value
-                        )
-            if any(value != 0 for value in accumulator.values()):
-                raise _validation_error(
-                    "jacobi_identity",
-                    "structure constants must satisfy the Jacobi identity",
-                )
         return self
 
     def model_copy(
@@ -291,7 +232,7 @@ class FiniteDimensionalLieAlgebra(StrictModel):
         update: Mapping[str, Any] | None = None,
         deep: bool = False,
     ) -> Self:
-        """Keep the internal Jacobi admission fact bound to unchanged fields."""
+        """Revalidate field updates through the canonical structural schema."""
         if not update:
             return super().model_copy(deep=deep)
         payload = self.model_dump(mode="python")

@@ -183,7 +183,6 @@ def test_identity_basis_change_preserves_source_algebra() -> None:
 def test_basis_change_revalidates_trusted_model_construct_input() -> None:
     unsafe = FiniteDimensionalLieAlgebra.model_construct(
         basis=("e", "f", "h"),
-        _jacobi_snapshot=(("e", "f", "h"), ()),
         structure_constants=tuple(
             StructureConstant.model_construct(
                 i=i,

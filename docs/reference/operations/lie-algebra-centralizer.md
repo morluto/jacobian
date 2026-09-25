@@ -15,11 +15,10 @@ centralizer, since commuting with the basis is equivalent to commuting with
 its linear span.
 
 The kernel is formed from the stacked linear equations `[x,s]=0` in the
-coordinates of `x`. The exact kernel is complete for accepted inputs. The
-canonical Lie-algebra value establishes Jacobi at construction; this operation
-separately bounds family length, rational coordinate digits, and linear-system
-work before the solve. The returned centralizer is closed under the bracket by
-Jacobi.
+coordinates of `x`. The exact kernel is complete for accepted inputs. This
+operation admits Jacobi at its input boundary and bounds family length,
+rational coordinate digits, and linear-system work before the solve. The
+returned centralizer is closed under the bracket by Jacobi.
 
 This operation returns the subalgebra itself, not an ideal claim. A consumer
 that relies on a caller-supplied `LieSubalgebra` checks its bracket closure at

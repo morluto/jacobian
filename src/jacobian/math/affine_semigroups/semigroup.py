@@ -240,7 +240,7 @@ def _estimate_factorization_bytes(
     except UnicodeEncodeError:
         return MAX_AFFINE_FACTOR_RESULT_BYTES + 1
     # JSON escaping expands an arbitrary control character to at most six bytes.
-    labels = 6 * label_bytes
+    escaped_label_bytes = 6 * label_bytes
     matrix = sum(
         len(str(abs(int(value)))) + 2 for row in configuration.entries for value in row
     )
@@ -250,7 +250,9 @@ def _estimate_factorization_bytes(
     )
     coefficient_bytes = sum(len(str(int(value))) + 3 for value in coordinates)
     target_bytes = configuration.rows * (MAX_AFFINE_FACTOR_RESULT_DIGITS + 3)
-    return 512 + labels + matrix + grading + coefficient_bytes + target_bytes
+    return (
+        512 + escaped_label_bytes + matrix + grading + coefficient_bytes + target_bytes
+    )
 
 
 def _preflight_factorization_parent_size(value: object) -> None:

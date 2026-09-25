@@ -255,10 +255,16 @@ class AnonymousGraphCardMultisetEqualityRequest(StrictModel):
         total_work = 0
         for side in ("left", "right"):
             multiset = value.get(side)
-            if type(multiset) is not dict:
+            if type(multiset) is dict:
+                order = multiset.get("card_order")
+                classes = multiset.get("classes")
+            elif type(multiset) is AnonymousGraphCardMultiset:
+                # Already-canonical typed operands skip nested parsing, but
+                # still share the same pair envelope when composed here.
+                order = multiset.card_order
+                classes = multiset.classes
+            else:
                 continue
-            order = multiset.get("card_order")
-            classes = multiset.get("classes")
             if (
                 type(order) is not int
                 or not 0 <= order <= MAX_UNLABELLED_DECK_VERTICES

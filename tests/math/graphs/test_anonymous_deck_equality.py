@@ -8,6 +8,7 @@ from pydantic import ValidationError
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationMatchRequest
 from jacobian.dispatch import invoke_operation
+from jacobian.math.graphs.decks import _models as deck_models
 from jacobian.math.graphs.decks._models import (
     AnonymousGraphCardMultisetEqualityRequest,
     AnonymousGraphCardMultisetRequest,
@@ -144,3 +145,49 @@ def test_combined_canonical_validation_work_is_admitted_once_for_both_sides() ->
         AnonymousGraphCardMultisetEqualityRequest.model_validate(
             {"left": five_classes, "right": four_classes.model_dump()}
         )
+
+
+def test_native_and_catalog_paths_do_not_replay_canonical_validation(
+    monkeypatch,
+) -> None:
+    from jacobian.math.graphs.decks.operations import (
+        anonymous_graph_card_multiset_equal,
+    )
+
+    raw = {
+        "card_order": 1,
+        "classes": [
+            {
+                "representative": {"vertices": ["v00"], "edges": []},
+                "multiplicity": "1",
+            }
+        ],
+    }
+    payload = {"left": raw, "right": raw}
+    original = deck_models._canonical_card_edges
+    canonical_checks = 0
+
+    def count_canonical_checks(vertices, edges):
+        nonlocal canonical_checks
+        canonical_checks += 1
+        return original(vertices, edges)
+
+    monkeypatch.setattr(deck_models, "_canonical_card_edges", count_canonical_checks)
+    native_payload = {
+        side: {
+            **raw,
+            "classes": [{**raw["classes"][0], "multiplicity": 1}],
+        }
+        for side in ("left", "right")
+    }
+    request = AnonymousGraphCardMultisetEqualityRequest.model_validate(native_payload)
+    assert canonical_checks == 2
+    assert anonymous_graph_card_multiset_equal(request).equal
+    assert canonical_checks == 2
+
+    canonical_checks = 0
+    catalog = Catalog.open()
+    operation = catalog.operation("graph.deck.anonymous_multiset.equal.check")
+    assert operation is not None
+    assert invoke_operation(operation.operation_id, payload, catalog).output["equal"]
+    assert canonical_checks == 2

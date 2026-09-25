@@ -17,7 +17,6 @@ from jacobian.catalog.models import (
 from jacobian.math.graphs.decks._models import (
     MAX_ANONYMOUS_CARD_CANONICALIZATION_WORK,
     MAX_ANONYMOUS_CARD_CLASSES,
-    MAX_ANONYMOUS_CARD_EQUALITY_WORK,
     MAX_ANONYMOUS_CARD_PROFILE_CELLS,
     MAX_ANONYMOUS_CARD_PROFILE_RESULT_BYTES,
     MAX_ANONYMOUS_CARD_PROFILE_WORK,
@@ -99,49 +98,16 @@ __all__ = [
 def anonymous_graph_card_multiset_equal(
     request: AnonymousGraphCardMultisetEqualityRequest,
 ) -> AnonymousGraphCardMultisetEqualityResult:
-    """Validate native operands within one budget, then compare them exactly."""
+    """Compare the two operands after request validation and shared admission."""
     if type(request) is not AnonymousGraphCardMultisetEqualityRequest:
         raise OperationDomainValidationError(
             location=("request",),
             code="graph_deck.anonymous_equality_request_carrier",
             message="request must be an AnonymousGraphCardMultisetEqualityRequest",
         )
-    left = request.left
-    right = request.right
-    work = 0
-    for side, multiset in (("left", left), ("right", right)):
-        order = getattr(multiset, "card_order", None)
-        classes = getattr(multiset, "classes", None)
-        if (
-            type(order) is not int
-            or not 0 <= order <= MAX_UNLABELLED_DECK_VERTICES
-            or type(classes) is not tuple
-            or len(classes) > MAX_ANONYMOUS_CARD_CLASSES
-        ):
-            raise OperationDomainValidationError(
-                location=(side,),
-                code="graph_deck.anonymous_equality_multiset_shape",
-                message="equality operands must be bounded anonymous card multisets",
-            )
-        work += _anonymous_canonicalization_work(order, len(classes))
-    if work > MAX_ANONYMOUS_CARD_EQUALITY_WORK:
-        raise OperationResourceAdmissionError(
-            location=("request",),
-            code="graph_deck.anonymous_equality_work_bound",
-            message="combined canonical validation exceeds the equality work bound",
-        )
-    for side, multiset in (("left", left), ("right", right)):
-        try:
-            AnonymousGraphCardMultiset.model_validate(
-                multiset.model_dump(mode="python")
-            )
-        except ValidationError as error:
-            raise OperationDomainValidationError(
-                location=(side,),
-                code="graph_deck.anonymous_equality_invalid_multiset",
-                message="equality operand is not a canonical anonymous card multiset",
-            ) from error
-    return _anonymous_graph_card_multiset_equal_from_admitted(left, right)
+    return _anonymous_graph_card_multiset_equal_from_admitted(
+        request.left, request.right
+    )
 
 
 def _anonymous_graph_card_multiset_equal_from_admitted(

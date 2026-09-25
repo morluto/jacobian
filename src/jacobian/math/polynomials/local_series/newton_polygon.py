@@ -300,11 +300,18 @@ def _admit(
         len(format_canonical_integer(abs(center.numerator))),
         len(format_canonical_integer(center.denominator)),
     )
+    component_digits = sum(
+        max(
+            len(format_canonical_integer(abs(value.numerator))),
+            len(format_canonical_integer(value.denominator)),
+        )
+        for row in source.coefficients
+        if row.series is not None
+        for coefficient in row.series.coefficients
+        for value in (coefficient.as_fraction(),)
+    )
     result_digits = (
-        512
-        + len(source.coefficients) * 192
-        + slots * (2 * MAX_NEWTON_POLYGON_SCALAR_DIGITS + 96)
-        + center_digits * 2
+        512 + len(source.coefficients) * 192 + component_digits * 2 + center_digits * 2
     )
     if result_digits > MAX_NEWTON_POLYGON_RESULT_DIGITS:
         raise OperationResourceAdmissionError(

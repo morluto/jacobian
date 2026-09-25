@@ -344,12 +344,14 @@ def add(
     for exponent, coefficient in (*terms_a, *terms_b):
         if lower <= exponent < precision:
             grouped[exponent].append(coefficient)
-    _admit_support(len(grouped))
     for values in grouped.values():
         _admit_sum_growth(values)
     coefficients = {
-        exponent: sum(values, Fraction()) for exponent, values in grouped.items()
+        exponent: total
+        for exponent, values in grouped.items()
+        if (total := sum(values, Fraction()))
     }
+    _admit_support(len(coefficients))
     _admit_result_envelope(coefficients, left.variable, center)
     return _make(left, lower, precision, coefficients, ramification)
 
@@ -371,12 +373,14 @@ def subtract(
     for exponent, coefficient in terms_b:
         if lower <= exponent < precision:
             grouped[exponent].append(-coefficient)
-    _admit_support(len(grouped))
     for values in grouped.values():
         _admit_sum_growth(values)
     coefficients = {
-        exponent: sum(values, Fraction()) for exponent, values in grouped.items()
+        exponent: total
+        for exponent, values in grouped.items()
+        if (total := sum(values, Fraction()))
     }
+    _admit_support(len(coefficients))
     _admit_result_envelope(coefficients, left.variable, center)
     return _make(left, lower, precision, coefficients, ramification)
 
@@ -559,8 +563,6 @@ def _admit_inverse_work(
     coefficient_count: int,
     unit_term_count: int,
 ) -> None:
-    output_terms = 1 if unit_term_count == 0 else coefficient_count
-    _admit_support(output_terms)
     work = (coefficient_count - 1) * unit_term_count
     if work > MAX_PUISEUX_ARITHMETIC_WORK:
         _resource(
@@ -721,6 +723,7 @@ def inverse(series: TruncatedPuiseuxWindow) -> TruncatedPuiseuxWindow:
             lower,
             series.ramification_index,
         )
+    _admit_support(len(coefficients))
     _admit_result_envelope(coefficients, series.variable, center)
     return _make(series, lower, precision, coefficients, series.ramification_index)
 

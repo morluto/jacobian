@@ -124,5 +124,6 @@ def test_operation_bounds_graph_before_adjacency_matrix_expansion() -> None:
     graph = LoopedSimpleGraph(
         vertices=tuple(f"v{i}" for i in range(9)), edges=(), loops=()
     )
-    with pytest.raises(ValueError, match="at most 8 vertices"):
-        LoopedGraphDeltaMatroidRequest(graph=graph)
+    with pytest.raises(OperationResourceAdmissionError, match="at most 8 vertices"):
+        looped_adjacency_delta_matroid(graph)
+    assert len(LoopedGraphDeltaMatroidRequest.model_validate({"graph": graph.model_dump()}).graph.vertices) == 9

@@ -2,17 +2,11 @@
 
 from __future__ import annotations
 
-from pydantic import ValidationError
-
-from jacobian.catalog.models import (
-    OperationDomainValidationError,
-    OperationResourceAdmissionError,
-)
 from jacobian.math.combinatorics.matroids.delta.extra import BinarySymmetricMatrix
 from jacobian.math.combinatorics.matroids.delta.extra_ops import binary
 from jacobian.math.graphs.delta_matroids._models import (
-    LoopedGraphDeltaMatroidRequest,
     LoopedGraphDeltaMatroidResult,
+    admit_looped_graph,
 )
 from jacobian.math.graphs.values import LoopedSimpleGraph
 
@@ -22,23 +16,7 @@ def looped_adjacency_delta_matroid(
 ) -> LoopedGraphDeltaMatroidResult:
     """Return the principal-minor delta-matroid of a looped simple graph."""
 
-    try:
-        canonical = LoopedSimpleGraph.model_validate(graph)
-    except ValidationError as error:
-        raise OperationDomainValidationError(
-            location=("graph",),
-            code="graph.looped_graph_invalid",
-            message="graph must be a canonical LoopedSimpleGraph value",
-        ) from error
-    try:
-        LoopedGraphDeltaMatroidRequest(graph=canonical)
-    except ValidationError as error:
-        raise OperationResourceAdmissionError(
-            location=("graph", "vertices"),
-            code="delta_matroid.binary_work",
-            message="looped graph conversion supports at most 8 vertices",
-        ) from error
-    graph = canonical
+    graph = admit_looped_graph(graph)
     vertices = graph.vertices
     edge_set = set(graph.edges)
     loop_set = set(graph.loops)

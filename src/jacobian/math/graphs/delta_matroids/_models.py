@@ -17,20 +17,11 @@ from jacobian.math.graphs.values import LoopedSimpleGraph
 
 
 class LoopedGraphDeltaMatroidRequest(StrictModel):
-    """Request using canonical looped graph encoding and at most eight vertices."""
+    """Request using the canonical looped graph encoding."""
 
     graph: LoopedSimpleGraph = Field(
-        description="Canonical looped graph: unique nonempty NFC labels (<=64 UTF-8 bytes), unique declared off-diagonal edges oriented left < right, and unique declared loop labels. This operation admits at most eight vertices."
+        description="Canonical looped graph: unique nonempty NFC labels (<=64 UTF-8 bytes), unique declared off-diagonal edges oriented left < right, and unique declared loop labels. Computational admission is at most eight vertices."
     )
-
-    @model_validator(mode="after")
-    def require_binary_envelope(self) -> Self:
-        if len(self.graph.vertices) > MAX_BINARY_GROUND:
-            raise PydanticCustomError(
-                "delta_matroid.binary_work",
-                f"looped graph conversion supports at most {MAX_BINARY_GROUND} vertices",
-            )
-        return self
 
 
 class LoopedGraphDeltaMatroidResult(StrictModel):
@@ -73,4 +64,33 @@ class LoopedGraphDeltaMatroidResult(StrictModel):
         return self
 
 
-__all__ = ["LoopedGraphDeltaMatroidRequest", "LoopedGraphDeltaMatroidResult"]
+def admit_looped_graph(graph: LoopedSimpleGraph) -> LoopedSimpleGraph:
+    """Revalidate the canonical carrier and enforce the operation work bound."""
+    from pydantic import ValidationError
+
+    from jacobian.catalog.models import (
+        OperationDomainValidationError,
+        OperationResourceAdmissionError,
+    )
+
+    if type(graph) is not LoopedSimpleGraph:
+        raise OperationDomainValidationError(
+            location=("graph",), code="graph.looped_graph_invalid",
+            message="graph must be a canonical LoopedSimpleGraph value",
+        )
+    try:
+        canonical = LoopedSimpleGraph.model_validate(graph.model_dump())
+    except (ValidationError, AttributeError) as error:
+        raise OperationDomainValidationError(
+            location=("graph",), code="graph.looped_graph_invalid",
+            message="graph must be a canonical LoopedSimpleGraph value",
+        ) from error
+    if len(canonical.vertices) > MAX_BINARY_GROUND:
+        raise OperationResourceAdmissionError(
+            location=("graph", "vertices"), code="delta_matroid.binary_work",
+            message=f"looped graph conversion supports at most {MAX_BINARY_GROUND} vertices",
+        )
+    return canonical
+
+
+__all__ = ["LoopedGraphDeltaMatroidRequest", "LoopedGraphDeltaMatroidResult", "admit_looped_graph"]

@@ -37,7 +37,7 @@ from jacobian.math.geometry.projective.coordinates._models import (
 )
 from jacobian.math.polynomials.values import RationalPolynomial
 
-MAX_BLOWUP_LABEL_BYTES = 64
+MAX_BLOWUP_LABEL_CHARS = 64
 
 
 def _domain(reason: str, message: str, location: tuple[str | int, ...]) -> NoReturn:
@@ -120,7 +120,7 @@ def _admit_surface_points(surface: BlowupP2Surface) -> int:
             )
         if (
             type(row.label) is not str
-            or not 1 <= len(row.label) <= MAX_BLOWUP_LABEL_BYTES
+            or not 1 <= len(row.label) <= MAX_BLOWUP_LABEL_CHARS
         ):
             _domain(
                 "point_label",
@@ -222,7 +222,7 @@ def _admit(request: PlaneCurveStrictTransformRequest) -> tuple[int, int, int]:
         + 4 * degree
         + 16
     )
-    output_bytes = 4096 + point_count * (MAX_BLOWUP_LABEL_BYTES + 3 * 192)
+    output_bytes = 4096 + point_count * (12 * MAX_BLOWUP_LABEL_CHARS + 3 * 192)
     if (
         work > MAX_CURVE_DIVISOR_WORK
         or intermediate_digits > MAX_CURVE_DIVISOR_INTERMEDIATE_DIGITS

@@ -101,6 +101,9 @@ def _preflight(
                 f"{side} operand word exceeds the {MAX_FREE_ALGEBRA_WORD_LENGTH}-letter budget",
             )
 
+    if left == right:
+        return (), (), 1, 1
+
     pair_count = len(left.terms) * len(right.terms)
     # Each pair can contribute to both uv and vu. This input-only upper bound
     # proves result term and word-cell limits before any concatenated words are

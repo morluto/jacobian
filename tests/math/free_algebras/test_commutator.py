@@ -144,11 +144,24 @@ def test_commutator_linear_fixture_distinguishes_word_order() -> None:
     }
 
 
-def test_commutator_rejects_candidate_output_before_convolution() -> None:
+def test_commutator_accepts_dense_self_bracket_before_candidate_bound() -> None:
     dense = _dense_operand()
 
+    result = commutator(dense, dense)
+
+    assert result.commutator.alphabet == dense.alphabet
+    assert result.commutator.terms == ()
+
+
+def test_commutator_rejects_candidate_output_before_convolution() -> None:
+    dense = _dense_operand()
+    distinct = FreeAlgebraPolynomial(
+        alphabet=dense.alphabet,
+        terms=dense.terms[:-1],
+    )
+
     with pytest.raises(OperationResourceAdmissionError) as caught:
-        commutator(dense, dense)
+        commutator(dense, distinct)
     assert caught.value.errors()[0]["type"] == (
         "free_algebra.commutator.result_term_budget"
     )

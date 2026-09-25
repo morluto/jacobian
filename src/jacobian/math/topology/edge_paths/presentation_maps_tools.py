@@ -14,6 +14,10 @@ def _run_induced(r: Any) -> Any:
     return induced_fundamental_group_map(r)
 
 
+def _run_compose(r: Any) -> Any:
+    return compose_fundamental_group_maps(r)
+
+
 _P = {"generators": ["x"], "relators": []}
 _CIRCLE = canonical_complex(
     ("a", "b", "c"), (("a", "b"), ("a", "c"), ("b", "c"))
@@ -40,6 +44,25 @@ TOOLS = (
                 },
             ),
         ),
+    ),
+    MathTool(
+        operation_id="topology.simplicial.fundamental_group.map.compose.compute",
+        title="Compose based fundamental-group presentation maps",
+        description=(
+            "Compose two exact induced presentation maps when the complete middle "
+            "presentation carriers agree. Return reduced outer-axis generator words "
+            "and the corresponding integer matrix on abelianizations."
+        ),
+        request_type=PresentationMapCompositionRequest,
+        result_type=PresentationMapCompositionResult,
+        run=_run_compose,
+        tags=("topology", "fundamental-group", "composition", "exact"),
+        discovery_terms=(
+            "compose induced fundamental group maps",
+            "compose presentation homomorphisms",
+            "fundamental group functoriality",
+        ),
+        examples=(),
     ),
     MathTool(
         operation_id="topology.simplicial.fundamental_group.induced_map.compute",

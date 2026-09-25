@@ -34,6 +34,7 @@ def test_catalog_contains_only_audited_operations() -> None:
         "topology.simplicial.edge_path.concatenate.compute",
         "topology.simplicial.fundamental_group.presentation.compute",
         "topology.simplicial.fundamental_group.induced_map.compute",
+        "topology.simplicial.fundamental_group.map.compose.compute",
         "topology.group_presentation.direct_relator_match.compute",
         "topology.group_presentation.abelianization.compute",
         "topology.group_presentation.free_reduce.compute",

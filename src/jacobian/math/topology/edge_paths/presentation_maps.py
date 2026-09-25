@@ -17,6 +17,7 @@ from jacobian.math.topology._request_admission import run_topology_admission
 from jacobian.math.topology.cohomology.operations._models import SimplicialMap
 from jacobian.math.topology.edge_paths._models import (
     MAX_INDUCED_MAP_EDGE_LETTERS,
+    MAX_PRESENTATION_GENERATORS,
     MAX_PRESENTATION_RELATOR_LETTERS,
     MAX_WORD,
     EdgeWordEntry,
@@ -24,6 +25,8 @@ from jacobian.math.topology.edge_paths._models import (
     FiniteGroupWord,
     FundamentalGroupMapRequest,
     FundamentalGroupMapResult,
+    PresentationMapCompositionRequest,
+    PresentationMapCompositionResult,
     PresentationRelatorImage,
     WordLetter,
 )
@@ -379,12 +382,251 @@ def induced_fundamental_group_map(
     )
 
 
+MAX_COMPOSITION_SUBSTITUTION_LETTERS = 65_536
+MAX_COMPOSITION_RELATOR_REPLAY_LETTERS = 65_536
+
+
+def _inverse_word(word: FiniteGroupWord) -> tuple[WordLetter, ...]:
+    return tuple(
+        WordLetter(generator=letter.generator, exponent=-letter.exponent)
+        for letter in reversed(word.letters)
+    )
+
+
+def _reduce_word_letters(letters: list[WordLetter]) -> tuple[WordLetter, ...]:
+    reduced: list[WordLetter] = []
+    for letter in letters:
+        if (
+            reduced
+            and reduced[-1].generator == letter.generator
+            and reduced[-1].exponent == -letter.exponent
+        ):
+            reduced.pop()
+        else:
+            reduced.append(letter)
+    return tuple(reduced)
+
+
+def _require_map_homomorphism(result: FundamentalGroupMapResult) -> None:
+    source_relators = result.source_presentation.presentation.relators
+    target_relators = result.target_presentation.presentation.relators
+    if len(source_relators) != len(result.relator_images):
+        raise OperationDomainValidationError(
+            location=("relator_images",),
+            code="fundamental_group_map.composition_relator_axis",
+            message="each source relator needs a target relation witness",
+        )
+    for index, (relator, witness) in enumerate(
+        zip(source_relators, result.relator_images, strict=True)
+    ):
+        if witness.source_relator_index != index:
+            raise OperationDomainValidationError(
+                location=("relator_images", index),
+                code="fundamental_group_map.composition_relator_axis",
+                message="relation witnesses must follow the source relator axis",
+            )
+        substituted: list[WordLetter] = []
+        for letter in relator.letters:
+            image = result.generator_images[letter.generator]
+            substituted.extend(
+                image.letters if letter.exponent == 1 else _inverse_word(image)
+            )
+        image_word = _reduce_word_letters(substituted)
+        if witness.target_relator_index is None:
+            expected: tuple[WordLetter, ...] = ()
+        else:
+            target_relator = target_relators[witness.target_relator_index]
+            relation = (
+                target_relator.letters
+                if witness.target_orientation == 1
+                else _inverse_word(target_relator)
+            )
+            expected = _reduce_word_letters(
+                [
+                    *witness.conjugator.letters,
+                    *relation,
+                    *_inverse_word(witness.conjugator),
+                ]
+            )
+        if image_word != expected:
+            raise OperationDomainValidationError(
+                location=("relator_images", index),
+                code="fundamental_group_map.composition_relator_replay",
+                message="an input map does not preserve its source relation under the supplied witness",
+            )
+
+    target_count = len(result.target_presentation.presentation.generators)
+    source_count = len(result.source_presentation.presentation.generators)
+    expected_matrix = tuple(
+        tuple(
+            sum(letter.exponent for letter in image.letters if letter.generator == row)
+            for image in result.generator_images
+        )
+        for row in range(target_count)
+    )
+    matrix = result.abelianization_map
+    if (
+        matrix.row_count != target_count
+        or matrix.column_count != source_count
+        or matrix.entries != expected_matrix
+    ):
+        raise OperationDomainValidationError(
+            location=("abelianization_map",),
+            code="fundamental_group_map.composition_matrix_claim",
+            message="an input abelianization matrix disagrees with its generator words",
+        )
+
+
+def compose_fundamental_group_maps(
+    request: PresentationMapCompositionRequest,
+) -> PresentationMapCompositionResult:
+    """Compose two based simplicial maps after applying the pi_1 construction."""
+    first, second = request.first, request.second
+    if first.target_presentation != second.source_presentation:
+        raise OperationDomainValidationError(
+            location=("second", "source_presentation"),
+            code="fundamental_group_map.composition_carrier",
+            message="the target presentation of the first map must equal the source presentation of the second",
+        )
+
+    source_count = len(first.source_presentation.presentation.generators)
+    middle_count = len(first.target_presentation.presentation.generators)
+    target_count = len(second.target_presentation.presentation.generators)
+    if (
+        len(first.generator_images) != source_count
+        or len(second.generator_images) != middle_count
+        or source_count > MAX_PRESENTATION_GENERATORS
+        or middle_count > MAX_PRESENTATION_GENERATORS
+        or target_count > MAX_PRESENTATION_GENERATORS
+    ):
+        raise OperationDomainValidationError(
+            location=("first", "generator_images"),
+            code="fundamental_group_map.composition_axes",
+            message="map generator words must cover their complete presentation axes",
+        )
+
+    # This exact count bounds substitution before allocating result words.
+    per_image_estimates = tuple(
+        sum(
+            len(second.generator_images[letter.generator].letters)
+            for letter in image.letters
+        )
+        for image in first.generator_images
+    )
+    estimated_letters = sum(per_image_estimates)
+    if estimated_letters > MAX_COMPOSITION_SUBSTITUTION_LETTERS:
+        raise OperationResourceAdmissionError(
+            location=("first", "generator_images"),
+            code="fundamental_group_map.composition_work",
+            message="composed generator-word expansion exceeds the admitted work bound",
+        )
+    if any(length > MAX_WORD for length in per_image_estimates):
+        raise OperationResourceAdmissionError(
+            location=("first", "generator_images"),
+            code="fundamental_group_map.composition_word_output",
+            message="a composed generator word exceeds the admitted output length",
+        )
+
+    def replay_work(result: FundamentalGroupMapResult) -> int:
+        total = 0
+        target_relators = result.target_presentation.presentation.relators
+        for relator, witness in zip(
+            result.source_presentation.presentation.relators,
+            result.relator_images,
+            strict=True,
+        ):
+            total += sum(
+                len(result.generator_images[letter.generator].letters)
+                for letter in relator.letters
+            )
+            if witness.target_relator_index is not None:
+                total += 2 * len(witness.conjugator.letters) + len(
+                    target_relators[witness.target_relator_index].letters
+                )
+        return total
+
+    relation_work = replay_work(first) + replay_work(second)
+    if relation_work > MAX_COMPOSITION_RELATOR_REPLAY_LETTERS:
+        raise OperationResourceAdmissionError(
+            location=("first", "relator_images"),
+            code="fundamental_group_map.composition_relation_work",
+            message="input relator replay exceeds the admitted work bound",
+        )
+
+    _require_map_homomorphism(first)
+    _require_map_homomorphism(second)
+
+    composed_images = []
+    for image in first.generator_images:
+        substituted: list[WordLetter] = []
+        for letter in image.letters:
+            target_word = second.generator_images[letter.generator]
+            substituted.extend(
+                target_word.letters
+                if letter.exponent == 1
+                else _inverse_word(target_word)
+            )
+        composed_images.append(
+            FiniteGroupWord(letters=_reduce_word_letters(substituted))
+        )
+
+    left, right = first.abelianization_map, second.abelianization_map
+    if (
+        left.row_count != middle_count
+        or left.column_count != source_count
+        or right.row_count != target_count
+        or right.column_count != middle_count
+    ):
+        raise OperationDomainValidationError(
+            location=("first", "abelianization_map"),
+            code="fundamental_group_map.composition_matrix_axes",
+            message="abelianization maps must use the same intermediate generator axis",
+        )
+    entries = tuple(
+        tuple(
+            sum(
+                right.entries[row][middle] * left.entries[middle][column]
+                for middle in range(middle_count)
+            )
+            for column in range(source_count)
+        )
+        for row in range(target_count)
+    )
+    word_matrix = tuple(
+        tuple(
+            sum(letter.exponent for letter in image.letters if letter.generator == row)
+            for image in composed_images
+        )
+        for row in range(target_count)
+    )
+    if entries != word_matrix:
+        raise OperationDomainValidationError(
+            location=("second", "abelianization_map"),
+            code="fundamental_group_map.composition_matrix_replay",
+            message="composed word exponent sums disagree with matrix composition",
+        )
+    return PresentationMapCompositionResult._from_kernel(
+        source_presentation=first.source_presentation,
+        intermediate_presentation=first.target_presentation,
+        target_presentation=second.target_presentation,
+        generator_images=tuple(composed_images),
+        abelianization_map=IntegerMatrix(
+            row_count=target_count,
+            column_count=source_count,
+            entries=entries,
+        ),
+    )
+
+
 __all__ = [
     "DirectRelatorMatchRequest",
     "DirectRelatorMatchResult",
     "FundamentalGroupMapRequest",
     "FundamentalGroupMapResult",
+    "PresentationMapCompositionRequest",
+    "PresentationMapCompositionResult",
     "PresentationRelatorImage",
+    "compose_fundamental_group_maps",
     "direct_relator_match",
     "induced_fundamental_group_map",
 ]

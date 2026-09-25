@@ -19,6 +19,9 @@ from jacobian.math.number_theory.characters.values import DirichletCharacter
 from jacobian.math.number_theory.modular_forms.basis import (
     modular_form_basis_q_expansions,
 )
+from jacobian.math.number_theory.modular_forms.character_basis import (
+    modular_character_coordinates_q_expansion,
+)
 from jacobian.math.number_theory.modular_forms.operations import space_dimension
 from jacobian.math.number_theory.modular_forms.transform_models import SturmBoundResult
 from jacobian.math.number_theory.modular_forms.transforms import sturm_bound
@@ -89,19 +92,37 @@ def test_space_rejects_coefficient_field_that_does_not_contain_character_values(
         )
 
 
-def test_space_checks_the_character_group_claim_used_for_field_compatibility() -> None:
+def test_space_defers_the_complete_group_proof_to_relying_operations() -> None:
     character = _character_order_six()
     forged_group = character.group.model_copy(update={"generator_orders": (6,)})
     forged_character = character.model_copy(update={"group": forged_group})
 
-    with pytest.raises(ValidationError, match="unit-group presentation is invalid"):
-        ModularFormSpace(
-            level=13,
-            weight=2,
-            kind="M",
-            character=forged_character,
-            coefficient_domain=RationalCyclotomicField(order=6),
-        )
+    space = ModularFormSpace(
+        level=13,
+        weight=2,
+        kind="S",
+        character=forged_character,
+        coefficient_domain=RationalCyclotomicField(order=6),
+    )
+
+    field = RationalCyclotomicField(order=6)
+    form = ModularFormCoordinates(
+        space=space,
+        basis_id="gamma0-13-even-order6-character-sturm-v1",
+        coordinates=(
+            RationalCyclotomicElement(
+                field=field,
+                coefficients_ascending=(
+                    CanonicalRational(num=1, den=1),
+                    CanonicalRational(num=0, den=1),
+                ),
+            ),
+        ),
+    )
+
+    with pytest.raises(OperationDomainValidationError) as excinfo:
+        modular_character_coordinates_q_expansion(form)
+    assert excinfo.value.errors()[0]["type"].startswith("dirichlet_character.group")
 
 
 def test_space_requires_explicit_character_inflation_to_the_level() -> None:

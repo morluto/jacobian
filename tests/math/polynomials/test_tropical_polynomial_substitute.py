@@ -192,6 +192,35 @@ def test_constant_polynomial_can_change_target_axis_without_images() -> None:
     )
 
 
+def test_annihilated_monomial_does_not_charge_later_image_coefficients() -> None:
+    source = _polynomial(("x", "y"), (((1, 1024), 0),))
+    zero = _polynomial(("t",), ())
+    large = _polynomial(("t",), (((0,), 10**100),))
+    result = compute_polynomial_substitute(
+        PolynomialSubstituteRequest(
+            polynomial=source,
+            target_variables=("t",),
+            images=(zero, large),
+        )
+    ).result
+    assert result.terms == ()
+
+
+def test_substitution_rejects_forged_duplicate_source_axis() -> None:
+    source = _polynomial(("x", "y"), (((1, 0), 0),)).model_copy(
+        update={"variables": ("x", "x")}
+    )
+    zero = _polynomial(("t",), ())
+    with pytest.raises(Exception, match="tropical.polynomial_axis"):
+        compute_polynomial_substitute(
+            PolynomialSubstituteRequest(
+                polynomial=source,
+                target_variables=("t",),
+                images=(zero, zero),
+            )
+        )
+
+
 def test_substitution_accepts_full_exponent_boundary() -> None:
     source = _polynomial(("x",), (((1024,), 0),))
     image = _polynomial(("t",), (((1,), 0),))

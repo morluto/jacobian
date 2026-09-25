@@ -151,6 +151,24 @@ def _admit_polynomial(poly: TropicalPolynomial) -> None:
             code="tropical.polynomial_type",
             message="expected a tropical polynomial",
         )
+    if (
+        not isinstance(poly.variables, tuple)
+        or len(poly.variables) > 128
+        or any(
+            not isinstance(label, str)
+            or not label
+            or label != label.strip()
+            or len(label) > 64
+            or any(unicodedata.category(character) in ("Cc", "Cs") for character in label)
+            for label in poly.variables
+        )
+        or len(set(poly.variables)) != len(poly.variables)
+    ):
+        raise OperationDomainValidationError(
+            location=("polynomial", "variables"),
+            code="tropical.polynomial_axis",
+            message="polynomial variable axis must be bounded, unique, and canonical",
+        )
     if len(poly.terms) > MAX_TROPICAL_POLYNOMIAL_TERMS:
         raise OperationResourceAdmissionError(
             location=("polynomial",),
@@ -897,8 +915,12 @@ def _admit_substitution_output(
         )
         scalar_additions = 0
         for exponent, image in zip(term.exponents, images, strict=True):
-            if exponent == 0 or not image.terms:
+            if exponent == 0:
                 continue
+            if not image.terms:
+                # This source monomial vanishes; later images incur no arithmetic.
+                digit_bound = 0
+                break
             image_digits = max(
                 max(
                     _digits(item.coefficient.value.num),

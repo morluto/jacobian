@@ -9,6 +9,7 @@ from types import ModuleType, SimpleNamespace
 
 import pytest
 import tools.benchmark_plan.compiler as planner
+from benchmarks.tooling.validation_plan import host_validation_plan
 from tests.process.tooling.ci import ROOT
 
 _MISSING = object()
@@ -98,6 +99,13 @@ def test_evaluation_evidence_markdown_does_not_select_oracle(
     assert any(
         "evaluation evidence documentation change" in reason for reason in plan.reasons
     )
+    host_plan = host_validation_plan(
+        ROOT,
+        ["benchmarks/evidence/classical-matrix-groups-admission.md"],
+        {},
+    )
+    assert host_plan.entries == ()
+    assert host_plan.reasons == ()
 
 
 def test_unclassified_evidence_path_still_fails_closed(

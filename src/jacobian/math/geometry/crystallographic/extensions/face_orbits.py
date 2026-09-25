@@ -473,8 +473,8 @@ def quotient_face_orbit_complex(
         degree_max=2,
         basis_sizes=(len(orbit_roots), len(edge_orbits), 1),
         differential_matrices=(
-            tuple(tuple(str(value) for value in row) for row in d1),
-            tuple(tuple(str(value) for value in row) for row in d2),
+            tuple(tuple(value for value in row) for row in d1),
+            tuple(tuple(value for value in row) for row in d2),
         ),
     )
     if any(

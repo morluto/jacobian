@@ -6,7 +6,6 @@ from pydantic import ValidationError
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.math.geometry.crystallographic.extensions._models import (
-    CrystallographicPolytopePairingRequest,
     FiniteLatticeExtension,
     PolytopeFacetPairing,
 )
@@ -102,15 +101,13 @@ def _checked_translation_torus(generators: tuple[tuple[int, ...], ...]):
                 ),
             )
         )
-    request = CrystallographicPolytopePairingRequest(
-        affine_realization=affine_section_realization(extension),
-        polytope=polytope,
-        lattice_axes=tuple(f"x{axis}" for axis in range(dimension)),
-        pairings=tuple(pairings),
+    pairing = pair_crystallographic_polytope_facets(
+        affine_section_realization(extension),
+        polytope,
+        tuple(f"x{axis}" for axis in range(dimension)),
+        tuple(pairings),
     )
-    checked = check_crystallographic_fundamental_domain(
-        pair_crystallographic_polytope_facets(request)
-    )
+    checked = check_crystallographic_fundamental_domain(pairing)
     assert checked.is_fundamental_domain
     return checked
 
@@ -139,9 +136,9 @@ def test_checked_cube_gives_integral_torus_product_chains() -> None:
 
     assert chain.basis_sizes == (1, 3, 3, 1)
     assert chain.differential_matrices == (
-        (("0", "0", "0"),),
-        (("0", "0", "0"), ("0", "0", "0"), ("0", "0", "0")),
-        (("0",), ("0",), ("0",)),
+        ((0, 0, 0),),
+        ((0, 0, 0), (0, 0, 0), (0, 0, 0)),
+        ((0,), (0,), (0,)),
     )
     assert tuple(
         group.free_rank for group in homology_groups(chain).homology_groups
@@ -170,7 +167,7 @@ def test_result_value_rejects_nonzero_differential() -> None:
     payload = result.model_dump(mode="python")
     chain = payload["quotient_chain_complex"]
     chain["differential_matrices"] = (
-        (("1", "0", "0"),),
+        ((1, 0, 0),),
         *chain["differential_matrices"][1:],
     )
 

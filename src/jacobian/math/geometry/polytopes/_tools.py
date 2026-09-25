@@ -10,6 +10,8 @@ from jacobian.math.geometry.polytopes._models import (
     FacetIncidenceResult,
     JoinRequest,
     JoinResult,
+    PolytopeFaceLatticeRequest,
+    PolytopeFaceLatticeResult,
     PolytopeSupportRequest,
     PolytopeSupportResult,
     PolytopeVolumeRequest,
@@ -25,6 +27,7 @@ from jacobian.math.geometry.polytopes._models import (
 from jacobian.math.geometry.polytopes.operations import (
     facet_incidence,
     polytope_edge_profile,
+    polytope_face_lattice,
     polytope_join,
     polytope_prism,
     polytope_pyramid,
@@ -82,6 +85,13 @@ def compute_polytope_vertex_figure(request: VertexFigureRequest) -> VertexFigure
     return polytope_vertex_figure(request.polytope, request.vertex_id)
 
 
+def compute_polytope_face_lattice(
+    request: PolytopeFaceLatticeRequest,
+) -> PolytopeFaceLatticeResult:
+    """Unpack a request and compute its exact rank-three face lattice."""
+    return polytope_face_lattice(request.polytope)
+
+
 def compute_polytope_volume(request: PolytopeVolumeRequest) -> PolytopeVolumeResult:
     """Unpack a request and project the native volume result."""
     vertices = request.vertices
@@ -97,6 +107,76 @@ def compute_polytope_volume(request: PolytopeVolumeRequest) -> PolytopeVolumeRes
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
+    MathTool(
+        operation_id="polytope.face_lattice.compute",
+        title="Compute the complete face lattice of a three-dimensional polytope",
+        description=(
+            "From an ordered, labelled rational V-representation in dimension three, "
+            "recompute the complete exact facet incidence, identify the extreme "
+            "source rows, and return every face including the empty and whole faces "
+            "with all Hasse cover relations. Face labels are sorted source-vertex "
+            "indices; redundant input rows remain in the source but are excluded "
+            "from the face vertices. Admission bounds coordinate height, exact facet "
+            "enumeration, postprocessing work, face and cover counts, and result size."
+        ),
+        request_type=PolytopeFaceLatticeRequest,
+        result_type=PolytopeFaceLatticeResult,
+        run=compute_polytope_face_lattice,
+        tags=("polytope", "face-lattice", "face-poset", "exact-rational"),
+        discovery_terms=(
+            "face lattice of a polytope",
+            "polytope face poset",
+            "Hasse diagram of a three-dimensional polytope",
+        ),
+        examples=(
+            OperationExample(
+                name="tetrahedron_face_lattice",
+                description=(
+                    "The standard tetrahedron has four vertices, six edges, "
+                    "four triangular facets, and its empty and whole faces."
+                ),
+                input={
+                    "polytope": {
+                        "space": {"axes": ["x", "y", "z"]},
+                        "vertices": [
+                            {
+                                "vertex_id": "ex",
+                                "coordinates": [
+                                    {"num": "1", "den": "1"},
+                                    {"num": "0", "den": "1"},
+                                    {"num": "0", "den": "1"},
+                                ],
+                            },
+                            {
+                                "vertex_id": "ey",
+                                "coordinates": [
+                                    {"num": "0", "den": "1"},
+                                    {"num": "1", "den": "1"},
+                                    {"num": "0", "den": "1"},
+                                ],
+                            },
+                            {
+                                "vertex_id": "ez",
+                                "coordinates": [
+                                    {"num": "0", "den": "1"},
+                                    {"num": "0", "den": "1"},
+                                    {"num": "1", "den": "1"},
+                                ],
+                            },
+                            {
+                                "vertex_id": "origin",
+                                "coordinates": [
+                                    {"num": "0", "den": "1"},
+                                    {"num": "0", "den": "1"},
+                                    {"num": "0", "den": "1"},
+                                ],
+                            },
+                        ],
+                    }
+                },
+            ),
+        ),
+    ),
     MathTool(
         operation_id="polytope.rational.h_to_v.compute",
         title="Convert an exact rational H-polyhedron to finite points and directions",
@@ -410,7 +490,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         title="Compute the exact prism over a bounded rational polytope",
         description="Embed each source vertex p as a bottom vertex (p, 0) and a top "
         "vertex (p, 1) on a fresh height axis, returning the exact prism "
-        "V-polytope P x [0, 1] with suffixed bottom/top transport IDs and the "
+        "V-polytope P x [0, 1] with suffixed bottom/top transport IDs, the "
+        "named height_axis, retained source coordinate space and axis map, and the "
         "replayed dimension identity dim(prism) = dim(P) + 1. The height axis "
         "must be fresh and the suffixed IDs must be distinct.",
         request_type=PrismRequest,
@@ -452,7 +533,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         description="Embed the left factor as (p, 0, 0) and the right factor as "
         "(0, q, 1) on (*left.axes, *right.axes, height_axis), returning the "
         "exact join V-polytope with unchanged source vertex IDs, explicit "
-        "left/right transport, and the replayed dimension identity "
+        "left/right vertex and ordered source-axis transports, retained factor "
+        "coordinate spaces, the named height_axis, and the dimension identity "
         "dim(join) = dim(P) + dim(Q) + 1. The factors must live on disjoint "
         "axes with disjoint vertex IDs and the height axis must be fresh.",
         request_type=JoinRequest,

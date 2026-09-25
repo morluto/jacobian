@@ -148,13 +148,15 @@ def _run_spline_dimension(
 
 
 def _run_common_refinement(request: CommonRefinementRequest) -> CommonRefinementResult:
-    return polytopal_complex_common_refinement(request)
+    return polytopal_complex_common_refinement(request.left, request.right)
 
 
 def _run_affine_transform(
     request: PolytopalComplexAffineTransformRequest,
 ) -> PolytopalComplexAffineTransformResult:
-    return polytopal_complex_affine_transform(request)
+    return polytopal_complex_affine_transform(
+        request.complex, request.matrix, request.translation
+    )
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (

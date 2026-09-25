@@ -216,7 +216,7 @@ def translation_torus_quotient_chains(
         basis_sizes=basis_sizes,
         differential_matrices=tuple(
             tuple(
-                tuple("0" for _ in range(basis_sizes[degree]))
+                tuple(0 for _ in range(basis_sizes[degree]))
                 for _ in range(basis_sizes[degree - 1])
             )
             for degree in range(1, dimension + 1)

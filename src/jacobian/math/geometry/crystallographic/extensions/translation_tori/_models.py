@@ -52,7 +52,7 @@ class BieberbachTranslationTorusChains(StrictModel):
             or any(
                 matrix
                 != tuple(
-                    tuple("0" for _ in range(expected_basis_sizes[degree]))
+                    tuple(0 for _ in range(expected_basis_sizes[degree]))
                     for _ in range(expected_basis_sizes[degree - 1])
                 )
                 for degree, matrix in enumerate(chain.differential_matrices, start=1)

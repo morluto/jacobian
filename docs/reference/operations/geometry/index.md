@@ -4,6 +4,8 @@
 
 - [Exact planar geometry](exact-planar-geometry.md)
 - [Exact rational H-to-V polyhedron conversion](rational-polyhedron-h-to-v.md)
+- [Three-dimensional polytope face lattices](three-dimensional-polytope-face-lattices.md)
+- [Exact rational polytope joins and prisms](polytope-join-prism.md)
 - [Rational polytopal complexes and splines](polytopal-complex-splines.md)
 - [Rational metric curvature profiles](rational-metric-curvature.md)
 - [Rational metric pullback](rational-metric-pullback.md)
@@ -11,5 +13,6 @@
 - [Projective plane-curve singularity profiles](projective-plane-curve-singularities.md)
 - [Bounded regular plane-curve arclength](plane-curve-arclength.md)
 - [Rational coordinate covariant derivatives](rational-covariant-derivatives.md)
+- [Plane-curve blowups](plane-curve-blowups.md)
 - [Two-dimensional Bieberbach polygon quotient chains](bieberbach-polygon-quotient-chains.md)
 - [Translation torus quotient chains](bieberbach-translation-torus-chains.md)

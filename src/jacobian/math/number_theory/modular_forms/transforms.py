@@ -441,6 +441,25 @@ def _sturm_space(space: object) -> ModularFormSpace:
             code="modular_form.unsupported_space",
             message="Sturm bounds require a valid exact modular-form parent",
         ) from error
+    if isinstance(space.character, DirichletCharacter):
+        try:
+            group = require_complete_character_group(space.character.group)
+        except (OperationDomainValidationError, OperationResourceAdmissionError) as error:
+            raise OperationDomainValidationError(
+                location=("space", "character", "group"),
+                code="modular_form.invalid_character_group",
+                message="Sturm bounds require a complete canonical character group",
+            ) from error
+        coordinates = space.character.coordinates
+        if type(coordinates) is not tuple or len(coordinates) != len(group.generator_orders) or any(
+            type(value) is not int or value < 0 or value >= order
+            for value, order in zip(coordinates, group.generator_orders, strict=True)
+        ):
+            raise OperationDomainValidationError(
+                location=("space", "character", "coordinates"),
+                code="modular_form.invalid_character_coordinates",
+                message="Sturm bounds require canonical character coordinates",
+            )
     if (
         space.group != "GAMMA0"
         or type(space.level) is not int

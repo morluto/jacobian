@@ -139,6 +139,23 @@ def test_sturm_bound_covers_every_exact_coefficient_parent(
     assert SturmBoundResult.model_validate(result.model_dump(mode="json")) == result
 
 
+def test_sturm_rejects_fabricated_character_group_claim() -> None:
+    from jacobian.catalog.models import OperationDomainValidationError
+
+    character = dirichlet_character(character_group(13), (2,))
+    forged_group = character.group.model_copy(update={"generator_orders": (6,)})
+    forged_character = character.model_copy(update={"group": forged_group})
+    space = ModularFormSpace(
+        level=13,
+        weight=2,
+        kind="M",
+        character=forged_character,
+        coefficient_domain=RationalCyclotomicField(order=6),
+    )
+    with pytest.raises(OperationDomainValidationError):
+        sturm_bound(space)
+
+
 def test_sturm_operation_accepts_cyclotomic_extension_of_trivial_space() -> None:
     space = ModularFormSpace(
         level=1,

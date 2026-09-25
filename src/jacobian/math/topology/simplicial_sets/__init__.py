@@ -29,10 +29,12 @@ from jacobian.math.topology.simplicial_sets.image import (
     simplicial_map_image,
 )
 from jacobian.math.topology.simplicial_sets.maps import (
+    NormalizedHomologyResult,
     TruncatedSimplicialMap,
     compose_simplicial_maps,
     identity_simplicial_map,
     normalized_chains,
+    normalized_homology,
     simplicial_map,
 )
 from jacobian.math.topology.simplicial_sets.operations import from_tables
@@ -53,6 +55,7 @@ __all__ = [
     "ComplexFaceSimplexIndex",
     "DegeneracyProfileResult",
     "FiniteTruncatedSimplicialSet",
+    "NormalizedHomologyResult",
     "SimplicialComplexPrefixResult",
     "SimplicialIdentityObstruction",
     "SimplicialMapImageResult",
@@ -67,6 +70,7 @@ __all__ = [
     "from_tables",
     "identity_simplicial_map",
     "normalized_chains",
+    "normalized_homology",
     "simplex_boundary",
     "simplex_horn",
     "simplicial_map",

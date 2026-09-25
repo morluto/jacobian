@@ -670,7 +670,7 @@ class LinkComponentsResult(StrictModel):
         }
         expected_darts = set(crossing_by_dart)
         expected_darts.update(
-            f"free_loop_{index:03d}:dart" for index in range(self.diagram.free_loops)
+            f"~free_loop_{index:03d}:dart" for index in range(self.diagram.free_loops)
         )
         covered: list[str] = []
         for component in self.components:

@@ -15,20 +15,16 @@ from jacobian.math.matrices.finite_fields.operations import (
     verify_rref,
 )
 from jacobian.math.matrices.finite_fields.quotient_spaces import (
-    PrimeFieldQuotientRequest,
     PrimeFieldQuotientSpace,
     PrimeFieldQuotientVector,
     PrimeFieldSubspace,
-    PrimeFieldVectorProjectionRequest,
 )
 
 __all__ = [
     "PrimeFieldMatrix",
-    "PrimeFieldQuotientRequest",
     "PrimeFieldQuotientSpace",
     "PrimeFieldQuotientVector",
     "PrimeFieldSubspace",
-    "PrimeFieldVectorProjectionRequest",
     "column_basis",
     "nullspace",
     "project_quotient_vector",

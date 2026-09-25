@@ -3,7 +3,6 @@
 from jacobian.math.polynomials.cyclotomic_coefficients._models import (
     CyclotomicPolynomial,
     CyclotomicPolynomialTerm,
-    RationalPolynomialCyclotomicEmbeddingRequest,
 )
 from jacobian.math.polynomials.cyclotomic_coefficients.operations import (
     embed_rational_polynomial,
@@ -12,6 +11,5 @@ from jacobian.math.polynomials.cyclotomic_coefficients.operations import (
 __all__ = [
     "CyclotomicPolynomial",
     "CyclotomicPolynomialTerm",
-    "RationalPolynomialCyclotomicEmbeddingRequest",
     "embed_rational_polynomial",
 ]

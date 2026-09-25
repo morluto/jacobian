@@ -9,6 +9,8 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.gauge._models import (
+    FiniteGroupGaugeBasepointTransportRequest,
+    FiniteGroupGaugeBasepointTransportResult,
     FiniteGroupGaugeComplex,
     FiniteGroupGaugeContribution,
     FiniteGroupGaugeCurvatureRequest,
@@ -333,6 +335,141 @@ def finite_group_gauge_holonomy(
         contributions=tuple(contributions),
         start=start,
         end=end,
+    )
+
+
+def finite_group_gauge_basepoint_transport(
+    request: FiniteGroupGaugeBasepointTransportRequest,
+) -> FiniteGroupGaugeBasepointTransportResult:
+    r"""Transport a based loop by conjugating with a connector holonomy.
+
+    For a connector ``gamma`` from ``s`` to ``t`` and loop ``ell`` based at
+    ``s``, the returned loop is ``reverse(gamma) * ell * gamma``. Its
+    holonomy is therefore ``Hol(gamma)^-1 Hol(ell) Hol(gamma)``.
+    """
+    if not isinstance(request, FiniteGroupGaugeBasepointTransportRequest):
+        _reject(
+            "request",
+            "lattice_gauge.finite_group.basepoint_request_type",
+            "expected a finite-group basepoint transport request",
+        )
+    field, loop, connector = request.field, request.loop, request.connector
+    if (
+        not isinstance(field, FiniteGroupGaugeField)
+        or not isinstance(loop, OrientedGaugePath)
+        or not isinstance(connector, OrientedGaugePath)
+        or not isinstance(field.group, FiniteGroupTable)
+    ):
+        _reject(
+            "request",
+            "lattice_gauge.finite_group.basepoint_request_shape",
+            "field, based loop, and connector must be typed finite-group values",
+        )
+    group = field.group
+    table, inverse, identity, order = _admit_group(group)
+    vertices, edges, values = _admit_field(field, group, order)
+    if (
+        not isinstance(loop.steps, tuple)
+        or not isinstance(connector.steps, tuple)
+        or len(loop.steps) > 256
+        or len(connector.steps) > 256
+    ):
+        raise OperationResourceAdmissionError(
+            location=("loop", "connector"),
+            code="lattice_gauge.finite_group.basepoint_input_path_bound",
+            message="source paths exceed the 256-step path bound",
+        )
+    transported_length = 2 * len(connector.steps) + len(loop.steps)
+    if transported_length > 256:
+        raise OperationResourceAdmissionError(
+            location=("connector", "loop"),
+            code="lattice_gauge.finite_group.basepoint_path_bound",
+            message="transported loop exceeds the 256-step path bound",
+        )
+    work = order**3 + len(edges) + len(loop.steps) + len(connector.steps) + 2
+    output_units = (
+        (len(edges) + 4) * order**2
+        + 3 * len(connector.steps)
+        + 2 * len(loop.steps)
+        + len(edges)
+        + len(vertices)
+    )
+    if work > MAX_FINITE_GROUP_GAUGE_WORK:
+        raise OperationResourceAdmissionError(
+            location=("request",),
+            code="lattice_gauge.finite_group.basepoint_work_bound",
+            message="basepoint transport work exceeds its admitted envelope",
+        )
+    if output_units > MAX_FINITE_GROUP_GAUGE_OUTPUT_UNITS:
+        raise OperationResourceAdmissionError(
+            location=("request",),
+            code="lattice_gauge.finite_group.basepoint_output_bound",
+            message="basepoint transport result exceeds its admitted output envelope",
+        )
+    loop_start, loop_end, loop_resolved = _resolve_path(
+        loop, vertices, edges, values, inverse
+    )
+    connector_start, connector_end, connector_resolved = _resolve_path(
+        connector, vertices, edges, values, inverse
+    )
+    for name, path, start in (
+        ("loop", loop, loop_start),
+        ("connector", connector, connector_start),
+    ):
+        if path.basepoint is not None and (
+            not _is_gauge_label(path.basepoint) or path.basepoint != start
+        ):
+            _reject(
+                name,
+                "lattice_gauge.finite_group.basepoint_mismatch",
+                "an authored path basepoint must equal its first vertex",
+            )
+    if loop_start != loop_end:
+        _reject(
+            "loop",
+            "lattice_gauge.finite_group.loop_not_closed",
+            "source path must be a loop before changing its basepoint",
+        )
+    if connector_start != loop_start:
+        _reject(
+            "connector",
+            "lattice_gauge.finite_group.connector_start_mismatch",
+            "connector must start at the source loop basepoint",
+        )
+
+    def product_of(resolved: tuple[tuple[str, bool, int], ...]) -> int:
+        product = identity
+        for _, _, element in resolved:
+            product = table[product][element]
+        return product
+
+    source_holonomy = product_of(loop_resolved)
+    connector_holonomy = product_of(connector_resolved)
+    target_holonomy = table[table[inverse[connector_holonomy]][source_holonomy]][
+        connector_holonomy
+    ]
+    reverse_steps = tuple(
+        GaugePathStep(edge_id=step.edge_id, forward=not step.forward)
+        for step in reversed(connector.steps)
+    )
+    transported_loop = OrientedGaugePath(
+        steps=reverse_steps + loop.steps + connector.steps,
+        basepoint=connector_end,
+    )
+    return FiniteGroupGaugeBasepointTransportResult.model_construct(
+        field=field,
+        loop=loop,
+        connector=connector,
+        transported_loop=transported_loop,
+        source_basepoint=loop_start,
+        target_basepoint=connector_end,
+        source_holonomy=FiniteGroupTableElement(group=group, index=source_holonomy),
+        connector_holonomy=FiniteGroupTableElement(
+            group=group, index=connector_holonomy
+        ),
+        transported_holonomy=FiniteGroupTableElement(
+            group=group, index=target_holonomy
+        ),
     )
 
 

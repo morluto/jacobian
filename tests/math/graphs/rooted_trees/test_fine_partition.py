@@ -273,14 +273,16 @@ def test_edgeless_order_boundary_preserves_not_a_tree_envelope() -> None:
         ),
         edges=(),
     )
-    with pytest.raises(
-        ValidationError, match=f"at most {MAX_SIMPLE_GRAPH_VERTICES} vertices"
-    ):
+    with pytest.raises(ValidationError) as request_error:
         RootedTreeFinePartitionRequest(
             graph=oversized,
             root=oversized.vertices[0],
             component_size_limit=1,
         )
+    assert (
+        request_error.value.errors()[0]["type"]
+        == "graph.rooted_tree.fine_partition.vertex_bound"
+    )
     with pytest.raises(
         OperationDomainValidationError,
     ) as exc_info:

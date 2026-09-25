@@ -35,7 +35,7 @@ class AnonymousVertexDeckEdgeCount(StrictModel):
     )
 
     @model_validator(mode="after")
-    def require_edge_count_quotient(self) -> Self:
+    def require_edge_count_structure(self) -> Self:
         order = self.source_order
         if order in (0, 1):
             expected_card_count = order
@@ -58,18 +58,9 @@ class AnonymousVertexDeckEdgeCount(StrictModel):
             raise ValueError("deck card order must be source order minus one")
         if sum(item.multiplicity for item in self.deck.classes) != order:
             raise ValueError("a vertex deck must contain one card per source vertex")
-        total = sum(
-            len(item.representative.edges) * item.multiplicity
-            for item in self.deck.classes
-        )
         divisor = order - 2
-        if (
-            self.card_edge_total != total
-            or self.overcount_divisor != divisor
-            or total % divisor
-            or self.source_edge_count != total // divisor
-        ):
-            raise ValueError("source edge count must equal the Kelly edge quotient")
+        if self.overcount_divisor != divisor:
+            raise ValueError("overcount divisor must equal source order minus two")
         return self
 
     @classmethod

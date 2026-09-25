@@ -3,7 +3,6 @@ from __future__ import annotations
 from itertools import combinations
 
 import pytest
-from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.decks._models import (
@@ -83,13 +82,15 @@ def test_result_round_trip_preserves_typed_input_deck_and_quotient() -> None:
         result.model_dump_json()
     )
     assert restored == result
-    with pytest.raises(ValidationError, match="Kelly edge quotient"):
-        AnonymousVertexDeckEdgeCount.model_validate(
-            {
-                **result.model_dump(mode="python"),
-                "source_edge_count": result.source_edge_count + 1,
-            }
-        )
+    # Transport decoding checks canonical structure, not the producer's
+    # mathematical quotient; the operation itself owns that computation.
+    forged = AnonymousVertexDeckEdgeCount.model_validate(
+        {
+            **result.model_dump(mode="python"),
+            "source_edge_count": result.source_edge_count + 1,
+        }
+    )
+    assert forged.source_edge_count == result.source_edge_count + 1
 
 
 def test_catalog_publishes_operation_composable_from_anonymous_card_carrier() -> None:

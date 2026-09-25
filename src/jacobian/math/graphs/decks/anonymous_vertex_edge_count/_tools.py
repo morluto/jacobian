@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from jacobian.catalog.models import MathTool
+from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.graphs.decks._models import AnonymousGraphCardMultiset
 from jacobian.math.graphs.decks.anonymous_vertex_edge_count._models import (
     AnonymousVertexDeckEdgeCount,
@@ -34,6 +34,33 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "reconstruct edges from graph deck",
             "Kelly edge count identity",
         ),
-        examples=(),
+        examples=(
+            OperationExample(
+                name="path_p3_edge_count",
+                description=(
+                    "The anonymous vertex deck of P3 has card edge total two; "
+                    "dividing by n-2 recovers its two source edges."
+                ),
+                input={
+                    "card_order": 2,
+                    "classes": [
+                        {
+                            "representative": {
+                                "vertices": ["v00", "v01"],
+                                "edges": [["v00", "v01"]],
+                            },
+                            "multiplicity": 2,
+                        },
+                        {
+                            "representative": {
+                                "vertices": ["v00", "v01"],
+                                "edges": [],
+                            },
+                            "multiplicity": 1,
+                        },
+                    ],
+                },
+            ),
+        ),
     ),
 )

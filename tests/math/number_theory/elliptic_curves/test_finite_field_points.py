@@ -11,6 +11,7 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
+from pydantic import ValidationError
 from jacobian.dispatch import invoke_operation
 from jacobian.math.finite_fields.values import (
     FiniteFieldElement,
@@ -799,6 +800,20 @@ def test_zeta_numerator_matches_independent_f5_and_f25_counts() -> None:
         FiniteFieldZetaFunctionResult.model_validate_json(full_zeta.model_dump_json())
         == full_zeta
     )
+    with pytest.raises(ValidationError):
+        FiniteFieldZetaFunctionResult.model_validate(
+            {
+                **full_zeta.model_dump(),
+                "trace": full_zeta.trace + 1,
+            }
+        )
+    with pytest.raises(ValidationError):
+        FiniteFieldZetaFunctionResult.model_validate(
+            {
+                **full_zeta.model_dump(),
+                "zeta_function": f5.numerator,
+            }
+        )
 
     extension = FiniteFieldPresentation(
         characteristic=5, modulus_coefficients=(2, 0, 1), generator="b"

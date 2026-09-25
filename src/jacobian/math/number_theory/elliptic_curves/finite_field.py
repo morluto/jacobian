@@ -662,10 +662,16 @@ class FiniteFieldZetaFunctionResult(StrictModel):
     zeta_function: RationalFunction
 
     @model_validator(mode="after")
-    def require_declared_axis(self) -> Self:
-        if self.zeta_function.variables != ("T",):
+    def require_curve_identity(self) -> Self:
+        q = int(self.curve.field.characteristic**self.curve.field.degree)
+        if self.trace != q + 1 - self.cardinality:
             raise _validation_error(
-                "zeta_function_axis", "zeta function must use the declared T axis"
+                "zeta_function_identity", "trace must match the exact curve cardinality"
+            )
+        if self.zeta_function != _zeta_rational_function(q, self.trace):
+            raise _validation_error(
+                "zeta_function_identity",
+                "zeta function must be the canonical function for the exact curve count",
             )
         return self
 

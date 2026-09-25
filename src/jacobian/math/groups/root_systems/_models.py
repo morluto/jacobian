@@ -1228,7 +1228,21 @@ class WeylWeightOrbitResult(StrictModel):
 class WeylDominantRepresentativeRequest(CartanMatrixRequest):
     """An integral weight in fundamental-weight coordinates."""
 
-    weight: tuple[StrictInt, ...] = Field(min_length=1, max_length=MAX_RANK)
+    weight: tuple[
+        Annotated[
+            int,
+            Field(ge=-MAX_REFLECTION_REPRESENTABLE, le=MAX_REFLECTION_REPRESENTABLE),
+        ],
+        ...,
+    ] = Field(
+        min_length=1,
+        max_length=MAX_RANK,
+        description=(
+            "Fundamental-weight coordinates; length must equal Cartan rank, "
+            f"and each integer must lie in [-{MAX_REFLECTION_REPRESENTABLE}, "
+            f"{MAX_REFLECTION_REPRESENTABLE}]."
+        ),
+    )
 
 
 class WeylDominantRepresentativeResult(StrictModel):

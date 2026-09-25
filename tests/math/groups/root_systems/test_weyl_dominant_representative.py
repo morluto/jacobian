@@ -102,6 +102,16 @@ def test_already_dominant_identity_weight_returns_identity_element() -> None:
     assert type(result).model_validate_json(result.model_dump_json()) == result
 
 
+def test_near_limit_non_dominant_weight_uses_bounded_transporter_path() -> None:
+    limit = (1 << 53) - 1
+    result = weyl_dominant_representative(
+        ((2, -1), (-1, 2)), (-limit, limit)
+    )
+
+    assert result.dominant_weight.coordinates == (limit, 0)
+    assert result.element.root_action.entries == ((-1, 1), (0, 1))
+
+
 def test_dominant_representative_is_a_published_operation() -> None:
     tool = next(
         tool

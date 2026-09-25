@@ -1741,15 +1741,10 @@ def weyl_dominant_representative(
             cartan, dominant_value, dominant_value, element
         )
 
-    # Every prefix remains in the finite orbit. Admit its exact coordinate,
-    # matrix-work, and output envelopes before performing any reflections.
-    coordinate_bounds = _weight_coordinate_bounds(rows, weight)
-    if any(bound > MAX_REFLECTION_REPRESENTABLE for bound in coordinate_bounds):
-        raise OperationDomainValidationError(
-            location=("weight",),
-            code="root_system.dominant_representative_coordinate_bound",
-            message="some Weyl image coordinate may exceed the interoperable integer bound",
-        )
+    # The full-orbit norm envelope can exceed representable coordinates even
+    # when the deterministic normalization path stays within bounds. Check the
+    # actual path before expanding it; each reflection is integral and bounded
+    # work is enforced by the word limit below.
     work_bound = MAX_WEYL_WORD_LENGTH * rank**3
     output_bytes_bound = rank * rank * 16 + rank * 32 + 2048
     if work_bound > 1_000_000 or output_bytes_bound > 16_384:
@@ -1760,17 +1755,28 @@ def weyl_dominant_representative(
         )
 
     word: list[int] = []
-    dominant = _dominant_weight(
-        rows,
-        weight,
-        word=word,
-        max_steps=MAX_WEYL_WORD_LENGTH,
-        bound_code="root_system.dominant_representative_word_bound",
-        bound_message=(
-            "the dominant transporter exceeds the admitted "
-            f"{MAX_WEYL_WORD_LENGTH}-reflection word bound"
-        ),
-    )
+    dominant = weight
+    for _ in range(MAX_WEYL_WORD_LENGTH + 1):
+        negative = next((i for i, value in enumerate(dominant) if value < 0), None)
+        if negative is None:
+            break
+        dominant = _weight_reflect(dominant, negative, rows)
+        if any(abs(value) > MAX_REFLECTION_REPRESENTABLE for value in dominant):
+            raise OperationDomainValidationError(
+                location=("weight",),
+                code="root_system.dominant_representative_coordinate_bound",
+                message="a coordinate on the dominant transporter exceeds the interoperable integer bound",
+            )
+        word.append(negative)
+    else:
+        raise OperationDomainValidationError(
+            location=("weight",),
+            code="root_system.dominant_representative_word_bound",
+            message=(
+                "the dominant transporter exceeds the admitted "
+                f"{MAX_WEYL_WORD_LENGTH}-reflection word bound"
+            ),
+        )
     root_action = tuple(tuple(int(i == j) for j in range(rank)) for i in range(rank))
     for index in word:
         reflection = _reflection_matrix(rows, index, transpose=False)

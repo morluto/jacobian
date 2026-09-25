@@ -49,6 +49,8 @@ Native Python callers can use domain functions without a catalog or server.
   notes that are not captured by the live schema.
 - [Schemas and value interoperability](reference/value-interoperability.md) —
   canonical ownership, explicit conversions, and serialized trust boundaries.
+- [Finite basis matroids](reference/finite-basis-matroids.md) — the bounded
+  complete-basis carrier and exact basis-exchange contract.
 - [Rational Bernstein coordinates](reference/polynomial-bernstein.md) — exact
   polynomial basis conversion on boxes, admission bounds, and evidence.
 - [Testing strategy](reference/testing-strategy.md) — validation ownership and

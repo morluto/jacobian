@@ -9,8 +9,10 @@ from jacobian.math.combinatorics.matroids.operations import (
     verify_closure,
     verify_maximum_weight_basis,
 )
+from jacobian.math.combinatorics.matroids.values import FiniteBasisMatroid
 
 __all__ = [
+    "FiniteBasisMatroid",
     "LinearMatroid",
     "matroid_closure",
     "matroid_intersection",

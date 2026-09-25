@@ -2,18 +2,25 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+
 from jacobian._execution import request_checkpoint
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.combinatorics.symmetric_functions._models import (
     MAX_LR_SEARCH_STATES,
     LittlewoodRichardsonCoefficientRequest,
     LittlewoodRichardsonCoefficientResult,
+    LittlewoodRichardsonTableauxRequest,
+    LittlewoodRichardsonTableauxResult,
     SchurProductRequest,
     SchurProductResult,
     SchurProductTerm,
     _lr_inner_content_orientation,
 )
-from jacobian.math.combinatorics.symmetric_functions.values import IntegerPartition
+from jacobian.math.combinatorics.symmetric_functions.values import (
+    IntegerPartition,
+    TableauCandidate,
+)
 
 
 def littlewood_richardson_coefficient(
@@ -62,20 +69,25 @@ def _lr_coefficient(
     content: IntegerPartition,
 ) -> int:
     """Count LR tableaux for partitions already inside the admitted envelope."""
-    outer_parts = outer.parts
-    inner_parts = inner.parts
-    content_parts = content.parts
-
+    outer_parts, inner_parts, content_parts = outer.parts, inner.parts, content.parts
     if any(
         inner_parts[index] > (outer_parts[index] if index < len(outer_parts) else 0)
         for index in range(len(inner_parts))
     ):
         return 0
-
-    skew_size = sum(outer_parts) - sum(inner_parts)
-    if skew_size != sum(content_parts):
+    if sum(outer_parts) - sum(inner_parts) != sum(content_parts):
         return 0
+    return sum(
+        1 for _ in _iter_lr_tableau_rows(outer_parts, inner_parts, content_parts)
+    )
 
+
+def _iter_lr_tableau_rows(
+    outer_parts: tuple[int, ...],
+    inner_parts: tuple[int, ...],
+    content_parts: tuple[int, ...],
+) -> Iterator[tuple[tuple[int, ...], ...]]:
+    """Yield LR fillings in reading-word order under the admitted envelope."""
     cells = tuple(
         (row, column)
         for row, outer_width in enumerate(outer_parts)
@@ -87,10 +99,9 @@ def _lr_coefficient(
     assigned: dict[tuple[int, int], int] = {}
     prefix_counts = [0] * len(content_parts)
     visited = 0
-    coefficient = 0
 
-    def search(position: int) -> None:
-        nonlocal visited, coefficient
+    def search(position: int) -> Iterator[tuple[tuple[int, ...], ...]]:
+        nonlocal visited
         visited += 1
         if visited > MAX_LR_SEARCH_STATES:
             raise OperationResourceAdmissionError(
@@ -99,9 +110,23 @@ def _lr_coefficient(
                 message="LR tableau search exceeded its admitted prefix bound",
             )
         if visited & 1023 == 0:
-            request_checkpoint("during Littlewood-Richardson tableau search")
+            request_checkpoint("during Littlewood-Richardson tableau enumeration")
         if position == len(cells):
-            coefficient += 1
+            present_rows = tuple(
+                row
+                for row, width in enumerate(outer_parts)
+                if width > (inner_parts[row] if row < len(inner_parts) else 0)
+            )
+            yield tuple(
+                tuple(
+                    assigned[(row, column)]
+                    for column in range(
+                        (inner_parts[row] if row < len(inner_parts) else 0) + 1,
+                        outer_parts[row] + 1,
+                    )
+                )
+                for row in present_rows
+            )
             return
 
         row, column = cells[position]
@@ -135,13 +160,59 @@ def _lr_coefficient(
             remaining[entry_index] -= 1
             prefix_counts[entry_index] += 1
             assigned[(row, column)] = entry
-            search(position + 1)
+            yield from search(position + 1)
             del assigned[(row, column)]
             prefix_counts[entry_index] -= 1
             remaining[entry_index] += 1
 
-    search(0)
-    return coefficient
+    yield from search(0)
+
+
+def littlewood_richardson_tableaux(
+    outer: IntegerPartition,
+    inner: IntegerPartition,
+    content: IntegerPartition,
+) -> LittlewoodRichardsonTableauxResult:
+    """Enumerate the complete LR tableau family in canonical reading-word order.
+
+    The operation uses the same bounded prefix envelope as coefficient
+    computation, plus an admission bound for worst-case result count and
+    serialized growth. Every recursive path corresponds to one distinct
+    content-prefix, and every complete path to exactly one skew filling.
+    """
+    request = LittlewoodRichardsonTableauxRequest.model_validate(
+        {
+            "outer": outer.model_dump(mode="python"),
+            "inner": inner.model_dump(mode="python"),
+            "content": content.model_dump(mode="python"),
+        }
+    )
+    return _enumerate_validated_lr(request)
+
+
+def _enumerate_validated_lr(
+    request: LittlewoodRichardsonTableauxRequest,
+) -> LittlewoodRichardsonTableauxResult:
+    outer, inner, content = request.outer, request.inner, request.content
+    outer_parts, inner_parts = outer.parts, inner.parts
+    if any(
+        inner_parts[index] > (outer_parts[index] if index < len(outer_parts) else 0)
+        for index in range(len(inner_parts))
+    ):
+        return LittlewoodRichardsonTableauxResult._from_kernel(request, ())
+    skew_size = sum(outer_parts) - sum(inner_parts)
+    if skew_size != sum(content.parts):
+        return LittlewoodRichardsonTableauxResult._from_kernel(request, ())
+
+    # Right-to-left, top-to-bottom is the declared LR reading word. The shared
+    # lazy kernel makes coefficient and complete-family outputs use identical
+    # row, column, content, and lattice constraints without materializing the
+    # family for coefficient requests.
+    tableaux = tuple(
+        TableauCandidate(rows=rows)
+        for rows in _iter_lr_tableau_rows(outer_parts, inner_parts, content.parts)
+    )
+    return LittlewoodRichardsonTableauxResult._from_kernel(request, tableaux)
 
 
 def schur_product(
@@ -193,4 +264,8 @@ def _partitions_of(
     )
 
 
-__all__ = ["littlewood_richardson_coefficient", "schur_product"]
+__all__ = [
+    "littlewood_richardson_coefficient",
+    "littlewood_richardson_tableaux",
+    "schur_product",
+]

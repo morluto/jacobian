@@ -196,6 +196,24 @@ def test_disjoint_union_manifest_declares_typed_pair_operation() -> None:
     assert type(result).model_validate_json(result.model_dump_json()) == result
 
 
+def test_marked_union_accounts_for_recursively_serialized_parent_nets() -> None:
+    # JSON escaping expands each control code to six bytes; all three marking
+    # parents (two source nets and the union net) are serialized recursively.
+    oversized_label = "\\x01" * 700_000
+    net = PetriNet(
+        place_count=1,
+        transition_count=0,
+        place_ids=(oversized_label,),
+        pre=((),),
+        post=((),),
+    )
+    marking = Marking(tokens=(0,), net=net)
+    with pytest.raises(
+        OperationResourceAdmissionError, match="serialized-output bound"
+    ):
+        disjoint_union(net, net, marking, marking)
+
+
 def test_output_growth_is_rejected_before_union_matrix_materialization() -> None:
     oversized_label = "x" * 1_800_000
     net = PetriNet(

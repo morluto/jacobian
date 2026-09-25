@@ -163,7 +163,18 @@ def _petri_net_union_output_bound(
         )
     )
     mappings_bound = 128 + 12 * (places + transitions)
-    markings_bound = 128 + 15 * places if include_markings else 0
+    # Markings serialize their parent net recursively. The result retains two
+    # source markings (each with its source net) and one union marking (with the
+    # union net), in addition to the explicit net fields above.
+    markings_bound = (
+        128
+        + 15 * places
+        + source_bound(left)
+        + source_bound(right)
+        + union_bound
+        if include_markings
+        else 0
+    )
     output_bound = (
         source_bound(left)
         + source_bound(right)

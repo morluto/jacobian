@@ -43,6 +43,7 @@ from jacobian.math.logic.automata.tree.values import (
     _build_reachable_state_profile,
     _reject_tree,
     accepted_tree_count_work_bound,
+    nondeterministic_run_counts_work_bound,
     validate_ranked_tree,
 )
 
@@ -54,6 +55,7 @@ __all__ = [
     "complete_deterministic_tree_automaton",
     "determinize_tree_automaton",
     "minimize_tree_automaton",
+    "nondeterministic_run_counts",
     "ranked_tree_positions",
     "ranked_tree_subtree",
     "reachable_state_profile",
@@ -1058,6 +1060,67 @@ def accepted_tree_count(
         return 0
     accepted_tree_count_work_bound(automaton, tree_size)
     return _accepted_tree_count_admitted(automaton, tree_size)
+
+
+def nondeterministic_run_counts(
+    automaton: BottomUpTreeAutomaton, max_size: int
+) -> tuple[int, ...]:
+    """Count accepting runs by exact node size through ``max_size``.
+
+    A run is a ranked tree together with one state assignment to every node,
+    where every assigned parent/children tuple is a transition and the root
+    state is final. A tree with several accepting assignments contributes
+    once per assignment.
+    """
+
+    nondeterministic_run_counts_work_bound(automaton, max_size)
+    return _nondeterministic_run_counts_admitted(automaton, max_size)
+
+
+def _nondeterministic_run_counts_admitted(
+    automaton: BottomUpTreeAutomaton, max_size: int
+) -> tuple[int, ...]:
+    by_key: dict[tuple[int, tuple[int, ...]], list[int]] = defaultdict(list)
+    for transition in automaton.transitions:
+        by_key[(transition.symbol, transition.child_states)].append(
+            transition.target_state
+        )
+
+    # counts[q][n] is the number of runs on n-node trees whose root is q.
+    counts = [[0] * (max_size + 1) for _ in range(automaton.state_count)]
+    output: list[int] = []
+    for size in range(1, max_size + 1):
+        child_size = size - 1
+        for (_, child_states), targets in by_key.items():
+            request_checkpoint("during nondeterministic tree run counting")
+            if not child_states:
+                coefficient = int(child_size == 0)
+            elif len(child_states) == 1:
+                coefficient = counts[child_states[0]][child_size]
+            elif len(child_states) == 2:
+                left, right = child_states
+                coefficient = sum(
+                    counts[left][left_size] * counts[right][child_size - left_size]
+                    for left_size in range(child_size + 1)
+                )
+            else:
+                # Truncated polynomial multiplication computes the number of
+                # child-run tuples with total size ``child_size``.
+                coefficients = [1]
+                for state in child_states:
+                    next_coefficients = [0] * (child_size + 1)
+                    for left_size, left_count in enumerate(coefficients):
+                        for right_size in range(child_size - left_size + 1):
+                            next_coefficients[left_size + right_size] += (
+                                left_count * counts[state][right_size]
+                            )
+                    coefficients = next_coefficients
+                coefficient = coefficients[child_size]
+            if coefficient:
+                for target in targets:
+                    counts[target][size] += coefficient
+        output.append(sum(counts[state][size] for state in automaton.final_states))
+    return tuple(output)
 
 
 def _accepted_tree_count_admitted(

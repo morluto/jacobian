@@ -15,6 +15,7 @@ that need more context than an operation card:
 - [Geometry](geometry/index.md)
 - [Regular languages](regular-languages.md)
 - [Deterministic tree-automaton complement](tree-automaton-complement.md)
+- [Nondeterministic tree-automaton run counts](tree-automaton-run-counts.md)
 - [Boolean products of deterministic tree automata](tree-automaton-boolean-products.md)
 - [Deterministic tree-automaton minimization](tree-automaton-minimize.md)
 - [Ranked-tree positions](ranked-tree-positions.md)

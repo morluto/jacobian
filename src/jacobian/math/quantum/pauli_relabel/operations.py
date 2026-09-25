@@ -56,10 +56,16 @@ def relabel_pauli(
             "quantum.pauli.relabel.source_mismatch",
             "the register map must start at the Pauli's source register",
         )
-    target = relabeling.target_register
-    mapping = relabeling.target_ids_in_source_order
-    source_ids = source.qubit_ids
-    target_ids = target.qubit_ids
+    target = getattr(relabeling, "target_register", None)
+    mapping = getattr(relabeling, "target_ids_in_source_order", None)
+    source_ids = getattr(source, "qubit_ids", None)
+    target_ids = getattr(target, "qubit_ids", None)
+    if not isinstance(target, QubitRegister):
+        _reject(
+            "relabeling.target_register",
+            "quantum.pauli.relabel.invalid_register",
+            "target must be a valid qubit register",
+        )
     if (
         type(source_ids) is not tuple
         or type(target_ids) is not tuple
@@ -79,8 +85,8 @@ def relabel_pauli(
             "quantum.pauli.relabel.invalid_register",
             "register axes must be bounded unique qubit labels of equal size",
         )
-    x_bits = phase_free.x_bits
-    z_bits = phase_free.z_bits
+    x_bits = getattr(phase_free, "x_bits", None)
+    z_bits = getattr(phase_free, "z_bits", None)
     if (
         type(x_bits) is not tuple
         or type(z_bits) is not tuple

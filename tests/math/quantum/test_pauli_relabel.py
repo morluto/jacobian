@@ -85,6 +85,37 @@ def test_relabeling_agrees_with_dense_tensor_factor_permutation() -> None:
                 assert result.phase == phase
 
 
+def test_relabeling_rejects_forged_native_values() -> None:
+    source = QubitRegister(qubit_ids=("a",))
+    pauli = ExactQubitPauli(
+        phase_free=PhaseFreeQubitPauli(register=source, x_bits=(1,), z_bits=(0,)),
+        phase=0,
+    )
+    malformed = QubitRegisterRelabeling.model_construct(
+        source_register=source,
+        target_register=None,
+        target_ids_in_source_order=(),
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        relabel_pauli(pauli, malformed)
+    assert error.value.errors()[0]["type"] == "quantum.pauli.relabel.invalid_register"
+
+    valid_map = QubitRegisterRelabeling(
+        source_register=source,
+        target_register=source,
+        target_ids_in_source_order=("a",),
+    )
+    forged_pauli = ExactQubitPauli.model_construct(
+        phase_free=PhaseFreeQubitPauli.model_construct(
+            qubit_register=source, x_bits=None, z_bits=None
+        ),
+        phase=0,
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        relabel_pauli(forged_pauli, valid_map)
+    assert error.value.errors()[0]["type"] == "quantum.pauli.relabel.invalid_pauli"
+
+
 def test_relabeling_rejects_a_non_bijection() -> None:
     source = QubitRegister(qubit_ids=("a", "b"))
     pauli = ExactQubitPauli(

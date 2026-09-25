@@ -301,7 +301,11 @@ TOOLS: MathTools = (
         examples=(
             OperationExample(
                 name="unit_cube_three_torus",
-                description="Compute the integral quotient chains for the unit cube translation lattice.",
+                description=(
+                    "Compute the integral quotient chains for the unit cube translation lattice; "
+                    "the input must be a freshly checked rank-three pure-translation "
+                    "parallelepiped with eight vertices, six facets, and opposite facet pairings."
+                ),
                 input=_UNIT_CUBE_EXAMPLE,
             ),
         ),

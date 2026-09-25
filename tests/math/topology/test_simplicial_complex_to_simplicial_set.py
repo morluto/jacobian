@@ -130,7 +130,7 @@ def test_output_bound_is_checked_before_materializing_degrees(monkeypatch):
         raise AssertionError("degree enumeration started before output admission")
 
     monkeypatch.setattr(complex_conversion, "_level_labels", unexpected)
-    monkeypatch.setattr(complex_conversion, "MAX_COMPLEX_PREFIX_OUTPUT_BYTES", 0)
+    monkeypatch.setattr(complex_conversion, "MAX_COMPLEX_PREFIX_OUTPUT_CELLS", 0)
     with pytest.raises(OperationResourceAdmissionError) as exc:
         simplicial_set_from_complex(
             SimplicialComplexPrefixRequest(complex=source, max_degree=2)

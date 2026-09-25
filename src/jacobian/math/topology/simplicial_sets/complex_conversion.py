@@ -27,7 +27,7 @@ from jacobian.math.topology.simplicial_sets.operations import from_tables
 
 MAX_COMPLEX_PREFIX_MAP_ENTRIES = 2_000
 MAX_COMPLEX_PREFIX_IDENTITY_WORK = 100_000
-MAX_COMPLEX_PREFIX_OUTPUT_BYTES = 1_000_000
+MAX_COMPLEX_PREFIX_OUTPUT_CELLS = 1_000_000
 
 
 def _admitted_faces(
@@ -157,13 +157,10 @@ def _build(request: SimplicialComplexPrefixRequest) -> SimplicialComplexPrefixRe
             code="simplicial_set.complex_prefix_identity_work_budget",
             message="the associated prefix identity checks exceed their work bound",
         )
-    # All generated labels have at most 14 ASCII characters (five vertex
-    # indices in 0..63); mapping rows are bounded by the canonical carrier.
-    source_bytes = len(source.model_dump_json().encode("utf-8"))
-    estimated_bytes = (
-        source_bytes + total * 24 + map_entries * 4 + transport_entries * 128 + 4096
-    )
-    if estimated_bytes > MAX_COMPLEX_PREFIX_OUTPUT_BYTES:
+    # Count generated labels, map/transport entries, and fixed structure.
+    label_chars = sum(len(vertex) for vertex in source.vertices)
+    output_cells = label_chars + total * 14 + map_entries + 3 * transport_entries + 4096
+    if output_cells > MAX_COMPLEX_PREFIX_OUTPUT_CELLS:
         raise OperationResourceAdmissionError(
             location=("max_degree",),
             code="simplicial_set.complex_prefix_output_budget",

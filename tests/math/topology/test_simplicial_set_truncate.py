@@ -124,23 +124,23 @@ def test_truncation_rejects_forged_malformed_labels_before_estimation(
     )
     monkeypatch.setattr(
         truncate_module,
-        "_estimate_output_bytes",
+        "_estimate_output_cells",
         lambda *_args: pytest.fail("output estimate ran before structural admission"),
     )
     with pytest.raises(OperationDomainValidationError):
         truncate_simplicial_set(request)
 
 
-def test_output_admission_accepts_exact_estimate_and_rejects_one_byte_less(
+def test_output_admission_accepts_exact_cell_estimate_and_rejects_one_cell_less(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     source = standard_simplex(1, 1)
-    estimate = truncate_module._estimate_output_bytes(source.sets, 1, 8)
+    estimate = truncate_module._estimate_output_cells(source.sets, 1, 8)
     request = SimplicialSetTruncateRequest(simplicial_set=source, max_degree=1)
 
-    monkeypatch.setattr(truncate_module, "MAX_TRUNCATE_OUTPUT_BYTES", estimate)
+    monkeypatch.setattr(truncate_module, "MAX_TRUNCATE_OUTPUT_CELLS", estimate)
     assert truncate_simplicial_set(request).max_degree == 1
-    monkeypatch.setattr(truncate_module, "MAX_TRUNCATE_OUTPUT_BYTES", estimate - 1)
+    monkeypatch.setattr(truncate_module, "MAX_TRUNCATE_OUTPUT_CELLS", estimate - 1)
     with pytest.raises(
         OperationResourceAdmissionError, match="estimated truncation output"
     ):

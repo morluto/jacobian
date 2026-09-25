@@ -21,7 +21,7 @@ from jacobian.math.topology.simplicial_sets.operations import from_tables
 
 MAX_COPRODUCT_MAP_ROWS = 50_000
 MAX_COPRODUCT_IDENTITY_WORK = 100_000
-MAX_COPRODUCT_OUTPUT_BYTES = 1_000_000
+MAX_COPRODUCT_OUTPUT_CELLS = 1_000_000
 
 
 def _identity_work(max_degree: int, sizes: tuple[int, ...]) -> int:
@@ -112,14 +112,14 @@ def simplicial_set_coproduct(
             ),
         )
     # Includes tagged labels, exact tagged axes, inclusions, and all map rows.
-    output_bytes = total * 96 + map_rows * 12
-    if output_bytes > MAX_COPRODUCT_OUTPUT_BYTES:
+    output_cells = total + 2 * map_rows
+    if output_cells > MAX_COPRODUCT_OUTPUT_CELLS:
         raise OperationResourceAdmissionError(
             location=("left", "right"),
             code="simplicial_set.coproduct_output_budget_exceeded",
             message=(
-                f"estimated coproduct output {output_bytes} bytes exceeds "
-                f"{MAX_COPRODUCT_OUTPUT_BYTES}"
+                f"estimated coproduct output {output_cells} cells exceeds "
+                f"{MAX_COPRODUCT_OUTPUT_CELLS}"
             ),
         )
 

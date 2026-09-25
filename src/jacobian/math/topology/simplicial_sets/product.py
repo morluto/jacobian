@@ -19,7 +19,7 @@ from jacobian.math.topology.simplicial_sets.product_models import (
 
 MAX_PRODUCT_MAP_ROWS = 50_000
 MAX_PRODUCT_IDENTITY_WORK = 100_000
-MAX_PRODUCT_OUTPUT_BYTES = 1_000_000
+MAX_PRODUCT_OUTPUT_CELLS = 1_000_000
 
 
 def simplicial_set_product(
@@ -78,14 +78,14 @@ def simplicial_set_product(
                 f"{MAX_PRODUCT_IDENTITY_WORK}"
             ),
         )
-    output_bytes = total * 96 + map_rows * 12
-    if output_bytes > MAX_PRODUCT_OUTPUT_BYTES:
+    output_cells = total + 2 * map_rows
+    if output_cells > MAX_PRODUCT_OUTPUT_CELLS:
         raise OperationResourceAdmissionError(
             location=("left", "right"),
             code="simplicial_set.product_output_budget_exceeded",
             message=(
-                f"estimated product output {output_bytes} bytes exceeds "
-                f"{MAX_PRODUCT_OUTPUT_BYTES}"
+                f"estimated product output {output_cells} cells exceeds "
+                f"{MAX_PRODUCT_OUTPUT_CELLS}"
             ),
         )
 

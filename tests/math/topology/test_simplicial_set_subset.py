@@ -45,17 +45,17 @@ def test_constant_vertex_gives_source_bound_closed_subobject() -> None:
         for operator, face_row in enumerate(ambient.face_maps[degree - 1]):
             subset_row = subset.face_maps[degree - 1][operator]
             for simplex, image in enumerate(result.inclusion.maps[degree]):
-                assert result.inclusion.maps[degree - 1][subset_row[simplex]] == (
-                    face_row[image]
+                assert (
+                    result.inclusion.maps[degree - 1][subset_row[simplex]]
+                    == (face_row[image])
                 )
     for degree in range(ambient.max_degree):
-        for operator, degeneracy_row in enumerate(
-            ambient.degeneracy_maps[degree]
-        ):
+        for operator, degeneracy_row in enumerate(ambient.degeneracy_maps[degree]):
             subset_row = subset.degeneracy_maps[degree][operator]
             for simplex, image in enumerate(result.inclusion.maps[degree]):
-                assert result.inclusion.maps[degree + 1][subset_row[simplex]] == (
-                    degeneracy_row[image]
+                assert (
+                    result.inclusion.maps[degree + 1][subset_row[simplex]]
+                    == (degeneracy_row[image])
                 )
 
 
@@ -136,6 +136,7 @@ def test_subset_operation_catalog_example_and_json_request() -> None:
         Catalog.open(),
     ).output
     assert result["inclusion"]["maps"] == [[0], [0], [0]]
-    assert SimplicialSubsetPrefix.model_validate(result).inclusion.source == tool.run(
-        request
-    ).inclusion.source
+    assert (
+        SimplicialSubsetPrefix.model_validate(result).inclusion.source
+        == tool.run(request).inclusion.source
+    )

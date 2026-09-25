@@ -48,8 +48,7 @@ def _identity_work(max_degree: int, sizes: tuple[int, ...]) -> int:
         for degree in range(max_degree - 1)
     )
     identities += sum(
-        (degree + 1) * (degree + 2) * sizes[degree]
-        for degree in range(max_degree)
+        (degree + 1) * (degree + 2) * sizes[degree] for degree in range(max_degree)
     )
     # Each identity compares two constructed composite rows. Both can scan
     # every simplex on the source degree axis before they are found equal.
@@ -68,19 +67,14 @@ def _output_byte_bound(
         for label in level
     )
     subset_labels = sum(
-        len(ambient.sets[degree][index])
-        * MAX_JSON_ASCII_CHARS_PER_LABEL_CHAR
-        + 3
+        len(ambient.sets[degree][index]) * MAX_JSON_ASCII_CHARS_PER_LABEL_CHAR + 3
         for degree, indices in enumerate(degree_indices)
         for index in indices
     )
     source_map_entries = sum(
         (degree + 1) * source_sizes[degree]
         for degree in range(1, ambient.max_degree + 1)
-    ) + sum(
-        (degree + 1) * source_sizes[degree]
-        for degree in range(ambient.max_degree)
-    )
+    ) + sum((degree + 1) * source_sizes[degree] for degree in range(ambient.max_degree))
     # Target source tables occur once, the restricted prefix contributes at
     # most one index per admitted selected incidence, and the inclusion map
     # has at most one target index per selected simplex.
@@ -151,27 +145,17 @@ def _preflight_request(
     subset_incidence = sum(
         (degree + 1) * len(degree_indices[degree])
         for degree in range(1, max_degree + 1)
-    ) + sum(
-        (degree + 1) * len(degree_indices[degree])
-        for degree in range(max_degree)
-    )
+    ) + sum((degree + 1) * len(degree_indices[degree]) for degree in range(max_degree))
     identity_work = _identity_work(max_degree, sizes)
     source_map_incidence = sum(
-        (degree + 1) * sizes[degree]
-        for degree in range(1, max_degree + 1)
-    ) + sum(
-        (degree + 1) * sizes[degree]
-        for degree in range(max_degree)
-    )
+        (degree + 1) * sizes[degree] for degree in range(1, max_degree + 1)
+    ) + sum((degree + 1) * sizes[degree] for degree in range(max_degree))
     source_label_characters = sum(
         len(label) for level in ambient.sets for label in level
     )
     subset_work = 3 * subset_incidence + 3 * total_selected
     if (
-        identity_work
-        + source_map_incidence
-        + source_label_characters
-        + subset_work
+        identity_work + source_map_incidence + source_label_characters + subset_work
         > MAX_SUBSET_CHECK_WORK
     ):
         raise OperationResourceAdmissionError(

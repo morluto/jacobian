@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated, Literal, Self
 
-from pydantic import Field, StrictInt, model_validator
+from pydantic import Field, StrictInt, conint, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
@@ -16,17 +16,19 @@ from jacobian.math.combinatorics.symmetric_functions.values import (
 
 MAX_PARTITION_N = 30
 MAX_ENUMERATED_PARTITIONS = 10_000
+MAX_PARTITION_ITEM = 2**53 - 1
+PartitionItem = conint(strict=True, ge=-MAX_PARTITION_ITEM, le=MAX_PARTITION_ITEM)
 
 
 class PartitionCheckRequest(StrictModel):
     """Classify one bounded raw sequence as a partition or an obstruction."""
 
-    parts: tuple[StrictInt, ...] = Field(
+    parts: tuple[PartitionItem, ...] = Field(
         min_length=0,
         max_length=MAX_PARTITION_SIZE,
         description=(
-            "Candidate positive weakly decreasing parts; the total admitted "
-            f"size is at most {MAX_PARTITION_SIZE}."
+            "A bounded sequence of exact integers; the bound applies to the "
+            f"sum of positive entries, at most {MAX_PARTITION_SIZE}."
         ),
     )
 
@@ -46,15 +48,10 @@ class PartitionCheckRequest(StrictModel):
                 "candidate has more parts than the supported bound",
             )
         if all(type(part) is int for part in parts):
-            if any(part.bit_length() > 53 for part in parts):
+            if any(abs(part) > MAX_PARTITION_ITEM for part in parts):
                 raise PydanticCustomError(
                     "combinatorics.partition_candidate_integer",
                     "candidate part exceeds the exact JSON integer bound",
-                )
-            if sum(max(part, 0) for part in parts) > MAX_PARTITION_SIZE:
-                raise PydanticCustomError(
-                    "combinatorics.partition_candidate_size",
-                    "candidate exceeds the supported partition size",
                 )
         if type(parts) is list:
             admitted = dict(value)
@@ -135,7 +132,7 @@ class PartitionRejected(StrictModel):
     """A source-bound rejection and its first defining obstruction."""
 
     kind: Literal["NOT_A_PARTITION"] = "NOT_A_PARTITION"
-    parts: tuple[StrictInt, ...] = Field(
+    parts: tuple[PartitionItem, ...] = Field(
         min_length=0,
         max_length=MAX_PARTITION_SIZE,
         description="The exact candidate sequence classified by this result.",
@@ -144,13 +141,9 @@ class PartitionRejected(StrictModel):
 
     @model_validator(mode="after")
     def require_first_source_obstruction(self) -> Self:
-        if any(part.bit_length() > 53 for part in self.parts):
+        if any(abs(part) > MAX_PARTITION_ITEM for part in self.parts):
             raise _combinatorics_validation_error(
                 "partition rejection source exceeds the exact JSON integer bound"
-            )
-        if sum(max(part, 0) for part in self.parts) > MAX_PARTITION_SIZE:
-            raise _combinatorics_validation_error(
-                "partition rejection source exceeds the supported size"
             )
 
         previous: int | None = None

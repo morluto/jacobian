@@ -133,11 +133,12 @@ def test_raw_candidate_is_bounded_before_request_model_construction() -> None:
     with pytest.raises(ValidationError):
         PartitionCheckRequest(parts=("3",))
 
-    with pytest.raises(ValidationError) as exc_info:
-        PartitionCheckRequest(parts=(501,))
-    assert exc_info.value.errors()[0]["type"] == (
-        "combinatorics.partition_candidate_size"
-    )
+    result = check_partition(PartitionCheckRequest(parts=(501, 1, 0)))
+    assert isinstance(result.outcome, PartitionRejected)
+    assert result.outcome.obstruction == NonpositivePartObstruction(index=2, value=0)
+
+    with pytest.raises(ValidationError):
+        PartitionCheckRequest(parts=(2**53,))
 
 
 def test_cell_output_at_the_admitted_bound_is_complete() -> None:

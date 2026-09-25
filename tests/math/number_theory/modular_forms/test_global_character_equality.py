@@ -17,6 +17,9 @@ from jacobian.math.number_theory.characters.operations import (
     dirichlet_character,
     dirichlet_character_value,
 )
+from jacobian.math.number_theory.modular_forms.character_basis import (
+    modular_character_coordinates_q_expansion,
+)
 from jacobian.math.number_theory.modular_forms.character_coordinates import (
     CHARACTER_RREF_BASIS_ID,
 )
@@ -24,6 +27,7 @@ from jacobian.math.number_theory.modular_forms.global_equality.models import (
     CyclotomicFieldEmbedding,
 )
 from jacobian.math.number_theory.modular_forms.global_equality.operations import (
+    _map_element,
     modular_form_coordinates_global_equal,
 )
 from jacobian.math.number_theory.modular_forms.values import (
@@ -90,6 +94,22 @@ def _form(space: ModularFormSpace, first_coordinate: int = 0):
     )
 
 
+def _basis_form(space: ModularFormSpace, basis_index: int):
+    from jacobian.math.number_theory.modular_forms.character_coordinates import (
+        _admit_coordinate_space,
+    )
+
+    context = _admit_coordinate_space(space)
+    assert 0 <= basis_index < context.dimension
+    return ModularFormCoordinates(
+        space=space,
+        basis_id=context.basis_id,
+        coordinates=tuple(
+            _element(int(index == basis_index)) for index in range(context.dimension)
+        ),
+    )
+
+
 def _embedding():
     # The inclusion Q(zeta_6) -> Q(zeta_12) sends zeta_6 to zeta_12^2.
     image = RationalCyclotomicElement(
@@ -117,60 +137,84 @@ def _conjugate_embedding():
     )
 
 
-def test_global_equality_compares_different_characters_and_rejects_weight_mismatch():
-    left = _form(_space(13, 4), first_coordinate=1)
-    right = _form(_space(13, 8), first_coordinate=1)
-    embedding = _embedding()
-    assert not modular_form_coordinates_global_equal(left, embedding, right, embedding)
-
-    same_character_form = _form(_space(13, 4), first_coordinate=1)
-    with pytest.raises(OperationDomainValidationError) as same_character_error:
-        modular_form_coordinates_global_equal(
-            same_character_form, embedding, same_character_form, embedding
-        )
-    assert (
-        same_character_error.value.errors()[0]["type"]
-        == "modular_form.global_equality_same_character"
+def test_global_equality_compares_nonzero_cross_embeddings():
+    # Characters 2 and 10 are Galois conjugate. Mapping their generators by
+    # opposite embeddings gives the same common Nebentypus and the same form.
+    left = _basis_form(_space(13, 2, kind="S"), basis_index=0)
+    right = _basis_form(_space(13, 10, kind="S"), basis_index=0)
+    assert modular_form_coordinates_global_equal(
+        left, _embedding(), right, _conjugate_embedding()
     )
+    # Independently realize each source coordinate with the exact character
+    # q-expansion API, then compare after applying the declared embeddings.
+    left_q = modular_character_coordinates_q_expansion(left).coefficients
+    right_q = modular_character_coordinates_q_expansion(right).coefficients
+    left_image = _embedding().generator_image
+    right_image = _conjugate_embedding().generator_image
+    assert tuple(
+        _map_element(value, left_image, _TARGET_FIELD) for value in left_q
+    ) == tuple(_map_element(value, right_image, _TARGET_FIELD) for value in right_q)
+
+    # A distinct nonzero scalar multiple is not equal to the first form.
+    unequal_right = ModularFormCoordinates(
+        space=right.space,
+        basis_id=right.basis_id,
+        coordinates=(_element(2),),
+    )
+    assert not modular_form_coordinates_global_equal(
+        left, _embedding(), unequal_right, _conjugate_embedding()
+    )
+    unequal_q = modular_character_coordinates_q_expansion(unequal_right).coefficients
+    assert tuple(
+        _map_element(value, right_image, _TARGET_FIELD) for value in right_q
+    ) != tuple(_map_element(value, right_image, _TARGET_FIELD) for value in unequal_q)
+
+    # Distinct mapped characters cannot describe the same nonzero form.
+    with pytest.raises(OperationDomainValidationError) as mismatch:
+        modular_form_coordinates_global_equal(
+            left, _embedding(), _basis_form(_space(13, 10, kind="S"), 0), _embedding()
+        )
+    assert mismatch.value.errors()[0]["type"] == (
+        "modular_form.global_equality_character_mismatch"
+    )
+
+    with pytest.raises(OperationDomainValidationError) as same_map:
+        modular_form_coordinates_global_equal(
+            left, _embedding(), _basis_form(_space(13, 2, kind="S"), 0), _embedding()
+        )
+    assert same_map.value.errors()[0]["type"] == (
+        "modular_form.global_equality_same_embedding"
+    )
+
     wrong_weight = ModularFormCoordinates.model_construct(
-        space=_space(13, 8, weight=4),
+        space=_space(13, 10, weight=4),
         basis_id=CHARACTER_RREF_BASIS_ID,
         coordinates=(),
     )
     with pytest.raises(OperationDomainValidationError) as error:
-        modular_form_coordinates_global_equal(left, embedding, wrong_weight, embedding)
+        modular_form_coordinates_global_equal(
+            left, _embedding(), wrong_weight, _conjugate_embedding()
+        )
     assert error.value.errors()[0]["type"] == "modular_form.global_equality_weight"
 
 
 def test_global_equality_handles_zero_spaces_and_unequal_levels():
-    embedding = _embedding()
     zero_left = _form(_space(13, 4, kind="S"))
     zero_right = _form(_space(13, 8, kind="S"))
     assert not zero_left.coordinates and not zero_right.coordinates
     assert modular_form_coordinates_global_equal(
-        zero_left, embedding, zero_right, embedding
-    )
-    assert modular_form_coordinates_global_equal(
-        zero_left, _conjugate_embedding(), zero_right, _conjugate_embedding()
+        zero_left, _embedding(), zero_right, _conjugate_embedding()
     )
 
-    # The explicit maps can change the transported characters independently.
-    # Both positive-dimensional source forms here are zero.
-    mapped_zero_left = _form(_space(13, 4))
-    mapped_zero_right = _form(_space(13, 2))
-    assert modular_form_coordinates_global_equal(
-        mapped_zero_left, embedding, mapped_zero_right, _conjugate_embedding()
-    )
-
-    # Same Nebentypus at different levels belongs to the adjacent
-    # same-character transport/equality contract, not this operation.
-    lower = _form(_space(13, 4))
-    upper = _form(_space(26, 4))
-    with pytest.raises(OperationDomainValidationError) as same_character_error:
-        modular_form_coordinates_global_equal(lower, embedding, upper, embedding)
+    # Same source map at both ends belongs to the adjacent same-character
+    # transport/equality contract, including across unequal levels.
+    lower = _form(_space(13, 2))
+    upper = _form(_space(26, 2))
+    with pytest.raises(OperationDomainValidationError) as same_map_error:
+        modular_form_coordinates_global_equal(lower, _embedding(), upper, _embedding())
     assert (
-        same_character_error.value.errors()[0]["type"]
-        == "modular_form.global_equality_same_character"
+        same_map_error.value.errors()[0]["type"]
+        == "modular_form.global_equality_same_embedding"
     )
 
 
@@ -179,5 +223,6 @@ def test_global_equality_reaches_gamma1_78_sturm_boundary():
     # This exercises the high-precision worker lane and compares nonzero forms.
     left = _form(_space(26, 4), first_coordinate=1)
     right = _form(_space(39, 8), first_coordinate=1)
-    embedding = _embedding()
-    assert not modular_form_coordinates_global_equal(left, embedding, right, embedding)
+    assert not modular_form_coordinates_global_equal(
+        left, _embedding(), right, _conjugate_embedding()
+    )

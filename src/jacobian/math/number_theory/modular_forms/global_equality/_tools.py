@@ -30,7 +30,7 @@ def _example_form_payload(character_coordinate: int) -> dict[str, object]:
             "group": "GAMMA0",
             "level": 13,
             "weight": 2,
-            "kind": "S",
+            "kind": "M",
             "character": {
                 "group": {
                     "modulus": 13,
@@ -60,23 +60,61 @@ def _example_form_payload(character_coordinate: int) -> dict[str, object]:
             "coefficient_domain": field,
         },
         "basis_id": "gamma0-cyclotomic-character-sturm-rref-v1",
-        "coordinates": [],
+        "coordinates": [
+            {
+                "field": field,
+                "coefficients_ascending": [
+                    {"num": 1, "den": 1},
+                    {"num": 0, "den": 1},
+                ],
+            },
+            {
+                "field": field,
+                "coefficients_ascending": [
+                    {"num": 0, "den": 1},
+                    {"num": 0, "den": 1},
+                ],
+            },
+            {
+                "field": field,
+                "coefficients_ascending": [
+                    {"num": 0, "den": 1},
+                    {"num": 0, "den": 1},
+                ],
+            },
+        ],
     }
 
 
 def _example_embedding_payload() -> dict[str, object]:
-    field = {"domain": "QQ_CYCLOTOMIC", "order": 6, "generator": "CLASS_OF_X"}
+    field = {"domain": "QQ_CYCLOTOMIC", "order": 12, "generator": "CLASS_OF_X"}
     return {
         "source_order": 6,
         "target_field": field,
         "generator_image": {
             "field": field,
             "coefficients_ascending": [
-                {"num": "0", "den": "1"},
-                {"num": "1", "den": "1"},
+                {"num": 0, "den": 1},
+                {"num": 0, "den": 1},
+                {"num": 1, "den": 1},
+                {"num": 0, "den": 1},
             ],
         },
     }
+
+
+def _example_conjugate_embedding_payload() -> dict[str, object]:
+    payload = _example_embedding_payload()
+    payload["generator_image"] = {
+        "field": payload["target_field"],
+        "coefficients_ascending": [
+            {"num": 1, "den": 1},
+            {"num": 0, "den": 1},
+            {"num": -1, "den": 1},
+            {"num": 0, "den": 1},
+        ],
+    }
+    return payload
 
 
 TOOLS: MathTools = (
@@ -84,8 +122,8 @@ TOOLS: MathTools = (
         operation_id="modular_form.equal.global_character.check",
         title="Check global equality across character spaces",
         description=(
-            "Compare exact same-weight forms with different transported characters from the "
-            "admitted level-13, 26, and 39 source spaces. Each source has an "
+            "Compare exact same-weight forms from distinct source embeddings whose "
+            "characters agree at levels 13, 26, or 39. Each source has an "
             "explicit cyclotomic field embedding into the same target field. "
             "Equality is decided through the Sturm bound for Gamma1 of the "
             "least common multiple of the source levels."
@@ -96,17 +134,16 @@ TOOLS: MathTools = (
         tags=("modular-forms", "characters", "equality", "exact"),
         examples=(
             OperationExample(
-                name="equal-character-forms-with-explicit-field-maps",
+                name="equal-nonzero-forms-with-conjugate-character-embeddings",
                 description=(
-                    "Compare zero forms in distinct character spaces through the "
-                    "Gamma1 Sturm prefix; each explicit field map must preserve "
-                    "its declared source and target parents."
+                    "Compare the same nonzero form from Galois-conjugate character spaces "
+                    "after explicit embeddings identify their common character."
                 ),
                 input={
-                    "left": _example_form_payload(4),
+                    "left": _example_form_payload(2),
                     "left_embedding": _example_embedding_payload(),
-                    "right": _example_form_payload(8),
-                    "right_embedding": _example_embedding_payload(),
+                    "right": _example_form_payload(10),
+                    "right_embedding": _example_conjugate_embedding_payload(),
                 },
             ),
         ),

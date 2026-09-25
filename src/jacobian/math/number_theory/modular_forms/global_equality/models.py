@@ -42,8 +42,9 @@ class ModularFormGlobalEqualityRequest(StrictModel):
 
     Source forms currently use Q(zeta_6) coordinates in the admitted level
     13/26/39 character families. Both explicit embeddings must target the same
-    Q(zeta_6) or Q(zeta_12) field, and they must induce distinct characters at
-    the common level. Same-character transport/equality is owned separately.
+    Q(zeta_6) or Q(zeta_12) field and induce the same character at the common
+    level. The embeddings must differ; same-map comparisons are owned by the
+    existing same-character transport/equality contract.
     """
 
     left: ModularFormCoordinates

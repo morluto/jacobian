@@ -155,14 +155,14 @@ def _mapped_character_value(
     return power
 
 
-def _require_distinct_mapped_characters(
+def _require_same_mapped_character(
     left: ModularFormSpace,
     right: ModularFormSpace,
     left_image: RationalCyclotomicElement,
     right_image: RationalCyclotomicElement,
     target: RationalCyclotomicField,
 ) -> None:
-    """Keep same-Nebentypus transport/equality in its existing owner lane."""
+    """Require one common Nebentypus and genuinely different source maps."""
     level = lcm(left.level, right.level)
     work = 2 * level * max(left.level, right.level) * 32
     if work > 500_000:
@@ -188,12 +188,15 @@ def _require_distinct_mapped_characters(
             right_character, residue, right_image, target
         )
         if left_value != right_value:
-            return
-    _fail_domain(
-        "modular_form.global_equality_same_character",
-        "the explicit embeddings give the same character at the common level; "
-        "use the existing same-character transport and equality contract",
-    )
+            _fail_domain(
+                "modular_form.global_equality_character_mismatch",
+                "the explicit embeddings must induce the same character at the common level",
+            )
+    if left_image == right_image:
+        _fail_domain(
+            "modular_form.global_equality_same_embedding",
+            "same-character comparisons with the same source embedding belong to the existing transport and equality contract",
+        )
 
 
 def _mapped_prefix(
@@ -248,9 +251,9 @@ def modular_form_coordinates_global_equal(
 ) -> bool:
     """Compare exact source coordinates through a Gamma1(lcm) Sturm prefix.
 
-    This slice compares distinct transported Nebentypus characters in the
-    order-six character families at levels 13, 26, and 39. Field maps are
-    supplied on each cyclotomic generator. The common ambient form need not be
+    This slice compares exact forms from different order-six character
+    embeddings at levels 13, 26, and 39 when those embeddings induce the same
+    Nebentypus at the common level. The common ambient form need not be
     materialized: each exact source basis is expanded only through the
     determining prefix of Gamma1(lcm(N_left,N_right)).
     """
@@ -280,7 +283,7 @@ def modular_form_coordinates_global_equal(
             "both explicit field maps must have the identical target field",
         )
     common_field = left_embedding.target_field
-    _require_distinct_mapped_characters(
+    _require_same_mapped_character(
         left.space, right.space, left_image, right_image, common_field
     )
 

@@ -46,14 +46,8 @@ from jacobian.math.topology.simplicial_sets.standard import (
     standard_simplex,
 )
 from jacobian.math.topology.simplicial_sets.subset import simplicial_subset
-from jacobian.math.topology.simplicial_sets.subset_models import (
-    SimplicialSubsetPrefix,
-    SimplicialSubsetRequest,
-)
+from jacobian.math.topology.simplicial_sets.subset_models import SimplicialSubsetPrefix
 from jacobian.math.topology.simplicial_sets.truncate import truncate_simplicial_set
-from jacobian.math.topology.simplicial_sets.truncate_models import (
-    SimplicialSetTruncateRequest,
-)
 
 __all__ = [
     "ComplexFaceSimplexIndex",
@@ -65,9 +59,7 @@ __all__ = [
     "SimplicialSetCoproductResult",
     "SimplicialSetProductResult",
     "SimplicialSetTablesResult",
-    "SimplicialSetTruncateRequest",
     "SimplicialSubsetPrefix",
-    "SimplicialSubsetRequest",
     "TruncatedSimplicialMap",
     "UnnormalizedChainsResult",
     "compose_simplicial_maps",

@@ -7,12 +7,9 @@ import json
 import pytest
 
 from jacobian.catalog.builtins import BUILTIN_TOOLS
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.dispatch import invoke_operation
 from jacobian.math.topology.simplicial_sets import (
     SimplicialSubsetPrefix,
-    SimplicialSubsetRequest,
     simplicial_subset,
     standard_simplex,
 )
@@ -21,6 +18,8 @@ from jacobian.math.topology.simplicial_sets.maps import (
     compose_simplicial_maps,
     identity_simplicial_map,
 )
+from jacobian.math.topology.simplicial_sets.subset_models import SimplicialSubsetRequest
+from jacobian.math.topology.simplicial_sets.subset_tools import TOOLS
 
 
 def _delta_one_prefix():
@@ -132,11 +131,11 @@ def test_subset_operation_catalog_example_and_json_request() -> None:
     request = SimplicialSubsetRequest.model_validate(tool.examples[0].input)
     assert tool.run(request).inclusion.source.sets[0] == ("(0)",)
 
-    result = invoke_operation(
-        operation_id,
-        json.loads(request.model_dump_json()),
-        Catalog.open(),
-    ).output
+    tool = next(tool for tool in TOOLS if tool.operation_id == operation_id)
+    result = tool.run(
+        tool.request_type.model_validate(json.loads(request.model_dump_json()))
+    )
+    result = result.model_dump(mode="json")
     assert result["inclusion"]["maps"] == [[0], [0], [0]]
     assert (
         SimplicialSubsetPrefix.model_validate(result).inclusion.source

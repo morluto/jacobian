@@ -3,6 +3,7 @@
 from itertools import product
 
 import pytest
+from pydantic_core import PydanticCustomError
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.quantum import (
@@ -83,13 +84,13 @@ def test_coset_rejects_nonisotropic_space_and_foreign_register() -> None:
         )
 
 
-def test_serialized_coset_requires_isotropic_rref_and_reduced_representative() -> None:
+def test_serialized_coset_requires_canonical_rref_and_reduced_representative() -> None:
     register = QubitRegister(qubit_ids=("q",))
     x = _pauli(register, (1, 0))
     z = _pauli(register, (0, 1))
     with pytest.raises(ValueError):
         StabilizerErrorCoset(
-            check_space=CheckSpaceValue(register=register, basis=(x, z)),
+            check_space=CheckSpaceValue(register=register, basis=(z, x)),
             representative=_pauli(register, (0, 0)),
         )
     with pytest.raises(ValueError):
@@ -97,6 +98,78 @@ def test_serialized_coset_requires_isotropic_rref_and_reduced_representative() -
             check_space=CheckSpaceValue(register=register, basis=(z,)),
             representative=z,
         )
+
+
+def test_value_constructor_defers_isotropy_to_the_admitted_operation() -> None:
+    register = QubitRegister(qubit_ids=("q",))
+    x = _pauli(register, (1, 0))
+    z = _pauli(register, (0, 1))
+    # ``(x, z)`` is canonical RREF but not isotropic. The constructor stays
+    # structural: isotropy is admitted once by the operation, and a consumer
+    # re-admits a caller-authored claim only when its result relies on it.
+    value = StabilizerErrorCoset(
+        check_space=CheckSpaceValue(register=register, basis=(x, z)),
+        representative=_pauli(register, (0, 0)),
+    )
+    assert value.check_space.basis == (x, z)
+
+
+def test_coset_rejects_a_foreign_register_basis_row() -> None:
+    first = QubitRegister(qubit_ids=("q",))
+    second = QubitRegister(qubit_ids=("other",))
+    row = _pauli(second, (1, 0))
+    # A native caller can embed a model-constructed check space whose declared
+    # register is A while a basis row lives on B of the same width. The coset
+    # validator owns the retained-parent invariant, so it compares every
+    # retained row against the declared register.
+    forged_check = CheckSpaceValue.model_construct(qubit_register=first, basis=(row,))
+    forged = StabilizerErrorCoset.model_construct(
+        check_space=forged_check,
+        representative=_pauli(first, (0, 0)),
+    )
+    with pytest.raises(PydanticCustomError) as raised:
+        forged.require_canonical_coset()  # type: ignore[operator]
+    assert raised.value.type == "stabilizer.error_coset_register"
+
+    with pytest.raises(ValueError):
+        StabilizerErrorCoset.model_validate(
+            {
+                "check_space": CheckSpaceValue.model_construct(
+                    qubit_register=first, basis=(row,)
+                ),
+                "representative": _pauli(first, (0, 0)),
+            }
+        )
+
+
+def test_coset_rejects_model_constructed_check_spaces() -> None:
+    register = QubitRegister(qubit_ids=("q",))
+    error = _pauli(register, (1, 0))
+    forged_requests = (
+        StabilizerErrorCosetRequest.model_construct(),
+        StabilizerErrorCosetRequest.model_construct(
+            check_space=CheckSpaceValue.model_construct(), error=error
+        ),
+        StabilizerErrorCosetRequest.model_construct(
+            check_space=CheckSpaceValue.model_construct(qubit_register=register),
+            error=error,
+        ),
+        StabilizerErrorCosetRequest.model_construct(
+            check_space=CheckSpaceValue.model_construct(
+                qubit_register=register, basis="ab"
+            ),
+            error=error,
+        ),
+        StabilizerErrorCosetRequest.model_construct(
+            check_space=CheckSpaceValue.model_construct(
+                qubit_register=register, basis=(None, "x") * 4
+            ),
+            error=error,
+        ),
+    )
+    for forged in forged_requests:
+        with pytest.raises(OperationDomainValidationError):
+            stabilizer_error_coset(forged)
 
 
 def test_catalog_publishes_coset_operation() -> None:

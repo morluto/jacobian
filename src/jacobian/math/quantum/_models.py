@@ -790,27 +790,35 @@ class StabilizerErrorCoset(StrictModel):
 
     @model_validator(mode="after")
     def require_canonical_coset(self) -> Self:
+        check_space = self.check_space
+        register = getattr(check_space, "qubit_register", None)
+        basis = getattr(check_space, "basis", None)
         if (
-            not isinstance(self.check_space, CheckSpaceValue)
-            or not isinstance(self.check_space.qubit_register, QubitRegister)
-            or not isinstance(self.check_space.basis, tuple)
-            or len(self.check_space.basis) > MAX_CHECK_ROWS
-            or any(
-                not isinstance(row, PhaseFreeQubitPauli)
-                for row in self.check_space.basis
-            )
+            not isinstance(check_space, CheckSpaceValue)
+            or not isinstance(register, QubitRegister)
+            or not isinstance(basis, tuple)
+            or len(basis) > MAX_CHECK_ROWS
+            or any(not isinstance(row, PhaseFreeQubitPauli) for row in basis)
             or not isinstance(self.representative, PhaseFreeQubitPauli)
         ):
             raise _validation_error(
                 "error_coset_structure", "coset parent and rows must be typed values"
             )
-        register = self.check_space.qubit_register
+        # Every retained row must live on the declared register. Isotropy is
+        # mathematical admission owned by ``stabilizer_error_coset`` and by any
+        # consumer relying on a caller-authored coset claim, so the constructor
+        # never replays the kernel's pairwise symplectic computation.
+        if any(row.qubit_register != register for row in basis):
+            raise _validation_error(
+                "error_coset_register",
+                "coset check rows must share the check register",
+            )
         if self.representative.qubit_register != register:
             raise _validation_error(
                 "error_coset_register",
                 "coset representative must share the check register",
             )
-        flat_rows = [[*row.x_bits, *row.z_bits] for row in self.check_space.basis]
+        flat_rows = [[*row.x_bits, *row.z_bits] for row in basis]
         width = 2 * len(register.qubit_ids)
         pivots = tuple(
             next((column for column, bit in enumerate(row) if bit), width)
@@ -829,19 +837,6 @@ class StabilizerErrorCoset(StrictModel):
         ):
             raise _validation_error(
                 "error_coset_basis", "coset check basis must be canonical RREF"
-            )
-        n = len(register.qubit_ids)
-        if any(
-            sum(
-                left.x_bits[q] * right.z_bits[q] + left.z_bits[q] * right.x_bits[q]
-                for q in range(n)
-            )
-            % 2
-            for index, left in enumerate(self.check_space.basis)
-            for right in self.check_space.basis[index + 1 :]
-        ):
-            raise _validation_error(
-                "error_coset_isotropy", "coset check basis must be isotropic"
             )
         bits = (*self.representative.x_bits, *self.representative.z_bits)
         if any(bits[pivot] for pivot in pivots):

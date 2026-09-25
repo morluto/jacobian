@@ -1146,26 +1146,27 @@ def stabilizer_error_coset(
             "quantum.stabilizer.error_coset.not_a_request",
             "error-coset projection requires a typed request",
         )
-    check_space = request.check_space
-    error = request.error
+    check_space = getattr(request, "check_space", None)
+    error = getattr(request, "error", None)
     if not isinstance(check_space, CheckSpaceValue):
         _reject(
             "check_space",
             "quantum.stabilizer.not_a_check_space",
             "error-coset projection requires a typed register-bound check space",
         )
-    register = _admit_register(check_space.qubit_register, "check_space")
-    if (
-        not isinstance(check_space.basis, tuple)
-        or len(check_space.basis) > MAX_CHECK_ROWS
-    ):
+    register = _admit_register(
+        getattr(check_space, "qubit_register", None), "check_space"
+    )
+    basis_value = getattr(check_space, "basis", None)
+    if not isinstance(basis_value, tuple) or len(basis_value) > MAX_CHECK_ROWS:
         _reject(
             "check_space",
             "quantum.stabilizer.invalid_basis",
             "check-space basis is malformed",
         )
+    basis = tuple(basis_value)
     rows: list[list[int]] = []
-    for check_row in check_space.basis:
+    for check_row in basis:
         _admit_phase_free(check_row, "check_space")
         if check_row.qubit_register != register:
             _reject(
@@ -1183,6 +1184,12 @@ def stabilizer_error_coset(
                     "quantum.stabilizer.not_isotropic",
                     "error-coset check space must be symplectically isotropic",
                 )
+    if not isinstance(error, PhaseFreeQubitPauli):
+        _reject(
+            "error",
+            "quantum.pauli.not_a_pauli",
+            "error must be a typed phase-free Pauli",
+        )
     _admit_phase_free(error, "error")
     if error.qubit_register != register:
         _reject(

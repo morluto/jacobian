@@ -118,6 +118,26 @@ def test_catalog_optimizer_example_returns_replayable_checker_result() -> None:
     assert verify_weighted_intersection_result(decoded)
 
 
+def test_optimizer_wide_split_round_trips_and_verifies() -> None:
+    labels = ("a", "b", "c")
+    loops = _matroid(((0,), (0,), (0,)), labels)
+    one_nonloop = _matroid(((0,), (0,), (1,)), labels)
+    weight = 999_999_999_999
+    result = maximum_weight_matroid_intersection(
+        _request(loops, one_nonloop, (-weight, -weight, weight))
+    )
+    decoded = MatroidWeightedIntersectionOptimizationResult.model_validate_json(
+        result.model_dump_json()
+    )
+    assert decoded.first_maximizer.weight_function.values == (weight, weight, weight)
+    from jacobian.math.combinatorics.matroids.operations import (
+        verify_maximum_weight_independent_set,
+    )
+
+    assert verify_maximum_weight_independent_set(decoded.first_maximizer)
+    assert verify_weighted_intersection_result(decoded)
+
+
 def test_weighted_intersection_matches_exhaustive_gf2_instances() -> None:
     """Compare all small represented matroid pairs with a coefficient oracle."""
     labels = ("a", "b", "c")

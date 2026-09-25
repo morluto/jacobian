@@ -1004,8 +1004,8 @@ def weighted_intersection_certificate(
     if (
         first_work > MAX_CLOSURE_RANK_WORK
         or second_work > MAX_CLOSURE_RANK_WORK
-        or first_output > 16 * 256
-        or second_output > 16 * 256
+        or first_output > 32 * 256
+        or second_output > 32 * 256
         or total_work > MAX_WEIGHTED_INTERSECTION_WORK
         or output_bytes > MAX_WEIGHTED_INTERSECTION_OUTPUT_BYTES
     ):

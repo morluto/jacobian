@@ -227,6 +227,11 @@ def test_split_witness_supports_bounded_extra_digits_for_cancellation() -> None:
         certificate.model_dump_json()
     )
     assert verify_weighted_intersection_result(decoded)
+    from jacobian.math.combinatorics.matroids.operations import (
+        verify_maximum_weight_independent_set,
+    )
+
+    assert verify_maximum_weight_independent_set(decoded.first_maximizer)
     replayed = weighted_intersection_certificate(
         MatroidWeightedIntersectionCertificateRequest(
             first=decoded.first,

@@ -43,16 +43,15 @@ def test_all_small_equal_size_families_match_independent_basis_axiom() -> None:
                     if family_mask >> index & 1
                 )
                 valid = _satisfies_basis_exchange(bases)
+                value = FiniteBasisMatroid(ground=ground, bases=bases)
+                assert value.bases == bases
+                assert value.rank == rank
+                assert value.ground == ground
                 if valid:
-                    value = FiniteBasisMatroid(ground=ground, bases=bases)
-                    assert value.bases == bases
-                    assert value.rank == rank
-                    assert value.ground == ground
+                    value.require_basis_exchange()
                 else:
                     with pytest.raises(Exception, match="basis exchange"):
-                        FiniteBasisMatroid(
-                            ground=ground, bases=bases
-                        ).require_basis_exchange()
+                        value.require_basis_exchange()
 
 
 @pytest.mark.parametrize(
@@ -142,8 +141,9 @@ def test_schema_and_raw_envelope_publish_and_enforce_exact_limits() -> None:
         )
 
     work_overflow = tuple(itertools.islice(itertools.combinations(range(64), 32), 45))
-    with pytest.raises(ValidationError, match="exchange_work_bound"):
-        FiniteBasisMatroid(ground=max_ground, bases=work_overflow)
+    bounded_claim = FiniteBasisMatroid(ground=max_ground, bases=work_overflow)
+    with pytest.raises(Exception, match="work exceeds the admitted bound"):
+        bounded_claim.require_basis_exchange()
 
 
 def test_raw_json_oversized_nested_family_fails_before_model_construction() -> None:

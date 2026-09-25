@@ -8,7 +8,7 @@ import pytest
 
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
-from jacobian.math.topology.release import GraphCliqueRequest, graph_clique_complex
+from jacobian.math.topology.release import graph_clique_complex
 
 
 def test_graph_clique_complex_matches_independent_powerset_oracle() -> None:
@@ -19,7 +19,7 @@ def test_graph_clique_complex_matches_independent_powerset_oracle() -> None:
                 edge for bit, edge in enumerate(possible_edges) if mask & (1 << bit)
             )
             graph = IndexedSimpleUndirectedGraph(vertex_count=vertex_count, edges=edges)
-            result = graph_clique_complex(GraphCliqueRequest(graph=graph))
+            result = graph_clique_complex(graph)
             edge_set = set(edges)
             cliques = {
                 subset
@@ -45,11 +45,8 @@ def test_graph_clique_complex_boundary_and_oversized_request() -> None:
         vertex_count=8,
         edges=tuple((left, right) for left in range(8) for right in range(left + 1, 8)),
     )
-    assert (
-        graph_clique_complex(GraphCliqueRequest(graph=full)).clique_complex.closure_size
-        == 255
-    )
+    assert graph_clique_complex(full).clique_complex.closure_size == 255
 
     oversized = IndexedSimpleUndirectedGraph(vertex_count=9, edges=())
     with pytest.raises(OperationResourceAdmissionError, match="between 1 and 8"):
-        graph_clique_complex(GraphCliqueRequest(graph=oversized))
+        graph_clique_complex(oversized)

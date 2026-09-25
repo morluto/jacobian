@@ -161,8 +161,7 @@ def face_poset(request: FacePosetRequest) -> FacePosetResult:
     )
 
 
-def clique_complex(request: CliqueRequest) -> CliqueResult:
-    source = _canonical(request.complex)
+def clique_complex(source: FiniteSimplicialComplex) -> CliqueResult:
     edges: tuple[tuple[str, str], ...] = (
         tuple((face[0], face[1]) for face in source.faces_by_dimension[1].faces)
         if source.dimension >= 1
@@ -207,7 +206,7 @@ def clique_complex(request: CliqueRequest) -> CliqueResult:
     )
 
 
-def graph_clique_complex(request: GraphCliqueRequest) -> CliqueResult:
+def graph_clique_complex(graph: IndexedSimpleUndirectedGraph) -> CliqueResult:
     """Return the flag complex of a bounded indexed graph.
 
     The graph is encoded as a one-dimensional finite simplicial complex and
@@ -215,7 +214,6 @@ def graph_clique_complex(request: GraphCliqueRequest) -> CliqueResult:
     Eight vertices is the largest envelope whose entire nonempty powerset
     stays within the canonical simplicial carrier's dimension-seven limit.
     """
-    graph = request.graph
     if not 1 <= graph.vertex_count <= MAX_GRAPH_CLIQUE_VERTICES:
         raise OperationResourceAdmissionError(
             location=("graph", "vertex_count"),
@@ -224,17 +222,18 @@ def graph_clique_complex(request: GraphCliqueRequest) -> CliqueResult:
         )
     vertices = tuple(f"v{index}" for index in range(graph.vertex_count))
     endpoints = {vertex for edge in graph.edges for vertex in edge}
-    facets = tuple((vertices[left], vertices[right]) for left, right in graph.edges)
-    facets += tuple(
+    facets: tuple[tuple[str, str], ...] = tuple(
+        (vertices[left], vertices[right]) for left, right in graph.edges
+    )
+    singleton_facets = tuple(
         (vertices[index],)
         for index in range(graph.vertex_count)
         if index not in endpoints
     )
-    return clique_complex(
-        CliqueRequest(
-            complex=SimplicialComplexRequest(vertices=vertices, facets=facets)
-        )
-    )
+    all_facets: tuple[Simplex, ...] = facets + singleton_facets
+    facets_for_complex = all_facets
+    source = canonicalize(vertices, facets_for_complex).complex
+    return clique_complex(source)
 
 
 def orientability(request: OrientabilityRequest) -> OrientabilityResult:

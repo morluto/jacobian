@@ -2,6 +2,7 @@
 """Public declarations for finite simplicial topology transforms."""
 
 from jacobian.catalog.models import MathTool, OperationExample
+from jacobian.math.topology.operations import canonicalize
 from jacobian.math.topology.release import *
 
 
@@ -10,11 +11,11 @@ def _run_poset(r: FacePosetRequest) -> FacePosetResult:
 
 
 def _run_clique(r: CliqueRequest) -> CliqueResult:
-    return clique_complex(r)
+    return clique_complex(canonicalize(r.complex.vertices, r.complex.facets).complex)
 
 
 def _run_graph_clique(r: GraphCliqueRequest) -> CliqueResult:
-    return graph_clique_complex(r)
+    return graph_clique_complex(r.graph)
 
 
 def _run_orient(r: OrientabilityRequest) -> OrientabilityResult:

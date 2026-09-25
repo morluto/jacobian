@@ -43,9 +43,10 @@ class IntegerAffineFactorial(StrictModel):
         ge=-MAX_PROPER_HYPERGEOMETRIC_AFFINE_COEFFICIENT,
         le=MAX_PROPER_HYPERGEOMETRIC_AFFINE_COEFFICIENT,
     )
+    # Offsets change the affine argument's location, not carrier/work size.
+    # Keep their wire representation intrinsically bounded without a numeric cap.
     offset: StrictInt = Field(
-        ge=-MAX_PROPER_HYPERGEOMETRIC_AFFINE_COEFFICIENT,
-        le=MAX_PROPER_HYPERGEOMETRIC_AFFINE_COEFFICIENT,
+        description="Arbitrary-size integer offset of the affine factorial argument."
     )
     power: StrictInt = Field(
         ge=-MAX_PROPER_HYPERGEOMETRIC_FACTOR_POWER,

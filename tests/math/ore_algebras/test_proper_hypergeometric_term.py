@@ -91,3 +91,11 @@ def test_affine_factor_bounds_and_zero_power_are_rejected():
         IntegerAffineFactorial(n_coefficient=1, k_coefficient=0, offset=0, power=0)
     with pytest.raises(ValidationError):
         IntegerAffineFactorial(n_coefficient=129, k_coefficient=0, offset=0, power=1)
+
+
+def test_large_offset_is_accepted_without_increasing_carrier_size():
+    factor = IntegerAffineFactorial(
+        n_coefficient=1, k_coefficient=0, offset=129, power=1
+    )
+    assert factor.offset == 129
+    assert factor.model_dump()["offset"] == 129

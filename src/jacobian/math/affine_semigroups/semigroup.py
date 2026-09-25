@@ -999,7 +999,15 @@ def _preflight_normality_work(semigroup: PositiveAffineSemigroup) -> None:
     per_candidate_overhead = (
         len(unique_vectors) ** 2 + configuration.rows * len(unique_vectors) + 2
     )
-    total_work = candidate_bound * (candidate_work + per_candidate_overhead)
+    # At most one candidate is returned as a hole. Its defining cone and
+    # lattice relations are replayed against the full caller axis.
+    witness_replay_work = (
+        configuration.columns**2 + configuration.rows * configuration.columns + 2
+    )
+    total_work = (
+        candidate_bound * (candidate_work + per_candidate_overhead)
+        + witness_replay_work
+    )
     if total_work > MAX_AFFINE_NORMALITY_WORK:
         raise OperationResourceAdmissionError(
             location=("semigroup",),
@@ -1062,6 +1070,11 @@ def normality(semigroup: PositiveAffineSemigroup) -> AffineSemigroupNormality:
     total_work = len(candidates) * (
         search_configuration.columns**2
         + search_configuration.rows * search_configuration.columns
+        + 2
+    )
+    total_work += (
+        source.configuration.columns**2
+        + source.configuration.rows * source.configuration.columns
         + 2
     )
     for target in candidates:

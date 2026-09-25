@@ -163,3 +163,21 @@ def test_normality_admits_combined_work_before_hilbert_expansion(
     )
     with pytest.raises(OperationResourceAdmissionError, match="normality membership"):
         normality(_semigroup(((2, 0), (0, 2), (2, 2))))
+
+
+def test_preflight_prices_full_axis_for_possible_hole_replay(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import jacobian.math.affine_semigroups.semigroup as semigroup_module
+
+    # Unique-vector fiber searches fit below this budget. Charging the one
+    # possible witness replay against all ten source columns pushes it above.
+    monkeypatch.setattr(semigroup_module, "MAX_AFFINE_NORMALITY_WORK", 200)
+    monkeypatch.setattr(
+        semigroup_module,
+        "_hilbert_basis_admitted",
+        lambda *_args: pytest.fail("normalization started before work admission"),
+    )
+    vectors = ((1, 0),) * 5 + ((0, 1),) * 5
+    with pytest.raises(OperationResourceAdmissionError, match="normality membership"):
+        normality(_semigroup(vectors))

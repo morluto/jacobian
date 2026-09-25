@@ -69,3 +69,16 @@ profile; no infinite affine root is introduced. Crossover pairs and a
 conservative serialized-result byte estimate are admitted before exact
 intersection arithmetic. Root numerators and denominators have a dedicated
 16,384-digit limit, and the output is capped at 16 MiB.
+
+## Univariate split form
+
+`tropical.polynomial.univariate_split_form.compute` returns the consecutive
+support polynomial obtained by multiplying the linear factors determined by
+the finite roots and their slope-jump multiplicities. It preserves the
+induced piecewise-linear function, including when the source has inessential
+terms, but does not claim formal polynomial equality. An integer-coefficient
+input is promoted to `QQ` when its split coefficients require rational values.
+The operation admits consecutive support before root computation, checks
+exact scalar growth before each coefficient sum, and bounds serialized output
+before constructing the result. This is the univariate split form described
+in the [combinatorial introduction to tropical geometry](https://math.berkeley.edu/~bernd/tropical/sec1.pdf).

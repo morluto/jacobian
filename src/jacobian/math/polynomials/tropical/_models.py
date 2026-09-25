@@ -374,6 +374,21 @@ class UnivariateRootsRequest(StrictModel):
     polynomial: TropicalPolynomial
 
 
+class UnivariateSplitFormRequest(StrictModel):
+    """Return a univariate polynomial with the same function in split form."""
+
+    polynomial: TropicalPolynomial
+
+    @model_validator(mode="after")
+    def require_univariate(self) -> Self:
+        if len(self.polynomial.variables) != 1:
+            raise _validation_error(
+                "split_form_univariate",
+                "split form requires exactly one polynomial variable",
+            )
+        return self
+
+
 class UnivariateNewtonPolygonRequest(StrictModel):
     """Request an exact coefficient-lifted hull for a univariate polynomial."""
 
@@ -580,6 +595,7 @@ __all__ = [
     "UnivariateNewtonPolygonRequest",
     "UnivariateNewtonPolygonResult",
     "UnivariateRootsRequest",
+    "UnivariateSplitFormRequest",
     "VectorBinaryRequest",
     "VectorProjectivizeRequest",
     "VectorProjectivizeResult",

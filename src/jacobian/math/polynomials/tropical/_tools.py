@@ -131,6 +131,12 @@ def compute_univariate_roots(
     return tropical_polynomial_univariate_roots(request.polynomial)
 
 
+def compute_univariate_split_form(
+    request: UnivariateSplitFormRequest,
+) -> TropicalPolynomial:
+    return tropical_polynomial_univariate_split_form(request.polynomial)
+
+
 def compute_univariate_newton_polygon(
     request: UnivariateNewtonPolygonRequest,
 ) -> UnivariateNewtonPolygonResult:
@@ -403,6 +409,46 @@ TOOLS: MathTools = (
         ),
     ),
     MathTool(
+        operation_id="tropical.polynomial.univariate_split_form.compute",
+        title="Compute a univariate tropical split form",
+        description=(
+            "Return the consecutive-support polynomial with the same exact "
+            "univariate tropical function. Its finite roots are encoded as "
+            "tropical linear factors with slope-jump multiplicity. An integer "
+            "input is promoted to QQ if rational roots require rational split "
+            "coefficients; the output is functionally equivalent, not formally "
+            "equal, to the source."
+        ),
+        request_type=UnivariateSplitFormRequest,
+        result_type=TropicalPolynomial,
+        run=compute_univariate_split_form,
+        tags=("tropical", "polynomial", "split-form", "exact"),
+        discovery_terms=(
+            "tropical polynomial split form",
+            "factor univariate tropical polynomial",
+            "tropical roots linear factors",
+        ),
+        examples=(
+            OperationExample(
+                name="rational_root_over_integer_input",
+                description=(
+                    "The min-plus polynomial min(0, 1+2x) has root -1/2; its "
+                    "split form is represented over QQ."
+                ),
+                input={
+                    "polynomial": {
+                        "semiring": {"convention": "MIN_PLUS", "base": "ZZ"},
+                        "variables": ["x"],
+                        "terms": [
+                            {"exponents": [0], "coefficient": _finite(0)},
+                            {"exponents": [2], "coefficient": _finite(1)},
+                        ],
+                    }
+                },
+            ),
+        ),
+    ),
+    MathTool(
         operation_id="tropical.polynomial.univariate_newton_polygon.compute",
         title="Compute a univariate tropical Newton polygon",
         description="Return the exact lower or upper coefficient hull, source terms on every face, face slopes, and finite tropical roots with horizontal-length multiplicities.",
@@ -595,6 +641,7 @@ __all__ = [
     "compute_scalar_add",
     "compute_scalar_multiply",
     "compute_scalar_power",
+    "compute_univariate_split_form",
     "compute_vector_add",
     "compute_vector_projectivize",
     "compute_vector_scale",

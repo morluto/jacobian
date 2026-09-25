@@ -1038,6 +1038,125 @@ def tropical_polynomial_univariate_roots(
     )
 
 
+def tropical_polynomial_univariate_split_form(
+    poly: TropicalPolynomial,
+) -> TropicalPolynomial:
+    """Return a canonical consecutive-support polynomial with the same function.
+
+    The finite tropical roots, repeated by slope-jump multiplicity, determine
+    the coefficients of the split form.  For integer input, the result is
+    promoted to QQ exactly when a rational root requires it.
+    """
+    _admit_polynomial(poly)
+    if len(poly.variables) != 1:
+        raise OperationDomainValidationError(
+            location=("polynomial", "variables"),
+            code="tropical.split_form_univariate",
+            message="split form requires exactly one polynomial variable",
+        )
+    if not poly.terms:
+        return TropicalPolynomial(
+            semiring=poly.semiring, variables=poly.variables, terms=()
+        )
+
+    first_exponent = poly.terms[0].exponents[0]
+    last_exponent = poly.terms[-1].exponents[0]
+    span = last_exponent - first_exponent
+    output_term_count = span + 1
+    if output_term_count > MAX_TROPICAL_POLYNOMIAL_TERMS:
+        raise OperationResourceAdmissionError(
+            location=("polynomial", "terms"),
+            code="tropical.split_form_terms",
+            message="the consecutive split form exceeds the polynomial term envelope",
+        )
+
+    # Root construction has its own pair, scalar-height, and output admission.
+    # The support expansion bound above is checked first, before that work.
+    profile = tropical_polynomial_univariate_roots(poly)
+    expanded_roots = tuple(
+        root.value.as_fraction()
+        for root in profile.roots
+        for _ in range(root.multiplicity)
+    )
+    if len(expanded_roots) != span:
+        raise ArithmeticError("tropical root multiplicities do not span the support")
+
+    # For min-plus, coefficient k is c_min minus the k largest roots.  For
+    # max-plus it is c_min minus the k smallest roots.  This is the coefficient
+    # formula for the tropical product of the corresponding linear factors.
+    roots_for_coefficients = tuple(
+        sorted(
+            expanded_roots,
+            reverse=poly.semiring.convention == "MIN_PLUS",
+        )
+    )
+    first_coefficient = _finite_value(poly.terms[0].coefficient).as_fraction()
+    coefficients = [first_coefficient]
+    for root in roots_for_coefficients:
+        left = CanonicalRational.from_fraction(coefficients[-1])
+        right = CanonicalRational.from_fraction(-root)
+        _check_fraction_sum_growth(left, right)
+        coefficients.append(coefficients[-1] - root)
+
+    last_coefficient = _finite_value(poly.terms[-1].coefficient).as_fraction()
+    if coefficients[-1] != last_coefficient:
+        raise ArithmeticError("tropical split form does not preserve the endpoint term")
+
+    result_base = (
+        poly.semiring.base
+        if all(value.denominator == 1 for value in coefficients)
+        else "QQ"
+    )
+    result_semiring = TropicalSemiring(
+        convention=poly.semiring.convention, base=result_base
+    )
+    rational_coefficients = tuple(
+        CanonicalRational.from_fraction(value) for value in coefficients
+    )
+    payload = {
+        "semiring": {
+            "convention": result_semiring.convention,
+            "base": result_semiring.base,
+        },
+        "variables": list(poly.variables),
+        "terms": [
+            {
+                "exponents": [first_exponent + index],
+                "coefficient": {
+                    "semiring": {
+                        "convention": result_semiring.convention,
+                        "base": result_semiring.base,
+                    },
+                    "kind": "FINITE",
+                    "value": value.model_dump(mode="json"),
+                },
+            }
+            for index, value in enumerate(rational_coefficients)
+        ],
+    }
+    if len(encode_strict_json(payload)) > CanonicalLimits().max_output_bytes:
+        raise OperationResourceAdmissionError(
+            location=("polynomial",),
+            code="tropical.split_form_output",
+            message="the exact split polynomial exceeds the output byte envelope",
+        )
+    return TropicalPolynomial(
+        semiring=result_semiring,
+        variables=poly.variables,
+        terms=tuple(
+            TropicalPolynomialTerm(
+                exponents=(first_exponent + index,),
+                coefficient=TropicalScalar._from_kernel(
+                    semiring=result_semiring,
+                    kind="FINITE",
+                    value=value,
+                ),
+            )
+            for index, value in enumerate(rational_coefficients)
+        ),
+    )
+
+
 def tropical_polynomial_univariate_newton_polygon(
     poly: TropicalPolynomial,
 ) -> TropicalNewtonPolygonProfile:
@@ -1329,6 +1448,7 @@ __all__ = [
     "tropical_polynomial_power",
     "tropical_polynomial_univariate_newton_polygon",
     "tropical_polynomial_univariate_roots",
+    "tropical_polynomial_univariate_split_form",
     "tropical_scalar_add",
     "tropical_scalar_multiply",
     "tropical_scalar_power",

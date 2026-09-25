@@ -21,6 +21,7 @@ that need more context than an operation card:
 - [Ranked-tree subtrees](ranked-tree-subtrees.md)
 - [One-hole ranked-tree contexts](ranked-tree-contexts.md)
 - [Tree context transformation monoid](tree-context-transformation-monoid.md)
+- [Regular tree grammars](regular-tree-grammar.md)
 - [SAT and SMT](sat-smt/index.md)
 - [Exact quadratic forms](quadratic-forms.md)
 - [Certified Dickman rho enclosures](dickman-rho.md)

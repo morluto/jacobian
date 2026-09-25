@@ -109,6 +109,8 @@ def _collect_rows(
             # A constant row never enters double-description expansion, so
             # classify it before the height envelope applies to its bound.
             has_inconsistent_constant |= bound < 0
+            if has_inconsistent_constant:
+                return [], True
             continue
         for component in (*inequality.normal, inequality.bound):
             component_digits = max(

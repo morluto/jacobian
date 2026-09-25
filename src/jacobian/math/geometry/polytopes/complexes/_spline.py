@@ -138,7 +138,7 @@ def _admit_complex(  # noqa: C901
                 _reject("complex_source", "cell provenance indices are malformed")
             vertices = tuple(
                 RationalPolytopeVertex(
-                    vertex_id=f"v{position}", coordinates=point.coordinates
+                    vertex_id=f"v{position:03d}", coordinates=point.coordinates
                 )
                 for position, point in enumerate(cell.vertices)
             )
@@ -1493,7 +1493,9 @@ def spline_evaluate(
     axes = tuple(spline.complex.space.axes)
     if len(point.coordinates) != len(axes):
         _reject("point_axis", "evaluation point must use the complex coordinate axes")
-    _admit_spline_evaluation_growth(spline, basis_coefficients, point)
+    point_fractions = tuple(value.as_fraction() for value in point.coordinates)
+    if any(_contains(cell, point_fractions) for cell in spline.complex.maximal_cells):
+        _admit_spline_evaluation_growth(spline, basis_coefficients, point)
     cell_ids, value = _evaluate_spline_basis_combination(
         spline, basis_coefficients, point
     )

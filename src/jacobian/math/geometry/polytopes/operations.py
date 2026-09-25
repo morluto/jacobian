@@ -37,7 +37,7 @@ from jacobian.math.geometry.polytopes._models import (
     MAX_POLYTOPE_FACE_LATTICE_COVERS,
     MAX_POLYTOPE_FACE_LATTICE_DIMENSION,
     MAX_POLYTOPE_FACE_LATTICE_FACES,
-    MAX_POLYTOPE_FACE_LATTICE_RESULT_CHARS,
+    MAX_POLYTOPE_FACE_LATTICE_RESULT_DIGITS,
     MAX_POLYTOPE_FACE_LATTICE_WORK,
     MAX_VERTICES,
     EdgeProfileResult,
@@ -1823,19 +1823,19 @@ def _admit_face_lattice_source(polytope_value: RationalVPolytope) -> RationalVPo
                 f"limit is {MAX_POLYTOPE_FACE_LATTICE_WORK}"
             ),
         )
-    output_chars_bound = (
+    output_digits_bound = (
         source_chars_bound
         + MAX_POLYTOPE_FACE_LATTICE_FACES * 256
         + MAX_POLYTOPE_FACE_LATTICE_COVERS * 64
         + 64_000
     )
-    if output_chars_bound > MAX_POLYTOPE_FACE_LATTICE_RESULT_CHARS:
+    if output_digits_bound > MAX_POLYTOPE_FACE_LATTICE_RESULT_DIGITS:
         raise OperationResourceAdmissionError(
             location=("result",),
             code="polytope.face_lattice.result_size_exceeded",
             message=(
-                f"face-lattice output may require {output_chars_bound} characters; "
-                f"limit is {MAX_POLYTOPE_FACE_LATTICE_RESULT_CHARS}"
+                f"face-lattice output may require {output_digits_bound} digits; "
+                f"limit is {MAX_POLYTOPE_FACE_LATTICE_RESULT_DIGITS}"
             ),
         )
 

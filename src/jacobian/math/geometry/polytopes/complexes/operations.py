@@ -34,6 +34,7 @@ from typing import TypedDict
 from sympy import Rational
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
+from jacobian.canonical import decimal_digit_width
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -677,7 +678,9 @@ def polytopal_complex_closure(
 
 
 def _rational_digits(value: Fraction) -> int:
-    return max(len(str(abs(value.numerator))), len(str(value.denominator)))
+    return max(
+        decimal_digit_width(value.numerator), decimal_digit_width(value.denominator)
+    )
 
 
 def _determinant(matrix: Sequence[Sequence[Fraction]]) -> Fraction:

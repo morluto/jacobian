@@ -251,9 +251,9 @@ def _admit_product_sum_growth(
         return
     if len(contributions) == 1:
         left, right = contributions[0]
-        numerator_bound = left.numerator.bit_length() + right.numerator.bit_length() - 1
+        numerator_bound = left.numerator.bit_length() + right.numerator.bit_length()
         denominator_bound = (
-            left.denominator.bit_length() + right.denominator.bit_length() - 1
+            left.denominator.bit_length() + right.denominator.bit_length()
         )
         if max(numerator_bound, denominator_bound) > _MAX_SCALAR_BITS:
             _resource(
@@ -263,11 +263,11 @@ def _admit_product_sum_growth(
             )
         return
     numerator_bits = [
-        left.numerator.bit_length() + right.numerator.bit_length() - 1
+        left.numerator.bit_length() + right.numerator.bit_length()
         for left, right in contributions
     ]
     denominator_bits = [
-        left.denominator.bit_length() + right.denominator.bit_length() - 1
+        left.denominator.bit_length() + right.denominator.bit_length()
         for left, right in contributions
     ]
     denominator_total = sum(denominator_bits)

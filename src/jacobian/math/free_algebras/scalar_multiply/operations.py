@@ -23,9 +23,11 @@ from jacobian.math.free_algebras.scalar_multiply._models import (
 )
 
 
-def _reject_resource(code: str, message: str) -> None:
+def _reject_resource(
+    code: str, message: str, *, location: tuple[str, ...] = ("polynomial",)
+) -> None:
     raise OperationResourceAdmissionError(
-        location=("polynomial",),
+        location=location,
         code=f"free_algebra.{code}",
         message=message,
     )
@@ -61,6 +63,7 @@ def scalar_multiply(
             "a nonzero polynomial coefficient cannot cancel enough digits from "
             f"a {scalar_digits}-digit scalar to fit the "
             f"{MAX_SCALAR_MULTIPLY_COEFFICIENT_DIGITS}-digit result bound",
+            location=("scalar",),
         )
 
     source_digits = max(

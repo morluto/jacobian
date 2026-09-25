@@ -150,9 +150,9 @@ def test_scalar_above_cross_cancellation_bound_is_rejected() -> None:
     source = polynomial(("x",), ((("x",), Fraction(1)),))
     with pytest.raises(OperationResourceAdmissionError) as exc_info:
         scalar_multiply(source, CanonicalRational.from_fraction(Fraction(10**128)))
-    assert exc_info.value.errors()[0]["type"] == (
-        "free_algebra.scalar_multiply_coefficient_growth"
-    )
+    error = exc_info.value.errors()[0]
+    assert error["type"] == "free_algebra.scalar_multiply_coefficient_growth"
+    assert error["loc"] == ("scalar",)
 
 
 def test_request_json_round_trip_preserves_the_operation_arguments() -> None:

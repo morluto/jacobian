@@ -164,6 +164,9 @@ def _admit_box_and_output(
     determinant: int,
     diagonal_cofactors: tuple[int, ...],
 ) -> tuple[int, ...]:
+    request_location = (
+        ("cutoff",) if isinstance(request, ThetaSeriesPrefixRequest) else ("indices",)
+    )
     radii = tuple(
         isqrt((2 * request.cutoff * cofactor) // determinant)
         for cofactor in diagonal_cofactors
@@ -173,7 +176,7 @@ def _admit_box_and_output(
         vector_count *= 2 * radius + 1
         if vector_count > MAX_THETA_PREFIX_VECTORS:
             raise OperationResourceAdmissionError(
-                location=("cutoff",),
+                location=request_location,
                 code="quadratic_form.theta_vector_bound",
                 message=(
                     "the proved lattice box exceeds the theta vector limit "
@@ -183,7 +186,7 @@ def _admit_box_and_output(
     evaluation_work = vector_count * max(1, support)
     if determinant_work + cofactor_work + evaluation_work > MAX_THETA_PREFIX_WORK:
         raise OperationResourceAdmissionError(
-            location=("cutoff",),
+            location=request_location,
             code="quadratic_form.theta_work_bound",
             message="theta enumeration exceeds the operation work envelope",
         )
@@ -214,7 +217,7 @@ def _admit_box_and_output(
     )
     if output_digits > MAX_THETA_PREFIX_OUTPUT_DIGITS:
         raise OperationResourceAdmissionError(
-            location=("cutoff",),
+            location=request_location,
             code="quadratic_form.theta_output_bound",
             message="theta prefix exceeds its admitted aggregate output digit envelope",
         )

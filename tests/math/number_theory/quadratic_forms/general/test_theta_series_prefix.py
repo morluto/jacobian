@@ -165,10 +165,13 @@ def test_selected_theta_request_requires_canonical_bounded_indices(
 
 def test_selected_theta_admission_bounds_proved_search_box() -> None:
     form = _form((1, 1, 1, 1, 1, 1, 1))
-    with pytest.raises(OperationResourceAdmissionError, match="lattice box"):
+    with pytest.raises(
+        OperationResourceAdmissionError, match="lattice box"
+    ) as exc_info:
         theta_selected_coefficients(
             ThetaSelectedCoefficientsRequest(form=form, indices=(1_000_000,))
         )
+    assert exc_info.value.errors()[0]["loc"] == ("indices",)
 
 
 def test_selected_theta_operation_composes_through_json_catalog_dispatch() -> None:

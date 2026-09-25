@@ -69,10 +69,11 @@ def test_advertised_invocation_example_executes_when_backend_is_available(
         )
     examples = operation.examples
     assert examples, f"{operation_id} must advertise one executable example"
+    request_schema = operation.request_type.model_json_schema()
+    Draft202012Validator.check_schema(request_schema)
+    request_validator = Draft202012Validator(request_schema)
     for invocation_example in examples:
-        schema = operation.request_type.model_json_schema()
-        Draft202012Validator.check_schema(schema)
-        Draft202012Validator(schema).validate(invocation_example.input)
+        request_validator.validate(invocation_example.input)
         operation.request_type.model_validate_json(
             encode_strict_json(invocation_example.input), strict=True
         )

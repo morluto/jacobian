@@ -13,7 +13,11 @@ from jacobian.math.geometry.blowup_p2._models import BlowupDivisorClass
 
 
 def _run(request: PlaneCurveStrictTransformRequest) -> BlowupDivisorClass:
-    return plane_curve_strict_transform_class(request)
+    return plane_curve_strict_transform_class(
+        request.polynomial,
+        request.surface,
+        request.projective_coordinate_variables,
+    )
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (

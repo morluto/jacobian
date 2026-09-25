@@ -2,26 +2,27 @@
 
 from __future__ import annotations
 
+import re
 from fractions import Fraction
 from itertools import combinations
-from math import comb
+from math import comb, gcd
 from typing import NoReturn
 
 from jacobian._exact import CanonicalRational
+from jacobian._execution import BackendFailureReason, OperationBackendError
 from jacobian.canonical import decimal_digit_width
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
 from jacobian.math.geometry.algebraic_curves.divisor_classes._models import (
+    MAX_CURVE_DIVISOR_ALLOCATION_UNITS,
     MAX_CURVE_DIVISOR_COEFFICIENT_DIGITS,
     MAX_CURVE_DIVISOR_DEGREE,
     MAX_CURVE_DIVISOR_INTERMEDIATE_DIGITS,
-    MAX_CURVE_DIVISOR_OUTPUT_BYTES,
     MAX_CURVE_DIVISOR_POINT_DIGITS,
     MAX_CURVE_DIVISOR_TERMS,
     MAX_CURVE_DIVISOR_WORK,
-    PlaneCurveStrictTransformRequest,
 )
 from jacobian.math.geometry.blowup_p2._models import (
     BlowupDivisorClass,
@@ -35,9 +36,14 @@ from jacobian.math.geometry.blowup_p2.operations import (
 from jacobian.math.geometry.projective.coordinates._models import (
     RationalProjectivePoint,
 )
-from jacobian.math.polynomials.values import RationalPolynomial
+from jacobian.math.polynomials.values import (
+    RationalPolynomial,
+    RationalPolynomialTerm,
+    SparseRationalPolynomial,
+)
 
 MAX_BLOWUP_LABEL_CHARS = 64
+_VARIABLE_PATTERN = re.compile(r"[A-Za-z][A-Za-z0-9_]{0,31}\Z")
 
 
 def _domain(reason: str, message: str, location: tuple[str | int, ...]) -> NoReturn:
@@ -47,19 +53,99 @@ def _domain(reason: str, message: str, location: tuple[str | int, ...]) -> NoRet
 
 
 def _admit_polynomial(polynomial: RationalPolynomial) -> int:
-    if len(polynomial.variables) != 3 or not polynomial.polynomial.terms:
+    if not isinstance(polynomial, RationalPolynomial):
+        _domain(
+            "polynomial_type",
+            "expected a canonical rational plane polynomial",
+            ("polynomial",),
+        )
+    domain = getattr(polynomial, "domain", None)
+    variables = getattr(polynomial, "variables", None)
+    sparse = getattr(polynomial, "polynomial", None)
+    if (
+        domain != "QQ"
+        or not isinstance(variables, tuple)
+        or len(variables) != 3
+        or any(
+            type(variable) is not str or _VARIABLE_PATTERN.fullmatch(variable) is None
+            for variable in variables
+        )
+        or len(set(variables)) != 3
+        or not isinstance(sparse, SparseRationalPolynomial)
+        or not isinstance(sparse.terms, tuple)
+        or not sparse.terms
+    ):
         _domain(
             "polynomial_axis",
             "a plane curve requires a nonzero ternary polynomial",
             ("polynomial",),
         )
-    if len(polynomial.polynomial.terms) > MAX_CURVE_DIVISOR_TERMS:
+    if len(sparse.terms) > MAX_CURVE_DIVISOR_TERMS:
         raise OperationResourceAdmissionError(
             location=("polynomial",),
             code="plane_curve_divisor.term_bound",
             message="plane-curve source admits at most 64 terms",
         )
-    degrees = {sum(term.exponents) for term in polynomial.polynomial.terms}
+    for index, term in enumerate(sparse.terms):
+        if not isinstance(term, RationalPolynomialTerm):
+            _domain(
+                "term_shape",
+                "homogeneous curve terms must be canonical rational terms",
+                ("polynomial", index),
+            )
+        term_exponents = getattr(term, "exponents", None)
+        if not isinstance(term_exponents, tuple) or len(term_exponents) != 3:
+            _domain(
+                "term_shape",
+                "homogeneous curve terms must use three bounded exponents",
+                ("polynomial", index),
+            )
+        if any(
+            type(exponent) is not int or exponent < 0 for exponent in term_exponents
+        ):
+            _domain(
+                "term_shape",
+                "homogeneous curve exponents must be nonnegative integers",
+                ("polynomial", index),
+            )
+        if any(exponent > MAX_CURVE_DIVISOR_DEGREE for exponent in term_exponents):
+            raise OperationResourceAdmissionError(
+                location=("polynomial", index),
+                code="plane_curve_divisor.degree_bound",
+                message="the plane-curve degree must be at most 12",
+            )
+        coefficient = getattr(term, "coefficient", None)
+        if not _is_canonical_rational(coefficient):
+            _domain(
+                "coefficient_type",
+                "curve coefficients must be canonical rationals",
+                ("polynomial", index),
+            )
+        if coefficient.num == 0:
+            _domain(
+                "zero_term",
+                "zero polynomial terms must be omitted",
+                ("polynomial", index),
+            )
+        if (
+            _rational_component_digits(coefficient)
+            > MAX_CURVE_DIVISOR_COEFFICIENT_DIGITS
+        ):
+            raise OperationResourceAdmissionError(
+                location=("polynomial", index),
+                code="plane_curve_divisor.coefficient_bound",
+                message="curve coefficients are limited to 32 decimal digits",
+            )
+    exponents = tuple(term.exponents for term in sparse.terms)
+    if exponents != tuple(sorted(exponents, reverse=True)) or len(
+        set(exponents)
+    ) != len(exponents):
+        _domain(
+            "term_order",
+            "curve terms must have unique exponents in descending lexicographic order",
+            ("polynomial",),
+        )
+    degrees = {sum(term.exponents) for term in sparse.terms}
     if len(degrees) != 1:
         _domain(
             "inhomogeneous", "the curve polynomial must be homogeneous", ("polynomial",)
@@ -71,47 +157,39 @@ def _admit_polynomial(polynomial: RationalPolynomial) -> int:
             code="plane_curve_divisor.degree_bound",
             message="the plane-curve degree must be 1..12",
         )
-    for index, term in enumerate(polynomial.polynomial.terms):
-        if len(term.exponents) != 3 or any(
-            exponent < 0 or exponent > degree for exponent in term.exponents
-        ):
-            _domain(
-                "term_shape",
-                "homogeneous curve terms must use three bounded exponents",
-                ("polynomial", index),
-            )
-        if not isinstance(term.coefficient, CanonicalRational):
-            _domain(
-                "coefficient_type",
-                "curve coefficients must be canonical rationals",
-                ("polynomial", index),
-            )
-        if (
-            max(
-                decimal_digit_width(term.coefficient.num),
-                decimal_digit_width(term.coefficient.den),
-            )
-            > MAX_CURVE_DIVISOR_COEFFICIENT_DIGITS
-        ):
-            raise OperationResourceAdmissionError(
-                location=("polynomial", index),
-                code="plane_curve_divisor.coefficient_bound",
-                message="curve coefficients are limited to 32 decimal digits",
-            )
     return degree
 
 
+def _is_canonical_rational(value: object) -> bool:
+    if not isinstance(value, CanonicalRational):
+        return False
+    numerator = getattr(value, "num", None)
+    denominator = getattr(value, "den", None)
+    if type(numerator) is not int or type(denominator) is not int or denominator <= 0:
+        return False
+    return gcd(abs(numerator), denominator) == 1 and (
+        numerator != 0 or denominator == 1
+    )
+
+
+def _rational_component_digits(value: CanonicalRational) -> int:
+    return max(decimal_digit_width(value.num), decimal_digit_width(value.den))
+
+
 def _admit_surface_points(surface: BlowupP2Surface) -> int:
-    if not isinstance(surface.points, tuple) or len(surface.points) > 16:
+    points = getattr(surface, "points", None)
+    if not isinstance(points, tuple) or len(points) > 16:
         raise OperationResourceAdmissionError(
             location=("surface",),
             code="plane_curve_divisor.point_bound",
             message="at most 16 blow-up points are admitted",
         )
     # Validate every point's raw arithmetic before canonicalizing the surface.
-    for point_index, row in enumerate(surface.points):
+    for point_index, row in enumerate(points):
+        row_label = getattr(row, "label", None)
+        row_point = getattr(row, "point", None)
         if not isinstance(row, BlowupPoint) or not isinstance(
-            row.point, RationalProjectivePoint
+            row_point, RationalProjectivePoint
         ):
             _domain(
                 "point_shape",
@@ -119,15 +197,15 @@ def _admit_surface_points(surface: BlowupP2Surface) -> int:
                 ("surface", point_index),
             )
         if (
-            type(row.label) is not str
-            or not 1 <= len(row.label) <= MAX_BLOWUP_LABEL_CHARS
+            type(row_label) is not str
+            or not 1 <= len(row_label) <= MAX_BLOWUP_LABEL_CHARS
         ):
             _domain(
                 "point_label",
                 "blow-up labels must be 1..64 characters",
                 ("surface", point_index),
             )
-        coordinates = row.point.coordinates
+        coordinates = getattr(row_point, "coordinates", None)
         if not isinstance(coordinates, tuple) or len(coordinates) != 3:
             _domain(
                 "point_axis",
@@ -141,13 +219,13 @@ def _admit_surface_points(surface: BlowupP2Surface) -> int:
                     "point coordinates must be canonical rationals",
                     ("surface", point_index, coordinate_index),
                 )
-            if (
-                max(
-                    decimal_digit_width(coordinate.num),
-                    decimal_digit_width(coordinate.den),
+            if not _is_canonical_rational(coordinate):
+                _domain(
+                    "point_scalar",
+                    "point coordinates must be canonical rationals",
+                    ("surface", point_index, coordinate_index),
                 )
-                > MAX_CURVE_DIVISOR_POINT_DIGITS
-            ):
+            if _rational_component_digits(coordinate) > MAX_CURVE_DIVISOR_POINT_DIGITS:
                 raise OperationResourceAdmissionError(
                     location=("surface", point_index, coordinate_index),
                     code="plane_curve_divisor.point_height",
@@ -159,7 +237,7 @@ def _admit_surface_points(surface: BlowupP2Surface) -> int:
                 "blow-up points must be nonzero projective points",
                 ("surface", point_index),
             )
-    return len(surface.points)
+    return len(points)
 
 
 def _reject_duplicate_points(surface: BlowupP2Surface) -> None:
@@ -182,26 +260,29 @@ def _reject_duplicate_points(surface: BlowupP2Surface) -> None:
             )
 
 
-def _admit(request: PlaneCurveStrictTransformRequest) -> tuple[int, int, int]:
+def _admit(
+    polynomial: RationalPolynomial,
+    surface: BlowupP2Surface,
+    projective_coordinate_variables: tuple[str, str, str],
+) -> int:
     """Admit the complete polynomial, point family, and retained result first."""
-    if not isinstance(request, PlaneCurveStrictTransformRequest):
+    if not isinstance(surface, BlowupP2Surface):
         _domain(
-            "request_type",
-            "expected a plane-curve strict-transform request",
-            ("request",),
-        )
-    polynomial, surface = request.polynomial, request.surface
-    if not isinstance(polynomial, RationalPolynomial) or not isinstance(
-        surface, BlowupP2Surface
-    ):
-        _domain(
-            "request_shape",
-            "request must retain canonical polynomial and surface values",
-            ("request",),
+            "surface_type",
+            "expected a canonical labelled blow-up surface",
+            ("surface",),
         )
     degree = _admit_polynomial(polynomial)
-    if tuple(sorted(request.projective_coordinate_variables)) != tuple(
-        sorted(polynomial.variables)
+    polynomial_variables = getattr(polynomial, "variables", ())
+    if (
+        not isinstance(projective_coordinate_variables, tuple)
+        or len(projective_coordinate_variables) != 3
+        or any(
+            type(variable) is not str for variable in projective_coordinate_variables
+        )
+        or len(set(projective_coordinate_variables)) != 3
+        or tuple(sorted(projective_coordinate_variables))
+        != tuple(sorted(polynomial_variables))
     ):
         _domain(
             "coordinate_transport",
@@ -209,6 +290,13 @@ def _admit(request: PlaneCurveStrictTransformRequest) -> tuple[int, int, int]:
             ("projective_coordinate_variables",),
         )
     point_count = _admit_surface_points(surface)
+    labels = tuple(point.label for point in surface.points)
+    if labels != tuple(sorted(labels)):
+        _domain(
+            "surface_labels",
+            "blow-up point labels must be in canonical sorted order",
+            ("surface",),
+        )
     derivative_slots = (degree + 1) * (degree + 2) // 2
     work = (
         6 * point_count * len(polynomial.polynomial.terms) * derivative_slots
@@ -222,19 +310,29 @@ def _admit(request: PlaneCurveStrictTransformRequest) -> tuple[int, int, int]:
         + 4 * degree
         + 16
     )
-    output_bytes = 4096 + point_count * (12 * MAX_BLOWUP_LABEL_CHARS + 3 * 192)
-    if (
-        work > MAX_CURVE_DIVISOR_WORK
-        or intermediate_digits > MAX_CURVE_DIVISOR_INTERMEDIATE_DIGITS
-        or output_bytes > MAX_CURVE_DIVISOR_OUTPUT_BYTES
-    ):
+    allocation_units = (
+        8 * point_count + 4 * len(polynomial.polynomial.terms) + 4 * (degree + 1)
+    )
+    if work > MAX_CURVE_DIVISOR_WORK:
         raise OperationResourceAdmissionError(
             location=("request",),
             code="plane_curve_divisor.work_bound",
-            message="plane-curve divisor computation exceeds its admitted work, growth, or output envelope",
+            message="plane-curve divisor computation exceeds its admitted work bound",
+        )
+    if intermediate_digits > MAX_CURVE_DIVISOR_INTERMEDIATE_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("request",),
+            code="plane_curve_divisor.intermediate_growth_bound",
+            message="plane-curve divisor computation exceeds its admitted coefficient-growth bound",
+        )
+    if allocation_units > MAX_CURVE_DIVISOR_ALLOCATION_UNITS:
+        raise OperationResourceAdmissionError(
+            location=("request",),
+            code="plane_curve_divisor.allocation_bound",
+            message="plane-curve divisor computation exceeds its admitted allocation bound",
         )
     _reject_duplicate_points(surface)
-    return degree, work, intermediate_digits
+    return degree
 
 
 def _multiplicity_at_point(
@@ -277,28 +375,35 @@ def _multiplicity_at_point(
                 )
             if coefficient:
                 return order
-    raise AssertionError("a nonzero homogeneous polynomial has nonzero chart expansion")
+    raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
 
 
 def plane_curve_strict_transform_class(
-    request: PlaneCurveStrictTransformRequest,
+    polynomial: RationalPolynomial,
+    surface: BlowupP2Surface,
+    projective_coordinate_variables: tuple[str, str, str],
 ) -> BlowupDivisorClass:
     """Compute ``dH - sum m_i E_i`` on the request's labelled P2 blow-up."""
-    degree, _work, _height = _admit(request)
-    canonical_surface = construct_surface(request.surface.points)
+    degree = _admit(polynomial, surface, projective_coordinate_variables)
+    canonical_surface = construct_surface(surface.points)
     variable_index = {
         variable: index
-        for index, variable in enumerate(request.projective_coordinate_variables)
+        for index, variable in enumerate(projective_coordinate_variables)
     }
     multiplicities = []
     for blowup_point in canonical_surface.points:
         ordered_coordinates = tuple(
             blowup_point.point.coordinates[variable_index[variable]]
-            for variable in request.polynomial.variables
+            for variable in polynomial.variables
         )
-        assert len(ordered_coordinates) == 3
+        if len(ordered_coordinates) != 3:
+            _domain(
+                "coordinate_transport",
+                "projective coordinate transport did not produce three coordinates",
+                ("projective_coordinate_variables",),
+            )
         multiplicities.append(
-            _multiplicity_at_point(request.polynomial, ordered_coordinates, degree)
+            _multiplicity_at_point(polynomial, ordered_coordinates, degree)
         )
     return construct_divisor_class(canonical_surface, degree, tuple(multiplicities))
 

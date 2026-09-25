@@ -10,4 +10,5 @@ hypergraphs.
 - [Tableau row-reading native helper](plactic-normal-forms.md#reading-an-existing-rsk-tableau)
 - [Disjoint Greene witnesses](greene-witnesses.md)
 - [Strict longest increasing subsequence](longest-increasing-subsequence.md)
+- [Weighted monotone subsequences](weighted-monotone-subsequences.md)
 - [Complete sunflower hypergraphs](sunflower-hypergraphs.md)

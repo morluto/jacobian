@@ -48,10 +48,14 @@ from jacobian.math.combinatorics.algebraic.values import RSKTableauPair
 from jacobian.math.combinatorics.algebraic.weighted_monotone._models import (
     EndpointProfileEntry,
     EndpointProfileResult,
+    WeightedMaximumRequest,
+    WeightedMaximumResult,
     WeightedOrderedWord,
 )
 from jacobian.math.combinatorics.algebraic.weighted_monotone.operations import (
     compute_endpoint_profile,
+    maximum_weight_nondecreasing_subsequence,
+    maximum_weight_nonincreasing_subsequence,
 )
 
 __all__ = [
@@ -67,6 +71,8 @@ __all__ = [
     "SemistandardTableauCheckResult",
     "SemistandardYoungTableauCountResult",
     "StandardTableauCheckResult",
+    "WeightedMaximumRequest",
+    "WeightedMaximumResult",
     "WeightedOrderedWord",
     "check_semistandard_tableau",
     "check_standard_tableau",
@@ -82,6 +88,8 @@ __all__ = [
     "longest_decreasing_subsequence",
     "longest_increasing_subsequence",
     "matrix_biword",
+    "maximum_weight_nondecreasing_subsequence",
+    "maximum_weight_nonincreasing_subsequence",
     "normalize_biword",
     "partition_dominance",
     "plactic_equivalence",

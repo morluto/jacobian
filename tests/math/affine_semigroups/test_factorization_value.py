@@ -107,12 +107,26 @@ def test_public_tool_preserves_factorization_output_admission_error() -> None:
         tool.run(request)
 
 
-def test_deserialized_factorization_checks_its_authored_relation() -> None:
+def test_deserialized_factorization_round_trips_structurally() -> None:
     semigroup = _semigroup()
-    result = evaluate_factorization(semigroup, (2, 3, 4)).model_dump(mode="json")
-    result["target"] = [0, 0]
-    with pytest.raises(ValidationError):
-        AffineFactorization.model_validate(result)
+    result = json.loads(evaluate_factorization(semigroup, (2, 3, 4)).model_dump_json())
+    result["target"] = ["0", "0"]
+    decoded = AffineFactorization.model_validate_json(json.dumps(result))
+    assert decoded.target == (0, 0)
+
+
+def test_canonical_factorization_accepts_large_exact_target() -> None:
+    semigroup = PositiveAffineSemigroup(
+        configuration=AffineConfiguration(
+            row_labels=("r",), generator_labels=("g",), entries=((1,),)
+        ),
+        grading=(CanonicalRational(num=1, den=1),),
+    )
+    value = 10**41
+    factorization = AffineFactorization(
+        semigroup=semigroup, coordinates=(value,), target=(value,)
+    )
+    assert factorization.target == (value,)
 
 
 def test_public_operation_example_dispatches_and_round_trips() -> None:

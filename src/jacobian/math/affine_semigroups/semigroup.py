@@ -141,8 +141,8 @@ class AffineFactorization(StrictModel):
     """One exact factorization, bound to its positive semigroup parent.
 
     ``coordinates`` use the retained generator axis and ``target`` uses its
-    ambient row axis.  The defining matrix equation is checked when a caller
-    supplies the value; producers use ``_from_kernel`` after computing it.
+    ambient row axis. The carrier validates structure; mathematical consumers
+    check the defining relation when they rely on it.
     """
 
     semigroup: PositiveAffineSemigroup
@@ -161,14 +161,6 @@ class AffineFactorization(StrictModel):
         if any(value < 0 for value in self.coordinates):
             raise _err(
                 "factorization_sign", "factorization coordinates must be nonnegative"
-            )
-        if any(
-            decimal_digit_width(value) > MAX_AFFINE_FACTOR_RESULT_DIGITS
-            for value in self.target
-        ):
-            raise _err(
-                "factorization_digits",
-                "factorization target exceeds its digit envelope",
             )
         return self
 

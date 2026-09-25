@@ -17,12 +17,13 @@ This follows the standard factorization homomorphism
 for affine semigroups in García-Sánchez, Ojeda, and Rosales, [*Affine semigroups
 having a unique Betti element*](https://arxiv.org/abs/1203.4138), Section 1.
 
-The exact matrix product is computed once. A decoded caller-supplied
-`AffineFactorization` has its claimed relation checked when validated, while
-the trusted operation constructor does not replay the product. The operation
-admits at most 8 ambient rows and 10 generators, 32 decimal digits per
-coefficient, an arithmetic work estimate, and the corresponding exact output
-digit bound before multiplication.
+The exact matrix product is computed once. `AffineFactorization` validates its
+axes and nonnegative coefficients without replaying the matrix product during
+deserialization; a consumer checks the defining relation when it relies on that
+claim. The operation admits at most 8 ambient rows and 10 generators, 32 decimal
+digits per coefficient, an arithmetic work estimate, and the serialized output
+size before multiplication. These execution limits do not constrain the
+canonical carrier's exact integer range.
 
 For generators `(1,-1)`, `(-1,2)`, and `(0,1)`, coefficients `(2,3,4)` map
 to `(-1,8)`. The positive grading `(3,2)` certifies that all three generators

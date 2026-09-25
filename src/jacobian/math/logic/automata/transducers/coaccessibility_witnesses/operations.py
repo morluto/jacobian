@@ -12,9 +12,12 @@ from jacobian.math.logic.automata.transducers.coaccessibility_witnesses._models 
 from jacobian.math.logic.automata.transducers.operations import _admit_transducer
 from jacobian.math.logic.automata.transducers.values import (
     MAX_FST_RESULT_WORD_LENGTH,
+    MAX_FST_STATES,
     SubseqTransition,
     SubsequentialTransducer,
 )
+
+MAX_COACCESSIBLE_OUTPUT_SYMBOLS = MAX_FST_STATES * MAX_FST_RESULT_WORD_LENGTH
 
 
 def _resource_error(code: str, message: str) -> OperationResourceAdmissionError:
@@ -94,6 +97,12 @@ def coaccessible_state_witnesses(
         paths.append((start, tuple(suffix), tuple(trace)))
         output_parts.append(tuple(parts))
         output_lengths.append(output_length)
+
+    if sum(output_lengths) > MAX_COACCESSIBLE_OUTPUT_SYMBOLS:
+        raise _resource_error(
+            "coaccessible_output_budget_exceeded",
+            "coaccessible witness outputs exceed the aggregate symbol bound",
+        )
 
     path_data = tuple(paths)
     edge_paths = tuple(

@@ -141,8 +141,7 @@ def _admit_one_face(
     basepoint: object,
     vertex_set: set[str],
     edge_by_id: dict[str, GaugeEdge],
-    total_steps: int,
- ) -> None:
+) -> None:
     if not steps:
         if not _is_label(basepoint) or basepoint not in vertex_set:
             _reject(
@@ -212,7 +211,7 @@ def _admit(request: FiniteGroupGaugeComplexRequest) -> None:
             "group", "lattice_gauge.complex.group_shape", "group table is malformed"
         )
     del table, inverse, identity
-    _, _, vertex_set, edge_by_id, _ = _admit_lattice(lattice)
+    _, _, vertex_set, edge_by_id = _admit_lattice(lattice)
     _admit_faces(faces, vertex_set, edge_by_id)
 
 

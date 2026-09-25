@@ -141,10 +141,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     MathTool(
         operation_id="discrepancy.theory.optimum.compute",
         title="Search for a coloring minimizing maximum discrepancy",
-        description="Minimize the maximum absolute set imbalance over all +1/-1 "
-        "colorings of a finite set system: small instances use an admitted "
-        "exact coloring scan; larger instances use bounded HiGHS incumbent "
-        "search with an exact pseudo-boolean proof. "
+        description="Find the minimum possible maximum absolute set imbalance "
+        "over all +1/-1 colorings of a finite set system. "
         "Solver exhaustion and backend failure are operational tool errors.",
         request_type=DiscrepancyOptimumRequest,
         result_type=DiscrepancyOptimumResult,

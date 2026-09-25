@@ -66,6 +66,10 @@ def _check_integral_form(form: IntegralQuadraticForm) -> tuple[int, ...]:
         )
     if (
         form.domain != "ZZ"
+        or any(
+            not isinstance(label, str) or not label or len(label) > 128
+            for label in form.axis
+        )
         or len(set(form.axis)) != n
         or len(form.diagonal_coefficients) != n
         or n + len(form.cross_terms) > MAX_INTEGRAL_QUADRATIC_FORM_TERMS
@@ -146,7 +150,18 @@ def reduce_integral_form_modulus(
             "work_bound", "coefficient reduction exceeds its digit-work bound"
         )
     label_size = sum(len(label) for label in request.form.axis)
-    result_digits = modulus_digits + label_size + support * modulus_digits + 8 * support
+    # Bound the complete returned value, including retained source coefficients
+    # and the axis/support structures duplicated in source and target.
+    source_coefficient_digits = sum(
+        _digits(coefficient) for coefficient in coefficients
+    )
+    result_digits = (
+        modulus_digits
+        + 2 * label_size
+        + source_coefficient_digits
+        + support * modulus_digits
+        + 16 * support
+    )
     if result_digits > MAX_MODULAR_QUADRATIC_RESULT_DIGITS:
         raise _resource_error(
             "result_bound", "modular polynomial exceeds its exact-result bound"
@@ -217,7 +232,11 @@ def _check_modular_values(
         len(polynomial.cross_terms) + n > MAX_MODULAR_QUADRATIC_FORM_TERMS
         or positions != tuple(sorted(set(positions)))
         or any(
-            not 0 <= term.left < term.right < n
+            not isinstance(term.left, int)
+            or isinstance(term.left, bool)
+            or not isinstance(term.right, int)
+            or isinstance(term.right, bool)
+            or not 0 <= term.left < term.right < n
             or not isinstance(term.coefficient, int)
             or isinstance(term.coefficient, bool)
             or not 0 < term.coefficient < polynomial.modulus

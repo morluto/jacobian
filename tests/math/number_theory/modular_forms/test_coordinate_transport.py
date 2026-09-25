@@ -151,6 +151,13 @@ def test_transport_catalog_operation_round_trips_target_coordinates() -> None:
     )
 
 
+def test_transport_rejects_incomplete_native_inclusion() -> None:
+    source = _coordinates(1, 4, "M", "level-one-e4-e6-monomials-v1", (1,))
+    incomplete = ModularFormSpaceInclusion.model_construct(map_kind="natural_gamma0_level_inclusion")
+    with pytest.raises(OperationDomainValidationError, match="contain its map kind"):
+        modular_form_coordinates_transport(source, incomplete)
+
+
 def test_transport_rejects_forged_inclusion_and_source_mismatch() -> None:
     source = _coordinates(1, 4, "M", "level-one-e4-e6-monomials-v1", (1,))
     target = ModularFormSpace(level=2, weight=4, kind="M")

@@ -1519,8 +1519,11 @@ def modular_form_space_inclusion(
     )
     if issue is not None:
         reason, message = issue
+        location = ("source_space",)
+        if source_space != target_space and source_space is not None and target_space is not None:
+            location = ("target_space",)
         raise OperationDomainValidationError(
-            location=("source_space",),
+            location=location,
             code=f"modular_form.inclusion_{reason}",
             message=message,
         )
@@ -1552,6 +1555,13 @@ def modular_form_coordinates_transport(
             location=("inclusion",),
             code="modular_form.transport_inclusion_type",
             message="inclusion must be an exact modular-form space inclusion value",
+        )
+    required_fields = ("map_kind", "source_space", "target_space")
+    if any(not hasattr(inclusion, field) for field in required_fields):
+        raise OperationDomainValidationError(
+            location=("inclusion",),
+            code="modular_form.transport_inclusion_incomplete",
+            message="inclusion must contain its map kind, source space, and target space",
         )
     source_space = form.space
     issue = natural_gamma0_inclusion_issue(
@@ -1593,7 +1603,7 @@ def modular_form_coordinates_transport(
     total_work += solve_work
     if total_work > MAX_PARI_BASIS_WORK:
         raise OperationResourceAdmissionError(
-            location=("target_space",),
+            location=("inclusion", "target_space"),
             code="modular_form.transport_work_bound",
             message="combined source and target basis work exceeds the transport envelope",
         )
@@ -1630,7 +1640,7 @@ def modular_form_coordinates_transport(
     result_bytes = target_plan.dimension * (2 * result_digit_bound + 32) + 512
     if result_bytes > MAX_PARI_BASIS_OUTPUT_BYTES:
         raise OperationResourceAdmissionError(
-            location=("target_space",),
+            location=("inclusion", "target_space"),
             code="modular_form.transport_output_bound",
             message="transport coordinates exceed the exact output-byte envelope",
         )

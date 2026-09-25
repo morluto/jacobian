@@ -15,14 +15,14 @@ from jacobian.math.topology.cellular_sheaves._kernel import (
 )
 from jacobian.math.topology.cellular_sheaves._models import (
     MAX_SHEAF_ENTRY_DIGITS,
-    MAX_SHEAF_HODGE_OUTPUT_CHARS,
+    MAX_SHEAF_HODGE_RESULT_DIGIT_WORK,
     MAX_SHEAF_TOTAL_STALK_RANK,
     FiniteCellularSheaf,
     SheafHodgeRequest,
     SheafHodgeResult,
     SheafScalar,
+    sheaf_scalar_digit_work,
     sheaf_scalar_digits,
-    sheaf_scalar_json_bound,
 )
 from jacobian.math.topology.cellular_sheaves.operations import sheaf_cohomology
 
@@ -63,7 +63,6 @@ def _admit_hodge_scalars_and_output(
     dimensions: tuple[int, ...],
     matrix_cells: int,
 ) -> None:
-    source_chars = len(sheaf.model_dump_json())
     max_scalar_digits = 1
     for restriction in (*sheaf.cover_restrictions, *sheaf.derived_restrictions):
         for row in restriction.entries:
@@ -94,19 +93,20 @@ def _admit_hodge_scalars_and_output(
     laplacian_entry_digits = (
         2 * max_scalar_digits * max_contractions + len(str(max_contractions + 1)) + 4
     )
-    output_chars = source_chars + sum(
-        2 * len(stalk.basis) ** 2 for stalk in sheaf.stalks
-    )
+    result_digit_work = sum(len(stalk.basis) ** 2 for stalk in sheaf.stalks)
     for size in dimensions:
         # Exact elimination entries are quotients of minors. Bound both
         # rational components using Hadamard on the admitted Hodge entries.
         result_digits = max(1, size * (laplacian_entry_digits + 2 * size + 4))
-        output_chars += sheaf_scalar_json_bound(size * size, result_digits)
-    if output_chars > MAX_SHEAF_HODGE_OUTPUT_CHARS:
+        # Up, down, and total Laplacians each have size^2 entries; a harmonic
+        # basis has at most size^2 coordinates. Hadamard bounds their scalar
+        # component heights by the same exact elimination estimate.
+        result_digit_work += sheaf_scalar_digit_work(4 * size * size, result_digits)
+    if result_digit_work > MAX_SHEAF_HODGE_RESULT_DIGIT_WORK:
         raise OperationResourceAdmissionError(
             location=("sheaf",),
-            code="topology.cellular_sheaf.hodge.output_chars",
-            message="the conservative exact Hodge output bound exceeds its character envelope",
+            code="topology.cellular_sheaf.hodge.result_digit_work",
+            message="the conservative exact Hodge scalar-height bound exceeds its digit-work envelope",
         )
 
 

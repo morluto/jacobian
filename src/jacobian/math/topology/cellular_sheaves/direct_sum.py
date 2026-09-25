@@ -18,7 +18,7 @@ from jacobian.math.topology.cellular_sheaves._models import (
     MAX_SHEAF_DERIVED_RESTRICTIONS,
     MAX_SHEAF_ENTRY_DIGITS,
     MAX_SHEAF_RESTRICTION_CELLS,
-    MAX_SHEAF_RESTRICTION_OUTPUT_CHARS,
+    MAX_SHEAF_RESTRICTION_RESULT_DIGIT_WORK,
     MAX_SHEAF_SIMPLICES,
     MAX_SHEAF_STALK_RANK,
     MAX_SHEAF_TOTAL_STALK_RANK,
@@ -27,8 +27,8 @@ from jacobian.math.topology.cellular_sheaves._models import (
     SheafScalar,
     SheafStalk,
     _require_field_scalars,
+    sheaf_scalar_digit_work,
     sheaf_scalar_digits,
-    sheaf_scalar_json_bound,
 )
 
 RestrictionKey = tuple[Simplex, Simplex]
@@ -253,18 +253,13 @@ def direct_sum(  # noqa: C901
             "matrix_cells_bound",
             "direct-sum restriction matrices exceed their cell bound",
         )
-    estimated_chars = (
-        len(left.model_dump_json())
-        + len(right.model_dump_json())
-        + sheaf_scalar_json_bound(output_matrix_cells)
-        + summed_rank * summed_rank * 3
-        + 256 * len(cells)
-        + 1024 * len(left_maps)
+    result_digit_work = sheaf_scalar_digit_work(
+        output_matrix_cells, MAX_SHEAF_ENTRY_DIGITS
     )
-    if estimated_chars > MAX_SHEAF_RESTRICTION_OUTPUT_CHARS:
+    if result_digit_work > MAX_SHEAF_RESTRICTION_RESULT_DIGIT_WORK:
         raise _resource(
-            "output_bound",
-            "direct-sum result is predicted to exceed the result-size bound",
+            "result_digit_work_bound",
+            "direct-sum restriction scalars exceed their digit-work bound",
         )
 
     sum_stalks: list[SheafStalk] = []

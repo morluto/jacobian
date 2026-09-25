@@ -10,13 +10,15 @@ from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.topology._models import canonical_complex
 from jacobian.math.topology.cellular_sheaves import (
     SheafField,
-    SheafMorphismRequest,
     SheafMorphismResult,
     SheafStalk,
     from_cover_maps,
     morphism,
 )
-from jacobian.math.topology.cellular_sheaves._models import CoverRestrictionMatrix
+from jacobian.math.topology.cellular_sheaves._models import (
+    CoverRestrictionMatrix,
+    SheafMorphismRequest,
+)
 from jacobian.math.topology.cellular_sheaves.extensions import (
     SheafMorphismComposeRequest,
     compose_morphisms,

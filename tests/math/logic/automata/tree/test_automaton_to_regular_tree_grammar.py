@@ -221,3 +221,19 @@ def test_source_bound_result_and_operation_declaration() -> None:
         if tool.operation_id == "tree_automaton.to_regular_tree_grammar.compute"
     )
     assert operation.result_type is TreeAutomatonToRegularTreeGrammarResult
+
+
+def test_unproductive_finals_do_not_require_a_synthetic_start() -> None:
+    automaton = BottomUpTreeAutomaton(
+        state_count=64,
+        arity=(0, 1),
+        transitions=(
+            TreeAutomatonTransition(symbol=0, child_states=(), target_state=0),
+        ),
+        final_states=(62, 63),
+    )
+
+    grammar = tree_automaton_to_regular_tree_grammar(automaton)
+
+    assert grammar.nonterminal_count == 1
+    assert grammar.productions == ()

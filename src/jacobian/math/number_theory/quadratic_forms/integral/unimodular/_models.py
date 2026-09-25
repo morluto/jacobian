@@ -76,6 +76,8 @@ class UnimodularChangeRequest(StrictModel):
         if len(entries) > MAX_UNIMODULAR_CHANGE_AXIS:
             raise _error("matrix_shape_bound", "change matrix is limited to 32 rows")
         for row in entries:
+            if not isinstance(row, (tuple, list)):
+                return value
             if len(row) > MAX_UNIMODULAR_CHANGE_AXIS:
                 raise _error(
                     "matrix_shape_bound", "change matrix is limited to 32 columns"
@@ -84,9 +86,7 @@ class UnimodularChangeRequest(StrictModel):
                 if isinstance(entry, str):
                     digits = len(entry.lstrip("-"))
                 elif isinstance(entry, int) and not isinstance(entry, bool):
-                    digits = (entry.bit_length() * 30_103 + 99_999) // 100_000
-                    if digits > 128 and entry.bit_length() <= 426:
-                        digits = 128 if abs(entry) < 10**128 else 129
+                    digits = 128 if abs(entry) < 10**128 else 129
                 else:
                     continue
                 if digits > 128:

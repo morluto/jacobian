@@ -145,7 +145,7 @@ def _require_canonical_form(form: IntegralQuadraticForm) -> int:
         or any(
             not isinstance(value, int)
             or isinstance(value, bool)
-            or _digits(value) > MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS
+            or abs(value) >= 10**MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS
             for value in form.diagonal_coefficients
         )
     ):
@@ -165,7 +165,7 @@ def _require_canonical_form(form: IntegralQuadraticForm) -> int:
             or not isinstance(term.coefficient, int)
             or isinstance(term.coefficient, bool)
             or term.coefficient == 0
-            or _digits(term.coefficient) > MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS
+            or abs(term.coefficient) >= 10**MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS
         ):
             raise _failure("cross_term_shape", "form cross terms must be canonical")
         positions.append((term.left, term.right))
@@ -201,8 +201,11 @@ def _preflight(request: UnimodularChangeRequest) -> list[list[int]]:
             "matrix_entries", "matrix entries must form a square integer matrix"
         )
     matrix = [[int(value) for value in row] for row in request.matrix.entries]
-    entry_digits = max((_digits(value) for row in matrix for value in row), default=1)
-    if entry_digits > MAX_CHANGE_MATRIX_ENTRY_DIGITS:
+    if any(
+        abs(value) >= 10**MAX_CHANGE_MATRIX_ENTRY_DIGITS
+        for row in matrix
+        for value in row
+    ):
         raise _resource_failure(
             "matrix_entry_bound",
             f"change matrix entries are limited to {MAX_CHANGE_MATRIX_ENTRY_DIGITS} digits",
@@ -210,10 +213,13 @@ def _preflight(request: UnimodularChangeRequest) -> list[list[int]]:
 
     # Every inverse entry is an (n-1)-minor. Hadamard's inequality and the
     # larger n*max-entry row bound give a cheap conservative decimal envelope.
+    # The same bound at order n covers every determinant intermediate before
+    # the exact ±1 test.
     max_entry = max((abs(value) for row in matrix for value in row), default=0)
     factor_bits = max(1, n * max_entry).bit_length()
     inverse_digits = _decimal_digit_upper_bound(factor_bits * max(0, n - 1))
-    if inverse_digits > MAX_CHANGE_OUTPUT_INTEGER_DIGITS:
+    determinant_digits = _decimal_digit_upper_bound(factor_bits * n)
+    if max(inverse_digits, determinant_digits) > MAX_CHANGE_OUTPUT_INTEGER_DIGITS:
         raise _resource_failure(
             "inverse_growth_bound",
             "the conservative exact inverse bound exceeds the admitted output digits",
@@ -259,7 +265,7 @@ def _preflight(request: UnimodularChangeRequest) -> list[list[int]]:
             "result_growth_bound",
             "source, transport maps, and transformed form exceed the aggregate result bound",
         )
-    estimated_work = 5 * n**3 + n * n
+    estimated_work = 5 * n**3 + n * n + 3 * len(request.form.cross_terms)
     if estimated_work > MAX_CHANGE_WORK:
         raise _resource_failure(
             "work_bound", "unimodular change exceeds the admitted work bound"

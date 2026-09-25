@@ -114,6 +114,28 @@ def test_degree_one_qq_field_has_identity_orbit_and_stabilizer() -> None:
     )
     assert type(result).model_validate(result.model_dump()) == result
 
+def test_orbit_accepts_wide_coordinates_when_zero_products_preserve_them() -> None:
+    field = splitting_field(SplittingFieldRequest(polynomial=_poly((-2, 0, 1)))).field
+    denominator = 10**127 + 1
+    element = SimpleNumberFieldElement(
+        presentation=field.extension,
+        coefficients_ascending=(
+            CanonicalRational.from_fraction(Fraction(1, denominator)),
+            CanonicalRational.from_fraction(Fraction(1, denominator)),
+        ),
+    )
+
+    result = element_embedding_orbit(
+        ElementEmbeddingOrbitRequest(field=field, element=element)
+    )
+
+    assert len(result.orbit) == 2
+    assert {tuple(c.as_fraction() for c in value.coefficients_ascending) for value in result.orbit} == {
+        (Fraction(1, denominator), Fraction(1, denominator)),
+        (Fraction(1, denominator), Fraction(-1, denominator)),
+    }
+
+
 def test_orbit_rejects_element_from_isomorphic_but_distinct_parent() -> None:
     first = splitting_field(SplittingFieldRequest(polynomial=_poly((-2, 0, 1)))).field
     second = splitting_field(SplittingFieldRequest(polynomial=_poly((-8, 0, 1)))).field

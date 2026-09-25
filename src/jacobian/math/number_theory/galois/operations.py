@@ -1175,6 +1175,8 @@ def _admit_element_image(
     image_scalar, image_alpha = _coords(automorphism.basis_images[1])
 
     def product_digit_pair(left: Fraction, right: Fraction) -> tuple[int, int]:
+        if left == 0 or right == 0:
+            return (1, 1)
         return (
             len(str(abs(left.numerator))) + len(str(abs(right.numerator))),
             len(str(left.denominator)) + len(str(right.denominator)),

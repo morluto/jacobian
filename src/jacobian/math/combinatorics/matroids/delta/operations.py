@@ -155,10 +155,12 @@ def distance_profile(
     """
 
     try:
+        if not isinstance(delta_matroid, FiniteDeltaMatroid):
+            delta_matroid = FiniteDeltaMatroid.model_validate(delta_matroid)
         system = FiniteFeasibleSetSystem(
             ground=delta_matroid.ground, feasible=delta_matroid.feasible
         )
-    except (ValidationError, ValueError) as exc:
+    except (AttributeError, TypeError, ValidationError, ValueError) as exc:
         raise OperationDomainValidationError(
             location=("delta_matroid",),
             code="delta_matroid.source_not_valid",

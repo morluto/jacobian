@@ -107,6 +107,23 @@ def test_profile_matches_independent_oracle_for_every_small_delta_matroid() -> N
             ) == DeltaMatroidDistanceProfileRequest(delta_matroid=source)
 
 
+def test_profile_rejects_inconsistent_histogram_and_coerced_integers() -> None:
+    source = FiniteDeltaMatroid(ground=("a",), feasible=((),))
+    payload = {
+        "delta_matroid": source.model_dump(),
+        "distance_by_mask": [0, 1],
+        "nearest_feasible_count_by_mask": [1, 1],
+        "distance_histogram": [0, 2],
+    }
+    with pytest.raises(ValueError, match="distance histogram must count"):
+        PublicDeltaMatroidDistanceProfile.model_validate(payload)
+
+    for invalid in (False, 0.0, "0"):
+        malformed = {**payload, "distance_by_mask": [invalid, 1], "distance_histogram": [1, 1]}
+        with pytest.raises(ValueError):
+            PublicDeltaMatroidDistanceProfile.model_validate(malformed)
+
+
 def test_empty_ground_profile_and_json_round_trip() -> None:
     source = FiniteDeltaMatroid(ground=(), feasible=((),))
     result = _distance_profile(DeltaMatroidDistanceProfileRequest(delta_matroid=source))
@@ -142,6 +159,15 @@ def test_request_schema_declares_profile_and_source_admission_bounds() -> None:
         "max_ground_label_utf8_bytes": 2_048,
         "max_symmetric_exchange_candidate_checks_per_replay": 250_000,
     }
+
+
+def test_native_malformed_profile_source_is_domain_error() -> None:
+    from jacobian.math.combinatorics.matroids.delta.operations import distance_profile
+
+    malformed = FiniteDeltaMatroid.model_construct()
+    with pytest.raises(OperationDomainValidationError) as error:
+        distance_profile(malformed)
+    assert error.value.errors()[0]["type"] == "delta_matroid.source_not_valid"
 
 
 def test_forged_non_delta_source_is_rejected() -> None:

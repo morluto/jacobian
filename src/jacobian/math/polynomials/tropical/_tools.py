@@ -167,6 +167,10 @@ def compute_matrix_multiply(request: MatrixMultiplyRequest) -> MatrixResult:
     )
 
 
+def compute_matrix_add(request: MatrixAddRequest) -> MatrixResult:
+    return MatrixResult._from_kernel(tropical_matrix_add(request.left, request.right))
+
+
 def compute_matrix_power(request: MatrixPowerRequest) -> MatrixResult:
     return MatrixResult._from_kernel(
         tropical_matrix_power(request.matrix, request.exponent)
@@ -636,6 +640,31 @@ TOOLS: MathTools = (
         ),
     ),
     MathTool(
+        operation_id="tropical.matrix.add.compute",
+        title="Add tropical matrices",
+        description=(
+            "Add tropical matrix entries coordinatewise while preserving the "
+            "shared semiring and identical labelled row and column axes."
+        ),
+        request_type=MatrixAddRequest,
+        result_type=MatrixResult,
+        run=compute_matrix_add,
+        tags=("tropical", "matrix", "exact"),
+        examples=(
+            OperationExample(
+                name="matrix_add",
+                description=(
+                    "Take the entrywise minimum of two matrices with identical "
+                    "MIN_PLUS semiring and labelled axes."
+                ),
+                input={
+                    "left": _matrix(((0, 4), (3, 1))),
+                    "right": _matrix(((2, 1), (3, 5))),
+                },
+            ),
+        ),
+    ),
+    MathTool(
         operation_id="tropical.matrix.multiply.compute",
         title="Multiply tropical matrices",
         description="Compute exact labelled-axis tropical matrix multiplication.",
@@ -736,6 +765,7 @@ __all__ = [
     "TOOLS",
     "compute_assignment",
     "compute_finite_power_sum",
+    "compute_matrix_add",
     "compute_matrix_multiply",
     "compute_matrix_power",
     "compute_minor_assignments",

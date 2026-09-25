@@ -528,6 +528,24 @@ class BivariateHypersurfaceRequest(StrictModel):
         return self
 
 
+class MatrixAddRequest(StrictModel):
+    left: TropicalMatrix
+    right: TropicalMatrix
+
+    @model_validator(mode="after")
+    def require_matching_axes(self) -> Self:
+        if (
+            self.left.semiring != self.right.semiring
+            or self.left.row_axis != self.right.row_axis
+            or self.left.column_axis != self.right.column_axis
+        ):
+            raise _validation_error(
+                "matrix_mismatch",
+                "matrices must have identical semiring and labelled axes",
+            )
+        return self
+
+
 class MatrixMultiplyRequest(StrictModel):
     left: TropicalMatrix
     right: TropicalMatrix
@@ -713,6 +731,7 @@ __all__ = [
     "BivariateRegularSubdivisionRequest",
     "FinitePowerSumResult",
     "InfinityCase",
+    "MatrixAddRequest",
     "MatrixAssignmentRequest",
     "MatrixFinitePowerSumRequest",
     "MatrixMinorAssignmentsRequest",

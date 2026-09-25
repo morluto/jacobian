@@ -1540,6 +1540,35 @@ def tropical_polynomial_univariate_newton_polygon(
     )
 
 
+def tropical_matrix_add(left: TropicalMatrix, right: TropicalMatrix) -> TropicalMatrix:
+    """Add matrices entrywise in one tropical semiring on identical axes."""
+    _admit_matrix(left)
+    _admit_matrix(right)
+    if (
+        left.semiring != right.semiring
+        or left.row_axis != right.row_axis
+        or left.column_axis != right.column_axis
+    ):
+        raise OperationDomainValidationError(
+            location=("right",),
+            code="tropical.matrix_mismatch",
+            message="matrices must have identical semiring and labelled axes",
+        )
+    rows = tuple(
+        tuple(
+            tropical_scalar_add(left.semiring, left_entry, right_entry)[0]
+            for left_entry, right_entry in zip(left_row, right_row, strict=True)
+        )
+        for left_row, right_row in zip(left.entries, right.entries, strict=True)
+    )
+    return TropicalMatrix(
+        semiring=left.semiring,
+        row_axis=left.row_axis,
+        column_axis=left.column_axis,
+        entries=rows,
+    )
+
+
 def tropical_matrix_multiply(
     left: TropicalMatrix, right: TropicalMatrix
 ) -> TropicalMatrix:
@@ -1842,6 +1871,7 @@ def tropical_matrix_minor_assignment_profiles(
 
 __all__ = [
     "tropical_assignment_profile",
+    "tropical_matrix_add",
     "tropical_matrix_finite_power_sum",
     "tropical_matrix_minor_assignment_profiles",
     "tropical_matrix_multiply",

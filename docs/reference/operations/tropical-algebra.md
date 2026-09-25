@@ -75,6 +75,16 @@ minimum.
 
 ## Tropical assignment profiles
 
+`tropical.matrix.add.compute` applies tropical addition to each pair of entries
+in matrices with the same semiring and exactly matching labelled row and column
+axes. It preserves those axes and returns the ordinary `TropicalMatrix` value.
+The operation uses the existing 4,096-cell and 8,192-digit scalar admission.
+Each result entry is selected from its two operands by exact min/max comparison,
+so arithmetic does not increase scalar height; work and newly allocated cells
+are linear in the matrix cell count. Empty row or column axes are preserved.
+
+## Tropical assignment profiles
+
 `tropical.matrix.assignment_profile.compute` accepts an `n × n` tropical
 matrix, with `n ≤ 8`. Row and column axes are distinct labelled sets; they
 must have equal lengths, but their labels need not agree. Each returned

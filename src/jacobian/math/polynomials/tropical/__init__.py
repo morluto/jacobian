@@ -16,6 +16,7 @@ from jacobian.math.polynomials.tropical.hypersurface import (
 )
 from jacobian.math.polynomials.tropical.operations import (
     tropical_assignment_profile,
+    tropical_matrix_add,
     tropical_matrix_finite_power_sum,
     tropical_matrix_minor_assignment_profiles,
     tropical_matrix_multiply,
@@ -87,6 +88,7 @@ __all__ = [
     "tropical_assignment_profile",
     "tropical_bivariate_hypersurface",
     "tropical_bivariate_regular_subdivision",
+    "tropical_matrix_add",
     "tropical_matrix_finite_power_sum",
     "tropical_matrix_minor_assignment_profiles",
     "tropical_matrix_multiply",

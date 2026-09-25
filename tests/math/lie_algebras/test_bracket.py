@@ -463,8 +463,7 @@ class TestBracketAdmission:
             structure_constants=bad_constants,
             _jacobi_snapshot=(SL2_BASIS, bad_constants),
         )
-        with pytest.raises(AttributeError):
-            bad._jacobi_snapshot = (SL2_BASIS, bad_constants)
+        bad.__dict__["_jacobi_snapshot"] = (SL2_BASIS, bad_constants)
         with pytest.raises(OperationDomainValidationError) as exc_info:
             lie_bracket(
                 bad, _element(SL2_BASIS, (1, 0, 0)), _element(SL2_BASIS, (0, 1, 0))
@@ -489,6 +488,47 @@ class TestBracketAdmission:
             )
         )
         admitted_abelian.__dict__["structure_constants"] = non_lie_constants
+
+        with pytest.raises(OperationDomainValidationError) as exc_info:
+            lie_bracket(
+                admitted_abelian,
+                _element(SL2_BASIS, (1, 0, 0)),
+                _element(SL2_BASIS, (0, 1, 0)),
+            )
+
+        assert exc_info.value.errors()[0]["type"] == "lie_algebra.jacobi_identity"
+
+    def test_mutated_table_and_forged_private_snapshot_are_revalidated(self) -> None:
+        admitted_abelian = _algebra(SL2_BASIS, ())
+        non_lie_constants = tuple(
+            StructureConstant.model_construct(
+                i=i,
+                j=j,
+                k=k,
+                coefficient=SL2.structure_constants[0].coefficient.from_integer_ratio(
+                    coefficient, 1
+                ),
+            )
+            for i, j, k, coefficient in (
+                (0, 1, 2, 1),
+                (0, 2, 0, -2),
+                (1, 2, 1, -2),
+            )
+        )
+        admitted_abelian.__dict__["structure_constants"] = non_lie_constants
+        admitted_abelian.__dict__["_jacobi_snapshot"] = (
+            SL2_BASIS,
+            tuple(
+                (
+                    constant.i,
+                    constant.j,
+                    constant.k,
+                    constant.coefficient.num,
+                    constant.coefficient.den,
+                )
+                for constant in non_lie_constants
+            ),
+        )
 
         with pytest.raises(OperationDomainValidationError) as exc_info:
             lie_bracket(

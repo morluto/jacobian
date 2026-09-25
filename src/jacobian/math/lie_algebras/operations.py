@@ -103,11 +103,9 @@ def _as_algebra(
     # Preserve operation-specific work admission even for previously validated
     # values. Its bounded field checks also precede snapshot comparison.
     _admit_lie_algebra_limits(value)
-    # Trusted `model_construct` values have no snapshot. Ordinary validated
-    # values can skip Jacobi only while their exact immutable content matches
-    # the private snapshot recorded at the proof boundary.
-    if value.has_current_jacobi_admission():
-        return value
+    # Pydantic's frozen models still expose mutable __dict__ storage. Reparse
+    # every native value at the operation boundary so no caller can replace
+    # fields (or any purported admission fact) after construction.
     try:
         return FiniteDimensionalLieAlgebra.model_validate(
             value.model_dump(mode="python")

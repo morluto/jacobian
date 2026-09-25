@@ -116,6 +116,14 @@ def saturation_predecessor(
     return in_saturation((point[0] - semigroup_point[0], point[1] - semigroup_point[1]))
 
 
+def test_smallest_extreme_generator_makes_admission_order_independent() -> None:
+    for vectors in (
+        ((100_000, 0), (1, 0), (0, 1)),
+        ((1, 0), (100_000, 0), (0, 1)),
+    ):
+        assert fundamental_holes(_semigroup(vectors)).holes == ()
+
+
 def test_parity_holes_reduce_to_one_fundamental_hole() -> None:
     result = fundamental_holes(_semigroup(((2, 0), (0, 2), (1, 1), (1, 0))))
 

@@ -73,13 +73,17 @@ def _extreme_source_generators(
     columns = configuration.columns_vectors
 
     def on_ray(ray: tuple[int, int]) -> tuple[int, int]:
-        for column in columns:
+        matches = [
+            (column[0], column[1])
+            for column in columns
             if (
                 ray[0] * column[1] - ray[1] * column[0] == 0
                 and ray[0] * column[0] + ray[1] * column[1] > 0
-            ):
-                return (column[0], column[1])
-        raise ArithmeticError("a cone ray has no source generator")
+            )
+        ]
+        if not matches:
+            raise ArithmeticError("a cone ray has no source generator")
+        return min(matches, key=lambda column: column[0] ** 2 + column[1] ** 2)
 
     first, second = on_ray(lower), on_ray(upper)
     determinant = first[0] * second[1] - first[1] * second[0]

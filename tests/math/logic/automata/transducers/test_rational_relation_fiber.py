@@ -138,6 +138,20 @@ def test_empty_input_and_empty_output_pair_is_the_epsilon_word() -> None:
     assert not nfa_membership(result, (0,))
 
 
+def test_derived_bounds_allow_long_input_with_empty_fiber() -> None:
+    relation = RationalTransducer(
+        input_alphabet_size=1,
+        output_alphabet_size=1,
+        output_alphabet=FiniteAlphabet(symbols=("x",)),
+        state_count=1,
+        initial_states=(0,),
+        accepting_states=(),
+        edges=(),
+    )
+    result = rational_relation_outputs_for_input(relation, (0,) * 513)
+    assert not nfa_membership(result, ())
+
+
 def test_input_word_is_bound_to_relation_input_alphabet() -> None:
     relation = _finite_relation()
     with pytest.raises(OperationDomainValidationError, match="input_word"):

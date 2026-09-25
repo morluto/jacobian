@@ -982,7 +982,11 @@ def project_rational_relation(
                 )
             )
 
-    for edge, label in zip(transducer.edges, labels, strict=True):
+    for edge_index, (edge, label) in enumerate(
+        zip(transducer.edges, labels, strict=True)
+    ):
+        if edge_index % 256 == 0:
+            request_checkpoint("during rational relation projection expansion")
         if not label:
             transitions.append(
                 NFATransition(
@@ -1008,6 +1012,7 @@ def project_rational_relation(
                 next_state += 1
             source = target
 
+    request_checkpoint("before rational relation projection result construction")
     return NFA(
         state_count=state_count,
         alphabet_size=alphabet_size,
@@ -1081,7 +1086,6 @@ def _validate_rational_fiber_input(
         )
     if (
         type(input_word) is not tuple
-        or len(input_word) > MAX_FST_WORD_LENGTH
         or any(
             type(symbol) is not int or not 0 <= symbol < transducer.input_alphabet_size
             for symbol in input_word
@@ -1122,22 +1126,28 @@ def _admit_rational_fiber(
         )
 
     matching_by_label: dict[tuple[int, ...], bytearray] = {}
-    for pattern in patterns:
-        request_checkpoint("during rational relation input-label matching")
+    for pattern_index, pattern in enumerate(patterns):
+        if pattern_index % 64 == 0:
+            request_checkpoint("during rational relation input-label matching")
         matching_by_label[pattern] = _matching_positions(input_word, pattern)
-    eligible_counts = tuple(
-        sum(byte.bit_count() for byte in matching_by_label[edge.input_label])
-        for edge in transducer.edges
-    )
+    eligible_counts_list: list[int] = []
+    for edge_index, edge in enumerate(transducer.edges):
+        if edge_index % 256 == 0:
+            request_checkpoint("during rational relation fiber admission")
+        eligible_counts_list.append(
+            sum(byte.bit_count() for byte in matching_by_label[edge.input_label])
+        )
+    eligible_counts = tuple(eligible_counts_list)
     eligible_edge_positions = sum(eligible_counts)
-    output_transition_bound = sum(
-        eligible * max(1, len(edge.output_label))
-        for eligible, edge in zip(eligible_counts, transducer.edges, strict=True)
-    )
-    output_intermediate_bound = sum(
-        eligible * max(0, len(edge.output_label) - 1)
-        for eligible, edge in zip(eligible_counts, transducer.edges, strict=True)
-    )
+    output_transition_bound = 0
+    output_intermediate_bound = 0
+    for edge_index, (eligible, edge) in enumerate(
+        zip(eligible_counts, transducer.edges, strict=True)
+    ):
+        if edge_index % 256 == 0:
+            request_checkpoint("during rational relation fiber admission")
+        output_transition_bound += eligible * max(1, len(edge.output_label))
+        output_intermediate_bound += eligible * max(0, len(edge.output_label) - 1)
     state_bound = 1 + product_state_bound + output_intermediate_bound
     bridge_count = len(transducer.initial_states)
     transition_bound = output_transition_bound + bridge_count
@@ -1194,7 +1204,9 @@ def _build_rational_fiber(
     word_length = len(input_word)
     ledger = OperationWorkLedger(work_bound)
     outgoing: list[list[RationalEdge]] = [[] for _ in range(transducer.state_count)]
-    for edge in transducer.edges:
+    for edge_index, edge in enumerate(transducer.edges):
+        if edge_index % 256 == 0:
+            request_checkpoint("preparing rational relation fiber expansion")
         outgoing[edge.source].append(edge)
 
     pairs: list[tuple[int, int]] = []
@@ -1212,7 +1224,9 @@ def _build_rational_fiber(
         return state_id
 
     transitions: list[NFATransition] = []
-    for state in transducer.initial_states:
+    for initial_index, state in enumerate(transducer.initial_states):
+        if initial_index % 256 == 0:
+            request_checkpoint("initializing rational relation fiber expansion")
         target = discover((state, 0))
         transitions.append(
             NFATransition(
@@ -1220,8 +1234,11 @@ def _build_rational_fiber(
             )
         )
     accepting: set[int] = set()
+    processed_pairs = 0
     while queue:
-        request_checkpoint("during rational relation fiber product exploration")
+        if processed_pairs % 64 == 0:
+            request_checkpoint("during rational relation fiber product exploration")
+        processed_pairs += 1
         state, position = queue.popleft()
         source_id = pair_ids[(state, position)]
         if position == word_length and state in transducer.accepting_states:
@@ -1261,14 +1278,18 @@ def _build_rational_fiber(
                 current_id = next_id
                 ledger.charge()
     request_checkpoint("before rational relation fiber result construction")
+    result_transitions = tuple(transitions)
+    request_checkpoint("after rational relation fiber transition materialization")
+    result_accepting = tuple(sorted(accepting))
+    request_checkpoint("after rational relation fiber accepting-state construction")
     return NFA(
         state_count=1 + len(pairs),
         alphabet_size=transducer.output_alphabet_size,
         alphabet_id=transducer.output_alphabet_id,
         alphabet=transducer.output_alphabet,
-        transitions=tuple(transitions),
+        transitions=result_transitions,
         initial_state=0,
-        accepting_states=tuple(sorted(accepting)),
+        accepting_states=result_accepting,
     )
 
 

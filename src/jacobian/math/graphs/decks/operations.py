@@ -354,6 +354,14 @@ def vertex_deck_induced_subgraph_count(
             code="graph_deck.kelly_pattern_carrier",
             message="pattern must be a SimpleUndirectedGraph",
         )
+    try:
+        pattern = SimpleUndirectedGraph.model_validate(pattern.model_dump())
+    except (ValidationError, TypeError, ValueError):
+        raise OperationDomainValidationError(
+            location=("pattern",),
+            code="graph_deck.kelly_pattern_graph_value",
+            message="pattern must be a canonical simple graph value",
+        ) from None
     family = deck.family
     source = _admit_deck_graph(family.source)
     source_order = len(source.vertices)

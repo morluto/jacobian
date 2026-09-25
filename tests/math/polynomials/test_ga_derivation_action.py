@@ -169,6 +169,44 @@ def test_triangular_locally_nilpotent_derivation_exponentiates_exactly() -> None
     _independent_coaction_oracle(action.generator_images)
 
 
+def test_action_rejects_lying_outer_and_empty_inner_sequences() -> None:
+    from collections.abc import Sequence
+
+    derivation, chains = _derivation()
+
+    class TooMany(Sequence[Any]):
+        def __len__(self) -> int:
+            return len(chains)
+
+        def __getitem__(self, index: int) -> Any:
+            if index < len(chains):
+                return chains[index]
+            raise IndexError
+
+        def __iter__(self):
+            yield from chains
+            while True:
+                yield chains[0]
+
+    with pytest.raises(OperationDomainValidationError) as error:
+        ga_action_from_derivation(derivation, TooMany())
+    assert error.value.errors()[0]["type"] == "polynomial_derivation.certificate_shape"
+
+    class EmptyChain(Sequence[Any]):
+        def __len__(self) -> int:
+            return 1
+
+        def __getitem__(self, index: int) -> Any:
+            raise IndexError
+
+        def __iter__(self):
+            return iter(())
+
+    with pytest.raises(OperationDomainValidationError) as error:
+        ga_action_from_derivation(derivation, (EmptyChain(), *chains[1:]))
+    assert error.value.errors()[0]["type"] == "polynomial_derivation.certificate_shape"
+
+
 def test_action_checks_every_generator_chain() -> None:
     derivation, chains = _derivation()
     invalid = (chains[0], (chains[1][0], _poly(("x", "y", "z"), ())), chains[2])

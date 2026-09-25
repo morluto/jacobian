@@ -601,6 +601,12 @@ def construct_locally_nilpotent_certificate(
         )
     canonical: list[tuple[RationalPolynomial, ...]] = []
     for index, chain in enumerate(chains):
+        if index >= len(derivation_value.variables):
+            raise OperationDomainValidationError(
+                location=("chains", index),
+                code="polynomial_derivation.certificate_shape",
+                message="one chain is required per generator",
+            )
         if not isinstance(chain, Sequence) or isinstance(chain, (str, bytes)):
             raise OperationDomainValidationError(
                 location=("chains", index),
@@ -626,6 +632,12 @@ def construct_locally_nilpotent_certificate(
                 )
             canonical_values.append(_as_polynomial(value))
         canonical_chain = tuple(canonical_values)
+        if not canonical_chain:
+            raise OperationDomainValidationError(
+                location=("chains", index),
+                code="polynomial_derivation.certificate_shape",
+                message="each generator chain must be nonempty",
+            )
         if canonical_chain[0] != generator:
             raise OperationDomainValidationError(
                 location=("chains", index, 0),

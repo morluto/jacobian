@@ -299,6 +299,20 @@ def theta_selected_coefficients(
             code="quadratic_form.theta_invalid_selected_indices",
             message="selected theta indices must be bounded and strictly increasing",
         )
+    if not (
+        isinstance(form.axis, tuple)
+        and isinstance(form.diagonal_coefficients, tuple)
+        and isinstance(form.cross_terms, tuple)
+        and len(form.axis) <= MAX_THETA_PREFIX_DIMENSION
+        and len(form.diagonal_coefficients) == len(form.axis)
+        and len(form.cross_terms)
+        <= MAX_THETA_PREFIX_DIMENSION * (MAX_THETA_PREFIX_DIMENSION + 1) // 2
+    ):
+        raise OperationDomainValidationError(
+            location=("form",),
+            code="quadratic_form.theta_invalid_form",
+            message="selected theta coefficients require a bounded canonical form",
+        )
     try:
         form = RationalQuadraticForm.model_validate(form.model_dump())
     except Exception as error:

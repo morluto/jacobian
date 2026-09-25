@@ -81,10 +81,7 @@ def test_action_is_published_as_one_typed_catalog_operation() -> None:
 def test_action_reduces_inverse_braid_prefixes_before_bounded_expansion() -> None:
     # w=(sigma_2^2 sigma_1^3)^2 sigma_2^2 followed by w^-1.
     w = ((2, 1), (2, 1), (1, 1), (1, 1), (1, 1)) * 2 + ((2, 1), (2, 1))
-    inverse = tuple(
-        (generator, -exponent)
-        for generator, exponent in reversed(w)
-    )
+    inverse = tuple((generator, -exponent) for generator, exponent in reversed(w))
     letters = tuple(
         (generator, 1 if exponent == 1 else -1) for generator, exponent in w + inverse
     )

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from itertools import product
 
 import pytest
@@ -60,7 +61,36 @@ def test_nonpartition_result_identifies_first_left_to_right_obstruction(
     result = check_partition(PartitionCheckRequest(parts=parts))
 
     assert isinstance(result.outcome, PartitionRejected)
+    assert result.outcome.parts == parts
     assert result.outcome.obstruction == expected
+
+
+def test_rejection_is_source_bound_and_rechecks_first_obstruction_on_decode() -> None:
+    result = check_partition(PartitionCheckRequest(parts=(3, 4, 0)))
+    assert isinstance(result.outcome, PartitionRejected)
+    decoded = type(result).model_validate_json(result.model_dump_json())
+    assert decoded == result
+    assert decoded.outcome.parts == (3, 4, 0)
+
+    forged = result.model_dump(mode="json")
+    forged["outcome"]["parts"] = [3, 1]
+    with pytest.raises(ValidationError):
+        type(result).model_validate(forged)
+
+    wrong_first_obstruction = result.model_dump(mode="json")
+    wrong_first_obstruction["outcome"]["obstruction"] = {
+        "kind": "NONPOSITIVE_PART",
+        "index": 2,
+        "value": 0,
+    }
+    with pytest.raises(ValidationError):
+        type(result).model_validate_json(json.dumps(wrong_first_obstruction))
+
+    with pytest.raises(ValidationError):
+        PartitionRejected(
+            parts=(3, 4, 0),
+            obstruction=NonpositivePartObstruction(index=2, value=0),
+        )
 
 
 def _first_obstruction(parts: tuple[int, ...]) -> tuple[str, int, int | None]:

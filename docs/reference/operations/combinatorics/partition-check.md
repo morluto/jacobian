@@ -8,7 +8,7 @@ An admitted candidate returns a result whose discriminated `outcome` is either
 `PARTITION` or `NOT_A_PARTITION`. A `PARTITION` outcome contains the canonical
 `IntegerPartition`, its size and length, its conjugate, and its one-based
 Ferrers cells in row-major order. A `NOT_A_PARTITION` outcome contains the
-first left-to-right obstruction:
+exact source sequence and its first left-to-right obstruction:
 
 - `NONPOSITIVE_PART`, with a zero-based index and the offending value; or
 - `INCREASING_ADJACENT_PARTS`, with the zero-based index of the right-hand

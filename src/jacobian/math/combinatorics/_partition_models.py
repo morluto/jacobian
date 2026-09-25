@@ -132,10 +132,46 @@ PartitionObstruction = Annotated[
 
 
 class PartitionRejected(StrictModel):
-    """A bounded integer sequence that is not a partition."""
+    """A source-bound rejection and its first defining obstruction."""
 
     kind: Literal["NOT_A_PARTITION"] = "NOT_A_PARTITION"
+    parts: tuple[StrictInt, ...] = Field(
+        min_length=0,
+        max_length=MAX_PARTITION_SIZE,
+        description="The exact candidate sequence classified by this result.",
+    )
     obstruction: PartitionObstruction
+
+    @model_validator(mode="after")
+    def require_first_source_obstruction(self) -> Self:
+        if any(part.bit_length() > 53 for part in self.parts):
+            raise _combinatorics_validation_error(
+                "partition rejection source exceeds the exact JSON integer bound"
+            )
+        if sum(max(part, 0) for part in self.parts) > MAX_PARTITION_SIZE:
+            raise _combinatorics_validation_error(
+                "partition rejection source exceeds the supported size"
+            )
+
+        previous: int | None = None
+        expected: PartitionObstruction | None = None
+        for index, part in enumerate(self.parts):
+            if part <= 0:
+                expected = NonpositivePartObstruction(index=index, value=part)
+                break
+            if previous is not None and previous < part:
+                expected = IncreasingPartsObstruction(
+                    index=index,
+                    previous_value=previous,
+                    value=part,
+                )
+                break
+            previous = part
+        if expected is None or self.obstruction != expected:
+            raise _combinatorics_validation_error(
+                "partition rejection obstruction does not match the first source violation"
+            )
+        return self
 
 
 PartitionCheckBranch = Annotated[

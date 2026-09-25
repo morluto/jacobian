@@ -60,17 +60,19 @@ def check_partition(request: PartitionCheckRequest) -> PartitionCheckResult:
         if part <= 0:
             return PartitionCheckResult(
                 outcome=PartitionRejected(
-                    obstruction=NonpositivePartObstruction(index=index, value=part)
+                    parts=parts,
+                    obstruction=NonpositivePartObstruction(index=index, value=part),
                 )
             )
         if previous is not None and previous < part:
             return PartitionCheckResult(
                 outcome=PartitionRejected(
+                    parts=parts,
                     obstruction=IncreasingPartsObstruction(
                         index=index,
                         previous_value=previous,
                         value=part,
-                    )
+                    ),
                 )
             )
         previous = part

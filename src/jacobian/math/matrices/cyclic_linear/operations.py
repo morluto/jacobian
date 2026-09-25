@@ -175,7 +175,6 @@ def apply_cyclotomic_field_inclusion(
     # One common-denominator and basis-image norm bound controls exact
     # rational height before expanding the caller's element.
     max_num_digits = max(len(str(abs(value.numerator))) for value in coordinates)
-    max_den_digits = max(len(str(value.denominator)) for value in coordinates)
     denominator = 1
     for value in coordinates:
         denominator = (
@@ -183,9 +182,7 @@ def apply_cyclotomic_field_inclusion(
         )
     denominator_digits = len(str(denominator))
     numerator_digits = (
-        max_num_digits
-        + (source_degree - 1) * max_den_digits
-        + len(str(source_degree * row_norm))
+        max_num_digits + denominator_digits + len(str(source_degree * row_norm))
     )
     if max(denominator_digits, numerator_digits) > MAX_CYCLIC_FIELD_ELEMENT_DIGITS:
         raise CyclicRankKernelAdmissionError(

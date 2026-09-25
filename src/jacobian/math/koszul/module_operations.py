@@ -258,7 +258,7 @@ def _admit(
     # This is mathematical admission for the Koszul postcondition, not merely
     # a shape check.  It is intentionally rerun by consumers of authored
     # complexes: serialized/model_construct values carry no trusted provenance.
-    if len(sequence) > 6 or len(module.basis) * (2 ** len(sequence)) > 256:
+    if len(sequence) > 6:
         raise OperationResourceAdmissionError(
             location=("sequence",),
             code="koszul.module.budget",
@@ -883,7 +883,26 @@ def module_koszul_top_homology(
     # The top-kernel contract needs no elimination in lower degrees. Admit the
     # retained input and this one matrix before rebuilding or densifying it.
     _admit_top_homology(value)
-    value = _admit_complex(value, admit_homology=False)
+    # The top-only envelope is already checked above. Revalidate the source
+    # shape and induced module action without applying the full-chain size cap.
+    try:
+        value = ModuleKoszulComplex.model_validate(value.model_dump())
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("complex",),
+            code="koszul.module.complex_shape",
+            message="the supplied module Koszul complex is not canonical",
+        ) from exc
+    if any(
+        size != len(value.module.basis) * comb(len(value.sequence), degree)
+        for degree, size in enumerate(value.basis_sizes)
+    ):
+        raise OperationDomainValidationError(
+            location=("complex", "basis_sizes"),
+            code="koszul.module.result_shape",
+            message="complex basis sizes must be the canonical Koszul dimensions",
+        )
+    _admit(value.module, value.sequence)
     source_request = ModuleKoszulRequest(
         algebra=value.algebra, module=value.module, sequence=value.sequence
     )

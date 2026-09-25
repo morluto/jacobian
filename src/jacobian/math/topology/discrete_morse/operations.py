@@ -10,9 +10,6 @@ from jacobian.math.topology._request_admission import (
 from jacobian.math.topology.discrete_morse._contraction import (
     compute_chain_contraction as _compute_chain_contraction,
 )
-from jacobian.math.topology.discrete_morse._contraction import (
-    compute_chain_contraction as _compute_chain_contraction,
-)
 from jacobian.math.topology.discrete_morse._kernel import (
     compute_gradient_paths as _compute_gradient_paths,
 )

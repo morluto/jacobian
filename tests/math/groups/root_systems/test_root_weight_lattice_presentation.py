@@ -121,5 +121,6 @@ def test_catalog_tool_consumes_canonical_cartan_datum():
         tool.operation_id, tool.examples[0].input, Catalog.open()
     )
     assert example_result.output["root_lattice"]["basis"]["entries"] == [
-        ["2", "-1"], ["-1", "2"]
+        ["2", "-1"],
+        ["-1", "2"],
     ]

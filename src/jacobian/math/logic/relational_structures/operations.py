@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from itertools import product
 from math import lcm
 from typing import Literal
@@ -20,6 +20,7 @@ from jacobian.math.logic.relational_structures._admission import (
     admit_homomorphism_search,
     admit_induced_substructure,
     admit_polymorphism_check,
+    admit_polymorphism_family,
     admit_pp_evaluation,
     admit_relational_product,
     admit_relational_reduct,
@@ -46,6 +47,8 @@ from jacobian.math.logic.relational_structures._models import (
     InducedSubstructureResult,
     RelationalPolymorphism,
     RelationalPolymorphismCheckResult,
+    RelationalPolymorphismEnumerationRequest,
+    RelationalPolymorphismFamily,
     RelationalPolymorphismRelationProfile,
     RelationalPolymorphismRequest,
     RelationalPolymorphismStatus,
@@ -419,6 +422,127 @@ def check_polymorphism(
         polymorphism=polymorphism,
         witness=witness,
         relation_profiles=tuple(relation_profiles),
+    )
+
+
+def _candidate_operation_tables(
+    carrier_size: int, table_cells: int
+) -> Iterable[tuple[int, ...]]:
+    """Yield complete function tables in lexicographic value order."""
+
+    return product(range(carrier_size), repeat=table_cells)
+
+
+def _operation_table_index(inputs: tuple[int, ...], carrier_size: int) -> int:
+    """Index an operation table by one lexicographically ordered input tuple."""
+
+    index = 0
+    for value in inputs:
+        index = index * carrier_size + value
+    return index
+
+
+def _contains_sorted_relation_row(
+    relation: tuple[tuple[int, ...], ...], target: tuple[int, ...]
+) -> bool:
+    """Check membership with a deterministic scan of the canonical rows."""
+
+    low = 0
+    high = len(relation)
+    while low < high:
+        middle = (low + high) // 2
+        row = relation[middle]
+        order = 0
+        for left, right in zip(row, target, strict=True):
+            if left < right:
+                order = -1
+                break
+            if left > right:
+                order = 1
+                break
+        if order < 0:
+            low = middle + 1
+        elif order > 0:
+            high = middle
+        else:
+            return True
+    return False
+
+
+def enumerate_polymorphisms(
+    source: FiniteRelationalStructure, arity: int
+) -> RelationalPolymorphismFamily:
+    """Return every fixed-arity polymorphism of one exact structure."""
+
+    source = _admit_structure(source, "source")
+    if type(arity) is not int:
+        raise OperationDomainValidationError(
+            location=("arity",),
+            code="relational.polymorphism.enumeration_arity_type",
+            message="arity must be an exact positive integer",
+        )
+    try:
+        admitted = RelationalPolymorphismEnumerationRequest.model_validate(
+            {"source": source.model_dump(), "arity": arity},
+            strict=True,
+        )
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("arity",),
+            code="relational.polymorphism.enumeration_request_shape",
+            message="request must contain a bounded positive arity and exact structure",
+        ) from exc
+
+    table_cells, candidate_count, _work, _output_bound = admit_polymorphism_family(
+        source, admitted.arity
+    )
+
+    # Admission precedes candidate generation. Membership uses binary search
+    # over the canonical sorted relation rows, so its comparison and coordinate
+    # work has a deterministic bound included in the admission estimate.
+    carrier_size = source.carrier_size
+    polymorphisms: list[tuple[int, ...]] = []
+    combinations_checked = 0
+    candidates_scanned = 0
+    for operation_table in _candidate_operation_tables(carrier_size, table_cells):
+        candidates_scanned += 1
+        if candidates_scanned % 256 == 1:
+            request_checkpoint("during complete polymorphism family enumeration")
+        preserved = True
+        for symbol, relation in zip(
+            source.signature, source.relation_tables, strict=True
+        ):
+            for input_rows in product(relation, repeat=admitted.arity):
+                combinations_checked += 1
+                if combinations_checked % 4_096 == 0:
+                    request_checkpoint(
+                        "during complete polymorphism preservation checks"
+                    )
+                output_row = tuple(
+                    operation_table[
+                        _operation_table_index(
+                            tuple(row[column] for row in input_rows), carrier_size
+                        )
+                    ]
+                    for column in range(symbol.arity)
+                )
+                if not _contains_sorted_relation_row(relation, output_row):
+                    preserved = False
+                    break
+            if not preserved:
+                break
+        if preserved:
+            polymorphisms.append(operation_table)
+
+    if candidates_scanned != candidate_count:
+        raise RuntimeError(
+            "polymorphism family did not scan its admitted function space"
+        )
+    operation_tables = tuple(polymorphisms)
+    return RelationalPolymorphismFamily._from_kernel(
+        source=source,
+        arity=admitted.arity,
+        operation_tables=operation_tables,
     )
 
 
@@ -1127,6 +1251,7 @@ __all__ = [
     "compute_core",
     "count_homomorphisms",
     "csp_instance_to_source_structure",
+    "enumerate_polymorphisms",
     "induced_substructure",
     "quotient_structure",
     "reduct_structure",

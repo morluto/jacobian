@@ -15,6 +15,7 @@ from jacobian.math.logic.relational_structures.values import (
     MAX_RELATIONAL_CARRIER,
     MAX_RELATIONAL_OPERATION_TABLE_CELLS,
     MAX_RELATIONAL_POLYMORPHISM_ARITY,
+    MAX_RELATIONAL_POLYMORPHISM_FAMILY_SIZE,
     MAX_RELATIONAL_SYMBOLS,
     FiniteRelationalStructure,
     PrimitivePositiveFormula,
@@ -1342,6 +1343,76 @@ class RelationalPolymorphismRequest(StrictModel):
         return self
 
 
+class RelationalPolymorphismEnumerationRequest(StrictModel):
+    """Enumerate every polymorphism of one fixed arity on a structure."""
+
+    source: FiniteRelationalStructure
+    arity: StrictInt = Field(
+        ge=1,
+        le=MAX_RELATIONAL_POLYMORPHISM_ARITY,
+        description=(
+            "Positive operation arity. The complete function-space size is "
+            "|A|^(|A|^arity), so the owner admits only bounded instances."
+        ),
+    )
+
+
+class RelationalPolymorphismFamily(StrictModel):
+    """The complete fixed-arity polymorphism family of one exact structure.
+
+    Each table uses lexicographic inputs from ``A^arity``; rows in
+    ``operation_tables`` are complete operation tables, sorted
+    lexicographically. The family retains the structure once rather than
+    repeating it in every member.
+    """
+
+    source: FiniteRelationalStructure
+    arity: StrictInt = Field(ge=1, le=MAX_RELATIONAL_POLYMORPHISM_ARITY)
+    operation_tables: tuple[tuple[StrictInt, ...], ...] = Field(
+        max_length=MAX_RELATIONAL_POLYMORPHISM_FAMILY_SIZE,
+        description=(
+            "Every relation-preserving operation table of the declared arity, "
+            "in lexicographic table order. Each table has |A|^arity values."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_canonical_operation_tables(self) -> Self:
+        table_cells = self.source.carrier_size**self.arity
+        previous: tuple[int, ...] | None = None
+        for table in self.operation_tables:
+            if len(table) != table_cells or any(
+                not 0 <= value < self.source.carrier_size for value in table
+            ):
+                raise _polymorphism_validation_error(
+                    "family.operation_table",
+                    "each table must be a complete function on the exact carrier",
+                )
+            if previous is not None and table <= previous:
+                raise _polymorphism_validation_error(
+                    "family.canonical_order",
+                    "operation tables must be unique and lexicographically ordered",
+                )
+            previous = table
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        source: FiniteRelationalStructure,
+        arity: int,
+        operation_tables: tuple[tuple[int, ...], ...],
+    ) -> Self:
+        """Build after complete admitted operation-space enumeration."""
+
+        return cls.model_construct(
+            source=source,
+            arity=arity,
+            operation_tables=operation_tables,
+        )
+
+
 class RelationalPolymorphism(StrictModel):
     """A complete operation table established to preserve one exact structure."""
 
@@ -1506,9 +1577,9 @@ class RelationalPolymorphismCheckResult(StrictModel):
                     "witness symbol must belong to the exact source signature",
                 ) from exc
             symbol = self.source.signature[symbol_index]
-            table = set(self.source.relation_tables[symbol_index])
+            relation_table_set = set(self.source.relation_tables[symbol_index])
             if symbol.arity != witness.relation_arity or any(
-                row not in table for row in witness.input_rows
+                row not in relation_table_set for row in witness.input_rows
             ):
                 raise _polymorphism_validation_error(
                     "polymorphism.witness_source",
@@ -1526,7 +1597,7 @@ class RelationalPolymorphismCheckResult(StrictModel):
             )
             if (
                 witness.output_row != expected_output
-                or witness.output_row in table
+                or witness.output_row in relation_table_set
                 or self.relation_profiles[symbol_index].preserved_combinations
                 >= self.relation_profiles[symbol_index].input_combinations
             ):
@@ -1581,6 +1652,8 @@ __all__ = [
     "InducedSubstructureResult",
     "RelationalPolymorphism",
     "RelationalPolymorphismCheckResult",
+    "RelationalPolymorphismEnumerationRequest",
+    "RelationalPolymorphismFamily",
     "RelationalPolymorphismRelationProfile",
     "RelationalPolymorphismRequest",
     "RelationalPolymorphismStatus",

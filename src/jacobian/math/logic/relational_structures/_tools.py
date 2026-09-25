@@ -5,6 +5,8 @@ from jacobian.math.logic.relational_structures._admission import (
     MAX_EMBEDDING_REFLECTION_CELLS,
     MAX_HOMOMORPHISM_ENUMERATION_OUTPUT_BYTES,
     MAX_POLYMORPHISM_COORDINATE_WORK,
+    MAX_POLYMORPHISM_FAMILY_OUTPUT_BYTES,
+    MAX_POLYMORPHISM_FAMILY_WORK,
     MAX_POLYMORPHISM_RELATION_COMBINATIONS,
     MAX_SEARCH_CANDIDATES,
     MAX_SEARCH_TUPLE_REPLAYS,
@@ -29,6 +31,8 @@ from jacobian.math.logic.relational_structures._models import (
     InducedSubstructureResult,
     PPFormulaEvaluationRequest,
     RelationalPolymorphismCheckResult,
+    RelationalPolymorphismEnumerationRequest,
+    RelationalPolymorphismFamily,
     RelationalPolymorphismRequest,
     RelationalProductRequest,
     RelationalProductResult,
@@ -45,6 +49,7 @@ from jacobian.math.logic.relational_structures.operations import (
     csp_instance_to_source_structure,
     direct_product_structure,
     enumerate_homomorphisms,
+    enumerate_polymorphisms,
     evaluate_pp_formula,
     induced_substructure,
     profile_csp_assignment,
@@ -58,6 +63,7 @@ from jacobian.math.logic.relational_structures.values import (
     MAX_RELATIONAL_CARRIER,
     MAX_RELATIONAL_OPERATION_TABLE_CELLS,
     MAX_RELATIONAL_POLYMORPHISM_ARITY,
+    MAX_RELATIONAL_POLYMORPHISM_FAMILY_SIZE,
     MAX_RELATIONAL_SYMBOLS,
     MAX_RELATIONAL_TABLE_ROWS,
     FiniteRelationalStructure,
@@ -147,6 +153,12 @@ def _polymorphism_check(
     request: RelationalPolymorphismRequest,
 ) -> RelationalPolymorphismCheckResult:
     return check_polymorphism(request)
+
+
+def _polymorphism_enumeration(
+    request: RelationalPolymorphismEnumerationRequest,
+) -> RelationalPolymorphismFamily:
+    return enumerate_polymorphisms(request.source, request.arity)
 
 
 def _pp_formula_evaluation(request: PPFormulaEvaluationRequest) -> PPDefinedRelation:
@@ -422,6 +434,50 @@ TOOLS: MathTools = (
                     },
                     "arity": 2,
                     "operation_table": [0, 0, 1, 1],
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="relational.polymorphisms.arity.enumerate",
+        title="Enumerate every polymorphism of one finite arity",
+        description=(
+            "Return every complete relation-preserving operation table "
+            "f:A^m→A exactly once, in lexicographic table order, bound to "
+            "the exact finite structure and arity. This enumerates one arity "
+            "slice, not the full clone across all arities. Admission bounds "
+            "the complete function space to "
+            f"{MAX_RELATIONAL_POLYMORPHISM_FAMILY_SIZE} candidates, aggregate "
+            f"table-generation/preservation work to {MAX_POLYMORPHISM_FAMILY_WORK} "
+            "steps, and the complete serialized result to "
+            f"{MAX_POLYMORPHISM_FAMILY_OUTPUT_BYTES} bytes before allocating "
+            "candidate tables; canonical relation-row membership scans are "
+            "included in the work bound."
+        ),
+        request_type=RelationalPolymorphismEnumerationRequest,
+        result_type=RelationalPolymorphismFamily,
+        run=_polymorphism_enumeration,
+        tags=("relational-structures", "polymorphism", "csp", "exact"),
+        discovery_terms=(
+            "all finite relational polymorphisms",
+            "complete polymorphism family of fixed arity",
+            "enumerate polymorphism operation tables",
+            "finite clone arity slice",
+        ),
+        examples=(
+            OperationExample(
+                name="unary_maps_preserving_singleton",
+                description=(
+                    "Enumerate unary maps preserving P={0}; the source carrier "
+                    "is {0,1} and the unary relation is exactly {(0,)}."
+                ),
+                input={
+                    "source": {
+                        "carrier_size": 2,
+                        "signature": [{"symbol_id": "P", "arity": 1}],
+                        "relation_tables": [[[0]]],
+                    },
+                    "arity": 1,
                 },
             ),
         ),

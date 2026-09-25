@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from fractions import Fraction
 from math import comb, factorial, gcd, isqrt, lcm
+from typing import Literal
 
 from jacobian._exact import CanonicalRational
 from jacobian._execution import request_checkpoint
@@ -19,10 +20,10 @@ from jacobian.math.number_theory.modular_forms._models import (
 )
 from jacobian.math.number_theory.modular_forms.kernel import expected_coefficients
 from jacobian.math.number_theory.modular_forms.operations import space_dimension
-from jacobian.math.number_theory.modular_forms.pari_basis import (
+from jacobian.math.number_theory.modular_forms.pari_backend import (
+    MAX_PARI_BASIS_ALLOCATION_BYTES,
     MAX_PARI_BASIS_DIMENSION,
     MAX_PARI_BASIS_LEVEL,
-    MAX_PARI_BASIS_OUTPUT_BYTES,
     MAX_PARI_BASIS_PRECISION,
     MAX_PARI_BASIS_WEIGHT,
     MAX_PARI_BASIS_WORK,
@@ -39,6 +40,7 @@ from jacobian.math.number_theory.modular_forms.values import (
     MAX_LEVEL_ONE_BASIS_COORDINATES,
     MAX_LEVEL_ONE_BASIS_PRECISION,
     MAX_LEVEL_ONE_BASIS_WEIGHT,
+    MAX_MODULAR_FORM_LEVEL,
     MAX_Q_TRANSFORM_OUTPUT_PRECISION,
     MAX_Q_TRANSFORM_SOURCE_ORDER,
     ModularFormBasis,
@@ -55,32 +57,41 @@ from jacobian.math.number_theory.modular_forms.values import (
 )
 from jacobian.math.polynomials.series._models import TruncatedSeries
 
-BASIS_ID = "level-one-e4-e6-monomials-v1"
-GAMMA0_TWO_BASIS_ID = "gamma0-two-weight-2-4-monomials-v1"
-GAMMA0_THREE_BASIS_ID = "gamma0-three-weight-2-4-6-hypersurface-v1"
-GAMMA0_FOUR_BASIS_ID = "gamma0-four-weight-2-generators-v1"
-GAMMA0_FOUR_CHI4_WEIGHT_ONE_BASIS_ID = "gamma0-four-chi4-weight-one-v1"
-GAMMA0_FOUR_CHI4_WEIGHT_THREE_BASIS_ID = "gamma0-four-chi4-weight-three-v1"
+BASIS_ID: _BasisId = "level-one-e4-e6-monomials-v1"
+GAMMA0_TWO_BASIS_ID: _BasisId = "gamma0-two-weight-2-4-monomials-v1"
+GAMMA0_THREE_BASIS_ID: _BasisId = "gamma0-three-weight-2-4-6-hypersurface-v1"
+GAMMA0_FOUR_BASIS_ID: _BasisId = "gamma0-four-weight-2-generators-v1"
+GAMMA0_FOUR_CHI4_WEIGHT_ONE_BASIS_ID: _BasisId = "gamma0-four-chi4-weight-one-v1"
+GAMMA0_FOUR_CHI4_WEIGHT_THREE_BASIS_ID: _BasisId = "gamma0-four-chi4-weight-three-v1"
+_BasisId = Literal[
+    "level-one-e4-e6-monomials-v1",
+    "gamma0-two-weight-2-4-monomials-v1",
+    "gamma0-three-weight-2-4-6-hypersurface-v1",
+    "gamma0-four-weight-2-generators-v1",
+    "gamma0-four-chi4-weight-one-v1",
+    "gamma0-four-chi4-weight-three-v1",
+    "gamma0-rational-gamma0-sturm-rref-v1",
+]
 MAX_LEVEL_ONE_BASIS_WORK = 4_000_000
-MAX_LEVEL_ONE_BASIS_OUTPUT_BYTES = 8 * 1024 * 1024
+MAX_LEVEL_ONE_BASIS_ALLOCATION_BYTES = 8 * 1024 * 1024
 MAX_COORDINATE_RESULT_DIGITS = 4_096
 MAX_COORDINATE_HECKE_WORK = 4_000_000
-MAX_HECKE_MATRIX_OUTPUT_BYTES = 8 * 1024 * 1024
+MAX_HECKE_MATRIX_ALLOCATION_BYTES = 8 * 1024 * 1024
 MAX_OPERATOR_IMAGE_WORK = 4_000_000
-MAX_OPERATOR_IMAGE_OUTPUT_BYTES = 8 * 1024 * 1024
+MAX_OPERATOR_IMAGE_ALLOCATION_BYTES = 8 * 1024 * 1024
 MAX_MODULAR_FORM_PRODUCT_WORK = 1 << 40
 MAX_MODULAR_FORM_PRODUCT_INTERMEDIATE_BYTES = 32 * 1024 * 1024
 MAX_CHANGE_OF_BASIS_DIGITS = MAX_LEVEL_ONE_BASIS_COEFFICIENT_DIGITS
 _MAX_CHANGE_OF_BASIS_INTEGER = 10**MAX_CHANGE_OF_BASIS_DIGITS
 MAX_CHANGE_OF_BASIS_WORK = 32_768
-MAX_CHANGE_OF_BASIS_OUTPUT_BYTES = 8 * 1024 * 1024
+MAX_CHANGE_OF_BASIS_ALLOCATION_BYTES = 8 * 1024 * 1024
 MAX_ATKIN_LEHNER_MATRIX_ENTRY_DIGITS = 512
 MAX_ATKIN_LEHNER_INTERNAL_DIGITS = 10_000_000
 MAX_ATKIN_LEHNER_INTERNAL_BYTES = 256 * 1024 * 1024
 
 
 def _hecke_coefficient(
-    coefficients: tuple[int, ...],
+    coefficients: tuple[int | Fraction, ...],
     index: int,
     m: int,
     weight: int,
@@ -194,7 +205,7 @@ def _solve_gamma0_four_coordinates(
 @dataclass(frozen=True)
 class _BasisPlan:
     space: ModularFormSpace
-    basis_id: str
+    basis_id: _BasisId
     precision: int
     terms: tuple[tuple[int, int], ...]
     is_cuspidal: bool
@@ -221,7 +232,7 @@ def _is_gamma0_four_chi4(space: ModularFormSpace) -> bool:
 
 def _gamma0_four_chi4_basis(
     space: ModularFormSpace,
-) -> tuple[str, tuple[tuple[int, int], ...]] | None:
+) -> tuple[_BasisId, tuple[tuple[int, int], ...]] | None:
     if not _is_gamma0_four_chi4(space):
         return None
     if space.weight == 1:
@@ -327,7 +338,7 @@ def _digit_bound(weight: int, precision: int) -> int:
 
 def _basis_terms_for_space(
     space: ModularFormSpace, is_cuspidal: bool
-) -> tuple[str, tuple[tuple[int, int], ...]]:
+) -> tuple[_BasisId, tuple[tuple[int, int], ...]]:
     """Select one exact basis convention and its ordered monomial indices."""
 
     character_basis = _gamma0_four_chi4_basis(space)
@@ -350,7 +361,11 @@ def _basis_terms_for_space(
 
 
 def _admit_basis(
-    space: object, precision: object, *, materialize_pari: bool = True
+    space: object,
+    precision: object,
+    *,
+    materialize_pari: bool = True,
+    at_least_sturm: bool = False,
 ) -> _BasisPlan:
     if not isinstance(space, ModularFormSpace):
         raise OperationDomainValidationError(
@@ -387,7 +402,12 @@ def _admit_basis(
             ),
         )
     if space.level > 4:
-        return _admit_pari_basis(space, precision, materialize=materialize_pari)
+        return _admit_pari_basis(
+            space,
+            precision,
+            materialize=materialize_pari,
+            at_least_sturm=at_least_sturm,
+        )
     if space.level == 3 and precision > MAX_GAMMA0_THREE_BASIS_PRECISION:
         raise OperationResourceAdmissionError(
             location=("precision",),
@@ -453,7 +473,7 @@ def _admit_basis(
     output_digits = dimension * precision * (coefficient_digits + 8)
     if (
         coefficient_digits > MAX_COORDINATE_RESULT_DIGITS
-        or output_digits > MAX_LEVEL_ONE_BASIS_OUTPUT_BYTES
+        or output_digits > MAX_LEVEL_ONE_BASIS_ALLOCATION_BYTES
     ):
         raise OperationResourceAdmissionError(
             location=("space", "weight"),
@@ -473,7 +493,11 @@ def _admit_basis(
 
 
 def _admit_pari_basis(
-    space: ModularFormSpace, precision: int, *, materialize: bool
+    space: ModularFormSpace,
+    precision: int,
+    *,
+    materialize: bool,
+    at_least_sturm: bool = False,
 ) -> _BasisPlan:
     """Preflight a PARI basis through at least the Sturm determining prefix."""
 
@@ -512,14 +536,19 @@ def _admit_pari_basis(
             message="Sturm determining precision exceeds the PARI basis envelope",
         )
     if precision < sturm_precision:
-        raise OperationDomainValidationError(
-            location=("precision",),
-            code="modular_form.pari_basis_requires_sturm_precision",
-            message=(
-                "PARI basis precision must include coefficients through the "
-                f"Sturm bound (at least {sturm_precision} terms)"
-            ),
-        )
+        if not at_least_sturm:
+            raise OperationDomainValidationError(
+                location=("precision",),
+                code="modular_form.pari_basis_requires_sturm_precision",
+                message=(
+                    "PARI basis precision must include coefficients through the "
+                    f"Sturm bound (at least {sturm_precision} terms)"
+                ),
+            )
+        # A coordinate-defined form is already globally identified, so a
+        # requested prefix shorter than the determining bound is evaluated
+        # from the internal Sturm-determining basis and truncated.
+        precision = sturm_precision
     if precision > MAX_PARI_BASIS_PRECISION:
         raise OperationResourceAdmissionError(
             location=("precision",),
@@ -541,8 +570,8 @@ def _admit_pari_basis(
             code="modular_form.pari_basis_work_bound",
             message="PARI modular-form basis work exceeds its exact envelope",
         )
-    output_bytes = dimension * precision * (2 * rref_digits + 32)
-    if output_bytes > MAX_PARI_BASIS_OUTPUT_BYTES:
+    allocation_bytes = dimension * precision * (2 * rref_digits + 32)
+    if allocation_bytes > MAX_PARI_BASIS_ALLOCATION_BYTES:
         raise OperationResourceAdmissionError(
             location=("space",),
             code="modular_form.pari_basis_output_bound",
@@ -739,7 +768,10 @@ def _formula_basis_coefficients(plan: _BasisPlan) -> tuple[tuple[Fraction, ...],
     order = plan.precision
     terms = plan.terms
     if plan.basis_id == GAMMA0_THREE_BASIS_ID:
-        return _gamma0_three_basis_coefficients(plan)
+        return tuple(
+            tuple(Fraction(value) for value in vector)
+            for vector in _gamma0_three_basis_coefficients(plan)
+        )
     if plan.basis_id == GAMMA0_FOUR_CHI4_WEIGHT_ONE_BASIS_ID:
         divisor_sums = [0] * order
         for divisor in range(1, order, 2):
@@ -749,29 +781,31 @@ def _formula_basis_coefficients(plan: _BasisPlan) -> tuple[tuple[Fraction, ...],
         coefficients = [Fraction(1, 4), *(Fraction(c) for c in divisor_sums[1:])]
         return (tuple(coefficients),)
     if plan.basis_id == GAMMA0_FOUR_CHI4_WEIGHT_THREE_BASIS_ID:
-        first = [0] * order
-        second = [0] * order
+        chi_first: list[int] = [0] * order
+        chi_second: list[int] = [0] * order
         for divisor in range(1, order):
             divisor_square = divisor * divisor
             for multiple in range(divisor, order, divisor):
                 quotient = multiple // divisor
                 if quotient % 2:
                     chi_quotient = 1 if quotient % 4 == 1 else -1
-                    second[multiple] += chi_quotient * divisor_square
+                    chi_second[multiple] += chi_quotient * divisor_square
             if divisor % 2:
                 chi_divisor = 1 if divisor % 4 == 1 else -1
                 for multiple in range(divisor, order, divisor):
-                    first[multiple] -= 4 * chi_divisor * divisor_square
-        first[0] = 1
+                    chi_first[multiple] -= 4 * chi_divisor * divisor_square
+        chi_first[0] = 1
         return (
-            tuple(Fraction(value) for value in first),
-            tuple(Fraction(value) for value in second),
+            tuple(Fraction(value) for value in chi_first),
+            tuple(Fraction(value) for value in chi_second),
         )
+    monomial_first: tuple[tuple[int, ...], ...]
+    monomial_second: tuple[tuple[int, ...], ...]
     if plan.space.level == 1:
         e4 = tuple(int(value) for value in expected_coefficients("E4", order))
         e6 = tuple(int(value) for value in expected_coefficients("E6", order))
-        first = _powers(e4, max((a for a, _ in terms), default=0))
-        second = _powers(e6, max((b for _, b in terms), default=0))
+        monomial_first = _powers(e4, max((a for a, _ in terms), default=0))
+        monomial_second = _powers(e6, max((b for _, b in terms), default=0))
     elif plan.space.level == 2:
         sigma_one = _sigma_coefficients(1, order)
         a2 = (
@@ -785,8 +819,8 @@ def _formula_basis_coefficients(plan: _BasisPlan) -> tuple[tuple[Fraction, ...],
         # Zagier's free-ring description gives generators A2 (weight 2) and
         # E4 (weight 4), so these coefficients are the exact level-two basis.
         e4 = tuple(int(value) for value in expected_coefficients("E4", order))
-        first = _powers(a2, max((a for a, _ in terms), default=0))
-        second = _powers(e4, max((b for _, b in terms), default=0))
+        monomial_first = _powers(a2, max((a for a, _ in terms), default=0))
+        monomial_second = _powers(e4, max((b for _, b in terms), default=0))
     else:
         sigma_one = _sigma_coefficients(1, order)
         a2 = (
@@ -800,25 +834,25 @@ def _formula_basis_coefficients(plan: _BasisPlan) -> tuple[tuple[Fraction, ...],
             1 if n == 0 else a2[n // 2] if n % 2 == 0 else 0 for n in range(order)
         )
         d4 = tuple((a2[n] - b4[n]) // 24 for n in range(order))
-        first = _powers(b4, max((a for a, _ in terms), default=0))
-        second = _powers(d4, max((d for _, d in terms), default=0))
+        monomial_first = _powers(b4, max((a for a, _ in terms), default=0))
+        monomial_second = _powers(d4, max((d for _, d in terms), default=0))
     delta = (
         tuple(int(value) for value in expected_coefficients("DELTA", order))
         if plan.is_cuspidal
         else ()
     )
-    output = []
+    output: list[tuple[Fraction, ...]] = []
     for a, b in terms:
-        vector = (
-            _multiply_series(first[a], second[b])
+        int_vector = (
+            _multiply_series(monomial_first[a], monomial_second[b])
             if a and b
-            else first[a]
+            else monomial_first[a]
             if a
-            else second[b]
+            else monomial_second[b]
         )
         if plan.is_cuspidal:
-            vector = _multiply_series(delta, vector)
-        output.append(vector)
+            int_vector = _multiply_series(delta, int_vector)
+        output.append(tuple(Fraction(value) for value in int_vector))
     return tuple(output)
 
 
@@ -872,7 +906,7 @@ def modular_form_basis_q_expansions(
 def _basis_labels(plan: _BasisPlan) -> tuple[str, ...]:
     if plan.basis_labels is not None:
         return plan.basis_labels
-    labels = []
+    labels: list[str] = []
     for a, b in plan.terms:
         if plan.basis_id == GAMMA0_FOUR_CHI4_WEIGHT_ONE_BASIS_ID:
             label = "G1_chi_minus4"
@@ -901,7 +935,8 @@ def _frame_admission(
             code="modular_form.frame_type",
             message="frame must be a typed modular-form change-of-basis value",
         )
-    plan = _admit_basis(frame.space, 1)
+    frame_precision = sturm_bound(frame.space).bound + 1
+    plan = _admit_basis(frame.space, frame_precision, materialize_pari=False)
     if (
         type(frame.source_labels) is not tuple
         or type(frame.labels) is not tuple
@@ -917,8 +952,9 @@ def _frame_admission(
             code="modular_form.frame_shape",
             message="frame axes and matrix rows must be immutable tuples with valid labels",
         )
-    if frame.source_basis_id != plan.basis_id or frame.source_labels != _basis_labels(
-        plan
+    if frame.source_basis_id != plan.basis_id or (
+        plan.basis_id != PARI_STURM_RREF_BASIS_ID
+        and frame.source_labels != _basis_labels(plan)
     ):
         raise OperationDomainValidationError(
             location=("frame", "source_labels"),
@@ -982,6 +1018,20 @@ def _frame_admission(
             max_digits = max(max_digits, digits)
             values.append(rational)
         matrix.append(tuple(values))
+    if plan.basis_id == PARI_STURM_RREF_BASIS_ID:
+        # Complete every request admission that does not depend on backend
+        # output before launching the PARI worker for the canonical basis.
+        frame_matrix = tuple(matrix)
+        zero = tuple(Fraction(0) for _ in range(n))
+        _admit_change_of_basis_arithmetic(n, frame_matrix, zero)
+        _solve_frame_matrix(frame_matrix, zero)
+        plan = _materialize_pari_basis(plan)
+        if frame.source_labels != _basis_labels(plan):
+            raise OperationDomainValidationError(
+                location=("frame", "source_labels"),
+                code="modular_form.frame_source_basis",
+                message="frame source labels and basis identifier must match the exact canonical basis",
+            )
     return plan, tuple(matrix)
 
 
@@ -1010,11 +1060,11 @@ def _admit_change_of_basis_arithmetic(
     work = dimension**3
     frame_bytes = dimension * dimension * (2 * MAX_CHANGE_OF_BASIS_DIGITS + 32)
     coordinate_bytes = dimension * (2 * estimated_digits + 64)
-    output_bytes = frame_bytes + coordinate_bytes
+    allocation_bytes = frame_bytes + coordinate_bytes
     if (
         work > MAX_CHANGE_OF_BASIS_WORK
         or estimated_digits > MAX_COORDINATE_RESULT_DIGITS
-        or output_bytes > MAX_CHANGE_OF_BASIS_OUTPUT_BYTES
+        or allocation_bytes > MAX_CHANGE_OF_BASIS_ALLOCATION_BYTES
     ):
         raise OperationResourceAdmissionError(
             location=("frame",),
@@ -1207,6 +1257,7 @@ def _admit_coordinates(
     admitted_plan: _BasisPlan | None = None,
     materialize_pari: bool = True,
     check_expansion_growth: bool = True,
+    allow_short_prefix: bool = False,
 ) -> tuple[_BasisPlan, tuple[Fraction, ...]]:
     if not isinstance(form, ModularFormCoordinates):
         raise OperationDomainValidationError(
@@ -1229,7 +1280,12 @@ def _admit_coordinates(
             message="form coordinates use an unsupported basis convention",
         )
     plan = (
-        _admit_basis(form.space, precision, materialize_pari=False)
+        _admit_basis(
+            form.space,
+            precision,
+            materialize_pari=False,
+            at_least_sturm=allow_short_prefix,
+        )
         if admitted_plan is None
         else admitted_plan
     )
@@ -1324,6 +1380,26 @@ def _require_canonical_coordinate_space(
         )
 
 
+def _admitted_common_level(
+    left_space: ModularFormSpace, right_space: ModularFormSpace
+) -> int:
+    """The exact common Gamma0 level, admitted within the space bound."""
+
+    common_level = (
+        left_space.level * right_space.level // gcd(left_space.level, right_space.level)
+    )
+    if common_level > MAX_MODULAR_FORM_LEVEL:
+        raise OperationResourceAdmissionError(
+            location=(),
+            code="modular_form.equality_level_bound",
+            message=(
+                "the common Gamma0 level exceeds the modular-form level bound "
+                f"{MAX_MODULAR_FORM_LEVEL}"
+            ),
+        )
+    return common_level
+
+
 def modular_form_coordinates_equal(
     left: ModularFormCoordinates, right: ModularFormCoordinates
 ) -> bool:
@@ -1398,9 +1474,7 @@ def modular_form_coordinates_equal(
     # Both forms embed into M_k(Gamma0(lcm(N1,N2))). The Sturm theorem there
     # makes equality of this finite prefix equivalent to equality of forms;
     # cusp forms embed in its ambient holomorphic space as well.
-    common_level = (
-        left_space.level * right_space.level // gcd(left_space.level, right_space.level)
-    )
+    common_level = _admitted_common_level(left_space, right_space)
     common_space = ModularFormSpace(
         level=common_level, weight=left_space.weight, kind="M"
     )
@@ -1435,7 +1509,7 @@ def modular_form_coordinates_equal(
             code="modular_form.equality_work_bound",
             message="combined equality basis and coefficient work exceeds its envelope",
         )
-    if combined_basis_bytes > MAX_PARI_BASIS_OUTPUT_BYTES:
+    if combined_basis_bytes > MAX_PARI_BASIS_ALLOCATION_BYTES:
         raise OperationResourceAdmissionError(
             location=(),
             code="modular_form.equality_basis_output_bound",
@@ -1469,7 +1543,7 @@ def modular_form_coordinates_equal(
             code="modular_form.equality_coefficient_growth",
             message="common Sturm prefix coefficient growth exceeds its exact envelope",
         )
-    if combined_expansion_bytes > MAX_PARI_BASIS_OUTPUT_BYTES:
+    if combined_expansion_bytes > MAX_PARI_BASIS_ALLOCATION_BYTES:
         raise OperationResourceAdmissionError(
             location=(),
             code="modular_form.equality_output_bound",
@@ -1621,8 +1695,8 @@ def modular_form_coordinates_transport(
             code="modular_form.transport_coefficient_growth",
             message="transport coordinate growth exceeds its exact digit envelope",
         )
-    result_bytes = target_plan.dimension * (2 * result_digit_bound + 32) + 512
-    if result_bytes > MAX_PARI_BASIS_OUTPUT_BYTES:
+    allocation_bytes = target_plan.dimension * (2 * result_digit_bound + 32) + 512
+    if allocation_bytes > MAX_PARI_BASIS_ALLOCATION_BYTES:
         raise OperationResourceAdmissionError(
             location=("target_space",),
             code="modular_form.transport_output_bound",
@@ -1672,7 +1746,10 @@ def modular_form_coordinates_q_expansion(
 ) -> ModularQExpansion:
     """Expand an exact form represented in one supported canonical basis."""
 
-    plan, coordinates = _admit_coordinates(form, precision)
+    # The coordinate value already identifies one global form, so a prefix
+    # shorter than the Sturm-determining bound is admitted at the internal
+    # determining precision and truncated to the requested order.
+    plan, coordinates = _admit_coordinates(form, precision, allow_short_prefix=True)
     basis_vectors = _basis_coefficients(plan)
     output = []
     for coefficient_index in range(precision):
@@ -1822,12 +1899,12 @@ def modular_form_coordinates_product(
             code="modular_form.product_intermediate_bound",
             message="combined product basis materialization exceeds its memory envelope",
         )
-    result_bytes = (
+    allocation_bytes = (
         len(encode_strict_json(target_space.model_dump(mode="json")))
         + target_dimension * (2 * result_digits + 64)
         + 1024
     )
-    if result_bytes > MAX_LEVEL_ONE_BASIS_OUTPUT_BYTES:
+    if allocation_bytes > MAX_LEVEL_ONE_BASIS_ALLOCATION_BYTES:
         raise OperationResourceAdmissionError(
             location=(),
             code="modular_form.product_output_bound",
@@ -2227,15 +2304,15 @@ def modular_form_coordinates_atkin_lehner(
             ),
         )
 
-    matrix_output_bytes = (
+    matrix_allocation_bytes = (
         dimension * dimension * (2 * MAX_ATKIN_LEHNER_MATRIX_ENTRY_DIGITS + 32) + 512
     )
-    coordinate_output_bytes = dimension * (2 * output_digit_bound + 32) + 512
+    coordinate_allocation_bytes = dimension * (2 * output_digit_bound + 32) + 512
     basis_input_bytes = (
         dimension * precision * (2 * max(1, plan.coefficient_digits) + 32) + 512
     )
-    output_bytes = matrix_output_bytes + coordinate_output_bytes
-    if basis_input_bytes + matrix_output_bytes > MAX_PARI_BASIS_OUTPUT_BYTES:
+    allocation_bytes = matrix_allocation_bytes + coordinate_allocation_bytes
+    if basis_input_bytes + matrix_allocation_bytes > MAX_PARI_BASIS_ALLOCATION_BYTES:
         raise OperationResourceAdmissionError(
             location=("form", "space"),
             code="modular_form.atkin_lehner_backend_output_bound",
@@ -2282,7 +2359,7 @@ def modular_form_coordinates_atkin_lehner(
             code="modular_form.atkin_lehner_work_bound",
             message="Atkin-Lehner work exceeds its admitted envelope",
         )
-    if output_bytes > MAX_PARI_BASIS_OUTPUT_BYTES:
+    if allocation_bytes > MAX_PARI_BASIS_ALLOCATION_BYTES:
         raise OperationResourceAdmissionError(
             location=("form", "space"),
             code="modular_form.atkin_lehner_output_bound",
@@ -2297,7 +2374,7 @@ def modular_form_coordinates_atkin_lehner(
         precision,
         basis_vectors,
         admitted_work=total_work,
-        admitted_output_bytes=basis_input_bytes + matrix_output_bytes,
+        admitted_allocation_bytes=basis_input_bytes + matrix_allocation_bytes,
     )
     output_coordinates = tuple(
         sum(
@@ -2432,7 +2509,7 @@ def modular_form_hecke_matrix(
         + plan.dimension.bit_length()
     )
     matrix_bytes = plan.dimension * plan.dimension * (2 * result_digits + 32)
-    if matrix_bytes > MAX_HECKE_MATRIX_OUTPUT_BYTES:
+    if matrix_bytes > MAX_HECKE_MATRIX_ALLOCATION_BYTES:
         raise OperationResourceAdmissionError(
             location=("index",),
             code="modular_form.hecke_matrix_output_bound",
@@ -2566,7 +2643,7 @@ def modular_form_hecke_matrix_in_frame(
     )
     transform_work = 3 * dimension**3
     frame_bytes = len(encode_strict_json(frame.model_dump(mode="json")))
-    result_bytes = (
+    allocation_bytes = (
         frame_bytes
         + dimension * dimension * (2 * result_digits + 48)
         + dimension * 768
@@ -2575,7 +2652,7 @@ def modular_form_hecke_matrix_in_frame(
     if (
         transform_work > 100_000
         or result_digits > MAX_COORDINATE_RESULT_DIGITS
-        or result_bytes > MAX_CHANGE_OF_BASIS_OUTPUT_BYTES
+        or allocation_bytes > MAX_CHANGE_OF_BASIS_ALLOCATION_BYTES
     ):
         raise OperationResourceAdmissionError(
             location=("frame",),
@@ -2583,18 +2660,27 @@ def modular_form_hecke_matrix_in_frame(
             message="exact Hecke matrix conjugation exceeds its work, growth, or output envelope",
         )
 
-    framed_entries = []
+    framed_entries: list[tuple[Fraction, ...]] = []
     for column in range(dimension):
         request_checkpoint("during framed Hecke matrix conjugation")
         transformed = tuple(
             sum(
-                operator[row][inner] * change[inner][column]
-                for inner in range(dimension)
+                (
+                    operator[row][inner] * change[inner][column]
+                    for inner in range(dimension)
+                ),
+                Fraction(0),
             )
             for row in range(dimension)
         )
         framed_column = tuple(
-            sum(inverse[row][inner] * transformed[inner] for inner in range(dimension))
+            sum(
+                (
+                    inverse[row][inner] * transformed[inner]
+                    for inner in range(dimension)
+                ),
+                Fraction(0),
+            )
             for row in range(dimension)
         )
         framed_entries.append(framed_column)
@@ -2717,14 +2803,14 @@ def modular_form_coordinates_u_prime(
     result_digits = image_digits + target_plan.dimension * (
         target_plan.coefficient_digits + target_plan.dimension.bit_length() + 2
     )
-    output_bytes = (
+    allocation_bytes = (
         len(encode_strict_json(space.model_dump(mode="json")))
         + target_plan.dimension * (2 * result_digits + 64)
         + 512
     )
     if (
         result_digits > MAX_COORDINATE_RESULT_DIGITS
-        or output_bytes > MAX_CHANGE_OF_BASIS_OUTPUT_BYTES
+        or allocation_bytes > MAX_CHANGE_OF_BASIS_ALLOCATION_BYTES
     ):
         raise OperationResourceAdmissionError(
             location=("form",),
@@ -2957,14 +3043,14 @@ def modular_form_coordinates_v3(
     result_digits = image_digits + target_plan.dimension * (
         target_plan.coefficient_digits + target_plan.dimension.bit_length() + 2
     )
-    result_bytes = (
+    allocation_bytes = (
         len(encode_strict_json(target_space.model_dump(mode="json")))
         + target_plan.dimension * (2 * result_digits + 64)
         + 512
     )
     if (
         result_digits > MAX_COORDINATE_RESULT_DIGITS
-        or result_bytes > MAX_CHANGE_OF_BASIS_OUTPUT_BYTES
+        or allocation_bytes > MAX_CHANGE_OF_BASIS_ALLOCATION_BYTES
     ):
         raise OperationResourceAdmissionError(
             location=("form",),
@@ -3076,6 +3162,10 @@ def modular_form_coordinates_v_degeneracy(
         materialize_pari=False,
         check_expansion_growth=False,
     )
+    if d == 1:
+        # V_1 is the identity operator on Gamma0(N): the validated form
+        # already carries its exact coordinates in the unchanged basis.
+        return form
     work = (
         source_plan.work
         + target_plan.work
@@ -3108,14 +3198,14 @@ def modular_form_coordinates_v_degeneracy(
     result_digits = image_digits + target_plan.dimension * (
         target_plan.coefficient_digits + target_plan.dimension.bit_length() + 2
     )
-    output_bytes = (
+    allocation_bytes = (
         len(encode_strict_json(target_space.model_dump(mode="json")))
         + target_plan.dimension * (2 * result_digits + 64)
         + 512
     )
     if (
         result_digits > MAX_COORDINATE_RESULT_DIGITS
-        or output_bytes > MAX_CHANGE_OF_BASIS_OUTPUT_BYTES
+        or allocation_bytes > MAX_CHANGE_OF_BASIS_ALLOCATION_BYTES
     ):
         raise OperationResourceAdmissionError(
             location=("form",),
@@ -3336,8 +3426,8 @@ def _admit_operator_image_prefix(
         + len(str(max(1, plan.dimension)))
         + 2
     )
-    output_bytes = precision * (2 * result_digits + 64)
-    if output_bytes > MAX_OPERATOR_IMAGE_OUTPUT_BYTES:
+    allocation_bytes = precision * (2 * result_digits + 64)
+    if allocation_bytes > MAX_OPERATOR_IMAGE_ALLOCATION_BYTES:
         raise OperationResourceAdmissionError(
             location=("precision",),
             code="modular_form.operator_image_output_bound",

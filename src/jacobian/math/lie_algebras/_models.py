@@ -6,10 +6,10 @@ from collections.abc import Mapping
 from fractions import Fraction
 from itertools import pairwise
 from typing import Annotated, Any, Self
-from weakref import ReferenceType, ref
 
 from pydantic import (
     Field,
+    PrivateAttr,
     StrictBool,
     StringConstraints,
     TypeAdapter,
@@ -63,27 +63,6 @@ MAX_CENTRALIZER_WORK = (
 # during generated-subalgebra or generated-ideal closure: the entry count
 # times the admitted per-entry decimal digit width must fit this envelope.
 MAX_GENERATED_MATRIX_DECIMAL_DIGITS = 5_000_000
-
-# Keep proof of construction outside the frozen model. Pydantic private
-# attributes remain assignable through normal attribute syntax, so an
-# instance-local boolean can be forged on a `model_construct` value.
-_JACOBI_ADMITTED: dict[int, ReferenceType[Any]] = {}
-
-
-def _register_jacobi_admitted(value: FiniteDimensionalLieAlgebra) -> None:
-    identity = id(value)
-
-    def discard(reference: ReferenceType[Any]) -> None:
-        if _JACOBI_ADMITTED.get(identity) is reference:
-            _JACOBI_ADMITTED.pop(identity, None)
-
-    _JACOBI_ADMITTED[identity] = ref(value, discard)
-
-
-def has_jacobi_admission(value: FiniteDimensionalLieAlgebra) -> bool:
-    """Whether this exact immutable instance crossed a Jacobi proof boundary."""
-    reference = _JACOBI_ADMITTED.get(id(value))
-    return reference is not None and reference() is value
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -154,6 +133,58 @@ class LieAlgebraStructureConstant(StructureConstant):
 class FiniteDimensionalLieAlgebra(StrictModel):
     """One finite-dimensional Lie algebra over QQ by ordered structure constants."""
 
+    _jacobi_snapshot: tuple[Any, ...] | None = PrivateAttr(default=None)
+
+    @classmethod
+    def model_construct(
+        cls, _fields_set: set[str] | None = None, **values: Any
+    ) -> Self:
+        """Trusted field construction never carries or accepts Jacobi proof."""
+        values.pop("_jacobi_snapshot", None)
+        value = super().model_construct(_fields_set=_fields_set, **values)
+        private = value.__pydantic_private__
+        assert private is not None
+        private["_jacobi_snapshot"] = None
+        return value
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        if name == "_jacobi_snapshot":
+            raise AttributeError("Jacobi admission is established by validation")
+        super().__setattr__(name, value)
+
+    def _current_structure_snapshot(self) -> tuple[Any, ...]:
+        return (
+            self.basis,
+            tuple(
+                (
+                    constant.i,
+                    constant.j,
+                    constant.k,
+                    constant.coefficient.num,
+                    constant.coefficient.den,
+                )
+                for constant in self.structure_constants
+            ),
+        )
+
+    def _record_jacobi_admission(self) -> None:
+        private = self.__pydantic_private__
+        assert private is not None
+        private["_jacobi_snapshot"] = self._current_structure_snapshot()
+
+    def has_current_jacobi_admission(self) -> bool:
+        """Check that this exact value still matches its admitted content."""
+        private = self.__pydantic_private__
+        if private is None:
+            return False
+        snapshot = private.get("_jacobi_snapshot")
+        if snapshot is None:
+            return False
+        try:
+            return bool(snapshot == self._current_structure_snapshot())
+        except (AttributeError, TypeError):
+            return False
+
     @classmethod
     def _from_jacobi_proved_kernel(
         cls,
@@ -208,7 +239,7 @@ class FiniteDimensionalLieAlgebra(StrictModel):
         value = cls.model_construct(
             basis=basis, structure_constants=canonical_constants
         )
-        _register_jacobi_admitted(value)
+        value._record_jacobi_admission()
         return value
 
     basis: tuple[LieBasisLabel, ...] = Field(
@@ -307,7 +338,7 @@ class FiniteDimensionalLieAlgebra(StrictModel):
                     "jacobi_identity",
                     "structure constants must satisfy the Jacobi identity",
                 )
-        _register_jacobi_admitted(self)
+        self._record_jacobi_admission()
         return self
 
     def model_copy(

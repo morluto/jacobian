@@ -693,8 +693,7 @@ def skeleton(
             location=("cells",),
             code="cubical_complex.skeleton_result_representation_size",
             message=(
-                "skeleton closure exceeds the admitted result representation-size "
-                "bound"
+                "skeleton closure exceeds the admitted result representation-size bound"
             ),
         )
     complex_, _source_cells = _canonical_complex(validated_cells)

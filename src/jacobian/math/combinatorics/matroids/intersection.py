@@ -1036,6 +1036,10 @@ def weighted_intersection_rank_certificate(
         ) from exc
 
     first, second = _admit_pair(request.first, request.second)
+    # Rank calls validate the characteristic themselves, but an empty
+    # certificate can bypass every rank call. Establish the shared field once
+    # before any empty-input shortcut, then use the admitted rank entry point.
+    _admit_prime(first.matrix.prime)
     objective, _ = _canonical_weight_function(first, request.weight_function)
     n = first.ground_size
     w_plus = max(0, max(objective, default=0))

@@ -93,9 +93,13 @@ def admit_invariant_relation_closure(
             ),
         )
 
+    # With no seeds, positive-arity operations cannot produce a tuple, so the
+    # closure kernel returns immediately without scanning the ambient power.
+    empty_closure = not generator_tuples
+
     # The queue sorts the current tuple set once per discovered row. The
     # factor eight covers up to log2(4096) comparisons for every row reference.
-    work = 8 * state_count * state_count
+    work = 0 if empty_closure else 8 * state_count * state_count
     for operation in polymorphisms:
         arity = operation.arity
         table_cells, check_work = admit_polymorphism_check(source, arity)
@@ -106,7 +110,9 @@ def admit_invariant_relation_closure(
         # Each discovered tuple is combined with every possible tuple in the
         # other m-1 coordinates, in each argument position. This bounds the
         # incremental fixed-point algorithm without rescanning old products.
-        closure_work = arity * arity * relation_arity * state_count**arity
+        closure_work = (
+            0 if empty_closure else arity * arity * relation_arity * state_count**arity
+        )
         work += check_work + preservation_combinations + closure_work
     retained_source_bytes = len(
         encode_strict_json({"source": source.model_dump(mode="json")})

@@ -232,3 +232,40 @@ def test_product_edge_limit_accepts_at_and_rejects_above_bound() -> None:
     assert len(at_limit.edges) == 4096
     with pytest.raises(OperationResourceAdmissionError):
         restrict_rational_input(relation(2049), dfa)
+
+
+def test_output_label_scans_are_inside_the_declared_work_envelope() -> None:
+    """Admission must bound copied output-label cells, not only DFA scans."""
+    alphabet = FiniteAlphabet(symbols=("a", "b"))
+    relation = RationalTransducer(
+        input_alphabet_size=2,
+        output_alphabet_size=1,
+        input_alphabet=alphabet,
+        output_alphabet=FiniteAlphabet(symbols=("x",)),
+        state_count=1,
+        initial_states=(0,),
+        accepting_states=(0,),
+        edges=tuple(
+            RationalEdge(
+                source=0,
+                target=0,
+                input_label=(),
+                output_label=(0,) * 16,
+            )
+            for _ in range(4096)
+        ),
+    )
+    dfa = DFA(
+        state_count=64,
+        alphabet_size=2,
+        alphabet=alphabet,
+        transitions=tuple(
+            DFATransition(source=state, symbol=symbol, target=state)
+            for state in range(64)
+            for symbol in range(2)
+        ),
+        initial_state=0,
+        accepting_states=(0,),
+    )
+    with pytest.raises(OperationResourceAdmissionError):
+        restrict_rational_input(relation, dfa)

@@ -24,6 +24,7 @@ def test_exact_public_api_symbols() -> None:
         "reachable_state_witnesses",
         "reachable_states",
         "replay_rational_path",
+        "restrict_rational_input",
         "run_subsequential",
         "trim_subsequential",
         "verify_composition",

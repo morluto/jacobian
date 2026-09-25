@@ -80,9 +80,7 @@ def test_dispatch_rejects_a_profile_beyond_the_facet_cap_as_invalid_request() ->
     # Assert the stable domain-error code, not the human-readable message text.
     # The contract is a typed admission rejection; the wording (and which internal
     # bound trips first) may change without changing that contract.
-    assert (
-        exc_info.value.errors()[0]["type"] == "polytope.facet_profile_not_admitted"
-    )
+    assert exc_info.value.errors()[0]["type"] == "polytope.facet_profile_not_admitted"
 
 
 def test_dispatch_admits_the_seven_simplex_with_interior_rows_at_the_cap_budget() -> (

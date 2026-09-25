@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Self
 
-from pydantic import model_validator
+from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
@@ -29,7 +29,16 @@ class RecurrenceOGFEquationRequest(StrictModel):
     """Transform a polynomial recurrence relation into its OGF equation."""
 
     recurrence: ShiftOreOperator
-    initial_coefficients: FiniteRationalSequence
+    initial_coefficients: FiniteRationalSequence = Field(
+        description=(
+            "Provide exactly a_0 through a_(r-1), where r is the largest "
+            "shift exponent in recurrence."
+        ),
+        json_schema_extra={
+            "x-cross-field-rule": "length(values) equals recurrence.order",
+            "examples": [{"values": [1, 1]}],
+        },
+    )
 
     @model_validator(mode="after")
     def require_boundary_coefficients(self) -> Self:

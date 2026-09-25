@@ -135,6 +135,23 @@ def test_polynomial_recurrence_keeps_nonzero_initial_boundary_exactly() -> None:
     )
 
 
+def test_boundary_forcing_growth_is_rejected_before_encoding() -> None:
+    with pytest.raises(OperationResourceAdmissionError, match="coefficient bound"):
+        polynomial_recurrence_to_ogf_equation(
+            _recurrence((1, [(0, 10**63)])),
+            {"values": [10**99]},
+        )
+
+
+def test_initial_coefficient_width_is_described_in_request_schema() -> None:
+    schema = __import__(
+        "jacobian.math.ore_algebras.recurrence_to_ogf._models",
+        fromlist=["RecurrenceOGFEquationRequest"],
+    ).RecurrenceOGFEquationRequest.model_json_schema()
+    field = schema["properties"]["initial_coefficients"]
+    assert "a_0 through a_(r-1)" in field["description"]
+
+
 def test_ogf_differential_equation_round_trips_to_recurrence() -> None:
     transformed = polynomial_recurrence_to_ogf_equation(
         _recurrence((0, [(0, -1)]), (1, [(0, -1)]), (2, [(0, 1)])),

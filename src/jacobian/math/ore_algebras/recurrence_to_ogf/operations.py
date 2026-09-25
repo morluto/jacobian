@@ -179,6 +179,18 @@ def _admit_transform(
     numerator_bits = max(
         (abs(value.numerator).bit_length() for value in scalar_values), default=1
     )
+    # Boundary forcing multiplies each initial value by a recurrence
+    # coefficient; admit the combined numerator height, not just either input.
+    initial_numerator_bits = max(
+        (abs(value.numerator).bit_length() for value in values), default=1
+    )
+    coefficient_numerator_bits = max(
+        (abs(value.numerator).bit_length() for value in input_scalars), default=1
+    )
+    numerator_bits = max(
+        numerator_bits,
+        initial_numerator_bits + coefficient_numerator_bits,
+    )
     growth_bits = (
         numerator_bits + denominator_bits + 32 + 8 * (maximum_degree + operator.order)
     )
@@ -219,7 +231,7 @@ def _expand_equation(
                 previous[derivative_order] if derivative_order < len(previous) else 0
             )
             row[derivative_order] = (
-                previous[derivative_order - 1] + derivative_order * same_degree
+                derivative_order * same_degree + previous[derivative_order - 1]
             )
         stirling.append(row)
 

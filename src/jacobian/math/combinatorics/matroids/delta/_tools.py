@@ -19,8 +19,15 @@ from jacobian.math.combinatorics.matroids.delta.extra import (
     BinaryMatrixResult,
     DeltaMatroidDualRequest,
     DeltaMatroidMinorRequest,
+    DeltaMatroidTwistPolynomialRequest,
+    DeltaMatroidTwistPolynomialResult,
 )
-from jacobian.math.combinatorics.matroids.delta.extra_ops import binary, dual, minor
+from jacobian.math.combinatorics.matroids.delta.extra_ops import (
+    binary,
+    dual,
+    minor,
+    twist_polynomial,
+)
 from jacobian.math.combinatorics.matroids.delta.operations import (
     from_feasible_sets,
     twist,
@@ -269,6 +276,36 @@ TOOLS: MathTools = (  # noqa: RUF005
                 name="binary_zero",
                 description="Reconstruct the principal-minor delta-matroid of the zero 2-by-2 symmetric matrix.",
                 input={"matrix": {"ground": ["a", "b"], "entries": [[0, 0], [0, 0]]}},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="delta_matroid.twist_polynomial.compute",
+        title="Compute the width-generating polynomial of all delta-matroid twists",
+        description=(
+            "Return Tw_D(z) = sum over every A subset E of z^width(D*A), with "
+            "the complete width histogram and canonical integer polynomial. "
+            "Admission allows "
+            "at most 4,096 twist masks, 262,144 mask-feasible-set evaluations, "
+            "and 65,536 encoded result bytes."
+        ),
+        request_type=DeltaMatroidTwistPolynomialRequest,
+        result_type=DeltaMatroidTwistPolynomialResult,
+        run=lambda request: twist_polynomial(request.delta_matroid),
+        tags=("delta-matroid", "twist", "width", "polynomial", "exact"),
+        examples=(
+            OperationExample(
+                name="two_element_twist_width_polynomial",
+                description=(
+                    "Count widths across all four twists; the feasible family "
+                    "must satisfy symmetric exchange."
+                ),
+                input={
+                    "delta_matroid": {
+                        "ground": ["a", "b"],
+                        "feasible": [[], [0], [0, 1], [1]],
+                    }
+                },
             ),
         ),
     ),

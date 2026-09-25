@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from jacobian._execution import request_checkpoint
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -7,8 +8,12 @@ from jacobian.catalog.models import (
 from jacobian.math.combinatorics.greedoids.values import FiniteFeasibleSetSystem
 from jacobian.math.combinatorics.matroids.delta.extra import (
     MAX_BINARY_GROUND,
+    MAX_TWIST_POLYNOMIAL_OUTPUT_BYTES,
+    MAX_TWIST_POLYNOMIAL_STATES,
+    MAX_TWIST_POLYNOMIAL_WORK,
     BinaryMatrixResult,
     BinarySymmetricMatrix,
+    DeltaMatroidTwistPolynomialResult,
 )
 from jacobian.math.combinatorics.matroids.delta.values import (
     DeltaMatroidAdmissionError,
@@ -16,6 +21,9 @@ from jacobian.math.combinatorics.matroids.delta.values import (
     first_symmetric_exchange_obstruction,
     require_delta_matroid_admission,
 )
+from jacobian.math.polynomials._models import IntegerPolynomial
+
+_TWIST_POLYNOMIAL_CHECKPOINT_STRIDE = 4_096
 
 
 def _admit_delta(value: object) -> FiniteDeltaMatroid:
@@ -149,6 +157,77 @@ def minor(
     return FiniteDeltaMatroid(ground=tuple(labels), feasible=rows)
 
 
+def twist_polynomial(d: FiniteDeltaMatroid) -> DeltaMatroidTwistPolynomialResult:
+    """Return ``sum_A z**width(D*A)`` as a complete width histogram.
+
+    Width is computed directly from feasible-set bit masks. This is equivalent
+    to materializing each twisted family, while keeping the active state and
+    result compact. The complete subset count, mask/feasible work, output bytes,
+    and source exchange replay are all admitted before the twist sweep.
+    """
+
+    d = _admit_delta(d)
+    n = len(d.ground)
+    if n > MAX_TWIST_POLYNOMIAL_STATES.bit_length() - 1:
+        raise OperationResourceAdmissionError(
+            location=("delta_matroid", "ground"),
+            code="delta_matroid.twist_polynomial_work",
+            message="complete twist polynomial exceeds its subset-state envelope",
+        )
+    state_count = 1 << n
+    work = state_count * len(d.feasible)
+    try:
+        label_bytes = sum(len(label.encode("utf-8")) for label in d.ground)
+    except UnicodeEncodeError:
+        raise OperationDomainValidationError(
+            location=("delta_matroid", "ground"),
+            code="delta_matroid.labels_not_utf8",
+            message="delta-matroid ground labels must be UTF-8-representable",
+        ) from None
+    # Every histogram count is at most state_count; account for JSON escaping
+    # of arbitrary Unicode labels in the retained ambient ground axis.
+    output_bound = 6 * label_bytes + (n + 1) * (len(str(state_count)) + 4) + 512
+    if (
+        state_count > MAX_TWIST_POLYNOMIAL_STATES
+        or work > MAX_TWIST_POLYNOMIAL_WORK
+        or output_bound > MAX_TWIST_POLYNOMIAL_OUTPUT_BYTES
+    ):
+        raise OperationResourceAdmissionError(
+            location=("delta_matroid",),
+            code="delta_matroid.twist_polynomial_work",
+            message=(
+                "complete twist polynomial exceeds its subset, evaluation, "
+                "or encoded-output envelope"
+            ),
+        )
+    _check(d)
+
+    feasible_masks = tuple(sum(1 << element for element in row) for row in d.feasible)
+    coefficients = [0] * (n + 1)
+    evaluations = 0
+    for twist_mask in range(state_count):
+        minimum = n + 1
+        maximum = -1
+        for feasible_mask in feasible_masks:
+            evaluations += 1
+            if evaluations % _TWIST_POLYNOMIAL_CHECKPOINT_STRIDE == 0:
+                request_checkpoint("during delta-matroid twist-polynomial evaluation")
+            size = (feasible_mask ^ twist_mask).bit_count()
+            minimum = min(minimum, size)
+            maximum = max(maximum, size)
+        coefficients[maximum - minimum] += 1
+
+    ascending = tuple(coefficients)
+    descending = tuple(reversed(ascending))
+    while len(descending) > 1 and descending[0] == 0:
+        descending = descending[1:]
+    return DeltaMatroidTwistPolynomialResult(
+        ground=d.ground,
+        coefficients_by_width=ascending,
+        polynomial=IntegerPolynomial(coefficients=descending),
+    )
+
+
 def _det2(a: list[list[int]]) -> int:
     a = [list(row) for row in a]
     n = len(a)
@@ -211,4 +290,4 @@ def binary(matrix: BinarySymmetricMatrix) -> BinaryMatrixResult:
     )
 
 
-__all__ = ["binary", "dual", "minor"]
+__all__ = ["binary", "dual", "minor", "twist_polynomial"]

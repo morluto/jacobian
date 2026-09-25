@@ -10,7 +10,9 @@ from jacobian.math.topology.cubical_complexes import (
 from jacobian.math.topology.cubical_complexes._models import CubicalCell
 
 
-def _direct_cartesian_vertices(intervals):
+def _direct_cartesian_vertices(
+    intervals: tuple[tuple[int, int], ...],
+) -> tuple[tuple[tuple[int, int], ...], ...]:
     active_axes = tuple(
         axis for axis, (lower, upper) in enumerate(intervals) if lower != upper
     )
@@ -28,7 +30,7 @@ def _direct_cartesian_vertices(intervals):
     return tuple(sorted(points))
 
 
-def test_vertices_match_independent_cartesian_product_and_keep_axis_order():
+def test_vertices_match_independent_cartesian_product_and_keep_axis_order() -> None:
     cell = CubicalCell(intervals=((2, 3), (-4, -4), (8, 9)))
     result = cell_vertices(cell)
 
@@ -41,14 +43,14 @@ def test_vertices_match_independent_cartesian_product_and_keep_axis_order():
     assert len(result.vertices) == 4
 
 
-def test_point_cell_has_itself_as_its_single_vertex():
+def test_point_cell_has_itself_as_its_single_vertex() -> None:
     point = CubicalCell(intervals=((7, 7), (-3, -3), (0, 0)))
     result = cell_vertices(point)
     assert result.cell == point
     assert tuple(vertex.intervals for vertex in result.vertices) == (point.intervals,)
 
 
-def test_native_result_round_trips_through_strict_json():
+def test_native_result_round_trips_through_strict_json() -> None:
     cell = CubicalCell(intervals=((0, 1), (2, 2)))
     result = cell_vertices(cell)
 
@@ -59,10 +61,12 @@ def test_native_result_round_trips_through_strict_json():
     assert restored == result
 
 
-def test_vertex_output_byte_bound_is_checked_before_enumeration(monkeypatch):
+def test_vertex_output_byte_bound_is_checked_before_enumeration(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     cell = CubicalCell(intervals=((10**63, 10**63 + 1),) * 10)
 
-    def forbidden_product(*_args, **_kwargs):
+    def forbidden_product(*_args: object, **_kwargs: object) -> None:
         pytest.fail("vertices must not be enumerated before byte admission")
 
     monkeypatch.setattr(cell_vertices_module, "product", forbidden_product)
@@ -73,7 +77,7 @@ def test_vertex_output_byte_bound_is_checked_before_enumeration(monkeypatch):
     )
 
 
-def test_vertex_coordinate_digit_bound_is_checked():
+def test_vertex_coordinate_digit_bound_is_checked() -> None:
     cell = CubicalCell(intervals=((10**64, 10**64 + 1),))
     with pytest.raises(OperationResourceAdmissionError) as error:
         cell_vertices(cell)
@@ -82,7 +86,7 @@ def test_vertex_coordinate_digit_bound_is_checked():
     )
 
 
-def test_negative_boundary_coordinate_is_admitted():
+def test_negative_boundary_coordinate_is_admitted() -> None:
     cell = CubicalCell(intervals=((-(10**63), -(10**63) + 1),))
     result = cell_vertices(cell)
     assert tuple(vertex.intervals for vertex in result.vertices) == (
@@ -91,8 +95,10 @@ def test_negative_boundary_coordinate_is_admitted():
     )
 
 
-def test_huge_native_endpoint_is_rejected_without_string_conversion(monkeypatch):
-    def forbidden_digit_width(*_args, **_kwargs):
+def test_huge_native_endpoint_is_rejected_without_string_conversion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def forbidden_digit_width(*_args: object, **_kwargs: object) -> None:
         pytest.fail("oversized native endpoints must be rejected before formatting")
 
     monkeypatch.setattr(

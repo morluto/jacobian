@@ -1583,16 +1583,48 @@ def _induced_subalgebra_constants(
                     message="candidate bracket escapes its span",
                 )
             constants.extend(
-                StructureConstant.model_construct(
-                    i=left_index,
-                    j=right_index,
-                    k=output_index,
-                    coefficient=CanonicalRational.from_fraction(bracket[pivot]),
+                _induced_structure_constant(
+                    left_index, right_index, output_index, bracket[pivot]
                 )
                 for output_index, pivot in enumerate(pivots)
                 if bracket[pivot]
             )
     return tuple(constants)
+
+
+def _induced_structure_constant(
+    left_index: int,
+    right_index: int,
+    output_index: int,
+    coefficient: Fraction,
+) -> StructureConstant:
+    """Admit the narrower algebra coefficient ceiling before canonicalization."""
+
+    if (
+        decimal_digit_width(coefficient.numerator) > MAX_STRUCTURE_COEFFICIENT_DIGITS
+        or decimal_digit_width(coefficient.denominator)
+        > MAX_STRUCTURE_COEFFICIENT_DIGITS
+    ):
+        raise OperationResourceAdmissionError(
+            location=(
+                "induced",
+                "structure_constants",
+                left_index,
+                right_index,
+                output_index,
+            ),
+            code="lie_algebra.subalgebra_result_height_bound",
+            message=(
+                "an induced structure coefficient exceeds the admitted "
+                f"{MAX_STRUCTURE_COEFFICIENT_DIGITS}-digit algebra bound"
+            ),
+        )
+    return StructureConstant.model_construct(
+        i=left_index,
+        j=right_index,
+        k=output_index,
+        coefficient=CanonicalRational.from_fraction(coefficient),
+    )
 
 
 def lie_subalgebra(
@@ -1677,7 +1709,9 @@ def lie_subalgebra(
             )
         ),
     )
-    _admit_lie_algebra(induced)
+    # Source Jacobi plus the complete bracket-closure check proves that the
+    # restricted bracket satisfies Jacobi. Rechecking all induced triples
+    # would replay that consequence after its defining computation.
     inclusion = candidate_value.generators
     subalgebra = LieSubalgebra.model_construct(
         basis=algebra_value.basis,

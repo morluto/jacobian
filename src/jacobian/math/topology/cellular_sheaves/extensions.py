@@ -788,8 +788,6 @@ def morphism(
             code="cellular_sheaf.morphism.parent_mismatch",
             message="sheaf morphisms require one complex and coefficient field",
         )
-    _admit_section_plan(source)
-    _admit_section_plan(target)
     _complete_diagram(source, role="source")
     _complete_diagram(target, role="target")
     target_cover = _admit_morphism_resources(source, target, components)

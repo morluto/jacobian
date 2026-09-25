@@ -23,7 +23,7 @@ from jacobian.math.number_theory.modular_forms.character_basis import (
 from jacobian.math.number_theory.modular_forms.character_coordinates import (
     CHARACTER_RREF_BASIS_ID,
 )
-from jacobian.math.number_theory.modular_forms.global_equality.models import (
+from jacobian.math.number_theory.modular_forms.global_equality import (
     CyclotomicFieldEmbedding,
 )
 from jacobian.math.number_theory.modular_forms.global_equality.operations import (
@@ -196,6 +196,24 @@ def test_global_equality_compares_nonzero_cross_embeddings():
             left, _embedding(), wrong_weight, _conjugate_embedding()
         )
     assert error.value.errors()[0]["type"] == "modular_form.global_equality_weight"
+
+
+def test_global_equality_rejects_invalid_native_argument_types():
+    from jacobian.catalog.models import OperationDomainValidationError
+
+    valid = _form(_space(13, 4, kind="S"))
+    for arguments, location in (
+        ((object(), _embedding(), valid, _conjugate_embedding()), "left"),
+        ((valid, _embedding(), object(), _conjugate_embedding()), "right"),
+        ((valid, object(), valid, _conjugate_embedding()), "left_embedding"),
+        ((valid, _embedding(), valid, object()), "right_embedding"),
+    ):
+        with pytest.raises(OperationDomainValidationError) as error:
+            modular_form_coordinates_global_equal(*arguments)
+        assert error.value.errors()[0]["loc"] == (location,)
+        assert error.value.errors()[0]["type"].startswith(
+            "modular_form.global_equality_"
+        )
 
 
 def test_global_equality_handles_zero_spaces_and_unequal_levels():

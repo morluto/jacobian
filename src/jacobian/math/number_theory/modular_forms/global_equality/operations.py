@@ -257,6 +257,30 @@ def modular_form_coordinates_global_equal(
     materialized: each exact source basis is expanded only through the
     determining prefix of Gamma1(lcm(N_left,N_right)).
     """
+    if type(left) is not ModularFormCoordinates:
+        _fail_domain(
+            "modular_form.global_equality_form_type",
+            "left must be exact modular-form coordinates",
+            ("left",),
+        )
+    if type(right) is not ModularFormCoordinates:
+        _fail_domain(
+            "modular_form.global_equality_form_type",
+            "right must be exact modular-form coordinates",
+            ("right",),
+        )
+    if type(left_embedding) is not CyclotomicFieldEmbedding:
+        _fail_domain(
+            "modular_form.global_equality_embedding_type",
+            "left_embedding must be an explicit cyclotomic field embedding",
+            ("left_embedding",),
+        )
+    if type(right_embedding) is not CyclotomicFieldEmbedding:
+        _fail_domain(
+            "modular_form.global_equality_embedding_type",
+            "right_embedding must be an explicit cyclotomic field embedding",
+            ("right_embedding",),
+        )
     if (
         type(left) is ModularFormCoordinates
         and type(right) is ModularFormCoordinates
@@ -312,7 +336,23 @@ def modular_form_coordinates_global_equal(
         )
     dimension = max(left_dimension, right_dimension, 1)
     source_degree = max(left_context.field.degree, right_context.field.degree)
-    intermediate_digits = 2 * (dimension * source_degree) ** 2 * 30 + 128
+    coordinate_height = max(
+        (
+            max(
+                len(str(abs(value.num))),
+                len(str(value.den)),
+            )
+            for form in (left, right)
+            for coordinate in form.coordinates
+            for value in coordinate.coefficients_ascending
+        ),
+        default=1,
+    )
+    intermediate_digits = (
+        2 * (dimension * source_degree) ** 2 * 30
+        + coordinate_height * (dimension * source_degree)
+        + 128
+    )
     worker_bytes = (left_dimension + right_dimension) * precision * source_degree * 48
     rref_bytes = (
         precision

@@ -2271,10 +2271,11 @@ class PrismResult(StrictModel):
                 "prism_height_axis_binding",
                 "the named prism height axis must be the final output axis",
             )
-        if tuple(row.source_axis for row in self.source_axis_map) != (
-            self.source_space.axes
-        ) or tuple(row.target_axis for row in self.source_axis_map) != (
-            self.prism.space.axes[:-1]
+        if (
+            tuple(row.source_axis for row in self.source_axis_map)
+            != (self.source_space.axes)
+            or tuple(row.target_axis for row in self.source_axis_map)
+            != (self.prism.space.axes[:-1])
         ):
             raise _validation_error(
                 "prism_axis_transport",
@@ -2465,8 +2466,7 @@ class JoinResult(StrictModel):
         left_width = len(self.left_space.axes)
         right_width = len(self.right_space.axes)
         if len(self.join.space.axes) != left_width + right_width + 1 or (
-            tuple(row.source_axis for row in self.left_axis_map)
-            != self.left_space.axes
+            tuple(row.source_axis for row in self.left_axis_map) != self.left_space.axes
             or tuple(row.target_axis for row in self.left_axis_map)
             != self.join.space.axes[:left_width]
             or tuple(row.source_axis for row in self.right_axis_map)

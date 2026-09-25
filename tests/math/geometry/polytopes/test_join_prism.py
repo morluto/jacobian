@@ -230,9 +230,9 @@ class TestJoinKnownAnswer:
         assert result.right_affine_dimension == 2
         assert result.join_affine_dimension == 4
         assert tuple(result.join.space.axes) == ("x", "y", "z", "h")
-        assert [
-            (row.source_axis, row.target_axis) for row in result.left_axis_map
-        ] == [("x", "x")]
+        assert [(row.source_axis, row.target_axis) for row in result.left_axis_map] == [
+            ("x", "x")
+        ]
         assert [
             (row.source_axis, row.target_axis) for row in result.right_axis_map
         ] == [("y", "y"), ("z", "z")]

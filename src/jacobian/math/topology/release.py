@@ -397,6 +397,12 @@ def _all_faces_sorted(complex_: FiniteSimplicialComplex) -> tuple[Simplex, ...]:
 
 def order_complex(request: OrderComplexRequest) -> OrderComplexResult:
     """Return the simplicial complex of all nonempty chains in a finite poset."""
+    if not isinstance(request, OrderComplexRequest):
+        raise OperationDomainValidationError(
+            location=(),
+            code="topology.order_complex.invalid_request",
+            message="order-complex input must be an OrderComplexRequest",
+        )
     poset = request.poset
     if not verify_finite_poset(poset):
         raise OperationDomainValidationError(
@@ -427,6 +433,12 @@ def order_complex(request: OrderComplexRequest) -> OrderComplexResult:
 
 
 def face_poset(request: FacePosetRequest) -> FacePosetResult:
+    if not isinstance(request, FacePosetRequest):
+        raise OperationDomainValidationError(
+            location=(),
+            code="topology.face_poset.invalid_request",
+            message="face-poset input must be a FacePosetRequest",
+        )
     complex_ = _canonical(request.complex)
     faces = _all_faces_sorted(complex_)
     if len(faces) * len(faces) > MAX_FACE_POSET_PAIR_CANDIDATES:

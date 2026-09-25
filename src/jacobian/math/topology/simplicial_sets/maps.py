@@ -113,12 +113,31 @@ def _require_naturality(map_value: TruncatedSimplicialMap, *, location: str) -> 
                     )
 
 
+def _require_carrier(
+    value: FiniteTruncatedSimplicialSet, *, location: str
+) -> FiniteTruncatedSimplicialSet:
+    checked = from_tables(
+        value.max_degree, value.sets, value.face_maps, value.degeneracy_maps
+    )
+    if checked.simplicial_set is None:
+        raise OperationDomainValidationError(
+            location=(location,),
+            code="simplicial_map.carrier_invalid",
+            message="map carrier fails a visible simplicial identity",
+        )
+    return checked.simplicial_set
+
+
 def compose_simplicial_maps(
     request: SimplicialMapCompositionRequest,
 ) -> TruncatedSimplicialMap:
     """Compose finite-prefix simplicial maps after checking their claims."""
     first, second = request.first, request.second
-    if first.target != second.source:
+    first_source = _require_carrier(first.source, location="first.source")
+    first_target = _require_carrier(first.target, location="first.target")
+    second_source = _require_carrier(second.source, location="second.source")
+    second_target = _require_carrier(second.target, location="second.target")
+    if first_target != second_source:
         raise OperationDomainValidationError(
             location=("second", "source"),
             code="simplicial_map.composition_carrier_mismatch",
@@ -133,7 +152,7 @@ def compose_simplicial_maps(
     # Naturality follows by composition, but replay it at this public boundary
     # so the returned map is independently checked against its bound carriers.
     composite = TruncatedSimplicialMap(
-        source=first.source, target=second.target, maps=maps
+        source=first_source, target=second_target, maps=maps
     )
     _require_naturality(composite, location="composite")
     return composite

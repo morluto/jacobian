@@ -29,10 +29,12 @@ from jacobian.math.topology.simplicial_sets.image import (
     simplicial_map_image,
 )
 from jacobian.math.topology.simplicial_sets.maps import (
+    NormalizedHomologyResult,
     TruncatedSimplicialMap,
     compose_simplicial_maps,
     identity_simplicial_map,
     normalized_chains,
+    normalized_homology,
     simplicial_map,
 )
 from jacobian.math.topology.simplicial_sets.operations import from_tables
@@ -51,19 +53,14 @@ from jacobian.math.topology.simplicial_sets.standard import (
     standard_simplex,
 )
 from jacobian.math.topology.simplicial_sets.subset import simplicial_subset
-from jacobian.math.topology.simplicial_sets.subset_models import (
-    SimplicialSubsetPrefix,
-    SimplicialSubsetRequest,
-)
+from jacobian.math.topology.simplicial_sets.subset_models import SimplicialSubsetPrefix
 from jacobian.math.topology.simplicial_sets.truncate import truncate_simplicial_set
-from jacobian.math.topology.simplicial_sets.truncate_models import (
-    SimplicialSetTruncateRequest,
-)
 
 __all__ = [
     "ComplexFaceSimplexIndex",
     "DegeneracyProfileResult",
     "FiniteTruncatedSimplicialSet",
+    "NormalizedHomologyResult",
     "SimplicialComplexPrefixResult",
     "SimplicialIdentityObstruction",
     "SimplicialMapImageResult",
@@ -72,9 +69,7 @@ __all__ = [
     "SimplicialSetQuotientRequest",
     "SimplicialSetQuotientResult",
     "SimplicialSetTablesResult",
-    "SimplicialSetTruncateRequest",
     "SimplicialSubsetPrefix",
-    "SimplicialSubsetRequest",
     "TruncatedSimplicialMap",
     "UnnormalizedChainsResult",
     "compose_simplicial_maps",
@@ -82,6 +77,7 @@ __all__ = [
     "from_tables",
     "identity_simplicial_map",
     "normalized_chains",
+    "normalized_homology",
     "simplex_boundary",
     "simplex_horn",
     "simplicial_map",

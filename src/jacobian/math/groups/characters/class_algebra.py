@@ -13,7 +13,10 @@ from jacobian.math.groups.characters._models import (
     ClassMultiplicationConstantsResult,
     ConjugacyClassPartition,
 )
-from jacobian.math.groups.characters.operations import _admit_partition_source
+from jacobian.math.groups.characters.operations import (
+    _admit_partition_classes,
+    _admit_partition_source,
+)
 
 MAX_CLASS_ALGEBRA_GROUP_ORDER = 256
 MAX_CLASS_ALGEBRA_CLASS_COUNT = 64
@@ -29,6 +32,20 @@ def class_multiplication_constants(
     request: ClassMultiplicationConstantsRequest,
 ) -> ClassMultiplicationConstantsResult:
     """Compute the complete integral class-sum multiplication tensor."""
+    # Revalidate even model_construct-created values at the public native boundary.
+    try:
+        request = ClassMultiplicationConstantsRequest.model_validate(request.model_dump())
+    except (AttributeError, TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("partition",),
+            code="groups.characters.class_algebra_request",
+            message="class algebra request is malformed",
+        ) from exc
+    if not isinstance(request, ClassMultiplicationConstantsRequest):
+        raise OperationDomainValidationError(
+            location=(), code="groups.characters.class_algebra_request",
+            message="class algebra request is malformed",
+        )
     claim = request.partition
     claimed_order = sum(len(conjugacy_class) for conjugacy_class in claim.classes)
     claimed_count = len(claim.classes)
@@ -40,6 +57,10 @@ def class_multiplication_constants(
     from jacobian.math.groups.operations import group_conjugacy_classes, group_order
 
     degree, generators = _admit_partition_source(claim.source)
+    _admit_partition_classes(claim.classes, degree)
+    # Schreier-Sims computes an exact order directly; cap the source degree and
+    # generators above, and admit this bounded canonicalization phase separately
+    # from tensor multiplication (no expansion of group elements yet).
     source_order = group_order(claim.source)
     if source_order > MAX_CLASS_ALGEBRA_GROUP_ORDER:
         raise OperationResourceAdmissionError(

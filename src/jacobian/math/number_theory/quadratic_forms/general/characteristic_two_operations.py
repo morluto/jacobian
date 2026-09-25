@@ -38,6 +38,16 @@ def evaluate_finite_field_quadratic_form(
             code="quadratic_form.characteristic_two.evaluation_request_type",
             message="request must be a finite-field quadratic evaluation request",
         )
+    try:
+        request = FiniteFieldQuadraticEvaluationRequest.model_validate(
+            request.model_dump(mode="python")
+        )
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="quadratic_form.characteristic_two.invalid_request",
+            message="request violates finite-field quadratic evaluation invariants",
+        ) from exc
     form = request.form
     n = len(form.axis)
     if n + len(form.cross_terms) > 4096:
@@ -86,6 +96,16 @@ def polar_pairing_finite_field_quadratic_form(
             code="quadratic_form.characteristic_two.pairing_request_type",
             message="request must be a finite-field quadratic pairing request",
         )
+    try:
+        request = FiniteFieldQuadraticPairingRequest.model_validate(
+            request.model_dump(mode="python")
+        )
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="quadratic_form.characteristic_two.invalid_request",
+            message="request violates finite-field quadratic pairing invariants",
+        ) from exc
     form = request.form
     if len(form.axis) + len(form.cross_terms) > 4096:
         raise OperationDomainValidationError(

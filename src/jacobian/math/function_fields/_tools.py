@@ -36,6 +36,9 @@ from jacobian.math.function_fields._models import (
     HyperellipticAffinePlaceValuationRequest,
     HyperellipticAffinePlaceValuationResult,
 )
+from jacobian.math.function_fields.hyperelliptic_affine_places import (
+    HYPERELLIPTIC_AFFINE_PLACES_TOOL,
+)
 from jacobian.math.function_fields.operations import (
     function_field_base_embedding,
     function_field_base_embedding_apply,
@@ -200,9 +203,7 @@ def _run_place_valuation(
 def _run_hyperelliptic_affine_valuation(
     request: HyperellipticAffinePlaceValuationRequest,
 ) -> HyperellipticAffinePlaceValuationResult:
-    return function_field_hyperelliptic_affine_valuation(
-        request.place, request.element
-    )
+    return function_field_hyperelliptic_affine_valuation(request.place, request.element)
 
 
 def _run_place_residue(
@@ -776,6 +777,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
+    HYPERELLIPTIC_AFFINE_PLACES_TOOL,
 )
 
 __all__ = ["TOOLS"]

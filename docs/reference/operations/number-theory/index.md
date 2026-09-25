@@ -2,6 +2,7 @@
 
 - [Rational function-field genus](function-field-genus.md)
 - [Rational affine hyperelliptic valuations](hyperelliptic-affine-valuations.md)
+- [Rational affine hyperelliptic place enumeration](hyperelliptic-affine-place-enumeration.md)
 - [Level-one named modular-form q-expansions](modular-forms-level-one-q-expansions.md)
 - [Function-field divisor effective parts](function-field-divisor-effective-parts.md)
 - [Rational function-field divisor arithmetic](function-field-divisor-arithmetic.md)

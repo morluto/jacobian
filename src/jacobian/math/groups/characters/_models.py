@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from typing import Self
 
-from pydantic import Field, StrictInt, model_validator
+from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import CanonicalRational, ExactInteger
 from jacobian._models import StrictModel
 from jacobian.math.groups._models import GroupConjugacyClassesResult, PermutationGroup
 from jacobian.math.groups.characters._cyclotomic import euler_phi
@@ -668,7 +668,7 @@ class CharacterRingElement(StrictModel):
     """
 
     table: CharacterTableResult
-    irreducible_multiplicities: tuple[StrictInt, ...] = Field(
+    irreducible_multiplicities: tuple[ExactInteger, ...] = Field(
         min_length=1, max_length=MAX_CLASS_COUNT
     )
 
@@ -681,7 +681,6 @@ class CharacterRingElement(StrictModel):
             )
         if any(
             coefficient.bit_length() > 1702
-            or len(str(abs(coefficient))) > MAX_VALUE_COEFFICIENT_DIGITS
             for coefficient in self.irreducible_multiplicities
         ):
             raise _validation_error(

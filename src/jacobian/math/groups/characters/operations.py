@@ -623,17 +623,11 @@ def _character_table_from_admitted_partition(
                         order,
                         (
                             Fraction(
-                                
-                                    {"trivial": 1, "sign": 1, "standard": 2}[label]
-                                    if size == 1
-                                    else {"trivial": 1, "sign": -1, "standard": 0}[
-                                        label
-                                    ]
-                                    if size == 3
-                                    else {"trivial": 1, "sign": 1, "standard": -1}[
-                                        label
-                                    ]
-                                
+                                {"trivial": 1, "sign": 1, "standard": 2}[label]
+                                if size == 1
+                                else {"trivial": 1, "sign": -1, "standard": 0}[label]
+                                if size == 3
+                                else {"trivial": 1, "sign": 1, "standard": -1}[label]
                             ),
                             Fraction(0),
                         ),

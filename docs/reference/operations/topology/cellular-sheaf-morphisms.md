@@ -23,10 +23,14 @@ the intermediate sheaf values to agree exactly, and returns the original
 source, final target, and composed component matrices. This makes the result
 usable after serialization without relying on unchecked caller claims.
 
-`cellular_sheaf.morphism.identity.compute` constructs the canonical identity
-natural transformation on one checked sheaf. It returns an identity matrix in
-each retained stalk basis, including the correctly shaped empty matrix for a
-zero-dimensional stalk. The source and target are the same source-bound sheaf.
+The native-only `identity_morphism` constructor in
+`jacobian.math.topology.cellular_sheaves` returns the canonical identity
+natural transformation on one checked sheaf. It is not published as a
+catalog operation; `cellular_sheaf.morphism.compute` already owns the public
+morphism value, and its example supplies the identity components directly.
+`identity_morphism` returns an identity matrix in each retained stalk basis,
+including the correctly shaped empty matrix for a zero-dimensional stalk,
+with the source and target set to the same source-bound sheaf.
 
 `cellular_sheaf.morphism.cochain_map` turns a natural morphism into its
 degreewise maps on cellular sheaf cochains. Each returned dense matrix is

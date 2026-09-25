@@ -211,6 +211,18 @@ class LogicalPauliSpace(StrictModel):
                 "symplectic_form_axes",
                 "induced form must be a GF(2) matrix on the quotient coordinate axis",
             )
+        form_values = tuple(
+            tuple(entry.coordinates[0] for entry in row) for row in form.entries
+        )
+        if any(form_values[index][index] for index in range(quotient_dimension)) or any(
+            form_values[row][column] != form_values[column][row]
+            for row in range(quotient_dimension)
+            for column in range(row + 1, quotient_dimension)
+        ):
+            raise _validation_error(
+                "symplectic_form_alternating",
+                "induced symplectic form must be alternating",
+            )
         self._require_semantic_relations(
             width, normalizer_dimension, quotient_dimension
         )

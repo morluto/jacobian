@@ -222,6 +222,14 @@ def test_nonisotropic_checks_are_not_a_logical_quotient() -> None:
         logical_pauli_space(source)
 
 
+def test_malformed_typed_check_row_uses_operation_domain_error() -> None:
+    register = QubitRegister(qubit_ids=("q0",))
+    malformed = PhaseFreeQubitPauli.model_construct(qubit_register=register)
+    source = CheckSpaceValue.model_construct(qubit_register=register, basis=(malformed,))
+    with pytest.raises(OperationDomainValidationError, match="check rows must be binary Paulis"):
+        logical_pauli_space(source)
+
+
 def test_maximum_register_and_check_row_boundary_remain_accepted() -> None:
     register = QubitRegister(qubit_ids=tuple(f"q{i}" for i in range(32)))
     zero = _pauli(register, 0)
@@ -248,7 +256,8 @@ def test_structural_roundtrip_rejects_a_foreign_register_claim() -> None:
         ("embedding", "orthogonal to every check"),
         ("kernel", "stabilizer inclusion must lie in the quotient projection kernel"),
         ("section", "projection composed with its section must be identity"),
-        ("form", "induced quotient form must equal ambient Pauli pairings"),
+        ("form", "induced symplectic form must be alternating"),
+        ("form_diagonal", "induced symplectic form must be alternating"),
         ("degenerate_form", "induced quotient symplectic form must be nondegenerate"),
     ],
 )
@@ -269,6 +278,8 @@ def test_consumer_validation_rejects_forged_semantic_relations(
     elif corruption == "section":
         payload["quotient_lift"]["matrix"]["entries"][0][0] = 0
     elif corruption == "form":
+        payload["induced_symplectic_form"]["entries"][0][0]["coordinates"] = ["1"]
+    elif corruption == "form_diagonal":
         payload["induced_symplectic_form"]["entries"][0][0]["coordinates"] = ["1"]
     else:
         for row in payload["induced_symplectic_form"]["entries"]:

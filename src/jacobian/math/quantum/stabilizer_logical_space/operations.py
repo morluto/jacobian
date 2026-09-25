@@ -83,16 +83,19 @@ def _admit_check_space(value: object) -> tuple[CheckSpaceValue, int, int, int]:
         )
     width = len(ids)
     for index, row in enumerate(rows):
+        row_register = getattr(row, "qubit_register", None)
+        x_bits = getattr(row, "x_bits", None)
+        z_bits = getattr(row, "z_bits", None)
         if (
             not isinstance(row, PhaseFreeQubitPauli)
-            or row.qubit_register != register
-            or type(row.x_bits) is not tuple
-            or type(row.z_bits) is not tuple
-            or len(row.x_bits) != width
-            or len(row.z_bits) != width
+            or row_register != register
+            or type(x_bits) is not tuple
+            or type(z_bits) is not tuple
+            or len(x_bits) != width
+            or len(z_bits) != width
             or any(
                 type(bit) is not int or bit not in (0, 1)
-                for bit in (*row.x_bits, *row.z_bits)
+                for bit in (*x_bits, *z_bits)
             )
         ):
             _reject(

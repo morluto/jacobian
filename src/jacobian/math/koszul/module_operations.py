@@ -451,35 +451,6 @@ def _require_square_zero(value: ModuleKoszulComplex) -> None:
                     )
 
 
-def _require_two_sided_unit(algebra: FiniteCommutativeAlgebra) -> None:
-    if algebra.unit is None:
-        raise OperationDomainValidationError(
-            location=("algebra", "unit"),
-            code="koszul.module.algebra_not_unital",
-            message="unit contraction requires a retained algebra unit",
-        )
-    dimension = len(algebra.basis)
-    if not all(
-        sum(
-            _f(algebra.unit[i]) * _f(algebra.multiplication[i][j][k])
-            for i in range(dimension)
-        )
-        == Fraction(int(j == k))
-        and sum(
-            _f(algebra.unit[i]) * _f(algebra.multiplication[j][i][k])
-            for i in range(dimension)
-        )
-        == Fraction(int(j == k))
-        for j in range(dimension)
-        for k in range(dimension)
-    ):
-        raise OperationDomainValidationError(
-            location=("algebra", "unit"),
-            code="koszul.module.invalid_unit",
-            message="retained algebra unit must act as the two-sided identity",
-        )
-
-
 def _algebra_rationals(
     algebra: FiniteCommutativeAlgebra,
 ) -> Iterator[CanonicalRational]:
@@ -761,10 +732,10 @@ def module_koszul_exactness_profile(
     bounds this smaller projection before any exact elimination is performed.
     """
     try:
-        value = ModuleKoszulHomologyRequest.model_validate(
-            request.model_dump()
+        value = (
+            request
             if isinstance(request, ModuleKoszulHomologyRequest)
-            else request
+            else ModuleKoszulHomologyRequest.model_validate(request)
         )
     except Exception as exc:
         raise OperationDomainValidationError(
@@ -772,25 +743,7 @@ def module_koszul_exactness_profile(
             code="koszul.module.homology_request_shape",
             message="the Koszul exactness request is not canonical",
         ) from exc
-    complex_value = _admit_complex(value.complex)
-    _require_square_zero(complex_value)
-    canonical = _build_module_koszul_complex(
-        ModuleKoszulRequest(
-            algebra=complex_value.algebra,
-            module=complex_value.module,
-            sequence=complex_value.sequence,
-        )
-    )
-    if (
-        not complex_value.square_zero
-        or canonical.differentials != complex_value.differentials
-    ):
-        raise OperationDomainValidationError(
-            location=("complex", "differentials"),
-            code="koszul.module.source_complex_mismatch",
-            message="source differentials must be induced by the retained sequence and action",
-        )
-    homology = module_koszul_homology(complex_value)
+    homology = module_koszul_homology(value.complex)
     first_nonzero = next(
         (
             degree
@@ -1115,7 +1068,7 @@ def module_koszul_sequence_permute(
             sequence=source.sequence,
         )
     )
-    if not source.square_zero or canonical_source.differentials != source.differentials:
+    if canonical_source.differentials != source.differentials:
         raise OperationDomainValidationError(
             location=("complex", "differentials"),
             code="koszul.module.source_complex_mismatch",
@@ -1368,7 +1321,6 @@ def module_koszul_unit_contract(
             message="unit contraction requires a retained algebra unit",
         )
     element = source.sequence[value.unit_index]
-    _require_two_sided_unit(algebra)
     inverse = _algebra_inverse(algebra, element)
     if inverse is None:
         raise OperationDomainValidationError(

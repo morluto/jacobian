@@ -1548,14 +1548,6 @@ def _gs_prefix_generators(
 
     basis: list[FreeAlgebraPolynomial] = []
     for index, generator in enumerate(ideal.generators):
-        if len(generator.terms) > MAX_FREE_ALGEBRA_OPERAND_TERMS or any(
-            len(term.word) > MAX_FREE_ALGEBRA_WORD_LENGTH for term in generator.terms
-        ):
-            raise OperationResourceAdmissionError(
-                location=("ideal", "generators", index),
-                code="free_algebra.gs_generator_budget",
-                message="GS generator expansion exceeds the admitted envelope",
-            )
         if not generator.terms:
             continue
         generator_degree = len(generator.terms[0].word)
@@ -1566,6 +1558,14 @@ def _gs_prefix_generators(
                 message="degree-bounded GS completion requires homogeneous generators",
             )
         if generator_degree <= degree:
+            if len(generator.terms) > MAX_FREE_ALGEBRA_OPERAND_TERMS or any(
+                len(term.word) > MAX_FREE_ALGEBRA_WORD_LENGTH for term in generator.terms
+            ):
+                raise OperationResourceAdmissionError(
+                    location=("ideal", "generators", index),
+                    code="free_algebra.gs_generator_budget",
+                    message="GS generator expansion exceeds the admitted envelope",
+                )
             basis.append(generator)
     return basis
 

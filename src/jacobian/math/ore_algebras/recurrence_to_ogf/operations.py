@@ -215,9 +215,11 @@ def _expand_equation(
         previous = stirling[-1]
         row = [0] * (power + 1)
         for derivative_order in range(1, power + 1):
-            old = previous[derivative_order] if derivative_order < len(previous) else 0
+            same_degree = (
+                previous[derivative_order] if derivative_order < len(previous) else 0
+            )
             row[derivative_order] = (
-                old + derivative_order * previous[derivative_order - 1]
+                previous[derivative_order - 1] + derivative_order * same_degree
             )
         stirling.append(row)
 

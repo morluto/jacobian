@@ -85,6 +85,23 @@ def test_fibonacci_recurrence_yields_ogf_equation_with_boundary_term() -> None:
     assert type(result).model_validate_json(result.model_dump_json()) == result
 
 
+def test_quadratic_recurrence_uses_correct_euler_operator_expansion() -> None:
+    # n^2*a_n maps to (xD)^2 F = xD F + x^2 D^2 F.
+    result = polynomial_recurrence_to_ogf_equation(
+        _recurrence((0, [(2, 1)])), {"values": []}
+    )
+    x = sp.Symbol("x")
+    generating_function = x**2
+    transformed = sum(
+        _as_sympy_polynomial(term.coefficient, x)
+        * sp.diff(generating_function, x, term.order)
+        for term in result.differential_operator.terms
+    )
+    euler_square = x * sp.diff(x * sp.diff(generating_function, x), x)
+    assert sp.expand(transformed - euler_square) == 0
+    assert sp.expand(euler_square) == 4 * x**2
+
+
 def test_polynomial_recurrence_uses_euler_operator_and_keeps_zero_boundary() -> None:
     # (n+1)a_(n+1)-a_n=0 gives xF'-xF=0, with no forcing term.
     result = polynomial_recurrence_to_ogf_equation(

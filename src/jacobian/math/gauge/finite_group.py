@@ -385,9 +385,25 @@ def finite_group_gauge_basepoint_transport(
     table, inverse, identity, order = _admit_group(group)
     vertices, edges, values = _admit_field(field, group, order)
     if (
-        not isinstance(loop.steps, tuple)
+        "steps" not in loop.__dict__
+        or "basepoint" not in loop.__dict__
+        or "steps" not in connector.__dict__
+        or "basepoint" not in connector.__dict__
+        or not isinstance(loop.steps, tuple)
         or not isinstance(connector.steps, tuple)
-        or len(loop.steps) > 256
+        or not all(isinstance(step, GaugePathStep) for step in (*loop.steps, *connector.steps))
+        or any(not isinstance(step.edge_id, str) or not isinstance(step.forward, bool)
+               for step in (*loop.steps, *connector.steps))
+        or not isinstance(loop.basepoint, (str, type(None)))
+        or not isinstance(connector.basepoint, (str, type(None)))
+    ):
+        _reject(
+            "request",
+            "lattice_gauge.finite_group.basepoint_request_shape",
+            "loop and connector paths are malformed",
+        )
+    if (
+        len(loop.steps) > 256
         or len(connector.steps) > 256
     ):
         raise OperationResourceAdmissionError(

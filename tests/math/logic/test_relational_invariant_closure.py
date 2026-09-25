@@ -16,6 +16,7 @@ from jacobian.catalog.models import (
 from jacobian.dispatch import invoke_operation
 from jacobian.math.logic.relational_structures import (
     FiniteRelationalStructure,
+    FiniteRelationSymbol,
     RelationalInvariantClosure,
     RelationalInvariantClosureRequest,
     RelationalPolymorphism,
@@ -102,8 +103,8 @@ def test_closure_is_exact_on_nonempty_source_relations() -> None:
     source = FiniteRelationalStructure(
         carrier_size=2,
         signature=(
-            {"symbol_id": "E", "arity": 2},
-            {"symbol_id": "P", "arity": 1},
+            FiniteRelationSymbol(symbol_id="E", arity=2),
+            FiniteRelationSymbol(symbol_id="P", arity=1),
         ),
         relation_tables=(((0, 0), (1, 1)), ((0,), (1,))),
     )
@@ -139,7 +140,7 @@ def test_two_supplied_operations_generate_the_least_common_closed_relation() -> 
 def test_non_polymorphism_is_rejected_before_it_can_claim_invariance() -> None:
     source = FiniteRelationalStructure(
         carrier_size=2,
-        signature=({"symbol_id": "P", "arity": 1},),
+        signature=(FiniteRelationSymbol(symbol_id="P", arity=1),),
         relation_tables=(((0,),),),
     )
     constant_one = _operation(source, 1, (1, 1))

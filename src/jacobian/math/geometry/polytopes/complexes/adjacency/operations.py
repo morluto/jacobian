@@ -1,17 +1,12 @@
 """Exact maximal-cell facet adjacency graphs."""
 
-from jacobian.canonical import (
-    CanonicalizationError,
-    CanonicalLimits,
-    encode_strict_json,
-)
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
+from jacobian.math.geometry.polytopes._models import RationalVPolytope
 from jacobian.math.geometry.polytopes.complexes._models import (
     MAX_COMPLEX_CELLS,
-    PolytopalComplexClosureRequest,
 )
 from jacobian.math.geometry.polytopes.complexes.adjacency._models import (
     PolytopalAdjacencyCell,
@@ -23,11 +18,16 @@ from jacobian.math.geometry.polytopes.complexes.operations import (
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
-MAX_POLYTOPAL_ADJACENCY_RESULT_BYTES = 4 * 1024 * 1024
+MAX_POLYTOPAL_ADJACENCY_RESULT_COORDINATES = (16 * 64 + 120 * 64) * 4
+MAX_POLYTOPAL_ADJACENCY_RESULT_DIGITS = 2_500_000
+
+
+def _digits(value: int) -> int:
+    return len(str(abs(value)))
 
 
 def polytopal_complex_adjacency_graph(
-    request: PolytopalComplexClosureRequest,
+    source_cells: tuple[RationalVPolytope, ...],
 ) -> PolytopalComplexAdjacencyGraph:
     """Return the simple graph joining cells that share a codimension-one face.
 
@@ -39,13 +39,13 @@ def polytopal_complex_adjacency_graph(
     not create an edge.
     """
 
-    if not isinstance(request, PolytopalComplexClosureRequest):
+    if not isinstance(source_cells, tuple):
         raise OperationDomainValidationError(
-            location=("request",),
-            code="polytopal_complex.adjacency.request_type",
-            message="expected a typed polytopal complex request",
+            location=("cells",),
+            code="polytopal_complex.adjacency.cell_collection_type",
+            message="maximal cells must be a canonical tuple",
         )
-    if len(request.cells) > MAX_COMPLEX_CELLS:
+    if len(source_cells) > MAX_COMPLEX_CELLS:
         raise OperationResourceAdmissionError(
             location=("cells",),
             code="polytopal_complex.adjacency.cell_count_over_envelope",
@@ -55,7 +55,7 @@ def polytopal_complex_adjacency_graph(
             ),
         )
 
-    complex_value = polytopal_complex_closure(request.cells)
+    complex_value = polytopal_complex_closure(source_cells)
     vertices = tuple(cell.cell_id for cell in complex_value.maximal_cells)
     vertex_count = len(vertices)
     maximum_edges = vertex_count * (vertex_count - 1) // 2
@@ -83,6 +83,38 @@ def polytopal_complex_adjacency_graph(
             message="maximal-cell adjacency edges exceed their combinatorial bound",
         )
 
+    cell_coordinate_count = sum(
+        len(cell.vertices) * complex_value.dimension
+        for cell in complex_value.maximal_cells
+    )
+    facet_coordinate_count = sum(
+        len(face.vertices) * complex_value.dimension for _, face in adjacent_rows
+    )
+    result_coordinate_count = cell_coordinate_count + facet_coordinate_count
+    if result_coordinate_count > MAX_POLYTOPAL_ADJACENCY_RESULT_COORDINATES:
+        raise OperationResourceAdmissionError(
+            location=("cells",),
+            code="polytopal_complex.adjacency.coordinate_count_over_envelope",
+            message="cell and shared-facet coordinate output exceeds its allocation bound",
+        )
+    result_digits = sum(
+        _digits(coordinate.num) + _digits(coordinate.den)
+        for cell in complex_value.maximal_cells
+        for point in cell.vertices
+        for coordinate in point.coordinates
+    ) + sum(
+        _digits(coordinate.num) + _digits(coordinate.den)
+        for _, face in adjacent_rows
+        for point in face.vertices
+        for coordinate in point.coordinates
+    )
+    if result_digits > MAX_POLYTOPAL_ADJACENCY_RESULT_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("cells",),
+            code="polytopal_complex.adjacency.digit_count_over_envelope",
+            message="exact cell and facet coordinate digits exceed their result bound",
+        )
+
     facet_edges = tuple(
         PolytopalFacetAdjacency(
             left_cell_id=record.first_cell_id,
@@ -91,44 +123,22 @@ def polytopal_complex_adjacency_graph(
         )
         for record, face in adjacent_rows
     )
-    cells = tuple(
+    result_cells = tuple(
         PolytopalAdjacencyCell(cell_id=cell.cell_id, vertices=cell.vertices)
         for cell in complex_value.maximal_cells
     )
     edges = tuple((row.left_cell_id, row.right_cell_id) for row in facet_edges)
-    result_payload = {
-        "space": complex_value.space.model_dump(mode="json"),
-        "dimension": complex_value.dimension,
-        "cells": [cell.model_dump(mode="json") for cell in cells],
-        "graph": {"vertices": list(vertices), "edges": [list(edge) for edge in edges]},
-        "facet_edges": [row.model_dump(mode="json") for row in facet_edges],
-    }
-    try:
-        encode_strict_json(
-            result_payload,
-            limits=CanonicalLimits(
-                max_output_bytes=MAX_POLYTOPAL_ADJACENCY_RESULT_BYTES
-            ),
-        )
-    except CanonicalizationError as exc:
-        raise OperationResourceAdmissionError(
-            location=("cells",),
-            code="polytopal_complex.adjacency.result_over_envelope",
-            message=(
-                "maximal-cell adjacency graph and labelled facets exceed the "
-                f"{MAX_POLYTOPAL_ADJACENCY_RESULT_BYTES}-byte result bound"
-            ),
-        ) from exc
     return PolytopalComplexAdjacencyGraph(
         space=complex_value.space,
         dimension=complex_value.dimension,
-        cells=cells,
+        cells=result_cells,
         graph=SimpleUndirectedGraph(vertices=vertices, edges=edges),
         facet_edges=facet_edges,
     )
 
 
 __all__ = [
-    "MAX_POLYTOPAL_ADJACENCY_RESULT_BYTES",
+    "MAX_POLYTOPAL_ADJACENCY_RESULT_COORDINATES",
+    "MAX_POLYTOPAL_ADJACENCY_RESULT_DIGITS",
     "polytopal_complex_adjacency_graph",
 ]

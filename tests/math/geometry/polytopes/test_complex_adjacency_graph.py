@@ -12,9 +12,6 @@ from jacobian.math.geometry.polytopes._models import (
     RationalPolytopeVertex,
     RationalVPolytope,
 )
-from jacobian.math.geometry.polytopes.complexes._models import (
-    PolytopalComplexClosureRequest,
-)
 from jacobian.math.geometry.polytopes.complexes.adjacency.operations import (
     polytopal_complex_adjacency_graph,
 )
@@ -42,9 +39,7 @@ def test_adjacency_uses_shared_facets_and_not_vertex_contacts() -> None:
         _cell(((1, 0), (1, 1), (0, 1))),
         _cell(((1, 1), (2, 1), (2, 2))),
     )
-    result = polytopal_complex_adjacency_graph(
-        PolytopalComplexClosureRequest(cells=cells)
-    )
+    result = polytopal_complex_adjacency_graph(cells)
 
     cell_points = {
         cell.cell_id: {
@@ -77,8 +72,8 @@ def test_adjacency_uses_shared_facets_and_not_vertex_contacts() -> None:
 
 def test_adjacency_admits_only_bounded_cell_families() -> None:
     triangle = _cell(((0, 0), (1, 0), (0, 1)))
-    request = PolytopalComplexClosureRequest.model_construct(cells=(triangle,) * 17)
+    cells = (triangle,) * 17
     with pytest.raises(
         OperationResourceAdmissionError, match="16-cell adjacency envelope"
     ):
-        polytopal_complex_adjacency_graph(request)
+        polytopal_complex_adjacency_graph(cells)

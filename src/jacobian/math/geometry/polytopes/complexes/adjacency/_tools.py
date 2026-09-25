@@ -10,7 +10,8 @@ from jacobian.math.geometry.polytopes.complexes.adjacency._models import (
     PolytopalComplexAdjacencyGraph,
 )
 from jacobian.math.geometry.polytopes.complexes.adjacency.operations import (
-    MAX_POLYTOPAL_ADJACENCY_RESULT_BYTES,
+    MAX_POLYTOPAL_ADJACENCY_RESULT_COORDINATES,
+    MAX_POLYTOPAL_ADJACENCY_RESULT_DIGITS,
     polytopal_complex_adjacency_graph,
 )
 
@@ -85,12 +86,13 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "intersections only along lower-dimensional faces do not produce "
             "edges. The request uses the face-closure bounds of at most "
             "16 cells in ambient dimension at most 4, and the graph is bounded "
-            "by 16 vertices, 120 edges, and "
-            f"{MAX_POLYTOPAL_ADJACENCY_RESULT_BYTES}-byte exact output."
+            "by 16 vertices, 120 edges, "
+            f"{MAX_POLYTOPAL_ADJACENCY_RESULT_COORDINATES} coordinate values, "
+            f"and {MAX_POLYTOPAL_ADJACENCY_RESULT_DIGITS} exact digits."
         ),
         request_type=PolytopalComplexClosureRequest,
         result_type=PolytopalComplexAdjacencyGraph,
-        run=polytopal_complex_adjacency_graph,
+        run=lambda request: polytopal_complex_adjacency_graph(request.cells),
         tags=("polytope", "polytopal-complex", "adjacency", "exact-rational"),
         discovery_terms=(
             "polytopal complex maximal-cell adjacency graph",

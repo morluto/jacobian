@@ -16,6 +16,8 @@ from jacobian.math.number_theory.galois._models import (
     FrobeniusCycleRequest,
     FrobeniusCycleResult,
     GaloisAutomorphismSubgroup,
+    GaloisCorrespondenceRequest,
+    GaloisCorrespondenceResult,
     GaloisFactorRequest,
     GaloisFactorResult,
     GaloisFixedFieldRequest,
@@ -40,6 +42,7 @@ from jacobian.math.number_theory.galois.operations import (
     compose_automorphisms,
     element_embedding_orbit,
     frobenius_cycle,
+    galois_correspondence,
     galois_factor,
     galois_fixed_field,
     galois_group,
@@ -101,7 +104,9 @@ def _apply_element(
     return apply_automorphism_to_element(request.automorphism, request.element)
 
 
-def _element_orbit(request: ElementEmbeddingOrbitRequest) -> ElementEmbeddingOrbitResult:
+def _element_orbit(
+    request: ElementEmbeddingOrbitRequest,
+) -> ElementEmbeddingOrbitResult:
     return element_embedding_orbit(request)
 
 
@@ -111,6 +116,12 @@ def _subgroup(request: GaloisSubgroupRequest) -> GaloisAutomorphismSubgroup:
 
 def _fixed_field(request: GaloisFixedFieldRequest) -> GaloisFixedFieldResult:
     return galois_fixed_field(request)
+
+
+def _correspondence(
+    request: GaloisCorrespondenceRequest,
+) -> GaloisCorrespondenceResult:
+    return galois_correspondence(request.field)
 
 
 def _intermediate_stabilizer(
@@ -454,6 +465,36 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                         },
                     },
                 },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="number_field.galois_correspondence.compute",
+        title="Compute the complete bounded Galois correspondence",
+        description=(
+            "Return every subgroup and embedded intermediate field of a "
+            "degree-at-most-two QQ splitting field, paired by H ↔ L^H. "
+            "The result includes both finite inclusion posets, both exact "
+            "directions of the correspondence, normal-subgroup data, and "
+            "the subgroup-index/fixed-field degree identities."
+        ),
+        request_type=GaloisCorrespondenceRequest,
+        result_type=GaloisCorrespondenceResult,
+        run=_correspondence,
+        tags=("galois-theory", "galois-correspondence", "fixed-field", "exact"),
+        discovery_terms=(
+            "complete Galois correspondence",
+            "subgroups and intermediate fields",
+            "fixed fields inclusion reversing lattice",
+        ),
+        examples=(
+            OperationExample(
+                name="quadratic_galois_correspondence",
+                description=(
+                    "Pair the trivial and full subgroups of Gal(Q(sqrt(2))/Q) "
+                    "with the whole field and the rational fixed field."
+                ),
+                input={"field": _FIELD_X2},
             ),
         ),
     ),

@@ -144,12 +144,9 @@ def test_relabel_requires_a_bijection_and_distinct_bounded_labels() -> None:
     admitted_labels = ("A" * 2047, "B")
     accepted = relabel(source, admitted_labels, (0, 1))
     assert accepted.relabelled.ground == admitted_labels
-    with pytest.raises(ValueError, match="2048-byte"):
-        DeltaMatroidRelabelRequest(
-            delta_matroid=source,
-            target_ground=("A" * 2048, "B"),
-            target_to_source=(0, 1),
-        )
+    from jacobian.catalog.models import OperationResourceAdmissionError
+    with pytest.raises(OperationResourceAdmissionError, match="UTF-8 byte bound"):
+        relabel(source, ("A" * 2048, "B"), (0, 1))
 
 
 def test_relabel_schema_advertises_runtime_admission_limits() -> None:

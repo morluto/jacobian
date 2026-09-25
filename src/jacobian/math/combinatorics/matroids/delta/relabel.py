@@ -7,6 +7,7 @@ from typing import Self
 from pydantic import ConfigDict, Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
+from jacobian._execution import request_checkpoint
 from jacobian._models import StrictModel
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -117,18 +118,12 @@ class DeltaMatroidRelabelRequest(StrictModel):
         if len(set(self.target_ground)) != n:
             raise _error("ground_unique", "target ground labels must be unique")
         try:
-            label_bytes = sum(
-                len(label.encode("utf-8")) for label in self.target_ground
-            )
+            for label in self.target_ground:
+                label.encode("utf-8")
         except UnicodeEncodeError:
             raise _error(
                 "ground_utf8", "target labels must be UTF-8 representable"
             ) from None
-        if label_bytes > MAX_DELTA_LABEL_BYTES:
-            raise _error(
-                "ground_bytes",
-                f"target labels exceed the {MAX_DELTA_LABEL_BYTES}-byte envelope",
-            )
         return self
 
 
@@ -225,9 +220,18 @@ def relabel(
             message=str(exc),
         ) from exc
 
+    target_bytes = sum(len(label.encode("utf-8")) for label in request.target_ground)
+    if target_bytes > MAX_DELTA_LABEL_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("target_ground",),
+            code="delta_matroid.relabel_target_bytes",
+            message="target labels exceed the admitted UTF-8 byte bound",
+        )
+
     n = len(source.ground)
     source_to_target_list = [0] * n
     for target, origin in enumerate(request.target_to_source):
+        request_checkpoint("during delta-matroid relabelling")
         source_to_target_list[origin] = target
     source_to_target = tuple(source_to_target_list)
 
@@ -282,6 +286,7 @@ def relabel(
             for row in source.feasible
         )
     )
+    request_checkpoint("before delta-matroid relabelling result construction")
     result_value = FiniteDeltaMatroid.model_construct(
         ground=request.target_ground,
         feasible=rows,

@@ -173,12 +173,19 @@ def _is_canonical_rational(value: object) -> TypeGuard[CanonicalRational]:
 
 
 def _rational_component_digits(value: CanonicalRational) -> int:
+    limit = 10**MAX_CURVE_DIVISOR_COEFFICIENT_DIGITS
+    # Canonical carriers can be forged by native callers; reject magnitude
+    # before exact formatting, which can be expensive for enormous integers.
+    if abs(value.num) >= limit or value.den >= limit:
+        return MAX_CURVE_DIVISOR_COEFFICIENT_DIGITS + 1
     return max(decimal_digit_width(value.num), decimal_digit_width(value.den))
 
 
 def _admit_surface_points(surface: BlowupP2Surface) -> int:
     points = getattr(surface, "points", None)
-    if not isinstance(points, tuple) or len(points) > 16:
+    if not isinstance(points, tuple):
+        _domain("point_shape", "surface points must be a tuple", ("surface",))
+    if len(points) > 16:
         raise OperationResourceAdmissionError(
             location=("surface",),
             code="plane_curve_divisor.point_bound",

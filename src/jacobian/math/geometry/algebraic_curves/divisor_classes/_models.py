@@ -14,7 +14,6 @@ from jacobian.math.geometry.blowup_p2._models import BlowupP2Surface
 from jacobian.math.polynomials.values import (
     PolynomialVariable,
     RationalPolynomial,
-    require_polynomial_budget,
 )
 
 MAX_CURVE_DIVISOR_DEGREE = 12
@@ -37,6 +36,10 @@ def _raw_component_digits(value: object) -> int:
             _raw_component_digits(value.get("den", "1")),
         )
     if isinstance(value, int):
+        # Compare against the fixed envelope before invoking FLINT's exact
+        # decimal formatter on attacker-controlled native integers.
+        if abs(value) >= 10**MAX_CURVE_DIVISOR_COEFFICIENT_DIGITS:
+            return MAX_CURVE_DIVISOR_COEFFICIENT_DIGITS + 1
         return decimal_digit_width(abs(value))
     return len(str(value).lstrip("-"))
 
@@ -118,16 +121,6 @@ class PlaneCurveStrictTransformRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_plane_curve_and_axis_map(self) -> Self:
-        try:
-            require_polynomial_budget(
-                self.polynomial,
-                maximum_terms=MAX_CURVE_DIVISOR_TERMS,
-                maximum_exponent=MAX_CURVE_DIVISOR_DEGREE,
-                maximum_coefficient_digits=MAX_CURVE_DIVISOR_COEFFICIENT_DIGITS,
-                label="plane-curve source",
-            )
-        except ValueError as exc:
-            raise _error("source_bound", str(exc)) from exc
         if self.polynomial.domain != "QQ" or len(self.polynomial.variables) != 3:
             raise _error(
                 "polynomial_axis", "a plane curve requires three variables over QQ"

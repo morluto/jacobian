@@ -44,7 +44,13 @@ def _admit_group(
     table = getattr(group, "multiplication", None)
     inverse = getattr(group, "inverse", None)
     identity = getattr(group, "identity", None)
-    order = len(table) if isinstance(table, tuple) else 0
+    if not isinstance(table, tuple):
+        _reject(
+            location,
+            "lattice_gauge.finite_group.table_shape",
+            "finite group table is malformed",
+        )
+    order = len(table)
     if not 1 <= order <= 24 or not isinstance(inverse, tuple) or len(inverse) != order:
         _reject(
             location,

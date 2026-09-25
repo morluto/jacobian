@@ -23,7 +23,8 @@ from jacobian.catalog.models import (
 from jacobian.math.finite_fields._admission import require_field
 from jacobian.math.finite_fields._algebraic_sets import (
     FieldEmbedding,
-    embed_field_element,
+    _check_embedding_root,
+    _embed_element,
 )
 from jacobian.math.finite_fields.values import (
     FiniteFieldElement,
@@ -1719,6 +1720,14 @@ def finite_field_curve_base_change(
     if point is not None:
         point = _point_admit_with_curve(curve, point)
 
+    _check_embedding_root(embedding)
+    from jacobian.math.finite_fields import _flint as flint
+
+    target_context = flint.context(embedding.target)
+
+    def mapped(element: FiniteFieldElement) -> FiniteFieldElement:
+        return _embed_element(element, embedding, target_context=target_context)
+
     target_field = embedding.target
     maximum = _element(
         target_field, (target_field.characteristic - 1,) * target_field.degree
@@ -1738,7 +1747,10 @@ def finite_field_curve_base_change(
     sample = FiniteFieldCurveBaseChangeResult.model_construct(
         curve=sample_curve, point=sample_point
     )
-    if len(rfc8785.dumps(sample.model_dump(mode="json"))) > CanonicalLimits().max_output_bytes:
+    if (
+        len(rfc8785.dumps(sample.model_dump(mode="json")))
+        > CanonicalLimits().max_output_bytes
+    ):
         raise OperationResourceAdmissionError(
             location=("embedding", "target"),
             code="elliptic_curve.finite_field.base_change_output_bound",
@@ -1747,8 +1759,8 @@ def finite_field_curve_base_change(
 
     target_curve = FiniteFieldShortWeierstrassCurve.model_construct(
         field=target_field,
-        coefficient_a=embed_field_element(curve.coefficient_a, embedding),
-        coefficient_b=embed_field_element(curve.coefficient_b, embedding),
+        coefficient_a=mapped(curve.coefficient_a),
+        coefficient_b=mapped(curve.coefficient_b),
         model=curve.model,
     )
     target_curve = _curve_admit(target_curve)
@@ -1760,13 +1772,11 @@ def finite_field_curve_base_change(
             assert point.x is not None and point.y is not None
             target_point = FiniteFieldEllipticPoint.affine(
                 target_curve,
-                embed_field_element(point.x, embedding),
-                embed_field_element(point.y, embedding),
+                mapped(point.x),
+                mapped(point.y),
             )
             target_point = _point_admit_with_curve(target_curve, target_point)
-    return FiniteFieldCurveBaseChangeResult(
-        curve=target_curve, point=target_point
-    )
+    return FiniteFieldCurveBaseChangeResult(curve=target_curve, point=target_point)
 
 
 def finite_field_cardinality(

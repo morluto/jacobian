@@ -343,6 +343,31 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             request.curve, request.embedding, request.point
         ),
         tags=("elliptic-curve", "finite-field", "base-change", "exact"),
+        examples=(
+            OperationExample(
+                name="transport_five_field_curve_to_f25",
+                description="Transport y²=x³+x+1 from F5 to F25 along the explicit embedding sending the F5 generator to zero.",
+                input={
+                    "curve": _finite_curve(),
+                    "embedding": {
+                        "source": _F5_PRESENTATION,
+                        "target": {
+                            "characteristic": "5",
+                            "modulus_coefficients": ["2", "0", "1"],
+                            "generator": "a",
+                        },
+                        "generator_image": {
+                            "presentation": {
+                                "characteristic": "5",
+                                "modulus_coefficients": ["2", "0", "1"],
+                                "generator": "a",
+                            },
+                            "coordinates": ["0", "0"],
+                        },
+                    },
+                },
+            ),
+        ),
     ),
     MathTool(
         operation_id="elliptic_curve.finite_field.cardinality.exhaustive.compute",

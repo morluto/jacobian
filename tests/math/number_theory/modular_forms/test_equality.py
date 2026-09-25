@@ -3,7 +3,10 @@ from typing import Literal, cast
 import pytest
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.number_theory.modular_forms._tools import TOOLS
 from jacobian.math.number_theory.modular_forms.basis import (
     modular_form_coordinates_equal,
@@ -151,6 +154,19 @@ def test_global_equality_rejects_missing_forged_space() -> None:
         OperationDomainValidationError, match="canonical modular-form space"
     ):
         modular_form_coordinates_equal(forged, valid)
+
+
+def test_global_equality_admits_an_oversized_common_level_as_a_typed_error() -> None:
+    def constant_form(level: int) -> ModularFormCoordinates:
+        return ModularFormCoordinates(
+            space=ModularFormSpace(level=level, weight=0, kind="M"),
+            basis_id="gamma0-rational-gamma0-sturm-rref-v1",
+            coordinates=(CanonicalRational(num=1, den=1),),
+        )
+
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        modular_form_coordinates_equal(constant_form(9973), constant_form(9967))
+    assert error.value.errors()[0]["type"] == "modular_form.equality_level_bound"
 
 
 def test_zero_dimensional_forms_have_the_unique_empty_coordinate_vector() -> None:

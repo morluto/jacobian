@@ -125,14 +125,19 @@ def _admit(category: FiniteCategory, degree: int) -> None:
     # bytes (\\uXXXX); include structural JSON overhead conservatively.
     identifier_chars = sum(len(value) for value in category.objects)
     identifier_chars += sum(
-        len(m.morphism_id) + len(m.source) + len(m.target)
-        for m in category.morphisms
+        len(m.morphism_id) + len(m.source) + len(m.target) for m in category.morphisms
     )
-    identifier_chars += sum(len(obj) + len(identity) for obj, identity in category.identities)
+    identifier_chars += sum(
+        len(obj) + len(identity) for obj, identity in category.identities
+    )
     identifier_chars += sum(sum(map(len, row)) for row in category.composition)
     identifier_occurrences = sum(sizes) * (2 * degree + 3)
     identifier_chars += identifier_occurrences * MAX_CATEGORY_IDENTIFIER_CHARACTERS
-    if identifier_chars * 6 + 1024 * (len(category.objects) + len(category.morphisms) + sum(sizes)) > NERVE_TRANSPORT_BYTE_BOUND:
+    if (
+        identifier_chars * 6
+        + 1024 * (len(category.objects) + len(category.morphisms) + sum(sizes))
+        > NERVE_TRANSPORT_BYTE_BOUND
+    ):
         raise OperationResourceAdmissionError(
             location=("max_degree",),
             code="finite_category.nerve_identifier_budget",

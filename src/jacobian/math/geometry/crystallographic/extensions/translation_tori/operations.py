@@ -121,8 +121,8 @@ def translation_torus_quotient_chains(
         or len(profile.facets) != 6
         or len(pairing.pairings) != 6
     ):
-        _resource(
-            "shape_bound",
+        _domain(
+            "source_shape",
             "input must have rank three, eight vertices, six facets, and six directed pairings",
         )
     input_bytes = len(checked.model_dump_json().encode("utf-8"))

@@ -36,7 +36,8 @@ class BieberbachTranslationTorusChains(StrictModel):
     def require_product_torus_chain(self) -> Self:
         chain = self.quotient_chain_complex
         if (
-            len(self.circle_directions) != 3
+            not self.source.is_fundamental_domain
+            or len(self.circle_directions) != 3
             or chain.coefficient_ring != CoefficientRing.INTEGER
             or chain.prime is not None
             or chain.degree_min != 0

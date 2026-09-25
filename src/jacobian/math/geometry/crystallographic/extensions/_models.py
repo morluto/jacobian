@@ -31,7 +31,7 @@ MAX_EXTENSION_GROUP_ORDER = 8
 MAX_EXTENSION_LATTICE_RANK = 4
 MAX_ACTION_ENTRY_DIGITS = 1
 MAX_COCYCLE_ENTRY_DIGITS = 4
-MAX_EXTENSION_TORSION_RESULT_BYTES = 2_000_000
+MAX_EXTENSION_TORSION_RESULT_SIZE = 2_000_000
 # The existing certified Smith carrier caps transformation entries at the
 # canonical exact-integer limit. A reconstructed lattice solution multiplies a
 # Smith right-transform entry by a transformed offset, so retain the resulting
@@ -434,6 +434,14 @@ class CrystallographicFundamentalDomainResult(StrictModel):
                 "fundamental_domain_result",
                 "positive result requires equal covolume and no overlap",
             )
+        if not self.is_fundamental_domain and (
+            self.polytope_volume == self.quotient_covolume
+            and self.overlap_translation is None
+        ):
+            raise _error(
+                "fundamental_domain_result",
+                "negative result requires unequal covolume or an overlap witness",
+            )
         return self
 
 
@@ -588,7 +596,7 @@ __all__ = [
     "MAX_EXTENSION_GROUP_ORDER",
     "MAX_EXTENSION_LATTICE_RANK",
     "MAX_EXTENSION_PAIRING_DIGITS",
-    "MAX_EXTENSION_TORSION_RESULT_BYTES",
+    "MAX_EXTENSION_TORSION_RESULT_SIZE",
     "MAX_EXTENSION_TORSION_VECTOR_DIGITS",
     "BieberbachFaceOrbitComplex",
     "BieberbachFaceOrbitMap",

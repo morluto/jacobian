@@ -25,7 +25,6 @@ def test_exact_public_api_symbols() -> None:
         "implication_countermodel_check",
         "quotient",
         "verify_congruence",
-        "verify_countermodel_find",
         "verify_equation_profile",
         "verify_evaluate",
         "verify_generated_subalgebra",

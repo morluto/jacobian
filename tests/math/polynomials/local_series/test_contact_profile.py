@@ -99,3 +99,17 @@ def test_contact_profile_is_published_with_formal_prefix_contract() -> None:
         )
     )
     assert result.pairs[0].contact_order == _rational(Fraction(1, 2))
+
+
+def test_native_boundary_revalidates_reconstructed_request() -> None:
+    from jacobian.catalog.models import OperationResourceAdmissionError
+
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        puiseux_contact_profile(PuiseuxContactRequest.model_construct(prefixes=()))
+    assert "invalid Puiseux contact request" in str(error.value)
+
+
+def test_profile_rejects_unbounded_pairwise_prefix_carrier() -> None:
+    prefix = _prefix((Fraction(1, 2), Fraction(1)))
+    with pytest.raises(ValueError):
+        PuiseuxContactProfile.model_validate({"prefixes": (prefix,) * 33, "pairs": ()})

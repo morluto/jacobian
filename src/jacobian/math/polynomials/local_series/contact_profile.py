@@ -8,12 +8,16 @@ from typing import Literal
 
 from pydantic import Field, StrictInt, model_validator
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import CanonicalRational, require_bounded_rational
+from jacobian._execution import request_checkpoint
 from jacobian._models import StrictModel
 from jacobian.canonical import CanonicalLimits
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.polynomials.local_series.puiseux_values import (
     TruncatedPuiseuxWindow,
+)
+from jacobian.math.polynomials.local_series.values import (
+    MAX_LOCAL_SERIES_COEFFICIENT_DIGITS,
 )
 
 MAX_PUISEUX_CONTACT_PREFIXES = 32
@@ -82,14 +86,21 @@ class PuiseuxContactPair(StrictModel):
 class PuiseuxContactProfile(StrictModel):
     """Source-bound contact data for each pair of supplied finite prefixes."""
 
-    prefixes: tuple[TruncatedPuiseuxWindow, ...]
+    prefixes: tuple[TruncatedPuiseuxWindow, ...] = Field(
+        max_length=MAX_PUISEUX_CONTACT_PREFIXES
+    )
     pairs: tuple[PuiseuxContactPair, ...]
 
     @model_validator(mode="after")
     def require_complete_pair_indexing(self) -> PuiseuxContactProfile:
-        expected = tuple(combinations(range(len(self.prefixes)), 2))
-        actual = tuple((row.left_index, row.right_index) for row in self.pairs)
-        if actual != expected:
+        if len(self.prefixes) < 2:
+            raise ValueError("contact profiles require at least two prefixes")
+        expected = combinations(range(len(self.prefixes)), 2)
+        actual = iter((row.left_index, row.right_index) for row in self.pairs)
+        if (
+            not all(pair == next(actual, None) for pair in expected)
+            or next(actual, None) is not None
+        ):
             raise ValueError("contact profile must contain every source pair in order")
         return self
 
@@ -108,6 +119,7 @@ def _contact_order(
     """Find the least supported exponent whose exact coefficients differ."""
     left_terms = left.terms
     right_terms = right.terms
+    request_checkpoint("during Puiseux contact support comparison")
     i = j = 0
     while i < len(left_terms) or j < len(right_terms):
         if j == len(right_terms) or (
@@ -144,7 +156,40 @@ def _contact_order(
 
 def puiseux_contact_profile(request: PuiseuxContactRequest) -> PuiseuxContactProfile:
     """Return pairwise finite-prefix contact orders under exact bounds."""
+    if not isinstance(request, PuiseuxContactRequest):
+        raise OperationResourceAdmissionError(
+            location=("request",),
+            code="local_series.puiseux_contact_request",
+            message="expected a PuiseuxContactRequest",
+        )
+    try:
+        request = PuiseuxContactRequest.model_validate(request.model_dump())
+        for prefix in request.prefixes:
+            for value in (prefix.center, prefix.valuation_lower, prefix.precision):
+                require_bounded_rational(
+                    value,
+                    max_digits=MAX_LOCAL_SERIES_COEFFICIENT_DIGITS,
+                    label="Puiseux request value",
+                )
+            for term in prefix.terms:
+                require_bounded_rational(
+                    term.exponent,
+                    max_digits=MAX_LOCAL_SERIES_COEFFICIENT_DIGITS,
+                    label="Puiseux exponent",
+                )
+                require_bounded_rational(
+                    term.coefficient,
+                    max_digits=MAX_LOCAL_SERIES_COEFFICIENT_DIGITS,
+                    label="Puiseux coefficient",
+                )
+    except (TypeError, ValueError) as error:
+        raise OperationResourceAdmissionError(
+            location=("request",),
+            code="local_series.puiseux_contact_request",
+            message="invalid Puiseux contact request",
+        ) from error
     prefixes = request.prefixes
+    request_checkpoint("before Puiseux contact admission")
     pair_count = len(prefixes) * (len(prefixes) - 1) // 2
     aggregate_terms = sum(len(prefix.terms) for prefix in prefixes)
     work = aggregate_terms * (len(prefixes) - 1)
@@ -171,6 +216,7 @@ def puiseux_contact_profile(request: PuiseuxContactRequest) -> PuiseuxContactPro
     precision = prefixes[0].precision
     rows: list[PuiseuxContactPair] = []
     for left_index, right_index in combinations(range(len(prefixes)), 2):
+        request_checkpoint("during Puiseux contact pair comparison")
         order = _contact_order(prefixes[left_index], prefixes[right_index])
         rows.append(
             PuiseuxContactPair(

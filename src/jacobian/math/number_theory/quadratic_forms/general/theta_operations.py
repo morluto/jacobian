@@ -11,6 +11,7 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.number_theory.quadratic_forms.general._extra_models import (
+    MAX_THETA_PREFIX_CUTOFF,
     MAX_THETA_PREFIX_DIMENSION,
     MAX_THETA_PREFIX_OUTPUT_DIGITS,
     MAX_THETA_PREFIX_VECTORS,
@@ -217,6 +218,16 @@ def theta_series_prefix(
     Q(x)<=N. The exact adjugate diagonal therefore yields a complete box.
     """
     form = request.form
+    if (
+        not isinstance(request.cutoff, int)
+        or isinstance(request.cutoff, bool)
+        or not 0 <= request.cutoff <= MAX_THETA_PREFIX_CUTOFF
+    ):
+        raise OperationDomainValidationError(
+            location=("cutoff",),
+            code="quadratic_form.theta.cutoff_bound",
+            message=f"cutoff must be an integer from 0 through {MAX_THETA_PREFIX_CUTOFF}",
+        )
     dimension, support, determinant_work, cofactor_work = _require_input_envelope(form)
     _, determinant, diagonal_cofactors = _positive_definite_matrix(form, dimension)
     radii = _admit_box_and_output(

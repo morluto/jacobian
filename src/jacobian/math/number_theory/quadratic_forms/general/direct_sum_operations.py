@@ -11,6 +11,7 @@ from jacobian.math.matrices.values import (
 )
 from jacobian.math.number_theory.quadratic_forms.general.direct_sum_models import (
     MAX_DIRECT_SUM_AXIS,
+    MAX_DIRECT_SUM_COMPONENTS,
     MAX_DIRECT_SUM_FORM_TERMS,
     QuadraticFormDirectSumRequest,
     QuadraticFormDirectSumResult,
@@ -41,6 +42,15 @@ def require_direct_sum_budget(
     or coordinate traversal runs.
     """
 
+    if len(forms) > MAX_DIRECT_SUM_COMPONENTS:
+        raise OperationResourceAdmissionError(
+            location=location,
+            code=f"quadratic_form.{code_prefix}_component_bound",
+            message=(
+                f"quadratic-form component count exceeds the "
+                f"{MAX_DIRECT_SUM_COMPONENTS}-component envelope"
+            ),
+        )
     dimension = sum(len(form.axis) for form in forms)
     support = sum(
         len(form.diagonal_coefficients) + len(form.cross_terms) for form in forms

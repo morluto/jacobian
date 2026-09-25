@@ -143,6 +143,12 @@ parallel native and wire mathematical value classes.
 JSON safety does not require Python-facing fields to store strings. Use native
 constructors and numeric accessors for computation; encode and decode only at
 the JSON boundary.
+Exact rational coefficients follow the same separation. Finite based chain
+complexes and filtered chain values use Python `int` or `fractions.Fraction`;
+JSON encodes an integer as a canonical decimal string and a nonintegral
+fraction as a reduced `numerator/denominator` string. The value codec checks
+spelling and digit bounds before constructing the Python scalar. Keep Python
+`model_dump()` numeric and use `model_validate_json()` for wire decoding.
 
 Producers, consumers, validators, serializers, worker codecs, and schemas share
 this boundary. When changing an exact-integer contract, preserve its canonical

@@ -74,9 +74,8 @@ class FiniteDimensionalLieAlgebra(StrictModel):
     """One finite-dimensional Lie algebra over QQ by ordered structure constants."""
 
     basis: tuple[LieBasisLabel, ...] = Field(
-        min_length=1,
         max_length=MAX_LIE_DIMENSION,
-        description="Ordered basis axis; row order is a transport convention.",
+        description="Ordered basis axis; row order is a transport convention",
     )
     structure_constants: tuple[StructureConstant, ...] = Field(
         min_length=0,
@@ -653,7 +652,6 @@ class LieSubalgebraConstructionRequest(StrictModel):
     algebra: FiniteDimensionalLieAlgebra
     candidate: LieIdeal | LieSubalgebra | LieSubspace
     subalgebra_basis: tuple[LieBasisLabel, ...] = Field(
-        min_length=1,
         max_length=MAX_LIE_DIMENSION,
         description="Labels for candidate RREF rows in their existing order.",
     )

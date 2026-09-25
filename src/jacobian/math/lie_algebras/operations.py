@@ -1663,12 +1663,6 @@ def lie_subalgebra(
             message="the candidate must use the source algebra's ordered basis",
         )
     rows = _subspace_rows(candidate_value)
-    if not rows:
-        raise OperationDomainValidationError(
-            location=("candidate",),
-            code="lie_algebra.zero_subalgebra_unrepresentable",
-            message="the current Lie-algebra value requires a nonempty basis",
-        )
     labels = (
         tuple(subalgebra_basis) if isinstance(subalgebra_basis, (tuple, list)) else ()
     )
@@ -1683,6 +1677,20 @@ def lie_subalgebra(
             code="lie_algebra.subalgebra_labels",
             message="provide one unique basis label per candidate row",
         )
+    from pydantic import TypeAdapter, ValidationError
+
+    from ._models import LieBasisLabel
+
+    try:
+        labels = tuple(
+            TypeAdapter(list[LieBasisLabel]).validate_python(list(labels), strict=True)
+        )
+    except ValidationError as error:
+        raise OperationDomainValidationError(
+            location=("subalgebra_basis",),
+            code="lie_algebra.subalgebra_labels",
+            message="induced basis labels must follow the canonical Lie basis grammar",
+        ) from error
     for row_index, row in enumerate(rows):
         for column_index, value in enumerate(row):
             try:
@@ -1700,7 +1708,7 @@ def lie_subalgebra(
     induced_constants = _induced_subalgebra_constants(
         rows, table, len(algebra_value.basis)
     )
-    induced = FiniteDimensionalLieAlgebra(
+    induced = FiniteDimensionalLieAlgebra.model_construct(
         basis=labels,
         structure_constants=tuple(
             sorted(

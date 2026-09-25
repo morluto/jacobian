@@ -22,4 +22,5 @@ that need more context than an operation card:
 - [Prime-field homogeneous fixed subspaces](prime-field-homogeneous-fixed-subspaces.md)
 - [Affine-semigroup Hilbert bases](affine-semigroup-hilbert-bases.md)
 - [Two-dimensional affine-semigroup normalization](affine-semigroup-normalization.md)
+- [Two-dimensional affine-semigroup normality](affine-semigroup-normality.md)
 - [Integer-configuration Graver bases](integer-configuration-graver-bases.md)

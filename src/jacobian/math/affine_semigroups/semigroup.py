@@ -29,6 +29,8 @@ MAX_AFFINE_GRAPH_EDGES = 100_000
 MAX_HILBERT_BASIS_DETERMINANT = 1_000
 MAX_HILBERT_BASIS_WORK = 1_010_000
 MAX_AFFINE_NORMALIZATION_OUTPUT_DIGITS = 64
+MAX_AFFINE_NORMALITY_CANDIDATES = MAX_HILBERT_BASIS_DETERMINANT + 1
+MAX_AFFINE_NORMALITY_WORK = 2_000_000
 
 
 def _err(reason: str, message: str) -> PydanticCustomError:
@@ -148,6 +150,36 @@ class AffineSemigroupNormalization(StrictModel):
             raise _err(
                 "normalization_order",
                 "normalization generators must be sorted and unique",
+            )
+        return self
+
+
+class AffineSemigroupNormality(StrictModel):
+    """Normality decision bound to a positive affine semigroup."""
+
+    semigroup: PositiveAffineSemigroup
+    normal: bool = Field(
+        description=(
+            "Whether the semigroup equals its cone intersected with its "
+            "generated group lattice."
+        )
+    )
+    hole: tuple[ExactInteger, ExactInteger] | None = Field(
+        default=None,
+        description=(
+            "One element of cone(S) intersect gp(S) that is absent from S "
+            "when normal is false; uses the retained ambient row axes."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def _normality_shape(self) -> Self:
+        if self.semigroup.configuration.rows != 2:
+            raise _err("normality_shape", "normality values require two rows")
+        if self.normal == (self.hole is not None):
+            raise _err(
+                "normality_witness",
+                "normality is true exactly when no normalization hole is returned",
             )
         return self
 
@@ -862,6 +894,136 @@ def normalization(semigroup: PositiveAffineSemigroup) -> AffineSemigroupNormaliz
     return AffineSemigroupNormalization(semigroup=semigroup, generators=transported)
 
 
+def _fiber_has_member(
+    semigroup: PositiveAffineSemigroup,
+    target: tuple[int, ...],
+    grades: tuple[int, ...],
+    target_grade: int,
+    maxima: tuple[int, ...],
+) -> bool:
+    """Search one already-admitted fiber and stop at its first factorization."""
+    if target_grade < 0:
+        return False
+    configuration = semigroup.configuration
+    coordinates = [0] * configuration.columns
+
+    def visit(index: int, remaining: int) -> bool:
+        if index == configuration.columns:
+            return all(
+                sum(
+                    coordinates[column] * configuration.entries[row][column]
+                    for column in range(configuration.columns)
+                )
+                == target[row]
+                for row in range(configuration.rows)
+            )
+        maximum = min(maxima[index], int(remaining // grades[index]))
+        for value in range(maximum + 1):
+            coordinates[index] = value
+            if visit(index + 1, remaining - value * grades[index]):
+                return True
+        coordinates[index] = 0
+        return False
+
+    return visit(0, target_grade)
+
+
+def normality(semigroup: PositiveAffineSemigroup) -> AffineSemigroupNormality:
+    """Decide normality for a full-rank, positive two-dimensional semigroup.
+
+    The complete Hilbert basis of ``cone(S) intersect gp(S)`` generates the
+    normalization. Testing its elements in ``S`` proves equality in both
+    directions: ``S`` is contained in its normalization, and membership of
+    every normalization generator gives the reverse inclusion. A missing
+    generator is returned as an exact hole.
+    """
+    normalized = normalization(semigroup)
+    source = normalized.semigroup
+    candidates = normalized.generators
+    if len(candidates) > MAX_AFFINE_NORMALITY_CANDIDATES:
+        raise OperationResourceAdmissionError(
+            location=("semigroup",),
+            code="affine_semigroup.normality_candidate_bound",
+            message="normalization Hilbert basis exceeds the normality candidate bound",
+        )
+
+    # An integral covector formed from the two extreme rays is strictly
+    # positive on every generator. It bounds coefficients without using the
+    # caller's potentially much larger rational grading.
+    lower, upper = _hilbert_rays(source.configuration)
+    grading = (upper[1] - lower[1], lower[0] - upper[0])
+    grades = tuple(
+        sum(
+            grading[row] * source.configuration.entries[row][column]
+            for row in range(source.configuration.rows)
+        )
+        for column in range(source.configuration.columns)
+    )
+    if any(grade <= 0 for grade in grades):
+        raise ArithmeticError("extreme-ray covector is not positive on the semigroup")
+
+    # Admit all candidate coefficient boxes and the worst-case exact
+    # cone/lattice witness checks before starting any coefficient traversal.
+    plans: list[tuple[int, tuple[int, ...], int]] = []
+    total_work = len(candidates) * (
+        source.configuration.columns**2
+        + source.configuration.rows * source.configuration.columns
+        + 2
+    )
+    for target in candidates:
+        target_grade = sum(
+            grading[row] * target[row] for row in range(source.configuration.rows)
+        )
+        if target_grade < 0:
+            raise ArithmeticError("normalization generator lies outside the cone")
+        maxima = tuple(target_grade // grade for grade in grades)
+        candidate_work = 1
+        for maximum in maxima:
+            candidate_work *= maximum + 1
+            if candidate_work > MAX_AFFINE_FIBER_WORK:
+                raise OperationResourceAdmissionError(
+                    location=("semigroup",),
+                    code="affine_semigroup.normality_candidate_fiber_bound",
+                    message=(
+                        "a normalization generator coefficient box exceeds "
+                        f"the {MAX_AFFINE_FIBER_WORK}-tuple candidate bound"
+                    ),
+                )
+        candidate_work *= (
+            source.configuration.columns
+            + 1
+            + source.configuration.rows * source.configuration.columns
+        )
+        total_work += candidate_work
+        if total_work > MAX_AFFINE_NORMALITY_WORK:
+            raise OperationResourceAdmissionError(
+                location=("semigroup",),
+                code="affine_semigroup.normality_work_bound",
+                message=(
+                    "normality membership and witness checks exceed the "
+                    f"{MAX_AFFINE_NORMALITY_WORK}-unit work envelope"
+                ),
+            )
+        plans.append((target_grade, maxima, candidate_work))
+
+    for target, (target_grade, maxima, _candidate_work) in zip(
+        candidates, plans, strict=True
+    ):
+        if _fiber_has_member(source, target, grades, target_grade, maxima):
+            continue
+        # The normalization kernel should produce only elements in both the
+        # generated cone and lattice. Replay those defining relations for the
+        # returned nonnormality witness.
+        if _cone_member(source.configuration, target) is None or not _lattice_member(
+            source.configuration, target
+        ):
+            raise ArithmeticError(
+                "normalization output failed its cone or generated-lattice invariant"
+            )
+        return AffineSemigroupNormality(semigroup=source, normal=False, hole=target)
+    return AffineSemigroupNormality(semigroup=source, normal=True, hole=None)
+
+
 def fiber(semigroup: PositiveAffineSemigroup, target: tuple[int, ...]) -> AffineFiber:
     semigroup = _admit_semigroup(semigroup)
     rows = _fiber(semigroup, target)
@@ -1031,6 +1193,7 @@ __all__ = [
     "AffineFiber",
     "AffineFiberGraph",
     "AffineMembershipResult",
+    "AffineSemigroupNormality",
     "AffineSemigroupNormalization",
     "PositiveAffineSemigroup",
     "PositiveGradingResult",
@@ -1038,6 +1201,7 @@ __all__ = [
     "fiber",
     "fiber_graph",
     "membership",
+    "normality",
     "normalization",
     "positive_grading",
 ]

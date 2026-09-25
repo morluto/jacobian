@@ -6,6 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.catalog.catalog import Catalog
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.dispatch import invoke_operation
 from jacobian.math.combinatorics.algebraic import (
     PlacticEquivalenceRequest,
@@ -40,21 +41,9 @@ def _independent_insertion(word: tuple[str, ...]) -> tuple[tuple[int, ...], ...]
 
 
 def test_knuth_generators_and_near_miss_have_exact_relation() -> None:
-    first = plactic_equivalence(
-        PlacticEquivalenceRequest(
-            left=_word(("a", "c", "b")), right=_word(("c", "a", "b"))
-        )
-    )
-    second = plactic_equivalence(
-        PlacticEquivalenceRequest(
-            left=_word(("b", "a", "c")), right=_word(("b", "c", "a"))
-        )
-    )
-    near_miss = plactic_equivalence(
-        PlacticEquivalenceRequest(
-            left=_word(("a", "b", "c")), right=_word(("b", "a", "c"))
-        )
-    )
+    first = plactic_equivalence(_word(("a", "c", "b")), _word(("c", "a", "b")))
+    second = plactic_equivalence(_word(("b", "a", "c")), _word(("b", "c", "a")))
+    near_miss = plactic_equivalence(_word(("a", "b", "c")), _word(("b", "a", "c")))
 
     assert first.equivalent and second.equivalent
     assert first.left.normal_form == first.right.normal_form
@@ -72,9 +61,7 @@ def test_exhaustive_short_words_match_independent_insertion_oracle() -> None:
 
     for left in words:
         for right in words:
-            result = plactic_equivalence(
-                PlacticEquivalenceRequest(left=_word(left), right=_word(right))
-            )
+            result = plactic_equivalence(_word(left), _word(right))
             expected = insertions[left] == insertions[right]
             assert result.equivalent is expected
             assert result.left.insertion_tableau.rows == insertions[left]
@@ -88,11 +75,21 @@ def test_plactic_equivalence_requires_the_same_ordered_alphabet() -> None:
         PlacticEquivalenceRequest(left=left, right=right)
 
 
+def test_native_operation_accepts_canonical_words_and_rejects_forged_sources() -> None:
+    left = FiniteWord.model_construct(alphabet=("a", "b"), letters=("a",))
+    right = FiniteWord.model_construct(alphabet=("b", "a"), letters=("a",))
+    with pytest.raises(OperationDomainValidationError) as error:
+        plactic_equivalence(left, right)
+    assert error.value.errors()[0]["type"] == (
+        "algebraic_combinatorics.plactic_equivalence_request"
+    )
+
+
 def test_equivalence_contract_round_trips_and_is_catalogued() -> None:
     request = PlacticEquivalenceRequest(
         left=_word(("a", "c", "b")), right=_word(("c", "a", "b"))
     )
-    result = plactic_equivalence(request)
+    result = plactic_equivalence(request.left, request.right)
     reconstructed = type(result).model_validate_json(result.model_dump_json())
 
     assert reconstructed == result

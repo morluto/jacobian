@@ -92,8 +92,8 @@ def test_oversized_forged_word_is_rejected_before_dynamic_programming() -> None:
         longest_increasing_subsequence(request)
 
 
-def test_utf8_payload_is_admitted_before_dynamic_programming() -> None:
+def test_payload_cardinality_is_admitted_before_dynamic_programming() -> None:
     source = FiniteWord.model_construct(alphabet=("a" * 140_801,), letters=())
     request = LongestIncreasingSubsequenceRequest.model_construct(word=source)
-    with pytest.raises(OperationResourceAdmissionError, match="UTF-8 payload"):
+    with pytest.raises(OperationResourceAdmissionError, match="payload exceeds"):
         longest_increasing_subsequence(request)

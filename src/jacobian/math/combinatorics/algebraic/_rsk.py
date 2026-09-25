@@ -5,8 +5,8 @@ from __future__ import annotations
 from bisect import bisect_left, bisect_right
 
 from jacobian.math.combinatorics.algebraic.values import (
-    MAX_RSK_WORD_BYTES,
     MAX_RSK_WORD_LENGTH,
+    MAX_RSK_WORD_PAYLOAD_SCALARS,
     RSKTableauPair,
 )
 from jacobian.math.combinatorics.symmetric_functions.values import (
@@ -19,25 +19,31 @@ from jacobian.math.combinatorics.symmetric_functions.values import (
 from jacobian.math.logic.languages.words.values import FiniteWord
 
 
-def word_payload_bytes(word: FiniteWord) -> int:
-    """Return the UTF-8 bytes carried by the alphabet and positioned letters."""
-    try:
-        alphabet_bytes = sum(len(symbol.encode("utf-8")) for symbol in word.alphabet)
-        letter_bytes = sum(len(letter.encode("utf-8")) for letter in word.letters)
-    except UnicodeEncodeError as error:
-        raise ValueError(
-            "RSK word symbols must be Unicode scalar values without surrogates"
-        ) from error
-    return alphabet_bytes + letter_bytes
+def word_payload_scalars(word: FiniteWord) -> int:
+    """Return the Unicode scalar values carried by the payload.
+
+    The count covers the alphabet and every positioned letter. A surrogate
+    code point is not a Unicode scalar value, so a payload containing one is
+    rejected before any count is returned.
+    """
+    payload = 0
+    for symbol in (*word.alphabet, *word.letters):
+        if any("\ud800" <= character <= "\udfff" for character in symbol):
+            raise ValueError(
+                "RSK word symbols must be Unicode scalar values without surrogates"
+            )
+        payload += len(symbol)
+    return payload
 
 
 def require_rsk_word_budget(word: FiniteWord) -> None:
     """Validate the complete work and source-payload envelope before insertion."""
     if len(word.letters) > MAX_RSK_WORD_LENGTH:
         raise ValueError(f"RSK word length must not exceed {MAX_RSK_WORD_LENGTH}")
-    if word_payload_bytes(word) > MAX_RSK_WORD_BYTES:
+    if word_payload_scalars(word) > MAX_RSK_WORD_PAYLOAD_SCALARS:
         raise ValueError(
-            f"RSK word payload must not exceed {MAX_RSK_WORD_BYTES} UTF-8 bytes"
+            "RSK word payload must not exceed "
+            f"{MAX_RSK_WORD_PAYLOAD_SCALARS} Unicode scalar values"
         )
 
 

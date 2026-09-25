@@ -39,7 +39,6 @@ from jacobian.math.combinatorics.algebraic._models import (
     StandardTableauCheckResult,
     StandardYoungTableauCountRequest,
     StandardYoungTableauCountResult,
-    TableauRowReadingWordRequest,
 )
 from jacobian.math.combinatorics.algebraic.biword import (
     Biword,
@@ -169,11 +168,7 @@ def plactic_normal_form(request: PlacticNormalFormRequest) -> PlacticNormalFormR
 def plactic_equivalence(
     request: PlacticEquivalenceRequest,
 ) -> PlacticEquivalenceResult:
-    return native.plactic_equivalence(request)
-
-
-def tableau_row_reading_word(request: TableauRowReadingWordRequest) -> FiniteWord:
-    return native.tableau_row_reading_word(request.pair)
+    return native.plactic_equivalence(request.left, request.right)
 
 
 def check_skew_littlewood_richardson(
@@ -563,9 +558,9 @@ TOOLS = TOOLS + (  # noqa: RUF005
             "Return the exact maximum length and one deterministic source-index "
             "witness for a word over its explicit ordered alphabet. Strict means "
             "each selected letter is strictly greater than the previous one, "
-            "so duplicate letters cannot both occur. Admission bounds the UTF-8 "
-            "payload, output size, word length, and the complete O(n^2) "
-            "predecessor-pair scan."
+            "so duplicate letters cannot both occur. Admission bounds the word "
+            "payload cardinality, output size, word length, and the complete "
+            "O(n^2) predecessor-pair scan."
         ),
         request_type=LongestIncreasingSubsequenceRequest,
         result_type=LongestIncreasingSubsequenceResult,
@@ -598,8 +593,8 @@ TOOLS = TOOLS + (  # noqa: RUF005
             "Return the exact maximum length and one deterministic source-index "
             "witness for a word over its explicit ordered alphabet. Strict means "
             "each selected letter is strictly smaller than the previous one. "
-            "Admission bounds payload bytes, word length, output bytes, and the "
-            "complete O(n^2) predecessor-pair scan."
+            "Admission bounds payload cardinality, word length, output size, "
+            "and the complete O(n^2) predecessor-pair scan."
         ),
         request_type=LongestDecreasingSubsequenceRequest,
         result_type=LongestDecreasingSubsequenceResult,
@@ -673,41 +668,6 @@ TOOLS = TOOLS + (  # noqa: RUF005
                 input={
                     "left": {"alphabet": ["1", "2", "3"], "letters": ["1", "3", "2"]},
                     "right": {"alphabet": ["1", "2", "3"], "letters": ["3", "1", "2"]},
-                },
-            ),
-        ),
-    ),
-    MathTool(
-        operation_id="tableau.row_reading_word.compute",
-        title="Read an RSK insertion tableau as a word",
-        description=(
-            "Read the insertion tableau bottom row to top row and each row "
-            "left to right (TABLEAU_ROW_READING_BOTTOM_TO_TOP_LEFT_TO_RIGHT_V1), "
-            "retaining the exact ordered alphabet from its RSK pair."
-        ),
-        request_type=TableauRowReadingWordRequest,
-        result_type=FiniteWord,
-        run=tableau_row_reading_word,
-        tags=("combinatorics", "tableaux", "words", "rsk", "exact"),
-        discovery_terms=(
-            "tableau row reading word",
-            "bottom to top tableau word",
-            "RSK insertion tableau to word",
-        ),
-        examples=(
-            OperationExample(
-                name="tableau_row_reading_word",
-                description=(
-                    "Read P with rows [1,2] and [3] bottom-to-top, "
-                    "left-to-right over its retained alphabet."
-                ),
-                input={
-                    "pair": {
-                        "alphabet": ["a", "b", "c"],
-                        "insertion_tableau": {"rows": [[1, 2], [3]]},
-                        "recording_tableau": {"rows": [[1, 3], [2]]},
-                        "shape": {"parts": [2, 1]},
-                    }
                 },
             ),
         ),

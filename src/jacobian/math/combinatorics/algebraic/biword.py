@@ -341,6 +341,29 @@ class GreeneWitnessResult(StrictModel):
                     )
         return self
 
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        word: FiniteWord,
+        shape: IntegerPartition,
+        families: tuple[GreeneWitnessFamily, ...],
+    ) -> Self:
+        """Build one result after the admitted witness kernel established it.
+
+        The flow kernel already proved disjointness, monotonicity, and the
+        shape-sum totals for these exact witnesses, so the trusted producer
+        path does not replay that mathematics; deserialization and explicit
+        claim checking still run ``require_witness_relations``.
+        """
+
+        return cls.model_construct(
+            word=word,
+            shape=shape,
+            families=families,
+            convention="ROW_INSERTION_RSK_V1",
+        )
+
 
 __all__ = [
     "Biword",

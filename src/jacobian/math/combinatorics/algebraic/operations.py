@@ -26,7 +26,6 @@ from jacobian.math.combinatorics.algebraic._models import (
     KnuthMovesResult,
     KnuthNeighbor,
     PartitionDominanceResult,
-    PlacticEquivalenceRequest,
     PlacticEquivalenceResult,
     PlacticNormalFormResult,
     RSKResult,
@@ -38,7 +37,7 @@ from jacobian.math.combinatorics.algebraic._models import (
 )
 from jacobian.math.combinatorics.algebraic._rsk import (
     _row_insert,
-    word_payload_bytes,
+    word_payload_scalars,
 )
 from jacobian.math.combinatorics.algebraic._rsk import (
     inverse_row_insertion_rsk as _inverse_row_insertion_rsk,
@@ -47,9 +46,9 @@ from jacobian.math.combinatorics.algebraic._rsk import (
     row_insertion_rsk as _row_insertion_rsk,
 )
 from jacobian.math.combinatorics.algebraic.values import (
-    MAX_RSK_WORD_BYTES,
+    MAX_RSK_ALPHABET_RANK_DIGITS,
     MAX_RSK_WORD_LENGTH,
-    MAX_RSK_WORD_OUTPUT_BYTES,
+    MAX_RSK_WORD_PAYLOAD_SCALARS,
     RSKTableauPair,
 )
 from jacobian.math.combinatorics.symmetric_functions.values import (
@@ -62,13 +61,22 @@ from jacobian.math.combinatorics.symmetric_functions.values import (
     require_semistandard,
     require_standard,
 )
-from jacobian.math.logic.languages.words.values import FiniteWord
+from jacobian.math.logic.languages.words.values import (
+    MAX_SYMBOL_LENGTH,
+    FiniteWord,
+)
 
 MAX_PLACTIC_EQUIVALENCE_WORK = (
     2 * MAX_RSK_WORD_LENGTH * MAX_RSK_WORD_LENGTH * MAX_RSK_WORD_LENGTH.bit_length()
 )
-MAX_PLACTIC_EQUIVALENCE_OUTPUT_BYTES = 2 * (
-    24 * MAX_RSK_WORD_BYTES + 32 * MAX_RSK_WORD_LENGTH + 4096
+# Each side of the combined result retains its source word (alphabet plus
+# positioned letters), emits a row-reading word (the alphabet again plus at
+# most one MAX_SYMBOL_LENGTH scalar payload per source letter), and carries
+# one insertion-tableau rank of at most MAX_RSK_ALPHABET_RANK_DIGITS decimal
+# digits per cell. Every quantity is a cardinality or digit bound.
+MAX_PLACTIC_EQUIVALENCE_OUTPUT_SCALARS = 2 * (
+    2 * MAX_RSK_WORD_PAYLOAD_SCALARS
+    + MAX_RSK_WORD_LENGTH * (MAX_SYMBOL_LENGTH + MAX_RSK_ALPHABET_RANK_DIGITS)
 )
 
 __all__ = [
@@ -598,36 +606,43 @@ def plactic_normal_form(word: FiniteWord) -> PlacticNormalFormResult:
 
 
 def plactic_equivalence(
-    request: PlacticEquivalenceRequest,
+    left: FiniteWord, right: FiniteWord
 ) -> PlacticEquivalenceResult:
     """Return canonical forms and equality in the row-insertion plactic monoid.
 
-    Both finite inputs are admitted together before either RSK insertion. An
-    n-letter insertion performs at most n rows of ceil(log2(n+1)) comparisons
-    for each of its n letters; combined output is bounded from both source
-    payloads before either normal form is constructed.
+    Both finite canonical words are admitted together before either RSK
+    insertion. An n-letter insertion performs at most n rows of
+    ceil(log2(n+1)) comparisons for each of its n letters; the combined
+    output is bounded from both source cardinalities before either normal
+    form is constructed.
     """
     try:
-        canonical = PlacticEquivalenceRequest.model_validate(
-            request.model_dump(mode="python")
-        )
+        canonical_left = FiniteWord.model_validate(left.model_dump(mode="python"))
+        canonical_right = FiniteWord.model_validate(right.model_dump(mode="python"))
     except (AttributeError, TypeError, ValidationError) as exc:
         raise OperationDomainValidationError(
             location=("request",),
             code="algebraic_combinatorics.plactic_equivalence_request",
             message="plactic equivalence requires two canonical words over one ordered alphabet",
         ) from exc
+    if canonical_left.alphabet != canonical_right.alphabet:
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="algebraic_combinatorics.plactic_equivalence_request",
+            message="plactic equivalence requires two canonical words over one ordered alphabet",
+        )
 
-    words = (canonical.left, canonical.right)
-    source_bytes = tuple(word_payload_bytes(word) for word in words)
+    words = (canonical_left, canonical_right)
+    source_payloads = tuple(word_payload_scalars(word) for word in words)
     if any(
-        len(word.letters) > MAX_RSK_WORD_LENGTH or size > MAX_RSK_WORD_BYTES
-        for word, size in zip(words, source_bytes, strict=True)
+        len(word.letters) > MAX_RSK_WORD_LENGTH
+        or payload > MAX_RSK_WORD_PAYLOAD_SCALARS
+        for word, payload in zip(words, source_payloads, strict=True)
     ):
         raise OperationResourceAdmissionError(
             location=("request",),
             code="algebraic_combinatorics.plactic_equivalence_source",
-            message="each source word must fit the ordinary RSK size and byte bounds",
+            message="each source word must fit the ordinary RSK size and payload bounds",
         )
     work = sum(
         len(word.letters) ** 2 * max(1, len(word.letters).bit_length())
@@ -640,23 +655,26 @@ def plactic_equivalence(
             message="combined RSK insertion work exceeds its admitted bound",
         )
     # Every resulting row-reading word contains no more letters than its
-    # source. The fixed carrier envelopes bound each nested exact result.
+    # source, each emitted letter is one retained alphabet symbol of at most
+    # MAX_SYMBOL_LENGTH scalar values, and each tableau cell stores one rank
+    # of at most MAX_RSK_ALPHABET_RANK_DIGITS decimal digits.
     output_bound = sum(
-        24 * size + 32 * len(word.letters) + 4096
-        for word, size in zip(words, source_bytes, strict=True)
+        2 * payload
+        + len(word.letters) * (MAX_SYMBOL_LENGTH + MAX_RSK_ALPHABET_RANK_DIGITS)
+        for word, payload in zip(words, source_payloads, strict=True)
     )
-    if output_bound > MAX_PLACTIC_EQUIVALENCE_OUTPUT_BYTES:
+    if output_bound > MAX_PLACTIC_EQUIVALENCE_OUTPUT_SCALARS:
         raise OperationResourceAdmissionError(
             location=("request",),
             code="algebraic_combinatorics.plactic_equivalence_output",
             message="combined canonical-form output exceeds its admitted bound",
         )
-    left = plactic_normal_form(canonical.left)
-    right = plactic_normal_form(canonical.right)
+    left_form = plactic_normal_form(canonical_left)
+    right_form = plactic_normal_form(canonical_right)
     return PlacticEquivalenceResult(
-        left=left,
-        right=right,
-        equivalent=left.insertion_tableau == right.insertion_tableau,
+        left=left_form,
+        right=right_form,
+        equivalent=left_form.insertion_tableau == right_form.insertion_tableau,
     )
 
 
@@ -684,13 +702,6 @@ def tableau_row_reading_word(pair: RSKTableauPair) -> FiniteWord:
             code="algebraic_combinatorics.rsk_tableau_size",
             message="tableau exceeds the admitted row-reading cell bound",
         )
-    worst_output_bytes = 12 * sum(map(len, canonical.alphabet)) * (cell_count + 1) + 256
-    if worst_output_bytes > MAX_RSK_WORD_OUTPUT_BYTES:
-        raise OperationResourceAdmissionError(
-            location=("pair",),
-            code="algebraic_combinatorics.row_reading_output_size",
-            message="row-reading output exceeds its admitted byte bound",
-        )
     try:
         require_semistandard(canonical.insertion_tableau)
         require_standard(canonical.recording_tableau)
@@ -715,6 +726,16 @@ def tableau_row_reading_word(pair: RSKTableauPair) -> FiniteWord:
         for row in reversed(canonical.insertion_tableau.rows)
         for entry in row
     )
+    # The output retains the alphabet once and emits exactly one referenced
+    # alphabet symbol per tableau cell, so its payload is the sum of the
+    # alphabet scalars and the scalars of the emitted letters.
+    output_scalars = sum(map(len, canonical.alphabet)) + sum(map(len, letters))
+    if output_scalars > MAX_RSK_WORD_PAYLOAD_SCALARS:
+        raise OperationResourceAdmissionError(
+            location=("pair",),
+            code="algebraic_combinatorics.row_reading_output_size",
+            message="row-reading output exceeds its admitted payload bound",
+        )
     return FiniteWord.model_construct(alphabet=canonical.alphabet, letters=letters)
 
 

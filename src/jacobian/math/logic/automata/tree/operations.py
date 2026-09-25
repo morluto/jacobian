@@ -1073,8 +1073,28 @@ def nondeterministic_run_counts(
     once per assignment.
     """
 
+    automaton = _validate_native_tree_automaton(automaton)
     nondeterministic_run_counts_work_bound(automaton, max_size)
+    if not automaton.final_states or not any(
+        not transition.child_states for transition in automaton.transitions
+    ):
+        return (0,) * max_size
     return _nondeterministic_run_counts_admitted(automaton, max_size)
+
+
+def _validate_native_tree_automaton(
+    automaton: BottomUpTreeAutomaton,
+) -> BottomUpTreeAutomaton:
+    if type(automaton) is not BottomUpTreeAutomaton:
+        _reject_tree("automaton must be a validated bottom-up tree automaton", resource=False)
+    try:
+        return BottomUpTreeAutomaton.model_validate(automaton.model_dump())
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("automaton", "tree"),
+            code="tree_automata.admission",
+            message="automaton is invalid",
+        ) from exc
 
 
 def _nondeterministic_run_counts_admitted(

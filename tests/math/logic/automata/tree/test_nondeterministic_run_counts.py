@@ -153,6 +153,18 @@ def test_zero_run_profiles_bypass_irrelevant_convolution_admission():
     assert nondeterministic_run_counts(no_finals, 100) == (0,) * 100
 
 
+def test_native_entry_rejects_unvalidated_automata():
+    from jacobian.catalog.models import OperationDomainValidationError
+
+    with pytest.raises(OperationDomainValidationError):
+        nondeterministic_run_counts({}, 2)
+    malformed = BottomUpTreeAutomaton.model_construct(
+        state_count=1, arity=(0,), transitions=(), final_states=(2,)
+    )
+    with pytest.raises(OperationDomainValidationError):
+        nondeterministic_run_counts(malformed, 2)
+
+
 def test_run_count_catalog_example_executes_and_serializes():
     operation_id = "tree_automaton.nondeterministic.run_counts.compute"
     catalog = Catalog.open()

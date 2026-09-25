@@ -96,7 +96,7 @@ class QuarticCubicResolventResult(StrictModel):
 
 def _preflight(
     source: MonicPolynomial,
-) -> tuple[Fraction, Fraction, Fraction, Fraction]:
+) -> tuple[MonicPolynomial, Fraction, Fraction, Fraction, Fraction]:
     # Re-establish the request's structural and component bounds for native callers.
     try:
         parsed = QuarticCubicResolventRequest.model_validate(
@@ -125,13 +125,13 @@ def _preflight(
             message="quartic resolvent exact arithmetic exceeds admitted bounds",
         )
     a, b, c, d = (coefficient.as_fraction() for coefficient in coefficients[3::-1])
-    return a, b, c, d
+    return parsed, a, b, c, d
 
 
 def compute_quartic_cubic_resolvent(
     polynomial: MonicPolynomial,
 ) -> QuarticCubicResolventResult:
-    a, b, c, d = _preflight(polynomial)
+    source, a, b, c, d = _preflight(polynomial)
     request_checkpoint("during quartic cubic resolvent computation")
     coefficients = (
         4 * b * d - a * a * d - c * c,
@@ -154,7 +154,7 @@ def compute_quartic_cubic_resolvent(
         variable="y",
     )
     return QuarticCubicResolventResult(
-        source=polynomial,
+        source=source,
         resolvent=result,
     )
 

@@ -1005,6 +1005,12 @@ def _parse_bounded_map(
     cells = 0
     chars = 0
     parsed: list[list[list[int | Fraction]]] = []
+    if len(request.target.basis_sizes) != len(request.source.basis_sizes):
+        raise _fail(
+            (label, "target", "basis_sizes"),
+            "filtered_chain_map.shape_invalid",
+            "source and target must have matching chain-degree axes",
+        )
     for degree, matrix in enumerate(request.maps):
         rows = request.target.basis_sizes[degree]
         columns = request.source.basis_sizes[degree]
@@ -1019,6 +1025,12 @@ def _parse_bounded_map(
         for row in matrix:
             parsed_row = []
             for value in row:
+                if prime is not None and type(value) is not int:
+                    raise _fail(
+                        (label, "maps", degree),
+                        "filtered_chain_map.entry_invalid",
+                        "finite-field map entries must be integers",
+                    )
                 numerator_digits, denominator_digits = _coefficient_size(value)
                 if (
                     numerator_digits > MAX_CHAIN_COMPLEX_COEFFICIENT_DIGITS

@@ -198,3 +198,39 @@ def test_composition_operation_exposes_the_native_contract() -> None:
     assert tool.result_type is FilteredChainMapResult
     request = _composition(_map(2), _map(3))
     assert tool.run(request).maps == (((6,),), ((6,),))
+
+
+def test_composition_rejects_malformed_component_axes_before_indexing() -> None:
+    malformed = _composition(_map(1), _map(2)).model_copy(
+        update={
+            "first": _composition(_map(1), _map(2)).first.model_copy(
+                update={"target": ChainComplexValue(coefficient_ring=CoefficientRing.RATIONAL, degree_min=0, degree_max=0, basis_sizes=(1,), differential_matrices=())}
+            )
+        }
+    )
+    with pytest.raises(ValueError, match="target complex of the first map"):
+        filtered_chain_map_compose(malformed)
+
+
+def test_composition_rejects_rational_coefficient_in_finite_field_map() -> None:
+    from fractions import Fraction
+
+    finite = ChainComplexValue(
+        coefficient_ring=CoefficientRing.PRIME_FIELD,
+        prime=3,
+        degree_min=0,
+        degree_max=0,
+        basis_sizes=(1,),
+        differential_matrices=(),
+    )
+    filtration = (FiltrationLevel(subspaces=(FilteredSubspace(vectors=((1,),)),)),)
+    forged = FilteredChainMapResult(
+        source=finite, target=finite,
+        source_filtration=filtration, target_filtration=filtration,
+        maps=(((Fraction(1, 2),),),), filtration_preserving=True, chain_map=True,
+    )
+    request = FilteredChainMapCompositionRequest(first=forged, second=filtered_map(
+        FilteredChainMapRequest(source=finite, target=finite, source_filtration=filtration,
+                                target_filtration=filtration, maps=(((1,),),))))
+    with pytest.raises(ValueError, match="finite-field map entries must be integers"):
+        filtered_chain_map_compose(request)

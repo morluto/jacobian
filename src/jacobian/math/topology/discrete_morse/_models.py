@@ -577,10 +577,25 @@ class MorseComplexResult(StrictModel):
         cells = tuple(
             cell for basis in self.critical_cells_by_dimension for cell in basis.cells
         )
-        if tuple(sorted(cells)) != tuple(sorted(self.critical_profile.critical_cells)):
+        source_cells = set(_canonical_cell_order(self.complex))
+        matched_cells: set[Simplex] = set()
+        for pair in self.pairs:
+            if pair.face not in source_cells or pair.coface not in source_cells:
+                raise _validation_error(
+                    "morse_pair_source_binding",
+                    "matched cells must belong to the source closure",
+                )
+            matched_cells.update((pair.face, pair.coface))
+        if (
+            len(set(cells)) != len(cells)
+            or tuple(sorted(cells))
+            != tuple(sorted(self.critical_profile.critical_cells))
+            or not set(cells).issubset(source_cells)
+            or set(cells) != source_cells - matched_cells
+        ):
             raise _validation_error(
                 "morse_basis_partition",
-                "the Morse basis must be exactly the critical-cell family",
+                "critical and matched cells must partition the source closure",
             )
         counts = tuple(len(basis.cells) for basis in self.critical_cells_by_dimension)
         if counts != self.critical_profile.counts_by_dimension:

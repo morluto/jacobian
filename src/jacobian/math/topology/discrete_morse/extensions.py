@@ -6,6 +6,7 @@ from pydantic import Field
 
 from jacobian._models import StrictModel
 from jacobian.catalog.models import (
+    OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
 from jacobian.math.topology._models import (
@@ -17,6 +18,7 @@ from jacobian.math.topology._models import (
 )
 from jacobian.math.topology._request_admission import (
     require_canonical_complex_admission,
+    run_topology_admission,
 )
 from jacobian.math.topology.discrete_morse._models import (
     DiscreteMorseMatchingResult,
@@ -116,7 +118,9 @@ def greedy_collapse(complex_: FiniteSimplicialComplex) -> CollapseSequenceResult
     This is a deterministic maximal collapse, not a minimum-size result or a
     claim of noncollapsibility, contractibility, or any other homotopy theorem.
     """
-    require_canonical_complex_admission(complex_)
+    run_topology_admission(
+        lambda: require_canonical_complex_admission(complex_), location=("complex",)
+    )
     source = complex_
     max_steps = min(MAX_COLLAPSE_SEQUENCE_STEPS, source.closure_size // 2)
     # Per step: at most eight ridge-owner inserts, eight candidate reads, and
@@ -136,16 +140,12 @@ def greedy_collapse(complex_: FiniteSimplicialComplex) -> CollapseSequenceResult
     # Bound the result by its mathematical cardinalities: source/target face
     # families and matching pairs. Canonicalization also enforces the global
     # topology face and step limits.
-    output_faces_bound = 3 * source.closure_size + 2 * len(source.vertices)
     output_pairs_bound = max_steps
-    if (
-        output_faces_bound > MAX_TOPOLOGY_FACES
-        or output_pairs_bound > MAX_COLLAPSE_SEQUENCE_STEPS
-    ):
+    if output_pairs_bound > MAX_COLLAPSE_SEQUENCE_STEPS:
         raise OperationResourceAdmissionError(
             location=("complex",),
             code="topology.greedy_collapse.admission.output_size",
-            message="the greedy collapse result exceeds the admitted face or pair count",
+            message="the greedy collapse result exceeds the admitted pair count",
         )
 
     faces = {face for degree in source.faces_by_dimension for face in degree.faces}
@@ -211,19 +211,10 @@ def collapse_sequence(request: CollapseSequenceRequest) -> CollapseSequenceResul
             or face not in faces
             or coface not in facets
         ):
-            return CollapseSequenceResult(
-                source=source,
-                target=canonical_complex(
-                    tuple(sorted({vertex for cell in faces for vertex in cell})),
-                    tuple(sorted(facets)),
-                    closure=tuple(
-                        tuple(sorted(cell for cell in faces if len(cell) == dim + 1))
-                        for dim in range(max(map(len, faces)))
-                    ),
-                ),
-                pairs=request.pairs,
-                valid=False,
-                collapsed_steps=steps,
+            raise OperationDomainValidationError(
+                location=("pairs", steps),
+                code="topology.collapse_sequence.pair.invalid",
+                message="collapse pair is structurally malformed or absent",
             )
         containing = tuple(facet for facet in facets if face_set.issubset(facet))
         if containing != (coface,):

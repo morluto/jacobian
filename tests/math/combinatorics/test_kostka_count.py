@@ -110,6 +110,7 @@ def test_content_labels_are_sparse_exact_and_never_reindexed() -> None:
     relabelled = _request((3, 2), ((11, 2), (30, 2), (100, 1)))
 
     first = fixed_content_count(original)
+    assert fixed_content_count(original.partition, original.content) == first
     second = fixed_content_count(relabelled)
 
     assert first.count == second.count

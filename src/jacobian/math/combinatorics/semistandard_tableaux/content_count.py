@@ -101,7 +101,8 @@ def _zero_result(
 
 
 def fixed_content_count(
-    request: FixedContentCountRequest,
+    partition: IntegerPartition | FixedContentCountRequest,
+    content: TableauContent | None = None,
 ) -> FixedContentCountResult:
     """Return the number of SSYTs of ``partition`` with exact ``content``.
 
@@ -111,8 +112,13 @@ def fixed_content_count(
     with closed forms avoid expanding that tree.
     """
 
-    partition = request.partition
-    content = request.content
+    if isinstance(partition, FixedContentCountRequest):
+        if content is not None:
+            raise TypeError("content must be omitted when passing a count request")
+        content = partition.content
+        partition = partition.partition
+    elif content is None:
+        raise TypeError("content is required when passing a partition")
     if _result_byte_upper_bound(partition, content) > MAX_KOSTKA_RESULT_BYTES:
         raise OperationResourceAdmissionError(
             location=("content",),

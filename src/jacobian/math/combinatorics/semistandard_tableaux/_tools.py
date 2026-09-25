@@ -60,7 +60,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
         request_type=FixedContentCountRequest,
         result_type=FixedContentCountResult,
-        run=fixed_content_count,
+        run=lambda request: fixed_content_count(request.partition, request.content),
         tags=("combinatorics", "young-tableaux", "kostka", "exact"),
         discovery_terms=(
             "Kostka number for shape and content",

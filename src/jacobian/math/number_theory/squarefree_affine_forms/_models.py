@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from sympy import isprime
 
 from jacobian.catalog.models import (
@@ -30,6 +32,16 @@ MAX_INTERVAL_SIEVE_RESIDUES = 4_000_000
 MAX_INTERVAL_SIEVE_VISITS = 2_000_000
 
 _CODE_PREFIX = "number_theory.squarefree_affine"
+_FORM_ID = re.compile(r"^[A-Za-z][A-Za-z0-9_.-]{0,31}$")
+
+
+def _decimal_digits(value: int) -> int:
+    """Bound decimal digits using bit length without converting huge integers."""
+    magnitude = abs(value)
+    if magnitude == 0:
+        return 1
+    # 30103/100000 is a strict upper approximation to log10(2).
+    return (magnitude.bit_length() * 30103 + 99999) // 100000
 
 
 def _domain_error(code: str, message: str) -> OperationDomainValidationError:
@@ -58,6 +70,7 @@ def admit_family(source: SquarefreeAffineFamily) -> None:
         or not hasattr(form, "coefficient")
         or not hasattr(form, "constant")
         or type(form.form_id) is not str
+        or not _FORM_ID.fullmatch(form.form_id)
         or type(form.coefficient) is not int
         or type(form.constant) is not int
         for form in forms
@@ -83,8 +96,8 @@ def admit_family(source: SquarefreeAffineFamily) -> None:
         if form.coefficient == 0 and form.constant == 0:
             raise _domain_error("form_zero", "affine form must not be identically zero")
         if (
-            len(str(abs(form.coefficient))) > MAX_SQUAREFREE_COMPONENT_DIGITS
-            or len(str(abs(form.constant))) > MAX_SQUAREFREE_COMPONENT_DIGITS
+            _decimal_digits(form.coefficient) > MAX_SQUAREFREE_COMPONENT_DIGITS
+            or _decimal_digits(form.constant) > MAX_SQUAREFREE_COMPONENT_DIGITS
         ):
             raise _resource_error(
                 "component_digit_bound",

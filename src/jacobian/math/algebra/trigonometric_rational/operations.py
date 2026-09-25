@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import heapq
 from dataclasses import dataclass
 from fractions import Fraction
 from math import gcd
@@ -811,19 +812,26 @@ def _modular_remainder_nonzero(
     if leading_exponent > max(dividend):
         return True
     inverse_leading = pow(divisor[leading_exponent], -1, prime)
-    remainder = dividend
+    remainder = dividend.copy()
+    degree_queue = [-exponent for exponent in remainder]
+    heapq.heapify(degree_queue)
     steps = 0
-    while remainder and max(remainder) >= leading_exponent:
-        exponent = max(remainder)
+    while degree_queue:
+        while degree_queue and -degree_queue[0] not in remainder:
+            heapq.heappop(degree_queue)
+        if not degree_queue or -degree_queue[0] < leading_exponent:
+            break
+        exponent = -degree_queue[0]
         quotient = remainder[exponent] * inverse_leading % prime
         shift = exponent - leading_exponent
         for divisor_exponent, divisor_coefficient in divisor.items():
             position = shift + divisor_exponent
-            value = (
-                remainder.get(position, 0) - quotient * divisor_coefficient
-            ) % prime
+            previous = remainder.get(position, 0)
+            value = (previous - quotient * divisor_coefficient) % prime
             if value:
                 remainder[position] = value
+                if not previous:
+                    heapq.heappush(degree_queue, -position)
             else:
                 remainder.pop(position, None)
             steps += 1

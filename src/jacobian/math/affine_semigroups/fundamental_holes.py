@@ -11,7 +11,10 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import ExactInteger
 from jacobian._models import StrictModel
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.affine_semigroups.group_lattice import compute_group_lattice
 from jacobian.math.affine_semigroups.holes import (
     MAX_AFFINE_HOLE_CANDIDATES,
@@ -155,11 +158,19 @@ def fundamental_holes(
         )
     )
     if lattice_index == 0:
-        raise ValueError("fundamental holes require a full-rank generated lattice")
+        raise OperationDomainValidationError(
+            location=("semigroup", "configuration"),
+            code="affine_semigroup.fundamental_holes_rank",
+            message="fundamental holes require a full-rank generated lattice",
+        )
     group = compute_group_lattice(source.configuration)
     basis = group.lattice.basis.entries
     if len(basis) != 2 or any(len(row) != 2 for row in basis):
-        raise ValueError("fundamental holes require a full-rank generated lattice")
+        raise OperationDomainValidationError(
+            location=("semigroup", "configuration"),
+            code="affine_semigroup.fundamental_holes_rank",
+            message="fundamental holes require a full-rank generated lattice",
+        )
     # For entries |a_ij|<M, every 2x2 minor is <2M^2, and the lattice index
     # is their gcd. In canonical 2D row HNF, every basis entry is at most that
     # index (or one in the index-one case). Cramer's rule then bounds each

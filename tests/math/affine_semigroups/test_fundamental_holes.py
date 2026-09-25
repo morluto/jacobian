@@ -202,23 +202,25 @@ def test_candidate_box_is_admitted_before_enumeration(
         fundamental_holes(_semigroup(((3, 0), (5, 0), (0, 1))))
 
 
-def test_degenerate_cone_is_rejected() -> None:
+def test_degenerate_cone_is_rejected_by_native_and_catalog_boundaries() -> None:
+    semigroup = _semigroup(((1, 0), (2, 0)))
     with pytest.raises(OperationDomainValidationError, match="full-rank"):
-        tool = next(
-            item
-            for item in TOOLS
-            if item.operation_id == "affine_semigroup.fundamental_holes.compute"
-        )
-        request = AffineSemigroupFundamentalHolesRequest(
-            semigroup=_semigroup(((1, 0), (2, 0)))
-        )
-        run = cast(
-            Callable[
-                [AffineSemigroupFundamentalHolesRequest],
-                AffineSemigroupFundamentalHoles,
-            ],
-            tool.run,
-        )
+        fundamental_holes(semigroup)
+
+    tool = next(
+        item
+        for item in TOOLS
+        if item.operation_id == "affine_semigroup.fundamental_holes.compute"
+    )
+    request = AffineSemigroupFundamentalHolesRequest(semigroup=semigroup)
+    run = cast(
+        Callable[
+            [AffineSemigroupFundamentalHolesRequest],
+            AffineSemigroupFundamentalHoles,
+        ],
+        tool.run,
+    )
+    with pytest.raises(OperationDomainValidationError, match="full-rank"):
         run(request)
 
 

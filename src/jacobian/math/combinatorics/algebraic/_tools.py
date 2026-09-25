@@ -28,6 +28,7 @@ from jacobian.math.combinatorics.algebraic._models import (
     RSKInverseWordRequest,
     RSKPermutationRequest,
     RSKResult,
+    RSKWordInverseTraceResult,
     RSKWordRequest,
     RSKWordTraceRequest,
     RSKWordTraceResult,
@@ -159,6 +160,18 @@ def inverse_rsk_word(request: RSKInverseWordRequest) -> FiniteWord:
             code="algebraic_combinatorics.rsk_pair_incompatible",
             message=str(exc),
         ) from exc
+
+
+def inverse_rsk_word_trace(
+    request: RSKInverseWordRequest,
+) -> RSKWordInverseTraceResult:
+    if request.convention != request.pair.convention:
+        raise OperationDomainValidationError(
+            location=("convention",),
+            code="algebraic_combinatorics.rsk_inverse_trace_convention",
+            message="the request and tableau pair must use the same RSK convention",
+        )
+    return native.inverse_row_insertion_rsk_trace(request.pair)
 
 
 def knuth_moves(request: KnuthMovesRequest) -> KnuthMovesResult:
@@ -354,6 +367,35 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                         "convention": "ROW_INSERTION_RSK_V1",
                     },
                     "convention": "ROW_INSERTION_RSK_V1",
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="tableau.rsk.inverse_word.trace.compute",
+        title="Trace ordinary word RSK reverse insertion",
+        description=(
+            "Reconstruct the exact finite word from a compatible ordinary word-RSK "
+            "pair and return one reverse-insertion event per recording label, "
+            "including the removed corner, carried entries, and resulting shape."
+        ),
+        request_type=RSKInverseWordRequest,
+        result_type=RSKWordInverseTraceResult,
+        run=inverse_rsk_word_trace,
+        tags=("combinatorics", "rsk", "words", "inverse", "trace", "exact"),
+        examples=(
+            OperationExample(
+                name="reverse_trace_repeated_letters",
+                description="Recover a repeated-letter word with all reverse bumps.",
+                input={
+                    "pair": {
+                        "alphabet": ["a", "b", "c"],
+                        "insertion_tableau": {"rows": [[1, 3], [2]]},
+                        "recording_tableau": {"rows": [[1, 2], [3]]},
+                        "shape": {"parts": [2, 1]},
+                        "source_kind": "WORD",
+                        "convention": "ROW_INSERTION_RSK_V1",
+                    },
                 },
             ),
         ),

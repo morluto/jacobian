@@ -29,6 +29,7 @@ from jacobian.math.combinatorics.algebraic._models import (
     PlacticEquivalenceResult,
     PlacticNormalFormResult,
     RSKResult,
+    RSKWordInverseTraceResult,
     RSKWordTraceResult,
     SemistandardTableauCheckResult,
     SemistandardYoungTableauCountResult,
@@ -42,6 +43,9 @@ from jacobian.math.combinatorics.algebraic._rsk import (
 )
 from jacobian.math.combinatorics.algebraic._rsk import (
     inverse_row_insertion_rsk as _inverse_row_insertion_rsk,
+)
+from jacobian.math.combinatorics.algebraic._rsk import (
+    inverse_row_insertion_rsk_trace as _inverse_row_insertion_rsk_trace,
 )
 from jacobian.math.combinatorics.algebraic._rsk import (
     row_insertion_rsk as _row_insertion_rsk,
@@ -522,6 +526,11 @@ def row_insertion_rsk(word: FiniteWord) -> RSKTableauPair:
 def inverse_row_insertion_rsk(pair: RSKTableauPair) -> FiniteWord:
     """Reconstruct the unique word represented by a pair of at most 500 cells."""
     return _inverse_row_insertion_rsk(pair)
+
+
+def inverse_row_insertion_rsk_trace(pair: RSKTableauPair) -> RSKWordInverseTraceResult:
+    """Return the reconstructed word and its reverse-insertion ledger."""
+    return _inverse_row_insertion_rsk_trace(pair)
 
 
 def row_insertion_rsk_trace(word: FiniteWord) -> RSKWordTraceResult:

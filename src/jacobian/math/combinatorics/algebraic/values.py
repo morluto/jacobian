@@ -154,6 +154,77 @@ class RSKInsertionEvent(StrictModel):
         return self
 
 
+class RSKReverseBumpStep(StrictModel):
+    """One reverse row replacement, with zero-based cell coordinates."""
+
+    row: StrictInt = Field(ge=0, le=MAX_RSK_WORD_LENGTH - 1)
+    column: StrictInt = Field(ge=0, le=MAX_RSK_WORD_LENGTH - 1)
+    displaced_entry: StrictInt = Field(ge=1, le=MAX_ALPHABET_SIZE)
+
+
+class RSKReverseInsertionEvent(StrictModel):
+    """Removal of one recording label and its reverse bump path."""
+
+    position: StrictInt = Field(ge=1, le=MAX_RSK_WORD_LENGTH)
+    letter: Symbol
+    removed_row: StrictInt = Field(ge=0, le=MAX_RSK_WORD_LENGTH - 1)
+    removed_column: StrictInt = Field(ge=0, le=MAX_RSK_WORD_LENGTH - 1)
+    removed_entry: StrictInt = Field(ge=1, le=MAX_ALPHABET_SIZE)
+    output_entry: StrictInt = Field(ge=1, le=MAX_ALPHABET_SIZE)
+    reverse_bump_path: tuple[RSKReverseBumpStep, ...] = Field(
+        max_length=MAX_RSK_WORD_LENGTH
+    )
+    row_lengths: tuple[StrictInt, ...] = Field(max_length=MAX_RSK_WORD_LENGTH)
+
+    @model_validator(mode="after")
+    def require_reverse_path_and_shape(self) -> Self:
+        if tuple(step.row for step in self.reverse_bump_path) != tuple(
+            range(self.removed_row - 1, -1, -1)
+        ):
+            raise PydanticCustomError(
+                "algebraic_combinatorics.rsk_reverse_trace_row_path",
+                "reverse bump steps must visit every preceding row in descending order",
+            )
+        if self.output_entry != (
+            self.reverse_bump_path[-1].displaced_entry
+            if self.reverse_bump_path
+            else self.removed_entry
+        ):
+            raise PydanticCustomError(
+                "algebraic_combinatorics.rsk_reverse_trace_output_entry",
+                "the output entry must be the final carried entry",
+            )
+        if (
+            sum(self.row_lengths) != self.position - 1
+            or any(length <= 0 for length in self.row_lengths)
+            or any(
+                left < right
+                for left, right in zip(
+                    self.row_lengths, self.row_lengths[1:], strict=False
+                )
+            )
+        ):
+            raise PydanticCustomError(
+                "algebraic_combinatorics.rsk_reverse_trace_shape",
+                "row lengths must describe the partition after removal",
+            )
+        if self.removed_row >= len(self.row_lengths) + 1:
+            raise PydanticCustomError(
+                "algebraic_combinatorics.rsk_reverse_trace_cell",
+                "the removed cell row is outside the prior shape",
+            )
+        if any(
+            step.row >= len(self.row_lengths)
+            or step.column >= self.row_lengths[step.row]
+            for step in self.reverse_bump_path
+        ):
+            raise PydanticCustomError(
+                "algebraic_combinatorics.rsk_reverse_trace_cell",
+                "a reverse bump cell must lie within the resulting shape",
+            )
+        return self
+
+
 __all__ = [
     "MAX_RSK_ALPHABET_RANK_DIGITS",
     "MAX_RSK_ROW_SEARCH_COMPARISONS",
@@ -162,5 +233,7 @@ __all__ = [
     "RSKBumpStep",
     "RSKConvention",
     "RSKInsertionEvent",
+    "RSKReverseBumpStep",
+    "RSKReverseInsertionEvent",
     "RSKTableauPair",
 ]

@@ -10,6 +10,11 @@ from jacobian.math.topology.simplicial_sets.standard import standard_simplex
 
 _DELTA_TWO = standard_simplex(2, 2).model_dump(mode="json")
 
+
+def _run(request: SimplicialSetSkeletonRequest) -> SimplicialSetSkeletonResult:
+    return simplicial_set_skeleton(request.simplicial_set, request.k)
+
+
 TOOLS = (
     MathTool(
         operation_id="topology.simplicial_set.skeleton.compute",
@@ -23,7 +28,7 @@ TOOLS = (
         ),
         request_type=SimplicialSetSkeletonRequest,
         result_type=SimplicialSetSkeletonResult,
-        run=simplicial_set_skeleton,
+        run=_run,
         tags=("topology", "simplicial-set", "skeleton", "exact"),
         discovery_terms=("simplicial set skeleton", "k-skeleton", "degenerate simplex"),
         examples=(

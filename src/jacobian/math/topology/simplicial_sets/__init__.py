@@ -24,6 +24,10 @@ from jacobian.math.topology.simplicial_sets.degeneracy import (
     DegeneracyProfileResult,
     degeneracy_profile,
 )
+from jacobian.math.topology.simplicial_sets.image import (
+    SimplicialMapImageResult,
+    simplicial_map_image,
+)
 from jacobian.math.topology.simplicial_sets.maps import (
     TruncatedSimplicialMap,
     compose_simplicial_maps,
@@ -49,6 +53,7 @@ __all__ = [
     "FiniteTruncatedSimplicialSet",
     "SimplicialComplexPrefixResult",
     "SimplicialIdentityObstruction",
+    "SimplicialMapImageResult",
     "SimplicialSetCoproductResult",
     "SimplicialSetProductResult",
     "SimplicialSetTablesResult",
@@ -62,6 +67,7 @@ __all__ = [
     "simplex_boundary",
     "simplex_horn",
     "simplicial_map",
+    "simplicial_map_image",
     "simplicial_set_coproduct",
     "simplicial_set_from_complex",
     "simplicial_set_product",

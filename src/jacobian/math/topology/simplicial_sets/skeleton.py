@@ -113,7 +113,7 @@ def _preflight(
 
 
 def simplicial_set_skeleton(
-    request: SimplicialSetSkeletonRequest,
+    simplicial_set: FiniteTruncatedSimplicialSet, k: int
 ) -> SimplicialSetSkeletonResult:
     """Generate the smallest finite simplicial subset containing degrees <= k.
 
@@ -121,7 +121,13 @@ def simplicial_set_skeleton(
     the already admitted lower-degree members. Since degeneracies raise degree
     by one, a single ascending pass computes the full closure.
     """
-    source, k = request.simplicial_set, request.k
+    if not isinstance(simplicial_set, FiniteTruncatedSimplicialSet):
+        raise OperationDomainValidationError(
+            location=("simplicial_set",),
+            code="simplicial_set.skeleton_source_invalid",
+            message="simplicial_set must be a finite truncated simplicial set",
+        )
+    source = simplicial_set
     sizes = admit_tables(
         source.max_degree,
         source.sets,

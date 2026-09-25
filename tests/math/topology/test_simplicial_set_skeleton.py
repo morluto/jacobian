@@ -18,9 +18,7 @@ from jacobian.math.topology.simplicial_sets.standard import standard_simplex
 
 def test_delta_two_one_skeleton_matches_independent_monotone_map_oracle() -> None:
     source = standard_simplex(2, 2)
-    result = simplicial_set_skeleton(
-        SimplicialSetSkeletonRequest(simplicial_set=source, k=1)
-    )
+    result = simplicial_set_skeleton(source, 1)
 
     # In Delta[2], a k-skeleton consists exactly of monotone maps whose image
     # has at most k+1 vertices. Enumerate those maps directly, independently of
@@ -65,9 +63,7 @@ def test_delta_two_one_skeleton_matches_independent_monotone_map_oracle() -> Non
 
 def test_zero_skeleton_contains_only_repeated_vertices_in_higher_degrees() -> None:
     source = standard_simplex(2, 3)
-    result = simplicial_set_skeleton(
-        SimplicialSetSkeletonRequest(simplicial_set=source, k=0)
-    )
+    result = simplicial_set_skeleton(source, 0)
     for degree, level in enumerate(result.skeleton.sets):
         expected = tuple(
             "(" + ",".join(map(str, simplex)) + ")"
@@ -79,9 +75,7 @@ def test_zero_skeleton_contains_only_repeated_vertices_in_higher_degrees() -> No
 
 def test_maximal_skeleton_is_the_identity_subset_and_round_trips() -> None:
     source = standard_simplex(1, 2)
-    result = simplicial_set_skeleton(
-        SimplicialSetSkeletonRequest(simplicial_set=source, k=2)
-    )
+    result = simplicial_set_skeleton(source, 2)
     assert result.skeleton == source
     assert result.inclusion.maps == tuple(
         tuple(range(len(level))) for level in source.sets
@@ -97,9 +91,7 @@ def test_empty_simplicial_set_has_empty_skeleton_and_inclusion() -> None:
         (((),), ((), ())),
     ).simplicial_set
     assert source is not None
-    result = simplicial_set_skeleton(
-        SimplicialSetSkeletonRequest(simplicial_set=source, k=1)
-    )
+    result = simplicial_set_skeleton(source, 1)
     assert result.skeleton.sets == ((), (), ())
     assert result.inclusion.maps == ((), (), ())
 
@@ -107,9 +99,7 @@ def test_empty_simplicial_set_has_empty_skeleton_and_inclusion() -> None:
 def test_skeleton_rejects_unseen_degree_and_invalid_source_tables() -> None:
     source = standard_simplex(1, 1)
     with pytest.raises(OperationDomainValidationError, match="visible"):
-        simplicial_set_skeleton(
-            SimplicialSetSkeletonRequest.model_construct(simplicial_set=source, k=2)
-        )
+        simplicial_set_skeleton(source, 2)
 
     corrupted = FiniteTruncatedSimplicialSet._from_kernel(
         max_degree=source.max_degree,
@@ -120,9 +110,7 @@ def test_skeleton_rejects_unseen_degree_and_invalid_source_tables() -> None:
         checked_identities=source.checked_identities,
     )
     with pytest.raises(OperationDomainValidationError, match="visible simplicial"):
-        simplicial_set_skeleton(
-            SimplicialSetSkeletonRequest.model_construct(simplicial_set=corrupted, k=0)
-        )
+        simplicial_set_skeleton(corrupted, 0)
 
 
 def test_request_rejects_boolean_degree() -> None:

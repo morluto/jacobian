@@ -30,6 +30,7 @@ from jacobian.math.topology.edge_paths._models import (
     FiniteGroupPresentation,
     FiniteGroupWord,
     FreeReductionRequest,
+    FreeReductionResult,
     FundamentalGroupPresentationResult,
     OrientedEdge,
     PresentationAbelianizationResult,
@@ -227,12 +228,15 @@ def _free_reduce(
     return tuple(stack)
 
 
-def free_reduce(request: FreeReductionRequest) -> FiniteGroupWord:
+def free_reduce(request: FreeReductionRequest) -> FreeReductionResult:
     """Return the unique freely reduced word on the supplied generator axis."""
-    return FiniteGroupWord(
-        letters=_free_reduce(
-            [(letter.generator, letter.exponent) for letter in request.letters]
-        )
+    return FreeReductionResult(
+        generator_count=request.generator_count,
+        word=FiniteGroupWord(
+            letters=_free_reduce(
+                [(letter.generator, letter.exponent) for letter in request.letters]
+            )
+        ),
     )
 
 

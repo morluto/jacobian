@@ -19,8 +19,8 @@ from jacobian.math.topology.edge_paths._models import (
     EdgePathConcatenateResult,
     EdgePathWordRequest,
     EdgePathWordResult,
-    FiniteGroupWord,
     FreeReductionRequest,
+    FreeReductionResult,
     FundamentalGroupPresentationRequest,
     FundamentalGroupPresentationResult,
     PresentationAbelianizationResult,
@@ -53,7 +53,7 @@ def _presentation_abelianization(
     return presentation_abelianization(request.presentation)
 
 
-def _free_reduce_word(request: FreeReductionRequest) -> FiniteGroupWord:
+def _free_reduce_word(request: FreeReductionRequest) -> FreeReductionResult:
     return free_reduce(request)
 
 
@@ -85,7 +85,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "relators are applied."
         ),
         request_type=FreeReductionRequest,
-        result_type=FiniteGroupWord,
+        result_type=FreeReductionResult,
         run=_free_reduce_word,
         tags=("topology", "group-presentation", "free-reduction", "exact"),
         discovery_terms=(

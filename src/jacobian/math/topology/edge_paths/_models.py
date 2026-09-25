@@ -106,6 +106,21 @@ class FiniteGroupWord(StrictModel):
     letters: tuple[WordLetter, ...] = Field(default=(), max_length=MAX_WORD)
 
 
+class FreeReductionResult(StrictModel):
+    """A reduced word retaining its ambient free-generator axis."""
+
+    generator_count: int = Field(ge=0, le=MAX_PRESENTATION_GENERATORS)
+    word: FiniteGroupWord
+
+    @model_validator(mode="after")
+    def require_word_axis(self) -> Self:
+        if any(
+            letter.generator >= self.generator_count for letter in self.word.letters
+        ):
+            raise _validation_error("word_generator", "word exceeds generator axis")
+        return self
+
+
 class FreeReductionRequest(StrictModel):
     """Freely reduce a bounded word over an explicitly sized generator set."""
 
@@ -393,7 +408,10 @@ class FundamentalGroupMapResult(StrictModel):
         target_generator_count = len(self.target_presentation.presentation.generators)
         if any(
             letter.generator >= target_generator_count
-            for word in self.generator_images
+            for word in (
+                *self.generator_images,
+                *(item.conjugator for item in self.relator_images),
+            )
             for letter in word.letters
         ):
             raise _validation_error(

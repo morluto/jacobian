@@ -14,6 +14,7 @@ from jacobian.catalog.models import (
 from jacobian.math.topology._models import canonical_complex
 from jacobian.math.topology.cellular_sheaves._models import (
     CoverRestrictionMatrix,
+    FiniteCellularSheaf,
     SheafField,
     SheafStalk,
 )
@@ -32,7 +33,9 @@ def _q(value: int) -> CanonicalRational:
     return CanonicalRational.from_fraction(Fraction(value))
 
 
-def _circle_sheaf(field: SheafField = SheafField.RATIONAL, prime: int | None = None):
+def _circle_sheaf(
+    field: SheafField = SheafField.RATIONAL, prime: int | None = None
+) -> FiniteCellularSheaf:
     complex_ = canonical_complex(("a", "b", "c"), (("a", "b"), ("a", "c"), ("b", "c")))
     faces = tuple(face for group in complex_.faces_by_dimension for face in group.faces)
     covers = tuple(
@@ -128,7 +131,7 @@ def test_identity_on_four_disconnected_sections_retains_identity_matrix() -> Non
     )
 
 
-def _single_vertex_sheaf():
+def _single_vertex_sheaf() -> FiniteCellularSheaf:
     complex_ = canonical_complex(("a",), (("a",),))
     result = from_cover_maps(
         complex_,

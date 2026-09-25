@@ -19,15 +19,15 @@ from jacobian.math.topology.cellular_sheaves._kernel import (
 from jacobian.math.topology.cellular_sheaves._models import (
     MAX_SHEAF_COHOMOLOGY_CELLS,
     MAX_SHEAF_ENTRY_DIGITS,
-    MAX_SHEAF_MORPHISM_OUTPUT_CHARS,
+    MAX_SHEAF_MORPHISM_RESULT_DIGIT_WORK,
     MAX_SHEAF_MORPHISM_WORK,
     SheafCohomologyGroup,
     SheafCohomologyResult,
     SheafField,
     SheafScalar,
     _require_field_scalars,
+    sheaf_scalar_digit_work,
     sheaf_scalar_digits,
-    sheaf_scalar_json_bound,
 )
 from jacobian.math.topology.cellular_sheaves.extensions import (
     SheafCochainMapResult,
@@ -131,20 +131,17 @@ class SheafCohomologyMapResult(StrictModel):
             for group in (*source_groups, *target_groups)
             for vector in group.cocycle_representatives
         ) + sum(len(row) for matrix in self.components for row in matrix)
-        if (
-            len(morphism.model_dump_json())
-            + sheaf_scalar_json_bound(scalar_count)
-            + 256 * (len(source_groups) + len(target_groups))
-            > MAX_SHEAF_MORPHISM_OUTPUT_CHARS
-        ):
-            raise ValueError("cohomology map coordinates exceed their output bound")
+        if sheaf_scalar_digit_work(scalar_count) > MAX_SHEAF_MORPHISM_RESULT_DIGIT_WORK:
+            raise ValueError(
+                "cohomology map coordinates exceed their output digit work bound"
+            )
         if any(
-            sheaf_scalar_digits(value) > 64
+            sheaf_scalar_digits(value) > MAX_SHEAF_ENTRY_DIGITS
             for group in (*source_groups, *target_groups)
             for vector in group.cocycle_representatives
             for value in vector
         ) or any(
-            sheaf_scalar_digits(value) > 64
+            sheaf_scalar_digits(value) > MAX_SHEAF_ENTRY_DIGITS
             for matrix in self.components
             for row in matrix
             for value in row
@@ -261,15 +258,13 @@ def _admit_quotient_reduction(
             "representative_growth_bound",
             "cohomology representative exceeds the exact result scalar digit limit",
         )
-    output_chars = (
-        len(induced_cochains.morphism.model_dump_json())
-        + sheaf_scalar_json_bound(representative_values + output_cells)
-        + 256 * (len(source.groups) + len(target.groups))
-    )
-    if output_chars > MAX_SHEAF_MORPHISM_OUTPUT_CHARS:
+    if (
+        sheaf_scalar_digit_work(representative_values + output_cells)
+        > MAX_SHEAF_MORPHISM_RESULT_DIGIT_WORK
+    ):
         raise _resource(
             "output_bound",
-            "cohomology-map matrices exceed their serialized output bound",
+            "cohomology-map scalar coordinates exceed their output digit work bound",
         )
 
     images_by_degree: list[tuple[tuple[Scalar, ...], ...]] = []

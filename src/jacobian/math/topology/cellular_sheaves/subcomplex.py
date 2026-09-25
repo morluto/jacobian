@@ -11,12 +11,12 @@ from jacobian.math.topology.cellular_sheaves._kernel import _admit_field
 from jacobian.math.topology.cellular_sheaves._models import (
     MAX_SHEAF_DERIVED_RESTRICTIONS,
     MAX_SHEAF_RESTRICTION_CELLS,
-    MAX_SHEAF_RESTRICTION_OUTPUT_CHARS,
+    MAX_SHEAF_RESTRICTION_RESULT_DIGIT_WORK,
     MAX_SHEAF_SIMPLICES,
     FiniteCellularSheaf,
     SheafSubcomplexResult,
+    sheaf_scalar_digit_work,
     sheaf_scalar_digits,
-    sheaf_scalar_json_bound,
 )
 
 
@@ -137,24 +137,20 @@ def restrict_to_subcomplex(
 
     # Admission precedes construction.  The source is included in the returned
     # source-bound result, and the target repeats retained exact maps.
-    output_chars = len(sheaf.model_dump_json()) + len(subcomplex.model_dump_json())
-    output_chars += (
-        sum(
-            len(item.model_dump_json())
-            for item in (*filtered_stalks, *filtered_cover, *filtered_derived)
+    output_scalar_digit_work = sum(
+        sheaf_scalar_digit_work(
+            sum(len(row) for row in item.entries),
+            max(
+                (sheaf_scalar_digits(value) for row in item.entries for value in row),
+                default=1,
+            ),
         )
-        + 1024
-    )
-    output_scalar_count = sum(
-        len(row)
         for item in (*filtered_cover, *filtered_derived)
-        for row in item.entries
     )
-    output_chars += sheaf_scalar_json_bound(output_scalar_count)
-    if output_chars > MAX_SHEAF_RESTRICTION_OUTPUT_CHARS:
+    if output_scalar_digit_work > MAX_SHEAF_RESTRICTION_RESULT_DIGIT_WORK:
         raise _resource(
-            "output_bound",
-            f"the source-bound result exceeds the {MAX_SHEAF_RESTRICTION_OUTPUT_CHARS}-character bound",
+            "result_digit_work_bound",
+            "the retained restriction scalars exceed their digit-work bound",
         )
 
     stalk_for = {stalk.simplex: stalk for stalk in filtered_stalks}

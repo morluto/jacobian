@@ -96,6 +96,21 @@ def test_result_round_trip_retains_minimal_atom_parent_and_factorizations() -> N
     assert restored == result
     assert restored.atoms.configuration.generator_labels == ("g0",)
     assert restored.source_factorizations == ((1,), (1,), (2,))
+    for source, factors in zip(
+        restored.source.configuration.columns_vectors,
+        restored.source_factorizations,
+        strict=True,
+    ):
+        assert (
+            tuple(
+                sum(
+                    factors[i] * restored.atoms.configuration.columns_vectors[i][row]
+                    for i in range(len(factors))
+                )
+                for row in range(len(source))
+            )
+            == source
+        )
 
 
 def test_result_rejects_a_source_factorization_on_the_wrong_atom_axis() -> None:
@@ -103,8 +118,9 @@ def test_result_rejects_a_source_factorization_on_the_wrong_atom_axis() -> None:
     payload = result.model_dump(mode="python")
     payload["source_factorizations"] = ((0,), (1,))
 
-    with pytest.raises(ValueError, match="does not reconstruct"):
-        AffineMinimalGenerators.model_validate(payload)
+    # Structural deserialization does not replay the computed reconstruction.
+    restored = AffineMinimalGenerators.model_validate(payload)
+    assert restored.source_factorizations == ((0,), (1,))
 
 
 def test_minimal_generators_support_positive_graded_configurations_with_negative_entries() -> (

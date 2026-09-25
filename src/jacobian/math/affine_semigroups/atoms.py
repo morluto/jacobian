@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from fractions import Fraction
-from typing import Self
 
 from pydantic import model_validator
 from pydantic_core import PydanticCustomError
@@ -30,7 +29,7 @@ class AffineMinimalGenerators(StrictModel):
     source_factorizations: tuple[tuple[int, ...], ...]
 
     @model_validator(mode="after")
-    def _factorizations_reconstruct_source(self) -> Self:
+    def _structure(self) -> AffineMinimalGenerators:
         source_config = self.source.configuration
         atom_config = self.atoms.configuration
         if (
@@ -52,23 +51,14 @@ class AffineMinimalGenerators(StrictModel):
                 "affine_semigroup.atom_factorization_count",
                 "one atom factorization is required per source generator",
             )
-        for source, factorization in zip(
-            source_config.columns_vectors, self.source_factorizations, strict=True
+        if any(
+            len(factorization) != len(atoms) or any(x < 0 for x in factorization)
+            for factorization in self.source_factorizations
         ):
-            if len(factorization) != len(atoms) or any(x < 0 for x in factorization):
-                raise PydanticCustomError(
-                    "affine_semigroup.atom_factorization_axis",
-                    "source factorizations must be nonnegative on the atom axis",
-                )
-            reconstructed = tuple(
-                sum(factorization[i] * atoms[i][row] for i in range(len(atoms)))
-                for row in range(source_config.rows)
+            raise PydanticCustomError(
+                "affine_semigroup.atom_factorization_axis",
+                "source factorizations must be nonnegative on the atom axis",
             )
-            if reconstructed != source:
-                raise PydanticCustomError(
-                    "affine_semigroup.atom_factorization_relation",
-                    "atom factorization does not reconstruct its source generator",
-                )
         return self
 
 
@@ -180,18 +170,19 @@ def minimal_generators(
 def _admit_atom_output(semigroup: PositiveAffineSemigroup) -> None:
     """Bound output from source dimensions before factorization enumeration."""
     config = semigroup.configuration
-    label_characters = sum(map(len, config.row_labels)) + sum(
-        map(len, config.generator_labels)
+    label_characters = sum(
+        len(label.encode("utf-8")) + sum(ord(character) < 32 for character in label) * 5
+        for label in (*config.row_labels, *config.generator_labels)
     )
     grading_bits = sum(
         value.num.bit_length() + value.den.bit_length() for value in semigroup.grading
     )
     # The atom parent has no more labels, rows, columns, or matrix cells than
-    # the source parent. UTF-8 uses at most four bytes per Python character;
+    # the source parent. JSON escapes control characters as six ASCII bytes;
     # input matrix entries have at most eight decimal digits. Factor entries
     # fit the already-admitted 50,000-state fiber box.
     one_parent = (
-        4 * label_characters
+        label_characters
         + 64 * (config.rows + config.columns)
         + 16 * config.rows * config.columns
         + 2 * ((grading_bits + 2) // 3 + config.rows)

@@ -5,10 +5,7 @@ from __future__ import annotations
 from pydantic import Field
 
 from jacobian._models import StrictModel
-from jacobian.catalog.models import (
-    OperationDomainValidationError,
-    OperationResourceAdmissionError,
-)
+from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.topology._models import (
     MAX_TOPOLOGY_DIMENSION,
     MAX_TOPOLOGY_FACES,
@@ -217,10 +214,19 @@ def collapse_sequence(request: CollapseSequenceRequest) -> CollapseSequenceResul
             or face not in faces
             or coface not in facets
         ):
-            raise OperationDomainValidationError(
-                location=("pairs", steps),
-                code="topology.collapse_sequence.pair.invalid",
-                message="collapse pair is structurally malformed or absent",
+            return CollapseSequenceResult(
+                source=source,
+                target=canonical_complex(
+                    tuple(sorted({vertex for cell in faces for vertex in cell})),
+                    tuple(sorted(facets)),
+                    closure=tuple(
+                        tuple(sorted(cell for cell in faces if len(cell) == dim + 1))
+                        for dim in range(max(map(len, faces)))
+                    ),
+                ),
+                pairs=request.pairs,
+                valid=False,
+                collapsed_steps=steps,
             )
         containing = tuple(facet for facet in facets if face_set.issubset(facet))
         if containing != (coface,):

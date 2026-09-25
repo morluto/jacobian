@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from itertools import combinations
 from math import comb
 
@@ -12,14 +13,28 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
+from jacobian.math.combinatorics.posets.core._models import (
+    ElementLabel,
+    FinitePoset,
+    PresentationPair,
+    ReflexivePairPolicy,
+    RelationInterpretation,
+)
+from jacobian.math.combinatorics.posets.core.operations import (
+    materialize_finite_poset,
+    verify_finite_poset,
+)
 from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
 from jacobian.math.topology._models import (
     MAX_TOPOLOGY_DIMENSION,
+    MAX_TOPOLOGY_FACES,
+    MAX_TOPOLOGY_FACETS,
     MAX_TOPOLOGY_VERTICES,
     FiniteSimplicialComplex,
     HomologyConvention,
     Simplex,
     SimplicialComplexRequest,
+    canonical_complex,
     is_bounded_prime,
 )
 from jacobian.math.topology._structural import _maximal_faces
@@ -30,8 +45,195 @@ MAX_FACE_POSET_CHAINS = 16_384
 MAX_FACE_POSET_PAIR_CANDIDATES = 1_000_000
 MAX_FACE_POSET_CHAIN_CANDIDATES = 100_000
 MAX_CLIQUE_CANDIDATES = 100_000
-MAX_CLIQUE_FACETS = 16_384
+MAX_CLIQUE_PAIR_CHECKS = 2_000_000
 MAX_GRAPH_CLIQUE_VERTICES = 8
+MAX_ORDER_COMPLEX_WORK = 1_000_000
+MAX_ORDER_COMPLEX_OUTPUT_BYTES = 1_500_000
+
+
+@dataclass(frozen=True)
+class _OrderComplexPlan:
+    strict_successors: dict[str, list[str]]
+    cover_predecessors: dict[str, list[str]]
+    cover_successors: dict[str, list[str]]
+    max_chain_length: int
+
+
+def _order_complex_plan(poset: FinitePoset) -> _OrderComplexPlan:
+    elements = poset.elements
+    strict_predecessors: dict[str, list[str]] = {element: [] for element in elements}
+    strict_successors: dict[str, list[str]] = {element: [] for element in elements}
+    cover_predecessors: dict[str, list[str]] = {element: [] for element in elements}
+    cover_successors: dict[str, list[str]] = {element: [] for element in elements}
+    for pair in poset.strict_order_pairs:
+        strict_predecessors[pair.upper].append(pair.lower)
+        strict_successors[pair.lower].append(pair.upper)
+    for pair in poset.cover_relations:
+        cover_predecessors[pair.upper].append(pair.lower)
+        cover_successors[pair.lower].append(pair.upper)
+
+    topological_order: list[str] = []
+    remaining = set(elements)
+    while remaining:
+        ready = sorted(
+            element
+            for element in remaining
+            if not set(cover_predecessors[element]).intersection(remaining)
+        )
+        if not ready:  # verify_finite_poset has already established acyclicity.
+            raise OperationDomainValidationError(
+                location=("poset",),
+                code="topology.order_complex.invalid_poset",
+                message="poset cover relations are not acyclic",
+            )
+        topological_order.extend(ready)
+        remaining.difference_update(ready)
+
+    chains_ending: dict[str, int] = {}
+    incidences_ending: dict[str, int] = {}
+    longest_chain_ending: dict[str, int] = {}
+    maximal_paths_ending: dict[str, int] = {}
+    for element in topological_order:
+        chains_ending[element] = 1 + sum(
+            chains_ending[lower] for lower in strict_predecessors[element]
+        )
+        incidences_ending[element] = 1 + sum(
+            incidences_ending[lower] + chains_ending[lower]
+            for lower in strict_predecessors[element]
+        )
+        longest_chain_ending[element] = 1 + max(
+            (longest_chain_ending[lower] for lower in cover_predecessors[element]),
+            default=0,
+        )
+        maximal_paths_ending[element] = (
+            1
+            if not cover_predecessors[element]
+            else sum(
+                maximal_paths_ending[lower] for lower in cover_predecessors[element]
+            )
+        )
+
+    chain_count = sum(chains_ending.values())
+    chain_vertex_incidences = sum(incidences_ending.values())
+    max_chain_length = max(longest_chain_ending.values(), default=0)
+    facet_count = sum(
+        maximal_paths_ending[element]
+        for element in elements
+        if not cover_successors[element]
+    )
+    work_estimate = (
+        len(elements) ** 2
+        + len(elements) ** 3
+        + len(poset.strict_order_pairs)
+        + len(poset.cover_relations)
+        + chain_count
+        + chain_vertex_incidences
+        + facet_count * max_chain_length
+        + facet_count**2 * max_chain_length
+    )
+    output_bytes_estimate = (
+        4096
+        + 40 * len(elements)
+        + 112
+        * (
+            len(poset.strict_order_pairs)
+            + len(poset.cover_relations)
+            + len(poset.incomparable_pairs)
+        )
+        + 40 * chain_vertex_incidences
+        + 40 * facet_count * max_chain_length
+    )
+    _admit_order_complex_output(
+        chain_count,
+        max_chain_length,
+        facet_count,
+        work_estimate,
+        output_bytes_estimate,
+    )
+    return _OrderComplexPlan(
+        strict_successors=strict_successors,
+        cover_predecessors=cover_predecessors,
+        cover_successors=cover_successors,
+        max_chain_length=max_chain_length,
+    )
+
+
+def _admit_order_complex_output(
+    chain_count: int,
+    max_chain_length: int,
+    facet_count: int,
+    work_estimate: int,
+    output_bytes_estimate: int,
+) -> None:
+    if chain_count > MAX_TOPOLOGY_FACES:
+        raise OperationResourceAdmissionError(
+            location=("poset",),
+            code="topology.order_complex.face_budget",
+            message=(
+                "the order complex has more nonempty chains than the finite "
+                "simplicial-complex face bound"
+            ),
+        )
+    if max_chain_length > MAX_TOPOLOGY_DIMENSION + 1:
+        raise OperationResourceAdmissionError(
+            location=("poset",),
+            code="topology.order_complex.dimension_budget",
+            message="the longest chain exceeds the finite-complex dimension bound",
+        )
+    if facet_count > MAX_TOPOLOGY_FACETS:
+        raise OperationResourceAdmissionError(
+            location=("poset",),
+            code="topology.order_complex.facet_budget",
+            message="maximal-chain facets exceed the finite-complex facet bound",
+        )
+    if work_estimate > MAX_ORDER_COMPLEX_WORK:
+        raise OperationResourceAdmissionError(
+            location=("poset",),
+            code="topology.order_complex.work_budget",
+            message="order-complex chain enumeration exceeds the admitted work bound",
+        )
+    if output_bytes_estimate > MAX_ORDER_COMPLEX_OUTPUT_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("poset",),
+            code="topology.order_complex.output_budget",
+            message="the complete order complex exceeds the admitted output bound",
+        )
+
+
+def _enumerate_order_complex_chains(
+    elements: tuple[str, ...], plan: _OrderComplexPlan
+) -> tuple[tuple[tuple[Simplex, ...], ...], tuple[tuple[str, ...], ...]]:
+    chains_by_dimension: list[set[Simplex]] = [
+        set() for _ in range(plan.max_chain_length)
+    ]
+
+    def collect_chains(prefix: tuple[str, ...], last: str) -> None:
+        chains_by_dimension[len(prefix) - 1].add(tuple(sorted(prefix)))
+        for successor in plan.strict_successors[last]:
+            collect_chains((*prefix, successor), successor)
+
+    for element in elements:
+        collect_chains((element,), element)
+
+    facet_chains: list[tuple[str, ...]] = []
+
+    def collect_maximal_chains(prefix: tuple[str, ...], last: str) -> None:
+        successors = plan.cover_successors[last]
+        if not successors:
+            facet_chains.append(prefix)
+            return
+        for successor in successors:
+            collect_maximal_chains((*prefix, successor), successor)
+
+    for element in elements:
+        if not plan.cover_predecessors[element]:
+            collect_maximal_chains((element,), element)
+
+    ordered_facets = tuple(sorted(facet_chains, key=lambda chain: tuple(sorted(chain))))
+    closure: tuple[tuple[Simplex, ...], ...] = tuple(
+        tuple(sorted(faces)) for faces in chains_by_dimension if faces
+    )
+    return closure, ordered_facets
 
 
 class FacePosetRequest(StrictModel):
@@ -41,8 +243,21 @@ class FacePosetRequest(StrictModel):
 class FacePosetResult(StrictModel):
     complex: FiniteSimplicialComplex
     faces: tuple[Simplex, ...]
+    face_element_labels: tuple[ElementLabel, ...]
     order_relations: tuple[tuple[int, int], ...]
+    poset: FinitePoset | None
     order_complex: FiniteSimplicialComplex
+
+
+class OrderComplexRequest(StrictModel):
+    poset: FinitePoset
+
+
+class OrderComplexResult(StrictModel):
+    poset: FinitePoset
+    complex: FiniteSimplicialComplex
+    vertex_elements: tuple[ElementLabel, ...]
+    maximal_chains: tuple[tuple[ElementLabel, ...], ...]
 
 
 class CliqueRequest(StrictModel):
@@ -192,7 +407,50 @@ def _all_faces_sorted(complex_: FiniteSimplicialComplex) -> tuple[Simplex, ...]:
     return tuple(face for group in complex_.faces_by_dimension for face in group.faces)
 
 
+def order_complex(request: OrderComplexRequest) -> OrderComplexResult:
+    """Return the simplicial complex of all nonempty chains in a finite poset."""
+    if not isinstance(request, OrderComplexRequest):
+        raise OperationDomainValidationError(
+            location=(),
+            code="topology.order_complex.invalid_request",
+            message="order-complex input must be an OrderComplexRequest",
+        )
+    poset = request.poset
+    if not verify_finite_poset(poset):
+        raise OperationDomainValidationError(
+            location=("poset",),
+            code="topology.order_complex.invalid_poset",
+            message="poset claims do not describe its canonical finite poset",
+        )
+    elements = poset.elements
+    if not elements:
+        raise OperationDomainValidationError(
+            location=("poset", "elements"),
+            code="topology.order_complex.empty_poset",
+            message=(
+                "the empty poset has no nonempty order-complex faces and is not "
+                "representable by FiniteSimplicialComplex"
+            ),
+        )
+
+    plan = _order_complex_plan(poset)
+    closure, ordered_facets = _enumerate_order_complex_chains(elements, plan)
+    complex_ = canonical_complex(elements, ordered_facets, closure=closure)
+    return OrderComplexResult(
+        poset=poset,
+        complex=complex_,
+        vertex_elements=elements,
+        maximal_chains=ordered_facets,
+    )
+
+
 def face_poset(request: FacePosetRequest) -> FacePosetResult:
+    if not isinstance(request, FacePosetRequest):
+        raise OperationDomainValidationError(
+            location=(),
+            code="topology.face_poset.invalid_request",
+            message="face-poset input must be a FacePosetRequest",
+        )
     complex_ = _canonical(request.complex)
     faces = _all_faces_sorted(complex_)
     if len(faces) * len(faces) > MAX_FACE_POSET_PAIR_CANDIDATES:
@@ -200,15 +458,6 @@ def face_poset(request: FacePosetRequest) -> FacePosetResult:
             location=("complex",),
             code="topology.face_poset.pair_budget",
             message="face-poset relation candidates exceed the admitted work bound",
-        )
-    chain_candidates = sum(
-        comb(len(faces), size) for size in range(1, complex_.dimension + 2)
-    )
-    if chain_candidates > MAX_FACE_POSET_CHAIN_CANDIDATES:
-        raise OperationResourceAdmissionError(
-            location=("complex",),
-            code="topology.face_poset.chain_candidate_budget",
-            message="order-complex chain candidates exceed the admitted work bound",
         )
     relations_list: list[tuple[int, int]] = []
     for i, a in enumerate(faces):
@@ -223,6 +472,39 @@ def face_poset(request: FacePosetRequest) -> FacePosetResult:
                 relations_list.append((i, j))
     relations = tuple(relations_list)
     relation_set = set(relations)
+    face_element_labels = tuple(f"f{index:04d}" for index in range(len(faces)))
+    if len(faces) <= 64:
+        poset = materialize_finite_poset(
+            face_element_labels,
+            tuple(
+                PresentationPair(
+                    lower=face_element_labels[lower],
+                    upper=face_element_labels[upper],
+                )
+                for lower, upper in relations
+            ),
+            RelationInterpretation.COMPARABLE_PAIRS,
+            ReflexivePairPolicy.FORBIDDEN,
+        )
+        order_result = order_complex(OrderComplexRequest(poset=poset))
+        return FacePosetResult(
+            complex=complex_,
+            faces=faces,
+            face_element_labels=face_element_labels,
+            order_relations=relations,
+            poset=poset,
+            order_complex=order_result.complex,
+        )
+
+    chain_candidates = sum(
+        comb(len(faces), size) for size in range(1, complex_.dimension + 2)
+    )
+    if chain_candidates > MAX_FACE_POSET_CHAIN_CANDIDATES:
+        raise OperationResourceAdmissionError(
+            location=("complex",),
+            code="topology.face_poset.chain_candidate_budget",
+            message="order-complex chain candidates exceed the admitted work bound",
+        )
     chains: list[tuple[str, ...]] = []
     for size in range(1, complex_.dimension + 2):
         for chain in combinations(range(len(faces)), size):
@@ -233,16 +515,16 @@ def face_poset(request: FacePosetRequest) -> FacePosetResult:
                         code="topology.face_poset.chain_budget",
                         message="order-complex simplices exceed the admitted output bound",
                     )
-                chains.append(tuple(f"f{index}" for index in chain))
+                chains.append(tuple(face_element_labels[index] for index in chain))
     facets = _maximal_faces(chains)
-    order_complex = canonicalize(
-        tuple(f"f{i}" for i in range(len(faces))), facets
-    ).complex
+    order_complex_value = canonicalize(face_element_labels, facets).complex
     return FacePosetResult(
         complex=complex_,
         faces=faces,
+        face_element_labels=face_element_labels,
         order_relations=relations,
-        order_complex=order_complex,
+        poset=None,
+        order_complex=order_complex_value,
     )
 
 
@@ -254,14 +536,13 @@ def clique_complex(request: CliqueRequest) -> CliqueResult:
         else ()
     )
     edge_set = {frozenset(edge) for edge in edges}
-    facets: list[Simplex] = []
     vertices = source.vertices
     # A flag complex is determined by its graph, not by the dimension of the
     # presentation supplied by the caller.  In particular, a K4 presented as
-    # a one-dimensional graph still has a 3-simplex.  Admit every possible
-    # clique size before beginning enumeration so the search bound covers the
-    # complete candidate expansion.
+    # a one-dimensional graph still has a 3-simplex. Preflight the whole
+    # powerset and pair-check upper bound before the output-sensitive walk.
     candidate_count = 0
+    pair_check_bound = 0
     for size in range(1, len(vertices) + 1):
         candidate_count += comb(len(vertices), size)
         if candidate_count > MAX_CLIQUE_CANDIDATES:
@@ -270,24 +551,79 @@ def clique_complex(request: CliqueRequest) -> CliqueResult:
                 code="topology.clique.candidate_budget",
                 message="clique candidates exceed the admitted search bound",
             )
-    for size in range(1, len(vertices) + 1):
+        pair_check_bound += comb(len(vertices), size) * comb(size, 2)
+        if pair_check_bound > MAX_CLIQUE_PAIR_CHECKS:
+            raise OperationResourceAdmissionError(
+                location=("complex",),
+                code="topology.clique.pair_check_budget",
+                message="clique edge checks exceed the admitted work bound",
+            )
+
+    faces_by_dimension: list[list[Simplex]] = [
+        [] for _ in range(MAX_TOPOLOGY_DIMENSION + 1)
+    ]
+    face_count = 0
+    # A clique larger than the carrier's maximum simplex contains a
+    # (MAX_TOPOLOGY_DIMENSION + 2)-vertex clique.  Checking that size is enough
+    # to reject every out-of-carrier complex without enumerating larger sets.
+    largest_candidate_size = min(len(vertices), MAX_TOPOLOGY_DIMENSION + 2)
+    for size in range(largest_candidate_size, 0, -1):
         for candidate in combinations(vertices, size):
-            if size == 1 or all(
+            if size > 1 and not all(
                 frozenset(pair) in edge_set for pair in combinations(candidate, 2)
             ):
-                facets.append(candidate)
-    maximal = _maximal_faces(facets)
-    if len(maximal) > MAX_CLIQUE_FACETS:
-        raise OperationResourceAdmissionError(
-            location=("complex",),
-            code="topology.clique.output_budget",
-            message="clique facets exceed the admitted output bound",
-        )
-    result_complex = canonicalize(vertices, maximal).complex
+                continue
+            if size > MAX_TOPOLOGY_DIMENSION + 1:
+                raise OperationResourceAdmissionError(
+                    location=("complex",),
+                    code="topology.clique.dimension_budget",
+                    message=(
+                        "clique complex dimension exceeds the admitted "
+                        f"maximum {MAX_TOPOLOGY_DIMENSION}"
+                    ),
+                )
+            if face_count == MAX_TOPOLOGY_FACES:
+                raise OperationResourceAdmissionError(
+                    location=("complex",),
+                    code="topology.clique.face_budget",
+                    message=(
+                        "clique complex face closure exceeds the admitted "
+                        f"maximum {MAX_TOPOLOGY_FACES}"
+                    ),
+                )
+            faces_by_dimension[size - 1].append(candidate)
+            face_count += 1
+
+    maximal: list[Simplex] = []
+    maximal_sets: list[frozenset[str]] = []
+    # Process larger faces first. Once a face is maximal, no later face can
+    # contain it, so the public facet bound can be enforced before appending an
+    # oversized maximal-facet collection.
+    for faces in reversed(faces_by_dimension):
+        for face in faces:
+            face_set = frozenset(face)
+            if any(existing.issuperset(face_set) for existing in maximal_sets):
+                continue
+            if len(maximal) == MAX_TOPOLOGY_FACETS:
+                raise OperationResourceAdmissionError(
+                    location=("complex",),
+                    code="topology.clique.facet_budget",
+                    message=(
+                        "clique complex maximal facets exceed the admitted "
+                        f"maximum {MAX_TOPOLOGY_FACETS}"
+                    ),
+                )
+            maximal.append(face)
+            maximal_sets.append(face_set)
+
+    closure = tuple(tuple(faces) for faces in faces_by_dimension)
+    highest_dimension = max(index for index, faces in enumerate(closure) if faces)
+    closure = closure[: highest_dimension + 1]
+    result_complex = canonical_complex(vertices, tuple(maximal), closure=closure)
     return CliqueResult(
         source=source,
         graph_edges=edges,
-        clique_facets=maximal,
+        clique_facets=tuple(maximal),
         clique_complex=result_complex,
     )
 
@@ -309,7 +645,9 @@ def graph_clique_complex(request: GraphCliqueRequest) -> CliqueResult:
         )
     vertices = tuple(f"v{index}" for index in range(graph.vertex_count))
     endpoints = {vertex for edge in graph.edges for vertex in edge}
-    facets = tuple((vertices[left], vertices[right]) for left, right in graph.edges)
+    facets: tuple[Simplex, ...] = tuple(
+        (vertices[left], vertices[right]) for left, right in graph.edges
+    )
     facets += tuple(
         (vertices[index],)
         for index in range(graph.vertex_count)
@@ -530,6 +868,8 @@ __all__ = [
     "LocalHomologyResult",
     "OneSkeletonRequest",
     "OneSkeletonResult",
+    "OrderComplexRequest",
+    "OrderComplexResult",
     "OrientabilityRequest",
     "OrientabilityResult",
     "clique_complex",
@@ -538,5 +878,6 @@ __all__ = [
     "homology_manifold",
     "local_homology",
     "one_skeleton",
+    "order_complex",
     "orientability",
 ]

@@ -3,11 +3,11 @@
 from typing import Any
 
 from jacobian.catalog.models import MathTool, OperationExample
-from jacobian.math.logic.automata.transducers.coaccessible_states._models import (
+from jacobian.math.logic.automata.transducers.coaccessibility_witnesses._models import (
     CoaccessibleStatesRequest,
     CoaccessibleStateWitnesses,
 )
-from jacobian.math.logic.automata.transducers.coaccessible_states.operations import (
+from jacobian.math.logic.automata.transducers.coaccessibility_witnesses.operations import (
     coaccessible_state_witnesses,
 )
 

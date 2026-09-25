@@ -9,11 +9,13 @@ import pytest
 
 import jacobian.math.logic.automata.transducers as transducer_package
 from jacobian.catalog.models import OperationResourceAdmissionError
-from jacobian.math.logic.automata.transducers.coaccessible_states._models import (
+from jacobian.math.logic.automata.transducers.coaccessibility_witnesses._models import (
     CoaccessibleStatesRequest,
 )
-from jacobian.math.logic.automata.transducers.coaccessible_states._tools import TOOLS
-from jacobian.math.logic.automata.transducers.coaccessible_states.operations import (
+from jacobian.math.logic.automata.transducers.coaccessibility_witnesses._tools import (
+    TOOLS,
+)
+from jacobian.math.logic.automata.transducers.coaccessibility_witnesses.operations import (
     coaccessible_state_witnesses,
 )
 from jacobian.math.logic.automata.transducers.values import (
@@ -135,7 +137,7 @@ def test_owner_local_manifest_is_visible_to_catalog_discovery() -> None:
         if module.name.endswith("._tools")
     )
     assert (
-        "jacobian.math.logic.automata.transducers.coaccessible_states._tools"
+        "jacobian.math.logic.automata.transducers.coaccessibility_witnesses._tools"
         in manifests
     )
 

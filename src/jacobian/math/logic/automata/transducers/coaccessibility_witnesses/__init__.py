@@ -1,6 +1,6 @@
 """Public coaccessibility witnesses for subsequential transducers."""
 
-from jacobian.math.logic.automata.transducers.coaccessible_states.operations import (
+from jacobian.math.logic.automata.transducers.coaccessibility_witnesses.operations import (
     coaccessible_state_witnesses,
 )
 

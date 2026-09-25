@@ -5,8 +5,7 @@ from __future__ import annotations
 from collections import deque
 
 from jacobian.catalog.models import OperationResourceAdmissionError
-from jacobian.math.logic.automata.transducers.coaccessible_states._models import (
-    CoaccessibleStatesRequest,
+from jacobian.math.logic.automata.transducers.coaccessibility_witnesses._models import (
     CoaccessibleStateWitness,
     CoaccessibleStateWitnesses,
 )
@@ -17,31 +16,12 @@ from jacobian.math.logic.automata.transducers.values import (
     SubsequentialTransducer,
 )
 
-MAX_SOURCE_BYTES = 8_000_000
-MAX_RESULT_BYTES = 8_500_000
-
 
 def _resource_error(code: str, message: str) -> OperationResourceAdmissionError:
     return OperationResourceAdmissionError(
         location=("transducer",),
         code=f"finite_state_transducer.{code}",
         message=message,
-    )
-
-
-def _result_byte_bound(
-    source_bytes: int,
-    paths: tuple[tuple[int, tuple[int, ...], tuple[int, ...]], ...],
-    output_lengths: tuple[int, ...],
-) -> int:
-    # Every symbol is an integer in 0..31, transition indices are at most
-    # 4095, and JSON arrays need at most one comma per entry. This deliberately
-    # includes a generous fixed row overhead for field names and endpoints.
-    return source_bytes + sum(
-        256 + 3 * len(suffix) + 3 * len(trace) + 6 * len(suffix) + 3 * output_length
-        for (_state, suffix, trace), output_length in zip(
-            paths, output_lengths, strict=True
-        )
     )
 
 
@@ -56,14 +36,7 @@ def coaccessible_state_witnesses(
     order followed by that terminal final output.
     """
 
-    request = CoaccessibleStatesRequest(transducer=transducer)
-    source_bytes = len(request.transducer.model_dump_json().encode("utf-8"))
-    if source_bytes > MAX_SOURCE_BYTES:
-        raise _resource_error(
-            "coaccessible_source_bytes_exceeded",
-            f"transducer serialization exceeds {MAX_SOURCE_BYTES} bytes",
-        )
-    value = _admit_transducer(request.transducer)
+    value = _admit_transducer(transducer)
 
     outgoing: list[list[tuple[int, int, SubseqTransition]]] = [
         [] for _ in range(value.state_count)
@@ -127,17 +100,6 @@ def coaccessible_state_witnesses(
         tuple(transition_indices[(trace[i], suffix[i])] for i in range(len(suffix)))
         for _state, suffix, trace in path_data
     )
-    result_bytes = _result_byte_bound(
-        source_bytes,
-        path_data,
-        tuple(output_lengths),
-    )
-    if result_bytes > MAX_RESULT_BYTES:
-        raise _resource_error(
-            "coaccessible_result_bytes_exceeded",
-            f"coaccessible result may exceed {MAX_RESULT_BYTES} bytes",
-        )
-
     witnesses = tuple(
         CoaccessibleStateWitness(
             state=state,

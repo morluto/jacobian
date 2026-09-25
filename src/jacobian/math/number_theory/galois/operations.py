@@ -69,12 +69,19 @@ def polynomial_discriminant(
         canonical_polynomial = RationalPolynomial.model_validate(
             polynomial.model_dump()
         )
-    except ValidationError as exc:
-        details = exc.errors(include_url=False, include_context=False)[0]
+    except (ValidationError, AttributeError, TypeError, ValueError) as exc:
+        if isinstance(exc, ValidationError):
+            details = exc.errors(include_url=False, include_context=False)[0]
+            code, message = str(details["type"]), str(details["msg"])
+        else:
+            code, message = (
+                "galois_theory.invalid_polynomial",
+                "polynomial must be a canonical rational polynomial",
+            )
         raise OperationDomainValidationError(
             location=("polynomial",),
-            code=str(details["type"]),
-            message=str(details["msg"]),
+            code=code,
+            message=message,
         ) from exc
     coefficients = _admit_value(
         lambda: _discriminant_coefficients(canonical_polynomial),
@@ -848,17 +855,23 @@ def apply_automorphism_to_element(
         scalar, alpha = element_coords
         image_scalar, image_alpha = _coords(canonical_automorphism.basis_images[1])
 
-        def product_digit_pair(left: Fraction, right: Fraction) -> tuple[int, int]:
-            return (
-                len(str(abs(left.numerator))) + len(str(abs(right.numerator))),
-                len(str(left.denominator)) + len(str(right.denominator)),
+        from jacobian._exact import canonical_rational_component_digits
+
+        def digits(value: Fraction) -> int:
+            return canonical_rational_component_digits(
+                CanonicalRational(num=value.numerator, den=value.denominator)
             )
+
+        def product_digit_pair(left: Fraction, right: Fraction) -> tuple[int, int]:
+            if left == 0 or right == 0:
+                return (1, 1)
+            return (digits(left) + digits(right), digits(left) + digits(right))
 
         def sum_digit_bound(
             left: Fraction, right_digits: tuple[int, int]
         ) -> tuple[int, int]:
-            left_numerator = len(str(abs(left.numerator)))
-            left_denominator = len(str(left.denominator))
+            left_numerator = digits(left)
+            left_denominator = digits(left)
             product_numerator, product_denominator = right_digits
             return max(
                 left_numerator + product_denominator,

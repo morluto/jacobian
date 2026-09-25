@@ -28,12 +28,6 @@ def _matrix(rows: list[list[int]]) -> tuple[tuple[Fraction, ...], ...]:
 
 def test_two_state_absorbing() -> None:
     """State 0 has 1/2 chance to go to state 1 (absorbing) or stay."""
-    matrix = _matrix([[1, 2, 2], [0, 1, 1]])
-    # Wait, that's wrong. Let me fix the matrix.
-    # matrix[0][0] = 1/2, matrix[0][1] = 1/2
-    # matrix[1][0] = 0, matrix[1][1] = 1
-    matrix = _matrix([[1, 2, 2], [0, 1, 1]])
-    # Actually the _cr takes (num, den), so I need:
     matrix = (
         (_cr(1, 2), _cr(1, 2)),
         (_cr(0), _cr(1)),

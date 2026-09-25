@@ -99,4 +99,5 @@ to another polynomial operation.
 - [Rational functions to Laurent prefixes](local-series-rational-expansion.md)
 - [Newton polygons for local-series polynomials](local-series-newton-polygon.md)
 - [First order lifting of a smooth local branch](local-series-smooth-branch-first-jet.md)
+- [Finite prefixes of smooth local branches](local-series-smooth-branch-prefix.md)
 - [Exact root--critical-point distance profiles](root-critical-distance-profile.md)

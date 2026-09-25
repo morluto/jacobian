@@ -58,7 +58,10 @@ from .puiseux_values import PuiseuxTerm, TruncatedPuiseuxWindow
 from .smooth_branch import (
     SmoothBranchFirstJetRequest,
     SmoothBranchFirstJetResult,
+    SmoothBranchPrefixRequest,
+    SmoothBranchPrefixResult,
     smooth_branch_first_jet,
+    smooth_branch_prefix,
 )
 from .values import TruncatedLaurentWindow
 
@@ -201,6 +204,79 @@ TOOLS: MathTools = (
                         ],
                     },
                     "initial_root": {"num": "2", "den": "1"},
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="local_series.polynomial.smooth_branch_prefix.compute",
+        title="Lift a simple rational local branch to finite precision",
+        description=(
+            "Return the exact formal branch y(t) modulo t^N for a supplied "
+            "rational simple root of F(0,y), with N from 3 through 32. The "
+            "unramified branch is unique over QQ; multiple roots, ramified "
+            "branches, and algebraic coefficients are outside this operation."
+        ),
+        request_type=SmoothBranchPrefixRequest,
+        result_type=SmoothBranchPrefixResult,
+        run=smooth_branch_prefix,
+        tags=("local-series", "polynomial", "branch-lifting", "exact"),
+        discovery_terms=(
+            "smooth branch power series prefix",
+            "implicit function formal series to finite order",
+            "lift simple rational root to local branch",
+        ),
+        examples=(
+            OperationExample(
+                name="square_root_smooth_branch_prefix",
+                description=(
+                    "For F(t,y)=y^2-(1+t), return the unique branch at y(0)=1 "
+                    "modulo t^5."
+                ),
+                input={
+                    "polynomial": {
+                        "variable": "t",
+                        "place": "FINITE",
+                        "center": {"num": "0", "den": "1"},
+                        "coefficients": [
+                            {
+                                "y_degree": 0,
+                                "series": {
+                                    "variable": "t",
+                                    "place": "FINITE",
+                                    "center": {"num": "0", "den": "1"},
+                                    "valuation_lower": 0,
+                                    "precision": 5,
+                                    "coefficients": [
+                                        {"num": "-1", "den": "1"},
+                                        {"num": "-1", "den": "1"},
+                                        {"num": "0", "den": "1"},
+                                        {"num": "0", "den": "1"},
+                                        {"num": "0", "den": "1"},
+                                    ],
+                                },
+                            },
+                            {
+                                "y_degree": 2,
+                                "series": {
+                                    "variable": "t",
+                                    "place": "FINITE",
+                                    "center": {"num": "0", "den": "1"},
+                                    "valuation_lower": 0,
+                                    "precision": 5,
+                                    "coefficients": [
+                                        {"num": "1", "den": "1"},
+                                        {"num": "0", "den": "1"},
+                                        {"num": "0", "den": "1"},
+                                        {"num": "0", "den": "1"},
+                                        {"num": "0", "den": "1"},
+                                    ],
+                                },
+                            },
+                        ],
+                    },
+                    "initial_root": {"num": "1", "den": "1"},
+                    "precision": 5,
                 },
             ),
         ),

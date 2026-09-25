@@ -9,6 +9,7 @@ import pytest
 from jsonschema import Draft202012Validator
 
 from jacobian.canonical import encode_strict_json
+from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import MathTool
 from jacobian.dispatch import OperationRequestValidationError, invoke_operation
@@ -30,11 +31,11 @@ _FACTOR_WORKER_OPERATION_IDS = frozenset({"polynomial.multivariate.factor.comput
 
 
 def _builtin_operations() -> tuple[MathTool[Any, Any], ...]:
-    return tuple(
-        operation
-        for descriptor in _CATALOG.snapshot().operations
-        if (operation := _CATALOG.operation(descriptor.operation_id)) is not None
-    )
+    # Do not build every input and output JSON schema while pytest is merely
+    # collecting this parametrized test. The selected operation's request
+    # schema is validated inside the test itself; Catalog.open() still supplies
+    # the full dispatch catalog for the public invocation check.
+    return BUILTIN_TOOLS
 
 
 def _builtin_operation_parameters() -> tuple[Any, ...]:

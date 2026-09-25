@@ -20,6 +20,7 @@ from jacobian.math.topology.cellular_sheaves._models import (
     MAX_SHEAF_COHOMOLOGY_CELLS,
     MAX_SHEAF_MORPHISM_OUTPUT_CHARS,
     MAX_SHEAF_MORPHISM_WORK,
+    MAX_SHEAF_TOTAL_STALK_RANK,
     SheafCohomologyGroup,
     SheafCohomologyResult,
     SheafField,
@@ -273,6 +274,22 @@ def _admit_quotient_reduction(
         for group in (*source.groups, *target.groups)
         for vector in group.cocycle_representatives
     )
+    # Cohomology representatives come from exact row reduction of admitted
+    # 64-digit inputs. Their coordinates are not constrained to 64 digits;
+    # conservatively admit the determinant-scale growth possible in a
+    # 512-coordinate cochain complex before constructing the result model.
+    representative_digit_bound = 64 * (MAX_SHEAF_TOTAL_STALK_RANK + 1)
+    if field.field is SheafField.RATIONAL:
+        for group in (*source.groups, *target.groups):
+            for vector in group.cocycle_representatives:
+                if any(
+                    sheaf_scalar_digits(value) > representative_digit_bound
+                    for value in vector
+                ):
+                    raise _resource(
+                        "representative_growth_bound",
+                        "cohomology representative exceeds the conservative exact-growth bound",
+                    )
     output_chars = (
         len(induced_cochains.morphism.model_dump_json())
         + sheaf_scalar_json_bound(representative_values + output_cells)

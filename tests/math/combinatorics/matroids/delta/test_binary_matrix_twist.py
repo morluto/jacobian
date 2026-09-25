@@ -6,9 +6,13 @@ import itertools
 import json
 from math import prod
 
+import pytest
+from pydantic import ValidationError
+
 from jacobian.catalog.catalog import Catalog
 from jacobian.dispatch import invoke_operation
 from jacobian.math.combinatorics.matroids.delta.extra import (
+    BinaryMatrixRequest,
     BinaryMatrixResult,
     BinaryMatrixTwistRequest,
     BinarySymmetricMatrix,
@@ -103,6 +107,49 @@ def test_eight_axis_identity_matrix_reaches_the_admitted_output_boundary() -> No
             for mask in range(1 << size)
         )
     )
+
+
+def test_matrix_axes_are_bounded_by_the_schema_and_during_json_parsing() -> None:
+    schema = BinarySymmetricMatrix.model_json_schema()
+    assert schema["properties"]["entries"]["maxItems"] == 8
+    assert schema["properties"]["entries"]["items"]["maxItems"] == 8
+    for request_type in (BinaryMatrixRequest, BinaryMatrixTwistRequest):
+        request_schema = request_type.model_json_schema()
+        matrix_schema = request_schema["$defs"]["BinarySymmetricMatrix"]
+        assert matrix_schema["properties"]["entries"]["maxItems"] == 8
+        assert matrix_schema["properties"]["entries"]["items"]["maxItems"] == 8
+
+    ground = [f"e{index}" for index in range(8)]
+    matrix = [[int(row == column) for column in range(8)] for row in range(8)]
+    assert BinarySymmetricMatrix.model_validate_json(
+        json.dumps({"ground": ground, "entries": matrix})
+    ).entries == tuple(tuple(row) for row in matrix)
+    assert BinaryMatrixTwistRequest.model_validate_json(
+        json.dumps({"matrix": {"ground": ground, "entries": matrix}})
+    ).matrix.entries == tuple(tuple(row) for row in matrix)
+
+    with pytest.raises(ValidationError, match="at most 8 items"):
+        BinaryMatrixTwistRequest.model_validate_json(
+            json.dumps(
+                {
+                    "matrix": {
+                        "ground": ground,
+                        "entries": [*matrix, matrix[0]],
+                    }
+                }
+            )
+        )
+    with pytest.raises(ValidationError, match="at most 8 items"):
+        BinaryMatrixTwistRequest.model_validate_json(
+            json.dumps(
+                {
+                    "matrix": {
+                        "ground": ground,
+                        "entries": [*matrix[:-1], [*matrix[-1], 0]],
+                    }
+                }
+            )
+        )
 
 
 def test_zero_matrix_twist_example_composes_through_catalog_dispatch() -> None:

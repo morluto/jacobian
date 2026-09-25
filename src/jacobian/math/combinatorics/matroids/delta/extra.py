@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Self
+from typing import Annotated, Self
 
 from pydantic import ConfigDict, Field, model_validator
 from pydantic_core import PydanticCustomError
@@ -64,9 +64,12 @@ class DeltaMatroidMinorResult(StrictModel):
     minor: FiniteDeltaMatroid
 
 
+BinaryMatrixRow = Annotated[tuple[int, ...], Field(max_length=MAX_BINARY_GROUND)]
+
+
 class BinarySymmetricMatrix(StrictModel):
     ground: tuple[str, ...] = Field(max_length=MAX_BINARY_GROUND)
-    entries: tuple[tuple[int, ...], ...]
+    entries: tuple[BinaryMatrixRow, ...] = Field(max_length=MAX_BINARY_GROUND)
 
     @model_validator(mode="after")
     def shape(self) -> Self:

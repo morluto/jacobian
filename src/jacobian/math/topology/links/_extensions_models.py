@@ -257,24 +257,35 @@ class LinkDisjointUnionResult(StrictModel):
                 "disjoint_union_target_coverage",
                 "transport targets must cover the target diagram",
             )
+        dart_maps = {
+            (r.source_index, r.source_dart_id): r.target_dart_id for r in self.dart_map
+        }
         for crossing_row in self.crossing_map:
             source = self.sources[crossing_row.source_index]
             source_crossing = next(
-                c for c in source.crossings if c.crossing_id == crossing_row.source_crossing_id
+                c
+                for c in source.crossings
+                if c.crossing_id == crossing_row.source_crossing_id
             )
             target = crossings.get(crossing_row.target_crossing_id)
-            if target is None or (target.over_pair, target.under_pair, target.sign) != (
-                source_crossing.over_pair,
-                source_crossing.under_pair,
-                source_crossing.sign,
+            mapped_darts = tuple(
+                dart_maps[(crossing_row.source_index, dart)]
+                for dart in source_crossing.half_edges
+            )
+            if (
+                target is None
+                or target.half_edges != mapped_darts
+                or (target.over_pair, target.under_pair, target.sign)
+                != (
+                    source_crossing.over_pair,
+                    source_crossing.under_pair,
+                    source_crossing.sign,
+                )
             ):
                 raise _validation_error(
                     "disjoint_union_crossing_binding",
                     "crossing transport must bind matching source metadata",
                 )
-        dart_maps = {
-            (r.source_index, r.source_dart_id): r.target_dart_id for r in self.dart_map
-        }
         arc_rows = {
             (r.source_index, r.source_tail, r.source_head): r for r in self.arc_map
         }
@@ -289,12 +300,22 @@ class LinkDisjointUnionResult(StrictModel):
                         "disjoint_union_arc_binding",
                         "arc transport must bind directed source and target arcs",
                     )
-        if self.diagram.free_loops != free_loop_count or {
-            r.target_loop_index for r in self.free_loop_map
-        } != set(range(free_loop_count)):
+        expected_loop_targets = {
+            (source_index, local_index): sum(
+                source.free_loops for source in self.sources[:source_index]
+            )
+            + local_index
+            for source_index, source in enumerate(self.sources)
+            for local_index in range(source.free_loops)
+        }
+        if self.diagram.free_loops != free_loop_count or any(
+            row.target_loop_index
+            != expected_loop_targets[(row.source_index, row.source_loop_index)]
+            for row in self.free_loop_map
+        ):
             raise _validation_error(
                 "disjoint_union_target_loops",
-                "loop transport must cover target loop indices",
+                "loop transport must preserve each source's cumulative offset",
             )
         return self
 

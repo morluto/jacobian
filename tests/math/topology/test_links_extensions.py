@@ -250,7 +250,10 @@ class TestDisjointUnion:
         )
         crossing["sign"] = -crossing["sign"]
 
-        with pytest.raises(ValidationError, match="target crossings must preserve"):
+        with pytest.raises(
+            ValidationError,
+            match="crossing transport must bind matching source metadata",
+        ):
             LinkDisjointUnionResult.model_validate_json(json.dumps(payload))
 
     def test_json_roundtrip_rejects_reversed_arc_map_and_bad_loop_offset(self) -> None:
@@ -261,7 +264,10 @@ class TestDisjointUnion:
             payload["arc_map"][0]["target_tail"],
         )
 
-        with pytest.raises(ValidationError, match="preserve every directed source arc"):
+        with pytest.raises(
+            ValidationError,
+            match="arc transport must bind directed source and target arcs",
+        ):
             LinkDisjointUnionResult.model_validate_json(json.dumps(payload))
 
         unlink = link_disjoint_union(

@@ -8,6 +8,8 @@ from jacobian.math.graphs.decks._models import (
     AnonymousCardDegreeProfile,
     AnonymousCardDegreeProfileRequest,
     AnonymousGraphCardMultiset,
+    AnonymousGraphCardMultisetEqualityRequest,
+    AnonymousGraphCardMultisetEqualityResult,
     AnonymousGraphCardMultisetRequest,
     EdgeDeckIsomorphismProfile,
     EdgeDeckIsomorphismProfileRequest,
@@ -33,9 +35,10 @@ from jacobian.math.graphs.decks._models import (
 )
 from jacobian.math.graphs.decks.operations import (
     _edge_deck_isomorphism_profile_from_admitted,
-    _profile_from_admitted_multiset,
     _vertex_deck_isomorphism_profile_from_admitted,
+    anonymous_card_degree_profile,
     anonymous_graph_card_multiset,
+    anonymous_graph_card_multiset_equal,
     edge_deletion_family,
     edge_unlabelled_deck,
     unlabelled_deck,
@@ -98,9 +101,13 @@ def _run_edge_isomorphism_profile(
 def _run_anonymous_card_degree_profile(
     request: AnonymousCardDegreeProfileRequest,
 ) -> AnonymousCardDegreeProfile:
-    # The request's before-validator admits the combined envelope before nested
-    # card parsing; that parser then establishes canonical form exactly once.
-    return _profile_from_admitted_multiset(request.multiset)
+    return anonymous_card_degree_profile(request)
+
+
+def _run_anonymous_multiset_equality(
+    request: AnonymousGraphCardMultisetEqualityRequest,
+) -> AnonymousGraphCardMultisetEqualityResult:
+    return anonymous_graph_card_multiset_equal(request)
 
 
 def _run_vertex_deck_induced_pattern_count(
@@ -129,11 +136,63 @@ def _run_vertex_deck_degree_multiset(
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
     MathTool(
+        operation_id="graph.deck.anonymous_multiset.equal.check",
+        title="Compare anonymous graph-card multisets",
+        description=(
+            "Decide exact equality of two bounded anonymous graph-card "
+            "multisets by card order, graph isomorphism class, and multiplicity. "
+            "Canonicalize each supplied representative once within the jointly "
+            "admitted work bound; isomorphic rows with split multiplicities are "
+            "merged for comparison. This does not assert deck realizability."
+        ),
+        request_type=AnonymousGraphCardMultisetEqualityRequest,
+        result_type=AnonymousGraphCardMultisetEqualityResult,
+        run=_run_anonymous_multiset_equality,
+        tags=("graph", "deck", "anonymous", "multiset", "equality", "exact"),
+        discovery_terms=(
+            "compare equality of anonymous graph card multisets",
+            "are anonymous graph card multisets isomorphic with equal multiplicity",
+            "anonymous graph deck multiset equality",
+        ),
+        examples=(
+            OperationExample(
+                name="different_card_multiplicities",
+                description="The empty graph and a one-edge card are different classes.",
+                input={
+                    "left": {
+                        "card_order": 2,
+                        "classes": [
+                            {
+                                "representative": {
+                                    "vertices": ["v00", "v01"],
+                                    "edges": [],
+                                },
+                                "multiplicity": "1",
+                            }
+                        ],
+                    },
+                    "right": {
+                        "card_order": 2,
+                        "classes": [
+                            {
+                                "representative": {
+                                    "vertices": ["v00", "v01"],
+                                    "edges": [["v00", "v01"]],
+                                },
+                                "multiplicity": "1",
+                            }
+                        ],
+                    },
+                },
+            ),
+        ),
+    ),
+    MathTool(
         operation_id="graph.deck.card_invariant_profile.compute",
         title="Profile anonymous graph cards by degree multiset",
         description=(
-            "Group the degree multisets of canonical anonymous graph-card "
-            "representatives, summing each class's exact positive multiplicity. "
+            "Group the degree multisets of the supplied anonymous graph-card "
+            "representatives, summing each row's exact positive multiplicity. "
             "Retain the declared card order, including for an empty input. This "
             "is an invariant profile of the supplied cards; it does not assert "
             "that they form a realizable graph deck or identify a source."
@@ -152,8 +211,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 name="empty_and_edge_card_profile",
                 description=(
                     "Count the degree multisets of an empty three-vertex card and "
-                    "two copies of a one-edge card; all representatives must be "
-                    "canonical cards of the declared order three."
+                    "two copies of a one-edge card."
                 ),
                 input={
                     "multiset": {

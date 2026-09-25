@@ -111,7 +111,7 @@ def anonymous_graph_card_multiset_equal(
 def _anonymous_graph_card_multiset_equal_from_admitted(
     request: AnonymousGraphCardMultisetEqualityRequest,
 ) -> AnonymousGraphCardMultisetEqualityResult:
-    """Compare a request whose pair admission and canonical checks have run."""
+    """Normalize both pre-admitted operands once, then compare multiplicities."""
     if (
         type(request) is not AnonymousGraphCardMultisetEqualityRequest
         or request._admitted_operands is None
@@ -126,8 +126,23 @@ def _anonymous_graph_card_multiset_equal_from_admitted(
             message="equality request must pass its combined admission and validation",
         )
     left, right = request.left, request.right
-    equal = left.card_order == right.card_order and left.classes == right.classes
+    left_classes = _normalize_anonymous_multiset_classes(left)
+    right_classes = _normalize_anonymous_multiset_classes(right)
+    equal = left.card_order == right.card_order and left_classes == right_classes
     return AnonymousGraphCardMultisetEqualityResult(equal=equal)
+
+
+def _normalize_anonymous_multiset_classes(
+    multiset: AnonymousGraphCardMultiset,
+) -> dict[tuple[tuple[str, str], ...], int]:
+    """Canonicalize supplied rows and merge isomorphic classes for equality."""
+    counts: dict[tuple[tuple[str, str], ...], int] = {}
+    for item in multiset.classes:
+        key = _canonical_card_edges(
+            item.representative.vertices, item.representative.edges
+        )
+        counts[key] = counts.get(key, 0) + item.multiplicity
+    return counts
 
 
 def _admit_anonymous_card_request(
@@ -309,17 +324,14 @@ def _admit_anonymous_profile_input(multiset: AnonymousGraphCardMultiset) -> None
 
     class_count = len(classes)
     pair_count = comb(order, 2)
-    canonical_work, total_work, cells, output_bytes = (
-        _anonymous_profile_resource_estimates(order, class_count)
+    total_work, cells, output_bytes = _anonymous_profile_resource_estimates(
+        order, class_count
     )
-    if (
-        canonical_work > MAX_ANONYMOUS_CARD_CANONICALIZATION_WORK
-        or total_work > MAX_ANONYMOUS_CARD_PROFILE_WORK
-    ):
+    if total_work > MAX_ANONYMOUS_CARD_PROFILE_WORK:
         raise OperationResourceAdmissionError(
             location=("multiset", "classes"),
             code="graph_deck.card_profile_work_bound",
-            message="canonical validation and degree profiling exceed the shared work bound",
+            message="degree profiling exceeds the shared work bound",
         )
     if cells > MAX_ANONYMOUS_CARD_PROFILE_CELLS:
         raise OperationResourceAdmissionError(
@@ -351,6 +363,12 @@ def _admit_anonymous_profile_input(multiset: AnonymousGraphCardMultiset) -> None
                 message="card-class multiplicities must be positive bounded exact integers",
             )
         graph = getattr(item, "representative", None)
+        if type(graph) is not SimpleUndirectedGraph:
+            raise OperationDomainValidationError(
+                location=("multiset", "classes", index, "representative"),
+                code="graph_deck.card_profile_representative_type",
+                message="card representatives must use SimpleUndirectedGraph",
+            )
         _admit_anonymous_card(graph, order, pair_count, index)
         if graph.vertices != expected_vertices:
             raise OperationDomainValidationError(
@@ -363,15 +381,9 @@ def _admit_anonymous_profile_input(multiset: AnonymousGraphCardMultiset) -> None
             raise OperationDomainValidationError(
                 location=("multiset", "classes", index),
                 code="graph_deck.card_profile_ordering",
-                message="canonical card classes must be unique and ordered",
+                message="representative rows must be unique and ordered",
             )
         previous = key
-        if _canonical_card_edges(graph.vertices, key) != key:
-            raise OperationDomainValidationError(
-                location=("multiset", "classes", index, "representative"),
-                code="graph_deck.card_profile_not_canonical",
-                message="each untrusted card representative must be permutation-minimal",
-            )
 
 
 def _compute_anonymous_card_degree_profile(
@@ -416,8 +428,7 @@ def anonymous_card_degree_profile(
             code="graph_deck.card_profile_request_carrier",
             message="request must be an AnonymousCardDegreeProfileRequest",
         )
-    multiset = getattr(request, "multiset", None)
-    return _compute_anonymous_card_degree_profile(multiset)
+    return _compute_anonymous_card_degree_profile(request.multiset)
 
 
 def _admit_deck_graph(graph: SimpleUndirectedGraph) -> SimpleUndirectedGraph:

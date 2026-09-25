@@ -1,5 +1,6 @@
 """Exact equality of anonymous graph-card multisets."""
 
+import json
 from itertools import combinations, permutations
 
 import pytest
@@ -11,7 +12,7 @@ from jacobian.catalog.models import (
     OperationMatchRequest,
 )
 from jacobian.dispatch import invoke_operation
-from jacobian.math.graphs.decks import _models as deck_models
+from jacobian.math.graphs.decks import operations as deck_operations
 from jacobian.math.graphs.decks._models import (
     AnonymousGraphCardClass,
     AnonymousGraphCardMultiset,
@@ -150,13 +151,13 @@ def test_combined_canonical_validation_work_is_admitted_once_for_both_sides() ->
             },
         ],
     }
-    with pytest.raises(ValidationError, match="combined canonical validation"):
+    with pytest.raises(ValidationError, match="combined canonicalization"):
         AnonymousGraphCardMultisetEqualityRequest.model_validate(
             {"left": five_classes, "right": four_classes.model_dump()}
         )
 
 
-def test_native_and_catalog_paths_do_not_replay_canonical_validation(
+def test_equality_canonicalizes_only_inside_the_admitted_operation(
     monkeypatch,
 ) -> None:
     from jacobian.math.graphs.decks.operations import (
@@ -173,7 +174,7 @@ def test_native_and_catalog_paths_do_not_replay_canonical_validation(
         ],
     }
     payload = {"left": raw, "right": raw}
-    original = deck_models._canonical_card_edges
+    original = deck_operations._canonical_card_edges
     canonical_checks = 0
 
     def count_canonical_checks(vertices, edges):
@@ -181,7 +182,9 @@ def test_native_and_catalog_paths_do_not_replay_canonical_validation(
         canonical_checks += 1
         return original(vertices, edges)
 
-    monkeypatch.setattr(deck_models, "_canonical_card_edges", count_canonical_checks)
+    monkeypatch.setattr(
+        deck_operations, "_canonical_card_edges", count_canonical_checks
+    )
     native_payload = {
         side: {
             **raw,
@@ -190,7 +193,7 @@ def test_native_and_catalog_paths_do_not_replay_canonical_validation(
         for side in ("left", "right")
     }
     request = AnonymousGraphCardMultisetEqualityRequest.model_validate(native_payload)
-    assert canonical_checks == 2
+    assert canonical_checks == 0
     assert anonymous_graph_card_multiset_equal(request).equal
     assert canonical_checks == 2
 
@@ -210,7 +213,7 @@ def test_typed_composition_is_preflighted_revalidated_once_and_roundtrips(
     right = _multiset((graph,), 1)
     assert not hasattr(left, "_canonical_snapshot")
 
-    original = deck_models._canonical_card_edges
+    original = deck_operations._canonical_card_edges
     canonical_checks = 0
 
     def count_canonical_checks(vertices, edges):
@@ -218,16 +221,18 @@ def test_typed_composition_is_preflighted_revalidated_once_and_roundtrips(
         canonical_checks += 1
         return original(vertices, edges)
 
-    monkeypatch.setattr(deck_models, "_canonical_card_edges", count_canonical_checks)
+    monkeypatch.setattr(
+        deck_operations, "_canonical_card_edges", count_canonical_checks
+    )
     request = AnonymousGraphCardMultisetEqualityRequest(left=left, right=right)
-    assert canonical_checks == 2
+    assert canonical_checks == 0
     assert anonymous_graph_card_multiset_equal(request).equal
     assert canonical_checks == 2
 
     round_trip = AnonymousGraphCardMultisetEqualityRequest.model_validate_json(
         request.model_dump_json()
     )
-    assert canonical_checks == 4
+    assert canonical_checks == 2
     assert anonymous_graph_card_multiset_equal(round_trip).equal
     assert canonical_checks == 4
 
@@ -248,7 +253,7 @@ def test_native_path_rejects_unvalidated_or_modified_request_carriers() -> None:
             ),
         ),
     )
-    with pytest.raises(ValidationError, match="combined canonical validation"):
+    with pytest.raises(ValidationError, match="combined canonicalization"):
         AnonymousGraphCardMultisetEqualityRequest(
             left=unchecked_multiset, right=unchecked_multiset
         )
@@ -264,10 +269,10 @@ def test_native_path_rejects_unvalidated_or_modified_request_carriers() -> None:
             ),
         ),
     )
-    with pytest.raises(ValidationError, match="minimal under all vertex permutations"):
-        AnonymousGraphCardMultisetEqualityRequest(
-            left=noncanonical_multiset, right=noncanonical_multiset
-        )
+    noncanonical_request = AnonymousGraphCardMultisetEqualityRequest(
+        left=noncanonical_multiset, right=noncanonical_multiset
+    )
+    assert anonymous_graph_card_multiset_equal(noncanonical_request).equal
 
     forged = AnonymousGraphCardMultisetEqualityRequest.model_construct(
         left=unchecked_multiset, right=unchecked_multiset
@@ -281,3 +286,46 @@ def test_native_path_rejects_unvalidated_or_modified_request_carriers() -> None:
     modified = valid.model_copy(update={"left": unchecked_multiset})
     with pytest.raises(OperationDomainValidationError, match="combined admission"):
         anonymous_graph_card_multiset_equal(modified)
+
+
+def test_deserialized_noncanonical_rows_and_split_isomorphic_multiplicity() -> None:
+    # These two edge vectors encode the same 3-vertex path under relabeling.
+    path_a = SimpleUndirectedGraph(
+        vertices=("v00", "v01", "v02"),
+        edges=(("v00", "v01"), ("v01", "v02")),
+    )
+    path_b = SimpleUndirectedGraph(
+        vertices=("v00", "v01", "v02"),
+        edges=(("v00", "v02"), ("v01", "v02")),
+    )
+    assert _isomorphic(path_a, path_b)
+    row_a = {
+        "representative": {
+            "vertices": ["v00", "v01", "v02"],
+            "edges": [["v00", "v01"], ["v01", "v02"]],
+        },
+        "multiplicity": "2",
+    }
+    row_b = {
+        "representative": {
+            "vertices": ["v00", "v01", "v02"],
+            "edges": [["v00", "v02"], ["v01", "v02"]],
+        },
+        "multiplicity": "1",
+    }
+    left = {"card_order": 3, "classes": [row_a]}
+    right = {
+        "card_order": 3,
+        "classes": [
+            {**row_a, "multiplicity": "1"},
+            {**row_b, "multiplicity": "1"},
+        ],
+    }
+    request = AnonymousGraphCardMultisetEqualityRequest.model_validate_json(
+        json.dumps({"left": left, "right": right})
+    )
+    assert anonymous_graph_card_multiset_equal(request).equal
+    decoded_again = AnonymousGraphCardMultisetEqualityRequest.model_validate_json(
+        request.model_dump_json()
+    )
+    assert anonymous_graph_card_multiset_equal(decoded_again).equal

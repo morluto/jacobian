@@ -57,16 +57,15 @@ def _anonymous_canonicalization_work(order: int, card_count: int) -> int:
 
 def _anonymous_profile_resource_estimates(
     order: int, card_count: int
-) -> tuple[int, int, int, int]:
-    """Estimate combined canonical-validation and degree-profile resources."""
+) -> tuple[int, int, int]:
+    """Estimate degree-profile work, materialized cells, and result bytes."""
     pair_count = comb(order, 2)
-    canonical_work = _anonymous_canonicalization_work(order, card_count)
     per_class_profile_work = order * order + 3 * order + 4 * pair_count + 4
     histogram_order_work = card_count * max(1, order) * max(1, card_count.bit_length())
     profile_work = card_count * per_class_profile_work + histogram_order_work
     cells = card_count * max(order, 1)
     output_bytes = 128 + card_count * (64 + 16 * order)
-    return canonical_work, canonical_work + profile_work, cells, output_bytes
+    return profile_work, cells, output_bytes
 
 
 def _canonical_card_edges(
@@ -127,14 +126,14 @@ class AnonymousGraphCardMultisetRequest(StrictModel):
 
 
 class AnonymousGraphCardClass(StrictModel):
-    """One canonically relabelled isomorphism class and its exact multiplicity."""
+    """One fixed-axis graph representative and its exact multiplicity."""
 
     representative: SimpleUndirectedGraph
     multiplicity: Annotated[int, DecimalIntegerEncoding(max_digits=12)] = Field(ge=1)
 
 
 class AnonymousGraphCardMultiset(StrictModel):
-    """Anonymous card multiset; it carries no source graph or deletion keys."""
+    """Structurally bounded anonymous card rows without a source graph."""
 
     card_order: int = Field(ge=0, le=MAX_UNLABELLED_DECK_VERTICES)
     classes: tuple[AnonymousGraphCardClass, ...] = Field(
@@ -142,7 +141,7 @@ class AnonymousGraphCardMultiset(StrictModel):
     )
 
     @model_validator(mode="after")
-    def require_structural_canonical_form(self) -> Self:
+    def require_structurally_valid_representatives(self) -> Self:
         n = self.card_order
         if type(n) is not int or n < 0 or n > MAX_UNLABELLED_DECK_VERTICES:
             raise _validation_error(
@@ -156,17 +155,11 @@ class AnonymousGraphCardMultiset(StrictModel):
                 "anonymous_card_classes", "classes exceed the carrier bound"
             )
         pair_count = comb(n, 2)
-        work = _anonymous_canonicalization_work(n, len(self.classes))
-        if work > MAX_ANONYMOUS_CARD_CANONICALIZATION_WORK:
-            raise _validation_error(
-                "anonymous_card_validation_bound",
-                "canonical class validation exceeds its bounded permutation work",
-            )
         output_bytes = len(self.classes) * (64 + 16 * pair_count)
         if output_bytes > MAX_ANONYMOUS_CARD_RESULT_BYTES:
             raise _validation_error(
                 "anonymous_card_output_bound",
-                "canonical classes exceed the result byte bound",
+                "anonymous card rows exceed the result byte bound",
             )
         previous_key: tuple[tuple[str, str], ...] | None = None
         expected_vertices = tuple(f"v{i:02d}" for i in range(n))
@@ -196,7 +189,7 @@ class AnonymousGraphCardMultiset(StrictModel):
             ):
                 raise _validation_error(
                     "anonymous_card_labels",
-                    "representatives must have the canonical fixed-width axis and bounded edges",
+                    "representatives must use the fixed-width axis and bounded edges",
                 )
             if any(
                 type(edge) is not tuple
@@ -221,15 +214,10 @@ class AnonymousGraphCardMultiset(StrictModel):
                     "anonymous_card_edges",
                     "representative edges must be valid, unique, and ordered",
                 )
-            if _canonical_card_edges(graph.vertices, graph.edges) != graph.edges:
-                raise _validation_error(
-                    "anonymous_card_not_canonical",
-                    "each representative must be minimal under all vertex permutations",
-                )
             if previous_key is not None and graph.edges <= previous_key:
                 raise _validation_error(
                     "anonymous_card_classes",
-                    "classes must be unique and lexicographically ordered",
+                    "representative rows must be unique and lexicographically ordered",
                 )
             previous_key = graph.edges
         return self
@@ -313,6 +301,7 @@ class AnonymousGraphCardMultisetEqualityRequest(StrictModel):
                 or type(classes) not in (list, tuple)
             ):
                 continue
+            classes = cast(list[Any] | tuple[Any, ...], classes)
             if len(classes) > MAX_ANONYMOUS_CARD_CLASSES:
                 raise _validation_error(
                     "anonymous_equality_class_bound",
@@ -322,7 +311,7 @@ class AnonymousGraphCardMultisetEqualityRequest(StrictModel):
         if total_work > MAX_ANONYMOUS_CARD_EQUALITY_WORK:
             raise _validation_error(
                 "anonymous_equality_work_bound",
-                "combined canonical validation exceeds the equality work bound",
+                "combined canonicalization exceeds the equality work bound",
             )
         normalized = dict(value)
         for side in ("left", "right"):
@@ -461,15 +450,16 @@ class AnonymousCardDegreeProfileRequest(StrictModel):
 
     multiset: AnonymousGraphCardMultiset = Field(
         description=(
-            "Anonymous multiset of pairwise nonisomorphic canonical graph-card "
-            "representatives and their exact multiplicities."
+            "Anonymous multiset of structurally valid fixed-axis graph-card "
+            "representatives and their exact multiplicities. Isomorphism classes "
+            "are normalized by operations whose result depends on that relation."
         )
     )
 
     @model_validator(mode="before")
     @classmethod
-    def admit_combined_resources_before_nested_canonicalization(cls, value: Any) -> Any:
-        """Reject over-budget profiles before parsing canonical card classes."""
+    def admit_combined_resources_before_nested_validation(cls, value: Any) -> Any:
+        """Reject over-budget profiles before parsing card classes."""
         _admit_anonymous_profile_wire_resources(value)
         return _normalize_anonymous_profile_json_tuples(value)
 
@@ -488,20 +478,18 @@ def _admit_anonymous_profile_wire_resources(value: Any) -> None:
         or type(classes) not in (list, tuple)
     ):
         return
+    classes = cast(list[Any] | tuple[Any, ...], classes)
     if len(classes) > MAX_ANONYMOUS_CARD_CLASSES:
         raise _validation_error(
             "card_profile_class_bound", "profile input has too many card classes"
         )
-    canonical_work, total_work, cells, output_bytes = (
-        _anonymous_profile_resource_estimates(order, len(classes))
+    total_work, cells, output_bytes = _anonymous_profile_resource_estimates(
+        order, len(classes)
     )
-    if (
-        canonical_work > MAX_ANONYMOUS_CARD_CANONICALIZATION_WORK
-        or total_work > MAX_ANONYMOUS_CARD_PROFILE_WORK
-    ):
+    if total_work > MAX_ANONYMOUS_CARD_PROFILE_WORK:
         raise _validation_error(
             "card_profile_work_bound",
-            "canonical validation and degree profiling exceed the shared work bound",
+            "degree profiling exceeds the shared work bound",
         )
     if cells > MAX_ANONYMOUS_CARD_PROFILE_CELLS:
         raise _validation_error(

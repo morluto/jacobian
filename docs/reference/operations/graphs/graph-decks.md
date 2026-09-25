@@ -19,11 +19,14 @@ comparison bound.
 of one declared order and stores each exact graph-isomorphism class once with
 its positive multiplicity. Its canonical representatives make card relabeling
 irrelevant while preserving repeated-card counts. The empty multiset retains
-its declared order. `graph.deck.anonymous_multiset.equal.check` compares two
-such values by declared order, canonical classes, and exact multiplicities;
-it returns only whether those supplied anonymous multisets are equal. It does
-not check deck realizability or identify a source graph. Pairwise canonical
-validation is admitted against one combined work bound before nested parsing.
+its declared order. Deserialization checks the fixed axis, graph-edge structure,
+row ordering, and multiplicity bounds; it does not prove that each supplied row
+is a permutation-minimal representative or that different rows are
+nonisomorphic. `graph.deck.anonymous_multiset.equal.check` canonicalizes both
+operands once under a combined work bound, merges isomorphic rows, and compares
+their declared orders and exact multiplicities. It does not check deck
+realizability or identify a source graph. The degree invariant profile uses
+only graph degrees, so it does not require permutation canonicalization.
 
 `graph.deck.vertex.induced_subgraph_count.compute` reconstructs the number of
 induced copies of a caller-supplied pattern `H` when `|V(H)| < n`, where `n` is

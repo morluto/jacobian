@@ -64,3 +64,20 @@ serialization.
 
 These operations construct and summarize decks. They do not decide whether a
 graph can be reconstructed from its deck.
+
+## Anonymous card multiset equality
+
+`graph.deck.anonymous.equal.decide` compares two
+`AnonymousGraphCardMultiset` values. It returns true exactly when both values
+have the same card order and the same multiplicity for every graph-isomorphism
+class. Card labels and class row order do not identify cards; the classes
+represent the multiset after each card is independently relabelled.
+
+The operation verifies each bounded representative's fixed axis and edge
+shape, then computes an exact permutation canonical form for every class on
+both sides. This consumer check is needed because structural decoding alone
+does not establish that a supplied representative is the canonical member of
+its isomorphism class. It admits aggregate work across both inputs before any
+permutation search, with a 2,000,000-unit limit. The result concerns only
+multiset equality; it makes no claim that either multiset is realizable as a
+graph deck, and equal decks do not imply source-graph isomorphism.

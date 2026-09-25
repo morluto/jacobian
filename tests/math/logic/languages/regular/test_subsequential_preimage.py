@@ -6,7 +6,6 @@ import pytest
 
 from jacobian.catalog.models import (
     OperationDomainValidationError,
-    OperationResourceAdmissionError,
 )
 from jacobian.math.logic.automata.transducers.values import (
     FiniteAlphabet,
@@ -16,7 +15,6 @@ from jacobian.math.logic.automata.transducers.values import (
 )
 from jacobian.math.logic.finite_alphabet import FiniteAlphabet as CanonicalAlphabet
 from jacobian.math.logic.languages.regular import FiniteAlphabet as RegularAlphabet
-from jacobian.math.logic.languages.regular import operations as regular_operations
 from jacobian.math.logic.languages.regular._models import (
     EquivalenceRequest,
     SubsequentialPreimageRequest,
@@ -125,7 +123,7 @@ def test_cross_domain_preimage_requires_same_explicit_alphabet_parent() -> None:
         SubsequentialPreimageRequest(dfa=different_identity, transducer=transducer)
 
 
-def test_preimage_rejects_oversized_full_product_before_expansion(
+def test_preimage_accepts_tiny_reachable_product_with_large_unreachable_carriers(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     alphabet = FiniteAlphabet(symbols=("a",))
@@ -156,16 +154,9 @@ def test_preimage_rejects_oversized_full_product_before_expansion(
         final_outputs=(SubseqFinalOutput(state=0, output=()),),
     )
 
-    def expansion_must_not_start(*_args: object, **_kwargs: object) -> DFA:
-        raise AssertionError("product expansion started before resource rejection")
-
-    monkeypatch.setattr(
-        regular_operations, "_build_subsequential_preimage", expansion_must_not_start
-    )
-    with pytest.raises(
-        OperationResourceAdmissionError, match="product, work, or output"
-    ):
-        dfa_subsequential_preimage(dfa, transducer)
+    result = dfa_subsequential_preimage(dfa, transducer)
+    assert result.state_count == 1
+    assert result.transitions[0].target == 0
 
 
 def test_preimage_revalidates_model_constructed_carriers() -> None:

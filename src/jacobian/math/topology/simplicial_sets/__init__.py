@@ -40,6 +40,10 @@ from jacobian.math.topology.simplicial_sets.product import simplicial_set_produc
 from jacobian.math.topology.simplicial_sets.product_models import (
     SimplicialSetProductResult,
 )
+from jacobian.math.topology.simplicial_sets.skeleton import (
+    SimplicialSetSkeletonResult,
+    simplicial_set_skeleton,
+)
 from jacobian.math.topology.simplicial_sets.standard import (
     simplex_boundary,
     simplex_horn,
@@ -56,6 +60,7 @@ __all__ = [
     "SimplicialMapImageResult",
     "SimplicialSetCoproductResult",
     "SimplicialSetProductResult",
+    "SimplicialSetSkeletonResult",
     "SimplicialSetTablesResult",
     "TruncatedSimplicialMap",
     "UnnormalizedChainsResult",
@@ -71,6 +76,7 @@ __all__ = [
     "simplicial_set_coproduct",
     "simplicial_set_from_complex",
     "simplicial_set_product",
+    "simplicial_set_skeleton",
     "standard_simplex",
     "truncate_simplicial_set",
     "unnormalized_chains",

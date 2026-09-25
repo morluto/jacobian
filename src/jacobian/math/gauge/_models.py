@@ -888,7 +888,7 @@ def _check_raw_loop_family_shape(value: object) -> None:
     if not isinstance(value, dict):
         return
     loops = value.get("loops")
-    if not isinstance(loops, (tuple, list)):
+    if type(loops) not in (tuple, list):
         return
     if len(loops) > MAX_GAUGE_LOOP_FAMILY_SIZE:
         raise _validation_error(
@@ -906,7 +906,7 @@ def _check_raw_loop_family_shape(value: object) -> None:
             if isinstance(path, dict)
             else getattr(path, "steps", None)
         )
-        if not isinstance(steps, (tuple, list)):
+        if type(steps) not in (tuple, list):
             continue
         if len(steps) > MAX_GAUGE_PATH_LENGTH:
             raise _validation_error(
@@ -973,6 +973,13 @@ class GaugeLoopFamilyHolonomies(StrictModel):
 
     @model_validator(mode="after")
     def require_source_bound_closed_loops(self) -> Self:
+        if (
+            not isinstance(self.field, GaugeField)
+            or not isinstance(self.field.lattice, GaugeLattice)
+            or type(self.loops) is not tuple
+            or any(not isinstance(edge, GaugeEdge) for edge in self.field.lattice.edges)
+        ):
+            raise _validation_error("loop_family_parent", "loop-family source is malformed")
         lattice = self.field.lattice
         by_edge = {edge.edge_id: edge for edge in lattice.edges}
         if type(self.field.degree) is not int or not 1 <= self.field.degree <= 8:
@@ -981,6 +988,24 @@ class GaugeLoopFamilyHolonomies(StrictModel):
             )
         total_steps = 0
         for entry in self.loops:
+            if (
+                not isinstance(entry, GaugeLoopHolonomy)
+                or not isinstance(entry.path, OrientedGaugePath)
+                or type(entry.basepoint) is not str
+                or not isinstance(entry.holonomy, PermutationLabel)
+                or type(entry.path.steps) is not tuple
+                or any(
+                    not isinstance(step, GaugePathStep)
+                    or type(step.edge_id) is not str
+                    or type(step.forward) is not bool
+                    for step in entry.path.steps
+                )
+                or any(type(value) is not int for value in entry.holonomy.image)
+                or type(entry.holonomy.image) is not tuple
+                or type(entry.holonomy.degree) is not int
+                or (entry.path.basepoint is not None and type(entry.path.basepoint) is not str)
+            ):
+                raise _validation_error("loop_family_path", "loop-family values are malformed")
             path = entry.path
             steps = path.steps
             total_steps += len(steps)

@@ -62,14 +62,14 @@ def _admit_holonomy(field: GaugeField, path: OrientedGaugePath) -> None:
     # trusted producers, so merely checking the outer GaugeField type is not a
     # sufficient public boundary.
     lattice, labels = _admit_transform_field(field)
-    if not isinstance(path, OrientedGaugePath):
+    if type(path) is not OrientedGaugePath:
         _reject(
             "path",
             "lattice_gauge.holonomy.path_not_a_gauge_path",
             "holonomy path must be an oriented lattice edge path",
         )
     steps = getattr(path, "steps", _MISSING)
-    if not isinstance(steps, tuple):
+    if type(steps) is not tuple:
         _reject(
             "path",
             "lattice_gauge.holonomy.path_shape",
@@ -422,7 +422,7 @@ def path_holonomy(field: GaugeField, path: OrientedGaugePath) -> HolonomyResult:
 def _admit_loop_family_size(
     loops: tuple[OrientedGaugePath, ...] | list[OrientedGaugePath],
 ) -> int:
-    if not isinstance(loops, (tuple, list)):
+    if type(loops) not in (tuple, list):
         _reject(
             "loops",
             "lattice_gauge.loop_family.loop_collection",

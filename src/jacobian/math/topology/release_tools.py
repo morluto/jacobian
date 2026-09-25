@@ -36,30 +36,6 @@ def _run_manifold(r: HomologyManifoldRequest) -> HomologyManifoldResult:
 _TRIANGLE = {"vertices": ["a", "b", "c"], "facets": [["a", "b", "c"]]}
 TOOLS = (
     MathTool(
-        operation_id="topology.simplicial_complex.one_skeleton.compute",
-        title="Return the one-skeleton as an indexed graph",
-        description=(
-            "Project a finite simplicial complex to the exact graph on its "
-            "canonical vertex axis. The result includes the unchanged source, "
-            "a reusable indexed graph, the vertex-label axis, and one source "
-            "1-face for each graph edge in edge order."
-        ),
-        request_type=OneSkeletonRequest,
-        result_type=OneSkeletonResult,
-        run=_run_one_skeleton,
-        tags=("topology", "simplicial", "graph", "one-skeleton", "exact"),
-        examples=(
-            OperationExample(
-                name="triangle_one_skeleton",
-                description=(
-                    "Project a filled triangle to its three vertices and three "
-                    "edges while retaining edge-to-face provenance."
-                ),
-                input={"complex": _TRIANGLE},
-            ),
-        ),
-    ),
-    MathTool(
         operation_id="topology.simplicial_complex.face_poset.compute",
         title="Compute the face poset and order complex",
         description="Return every nonempty face, strict inclusion relation, and the order complex of a finite simplicial complex; chains are represented by source face indices.",

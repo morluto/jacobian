@@ -158,6 +158,18 @@ def _canonical(request: SimplicialComplexRequest) -> FiniteSimplicialComplex:
 
 def one_skeleton(request: OneSkeletonRequest) -> OneSkeletonResult:
     """Return the graph on the canonical vertex axis and map edges to faces."""
+    if not isinstance(request, OneSkeletonRequest):
+        raise OperationDomainValidationError(
+            location=(),
+            code="topology.one_skeleton.request_type",
+            message="request must be a OneSkeletonRequest",
+        )
+    if not isinstance(request.complex, SimplicialComplexRequest):
+        raise OperationDomainValidationError(
+            location=("complex",),
+            code="topology.one_skeleton.complex_type",
+            message="complex must be a SimplicialComplexRequest",
+        )
     source = _canonical(request.complex)
     faces = source.faces_by_dimension[1].faces if source.dimension >= 1 else ()
     vertex_index = {label: index for index, label in enumerate(source.vertices)}

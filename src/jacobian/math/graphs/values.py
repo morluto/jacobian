@@ -133,9 +133,18 @@ class LoopedSimpleGraph(StrictModel):
     order is preserved as the matrix axis used by binary graph constructions.
     """
 
-    vertices: tuple[str, ...] = Field(max_length=MAX_SIMPLE_GRAPH_VERTICES)
-    edges: tuple[tuple[str, str], ...] = Field(max_length=MAX_SIMPLE_GRAPH_EDGES)
-    loops: tuple[str, ...] = Field(max_length=MAX_SIMPLE_GRAPH_VERTICES)
+    vertices: tuple[str, ...] = Field(
+        max_length=MAX_ENCODED_SIMPLE_GRAPH_VERTICES,
+        description="Unique nonempty Unicode NFC labels of at most 64 UTF-8 bytes; axis order is preserved.",
+    )
+    edges: tuple[tuple[str, str], ...] = Field(
+        max_length=MAX_ENCODED_SIMPLE_GRAPH_EDGES,
+        description="Unique off-diagonal pairs of declared vertices, oriented left < right by label; list order is preserved.",
+    )
+    loops: tuple[str, ...] = Field(
+        max_length=MAX_ENCODED_SIMPLE_GRAPH_VERTICES,
+        description="Unique declared vertex labels with diagonal entry one; labels obey the vertex canonical-label rules.",
+    )
 
     @model_validator(mode="after")
     def require_canonical_looped_graph(self) -> Self:

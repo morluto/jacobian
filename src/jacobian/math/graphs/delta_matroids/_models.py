@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Self
 
-from pydantic import model_validator
+from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
@@ -17,7 +17,11 @@ from jacobian.math.graphs.values import LoopedSimpleGraph
 
 
 class LoopedGraphDeltaMatroidRequest(StrictModel):
-    graph: LoopedSimpleGraph
+    """Request using canonical looped graph encoding and at most eight vertices."""
+
+    graph: LoopedSimpleGraph = Field(
+        description="Canonical looped graph: unique nonempty NFC labels (<=64 UTF-8 bytes), unique declared off-diagonal edges oriented left < right, and unique declared loop labels. This operation admits at most eight vertices."
+    )
 
     @model_validator(mode="after")
     def require_binary_envelope(self) -> Self:

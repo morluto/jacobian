@@ -679,7 +679,9 @@ def _finish_shift_power_stage(
     for exponent, (degree, terms, digits, pair_count) in stage.items():
         digits += len(str(pair_count - 1)) if pair_count > 1 else 0
         terms = min(degree + 1, terms)
-        degree_limit = MAX_SHIFT_RESULT_DEGREE if final else MAX_SHIFT_COEFFICIENT_DEGREE
+        degree_limit = (
+            MAX_SHIFT_RESULT_DEGREE if final else MAX_SHIFT_COEFFICIENT_DEGREE
+        )
         term_limit = MAX_SHIFT_TERMS if final else MAX_SHIFT_COEFFICIENT_TERMS
         digit_limit = MAX_SHIFT_RESULT_DIGITS if final else MAX_SHIFT_COEFFICIENT_DIGITS
         if degree > degree_limit or terms > term_limit or digits > digit_limit:
@@ -1068,9 +1070,7 @@ def shift_operator_normalize_polynomial_coefficients(
         output_weight += 256
         for value in polynomial.values():
             multiplier = lcm_denominators // value.denominator
-            normalized_numerator = (
-                value.numerator * multiplier // common_numerator
-            )
+            normalized_numerator = value.numerator * multiplier // common_numerator
             normalized_digits = _digit_count(normalized_numerator)
             if normalized_digits > MAX_RATIONAL_FUNCTION_COEFFICIENT_DIGITS:
                 raise OperationResourceAdmissionError(
@@ -1926,9 +1926,7 @@ def differential_operator_normalize_polynomial_coefficients(
         output_weight += 256
         for coefficient in polynomial.values():
             multiplier = denominator_lcm // coefficient.denominator
-            normalized_numerator = (
-                coefficient.numerator * multiplier // numerator_gcd
-            )
+            normalized_numerator = coefficient.numerator * multiplier // numerator_gcd
             digits = _digit_count(normalized_numerator)
             if digits > MAX_RATIONAL_FUNCTION_COEFFICIENT_DIGITS:
                 raise OperationResourceAdmissionError(

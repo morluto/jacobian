@@ -858,7 +858,7 @@ def _character_lambda_square(
             "request must contain one table-bound virtual character",
             ("request",),
         )
-    element = request.character
+    element = getattr(request, "character", None)
     if not isinstance(element, CharacterRingElement):
         raise _invalid(
             "groups.characters.lambda_square_input_type",

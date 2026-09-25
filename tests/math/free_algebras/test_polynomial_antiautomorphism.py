@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fractions import Fraction
+from itertools import product
 
 import pytest
 
@@ -247,3 +248,28 @@ def test_full_alphabet_long_monomial_admitted_and_malformed_labels_rejected() ->
     )
     with pytest.raises(OperationResourceAdmissionError):
         reverse_polynomial_antiautomorphism(oversized)
+
+
+def test_dense_canonical_multiplication_output_is_reversible() -> None:
+    alphabet = ("a", "b")
+    words = {tuple("".join(bits)) for bits in product("ab", repeat=6)}
+    source = _polynomial(alphabet, dict.fromkeys(words, 1))
+    product_value = multiply(source, source).product
+
+    result = reverse_polynomial_antiautomorphism(product_value)
+
+    assert len(result.terms) == 4_096
+    assert _coefficient_map(result) == _reverse_oracle(_coefficient_map(product_value))
+
+
+def test_oversized_forged_coefficient_rejected_before_revalidation() -> None:
+    forged = CanonicalRational.model_construct(num=10**100_000, den=1)
+    term = FreeAlgebraTerm.model_construct(coefficient=forged, word=("x",))
+    value = FreeAlgebraPolynomial.model_construct(alphabet=("x",), terms=(term,))
+
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
+        reverse_polynomial_antiautomorphism(value)
+
+    assert exc_info.value.errors()[0]["type"] == (
+        "free_algebra.antiautomorphism_work_budget"
+    )

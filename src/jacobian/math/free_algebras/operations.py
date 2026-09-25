@@ -13,7 +13,11 @@ from itertools import product
 from math import factorial, gcd, lcm
 from typing import Any, Literal, cast
 
-from jacobian._exact import CanonicalRational, canonical_rational_component_digits
+from jacobian._exact import (
+    MAX_CANONICAL_RATIONAL_DIGITS,
+    CanonicalRational,
+    canonical_rational_component_digits,
+)
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -127,9 +131,9 @@ def _antiautomorphism_admission_work(value: FreeAlgebraPolynomial) -> int:
                 "polynomial reversal input is outside the admitted work envelope",
             )
     term_count = len(terms)
-    total_cells = 0
     maximum_word_length = 0
     word_label_cost = 0
+    coefficient_cost = 0
     for term in terms:
         if type(term) is not FreeAlgebraTerm:
             _reject_resource(
@@ -144,6 +148,7 @@ def _antiautomorphism_admission_work(value: FreeAlgebraPolynomial) -> int:
                 "antiautomorphism_work_budget",
                 "polynomial reversal input is outside the admitted work envelope",
             )
+        assert type(word) is tuple
         word_length = len(word)
         if word_length > MAX_FREE_ALGEBRA_RESULT_WORD_LENGTH:
             _reject_resource(
@@ -161,24 +166,63 @@ def _antiautomorphism_admission_work(value: FreeAlgebraPolynomial) -> int:
                     "antiautomorphism_work_budget",
                     "polynomial reversal input is outside the admitted work envelope",
                 )
-            word_label_cost += 12 * len(label)
-        total_cells += word_length
+            word_label_cost += len(label)
         maximum_word_length = max(maximum_word_length, word_length)
 
+        # Inspect native model_construct values before model_dump/revalidation:
+        # those paths may reduce and stringify integers, so malformed oversized
+        # coefficient components must be refused here.
+        coefficient = getattr(term, "coefficient", None)
+        if type(coefficient) is not CanonicalRational:
+            _reject_resource(
+                ("polynomial", "terms"),
+                "antiautomorphism_work_budget",
+                "polynomial reversal input is outside the admitted work envelope",
+            )
+        numerator = getattr(coefficient, "num", None)
+        denominator = getattr(coefficient, "den", None)
+        if type(numerator) is not int or type(denominator) is not int:
+            _reject_resource(
+                ("polynomial", "terms"),
+                "antiautomorphism_work_budget",
+                "polynomial reversal input is outside the admitted work envelope",
+            )
+        assert type(numerator) is int and type(denominator) is int
+        # ExactInteger schemas cap decimal components at 32,768 digits.
+        # Compare by bit length first so forged enormous ints cannot trigger
+        # Python's guarded decimal conversion.
+        digit_limit_bits = MAX_CANONICAL_RATIONAL_DIGITS * 3322 // 1000 + 1
+        if (
+            numerator.bit_length() > digit_limit_bits
+            or denominator.bit_length() > digit_limit_bits
+            or denominator <= 0
+        ):
+            _reject_resource(
+                ("polynomial", "terms"),
+                "antiautomorphism_work_budget",
+                "polynomial reversal input is outside the admitted work envelope",
+            )
+        digits = max(len(str(abs(numerator))), len(str(abs(denominator))))
+        if digits > MAX_FREE_ALGEBRA_COEFFICIENT_DIGITS:
+            _reject_resource(
+                ("polynomial", "terms"),
+                "antiautomorphism_work_budget",
+                "polynomial reversal input is outside the admitted work envelope",
+            )
+        coefficient_cost += 4 * digits
+
     # model_dump/revalidation builds one canonical rank tuple per letter and
-    # sorts the input words. The kernel then reverses/canonicalizes once. Bound
-    # rank lookup by the full alphabet size and sorting by the worst-case
-    # comparison count (2 n ceil(log2 n)) times the longest word. The factor
-    # of four covers both tuple/key creation and comparison traversal in the
-    # validator and kernel; the linear terms cover tuple copying and reversal.
+    # sorts input words; the kernel reverses and sorts them again. Charge the
+    # actual alphabet/word label lengths inspected above, not the maximum label
+    # length for every cell. Sorting comparisons visit the actual words, bounded
+    # by twice n ceil(log2 n) times the longest word.
     sort_levels = max(1, term_count.bit_length())
     # Letter labels may contain 64 code points, so include their hashing,
     # equality, JSON sizing, strict validation, and serialization costs.
     # JSON's ASCII escaping may emit up to twelve bytes per Unicode scalar.
-    label_cost = sum(12 * len(label) for label in alphabet)
-    validation_and_reversal = 4 * ((len(alphabet) + 1) * word_label_cost + label_cost)
-    sorting = 2 * term_count * maximum_word_length * sort_levels * 2
-    coefficient_cost = 4 * term_count * MAX_FREE_ALGEBRA_COEFFICIENT_DIGITS
+    label_cost = sum(len(label) for label in alphabet)
+    validation_and_reversal = 4 * (2 * word_label_cost + label_cost)
+    sorting = 2 * term_count * maximum_word_length * sort_levels
     return max(1, validation_and_reversal + sorting + coefficient_cost + 4 * term_count)
 
 

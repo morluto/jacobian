@@ -21,6 +21,9 @@ from jacobian.math.matrices.cyclic_linear._models import (
     RationalCyclotomicElement,
     RationalCyclotomicField,
 )
+from jacobian.math.number_theory.arithmetic_functions._models import (
+    DirichletConvolutionResult,
+)
 from jacobian.math.number_theory.characters.values import (
     MAX_CHARACTER_GROUP_MODULUS,
     MAX_PRINCIPAL_CHARACTER_MODULUS,
@@ -437,6 +440,13 @@ class DirichletCharacterSequenceTwistRequest(StrictModel):
         return self
 
 
+class DirichletCharacterArithmeticFunctionTwistRequest(StrictModel):
+    """Twist an exact arithmetic-function prefix indexed from one."""
+
+    function: DirichletConvolutionResult
+    character: DirichletCharacter
+
+
 class DirichletCharacterJacobiSumRequest(StrictModel):
     """Compute J(chi, psi) when both characters use one exact group parent."""
 
@@ -735,6 +745,7 @@ __all__ = [
     "MAX_GENERALIZED_BERNOULLI_INDEX",
     "MAX_INTEGER_DIGITS",
     "CharacterGroupRequest",
+    "DirichletCharacterArithmeticFunctionTwistRequest",
     "DirichletCharacterConductorRequest",
     "DirichletCharacterConductorResult",
     "DirichletCharacterConjugateRequest",

@@ -4,7 +4,10 @@ import pytest
 
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import encode_strict_json
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.number_theory.modular_forms._tools import TOOLS
 from jacobian.math.number_theory.modular_forms.basis import (
     modular_form_coordinates_q_expansion,
@@ -19,6 +22,7 @@ from jacobian.math.number_theory.modular_forms.values import (
     ModularFormCoordinates,
     ModularFormSpace,
 )
+from jacobian.math.number_theory.modular_forms.basis import PARI_STURM_RREF_BASIS_ID
 
 _BASIS = "level-one-e4-e6-monomials-v1"
 
@@ -98,17 +102,33 @@ def test_coordinate_addition_handles_the_zero_dimensional_space() -> None:
     assert result == zero_cusp
 
 
-def test_coordinate_addition_admits_projected_denominator_growth() -> None:
-    first_denominator = 10**127 + 1
-    second_denominator = 10**127 + 2
+def test_coordinate_addition_rejects_result_outside_consumer_digit_envelope() -> None:
+    first_denominator = 10**128 - 1
+    second_denominator = 10**128 - 2
     left = _form((Fraction(1, first_denominator), 0))
     right = _form((Fraction(1, second_denominator), 0))
 
+    with pytest.raises(OperationResourceAdmissionError) as refusal:
+        modular_form_coordinates_add(left, right)
+    assert "coordinate growth" in str(refusal.value)
+
+
+def test_coordinate_addition_supports_pari_sturm_basis() -> None:
+    space = ModularFormSpace(level=5, weight=4, kind="M")
+    left = ModularFormCoordinates(
+        space=space,
+        basis_id=PARI_STURM_RREF_BASIS_ID,
+        coordinates=(_q(1), _q(0), _q(0)),
+    )
+    right = ModularFormCoordinates(
+        space=space,
+        basis_id=PARI_STURM_RREF_BASIS_ID,
+        coordinates=(_q(0), _q(1), _q(0)),
+    )
+
     result = modular_form_coordinates_add(left, right)
 
-    value = result.coordinates[0].as_fraction()
-    assert value == Fraction(1, first_denominator) + Fraction(1, second_denominator)
-    assert len(str(value.denominator)) == 255
+    assert tuple(value.as_fraction() for value in result.coordinates) == (1, 1, 0)
 
 
 def test_coordinate_addition_is_published_with_executable_example() -> None:

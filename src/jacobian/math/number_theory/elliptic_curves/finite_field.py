@@ -597,6 +597,35 @@ class FiniteFieldCardinalityResult(StrictModel):
     frobenius_polynomial: tuple[int, int, int]
 
 
+class FiniteFieldFrobeniusResult(StrictModel):
+    """Exact Frobenius polynomial and ordinary/supersingular class."""
+
+    curve: FiniteFieldShortWeierstrassCurve
+    cardinality: int = Field(ge=1)
+    trace: int
+    determinant: int = Field(ge=1)
+    characteristic_polynomial: tuple[int, int, int]
+    discriminant: int
+    classification: Literal["ORDINARY", "SUPERSINGULAR"]
+
+    @model_validator(mode="after")
+    def require_claim_consistency(self) -> Self:
+        q = self.curve.field.characteristic**self.curve.field.degree
+        if (
+            self.determinant != q
+            or self.trace != q + 1 - self.cardinality
+            or self.characteristic_polynomial != (1, -self.trace, q)
+            or self.discriminant != self.trace * self.trace - 4 * q
+            or self.classification
+            != ("SUPERSINGULAR" if self.trace % self.curve.field.characteristic == 0 else "ORDINARY")
+        ):
+            raise _validation_error(
+                "frobenius_claim_mismatch",
+                "Frobenius data must agree with the curve field and trace",
+            )
+        return self
+
+
 class FiniteFieldZetaPolynomialResult(StrictModel):
     """Numerator of the zeta function of one finite-field elliptic curve.
 
@@ -1864,6 +1893,54 @@ def finite_field_cardinality(
     return _cardinality_from_points(curve, points, q)
 
 
+def finite_field_frobenius(
+    curve: FiniteFieldShortWeierstrassCurve,
+) -> FiniteFieldFrobeniusResult:
+    """Compute the exact Frobenius polynomial and p-rank class over F_q.
+
+    For elliptic curves over a finite field of characteristic p, the curve is
+    supersingular exactly when p divides the Frobenius trace; otherwise it is
+    ordinary. The trace is obtained by the admitted exact quadratic-character
+    sum used by the count-only operation.
+    """
+    curve = _curve_admit(curve)
+    q = _admit_extension_count_growth(curve, 1)
+    trace_bound = 2 * (isqrt(q) + 1)
+    output_sample = FiniteFieldFrobeniusResult.model_construct(
+        curve=curve,
+        cardinality=q + 1 + trace_bound,
+        trace=-trace_bound,
+        determinant=q,
+        characteristic_polynomial=(1, trace_bound, q),
+        discriminant=trace_bound * trace_bound - 4 * q,
+        classification="SUPERSINGULAR",
+    )
+    if (
+        len(rfc8785.dumps(output_sample.model_dump(mode="json")))
+        > CanonicalLimits().max_output_bytes
+    ):
+        raise OperationResourceAdmissionError(
+            location=("curve",),
+            code="elliptic_curve.finite_field.frobenius_output_bound",
+            message="Frobenius data exceed the canonical output-byte envelope",
+        )
+    count = _cardinality_from_character_sum(curve, q)
+    trace = count.trace
+    return FiniteFieldFrobeniusResult(
+        curve=count.curve,
+        cardinality=count.cardinality,
+        trace=trace,
+        determinant=q,
+        characteristic_polynomial=(1, -trace, q),
+        discriminant=trace * trace - 4 * q,
+        classification=(
+            "SUPERSINGULAR"
+            if trace % count.curve.field.characteristic == 0
+            else "ORDINARY"
+        ),
+    )
+
+
 def finite_field_zeta_polynomial(
     curve: FiniteFieldShortWeierstrassCurve,
 ) -> FiniteFieldZetaPolynomialResult:
@@ -1973,6 +2050,7 @@ __all__ = [
     "FiniteFieldExtensionCount",
     "FiniteFieldExtensionCountsRequest",
     "FiniteFieldExtensionCountsResult",
+    "FiniteFieldFrobeniusResult",
     "FiniteFieldGroupStructureResult",
     "FiniteFieldIsogenyClassRequest",
     "FiniteFieldIsogenyClassResult",
@@ -1994,6 +2072,7 @@ __all__ = [
     "finite_field_curve_base_change",
     "finite_field_discriminant",
     "finite_field_extension_counts",
+    "finite_field_frobenius",
     "finite_field_group_structure",
     "finite_field_isogeny_class",
     "finite_field_isomorphism",

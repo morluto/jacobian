@@ -27,6 +27,7 @@ from jacobian.math.number_theory.elliptic_curves.finite_field import (
     finite_field_curve_base_change,
     finite_field_discriminant,
     finite_field_extension_counts,
+    finite_field_frobenius,
     finite_field_group_structure,
     finite_field_isogeny_class,
     finite_field_isomorphism,
@@ -60,6 +61,63 @@ def test_finite_field_group_identities_and_cardinality() -> None:
     result = finite_field_cardinality(curve)
     assert result.cardinality == len(points)
     assert result.trace == 5 + 1 - len(points)
+
+
+def test_frobenius_data_and_supersingularity_match_direct_f5_oracle() -> None:
+    field = FiniteFieldPresentation(
+        characteristic=5, modulus_coefficients=(0, 1), generator="a"
+    )
+
+    def curve(a: int, b: int) -> FiniteFieldShortWeierstrassCurve:
+        return FiniteFieldShortWeierstrassCurve(
+            field=field,
+            coefficient_a=FiniteFieldElement(presentation=field, coordinates=(a,)),
+            coefficient_b=FiniteFieldElement(presentation=field, coordinates=(b,)),
+        )
+
+    def direct_count(a: int, b: int) -> int:
+        return 1 + sum(
+            1
+            for x in range(5)
+            for y in range(5)
+            if (y * y - x * x * x - a * x - b) % 5 == 0
+        )
+
+    for coefficients in ((1, 1), (0, 1), (2, 1)):
+        a, b = coefficients
+        result = finite_field_frobenius(curve(a, b))
+        count = direct_count(a, b)
+        trace = 6 - count
+        assert result.curve == curve(a, b)
+        assert result.cardinality == count
+        assert result.trace == trace
+        assert result.determinant == 5
+        assert result.characteristic_polynomial == (1, -trace, 5)
+        assert result.discriminant == trace * trace - 20
+        assert result.classification == (
+            "SUPERSINGULAR" if trace % 5 == 0 else "ORDINARY"
+        )
+
+
+def test_frobenius_public_example_dispatch_and_json_round_trip() -> None:
+    catalog = Catalog.open()
+    operation = catalog.operation("elliptic_curve.finite_field.frobenius.compute")
+    assert operation is not None
+    invocation = invoke_operation(
+        operation.operation_id, operation.examples[0].input, catalog
+    )
+    assert invocation.output["trace"] == -3
+    assert invocation.output["classification"] == "ORDINARY"
+    decoded = operation.result_type.model_validate_json(json.dumps(invocation.output))
+    field = FiniteFieldPresentation(
+        characteristic=5, modulus_coefficients=(0, 1), generator="a"
+    )
+    one = FiniteFieldElement(presentation=field, coordinates=(1,))
+    assert decoded == finite_field_frobenius(
+        FiniteFieldShortWeierstrassCurve(
+            field=field, coefficient_a=one, coefficient_b=one
+        )
+    )
 
 
 def test_isogeny_class_decision_matches_independent_finite_field_counts() -> None:

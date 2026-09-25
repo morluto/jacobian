@@ -7,7 +7,6 @@ import sympy as sp
 
 from jacobian.catalog.models import (
     OperationDomainValidationError,
-    OperationResourceAdmissionError,
 )
 from jacobian.math.quantum._models import (
     ExactQubitPauli,
@@ -72,11 +71,7 @@ def test_elementary_gates_match_exact_dense_conjugation() -> None:
                 phase=phase,
             )
             for gate, qubits in gate_specs:
-                actual = conjugate_pauli(
-                    PauliCliffordConjugationRequest(
-                        pauli=pauli, gate=gate, qubits=qubits
-                    )
-                )
+                actual = conjugate_pauli(pauli, gate, qubits)
                 unitary = _gate_matrix(gate, qubits, ids)
                 expected = unitary * _dense(pauli) * unitary.conjugate().T
                 assert (expected - _dense(actual)).applyfunc(sp.simplify) == sp.zeros(
@@ -107,9 +102,7 @@ def test_register_boundary_is_accepted_and_work_overflow_is_refused() -> None:
         ),
         phase=0,
     )
-    result = conjugate_pauli(
-        PauliCliffordConjugationRequest(pauli=pauli, gate="H", qubits=(ids[-1],))
-    )
+    result = conjugate_pauli(pauli, "H", (ids[-1],))
     assert result == pauli
 
     long_ids = tuple(f"{index:02d}" + "x" * 62 for index in range(32))
@@ -120,12 +113,7 @@ def test_register_boundary_is_accepted_and_work_overflow_is_refused() -> None:
         ),
         phase=0,
     )
-    with pytest.raises(OperationResourceAdmissionError):
-        conjugate_pauli(
-            PauliCliffordConjugationRequest(
-                pauli=long_pauli, gate="H", qubits=(long_ids[-1],)
-            )
-        )
+    assert conjugate_pauli(long_pauli, "H", (long_ids[-1],)) == long_pauli
 
 
 def test_elementary_clifford_generators_compose_with_exact_inverses() -> None:
@@ -137,30 +125,20 @@ def test_elementary_clifford_generators_compose_with_exact_inverses() -> None:
 
     h_twice = source
     for _ in range(2):
-        h_twice = conjugate_pauli(
-            PauliCliffordConjugationRequest(
-                pauli=h_twice, gate="H", qubits=("control",)
-            )
-        )
+        h_twice = conjugate_pauli(h_twice, "H", ("control",))
     assert h_twice == source
 
     s_four_times = source
     for _ in range(4):
-        s_four_times = conjugate_pauli(
-            PauliCliffordConjugationRequest(
-                pauli=s_four_times, gate="S", qubits=("target",)
-            )
-        )
+        s_four_times = conjugate_pauli(s_four_times, "S", ("target",))
     assert s_four_times == source
 
     cnot_twice = source
     for _ in range(2):
         cnot_twice = conjugate_pauli(
-            PauliCliffordConjugationRequest(
-                pauli=cnot_twice,
-                gate="CNOT",
-                qubits=("target", "control"),
-            )
+            cnot_twice,
+            "CNOT",
+            ("target", "control"),
         )
     assert cnot_twice == source
 
@@ -173,4 +151,4 @@ def test_gate_axes_are_bound_to_the_exact_register() -> None:
     )
     request = PauliCliffordConjugationRequest(pauli=pauli, gate="H", qubits=("q1",))
     with pytest.raises(OperationDomainValidationError, match="register elements"):
-        conjugate_pauli(request)
+        conjugate_pauli(request.pauli, request.gate, request.qubits)

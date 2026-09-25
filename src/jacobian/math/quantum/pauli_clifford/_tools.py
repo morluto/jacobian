@@ -5,7 +5,14 @@ from jacobian.math.quantum._models import ExactQubitPauli
 from jacobian.math.quantum.pauli_clifford._models import (
     PauliCliffordConjugationRequest,
 )
-from jacobian.math.quantum.pauli_clifford.operations import conjugate_pauli
+from jacobian.math.quantum.pauli_clifford.operations import (
+    conjugate_pauli as _conjugate_pauli,
+)
+
+
+def _run(request: PauliCliffordConjugationRequest) -> ExactQubitPauli:
+    return _conjugate_pauli(request.pauli, request.gate, request.qubits)
+
 
 TOOLS: MathTools = (
     MathTool(
@@ -19,7 +26,7 @@ TOOLS: MathTools = (
         ),
         request_type=PauliCliffordConjugationRequest,
         result_type=ExactQubitPauli,
-        run=conjugate_pauli,
+        run=_run,
         tags=("quantum", "pauli", "clifford", "conjugation", "exact"),
         examples=(
             OperationExample(

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
 from fractions import Fraction
 from itertools import product as cartesian_product
 from math import ceil, comb, floor, log10
@@ -351,7 +352,10 @@ def affine_section_realization(
     shifts = tuple(
         tuple(
             Fraction(
-                sum(checked.factor_set[g][h][coordinate] for h in range(order)),
+                sum(
+                    (checked.factor_set[g][h][coordinate] for h in range(order)),
+                    Fraction(0),
+                ),
                 order,
             )
             for coordinate in range(rank)
@@ -539,7 +543,12 @@ def pair_crystallographic_polytope_facets(
         realization=realization,
         profile=profile,
         vertices=vertices,
-        pairings=checked_request.pairings,
+        pairings=tuple(
+            CrystallographicPolytopePairing.model_validate(
+                item.model_dump(mode="python", warnings=False), strict=True
+            )
+            for item in checked_request.pairings
+        ),
         order=order,
         rank=rank,
     )
@@ -736,7 +745,7 @@ def _admit_fundamental_domain_intersections(
         for translation in cartesian_product(*endpoints):
             for normal, offset in rows:
                 transformed_normal = tuple(
-                    sum(normal[k] * inverse[k][i] for k in range(rank))
+                    sum((normal[k] * inverse[k][i] for k in range(rank)), Fraction(0))
                     for i in range(rank)
                 )
                 affine_offset = sum(
@@ -789,7 +798,7 @@ def _range_product_count(bounds: tuple[range, ...]) -> int:
     return count
 
 
-def _integer_vectors(bounds: tuple[range, ...]):
+def _integer_vectors(bounds: tuple[range, ...]) -> Iterator[tuple[int, ...]]:
     if not bounds or any(not axis for axis in bounds):
         return
     from itertools import product
@@ -839,7 +848,7 @@ def _validate_pairing_ledger(
 ) -> tuple[CrystallographicPolytopePairing, ...]:
     """Check ledger completeness, exact inverses, and all facet vertex maps."""
     facet_count = len(profile.facets)
-    by_source: dict[int, object] = {}
+    by_source: dict[int, CrystallographicPolytopePairing] = {}
     for position, pairing in enumerate(pairings):
         if (
             pairing.source_facet_index >= facet_count

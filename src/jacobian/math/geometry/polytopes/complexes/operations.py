@@ -31,6 +31,7 @@ from collections.abc import Iterable, Sequence
 from fractions import Fraction
 from typing import TypedDict
 
+from pydantic import ValidationError
 from sympy import Rational
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
@@ -737,6 +738,28 @@ def _affine_transport_preflight(
             code="polytopal_complex.affine_transform_shape",
             message="matrix and translation dimensions must match the complex axes",
         )
+    try:
+        matrix = tuple(
+            tuple(
+                CanonicalRational.model_validate(
+                    entry.model_dump(mode="python", warnings=False), strict=True
+                )
+                for entry in row
+            )
+            for row in matrix
+        )
+        translation = tuple(
+            CanonicalRational.model_validate(
+                entry.model_dump(mode="python", warnings=False), strict=True
+            )
+            for entry in translation
+        )
+    except (AttributeError, TypeError, ValidationError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("matrix",),
+            code="polytopal_complex.affine_transform_canonical",
+            message="affine coefficients must be canonical rationals",
+        ) from exc
     linear_map = [
         [Fraction(*entry.as_integer_ratio()) for entry in row] for row in matrix
     ]

@@ -410,6 +410,7 @@ def piecewise_polynomial_add(  # noqa: C901
     # Preflight the exact union support and every rational sum before any
     # coefficient arithmetic or compatibility reduction is performed.
     output_term_count = 0
+    max_piece_term_count = 0
     output_digit_bound = 0
     maximum_degree = 0
     for cell_id in sorted(left_by_id):
@@ -425,6 +426,7 @@ def piecewise_polynomial_add(  # noqa: C901
                 message=f"a sum piece may contain at most {MAX_POLYNOMIAL_TERMS} terms",
             )
         output_term_count += len(exponents)
+        max_piece_term_count = max(max_piece_term_count, len(exponents))
         for exponent in exponents:
             maximum_degree = max(maximum_degree, sum(exponent))
             left_coefficient = first_by_exponent.get(exponent)
@@ -478,7 +480,7 @@ def piecewise_polynomial_add(  # noqa: C901
         )
 
     dimension = len(left.complex.space.axes)
-    reduced_terms = output_term_count * comb(maximum_degree + dimension, dimension)
+    reduced_terms = max_piece_term_count * comb(maximum_degree + dimension, dimension)
     if reduced_terms > 4_096:
         raise OperationResourceAdmissionError(
             location=("pieces",),
@@ -936,6 +938,16 @@ def piecewise_polynomial_smoothness(
     request: PiecewiseSmoothnessRequest,
 ) -> PiecewiseSmoothnessResult:
     """Return exact C^r orders on every interior facet of a piecewise polynomial."""
+    if not isinstance(request, PiecewiseSmoothnessRequest):
+        _reject("smoothness_request", "expected a canonical smoothness request")
+    try:
+        request = PiecewiseSmoothnessRequest.model_validate(
+            request.model_dump(mode="python", warnings=False), strict=True
+        )
+    except (AttributeError, TypeError, ValueError):
+        _reject(
+            "smoothness_request", "request fields must satisfy the smoothness schema"
+        )
     function = request.function
     complex_value = _admit_pieces(function.complex, function.pieces)
     if any(
@@ -1410,6 +1422,7 @@ def _admit_spline_evaluation_growth(
     spline: SplineSpaceResult,
     coefficients: tuple[CanonicalRational, ...],
     point: ComplexPoint,
+    containing_ids: frozenset[str],
 ) -> None:
     """Bound the full rational sum before constructing its products."""
 
@@ -1420,7 +1433,6 @@ def _admit_spline_evaluation_growth(
         )
         if not scalar.num:
             continue
-        containing_ids = _containing_cell_ids(spline.complex, point)
         for column, (cell_id, exponents) in enumerate(spline.coefficient_axis):
             if cell_id not in containing_ids:
                 continue
@@ -1447,13 +1459,12 @@ def _evaluate_spline_basis_combination(
     spline: SplineSpaceResult,
     coefficients: tuple[CanonicalRational, ...],
     point: ComplexPoint,
+    containing_ids: frozenset[str],
 ) -> tuple[tuple[str, ...], Fraction | None]:
-    point_fractions = tuple(value.as_fraction() for value in point.coordinates)
     cells = tuple(
-        cell
-        for cell in spline.complex.maximal_cells
-        if _contains(cell, point_fractions)
+        cell for cell in spline.complex.maximal_cells if cell.cell_id in containing_ids
     )
+    point_fractions = tuple(value.as_fraction() for value in point.coordinates)
     if not cells:
         return (), None
     coefficient_fractions = tuple(value.as_fraction() for value in coefficients)
@@ -1507,11 +1518,13 @@ def spline_evaluate(
     axes = tuple(spline.complex.space.axes)
     if len(point.coordinates) != len(axes):
         _reject("point_axis", "evaluation point must use the complex coordinate axes")
-    point_fractions = tuple(value.as_fraction() for value in point.coordinates)
-    if any(_contains(cell, point_fractions) for cell in spline.complex.maximal_cells):
-        _admit_spline_evaluation_growth(spline, basis_coefficients, point)
+    containing_ids = _containing_cell_ids(spline.complex, point)
+    if containing_ids:
+        _admit_spline_evaluation_growth(
+            spline, basis_coefficients, point, containing_ids
+        )
     cell_ids, value = _evaluate_spline_basis_combination(
-        spline, basis_coefficients, point
+        spline, basis_coefficients, point, containing_ids
     )
     return SplineEvaluationResult(
         complex=spline.complex,

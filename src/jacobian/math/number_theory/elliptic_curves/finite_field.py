@@ -661,6 +661,14 @@ class FiniteFieldZetaFunctionResult(StrictModel):
     trace: int
     zeta_function: RationalFunction
 
+    @model_validator(mode="after")
+    def require_declared_axis(self) -> Self:
+        if self.zeta_function.variables != ("T",):
+            raise _validation_error(
+                "zeta_function_axis", "zeta function must use the declared T axis"
+            )
+        return self
+
 
 class FiniteFieldGroupStructureResult(StrictModel):
     """Invariant factors with one curve-bound generator for each factor."""

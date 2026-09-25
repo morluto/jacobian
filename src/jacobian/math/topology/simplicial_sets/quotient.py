@@ -11,17 +11,16 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.topology.simplicial_sets._models import (
-    MAX_SIMPLICES_PER_DEGREE,
     MAX_SIMPLICIAL_SET_DEGREE,
-    MAX_TOTAL_SIMPLICES,
     FiniteTruncatedSimplicialSet,
 )
 from jacobian.math.topology.simplicial_sets._models import (
     FiniteTruncatedSimplicialSet as _CanonicalSimplicialSet,
 )
 from jacobian.math.topology.simplicial_sets.maps import TruncatedSimplicialMap
-from jacobian.math.topology.simplicial_sets.operations import from_tables
+from jacobian.math.topology.simplicial_sets.operations import admit_tables, from_tables
 from jacobian.math.topology.simplicial_sets.quotient_models import (
+    MAX_CLASS_ID,
     SimplicialSetQuotientRequest,
     SimplicialSetQuotientResult,
 )
@@ -75,36 +74,41 @@ def _preflight(
         _invalid("request_invalid", f"request fields are malformed: {exc}")
     if type(source) is not FiniteTruncatedSimplicialSet:
         _invalid("source_type", "source must be a finite truncated simplicial set")
-    max_degree = source.max_degree
+    try:
+        max_degree = source.max_degree
+        total_simplices = source.total_simplices
+        checked_identities = source.checked_identities
+        sets = source.sets
+        face_maps = source.face_maps
+        degeneracy_maps = source.degeneracy_maps
+    except AttributeError as exc:
+        _invalid("source_invalid", f"source fields are malformed: {exc}")
     if type(max_degree) is not int or not 0 <= max_degree <= MAX_SIMPLICIAL_SET_DEGREE:
         _invalid("source_degree", "source degree is outside the finite prefix bound")
-    if (
-        type(source.sets) is not tuple
-        or type(source.face_maps) is not tuple
-        or type(source.degeneracy_maps) is not tuple
-        or any(type(level) is not tuple for level in source.sets)
-        or type(source.total_simplices) is not int
-    ):
-        _invalid("source_axes", "source tables are structurally malformed")
-    sizes = tuple(len(level) for level in source.sets)
-    if (
-        len(sizes) != max_degree + 1
-        or any(not 0 <= size <= MAX_SIMPLICES_PER_DEGREE for size in sizes)
-        or sum(sizes) != source.total_simplices
-        or sum(sizes) > MAX_TOTAL_SIMPLICES
-    ):
-        _invalid("source_axes", "source simplex axes exceed the finite prefix bounds")
+    if type(checked_identities) is not int or checked_identities < 0:
+        _invalid("source_invalid", "source identity count is malformed")
+    # Structural admission runs before any serialization walk so a native
+    # caller cannot make json.dumps traverse an unbounded label or map row that
+    # the shared label/axis path would reject. This is cheaper than the identity
+    # replay and owns every structural check, including label length bounds.
+    sizes = admit_tables(max_degree, sets, face_maps, degeneracy_maps)
+    if type(total_simplices) is not int or total_simplices != sum(sizes):
+        _invalid("source_axes", "source total does not match its degree sizes")
     if type(class_id_rows) is not tuple or len(class_id_rows) != max_degree + 1:
         _invalid("degree_coverage", "class IDs must cover each source degree")
     for degree, class_ids in enumerate(class_id_rows):
         if (
             type(class_ids) is not tuple
             or len(class_ids) != sizes[degree]
-            or any(type(class_id) is not int or class_id < 0 for class_id in class_ids)
+            or any(
+                type(class_id) is not int or not 0 <= class_id <= MAX_CLASS_ID
+                for class_id in class_ids
+            )
         ):
             _invalid(
                 "class_axis_invalid",
-                f"degree {degree} class IDs must be bounded integers on the source axis",
+                f"degree {degree} class IDs must be JSON-safe nonnegative integers "
+                "on the source axis",
                 "degree_class_ids",
                 degree,
             )

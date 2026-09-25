@@ -14,9 +14,22 @@ from jacobian.math.topology.simplicial_sets._models import (
 )
 from jacobian.math.topology.simplicial_sets.maps import TruncatedSimplicialMap
 
+# Class IDs are labels: their magnitude is independent of the source simplex
+# count and only their equality defines the relation. Keep them exactly
+# interoperable as JSON numbers by bounding them to the JSON-safe integer
+# envelope, rather than capping them by the 96-simplex carrier.
+MAX_CLASS_ID = 2**53 - 1
+
 ClassId = Annotated[
     StrictInt,
-    Field(ge=0, description="A source-local equivalence class ID."),
+    Field(
+        ge=0,
+        le=MAX_CLASS_ID,
+        description=(
+            "A source-local equivalence class ID: a nonnegative JSON-safe "
+            "integer label whose magnitude is independent of the simplex count."
+        ),
+    ),
 ]
 DegreeClassIds = Annotated[
     tuple[ClassId, ...], Field(max_length=MAX_SIMPLICES_PER_DEGREE)
@@ -58,4 +71,8 @@ class SimplicialSetQuotientResult(StrictModel):
     quotient_map: TruncatedSimplicialMap
 
 
-__all__ = ["SimplicialSetQuotientRequest", "SimplicialSetQuotientResult"]
+__all__ = [
+    "MAX_CLASS_ID",
+    "SimplicialSetQuotientRequest",
+    "SimplicialSetQuotientResult",
+]

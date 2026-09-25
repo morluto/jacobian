@@ -4,6 +4,9 @@
 quotient of a finite truncated simplicial set. Each `degree_class_ids[n]` row
 has one nonnegative class ID for every simplex in degree `n`; equal IDs define
 the equivalence classes in that degree. IDs have no meaning across degrees.
+Class IDs are JSON-safe nonnegative integers (at most `2**53 - 1`), so the
+same labels transport losslessly as JSON numbers; their magnitude is
+independent of the source simplex count.
 
 The operation checks that every visible face and degeneracy sends equivalent
 source simplices to equivalent target simplices. It then induces the face and

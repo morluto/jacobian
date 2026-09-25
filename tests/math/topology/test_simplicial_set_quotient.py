@@ -1,8 +1,15 @@
 """Exact behavior for finite simplicial-set congruence quotients."""
 
 import pytest
+from pydantic import ValidationError
 
+from jacobian.canonical import CanonicalizationError
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.dispatch import parse_operation_input
+from jacobian.math.topology.simplicial_sets._models import (
+    MAX_SIMPLEX_LABEL_LENGTH,
+    FiniteTruncatedSimplicialSet,
+)
 from jacobian.math.topology.simplicial_sets._tools import TOOLS as ALL_TOOLS
 from jacobian.math.topology.simplicial_sets.maps import (
     SimplicialMapRequest,
@@ -10,6 +17,7 @@ from jacobian.math.topology.simplicial_sets.maps import (
 )
 from jacobian.math.topology.simplicial_sets.quotient import simplicial_set_quotient
 from jacobian.math.topology.simplicial_sets.quotient_models import (
+    MAX_CLASS_ID,
     SimplicialSetQuotientRequest,
     SimplicialSetQuotientResult,
 )
@@ -108,7 +116,10 @@ def test_full_carrier_boundary_remains_admitted() -> None:
     assert result.quotient_map.maps == (identity, identity, identity)
 
 
-def test_class_labels_are_unbounded_and_native_construct_is_admitted() -> None:
+def test_class_labels_are_independent_of_the_simplex_count() -> None:
+    # Labels beyond the 96-simplex carrier stay admissible; only their equality
+    # defines the relation, so their magnitude changes neither the quotient nor
+    # the transport envelope below the JSON-safe integer bound.
     request = _request([[97, 97], [101, 102, 101], [103, 104, 105, 103]])
     result = simplicial_set_quotient(request)
     assert result.quotient_map.maps[0] == (0, 0)
@@ -116,6 +127,106 @@ def test_class_labels_are_unbounded_and_native_construct_is_admitted() -> None:
     malformed = SimplicialSetQuotientRequest.model_construct()
     with pytest.raises(OperationDomainValidationError):
         simplicial_set_quotient(malformed)
+
+
+def test_class_labels_use_the_lossless_json_transport_envelope() -> None:
+    boundary_ids = [
+        [0, 0],
+        [0, 1, 0],
+        [0, 1, MAX_CLASS_ID, 0],
+    ]
+    native = _request(boundary_ids)
+    source_json = standard_simplex(1, 2).model_dump(mode="json")
+    wire = parse_operation_input(
+        SimplicialSetQuotientRequest,
+        {"simplicial_set": source_json, "degree_class_ids": boundary_ids},
+    )
+    assert wire == native
+    assert simplicial_set_quotient(wire).quotient_map.maps[0] == (0, 0)
+
+    # Above the envelope neither native validation nor the JSON transport
+    # admits the label, and a forged native construct shares owner admission.
+    with pytest.raises(ValidationError):
+        _request(
+            [
+                [0, 0],
+                [0, 1, 0],
+                [0, 1, MAX_CLASS_ID + 1, 0],
+            ]
+        )
+    with pytest.raises(CanonicalizationError):
+        parse_operation_input(
+            SimplicialSetQuotientRequest,
+            {
+                "simplicial_set": source_json,
+                "degree_class_ids": [
+                    [0, 0],
+                    [0, 1, 0],
+                    [0, 1, MAX_CLASS_ID + 1, 0],
+                ],
+            },
+        )
+    forged = SimplicialSetQuotientRequest.model_construct(
+        simplicial_set=standard_simplex(1, 2),
+        degree_class_ids=(
+            (0, 0),
+            (0, 1, 0),
+            (0, 1, MAX_CLASS_ID + 1, 0),
+        ),
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        simplicial_set_quotient(forged)
+    assert error.value.errors()[0]["type"] == (
+        "simplicial_set.quotient.class_axis_invalid"
+    )
+
+
+def test_malformed_native_source_is_rejected_before_serialization(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import jacobian.math.topology.simplicial_sets.quotient as quotient_module
+
+    class _NoSerialization:
+        def dumps(self, *_args: object, **_kwargs: object) -> str:
+            raise AssertionError(
+                "source must be structurally admitted before serialization"
+            )
+
+    monkeypatch.setattr(quotient_module, "json", _NoSerialization())
+
+    oversized_label = "x" * (MAX_SIMPLEX_LABEL_LENGTH + 1)
+    cases = (
+        (
+            {
+                "max_degree": 1,
+                "sets": ((oversized_label, "b"), ("ab", "ba", "bb")),
+                "face_maps": (((0, 1, 1), (0, 0, 1)),),
+                "degeneracy_maps": (((0, 2),),),
+                "total_simplices": 5,
+                "checked_identities": 0,
+            },
+            "simplicial_set.degree_set_invalid",
+        ),
+        (
+            {
+                "max_degree": 1,
+                "sets": (("a", "b"), ("ab", "ba", "bb")),
+                "face_maps": (((0, 1, 1), (0, 0, 1, 0)),),
+                "degeneracy_maps": (((0, 2),),),
+                "total_simplices": 5,
+                "checked_identities": 0,
+            },
+            "simplicial_set.face_map_axis_invalid",
+        ),
+    )
+    for values, expected_code in cases:
+        request = SimplicialSetQuotientRequest.model_construct(
+            simplicial_set=FiniteTruncatedSimplicialSet.model_construct(**values),
+            degree_class_ids=((0, 0), (0, 0, 0)),
+        )
+        with pytest.raises(OperationDomainValidationError) as error:
+            simplicial_set_quotient(request)
+        assert error.value.errors()[0]["type"] == expected_code
 
 
 def test_published_tool_example_dispatches_and_serializes() -> None:

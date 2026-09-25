@@ -29,7 +29,16 @@ from jacobian.math.matrices.finite_fields._bounds import (
 )
 from jacobian.math.matrices.finite_fields.linear_algebra import PrimeFieldMatrix
 
-_MAX_FIELD_ORDER = 65536
+# Keep the field's mathematical representation envelope distinct from the
+# complete-table and enumerated-result envelopes below. The one-step extension
+# admits the first prime q immediately above 2^16 (65537) for exact scalar
+# arithmetic without extending any field-wide materialization contract.
+MAX_FINITE_FIELD_PRESENTATION_ORDER = 65_537
+MAX_PROJECTIVE_LINE_DIRECTIONS = 65_536
+MAX_DIRECTION_RANK_LEDGER_ROWS = 65_536
+MAX_DIRECTION_RANK_PRESENTATION_ORDER = 65_536
+MAX_FINITE_POLYNOMIAL_COEFFICIENTS = 65_536
+MAX_FINITE_MAP_TABLE_ROWS = 65_536
 _MIN_MODULUS_COEFFICIENTS = 2
 _MAX_MODULUS_COEFFICIENTS = 17
 _MAX_VALUE_AXIS_LABELS = 256
@@ -44,7 +53,7 @@ _MAX_HOMOGENEOUS_MONOMIALS = MAX_PRIME_FIELD_MATRIX_AXIS
 # the characteristic, and cap the characteristic by the supported field
 # order.  Five decimal digits therefore cover every exact integer leaf while
 # keeping the JSON boundary explicit.
-MAX_FINITE_FIELD_INTEGER_DIGITS = len(str(_MAX_FIELD_ORDER))
+MAX_FINITE_FIELD_INTEGER_DIGITS = len(str(MAX_FINITE_FIELD_PRESENTATION_ORDER))
 FiniteFieldInteger = Annotated[
     int,
     DecimalIntegerEncoding(max_digits=MAX_FINITE_FIELD_INTEGER_DIGITS),
@@ -55,7 +64,7 @@ FiniteFieldInteger = Annotated[
 # numbers.  Keep the scalar and aggregate result bounds explicit at this
 # source-bound result boundary.
 MAX_ORBIT_DISTRIBUTION_COUNT_DIGITS = 32_768
-MAX_ORBIT_DISTRIBUTION_ROWS = _MAX_FIELD_ORDER + 1
+MAX_ORBIT_DISTRIBUTION_ROWS = 65_537
 MAX_ORBIT_DISTRIBUTION_TOTAL_DIGITS = 5_000_000
 _MAX_ORBIT_DISTRIBUTION_COUNT: int = 10**MAX_ORBIT_DISTRIBUTION_COUNT_DIGITS
 _MAX_ORBIT_DISTRIBUTION_COUNT_BIT_LENGTH: int = (
@@ -221,7 +230,7 @@ def _validate_presentation_shape(
             "finite_field.characteristic_prime_integer",
             "characteristic must be a prime integer",
         )
-    if characteristic > _MAX_FIELD_ORDER:
+    if characteristic > MAX_FINITE_FIELD_PRESENTATION_ORDER:
         raise _validation_error(
             "finite_field.characteristic_exceeds_supported_field_order_bound",
             "characteristic exceeds the supported field-order bound",
@@ -294,7 +303,7 @@ class FiniteFieldPresentation(StrictModel):
             self.modulus_coefficients,
             self.generator,
         )
-        if self.characteristic**self.degree > _MAX_FIELD_ORDER:
+        if self.characteristic**self.degree > MAX_FINITE_FIELD_PRESENTATION_ORDER:
             raise _validation_error(
                 "finite_field.field_order_exceeds_supported_bound",
                 "field order exceeds the supported bound",
@@ -924,7 +933,7 @@ class ProjectiveLine(StrictModel):
         expected = (self.presentation.order ** len(self.axis.labels) - 1) // (
             self.presentation.order - 1
         )
-        if expected > _MAX_FIELD_ORDER:
+        if expected > MAX_PROJECTIVE_LINE_DIRECTIONS:
             raise _validation_error(
                 "finite_field.projective_line_exceeds_supported_direction_bound",
                 "projective line exceeds the supported direction bound",
@@ -1077,7 +1086,9 @@ class DirectionRankLedger(StrictModel):
     """An ordered, exact binding from projective directions to rank results."""
 
     subspace: FiniteDimensionalSubspace
-    entries: tuple[RankResult, ...] = Field(min_length=1, max_length=_MAX_FIELD_ORDER)
+    entries: tuple[RankResult, ...] = Field(
+        min_length=1, max_length=MAX_DIRECTION_RANK_LEDGER_ROWS
+    )
 
     @model_validator(mode="after")
     def validate_ledger(self) -> Self:
@@ -1224,7 +1235,7 @@ class FinitePolynomial(StrictModel):
                 "finite_field.finite_polynomial_constant_coefficient",
                 "finite polynomial requires a constant coefficient",
             )
-        if len(self.coefficients) > _MAX_FIELD_ORDER:
+        if len(self.coefficients) > MAX_FINITE_POLYNOMIAL_COEFFICIENTS:
             raise _validation_error(
                 "finite_field.finite_polynomial_exceeds_supported_degree_bound",
                 "finite polynomial exceeds the supported degree bound",
@@ -1292,7 +1303,7 @@ class FiniteMapTable(StrictModel):
     map: FinitePolynomialMap
     entries: tuple[tuple[FiniteFieldElement, FiniteFieldElement], ...] = Field(
         min_length=1,
-        max_length=_MAX_FIELD_ORDER,
+        max_length=MAX_FINITE_MAP_TABLE_ROWS,
     )
 
     @model_validator(mode="after")
@@ -1302,7 +1313,7 @@ class FiniteMapTable(StrictModel):
                 "finite_field.finite_map_table_enumerate_complete_domain",
                 "finite map table must enumerate the complete domain",
             )
-        if self.map.domain.order > _MAX_FIELD_ORDER:
+        if self.map.domain.order > MAX_FINITE_MAP_TABLE_ROWS:
             raise _validation_error(
                 "finite_field.finite_map_table_exceeds_supported_domain_bound",
                 "finite map table exceeds the supported domain bound",

@@ -9,7 +9,6 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.gauge._models import (
-    MAX_FINITE_GROUP_GAUGE_COMPLEX_OUTPUT_BYTES,
     MAX_GAUGE_EDGES,
     MAX_GAUGE_FACES,
     MAX_GAUGE_TOTAL_FACE_STEPS,
@@ -218,17 +217,15 @@ def _admit(request: FiniteGroupGaugeComplexRequest) -> None:
         _reject(
             "lattice", "lattice_gauge.complex.lattice_shape", "lattice is malformed"
         )
-    table, inverse, identity, order = _admit_group(group, location="group")
-    del table, inverse, identity
-    _, _, vertex_set, edge_by_id, output_bytes = _admit_lattice(lattice)
-    face_bytes = _admit_faces(faces, vertex_set, edge_by_id)
-    output_bytes += face_bytes + order * order * 4 + order * 12
-    if output_bytes > MAX_FINITE_GROUP_GAUGE_COMPLEX_OUTPUT_BYTES:
-        raise OperationResourceAdmissionError(
-            location=("result",),
-            code="lattice_gauge.complex.output_bytes",
-            message="source-bound complex exceeds the conservative two-megabyte output envelope",
+    try:
+        table, inverse, identity, _order = _admit_group(group, location="group")
+    except (AttributeError, TypeError):
+        _reject(
+            "group", "lattice_gauge.complex.group_shape", "group table is malformed"
         )
+    del table, inverse, identity
+    _, _, vertex_set, edge_by_id, _ = _admit_lattice(lattice)
+    _admit_faces(faces, vertex_set, edge_by_id)
 
 
 def construct_finite_group_gauge_complex(

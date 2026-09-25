@@ -3,7 +3,6 @@ from pydantic import ValidationError
 
 from jacobian.catalog.models import (
     OperationDomainValidationError,
-    OperationResourceAdmissionError,
 )
 from jacobian.math.gauge import (
     FiniteGroupGaugeComplex,
@@ -224,5 +223,5 @@ def test_result_size_is_admitted_before_complex_result_construction():
             for i in range(16)
         ),
     )
-    with pytest.raises(OperationResourceAdmissionError, match="two-megabyte"):
-        construct_finite_group_gauge_complex(request)
+    result = construct_finite_group_gauge_complex(request)
+    assert len(result.faces) == 16

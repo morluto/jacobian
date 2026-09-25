@@ -6,7 +6,10 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.catalog.catalog import Catalog
-from jacobian.catalog.models import OperationMatchRequest
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationMatchRequest,
+)
 from jacobian.dispatch import invoke_operation
 from jacobian.math.graphs.decks import _models as deck_models
 from jacobian.math.graphs.decks._models import (
@@ -191,3 +194,31 @@ def test_native_and_catalog_paths_do_not_replay_canonical_validation(
     assert operation is not None
     assert invoke_operation(operation.operation_id, payload, catalog).output["equal"]
     assert canonical_checks == 2
+
+
+def test_native_path_rejects_unvalidated_or_modified_request_carriers() -> None:
+    from jacobian.math.graphs.decks._models import AnonymousGraphCardMultiset
+    from jacobian.math.graphs.decks.operations import (
+        anonymous_graph_card_multiset_equal,
+    )
+
+    unchecked_multiset = AnonymousGraphCardMultiset.model_construct(
+        card_order=10, classes=()
+    )
+    with pytest.raises(ValidationError, match="typed operands must come"):
+        AnonymousGraphCardMultisetEqualityRequest(
+            left=unchecked_multiset, right=unchecked_multiset
+        )
+
+    forged = AnonymousGraphCardMultisetEqualityRequest.model_construct(
+        left=unchecked_multiset, right=unchecked_multiset
+    )
+    with pytest.raises(OperationDomainValidationError, match="combined admission"):
+        anonymous_graph_card_multiset_equal(forged)
+
+    valid = AnonymousGraphCardMultisetEqualityRequest(
+        left=_multiset((), 0), right=_multiset((), 0)
+    )
+    modified = valid.model_copy(update={"left": unchecked_multiset})
+    with pytest.raises(OperationDomainValidationError, match="combined admission"):
+        anonymous_graph_card_multiset_equal(modified)

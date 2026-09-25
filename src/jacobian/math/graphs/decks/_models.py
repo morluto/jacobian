@@ -6,7 +6,7 @@ from itertools import combinations, permutations
 from math import comb, factorial
 from typing import Annotated, Any, Self, cast
 
-from pydantic import Field, model_validator
+from pydantic import Field, PrivateAttr, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import DecimalIntegerEncoding
@@ -140,6 +140,9 @@ class AnonymousGraphCardMultiset(StrictModel):
     classes: tuple[AnonymousGraphCardClass, ...] = Field(
         max_length=MAX_ANONYMOUS_CARD_CLASSES
     )
+    _canonical_snapshot: tuple[int, tuple[AnonymousGraphCardClass, ...]] | None = (
+        PrivateAttr(default=None)
+    )
 
     @model_validator(mode="after")
     def require_structural_canonical_form(self) -> Self:
@@ -232,13 +235,16 @@ class AnonymousGraphCardMultiset(StrictModel):
                     "classes must be unique and lexicographically ordered",
                 )
             previous_key = graph.edges
+        object.__setattr__(self, "_canonical_snapshot", (self.card_order, self.classes))
         return self
 
     @classmethod
     def _from_kernel(
         cls, card_order: int, classes: tuple[AnonymousGraphCardClass, ...]
     ) -> Self:
-        return cls.model_construct(card_order=card_order, classes=classes)
+        result = cls.model_construct(card_order=card_order, classes=classes)
+        object.__setattr__(result, "_canonical_snapshot", (card_order, classes))
+        return result
 
 
 class AnonymousGraphCardMultisetEqualityRequest(StrictModel):
@@ -246,6 +252,9 @@ class AnonymousGraphCardMultisetEqualityRequest(StrictModel):
 
     left: AnonymousGraphCardMultiset
     right: AnonymousGraphCardMultiset
+    _admitted_operands: (
+        tuple[AnonymousGraphCardMultiset, AnonymousGraphCardMultiset] | None
+    ) = PrivateAttr(default=None)
 
     @model_validator(mode="before")
     @classmethod
@@ -263,6 +272,11 @@ class AnonymousGraphCardMultisetEqualityRequest(StrictModel):
                 # still share the same pair envelope when composed here.
                 order = multiset.card_order
                 classes = multiset.classes
+                if multiset._canonical_snapshot != (order, classes):
+                    raise _validation_error(
+                        "anonymous_equality_unadmitted_operand",
+                        "typed operands must come from validation or trusted construction",
+                    )
             else:
                 continue
             if (
@@ -290,6 +304,11 @@ class AnonymousGraphCardMultisetEqualityRequest(StrictModel):
                     {"multiset": multiset}
                 )["multiset"]
         return normalized
+
+    @model_validator(mode="after")
+    def record_admitted_operands(self) -> Self:
+        object.__setattr__(self, "_admitted_operands", (self.left, self.right))
+        return self
 
 
 class AnonymousGraphCardMultisetEqualityResult(StrictModel):
@@ -1280,7 +1299,7 @@ def _normalize_vertex_iso_profile_result(value: Any) -> Any:
                 tuple(row) if field == "vertex_maps" and type(row) is list else row
                 for row in rows
             )
-    return normalized
+        return normalized
 
 
 def _admit_and_normalize_vertex_iso_profile_result(value: Any) -> Any:

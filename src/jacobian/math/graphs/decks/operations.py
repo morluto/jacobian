@@ -105,15 +105,30 @@ def anonymous_graph_card_multiset_equal(
             code="graph_deck.anonymous_equality_request_carrier",
             message="request must be an AnonymousGraphCardMultisetEqualityRequest",
         )
-    return _anonymous_graph_card_multiset_equal_from_admitted(
-        request.left, request.right
-    )
+    return _anonymous_graph_card_multiset_equal_from_admitted(request)
 
 
 def _anonymous_graph_card_multiset_equal_from_admitted(
-    left: AnonymousGraphCardMultiset, right: AnonymousGraphCardMultiset
+    request: AnonymousGraphCardMultisetEqualityRequest,
 ) -> AnonymousGraphCardMultisetEqualityResult:
-    """Compare two values after their canonical classes have been established."""
+    """Compare a request whose pair admission and canonical checks have run."""
+    if (
+        type(request) is not AnonymousGraphCardMultisetEqualityRequest
+        or request._admitted_operands != (request.left, request.right)
+        or type(request.left) is not AnonymousGraphCardMultiset
+        or type(request.right) is not AnonymousGraphCardMultiset
+        or request.left._canonical_snapshot
+        != (request.left.card_order, request.left.classes)
+        or request.right._canonical_snapshot
+        != (request.right.card_order, request.right.classes)
+    ):
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="graph_deck.anonymous_equality_not_admitted",
+            message="equality request must pass its combined admission and validation",
+        )
+    left, right = request._admitted_operands
+    assert left is not None and right is not None
     equal = left.card_order == right.card_order and left.classes == right.classes
     return AnonymousGraphCardMultisetEqualityResult(equal=equal)
 

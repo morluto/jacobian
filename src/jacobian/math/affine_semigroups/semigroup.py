@@ -895,7 +895,7 @@ def normalization(semigroup: PositiveAffineSemigroup) -> AffineSemigroupNormaliz
 
 
 def _fiber_has_member(
-    semigroup: PositiveAffineSemigroup,
+    configuration: AffineConfiguration,
     target: tuple[int, ...],
     grades: tuple[int, ...],
     target_grade: int,
@@ -904,7 +904,6 @@ def _fiber_has_member(
     """Search one already-admitted fiber and stop at its first factorization."""
     if target_grade < 0:
         return False
-    configuration = semigroup.configuration
     coordinates = [0] * configuration.columns
 
     def visit(index: int, remaining: int) -> bool:
@@ -945,10 +944,14 @@ def _preflight_normality_work(semigroup: PositiveAffineSemigroup) -> None:
         raise ValueError("normality currently requires a two-row configuration")
 
     lower, upper = _hilbert_rays(configuration)
+    unique_vectors = tuple(dict.fromkeys(configuration.columns_vectors))
+    unique_entries = tuple(
+        tuple(vector[row] for vector in unique_vectors) for row in range(2)
+    )
     grading = (upper[1] - lower[1], lower[0] - upper[0])
     grades = tuple(
-        sum(grading[row] * configuration.entries[row][column] for row in range(2))
-        for column in range(configuration.columns)
+        sum(grading[row] * unique_entries[row][column] for row in range(2))
+        for column in range(len(unique_vectors))
     )
     if any(grade <= 0 for grade in grades):
         raise ArithmeticError("extreme-ray covector is not positive on the semigroup")
@@ -992,11 +995,9 @@ def _preflight_normality_work(semigroup: PositiveAffineSemigroup) -> None:
                     f"the {MAX_AFFINE_FIBER_WORK}-tuple candidate bound"
                 ),
             )
-    candidate_work *= (
-        configuration.columns + 1 + configuration.rows * configuration.columns
-    )
+    candidate_work *= len(unique_vectors) + 1 + configuration.rows * len(unique_vectors)
     per_candidate_overhead = (
-        configuration.columns**2 + configuration.rows * configuration.columns + 2
+        len(unique_vectors) ** 2 + configuration.rows * len(unique_vectors) + 2
     )
     total_work = candidate_bound * (candidate_work + per_candidate_overhead)
     if total_work > MAX_AFFINE_NORMALITY_WORK:
@@ -1035,13 +1036,22 @@ def normality(semigroup: PositiveAffineSemigroup) -> AffineSemigroupNormality:
     # positive on every generator. It bounds coefficients without using the
     # caller's potentially much larger rational grading.
     lower, upper = _hilbert_rays(source.configuration)
+    unique_vectors = tuple(dict.fromkeys(source.configuration.columns_vectors))
+    search_configuration = AffineConfiguration(
+        row_labels=source.configuration.row_labels,
+        generator_labels=tuple(f"g{index}" for index in range(len(unique_vectors))),
+        entries=tuple(
+            tuple(vector[row] for vector in unique_vectors)
+            for row in range(source.configuration.rows)
+        ),
+    )
     grading = (upper[1] - lower[1], lower[0] - upper[0])
     grades = tuple(
         sum(
-            grading[row] * source.configuration.entries[row][column]
+            grading[row] * search_configuration.entries[row][column]
             for row in range(source.configuration.rows)
         )
-        for column in range(source.configuration.columns)
+        for column in range(search_configuration.columns)
     )
     if any(grade <= 0 for grade in grades):
         raise ArithmeticError("extreme-ray covector is not positive on the semigroup")
@@ -1050,8 +1060,8 @@ def normality(semigroup: PositiveAffineSemigroup) -> AffineSemigroupNormality:
     # cone/lattice witness checks before starting any coefficient traversal.
     plans: list[tuple[int, tuple[int, ...], int]] = []
     total_work = len(candidates) * (
-        source.configuration.columns**2
-        + source.configuration.rows * source.configuration.columns
+        search_configuration.columns**2
+        + search_configuration.rows * search_configuration.columns
         + 2
     )
     for target in candidates:
@@ -1074,9 +1084,9 @@ def normality(semigroup: PositiveAffineSemigroup) -> AffineSemigroupNormality:
                     ),
                 )
         candidate_work *= (
-            source.configuration.columns
+            search_configuration.columns
             + 1
-            + source.configuration.rows * source.configuration.columns
+            + search_configuration.rows * search_configuration.columns
         )
         total_work += candidate_work
         if total_work > MAX_AFFINE_NORMALITY_WORK:
@@ -1093,7 +1103,9 @@ def normality(semigroup: PositiveAffineSemigroup) -> AffineSemigroupNormality:
     for target, (target_grade, maxima, _candidate_work) in zip(
         candidates, plans, strict=True
     ):
-        if _fiber_has_member(source, target, grades, target_grade, maxima):
+        if _fiber_has_member(
+            search_configuration, target, grades, target_grade, maxima
+        ):
             continue
         # The normalization kernel should produce only elements in both the
         # generated cone and lattice. Replay those defining relations for the

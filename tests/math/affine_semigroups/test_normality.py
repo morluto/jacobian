@@ -104,6 +104,17 @@ def test_redundant_even_quadrant_generators_are_normal_in_their_group_lattice() 
     assert result.semigroup.configuration.columns_vectors == vectors
 
 
+def test_duplicate_generators_are_deduplicated_for_admission_and_membership() -> None:
+    vectors = ((1, 0),) * 5 + ((0, 1),) * 5
+    result = normality(_semigroup(vectors))
+
+    assert result.normal
+    assert result.hole is None
+    # Internal pricing/search deduplicates vector values while the public
+    # result retains the caller's labelled generator axis.
+    assert result.semigroup.configuration.columns_vectors == vectors
+
+
 def test_normality_manifest_example_round_trips() -> None:
     tool = next(
         tool

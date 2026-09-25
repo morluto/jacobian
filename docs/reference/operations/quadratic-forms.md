@@ -212,3 +212,23 @@ is capped at 2,000,000 term evaluations. A large maximum index can consequently
 be accepted in low dimension and rejected when its proved box is too large.
 The operation computes the selected finite coefficients directly; it makes no
 claim about modularity or an infinite theta series beyond those values.
+
+## Complete representation-vector fibers
+
+`quadratic_form.representing_vectors.compute` returns every integer vector
+`x` with `Q(x)=n` for each requested nonnegative index. Requested indices are
+strictly increasing; every index appears in the result, including an empty
+vector list when no representation exists. Each vector's coordinates are in
+the retained form's ordered axis, use canonical exact-integer JSON spellings,
+and are returned in lexicographic order. Sign changes and coordinate
+permutations remain distinct vectors.
+
+The form must be integral and positive definite. With `C` the integral polar
+matrix, the exact adjugate bound `x_i^2 <= 2*N*(C^-1)_ii`, where `N` is the
+largest requested index, yields a complete search box. The kernel admits the
+box size and term-evaluation work before enumeration. It also uses that box as
+a sound upper bound on the number of vectors that could be returned, and
+admits the worst-case coordinate spellings, retained form, row structure, and
+aggregate output bytes before building vectors. At most 100,000 vectors and
+8 MiB of result bytes are allowed. This is a finite fiber operation; it does
+not decide representability beyond the requested indices.

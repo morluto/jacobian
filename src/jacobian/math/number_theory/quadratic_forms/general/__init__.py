@@ -5,6 +5,8 @@ from jacobian.math.number_theory.quadratic_forms.general._extra_models import (
     FiniteBoxProfileResult,
     FiniteGaussSumRequest,
     FiniteGaussSumResult,
+    ThetaRepresentingVectorsRequest,
+    ThetaRepresentingVectorsResult,
     ThetaSelectedCoefficient,
     ThetaSelectedCoefficientsRequest,
     ThetaSelectedCoefficientsResult,
@@ -35,6 +37,7 @@ from jacobian.math.number_theory.quadratic_forms.general.operations import (
     require_coefficient_matrix_budget,
 )
 from jacobian.math.number_theory.quadratic_forms.general.theta_operations import (
+    theta_representing_vectors,
     theta_selected_coefficients,
     theta_series_prefix,
 )
@@ -56,6 +59,8 @@ __all__ = [
     "QuadraticFormRestrictionResult",
     "RationalCoordinateVector",
     "RationalQuadraticForm",
+    "ThetaRepresentingVectorsRequest",
+    "ThetaRepresentingVectorsResult",
     "ThetaSelectedCoefficient",
     "ThetaSelectedCoefficientsRequest",
     "ThetaSelectedCoefficientsResult",
@@ -70,6 +75,7 @@ __all__ = [
     "quadratic_form_direct_sum",
     "quadratic_form_restrict_coordinates",
     "require_coefficient_matrix_budget",
+    "theta_representing_vectors",
     "theta_selected_coefficients",
     "theta_series_prefix",
 ]

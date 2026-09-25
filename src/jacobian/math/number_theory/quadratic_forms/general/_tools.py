@@ -10,6 +10,8 @@ from jacobian.math.number_theory.quadratic_forms.general._extra_models import (
     FiniteBoxProfileResult,
     FiniteGaussSumRequest,
     FiniteGaussSumResult,
+    ThetaRepresentingVectorsRequest,
+    ThetaRepresentingVectorsResult,
     ThetaSelectedCoefficientsRequest,
     ThetaSelectedCoefficientsResult,
 )
@@ -34,6 +36,7 @@ from jacobian.math.number_theory.quadratic_forms.general.operations import (
     evaluate_rational_quadratic_form,
 )
 from jacobian.math.number_theory.quadratic_forms.general.theta_operations import (
+    theta_representing_vectors,
     theta_selected_coefficients,
 )
 from jacobian.math.number_theory.quadratic_forms.general.values import (
@@ -139,6 +142,12 @@ def compute_theta_selected_coefficients(
     request: ThetaSelectedCoefficientsRequest,
 ) -> ThetaSelectedCoefficientsResult:
     return theta_selected_coefficients(request)
+
+
+def compute_theta_representing_vectors(
+    request: ThetaRepresentingVectorsRequest,
+) -> ThetaRepresentingVectorsResult:
+    return theta_representing_vectors(request)
 
 
 def _form_example() -> dict[str, object]:
@@ -329,6 +338,42 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                         "diagonal_coefficients": [{"num": "1", "den": "1"}],
                     },
                     "modulus": 3,
+                },
+            ),
+        ),
+    ),
+)
+TOOLS = (
+    *TOOLS,
+    MathTool(
+        operation_id="quadratic_form.representing_vectors.compute",
+        title="Enumerate complete quadratic-form representation vectors",
+        description=(
+            "Return every integer vector x, in the exact ordered form axis, at "
+            "each requested value Q(x)=n. All requested fibers are complete, "
+            "including empty fibers. The positive-definite search box, exact "
+            "evaluation work, vector count, and aggregate serialized output bytes "
+            "are admitted before enumeration."
+        ),
+        request_type=ThetaRepresentingVectorsRequest,
+        result_type=ThetaRepresentingVectorsResult,
+        run=compute_theta_representing_vectors,
+        tags=("quadratic-form", "representation-vectors", "exact"),
+        examples=(
+            OperationExample(
+                name="sum-of-two-squares-vectors",
+                description=(
+                    "Return every signed and ordered representation of 2 by x^2+y^2."
+                ),
+                input={
+                    "form": {
+                        "axis": ["x", "y"],
+                        "diagonal_coefficients": [
+                            {"num": "1", "den": "1"},
+                            {"num": "1", "den": "1"},
+                        ],
+                    },
+                    "indices": [0, 1, 2, 3],
                 },
             ),
         ),

@@ -16,6 +16,8 @@ def test_exact_public_api_symbols() -> None:
         "QuadraticFormRestrictionResult",
         "RationalCoordinateVector",
         "RationalQuadraticForm",
+        "ThetaRepresentingVectorsRequest",
+        "ThetaRepresentingVectorsResult",
         "ThetaSelectedCoefficient",
         "ThetaSelectedCoefficientsRequest",
         "ThetaSelectedCoefficientsResult",
@@ -30,6 +32,7 @@ def test_exact_public_api_symbols() -> None:
         "quadratic_form_direct_sum",
         "quadratic_form_restrict_coordinates",
         "require_coefficient_matrix_budget",
+        "theta_representing_vectors",
         "theta_selected_coefficients",
         "theta_series_prefix",
     )

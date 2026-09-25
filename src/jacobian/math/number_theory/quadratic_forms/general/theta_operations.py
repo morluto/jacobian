@@ -15,11 +15,17 @@ from jacobian.math.number_theory.quadratic_forms.general._extra_models import (
     MAX_THETA_PREFIX_OUTPUT_DIGITS,
     MAX_THETA_PREFIX_VECTORS,
     MAX_THETA_PREFIX_WORK,
+    MAX_THETA_REPRESENTATION_OUTPUT_BYTES,
+    MAX_THETA_REPRESENTATION_VECTOR_COUNT,
+    ThetaRepresentingVectorsRequest,
+    ThetaRepresentingVectorsResult,
+    ThetaRepresentingVectorsRow,
     ThetaSelectedCoefficient,
     ThetaSelectedCoefficientsRequest,
     ThetaSelectedCoefficientsResult,
     ThetaSeriesPrefixRequest,
     ThetaSeriesPrefixResult,
+    _theta_representation_output_upper_bytes,
 )
 from jacobian.math.number_theory.quadratic_forms.general.values import (
     RationalQuadraticForm,
@@ -157,7 +163,11 @@ def _positive_definite_matrix(
 
 
 def _admit_box_and_output(
-    request: ThetaSeriesPrefixRequest | ThetaSelectedCoefficientsRequest,
+    request: (
+        ThetaSeriesPrefixRequest
+        | ThetaSelectedCoefficientsRequest
+        | ThetaRepresentingVectorsRequest
+    ),
     support: int,
     determinant_work: int,
     cofactor_work: int,
@@ -212,15 +222,32 @@ def _admit_box_and_output(
         if isinstance(request, ThetaSeriesPrefixRequest)
         else sum(len(str(index)) for index in request.indices)
     )
-    output_digits = (
-        source_digits + coefficient_count * (count_digits + 1) + index_digits
-    )
-    if output_digits > MAX_THETA_PREFIX_OUTPUT_DIGITS:
-        raise OperationResourceAdmissionError(
-            location=request_location,
-            code="quadratic_form.theta_output_bound",
-            message="theta prefix exceeds its admitted aggregate output digit envelope",
+    if isinstance(request, ThetaRepresentingVectorsRequest):
+        output_bound = _theta_representation_output_upper_bytes(
+            form,
+            row_count=len(request.indices),
+            vector_count=vector_count,
+            coordinate_abs_bound=max(radii, default=0),
         )
+        if (
+            vector_count > MAX_THETA_REPRESENTATION_VECTOR_COUNT
+            or output_bound > MAX_THETA_REPRESENTATION_OUTPUT_BYTES
+        ):
+            raise OperationResourceAdmissionError(
+                location=request_location,
+                code="quadratic_form.theta_representation_output_bound",
+                message="representation vectors exceed their admitted output envelope",
+            )
+    else:
+        output_digits = (
+            source_digits + coefficient_count * (count_digits + 1) + index_digits
+        )
+        if output_digits > MAX_THETA_PREFIX_OUTPUT_DIGITS:
+            raise OperationResourceAdmissionError(
+                location=request_location,
+                code="quadratic_form.theta_output_bound",
+                message="theta prefix exceeds its admitted aggregate output digit envelope",
+            )
     return radii
 
 
@@ -311,4 +338,55 @@ def theta_selected_coefficients(
     )
 
 
-__all__ = ["theta_selected_coefficients", "theta_series_prefix"]
+def theta_representing_vectors(
+    request: ThetaRepresentingVectorsRequest,
+) -> ThetaRepresentingVectorsResult:
+    """Return every integer vector at each selected value, in axis order."""
+    form = request.form
+    dimension, support, determinant_work, cofactor_work = _require_input_envelope(form)
+    _, determinant, diagonal_cofactors = _positive_definite_matrix(form, dimension)
+    radii = _admit_box_and_output(
+        request,
+        support,
+        determinant_work,
+        cofactor_work,
+        determinant,
+        diagonal_cofactors,
+    )
+
+    vectors_by_value: dict[int, list[tuple[int, ...]]] = {
+        index: [] for index in request.indices
+    }
+    diagonal = tuple(value.num for value in form.diagonal_coefficients)
+    crosses = tuple(
+        (term.left, term.right, term.coefficient.num) for term in form.cross_terms
+    )
+    ranges = tuple(range(-radius, radius + 1) for radius in radii)
+    for vector in product(*ranges):
+        value = sum(
+            coefficient * coordinate * coordinate
+            for coefficient, coordinate in zip(diagonal, vector, strict=True)
+        )
+        value += sum(
+            coefficient * vector[left] * vector[right]
+            for left, right, coefficient in crosses
+        )
+        selected = vectors_by_value.get(value)
+        if selected is not None:
+            selected.append(tuple(vector))
+    return ThetaRepresentingVectorsResult(
+        form=form,
+        rows=tuple(
+            ThetaRepresentingVectorsRow(
+                index=index, vectors=tuple(vectors_by_value[index])
+            )
+            for index in request.indices
+        ),
+    )
+
+
+__all__ = [
+    "theta_representing_vectors",
+    "theta_selected_coefficients",
+    "theta_series_prefix",
+]

@@ -11,7 +11,6 @@ from jacobian.catalog.models import (
 from jacobian.math.topology._models import (
     MAX_TOPOLOGY_DIMENSION,
     MAX_TOPOLOGY_FACES,
-    MAX_TOPOLOGY_VERTICES,
     FiniteSimplicialComplex,
     SimplicialComplexRequest,
     canonical_complex,
@@ -27,8 +26,6 @@ MAX_COLLAPSE_SEQUENCE_STEPS = MAX_TOPOLOGY_FACES // 2
 # Bound total face-set visits across all admitted sequence steps.
 MAX_COLLAPSE_SEQUENCE_FACE_WORK = 128_000_000
 MAX_GREEDY_COLLAPSE_WORK = 60_000_000
-MAX_GREEDY_COLLAPSE_OUTPUT_BYTES = 3_000_000
-_MAX_SIMPLEX_JSON_BYTES = (MAX_TOPOLOGY_DIMENSION + 1) * 34 + MAX_TOPOLOGY_DIMENSION + 3
 
 
 class GreedyMatchingRequest(StrictModel):
@@ -135,22 +132,19 @@ def greedy_collapse(request: GreedyCollapseRequest) -> CollapseSequenceResult:
                 f"{work_bound}, above the {MAX_GREEDY_COLLAPSE_WORK}-unit envelope"
             ),
         )
-    # Source and target each serialize at most N faces, N facets, and V
-    # vertices; the pair list contains at most N simplex rows.  ASCII vertex
-    # labels have at most 32 characters, so each simplex JSON row is bounded.
-    output_bound = (
-        (5 * source.closure_size + 2 * MAX_TOPOLOGY_VERTICES) * _MAX_SIMPLEX_JSON_BYTES
-        + MAX_COLLAPSE_SEQUENCE_STEPS * 32
-        + 8192
-    )
-    if output_bound > MAX_GREEDY_COLLAPSE_OUTPUT_BYTES:
+    # Bound the result by its mathematical cardinalities: source/target face
+    # families and matching pairs. Canonicalization also enforces the global
+    # topology face and step limits.
+    output_faces_bound = 3 * source.closure_size + 2 * len(source.vertices)
+    output_pairs_bound = max_steps
+    if (
+        output_faces_bound > MAX_TOPOLOGY_FACES
+        or output_pairs_bound > MAX_COLLAPSE_SEQUENCE_STEPS
+    ):
         raise OperationResourceAdmissionError(
             location=("complex",),
-            code="topology.greedy_collapse.admission.output_bytes",
-            message=(
-                f"the greedy collapse result is bounded by {output_bound} bytes, "
-                f"above the {MAX_GREEDY_COLLAPSE_OUTPUT_BYTES}-byte envelope"
-            ),
+            code="topology.greedy_collapse.admission.output_size",
+            message="the greedy collapse result exceeds the admitted face or pair count",
         )
 
     faces = {face for degree in source.faces_by_dimension for face in degree.faces}

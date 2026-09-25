@@ -103,7 +103,7 @@ def test_greedy_collapse_composes_with_sequence_and_acyclic_matching() -> None:
     ("limit_name", "limit_value"),
     [
         ("MAX_GREEDY_COLLAPSE_WORK", 1),
-        ("MAX_GREEDY_COLLAPSE_OUTPUT_BYTES", 1),
+        ("MAX_TOPOLOGY_FACES", 1),
     ],
 )
 def test_greedy_collapse_preflight_rejects_before_pair_search(

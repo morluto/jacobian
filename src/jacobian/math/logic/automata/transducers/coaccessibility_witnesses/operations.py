@@ -39,6 +39,8 @@ def coaccessible_state_witnesses(
     order followed by that terminal final output.
     """
 
+    # Admit the canonical native carrier before any request model could coerce
+    # dictionaries or other caller values into it.
     value = _admit_transducer(transducer)
 
     outgoing: list[list[tuple[int, int, SubseqTransition]]] = [

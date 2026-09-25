@@ -1,16 +1,16 @@
 """Public declaration of exact free-algebra homomorphism application."""
 
 from jacobian.catalog.models import MathTool, OperationExample
+from jacobian.math.free_algebras._models import FreeAlgebraPolynomial
 from jacobian.math.free_algebras.homomorphism._models import (
     FreeAlgebraHomomorphismApplyRequest,
-    FreeAlgebraHomomorphismApplyResult,
 )
 from jacobian.math.free_algebras.homomorphism.operations import apply
 
 
 def _run_apply(
     request: FreeAlgebraHomomorphismApplyRequest,
-) -> FreeAlgebraHomomorphismApplyResult:
+) -> FreeAlgebraPolynomial:
     return apply(request.homomorphism, request.polynomial)
 
 
@@ -23,7 +23,7 @@ TOOLS = (
             "extend multiplicatively and linearly over QQ, and collect a canonical target polynomial."
         ),
         request_type=FreeAlgebraHomomorphismApplyRequest,
-        result_type=FreeAlgebraHomomorphismApplyResult,
+        result_type=FreeAlgebraPolynomial,
         run=_run_apply,
         tags=("algebra", "free-algebra", "homomorphism", "noncommutative", "exact"),
         discovery_terms=(
@@ -34,12 +34,15 @@ TOOLS = (
         examples=(
             OperationExample(
                 name="ordered_substitution",
-                description="Map x to u+v and y to uv, then apply to xy-yx.",
+                description=(
+                    "Map x to u+v and y to uv, then apply to xy-yx; each image "
+                    "must use the declared target alphabet."
+                ),
                 input={
                     "homomorphism": {
                         "source_alphabet": ["x", "y"],
                         "target_alphabet": ["u", "v"],
-                        "generator_images": [
+                        "images": [
                             {
                                 "alphabet": ["u", "v"],
                                 "terms": [

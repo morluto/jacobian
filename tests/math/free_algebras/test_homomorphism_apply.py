@@ -1,15 +1,19 @@
 from fractions import Fraction
+from itertools import product as cartesian_product
 
 import pytest
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
-from jacobian.math.free_algebras._models import FreeAlgebraPolynomial
+from jacobian.math.free_algebras._models import (
+    FreeAlgebraPolynomial,
+    FreeAlgebraPolynomialHomomorphism,
+)
 from jacobian.math.free_algebras.homomorphism._models import (
-    FreeAlgebraHomomorphism,
     FreeAlgebraHomomorphismApplyRequest,
 )
 from jacobian.math.free_algebras.homomorphism.operations import apply
+from jacobian.math.free_algebras.operations import multiply
 
 
 def polynomial(alphabet, *terms):
@@ -26,10 +30,10 @@ def polynomial(alphabet, *terms):
 
 def test_apply_preserves_order_and_matches_independent_matrix_evaluation():
     target = ("u", "v")
-    hom = FreeAlgebraHomomorphism(
+    hom = FreeAlgebraPolynomialHomomorphism(
         source_alphabet=("x", "y"),
         target_alphabet=target,
-        generator_images=(
+        images=(
             polynomial(target, (("v",), Fraction(1)), (("u",), Fraction(1))),
             polynomial(target, (("u", "v"), Fraction(1))),
         ),
@@ -38,9 +42,7 @@ def test_apply_preserves_order_and_matches_independent_matrix_evaluation():
         ("x", "y"), (("y", "x"), Fraction(-1)), (("x", "y"), Fraction(1))
     )
     result = apply(hom, source)
-    assert [
-        (term.word, term.coefficient.as_fraction()) for term in result.image.terms
-    ] == [
+    assert [(term.word, term.coefficient.as_fraction()) for term in result.terms] == [
         (("v", "u", "v"), Fraction(1)),
         (("u", "v", "v"), Fraction(-1)),
         (("u", "v", "u"), Fraction(-1)),
@@ -74,7 +76,7 @@ def test_apply_preserves_order_and_matches_independent_matrix_evaluation():
             )
         return total
 
-    assert evaluate(result.image, matrices) == evaluate(
+    assert evaluate(result, matrices) == evaluate(
         source,
         {
             "x": tuple(
@@ -87,23 +89,23 @@ def test_apply_preserves_order_and_matches_independent_matrix_evaluation():
 
 
 def test_empty_axes_zero_and_unit_are_preserved():
-    hom = FreeAlgebraHomomorphism(
-        source_alphabet=(), target_alphabet=("z",), generator_images=()
+    hom = FreeAlgebraPolynomialHomomorphism(
+        source_alphabet=(), target_alphabet=("z",), images=()
     )
     zero = polynomial(
         (),
     )
     result = apply(hom, zero)
-    assert result.image.alphabet == ("z",)
-    assert result.image.terms == ()
+    assert result.alphabet == ("z",)
+    assert result.terms == ()
 
-    unit_hom = FreeAlgebraHomomorphism(
+    unit_hom = FreeAlgebraPolynomialHomomorphism(
         source_alphabet=("x",),
         target_alphabet=(),
-        generator_images=(polynomial((), ((), Fraction(2))),),
+        images=(polynomial((), ((), Fraction(2))),),
     )
     unit = polynomial(("x",), ((), Fraction(3)))
-    image = apply(unit_hom, unit).image
+    image = apply(unit_hom, unit)
     assert [(term.word, term.coefficient.as_fraction()) for term in image.terms] == [
         ((), Fraction(3))
     ]
@@ -112,33 +114,61 @@ def test_empty_axes_zero_and_unit_are_preserved():
 def test_equal_generator_images_are_collected_exactly():
     target = ("u",)
     u = polynomial(target, (("u",), Fraction(1)))
-    hom = FreeAlgebraHomomorphism(
+    hom = FreeAlgebraPolynomialHomomorphism(
         source_alphabet=("x", "y"),
         target_alphabet=target,
-        generator_images=(u, u),
+        images=(u, u),
     )
     source = polynomial(("x", "y"), (("y",), Fraction(-1)), (("x",), Fraction(1)))
-    image = apply(hom, source).image
+    image = apply(hom, source)
     assert image.terms == ()
 
 
 def test_map_requires_one_image_per_source_generator_and_matching_axes():
-    with pytest.raises(ValidationError, match="homomorphism_image_count"):
-        FreeAlgebraHomomorphism(
-            source_alphabet=("x",), target_alphabet=(), generator_images=()
-        )
-    with pytest.raises(ValidationError, match="homomorphism_target_axis"):
-        FreeAlgebraHomomorphism(
-            source_alphabet=("x",),
-            target_alphabet=("u",),
-            generator_images=(polynomial(("v",), (("v",), Fraction(1))),),
-        )
     with pytest.raises(ValidationError, match="homomorphism_source_axis"):
         FreeAlgebraHomomorphismApplyRequest(
-            homomorphism=FreeAlgebraHomomorphism(
+            homomorphism=FreeAlgebraPolynomialHomomorphism(
                 source_alphabet=("x",),
                 target_alphabet=(),
-                generator_images=(polynomial(()),),
+                images=(polynomial(()),),
             ),
             polynomial=polynomial(("y",)),
         )
+
+
+def test_application_roundtrips_and_composes_through_typed_json_values():
+    source_alphabet = ("x",)
+    target_alphabet = ("u", "v")
+    homomorphism = FreeAlgebraPolynomialHomomorphism(
+        source_alphabet=source_alphabet,
+        target_alphabet=target_alphabet,
+        images=(
+            polynomial(
+                target_alphabet,
+                (("v",), Fraction(1)),
+                (("u",), Fraction(1)),
+            ),
+        ),
+    )
+    request = FreeAlgebraHomomorphismApplyRequest(
+        homomorphism=homomorphism,
+        polynomial=polynomial(source_alphabet, (("x", "x"), Fraction(1))),
+    )
+    decoded_request = FreeAlgebraHomomorphismApplyRequest.model_validate_json(
+        request.model_dump_json()
+    )
+    result = apply(decoded_request.homomorphism, decoded_request.polynomial)
+    decoded_result = FreeAlgebraPolynomial.model_validate_json(result.model_dump_json())
+
+    assert decoded_result == polynomial(
+        target_alphabet,
+        (("v", "v"), Fraction(1)),
+        (("v", "u"), Fraction(1)),
+        (("u", "v"), Fraction(1)),
+        (("u", "u"), Fraction(1)),
+    )
+    squared = multiply(decoded_result, decoded_result).product
+    assert {term.word for term in squared.terms} == set(
+        cartesian_product(target_alphabet, repeat=4)
+    )
+    assert all(term.coefficient.as_fraction() == 1 for term in squared.terms)

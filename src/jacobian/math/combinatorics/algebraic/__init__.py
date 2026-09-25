@@ -4,6 +4,7 @@ from jacobian.math.combinatorics.algebraic._models import (
     PartitionDominanceResult,
     PlacticEquivalenceRequest,
     PlacticEquivalenceResult,
+    RSKWordTraceResult,
     SemistandardTableauCheckResult,
     SemistandardYoungTableauCountResult,
     StandardTableauCheckResult,
@@ -35,6 +36,7 @@ from jacobian.math.combinatorics.algebraic.operations import (
     plactic_equivalence,
     plactic_normal_form,
     row_insertion_rsk,
+    row_insertion_rsk_trace,
     semistandard_young_tableaux_count,
     standard_young_tableaux_count,
     tableau_row_reading_word,
@@ -44,7 +46,11 @@ from jacobian.math.combinatorics.algebraic.subsequences import (
     longest_decreasing_subsequence,
     longest_increasing_subsequence,
 )
-from jacobian.math.combinatorics.algebraic.values import RSKTableauPair
+from jacobian.math.combinatorics.algebraic.values import (
+    RSKBumpStep,
+    RSKInsertionEvent,
+    RSKTableauPair,
+)
 from jacobian.math.combinatorics.algebraic.weighted_monotone._models import (
     EndpointProfileEntry,
     EndpointProfileResult,
@@ -63,7 +69,10 @@ __all__ = [
     "PartitionDominanceResult",
     "PlacticEquivalenceRequest",
     "PlacticEquivalenceResult",
+    "RSKBumpStep",
+    "RSKInsertionEvent",
     "RSKTableauPair",
+    "RSKWordTraceResult",
     "SemistandardTableauCheckResult",
     "SemistandardYoungTableauCountResult",
     "StandardTableauCheckResult",
@@ -87,6 +96,7 @@ __all__ = [
     "plactic_equivalence",
     "plactic_normal_form",
     "row_insertion_rsk",
+    "row_insertion_rsk_trace",
     "rsk_biword",
     "semistandard_young_tableaux_count",
     "standard_young_tableaux_count",

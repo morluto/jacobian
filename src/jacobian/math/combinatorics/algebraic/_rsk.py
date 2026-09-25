@@ -4,9 +4,25 @@ from __future__ import annotations
 
 from bisect import bisect_left, bisect_right
 
+from pydantic import ValidationError
+
+from jacobian._execution import request_checkpoint
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
+from jacobian.math.combinatorics.algebraic._models import (
+    MAX_RSK_TRACE_RESULT_BYTES,
+    MAX_RSK_TRACE_WORK,
+    RSKWordTraceRequest,
+    RSKWordTraceResult,
+)
 from jacobian.math.combinatorics.algebraic.values import (
+    MAX_RSK_ROW_SEARCH_COMPARISONS,
     MAX_RSK_WORD_LENGTH,
     MAX_RSK_WORD_PAYLOAD_SCALARS,
+    RSKBumpStep,
+    RSKInsertionEvent,
     RSKTableauPair,
 )
 from jacobian.math.combinatorics.symmetric_functions.values import (
@@ -148,4 +164,164 @@ def inverse_row_insertion_rsk(pair: RSKTableauPair) -> FiniteWord:
     return _inverse(pair)
 
 
-__all__ = ["inverse_row_insertion_rsk", "row_insertion_rsk"]
+def _trace_output_size_bound(word: FiniteWord, payload_scalars: int) -> int:
+    """Conservatively bound the JSON size of a full insertion ledger."""
+    length = len(word.letters)
+    # Columns in a semistandard tableau strictly increase, so its height is
+    # at most the number of ranks in the source alphabet.
+    bump_steps = sum(
+        min(prefix_length, len(word.alphabet)) for prefix_length in range(length)
+    )
+    alphabet_scalars = sum(len(symbol) for symbol in word.alphabet)
+    retained_scalars = 2 * payload_scalars + alphabet_scalars
+    return (
+        2048
+        + 6 * retained_scalars
+        + 16 * (length + len(word.alphabet))
+        + 68 * bump_steps
+        + 512 * length
+        + 16 * length
+    )
+
+
+def _admit_rsk_trace(
+    request: RSKWordTraceRequest,
+) -> tuple[RSKWordTraceRequest, dict[str, int]]:
+    """Canonicalize once, then admit trace work and result growth."""
+    if type(request) is not RSKWordTraceRequest or request.convention != (
+        "ROW_INSERTION_RSK_V1"
+    ):
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="algebraic_combinatorics.rsk_trace_request",
+            message="expected a canonical row-insertion RSK trace request",
+        )
+    if type(request.word) is not FiniteWord:
+        raise OperationDomainValidationError(
+            location=("word",),
+            code="algebraic_combinatorics.rsk_trace_word",
+            message="expected a canonical finite word",
+        )
+    try:
+        word = FiniteWord(
+            alphabet=request.word.alphabet,
+            letters=request.word.letters,
+        )
+        payload_scalars = word_payload_scalars(word)
+    except (ValidationError, TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("word",),
+            code="algebraic_combinatorics.rsk_trace_word",
+            message="word must use distinct Unicode symbols from its ordered alphabet",
+        ) from exc
+    length = len(word.letters)
+    if length > MAX_RSK_WORD_LENGTH or payload_scalars > MAX_RSK_WORD_PAYLOAD_SCALARS:
+        raise OperationResourceAdmissionError(
+            location=("word",),
+            code="algebraic_combinatorics.rsk_trace_word_limit",
+            message="the word exceeds the admitted RSK trace envelope",
+        )
+    bump_steps = sum(
+        min(prefix_length, len(word.alphabet)) for prefix_length in range(length)
+    )
+    work = bump_steps * MAX_RSK_ROW_SEARCH_COMPARISONS
+    if work > MAX_RSK_TRACE_WORK:
+        raise OperationResourceAdmissionError(
+            location=("word",),
+            code="algebraic_combinatorics.rsk_trace_work",
+            message="the complete insertion trace exceeds the admitted work bound",
+        )
+    output_bytes = _trace_output_size_bound(word, payload_scalars)
+    if output_bytes > MAX_RSK_TRACE_RESULT_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("word",),
+            code="algebraic_combinatorics.rsk_trace_output",
+            message=(
+                "the complete insertion ledger exceeds the admitted 8 MB result bound"
+            ),
+        )
+    canonical_request = RSKWordTraceRequest.model_construct(
+        word=word,
+        convention=request.convention,
+    )
+    rank = {symbol: index for index, symbol in enumerate(word.alphabet, 1)}
+    return canonical_request, rank
+
+
+def _trace_validated_rsk_word(
+    request: RSKWordTraceRequest,
+) -> RSKWordTraceResult:
+    """Execute one request after its owner admission."""
+    canonical_request, rank = _admit_rsk_trace(request)
+    word = canonical_request.word
+    insertion: list[list[int]] = []
+    recording: list[list[int]] = []
+    events: list[RSKInsertionEvent] = []
+
+    for position, letter in enumerate(word.letters, start=1):
+        if position == 1 or position % 16 == 0:
+            request_checkpoint("during row-insertion RSK trace")
+        current = rank[letter]
+        row_index = 0
+        bump_path: list[RSKBumpStep] = []
+        while row_index < len(insertion):
+            row = insertion[row_index]
+            column = bisect_right(row, current)
+            if column == len(row):
+                row.append(current)
+                recording[row_index].append(position)
+                added_row, added_column, added_entry = row_index, column, current
+                break
+            bumped = row[column]
+            row[column] = current
+            bump_path.append(
+                RSKBumpStep(row=row_index, column=column, bumped_entry=bumped)
+            )
+            current = bumped
+            row_index += 1
+        else:
+            insertion.append([current])
+            recording.append([position])
+            added_row, added_column, added_entry = row_index, 0, current
+        events.append(
+            RSKInsertionEvent(
+                position=position,
+                letter=letter,
+                bump_path=tuple(bump_path),
+                added_row=added_row,
+                added_column=added_column,
+                added_entry=added_entry,
+                row_lengths=tuple(len(row) for row in insertion),
+            )
+        )
+
+    insertion_rows = tuple(tuple(row) for row in insertion)
+    recording_rows = tuple(tuple(row) for row in recording)
+    shape = IntegerPartition(parts=tuple(len(row) for row in insertion_rows))
+    pair = RSKTableauPair(
+        alphabet=word.alphabet,
+        insertion_tableau=SemistandardYoungTableau(rows=insertion_rows),
+        recording_tableau=StandardYoungTableau(rows=recording_rows),
+        shape=shape,
+        convention=canonical_request.convention,
+    )
+    return RSKWordTraceResult._from_kernel(canonical_request, pair, tuple(events))
+
+
+def row_insertion_rsk_trace(word: FiniteWord) -> RSKWordTraceResult:
+    """Return the ordinary word-RSK pair with its exact insertion ledger."""
+    if type(word) is not FiniteWord:
+        raise OperationDomainValidationError(
+            location=("word",),
+            code="algebraic_combinatorics.rsk_trace_word",
+            message="expected a canonical finite word",
+        )
+    request = RSKWordTraceRequest.model_construct(word=word)
+    return _trace_validated_rsk_word(request)
+
+
+__all__ = [
+    "inverse_row_insertion_rsk",
+    "row_insertion_rsk",
+    "row_insertion_rsk_trace",
+]

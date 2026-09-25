@@ -29,6 +29,7 @@ from jacobian.math.combinatorics.algebraic._models import (
     PlacticEquivalenceResult,
     PlacticNormalFormResult,
     RSKResult,
+    RSKWordTraceResult,
     SemistandardTableauCheckResult,
     SemistandardYoungTableauCountResult,
     SkewLittlewoodRichardsonCheckResult,
@@ -44,6 +45,9 @@ from jacobian.math.combinatorics.algebraic._rsk import (
 )
 from jacobian.math.combinatorics.algebraic._rsk import (
     row_insertion_rsk as _row_insertion_rsk,
+)
+from jacobian.math.combinatorics.algebraic._rsk import (
+    row_insertion_rsk_trace as _row_insertion_rsk_trace,
 )
 from jacobian.math.combinatorics.algebraic.values import (
     MAX_RSK_ALPHABET_RANK_DIGITS,
@@ -91,6 +95,7 @@ __all__ = [
     "plactic_equivalence",
     "plactic_normal_form",
     "row_insertion_rsk",
+    "row_insertion_rsk_trace",
     "semistandard_young_tableaux_count",
     "standard_young_tableaux_count",
     "tableau_row_reading_word",
@@ -517,6 +522,11 @@ def row_insertion_rsk(word: FiniteWord) -> RSKTableauPair:
 def inverse_row_insertion_rsk(pair: RSKTableauPair) -> FiniteWord:
     """Reconstruct the unique word represented by a pair of at most 500 cells."""
     return _inverse_row_insertion_rsk(pair)
+
+
+def row_insertion_rsk_trace(word: FiniteWord) -> RSKWordTraceResult:
+    """Return word RSK with its complete ordinary insertion bump path."""
+    return _row_insertion_rsk_trace(word)
 
 
 def _rsk_permutation(

@@ -6,6 +6,9 @@ from jacobian.math.topology._models import FiniteSimplicialComplex, Simplex
 from jacobian.math.topology._request_admission import (
     require_canonical_complex_admission,
 )
+from jacobian.math.topology.discrete_morse._contraction import (
+    compute_chain_contraction as _compute_chain_contraction,
+)
 from jacobian.math.topology.discrete_morse._kernel import (
     compute_gradient_paths as _compute_gradient_paths,
 )
@@ -27,6 +30,7 @@ from jacobian.math.topology.discrete_morse._models import (
     IntegerMorseComplexResult,
     MatchingPair,
     MinimumMorseMatchingResult,
+    MorseChainContractionResult,
     MorseComplexResult,
 )
 
@@ -97,7 +101,17 @@ def compute_minimum_matching(
     return _compute_minimum_matching(complex_)
 
 
+def compute_chain_contraction(
+    complex_: FiniteSimplicialComplex,
+    pairs: tuple[MatchingPair, ...],
+) -> MorseChainContractionResult:
+    """Return a bounded integral chain contraction onto the Morse complex."""
+
+    return _compute_chain_contraction(complex_, pairs)
+
+
 __all__ = [
+    "compute_chain_contraction",
     "compute_gradient_paths",
     "compute_integer_morse_complex",
     "compute_minimum_matching",

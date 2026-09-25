@@ -10,3 +10,4 @@ retained below for that mathematical reference.
 
 - [Discrete Morse matching](discrete-morse-matching.md)
 - [Recurrences and rational generating series](recurrences-and-generating-series.md)
+- [Discrete Morse chain contractions](discrete-morse-chain-contraction.md)

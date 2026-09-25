@@ -468,6 +468,11 @@ def _admit_addition_resources(
         else:
             numerator_degree = max(ln + rd, rn + ld)
             denominator_degree = ld + rd
+            # Identical denominators are shared, not multiplied. This exact
+            # common-denominator case also admits cancellation such as a + (-a).
+            if left_coordinate.denominator == right_coordinate.denominator:
+                numerator_degree = max(ln, rn)
+                denominator_degree = ld
             output_degree = max(numerator_degree, denominator_degree)
             # Bound the two cross products, numerator addition, denominator
             # product, and bounded Euclidean normalization in GF(p)[x].
@@ -529,6 +534,18 @@ def _admit_multiplication_resources(
 ) -> None:
     """Preflight the existing product envelope for canonical operands."""
 
+    if field.degree == 1:
+        work = 0
+        for a, b in zip(left.coordinates, right.coordinates, strict=True):
+            work += (a.numerator.degree + 1) * (b.numerator.degree + 1)
+            work += (a.denominator.degree + 1) * (b.denominator.degree + 1)
+        if work > MAX_MULTIPLICATION_WORK:
+            raise OperationResourceAdmissionError(
+                location=("left", "coordinates"),
+                code="function_field.multiplication_work_exceeds_envelope",
+                message="rational-function multiplication exceeds its work envelope",
+            )
+        return
     max_terms = 1
     total_degree = 0
     max_numerator_degree = 0
@@ -631,13 +648,14 @@ def _admit_elements(
             code="function_field.element_field_mismatch",
             message="both elements must be bound to the identical function field",
         )
-    _admit_field(left_field)
+    _admit_field_resources(left_field)
     canonical_left = _canonical_element(left, left_field)
     canonical_right = _canonical_element(right, left_field)
     if operation == "addition":
         _admit_addition_resources(left_field, canonical_left, canonical_right)
     else:
         _admit_multiplication_resources(left_field, canonical_left, canonical_right)
+    _admit_field_algebra(left_field)
     return left_field, canonical_left, canonical_right
 
 
@@ -832,13 +850,23 @@ def function_field_element_inverse(
         coefficient[1].__len__() - 1 for coefficient in _field_kpoly(field)
     )
     degree = field.degree
-    coefficient_bound = degree**2 * (
-        numerator_degree
-        + denominator_degree
-        + field_numerator_degree
-        + field_denominator_degree
-        + 1
-    )
+    if degree == 1:
+        coefficient_bound = max(numerator_degree, denominator_degree)
+        if coefficient_bound > MAX_POLYNOMIAL_X_DEGREE:
+            raise OperationResourceAdmissionError(
+                location=("element", "coordinates"),
+                code="function_field.inverse_coefficient_growth_exceeds_envelope",
+                message="the exact rational inverse exceeds the coefficient envelope",
+            )
+        work = numerator_degree + denominator_degree + 1
+    else:
+        coefficient_bound = degree**2 * (
+            numerator_degree
+            + denominator_degree
+            + field_numerator_degree
+            + field_denominator_degree
+            + 1
+        )
     if coefficient_bound > MAX_POLYNOMIAL_X_DEGREE:
         raise OperationResourceAdmissionError(
             location=("element", "coordinates"),
@@ -1341,6 +1369,14 @@ def function_field_place_residue(
                 message="a finite place requires its prime polynomial",
             )
         degree = phi.degree
+        # Reject structurally impossible residue carriers before prime-place
+        # admission invokes polynomial factorization.
+        if prime**degree > 65_536:
+            raise OperationResourceAdmissionError(
+                location=("place",),
+                code="function_field.residue_field_order_exceeds_envelope",
+                message="the residue field exceeds the finite-field carrier order bound",
+            )
         # The existing finite-field carrier is bounded by order 65536.
         if prime**degree > 65_536:
             raise OperationResourceAdmissionError(
@@ -1497,6 +1533,7 @@ def _admit_divisor(divisor: FunctionFieldDivisor) -> FunctionFieldDivisor:
             message="divisor has malformed field or support data",
         ) from exc
     field = _validated_field(field_value)
+    _admit_field(field)
     if type(terms) is not tuple or len(terms) > 256:
         raise OperationDomainValidationError(
             location=("divisor", "terms"),
@@ -1577,6 +1614,37 @@ def function_field_divisor_add(
             location=("right", "field"),
             code="function_field.parent_mismatch",
             message="divisors must belong to the same exact function field",
+        )
+    # Combine structurally canonical place keys and enforce output support
+    # before either operand triggers irreducibility factorization.
+    raw_support: dict[str, tuple[FunctionFieldPlace, int]] = {}
+    for operand in (left, right):
+        terms = getattr(operand, "terms", None)
+        if type(terms) is not tuple or len(terms) > 256:
+            raise OperationDomainValidationError(
+                location=("divisor", "terms"),
+                code="function_field.divisor_shape",
+                message="divisor terms must be a bounded canonical tuple",
+            )
+        for term in terms:
+            place = _canonical_place(getattr(term, "place", None))
+            if place.field != left_field:
+                raise OperationDomainValidationError(
+                    location=("divisor", "terms", "place", "field"),
+                    code="function_field.divisor_parent",
+                    message="every divisor place must belong to divisor.field",
+                )
+            key = place.model_dump_json()
+            previous = raw_support.get(key)
+            raw_support[key] = (
+                place,
+                getattr(term, "multiplicity", 0) + (previous[1] if previous else 0),
+            )
+    if sum(bool(multiplicity) for _, multiplicity in raw_support.values()) > 256:
+        raise OperationResourceAdmissionError(
+            location=("result", "terms"),
+            code="function_field.divisor_support_exceeds_envelope",
+            message="the combined divisor support exceeds 256 places",
         )
     left = _admit_divisor(left)
     right = _admit_divisor(right)

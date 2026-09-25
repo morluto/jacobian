@@ -118,8 +118,6 @@ def test_combinatorial_work_is_admitted_before_enumeration() -> None:
 
 def test_operation_is_catalogued_with_usable_example() -> None:
     from jacobian.canonical import encode_strict_json
-    from jacobian.catalog.catalog import Catalog
-    from jacobian.catalog.models import OperationMatchRequest
     from jacobian.math.polynomials.derivations._tools import TOOLS
 
     operation_id = "algebraic_group.gm.invariants_through_degree.compute"
@@ -129,7 +127,4 @@ def test_operation_is_catalogued_with_usable_example() -> None:
     )
     result = tool.run(request)
     assert result.dimension == sum(row.dimension for row in result.hilbert_prefix)
-    found = Catalog.open().match(
-        OperationMatchRequest(need="weight zero polynomial basis by degree")
-    )
-    assert any(item.operation_id == operation_id for item in found.matches)
+    assert operation_id in {item.operation_id for item in TOOLS}

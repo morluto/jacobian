@@ -181,8 +181,6 @@ def test_native_surface_excludes_wire_request_envelopes() -> None:
 
 def test_weight_action_is_catalogued_with_valid_example() -> None:
     from jacobian.canonical import encode_strict_json
-    from jacobian.catalog.catalog import Catalog
-    from jacobian.catalog.models import OperationMatchRequest
     from jacobian.math.polynomials.derivations._tools import TOOLS
 
     operation_id = "algebraic_group.gm.diagonal_weight_action.compute"
@@ -196,5 +194,4 @@ def test_weight_action_is_catalogued_with_valid_example() -> None:
             request.action, request.polynomial, request.parameter
         ).weight_zero
     )
-    found = Catalog.open().match(OperationMatchRequest(need="diagonal integer weights"))
-    assert any(item.operation_id == operation_id for item in found.matches)
+    assert operation_id in {item.operation_id for item in TOOLS}

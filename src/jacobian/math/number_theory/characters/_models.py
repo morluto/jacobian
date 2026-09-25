@@ -30,6 +30,7 @@ from jacobian.math.number_theory.characters.values import (
     CyclotomicValue,
     DirichletCharacter,
     DirichletCharacterGroup,
+    PrimitiveDirichletCharacter,
     PrincipalDirichletCharacter,
 )
 from jacobian.math.number_theory.sequences.core._models import (
@@ -478,26 +479,21 @@ class DirichletCharacterGaussSumResult(StrictModel):
 class DirichletCharacterPrimitiveGaussNormResult(StrictModel):
     """Exact squared complex modulus of a primitive character Gauss sum."""
 
-    character: DirichletCharacter
-    conductor: StrictInt = Field(ge=1, le=MAX_CHARACTER_GROUP_MODULUS)
+    primitive_character: PrimitiveDirichletCharacter
     gauss_sum: RationalCyclotomicElement
     norm_squared: RationalCyclotomicElement
 
     @model_validator(mode="after")
     def require_primitive_source_and_norm(self) -> Self:
-        if self.conductor != self.character.group.modulus:
-            raise _validation_error(
-                "gauss_norm_not_primitive",
-                "character modulus must equal its computed conductor",
-            )
+        conductor = self.primitive_character.conductor
         if self.gauss_sum.field != self.norm_squared.field:
             raise _validation_error(
                 "gauss_norm_field", "Gauss sum and norm must use one cyclotomic parent"
             )
         expected = (
-            CanonicalRational.from_fraction(self.conductor),
+            CanonicalRational.from_integer_ratio(conductor, 1),
             *(
-                CanonicalRational.from_fraction(0)
+                CanonicalRational.from_integer_ratio(0, 1)
                 for _ in range(self.norm_squared.field.degree - 1)
             ),
         )
@@ -509,7 +505,7 @@ class DirichletCharacterPrimitiveGaussNormResult(StrictModel):
 
 
 class DirichletCharacterPrimitiveGaussNormRequest(StrictModel):
-    character: DirichletCharacter
+    primitive_character: PrimitiveDirichletCharacter
 
 
 class DirichletCharacterGeneralizedGaussSumRequest(StrictModel):
@@ -567,7 +563,7 @@ class DirichletCharacterConductorResult(StrictModel):
 
     character: DirichletCharacter
     conductor: StrictInt = Field(ge=1, le=MAX_CHARACTER_GROUP_MODULUS)
-    primitive_character: DirichletCharacter
+    primitive_character: PrimitiveDirichletCharacter
 
     @model_validator(mode="after")
     def require_divisor_of_source_modulus(self) -> Self:
@@ -576,7 +572,7 @@ class DirichletCharacterConductorResult(StrictModel):
                 "conductor_not_divisor",
                 "character conductor must divide the source modulus",
             )
-        if self.primitive_character.group.modulus != self.conductor:
+        if self.primitive_character.conductor != self.conductor:
             raise _validation_error(
                 "primitive_character_modulus_mismatch",
                 "primitive character must be represented modulo its conductor",
@@ -588,7 +584,7 @@ class DirichletCharacterConductorResult(StrictModel):
         cls,
         character: DirichletCharacter,
         conductor: int,
-        primitive_character: DirichletCharacter,
+        primitive_character: PrimitiveDirichletCharacter,
     ) -> Self:
         return cls.model_construct(
             character=character,

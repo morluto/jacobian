@@ -6,18 +6,14 @@ import math
 from fractions import Fraction
 from itertools import product
 from math import gcd
-from typing import cast
+from typing import Literal, cast
 
 from pydantic import ValidationError
 from pydantic_core import PydanticCustomError
 from sympy import QQ, Poly, bernoulli, cyclotomic_poly, factorint, symbols
 
 from jacobian._exact import CanonicalRational
-from jacobian.canonical import (
-    CanonicalLimits,
-    encode_strict_json,
-    format_canonical_integer,
-)
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -47,7 +43,6 @@ from jacobian.math.number_theory.characters._models import (
     DirichletCharacterParityResult,
     DirichletCharacterPrimitiveGaussNormResult,
     DirichletCharacterResidueIndicatorExpansion,
-    DirichletCharacterSequenceTwistRequest,
     DirichletCharacterTableResult,
     DirichletCharacterValueResult,
     PrincipalDirichletCharacterValueResult,
@@ -65,6 +60,7 @@ from jacobian.math.number_theory.characters.values import (
     DirichletCharacterKernel,
     DirichletCharacterRestrictionObstruction,
     DirichletCharacterRestrictionResult,
+    PrimitiveDirichletCharacter,
     PrincipalDirichletCharacter,
 )
 from jacobian.math.number_theory.sequences.core._models import (
@@ -90,6 +86,7 @@ __all__ = [
     "dirichlet_character_generalized_gauss_sum",
     "dirichlet_character_group_enumerate",
     "dirichlet_character_inflate",
+    "dirichlet_character_inverse",
     "dirichlet_character_jacobi_sum",
     "dirichlet_character_kernel",
     "dirichlet_character_l_value_nonpositive_integer",
@@ -121,10 +118,28 @@ MAX_CONDUCTOR_KERNEL_WORK = 4_194_304
 MAX_CHARACTER_SUM_WORK = 1_000_000
 MAX_CHARACTER_ORTHOGONALITY_WORK = 500_000
 MAX_GENERALIZED_BERNOULLI_WORK = 500_000
-MAX_GENERALIZED_BERNOULLI_RESULT_BYTES = 1_000_000
+MAX_CHARACTER_RESULT_CELLS = 1_000_000
+MAX_CHARACTER_RESULT_DIGITS = 5_000_000
 MAX_CHARACTER_SEQUENCE_TWIST_WORK = 10_000_000
-MAX_CHARACTER_SEQUENCE_TWIST_BYTES = 16_000_000
 MAX_CHARACTER_SEQUENCE_TWIST_COEFFICIENTS = 1_000_000
+
+
+def _admit_result_allocation(
+    *,
+    cells: int,
+    digits: int,
+    location: tuple[str | int, ...],
+    code: str,
+    message: str,
+) -> None:
+    """Bound exact result cardinality and integer growth before allocation."""
+
+    if cells > MAX_CHARACTER_RESULT_CELLS or digits > MAX_CHARACTER_RESULT_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=location,
+            code=code,
+            message=message,
+        )
 
 
 def _jacobi_sum_field(order: int, modulus: int) -> tuple[int, tuple[int, ...]]:
@@ -264,7 +279,7 @@ def dirichlet_character_jacobi_sum(
     value = RationalCyclotomicElement(
         field=RationalCyclotomicField(order=order),
         coefficients_ascending=tuple(
-            CanonicalRational.from_fraction(value) for value in reduced[:degree]
+            CanonicalRational.from_integer_ratio(value, 1) for value in reduced[:degree]
         ),
     )
     return DirichletCharacterJacobiSumResult(
@@ -430,7 +445,7 @@ def _admit_principal_modulus(modulus: int) -> None:
 def _require_character(character: DirichletCharacter) -> DirichletCharacter:
     if not isinstance(character, DirichletCharacter):
         raise OperationDomainValidationError(
-            location=("character",),
+            location=("primitive_character",),
             code="dirichlet_character.character_type",
             message="character must be a Dirichlet character value",
         )
@@ -657,14 +672,6 @@ def dirichlet_character_kernel(
             code="dirichlet_character.kernel.work_bound",
             message="kernel evaluation exceeds its bounded dual-coordinate work",
         )
-    character_size = len(encode_strict_json(character.model_dump(mode="json")))
-    output_bound = character_size + len(character.group.unit_residues) * 16 + 256
-    if output_bound > 1_000_000:
-        raise OperationResourceAdmissionError(
-            location=("character", "group"),
-            code="dirichlet_character.kernel.output_bound",
-            message="complete character kernel exceeds its serialized output bound",
-        )
     residues = tuple(
         residue
         for residue, row in zip(
@@ -700,7 +707,7 @@ def dirichlet_character_parity(
     if value is None:
         raise RuntimeError("minus one must be a unit modulo every positive modulus")
     if value.exponent == 0:
-        parity = "EVEN"
+        parity: Literal["EVEN", "ODD"] = "EVEN"
     elif (
         character.group.exponent % 2 == 0
         and value.exponent == character.group.exponent // 2
@@ -866,9 +873,13 @@ def dirichlet_character_conductor(
         if target_exponent % scale:
             raise RuntimeError("induced character value is outside the target field")
         primitive_coordinates.append((target_exponent // scale) % target_order)
-    primitive_character = DirichletCharacter.model_construct(
+    primitive_character_value = DirichletCharacter.model_construct(
         group=primitive_group,
         coordinates=tuple(primitive_coordinates),
+    )
+    primitive_character = PrimitiveDirichletCharacter.model_construct(
+        character=primitive_character_value,
+        conductor=conductor,
     )
     return DirichletCharacterConductorResult._from_kernel(
         character, conductor, primitive_character
@@ -1209,20 +1220,18 @@ def dirichlet_character_group_enumerate(
             message="complete dual character enumeration exceeds the admitted work envelope",
         )
 
-    group_bytes = len(encode_strict_json(group.model_dump(mode="json")))
-    coordinate_row_bytes = (
-        2
-        + max(rank - 1, 0)
-        + sum(len(str(order - 1)) for order in group.generator_orders)
+    coordinate_cells = count * rank
+    coordinate_digits = count * sum(
+        len(format_canonical_integer(max(order - 1, 0)))
+        for order in group.generator_orders
     )
-    coordinates_bytes = count * coordinate_row_bytes + max(count - 1, 0)
-    output_bytes_bound = group_bytes + coordinates_bytes + 128
-    if output_bytes_bound > CanonicalLimits().max_output_bytes:
-        raise OperationResourceAdmissionError(
-            location=("group",),
-            code="dirichlet_character.enumeration_output_bound",
-            message="complete dual character family exceeds the canonical output limit",
-        )
+    _admit_result_allocation(
+        cells=coordinate_cells,
+        digits=coordinate_digits,
+        location=("group",),
+        code="dirichlet_character.enumeration_allocation_bound",
+        message="complete dual character family exceeds its admitted coordinate allocation",
+    )
 
     coordinates = tuple(product(*(range(order) for order in group.generator_orders)))
     if len(coordinates) != count:
@@ -1236,7 +1245,7 @@ def dirichlet_character_fourier_matrix(
     """Return the exact complete character table over the canonical unit axis.
 
     Each entry is the exponent of the group's common primitive root. Complete
-    work and serialized output are admitted before constructing any matrix row.
+    work and exact result allocation are admitted before constructing rows.
     """
 
     group = require_complete_character_group(group)
@@ -1250,31 +1259,20 @@ def dirichlet_character_fourier_matrix(
             message="complete character Fourier matrix exceeds the admitted work envelope",
         )
 
-    group_bytes = len(encode_strict_json(group.model_dump(mode="json")))
-    digit_bound = len(str(max(group.exponent - 1, 0)))
-    matrix_bytes_bound = count * count * (digit_bound + 2) + count + 2
-    coordinate_row_bytes = (
-        2
-        + max(rank - 1, 0)
-        + sum(len(str(order - 1)) for order in group.generator_orders)
+    matrix_cells = count * count + count * rank
+    exponent_digits = len(format_canonical_integer(max(group.exponent - 1, 0)))
+    coordinate_digits = count * sum(
+        len(format_canonical_integer(max(axis_order - 1, 0)))
+        for axis_order in group.generator_orders
     )
-    axes_bytes_bound = count * coordinate_row_bytes + max(count - 1, 0)
-    unit_axis_bytes_bound = sum(
-        len(str(residue)) + 1 for residue in group.unit_residues
+    matrix_digits = count * count * exponent_digits + coordinate_digits
+    _admit_result_allocation(
+        cells=matrix_cells,
+        digits=matrix_digits,
+        location=("group",),
+        code="dirichlet_character.fourier_allocation_bound",
+        message="complete character Fourier matrix exceeds its admitted exact allocation",
     )
-    output_bytes_bound = (
-        group_bytes
-        + matrix_bytes_bound
-        + axes_bytes_bound
-        + unit_axis_bytes_bound
-        + 512
-    )
-    if output_bytes_bound > CanonicalLimits().max_output_bytes:
-        raise OperationResourceAdmissionError(
-            location=("group",),
-            code="dirichlet_character.fourier.output_bound",
-            message="complete character Fourier matrix exceeds the canonical output limit",
-        )
 
     character_coordinates = tuple(
         product(*(range(order) for order in group.generator_orders))
@@ -1338,22 +1336,21 @@ def dirichlet_character_residue_indicator_expansion(
             code="dirichlet_character.residue_indicator.work_bound",
             message="residue-class indicator expansion exceeds the admitted work envelope",
         )
-    group_bytes = len(encode_strict_json(group.model_dump(mode="json")))
-    coordinate_row_bytes = (
-        2
-        + max(rank - 1, 0)
-        + sum(len(str(order - 1)) for order in group.generator_orders)
-    )
-    exponent_digits = len(str(max(group.exponent - 1, 0)))
-    output_bytes_bound = (
-        group_bytes + count * (coordinate_row_bytes + exponent_digits + 8) + 512
-    )
-    if output_bytes_bound > CanonicalLimits().max_output_bytes:
-        raise OperationResourceAdmissionError(
-            location=("group",),
-            code="dirichlet_character.residue_indicator.output_bound",
-            message="residue-class indicator expansion exceeds the canonical output limit",
+    result_cells = count * (rank + 1)
+    result_digits = count * (
+        len(format_canonical_integer(max(group.exponent - 1, 0)))
+        + sum(
+            len(format_canonical_integer(max(axis_order - 1, 0)))
+            for axis_order in group.generator_orders
         )
+    )
+    _admit_result_allocation(
+        cells=result_cells,
+        digits=result_digits,
+        location=("group",),
+        code="dirichlet_character.residue_indicator_allocation_bound",
+        message="residue-class indicator expansion exceeds its admitted exact allocation",
+    )
 
     target_unit_coordinates = group.unit_coordinates[unit_index]
     character_coordinates = tuple(
@@ -1405,18 +1402,11 @@ def dirichlet_character_inflate(
             message="target modulus must be a multiple of the source modulus",
         )
 
-    target_group = character_group(target_modulus)
-    source_exponent = source_group.exponent
-    target_exponent = target_group.exponent
-    if target_exponent % source_exponent:
-        raise RuntimeError(
-            "surjective unit reduction must make the source exponent divide the target exponent"
-        )
-
-    target_units = target_group.unit_residues
-    target_rank = len(target_group.generator_orders)
+    _admit_character_group(target_modulus)
     source_rank = len(source_group.generator_orders)
-    work_bound = len(target_units) * max(1, source_rank) + target_rank * max(
+    target_units_bound = target_modulus
+    target_rank_bound = target_modulus.bit_length()
+    work_bound = target_units_bound * max(1, source_rank) + target_rank_bound * max(
         1, source_rank
     )
     if work_bound > MAX_CHARACTER_ENUMERATION_WORK:
@@ -1425,29 +1415,27 @@ def dirichlet_character_inflate(
             code="dirichlet_character.inflation.work_bound",
             message="inflation exceeds its admitted coordinate-map work bound",
         )
-    # Bound the complete source-linked output using the known parent sizes
-    # before deriving target coordinates or the residue reduction rows.
-    source_bytes = len(encode_strict_json(character.model_dump(mode="json")))
-    target_group_bytes = len(encode_strict_json(target_group.model_dump(mode="json")))
-    target_coordinate_bytes = 2 + sum(
-        len(str(axis_order - 1)) + 1 for axis_order in target_group.generator_orders
+    result_cells = target_rank_bound + 2 * target_units_bound
+    target_digits = len(format_canonical_integer(max(target_modulus - 1, 0)))
+    result_digits = target_rank_bound * target_digits + target_units_bound * (
+        target_digits + len(format_canonical_integer(source_modulus - 1))
     )
-    reduction_bytes = 4 + len(target_units) * (
-        len(str(target_modulus - 1)) + len(str(source_modulus - 1)) + 2
+    _admit_result_allocation(
+        cells=result_cells,
+        digits=result_digits,
+        location=("target_modulus",),
+        code="dirichlet_character.inflation_allocation_bound",
+        message="inflation exceeds its admitted unit-map allocation",
     )
-    output_bytes_bound = (
-        source_bytes
-        + target_group_bytes
-        + target_coordinate_bytes
-        + reduction_bytes
-        + 256
-    )
-    if output_bytes_bound > CanonicalLimits().max_output_bytes:
-        raise OperationResourceAdmissionError(
-            location=("target_modulus",),
-            code="dirichlet_character.inflation.output_bound",
-            message="inflation value exceeds the canonical output byte bound",
+
+    target_group = _character_group_from_admitted(target_modulus)
+    source_exponent = source_group.exponent
+    target_exponent = target_group.exponent
+    if target_exponent % source_exponent:
+        raise RuntimeError(
+            "surjective unit reduction must make the source exponent divide the target exponent"
         )
+    target_units = target_group.unit_residues
 
     source_coordinates_by_residue = dict(
         zip(source_group.unit_residues, source_group.unit_coordinates, strict=True)
@@ -1497,21 +1485,6 @@ def dirichlet_character_inflate(
     )
 
 
-def _character_group_wire_bytes_upper_bound(
-    modulus: int, unit_count: int, rank: int
-) -> int:
-    """Conservatively bound canonical group JSON from admitted dimensions."""
-
-    digits = len(str(max(1, modulus)))
-    return (
-        512
-        + 8 * digits
-        + unit_count * (digits + 2)
-        + unit_count * rank * (digits + 2)
-        + 3 * rank * (digits + 2)
-    )
-
-
 def _admit_character_restriction(source_modulus: int, target_modulus: int) -> None:
     """Admit both groups, complete fiber work, and largest output from moduli."""
 
@@ -1535,37 +1508,22 @@ def _admit_character_restriction(source_modulus: int, target_modulus: int) -> No
             message="factor-down unit mapping exceeds its admitted work bound",
         )
 
-    source_group_bytes = _character_group_wire_bytes_upper_bound(
-        source_modulus, source_units, source_rank
+    result_cells = 2 * target_units + target_rank
+    target_digits = len(format_canonical_integer(max(target_modulus - 1, 0)))
+    source_digits = len(format_canonical_integer(max(source_modulus - 1, 0)))
+    result_digits = (
+        target_units * (target_digits + source_digits)
+        + target_rank * target_digits
+        + 4 * source_digits
+        + target_digits
     )
-    source_character_bytes = (
-        source_group_bytes + 128 + source_rank * (len(str(source_modulus)) + 2)
+    _admit_result_allocation(
+        cells=result_cells,
+        digits=result_digits,
+        location=("target_modulus",),
+        code="dirichlet_character.restriction_allocation_bound",
+        message="factor-down result exceeds its admitted unit-map allocation",
     )
-    target_group_bytes = _character_group_wire_bytes_upper_bound(
-        target_modulus, target_units, target_rank
-    )
-    target_coordinates_bytes = 2 + target_rank * (len(str(target_modulus)) + 2)
-    lift_map_bytes = 4 + target_units * (
-        len(str(target_modulus - 1)) + len(str(source_modulus - 1)) + 2
-    )
-    success_bytes = (
-        source_character_bytes
-        + target_group_bytes
-        + target_coordinates_bytes
-        + lift_map_bytes
-        + 256
-    )
-    obstruction_bytes = (
-        source_character_bytes
-        + target_group_bytes
-        + 2 * (2 * len(str(source_modulus)) + 64)
-    )
-    if max(success_bytes, obstruction_bytes) > CanonicalLimits().max_output_bytes:
-        raise OperationResourceAdmissionError(
-            location=("target_modulus",),
-            code="dirichlet_character.restriction.output_bound",
-            message="factor-down result exceeds the canonical output byte bound",
-        )
 
 
 def _first_restriction_fiber_obstruction(
@@ -1631,7 +1589,13 @@ def _restriction_source_modulus(
             code="dirichlet_character.group.modulus_bound",
             message="source modulus exceeds the 2,048 character-group bound",
         )
-    if not 1 <= target_modulus <= MAX_CHARACTER_GROUP_MODULUS:
+    if target_modulus < 1:
+        raise OperationDomainValidationError(
+            location=("target_modulus",),
+            code="dirichlet_character.restriction.modulus_positive",
+            message="target modulus must be positive",
+        )
+    if target_modulus > MAX_CHARACTER_GROUP_MODULUS:
         raise OperationResourceAdmissionError(
             location=("target_modulus",),
             code="dirichlet_character.group.modulus_bound",
@@ -1959,17 +1923,13 @@ def _dirichlet_character_generalized_bernoulli(
             code="dirichlet_character.generalized_bernoulli.work_bound",
             message="generalized Bernoulli evaluation exceeds its admitted exact work envelope",
         )
-    result_bytes = (
-        2_048
-        + modulus * (8 + 6 * rank)
-        + degree * (2 * (MAX_CYCLIC_FIELD_ELEMENT_DIGITS + 12) + 32)
+    _admit_result_allocation(
+        cells=2 * degree,
+        digits=2 * degree * MAX_CYCLIC_FIELD_ELEMENT_DIGITS,
+        location=("character", "group"),
+        code="dirichlet_character.generalized_bernoulli.result_allocation_bound",
+        message="generalized Bernoulli value exceeds its admitted coefficient allocation",
     )
-    if result_bytes > MAX_GENERALIZED_BERNOULLI_RESULT_BYTES:
-        raise OperationResourceAdmissionError(
-            location=("character", "group"),
-            code="dirichlet_character.generalized_bernoulli.result_bytes_bound",
-            message="generalized Bernoulli result exceeds its admitted byte envelope",
-        )
 
     # The defining polynomial has degree at most 128, coefficients bounded by
     # 2**degree (Vieta's formula for unit-circle roots), and construction work
@@ -2094,17 +2054,13 @@ def dirichlet_character_generalized_bernoulli_prefix(
             code="dirichlet_character.generalized_bernoulli_prefix.work_bound",
             message="generalized Bernoulli prefix exceeds its admitted exact work envelope",
         )
-    result_bytes = (
-        2_048
-        + modulus * (8 + 6 * rank)
-        + count * degree * (2 * (MAX_CYCLIC_FIELD_ELEMENT_DIGITS + 12) + 32)
+    _admit_result_allocation(
+        cells=2 * count * degree,
+        digits=2 * count * degree * MAX_CYCLIC_FIELD_ELEMENT_DIGITS,
+        location=("character", "group"),
+        code="dirichlet_character.generalized_bernoulli_prefix.result_allocation_bound",
+        message="generalized Bernoulli prefix exceeds its admitted coefficient allocation",
     )
-    if result_bytes > MAX_GENERALIZED_BERNOULLI_RESULT_BYTES:
-        raise OperationResourceAdmissionError(
-            location=("character", "group"),
-            code="dirichlet_character.generalized_bernoulli_prefix.result_bytes_bound",
-            message="generalized Bernoulli prefix exceeds its admitted byte envelope",
-        )
 
     cyclotomic_coefficients = _generalized_bernoulli_cyclotomic_polynomial(
         value_order, degree
@@ -2194,7 +2150,7 @@ def _sequence_twist_input_digit_bounds(
     max_denominator_digits = 1
     for value in sequence.values:
         coefficients = _sequence_twist_source_coefficients(sequence, value)
-        if isinstance(sequence, FiniteCyclotomicSequence):
+        if isinstance(value, RationalCyclotomicElement):
             coordinates = value.coefficients_ascending
         else:
             coordinates = (CanonicalRational.from_fraction(coefficients[0]),)
@@ -2214,17 +2170,11 @@ def _sequence_twist_input_digit_bounds(
 
 
 def _admit_sequence_twist_source(
-    request: DirichletCharacterSequenceTwistRequest,
+    sequence: FiniteIntegerSequence | FiniteRationalSequence | FiniteCyclotomicSequence,
+    index_origin: int | None,
 ) -> tuple[
     FiniteIntegerSequence | FiniteRationalSequence | FiniteCyclotomicSequence, int
 ]:
-    if not isinstance(request, DirichletCharacterSequenceTwistRequest):
-        raise OperationDomainValidationError(
-            location=("request",),
-            code="dirichlet_character.sequence_twist.request_type",
-            message="sequence twist requires a typed request",
-        )
-    sequence = request.sequence
     if not isinstance(
         sequence,
         (FiniteIntegerSequence, FiniteRationalSequence, FiniteCyclotomicSequence),
@@ -2240,16 +2190,35 @@ def _admit_sequence_twist_source(
             code="dirichlet_character.sequence_twist.sequence_shape",
             message="source sequence values are malformed",
         )
-    index_origin = (
-        sequence.index_origin
-        if isinstance(sequence, FiniteCyclotomicSequence)
-        else request.index_origin
-    )
-    if type(index_origin) is not int or not -(2**31) <= index_origin <= 2**31 - 1:
+    if index_origin is not None and (
+        type(index_origin) is not int or not -(2**31) <= index_origin <= 2**31 - 1
+    ):
         raise OperationDomainValidationError(
             location=("index_origin",),
             code="dirichlet_character.sequence_twist.index_origin",
             message="index origin must be a signed 32-bit integer",
+        )
+    if isinstance(sequence, FiniteCyclotomicSequence):
+        try:
+            sequence = FiniteCyclotomicSequence.model_validate(sequence.model_dump())
+        except (ValidationError, AttributeError, TypeError, ValueError) as exc:
+            raise OperationDomainValidationError(
+                location=("sequence",),
+                code="dirichlet_character.sequence_twist.sequence_invalid",
+                message="cyclotomic source sequence is malformed",
+            ) from exc
+        if index_origin is not None and index_origin != sequence.index_origin:
+            raise OperationDomainValidationError(
+                location=("index_origin",),
+                code="dirichlet_character.sequence_twist.index_origin_mismatch",
+                message="an existing cyclotomic sequence keeps its authored index origin",
+            )
+        index_origin = sequence.index_origin
+    if index_origin is None:
+        raise OperationDomainValidationError(
+            location=("index_origin",),
+            code="dirichlet_character.sequence_twist.index_origin_required",
+            message="integer and rational sequences require an explicit index origin",
         )
     return sequence, index_origin
 
@@ -2276,11 +2245,14 @@ def _admit_sequence_twist_field(
 
 
 def dirichlet_character_sequence_twist(
-    request: DirichletCharacterSequenceTwistRequest,
+    sequence: FiniteIntegerSequence | FiniteRationalSequence | FiniteCyclotomicSequence,
+    character: DirichletCharacter,
+    *,
+    index_origin: int | None = None,
 ) -> FiniteCyclotomicSequence:
     r"""Return ``chi(n) a_n`` in the minimal exact cyclotomic coefficient field."""
-    sequence, index_origin = _admit_sequence_twist_source(request)
-    character = _require_character(request.character)
+    sequence, index_origin = _admit_sequence_twist_source(sequence, index_origin)
+    character = _require_character(character)
     target_order, value_order, degree = _admit_sequence_twist_field(sequence, character)
     values = sequence.values
     _, max_numerator_digits, max_denominator_digits = (
@@ -2310,16 +2282,6 @@ def dirichlet_character_sequence_twist(
             code="dirichlet_character.sequence_twist.work_bound",
             message="twist exceeds its admitted exact lookup and coefficient work",
         )
-    max_result_bytes = 1_024 + coefficient_cells * (
-        2 * MAX_CYCLIC_FIELD_ELEMENT_DIGITS + 40
-    )
-    if max_result_bytes > MAX_CHARACTER_SEQUENCE_TWIST_BYTES:
-        raise OperationResourceAdmissionError(
-            location=("sequence",),
-            code="dirichlet_character.sequence_twist.result_bytes_bound",
-            message="twisted sequence exceeds its admitted canonical output-byte bound",
-        )
-
     # The field polynomial has order <= 128 and degree <= 128; its construction
     # is therefore admitted before materializing the exact defining polynomial.
     polynomial = _generalized_bernoulli_cyclotomic_polynomial(target_order, degree)
@@ -2479,7 +2441,16 @@ def _compute_generalized_gauss_sum(
             code=f"dirichlet_character.{error_name}.frequency_type",
             message="frequency must be a strict integer",
         )
-    _require_bounded_digits(frequency)
+    try:
+        _admit_character_integer(
+            frequency, type_code=f"dirichlet_character.{error_name}.frequency_type"
+        )
+    except PydanticCustomError as exc:
+        raise OperationResourceAdmissionError(
+            location=("frequency",),
+            code=f"dirichlet_character.{error_name}.frequency_digit_bound",
+            message="frequency exceeds the admitted exact integer digit bound",
+        ) from exc
     group = character.group
     modulus = group.modulus
     frequency_residue = frequency % modulus
@@ -2575,7 +2546,7 @@ def _compute_generalized_gauss_sum(
     value = RationalCyclotomicElement(
         field=RationalCyclotomicField(order=order),
         coefficients_ascending=tuple(
-            CanonicalRational.from_fraction(coefficient)
+            CanonicalRational.from_integer_ratio(coefficient, 1)
             for coefficient in values[:degree]
         ),
     )
@@ -2608,18 +2579,22 @@ def dirichlet_character_gauss_sum(
 
 
 def dirichlet_character_primitive_gauss_norm(
-    character: DirichletCharacter,
+    primitive_character: PrimitiveDirichletCharacter,
 ) -> DirichletCharacterPrimitiveGaussNormResult:
-    """Compute |tau(chi)|^2 after deriving primitivity from the source character.
+    """Compute |tau(chi)|^2 for a typed primitive-character claim.
 
     The complex absolute value is represented exactly as tau(chi) times its
-    cyclotomic conjugate. The operation accepts only characters whose computed
-    conductor equals their modulus and checks that this product is that modulus.
+    cyclotomic conjugate. The operation checks the claimed conductor against
+    the exact least conductor before relying on the primitive-character theorem.
     """
-    character = _require_character(character)
-    conductor = dirichlet_character_conductor(character)
+    if not isinstance(primitive_character, PrimitiveDirichletCharacter):
+        primitive_character = PrimitiveDirichletCharacter.model_validate(
+            primitive_character
+        )
+    character = _require_character(primitive_character.character)
+    exact_conductor = dirichlet_character_conductor(character).conductor
     modulus = character.group.modulus
-    if conductor.conductor != modulus:
+    if exact_conductor != primitive_character.conductor:
         raise OperationDomainValidationError(
             location=("character",),
             code="dirichlet_character.primitive_gauss_norm.requires_primitive",
@@ -2658,8 +2633,7 @@ def dirichlet_character_primitive_gauss_norm(
         ),
     )
     return DirichletCharacterPrimitiveGaussNormResult(
-        character=character,
-        conductor=modulus,
+        primitive_character=primitive_character,
         gauss_sum=gauss_sum,
         norm_squared=norm,
     )

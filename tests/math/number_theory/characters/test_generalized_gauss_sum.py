@@ -3,10 +3,8 @@ from __future__ import annotations
 from math import lcm
 
 import pytest
-from pydantic_core import PydanticCustomError
 from sympy import I, Rational, exp, pi, to_number_field
 
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.matrices.cyclic_linear._models import RationalCyclotomicField
 from jacobian.math.number_theory.characters._models import (
@@ -61,7 +59,7 @@ def test_generalized_gauss_sum_matches_direct_exact_residue_sum(
     )
 
 
-def test_generalized_gauss_sum_is_discoverable_and_composes_through_catalog() -> None:
+def test_generalized_gauss_sum_is_declared_and_composes_from_its_manifest() -> None:
     tool = next(
         item
         for item in TOOLS
@@ -75,10 +73,6 @@ def test_generalized_gauss_sum_is_discoverable_and_composes_through_catalog() ->
     assert all(
         coefficient.as_fraction() == 0
         for coefficient in result.value.coefficients_ascending
-    )
-    assert (
-        Catalog(TOOLS).operation("dirichlet_character.generalized_gauss_sum.compute")
-        is tool
     )
 
 
@@ -97,7 +91,7 @@ def test_generalized_gauss_sum_preserves_principal_nonunit_frequency() -> None:
 
 def test_generalized_gauss_sum_admits_frequency_and_field_before_sum() -> None:
     character = dirichlet_character(character_group(3), (0,))
-    with pytest.raises(PydanticCustomError):
+    with pytest.raises(OperationResourceAdmissionError):
         dirichlet_character_generalized_gauss_sum(character, 10**256)
 
     large_character = dirichlet_character(character_group(257), (0,))

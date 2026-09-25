@@ -19,7 +19,7 @@ coefficients in ascending power-basis order. This gives an explicit embedding
 for every character value and a stable field identity for downstream exact
 operations.
 
-The operation admits modulus at most 2,048, cyclotomic order at most 256, at
+The operation admits modulus at most 2,048, cyclotomic order at most 128, at
 most 1,000,000 residue-and-field work units, and the shared 256-digit
 cyclotomic coefficient limit. It admits the field construction before forming
 its defining polynomial and proves a coefficient-growth bound from the exact

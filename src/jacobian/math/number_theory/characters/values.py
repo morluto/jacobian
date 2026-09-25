@@ -64,6 +64,26 @@ class DirichletCharacter(StrictModel):
         return self
 
 
+class PrimitiveDirichletCharacter(StrictModel):
+    """A character claimed primitive, bound to its proposed exact conductor.
+
+    Construction records the mathematical claim and its modulus. Consumers
+    relying on primitivity establish that claim at their operation boundary.
+    """
+
+    character: DirichletCharacter
+    conductor: StrictInt = Field(ge=1, le=MAX_CHARACTER_GROUP_MODULUS)
+
+    @model_validator(mode="after")
+    def require_modulus_matches_conductor(self) -> Self:
+        if self.character.group.modulus != self.conductor:
+            raise _validation_error(
+                "primitive_character_modulus_mismatch",
+                "primitive character modulus must equal its claimed conductor",
+            )
+        return self
+
+
 class DirichletCharacterKernel(StrictModel):
     """Complete kernel of one character as canonical unit residues."""
 

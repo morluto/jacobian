@@ -885,6 +885,10 @@ def _admit_subsequential_image(
         pair_bound * transducer.input_alphabet_size
         + transition_output_edges
         + final_output_edges
+        # Product exploration scans each emitted word once, then NFA expansion
+        # scans it again while creating its path.
+        + transition_output_edges
+        + final_output_edges
         + nfa_state_bound
         + nfa_transition_bound
     )

@@ -21,8 +21,6 @@ from jacobian.math.number_theory.kempner import (
 )
 from jacobian.math.number_theory.kempner._models import (
     MAX_KEMPNER_SERIES_NUMERALS,
-    KempnerDecimalEnclosure,
-    KempnerDecimalEnclosureRequest,
     KempnerSeriesEnclosure,
     KempnerSeriesEnclosureRequest,
 )
@@ -184,17 +182,16 @@ def test_dense_catalog_operation_round_trips_exact_interval() -> None:
     tool = next(
         tool
         for tool in TOOLS
-        if tool.operation_id == "number_theory.kempner_series.decimal_enclose"
+        if tool.operation_id == "number_theory.kempner_series.enclose"
     )
-    request = KempnerDecimalEnclosureRequest(
-        digit_set=KempnerDigitSet(base=10, allowed_digits=tuple(range(9))),
-        cutoff=6,
-        precision=24,
+    request = KempnerSeriesEnclosureRequest(
+        digit_set=KempnerDigitSet(base=10, allowed_digits=(1,)),
+        cutoff=2,
     )
     result = tool.run(request)
-    assert isinstance(result, KempnerDecimalEnclosure)
+    assert isinstance(result, KempnerSeriesEnclosure)
     assert (
-        KempnerDecimalEnclosure.model_validate_json(result.model_dump_json()) == result
+        KempnerSeriesEnclosure.model_validate_json(result.model_dump_json()) == result
     )
 
 

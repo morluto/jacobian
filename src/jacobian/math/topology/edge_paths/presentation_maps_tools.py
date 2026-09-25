@@ -140,7 +140,23 @@ TOOLS = (
             "basepoint transport isomorphism on pi1",
             "conjugate loop under a basepoint path",
         ),
-        examples=(),
+        examples=(
+            OperationExample(
+                name="circle_basepoint_change",
+                description=(
+                    "Transport the canonical fundamental-group generator of a "
+                    "3-edge circle along one edge."
+                ),
+                input={
+                    "path": {
+                        "complex": _CIRCLE,
+                        "source_base_vertex": "a",
+                        "target_base_vertex": "b",
+                        "path_vertices": ["a", "b"],
+                    }
+                },
+            ),
+        ),
     ),
 )
 __all__ = ["TOOLS"]

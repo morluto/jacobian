@@ -826,6 +826,7 @@ __all__ = [
     "PresentationMapCompositionResult",
     "PresentationRelatorImage",
     "compose_fundamental_group_maps",
+    "change_fundamental_group_basepoint",
     "direct_relator_match",
     "induced_fundamental_group_map",
 ]

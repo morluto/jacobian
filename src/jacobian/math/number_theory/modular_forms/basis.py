@@ -1520,7 +1520,7 @@ def modular_form_space_inclusion(
     if issue is not None:
         reason, message = issue
         location = ("source_space",)
-        if source_space != target_space and source_space is not None and target_space is not None:
+        if reason == "inclusion_weight" or reason == "inclusion_level":
             location = ("target_space",)
         raise OperationDomainValidationError(
             location=location,

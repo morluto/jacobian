@@ -32,6 +32,7 @@ def test_exact_public_api_symbols() -> None:
         "replay_firing_sequence",
         "reverse_petri_net",
         "siphon_trap_family",
+        "shortest_firing_sequences",
         "state_equation_target",
         "verify_enabled_transitions",
         "verify_fire_transition",

@@ -30,6 +30,9 @@ from jacobian.math.logic.automata.petri_nets.operations import (
     verify_reachability_graph,
     verify_siphon_trap,
 )
+from jacobian.math.logic.automata.petri_nets.shortest_paths.operations import (
+    shortest_firing_sequences,
+)
 from jacobian.math.logic.automata.petri_nets.values import (
     Marking,
     PetriNet,
@@ -61,6 +64,7 @@ __all__ = [
     "replay_firing_sequence",
     "reverse_petri_net",
     "siphon_trap_family",
+    "shortest_firing_sequences",
     "state_equation_target",
     "verify_enabled_transitions",
     "verify_fire_transition",

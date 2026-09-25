@@ -31,12 +31,26 @@ result-binding obstruction check. The aggregate worst case is therefore
 1,000,000 candidate checks per accepted call, which is part of this operation's
 advertised envelope rather than a universal result-construction rule.
 
-This initial operation deliberately does not construct twists, minors, binary
-matrix presentations, graph conversions, or interlace polynomials. Those are
-separate mathematical postconditions rather than fields of the recognition
-result.
-
 `delta_matroid.twist.compute` returns the canonical twisted `FiniteDeltaMatroid`.
-Width `max(|F|)-min(|F|)` is a native projection of the feasible family and is
-not a catalog operation. It scans every retained feasible-row length of the
-canonical value and has no extra row ceiling.
+`delta_matroid.lower_matroid.compute` and
+`delta_matroid.upper_matroid.compute` return `FiniteBasisMatroid` values whose
+bases are, respectively, all minimum-cardinality or all maximum-cardinality
+feasible sets. They preserve the source ground axis and include
+`source_feasible_indices`, aligned with the result bases, as an exact map back
+to the source's canonical feasible rows. The source symmetric-exchange axiom is
+replayed at each operation boundary. The basis-family exchange axiom is checked
+by the result carrier.
+The lower/upper matroid theorem is stated in Section 6.1 of Dupont, Fink, and
+Moci, [*Universal Tutte characters via combinatorial coalgebras*](https://doi.org/10.5802/alco.35).
+
+These conversions retain the 16,384 source-membership, 2,048 UTF-8 source-label,
+and 250,000 source exchange-work limits. The target `FiniteBasisMatroid` admits
+at most 64 ground labels, 4,096 basis rows, 65,536 basis memberships, 1,024
+UTF-8 bytes per label, 16,384 aggregate label bytes, and 2,000,000 worst-case
+basis-exchange candidate checks. Output bounds are checked before materializing
+the selected basis family. A source with more than 64 ground elements remains a
+valid delta-matroid input but is refused for these conversions because the
+canonical basis carrier cannot represent that output size.
+
+Width `max(|F|)-min(|F|)` is also available as
+`delta_matroid.width.compute`; it scans each retained feasible-row length.

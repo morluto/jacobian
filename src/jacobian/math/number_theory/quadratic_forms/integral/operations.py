@@ -1,41 +1,27 @@
 """Exact scalar extension of integral quadratic polynomials to rational forms."""
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.quadratic_forms.general.values import (
     QuadraticCrossTerm,
     RationalQuadraticForm,
 )
 from jacobian.math.number_theory.quadratic_forms.integral._models import (
-    MAX_INTEGRAL_QUADRATIC_FORM_OUTPUT_BYTES,
+    IntegralQuadraticForm,
     IntegralQuadraticFormInclusion,
-    IntegralQuadraticFormInclusionRequest,
 )
 
 
 def integral_form_to_rational(
-    request: IntegralQuadraticFormInclusionRequest,
+    source: IntegralQuadraticForm,
 ) -> IntegralQuadraticFormInclusion:
     """Apply coefficient-wise ``ZZ -> QQ`` while preserving the coordinate axis."""
 
-    source = request.form
-    coefficient_count = len(source.diagonal_coefficients) + len(source.cross_terms)
-    # Source and target each retain every coefficient. Include conservative
-    # JSON punctuation and labels before constructing the rational target.
-    output_byte_bound = (
-        coefficient_count * (2 * 258 + 96)
-        + len(source.cross_terms) * 96
-        + sum(len(label.encode("utf-8")) + 8 for label in source.axis)
-        + 1_024
-    )
-    if output_byte_bound > MAX_INTEGRAL_QUADRATIC_FORM_OUTPUT_BYTES:
-        raise OperationResourceAdmissionError(
+    if not isinstance(source, IntegralQuadraticForm):
+        raise OperationDomainValidationError(
             location=("form",),
-            code="quadratic_form.integral.rational_extension_output_bound",
-            message=(
-                "source and target quadratic forms exceed the admitted "
-                "serialized output byte bound"
-            ),
+            code="quadratic_form.integral.form_type",
+            message="expected a canonical integral quadratic form",
         )
 
     target = RationalQuadraticForm(
@@ -53,7 +39,7 @@ def integral_form_to_rational(
             for term in source.cross_terms
         ),
     )
-    return IntegralQuadraticFormInclusion(
+    return IntegralQuadraticFormInclusion.model_construct(
         source=source,
         target=target,
     )

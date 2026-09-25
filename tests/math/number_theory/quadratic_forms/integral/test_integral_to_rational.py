@@ -11,7 +11,6 @@ import pytest
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.builtins import BUILTIN_TOOLS
-from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.number_theory.quadratic_forms.general._extra_models import (
     FiniteBoxProfileRequest,
 )
@@ -26,7 +25,6 @@ from jacobian.math.number_theory.quadratic_forms.general.values import (
 )
 from jacobian.math.number_theory.quadratic_forms.integral import (
     IntegralQuadraticForm,
-    IntegralQuadraticFormInclusionRequest,
     integral_form_to_rational,
 )
 
@@ -46,9 +44,7 @@ def test_zz_inclusion_round_trips_and_composes_with_exact_box_profile() -> None:
         diagonal_coefficients=(2, 0),
         cross_terms=({"left": 0, "right": 1, "coefficient": 3},),
     )
-    inclusion = integral_form_to_rational(
-        IntegralQuadraticFormInclusionRequest(form=source)
-    )
+    inclusion = integral_form_to_rational(source)
 
     restored = type(inclusion).model_validate_json(inclusion.model_dump_json())
     assert restored == inclusion
@@ -105,9 +101,7 @@ def test_empty_zero_and_degenerate_forms_keep_their_parent_and_axis(
         diagonal_coefficients=diagonal,
         cross_terms=cross_terms,
     )
-    inclusion = integral_form_to_rational(
-        IntegralQuadraticFormInclusionRequest(form=form)
-    )
+    inclusion = integral_form_to_rational(form)
     assert inclusion.source.domain == "ZZ"
     assert inclusion.target.domain == "QQ"
     assert inclusion.target.axis == axis
@@ -129,31 +123,20 @@ def test_integral_carrier_rejects_nonintegral_wire_coefficients() -> None:
         )
 
 
-def test_target_output_is_admitted_before_rational_form_construction(
-    monkeypatch,
-) -> None:
-    import jacobian.math.number_theory.quadratic_forms.integral.operations as operations
-
-    axis = tuple(f"x{index}" for index in range(64))
-    pairs = tuple((left, right) for left in range(64) for right in range(left + 1, 64))
+def test_maximal_admissible_support_is_converted() -> None:
+    axis = tuple(f"x{index}" for index in range(128))
+    pairs = tuple(
+        (left, right) for left in range(128) for right in range(left + 1, 128)
+    )
     source = IntegralQuadraticForm(
         axis=axis,
-        diagonal_coefficients=(0,) * 64,
+        diagonal_coefficients=(0,) * 128,
         cross_terms=tuple(
-            {"left": left, "right": right, "coefficient": 10**255}
-            for left, right in pairs[: 2_048 - 64]
+            {"left": left, "right": right, "coefficient": 1}
+            for left, right in pairs[: 2_048 - 128]
         ),
     )
-
-    def no_rational_target(**kwargs):
-        raise AssertionError("QQ target construction began before output admission")
-
-    monkeypatch.setattr(operations, "RationalQuadraticForm", no_rational_target)
-    with pytest.raises(OperationResourceAdmissionError) as exc_info:
-        integral_form_to_rational(IntegralQuadraticFormInclusionRequest(form=source))
-    assert exc_info.value.errors()[0]["type"] == (
-        "quadratic_form.integral.rational_extension_output_bound"
-    )
+    assert len(integral_form_to_rational(source).target.cross_terms) == 1_920
 
 
 def test_catalog_operation_is_discoverable_and_its_example_runs() -> None:

@@ -21,7 +21,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
         request_type=IntegralQuadraticFormInclusionRequest,
         result_type=IntegralQuadraticFormInclusion,
-        run=native.integral_form_to_rational,
+        run=lambda request: native.integral_form_to_rational(request.form),
         tags=("quadratic-form", "integral", "coefficient-map", "exact"),
         discovery_terms=(
             "integral quadratic form over the integers",

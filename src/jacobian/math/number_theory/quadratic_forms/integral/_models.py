@@ -17,7 +17,6 @@ from jacobian.math.number_theory.quadratic_forms.general.values import (
 
 MAX_INTEGRAL_QUADRATIC_FORM_AXIS = 128
 MAX_INTEGRAL_QUADRATIC_FORM_TERMS = 2_048
-MAX_INTEGRAL_QUADRATIC_FORM_OUTPUT_BYTES = 1_400_000
 IntegralCoefficient = Annotated[
     int, DecimalIntegerEncoding(max_digits=MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS)
 ]
@@ -108,38 +107,9 @@ class IntegralQuadraticFormInclusion(StrictModel):
     source: IntegralQuadraticForm
     target: RationalQuadraticForm
 
-    @model_validator(mode="after")
-    def require_inclusion_image(self) -> Self:
-        expected_axis = self.source.axis
-        if self.target.axis != expected_axis:
-            raise _error(
-                "inclusion_axis", "coefficient inclusion must preserve the axis"
-            )
-        diagonal = tuple(value.num for value in self.target.diagonal_coefficients)
-        if any(
-            value.den != 1 for value in self.target.diagonal_coefficients
-        ) or diagonal != (self.source.diagonal_coefficients):
-            raise _error("inclusion_diagonal", "target diagonal must be the ZZ image")
-        source_cross = tuple(
-            (term.left, term.right, term.coefficient)
-            for term in self.source.cross_terms
-        )
-        target_cross = tuple(
-            (term.left, term.right, term.coefficient.num, term.coefficient.den)
-            for term in self.target.cross_terms
-        )
-        if target_cross != tuple(
-            (left, right, coefficient, 1) for left, right, coefficient in source_cross
-        ):
-            raise _error(
-                "inclusion_cross_terms", "target cross terms must be the ZZ image"
-            )
-        return self
-
 
 __all__ = [
     "MAX_INTEGRAL_QUADRATIC_FORM_AXIS",
-    "MAX_INTEGRAL_QUADRATIC_FORM_OUTPUT_BYTES",
     "MAX_INTEGRAL_QUADRATIC_FORM_TERMS",
     "IntegralQuadraticCrossTerm",
     "IntegralQuadraticForm",

@@ -276,7 +276,14 @@ def distance(
     """
 
     delta_matroid = _admit_direct_sum_source(delta_matroid, "delta_matroid")
-    require_twist_subset(delta_matroid, subset)
+    try:
+        require_twist_subset(delta_matroid, subset)
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("subset",),
+            code="delta_matroid.twist_subset",
+            message="subset must be a canonical in-range ground-index tuple",
+        ) from exc
     try:
         system = FiniteFeasibleSetSystem(
             ground=delta_matroid.ground, feasible=delta_matroid.feasible

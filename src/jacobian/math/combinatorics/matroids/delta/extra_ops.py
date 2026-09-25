@@ -309,6 +309,16 @@ def feasible_size_profile(d: FiniteDeltaMatroid) -> DeltaMatroidFeasibleSizeProf
     """
 
     d = _admit_delta(d)
+    # Bound family scanning before reconstruction/counting; memberships is the
+    # canonical row-work envelope.
+    from jacobian.math.combinatorics.matroids.delta.values import MAX_DELTA_MEMBERSHIPS
+
+    if len(d.feasible) > MAX_DELTA_MEMBERSHIPS:
+        raise OperationResourceAdmissionError(
+            location=("delta_matroid",),
+            code="delta_matroid.feasible_size_profile_work",
+            message="feasible family exceeds profile work envelope",
+        )
     entries = len(d.ground) + 1
     try:
         for label in d.ground:

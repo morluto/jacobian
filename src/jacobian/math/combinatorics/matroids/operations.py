@@ -361,6 +361,14 @@ def maximum_weight_independent_set_result(
             code="matroid.carrier",
             message="matroid must be a LinearMatroid",
         )
+    try:
+        matroid = LinearMatroid.model_validate(matroid.model_dump(mode="python"))
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("matroid",),
+            code="matroid.carrier",
+            message="matroid carrier is malformed",
+        ) from exc
     if not isinstance(weight_function, MatroidWeightFunction):
         raise OperationDomainValidationError(
             location=("weight_function",),

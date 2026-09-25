@@ -18,8 +18,10 @@ from jacobian.math.topology.simplicial_sets.degeneracy_tools import (
 )
 from jacobian.math.topology.simplicial_sets.image_tools import TOOLS as IMAGE_TOOLS
 from jacobian.math.topology.simplicial_sets.maps import (
+    SimplicialHomologyMapValue,
     TruncatedSimplicialMap,
     induced_normalized_chain_map,
+    induced_normalized_homology_map,
 )
 from jacobian.math.topology.simplicial_sets.maps_tools import TOOLS as MAP_TOOLS
 from jacobian.math.topology.simplicial_sets.operations import from_tables
@@ -44,6 +46,12 @@ def _run_induced_chain_map(
     request: TruncatedSimplicialMap,
 ) -> ChainMapValue:
     return induced_normalized_chain_map(request)
+
+
+def _run_induced_homology_map(
+    request: TruncatedSimplicialMap,
+) -> SimplicialHomologyMapValue:
+    return induced_normalized_homology_map(request)
 
 
 # Delta[1] truncated to degrees 0..1: X_0 = {0, 1}, X_1 = {00, 01, 11};
@@ -95,6 +103,37 @@ TOOLS = (
             OperationExample(
                 name="identity_delta_one",
                 description="Take the normalized chain map induced by the identity on Delta[1].",
+                input=_IDENTITY_DELTA_ONE_MAP,
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="topology.simplicial_set.map.induced_homology.compute",
+        title="Compute the induced map on supported normalized homology",
+        description=(
+            "Return the exact induced maps in degrees 0 through N-1 for a "
+            "finite simplicial map on prefixes through degree N. Endpoints "
+            "retain normalized chain representatives and canonical free and "
+            "torsion generators. The top homology is omitted because its "
+            "incoming differential is outside the prefix. Work and output "
+            "are bounded by the normalized integral homology and map limits."
+        ),
+        request_type=TruncatedSimplicialMap,
+        result_type=SimplicialHomologyMapValue,
+        run=_run_induced_homology_map,
+        tags=("topology", "simplicial-set", "map", "homology", "exact"),
+        discovery_terms=(
+            "induced simplicial homology map",
+            "map on normalized homology",
+            "simplicial map induced homology",
+        ),
+        examples=(
+            OperationExample(
+                name="identity_delta_one",
+                description=(
+                    "Compute the induced map on H0 and H1 for the identity "
+                    "of Delta[1] with its degree-2 prefix."
+                ),
                 input=_IDENTITY_DELTA_ONE_MAP,
             ),
         ),

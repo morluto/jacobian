@@ -2,19 +2,24 @@
 
 from __future__ import annotations
 
-from pydantic import model_validator
+from fractions import Fraction
 
+from pydantic import Field, StrictInt, model_validator
+
+from jacobian._exact import ExactInteger
 from jacobian._models import StrictModel
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
+from jacobian.math.matrices.certified_snf.operations import inverse_unimodular
 from jacobian.math.topology.chain_complexes.operations import (
     chain_map_commutes,
     homology_groups,
 )
 from jacobian.math.topology.chain_complexes.values import (
     MAX_CHAIN_MAP_CELLS,
+    MAX_INTEGRAL_HOMOLOGY_CHAIN_RANK,
     MAX_OPERATION_MATRIX_CELLS,
     ChainComplexValue,
     ChainMapValue,
@@ -286,6 +291,88 @@ class NormalizedHomologyResult(StrictModel):
         return self
 
 
+class IntegralHomologyCoordinates(StrictModel):
+    """Coordinates in a retained free and invariant-factor basis."""
+
+    free: tuple[ExactInteger, ...] = Field(max_length=MAX_INTEGRAL_HOMOLOGY_CHAIN_RANK)
+    torsion: tuple[ExactInteger, ...] = Field(
+        max_length=MAX_INTEGRAL_HOMOLOGY_CHAIN_RANK
+    )
+
+
+class NormalizedHomologyDegreeMap(StrictModel):
+    """Images of the canonical free and torsion generators in one degree."""
+
+    degree: StrictInt = Field(ge=0, le=4)
+    free_generator_images: tuple[IntegralHomologyCoordinates, ...] = Field(
+        max_length=MAX_INTEGRAL_HOMOLOGY_CHAIN_RANK
+    )
+    torsion_generator_images: tuple[IntegralHomologyCoordinates, ...] = Field(
+        max_length=MAX_INTEGRAL_HOMOLOGY_CHAIN_RANK
+    )
+
+
+class SimplicialHomologyMapValue(StrictModel):
+    """An induced map between the supported normalized integral homology."""
+
+    simplicial_map: TruncatedSimplicialMap
+    source: NormalizedHomologyResult
+    target: NormalizedHomologyResult
+    degree_maps: tuple[NormalizedHomologyDegreeMap, ...] = Field(max_length=4)
+
+    @model_validator(mode="after")
+    def require_source_bound_matrices(self) -> SimplicialHomologyMapValue:
+        if (
+            self.source.simplicial_set != self.simplicial_map.source
+            or self.target.simplicial_set != self.simplicial_map.target
+        ):
+            raise ValueError("homology endpoints must match the simplicial map")
+        supported_degrees = self.simplicial_map.source.max_degree
+        if self.simplicial_map.target.max_degree != supported_degrees or tuple(
+            item.degree for item in self.degree_maps
+        ) != tuple(range(supported_degrees)):
+            raise ValueError("homology maps must cover exactly the supported degrees")
+        for degree, matrix in enumerate(self.degree_maps):
+            source_group = self.source.homology_groups[degree]
+            target_group = self.target.homology_groups[degree]
+            assert isinstance(source_group, IntegralHomologyGroupValue)
+            assert isinstance(target_group, IntegralHomologyGroupValue)
+            target_torsion = target_group.torsion_invariant_factors
+            if len(matrix.free_generator_images) != source_group.free_rank or len(
+                matrix.torsion_generator_images
+            ) != len(source_group.torsion_generators):
+                raise ValueError("homology images must cover every source generator")
+            for image in (
+                *matrix.free_generator_images,
+                *matrix.torsion_generator_images,
+            ):
+                if len(image.free) != target_group.free_rank or len(
+                    image.torsion
+                ) != len(target_torsion):
+                    raise ValueError("homology image coordinates have invalid axes")
+                if any(
+                    coordinate < 0 or coordinate >= order
+                    for coordinate, order in zip(
+                        image.torsion, target_torsion, strict=True
+                    )
+                ):
+                    raise ValueError("torsion coordinates must be canonical residues")
+            for generator, image in zip(
+                source_group.torsion_generators,
+                matrix.torsion_generator_images,
+                strict=True,
+            ):
+                order = int(generator.order)
+                if any(image.free) or any(
+                    order * int(coordinate) % int(target_order)
+                    for coordinate, target_order in zip(
+                        image.torsion, target_torsion, strict=True
+                    )
+                ):
+                    raise ValueError("torsion generator image violates its order")
+        return self
+
+
 def simplicial_map(request: SimplicialMapRequest) -> SimplicialMapResult:
     s, t = request.source, request.target
     if s.max_degree != t.max_degree or len(request.maps) != s.max_degree + 1:
@@ -518,7 +605,9 @@ def induced_normalized_chain_map(
         )
 
     normalized_source = normalized_chains(source)
-    normalized_target = normalized_chains(target)
+    normalized_target = (
+        normalized_source if target == source else normalized_chains(target)
+    )
     _require_naturality(map_value, location="map")
     target_rows = tuple(
         {simplex: index for index, simplex in enumerate(level)}
@@ -549,6 +638,254 @@ def induced_normalized_chain_map(
             message="the induced normalized boundary does not commute with the map",
         )
     return chain_map
+
+
+def _mat_vec(
+    matrix: tuple[tuple[int, ...], ...], vector: tuple[int, ...]
+) -> tuple[int, ...]:
+    if any(len(row) != len(vector) for row in matrix):
+        raise ValueError("matrix and vector axes are incompatible")
+    return tuple(
+        sum(entry * vector[index] for index, entry in enumerate(row)) for row in matrix
+    )
+
+
+def _integer_matrix(
+    matrix: tuple[tuple[int | Fraction, ...], ...],
+) -> tuple[tuple[int, ...], ...]:
+    rows: list[tuple[int, ...]] = []
+    for row in matrix:
+        integer_row: list[int] = []
+        for entry in row:
+            if type(entry) is not int:
+                raise OperationDomainValidationError(
+                    location=("chain_map",),
+                    code="simplicial_set.induced_homology_requires_integral_map",
+                    message="normalized simplicial homology maps require integral coefficients",
+                )
+            integer_row.append(entry)
+        rows.append(tuple(integer_row))
+    return tuple(rows)
+
+
+def _coordinates_in_target_homology(
+    cycle: tuple[int, ...],
+    group: IntegralHomologyGroupValue,
+    inverse_right: tuple[tuple[int, ...], ...],
+) -> IntegralHomologyCoordinates:
+    chain_coordinates = _mat_vec(inverse_right, cycle)
+    rank = group.outgoing_boundary_rank
+    if any(chain_coordinates[:rank]):
+        raise OperationDomainValidationError(
+            location=("map", "homology"),
+            code="simplicial_set.induced_homology_cycle_coordinates_invalid",
+            message="mapped representative is not a cycle in the target complex",
+        )
+    cycle_coordinates = chain_coordinates[rank:]
+    incoming = group.incoming_smith_certificate
+    smith_coordinates = _mat_vec(
+        incoming.left_transformation.entries, cycle_coordinates
+    )
+    boundary_rank = group.incoming_boundary_rank
+    torsion = tuple(
+        smith_coordinates[index] % int(order)
+        for index, order in enumerate(incoming.invariant_factors)
+        if int(order) > 1
+    )
+    return IntegralHomologyCoordinates(
+        free=tuple(smith_coordinates[boundary_rank:]), torsion=torsion
+    )
+
+
+def _map_homology_generator(
+    chain_map: ChainMapValue,
+    degree: int,
+    cycle: tuple[int, ...],
+    target_group: IntegralHomologyGroupValue,
+    inverse_right: tuple[tuple[int, ...], ...],
+    *,
+    torsion_order: int | None = None,
+    bounding_chain: tuple[int, ...] | None = None,
+) -> IntegralHomologyCoordinates:
+    if degree and any(
+        _mat_vec(
+            _integer_matrix(chain_map.source.differential_matrices[degree - 1]),
+            cycle,
+        )
+    ):
+        raise OperationDomainValidationError(
+            location=("source", "homology", degree),
+            code="simplicial_set.induced_homology_source_cycle_invalid",
+            message="a retained homology representative is not a source cycle",
+        )
+    image = _mat_vec(_integer_matrix(chain_map.map_matrices[degree]), cycle)
+    if degree:
+        outgoing = _integer_matrix(chain_map.target.differential_matrices[degree - 1])
+        if any(_mat_vec(outgoing, image)):
+            raise OperationDomainValidationError(
+                location=("map", "homology", degree),
+                code="simplicial_set.induced_homology_cycle_identity_failed",
+                message="the induced chain map did not send a cycle to a cycle",
+            )
+    if torsion_order is not None:
+        assert bounding_chain is not None
+        source_boundary = _mat_vec(
+            _integer_matrix(chain_map.source.differential_matrices[degree]),
+            bounding_chain,
+        )
+        if source_boundary != tuple(torsion_order * value for value in cycle):
+            raise OperationDomainValidationError(
+                location=("source", "homology", degree),
+                code="simplicial_set.induced_homology_torsion_witness_invalid",
+                message="the retained torsion representative has an invalid boundary witness",
+            )
+        mapped_bounding_chain = _mat_vec(
+            _integer_matrix(chain_map.map_matrices[degree + 1]), bounding_chain
+        )
+        target_boundary = _mat_vec(
+            _integer_matrix(chain_map.target.differential_matrices[degree]),
+            mapped_bounding_chain,
+        )
+        if target_boundary != tuple(torsion_order * value for value in image):
+            raise OperationDomainValidationError(
+                location=("map", "homology", degree),
+                code="simplicial_set.induced_homology_torsion_identity_failed",
+                message="the chain map failed to preserve a torsion bounding relation",
+            )
+    return _coordinates_in_target_homology(image, target_group, inverse_right)
+
+
+def induced_normalized_homology_map(
+    map_value: TruncatedSimplicialMap,
+) -> SimplicialHomologyMapValue:
+    """Compute the induced map on every homology degree supported by a prefix."""
+    chain_map = induced_normalized_chain_map(map_value)
+    source = normalized_homology(map_value.source)
+    target = (
+        source
+        if map_value.target == map_value.source
+        else normalized_homology(map_value.target)
+    )
+    degree_maps: list[NormalizedHomologyDegreeMap] = []
+    for degree, (source_group, target_group) in enumerate(
+        zip(source.homology_groups, target.homology_groups, strict=True)
+    ):
+        assert isinstance(source_group, IntegralHomologyGroupValue)
+        assert isinstance(target_group, IntegralHomologyGroupValue)
+        inverse_right = (
+            tuple(
+                tuple(row)
+                for row in inverse_unimodular(
+                    [
+                        list(row)
+                        for row in target_group.outgoing_smith_certificate.right_transformation.entries
+                    ]
+                )
+            )
+            if source_group.free_rank or source_group.torsion_generators
+            else ()
+        )
+        degree_maps.append(
+            NormalizedHomologyDegreeMap(
+                degree=degree,
+                free_generator_images=tuple(
+                    _map_homology_generator(
+                        chain_map,
+                        degree,
+                        tuple(generator.cycle.coefficients),
+                        target_group,
+                        inverse_right,
+                    )
+                    for generator in source_group.free_generators
+                ),
+                torsion_generator_images=tuple(
+                    _map_homology_generator(
+                        chain_map,
+                        degree,
+                        tuple(generator.cycle.coefficients),
+                        target_group,
+                        inverse_right,
+                        torsion_order=int(generator.order),
+                        bounding_chain=tuple(generator.bounding_chain.coefficients),
+                    )
+                    for generator in source_group.torsion_generators
+                ),
+            )
+        )
+    return SimplicialHomologyMapValue(
+        simplicial_map=map_value,
+        source=source,
+        target=target,
+        degree_maps=tuple(degree_maps),
+    )
+
+
+def _compose_homology_coordinates(
+    coordinates: IntegralHomologyCoordinates,
+    middle_images: NormalizedHomologyDegreeMap,
+    target_group: IntegralHomologyGroupValue,
+) -> IntegralHomologyCoordinates:
+    free = [0] * target_group.free_rank
+    torsion = [0] * len(target_group.torsion_invariant_factors)
+    images = (
+        *middle_images.free_generator_images,
+        *middle_images.torsion_generator_images,
+    )
+    coefficients = (*coordinates.free, *coordinates.torsion)
+    for coefficient, image in zip(coefficients, images, strict=True):
+        for index, value in enumerate(image.free):
+            free[index] += int(coefficient) * int(value)
+        for index, value in enumerate(image.torsion):
+            torsion[index] += int(coefficient) * int(value)
+    torsion = [
+        value % int(order)
+        for value, order in zip(
+            torsion, target_group.torsion_invariant_factors, strict=True
+        )
+    ]
+    return IntegralHomologyCoordinates(free=tuple(free), torsion=tuple(torsion))
+
+
+def compose_simplicial_homology_maps(
+    first: SimplicialHomologyMapValue,
+    second: SimplicialHomologyMapValue,
+) -> SimplicialHomologyMapValue:
+    """Compose two induced normalized integral homology maps."""
+    if first.target != second.source:
+        raise OperationDomainValidationError(
+            location=("second", "source"),
+            code="simplicial_set.homology_map_composition_mismatch",
+            message="the first target homology must equal the second source homology",
+        )
+    composite_map = compose_simplicial_maps(
+        SimplicialMapCompositionRequest(
+            first=first.simplicial_map, second=second.simplicial_map
+        )
+    )
+    degree_maps: list[NormalizedHomologyDegreeMap] = []
+    for degree, first_degree in enumerate(first.degree_maps):
+        target_group = second.target.homology_groups[degree]
+        assert isinstance(target_group, IntegralHomologyGroupValue)
+        second_degree = second.degree_maps[degree]
+        degree_maps.append(
+            NormalizedHomologyDegreeMap(
+                degree=degree,
+                free_generator_images=tuple(
+                    _compose_homology_coordinates(image, second_degree, target_group)
+                    for image in first_degree.free_generator_images
+                ),
+                torsion_generator_images=tuple(
+                    _compose_homology_coordinates(image, second_degree, target_group)
+                    for image in first_degree.torsion_generator_images
+                ),
+            )
+        )
+    return SimplicialHomologyMapValue(
+        simplicial_map=composite_map,
+        source=first.source,
+        target=second.target,
+        degree_maps=tuple(degree_maps),
+    )
 
 
 def normalized_homology(
@@ -593,13 +930,19 @@ def normalized_homology(
 
 
 __all__ = [
+    "IntegralHomologyCoordinates",
     "NormalizedChainsRequest",
     "NormalizedChainsResult",
+    "NormalizedHomologyDegreeMap",
     "NormalizedHomologyResult",
+    "SimplicialHomologyMapValue",
     "SimplicialMapRequest",
     "SimplicialMapResult",
     "TruncatedSimplicialMap",
+    "compose_simplicial_homology_maps",
+    "compose_simplicial_maps",
     "identity_simplicial_map",
+    "induced_normalized_homology_map",
     "normalized_chains",
     "normalized_homology",
     "simplicial_map",

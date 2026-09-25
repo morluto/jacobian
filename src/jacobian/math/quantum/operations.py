@@ -40,7 +40,6 @@ from jacobian.math.quantum._models import (
     PauliToLabelsResult,
     PhaseFreeQubitPauli,
     QubitRegister,
-    StabilizerCodeRequest,
     StabilizerCodeValue,
     StabilizerDistanceResult,
     StabilizerErrorEquivalenceResult,
@@ -479,8 +478,8 @@ def stabilizer_group_from_generators(
             "quantum.stabilizer.exact_group.invalid_request",
             "request must contain a register and exact Pauli generators",
         )
-    register = _admit_register(request.qubit_register, "register")
-    values = request.generators
+    register = _admit_register(getattr(request, "qubit_register", None), "register")
+    values = getattr(request, "generators", None)
     if not isinstance(values, tuple) or len(values) > MAX_CHECK_ROWS:
         _reject(
             "generators",
@@ -576,16 +575,9 @@ def stabilizer_group_from_generators(
 
 
 def _admit_stabilizer_code_request(
-    request: object,
+    group: object, eigenvalues: object
 ) -> tuple[QubitRegister, tuple[ExactQubitPauli, ...], tuple[int, ...]]:
     """Validate a code's group, character, axes, and complete admitted work."""
-    if not isinstance(request, StabilizerCodeRequest):
-        _reject(
-            "request",
-            "quantum.stabilizer.code.invalid_request",
-            "code construction requires a typed group and character",
-        )
-    group = getattr(request, "group", None)
     if not isinstance(group, ExactStabilizerGroup):
         _reject(
             "group",
@@ -594,7 +586,6 @@ def _admit_stabilizer_code_request(
         )
     register = _admit_register(getattr(group, "qubit_register", None), "group")
     generators = getattr(group, "generators", None)
-    eigenvalues = getattr(request, "generator_eigenvalues", None)
     if not isinstance(generators, tuple) or len(generators) > MAX_CHECK_ROWS:
         _reject(
             "group",
@@ -673,7 +664,9 @@ def _admit_stabilizer_code_request(
     return register, generators, eigenvalues
 
 
-def stabilizer_code_compute(request: StabilizerCodeRequest) -> StabilizerCodeValue:
+def stabilizer_code_compute(
+    group: ExactStabilizerGroup, generator_eigenvalues: tuple[int, ...]
+) -> StabilizerCodeValue:
     """Canonicalize an exact group together with its one-dimensional character.
 
     Each input generator ``g`` with eigenvalue ``lambda`` is replaced by
@@ -681,7 +674,9 @@ def stabilizer_code_compute(request: StabilizerCodeRequest) -> StabilizerCodeVal
     space with eigenvalue +1. Row operations carry their exact Pauli products,
     so RREF canonicalizes the subgroup without losing scalar signs.
     """
-    register, generators, eigenvalues = _admit_stabilizer_code_request(request)
+    register, generators, eigenvalues = _admit_stabilizer_code_request(
+        group, generator_eigenvalues
+    )
     width = len(register.qubit_ids)
 
     # Replace each generator g with chi(g) g. The resulting operators have
@@ -710,7 +705,10 @@ def stabilizer_code_compute(request: StabilizerCodeRequest) -> StabilizerCodeVal
             vector, pauli = rows[index]
             product_pauli = _product_pauli_after_admission(pauli, pivot_pauli)
             rows[index] = (
-                [(left + right) % 2 for left, right in zip(vector, pivot_vector, strict=True)],
+                [
+                    (left + right) % 2
+                    for left, right in zip(vector, pivot_vector, strict=True)
+                ],
                 product_pauli,
             )
         target += 1

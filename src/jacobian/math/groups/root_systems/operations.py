@@ -10,7 +10,6 @@ from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
 from jacobian._execution import BackendFailureReason, OperationBackendError
-from jacobian.canonical import CanonicalLimits
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -53,7 +52,7 @@ from jacobian.math.groups.root_systems._dynkin_models import (
 from jacobian.math.groups.root_systems._models import (
     MAX_BRUHAT_INTERVAL_ELEMENTS,
     MAX_BRUHAT_INTERVAL_GROUP_ORDER,
-    MAX_BRUHAT_INTERVAL_OUTPUT_BYTES,
+    MAX_BRUHAT_INTERVAL_OUTPUT_CELLS,
     MAX_LATTICE_COORDINATE_BITS,
     MAX_LATTICE_OUTPUT_COORDINATE_BITS,
     MAX_LATTICE_VECTOR_OUTPUT_CELLS,
@@ -1663,8 +1662,7 @@ def weyl_bruhat_interval(
     if (
         group_order > MAX_BRUHAT_INTERVAL_ELEMENTS
         or work_bound > MAX_BRUHAT_INTERVAL_WORK
-        or output_bound > MAX_BRUHAT_INTERVAL_OUTPUT_BYTES
-        or output_bound > CanonicalLimits().max_output_bytes
+        or output_bound > MAX_BRUHAT_INTERVAL_OUTPUT_CELLS
     ):
         raise OperationResourceAdmissionError(
             location=("matrix",),

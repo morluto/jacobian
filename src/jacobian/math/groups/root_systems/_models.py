@@ -26,7 +26,7 @@ MAX_WEYL_GROUP_ORDER = 696_729_600
 # element needed to establish it. Keep this complete-enumeration lane small.
 MAX_BRUHAT_INTERVAL_GROUP_ORDER = 64
 MAX_BRUHAT_INTERVAL_ELEMENTS = 64
-MAX_BRUHAT_INTERVAL_OUTPUT_BYTES = 256_000
+MAX_BRUHAT_INTERVAL_OUTPUT_CELLS = 65_536
 # Lagrange bounds every element order by the largest admitted Weyl-group order.
 MAX_WEYL_ELEMENT_ORDER = MAX_WEYL_GROUP_ORDER
 MAX_WEIGHT_ORBIT_SIZE = 4096

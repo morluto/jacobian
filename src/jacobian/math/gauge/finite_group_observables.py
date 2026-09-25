@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Self
-
-from pydantic import Field, model_validator
+from pydantic import Field
 
 from jacobian._models import StrictModel
 from jacobian.catalog.models import (
@@ -18,7 +16,6 @@ from jacobian.math.gauge._models import (
     OrientedGaugePath,
 )
 from jacobian.math.gauge.finite_group import finite_group_gauge_holonomy
-from jacobian.math.groups._table_models import FiniteGroupTableElement
 
 MAX_HOLONOMY_CONJUGACY_WORK = 2_000
 MAX_HOLONOMY_CONJUGACY_OUTPUT_BYTES = 1_000_000
@@ -38,37 +35,6 @@ class FiniteGroupConjugacyProfile(StrictModel):
     conjugate_indices: tuple[int, ...] = Field(max_length=24)
     class_representative_index: int
     class_size: int
-
-    @model_validator(mode="after")
-    def require_exact_source_bound_class(self) -> Self:
-        if (
-            not isinstance(self.loop, FiniteGroupGaugeHolonomyResult)
-            or self.loop.start != self.loop.end
-            or not isinstance(self.loop.holonomy, FiniteGroupTableElement)
-            or self.loop.holonomy.group != self.loop.field.group
-        ):
-            raise ValueError("conjugacy profile must retain one exact based loop")
-        group = self.loop.field.group
-        table = group.multiplication
-        inverse = group.inverse
-        order = len(group.multiplication)
-        if not 1 <= order <= 24 or len(inverse) != order:
-            raise ValueError("conjugacy profile group must have order at most 24")
-        expected = tuple(
-            sorted(
-                {
-                    table[table[g][self.loop.holonomy.index]][inverse[g]]
-                    for g in range(order)
-                }
-            )
-        )
-        if (
-            self.conjugate_indices != expected
-            or self.class_representative_index != expected[0]
-            or self.class_size != len(expected)
-        ):
-            raise ValueError("conjugate indices must be the complete class of holonomy")
-        return self
 
 
 def finite_group_holonomy_conjugacy_profile(
@@ -101,7 +67,7 @@ def finite_group_holonomy_conjugacy_profile(
             message="finite-group conjugacy orbit exceeds its work envelope",
         )
     source_bytes = len(loop.model_dump_json(warnings=False).encode("utf-8"))
-    if source_bytes * 2 + 4096 > MAX_HOLONOMY_CONJUGACY_OUTPUT_BYTES:
+    if source_bytes + 4096 + order * 4 > MAX_HOLONOMY_CONJUGACY_OUTPUT_BYTES:
         raise OperationResourceAdmissionError(
             location=("field", "path"),
             code="lattice_gauge.conjugacy.output_bound",

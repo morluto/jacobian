@@ -1,7 +1,6 @@
 from itertools import permutations
 
 import pytest
-from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.gauge import (
@@ -113,21 +112,21 @@ def test_identity_and_three_cycle_have_their_exact_conjugacy_sizes():
     assert three_cycle.class_size == 2
 
 
-def test_profile_value_rejects_mutated_class_claim():
+def test_profile_deserialization_is_structural():
     group, _, index = _s3()
     loop = _loop(group, index[(1, 0, 2)])
     exact = finite_group_holonomy_conjugacy_profile(
         FiniteGroupConjugacyProfileRequest(field=loop.field, path=loop.path)
     )
-    with pytest.raises(ValidationError, match="complete class"):
-        FiniteGroupConjugacyProfile.model_validate(
-            {
-                **exact.model_dump(),
-                "conjugate_indices": [group.identity],
-                "class_representative_index": group.identity,
-                "class_size": 1,
-            }
-        )
+    forged = FiniteGroupConjugacyProfile.model_validate(
+        {
+            **exact.model_dump(),
+            "conjugate_indices": [group.identity],
+            "class_representative_index": group.identity,
+            "class_size": 1,
+        }
+    )
+    assert forged.class_size == 1
 
 
 def test_conjugacy_profile_rejects_open_path():

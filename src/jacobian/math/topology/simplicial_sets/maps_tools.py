@@ -8,6 +8,7 @@ from jacobian.math.topology.simplicial_sets.maps import (
     SimplicialMapCompositionRequest,
     TruncatedSimplicialMap,
     compose_simplicial_maps,
+    identity_simplicial_map,
     normalized_homology,
 )
 from jacobian.math.topology.simplicial_sets.standard import standard_simplex
@@ -36,6 +37,26 @@ def _identity(r: FiniteTruncatedSimplicialSet) -> TruncatedSimplicialMap:
 _S = standard_simplex(1, 2).model_dump(mode="json")
 _MAP = {"source": _S, "target": _S, "maps": [[0, 1], [0, 1, 2], [0, 1, 2, 3]]}
 TOOLS = (
+    MathTool(
+        operation_id="topology.simplicial_set.map.identity.compute",
+        title="Construct a finite simplicial-set identity map",
+        description=(
+            "Return the identity degreewise map on a complete finite truncated "
+            "simplicial-set prefix, retaining the exact carrier. The prefix is "
+            "bounded to degree 4 and 96 total simplices."
+        ),
+        request_type=FiniteTruncatedSimplicialSet,
+        result_type=TruncatedSimplicialMap,
+        run=_identity,
+        tags=("topology", "simplicial-set", "map", "identity", "exact"),
+        examples=(
+            OperationExample(
+                name="identity_delta_one",
+                description="Construct the identity map on a Delta[1] prefix.",
+                input=_S,
+            ),
+        ),
+    ),
     MathTool(
         operation_id="topology.simplicial_set.map.compose.compute",
         title="Compose finite simplicial maps",

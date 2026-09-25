@@ -120,18 +120,8 @@ def _preflight(source: FiniteTruncatedSimplicialSet) -> int:
 def unnormalized_chains(
     request: UnnormalizedChainsRequest,
 ) -> UnnormalizedChainsResult:
-    source = request.simplicial_set
-    checked = from_tables(
-        source.max_degree, source.sets, source.face_maps, source.degeneracy_maps
-    )
-    if checked.simplicial_set is None:
-        raise OperationDomainValidationError(
-            location=("simplicial_set",),
-            code="simplicial_set.unnormalized_source_invalid",
-            message="source tables fail a simplicial identity",
-        )
-    source = checked.simplicial_set
     require_prime_field_admission(request.coefficient_ring, request.prime)
+    source = request.simplicial_set
     _preflight(source)
     # Serialized source values do not carry trusted producer provenance. Since
     # d^2=0 depends on simplicial identities, re-establish those caller claims

@@ -20,5 +20,6 @@ Admission occurs before constructing tagged axes or map tables. The operation
 bounds each degree by 32 simplices, the complete prefix by 96 simplices, map
 rows by 50,000, and conservative serialized output size by 1,000,000 bytes.
 Requests above those limits fail as resource-admission errors without
-returning a partial coproduct. Empty degree levels are supported, including the all-empty prefix representing
-the initial simplicial set; coproducts with empty factors remain composable.
+returning a partial coproduct. The finite carrier currently requires every
+degree to be nonempty, so inputs with empty degree levels are outside its
+represented domain.

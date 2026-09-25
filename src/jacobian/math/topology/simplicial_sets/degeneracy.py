@@ -13,7 +13,7 @@ from jacobian.math.topology.simplicial_sets._models import (
     MAX_TOTAL_SIMPLICES,
     FiniteTruncatedSimplicialSet,
 )
-from jacobian.math.topology.simplicial_sets.operations import admit_tables, from_tables
+from jacobian.math.topology.simplicial_sets.operations import from_tables
 
 _MAX_IDENTITY_ROW_WORK = 100_000
 _MAX_OUTPUT_BYTES = 65_536
@@ -68,9 +68,7 @@ class DegeneracyProfileResult(StrictModel):
 
 
 def _preflight(source: FiniteTruncatedSimplicialSet) -> tuple[int, ...]:
-    sizes = admit_tables(
-        source.max_degree, source.sets, source.face_maps, source.degeneracy_maps
-    )
+    sizes = tuple(len(level) for level in source.sets)
     # from_tables composes at most this many rows while checking all visible
     # identities. This upper bound is computed before any identity traversal.
     work = 0

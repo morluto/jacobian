@@ -95,6 +95,12 @@ def _tables(
             for simplex in combinations_with_replacement(range(n + 1), degree + 1)
             if _allowed(kind, n, k, simplex)
         )
+        if not level:
+            raise OperationDomainValidationError(
+                location=("dimension",),
+                code="simplicial_set.empty_prefix",
+                message="this finite prefix has an empty degree and the nonempty carrier cannot encode it",
+            )
         values.append(level)
     labels = tuple(
         tuple("(" + ",".join(map(str, simplex)) + ")" for simplex in level)
@@ -147,6 +153,12 @@ def standard_simplex(dimension: int, max_degree: int) -> FiniteTruncatedSimplici
 
 def simplex_boundary(dimension: int, max_degree: int) -> FiniteTruncatedSimplicialSet:
     _admit(dimension, max_degree)
+    if dimension == 0:
+        raise OperationDomainValidationError(
+            location=("dimension",),
+            code="simplicial_set.empty_boundary",
+            message="the boundary of Delta[0] is empty and outside the nonempty finite carrier",
+        )
     return _tables("boundary", dimension, max_degree)
 
 

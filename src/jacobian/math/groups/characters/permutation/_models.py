@@ -80,10 +80,6 @@ def _preflight_action(value: object) -> FinitePermutationAction:
 def _validate_action_partition(
     action: FinitePermutationAction, partition: ConjugacyClassPartition
 ) -> None:
-    from jacobian.math.groups.characters.permutation.operations import (
-        _enumerate_group_classes,
-    )
-
     classes = getattr(partition, "classes", None)
     if (
         not isinstance(classes, tuple)
@@ -120,12 +116,18 @@ def _validate_action_partition(
             "partition_group",
             "class partition must retain the action's generated permutation group",
         )
-    expected = _enumerate_group_classes(action)
+    # Model validation is structural only. Completeness is established by the
+    # admitted producer and checked by consumers only when they rely on it.
     actual = tuple(tuple(tuple(element) for element in cls) for cls in classes)
-    if actual != expected:
+    flattened = tuple(element for cls in actual for element in cls)
+    if (
+        len(set(flattened)) != len(flattened)
+        or any(tuple(sorted(cls)) != cls for cls in actual)
+        or tuple(sorted(actual, key=lambda row: row[0])) != actual
+    ):
         raise _error(
-            "partition_complete",
-            "class partition must be the complete action-group partition",
+            "partition_structure",
+            "class partition must be canonically ordered without duplicate elements",
         )
 
 

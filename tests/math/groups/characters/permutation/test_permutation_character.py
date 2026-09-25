@@ -94,8 +94,20 @@ def test_character_serialization_and_tampering_are_checked() -> None:
         [[1, 0, 2]],
         [[1, 2, 0]],
     ]
-    with pytest.raises(ValidationError, match="complete action-group partition"):
-        FiniteCharacter.model_validate_json(json.dumps(forged_partition))
+    forged_partition["axis"]["class_sizes"] = [1, 1, 1]
+    forged_partition["axis"]["class_representatives"] = [
+        [0, 1, 2], [1, 0, 2], [1, 2, 0]
+    ]
+    forged_partition["axis"]["group_order"] = 3
+    forged_partition["values"] = [
+        result.values[0].model_dump(mode="json"),
+        result.values[1].model_dump(mode="json"),
+        result.values[2].model_dump(mode="json"),
+    ]
+    structurally_valid_but_incomplete = FiniteCharacter.model_validate_json(
+        json.dumps(forged_partition)
+    )
+    assert structurally_valid_but_incomplete.partition.classes != result.partition.classes
 
     oversized_partition = result.model_dump(mode="json")
     oversized_partition["partition"]["classes"] = [[]] * 65

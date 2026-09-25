@@ -6,8 +6,6 @@ from jacobian.math.graphs.decks._models import (
     SourceBoundVertexCard,
     UnlabelledDeck,
     UnlabelledDeckClass,
-    UnlabelledEdgeDeck,
-    UnlabelledEdgeDeckClass,
     UnlabelledVertexDeck,
     UnlabelledVertexDeckClass,
     VertexDeckDegreeMultisetRequest,
@@ -21,7 +19,6 @@ from jacobian.math.graphs.decks._models import (
 )
 from jacobian.math.graphs.decks.operations import (
     edge_deletion_family,
-    edge_unlabelled_deck,
     unlabelled_deck,
     unlabelled_vertex_deck,
     verify_edge_deletion_family,
@@ -39,8 +36,6 @@ __all__ = [
     "SourceBoundVertexCard",
     "UnlabelledDeck",
     "UnlabelledDeckClass",
-    "UnlabelledEdgeDeck",
-    "UnlabelledEdgeDeckClass",
     "UnlabelledVertexDeck",
     "UnlabelledVertexDeckClass",
     "VertexDeckDegreeMultisetRequest",
@@ -52,7 +47,6 @@ __all__ = [
     "VertexDeckSubgraphCountRequest",
     "VertexDeletionFamily",
     "edge_deletion_family",
-    "edge_unlabelled_deck",
     "unlabelled_deck",
     "unlabelled_vertex_deck",
     "verify_edge_deletion_family",

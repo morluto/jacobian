@@ -127,6 +127,22 @@ def test_pattern_must_have_strictly_fewer_vertices_than_source() -> None:
         vertex_deck_subgraph_count(deck, pattern)
 
 
+def test_subgraph_count_rejects_oversized_label_echo_before_expansion() -> None:
+    """The ordinary-copy gate must bound deck echo allocation, not transport bytes."""
+    big = "x" * 200_000
+    source = SimpleUndirectedGraph(
+        vertices=(big, "b", "c"), edges=(("b", "c"), ("b", big), ("c", big))
+    )
+    deck = unlabelled_vertex_deck(vertex_deletion_family(source))
+    pattern = SimpleUndirectedGraph(vertices=("p",), edges=())
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
+        vertex_deck_subgraph_count(deck, pattern)
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graph_deck.kelly_subgraph_result_allocation"
+    )
+
+
 def test_work_admission_precedes_copy_count_expansion(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

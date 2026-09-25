@@ -125,6 +125,18 @@ class RestrictRationalOutputResult(StrictModel):
                 "edge_transport_out_of_range",
                 "edge transport leaves the embedded source relation",
             )
+        if (
+            self.output_language.alphabet_size != self.source.output_alphabet_size
+            or len(self.output_alphabet.symbols) != self.source.output_alphabet_size
+            or (
+                self.source.output_alphabet is not None
+                and self.source.output_alphabet != self.output_alphabet
+            )
+        ):
+            raise _error(
+                "source_output_context_mismatch",
+                "embedded language and alphabet must match the source output axis",
+            )
         if self.restricted.input_alphabet_size != self.source.input_alphabet_size:
             raise _error(
                 "input_axis_mismatch", "the input alphabet axis must be retained"

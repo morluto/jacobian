@@ -125,7 +125,6 @@ def _validate_alphabet_contexts(
             )
         if (
             not context.symbols
-            or len(set(context.symbols)) != len(context.symbols)
             or len(context.symbols) > MAX_FST_ALPHABET
             or any(
                 not isinstance(symbol, str) or _utf8_length(symbol) > 256
@@ -136,6 +135,19 @@ def _validate_alphabet_contexts(
                 "alphabet_symbol_too_long",
                 "alphabet labels must be at most 256 UTF-8 bytes",
             )
+        if len(set(context.symbols)) != len(context.symbols):
+            _fail(
+                "alphabet_symbol_too_long",
+                "alphabet labels must be at most 256 UTF-8 bytes",
+            )
+    if (
+        relation.input_alphabet is not None
+        and len(relation.input_alphabet.symbols) != relation.input_alphabet_size
+    ):
+        _fail(
+            "input_context_size_mismatch",
+            "input alphabet context must match the input axis",
+        )
     if any(
         identifier is not None
         and (not isinstance(identifier, str) or _utf8_length(identifier) > 256)

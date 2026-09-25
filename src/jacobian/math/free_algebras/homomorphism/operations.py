@@ -20,6 +20,7 @@ from jacobian.math.free_algebras._models import (
     canonical_word_key,
 )
 from jacobian.math.free_algebras.homomorphism._models import (
+    FreeAlgebraHomomorphism,
     FreeAlgebraHomomorphismApplyRequest,
     FreeAlgebraHomomorphismApplyResult,
 )
@@ -31,7 +32,13 @@ def _resource(code: str, message: str) -> None:
     )
 
 
-def _admit(request: FreeAlgebraHomomorphismApplyRequest):
+def _admit(
+    request: FreeAlgebraHomomorphismApplyRequest,
+) -> tuple[
+    FreeAlgebraHomomorphism,
+    FreeAlgebraPolynomial,
+    dict[str, FreeAlgebraPolynomial],
+]:
     """Establish all substitution growth bounds before distributive expansion."""
     hom, polynomial = request.homomorphism, request.polynomial
     try:
@@ -120,7 +127,11 @@ def _admit(request: FreeAlgebraHomomorphismApplyRequest):
     return hom, polynomial, image_by_letter
 
 
-def _substitute(polynomial: FreeAlgebraPolynomial, hom, image_by_letter):
+def _substitute(
+    polynomial: FreeAlgebraPolynomial,
+    hom: FreeAlgebraHomomorphism,
+    image_by_letter: dict[str, FreeAlgebraPolynomial],
+) -> FreeAlgebraPolynomial:
     values: defaultdict[tuple[str, ...], Fraction] = defaultdict(Fraction)
     for term in polynomial.terms:
         partial: dict[tuple[str, ...], Fraction] = {(): term.coefficient.as_fraction()}

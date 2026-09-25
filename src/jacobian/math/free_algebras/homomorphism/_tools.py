@@ -38,11 +38,11 @@ TOOLS = (
                                 "terms": [
                                     {
                                         "coefficient": {"num": "1", "den": "1"},
-                                        "word": ["u"],
+                                        "word": ["v"],
                                     },
                                     {
                                         "coefficient": {"num": "1", "den": "1"},
-                                        "word": ["v"],
+                                        "word": ["u"],
                                     },
                                 ],
                             },
@@ -61,12 +61,12 @@ TOOLS = (
                         "alphabet": ["x", "y"],
                         "terms": [
                             {
-                                "coefficient": {"num": "1", "den": "1"},
-                                "word": ["x", "y"],
-                            },
-                            {
                                 "coefficient": {"num": "-1", "den": "1"},
                                 "word": ["y", "x"],
+                            },
+                            {
+                                "coefficient": {"num": "1", "den": "1"},
+                                "word": ["x", "y"],
                             },
                         ],
                     },

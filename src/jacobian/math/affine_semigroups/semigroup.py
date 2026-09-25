@@ -12,6 +12,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, ExactInteger
 from jacobian._models import StrictModel
+from jacobian.canonical import decimal_digit_width
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -29,6 +30,11 @@ MAX_AFFINE_GRAPH_EDGES = 100_000
 MAX_HILBERT_BASIS_DETERMINANT = 1_000
 MAX_HILBERT_BASIS_WORK = 1_010_000
 MAX_AFFINE_NORMALIZATION_OUTPUT_DIGITS = 64
+MAX_AFFINE_FACTOR_COORDINATE_DIGITS = 32
+MAX_AFFINE_FACTOR_RESULT_DIGITS = (
+    MAX_AFFINE_FACTOR_COORDINATE_DIGITS + MAX_AFFINE_DIGITS + 1
+)
+MAX_AFFINE_FACTOR_RESULT_BYTES = 1_000_000
 
 
 def _err(reason: str, message: str) -> PydanticCustomError:
@@ -153,8 +159,46 @@ class AffineSemigroupNormalization(StrictModel):
 
 
 class AffineFactorization(StrictModel):
+    """One exact factorization, bound to its positive semigroup parent.
+
+    ``coordinates`` use the retained generator axis and ``target`` uses its
+    ambient row axis. The carrier validates structure; mathematical consumers
+    check the defining relation when they rely on it.
+    """
+
+    semigroup: PositiveAffineSemigroup
     coordinates: tuple[ExactInteger, ...]
     target: tuple[ExactInteger, ...]
+
+    @model_validator(mode="after")
+    def _factorization_contract(self) -> Self:
+        configuration = self.semigroup.configuration
+        if len(self.coordinates) != configuration.columns:
+            raise _err("factorization_axis", "coordinates must use the generator axis")
+        if len(self.target) != configuration.rows:
+            raise _err(
+                "factorization_target_axis", "target must use the ambient row axis"
+            )
+        if any(value < 0 for value in self.coordinates):
+            raise _err(
+                "factorization_sign", "factorization coordinates must be nonnegative"
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        semigroup: PositiveAffineSemigroup,
+        coordinates: tuple[int, ...],
+        target: tuple[int, ...],
+    ) -> Self:
+        """Construct a computed value without replaying its matrix product."""
+        return cls.model_construct(
+            semigroup=semigroup,
+            coordinates=coordinates,
+            target=target,
+        )
 
 
 def _factorization_matches(
@@ -175,6 +219,112 @@ def _factorization_matches(
         == target[row]
         for row in range(semigroup.configuration.rows)
     )
+
+
+def _estimate_factorization_bytes(
+    semigroup: PositiveAffineSemigroup, coordinates: tuple[int, ...]
+) -> int:
+    """Conservatively bound serialized parent and factorization fields."""
+    configuration = semigroup.configuration
+    labels = (*configuration.row_labels, *configuration.generator_labels)
+    if any(type(label) is not str for label in labels):
+        return MAX_AFFINE_FACTOR_RESULT_BYTES + 1
+    if any(
+        len(label) > MAX_AFFINE_FACTOR_RESULT_BYTES
+        or any(0xD800 <= ord(character) <= 0xDFFF for character in label)
+        for label in labels
+    ):
+        return MAX_AFFINE_FACTOR_RESULT_BYTES + 1
+    try:
+        label_bytes = sum(len(label.encode("utf-8")) for label in labels)
+    except UnicodeEncodeError:
+        return MAX_AFFINE_FACTOR_RESULT_BYTES + 1
+    # JSON escaping expands an arbitrary control character to at most six bytes.
+    labels = 6 * label_bytes
+    matrix = sum(
+        len(str(abs(int(value)))) + 2 for row in configuration.entries for value in row
+    )
+    grading = sum(
+        decimal_digit_width(value.num) + decimal_digit_width(value.den) + 16
+        for value in semigroup.grading
+    )
+    coefficient_bytes = sum(len(str(int(value))) + 3 for value in coordinates)
+    target_bytes = configuration.rows * (MAX_AFFINE_FACTOR_RESULT_DIGITS + 3)
+    return 512 + labels + matrix + grading + coefficient_bytes + target_bytes
+
+
+def _preflight_factorization_parent_size(value: object) -> None:
+    """Bound a native parent's dump before `_admit_semigroup` copies it."""
+    if type(value) is not PositiveAffineSemigroup:
+        raise OperationDomainValidationError(
+            location=("semigroup",),
+            code="affine_semigroup.semigroup",
+            message="semigroup must be a canonical positive affine semigroup",
+        )
+    configuration = value.configuration
+    if type(configuration) is not AffineConfiguration:
+        raise OperationDomainValidationError(
+            location=("semigroup", "configuration"),
+            code="affine_semigroup.configuration",
+            message="semigroup configuration must be canonical",
+        )
+    if (
+        type(configuration.row_labels) is not tuple
+        or not 1 <= len(configuration.row_labels) <= MAX_AFFINE_ROWS
+        or type(configuration.generator_labels) is not tuple
+        or not 1 <= len(configuration.generator_labels) <= MAX_AFFINE_GENERATORS
+        or type(configuration.entries) is not tuple
+        or len(configuration.entries) != len(configuration.row_labels)
+        or any(
+            type(row) is not tuple or len(row) != len(configuration.generator_labels)
+            for row in configuration.entries
+        )
+        or type(value.grading) is not tuple
+        or len(value.grading) != len(configuration.row_labels)
+    ):
+        raise OperationDomainValidationError(
+            location=("semigroup",),
+            code="affine_semigroup.semigroup_shape",
+            message="semigroup axes and matrices must be structurally canonical",
+        )
+    if (
+        any(
+            type(label) is not str
+            for label in (*configuration.row_labels, *configuration.generator_labels)
+        )
+        or any(
+            type(entry) is not int or abs(entry) >= 10**MAX_AFFINE_DIGITS
+            for row in configuration.entries
+            for entry in row
+        )
+        or any(
+            type(grade) is not CanonicalRational
+            or type(grade.num) is not int
+            or type(grade.den) is not int
+            for grade in value.grading
+        )
+    ):
+        raise OperationDomainValidationError(
+            location=("semigroup",),
+            code="affine_semigroup.semigroup_scalar",
+            message="semigroup axes, entries, and grading must use canonical values",
+        )
+    if any(
+        grade.num.bit_length() > 110_000 or grade.den.bit_length() > 110_000
+        for grade in value.grading
+    ):
+        raise OperationResourceAdmissionError(
+            location=("semigroup", "grading"),
+            code="affine_semigroup.factorization_output",
+            message="factorization parent exceeds the 1,000,000-byte output envelope",
+        )
+    estimated_bytes = _estimate_factorization_bytes(value, ())
+    if estimated_bytes > MAX_AFFINE_FACTOR_RESULT_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("semigroup",),
+            code="affine_semigroup.factorization_output",
+            message="factorization result exceeds the 1,000,000-byte output envelope",
+        )
 
 
 class AffineFiber(StrictModel):
@@ -628,6 +778,92 @@ def construct(
         ) from exc
 
 
+def evaluate_factorization(
+    semigroup: PositiveAffineSemigroup, coordinates: tuple[int, ...]
+) -> AffineFactorization:
+    """Evaluate one admitted coefficient vector into its parent-bound element."""
+    return _evaluate_factorization(semigroup, coordinates, validate_parent=True)
+
+
+def _evaluate_factorization(
+    semigroup: PositiveAffineSemigroup,
+    coordinates: tuple[int, ...],
+    *,
+    validate_parent: bool,
+) -> AffineFactorization:
+    """Run the admitted product; catalog requests already validate the parent."""
+    if validate_parent:
+        _preflight_factorization_parent_size(semigroup)
+        semigroup = _admit_semigroup(semigroup)
+    elif type(semigroup) is not PositiveAffineSemigroup:
+        raise OperationDomainValidationError(
+            location=("semigroup",),
+            code="affine_semigroup.semigroup",
+            message="semigroup must be a canonical positive affine semigroup",
+        )
+    config = semigroup.configuration
+    if type(coordinates) is not tuple or any(
+        type(value) is not int for value in coordinates
+    ):
+        raise OperationDomainValidationError(
+            location=("coordinates",),
+            code="affine_semigroup.factorization_type",
+            message="coordinates must be a tuple of exact integers",
+        )
+    if len(coordinates) != config.columns:
+        raise OperationDomainValidationError(
+            location=("coordinates",),
+            code="affine_semigroup.factorization_axis",
+            message="coordinates must use the retained generator axis",
+        )
+    if any(value < 0 for value in coordinates):
+        raise OperationDomainValidationError(
+            location=("coordinates",),
+            code="affine_semigroup.factorization_sign",
+            message="factorization coordinates must be nonnegative",
+        )
+    max_coordinate = 10**MAX_AFFINE_FACTOR_COORDINATE_DIGITS
+    if any(value >= max_coordinate for value in coordinates):
+        raise OperationResourceAdmissionError(
+            location=("coordinates",),
+            code="affine_semigroup.factorization_digits",
+            message=(
+                "factorization coordinates are limited to "
+                f"{MAX_AFFINE_FACTOR_COORDINATE_DIGITS} decimal digits"
+            ),
+        )
+    arithmetic_work = (
+        config.rows * config.columns * MAX_AFFINE_FACTOR_COORDINATE_DIGITS**2
+    )
+    if arithmetic_work > 1_000_000:
+        raise OperationResourceAdmissionError(
+            location=("coordinates",),
+            code="affine_semigroup.factorization_work",
+            message="exact factorization evaluation exceeds its arithmetic work envelope",
+        )
+    if (
+        _estimate_factorization_bytes(semigroup, coordinates)
+        > MAX_AFFINE_FACTOR_RESULT_BYTES
+    ):
+        raise OperationResourceAdmissionError(
+            location=("semigroup",),
+            code="affine_semigroup.factorization_output",
+            message="factorization result exceeds the 1,000,000-byte output envelope",
+        )
+    target = tuple(
+        sum(
+            coordinates[column] * config.entries[row][column]
+            for column in range(config.columns)
+        )
+        for row in range(config.rows)
+    )
+    return AffineFactorization._from_kernel(
+        semigroup=semigroup,
+        coordinates=coordinates,
+        target=target,
+    )
+
+
 def _hilbert_rays(
     configuration: AffineConfiguration,
 ) -> tuple[tuple[int, int], tuple[int, int]]:
@@ -998,15 +1234,6 @@ def fiber_graph(
                 f"{MAX_AFFINE_GRAPH_EDGE_CHECKS}-check envelope"
             ),
         )
-    if candidate_count * len(ordered_moves) > MAX_AFFINE_GRAPH_EDGES:
-        raise OperationResourceAdmissionError(
-            location=("target",),
-            code="affine_semigroup.graph_output",
-            message=(
-                "worst-case fiber graph exceeds the "
-                f"{MAX_AFFINE_GRAPH_EDGES}-edge output envelope"
-            ),
-        )
     vertices = _enumerate_fiber(semigroup, target, grades, target_grade, maxima)
     positions = {vertex: index for index, vertex in enumerate(vertices)}
     edges: set[tuple[int, int]] = set()
@@ -1054,6 +1281,7 @@ __all__ = [
     "PositiveAffineSemigroup",
     "PositiveGradingResult",
     "construct",
+    "evaluate_factorization",
     "fiber",
     "fiber_graph",
     "membership",

@@ -60,7 +60,7 @@ def _field_context(presentation: FiniteFieldPresentation) -> Any:
     modulus = fmpz_mod_poly_ctx(presentation.characteristic)(
         list(presentation.modulus_coefficients)
     )
-    return fq_default_ctx(modulus=modulus)
+    return fq_default_ctx(modulus=modulus, check_prime=False, check_modulus=False)
 
 
 def _field_element(

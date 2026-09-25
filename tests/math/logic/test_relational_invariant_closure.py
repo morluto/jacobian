@@ -123,8 +123,8 @@ def test_two_supplied_operations_generate_the_least_common_closed_relation() -> 
         RelationalInvariantClosureRequest(
             source=source,
             relation_arity=1,
-            generator_tuples=((0,),),
-            polymorphisms=(constant_zero, constant_one),
+            generator_tuples=((1,), (0,), (0,)),
+            polymorphisms=(constant_one, constant_zero, constant_zero),
         )
     )
     assert result.tuples == ((0,), (1,))

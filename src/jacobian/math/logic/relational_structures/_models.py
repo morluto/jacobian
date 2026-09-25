@@ -1459,11 +1459,11 @@ class RelationalInvariantClosureRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_source_bound_generators(self) -> Self:
-        if self.generator_tuples != tuple(sorted(set(self.generator_tuples))):
-            raise _polymorphism_validation_error(
-                "closure.generator_order",
-                "generator tuples must be unique and lexicographically ordered",
-            )
+        object.__setattr__(
+            self,
+            "generator_tuples",
+            tuple(sorted(set(self.generator_tuples))),
+        )
         if any(
             len(row) != self.relation_arity
             or any(not 0 <= value < self.source.carrier_size for value in row)
@@ -1478,6 +1478,15 @@ class RelationalInvariantClosureRequest(StrictModel):
                 "closure.operation_source",
                 "every supplied operation must be bound to the exact source structure",
             )
+        operation_by_key = {
+            (operation.arity, operation.operation_table): operation
+            for operation in self.polymorphisms
+        }
+        object.__setattr__(
+            self,
+            "polymorphisms",
+            tuple(operation_by_key[key] for key in sorted(operation_by_key)),
+        )
         return self
 
 
@@ -1532,6 +1541,15 @@ class RelationalInvariantClosure(StrictModel):
             raise _polymorphism_validation_error(
                 "closure.result_operation_source",
                 "every retained operation must be bound to the exact source structure",
+            )
+        operation_keys = tuple(
+            (operation.arity, operation.operation_table)
+            for operation in self.polymorphisms
+        )
+        if operation_keys != tuple(sorted(set(operation_keys))):
+            raise _polymorphism_validation_error(
+                "closure.result_operation_order",
+                "retained operations must be in canonical unique order",
             )
         return self
 

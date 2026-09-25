@@ -173,26 +173,6 @@ TOOLS = (
         ),
     ),
     MathTool(
-        operation_id="lattice_gauge.plaquette.compute",
-        title="Compute exact oriented plaquette curvature",
-        description=(
-            "Compute the ordered nonabelian holonomy around a closed oriented "
-            "lattice plaquette path; reversing orientation gives the exact inverse "
-            "and the result remains bound to the field and path."
-        ),
-        request_type=PlaquetteRequest,
-        result_type=PlaquetteResult,
-        run=_run_plaquette,
-        tags=("lattice-gauge", "plaquette", "curvature", "exact"),
-        examples=(
-            OperationExample(
-                name="triangle_plaquette",
-                description="Compute triangle plaquette curvature; the path must be closed and chain over the field lattice.",
-                input={"field": _TRIANGLE_FIELD, "path": _TRIANGLE_PATH},
-            ),
-        ),
-    ),
-    MathTool(
         operation_id="lattice_gauge.holonomy.compute",
         title="Compute the ordered exact holonomy of a lattice gauge field",
         description=(
@@ -207,9 +187,11 @@ TOOLS = (
         request_type=HolonomyRequest,
         result_type=HolonomyResult,
         run=_run_holonomy,
-        tags=("lattice-gauge", "holonomy", "exact"),
+        tags=("lattice-gauge", "holonomy", "plaquette", "curvature", "exact"),
         discovery_terms=(
             "lattice gauge path holonomy",
+            "oriented plaquette curvature",
+            "closed lattice gauge loop",
             "Wilson line ordered product",
             "gauge field edge product",
             "finite group Wilson loop character",

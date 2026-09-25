@@ -14,7 +14,12 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.math.gauge._models import GaugeLattice, GaugePathStep, OrientedGaugePath
+from jacobian.math.gauge._models import (
+    MAX_GAUGE_LABEL_LENGTH,
+    GaugeLattice,
+    GaugePathStep,
+    OrientedGaugePath,
+)
 from jacobian.math.gauge._su2_models import (
     SU2GaugeEdgeValue,
     SU2GaugeField,
@@ -60,6 +65,7 @@ def _admit_su2_path(
     edges = {edge.edge_id: edge for edge in field.lattice.edges}
     aggregate_work = 0
     accumulated_digits = 1
+    previous: tuple[str, bool] | None = None
     cursor: str | None = None
     start: str | None = None
     for step in path.steps:
@@ -79,8 +85,16 @@ def _admit_su2_path(
             start = tail
         cursor = head
         step_digits = _value_digits(labels[step.edge_id])
+        traversal = (step.edge_id, step.forward)
+        if (
+            previous is not None
+            and previous[0] == step.edge_id
+            and previous[1] != step.forward
+        ):
+            accumulated_digits = 1
         aggregate_work += 64 * accumulated_digits * step_digits
         accumulated_digits += step_digits + 1
+        previous = traversal
     _admit_aggregate_work(aggregate_work, "path")
     if not path.steps:
         basepoint: object = getattr(path, "basepoint", None)
@@ -117,6 +131,14 @@ def _compose_path(
     return result
 
 
+def _valid_label(value: object) -> bool:
+    return (
+        type(value) is str
+        and 1 <= len(value) <= MAX_GAUGE_LABEL_LENGTH
+        and not any(0xD800 <= ord(character) <= 0xDFFF for character in value)
+    )
+
+
 def _reject(code: str, message: str) -> NoReturn:
     raise OperationDomainValidationError(
         location=("field",), code=f"lattice_gauge.su2.{code}", message=message
@@ -135,9 +157,7 @@ def _admit_field(field: object) -> SU2GaugeField:
     if (
         not isinstance(vertices, tuple)
         or not 1 <= len(vertices) <= 64
-        or any(
-            type(vertex) is not str or not 1 <= len(vertex) <= 64 for vertex in vertices
-        )
+        or any(not _valid_label(vertex) for vertex in vertices)
         or len(set(vertices)) != len(vertices)
         or not isinstance(edges, tuple)
         or not 1 <= len(edges) <= 128
@@ -145,9 +165,9 @@ def _admit_field(field: object) -> SU2GaugeField:
         _reject("field_shape", "SU(2) gauge lattice is malformed")
     for edge in edges:
         if (
-            type(getattr(edge, "edge_id", None)) is not str
-            or type(getattr(edge, "tail", None)) is not str
-            or type(getattr(edge, "head", None)) is not str
+            not _valid_label(getattr(edge, "edge_id", None))
+            or not _valid_label(getattr(edge, "tail", None))
+            or not _valid_label(getattr(edge, "head", None))
             or edge.tail not in vertices
             or edge.head not in vertices
         ):
@@ -174,8 +194,10 @@ def su2_gauge_transform(
 ) -> SU2GaugeTransformResult:
     """Apply ``U'_(u->v) = g_u U_(u->v) g_v^-1`` edgewise."""
     field = _admit_field(field)
-    if not isinstance(vertex_values, tuple) or any(
-        not isinstance(entry, SU2GaugeVertexValue) for entry in vertex_values
+    if (
+        not isinstance(vertex_values, tuple)
+        or len(vertex_values) > len(field.lattice.vertices)
+        or any(not isinstance(entry, SU2GaugeVertexValue) for entry in vertex_values)
     ):
         _reject("transform_vertices", "gauge frames are malformed")
     frames: dict[str, RationalUnitQuaternion] = {}

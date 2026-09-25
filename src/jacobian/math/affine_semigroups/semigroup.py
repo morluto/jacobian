@@ -771,7 +771,11 @@ def normalization(semigroup: PositiveAffineSemigroup) -> AffineSemigroupNormaliz
     semigroup = _admit_semigroup(semigroup)
     configuration = semigroup.configuration
     if configuration.rows != 2 or configuration.columns < 2:
-        raise ValueError("normalization currently requires a two-row configuration")
+        raise OperationDomainValidationError(
+            location=("semigroup", "configuration"),
+            code="affine_semigroup.normalization_domain",
+            message="normalization requires a two-row configuration with at least two generators",
+        )
 
     maximum = max(abs(value) for row in configuration.entries for value in row)
     minor_bound = max(
@@ -790,12 +794,20 @@ def normalization(semigroup: PositiveAffineSemigroup) -> AffineSemigroupNormaliz
     matrix = Matrix([[int(value) for value in row] for row in configuration.entries])
     hnf = hermite_normal_form(matrix)
     if hnf.shape != (2, 2):
-        raise ValueError("normalization requires a full-rank generated lattice in Z^2")
+        raise OperationDomainValidationError(
+            location=("semigroup", "configuration"),
+            code="affine_semigroup.normalization_domain",
+            message="normalization requires a full-rank generated lattice in Z^2",
+        )
     a, b = int(hnf[0, 0]), int(hnf[0, 1])
     c, d = int(hnf[1, 0]), int(hnf[1, 1])
     determinant = a * d - b * c
     if determinant == 0:
-        raise ValueError("normalization requires a full-rank generated lattice in Z^2")
+        raise OperationDomainValidationError(
+            location=("semigroup", "configuration"),
+            code="affine_semigroup.normalization_domain",
+            message="normalization requires a full-rank generated lattice in Z^2",
+        )
 
     coordinate_columns: list[tuple[int, int]] = []
     for x, y in configuration.columns_vectors:
@@ -829,7 +841,14 @@ def normalization(semigroup: PositiveAffineSemigroup) -> AffineSemigroupNormaliz
             for row in range(2)
         ),
     )
-    rays = _hilbert_rays(coordinate_configuration)
+    try:
+        rays = _hilbert_rays(coordinate_configuration)
+    except ValueError as exc:
+        raise OperationDomainValidationError(
+            location=("semigroup", "configuration"),
+            code="affine_semigroup.normalization_domain",
+            message=str(exc),
+        ) from exc
     ray_determinant = rays[0][0] * rays[1][1] - rays[0][1] * rays[1][0]
     if ray_determinant > MAX_HILBERT_BASIS_DETERMINANT:
         raise OperationResourceAdmissionError(

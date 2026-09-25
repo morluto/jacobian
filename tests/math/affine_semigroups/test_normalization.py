@@ -10,7 +10,10 @@ from typing import cast
 import pytest
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.affine_semigroups import (
     AffineConfiguration,
     AffineSemigroupNormalization,
@@ -121,6 +124,23 @@ def test_normalization_matches_small_exact_lattice_oracle() -> None:
         assert result.semigroup.configuration.columns_vectors == vectors
 
 
+@pytest.mark.parametrize(
+    "vectors",
+    (
+        ((1, 0),),
+        ((1, 0), (2, 0)),
+        ((1, 1), (2, 2)),
+        ((1, 1), (2, 2), (3, 3)),
+    ),
+)
+def test_normalization_reports_expected_native_domain_failures(
+    vectors: tuple[tuple[int, int], ...],
+) -> None:
+    with pytest.raises(OperationDomainValidationError) as exc_info:
+        normalization(_semigroup(vectors))
+    assert exc_info.value.errors()[0]["type"] == "affine_semigroup.normalization_domain"
+
+
 def test_normalization_matches_exhaustive_small_pointed_semigroups() -> None:
     # Exhaust every two- and three-generator subset of this small positive
     # quadrant grid. The brute oracle checks lattice membership by minor gcds
@@ -185,7 +205,7 @@ def test_normalization_preserves_full_source_through_model_and_json_round_trips(
 
 
 def test_normalization_requires_full_rank_and_bounded_hilbert_search() -> None:
-    with pytest.raises(ValueError, match="full-rank"):
+    with pytest.raises(OperationDomainValidationError, match="full-rank"):
         normalization(_semigroup(((1, 0), (2, 0))))
 
     # The group lattice is Z^2 due to the interior vector, while the cone rays

@@ -436,6 +436,19 @@ def concurrent_step(
             status="ESCAPES_DECLARED_ENVELOPE",
             envelope_escape=target,
         )
+    derived_bytes = len(marking.model_dump_json().encode("utf-8")) + 3 * net.place_count
+    output_bound = (
+        3 * len(net.model_dump_json().encode("utf-8"))
+        + 2 * derived_bytes
+        + 10 * (net.place_count + net.transition_count)
+        + 1024
+    )
+    if output_bound > MAX_MARKING_CONFLICT_PROFILE_MATERIALIZED_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("net",),
+            code="petri_net.concurrent_step_output_bound",
+            message="concurrent step result exceeds its output bound",
+        )
     return ConcurrentStepResult(
         net=net,
         marking=marking,
@@ -893,6 +906,21 @@ def marking_reachability(
                 queue.append(target_index)
             if successor == target:
                 transitions = witness(target_index)
+                replay_bound = _firing_sequence_replay_output_bound(
+                    net, initial_marking, len(transitions)
+                )
+                if replay_bound > MAX_FIRING_SEQUENCE_REPLAY_MATERIALIZED_BYTES:
+                    incomplete_reasons.add("SEQUENCE_LIMIT")
+                    return MarkingReachabilityResult(
+                        net=net,
+                        initial_marking=initial_marking,
+                        target_marking=target_marking,
+                        max_states=max_states,
+                        status="INCOMPLETE",
+                        sequence=None,
+                        explored_state_count=len(states),
+                        incomplete_reasons=tuple(sorted(incomplete_reasons)),
+                    )
                 if len(transitions) > MAX_FIRING_SEQUENCE_LENGTH:
                     incomplete_reasons.add("SEQUENCE_LIMIT")
                     return MarkingReachabilityResult(
@@ -1241,10 +1269,13 @@ def place_set_initial_marking_profile(
             message="subset must use the net place axis",
         )
 
-    # The nested support profile retains a second complete net copy. Bound both
-    # copies before constructing that nested value.
+    # The result may retain the net directly, in the source marking, and in
+    # the nested support profile. Account for the parent convention explicitly.
     nested_net_bytes = len(net.model_dump_json().encode("utf-8"))
-    if 2 * nested_net_bytes > MAX_MARKING_CONFLICT_PROFILE_MATERIALIZED_BYTES:
+    marking_parent_copies = 1 if marking.net is not None else 0
+    if (
+        2 + marking_parent_copies
+    ) * nested_net_bytes + 2048 > MAX_MARKING_CONFLICT_PROFILE_MATERIALIZED_BYTES:
         raise OperationResourceAdmissionError(
             location=("net",),
             code="petri_net.initial_profile_output_bound",

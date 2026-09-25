@@ -206,8 +206,8 @@ class FilteredChainMapPageZeroResult(StrictModel):
                     "E0 dimensions and quotient representatives must cover "
                     "every degree and level"
                 )
-            for level_index, level in enumerate(dimensions):
-                for degree, dimension in enumerate(level):
+            for level_index, level_dimensions in enumerate(dimensions):
+                for degree, dimension in enumerate(level_dimensions):
                     if dimension < 0 or dimension > complex_value.basis_sizes[degree]:
                         raise ValueError(
                             "E0 dimensions must lie between zero and each chain rank"
@@ -1076,7 +1076,7 @@ def filtered_chain_map_page_zero(
             target_graded.quotient_representatives[level]
         ):
             lower_target[degree].extend(
-                [_parse_entry(entry, prime) for entry in vector]
+                tuple(_parse_entry(entry, prime) for entry in vector)
                 for vector in representatives
             )
 

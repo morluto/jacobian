@@ -84,6 +84,7 @@ from jacobian.math.groups.root_systems._models import (
     SimpleReflectionResult,
     SimpleReflectionsResult,
     WeightLatticeVector,
+    WeylAntidominantRepresentativeResult,
     WeylDescentsResult,
     WeylDominantRepresentativeResult,
     WeylElement,
@@ -1788,6 +1789,136 @@ def weyl_dominant_representative(
     )
 
 
+def weyl_antidominant_representative(
+    matrix: CartanMatrix | tuple[tuple[int, ...], ...],
+    weight: tuple[int, ...] | list[int],
+) -> WeylAntidominantRepresentativeResult:
+    """Return the unique antidominant orbit representative and transporter.
+
+    For a weight not already in the negative chamber, first move it to the
+    dominant chamber and then apply the longest Weyl element. This uses the
+    finite-type chamber duality ``w0(C+) = C-`` and retains the resulting
+    exact action on the root lattice as the transporter value.
+    """
+    from jacobian.math.matrices.values import IntegerMatrix
+
+    cartan = _as_cartan(matrix)
+    rows = cartan.entries
+    _admit_cartan_finite_type(rows)
+    rank = len(rows)
+    if isinstance(weight, list):
+        weight = tuple(weight)
+    if (
+        not isinstance(weight, tuple)
+        or len(weight) != rank
+        or any(
+            type(coordinate) is not int
+            or abs(coordinate) > MAX_REFLECTION_REPRESENTABLE
+            for coordinate in weight
+        )
+    ):
+        raise OperationDomainValidationError(
+            location=("weight",),
+            code="root_system.invalid_integral_weight",
+            message=(
+                "weight must have one bounded integer fundamental-weight "
+                "coordinate per simple coroot"
+            ),
+        )
+
+    coordinate_bounds = _weight_coordinate_bounds(rows, weight)
+    if any(bound > MAX_REFLECTION_REPRESENTABLE for bound in coordinate_bounds):
+        raise OperationDomainValidationError(
+            location=("weight",),
+            code="root_system.antidominant_representative_coordinate_bound",
+            message=(
+                "some Weyl image coordinate may exceed the interoperable integer bound"
+            ),
+        )
+    longest_word_work_bound = (
+        (MAX_POSITIVE_ROOTS + 1) * rank * MAX_POSITIVE_ROOTS * rank
+    )
+    inversion_work_bound = MAX_POSITIVE_ROOTS * MAX_POSITIVE_ROOTS * rank
+    action_work_bound = (MAX_WEYL_WORD_LENGTH + MAX_POSITIVE_ROOTS) * rank**2
+    work_bound = (
+        longest_word_work_bound
+        + inversion_work_bound
+        + action_work_bound
+        + MAX_POSITIVE_ROOTS * rank**2
+        + MAX_WEYL_WORD_LENGTH * rank
+    )
+    output_cells_bound = rank * rank + 2 * rank
+    output_bytes_bound = rank * rank * 32 + rank * 64 + 2048
+    if (
+        work_bound > 2_000_000
+        or output_cells_bound > 1_000
+        or output_bytes_bound > 16_384
+    ):
+        raise OperationResourceAdmissionError(
+            location=("weight",),
+            code="root_system.antidominant_representative_bounds",
+            message=(
+                "the antidominant representative and transporter exceed the "
+                "admitted work or output envelope"
+            ),
+        )
+
+    identity = tuple(tuple(int(i == j) for j in range(rank)) for i in range(rank))
+    # Both chambers include their shared walls. Preserve the identity map when
+    # the source is already antidominant, including zero.
+    if all(coordinate <= 0 for coordinate in weight):
+        element = WeylElement.model_construct(
+            matrix=cartan,
+            root_action=IntegerMatrix(
+                row_count=rank, column_count=rank, entries=identity
+            ),
+        )
+        return WeylAntidominantRepresentativeResult._from_kernel(
+            cartan, weight, weight, element
+        )
+
+    dominant_word: list[int] = []
+    dominant = _dominant_weight(
+        rows,
+        weight,
+        word=dominant_word,
+        max_steps=MAX_WEYL_WORD_LENGTH,
+        bound_code="root_system.antidominant_representative_word_bound",
+        bound_message=(
+            "the antidominant transporter exceeds the admitted "
+            f"{MAX_WEYL_WORD_LENGTH}-reflection chamber-normalization bound"
+        ),
+    )
+    longest_word = _weyl_longest_word_kernel(rows)
+    positive_root_count = len(enumerate_positive_roots(rows))
+    if (
+        len(longest_word) != positive_root_count
+        or len(_weyl_word_inversions_kernel(rows, longest_word)) != positive_root_count
+    ):
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+
+    antidominant = dominant
+    root_action = identity
+    for index in dominant_word:
+        root_action = _left_apply_root_reflection_to_action(root_action, index, rows)
+    for index in longest_word:
+        antidominant = _weight_reflect(antidominant, index, rows)
+        root_action = _left_apply_root_reflection_to_action(root_action, index, rows)
+    if any(value > 0 for value in antidominant):
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+    element = WeylElement.model_construct(
+        matrix=cartan,
+        root_action=IntegerMatrix(
+            row_count=rank,
+            column_count=rank,
+            entries=tuple(tuple(row) for row in root_action),
+        ),
+    )
+    return WeylAntidominantRepresentativeResult._from_kernel(
+        cartan, weight, antidominant, element
+    )
+
+
 def _stabilizer_order(
     rows: tuple[tuple[int, ...], ...], dominant: tuple[int, ...]
 ) -> int:
@@ -2123,6 +2254,23 @@ def _reflection_matrix(
             pairing = rows[index][source] if not transpose else rows[source][index]
             matrix[target][source] -= int(target == index) * pairing
     return tuple(tuple(row) for row in matrix)
+
+
+def _left_apply_root_reflection_to_action(
+    action: tuple[tuple[int, ...], ...],
+    index: int,
+    rows: tuple[tuple[int, ...], ...],
+) -> tuple[tuple[int, ...], ...]:
+    """Left-multiply a root action by ``s_index`` using its one changed row."""
+    reflected = list(action)
+    reflected[index] = tuple(
+        action[index][column]
+        - sum(
+            rows[index][source] * action[source][column] for source in range(len(rows))
+        )
+        for column in range(len(rows))
+    )
+    return tuple(reflected)
 
 
 def _weight_reflection_matrix(

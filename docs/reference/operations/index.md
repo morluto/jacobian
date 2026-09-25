@@ -17,6 +17,7 @@ that need more context than an operation card:
 - [Root, coroot, weight, and coweight vectors](groups/root-weight-lattices.md)
 - [Positive-root length profiles](groups/root-length-profiles.md)
 - [Weyl-element orders](groups/weyl-element-order.md)
+- [Antidominant Weyl representatives](groups/weyl-antidominant-representative.md)
 - [Finite Dynkin diagrams](groups/dynkin-diagrams.md)
 - [Highest positive coroots](groups/highest-coroots.md)
 - [Positive-root height and support profiles](groups/positive-root-profiles.md)

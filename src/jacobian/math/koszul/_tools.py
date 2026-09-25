@@ -78,7 +78,7 @@ _KOSZUL_XY_EXAMPLE = {
 }
 
 
-_MODULE_EXAMPLE = {
+_MODULE_EXAMPLE: dict[str, Any] = {
     "algebra": {
         "basis": ["1"],
         "multiplication": [[[{"num": "1", "den": "1"}]]],

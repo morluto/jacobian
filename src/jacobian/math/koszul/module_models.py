@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from itertools import combinations
-from typing import Self
+from typing import Any, Self
 
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
@@ -401,7 +401,7 @@ class ModuleKoszulDGA(StrictModel):
         return self
 
     @classmethod
-    def _from_kernel(cls, **values) -> Self:
+    def _from_kernel(cls, **values: Any) -> Self:
         """Construct an admitted DGA without replaying its product table."""
         return cls.model_construct(**values)
 

@@ -245,7 +245,7 @@ def test_output_budget_rejects_before_complex_expansion(monkeypatch):
         raise AssertionError("chain construction ran before DGA admission")
 
     monkeypatch.setattr(dga_operations, "_build_module_koszul_complex", fail_if_built)
-    monkeypatch.setattr(dga_operations, "MAX_KOSZUL_DGA_OUTPUT_BYTES", 1)
+    monkeypatch.setattr(dga_operations, "MAX_KOSZUL_DGA_OUTPUT_CELLS", 1)
     with pytest.raises(OperationResourceAdmissionError) as caught:
         dga_operations.module_koszul_dga(
             ModuleKoszulDGARequest(algebra=_dual_numbers(), sequence=((_q(0), _q(1)),))

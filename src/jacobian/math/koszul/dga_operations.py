@@ -33,7 +33,7 @@ from jacobian.math.koszul.module_operations import (
 )
 
 MAX_KOSZUL_DGA_WORK = 2_000_000
-MAX_KOSZUL_DGA_OUTPUT_BYTES = 8 * 1024 * 1024
+MAX_KOSZUL_DGA_OUTPUT_CELLS = 8 * 1024 * 1024
 MAX_KOSZUL_DGA_LABEL_BYTES = 256
 MAX_KOSZUL_DGA_INTERMEDIATE_DIGITS = 8_192
 
@@ -177,23 +177,23 @@ def _admit_dga(value: ModuleKoszulDGARequest) -> None:
         + product_work_bound
         + product_coefficient_work
     )
-    product_entry_bytes = 2 * multiplication_digits + 80
-    differential_entry_bytes = 2 * differential_digits + 64
+    product_entry_cells = multiplication_digits + 2
+    differential_entry_cells = differential_digits + 2
     rational_items = 4 * dimension**3 + 4 * dimension + 2 * sequence_length * dimension
-    context_bytes = rational_items * (
-        2 * max(multiplication_digits, unit_digits, sequence_digits) + 24
+    context_cells = rational_items * (
+        max(multiplication_digits, unit_digits, sequence_digits) + 2
     )
-    context_bytes += 4 * label_byte_count + 2_048
-    result_bytes_bound = (
-        2_048
-        + context_bytes
-        + product_entries_bound * product_entry_bytes
-        + differential_entries_bound * differential_entry_bytes
+    context_cells += 4 * label_byte_count + 64
+    result_cells_bound = (
+        64
+        + context_cells
+        + product_entries_bound * product_entry_cells
+        + differential_entries_bound * differential_entry_cells
     )
     if (
         product_entries_bound > MAX_KOSZUL_DGA_PRODUCT_ENTRIES
         or work_bound > MAX_KOSZUL_DGA_WORK
-        or result_bytes_bound > MAX_KOSZUL_DGA_OUTPUT_BYTES
+        or result_cells_bound > MAX_KOSZUL_DGA_OUTPUT_CELLS
     ):
         raise OperationResourceAdmissionError(
             location=("sequence",),
@@ -340,4 +340,4 @@ def module_koszul_dga(
     )
 
 
-__all__ = ["MAX_KOSZUL_DGA_OUTPUT_BYTES", "MAX_KOSZUL_DGA_WORK", "module_koszul_dga"]
+__all__ = ["MAX_KOSZUL_DGA_OUTPUT_CELLS", "MAX_KOSZUL_DGA_WORK", "module_koszul_dga"]

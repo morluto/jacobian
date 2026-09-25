@@ -238,6 +238,7 @@ def inverse_row_insertion_rsk_trace(
 ) -> RSKWordInverseTraceResult:
     """Reconstruct a word together with every reverse-insertion event."""
     request, cell_count = _admit_inverse_trace(pair)
+    pair = request.pair
     insertion = [list(row) for row in pair.insertion_tableau.rows]
     label_cells: list[tuple[int, int] | None] = [None] * cell_count
     for row_index, row in enumerate(pair.recording_tableau.rows):

@@ -169,6 +169,18 @@ def test_inverse_trace_revalidates_forged_pair_shape_before_indexing() -> None:
     )
 
 
+def test_inverse_trace_executes_against_canonicalized_pair() -> None:
+    original = row_insertion_rsk(
+        FiniteWord(alphabet=("a", "b"), letters=("b", "a"))
+    )
+    forged = original.model_copy(
+        update={"insertion_tableau": {"rows": [[1], [2]]}}
+    )
+    result = inverse_row_insertion_rsk_trace(forged)
+    assert result.word == FiniteWord(alphabet=("a", "b"), letters=("b", "a"))
+    assert row_insertion_rsk(result.word) == original
+
+
 def test_inverse_trace_deserialization_rejects_missing_event() -> None:
     result = inverse_row_insertion_rsk_trace(
         row_insertion_rsk(FiniteWord(alphabet=("a", "b"), letters=("b", "a")))

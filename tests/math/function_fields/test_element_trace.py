@@ -132,6 +132,23 @@ def test_rational_function_field_trace_is_identity() -> None:
     assert result.trace == _rational(7, (1, 1), (1, 0, 1))
 
 
+def test_degree_four_trace_obeys_newton_identity() -> None:
+    # f(y)=y^4+2y^3+y^2+1 over GF(3)(x). Newton gives s_3=1.
+    field = FiniteFunctionField(
+        characteristic=3,
+        variable="x",
+        generator="y",
+        defining_polynomial=(
+            _rational(3, (1,)), _rational(3, (0,)),
+            _rational(3, (1,)), _rational(3, (2,)), _rational(3, (1,)),
+        ),
+    )
+    element = _element(field, (_rational(3, (0,)), _rational(3, (0,)),
+                               _rational(3, (0,)), _rational(3, (1,))))
+    result = function_field_element_trace(element)
+    assert result.trace == _rational(3, (1,))
+
+
 def test_trace_growth_admission_precedes_rational_function_expansion(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

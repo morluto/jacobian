@@ -876,7 +876,7 @@ def _admit_trace_growth(
         total = (-1, 0)
         for previous_power in range(1, power):
             product_degree = _trace_multiply_degree(
-                coefficient_degrees[degree - previous_power],
+                coefficient_degrees[degree - power + previous_power],
                 power_sum_degrees[previous_power],
             )
             admit(product_degree, ("element", "field", "defining_polynomial"))
@@ -948,7 +948,7 @@ def function_field_element_trace(
                 total = rf_add(
                     total,
                     rf_mul(
-                        coefficients[degree - previous_power],
+                        coefficients[degree - power + previous_power],
                         power_sums[previous_power],
                         prime,
                     ),

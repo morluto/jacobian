@@ -6,6 +6,7 @@ from jacobian.math.logic.relational_structures._admission import (
     MAX_HOMOMORPHISM_ENUMERATION_MAP_LABELS,
     MAX_POLYMORPHISM_COORDINATE_WORK,
     MAX_POLYMORPHISM_RELATION_COMBINATIONS,
+    MAX_RELATIONAL_DISJOINT_UNION_WORK,
     MAX_RELATIONAL_STRUCTURE_TRANSFORM_WORK,
     MAX_SEARCH_CANDIDATES,
     MAX_SEARCH_TUPLE_REPLAYS,
@@ -29,6 +30,8 @@ from jacobian.math.logic.relational_structures._models import (
     HomomorphismSearchResult,
     InducedSubstructureRequest,
     InducedSubstructureResult,
+    RelationalDisjointUnionRequest,
+    RelationalDisjointUnionResult,
     RelationalPolymorphismCheckResult,
     RelationalPolymorphismRequest,
     RelationalQuotient,
@@ -42,6 +45,7 @@ from jacobian.math.logic.relational_structures.operations import (
     compute_core,
     count_homomorphisms,
     csp_instance_to_source_structure,
+    disjoint_union_structure,
     enumerate_homomorphisms,
     induced_substructure,
     profile_csp_assignment,
@@ -130,6 +134,12 @@ def _induced_substructure(
 
 def _relational_reduct(request: RelationalReductRequest) -> RelationalReductResult:
     return reduct_structure(request.source, request.symbol_ids)
+
+
+def _relational_disjoint_union(
+    request: RelationalDisjointUnionRequest,
+) -> RelationalDisjointUnionResult:
+    return disjoint_union_structure(request.left, request.right)
 
 
 def _transpose_binary_relation(
@@ -301,6 +311,62 @@ TOOLS: MathTools = (
                         "relation_tables": [[[0, 1], [1, 2]], [[2]]],
                     },
                     "symbol_id": "E",
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="relational_structure.disjoint_union.compute",
+        title="Form a disjoint union of finite relational structures",
+        description=(
+            "Form the relational coproduct of two finite structures over the "
+            "same ranked signature. Left labels remain fixed and right labels "
+            "are offset by the left carrier size; each positive-arity relation "
+            "is the union of the two transported tables, with no mixed-component "
+            "tuples. A nullary relation is true exactly when either input "
+            "relation is true. The result includes both component inclusions. "
+            f"The combined carrier is bounded by {MAX_RELATIONAL_CARRIER}, "
+            f"each relation table by {MAX_RELATIONAL_TABLE_ROWS} rows, and all "
+            "table and coordinate work is preflighted against "
+            f"{MAX_RELATIONAL_DISJOINT_UNION_WORK} visits."
+        ),
+        request_type=RelationalDisjointUnionRequest,
+        result_type=RelationalDisjointUnionResult,
+        run=_relational_disjoint_union,
+        tags=("relational-structures", "finite-model-theory", "csp", "exact"),
+        discovery_terms=(
+            "relational disjoint union",
+            "coproduct of finite relational structures",
+            "tagged sum of structures",
+            "component inclusions",
+        ),
+        examples=(
+            OperationExample(
+                name="two_components_with_nullary_truth_union",
+                description=(
+                    "Concatenates the component carriers, transports their "
+                    "relations, and makes the shared nullary relation true "
+                    "because it is true in the right component."
+                ),
+                input={
+                    "left": {
+                        "carrier_size": 2,
+                        "signature": [
+                            {"symbol_id": "E", "arity": 2},
+                            {"symbol_id": "P", "arity": 1},
+                            {"symbol_id": "T", "arity": 0},
+                        ],
+                        "relation_tables": [[[0, 1]], [[1]], []],
+                    },
+                    "right": {
+                        "carrier_size": 2,
+                        "signature": [
+                            {"symbol_id": "E", "arity": 2},
+                            {"symbol_id": "P", "arity": 1},
+                            {"symbol_id": "T", "arity": 0},
+                        ],
+                        "relation_tables": [[[0, 0]], [], [[]]],
+                    },
                 },
             ),
         ),

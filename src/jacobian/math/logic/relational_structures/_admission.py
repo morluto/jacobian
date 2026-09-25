@@ -19,6 +19,7 @@ from jacobian.catalog.models import (
 )
 from jacobian.math.logic.relational_structures.values import (
     MAX_RELATIONAL_ARITY,
+    MAX_RELATIONAL_CARRIER,
     MAX_RELATIONAL_OPERATION_TABLE_CELLS,
     MAX_RELATIONAL_POLYMORPHISM_ARITY,
     MAX_RELATIONAL_SYMBOLS,
@@ -54,6 +55,11 @@ MAX_RELATIONAL_STRUCTURE_TRANSFORM_WORK = (
     MAX_RELATIONAL_SYMBOLS
     * (1 + MAX_RELATIONAL_TABLE_ROWS * (MAX_RELATIONAL_ARITY + 1))
     + 2 * MAX_RELATIONAL_TABLE_ROWS
+)
+MAX_RELATIONAL_DISJOINT_UNION_WORK = MAX_RELATIONAL_CARRIER + MAX_RELATIONAL_SYMBOLS * (
+    MAX_RELATIONAL_TABLE_ROWS
+    * (MAX_RELATIONAL_ARITY + 1 + MAX_RELATIONAL_TABLE_ROWS.bit_length())
+    + MAX_RELATIONAL_TABLE_ROWS * MAX_RELATIONAL_ARITY
 )
 
 
@@ -91,6 +97,70 @@ def admit_binary_relation_transpose(
             ),
         )
     return work
+
+
+def admit_relational_disjoint_union(
+    left: FiniteRelationalStructure, right: FiniteRelationalStructure
+) -> tuple[tuple[int, ...], tuple[int, ...], int]:
+    """Preflight the tagged carrier, exact relation rows, and tuple work."""
+
+    if left.signature != right.signature:
+        raise OperationDomainValidationError(
+            location=("right", "signature"),
+            code="relational.structure.disjoint_union_signature",
+            message="disjoint-union components must have the same ranked signature",
+        )
+    carrier_size = left.carrier_size + right.carrier_size
+    if carrier_size > MAX_RELATIONAL_CARRIER:
+        raise OperationResourceAdmissionError(
+            location=("disjoint_union", "carrier_size"),
+            code="relational.structure.disjoint_union_carrier_bound",
+            message=(
+                f"disjoint-union carrier has {carrier_size} labels, exceeding "
+                f"the canonical {MAX_RELATIONAL_CARRIER}-label structure bound"
+            ),
+        )
+
+    work = carrier_size
+    for symbol, left_table, right_table in zip(
+        left.signature,
+        left.relation_tables,
+        right.relation_tables,
+        strict=True,
+    ):
+        rows = (
+            int(bool(left_table or right_table))
+            if symbol.arity == 0
+            else len(left_table) + len(right_table)
+        )
+        if rows > MAX_RELATIONAL_TABLE_ROWS:
+            raise OperationResourceAdmissionError(
+                location=("disjoint_union", "relation_tables", symbol.symbol_id),
+                code="relational.structure.disjoint_union_table_bound",
+                message=(
+                    f"union relation {symbol.symbol_id} has {rows} rows, exceeding "
+                    f"the canonical {MAX_RELATIONAL_TABLE_ROWS}-row table bound"
+                ),
+            )
+        # This covers output row/cell reconstruction, its comparison sort, and
+        # coordinate offsets for all right-component tuples.
+        work += rows * (symbol.arity + 1 + rows.bit_length())
+        work += len(right_table) * symbol.arity
+    if work > MAX_RELATIONAL_DISJOINT_UNION_WORK:
+        raise OperationResourceAdmissionError(
+            location=("disjoint_union",),
+            code="relational.structure.disjoint_union_work_bound",
+            message=(
+                f"disjoint union needs {work} row and coordinate visits, "
+                f"exceeding the {MAX_RELATIONAL_DISJOINT_UNION_WORK}-visit envelope"
+            ),
+        )
+
+    return (
+        tuple(range(left.carrier_size)),
+        tuple(range(left.carrier_size, carrier_size)),
+        work,
+    )
 
 
 def candidate_space(source_size: int, target_size: int) -> int:

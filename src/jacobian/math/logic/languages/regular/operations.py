@@ -61,6 +61,7 @@ __all__ = [
     "dfa_subsequential_preimage",
     "dfa_transition_carrier",
     "nfa_membership",
+    "nfa_subsequential_image",
     "transition_parikh_profile",
     "verify_accepted_word_count",
     "verify_dfa_run",
@@ -473,6 +474,18 @@ def _admit_cross_domain_dfa(dfa: DFA, operation: str) -> DFA:
         ) from exc
 
 
+def _admit_cross_domain_nfa(nfa: NFA, operation: str) -> NFA:
+    """Recheck a caller-supplied NFA at this public native boundary."""
+    try:
+        return NFA.model_validate(nfa.model_dump(), strict=True)
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("nfa",),
+            code=f"regular_language.{operation}.invalid_nfa_carrier",
+            message=f"{operation} requires a structurally valid canonical NFA",
+        ) from exc
+
+
 def _admit_cross_domain_transducer(
     transducer: SubsequentialTransducer, operation: str
 ) -> SubsequentialTransducer:
@@ -639,6 +652,196 @@ def dfa_subsequential_image(dfa: DFA, transducer: SubsequentialTransducer) -> NF
         work_bound,
         nfa_state_bound,
         nfa_transition_bound,
+    )
+
+
+def nfa_subsequential_image(nfa: NFA, transducer: SubsequentialTransducer) -> NFA:
+    """Return an epsilon-NFA for the image of an epsilon-NFA language.
+
+    The product retains source epsilon edges without advancing the transducer;
+    labeled source edges advance both machines and emit the transducer output.
+    Final outputs are included only at accepting source states.
+    """
+    if type(nfa) is not NFA or type(transducer) is not SubsequentialTransducer:
+        raise OperationDomainValidationError(
+            location=("nfa", "transducer"),
+            code="regular_language.nfa_image.noncanonical_input",
+            message="NFA image requires canonical NFA and subsequential transducer values",
+        )
+    nfa = _admit_cross_domain_nfa(nfa, "nfa_image")
+    transducer = _admit_cross_domain_transducer(transducer, "nfa_image")
+    if (
+        nfa.alphabet is None
+        or transducer.input_alphabet is None
+        or transducer.output_alphabet is None
+        or nfa.alphabet != transducer.input_alphabet
+        or nfa.alphabet_id != transducer.input_alphabet_id
+        or nfa.alphabet_size != len(nfa.alphabet.symbols)
+    ):
+        raise OperationDomainValidationError(
+            location=("nfa", "transducer"),
+            code="regular_language.nfa_image.alphabet_mismatch",
+            message=(
+                "NFA image requires matching explicit input alphabets and an "
+                "explicit transducer output alphabet"
+            ),
+        )
+    work_bound, state_bound, transition_bound = _admit_nfa_subsequential_image(
+        nfa, transducer
+    )
+    return _build_nfa_subsequential_image(
+        nfa, transducer, work_bound, state_bound, transition_bound
+    )
+
+
+def _admit_nfa_subsequential_image(
+    nfa: NFA, transducer: SubsequentialTransducer
+) -> tuple[int, int, int]:
+    """Bound the full product and expanded output NFA before construction."""
+    request_checkpoint("before NFA subsequential image admission")
+    pair_bound = nfa.state_count * transducer.state_count
+    epsilon_edges = sum(edge.symbol is None for edge in nfa.transitions)
+    symbol_edge_counts = [0] * nfa.alphabet_size
+    for edge in nfa.transitions:
+        if edge.symbol is not None:
+            symbol_edge_counts[edge.symbol] += 1
+    transducer_edges_by_symbol: dict[int, list[int]] = {}
+    for edge in transducer.transitions:
+        transducer_edges_by_symbol.setdefault(edge.input_symbol, []).append(
+            len(edge.output)
+        )
+    product_edge_bound = epsilon_edges * transducer.state_count + sum(
+        source_count * len(transducer_edges_by_symbol.get(symbol, ()))
+        for symbol, source_count in enumerate(symbol_edge_counts)
+    )
+    output_transition_bound = epsilon_edges * transducer.state_count + sum(
+        source_count
+        * sum(
+            max(1, output_length)
+            for output_length in transducer_edges_by_symbol.get(symbol, ())
+        )
+        for symbol, source_count in enumerate(symbol_edge_counts)
+    )
+    output_intermediates = sum(
+        source_count
+        * sum(
+            max(0, output_length - 1)
+            for output_length in transducer_edges_by_symbol.get(symbol, ())
+        )
+        for symbol, source_count in enumerate(symbol_edge_counts)
+    )
+    terminal_pair_bound = len(nfa.accepting_states) * len(transducer.final_outputs)
+    final_output_transitions = len(nfa.accepting_states) * sum(
+        max(1, len(final.output)) for final in transducer.final_outputs
+    )
+    final_intermediates = len(nfa.accepting_states) * sum(
+        max(0, len(final.output) - 1) for final in transducer.final_outputs
+    )
+    state_bound = (
+        pair_bound
+        + output_intermediates
+        + final_intermediates
+        + int(terminal_pair_bound > 0)
+    )
+    transition_bound = output_transition_bound + final_output_transitions
+    work_bound = (
+        pair_bound
+        + len(nfa.transitions) * transducer.state_count
+        + output_transition_bound
+        + final_output_transitions
+        + state_bound
+    )
+    intermediate_bytes_bound = (
+        pair_bound * 128
+        + product_edge_bound * 128
+        + terminal_pair_bound * 96
+        + state_bound * 256
+        + transition_bound * 128
+    )
+    output_bytes_bound = 4096 + state_bound * 24 + transition_bound * 72
+    if (
+        state_bound > MAX_NFA_STATES
+        or transition_bound > MAX_NFA_TRANSITIONS
+        or intermediate_bytes_bound > MAX_SUBSEQUENTIAL_IMAGE_INTERMEDIATE_BYTES
+        or output_bytes_bound > MAX_SUBSEQUENTIAL_IMAGE_OUTPUT_BYTES
+        or work_bound > MAX_SUBSEQUENTIAL_IMAGE_WORK
+    ):
+        raise OperationResourceAdmissionError(
+            location=("nfa", "transducer"),
+            code="regular_language.nfa_image_resource_bound",
+            message=(
+                "subsequential NFA image exceeds its product or output-NFA "
+                "work, intermediate-allocation, or output bound"
+            ),
+        )
+    request_checkpoint("after NFA subsequential image admission")
+    return work_bound, state_bound, transition_bound
+
+
+def _build_nfa_subsequential_image(
+    nfa: NFA,
+    transducer: SubsequentialTransducer,
+    work_bound: int,
+    state_bound: int,
+    transition_bound: int,
+) -> NFA:
+    ledger = OperationWorkLedger(work_bound)
+    outgoing: list[list[tuple[int | None, int]]] = [[] for _ in range(nfa.state_count)]
+    for edge in nfa.transitions:
+        outgoing[edge.source].append((edge.symbol, edge.target))
+    transducer_edges = {
+        (edge.source, edge.input_symbol): edge for edge in transducer.transitions
+    }
+    final_outputs = {final.state: final.output for final in transducer.final_outputs}
+    initial_pair = (nfa.initial_state, transducer.initial_state)
+    pairs = [initial_pair]
+    pair_ids = {initial_pair: 0}
+    product_edges: list[tuple[int, tuple[int, ...], int]] = []
+    terminal_pairs: list[tuple[int, tuple[int, ...]]] = []
+    cursor = 0
+    while cursor < len(pairs):
+        request_checkpoint("during subsequential NFA image product exploration")
+        source_state, transducer_state = pairs[cursor]
+        final_output = final_outputs.get(transducer_state)
+        if source_state in nfa.accepting_states and final_output is not None:
+            terminal_pairs.append((cursor, final_output))
+        for input_symbol, source_target in outgoing[source_state]:
+            ledger.charge()
+            if input_symbol is None:
+                edge_output: tuple[int, ...] = ()
+                target_transducer_state = transducer_state
+            else:
+                transition = transducer_edges.get((transducer_state, input_symbol))
+                if transition is None:
+                    continue
+                edge_output = transition.output
+                target_transducer_state = transition.target
+            target_pair = (source_target, target_transducer_state)
+            target_id = pair_ids.get(target_pair)
+            if target_id is None:
+                target_id = len(pairs)
+                pair_ids[target_pair] = target_id
+                pairs.append(target_pair)
+            product_edges.append((cursor, edge_output, target_id))
+            ledger.charge(len(edge_output))
+        cursor += 1
+    transitions, state_count, accepting_sink = _expand_image_nfa(
+        pairs,
+        product_edges,
+        terminal_pairs,
+        state_bound,
+        transition_bound,
+        ledger,
+    )
+    request_checkpoint("before subsequential NFA image result construction")
+    return NFA(
+        state_count=state_count,
+        alphabet_size=transducer.output_alphabet_size,
+        alphabet_id=transducer.output_alphabet_id,
+        alphabet=transducer.output_alphabet,
+        transitions=transitions,
+        initial_state=0,
+        accepting_states=() if accepting_sink is None else (accepting_sink,),
     )
 
 

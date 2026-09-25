@@ -129,6 +129,46 @@ class SubsequentialImageRequest(StrictModel):
         return self
 
 
+class SubsequentialNFAImageRequest(StrictModel):
+    """Image of a parented epsilon-NFA language under a subsequential map."""
+
+    nfa: NFA
+    transducer: SubsequentialTransducer
+
+    @model_validator(mode="after")
+    def require_matching_explicit_input_alphabet(self) -> Self:
+        alphabet = self.nfa.alphabet
+        input_alphabet = self.transducer.input_alphabet
+        if alphabet is None or input_alphabet is None:
+            raise _validation_error(
+                "nfa_image_alphabet_context_missing",
+                "NFA image requires explicit source and transducer input alphabets",
+            )
+        if self.transducer.output_alphabet is None:
+            raise _validation_error(
+                "nfa_image_output_alphabet_context_missing",
+                "NFA image requires an explicit transducer output alphabet",
+            )
+        if alphabet != input_alphabet:
+            raise _validation_error(
+                "nfa_image_alphabet_context_mismatch",
+                "NFA and transducer input alphabet contexts must be identical",
+            )
+        if (self.nfa.alphabet_id is None) != (
+            self.transducer.input_alphabet_id is None
+        ) or self.nfa.alphabet_id != self.transducer.input_alphabet_id:
+            raise _validation_error(
+                "nfa_image_alphabet_identity_mismatch",
+                "NFA and transducer input alphabet identities must be identical",
+            )
+        if self.nfa.alphabet_size != len(alphabet.symbols):
+            raise _validation_error(
+                "nfa_image_alphabet_size_mismatch",
+                "NFA alphabet_size must match its explicit alphabet context",
+            )
+        return self
+
+
 class NFAMembershipRequest(StrictModel):
     """Decide whether a parented finite word belongs to an NFA language."""
 

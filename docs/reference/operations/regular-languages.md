@@ -69,6 +69,17 @@ output-path expansion is the standard finite-automaton construction; see the
 [NFA construction and subset-construction discussion in these automata
 notes](https://www.cis.upenn.edu/~jean/old511/html/cis51108sl2.pdf#page=38).
 
+`transducer.subsequential.nfa_image.compute` extends the image operation to a
+source epsilon-NFA. Source epsilon edges preserve the transducer state and add
+an output epsilon edge; labeled source edges advance both machines, and final
+outputs are emitted only at accepting source states. The result recognizes the
+image of the complete source regular language, including all epsilon-path
+choices, without first determinizing the source NFA. The exact input alphabet
+and optional identity must match the transducer's input parent. Admission bounds
+the full state product, output-word expansion, work, and serialized result
+before constructing the product; the result retains the output alphabet and
+identity.
+
 `regular_language.nfa.membership.decide` checks one finite word in an explicitly
 parented NFA. It computes epsilon closure before reading and after each symbol,
 propagates the reachable state set along matching labeled edges, and accepts

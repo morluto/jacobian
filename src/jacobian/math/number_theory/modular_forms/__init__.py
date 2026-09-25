@@ -44,6 +44,7 @@ from jacobian.math.number_theory.modular_forms.character_degeneracy import (
     modular_character_coordinates_v_degeneracy,
 )
 from jacobian.math.number_theory.modular_forms.character_degeneracy_models import (
+    ModularCharacterVDegeneracyImage,
     ModularCharacterVDegeneracyRequest,
 )
 from jacobian.math.number_theory.modular_forms.field_coordinates import (
@@ -90,6 +91,7 @@ __all__ = [
     "ModularCharacterHeckeRequest",
     "ModularCharacterQExpansion",
     "ModularCharacterSpaceInclusion",
+    "ModularCharacterVDegeneracyImage",
     "ModularCharacterVDegeneracyRequest",
     "ModularFormBasis",
     "ModularFormChangeOfBasisFrame",

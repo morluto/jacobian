@@ -1,5 +1,7 @@
 """Public declarations for exact bounded modular-form operations."""
 
+from typing import cast
+
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.number_theory.modular_forms import operations as native
 from jacobian.math.number_theory.modular_forms._models import (
@@ -61,6 +63,7 @@ from jacobian.math.number_theory.modular_forms.character_degeneracy import (
     modular_character_coordinates_v_degeneracy,
 )
 from jacobian.math.number_theory.modular_forms.character_degeneracy_models import (
+    ModularCharacterVDegeneracyImage,
     ModularCharacterVDegeneracyRequest,
 )
 from jacobian.math.number_theory.modular_forms.field_coordinates_tools import (
@@ -75,7 +78,6 @@ from jacobian.math.number_theory.modular_forms.values import (
     ModularFormBasis,
     ModularFormChangeOfBasisFrame,
     ModularFormCoordinates,
-    ModularFormFieldQExpansion,
     ModularFormFramedCoordinates,
     ModularFormFramedHeckeMatrix,
     ModularFormHeckeMatrix,
@@ -214,12 +216,12 @@ def apply_coordinate_v_degeneracy(
 
 def apply_character_coordinate_v_degeneracy(
     request: ModularCharacterVDegeneracyRequest,
-) -> ModularFormFieldQExpansion:
+) -> ModularCharacterVDegeneracyImage:
     return modular_character_coordinates_v_degeneracy(request)
 
 
 def _character_v_target_space_example() -> dict[str, object]:
-    target = dict(_character_form_example()["space"])
+    target = dict(cast(dict[str, object], _character_form_example()["space"]))
     target["level"] = 26
     target["character"] = {
         "group": {
@@ -1280,17 +1282,19 @@ TOOLS: MathTools = (
     ),
     MathTool(
         operation_id="modular_form.character_coordinates.v_degeneracy.apply",
-        title="Apply character-valued V_d into an exact target space",
+        title="Represent a character-valued V_d image in its exact target space",
         description=(
-            "Apply V_d(f)(q)=f(q^d) to either normalized form in "
+            "Return the exact source-bound V_d image, defined by "
+            "V_d(f)(q)=f(q^d), for either normalized form in "
             "S2(Gamma0(13), chi) for the admitted order-six characters over "
             "Q(zeta_6), with d=2 or 3. Supply the exact target S2 space at "
             "level 26 or 39; its character-inflation inclusion is checked. "
-            "Return the exact finite q-prefix through q^(2d), the image of "
-            "the source's Sturm-determining prefix."
+            "The result retains the exact source form, degeneracy index, "
+            "inflated target space, and finite q-prefix through q^(2d), the "
+            "image of the source's Sturm-determining prefix."
         ),
         request_type=ModularCharacterVDegeneracyRequest,
-        result_type=ModularFormFieldQExpansion,
+        result_type=ModularCharacterVDegeneracyImage,
         run=apply_character_coordinate_v_degeneracy,
         tags=("modular-forms", "characters", "v-operator", "exact"),
         examples=(

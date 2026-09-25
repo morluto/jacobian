@@ -499,10 +499,22 @@ tracks the number but still pins the surrounding wording, so a reword or a
 different bound tripping first fails the test even though the contract holds.
 This is assertion debt: it couples the test to prose instead of behavior.
 
-Only when an error carries no stable code (a bare `ValueError` from a private
-helper) is a message match acceptable. Then derive any embedded bound from the
-owning source constant rather than hardcoding it, so a scale-cap change does not
-break the assertion:
+Some failures have no stable, reason-specific code. A Python `ValueError` has
+no structured error identifier; a Pydantic `ValidationError` may expose a
+custom, owner-specific `errors()[0]["type"]`, or only a generic type such as
+`value_error`. Prefer the specific type whenever it exists. Do not treat a
+generic type as identifying a particular bound when the message is the only
+thing that distinguishes it.
+
+For a code-less failure, first make the test input otherwise valid and isolate
+the boundary it is meant to exercise. If rejection alone establishes the
+contract, assert the exception class and keep the message out of the test. A
+message match is justified only when the exact failure reason or ordering is
+itself part of the test and there is no stable identifier for it. Prefer adding
+a stable owner error code when callers or tests need to distinguish such
+reasons. When a message match is justified, derive any embedded bound from the
+owning source constant rather than hardcoding it, so a scale-cap change does
+not break the assertion:
 
 ```python
 from jacobian.math.number_theory.diophantine_approximation._models import (

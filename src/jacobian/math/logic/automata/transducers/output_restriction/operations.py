@@ -14,7 +14,6 @@ from jacobian.math.logic.automata.transducers.output_restriction._models import 
     MAX_RESTRICT_OUTPUT_WORK,
     RestrictOutputEdgeSource,
     RestrictOutputProductState,
-    RestrictRationalOutputRequest,
     RestrictRationalOutputResult,
 )
 from jacobian.math.logic.automata.transducers.values import (
@@ -286,7 +285,9 @@ def _validate_relation_edges(
 
 
 def _validate_inputs(
-    request: RestrictRationalOutputRequest,
+    relation: RationalTransducer,
+    language: DFA,
+    output_alphabet: FiniteAlphabet,
 ) -> tuple[
     dict[tuple[int, int], int],
     tuple[tuple[int, ...], ...],
@@ -295,16 +296,15 @@ def _validate_inputs(
         tuple[tuple[int, ...], ...],
     ],
 ]:
-    relation = request.transducer
     if not isinstance(relation, RationalTransducer):
         _fail(
             "relation_type_invalid", "output restriction requires a rational transducer"
         )
     _validate_relation_axes(relation)
-    if not isinstance(request.output_language, DFA):
+    if not isinstance(language, DFA):
         _fail("language_type_invalid", "output restriction requires a total DFA")
-    delta = _validate_dfa(request.output_language, relation.output_alphabet_size)
-    _validate_alphabet_contexts(relation, request.output_alphabet)
+    delta = _validate_dfa(language, relation.output_alphabet_size)
+    _validate_alphabet_contexts(relation, output_alphabet)
     outgoing, edge_inputs, edge_outputs, label_cells = _validate_relation_edges(
         relation
     )
@@ -318,7 +318,9 @@ def _validate_inputs(
 
 
 def restrict_rational_output(
-    request: RestrictRationalOutputRequest,
+    relation: RationalTransducer,
+    language: DFA,
+    output_alphabet: FiniteAlphabet,
 ) -> RestrictRationalOutputResult:
     """Return the exact relation ``R ∩ (A* x L)``.
 
@@ -327,13 +329,7 @@ def restrict_rational_output(
     and source-edge coordinates; canonical target edges are materialized after
     exact state, edge, label-cell, and output bounds are known.
     """
-    if not isinstance(request, RestrictRationalOutputRequest):
-        _fail(
-            "request_type_invalid", "output restriction requires its canonical request"
-        )
-    delta, outgoing, labels = _validate_inputs(request)
-    relation = request.transducer
-    language = request.output_language
+    delta, outgoing, labels = _validate_inputs(relation, language, output_alphabet)
     edge_inputs, edge_outputs = labels
 
     product_state_bound = relation.state_count * language.state_count
@@ -449,7 +445,7 @@ def restrict_rational_output(
         input_alphabet_id=relation.input_alphabet_id,
         output_alphabet_id=relation.output_alphabet_id,
         input_alphabet=relation.input_alphabet,
-        output_alphabet=request.output_alphabet,
+        output_alphabet=output_alphabet,
         state_count=len(pairs),
         initial_states=initial_ids,
         accepting_states=accepting_ids,
@@ -462,7 +458,7 @@ def restrict_rational_output(
     return RestrictRationalOutputResult(
         source=relation,
         output_language=language,
-        output_alphabet=request.output_alphabet,
+        output_alphabet=output_alphabet,
         restricted=restricted,
         product_states=product_states,
         edge_sources=edge_sources,

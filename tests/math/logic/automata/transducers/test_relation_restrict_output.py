@@ -106,6 +106,14 @@ def _relation_pairs(
     return set(_accepted_paths(relation))
 
 
+def _restrict(request: RestrictRationalOutputRequest) -> RestrictRationalOutputResult:
+    return restrict_rational_output(
+        request.transducer,
+        request.output_language,
+        request.output_alphabet,
+    )
+
+
 def test_output_restriction_matches_independent_acyclic_path_oracle() -> None:
     source = _source()
     output_language = _output_language()
@@ -115,7 +123,7 @@ def test_output_restriction_matches_independent_acyclic_path_oracle() -> None:
         output_alphabet=FiniteAlphabet(symbols=("x", "y")),
     )
 
-    result = restrict_rational_output(request)
+    result = _restrict(request)
 
     oracle = {
         (input_word, output_word)
@@ -146,11 +154,9 @@ def test_output_restriction_round_trips_and_is_registered() -> None:
     restored_request = RestrictRationalOutputRequest.model_validate_json(
         request.model_dump_json()
     )
-    assert restrict_rational_output(restored_request) == restrict_rational_output(
-        request
-    )
+    assert _restrict(restored_request) == _restrict(request)
 
-    result = restrict_rational_output(request)
+    result = _restrict(request)
     restored_result = RestrictRationalOutputResult.model_validate_json(
         result.model_dump_json()
     )
@@ -170,7 +176,11 @@ def test_output_restriction_rejects_mismatched_alphabet_context() -> None:
         output_alphabet=FiniteAlphabet(symbols=("x", "y")),
     )
     with pytest.raises(OperationDomainValidationError) as caught:
-        restrict_rational_output(request)
+        restrict_rational_output(
+            request.transducer,
+            request.output_language,
+            request.output_alphabet,
+        )
     assert caught.value.errors()[0]["type"] == (
         "rational_transducer.restrict_output.output_context_mismatch"
     )

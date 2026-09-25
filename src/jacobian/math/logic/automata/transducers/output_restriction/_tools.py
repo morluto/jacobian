@@ -37,6 +37,17 @@ _EXAMPLE_DFA = {
     "accepting_states": [1],
 }
 
+
+def _run_restrict_output(
+    request: RestrictRationalOutputRequest,
+) -> RestrictRationalOutputResult:
+    return restrict_rational_output(
+        request.transducer,
+        request.output_language,
+        request.output_alphabet,
+    )
+
+
 TOOLS = (
     MathTool(
         operation_id="transducer.relation.restrict_output.compute",
@@ -49,7 +60,7 @@ TOOLS = (
         ),
         request_type=RestrictRationalOutputRequest,
         result_type=RestrictRationalOutputResult,
-        run=restrict_rational_output,
+        run=_run_restrict_output,
         tags=("transducer", "rational-relation", "output-restriction", "exact"),
         discovery_terms=(
             "restrict rational relation output",

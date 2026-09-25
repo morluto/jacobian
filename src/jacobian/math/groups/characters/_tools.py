@@ -356,7 +356,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "complete nonnegative integer structure-constant tensor. The source "
             "partition is checked against its concrete permutation group. This "
             "operation admits groups of order at most 256 and at most 64 classes, "
-            "with explicit work and output-cell bounds."
+            "with explicit work and output-cell bounds; each coefficient is at "
+            "most the group order."
         ),
         request_type=ClassMultiplicationConstantsRequest,
         result_type=ClassMultiplicationConstantsResult,

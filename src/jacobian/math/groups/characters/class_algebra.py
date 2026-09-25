@@ -19,7 +19,6 @@ MAX_CLASS_ALGEBRA_GROUP_ORDER = 256
 MAX_CLASS_ALGEBRA_CLASS_COUNT = 64
 MAX_CLASS_ALGEBRA_MULTIPLICATION_STEPS = 4_194_304
 MAX_CLASS_ALGEBRA_OUTPUT_CELLS = 262_144
-MAX_CLASS_ALGEBRA_OUTPUT_BYTES = 2_000_000
 
 
 def _compose(first: tuple[int, ...], second: tuple[int, ...]) -> tuple[int, ...]:
@@ -100,6 +99,13 @@ def class_multiplication_constants(
                 coefficient, remainder = divmod(count, class_size)
                 if remainder:
                     raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+                # Conjugation acts transitively on the target class and
+                # bijectively on factorizations, so this quotient is the
+                # number of factorizations of any one fixed target element.
+                # For that target, each left factor determines at most one
+                # right factor and vice versa. Hence the coefficient is at
+                # most min(|C_left|, |C_right|) <= |G|, which is at most three
+                # decimal digits under the admitted order cap.
                 coefficients.append(coefficient)
             plane.append(tuple(coefficients))
         tensor.append(plane)
@@ -117,6 +123,14 @@ def class_multiplication_constants(
 
 
 def _admit_class_algebra_size(order: int, class_count: int, degree: int) -> None:
+    """Admit work and exact result shape before class-algebra allocation.
+
+    The tensor has exactly ``class_count**3`` integer cells. For any fixed
+    target element, its structure constant is at most ``order`` by the
+    per-left-factor uniqueness argument in the kernel, so the order bound also
+    bounds exact scalar height. The retained partition has ``order * degree``
+    point coordinates, each in ``0..degree - 1``.
+    """
     if order > MAX_CLASS_ALGEBRA_GROUP_ORDER:
         raise OperationResourceAdmissionError(
             location=("partition",),
@@ -148,13 +162,4 @@ def _admit_class_algebra_size(order: int, class_count: int, degree: int) -> None
             location=("partition", "classes"),
             code="groups.characters.class_algebra_output_exceeds_envelope",
             message="class multiplication tensor exceeds its output-cell envelope",
-        )
-    output_bytes = (
-        output_cells * (len(str(max(1, order * order))) + 3) + order * degree + 1_024
-    )
-    if output_bytes > MAX_CLASS_ALGEBRA_OUTPUT_BYTES:
-        raise OperationResourceAdmissionError(
-            location=("partition", "classes"),
-            code="groups.characters.class_algebra_output_bytes_exceed_envelope",
-            message="class multiplication tensor exceeds its serialized-size envelope",
         )

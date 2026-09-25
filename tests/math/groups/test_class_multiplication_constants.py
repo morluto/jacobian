@@ -13,7 +13,10 @@ from jacobian.math.groups.characters._models import (
     ClassMultiplicationConstantsRequest,
     ClassMultiplicationConstantsResult,
 )
-from jacobian.math.groups.characters.class_algebra import class_multiplication_constants
+from jacobian.math.groups.characters.class_algebra import (
+    _admit_class_algebra_size,
+    class_multiplication_constants,
+)
 from jacobian.math.groups.operations import group_conjugacy_classes
 
 
@@ -21,8 +24,14 @@ def _partition(generators: list[list[int]]) -> GroupConjugacyClassesResult:
     degree = len(generators[0])
     classes = group_conjugacy_classes(degree, generators)
     return GroupConjugacyClassesResult(
-        source=PermutationGroup(degree=degree, generators=generators),
-        classes=classes,
+        source=PermutationGroup(
+            degree=degree,
+            generators=tuple(tuple(generator) for generator in generators),
+        ),
+        classes=tuple(
+            tuple(tuple(member) for member in conjugacy_class)
+            for conjugacy_class in classes
+        ),
     )
 
 
@@ -104,3 +113,39 @@ def test_actual_group_order_bound_precedes_conjugacy_expansion() -> None:
         class_multiplication_constants(
             ClassMultiplicationConstantsRequest(partition=forged_small_partition)
         )
+
+
+def test_maximum_tensor_shape_is_admitted_without_serialized_size_gate() -> None:
+    # A concrete cyclic group reaches the operation's maximum tensor-cell
+    # boundary and produces the complete, exact class algebra.
+    generator = (*range(1, 64), 0)
+    cyclic_64 = _partition([list(generator)])
+    result = class_multiplication_constants(
+        ClassMultiplicationConstantsRequest(partition=cyclic_64)
+    )
+    assert len(result.constants) == 64
+    assert (
+        sum(
+            len(pair_coefficients)
+            for plane in result.constants
+            for pair_coefficients in plane
+        )
+        == 64**3
+    )
+    square = tuple(generator[generator[index]] for index in range(64))
+    class_index = {
+        conjugacy_class[0]: index
+        for index, conjugacy_class in enumerate(result.partition.classes)
+    }
+    assert (
+        result.constants[class_index[generator]][class_index[generator]][
+            class_index[square]
+        ]
+        == 1
+    )
+
+    # This shape is within the public mathematical envelope: 64^3 exact
+    # integer coefficients, with group-order-bounded coefficient height. The
+    # previous JSON-size estimate rejected it even though the cell, work, and
+    # scalar bounds admit the result.
+    _admit_class_algebra_size(order=128, class_count=64, degree=8)

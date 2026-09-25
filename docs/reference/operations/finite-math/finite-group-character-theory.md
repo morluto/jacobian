@@ -15,8 +15,12 @@ the partition. This follows GAP's documented convention for
 [`ClassMultiplicationCoefficient`](https://gap-system.github.io/gap/doc/ref/chap71_mj.html#X85EB1F307F863E46): it counts factorizations of one fixed target element and gives the coefficient of that target class sum in the product.
 
 Admission bounds group order by 256, class count by 64, the permutation work
-and the complete cubic result tensor, with separate coefficient-byte and
-operation-work limits applied before class multiplication. For S3, ordering
+and the complete cubic result tensor before class multiplication. For a fixed
+target element, each left factor determines at most one right factor, so every
+coefficient is at most the smaller of the two input class sizes and therefore
+at most the group order (at most 256 here). The returned partition has at most
+`group_order * permutation_degree` point coordinates; the existing degree cap
+is 64. For S3, ordering
 classes as identity, transpositions, and 3-cycles, the constants for
 `T*T` are `(3, 0, 3)`, for `T*C` are `(0, 2, 0)`, and for `C*C` are
 `(2, 0, 1)`. The trivial class is the unit. These are structure constants of

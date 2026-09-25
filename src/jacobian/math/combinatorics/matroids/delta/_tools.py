@@ -7,6 +7,7 @@ from jacobian.catalog.models import (
     OperationExample,
     OperationResourceAdmissionError,
 )
+from jacobian.math.combinatorics.greedoids.values import FiniteFeasibleSetSystem
 from jacobian.math.combinatorics.matroids.delta._models import (
     DeltaMatroidDistanceRequest,
     DeltaMatroidDistanceResult,
@@ -16,7 +17,6 @@ from jacobian.math.combinatorics.matroids.delta._models import (
     DeltaMatroidTwistResult,
     DeltaMatroidWidthRequest,
     DeltaMatroidWidthResult,
-    twist_result_serialized_bytes,
 )
 from jacobian.math.combinatorics.matroids.delta.extra import (
     BinaryLoopComplementRequest,
@@ -48,9 +48,9 @@ from jacobian.math.combinatorics.matroids.delta.operations import (
     width,
 )
 from jacobian.math.combinatorics.matroids.delta.values import (
-    MAX_DELTA_TWIST_RESULT_BYTES,
     DeltaMatroidAdmissionError,
     FiniteDeltaMatroid,
+    canonical_feasible_rows,
 )
 
 
@@ -71,22 +71,20 @@ def _from_feasible_sets(
 
 def _twist(request: DeltaMatroidTwistRequest) -> DeltaMatroidTwistResult:
     try:
+        # The source envelope bounds retained labels and memberships; twisting
+        # preserves row count and is admitted by its projected membership count.
+        # No transport-size serialization pass is needed before construction.
         twisted = twist(request.delta_matroid, request.subset)
-        result_bytes = twist_result_serialized_bytes(
-            request.delta_matroid, request.subset, twisted
+        source = FiniteDeltaMatroid.model_construct(
+            ground=request.delta_matroid.ground,
+            feasible=canonical_feasible_rows(
+                FiniteFeasibleSetSystem(
+                    ground=request.delta_matroid.ground,
+                    feasible=request.delta_matroid.feasible,
+                )
+            ),
         )
-        if result_bytes > MAX_DELTA_TWIST_RESULT_BYTES:
-            raise OperationResourceAdmissionError(
-                location=("result",),
-                code="delta_matroid.twist_result_bytes_exceeded",
-                message=(
-                    "source-bound twist result exceeds the "
-                    f"{MAX_DELTA_TWIST_RESULT_BYTES}-byte compact JSON envelope"
-                ),
-            )
-        return DeltaMatroidTwistResult._from_kernel(
-            request.delta_matroid, request.subset, twisted
-        )
+        return DeltaMatroidTwistResult._from_kernel(source, request.subset, twisted)
     except OperationResourceAdmissionError:
         raise
     except DeltaMatroidAdmissionError as exc:

@@ -53,6 +53,8 @@ from jacobian.math.groups.characters._models import (
     FrobeniusSchurIndicatorResult,
 )
 
+_MAX_ORDER_EIGHT_CHARACTER_PRODUCTS = 512
+
 
 def _fractions(value: CyclotomicValue) -> tuple[Fraction, ...]:
     return tuple(coefficient.as_fraction() for coefficient in value.coefficients)
@@ -503,6 +505,101 @@ def _cyclic_generator(partition: GroupConjugacyClassesResult) -> tuple[int, ...]
     return None
 
 
+def _order_eight_sign_map(
+    multiplication: tuple[tuple[int, ...], ...],
+    identity: int,
+    generators: tuple[int, int],
+    generator_signs: tuple[int, int],
+) -> tuple[int, ...] | None:
+    values: list[int | None] = [None] * 8
+    values[identity] = 1
+    pending = [identity]
+    while pending:
+        current = pending.pop()
+        current_sign = values[current]
+        if current_sign is None:
+            raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+        for generator, generator_sign in zip(generators, generator_signs, strict=True):
+            product = multiplication[current][generator]
+            proposed_sign = current_sign * generator_sign
+            if values[product] is None:
+                values[product] = proposed_sign
+                pending.append(product)
+            elif values[product] != proposed_sign:
+                return None
+    if any(value is None for value in values):
+        return None
+    return tuple(value for value in values if value is not None)
+
+
+def _order_eight_linear_characters(
+    partition: GroupConjugacyClassesResult,
+) -> tuple[tuple[int, ...], ...]:
+    """Enumerate the four linear characters of a nonabelian group of order 8.
+
+    Two noncommuting elements generate every nonabelian group of order 8:
+    their generated subgroup is nonabelian, while every group of order at most
+    4 is abelian. Each character is determined by its values on that pair.
+    """
+    elements = tuple(
+        sorted(tuple(element) for cls in partition.classes for element in cls)
+    )
+    element_index = {element: index for index, element in enumerate(elements)}
+    identity_index = element_index.get(tuple(range(partition.source.degree)))
+    if len(elements) != 8 or identity_index is None:
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+    multiplication = tuple(
+        tuple(
+            element_index.get(_permutation_compose(left, right), -1)
+            for right in elements
+        )
+        for left in elements
+    )
+    if any(index < 0 for row in multiplication for index in row):
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+
+    generators = next(
+        (
+            (left, right)
+            for left in range(8)
+            for right in range(left + 1, 8)
+            if multiplication[left][right] != multiplication[right][left]
+        ),
+        None,
+    )
+    if generators is None:
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+
+    rows: set[tuple[int, ...]] = set()
+    for first_sign in (-1, 1):
+        for second_sign in (-1, 1):
+            complete = _order_eight_sign_map(
+                multiplication,
+                identity_index,
+                generators,
+                (first_sign, second_sign),
+            )
+            if complete is None:
+                continue
+            if not all(
+                complete[multiplication[left][right]]
+                == complete[left] * complete[right]
+                for left in range(8)
+                for right in range(8)
+            ):
+                continue
+            rows.add(
+                tuple(
+                    complete[element_index[tuple(cls[0])]] for cls in partition.classes
+                )
+            )
+
+    ordered_rows = tuple(sorted(rows, key=lambda row: tuple(-value for value in row)))
+    if len(ordered_rows) != 4 or ordered_rows[0] != (1,) * len(partition.classes):
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+    return ordered_rows
+
+
 def _admit_character_table(
     *, order: int, class_count: int, cyclotomic_order: int, row_count: int
 ) -> None:
@@ -680,12 +777,13 @@ def _admit_character_partition(partition: object) -> GroupConjugacyClassesResult
 def character_table(
     partition: GroupConjugacyClassesResult,
 ) -> CharacterTableResult:
-    """Return a complete exact table for the bounded cyclic/S3 slice.
+    """Return a complete exact table for the bounded supported group families.
 
     The source partition is complete, so the result remains bound to the
     concrete permutation group and class ordering.  The supported family is
-    intentionally explicit: trivial groups, cyclic groups, and S3.  Other
-    groups are domain-invalid rather than receiving a guessed partial table.
+    intentionally explicit: trivial groups, cyclic groups, S3, and nonabelian
+    groups of order eight. Other groups are domain-invalid rather than
+    receiving a guessed partial table.
     """
     partition = _admit_character_partition(partition)
     order = sum(len(cls) for cls in partition.classes)
@@ -746,6 +844,80 @@ def character_table(
                 ),
             ),
         ]
+    elif order == 8 and len(sizes) == 5 and sorted(sizes) == [1, 1, 2, 2, 2]:
+        _admit_character_table(
+            order=order,
+            class_count=len(sizes),
+            cyclotomic_order=1,
+            row_count=5,
+        )
+        estimated_products = (8 * 8) + (4 * 8 * 2) + (4 * 8 * 8)
+        if estimated_products > _MAX_ORDER_EIGHT_CHARACTER_PRODUCTS:
+            raise OperationResourceAdmissionError(
+                location=("partition",),
+                code="groups.characters.order_eight_work_exceeds_envelope",
+                message=(
+                    "order-eight character construction exceeds its "
+                    f"{_MAX_ORDER_EIGHT_CHARACTER_PRODUCTS}-product envelope"
+                ),
+            )
+        linear_rows = _order_eight_linear_characters(partition)
+        identity = tuple(range(partition.source.degree))
+        identity_class = next(
+            index
+            for index, conjugacy_class in enumerate(partition.classes)
+            if identity in conjugacy_class
+        )
+        central_singletons = tuple(
+            index for index, size in enumerate(sizes) if size == 1
+        )
+        if len(central_singletons) != 2:
+            raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+        nonidentity_center = next(
+            index for index in central_singletons if index != identity_class
+        )
+        rows.extend(
+            CharacterRow(
+                label="trivial" if row_index == 0 else f"linear_{row_index}",
+                degree=1,
+                values=tuple(_make_value(1, (Fraction(value),)) for value in values),
+            )
+            for row_index, values in enumerate(linear_rows)
+        )
+        nonlinear_values = tuple(
+            _make_value(
+                1,
+                (
+                    Fraction(2)
+                    if index == identity_class
+                    else Fraction(-2)
+                    if index == nonidentity_center
+                    else Fraction(0),
+                ),
+            )
+            for index in range(len(sizes))
+        )
+        rows.append(CharacterRow(label="degree_two", degree=2, values=nonlinear_values))
+        # Check the exact orthogonality relations before publishing the table.
+        # For nonabelian groups of order 8, the two singleton classes are the
+        # identity and the nontrivial central element; the other three classes
+        # have size two.
+        for row_index, left in enumerate(rows):
+            for right_index, right in enumerate(rows[row_index:], start=row_index):
+                inner = (
+                    sum(
+                        (
+                            sizes[index]
+                            * left.values[index].coefficients[0].as_fraction()
+                            * right.values[index].coefficients[0].as_fraction()
+                            for index in range(len(sizes))
+                        ),
+                        Fraction(0),
+                    )
+                    / order
+                )
+                if inner != int(row_index == right_index):
+                    raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
     else:
         generator = _cyclic_generator(partition)
         if generator is None or any(len(cls) != 1 for cls in partition.classes):

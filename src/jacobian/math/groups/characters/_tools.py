@@ -484,9 +484,10 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         description=(
             "Compute the complete exact irreducible character table of a concrete "
             "permutation group class partition. This bounded release supports the "
-            "trivial, cyclic, and S3 groups; the returned rows retain the complete "
-            "source group and ordered class partition, and satisfy row orthogonality "
-            "and the degree-square identity."
+            "trivial and cyclic groups, S3, and nonabelian groups of order eight "
+            "(D8 and Q8). The returned rows retain the complete source group and "
+            "ordered class partition, and satisfy row orthogonality and the "
+            "degree-square identity."
         ),
         request_type=CharacterTableRequest,
         result_type=CharacterTableResult,

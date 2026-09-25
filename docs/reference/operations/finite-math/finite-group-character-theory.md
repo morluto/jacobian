@@ -2,6 +2,28 @@
 
 [Finite mathematics operations](index.md) · [Tool surface](../../tools.md)
 
+## Bounded complete character tables
+
+`finite_group.character_table.compute` returns a complete irreducible table for
+the trivial group, supported cyclic groups, S3, and a concrete nonabelian
+permutation group of order eight. For the last case, the complete canonical
+conjugacy partition must have class sizes `1, 1, 2, 2, 2`; this is the shared
+profile of D8 and Q8. The result retains the input group and exact class axis,
+uses rational character values, and includes four linear rows plus one
+degree-two row.
+
+The operation derives the linear rows from group multiplication. A pair of
+noncommuting elements generates a nonabelian order-eight group, so the four
+choices of signs on those generators exhaust its homomorphisms to `{±1}`. The
+degree-two row takes values `2` on the identity, `-2` on the other central
+element, and `0` on the three noncentral classes. Exact row orthogonality and
+the degree-square sum are checked before publication. GAP's character table
+reference gives the same table for D8 and Q8, with their class representative
+orders distinguishing the groups: [GAP Character Table Library](https://docs.gap-system.org/pkg/ctbllib/doc2/manual.pdf).
+
+This order-eight extension does not claim tables for general nonabelian groups
+or for noncyclic abelian groups such as `C2 × C2 × C2`.
+
 ## Scaling a class function
 
 `class_function.scale.compute` multiplies every value by one exact scalar in

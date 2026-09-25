@@ -71,9 +71,9 @@ def test_trivial_group_uses_one_class_same_carrier() -> None:
 
 
 def test_unsupported_complete_group_is_rejected_not_partial() -> None:
-    # D8 is neither cyclic nor the supported S3 slice.
+    # A4 is outside the explicitly supported complete-table families.
     with pytest.raises(OperationDomainValidationError):
-        character_table(_partition(4, ((1, 0, 3, 2), (0, 2, 1, 3))))
+        character_table(_partition(4, ((1, 2, 0, 3), (1, 0, 3, 2))))
 
 
 def test_cyclic_table_admits_interior_and_rejects_aggregate_boundary() -> None:

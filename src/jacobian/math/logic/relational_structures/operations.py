@@ -551,16 +551,7 @@ def _preflight_csp_instance(instance: FiniteCspInstance) -> None:
         template_rows += len(table)
         if template_rows > MAX_RELATIONAL_TRANSPORT_TUPLES:
             _raise_invalid_csp_instance()
-        for row in table:
-            if (
-                not isinstance(row, tuple)
-                or len(row) != symbol.arity
-                or any(
-                    type(value) is not int or not 0 <= value < template.carrier_size
-                    for value in row
-                )
-            ):
-                _raise_invalid_csp_instance()
+        _preflight_relation_rows(table, symbol.arity, template.carrier_size)
     scope_entries = 0
     for constraint in constraints:
         if type(constraint) is not FiniteCspConstraint:
@@ -585,6 +576,20 @@ def _preflight_csp_instance(instance: FiniteCspInstance) -> None:
         if any(
             type(variable) is not int or not 0 <= variable < variable_count
             for variable in scope
+        ):
+            _raise_invalid_csp_instance()
+
+
+def _preflight_relation_rows(
+    table: tuple[object, ...], arity: int, carrier_size: int
+) -> None:
+    for row in table:
+        if (
+            not isinstance(row, tuple)
+            or len(row) != arity
+            or any(
+                type(value) is not int or not 0 <= value < carrier_size for value in row
+            )
         ):
             _raise_invalid_csp_instance()
 

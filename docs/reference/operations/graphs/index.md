@@ -22,4 +22,3 @@ there is no graph artifact carrier or invariant-batch registry.
 - [Induced edge-deletion profiles](induced-edge-deletion-profile.md)
 - [Exact graph deletion decks](graph-decks.md)
 - [Anonymous vertex-deck degree multiset](anonymous-vertex-degree-multiset.md)
-- [Anonymous vertex-deck source order](anonymous-vertex-source-order.md)

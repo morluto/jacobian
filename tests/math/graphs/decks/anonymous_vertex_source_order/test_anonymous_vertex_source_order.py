@@ -18,7 +18,6 @@ from jacobian.math.graphs.decks.anonymous_vertex_source_order import (
     AnonymousVertexDeckSourceOrder,
     anonymous_vertex_deck_source_order,
 )
-from jacobian.math.graphs.decks.anonymous_vertex_source_order._tools import TOOLS
 from jacobian.math.graphs.decks.operations import anonymous_graph_card_multiset
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
@@ -92,13 +91,3 @@ def test_result_roundtrip_retains_the_anonymous_deck_context() -> None:
     assert restored.deck == deck
     assert anonymous_vertex_deck_edge_count(restored.deck).source_order == 4
 
-
-def test_operation_declaration_composes_with_the_existing_card_carrier() -> None:
-    tool = next(
-        tool
-        for tool in TOOLS
-        if tool.operation_id == "graph.deck.anonymous_vertex.source_order.compute"
-    )
-    assert tool.request_type is AnonymousGraphCardMultiset
-    assert tool.result_type is AnonymousVertexDeckSourceOrder
-    assert tool.run(_vertex_deck(_graph(3, 0b011))).source_order == 3

@@ -45,7 +45,9 @@ def test_table_rejects_non_square_shape_and_wrong_identity() -> None:
             FiniteGroupTableRequest(identity=0, multiplication=((0, 1),))
         )
     with pytest.raises(OperationDomainValidationError, match="two-sided"):
-        construct_finite_group_table(FiniteGroupTableRequest(identity=1, multiplication=S3))
+        construct_finite_group_table(
+            FiniteGroupTableRequest(identity=1, multiplication=S3)
+        )
 
 
 def test_table_rejects_nonassociative_loop() -> None:

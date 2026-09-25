@@ -25,6 +25,8 @@ from jacobian.math.logic.automata.petri_nets._models import (
     MarkingReachabilityResult,
     PetriInvariantsRequest,
     PetriInvariantsResult,
+    PetriNetMatricesRequest,
+    PetriNetMatricesResult,
     PetriNetRelabelingRequest,
     PetriNetRelabelingResult,
     PlaceSetInitialMarkingProfileRequest,
@@ -56,6 +58,7 @@ from jacobian.math.logic.automata.petri_nets.operations import (
     marking_conflict_profile,
     marking_reachability,
     petri_invariants,
+    petri_net_matrices,
     place_set_initial_marking_profile,
     place_set_support,
     reachability_graph,
@@ -158,6 +161,12 @@ def compute_petri_invariants(request: PetriInvariantsRequest) -> PetriInvariants
     return petri_invariants(request.net)
 
 
+def compute_petri_net_matrices(
+    request: PetriNetMatricesRequest,
+) -> PetriNetMatricesResult:
+    return petri_net_matrices(request.net)
+
+
 def compute_place_set_support(request: PlaceSetSupportRequest) -> PlaceSetSupportResult:
     return place_set_support(request.net, request.places)
 
@@ -211,6 +220,30 @@ _PRODUCER_CONSUMER_NET = {
 }
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
+    MathTool(
+        operation_id="petri_net.matrices.compute",
+        title="Compute Petri-net pre, post, and incidence matrices",
+        description="Return exact precondition and postcondition matrices and their incidence difference C = Post - Pre. The source net retains the place and transition axes.",
+        request_type=PetriNetMatricesRequest,
+        result_type=PetriNetMatricesResult,
+        run=compute_petri_net_matrices,
+        tags=("petri-net", "matrices", "exact"),
+        discovery_terms=("pre-incidence", "post-incidence", "incidence matrix"),
+        examples=(
+            OperationExample(
+                name="weighted_pre_post_matrices",
+                description="Return all three matrices for a two-place weighted net.",
+                input={
+                    "net": {
+                        "place_count": 2,
+                        "transition_count": 1,
+                        "pre": [[2], [0]],
+                        "post": [[0], [3]],
+                    }
+                },
+            ),
+        ),
+    ),
     MathTool(
         operation_id="petri_net.relabel.compute",
         title="Relabel Petri-net place and transition axes",

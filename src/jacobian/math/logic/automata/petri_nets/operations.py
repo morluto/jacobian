@@ -35,6 +35,7 @@ from jacobian.math.logic.automata.petri_nets._models import (
     MarkingReachabilityResult,
     PetriInvariantsResult,
     PetriMarkingState,
+    PetriNetMatricesResult,
     PetriNetRelabelingRequest,
     PetriNetRelabelingResult,
     PetriPlaceSubset,
@@ -84,6 +85,7 @@ __all__ = [
     "marking_conflict_profile",
     "marking_reachability",
     "petri_invariants",
+    "petri_net_matrices",
     "place_set_initial_marking_profile",
     "place_set_support",
     "reachability_graph",
@@ -790,6 +792,92 @@ def compute_incidence_matrix(net: PetriNet) -> IncidenceMatrixResult:
                 )
                 for p in range(net.place_count)
             ),
+        ),
+    )
+
+
+def petri_net_matrices(net: PetriNet) -> PetriNetMatricesResult:
+    """Return exact Pre, Post, and C=Post-Pre matrices in the net's axes."""
+    admitted = _admit_net(net)
+    place_count = admitted.place_count
+    transition_count = admitted.transition_count
+
+    def array_size(items: list[int]) -> int:
+        return 2 + max(0, len(items) - 1) + sum(items)
+
+    def matrix_size(entries: tuple[tuple[int, ...], ...]) -> int:
+        values_size = array_size(
+            [array_size([len(str(value)) + 2 for value in row]) for row in entries]
+        )
+        return strict_json_object_size(
+            (
+                ("domain", 4),
+                ("row_count", len(str(place_count))),
+                ("column_count", len(str(transition_count))),
+                ("entries", values_size),
+            )
+        )
+
+    output_size = strict_json_object_size(
+        (
+            ("net", _petri_net_reverse_output_bound(admitted)),
+            ("pre", matrix_size(admitted.pre)),
+            ("post", matrix_size(admitted.post)),
+            # ExactInteger scalars serialize as quoted decimal strings. An
+            # incidence entry has at most five digits plus sign and quotes.
+            (
+                "incidence",
+                strict_json_object_size(
+                    (
+                        ("domain", 4),
+                        ("row_count", len(str(place_count))),
+                        ("column_count", len(str(transition_count))),
+                        (
+                            "entries",
+                            array_size(
+                                [
+                                    array_size([7] * transition_count)
+                                    for _place in range(place_count)
+                                ]
+                            ),
+                        ),
+                    )
+                ),
+            ),
+        )
+    )
+    if output_size > MAX_PETRI_NET_REVERSE_OUTPUT_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("net",),
+            code="petri_net.matrices_output_bound",
+            message="Petri-net matrices exceed the serialized output bound",
+        )
+    incidence = tuple(
+        tuple(
+            admitted.post[place][transition] - admitted.pre[place][transition]
+            for transition in range(transition_count)
+        )
+        for place in range(place_count)
+    )
+    # The input net is already bounded to 64 by 64 cells and arc weights at
+    # most 1000. Three dense integer matrices therefore have a small fixed
+    # exact representation; no backend expansion or data-dependent search occurs.
+    return PetriNetMatricesResult.model_construct(
+        net=admitted,
+        pre=IntegerMatrix.model_construct(
+            row_count=place_count,
+            column_count=transition_count,
+            entries=admitted.pre,
+        ),
+        post=IntegerMatrix.model_construct(
+            row_count=place_count,
+            column_count=transition_count,
+            entries=admitted.post,
+        ),
+        incidence=IntegerMatrix.model_construct(
+            row_count=place_count,
+            column_count=transition_count,
+            entries=incidence,
         ),
     )
 

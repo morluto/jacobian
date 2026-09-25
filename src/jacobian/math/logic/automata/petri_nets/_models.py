@@ -456,6 +456,21 @@ class IncidenceMatrixRequest(StrictModel):
     net: PetriNet
 
 
+class PetriNetMatricesRequest(StrictModel):
+    """Project the pre-, post-, and incidence matrices of a Petri net."""
+
+    net: PetriNet
+
+
+class PetriNetMatricesResult(StrictModel):
+    """Exact matrices, with the source net retaining their place/transition axes."""
+
+    net: PetriNet
+    pre: IntegerMatrix
+    post: IntegerMatrix
+    incidence: IntegerMatrix
+
+
 class IncidenceMatrixResult(StrictModel):
     """The incidence matrix bound to its net's place/transition axes."""
 

@@ -25,10 +25,11 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         description=(
             "For each isomorphism class in an anonymous same-order graph-card "
             "multiset, compute the sorted component vertex counts and return "
-            "their exact histogram weighted by card multiplicity. Cards are "
-            "canonicalized independently under an aggregate 2000000-unit "
-            "canonicalization and connectivity-work bound. This is a cardwise "
-            "invariant and does not reconstruct the source graph's components."
+            "their exact histogram weighted by card multiplicity. Component "
+            "sizes are relabelling invariants, so representatives are profiled "
+            "directly under an aggregate 2000000-unit connectivity-work bound. "
+            "This is a cardwise invariant and does not reconstruct the source "
+            "graph's components."
         ),
         request_type=AnonymousDeckComponentProfileRequest,
         result_type=AnonymousDeckComponentProfile,

@@ -13,8 +13,6 @@ from jacobian.math.graphs.decks._models import (
     MAX_UNLABELLED_DECK_VERTICES,
     AnonymousGraphCardClass,
     AnonymousGraphCardMultiset,
-    _anonymous_canonicalization_work,
-    _canonical_card_edges,
 )
 from jacobian.math.graphs.decks.card_component_profile._models import (
     AnonymousDeckComponentProfile,
@@ -81,12 +79,17 @@ def _admit_deck(
             )
         graph = getattr(item, "representative", None)
         multiplicity = getattr(item, "multiplicity", None)
+        # Read nested fields defensively: a schema-bypassed model_construct
+        # value has no attributes, and direct access would leak AttributeError
+        # instead of the declared domain diagnostic.
+        vertices = getattr(graph, "vertices", None)
+        edges = getattr(graph, "edges", None)
         if (
             type(graph) is not SimpleUndirectedGraph
-            or type(graph.vertices) is not tuple
-            or graph.vertices != expected_vertices
-            or type(graph.edges) is not tuple
-            or len(graph.edges) > pair_count
+            or type(vertices) is not tuple
+            or vertices != expected_vertices
+            or type(edges) is not tuple
+            or len(edges) > pair_count
             or type(multiplicity) is not int
             or not 1 <= multiplicity < 10**12
         ):
@@ -95,7 +98,7 @@ def _admit_deck(
                 code="graph_deck.component_profile_class",
                 message="each class needs a fixed-axis graph and positive bounded multiplicity",
             )
-        for edge in graph.edges:
+        for edge in edges:
             if (
                 type(edge) is not tuple
                 or len(edge) != 2
@@ -109,36 +112,23 @@ def _admit_deck(
                     code="graph_deck.component_profile_edges",
                     message="card edges must be canonical pairs on the declared axis",
                 )
-        if tuple(sorted(set(graph.edges))) != graph.edges:
+        if tuple(sorted(set(edges))) != edges:
             raise OperationDomainValidationError(
                 location=("deck", "classes", index, "representative", "edges"),
                 code="graph_deck.component_profile_edges",
                 message="card edges must be unique and ordered",
             )
-        rows.append((graph.edges, multiplicity))
+        rows.append((edges, multiplicity))
         total_card_count += multiplicity
 
-    canonical_work = _anonymous_canonicalization_work(order, len(classes))
     connectivity_work = len(classes) * (order + 2 * pair_count)
-    total_work = canonical_work + connectivity_work
-    if total_work > MAX_CARD_COMPONENT_PROFILE_WORK:
+    if connectivity_work > MAX_CARD_COMPONENT_PROFILE_WORK:
         raise OperationResourceAdmissionError(
             location=("deck",),
             code="graph_deck.component_profile_work_bound",
-            message="card canonicalization and component analysis exceed the exact work bound",
+            message="card component analysis exceeds the exact work bound",
         )
     return order, tuple(rows), total_card_count
-
-
-def _canonical_cards(
-    order: int,
-    rows: tuple[tuple[tuple[tuple[str, str], ...], int], ...],
-) -> Counter[tuple[tuple[str, str], ...]]:
-    vertices = tuple(f"v{i:02d}" for i in range(order))
-    counts: Counter[tuple[tuple[str, str], ...]] = Counter()
-    for edges, multiplicity in rows:
-        counts[_canonical_card_edges(vertices, edges)] += multiplicity
-    return counts
 
 
 def _component_orders(
@@ -179,11 +169,12 @@ def card_component_profile(
         )
     order, rows, card_count = _admit_deck(getattr(request, "deck", None))
 
-    # The full canonicalization and connectivity plan has been admitted before
-    # either exact permutation search or adjacency traversal begins.
-    canonical_counts = _canonical_cards(order, rows)
+    # The connectivity plan has been admitted before adjacency traversal begins.
+    # Component sizes are graph-isomorphism invariants, so each admitted
+    # representative is profiled directly; duplicate isomorphic rows accumulate
+    # under the same component-size tuple without any permutation search.
     profile_counts: Counter[tuple[int, ...]] = Counter()
-    for edges, multiplicity in canonical_counts.items():
+    for edges, multiplicity in rows:
         profile_counts[_component_orders(order, edges)] += multiplicity
     profiles = tuple(
         CardComponentSizeProfile.model_construct(

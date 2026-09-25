@@ -3,9 +3,17 @@ from itertools import combinations
 
 import pytest
 
-from jacobian.catalog.models import OperationResourceAdmissionError
-from jacobian.math.graphs.decks._models import AnonymousGraphCardMultisetRequest
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
+from jacobian.math.graphs.decks._models import (
+    AnonymousGraphCardClass,
+    AnonymousGraphCardMultiset,
+    AnonymousGraphCardMultisetRequest,
+)
 from jacobian.math.graphs.decks.card_component_profile._models import (
+    AnonymousDeckComponentProfile,
     AnonymousDeckComponentProfileRequest,
 )
 from jacobian.math.graphs.decks.card_component_profile._tools import TOOLS
@@ -16,7 +24,7 @@ from jacobian.math.graphs.decks.operations import anonymous_graph_card_multiset
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 
-def _deck(cards: tuple[SimpleUndirectedGraph, ...]):
+def _deck(cards: tuple[SimpleUndirectedGraph, ...]) -> AnonymousGraphCardMultiset:
     return anonymous_graph_card_multiset(
         AnonymousGraphCardMultisetRequest(card_order=4, cards=cards)
     )
@@ -26,7 +34,7 @@ def _oracle_component_orders(
     graph: SimpleUndirectedGraph,
 ) -> tuple[int, ...]:
     labels = graph.vertices
-    adjacency = {vertex: set() for vertex in labels}
+    adjacency: dict[str, set[str]] = {vertex: set() for vertex in labels}
     for left, right in graph.edges:
         adjacency[left].add(right)
         adjacency[right].add(left)
@@ -46,7 +54,7 @@ def _oracle_component_orders(
     return tuple(sorted(sizes))
 
 
-def test_exhaustive_order_four_graph_multiset_matches_independent_oracle():
+def test_exhaustive_order_four_graph_multiset_matches_independent_oracle() -> None:
     vertices = ("a", "b", "c", "d")
     possible_edges = tuple(combinations(vertices, 2))
     cards = tuple(
@@ -71,7 +79,7 @@ def test_exhaustive_order_four_graph_multiset_matches_independent_oracle():
     assert sum(item.multiplicity for item in result.profiles) == len(cards)
 
 
-def test_cardwise_profile_is_unchanged_by_independent_relabelling_and_order():
+def test_cardwise_profile_is_unchanged_by_independent_relabelling_and_order() -> None:
     first = SimpleUndirectedGraph(
         vertices=("a", "b", "c", "d"),
         edges=(("a", "b"), ("b", "c"), ("c", "d")),
@@ -97,7 +105,7 @@ def test_cardwise_profile_is_unchanged_by_independent_relabelling_and_order():
     }
 
 
-def test_zero_order_empty_deck_and_catalog_example():
+def test_zero_order_empty_deck_and_catalog_example() -> None:
     empty_deck = anonymous_graph_card_multiset(
         AnonymousGraphCardMultisetRequest(card_order=0, cards=())
     )
@@ -125,15 +133,95 @@ def test_zero_order_empty_deck_and_catalog_example():
     }
 
 
-def test_total_work_is_admitted_before_canonicalization_or_connectivity(monkeypatch):
+@pytest.mark.parametrize("order", (8, 9, 10))
+def test_high_order_deck_is_profiled_without_permutation_canonicalization(
+    order: int,
+) -> None:
+    # A single order-8 row exhausts the old factorial canonicalization budget,
+    # yet component sizes need no canonical form, so these decks must be
+    # admitted and profiled directly.
+    vertices = tuple(f"v{i:02d}" for i in range(order))
+    edges = tuple((vertices[i], vertices[i + 1]) for i in range(order - 1))
+    graph = SimpleUndirectedGraph(vertices=vertices, edges=edges)
+    deck = AnonymousGraphCardMultiset(
+        card_order=order,
+        classes=(AnonymousGraphCardClass(representative=graph, multiplicity=5),),
+    )
+    result = card_component_profile(AnonymousDeckComponentProfileRequest(deck=deck))
+    assert {item.component_orders: item.multiplicity for item in result.profiles} == {
+        (order,): 5
+    }
+    assert result.card_count == 5
+    decoded = AnonymousDeckComponentProfile.model_validate_json(
+        result.model_dump_json()
+    )
+    assert decoded == result
+
+
+def test_duplicate_isomorphic_rows_accumulate_without_canonicalization() -> None:
+    # Component sizes are relabelling invariants, so two non-canonical but
+    # isomorphic representatives must merge under the same component tuple
+    # without any permutation canonicalization.
+    first = SimpleUndirectedGraph(
+        vertices=("v00", "v01", "v02", "v03"),
+        edges=(("v00", "v01"), ("v01", "v02"), ("v02", "v03")),
+    )
+    second = SimpleUndirectedGraph(
+        vertices=("v00", "v01", "v02", "v03"),
+        edges=(("v00", "v01"), ("v01", "v03"), ("v02", "v03")),
+    )
+    deck = AnonymousGraphCardMultiset.model_construct(
+        card_order=4,
+        classes=(
+            AnonymousGraphCardClass.model_construct(
+                representative=first, multiplicity=2
+            ),
+            AnonymousGraphCardClass.model_construct(
+                representative=second, multiplicity=3
+            ),
+        ),
+    )
+    result = card_component_profile(
+        AnonymousDeckComponentProfileRequest.model_construct(deck=deck)
+    )
+    assert {item.component_orders: item.multiplicity for item in result.profiles} == {
+        (4,): 5
+    }
+    assert result.card_count == 5
+
+
+@pytest.mark.parametrize(
+    "forged_graph",
+    (
+        SimpleUndirectedGraph.model_construct(),
+        SimpleUndirectedGraph.model_construct(vertices=("v00", "v01")),
+    ),
+)
+def test_schema_bypassed_representative_reports_domain_error(
+    forged_graph: SimpleUndirectedGraph,
+) -> None:
+    # Schema-bypassed nested values must yield the declared domain diagnostic,
+    # not a raw AttributeError from missing graph fields.
+    deck = AnonymousGraphCardMultiset.model_construct(
+        card_order=2,
+        classes=(
+            AnonymousGraphCardClass.model_construct(
+                representative=forged_graph, multiplicity=1
+            ),
+        ),
+    )
+    with pytest.raises(OperationDomainValidationError):
+        card_component_profile(
+            AnonymousDeckComponentProfileRequest.model_construct(deck=deck)
+        )
+
+
+def test_connectivity_work_is_admitted_before_graph_traversal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     graph = SimpleUndirectedGraph(
         vertices=("v00", "v01", "v02"), edges=(("v00", "v01"),)
     )
-    from jacobian.math.graphs.decks._models import (
-        AnonymousGraphCardClass,
-        AnonymousGraphCardMultiset,
-    )
-
     deck = AnonymousGraphCardMultiset.model_construct(
         card_order=3,
         classes=(
@@ -143,20 +231,17 @@ def test_total_work_is_admitted_before_canonicalization_or_connectivity(monkeypa
         ),
     )
     monkeypatch.setattr(
-        "jacobian.math.graphs.decks.card_component_profile.operations._anonymous_canonicalization_work",
-        lambda _order, _count: 2_000_001,
+        "jacobian.math.graphs.decks.card_component_profile.operations"
+        ".MAX_CARD_COMPONENT_PROFILE_WORK",
+        0,
     )
     calls = 0
 
-    def unexpected(*_args):
+    def unexpected(*_args: object) -> None:
         nonlocal calls
         calls += 1
-        raise AssertionError("expensive graph work preceded admission")
+        raise AssertionError("component traversal preceded admission")
 
-    monkeypatch.setattr(
-        "jacobian.math.graphs.decks.card_component_profile.operations._canonical_card_edges",
-        unexpected,
-    )
     monkeypatch.setattr(
         "jacobian.math.graphs.decks.card_component_profile.operations._component_orders",
         unexpected,

@@ -678,8 +678,9 @@ def splitting_field(request: SplittingFieldRequest) -> SplittingFieldResult:
     return _construct_splitting_field(canonical_request.polynomial)
 
 
-def automorphisms(field: QQSplittingField) -> AutomorphismResult:
-    canonical_field = _canonical_splitting_field(field, location=("field",))
+def _automorphisms_of_canonical_field(
+    canonical_field: QQSplittingField,
+) -> AutomorphismResult:
     presentation = canonical_field.extension
     candidates = (
         [_automorphism_for_generator_image(canonical_field, _one(presentation))]
@@ -703,6 +704,11 @@ def automorphisms(field: QQSplittingField) -> AutomorphismResult:
         field=canonical_field,
         automorphisms=tuple(unique[key] for key in sorted(unique)),
     )
+
+
+def automorphisms(field: QQSplittingField) -> AutomorphismResult:
+    canonical_field = _canonical_splitting_field(field, location=("field",))
+    return _automorphisms_of_canonical_field(canonical_field)
 
 
 def compose_automorphisms(
@@ -794,7 +800,7 @@ def _canonical_automorphism_subgroup(
             message="every subgroup element must belong to the same exact field",
         )
 
-    full_group = automorphisms(field).automorphisms
+    full_group = _automorphisms_of_canonical_field(field).automorphisms
     full_by_action = {element.root_permutation: element for element in full_group}
     by_action = {element.root_permutation: element for element in elements}
     if len(by_action) != len(elements) or any(
@@ -1051,9 +1057,7 @@ def _admit_element_image(
             product_numerator + left_denominator,
         ) + 1, max(left_denominator + product_denominator, 1)
 
-    scalar_sum_bounds = sum_digit_bound(
-        scalar, product_digit_pair(alpha, image_scalar)
-    )
+    scalar_sum_bounds = sum_digit_bound(scalar, product_digit_pair(alpha, image_scalar))
     alpha_bounds = product_digit_pair(alpha, image_alpha)
     scalar_bound = max(scalar_sum_bounds)
     alpha_bound = max(alpha_bounds)
@@ -1080,8 +1084,7 @@ def _admit_element_orbit_output(
         for coefficient in element.coefficients_ascending
     )
     field_coefficient_digits = max(
-        len(str(abs(value)))
-        for value in field.extension.coefficients_descending
+        len(str(abs(value))) for value in field.extension.coefficients_descending
     )
     # The quadratic trace/norm formulas use at most four element coordinates
     # and four defining-polynomial coefficient factors before rational
@@ -1113,6 +1116,7 @@ def _admit_element_orbit_output(
             ),
         )
 
+
 def element_embedding_orbit(
     request: ElementEmbeddingOrbitRequest,
 ) -> ElementEmbeddingOrbitResult:
@@ -1121,9 +1125,7 @@ def element_embedding_orbit(
         canonical_request = ElementEmbeddingOrbitRequest.model_validate(
             request.model_dump()
         )
-        field = _canonical_splitting_field(
-            canonical_request.field, location=("field",)
-        )
+        field = _canonical_splitting_field(canonical_request.field, location=("field",))
         element = canonical_request.element
     except (ValidationError, AttributeError, KeyError, TypeError, ValueError) as exc:
         raise OperationDomainValidationError(
@@ -1138,7 +1140,7 @@ def element_embedding_orbit(
     # uses a fixed number of products/sums, with fewer than 1100 digits per
     # rational coordinate under these input and defining-coefficient bounds.
     _admit_element_orbit_output(field, element)
-    group = automorphisms(field).automorphisms
+    group = _automorphisms_of_canonical_field(field).automorphisms
     for automorphism in group:
         _admit_element_image(automorphism, element)
     action: list[ElementAutomorphismImage] = []
@@ -1160,7 +1162,9 @@ def element_embedding_orbit(
         polynomial_coefficients = (-coordinates[0], Fraction(1))
     elif orbit_size == 2:
         scalar, radical = coordinates
-        leading, linear, constant = map(Fraction, field.extension.coefficients_descending)
+        leading, linear, constant = map(
+            Fraction, field.extension.coefficients_descending
+        )
         generator_trace = -linear / leading
         generator_norm = constant / leading
         trace = 2 * scalar + radical * generator_trace
@@ -1199,9 +1203,7 @@ def element_embedding_orbit(
         source_element=element,
         action=tuple(action),
         orbit=tuple(images),
-        stabilizer=GaloisAutomorphismSubgroup(
-            field=field, elements=tuple(stabilizers)
-        ),
+        stabilizer=GaloisAutomorphismSubgroup(field=field, elements=tuple(stabilizers)),
         orbit_size=orbit_size,
         minimal_polynomial=polynomial,
     )

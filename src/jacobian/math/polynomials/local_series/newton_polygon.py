@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from fractions import Fraction
 from itertools import pairwise
+from math import gcd, isqrt, lcm
 from typing import Literal
 
 from pydantic import Field, StrictInt, TypeAdapter, ValidationError, model_validator
@@ -14,6 +15,14 @@ from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
+)
+from jacobian.math.number_theory.algebraic_numbers.complex import (
+    MAX_COMPLEX_ALGEBRAIC_COEFFICIENT_DIGITS,
+    ComplexAlgebraicValue,
+)
+from jacobian.math.number_theory.algebraic_numbers.real import (
+    MAX_REAL_ALGEBRAIC_COEFFICIENT_DIGITS,
+    RealAlgebraicValue,
 )
 from jacobian.math.polynomials.local_series.arithmetic import (
     _check as _check_laurent,
@@ -29,13 +38,6 @@ from jacobian.math.polynomials.values import (
     RationalPolynomialTerm,
     SparseRationalPolynomial,
 )
-from jacobian.math.number_theory.algebraic_numbers.complex import (
-    MAX_COMPLEX_ALGEBRAIC_COEFFICIENT_DIGITS, ComplexAlgebraicValue,
-)
-from jacobian.math.number_theory.algebraic_numbers.real import (
-    MAX_REAL_ALGEBRAIC_COEFFICIENT_DIGITS, RealAlgebraicValue,
-)
-from math import gcd, isqrt, lcm
 
 MAX_LOCAL_POLYNOMIAL_ROWS = 256
 MAX_LOCAL_POLYNOMIAL_SERIES_SLOTS = 8192

@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from fractions import Fraction
 
+import pytest
+
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.models import MathTool
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.arithmetic_functions._models import (
     DirichletConvolutionRequest,
     DirichletConvolutionResult,
@@ -12,7 +14,7 @@ from jacobian.math.number_theory.arithmetic_functions._tools import (
     compute_dirichlet_convolution,
 )
 from jacobian.math.number_theory.characters._models import (
-    DirichletCharacterArithmeticFunctionTwistRequest,
+    DirichletCharacterSequenceTwistRequest,
 )
 from jacobian.math.number_theory.characters._tools import TOOLS
 from jacobian.math.number_theory.characters.operations import (
@@ -20,6 +22,10 @@ from jacobian.math.number_theory.characters.operations import (
     dirichlet_character_arithmetic_function_twist,
 )
 from jacobian.math.number_theory.characters.values import DirichletCharacter
+from jacobian.math.number_theory.sequences.core import (
+    FiniteCyclotomicSequence,
+    FiniteRationalSequence,
+)
 
 
 def _rational(value: int) -> CanonicalRational:
@@ -32,7 +38,7 @@ def _function(values: tuple[int, ...]) -> DirichletConvolutionResult:
     )
 
 
-def _coefficients(result: object) -> tuple[tuple[Fraction, ...], ...]:
+def _coefficients(result: FiniteCyclotomicSequence) -> tuple[tuple[Fraction, ...], ...]:
     return tuple(
         tuple(coefficient.as_fraction() for coefficient in value.coefficients_ascending)
         for value in result.values
@@ -43,11 +49,9 @@ def test_quartic_character_twists_arithmetic_function_prefix_exactly() -> None:
     # Independent table: for the generator 2 mod 5, chi(2)=i, so the
     # character values on 1,...,7 are 1,i,-i,-1,0,1,i.
     character = DirichletCharacter(group=character_group(5), coordinates=(1,))
-    request = DirichletCharacterArithmeticFunctionTwistRequest(
-        function=_function((2, 3, 5, 7, 11, 13, 17)), character=character
+    result = dirichlet_character_arithmetic_function_twist(
+        _function((2, 3, 5, 7, 11, 13, 17)), character
     )
-
-    result = dirichlet_character_arithmetic_function_twist(request)
 
     assert result.index_origin == 1
     assert result.field.order == 4
@@ -65,9 +69,7 @@ def test_quartic_character_twists_arithmetic_function_prefix_exactly() -> None:
 def test_modulus_one_trivial_character_preserves_rational_prefix() -> None:
     character = DirichletCharacter(group=character_group(1), coordinates=())
     result = dirichlet_character_arithmetic_function_twist(
-        DirichletCharacterArithmeticFunctionTwistRequest(
-            function=_function((0, -3, 8)), character=character
-        )
+        _function((0, -3, 8)), character
     )
 
     assert result.index_origin == 1
@@ -87,11 +89,7 @@ def test_dirichlet_convolution_output_composes_with_character_twist() -> None:
         )
     )
     character = DirichletCharacter(group=character_group(3), coordinates=(1,))
-    twisted = dirichlet_character_arithmetic_function_twist(
-        DirichletCharacterArithmeticFunctionTwistRequest(
-            function=convolution, character=character
-        )
-    )
+    twisted = dirichlet_character_arithmetic_function_twist(convolution, character)
 
     # The convolution prefix is (2, 5, 6, 13, 12, 16); chi_3 is +1,-1,0,
     # hence the arithmetic-function twist is (2,-5,0,13,-12,0).
@@ -103,9 +101,7 @@ def test_dirichlet_convolution_output_composes_with_character_twist() -> None:
 def test_all_zero_prefix_stays_exact_zero_in_character_field() -> None:
     character = DirichletCharacter(group=character_group(5), coordinates=(1,))
     result = dirichlet_character_arithmetic_function_twist(
-        DirichletCharacterArithmeticFunctionTwistRequest(
-            function=_function((0, 0, 0, 0, 0)), character=character
-        )
+        _function((0, 0, 0, 0, 0)), character
     )
 
     assert result.field.order == 4
@@ -116,22 +112,53 @@ def test_all_zero_prefix_stays_exact_zero_in_character_field() -> None:
     )
 
 
-def test_catalog_publishes_and_executes_arithmetic_function_twist() -> None:
+def test_native_twist_rejects_a_non_arithmetic_function_value() -> None:
+    character = DirichletCharacter(group=character_group(3), coordinates=(1,))
+
+    with pytest.raises(OperationDomainValidationError) as error:
+        dirichlet_character_arithmetic_function_twist((2, 3, 4), character)  # type: ignore[arg-type]
+
+    assert error.value.errors()[0]["type"] == (
+        "dirichlet_character.arithmetic_function_twist.function_type"
+    )
+
+
+def test_catalog_publishes_one_twist_operation_with_arithmetic_function_terms() -> None:
+    twist_tools = tuple(
+        tool
+        for tool in TOOLS
+        if tool.operation_id.endswith("dirichlet_character_twist.compute")
+    )
+
+    assert tuple(tool.operation_id for tool in twist_tools) == (
+        "sequence.dirichlet_character_twist.compute",
+    )
+    tool = twist_tools[0]
+    assert "arithmetic-function" in tool.tags
+    assert "arithmetic function character twist" in tool.discovery_terms
+
+
+def test_published_sequence_twist_executes_the_arithmetic_function_prefix() -> None:
     tool = next(
         item
         for item in TOOLS
-        if item.operation_id == "arithmetic_function.dirichlet_character_twist.compute"
+        if item.operation_id == "sequence.dirichlet_character_twist.compute"
     )
-    assert isinstance(tool, MathTool)
-    request = DirichletCharacterArithmeticFunctionTwistRequest(
-        function=_function((2, 3, 4)),
-        character=DirichletCharacter(group=character_group(3), coordinates=(1,)),
+    function = _function((2, 3, 4))
+    character = DirichletCharacter(group=character_group(3), coordinates=(1,))
+
+    native_result = dirichlet_character_arithmetic_function_twist(function, character)
+    catalog_result = tool.run(
+        DirichletCharacterSequenceTwistRequest(
+            sequence=FiniteRationalSequence(domain="rational", values=function.values),
+            character=character,
+            index_origin=1,
+        )
     )
 
-    result = tool.run(request)
-
-    assert result.index_origin == 1
-    assert _coefficients(result) == (
+    assert catalog_result.index_origin == 1
+    assert _coefficients(catalog_result) == _coefficients(native_result)
+    assert _coefficients(catalog_result) == (
         (Fraction(2),),
         (Fraction(-3),),
         (Fraction(0),),

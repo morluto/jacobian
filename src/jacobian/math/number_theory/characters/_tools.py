@@ -8,7 +8,6 @@ from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.number_theory.characters import operations as native
 from jacobian.math.number_theory.characters._models import (
     CharacterGroupRequest,
-    DirichletCharacterArithmeticFunctionTwistRequest,
     DirichletCharacterConductorRequest,
     DirichletCharacterConductorResult,
     DirichletCharacterConjugateRequest,
@@ -255,12 +254,6 @@ def _compute_sequence_twist(
         request.character,
         index_origin=request.index_origin,
     )
-
-
-def _compute_arithmetic_function_twist(
-    request: DirichletCharacterArithmeticFunctionTwistRequest,
-) -> FiniteCyclotomicSequence:
-    return native.dirichlet_character_arithmetic_function_twist(request)
 
 
 def _compute_generalized_bernoulli(
@@ -1016,16 +1009,26 @@ TOOLS: MathTools = (
         description=(
             "Return b_(n)=chi(n)*a_(n) in a canonical rational cyclotomic "
             "sequence. Integer and rational sources supply index_origin; an "
-            "existing cyclotomic source retains its authored origin. Repeated "
-            "twists embed into the least common cyclotomic field. Field order, "
-            "lookup work, coefficient growth, and output size are admitted "
-            "before sequence expansion."
+            "existing cyclotomic source retains its authored origin. An exact "
+            "arithmetic-function prefix is the rational index_origin=1 case. "
+            "Repeated twists embed into the least common cyclotomic field. "
+            "Field order, lookup work, coefficient growth, and output size are "
+            "admitted before sequence expansion."
         ),
         request_type=DirichletCharacterSequenceTwistRequest,
         result_type=FiniteCyclotomicSequence,
         run=_compute_sequence_twist,
-        tags=("sequence", "dirichlet-character", "cyclotomic", "exact"),
-        discovery_terms=("Dirichlet character sequence twist",),
+        tags=(
+            "sequence",
+            "dirichlet-character",
+            "cyclotomic",
+            "exact",
+            "arithmetic-function",
+        ),
+        discovery_terms=(
+            "Dirichlet character sequence twist",
+            "arithmetic function character twist",
+        ),
         examples=(
             OperationExample(
                 name="quadratic_mod3_sequence_twist",
@@ -1044,39 +1047,6 @@ TOOLS: MathTools = (
                         "coordinates": [1],
                     },
                     "index_origin": 1,
-                },
-            ),
-        ),
-    ),
-    MathTool(
-        operation_id="arithmetic_function.dirichlet_character_twist.compute",
-        title="Twist an arithmetic-function prefix by a Dirichlet character",
-        description=(
-            "Return b(n)=chi(n)*a(n) for a finite exact table indexed by "
-            "n=1,...,M. The result is a cyclotomic sequence whose index origin "
-            "is fixed to 1, so it composes directly with finite-sequence "
-            "operations. Exact field, coefficient growth, work, and output "
-            "limits use the same bounded kernel as general sequence twists."
-        ),
-        request_type=DirichletCharacterArithmeticFunctionTwistRequest,
-        result_type=FiniteCyclotomicSequence,
-        run=_compute_arithmetic_function_twist,
-        tags=("number-theory", "arithmetic-function", "dirichlet-character", "exact"),
-        discovery_terms=("arithmetic function character twist",),
-        examples=(
-            OperationExample(
-                name="quadratic_mod3_convolution_twist",
-                description="Twist a rational arithmetic-function prefix by the nonprincipal character modulo 3.",
-                input={
-                    "function": {
-                        "values": [
-                            {"num": "2", "den": "1"},
-                            {"num": "3", "den": "1"},
-                            {"num": "4", "den": "1"},
-                        ],
-                        "length": 3,
-                    },
-                    "character": {"group": _GROUP_MOD3, "coordinates": [1]},
                 },
             ),
         ),

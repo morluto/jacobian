@@ -27,10 +27,10 @@ from jacobian.math.matrices.cyclic_linear._models import (
 )
 from jacobian.math.number_theory.arithmetic_functions._models import (
     MAX_ARITHMETIC_FUNCTION_PREFIX_LENGTH,
+    DirichletConvolutionResult,
 )
 from jacobian.math.number_theory.characters._models import (
     MAX_GENERALIZED_BERNOULLI_INDEX,
-    DirichletCharacterArithmeticFunctionTwistRequest,
     DirichletCharacterConductorResult,
     DirichletCharacterGaussSumResult,
     DirichletCharacterGeneralizedBernoulliPrefix,
@@ -2388,16 +2388,16 @@ def dirichlet_character_sequence_twist(
 
 
 def dirichlet_character_arithmetic_function_twist(
-    request: DirichletCharacterArithmeticFunctionTwistRequest,
+    function: DirichletConvolutionResult,
+    character: DirichletCharacter,
 ) -> FiniteCyclotomicSequence:
     """Twist a finite arithmetic-function prefix on indices 1 through M."""
-    if not isinstance(request, DirichletCharacterArithmeticFunctionTwistRequest):
+    if not isinstance(function, DirichletConvolutionResult):
         raise OperationDomainValidationError(
-            location=("request",),
-            code="dirichlet_character.arithmetic_function_twist.request_type",
-            message="arithmetic-function twist requires a typed request",
+            location=("function",),
+            code="dirichlet_character.arithmetic_function_twist.function_type",
+            message="source must be an exact arithmetic-function prefix value",
         )
-    function = request.function
     if (
         type(function.values) is not tuple
         or type(function.length) is not int
@@ -2414,9 +2414,7 @@ def dirichlet_character_arithmetic_function_twist(
     sequence = FiniteRationalSequence.model_construct(
         domain="rational", values=function.values
     )
-    return dirichlet_character_sequence_twist(
-        sequence, request.character, index_origin=1
-    )
+    return dirichlet_character_sequence_twist(sequence, character, index_origin=1)
 
 
 def _compute_generalized_gauss_sum(

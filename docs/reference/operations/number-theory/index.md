@@ -37,4 +37,3 @@ and finite abelian-group decompositions are separate catalog entries.
 - [Exact Dirichlet-character Jacobi sum](dirichlet-character-jacobi-sum.md)
 - [Exact Dirichlet-character Gauss sums](dirichlet-character-gauss-sum.md)
 - [Exact finite sequence twist by a Dirichlet character](dirichlet-character-sequence-twist.md)
-- [Exact arithmetic-function twist by a Dirichlet character](dirichlet-character-arithmetic-function-twist.md)

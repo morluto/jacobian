@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator, Mapping
+from fractions import Fraction
 from math import comb
 from typing import Any
 
@@ -18,6 +19,8 @@ from jacobian.math.polynomials.derivations._weight_models import (
     MAX_DIAGONAL_WEIGHT,
     MAX_GM_INVARIANT_DEGREE,
     MAX_GM_INVARIANT_MONOMIALS,
+    MAX_GM_SUBREP_DIMENSION,
+    MAX_GM_SUBREP_TOTAL_TERMS,
     MAX_WEIGHT_ACTION_DEGREE,
     MAX_WEIGHT_ACTION_TERMS,
     MAX_WEIGHT_ACTION_VARIABLES,
@@ -26,6 +29,8 @@ from jacobian.math.polynomials.derivations._weight_models import (
     PolynomialWeightComponent,
     PolynomialWeightDegreeDimension,
     PolynomialWeightInvariantResult,
+    PolynomialWeightSubrepresentationRequest,
+    PolynomialWeightSubrepresentationResult,
 )
 from jacobian.math.polynomials.values import (
     PolynomialVariable,
@@ -298,4 +303,291 @@ def gm_invariants_through_degree(
     )
 
 
-__all__ = ["diagonal_weight_action", "gm_invariants_through_degree"]
+def _canonical_rational(value: Fraction) -> CanonicalRational:
+    return CanonicalRational(num=value.numerator, den=value.denominator)
+
+
+def _parse_subrepresentation_request(
+    request: PolynomialWeightSubrepresentationRequest | Mapping[str, Any],
+) -> tuple[
+    PolynomialWeightSubrepresentationRequest,
+    PolynomialWeightAction,
+    tuple[RationalPolynomial, ...],
+]:
+    try:
+        payload = (
+            request.model_dump()
+            if isinstance(request, PolynomialWeightSubrepresentationRequest)
+            else request
+        )
+        checked = PolynomialWeightSubrepresentationRequest.model_validate(payload)
+        action = _as_weight_action(
+            checked.action.model_dump(), code="gm_subrepresentation.request_shape"
+        )
+        generators = tuple(
+            _as_decoded_polynomial(generator.model_dump())
+            for generator in checked.generators
+        )
+    except (ValidationError, TypeError, ValueError, PydanticCustomError) as exc:
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="gm_subrepresentation.request_shape",
+            message="the request must bind polynomial generators to one diagonal G_m action",
+        ) from exc
+    if any(generator.variables != action.variables for generator in generators):
+        raise OperationDomainValidationError(
+            location=("generators",),
+            code="gm_subrepresentation.ordered_ring",
+            message="every generator must use the action's ordered polynomial ring",
+        )
+    return checked, action, generators
+
+
+def _admit_subrepresentation_support(
+    action: PolynomialWeightAction,
+    generators: tuple[RationalPolynomial, ...],
+) -> tuple[dict[int, tuple[tuple[int, ...], ...]], dict[int, set[int]]]:
+    """Preflight projected support, exact elimination work, and output size."""
+    grouped_support: dict[int, set[tuple[int, ...]]] = {}
+    grouped_sources: dict[int, set[int]] = {}
+    total_terms = 0
+    for source_index, generator in enumerate(generators):
+        if len(generator.polynomial.terms) > 64:
+            raise OperationResourceAdmissionError(
+                location=("generators", source_index),
+                code="gm_subrepresentation.generator_terms",
+                message="each polynomial generator is bounded to 64 sparse terms",
+            )
+        total_terms += len(generator.polynomial.terms)
+        for term in generator.polynomial.terms:
+            if sum(term.exponents) > MAX_WEIGHT_ACTION_DEGREE:
+                raise OperationResourceAdmissionError(
+                    location=("generators", source_index),
+                    code="gm_subrepresentation.generator_degree",
+                    message="polynomial generators exceed total degree 64",
+                )
+            try:
+                require_bounded_rational(
+                    term.coefficient,
+                    max_digits=8,
+                    label="G_m subrepresentation generator coefficient",
+                )
+            except ValueError as exc:
+                raise OperationResourceAdmissionError(
+                    location=("generators", source_index),
+                    code="gm_subrepresentation.coefficient_budget",
+                    message=str(exc),
+                ) from exc
+            weight = sum(
+                variable_weight * exponent
+                for variable_weight, exponent in zip(
+                    action.weights, term.exponents, strict=True
+                )
+            )
+            grouped_support.setdefault(weight, set()).add(tuple(term.exponents))
+            grouped_sources.setdefault(weight, set()).add(source_index)
+    if total_terms > MAX_GM_SUBREP_TOTAL_TERMS:
+        raise OperationResourceAdmissionError(
+            location=("generators",),
+            code="gm_subrepresentation.total_terms",
+            message="the combined sparse generators exceed 256 terms",
+        )
+    work_cells = sum(
+        len(grouped_sources[weight]) ** 2 * len(support)
+        for weight, support in grouped_support.items()
+    )
+    if work_cells > 2_000_000:
+        raise OperationResourceAdmissionError(
+            location=("generators",),
+            code="gm_subrepresentation.rref_budget",
+            message="weight-projection row reduction exceeds its admitted work envelope",
+        )
+    predicted_basis_terms = sum(
+        len(support) * len(grouped_sources[weight])
+        for weight, support in grouped_support.items()
+    )
+    predicted_output_bytes = (
+        predicted_basis_terms * (2 * 4_096 + 24)
+        + len(generators) * MAX_GM_SUBREP_DIMENSION * (2 * 8 + 24)
+        + MAX_GM_SUBREP_DIMENSION**2 * 128
+        + 1_000_000
+    )
+    if predicted_output_bytes > 80_000_000:
+        raise OperationResourceAdmissionError(
+            location=("generators",),
+            code="gm_subrepresentation.output_budget",
+            message="the exact stable-basis and representation result exceeds its output envelope",
+        )
+    return (
+        {
+            weight: tuple(sorted(support, reverse=True))
+            for weight, support in grouped_support.items()
+        },
+        grouped_sources,
+    )
+
+
+def _weight_projection_rref(
+    projected_generators: dict[int, dict[int, dict[tuple[int, ...], Fraction]]],
+    monomials_by_weight: dict[int, tuple[tuple[int, ...], ...]],
+) -> dict[int, list[tuple[int, tuple[Fraction, ...]]]]:
+    """Return one deterministic RREF basis in each exact character space."""
+    basis_by_weight: dict[int, list[tuple[int, tuple[Fraction, ...]]]] = {}
+    for weight in sorted(monomials_by_weight):
+        monomials = monomials_by_weight[weight]
+        pivot_rows: dict[int, list[Fraction]] = {}
+        for coefficients in projected_generators.get(weight, {}).values():
+            row = [coefficients.get(monomial, Fraction(0)) for monomial in monomials]
+            for pivot in sorted(pivot_rows):
+                factor = row[pivot]
+                if factor:
+                    row = [
+                        value - factor * pivot_value
+                        for value, pivot_value in zip(
+                            row, pivot_rows[pivot], strict=True
+                        )
+                    ]
+            pivot = next((index for index, value in enumerate(row) if value), None)
+            if pivot is None:
+                continue
+            scale = row[pivot]
+            row = [value / scale for value in row]
+            for existing_pivot, existing_row in tuple(pivot_rows.items()):
+                factor = existing_row[pivot]
+                if factor:
+                    pivot_rows[existing_pivot] = [
+                        value - factor * pivot_value
+                        for value, pivot_value in zip(existing_row, row, strict=True)
+                    ]
+            pivot_rows[pivot] = row
+        if pivot_rows:
+            basis_by_weight[weight] = [
+                (pivot, tuple(pivot_rows[pivot])) for pivot in sorted(pivot_rows)
+            ]
+    return basis_by_weight
+
+
+def _project_generators_by_weight(
+    action: PolynomialWeightAction,
+    generators: tuple[RationalPolynomial, ...],
+) -> dict[int, dict[int, dict[tuple[int, ...], Fraction]]]:
+    """Build admitted sparse weight projections in one pass over source terms."""
+    projections: dict[int, dict[int, dict[tuple[int, ...], Fraction]]] = {}
+    for source_index, generator in enumerate(generators):
+        for term in generator.polynomial.terms:
+            weight = sum(
+                variable_weight * exponent
+                for variable_weight, exponent in zip(
+                    action.weights, term.exponents, strict=True
+                )
+            )
+            projections.setdefault(weight, {}).setdefault(source_index, {})[
+                tuple(term.exponents)
+            ] = term.coefficient.as_fraction()
+    return projections
+
+
+def gm_generated_subrepresentation(
+    request: PolynomialWeightSubrepresentationRequest | Mapping[str, Any],
+) -> PolynomialWeightSubrepresentationResult:
+    """Return the smallest G_m-stable span generated by supplied polynomials.
+
+    A diagonal torus coaction separates into integer character spaces. The
+    stable span generated by finitely many polynomials is therefore the span
+    of their weight-homogeneous projections. Each character-space span is
+    reduced to a deterministic RREF basis in the source monomial coordinates.
+    """
+    checked, action, generators = _parse_subrepresentation_request(request)
+    monomials_by_weight, _ = _admit_subrepresentation_support(action, generators)
+    projections = _project_generators_by_weight(action, generators)
+    basis_by_weight = _weight_projection_rref(projections, monomials_by_weight)
+
+    dimension = sum(len(rows) for rows in basis_by_weight.values())
+    if dimension > MAX_GM_SUBREP_DIMENSION:
+        raise AssertionError("the row-space dimension exceeds its support bound")
+
+    basis_polynomials: list[RationalPolynomial] = []
+    basis_weights: list[int] = []
+    pivot_monomials: list[tuple[int, ...]] = []
+    for weight, rows in basis_by_weight.items():
+        monomials = monomials_by_weight[weight]
+        for pivot, row in rows:
+            if any(
+                max(len(str(abs(value.numerator))), len(str(value.denominator))) > 4_096
+                for value in row
+            ):
+                raise OperationResourceAdmissionError(
+                    location=("generators",),
+                    code="gm_subrepresentation.basis_coefficient_digits",
+                    message="exact stable-basis coefficients exceed the admitted envelope",
+                )
+            terms = tuple(
+                RationalPolynomialTerm(
+                    coefficient=_canonical_rational(coefficient), exponents=monomial
+                )
+                for monomial, coefficient in zip(monomials, row, strict=True)
+                if coefficient
+            )
+            basis_polynomials.append(
+                RationalPolynomial(
+                    variables=action.variables,
+                    polynomial=SparseRationalPolynomial(terms=terms),
+                )
+            )
+            basis_weights.append(weight)
+            pivot_monomials.append(monomials[pivot])
+
+    # RREF pivots are identity coordinates. Since distinct weight spaces have
+    # disjoint monomial supports, reading each source coefficient at the
+    # corresponding pivot gives its exact coordinates in the full basis.
+    generator_coordinates = []
+    for generator in generators:
+        coefficients = {
+            tuple(term.exponents): term.coefficient.as_fraction()
+            for term in generator.polynomial.terms
+        }
+        generator_coordinates.append(
+            tuple(
+                _canonical_rational(coefficients.get(pivot, Fraction(0)))
+                for pivot in pivot_monomials
+            )
+        )
+
+    parameter = checked.parameter
+    zero_entry = RationalLaurentPolynomial(variables=(parameter,), terms=())
+    matrix_rows = []
+    for row_index, _weight in enumerate(basis_weights):
+        row = []
+        for column_index, column_weight in enumerate(basis_weights):
+            if row_index == column_index:
+                row.append(
+                    RationalLaurentPolynomial(
+                        variables=(parameter,),
+                        terms=(
+                            RationalLaurentPolynomialTerm(
+                                coefficient=CanonicalRational(num=1, den=1),
+                                exponents=(column_weight,),
+                            ),
+                        ),
+                    )
+                )
+            else:
+                row.append(zero_entry)
+        matrix_rows.append(tuple(row))
+
+    return PolynomialWeightSubrepresentationResult(
+        action=action,
+        generators=generators,
+        basis=tuple(basis_polynomials),
+        weights=tuple(basis_weights),
+        generator_coordinates=tuple(generator_coordinates),
+        parameter=parameter,
+        matrix=tuple(matrix_rows),
+    )
+
+
+__all__ = [
+    "diagonal_weight_action",
+    "gm_generated_subrepresentation",
+    "gm_invariants_through_degree",
+]

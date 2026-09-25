@@ -9,7 +9,7 @@ from jacobian.catalog.models import (
 from jacobian.math.topology.chain_complexes._filtered_models import MAX_FILTER_LEVELS
 from jacobian.math.topology.cubical_complexes._models import (
     MAX_CUBICAL_CHAIN_CELLS,
-    MAX_CUBICAL_PRODUCT_RESULT_BYTES,
+    MAX_CUBICAL_PRODUCT_RESULT_SIZE,
     MAX_DIM,
     MAX_LOWER_STAR_CELLS,
     MAX_LOWER_STAR_VERTICES,
@@ -340,7 +340,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             f"{MAX_CUBICAL_CHAIN_CELLS} cells and ambient dimension "
             f"{MAX_DIM}."
             f" Estimated result encoding is bounded to "
-            f"{MAX_CUBICAL_PRODUCT_RESULT_BYTES} bytes."
+            f"{MAX_CUBICAL_PRODUCT_RESULT_SIZE} bytes."
         ),
         request_type=CubicalProductRequest,
         result_type=CubicalProductResult,

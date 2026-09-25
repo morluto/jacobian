@@ -4,7 +4,7 @@ from typing import Any
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.topology.cubical_complexes._models import (
     MAX_CELLS,
-    MAX_CUBICAL_BITMAP_RESULT_BYTES,
+    MAX_CUBICAL_BITMAP_RESULT_SIZE,
     MAX_CUBICAL_BITMAP_SIDE,
 )
 from jacobian.math.topology.cubical_complexes.extensions import *
@@ -37,7 +37,7 @@ TOOLS = (
             "then return the complete cubical face closure. Rows and columns "
             f"are each bounded to {MAX_CUBICAL_BITMAP_SIDE}, foreground pixels "
             f"to {MAX_CELLS}, and the conservative result encoding to "
-            f"{MAX_CUBICAL_BITMAP_RESULT_BYTES} bytes. All-background bitmaps "
+            f"{MAX_CUBICAL_BITMAP_RESULT_SIZE} bytes. All-background bitmaps "
             "are rejected because the current CubicalComplex type is nonempty."
         ),
         request_type=CubicalBitmapRequest,

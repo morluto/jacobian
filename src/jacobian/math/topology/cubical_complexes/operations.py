@@ -47,25 +47,26 @@ from jacobian.math.topology.cubical_complexes._models import (
     MAX_CUBICAL_CHAIN_CELLS,
     MAX_CUBICAL_CHAIN_GROUP,
     MAX_CUBICAL_CLOSED_STAR_COORDINATE_DIGITS,
-    MAX_CUBICAL_CLOSED_STAR_RESULT_BYTES,
+    MAX_CUBICAL_CLOSED_STAR_RESULT_SIZE,
     MAX_CUBICAL_CLOSED_STAR_WORK,
     MAX_CUBICAL_FACE_POSET_CANDIDATES,
     MAX_CUBICAL_FACE_POSET_COORDINATE_DIGITS,
     MAX_CUBICAL_FACE_POSET_COVER_CANDIDATES,
-    MAX_CUBICAL_FACE_POSET_RESULT_BYTES,
+    MAX_CUBICAL_FACE_POSET_RESULT_SIZE,
     MAX_CUBICAL_GRAPH_EDGES,
-    MAX_CUBICAL_GRAPH_RESULT_BYTES,
+    MAX_CUBICAL_GRAPH_RESULT_SIZE,
     MAX_CUBICAL_GRAPH_VERTICES,
     MAX_CUBICAL_GRAPH_WORK,
-    MAX_CUBICAL_PRODUCT_RESULT_BYTES,
+    MAX_CUBICAL_PRODUCT_RESULT_SIZE,
     MAX_CUBICAL_SKELETON_COORDINATE_DIGITS,
+    MAX_CUBICAL_SKELETON_RESULT_SIZE,
     MAX_DIM,
     MAX_FACE_CELLS,
     MAX_LOWER_STAR_CELLS,
     MAX_LOWER_STAR_COORDINATE_DIGITS,
     MAX_LOWER_STAR_FILTER_VECTOR_ENTRIES,
     MAX_LOWER_STAR_INCIDENCES,
-    MAX_LOWER_STAR_RESULT_BYTES,
+    MAX_LOWER_STAR_RESULT_SIZE,
     MAX_LOWER_STAR_VALUE_DIGITS,
     MAX_LOWER_STAR_VERTICES,
     CubicalCell,
@@ -235,23 +236,23 @@ def _admit_face_poset_source(
     return source_cells, ambient_dimension, maximum_coordinate_digits
 
 
-def _admit_face_poset_result_bytes(
+def _admit_face_poset_result_size(
     ambient_dimension: int, maximum_coordinate_digits: int
 ) -> None:
     relation_pair_bound = MAX_POSET_ELEMENTS * (MAX_POSET_ELEMENTS - 1) // 2
-    estimated_result_bytes = (
+    estimated_result_size = (
         4 * MAX_POSET_ELEMENTS * ambient_dimension * (maximum_coordinate_digits + 2)
         + 3 * relation_pair_bound * 128
         + 512 * MAX_POSET_ELEMENTS
         + 32_768
     )
-    if estimated_result_bytes > MAX_CUBICAL_FACE_POSET_RESULT_BYTES:
+    if estimated_result_size > MAX_CUBICAL_FACE_POSET_RESULT_SIZE:
         raise OperationResourceAdmissionError(
             location=("cells",),
-            code="cubical_complex.face_poset.result_byte_budget",
+            code="cubical_complex.face_poset.result_size_budget",
             message=(
-                "estimated face-poset encoding exceeds the "
-                f"{MAX_CUBICAL_FACE_POSET_RESULT_BYTES}-byte result bound"
+                "estimated face-poset representation exceeds the "
+                f"{MAX_CUBICAL_FACE_POSET_RESULT_SIZE}-unit size bound"
             ),
         )
 
@@ -293,7 +294,7 @@ def face_poset(request: CubicalComplexRequest) -> CubicalFacePosetResult:
     source_cells, ambient_dimension, maximum_coordinate_digits = (
         _admit_face_poset_source(request.cells)
     )
-    _admit_face_poset_result_bytes(ambient_dimension, maximum_coordinate_digits)
+    _admit_face_poset_result_size(ambient_dimension, maximum_coordinate_digits)
     complex_, _ = _canonical_complex(source_cells, face_output_limit=MAX_POSET_ELEMENTS)
     elements = tuple(f"c{index:02d}" for index in range(len(complex_.cells)))
     label_by_cell = dict(zip(complex_.cells, elements, strict=True))
@@ -435,12 +436,12 @@ def closed_star(request: CubicalClosedStarRequest) -> CubicalClosedStarResult:
     face_count_upper = sum(3**cell.dimension for cell in source_cells)
     closure_work_bound = ambient_dimension * face_count_upper
     star_work_bound = ambient_dimension * face_count_upper
-    cell_bytes_bound = ambient_dimension * (2 * coordinate_digits + 18) + 32
-    output_bytes_bound = 512 + 2 * face_count_upper * cell_bytes_bound
+    cell_size_bound = ambient_dimension * (2 * coordinate_digits + 18) + 32
+    output_size_bound = 512 + 2 * face_count_upper * cell_size_bound
     if (
         face_count_upper > MAX_FACE_CELLS
         or closure_work_bound + star_work_bound > MAX_CUBICAL_CLOSED_STAR_WORK
-        or output_bytes_bound > MAX_CUBICAL_CLOSED_STAR_RESULT_BYTES
+        or output_size_bound > MAX_CUBICAL_CLOSED_STAR_RESULT_SIZE
     ):
         raise OperationResourceAdmissionError(
             location=("cells",),
@@ -547,21 +548,21 @@ def one_skeleton(cells: tuple[CubicalCell, ...]) -> CubicalOneSkeletonResult:
             ),
         )
     closure_count_bound = min(MAX_FACE_CELLS, face_work_bound)
-    cell_bytes = ambient_dimension * (2 * maximum_coordinate_digits + 8) + 64
-    vertex_bytes = ambient_dimension * (2 * maximum_coordinate_digits + 8) + 48
-    estimated_output_bytes = (
-        closure_count_bound * cell_bytes
-        + vertex_count_bound * vertex_bytes
+    cell_size = ambient_dimension * (2 * maximum_coordinate_digits + 8) + 64
+    vertex_size = ambient_dimension * (2 * maximum_coordinate_digits + 8) + 48
+    estimated_output_size = (
+        closure_count_bound * cell_size
+        + vertex_count_bound * vertex_size
         + edge_count_bound * 32
         + 4_096
     )
-    if estimated_output_bytes > MAX_CUBICAL_GRAPH_RESULT_BYTES:
+    if estimated_output_size > MAX_CUBICAL_GRAPH_RESULT_SIZE:
         raise OperationResourceAdmissionError(
             location=("cells",),
-            code="cubical_complex.one_skeleton.output_bytes",
+            code="cubical_complex.one_skeleton.output_size",
             message=(
-                f"conservative output estimate {estimated_output_bytes} exceeds "
-                f"{MAX_CUBICAL_GRAPH_RESULT_BYTES} bytes"
+                f"conservative output estimate {estimated_output_size} exceeds "
+                f"{MAX_CUBICAL_GRAPH_RESULT_SIZE} representation-size units"
             ),
         )
 
@@ -679,6 +680,23 @@ def skeleton(
             code="cubical_complex.skeleton_result_size",
             message="skeleton closure exceeds the admitted output bound",
         )
+    # The result retains both the full face closure and its filtered skeleton.
+    # Cell count and coordinate width are each admitted above, but only their
+    # product bounds the retained scalars, so a full-dimensional closure with
+    # wide coordinates is rejected here before it is materialized.
+    ambient_dimension = len(validated_cells[0].intervals)
+    skeleton_result_size = (
+        2 * face_bound * ambient_dimension * 2 * (coordinate_digits + 4) + 4096
+    )
+    if skeleton_result_size > MAX_CUBICAL_SKELETON_RESULT_SIZE:
+        raise OperationResourceAdmissionError(
+            location=("cells",),
+            code="cubical_complex.skeleton_result_representation_size",
+            message=(
+                "skeleton closure exceeds the admitted result representation-size "
+                "bound"
+            ),
+        )
     complex_, _source_cells = _canonical_complex(validated_cells)
     retained = tuple(
         cell for cell in complex_.cells if cell.dimension <= dimension_bound
@@ -742,19 +760,19 @@ def product(
             for coordinate in interval
         )
 
-    output_bytes_bound = (
+    output_size_bound = (
         128
         + product_cell_count * (64 + 8 * (left_dimension + right_dimension))
         + len(right.cells) * sum(coordinate_digit_bound(cell) for cell in left.cells)
         + len(left.cells) * sum(coordinate_digit_bound(cell) for cell in right.cells)
     )
-    if output_bytes_bound > MAX_CUBICAL_PRODUCT_RESULT_BYTES:
+    if output_size_bound > MAX_CUBICAL_PRODUCT_RESULT_SIZE:
         raise OperationResourceAdmissionError(
             location=("cells",),
             code="cubical_complex.product_result_size",
             message=(
                 "the cubical product exceeds the "
-                f"{MAX_CUBICAL_PRODUCT_RESULT_BYTES}-byte result bound"
+                f"{MAX_CUBICAL_PRODUCT_RESULT_SIZE}-unit representation-size bound"
             ),
         )
 
@@ -1122,7 +1140,7 @@ def _admit_lower_star_output(
                 f"{MAX_LOWER_STAR_FILTER_VECTOR_ENTRIES}-entry bound"
             ),
         )
-    output_bytes_bound = (
+    output_size_bound = (
         1024
         + len(complex_.cells)
         * (192 + ambient_dimension * (2 * MAX_LOWER_STAR_COORDINATE_DIGITS + 16))
@@ -1136,13 +1154,13 @@ def _admit_lower_star_output(
         + matrix_cells * 16
         + filter_vector_entries * 4
     )
-    if output_bytes_bound > MAX_LOWER_STAR_RESULT_BYTES:
+    if output_size_bound > MAX_LOWER_STAR_RESULT_SIZE:
         raise OperationResourceAdmissionError(
             location=("cells",),
             code="cubical_complex.lower_star_result_size",
             message=(
                 "lower-star output exceeds the "
-                f"{MAX_LOWER_STAR_RESULT_BYTES}-byte result bound"
+                f"{MAX_LOWER_STAR_RESULT_SIZE}-unit representation-size bound"
             ),
         )
     return groups

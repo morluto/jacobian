@@ -13,6 +13,8 @@ from jacobian.catalog.models import (
 from jacobian.dispatch import invoke_operation
 from jacobian.math.graphs.decks import _models as deck_models
 from jacobian.math.graphs.decks._models import (
+    AnonymousGraphCardClass,
+    AnonymousGraphCardMultiset,
     AnonymousGraphCardMultisetEqualityRequest,
     AnonymousGraphCardMultisetRequest,
 )
@@ -79,6 +81,10 @@ def test_relabeling_row_order_multiplicity_and_card_order_semantics() -> None:
         right=_multiset((empty, relabelled_path), 3),
     )
     assert anonymous_graph_card_multiset_equal(same).equal
+    round_trip = AnonymousGraphCardMultisetEqualityRequest.model_validate_json(
+        same.model_dump_json()
+    )
+    assert anonymous_graph_card_multiset_equal(round_trip).equal
 
     changed_multiplicity = AnonymousGraphCardMultisetEqualityRequest(
         left=_multiset((path, empty), 3), right=_multiset((path, path), 3)
@@ -196,18 +202,71 @@ def test_native_and_catalog_paths_do_not_replay_canonical_validation(
     assert canonical_checks == 2
 
 
+def test_typed_composition_is_preflighted_revalidated_once_and_roundtrips(
+    monkeypatch,
+) -> None:
+    graph = SimpleUndirectedGraph(vertices=("a",), edges=())
+    left = _multiset((graph,), 1)
+    right = _multiset((graph,), 1)
+    assert not hasattr(left, "_canonical_snapshot")
+
+    original = deck_models._canonical_card_edges
+    canonical_checks = 0
+
+    def count_canonical_checks(vertices, edges):
+        nonlocal canonical_checks
+        canonical_checks += 1
+        return original(vertices, edges)
+
+    monkeypatch.setattr(deck_models, "_canonical_card_edges", count_canonical_checks)
+    request = AnonymousGraphCardMultisetEqualityRequest(left=left, right=right)
+    assert canonical_checks == 2
+    assert anonymous_graph_card_multiset_equal(request).equal
+    assert canonical_checks == 2
+
+    round_trip = AnonymousGraphCardMultisetEqualityRequest.model_validate_json(
+        request.model_dump_json()
+    )
+    assert canonical_checks == 4
+    assert anonymous_graph_card_multiset_equal(round_trip).equal
+    assert canonical_checks == 4
+
+
 def test_native_path_rejects_unvalidated_or_modified_request_carriers() -> None:
-    from jacobian.math.graphs.decks._models import AnonymousGraphCardMultiset
     from jacobian.math.graphs.decks.operations import (
         anonymous_graph_card_multiset_equal,
     )
 
     unchecked_multiset = AnonymousGraphCardMultiset.model_construct(
-        card_order=10, classes=()
+        card_order=10,
+        classes=(
+            AnonymousGraphCardClass.model_construct(
+                representative=SimpleUndirectedGraph.model_construct(
+                    vertices=tuple(f"v{i:02d}" for i in range(10)), edges=()
+                ),
+                multiplicity=1,
+            ),
+        ),
     )
-    with pytest.raises(ValidationError, match="typed operands must come"):
+    with pytest.raises(ValidationError, match="combined canonical validation"):
         AnonymousGraphCardMultisetEqualityRequest(
             left=unchecked_multiset, right=unchecked_multiset
+        )
+
+    noncanonical_multiset = AnonymousGraphCardMultiset.model_construct(
+        card_order=3,
+        classes=(
+            AnonymousGraphCardClass.model_construct(
+                representative=SimpleUndirectedGraph.model_construct(
+                    vertices=("v00", "v01", "v02"), edges=(("v00", "v01"),)
+                ),
+                multiplicity=1,
+            ),
+        ),
+    )
+    with pytest.raises(ValidationError, match="minimal under all vertex permutations"):
+        AnonymousGraphCardMultisetEqualityRequest(
+            left=noncanonical_multiset, right=noncanonical_multiset
         )
 
     forged = AnonymousGraphCardMultisetEqualityRequest.model_construct(

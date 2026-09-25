@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import pytest
 
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.quantum._models import (
     ExactQubitPauli,
     ExactStabilizerGroup,
@@ -279,6 +282,43 @@ def test_redundant_rows_are_canonicalized_before_result_size_admission():
 
     assert result.generators == (generator,)
     assert ExactStabilizerGroup.model_validate_json(result.model_dump_json()) == result
+
+
+def test_empty_group_with_many_gates_does_not_charge_register_bytes_per_gate():
+    register = QubitRegister(
+        qubit_ids=tuple("q" * 62 + f"{index:02}" for index in range(32))
+    )
+    group = ExactStabilizerGroup(qubit_register=register, generators=())
+    sequence = StabilizerCliffordSequence(
+        register=register,
+        gates=(CliffordGate(gate="H", qubits=(register.qubit_ids[0],)),) * 30,
+    )
+    result = apply_stabilizer_clifford_sequence(
+        StabilizerCliffordSequenceApplyRequest(group=group, sequence=sequence)
+    )
+    assert result.generators == ()
+    assert result.qubit_register == register
+
+
+@pytest.mark.parametrize(
+    "sequence",
+    [
+        StabilizerCliffordSequence.model_construct(gates=()),
+        StabilizerCliffordSequence.model_construct(qubit_register=None, gates=()),
+    ],
+)
+def test_malformed_native_sequence_fields_raise_domain_error(sequence):
+    register = QubitRegister(qubit_ids=("q0",))
+    group = ExactStabilizerGroup(qubit_register=register, generators=())
+    with pytest.raises(OperationDomainValidationError) as error:
+        apply_stabilizer_clifford_sequence(
+            StabilizerCliffordSequenceApplyRequest.model_construct(
+                group=group, sequence=sequence
+            )
+        )
+    assert error.value.errors()[0]["type"] == (
+        "quantum.stabilizer_clifford_sequence.invalid_register"
+    )
 
 
 def test_empty_sequence_is_identity_on_a_stabilizer_group():

@@ -82,14 +82,16 @@ def _admit_sequence_shape(
             "quantum.stabilizer_clifford_sequence.invalid_sequence",
             "value must be a typed finite Clifford sequence",
         )
-    register = _admit_register(value.register, f"{location}.register")
+    register = _admit_register(
+        getattr(value, "qubit_register", None), f"{location}.register"
+    )
     if expected_register is not None and register != expected_register:
         _reject(
             location,
             "quantum.stabilizer_clifford_sequence.register_mismatch",
             "sequence and target must use the identical ordered register",
         )
-    gates = value.gates
+    gates = getattr(value, "gates", None)
     count = len(gates) if isinstance(gates, tuple) else -1
     if not 0 <= count <= MAX_CLIFFORD_SEQUENCE_GATES:
         _reject(
@@ -273,7 +275,7 @@ def apply_stabilizer_clifford_sequence(
         6 * len(axis) + 4 for gate in sequence.gates for axis in gate.qubits
     )
     axis_resolution_work = (
-        gate_count * (4 * width + 4 * register_bytes) + gate_axis_bytes
+        gate_count * (4 * width + 4 * (width + gate_axis_bytes)) + gate_axis_bytes
     )
     if (
         source_validation > 1_000_000

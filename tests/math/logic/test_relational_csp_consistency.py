@@ -180,6 +180,41 @@ def test_candidate_expansion_is_admitted_before_kernel_work(monkeypatch: pytest.
         )
 
 
+def test_native_call_rejects_noncanonical_constructed_instance() -> None:
+    from jacobian.catalog.models import OperationDomainValidationError
+
+    canonical = _instance(2, (1,), (((0,),),), 1, ((0, (0,)),))
+    malformed = FiniteCspInstance.model_construct(
+        template=FiniteRelationalStructure.model_construct(
+            carrier_size=2,
+            signature=(
+                FiniteRelationSymbol.model_construct(symbol_id="R0", arity=1),
+                FiniteRelationSymbol.model_construct(symbol_id="R0", arity=1),
+            ),
+            relation_tables=(((0,),), ((1,),)),
+        ),
+        variable_count=1,
+        constraints=canonical.constraints,
+    )
+    request = CspDomainRequest.model_construct(instance=malformed, domains=((0, 1),))
+    with pytest.raises(OperationDomainValidationError) as error:
+        generalized_arc_consistency(request)
+    assert error.value.errors()[0]["type"] == "relational.csp.consistency.instance_shape"
+
+
+def test_consistency_result_rejects_forged_structural_claims() -> None:
+    instance = _instance(2, (1,), (((0,),),), 1, ((0, (0,)),))
+    result = generalized_arc_consistency(CspDomainRequest(instance=instance, domains=((0, 1),)))
+    payload = result.model_dump()
+    payload["domains"] = ((1, 0),)
+    with pytest.raises(ValidationError):
+        CspDomainConsistency.model_validate(payload)
+    payload = result.model_dump()
+    payload["empty_domain_variables"] = (0,)
+    with pytest.raises(ValidationError):
+        CspDomainConsistency.model_validate(payload)
+
+
 def test_operation_manifest_uses_typed_carriers() -> None:
     assert len(TOOLS) == 1
     declaration = TOOLS[0]

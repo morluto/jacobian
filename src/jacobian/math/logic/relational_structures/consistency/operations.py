@@ -90,6 +90,14 @@ def _admit_domain_request(request: CspDomainRequest) -> None:
             message="instance must be a canonical finite CSP instance",
         )
     _preflight_csp_instance(instance)
+    try:
+        instance = FiniteCspInstance.model_validate(instance.model_dump(), strict=True)
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("instance",),
+            code="relational.csp.consistency.instance_shape",
+            message="instance must have canonical variables, constraints, and template relations",
+        ) from exc
     if (
         not isinstance(request.domains, tuple)
         or len(request.domains) != instance.variable_count

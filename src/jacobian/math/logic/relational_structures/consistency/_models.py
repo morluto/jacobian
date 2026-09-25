@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Self
+from typing import Annotated, Self
 
 from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
@@ -20,7 +20,7 @@ class CspDomainRequest(StrictModel):
     """A finite CSP instance with one allowed template subset per variable."""
 
     instance: FiniteCspInstance
-    domains: tuple[tuple[StrictInt, ...], ...] = Field(
+    domains: tuple[Annotated[tuple[StrictInt, ...], Field(max_length=MAX_RELATIONAL_CARRIER)], ...] = Field(
         max_length=MAX_RELATIONAL_CARRIER,
         description="One ordered, duplicate-free subset of template labels per variable.",
     )
@@ -56,3 +56,32 @@ class CspDomainConsistency(StrictModel):
     domains: tuple[tuple[StrictInt, ...], ...]
     empty_domain_variables: tuple[StrictInt, ...]
     false_nullary_constraint_ids: tuple[str, ...]
+
+    @model_validator(mode="after")
+    def require_canonical_consistency(self) -> Self:
+        count = self.instance.variable_count
+        if len(self.initial_domains) != count or len(self.domains) != count:
+            raise _error("result_axis", "domain axes must match the instance variable count")
+        if any(
+            tuple(sorted(set(domain))) != domain
+            or not set(domain).issubset(initial)
+            or any(not 0 <= value < self.instance.template.carrier_size for value in domain)
+            for domain, initial in zip(self.domains, self.initial_domains, strict=True)
+        ):
+            raise _error("result_domains", "final domains must be canonical subsets of initial domains")
+        expected_empty = tuple(i for i, domain in enumerate(self.domains) if not domain)
+        if self.empty_domain_variables != expected_empty:
+            raise _error("result_empty_domains", "empty-domain metadata must match the final domains")
+        symbols = {symbol.symbol_id: i for i, symbol in enumerate(self.instance.template.signature)}
+        false_ids = {
+            constraint.constraint_id
+            for constraint in self.instance.constraints
+            if not constraint.scope
+            and not self.instance.template.relation_tables[symbols[constraint.symbol_id]]
+        }
+        if (
+            tuple(sorted(set(self.false_nullary_constraint_ids))) != self.false_nullary_constraint_ids
+            or set(self.false_nullary_constraint_ids) != false_ids
+        ):
+            raise _error("result_nullary_metadata", "false nullary metadata must name exactly false nullary constraints")
+        return self

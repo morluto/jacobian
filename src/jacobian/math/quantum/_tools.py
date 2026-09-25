@@ -31,6 +31,8 @@ from jacobian.math.quantum._models import (
     StabilizerDistanceResult,
     StabilizerErrorEquivalenceRequest,
     StabilizerErrorEquivalenceResult,
+    StabilizerStatePauliMeasurementRequest,
+    StabilizerStatePauliMeasurementResult,
     StabilizerSyndromeRequest,
     StabilizerSyndromeResult,
 )
@@ -51,6 +53,7 @@ from jacobian.math.quantum.operations import (
     stabilizer_group_from_generators,
     stabilizer_logical_frame,
     stabilizer_normalizer,
+    stabilizer_state_measure_pauli,
     stabilizer_syndrome,
 )
 
@@ -183,6 +186,60 @@ TOOLS = (
                         ],
                     },
                     "generator_eigenvalues": [1, 1],
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="quantum.stabilizer_state.measure_pauli.compute",
+        title="Measure an exact Pauli on a pure stabilizer state",
+        description=(
+            "Measure one register-bound Hermitian Pauli on a pure stabilizer "
+            "state. Return either its deterministic eigenvalue and exact signed "
+            "generator relation, or both equiprobable +/-1 outcomes with each "
+            "post-measurement pure stabilizer state and probability 1/2. The "
+            "operation stores no trajectory or random sample."
+        ),
+        request_type=StabilizerStatePauliMeasurementRequest,
+        result_type=StabilizerStatePauliMeasurementResult,
+        run=stabilizer_state_measure_pauli,
+        tags=("quantum", "stabilizer", "measurement", "pauli", "exact"),
+        discovery_terms=(
+            "Pauli measurement on stabilizer state",
+            "deterministic stabilizer measurement outcome",
+            "random stabilizer measurement branches",
+        ),
+        examples=(
+            OperationExample(
+                name="measure_x_on_zero_state",
+                description=(
+                    "Measuring X on the +1 eigenstate of Z gives both exact "
+                    "outcomes with probability one half."
+                ),
+                input={
+                    "state": {
+                        "group": {
+                            "register": {"qubit_ids": ["q0"]},
+                            "generators": [
+                                {
+                                    "phase_free": {
+                                        "register": {"qubit_ids": ["q0"]},
+                                        "x_bits": [0],
+                                        "z_bits": [1],
+                                    },
+                                    "phase": 0,
+                                }
+                            ],
+                        }
+                    },
+                    "observable": {
+                        "phase_free": {
+                            "register": {"qubit_ids": ["q0"]},
+                            "x_bits": [1],
+                            "z_bits": [0],
+                        },
+                        "phase": 0,
+                    },
                 },
             ),
         ),

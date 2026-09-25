@@ -326,6 +326,116 @@ class StabilizerCodeValue(StrictModel):
         return len(self.group.register.qubit_ids) - len(self.group.generators)
 
 
+class StabilizerStatePauliMeasurementRequest(StrictModel):
+    """Measure one exact Hermitian Pauli on a pure stabilizer code value."""
+
+    state: StabilizerCodeValue
+    observable: ExactQubitPauli
+
+
+class StabilizerMeasurementBranch(StrictModel):
+    """One exact binary measurement branch and its compact post-state."""
+
+    outcome: Literal[-1, 1]
+    probability_numerator: Literal[1]
+    probability_denominator: Literal[2]
+    state: StabilizerCodeValue
+
+    @model_validator(mode="after")
+    def require_pure_post_state(self) -> Self:
+        if self.state.logical_qubits != 0:
+            raise _validation_error(
+                "measurement_branch_state", "measurement branch must retain a pure stabilizer state"
+            )
+        return self
+
+
+class StabilizerStatePauliMeasurementResult(StrictModel):
+    """Deterministic or equiprobable exact Pauli measurement on a stabilizer state."""
+
+    status: Literal["DETERMINISTIC", "UNIFORM_BINARY"]
+    source_state: StabilizerCodeValue
+    observable: ExactQubitPauli
+    deterministic_outcome: Literal[-1, 1] | None = None
+    relation_generator_bits: tuple[StrictInt, ...] | None = None
+    relation_phase: Literal[0, 2] | None = None
+    deterministic_state: StabilizerCodeValue | None = None
+    positive_branch: StabilizerMeasurementBranch | None = None
+    negative_branch: StabilizerMeasurementBranch | None = None
+
+    @model_validator(mode="after")
+    def require_exact_branch(self) -> Self:
+        register = self.source_state.group.register
+        if self.source_state.logical_qubits != 0:
+            raise _validation_error(
+                "measurement_source_state", "measurement source must encode no logical qubits"
+            )
+        if self.observable.register != register:
+            raise _validation_error(
+                "measurement_register", "observable and state must share the ordered register"
+            )
+        if self.status == "DETERMINISTIC":
+            if (
+                self.deterministic_outcome not in (-1, 1)
+                or self.relation_generator_bits is None
+                or len(self.relation_generator_bits) != len(self.source_state.group.generators)
+                or any(bit not in (0, 1) for bit in self.relation_generator_bits)
+                or self.relation_phase not in (0, 2)
+                or self.deterministic_state is None
+                or self.deterministic_state.logical_qubits != 0
+                or self.deterministic_state.group.register != register
+                or self.deterministic_state != self.source_state
+                or self.positive_branch is not None
+                or self.negative_branch is not None
+            ):
+                raise _validation_error(
+                    "measurement_deterministic_branch",
+                    "deterministic result needs a generator relation and unchanged state only",
+                )
+            expected = 1 if self.relation_phase == 0 else -1
+            if self.deterministic_outcome != expected:
+                raise _validation_error(
+                    "measurement_relation_outcome",
+                    "observable relation phase must determine its exact eigenvalue",
+                )
+        else:
+            if any(
+                value is not None
+                for value in (
+                    self.deterministic_outcome,
+                    self.relation_generator_bits,
+                    self.relation_phase,
+                    self.deterministic_state,
+                )
+            ) or self.positive_branch is None or self.negative_branch is None:
+                raise _validation_error(
+                    "measurement_uniform_branch",
+                    "uniform result needs exactly the positive and negative branches",
+                )
+            for branch, outcome in (
+                (self.positive_branch, 1),
+                (self.negative_branch, -1),
+            ):
+                if (
+                    branch.outcome != outcome
+                    or branch.probability_numerator != 1
+                    or branch.probability_denominator != 2
+                    or branch.state.group.register != register
+                ):
+                    raise _validation_error(
+                        "measurement_uniform_probability",
+                        "uniform branches must have outcomes +/-1, probability 1/2, and the source register",
+                    )
+        if any(
+            type(bit) is not int or bit not in (0, 1)
+            for bit in (self.relation_generator_bits or ())
+        ):
+            raise _validation_error(
+                "measurement_relation_bits", "generator relation coordinates must be bits"
+            )
+        return self
+
+
 class PauliProductRequest(StrictModel):
     left: ExactQubitPauli
     right: ExactQubitPauli
@@ -1189,6 +1299,9 @@ __all__ = [
     "QubitRegister",
     "StabilizerErrorEquivalenceRequest",
     "StabilizerErrorEquivalenceResult",
+    "StabilizerMeasurementBranch",
+    "StabilizerStatePauliMeasurementRequest",
+    "StabilizerStatePauliMeasurementResult",
     "StabilizerSyndromeRequest",
     "StabilizerSyndromeResult",
 ]

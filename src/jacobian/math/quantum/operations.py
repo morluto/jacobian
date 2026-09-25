@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from itertools import combinations, product
-from typing import NoReturn
+from typing import Literal, NoReturn, cast
 
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -44,6 +44,9 @@ from jacobian.math.quantum._models import (
     StabilizerCodeValue,
     StabilizerDistanceResult,
     StabilizerErrorEquivalenceResult,
+    StabilizerMeasurementBranch,
+    StabilizerStatePauliMeasurementRequest,
+    StabilizerStatePauliMeasurementResult,
     StabilizerSyndromeResult,
 )
 
@@ -730,6 +733,216 @@ def stabilizer_code_compute(request: StabilizerCodeRequest) -> StabilizerCodeVal
         generators=tuple(row[1] for row in rows[:target]),
     )
     return StabilizerCodeValue(group=canonical_group)
+
+
+def _stabilizer_relation_for_pauli(
+    generators: tuple[ExactQubitPauli, ...], observable: ExactQubitPauli
+) -> tuple[tuple[int, ...], int]:
+    """Express a commuting state observable using exact stabilizer generators."""
+    echelon: dict[int, tuple[tuple[int, ...], ExactQubitPauli, int]] = {}
+    for index, generator in enumerate(generators):
+        reduced = generator
+        coordinates = (*reduced.phase_free.x_bits, *reduced.phase_free.z_bits)
+        relation = 1 << index
+        for pivot in sorted(echelon):
+            if coordinates[pivot]:
+                row, exact_row, row_relation = echelon[pivot]
+                reduced = _product_pauli_after_admission(reduced, exact_row)
+                coordinates = tuple(a ^ b for a, b in zip(coordinates, row, strict=True))
+                relation ^= row_relation
+        new_pivot = next((column for column, bit in enumerate(coordinates) if bit), None)
+        if new_pivot is not None:
+            echelon[new_pivot] = (coordinates, reduced, relation)
+
+    reduced = observable
+    coordinates = (*observable.phase_free.x_bits, *observable.phase_free.z_bits)
+    relation = 0
+    for pivot in sorted(echelon):
+        if coordinates[pivot]:
+            row, exact_row, row_relation = echelon[pivot]
+            reduced = _product_pauli_after_admission(reduced, exact_row)
+            coordinates = tuple(a ^ b for a, b in zip(coordinates, row, strict=True))
+            relation ^= row_relation
+    if any(coordinates) or reduced.phase not in (0, 2):
+        _reject(
+            "observable",
+            "quantum.stabilizer.measurement.commuting_not_in_state_group",
+            "a commuting Pauli on a pure stabilizer state must be a signed stabilizer",
+        )
+    return (
+        tuple((relation >> index) & 1 for index in range(len(generators))),
+        reduced.phase,
+    )
+
+
+def _measurement_post_state(
+    state: StabilizerCodeValue,
+    observable: ExactQubitPauli,
+    outcome: int,
+    anticommuting_index: int,
+) -> StabilizerCodeValue:
+    """Replace one anticommuting stabilizer row and canonicalize the branch."""
+    generators = state.group.generators
+    pivot = generators[anticommuting_index]
+    measured = ExactQubitPauli.model_construct(
+        phase_free=observable.phase_free,
+        phase=(observable.phase + (2 if outcome == -1 else 0)) % 4,
+    )
+    updated: list[ExactQubitPauli] = []
+    for index, generator in enumerate(generators):
+        if index == anticommuting_index:
+            updated.append(measured)
+        elif _symplectic_pairing(
+            (*generator.phase_free.x_bits, *generator.phase_free.z_bits),
+            (*observable.phase_free.x_bits, *observable.phase_free.z_bits),
+            len(state.group.register.qubit_ids),
+        ):
+            updated.append(_product_pauli_after_admission(generator, pivot))
+        else:
+            updated.append(generator)
+    group = ExactStabilizerGroup(register=state.group.register, generators=tuple(updated))
+    return stabilizer_code_compute(
+        StabilizerCodeRequest(
+            group=group,
+            generator_eigenvalues=(1,) * len(updated),
+        )
+    )
+
+
+def stabilizer_state_measure_pauli(
+    request: StabilizerStatePauliMeasurementRequest,
+) -> StabilizerStatePauliMeasurementResult:
+    """Measure one exact Hermitian Pauli on a pure stabilizer state."""
+    if not isinstance(request, StabilizerStatePauliMeasurementRequest):
+        _reject(
+            "request",
+            "quantum.stabilizer.measurement.invalid_request",
+            "Pauli measurement requires a typed stabilizer-state request",
+        )
+    state = request.state
+    if not isinstance(state, StabilizerCodeValue) or not isinstance(
+        state.group, ExactStabilizerGroup
+    ):
+        _reject(
+            "state",
+            "quantum.stabilizer.measurement.invalid_state",
+            "Pauli measurement requires an exact stabilizer code value",
+        )
+    register = _admit_register(state.group.register, "state")
+    n = len(register.qubit_ids)
+    generators = state.group.generators
+    if not isinstance(generators, tuple) or len(generators) != n:
+        _reject(
+            "state",
+            "quantum.stabilizer.measurement.state_not_pure",
+            "measurement requires a maximal rank-n stabilizer state",
+        )
+    observable = _admit_exact(request.observable, "observable")
+    if observable.register != register:
+        _reject(
+            "observable",
+            "quantum.stabilizer.measurement.register_mismatch",
+            "observable and state must use the same ordered qubit register",
+        )
+    if (
+        observable.phase
+        + sum(
+            x * z
+            for x, z in zip(
+                observable.phase_free.x_bits,
+                observable.phase_free.z_bits,
+                strict=True,
+            )
+        )
+    ) % 2:
+        _reject(
+            "observable",
+            "quantum.stabilizer.measurement.observable_not_hermitian",
+            "measurement observable must be a Hermitian Pauli",
+        )
+
+    pair_count = n * (n - 1) // 2
+    code_work = (
+        2 * pair_count * n
+        + 6 * n**3
+        + n * (MAX_QUBIT_LABEL_LENGTH + 4)
+        + 3 * n * n * (MAX_QUBIT_LABEL_LENGTH + 4)
+        + n * n
+    )
+    state_bytes = (
+        (n + 1) * (n * (12 * MAX_QUBIT_LABEL_LENGTH + 3) + 128)
+        + n * (4 * n + 128)
+        + 512
+    )
+    observable_bytes = n * (12 * MAX_QUBIT_LABEL_LENGTH + 3) + 512
+    admitted_work = 3 * code_work + 8 * n * n + 2 * n
+    output_bytes = 3 * state_bytes + observable_bytes + 2048
+    if admitted_work > 2_000_000 or output_bytes > 4_000_000:
+        raise OperationResourceAdmissionError(
+            location=("request",),
+            code="quantum.stabilizer.measurement.over_envelope",
+            message="measurement tableau work or exact branch output exceeds its admitted envelope",
+        )
+
+    # Revalidate/canonicalize the authored state once; all subsequent tableau
+    # updates use the resulting independent +1 group on the same register.
+    canonical_state = stabilizer_code_compute(
+        StabilizerCodeRequest(group=state.group, generator_eigenvalues=(1,) * n)
+    )
+    canonical_generators = canonical_state.group.generators
+    observable_vector = (
+        *observable.phase_free.x_bits,
+        *observable.phase_free.z_bits,
+    )
+    anticommuting_index = next(
+        (
+            index
+            for index, generator in enumerate(canonical_generators)
+            if _symplectic_pairing(
+                (*generator.phase_free.x_bits, *generator.phase_free.z_bits),
+                observable_vector,
+                n,
+            )
+        ),
+        None,
+    )
+    if anticommuting_index is None:
+        relation_bits, relation_phase = _stabilizer_relation_for_pauli(
+            canonical_generators, observable
+        )
+        return StabilizerStatePauliMeasurementResult(
+            status="DETERMINISTIC",
+            source_state=canonical_state,
+            observable=observable,
+            deterministic_outcome=1 if relation_phase == 0 else -1,
+            relation_generator_bits=relation_bits,
+            relation_phase=cast(Literal[0, 2], relation_phase),
+            deterministic_state=canonical_state,
+        )
+
+    positive_state = _measurement_post_state(
+        canonical_state, observable, 1, anticommuting_index
+    )
+    negative_state = _measurement_post_state(
+        canonical_state, observable, -1, anticommuting_index
+    )
+    return StabilizerStatePauliMeasurementResult(
+        status="UNIFORM_BINARY",
+        source_state=canonical_state,
+        observable=observable,
+        positive_branch=StabilizerMeasurementBranch(
+            outcome=1,
+            probability_numerator=1,
+            probability_denominator=2,
+            state=positive_state,
+        ),
+        negative_branch=StabilizerMeasurementBranch(
+            outcome=-1,
+            probability_numerator=1,
+            probability_denominator=2,
+            state=negative_state,
+        ),
+    )
 
 
 def _gf2_nullspace(rows: list[list[int]], width: int) -> tuple[tuple[int, ...], ...]:

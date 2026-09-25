@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from itertools import product
-from math import gcd, lcm, prod
+from pydantic import ValidationError
 
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -13,11 +12,14 @@ from jacobian.math.number_theory.characters.coordinate_basis._models import (
     DirichletCharacterBasisChangeResult,
     DirichletCharacterCoordinateIsomorphism,
 )
+from jacobian.math.number_theory.characters.operations import (
+    _require_character,
+    require_complete_character_group,
+)
 from jacobian.math.number_theory.characters.values import (
     MAX_CHARACTER_GROUP_MODULUS,
     CyclotomicValue,
     DirichletCharacter,
-    DirichletCharacterGroup,
 )
 
 _MAX_WORK = 131_072
@@ -39,81 +41,26 @@ def _resource_error(code: str, message: str) -> None:
     )
 
 
-def _prime_exponents(value: int) -> dict[int, int]:
-    factors: dict[int, int] = {}
-    prime = 2
-    remaining = value
-    while prime * prime <= remaining:
-        while remaining % prime == 0:
-            factors[prime] = factors.get(prime, 0) + 1
-            remaining //= prime
-        prime += 1 if prime == 2 else 2
-    if remaining > 1:
-        factors[remaining] = factors.get(remaining, 0) + 1
-    return factors
+def _require_coordinate_isomorphism(
+    coordinate_isomorphism: DirichletCharacterCoordinateIsomorphism,
+) -> DirichletCharacterCoordinateIsomorphism:
+    """Admit a native isomorphism argument before any field is dereferenced."""
 
-
-def _invariant_factors(generator_orders: tuple[int, ...]) -> tuple[int, ...]:
-    factors_by_prime = tuple(_prime_exponents(order) for order in generator_orders)
-    primes = {prime for factors in factors_by_prime for prime in factors}
-    rank = len(generator_orders)
-    result = [1] * rank
-    for prime in primes:
-        exponents = sorted(factors.get(prime, 0) for factors in factors_by_prime)
-        for index, exponent in enumerate(exponents):
-            result[index] *= prime**exponent
-    return tuple(value for value in result if value > 1)
-
-
-def _validate_group(group: DirichletCharacterGroup) -> None:
-    modulus = group.modulus
-    if not 1 <= modulus <= MAX_CHARACTER_GROUP_MODULUS:
-        _resource_error("modulus_bound", "modulus exceeds the character table bound")
-    units = tuple(residue for residue in range(modulus) if gcd(residue, modulus) == 1)
-    if group.unit_residues != units or group.character_count != len(units):
-        _domain_error("group_unit_table", "group must list exactly the canonical units")
-
-    orders = group.generator_orders
-    coordinates = group.unit_coordinates
-    if any(order > len(units) for order in orders):
+    if not isinstance(coordinate_isomorphism, DirichletCharacterCoordinateIsomorphism):
         _domain_error(
-            "group_coordinate_order",
-            "generator orders exceed the finite unit-group size",
+            "isomorphism_type",
+            "coordinate_isomorphism must be a coordinate-basis isomorphism value",
         )
-    if prod(orders) != len(units):
-        _domain_error(
-            "group_coordinate_order",
-            "generator orders must multiply to the number of units",
+    try:
+        return DirichletCharacterCoordinateIsomorphism.model_validate(
+            coordinate_isomorphism.model_dump()
         )
-    if group.invariant_factors != _invariant_factors(orders):
-        _domain_error(
-            "group_invariant_factors",
-            "invariant factors must describe the supplied cyclic coordinate axes",
-        )
-    expected_exponent = lcm(*orders) if orders else 1
-    if group.exponent != expected_exponent or group.exponent > len(units):
-        _domain_error(
-            "group_exponent", "group exponent must be the lcm of generator orders"
-        )
-
-    expected_coordinates = set(product(*(range(order) for order in orders)))
-    if (
-        len(expected_coordinates) != len(units)
-        or set(coordinates) != expected_coordinates
-    ):
-        _domain_error(
-            "group_coordinate_bijection",
-            "unit-coordinate rows must cover the full direct product exactly once",
-        )
-    for residue, row in zip(units, coordinates, strict=True):
-        reconstructed = 1 % modulus
-        for generator, exponent in zip(group.generators, row, strict=True):
-            reconstructed = reconstructed * pow(generator, exponent, modulus) % modulus
-        if reconstructed != residue:
-            _domain_error(
-                "group_coordinate_reconstruction",
-                "each unit coordinate row must reconstruct its canonical residue",
-            )
+    except (ValidationError, AttributeError, KeyError, TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("coordinate_isomorphism",),
+            code="dirichlet_character.coordinate_basis.isomorphism_invalid",
+            message="coordinate isomorphism has malformed authored fields",
+        ) from exc
 
 
 def _character_exponent(character: DirichletCharacter, row: tuple[int, ...]) -> int:
@@ -135,6 +82,8 @@ def change_dirichlet_character_coordinate_basis(
 ) -> DirichletCharacterBasisChangeResult:
     """Express the same residue character in a supplied target unit basis."""
 
+    coordinate_isomorphism = _require_coordinate_isomorphism(coordinate_isomorphism)
+    character = _require_character(character)
     source = coordinate_isomorphism.source_group
     target = coordinate_isomorphism.target_group
     if character.group != source:
@@ -159,8 +108,8 @@ def change_dirichlet_character_coordinate_basis(
     if source.modulus > MAX_CHARACTER_GROUP_MODULUS:
         _resource_error("modulus_bound", "modulus exceeds the character table bound")
 
-    _validate_group(source)
-    _validate_group(target)
+    require_complete_character_group(source)
+    require_complete_character_group(target)
 
     source_rows = dict(zip(source.unit_residues, source.unit_coordinates, strict=True))
     for index, generator in enumerate(target.generators):

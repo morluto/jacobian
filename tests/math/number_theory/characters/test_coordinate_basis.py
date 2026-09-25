@@ -7,13 +7,24 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.number_theory.characters.coordinate_basis import (
+    change_dirichlet_character_coordinate_basis as exported_coordinate_basis_change,
+)
 from jacobian.math.number_theory.characters.coordinate_basis._models import (
     DirichletCharacterBasisChangeRequest,
+    DirichletCharacterBasisChangeResult,
     DirichletCharacterCoordinateIsomorphism,
 )
 from jacobian.math.number_theory.characters.coordinate_basis._tools import TOOLS
 from jacobian.math.number_theory.characters.coordinate_basis.operations import (
     change_dirichlet_character_coordinate_basis,
+)
+from jacobian.math.number_theory.characters.operations import (
+    dirichlet_character_conjugate,
+    dirichlet_character_product,
+    dirichlet_character_table,
+    dirichlet_character_value,
+    require_complete_character_group,
 )
 from jacobian.math.number_theory.characters.values import (
     CyclotomicValue,
@@ -165,3 +176,101 @@ def test_trivial_unit_group_transport_preserves_its_degenerate_table() -> None:
     assert result.transported_character.coordinates == ()
     assert result.residues == (0,)
     assert result.values == (CyclotomicValue(order=1, exponent=0),)
+
+
+def test_operation_is_exported_from_its_owner_package() -> None:
+    assert (
+        exported_coordinate_basis_change is change_dirichlet_character_coordinate_basis
+    )
+
+
+def test_transported_character_composes_with_existing_consumers() -> None:
+    request = _request()
+
+    result = change_dirichlet_character_coordinate_basis(
+        request.character, request.coordinate_isomorphism
+    )
+    transported = result.transported_character
+
+    require_complete_character_group(transported.group)
+    assert dirichlet_character_table(transported).values == result.values
+    for residue in range(8):
+        assert dirichlet_character_value(
+            transported, residue
+        ).value == _direct_character_value(request.character, residue)
+    square = dirichlet_character_product(transported, transported)
+    assert square.group == transported.group
+    assert square.coordinates == (0, 0)
+    conjugate = dirichlet_character_conjugate(transported)
+    assert dirichlet_character_table(conjugate).values == tuple(
+        None if value is None else value.conjugate() for value in result.values
+    )
+
+
+def test_transported_character_survives_serialization_into_consumers() -> None:
+    request = _request()
+    result = change_dirichlet_character_coordinate_basis(
+        request.character, request.coordinate_isomorphism
+    )
+
+    decoded = DirichletCharacterBasisChangeResult.model_validate_json(
+        result.model_dump_json()
+    )
+
+    require_complete_character_group(decoded.transported_character.group)
+    assert (
+        dirichlet_character_table(decoded.transported_character).values == result.values
+    )
+
+
+def test_group_admission_rejects_nonunit_order_one_generators() -> None:
+    group = DirichletCharacterGroup(
+        modulus=2,
+        unit_residues=(1,),
+        character_count=1,
+        invariant_factors=(),
+        generators=(0,),
+        generator_orders=(1,),
+        unit_coordinates=((0,),),
+        exponent=1,
+    )
+    character = DirichletCharacter(group=group, coordinates=(0,))
+    isomorphism = DirichletCharacterCoordinateIsomorphism(
+        source_group=group,
+        target_group=group,
+        target_generator_images_in_source_coordinates=((0,),),
+    )
+
+    with pytest.raises(OperationDomainValidationError, match="exact") as error:
+        change_dirichlet_character_coordinate_basis(character, isomorphism)
+    assert error.value.errors()[0]["type"] == (
+        "dirichlet_character.group.generator_order"
+    )
+
+
+def test_native_transport_rejects_wrong_runtime_argument_types() -> None:
+    request = _request()
+
+    with pytest.raises(OperationDomainValidationError, match="coordinate-basis"):
+        change_dirichlet_character_coordinate_basis(
+            request.character,
+            object(),  # type: ignore[arg-type]
+        )
+    with pytest.raises(OperationDomainValidationError, match="Dirichlet character"):
+        change_dirichlet_character_coordinate_basis(
+            object(),  # type: ignore[arg-type]
+            request.coordinate_isomorphism,
+        )
+
+
+def test_native_transport_rejects_a_shape_bypassed_isomorphism() -> None:
+    request = _request()
+    invalid = request.coordinate_isomorphism.model_copy(
+        update={"target_generator_images_in_source_coordinates": ()}
+    )
+
+    with pytest.raises(OperationDomainValidationError, match="malformed") as error:
+        change_dirichlet_character_coordinate_basis(request.character, invalid)
+    assert error.value.errors()[0]["type"] == (
+        "dirichlet_character.coordinate_basis.isomorphism_invalid"
+    )

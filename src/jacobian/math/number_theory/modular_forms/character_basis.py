@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from fractions import Fraction
 from math import gcd
+from typing import Literal
 
 from jacobian._execution import request_checkpoint
 from jacobian.catalog.models import (
@@ -122,7 +123,7 @@ def _require_basis_space(
         or character.group.modulus != space.level
     ):
         _domain(
-            "character basis supports weight-two order-six character spaces at levels 13, 26, and 39 over Q(zeta_6)"
+            "character basis supports weight-two conductor-13 characters at levels 13, 26, and 39 over Q(zeta_6)"
         )
     request = _pari_character_request(space)
     return space, field, request
@@ -214,8 +215,11 @@ def _character_basis_from_admission(
     """Construct the basis after source and character admission has completed."""
     # Quer, Thm. 2.3, gives the exact independent dimension formula for this
     # bounded character family. Admission is complete before entering PARI.
+    character = space.character
+    if type(character) is not DirichletCharacter:
+        raise RuntimeError("admitted character basis lost its explicit character")
     cusp_dimension, full_dimension = character_space_dimensions(
-        space.level, space.weight, space.character, field
+        space.level, space.weight, character, field
     )
     dimension = cusp_dimension if space.kind == "S" else full_dimension
     precision = _character_sturm_precision(space)
@@ -233,7 +237,9 @@ def _character_basis_from_admission(
             code="modular_form.character_basis_height_admission",
             message="normalized character coefficients exceed the exact height envelope",
         )
-    output_bytes = precision * field.degree * (2 * normalized_digits + 32)
+    output_bytes = (
+        max(1, dimension) * precision * field.degree * (2 * normalized_digits + 32)
+    )
     if work > _MAX_WORK or output_bytes > _MAX_OUTPUT_BYTES:
         raise OperationResourceAdmissionError(
             location=("space",),
@@ -262,9 +268,17 @@ def _character_basis_from_admission(
     if len(raw_basis) != dimension:
         raise RuntimeError("PARI returned a character basis of the wrong dimension")
     normalized = _rref_character_prefix(raw_basis, field, precision)
-    basis_id = (
-        CHARACTER_BASIS_ID
-        if space.level == 13 and space.kind == "S"
+    basis_id: Literal[
+        "gamma0-13-even-order6-character-sturm-v1",
+        "gamma0-cyclotomic-character-sturm-rref-v1",
+    ] = (
+        "gamma0-13-even-order6-character-sturm-v1"
+        if (
+            space.level == 13
+            and space.kind == "S"
+            and type(space.character) is DirichletCharacter
+            and space.character.coordinates in ((2,), (10,))
+        )
         else "gamma0-cyclotomic-character-sturm-rref-v1"
     )
     elements = tuple(

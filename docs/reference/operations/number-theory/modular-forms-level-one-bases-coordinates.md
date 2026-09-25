@@ -44,14 +44,15 @@ remain unsupported in the rational basis and coordinate paths.
 
 `ModularFormSpace` can represent a bounded cyclotomic coefficient parent using
 the canonical `RationalCyclotomicField` power-basis value. A narrow
-field-valued character basis slice supports even order-6 characters of
-conductor 13 at levels 13, 26, and 39, in both `M_2` and `S_2`, over
+field-valued character basis slice supports even characters of conductor 13
+and order dividing six at levels 13, 26, and 39, in both `M_2` and `S_2`, over
 `Q(zeta_6)`. `modular_form.character_basis.compute` returns the complete
 q-Sturm RREF basis at precisions 3, 8, and 10 for those levels.
 `S_2(Gamma0(13), chi)` remains one-dimensional and retains its previous
 basis identifier and normalization through q^0..q^2.
-`ModularFormCoordinates` represents one exact scalar multiple of that
-basis element; `modular_form.character_coordinates.q_expansion.compute`
+For the one-dimensional order-six level-13 cusp subspaces,
+`ModularFormCoordinates` represents one exact scalar multiple of that basis
+element; `modular_form.character_coordinates.q_expansion.compute`
 returns its exact field-valued Sturm prefix. The operation
 `modular_form.equal.check` compares two such forms only when their space and
 basis identifiers are identical, using the common q^0..q^2 prefix.

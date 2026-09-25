@@ -257,6 +257,18 @@ def kernel_of_morphism(value: SheafMorphismResult) -> SheafMorphismKernelResult:
         )
     _admit_section_plan(source)
     _admit_section_plan(target)
+    # Authored Pydantic models can bypass validation via model_construct/model_copy;
+    # reject malformed pair structure before the shared scalar/resource scan.
+    if not isinstance(value.components, tuple) or any(
+        not isinstance(component, tuple)
+        or len(component) != 2
+        or not isinstance(component[1], (tuple, list))
+        for component in value.components
+    ):
+        raise _fail_domain(
+            "component_structure",
+            "morphism components must be a tuple of (simplex key, matrix) pairs",
+        )
     target_cover, input_digits, morphism_work = _admit_morphism_resources(
         source, target, value.components
     )

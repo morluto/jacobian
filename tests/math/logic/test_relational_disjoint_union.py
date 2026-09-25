@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from itertools import product
+from itertools import islice, product
 
 import pytest
 
@@ -219,13 +219,7 @@ def test_mismatched_signatures_and_unrepresentable_carrier_fail_typed() -> None:
 
 
 def test_union_relation_row_growth_is_admitted_before_construction() -> None:
-    rows = tuple(
-        (a, b, c, d)
-        for a in range(32)
-        for b in range(32)
-        for c in range(32)
-        for d in range(32)
-    )
+    rows = tuple(islice(product(range(32), repeat=4), 3_000))
     signature = (FiniteRelationSymbol(symbol_id="Q", arity=4),)
     left = FiniteRelationalStructure(
         carrier_size=32, signature=signature, relation_tables=(rows[:3_000],)

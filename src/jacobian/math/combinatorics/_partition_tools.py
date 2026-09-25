@@ -8,9 +8,16 @@ from jacobian.math.combinatorics._models import (
     NonnegativePairRequest,
 )
 from jacobian.math.combinatorics._partition_models import (
+    IncreasingPartsObstruction,
     IntegerPartitionEnumerationRequest,
     IntegerPartitionEnumerationResult,
+    NonpositivePartObstruction,
+    PartitionCheckRequest,
+    PartitionCheckResult,
+    PartitionFound,
+    PartitionRejected,
 )
+from jacobian.math.combinatorics.symmetric_functions.values import IntegerPartition
 
 
 def _integer_result(value: int) -> IntegerResult:
@@ -44,7 +51,77 @@ def enumerate_integer_partitions(
     )
 
 
+def check_partition(request: PartitionCheckRequest) -> PartitionCheckResult:
+    """Return the canonical partition or the first defining obstruction."""
+
+    parts = request.parts
+    previous: int | None = None
+    for index, part in enumerate(parts):
+        if part <= 0:
+            return PartitionCheckResult(
+                outcome=PartitionRejected(
+                    obstruction=NonpositivePartObstruction(index=index, value=part)
+                )
+            )
+        if previous is not None and previous < part:
+            return PartitionCheckResult(
+                outcome=PartitionRejected(
+                    obstruction=IncreasingPartsObstruction(
+                        index=index,
+                        previous_value=previous,
+                        value=part,
+                    )
+                )
+            )
+        previous = part
+
+    partition = IntegerPartition(parts=parts)
+    conjugate = tuple(
+        sum(part >= column for part in parts)
+        for column in range(1, (parts[0] if parts else 0) + 1)
+    )
+    cells = tuple(
+        (row, column)
+        for row, part in enumerate(parts, start=1)
+        for column in range(1, part + 1)
+    )
+    return PartitionCheckResult(
+        outcome=PartitionFound(
+            partition=partition,
+            size=sum(parts),
+            length=len(parts),
+            conjugate=IntegerPartition(parts=conjugate),
+            cells=cells,
+        )
+    )
+
+
 PARTITION_OPERATIONS = (
+    MathTool(
+        operation_id="combinatorics.partition.check",
+        title="Check an integer partition candidate",
+        description=(
+            "Classify a bounded sequence of exact integers as an integer "
+            "partition, returning its canonical value and Ferrers data, or "
+            "the first nonpositive part or adjacent increase."
+        ),
+        request_type=PartitionCheckRequest,
+        result_type=PartitionCheckResult,
+        run=check_partition,
+        tags=("combinatorics", "partition", "exact"),
+        examples=(
+            OperationExample(
+                name="partition_candidate",
+                description="Check the partition (4, 2, 1).",
+                input={"parts": [4, 2, 1]},
+            ),
+            OperationExample(
+                name="partition_obstruction",
+                description="Locate the first increasing adjacent pair.",
+                input={"parts": [3, 4, 1]},
+            ),
+        ),
+    ),
     MathTool(
         operation_id="combinatorics.compute.stirling_first",
         title="Compute Stirling number of first kind",

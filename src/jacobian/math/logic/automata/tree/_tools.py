@@ -28,6 +28,8 @@ from jacobian.math.logic.automata.tree._models import (
     TreeContextPlugResult,
     TreeContextStateMapRequest,
     TreeContextStateMapResult,
+    TreeContextTransformationMonoidRequest,
+    TreeContextTransformationMonoidResult,
     TreeDeterminizeRequest,
     TreeDeterminizeResult,
     TreeRunRequest,
@@ -46,6 +48,7 @@ from jacobian.math.logic.automata.tree.operations import (
     ranked_tree_positions,
     ranked_tree_subtree,
     reachable_state_profile,
+    tree_context_transformation_monoid,
     trim_tree_automaton,
 )
 from jacobian.math.logic.automata.tree.values import (
@@ -116,6 +119,14 @@ def compute_tree_context_state_map(
     request: TreeContextStateMapRequest,
 ) -> TreeContextStateMapResult:
     return map_tree_context_states(request.automaton, request.context)
+
+
+def compute_tree_context_transformation_monoid(
+    request: TreeContextTransformationMonoidRequest,
+) -> TreeContextTransformationMonoidResult:
+    return tree_context_transformation_monoid(
+        request.automaton, max_elements=request.max_elements
+    )
 
 
 def compute_tree_automaton_reachability(
@@ -283,6 +294,46 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                         "final_states": [0],
                     },
                     "context": {"arity": [0], "frames": []},
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="tree_automaton.context.transformation_monoid.compute",
+        title="Compute the context-induced transformation monoid",
+        description=(
+            "Return every state map induced by a one-hole ranked-tree context, "
+            "its exact finite multiplication table, and one ranked context witness "
+            "per map. Requires a complete deterministic automaton. The requested "
+            "element cap, transition and reachable-state generator count, closure "
+            "work, multiplication work, witness size, and serialized table are "
+            "admitted before or during exact closure; exceeding a bound is a "
+            "resource refusal and never a partial monoid."
+        ),
+        request_type=TreeContextTransformationMonoidRequest,
+        result_type=TreeContextTransformationMonoidResult,
+        run=compute_tree_context_transformation_monoid,
+        tags=("tree-automata", "context", "transformation-monoid", "exact"),
+        discovery_terms=(
+            "tree automaton context monoid",
+            "context transformation monoid",
+        ),
+        examples=(
+            OperationExample(
+                name="unary_context_monoid",
+                description="Enumerate the maps induced by all unary chains, including the empty context.",
+                input={
+                    "automaton": {
+                        "state_count": 2,
+                        "arity": [0, 1],
+                        "transitions": [
+                            {"symbol": 0, "child_states": [], "target_state": 0},
+                            {"symbol": 1, "child_states": [0], "target_state": 1},
+                            {"symbol": 1, "child_states": [1], "target_state": 1},
+                        ],
+                        "final_states": [1],
+                    },
+                    "max_elements": 8,
                 },
             ),
         ),

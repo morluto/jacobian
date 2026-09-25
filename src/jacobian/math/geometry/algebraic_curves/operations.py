@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 import sympy
 
+from jacobian.canonical import decimal_digit_width
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -111,7 +112,7 @@ class PlaneCurveBlowupChartData:
 
 
 def _digit_floor(value: int) -> int:
-    return len(str(abs(value))) - 1
+    return decimal_digit_width(value) - 1
 
 
 def _blowup_result_admission_error(location: str) -> OperationResourceAdmissionError:

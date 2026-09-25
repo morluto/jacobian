@@ -953,8 +953,15 @@ def modular_character_coordinates_u_prime(
     basis_bytes = source_precision * dimension * field.degree * (2 * basis_digits + 32)
     matrix_bytes = dimension * dimension * field.degree * (2 * matrix_digits + 32)
     result_bytes = dimension * field.degree * (2 * linear_digits + 32)
+    # Every product below passes through cyclotomic._admit before its exact
+    # reduction; include that kernel's conservative product-height envelope so
+    # admission cannot defer a predictable refusal until after PARI expansion.
+    product_digits = max(input_digits, basis_digits, matrix_digits) * (
+        2 * field.degree + 2
+    ) + len(str(field.degree)) + 2
     if (
-        linear_digits > MAX_CYCLIC_FIELD_ELEMENT_DIGITS
+        product_digits > MAX_CYCLIC_FIELD_ELEMENT_DIGITS
+        or linear_digits > MAX_CYCLIC_FIELD_ELEMENT_DIGITS
         or intermediate_digits > MAX_CYCLIC_FIELD_ELEMENT_DIGITS
         or closure_digits > MAX_CYCLIC_FIELD_ELEMENT_DIGITS
         or work > _MAX_WORK

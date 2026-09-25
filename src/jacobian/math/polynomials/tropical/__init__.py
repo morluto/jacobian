@@ -3,6 +3,7 @@
 from jacobian.math.polynomials.tropical._models import (
     PolynomialActiveTermsRequest,
     PolynomialActiveTermsResult,
+    PolynomialSubstituteRequest,
     ScalarAddResult,
     ScalarDualResult,
     TropicalActiveTerm,
@@ -20,6 +21,7 @@ from jacobian.math.polynomials.tropical.operations import (
     tropical_polynomial_evaluate,
     tropical_polynomial_multiply,
     tropical_polynomial_power,
+    tropical_polynomial_substitute,
     tropical_polynomial_univariate_newton_polygon,
     tropical_polynomial_univariate_roots,
     tropical_scalar_add,
@@ -55,6 +57,7 @@ from jacobian.math.polynomials.tropical.values import (
 __all__ = [
     "PolynomialActiveTermsRequest",
     "PolynomialActiveTermsResult",
+    "PolynomialSubstituteRequest",
     "ScalarAddResult",
     "ScalarDualResult",
     "TropicalActiveTerm",
@@ -85,6 +88,7 @@ __all__ = [
     "tropical_polynomial_evaluate",
     "tropical_polynomial_multiply",
     "tropical_polynomial_power",
+    "tropical_polynomial_substitute",
     "tropical_polynomial_univariate_newton_polygon",
     "tropical_polynomial_univariate_roots",
     "tropical_scalar_add",

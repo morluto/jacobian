@@ -111,6 +111,18 @@ def compute_polynomial_power(request: PolynomialPowerRequest) -> PolynomialResul
     )
 
 
+def compute_polynomial_substitute(
+    request: PolynomialSubstituteRequest,
+) -> PolynomialResult:
+    return PolynomialResult._from_kernel(
+        tropical_polynomial_substitute(
+            request.polynomial,
+            request.target_variables,
+            request.images,
+        )
+    )
+
+
 def compute_polynomial_evaluate(
     request: PolynomialEvaluateRequest,
 ) -> PolynomialEvaluateResult:
@@ -361,6 +373,48 @@ TOOLS: MathTools = (
                 input={
                     "polynomial": _poly((((0,), 0), ((1,), 0))),
                     "exponent": 3,
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="tropical.polynomial.substitute.compute",
+        title="Substitute tropical polynomials",
+        description=(
+            "Apply a simultaneous map from every source variable to a sparse "
+            "tropical polynomial over one explicit target axis."
+        ),
+        request_type=PolynomialSubstituteRequest,
+        result_type=PolynomialResult,
+        run=compute_polynomial_substitute,
+        tags=("tropical", "polynomial", "substitution", "exact"),
+        examples=(
+            OperationExample(
+                name="binomial_substitution",
+                description=(
+                    "Substitute 0 plus x into a MIN_PLUS polynomial; provide one "
+                    "image for each source variable in its declared axis order."
+                ),
+                input={
+                    "polynomial": {
+                        "semiring": _s(),
+                        "variables": ["x"],
+                        "terms": [
+                            {"exponents": [0], "coefficient": _finite(0)},
+                            {"exponents": [1], "coefficient": _finite(0)},
+                        ],
+                    },
+                    "target_variables": ["t"],
+                    "images": [
+                        {
+                            "semiring": _s(),
+                            "variables": ["t"],
+                            "terms": [
+                                {"exponents": [0], "coefficient": _finite(0)},
+                                {"exponents": [1], "coefficient": _finite(1)},
+                            ],
+                        }
+                    ],
                 },
             ),
         ),

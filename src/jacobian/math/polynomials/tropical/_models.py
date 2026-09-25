@@ -8,6 +8,7 @@ from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+from jacobian.math._labels import OpaqueLabel
 from jacobian.math.polynomials.tropical.values import (
     TropicalMatrix,
     TropicalNewtonPolygonProfile,
@@ -291,6 +292,46 @@ class PolynomialPowerRequest(StrictModel):
 
     polynomial: TropicalPolynomial
     exponent: int = Field(ge=0, le=16)
+
+
+class PolynomialSubstituteRequest(StrictModel):
+    """Simultaneous polynomial substitution with images aligned to the source axis."""
+
+    polynomial: TropicalPolynomial
+    target_variables: tuple[OpaqueLabel, ...] = Field(
+        max_length=128,
+        description="Ordered variable axis shared by every substitution image.",
+    )
+    images: tuple[TropicalPolynomial, ...] = Field(
+        max_length=128,
+        description=(
+            "One image for each source variable, in exactly the order of "
+            "polynomial.variables. Every image must use target_variables."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_aligned_images(self) -> Self:
+        if len(self.images) != len(self.polynomial.variables):
+            raise _validation_error(
+                "substitution_arity",
+                "images must contain one polynomial for each source variable",
+            )
+        if len(set(self.target_variables)) != len(self.target_variables):
+            raise _validation_error(
+                "substitution_target_axis",
+                "target variable labels must be unique",
+            )
+        if any(
+            image.semiring != self.polynomial.semiring
+            or image.variables != self.target_variables
+            for image in self.images
+        ):
+            raise _validation_error(
+                "substitution_image_parent",
+                "images must share the source semiring and target variable axis",
+            )
+        return self
 
 
 class PolynomialEvaluateRequest(StrictModel):
@@ -631,6 +672,7 @@ __all__ = [
     "PolynomialEvaluateResult",
     "PolynomialPowerRequest",
     "PolynomialResult",
+    "PolynomialSubstituteRequest",
     "ScalarAddRequest",
     "ScalarAddResult",
     "ScalarBinaryRequest",

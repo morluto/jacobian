@@ -1067,7 +1067,27 @@ def restrict_rational_input(
     edge_scan_bound = len(transducer.edges) * dfa.state_count
     label_work_bound = sum(len(edge.input_label) for edge in transducer.edges)
     work_bound = product_bound + edge_scan_bound + dfa.state_count * label_work_bound
-    intermediate_bytes = product_bound * 48 + edge_scan_bound * 8
+    # The kernel stops immediately after observing the first state/edge over
+    # the public carrier cap, so these are the largest lists/maps it can hold.
+    # Per-record budgets include tuple/list slots, dict entries and table slack,
+    # Python integer references, and the outgoing/transition indexing rows.
+    possible_product_states = min(product_bound, MAX_FST_STATES + 1)
+    possible_product_edges = min(edge_scan_bound, MAX_FST_EDGES + 1)
+    source_label_cells = sum(
+        len(edge.input_label) + len(edge.output_label) for edge in transducer.edges
+    )
+    result_label_cells = min(
+        dfa.state_count * source_label_cells,
+        possible_product_edges * (2 * MAX_FST_WORD_LENGTH),
+    )
+    intermediate_bytes = (
+        4096
+        + possible_product_states * 512
+        + possible_product_edges * 512
+        + len(transducer.edges) * 256
+        + len(dfa.transitions) * 256
+        + result_label_cells * 8
+    )
     if (
         work_bound > MAX_RATIONAL_RESTRICTION_WORK
         or intermediate_bytes > MAX_RATIONAL_RESTRICTION_INTERMEDIATE_BYTES

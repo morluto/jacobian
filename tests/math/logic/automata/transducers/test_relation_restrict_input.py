@@ -190,3 +190,45 @@ def test_product_state_limit_accepts_at_and_rejects_above_bound() -> None:
     assert accepted.state_count == len(states) == 64
     with pytest.raises(OperationResourceAdmissionError):
         restrict_rational_input(_cycle_relation(9), _cycle_dfa(8))
+
+
+def test_product_edge_limit_accepts_at_and_rejects_above_bound() -> None:
+    alphabet = FiniteAlphabet(symbols=("a", "b"))
+    dfa = DFA(
+        state_count=2,
+        alphabet_size=2,
+        alphabet=alphabet,
+        transitions=(
+            DFATransition(source=0, symbol=0, target=1),
+            DFATransition(source=0, symbol=1, target=0),
+            DFATransition(source=1, symbol=0, target=0),
+            DFATransition(source=1, symbol=1, target=1),
+        ),
+        initial_state=0,
+        accepting_states=(0, 1),
+    )
+
+    def relation(edge_count: int) -> RationalTransducer:
+        return RationalTransducer(
+            input_alphabet_size=2,
+            output_alphabet_size=1,
+            input_alphabet=alphabet,
+            output_alphabet=FiniteAlphabet(symbols=("x",)),
+            state_count=1,
+            initial_states=(0,),
+            accepting_states=(0,),
+            edges=tuple(
+                RationalEdge(
+                    source=0,
+                    target=0,
+                    input_label=(0,),
+                    output_label=(0,),
+                )
+                for _ in range(edge_count)
+            ),
+        )
+
+    at_limit, _, _ = restrict_rational_input(relation(2048), dfa)
+    assert len(at_limit.edges) == 4096
+    with pytest.raises(OperationResourceAdmissionError):
+        restrict_rational_input(relation(2049), dfa)

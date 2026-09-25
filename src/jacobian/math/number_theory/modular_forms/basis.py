@@ -1342,7 +1342,7 @@ def modular_form_coordinates_equal(
     if left.space == right.space:
         if left.space.coefficient_domain != "QQ":
             if left.space.character != "TRIVIAL":
-                from jacobian.math.number_theory.modular_forms.character_basis import (
+                from jacobian.math.number_theory.modular_forms.character_coordinates import (
                     modular_character_coordinates_equal,
                 )
 

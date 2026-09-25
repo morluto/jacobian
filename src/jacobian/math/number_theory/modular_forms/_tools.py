@@ -206,8 +206,11 @@ TOOLS: MathTools = (
             "space, compare admitted canonical coordinates; across supported "
             "rational trivial-character spaces of equal weight, compare through "
             "the Sturm bound of their common Gamma0(lcm(levels)) ambient M space. "
-            "The represented cyclotomic character space also uses its exact Sturm "
-            "prefix; cyclotomic comparisons require the identical space and basis. "
+            "Cyclotomic character comparisons require the identical exact space "
+            "and canonical basis. The one-dimensional order-six slice compares "
+            "through its Sturm prefix; bounded conductor-13 RREF coordinates "
+            "compare as exact vectors in the basis whose producer checks full "
+            "q-Sturm rank. "
             "Finite q-prefixes are not accepted as forms."
         ),
         request_type=ModularFormEqualityRequest,

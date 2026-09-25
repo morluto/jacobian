@@ -7,9 +7,10 @@ from typing import Literal
 
 from pydantic import ConfigDict, Field
 
+from jacobian._execution import request_checkpoint
 from jacobian._models import StrictModel
 from jacobian.catalog.models import OperationResourceAdmissionError
-from jacobian.math.combinatorics.matroids.delta.extra_ops import _check
+from jacobian.math.combinatorics.matroids.delta.extra_ops import _admit_delta, _check
 from jacobian.math.combinatorics.matroids.delta.values import FiniteDeltaMatroid
 from jacobian.math.polynomials._models import IntegerPolynomial
 
@@ -27,12 +28,17 @@ class DistanceInterlaceRequest(StrictModel):
                 "Admission permits at most "
                 f"{MAX_DISTANCE_INTERLACE_WORK} subset-feasible comparisons "
                 f"{MAX_DISTANCE_INTERLACE_TERMS} polynomial terms and "
-                f"{MAX_DISTANCE_INTERLACE_COEFFICIENT_BITS}-bit coefficients."
+                f"{MAX_DISTANCE_INTERLACE_COEFFICIENT_BITS}-bit coefficients. "
+                "The source also obeys the canonical delta-matroid membership, "
+                "label-byte, and symmetric-exchange-candidate limits."
             ),
             "admission_limits": {
                 "max_subset_feasible_comparisons": MAX_DISTANCE_INTERLACE_WORK,
                 "max_polynomial_terms": MAX_DISTANCE_INTERLACE_TERMS,
                 "max_coefficient_bits": MAX_DISTANCE_INTERLACE_COEFFICIENT_BITS,
+                "max_feasible_set_memberships": 16_384,
+                "max_label_utf8_bytes": 2_048,
+                "max_symmetric_exchange_candidates": 250_000,
             },
         }
     )
@@ -61,11 +67,12 @@ def distance_interlace_polynomial(
 ) -> DistanceInterlaceResult:
     """Return ``sum_X (x - 1)^d_D(X)`` and its complete distance histogram."""
 
+    delta_matroid = _admit_delta(delta_matroid)
     family = _check(delta_matroid)
     n = len(family.ground)
     subset_count = 1 << n
     row_count = len(family.feasible)
-    work = subset_count * row_count * max(1, n)
+    work = subset_count * row_count
     if work > MAX_DISTANCE_INTERLACE_WORK:
         raise OperationResourceAdmissionError(
             location=("delta_matroid",),
@@ -103,6 +110,8 @@ def distance_interlace_polynomial(
     feasible_masks = tuple(sum(1 << index for index in row) for row in family.feasible)
     distance_counts = [0] * (n + 1)
     for subset in range(subset_count):
+        if subset % 1024 == 0:
+            request_checkpoint("during distance interlace subset enumeration")
         distance = min((subset ^ row).bit_count() for row in feasible_masks)
         distance_counts[distance] += 1
 
@@ -117,6 +126,7 @@ def distance_interlace_polynomial(
     while len(descending) > 1 and descending[0] == 0:
         descending = descending[1:]
 
+    request_checkpoint("before distance interlace result construction")
     return DistanceInterlaceResult(
         source=delta_matroid,
         distance_counts=tuple(distance_counts),

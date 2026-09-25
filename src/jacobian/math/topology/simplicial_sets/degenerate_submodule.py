@@ -7,21 +7,19 @@ from pydantic import Field, StrictInt, model_validator
 from jacobian._models import StrictModel
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.topology.chain_complexes.values import (
-    MAX_MATRIX_CELLS,
-    MAX_OPERATION_MATRIX_CELLS,
     ChainCoefficient,
     ChainComplexValue,
+    require_prime_field_admission,
 )
+from jacobian.math.topology.simplicial_sets import chains as chains_module
 from jacobian.math.topology.simplicial_sets._models import (
     FiniteTruncatedSimplicialSet,
 )
 from jacobian.math.topology.simplicial_sets.chains import (
     UnnormalizedChainsRequest,
     UnnormalizedChainsResult,
-    unnormalized_chains,
 )
 
-MAX_DEGENERATE_SUBMODULE_OUTPUT_BYTES = 256_000
 MAX_DEGENERATE_SUBMODULE_WORK_UNITS = 20_000
 _DEGENERATE_SUBMODULE_OUTPUT_OVERHEAD = 8_192
 
@@ -86,44 +84,37 @@ class DegenerateSubmoduleResult(StrictModel):
         return self
 
 
-def _admit(source: FiniteTruncatedSimplicialSet) -> None:
-    """Bound work and output from source ranks before any chain matrices exist.
-
-    In each degree, the degenerate rank is at most the ambient rank. These
-    source-derived upper bounds cover the exact matrices later built, including
-    empty and fully degenerate degrees.
-    """
+def _admit(
+    request: DegenerateSubmoduleRequest,
+) -> tuple[FiniteTruncatedSimplicialSet, tuple[tuple[int, ...], ...]]:
+    """Check scalars/source and admit the combined result before matrices."""
+    require_prime_field_admission(request.coefficient_ring, request.prime)
+    source = chains_module._checked_simplicial_set(request.simplicial_set)
+    basis_indices = _degenerate_indices(source)
     sizes = tuple(len(level) for level in source.sets)
     ambient_cells = sum(
         sizes[degree - 1] * sizes[degree] for degree in range(1, len(sizes))
     )
-    # A degreewise inclusion has at most source-rank squared cells; restricting
-    # the differential has at most the ambient boundary shape.
-    inclusion_cells = sum(size * size for size in sizes)
-    degenerate_boundary_cells = ambient_cells
+    ranks = tuple(len(indices) for indices in basis_indices)
+    inclusion_cells = sum(size * rank for size, rank in zip(sizes, ranks, strict=True))
+    degenerate_boundary_cells = sum(
+        ranks[degree - 1] * ranks[degree] for degree in range(1, len(ranks))
+    )
     degeneracy_rows = sum(
         (degree + 1) * sizes[degree] for degree in range(max(0, source.max_degree))
     )
     face_rows = sum((degree + 1) * sizes[degree] for degree in range(1, len(sizes)))
+    restricted_boundary_rows = sum(
+        sizes[degree - 1] * ranks[degree] for degree in range(1, len(sizes))
+    )
     work = (
         degeneracy_rows
         + face_rows
         + ambient_cells
         + inclusion_cells
+        + restricted_boundary_rows
         + degenerate_boundary_cells
     )
-    if ambient_cells > MAX_OPERATION_MATRIX_CELLS:
-        _admission_error(
-            "degenerate_submodule_ambient_matrix_budget_exceeded",
-            f"ambient boundaries require {ambient_cells} cells, exceeding "
-            f"the {MAX_OPERATION_MATRIX_CELLS}-cell construction bound",
-        )
-    if inclusion_cells + ambient_cells + degenerate_boundary_cells > MAX_MATRIX_CELLS:
-        _admission_error(
-            "degenerate_submodule_matrix_budget_exceeded",
-            "ambient, inclusion, and subcomplex matrices exceed the aggregate "
-            f"{MAX_MATRIX_CELLS}-cell bound",
-        )
     if work > MAX_DEGENERATE_SUBMODULE_WORK_UNITS:
         _admission_error(
             "degenerate_submodule_work_budget_exceeded",
@@ -131,22 +122,21 @@ def _admit(source: FiniteTruncatedSimplicialSet) -> None:
             f"exceeding {MAX_DEGENERATE_SUBMODULE_WORK_UNITS}",
         )
 
-    source_bytes = len(source.model_dump_json().encode("utf-8"))
-    # Every matrix scalar is at most seven digits over the admitted prime
-    # fields, and has absolute value at most five over ZZ or QQ. Twelve bytes
-    # per scalar also covers separators; the overhead covers all JSON shape.
-    estimated_bytes = (
-        _DEGENERATE_SUBMODULE_OUTPUT_OVERHEAD
-        + source_bytes
-        + 12 * (ambient_cells + inclusion_cells + degenerate_boundary_cells)
-        + 12 * source.total_simplices
+    # The shared estimate includes the source tables, the repeated serialized
+    # simplex_bases labels (ASCII-escaped at their 32-character bound), and the
+    # ambient differential. Add exact-rank inclusion/restricted matrices and
+    # the standalone result envelope before permitting any chain matrices.
+    additional_output_bytes = _DEGENERATE_SUBMODULE_OUTPUT_OVERHEAD // 2 + 12 * (
+        sum(ranks) + inclusion_cells + degenerate_boundary_cells
     )
-    if estimated_bytes > MAX_DEGENERATE_SUBMODULE_OUTPUT_BYTES:
-        _admission_error(
-            "degenerate_submodule_output_budget_exceeded",
-            f"estimated result size {estimated_bytes} bytes exceeds "
-            f"{MAX_DEGENERATE_SUBMODULE_OUTPUT_BYTES}",
-        )
+    chains_module._preflight(
+        source,
+        additional_matrix_cells=inclusion_cells + degenerate_boundary_cells,
+        additional_output_bytes=additional_output_bytes,
+        output_name="degenerate submodule",
+        output_error_code="simplicial_set.degenerate_submodule_output_budget_exceeded",
+    )
+    return source, basis_indices
 
 
 def _admission_error(code: str, message: str) -> None:
@@ -175,10 +165,8 @@ def degenerate_submodule(
     request: DegenerateSubmoduleRequest,
 ) -> DegenerateSubmoduleResult:
     """Return the span of degenerate simplices as a based chain subcomplex."""
-    source = request.simplicial_set
-    _admit(source)
-    ambient = unnormalized_chains(request)
-    basis_indices = _degenerate_indices(ambient.simplicial_set)
+    source, basis_indices = _admit(request)
+    ambient = chains_module._unnormalized_chains_from_checked_source(request, source)
     sizes = tuple(len(level) for level in ambient.simplex_bases)
     ranks = tuple(len(indices) for indices in basis_indices)
 
@@ -202,7 +190,9 @@ def degenerate_submodule(
         target_positions = {
             index: position for position, index in enumerate(basis_indices[degree - 1])
         }
-        matrix = [[0] * len(source_indices) for _ in basis_indices[degree - 1]]
+        matrix: list[list[ChainCoefficient]] = [
+            [0] * len(source_indices) for _ in basis_indices[degree - 1]
+        ]
         for column, source_index in enumerate(source_indices):
             for ambient_row, row in enumerate(ambient_matrix):
                 coefficient = row[source_index]

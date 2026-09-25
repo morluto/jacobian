@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from typing import Self
 
 from pydantic import Field, StrictInt, model_validator
 
@@ -12,6 +13,7 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.topology.chain_complexes.values import (
+    MAX_MATRIX_CELLS,
     MAX_OPERATION_MATRIX_CELLS,
     ChainCoefficient,
     ChainComplexValue,
@@ -36,7 +38,7 @@ class UnnormalizedChainsRequest(StrictModel):
     prime: StrictInt | None = Field(default=None, ge=2, le=1_000_003)
 
     @model_validator(mode="after")
-    def require_ring_and_prime_coupling(self):
+    def require_ring_and_prime_coupling(self) -> Self:
         if self.coefficient_ring is CoefficientRing.PRIME_FIELD:
             if self.prime is None:
                 raise ValueError("GF_p coefficients require a prime modulus")
@@ -53,7 +55,7 @@ class UnnormalizedChainsResult(StrictModel):
     chain_complex: ChainComplexValue
 
     @model_validator(mode="after")
-    def require_source_bound_chain_axes(self):
+    def require_source_bound_chain_axes(self) -> Self:
         if self.simplex_bases != self.simplicial_set.sets:
             raise ValueError("simplex bases must retain the source degree axes")
         value = self.chain_complex
@@ -86,7 +88,15 @@ def _estimate_output_bytes(
     return _CHAIN_RESULT_JSON_OVERHEAD_BOUND + source_bytes + basis_bytes + 12 * cells
 
 
-def _preflight(source: FiniteTruncatedSimplicialSet) -> int:
+def _preflight(
+    source: FiniteTruncatedSimplicialSet,
+    *,
+    additional_matrix_cells: int = 0,
+    additional_output_bytes: int = 0,
+    output_name: str = "unnormalized chains",
+    output_error_code: str = "simplicial_set.unnormalized_chain_output_budget_exceeded",
+) -> int:
+    """Admit the ambient chain matrices and any caller-derived result parts."""
     sizes = tuple(len(level) for level in source.sets)
     cells = sum(sizes[n - 1] * sizes[n] for n in range(1, len(sizes)))
     if cells > MAX_OPERATION_MATRIX_CELLS:
@@ -98,13 +108,23 @@ def _preflight(source: FiniteTruncatedSimplicialSet) -> int:
                 f"the {MAX_OPERATION_MATRIX_CELLS}-cell construction bound"
             ),
         )
-    estimate = _estimate_output_bytes(source, sizes)
+    combined_cells = cells + additional_matrix_cells
+    if combined_cells > MAX_MATRIX_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("simplicial_set",),
+            code="simplicial_set.unnormalized_chain_combined_matrix_budget_exceeded",
+            message=(
+                f"combined chain result requires {combined_cells} matrix cells, "
+                f"exceeding the {MAX_MATRIX_CELLS}-cell bound"
+            ),
+        )
+    estimate = _estimate_output_bytes(source, sizes) + additional_output_bytes
     if estimate > MAX_UNNORMALIZED_CHAIN_OUTPUT_BYTES:
         raise OperationResourceAdmissionError(
             location=("simplicial_set",),
-            code="simplicial_set.unnormalized_chain_output_budget_exceeded",
+            code=output_error_code,
             message=(
-                f"estimated chain result size {estimate} bytes exceeds the "
+                f"estimated {output_name} result size {estimate} bytes exceeds the "
                 f"{MAX_UNNORMALIZED_CHAIN_OUTPUT_BYTES}-byte output bound"
             ),
         )
@@ -117,15 +137,10 @@ def _preflight(source: FiniteTruncatedSimplicialSet) -> int:
     return cells
 
 
-def unnormalized_chains(
-    request: UnnormalizedChainsRequest,
-) -> UnnormalizedChainsResult:
-    require_prime_field_admission(request.coefficient_ring, request.prime)
-    source = request.simplicial_set
-    _preflight(source)
-    # Serialized source values do not carry trusted producer provenance. Since
-    # d^2=0 depends on simplicial identities, re-establish those caller claims
-    # once before constructing the chain value.
+def _checked_simplicial_set(
+    source: FiniteTruncatedSimplicialSet,
+) -> FiniteTruncatedSimplicialSet:
+    """Re-establish caller-supplied simplicial identities exactly once."""
     checked = from_tables(
         source.max_degree,
         source.sets,
@@ -147,7 +162,19 @@ def unnormalized_chains(
                 )
             ),
         )
+    return checked.simplicial_set
 
+
+def _unnormalized_chains_from_checked_source(
+    request: UnnormalizedChainsRequest,
+    source: FiniteTruncatedSimplicialSet,
+) -> UnnormalizedChainsResult:
+    """Construct chains after the caller has admitted and checked ``source``.
+
+    This constructor performs no resource admission, primality check, or
+    simplicial-identity replay. Its caller owns those steps before matrix
+    construction.
+    """
     sizes = tuple(len(level) for level in source.sets)
     matrices: list[tuple[tuple[ChainCoefficient, ...], ...]] = []
     for degree in range(1, source.max_degree + 1):
@@ -158,7 +185,7 @@ def unnormalized_chains(
                 matrix[row][column] += sign
         if request.coefficient_ring is CoefficientRing.PRIME_FIELD:
             prime = request.prime
-            if prime is None:  # guarded by model validation and primality admission
+            if prime is None:  # guarded by request validation and admission
                 raise RuntimeError("GF_p coefficients require a prime modulus")
             matrix = [[entry % prime for entry in row] for row in matrix]
         matrices.append(tuple(tuple(entry for entry in row) for row in matrix))
@@ -171,9 +198,25 @@ def unnormalized_chains(
         differential_matrices=tuple(matrices),
     )
     return UnnormalizedChainsResult(
-        simplicial_set=checked.simplicial_set,
-        simplex_bases=checked.simplicial_set.sets,
+        simplicial_set=source,
+        simplex_bases=source.sets,
         chain_complex=value,
+    )
+
+
+def unnormalized_chains(
+    request: UnnormalizedChainsRequest,
+) -> UnnormalizedChainsResult:
+    require_prime_field_admission(request.coefficient_ring, request.prime)
+    source = request.simplicial_set
+    _preflight(source)
+    # Serialized source values do not carry trusted producer provenance. Since
+    # d^2=0 depends on simplicial identities, re-establish those caller claims
+    # once before constructing the chain value.
+    checked_source = _checked_simplicial_set(source)
+    return _unnormalized_chains_from_checked_source(
+        request,
+        checked_source,
     )
 
 

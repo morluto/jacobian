@@ -281,6 +281,40 @@ def _admit_shift_product_degree_bounds(
                 )
 
             result_exponent = left_term.exponent + right_term.exponent
+            # A shift by i expands p(n+i); for degree d and coefficient
+            # height h, each binomial contribution is bounded by h+i*d bits.
+            # Preflight this before _plan_shift_product_cells materializes it.
+            for degree, height in (
+                (
+                    right_numerator_degree,
+                    max(
+                        (
+                            abs(v.numerator).bit_length()
+                            for v in _decode_rf(right_term.coefficient)[0].values()
+                        ),
+                        default=0,
+                    ),
+                ),
+                (
+                    right_denominator_degree,
+                    max(
+                        (
+                            abs(v.numerator).bit_length()
+                            for v in _decode_rf(right_term.coefficient)[1].values()
+                        ),
+                        default=0,
+                    ),
+                ),
+            ):
+                if (
+                    height + left_term.exponent * degree
+                    > MAX_RATIONAL_FUNCTION_COEFFICIENT_DIGITS * 4
+                ):
+                    raise OperationResourceAdmissionError(
+                        location=("right", "terms", right_term.exponent),
+                        code="ore_algebra.shift_product_coefficient_digits",
+                        message="shifted coefficient exceeds the rational-function coefficient-digit carrier",
+                    )
             grouped.setdefault(result_exponent, []).append(
                 (contribution_numerator_degree, contribution_denominator_degree)
             )

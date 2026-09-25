@@ -27,6 +27,7 @@ from jacobian.math.topology.chain_complexes._filtered_operations import (
     _admit_filtered_structure,
     _associated_graded_admitted,
     _coordinates,
+    _denominator_rows,
     _fail,
     _in_span,
     _mat_vec,
@@ -37,8 +38,11 @@ from jacobian.math.topology.chain_complexes._filtered_operations import (
     _row_basis,
     _serialize_scalar,
     _solve,
+    _spectral_bidegree_page,
+    _spectral_zero_page,
     _transpose,
     admit_filtered,
+    admit_spectral_page,
     spectral_page,
 )
 from jacobian.math.topology.chain_complexes.values import (
@@ -158,6 +162,48 @@ class FilteredChainMapResult(StrictModel):
     maps: tuple[tuple[tuple[ChainCoefficient, ...], ...], ...]
     filtration_preserving: bool
     chain_map: bool
+
+
+class FilteredChainMapPageRequest(StrictModel):
+    """Induce one bounded spectral-sequence page map."""
+
+    map: FilteredChainMapResult
+    page: int = Field(ge=0, le=MAX_SPECTRAL_PAGE)
+
+
+class FilteredChainMapPageResult(StrictModel):
+    """The map on one page in the retained source and target quotient bases."""
+
+    map: FilteredChainMapResult
+    source_page: SpectralPageResult
+    target_page: SpectralPageResult
+    maps: tuple[tuple[tuple[tuple[ChainCoefficient, ...], ...], ...], ...]
+
+    @model_validator(mode="after")
+    def require_page_axes(self) -> Self:
+        if (
+            self.source_page.complex != self.map.source
+            or self.target_page.complex != self.map.target
+            or self.source_page.filtration != self.map.source_filtration
+            or self.target_page.filtration != self.map.target_filtration
+            or self.source_page.page != self.target_page.page
+            or len(self.maps) != len(self.source_page.page_dimensions)
+            or len(self.maps) != len(self.target_page.page_dimensions)
+        ):
+            raise ValueError(
+                "induced page-map source, target, and page axes must agree"
+            )
+        for level, blocks in enumerate(self.maps):
+            if len(blocks) != len(self.source_page.page_dimensions[level]) or len(
+                blocks
+            ) != len(self.target_page.page_dimensions[level]):
+                raise ValueError("induced page maps must cover every chain degree")
+            for degree, matrix in enumerate(blocks):
+                rows = self.target_page.page_dimensions[level][degree]
+                columns = self.source_page.page_dimensions[level][degree]
+                if len(matrix) != rows or any(len(row) != columns for row in matrix):
+                    raise ValueError("induced page matrix axes are inconsistent")
+        return self
 
 
 class FilteredChainMapCompositionRequest(StrictModel):
@@ -528,6 +574,7 @@ def _homology_image_subspace(
                 code="filtered_homology.boundary_witness_invalid",
                 message="the returned chain does not replay its homology-class boundary relation",
             )
+        assert preimage is not None
         preimages.append(preimage)
     return selected_coordinates, selected_representatives, preimages
 
@@ -921,7 +968,7 @@ def filtered_chain_map_page_zero(
             target_graded.quotient_representatives[level]
         ):
             lower_target[degree].extend(
-                [_parse_entry(entry, prime) for entry in vector]
+                tuple(_parse_entry(entry, prime) for entry in vector)
                 for vector in representatives
             )
 
@@ -985,6 +1032,276 @@ def _mul(left: Any, right: Any, prime: int | None, *, output_width: int) -> Any:
             output.append(value % prime if prime is not None else value)
         result.append(output)
     return result
+
+
+def filtered_chain_map_page(
+    request: FilteredChainMapPageRequest,
+) -> FilteredChainMapPageResult:
+    """Induce the exact map on one bounded E^r page.
+
+    The operation reapplies chain-map and filtration admission, transports the
+    source page representatives in ambient coordinates, reduces them modulo
+    the target page denominators, and checks naturality against every d^r.
+    """
+    authored = request.map
+    chain_map_request = FilteredChainMapRequest(
+        source=authored.source,
+        source_filtration=authored.source_filtration,
+        target=authored.target,
+        target_filtration=authored.target_filtration,
+        maps=authored.maps,
+    )
+    source_admission, target_admission, map_value = _admit_e0_map_request(
+        chain_map_request
+    )
+
+    source, target = authored.source, authored.target
+    levels = len(authored.source_filtration)
+    degree_count = len(source.basis_sizes)
+    prime = source.prime
+    # Bound repeated exact subspace reductions and the dense page-map output
+    # before page representatives or denominator bases are expanded.
+    cubic = sum(
+        max(1, rank) ** 3 for rank in (*source.basis_sizes, *target.basis_sizes)
+    )
+    coordinate_solves = sum(
+        max(1, rank) ** 4 for rank in (*source.basis_sizes, *target.basis_sizes)
+    )
+    work_bound = levels * (cubic * (3 * request.page + 3) + coordinate_solves)
+    if work_bound > MAX_FILTERED_HOMOLOGY_WORK:
+        raise OperationResourceAdmissionError(
+            location=("page",),
+            code="filtered_chain_map.page_work_exceeded",
+            message="the conservative representative-transport work bound exceeds the admitted page-map work",
+        )
+    map_cells = levels * sum(
+        source.basis_sizes[index] * target.basis_sizes[index]
+        for index in range(degree_count)
+    )
+    page_cells = (
+        levels
+        * 3
+        * sum(
+            source.basis_sizes[index] ** 2 + target.basis_sizes[index] ** 2
+            for index in range(degree_count)
+        )
+    )
+    input_scalars = [
+        value
+        for complex_value, filtration in (
+            (source, authored.source_filtration),
+            (target, authored.target_filtration),
+        )
+        for matrix in complex_value.differential_matrices
+        for row in matrix
+        for value in row
+    ]
+    input_scalars.extend(
+        value
+        for filtration in (authored.source_filtration, authored.target_filtration)
+        for level in filtration
+        for subspace in level.subspaces
+        for vector in subspace.vectors
+        for value in vector
+    )
+    input_scalars.extend(
+        value for matrix in map_value.maps for row in matrix for value in row
+    )
+    max_scalar_chars = max((len(str(value)) for value in input_scalars), default=1)
+    scalar_chars_bound = 96 * max_scalar_chars + 512
+    output_bound = (map_cells + page_cells) * scalar_chars_bound + 4096
+    if output_bound > MAX_FILTERED_HOMOLOGY_RESULT_CHARS:
+        raise OperationResourceAdmissionError(
+            location=("page",),
+            code="filtered_chain_map.page_output_exceeded",
+            message="the conservative page-map output bound exceeds the admitted result size",
+        )
+
+    admit_spectral_page(request.page)
+    if request.page == 0:
+        source_page = _spectral_zero_page(
+            _associated_graded_admitted(
+                source, authored.source_filtration, source_admission
+            ),
+            request.page,
+        )
+        target_page = _spectral_zero_page(
+            _associated_graded_admitted(
+                target, authored.target_filtration, target_admission
+            ),
+            request.page,
+        )
+    else:
+        source_page = _spectral_bidegree_page(
+            source,
+            authored.source_filtration,
+            source_admission.bases,
+            source_admission.differentials,
+            request.page,
+        )
+        target_page = _spectral_bidegree_page(
+            target,
+            authored.target_filtration,
+            target_admission.bases,
+            target_admission.differentials,
+            request.page,
+        )
+    if request.page == 0:
+        target_denominators: list[list[list[list[int | Fraction]]]] = [
+            [[] for _ in range(degree_count)] for _ in range(levels)
+        ]
+        lower: list[list[list[int | Fraction]]] = [[] for _ in range(degree_count)]
+        for level in range(levels):
+            target_denominators[level] = [list(rows) for rows in lower]
+            for degree, reps in enumerate(target_page.page_representatives[level]):
+                lower[degree].extend(
+                    [_parse_entry(value, prime) for value in vector] for vector in reps
+                )
+    else:
+        target_denominators = [[[] for _ in range(degree_count)] for _ in range(levels)]
+        for level in range(levels):
+            for degree in range(degree_count):
+                target_denominators[level][degree] = _denominator_rows(
+                    target_admission.bases,
+                    target_admission.differentials,
+                    target.basis_sizes,
+                    level,
+                    degree,
+                    request.page,
+                    prime,
+                )
+
+    parsed_maps = [
+        [[_parse_entry(value, prime) for value in row] for row in matrix]
+        for matrix in map_value.maps
+    ]
+    map_blocks: list[tuple[tuple[tuple[ChainCoefficient, ...], ...], ...]] = []
+    for level in range(levels):
+        degree_blocks = []
+        for degree in range(degree_count):
+            denominator = target_denominators[level][degree]
+            target_reps = [
+                [_parse_entry(value, prime) for value in vector]
+                for vector in target_page.page_representatives[level][degree]
+            ]
+            target_basis = [*denominator, *target_reps]
+            columns = []
+            for vector in source_page.page_representatives[level][degree]:
+                image = _mat_vec(
+                    parsed_maps[degree],
+                    [_parse_entry(value, prime) for value in vector],
+                    prime,
+                )
+                try:
+                    coordinates = _coordinates(target_basis, image, prime)
+                except ValueError as exc:
+                    raise _fail(
+                        ("map", "maps", level, degree),
+                        "filtered_chain_map.page_image_outside_target",
+                        "a source page representative must map into the target page cycles",
+                    ) from exc
+                columns.append(coordinates[len(denominator) :])
+            rows = target_page.page_dimensions[level][degree]
+            block = [
+                [columns[column][row] for column in range(len(columns))]
+                for row in range(rows)
+            ]
+            degree_blocks.append(
+                tuple(
+                    tuple(_serialize_scalar(value, prime) for value in row)
+                    for row in block
+                )
+            )
+        map_blocks.append(tuple(degree_blocks))
+
+    maps = tuple(map_blocks)
+    # Check target d^r after f equals f after source d^r. Dimensions on each
+    # differential retain empty rows/columns even when its dense entries do not.
+    target_records = {
+        (entry.source_level, entry.source_degree): entry
+        for entry in target_page.differentials
+    }
+    for source_record in source_page.differentials:
+        key = (source_record.source_level, source_record.source_degree)
+        target_record = target_records[key]
+        level = source_record.source_level
+        degree = source_record.source_degree - source.degree_min
+        target_level = source_record.target_level
+        target_degree = degree - 1
+        f_source = [
+            [_parse_entry(value, prime) for value in row] for row in maps[level][degree]
+        ]
+        f_target = [
+            [_parse_entry(value, prime) for value in row]
+            for row in maps[target_level][target_degree]
+        ]
+        source_d = [
+            [_parse_entry(value, prime) for value in row]
+            for row in source_record.entries
+        ]
+        target_d = [
+            [_parse_entry(value, prime) for value in row]
+            for row in target_record.entries
+        ]
+        left = _rectangular_product(
+            target_d,
+            target_record.rows,
+            target_record.columns,
+            f_source,
+            source_page.page_dimensions[level][degree],
+            prime,
+        )
+        right = _rectangular_product(
+            f_target,
+            target_page.page_dimensions[target_level][target_degree],
+            source_page.page_dimensions[target_level][target_degree],
+            source_d,
+            source_page.page_dimensions[level][degree],
+            prime,
+        )
+        if left != right:
+            raise _fail(
+                ("map", "maps", level, degree),
+                "filtered_chain_map.page_square_failed",
+                "the induced page map must commute with the page differential",
+            )
+    return FilteredChainMapPageResult(
+        map=map_value,
+        source_page=source_page,
+        target_page=target_page,
+        maps=maps,
+    )
+
+
+def _rectangular_product(
+    left: list[list[int | Fraction]],
+    left_rows: int,
+    inner: int,
+    right: list[list[int | Fraction]],
+    right_columns: int,
+    prime: int | None,
+) -> list[list[int | Fraction]]:
+    """Multiply matrices while retaining explicitly admitted empty axes."""
+    if left_rows and (len(left) != left_rows or any(len(row) != inner for row in left)):
+        raise ValueError("left page matrix has inconsistent axes")
+    if inner and (
+        len(right) != inner or any(len(row) != right_columns for row in right)
+    ):
+        raise ValueError("right page matrix has inconsistent axes")
+    if not left_rows:
+        return []
+    if not inner:
+        return [[0 for _ in range(right_columns)] for _ in range(left_rows)]
+    columns = list(zip(*right, strict=True)) if right_columns else []
+    return [
+        [
+            (sum(a * b for a, b in zip(row, column, strict=True)) % prime)
+            if prime is not None
+            else sum(a * b for a, b in zip(row, column, strict=True))
+            for column in columns
+        ]
+        for row in left
+    ]
 
 
 def _coefficient_size(value: int | Fraction) -> tuple[int, int]:
@@ -1321,7 +1638,7 @@ def _exact_filtered_homology_coordinates(
                 filtered_cycles.append(vector)
             filtered_cycles = _row_basis(filtered_cycles, prime)
             full_cycle_basis = [*boundaries, *homology_basis]
-            image_coordinates = []
+            image_coordinates: list[list[int | Fraction]] = []
             for vector in filtered_cycles:
                 if any(_mat_vec(outgoing, vector, prime)):
                     raise OperationDomainValidationError(
@@ -1563,6 +1880,8 @@ def abutment(request: SpectralAbutmentRequest) -> SpectralAbutmentResult:
 
 __all__ = [
     "FilteredChainMapCompositionRequest",
+    "FilteredChainMapPageRequest",
+    "FilteredChainMapPageResult",
     "FilteredChainMapPageZeroResult",
     "FilteredChainMapRequest",
     "FilteredChainMapResult",
@@ -1577,6 +1896,7 @@ __all__ = [
     "SpectralPagesResult",
     "abutment",
     "filtered_chain_map_compose",
+    "filtered_chain_map_page",
     "filtered_chain_map_page_zero",
     "filtered_homology_filtration",
     "filtered_map",

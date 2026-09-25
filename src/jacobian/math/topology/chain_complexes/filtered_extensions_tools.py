@@ -16,6 +16,10 @@ def _page_zero_map(r: Any) -> Any:
     return filtered_chain_map_page_zero(r)
 
 
+def _page_map(r: Any) -> Any:
+    return filtered_chain_map_page(r)
+
+
 def _compose_map(r: Any) -> Any:
     return filtered_chain_map_compose(r)
 
@@ -128,6 +132,50 @@ TOOLS = (
                     "source_filtration": _F,
                     "target_filtration": _F,
                     "maps": [[["1"]], [["1"]]],
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="homological.filtered_chain_map.page.compute",
+        title="Induce a map on a spectral-sequence page",
+        description=(
+            "For an exact filtration-preserving chain map, compute the map "
+            "on a requested bounded E^r page. The result retains both "
+            "source-bound page values and quotient-coordinate matrices; "
+            "representative transport and commutation with d^r are checked."
+        ),
+        request_type=FilteredChainMapPageRequest,
+        result_type=FilteredChainMapPageResult,
+        run=_page_map,
+        tags=("homological", "filtered", "spectral-sequence", "chain-map", "exact"),
+        examples=(
+            OperationExample(
+                name="identity_on_e1",
+                description="The identity map on a one-term zero-differential filtered complex induces the identity on E1.",
+                input={
+                    "map": {
+                        "source": {
+                            "coefficient_ring": "QQ",
+                            "degree_min": 0,
+                            "degree_max": 0,
+                            "basis_sizes": [1],
+                            "differential_matrices": [],
+                        },
+                        "target": {
+                            "coefficient_ring": "QQ",
+                            "degree_min": 0,
+                            "degree_max": 0,
+                            "basis_sizes": [1],
+                            "differential_matrices": [],
+                        },
+                        "source_filtration": [{"subspaces": [{"vectors": [["1"]]}]}],
+                        "target_filtration": [{"subspaces": [{"vectors": [["1"]]}]}],
+                        "maps": [[["1"]]],
+                        "filtration_preserving": True,
+                        "chain_map": True,
+                    },
+                    "page": 1,
                 },
             ),
         ),

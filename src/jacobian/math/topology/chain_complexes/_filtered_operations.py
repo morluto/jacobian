@@ -749,9 +749,10 @@ def _associated_graded_admitted(
             block: Matrix = [
                 [_parse_entry(0, prime) for _ in range(columns)] for _ in range(rows)
             ]
+            combined_basis = lower[index] + rep_rows[index]
             for column, rep in enumerate(rep_rows[index + 1]):
                 image = _mat_vec(differentials[index], rep, prime)
-                coords = _coordinates(upper[index], image, prime)
+                coords = _coordinates(combined_basis, image, prime)
                 for row in range(rows):
                     block[row][column] = coords[len(lower[index]) + row]
             scalar_diffs.append(block)

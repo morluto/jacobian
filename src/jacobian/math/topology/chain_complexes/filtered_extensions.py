@@ -724,11 +724,23 @@ def _filtered_map_admitted(
 
 def _admit_e0_map_request(request: FilteredChainMapRequest) -> tuple[Any, Any, Any]:
     _check_filtered_chain_map_axes(request)
-    map_cells = len(request.source_filtration) * sum(
-        source_size * target_size
-        for source_size, target_size in zip(
-            request.source.basis_sizes, request.target.basis_sizes, strict=True
+    source_admission = _admit_filtered_semantics(
+        request.source, request.source_filtration
+    )
+    target_admission = _admit_filtered_semantics(
+        request.target, request.target_filtration
+    )
+    map_cells = sum(
+        (
+            len(source_admission.bases[level][degree])
+            - (len(source_admission.bases[level - 1][degree]) if level else 0)
         )
+        * (
+            len(target_admission.bases[level][degree])
+            - (len(target_admission.bases[level - 1][degree]) if level else 0)
+        )
+        for level in range(len(request.source_filtration))
+        for degree in range(len(request.source.basis_sizes))
     )
     if map_cells > MAX_FILTERED_HOMOLOGY_RESULT_CELLS:
         raise OperationResourceAdmissionError(
@@ -788,12 +800,6 @@ def _admit_e0_map_request(request: FilteredChainMapRequest) -> tuple[Any, Any, A
                 f"{MAX_FILTERED_HOMOLOGY_RESULT_CHARS} characters"
             ),
         )
-    source_admission = _admit_filtered_semantics(
-        request.source, request.source_filtration
-    )
-    target_admission = _admit_filtered_semantics(
-        request.target, request.target_filtration
-    )
     map_value = _filtered_map_admitted(request, source_admission, target_admission)
     if not map_value.chain_map:
         raise OperationDomainValidationError(

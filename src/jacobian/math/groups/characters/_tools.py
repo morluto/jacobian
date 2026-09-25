@@ -29,7 +29,7 @@ from jacobian.math.groups.characters._models import (
     FrobeniusSchurIndicatorResult,
 )
 from jacobian.math.groups.characters.abelian_operations import (
-    finite_abelian_character_table,
+    _run_finite_abelian_character_table,
 )
 from jacobian.math.groups.characters.operations import (
     character_table,
@@ -497,7 +497,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
         request_type=FiniteAbelianCharacterTableRequest,
         result_type=FiniteAbelianCharacterTableResult,
-        run=finite_abelian_character_table,
+        run=_run_finite_abelian_character_table,
         tags=("finite-abelian-group", "character-table", "cyclotomic", "exact"),
         discovery_terms=(
             "finite Abelian character table",

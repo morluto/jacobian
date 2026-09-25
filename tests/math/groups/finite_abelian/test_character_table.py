@@ -6,10 +6,7 @@ import pytest
 from jacobian.canonical import encode_strict_json
 from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.models import OperationResourceAdmissionError
-from jacobian.math.groups.characters import (
-    FiniteAbelianCharacterTableRequest,
-    finite_abelian_character_table,
-)
+from jacobian.math.groups.characters import finite_abelian_character_table
 from jacobian.math.groups.characters._cyclotomic import (
     conjugate_value,
     multiply_values,
@@ -28,9 +25,7 @@ def test_finite_abelian_character_table_is_exact_and_row_orthogonal(
     moduli: tuple[int, ...],
 ) -> None:
     group = FiniteAbelianProductGroup(moduli=moduli)
-    result = finite_abelian_character_table(
-        FiniteAbelianCharacterTableRequest(group=group)
-    )
+    result = finite_abelian_character_table(group)
     expected_elements = tuple(product(*(range(modulus) for modulus in moduli)))
     assert result.elements == (expected_elements if moduli else ((),))
     exponent = result.cyclotomic_order
@@ -74,14 +69,12 @@ def test_finite_abelian_character_table_admits_before_materializing(
 ) -> None:
     group = FiniteAbelianProductGroup(moduli=moduli)
     with pytest.raises(OperationResourceAdmissionError, match=message):
-        finite_abelian_character_table(FiniteAbelianCharacterTableRequest(group=group))
+        finite_abelian_character_table(group)
 
 
 def test_table_admits_seven_coordinates_when_output_fits() -> None:
     group = FiniteAbelianProductGroup(moduli=(2,) * 7)
-    result = finite_abelian_character_table(
-        FiniteAbelianCharacterTableRequest(group=group)
-    )
+    result = finite_abelian_character_table(group)
     assert len(result.elements) == len(result.rows) == 128
 
 

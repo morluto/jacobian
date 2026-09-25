@@ -6,7 +6,10 @@ from itertools import product
 from math import lcm
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.groups.characters._abelian_models import (
     MAX_ABELIAN_CHARACTER_TABLE_CELLS,
     MAX_ABELIAN_CHARACTER_TABLE_ORDER,
@@ -22,20 +25,21 @@ from jacobian.math.groups.characters._models import CyclotomicValue
 
 
 def finite_abelian_character_table(
-    request: FiniteAbelianCharacterTableRequest,
+    group: object,
 ) -> FiniteAbelianCharacterTableResult:
     """Return the complete exact Fourier table of an admitted product group."""
     try:
-        request = FiniteAbelianCharacterTableRequest.model_validate(
-            request.model_dump(mode="python"), strict=True
+        from jacobian.math.groups.finite_abelian import FiniteAbelianProductGroup
+
+        group = FiniteAbelianProductGroup.model_validate(
+            group.model_dump(mode="python"), strict=True
         )
     except (AttributeError, TypeError, ValueError) as exc:
-        raise OperationResourceAdmissionError(
-            location=("request",),
-            code="groups.characters.abelian.invalid_request",
-            message="character table request must satisfy its typed contract",
+        raise OperationDomainValidationError(
+            location=("group",),
+            code="groups.characters.abelian.invalid_group",
+            message="character table group must satisfy its typed contract",
         ) from exc
-    group = request.group
     moduli = group.moduli
     # Every modulus is at least two, so seven coordinates already exceed the
     # public order envelope. Check before multiplying potentially huge ranks.
@@ -105,4 +109,11 @@ def finite_abelian_character_table(
     )
 
 
-__all__ = ["finite_abelian_character_table"]
+def _run_finite_abelian_character_table(
+    request: FiniteAbelianCharacterTableRequest,
+) -> FiniteAbelianCharacterTableResult:
+    """Adapt the catalog request envelope to the native group operation."""
+    return finite_abelian_character_table(request.group)
+
+
+__all__ = ["_run_finite_abelian_character_table", "finite_abelian_character_table"]

@@ -64,13 +64,13 @@ def _digits(value: Fraction) -> int:
 def _admit_pair(
     left: DifferentialOreOperator, right: DifferentialOreOperator
 ) -> tuple[DifferentialOreOperator, DifferentialOreOperator]:
-    admitted = (
-        _admit_differential_operator(left),
-        _admit_differential_operator(right),
-    )
+    # Inspect the typed representation and cheap operation-specific bounds first:
+    # canonical RF recognition can invoke polynomial GCD work, so rejected
+    # higher-order/nonconstant inputs must not reach it.
+    raw = (left, right)
     work = 0
     maximum_input_digits = 1
-    for label, operator in zip(("left", "right"), admitted, strict=True):
+    for label, operator in zip(("left", "right"), raw, strict=True):
         if operator.order > _MAX_ORDER:
             raise OperationResourceAdmissionError(
                 location=(label, "terms"),
@@ -109,7 +109,10 @@ def _admit_pair(
         )
     if _MAX_OPERATION_SCALAR_DIGITS > MAX_RATIONAL_FUNCTION_COEFFICIENT_DIGITS:
         raise AssertionError("GCRD output envelope exceeds its scalar carrier")
-    return admitted
+    return (
+        _admit_differential_operator(left),
+        _admit_differential_operator(right),
+    )
 
 
 def differential_operator_gcrd(

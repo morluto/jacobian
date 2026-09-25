@@ -255,6 +255,11 @@ class AnonymousCardDegreeProfile(StrictModel):
                 "card_profile_source", "profile source has the wrong carrier"
             )
         order = self.card_order
+        if order != self.source.card_order:
+            raise _validation_error(
+                "card_profile_source_order",
+                "card_order must match the retained source card_order",
+            )
         if type(order) is not int or not 0 <= order <= MAX_UNLABELLED_DECK_VERTICES:
             raise _validation_error(
                 "card_profile_order", "card_order is outside its bound"

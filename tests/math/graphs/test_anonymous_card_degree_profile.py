@@ -114,6 +114,19 @@ def test_empty_profile_retains_card_order_and_round_trips() -> None:
     )
 
 
+def test_empty_profile_rejects_card_order_different_from_source() -> None:
+    multiset = anonymous_graph_card_multiset(
+        AnonymousGraphCardMultisetRequest(card_order=3, cards=())
+    )
+    with pytest.raises(ValueError, match="must match the retained source"):
+        AnonymousCardDegreeProfile(
+            source=multiset,
+            card_order=4,
+            total_card_multiplicity=0,
+            degree_multisets=(),
+        )
+
+
 def test_native_operation_rejects_model_construct_noncanonical_card() -> None:
     representative = SimpleUndirectedGraph.model_construct(
         vertices=("v00", "v01", "v02"), edges=(("v00", "v01"),)
@@ -208,7 +221,7 @@ def test_catalog_round_trip_canonicalizes_nested_multiset_only_once(
         calls += 1
         return original(vertices, edges)
 
-    monkeypatch.setattr(deck_models, "_canonical_card_edges", counted)
+    monkeypatch.setattr(deck_operations, "_canonical_card_edges", counted)
     exact_total_work = deck_models._anonymous_profile_resource_estimates(3, 2)[1]
     monkeypatch.setattr(
         deck_models, "MAX_ANONYMOUS_CARD_PROFILE_WORK", exact_total_work

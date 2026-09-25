@@ -502,7 +502,7 @@ TOOLS = (
         run=_run_polynomial_substitute,
         tags=("free-algebra", "polynomial", "homomorphism", "substitution", "exact"),
         discovery_terms=(
-            "free associative algebra homomorphism",
+            "free associative algebra homomorphism apply",
             "noncommutative polynomial substitution",
             "generator-to-polynomial map",
             "free algebra morphism apply",

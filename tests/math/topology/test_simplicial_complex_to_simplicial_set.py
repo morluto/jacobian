@@ -9,11 +9,13 @@ from jacobian.catalog.models import (
 )
 from jacobian.math.topology.operations import canonicalize
 from jacobian.math.topology.simplicial_sets import (
-    SimplicialComplexPrefixRequest,
     complex_conversion,
     simplicial_set_from_complex,
 )
 from jacobian.math.topology.simplicial_sets._tools import TOOLS
+from jacobian.math.topology.simplicial_sets.complex_conversion_models import (
+    SimplicialComplexPrefixRequest,
+)
 from jacobian.math.topology.simplicial_sets.maps import normalized_chains
 
 

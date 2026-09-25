@@ -6,7 +6,6 @@ from jacobian.math.topology.simplicial_sets._models import (
     SimplicialSetTablesResult,
 )
 from jacobian.math.topology.simplicial_sets.chains import (
-    UnnormalizedChainsRequest,
     UnnormalizedChainsResult,
     unnormalized_chains,
 )
@@ -15,20 +14,21 @@ from jacobian.math.topology.simplicial_sets.complex_conversion import (
 )
 from jacobian.math.topology.simplicial_sets.complex_conversion_models import (
     ComplexFaceSimplexIndex,
-    SimplicialComplexPrefixRequest,
     SimplicialComplexPrefixResult,
 )
 from jacobian.math.topology.simplicial_sets.coproduct import simplicial_set_coproduct
 from jacobian.math.topology.simplicial_sets.coproduct_models import (
-    SimplicialSetCoproductRequest,
     SimplicialSetCoproductResult,
 )
 from jacobian.math.topology.simplicial_sets.degeneracy import (
     DegeneracyProfileResult,
     degeneracy_profile,
 )
+from jacobian.math.topology.simplicial_sets.image import (
+    SimplicialMapImageResult,
+    simplicial_map_image,
+)
 from jacobian.math.topology.simplicial_sets.maps import (
-    SimplicialMapCompositionRequest,
     TruncatedSimplicialMap,
     compose_simplicial_maps,
     identity_simplicial_map,
@@ -38,7 +38,6 @@ from jacobian.math.topology.simplicial_sets.maps import (
 from jacobian.math.topology.simplicial_sets.operations import from_tables
 from jacobian.math.topology.simplicial_sets.product import simplicial_set_product
 from jacobian.math.topology.simplicial_sets.product_models import (
-    SimplicialSetProductRequest,
     SimplicialSetProductResult,
 )
 from jacobian.math.topology.simplicial_sets.standard import (
@@ -60,20 +59,19 @@ __all__ = [
     "ComplexFaceSimplexIndex",
     "DegeneracyProfileResult",
     "FiniteTruncatedSimplicialSet",
-    "SimplicialComplexPrefixRequest",
     "SimplicialComplexPrefixResult",
     "SimplicialIdentityObstruction",
-    "SimplicialMapCompositionRequest",
-    "SimplicialSetCoproductRequest",
+    "SimplicialMapImageResult",
     "SimplicialSetCoproductResult",
-    "SimplicialSetProductRequest",
     "SimplicialSetProductResult",
     "SimplicialSetTablesResult",
     "SimplicialSetTruncateRequest",
     "SimplicialSubsetPrefix",
     "SimplicialSubsetRequest",
+    "SimplicialSetTruncateRequest",
+    "SimplicialSubsetPrefix",
+    "SimplicialSubsetRequest",
     "TruncatedSimplicialMap",
-    "UnnormalizedChainsRequest",
     "UnnormalizedChainsResult",
     "compose_simplicial_maps",
     "degeneracy_profile",
@@ -83,6 +81,7 @@ __all__ = [
     "simplex_boundary",
     "simplex_horn",
     "simplicial_map",
+    "simplicial_map_image",
     "simplicial_set_coproduct",
     "simplicial_set_from_complex",
     "simplicial_set_product",

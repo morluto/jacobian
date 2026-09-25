@@ -59,9 +59,7 @@ def admit_pp_evaluation(
 ) -> None:
     """Admit exhaustive pp assignment replay and output materialization."""
 
-    symbol_arities = {
-        symbol.symbol_id: symbol.arity for symbol in structure.signature
-    }
+    symbol_arities = {symbol.symbol_id: symbol.arity for symbol in structure.signature}
     for index, atom in enumerate(formula.atoms):
         if isinstance(atom, PPRelationAtom):
             arity = symbol_arities.get(atom.symbol_id)
@@ -83,13 +81,43 @@ def admit_pp_evaluation(
     output_tuples = (
         1 if len(formula.free_variables) == 0 else size ** len(formula.free_variables)
     )
+    # Every satisfying assignment must satisfy each atom. Relation atoms bound
+    # their participating coordinates by the table cardinality; unconstrained
+    # coordinates remain free. This is a sound upper bound on distinct output
+    # tuples, since projection cannot increase satisfying assignments.
+    satisfying_bound = assignments
+    for atom in formula.atoms:
+        if isinstance(atom, PPRelationAtom):
+            table_size = len(
+                structure.relation_tables[
+                    next(
+                        i
+                        for i, symbol in enumerate(structure.signature)
+                        if symbol.symbol_id == atom.symbol_id
+                    )
+                ]
+            )
+            constrained = len(set(atom.variables))
+            satisfying_bound = min(
+                satisfying_bound,
+                table_size * (size ** (formula.variable_count - constrained)),
+            )
+        else:
+            if atom.left != atom.right:
+                satisfying_bound = min(
+                    satisfying_bound,
+                    max(size - 1, 0) * (size ** (formula.variable_count - 1)),
+                )
+    output_tuples = min(output_tuples, satisfying_bound)
     atom_checks = assignments * len(formula.atoms)
     coordinate_work = assignments * formula.variable_count
     coordinate_work += assignments * sum(
         len(atom.variables) if isinstance(atom, PPRelationAtom) else 2
         for atom in formula.atoms
     )
-    coordinate_work += output_tuples * len(formula.free_variables)
+    # The kernel projects every satisfying full assignment before set
+    # deduplication, so charge the worst-case projection on all assignments.
+    coordinate_work += assignments * len(formula.free_variables)
     if assignments > MAX_PP_EVALUATION_ASSIGNMENTS:
         raise OperationResourceAdmissionError(
             location=("formula", "variable_count"),

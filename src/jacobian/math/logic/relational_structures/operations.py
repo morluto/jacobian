@@ -510,12 +510,18 @@ def profile_csp_assignment(
 def _preflight_csp_instance(instance: FiniteCspInstance) -> None:
     """Bound native values before recursively copying them for revalidation."""
 
-    template = instance.template
-    constraints = instance.constraints
+    # Validation-bypassed Pydantic instances may omit attributes entirely;
+    # inspect fields defensively so malformed native values use the domain error.
+    try:
+        template = instance.template
+        constraints = instance.constraints
+        variable_count = instance.variable_count
+    except (AttributeError, TypeError):
+        _raise_invalid_csp_instance()
     if (
         type(template) is not FiniteRelationalStructure
-        or type(instance.variable_count) is not int
-        or not 0 <= instance.variable_count <= MAX_RELATIONAL_CARRIER
+        or type(variable_count) is not int
+        or not 0 <= variable_count <= MAX_RELATIONAL_CARRIER
         or not isinstance(constraints, tuple)
         or len(constraints) > MAX_CSP_CONSTRAINTS
     ):
@@ -557,22 +563,28 @@ def _preflight_csp_instance(instance: FiniteCspInstance) -> None:
                 _raise_invalid_csp_instance()
     scope_entries = 0
     for constraint in constraints:
+        if type(constraint) is not FiniteCspConstraint:
+            _raise_invalid_csp_instance()
+        try:
+            symbol_id = constraint.symbol_id
+            scope = constraint.scope
+        except (AttributeError, TypeError):
+            _raise_invalid_csp_instance()
         if (
-            type(constraint) is not FiniteCspConstraint
-            or type(constraint.symbol_id) is not str
-            or not isinstance(constraint.scope, tuple)
-            or len(constraint.scope) > MAX_RELATIONAL_ARITY
+            type(symbol_id) is not str
+            or not isinstance(scope, tuple)
+            or len(scope) > MAX_RELATIONAL_ARITY
         ):
             _raise_invalid_csp_instance()
-        arity = symbol_arities.get(constraint.symbol_id)
-        if arity is None or len(constraint.scope) != arity:
+        arity = symbol_arities.get(symbol_id)
+        if arity is None or len(scope) != arity:
             _raise_invalid_csp_instance()
-        scope_entries += len(constraint.scope)
+        scope_entries += len(scope)
         if scope_entries > MAX_CSP_SCOPE_ENTRIES:
             _raise_invalid_csp_instance()
         if any(
-            type(variable) is not int or not 0 <= variable < instance.variable_count
-            for variable in constraint.scope
+            type(variable) is not int or not 0 <= variable < variable_count
+            for variable in scope
         ):
             _raise_invalid_csp_instance()
 

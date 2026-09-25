@@ -925,6 +925,14 @@ class CspAssignmentProfile(StrictModel):
             raise _validation_error(
                 "assignment_axis", "profile assignment is not total"
             )
+        if any(
+            not 0 <= value < self.instance.template.carrier_size
+            for value in self.assignment
+        ):
+            raise _validation_error(
+                "assignment_value",
+                "profile assignment values must lie in the template carrier",
+            )
         if len(self.evaluations) != len(self.instance.constraints):
             raise _validation_error(
                 "assignment_profile", "every constraint occurrence must be evaluated"

@@ -181,3 +181,41 @@ def test_character_coordinates_reject_wrong_canonical_basis_and_parent() -> None
         parent_error.value.errors()[0]["type"]
         == "modular_form.character_coordinates_parent"
     )
+
+
+def test_oversized_character_claim_is_rejected_before_group_reconstruction(
+    monkeypatch,
+) -> None:
+    space = _space()
+    character = type(space.character).model_construct(
+        group=space.character.group,
+        coordinates=(0,) * 33,
+    )
+    forged_space = ModularFormSpace.model_construct(
+        group=space.group,
+        level=space.level,
+        weight=space.weight,
+        kind=space.kind,
+        character=character,
+        coefficient_domain=space.coefficient_domain,
+    )
+    forged_form = ModularFormCoordinates.model_construct(
+        space=forged_space,
+        basis_id=CHARACTER_RREF_BASIS_ID,
+        coordinates=(_element(1), _element(0)),
+    )
+
+    from jacobian.math.number_theory.modular_forms import character_coordinates
+
+    def reconstruction_must_not_run(*args, **kwargs):
+        raise AssertionError("oversized caller data reached group reconstruction")
+
+    monkeypatch.setattr(
+        character_coordinates, "_require_basis_space", reconstruction_must_not_run
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        modular_form_coordinates_equal(forged_form, forged_form)
+    assert (
+        error.value.errors()[0]["type"]
+        == "modular_form.character_coordinates_character_shape"
+    )

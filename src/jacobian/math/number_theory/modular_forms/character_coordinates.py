@@ -38,8 +38,10 @@ MAX_CHARACTER_COORDINATE_EQUALITY_WORK = 1_000_000
 def _bounded_int_tuple(
     values: object, *, maximum_length: int, maximum_value: int
 ) -> bool:
-    return type(values) is tuple and len(values) <= maximum_length and all(
-        type(value) is int and 0 <= value <= maximum_value for value in values
+    return (
+        type(values) is tuple
+        and len(values) <= maximum_length
+        and all(type(value) is int and 0 <= value <= maximum_value for value in values)
     )
 
 
@@ -71,11 +73,8 @@ def _admit_space_work(space: ModularFormSpace) -> None:
         or not 0 <= group.character_count <= level
         or type(group.exponent) is not int
         or not 0 <= group.exponent <= level
-        or
-        not _bounded_int_tuple(
-            group.unit_residues,
-            maximum_length=level,
-            maximum_value=level,
+        or not _bounded_int_tuple(
+            group.unit_residues, maximum_length=level, maximum_value=level
         )
         or not _bounded_int_tuple(
             group.generator_orders, maximum_length=32, maximum_value=level
@@ -89,9 +88,7 @@ def _admit_space_work(space: ModularFormSpace) -> None:
         or type(group.unit_coordinates) is not tuple
         or len(group.unit_coordinates) > level
         or any(
-            not _bounded_int_tuple(
-                row, maximum_length=32, maximum_value=level
-            )
+            not _bounded_int_tuple(row, maximum_length=32, maximum_value=level)
             for row in group.unit_coordinates
         )
         or not _bounded_int_tuple(
@@ -108,10 +105,7 @@ def _admit_space_work(space: ModularFormSpace) -> None:
     # in the degree-two field, with the canonical element digit cap applied.
     admitted_work = (
         64 * level * level
-        + 2
-        * MAX_CHARACTER_COORDINATE_DIMENSION
-        * 2
-        * MAX_CYCLIC_FIELD_ELEMENT_DIGITS
+        + 2 * MAX_CHARACTER_COORDINATE_DIMENSION * 2 * MAX_CYCLIC_FIELD_ELEMENT_DIGITS
     )
     if admitted_work > MAX_CHARACTER_COORDINATE_EQUALITY_WORK:
         raise OperationResourceAdmissionError(
@@ -236,6 +230,15 @@ def _generic_character_coordinates_equal(
     context = _admit_coordinate_space(left.space)
     _admit_coordinate_vector(left, context, "left")
     _admit_coordinate_vector(right, context, "right")
+    admitted_work = (
+        2 * context.dimension * context.field.degree * MAX_CYCLIC_FIELD_ELEMENT_DIGITS
+    )
+    if admitted_work > MAX_CHARACTER_COORDINATE_EQUALITY_WORK:
+        raise OperationResourceAdmissionError(
+            location=(),
+            code="modular_form.character_coordinates_equality_work",
+            message="exact character-coordinate equality exceeds its work envelope",
+        )
     return left.coordinates == right.coordinates
 
 

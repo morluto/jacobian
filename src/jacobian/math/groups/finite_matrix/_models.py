@@ -133,7 +133,12 @@ class ExtensionFieldLinearGroupRequest(StrictModel):
     """An extension field and labelled coordinate space for a full matrix group."""
 
     presentation: FiniteFieldPresentation
-    vector_axis: Axis
+    vector_axis: Axis = Field(
+        description=(
+            "Ordered coordinate axis; extension-field matrix-group constructors "
+            f"support dimensions 1 through {MAX_LINEAR_GROUP_DIMENSION}."
+        )
+    )
 
     @model_validator(mode="after")
     def require_admitted_extension_space(self) -> Self:

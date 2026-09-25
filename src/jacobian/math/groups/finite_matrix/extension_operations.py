@@ -360,7 +360,6 @@ def _admit_group_parameters(
             f"dimension must not exceed {MAX_LINEAR_GROUP_DIMENSION}",
             ("vector_axis",),
         )
-    require_field(presentation)
     q = presentation.order
     dimension = len(axis.labels)
     generator_count = (
@@ -391,6 +390,7 @@ def _admit_group_parameters(
         generator_count,
         order_digit_bound,
     )
+    require_field(presentation)
     order = _linear_group_order(q, dimension)
     return presentation, axis, _field_context(presentation), q, order
 
@@ -441,6 +441,7 @@ def _revalidate_general_linear_group(
             code="finite_matrix_group.group_shape",
             message="group must satisfy its complete canonical carrier contract",
         ) from exc
+    _check_projective_point_count(admitted.presentation, admitted.vector_axis)
     expected = construct_extension_general_linear_group(
         admitted.presentation, admitted.vector_axis
     )
@@ -466,6 +467,7 @@ def _revalidate_special_linear_group(
             code="finite_matrix_group.group_shape",
             message="group must satisfy its complete canonical carrier contract",
         ) from exc
+    _check_projective_point_count(admitted.presentation, admitted.vector_axis)
     expected = construct_extension_special_linear_group(
         admitted.presentation, admitted.vector_axis
     )
@@ -517,19 +519,23 @@ def _point_label(point: ProjectivePoint) -> str:
     return f"[{coordinates}]"
 
 
-def _projective_action(
-    group: ExtensionFieldGeneralLinearGroup | ExtensionFieldSpecialLinearGroup,
-) -> tuple[tuple[ProjectivePoint, ...], FinitePermutationAction]:
-    points_bound = sum(
-        group.presentation.order**power
-        for power in range(len(group.vector_axis.labels))
-    )
+def _check_projective_point_count(
+    presentation: FiniteFieldPresentation, axis: Axis
+) -> int:
+    points_bound = sum(presentation.order**power for power in range(len(axis.labels)))
     if points_bound > MAX_PROJECTIVE_POINT_ACTION_SIZE:
         _resource_error(
             "projective_action_size_bound",
             "the complete projective-point axis exceeds the 50-point output envelope",
             ("group",),
         )
+    return int(points_bound)
+
+
+def _projective_action(
+    group: ExtensionFieldGeneralLinearGroup | ExtensionFieldSpecialLinearGroup,
+) -> tuple[tuple[ProjectivePoint, ...], FinitePermutationAction]:
+    points_bound = _check_projective_point_count(group.presentation, group.vector_axis)
     _check_projective_action_allocation(group, points_bound)
     context = _field_context(group.presentation)
     points = _projective_points(context, group.presentation, group.vector_axis)

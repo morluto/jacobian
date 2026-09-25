@@ -60,12 +60,13 @@ def test_group_lattice_carrier_rejects_wrong_ambient_dimension() -> None:
         AffineGroupLattice.model_validate(payload)
 
 
-def test_group_lattice_carrier_checks_both_integer_inclusions() -> None:
-    result = compute_group_lattice(_configuration(((2, 0), (0, 2))))
+def test_group_lattice_is_canonical_with_redundant_generators() -> None:
+    result = compute_group_lattice(_configuration(((1, 1),)))
+    assert result.lattice.basis.entries == ((1,),)
     payload = result.model_dump(mode="python")
-    payload["generator_lattice_coordinates"]["entries"] = ((2, 0), (0, 1))
-    with pytest.raises(ValidationError):
-        AffineGroupLattice.model_validate(payload)
+    assert "basis_generator_coordinates" not in payload
+    assert "generator_lattice_coordinates" not in payload
+    assert AffineGroupLattice.model_validate(payload) == result
 
 
 def test_group_lattice_catalog_example_executes() -> None:

@@ -264,6 +264,8 @@ class FiniteGaussSumResult(StrictModel):
 
 
 MAX_THETA_PREFIX_CUTOFF = 512
+MAX_THETA_SELECTED_INDEX = 1_000_000_000
+MAX_THETA_SELECTED_INDICES = 128
 MAX_THETA_PREFIX_DIMENSION = 7
 MAX_THETA_PREFIX_VECTORS = 100_000
 MAX_THETA_PREFIX_WORK = 2_000_000
@@ -290,6 +292,56 @@ class ThetaSeriesPrefixResult(StrictModel):
             raise ValueError("theta coefficients must cover q^0 through q^cutoff")
         if any(value < 0 for value in self.coefficients):
             raise ValueError("theta coefficients must be nonnegative")
+        return self
+
+
+class ThetaSelectedCoefficientsRequest(StrictModel):
+    """Selected exact representation numbers of a positive-definite form."""
+
+    form: RationalQuadraticForm
+    indices: tuple[int, ...] = Field(
+        min_length=1, max_length=MAX_THETA_SELECTED_INDICES
+    )
+
+    @model_validator(mode="after")
+    def require_canonical_indices(self) -> Self:
+        if any(index < 0 or index > MAX_THETA_SELECTED_INDEX for index in self.indices):
+            raise ValueError(
+                f"theta indices must lie in [0, {MAX_THETA_SELECTED_INDEX}]"
+            )
+        if tuple(sorted(set(self.indices))) != self.indices:
+            raise ValueError("theta indices must be strictly increasing")
+        return self
+
+    @property
+    def cutoff(self) -> int:
+        return self.indices[-1]
+
+
+class ThetaSelectedCoefficient(StrictModel):
+    index: int = Field(ge=0, le=MAX_THETA_SELECTED_INDEX)
+    coefficient: int = Field(ge=0)
+
+
+class ThetaSelectedCoefficientsResult(StrictModel):
+    """Exact source-bound coefficients at the requested increasing indices."""
+
+    form: RationalQuadraticForm
+    coefficients: tuple[ThetaSelectedCoefficient, ...] = Field(
+        min_length=1, max_length=MAX_THETA_SELECTED_INDICES
+    )
+
+    @model_validator(mode="after")
+    def require_increasing_indices(self) -> Self:
+        indices = tuple(row.index for row in self.coefficients)
+        if tuple(sorted(set(indices))) != indices:
+            raise ValueError(
+                "selected theta result indices must be strictly increasing"
+            )
+        if any(row.coefficient > MAX_THETA_PREFIX_VECTORS for row in self.coefficients):
+            raise ValueError(
+                "a selected theta coefficient exceeds the admitted vector count"
+            )
         return self
 
 

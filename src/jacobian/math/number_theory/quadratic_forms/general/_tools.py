@@ -10,6 +10,8 @@ from jacobian.math.number_theory.quadratic_forms.general._extra_models import (
     FiniteBoxProfileResult,
     FiniteGaussSumRequest,
     FiniteGaussSumResult,
+    ThetaSelectedCoefficientsRequest,
+    ThetaSelectedCoefficientsResult,
 )
 from jacobian.math.number_theory.quadratic_forms.general._models import *  # noqa: F403
 from jacobian.math.number_theory.quadratic_forms.general.direct_sum_models import (
@@ -30,6 +32,9 @@ from jacobian.math.number_theory.quadratic_forms.general.operations import (
     bilinear_pairing,
     coefficient_matrix,
     evaluate_rational_quadratic_form,
+)
+from jacobian.math.number_theory.quadratic_forms.general.theta_operations import (
+    theta_selected_coefficients,
 )
 from jacobian.math.number_theory.quadratic_forms.general.values import (
     MAX_QUADRATIC_EVALUATION_DIGITS,
@@ -128,6 +133,12 @@ def compute_finite_box_profile(
     request: FiniteBoxProfileRequest,
 ) -> FiniteBoxProfileResult:
     return finite_box_value_profile(request)
+
+
+def compute_theta_selected_coefficients(
+    request: ThetaSelectedCoefficientsRequest,
+) -> ThetaSelectedCoefficientsResult:
+    return theta_selected_coefficients(request)
 
 
 def _form_example() -> dict[str, object]:
@@ -318,6 +329,38 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                         "diagonal_coefficients": [{"num": "1", "den": "1"}],
                     },
                     "modulus": 3,
+                },
+            ),
+        ),
+    ),
+)
+TOOLS = (
+    *TOOLS,
+    MathTool(
+        operation_id="quadratic_form.theta_selected_coefficients.compute",
+        title="Compute selected quadratic-form theta coefficients",
+        description=(
+            "Return the exact representation numbers r_Q(n) at strictly increasing "
+            "selected indices, retaining the positive-definite integral source form. "
+            "The index range and number of requested entries are bounded; a proved "
+            "coordinate box, exact evaluation work, and aggregate output digits are "
+            "admitted before enumeration. Intervening coefficients are not built or "
+            "returned."
+        ),
+        request_type=ThetaSelectedCoefficientsRequest,
+        result_type=ThetaSelectedCoefficientsResult,
+        run=compute_theta_selected_coefficients,
+        tags=("quadratic-form", "theta-series", "exact"),
+        examples=(
+            OperationExample(
+                name="sparse-square-coefficients",
+                description="Read two sparse coefficients of the unary theta series.",
+                input={
+                    "form": {
+                        "axis": ["x"],
+                        "diagonal_coefficients": [{"num": "1", "den": "1"}],
+                    },
+                    "indices": [0, 1_000_000],
                 },
             ),
         ),

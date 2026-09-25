@@ -191,3 +191,24 @@ the canonical cyclotomic polynomial. The exact output is carried by
 `RationalCyclotomicElement`; no floating approximation or separate residue
 enumeration is used. The finite sum and histogram contract is consistent with
 the exact quadratic-form interfaces documented by [Sage](https://doc.sagemath.org/html/en/reference/quadratic_forms/sage/quadratic_forms/quadratic_form.html).
+
+## Selected theta coefficients
+
+`quadratic_form.theta_selected_coefficients.compute` returns the exact
+representation numbers `r_Q(n)` at a strictly increasing tuple of selected
+nonnegative indices for an integral positive-definite form. The form and each
+requested index remain attached to its result, including zero coefficients.
+Unlike a prefix, the result does not construct or serialize coefficients at
+intervening indices. This is useful for a sparse query such as `r_(x^2)(10^6)`.
+
+The kernel uses the same exact adjugate bound as the theta-prefix operation. If
+`C` is twice the half-polar Gram matrix, then any vector with `Q(x) <= N`
+satisfies `x_i^2 <= 2*N*(C^-1)_ii`; its diagonal cofactors therefore give a
+complete integer box for `N = max(indices)`. Dimension, coefficient growth,
+determinant work, full box size, evaluations, and retained output digits are
+admitted before enumeration. The index is capped at `10^9`, at most 128
+indices are accepted, at most 100,000 vectors are enumerated, and total work
+is capped at 2,000,000 term evaluations. A large maximum index can consequently
+be accepted in low dimension and rejected when its proved box is too large.
+The operation computes the selected finite coefficients directly; it makes no
+claim about modularity or an infinite theta series beyond those values.

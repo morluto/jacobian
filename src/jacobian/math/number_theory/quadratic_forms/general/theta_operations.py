@@ -15,6 +15,9 @@ from jacobian.math.number_theory.quadratic_forms.general._extra_models import (
     MAX_THETA_PREFIX_OUTPUT_DIGITS,
     MAX_THETA_PREFIX_VECTORS,
     MAX_THETA_PREFIX_WORK,
+    ThetaSelectedCoefficient,
+    ThetaSelectedCoefficientsRequest,
+    ThetaSelectedCoefficientsResult,
     ThetaSeriesPrefixRequest,
     ThetaSeriesPrefixResult,
 )
@@ -154,7 +157,7 @@ def _positive_definite_matrix(
 
 
 def _admit_box_and_output(
-    request: ThetaSeriesPrefixRequest,
+    request: ThetaSeriesPrefixRequest | ThetaSelectedCoefficientsRequest,
     support: int,
     determinant_work: int,
     cofactor_work: int,
@@ -196,7 +199,19 @@ def _admit_box_and_output(
             *(term.coefficient for term in form.cross_terms),
         )
     )
-    output_digits = source_digits + (request.cutoff + 1) * (count_digits + 1)
+    coefficient_count = (
+        request.cutoff + 1
+        if isinstance(request, ThetaSeriesPrefixRequest)
+        else len(request.indices)
+    )
+    index_digits = (
+        0
+        if isinstance(request, ThetaSeriesPrefixRequest)
+        else sum(len(str(index)) for index in request.indices)
+    )
+    output_digits = (
+        source_digits + coefficient_count * (count_digits + 1) + index_digits
+    )
     if output_digits > MAX_THETA_PREFIX_OUTPUT_DIGITS:
         raise OperationResourceAdmissionError(
             location=("cutoff",),
@@ -250,4 +265,47 @@ def theta_series_prefix(
     )
 
 
-__all__ = ["theta_series_prefix"]
+def theta_selected_coefficients(
+    request: ThetaSelectedCoefficientsRequest,
+) -> ThetaSelectedCoefficientsResult:
+    """Return only requested r_Q(n), without constructing intervening terms."""
+    form = request.form
+    dimension, support, determinant_work, cofactor_work = _require_input_envelope(form)
+    _, determinant, diagonal_cofactors = _positive_definite_matrix(form, dimension)
+    radii = _admit_box_and_output(
+        request,
+        support,
+        determinant_work,
+        cofactor_work,
+        determinant,
+        diagonal_cofactors,
+    )
+
+    wanted = set(request.indices)
+    counts = dict.fromkeys(request.indices, 0)
+    diagonal = tuple(value.num for value in form.diagonal_coefficients)
+    crosses = tuple(
+        (term.left, term.right, term.coefficient.num) for term in form.cross_terms
+    )
+    ranges = tuple(range(-radius, radius + 1) for radius in radii)
+    for vector in product(*ranges):
+        value = sum(
+            coefficient * coordinate * coordinate
+            for coefficient, coordinate in zip(diagonal, vector, strict=True)
+        )
+        value += sum(
+            coefficient * vector[left] * vector[right]
+            for left, right, coefficient in crosses
+        )
+        if value in wanted:
+            counts[value] += 1
+    return ThetaSelectedCoefficientsResult(
+        form=form,
+        coefficients=tuple(
+            ThetaSelectedCoefficient(index=index, coefficient=counts[index])
+            for index in request.indices
+        ),
+    )
+
+
+__all__ = ["theta_selected_coefficients", "theta_series_prefix"]

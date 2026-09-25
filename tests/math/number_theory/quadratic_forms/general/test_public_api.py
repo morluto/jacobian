@@ -16,6 +16,9 @@ def test_exact_public_api_symbols() -> None:
         "QuadraticFormRestrictionResult",
         "RationalCoordinateVector",
         "RationalQuadraticForm",
+        "ThetaSelectedCoefficient",
+        "ThetaSelectedCoefficientsRequest",
+        "ThetaSelectedCoefficientsResult",
         "ThetaSeriesPrefixRequest",
         "ThetaSeriesPrefixResult",
         "bilinear_pairing",
@@ -27,6 +30,7 @@ def test_exact_public_api_symbols() -> None:
         "quadratic_form_direct_sum",
         "quadratic_form_restrict_coordinates",
         "require_coefficient_matrix_budget",
+        "theta_selected_coefficients",
         "theta_series_prefix",
     )
     assert tuple(quadratic_forms.__all__) == expected

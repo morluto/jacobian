@@ -47,6 +47,7 @@ def _admit_connection_cartan(value: CartanMatrix) -> CartanMatrix:
         )
     if (
         not isinstance(matrix, IntegerMatrix)
+        or getattr(matrix, "domain", None) != "ZZ"
         or not isinstance(axis, tuple)
         or axis != tuple(range(rank))
         or type(matrix.row_count) is not int

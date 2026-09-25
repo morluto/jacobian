@@ -102,7 +102,9 @@ def test_conversion_serializes_and_composes_with_normalized_chains():
     assert tuple(map(len, normalized.nondegenerate_bases)) == (2, 1, 0)
     assert normalized.chain_complex.differential_matrices[0] == ((-1,), (1,))
     assert normalized.chain_complex.basis_sizes == (2, 1, 0)
-    assert type(normalized).model_validate_json(normalized.model_dump_json()) == normalized
+    assert (
+        type(normalized).model_validate_json(normalized.model_dump_json()) == normalized
+    )
 
 
 def test_exact_prefix_count_is_admitted_before_materializing_degrees(monkeypatch):
@@ -128,7 +130,7 @@ def test_output_bound_is_checked_before_materializing_degrees(monkeypatch):
         raise AssertionError("degree enumeration started before output admission")
 
     monkeypatch.setattr(complex_conversion, "_level_labels", unexpected)
-    monkeypatch.setattr(complex_conversion, "MAX_COMPLEX_PREFIX_OUTPUT_BYTES", 0)
+    monkeypatch.setattr(complex_conversion, "MAX_COMPLEX_PREFIX_OUTPUT_CELLS", 0)
     with pytest.raises(OperationResourceAdmissionError) as exc:
         simplicial_set_from_complex(
             SimplicialComplexPrefixRequest(complex=source, max_degree=2)

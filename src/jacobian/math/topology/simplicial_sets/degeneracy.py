@@ -16,7 +16,7 @@ from jacobian.math.topology.simplicial_sets._models import (
 from jacobian.math.topology.simplicial_sets.operations import from_tables
 
 _MAX_IDENTITY_ROW_WORK = 100_000
-_MAX_OUTPUT_BYTES = 65_536
+_MAX_OUTPUT_CELLS = 65_536
 
 
 class DegeneracyWitness(StrictModel):
@@ -33,7 +33,7 @@ class DegeneracyDegreeProfile(StrictModel):
     immediate_witnesses: tuple[DegeneracyWitness | None, ...]
 
     @model_validator(mode="after")
-    def require_partition(self):
+    def require_partition(self) -> DegeneracyDegreeProfile:
         if tuple(sorted(set(self.nondegenerate_indices))) != self.nondegenerate_indices:
             raise ValueError("nondegenerate indices must be sorted and unique")
         if any(
@@ -56,7 +56,7 @@ class DegeneracyProfileResult(StrictModel):
     degrees: tuple[DegeneracyDegreeProfile, ...]
 
     @model_validator(mode="after")
-    def require_source_axes(self):
+    def require_source_axes(self) -> DegeneracyProfileResult:
         if len(self.degrees) != self.simplicial_set.max_degree + 1:
             raise ValueError("profiles must cover every source degree")
         if any(
@@ -83,21 +83,23 @@ def _preflight(source: FiniteTruncatedSimplicialSet) -> tuple[int, ...]:
     for n in range(source.max_degree):
         work += (n + 1) * (n + 2) * sizes[n]
         work += (n + 1) * sizes[n]  # profile's degeneracy-image scan
-    # Profile output is at most one index plus one optional witness per input
-    # simplex. Include a conservative bound for the retained source and JSON
-    # framing; the source schema separately caps it at 96 simplices / degree 4.
-    output_bound = len(source.model_dump_json()) + 160 * sum(sizes) + 256
+    # Count source label characters and one profile/witness cell per simplex.
+    output_cells = (
+        sum(len(label) for level in source.sets for label in level)
+        + 3 * sum(sizes)
+        + 256
+    )
     if work > _MAX_IDENTITY_ROW_WORK:
         raise OperationResourceAdmissionError(
             location=("simplicial_set",),
             code="simplicial_set.degeneracy_profile_work_budget_exceeded",
             message="simplicial identity checks exceed the profile work bound",
         )
-    if sum(sizes) > MAX_TOTAL_SIMPLICES or output_bound > _MAX_OUTPUT_BYTES:
+    if sum(sizes) > MAX_TOTAL_SIMPLICES or output_cells > _MAX_OUTPUT_CELLS:
         raise OperationResourceAdmissionError(
             location=("simplicial_set",),
             code="simplicial_set.degeneracy_profile_output_budget_exceeded",
-            message="degeneracy profile exceeds the bounded output size",
+            message="degeneracy profile exceeds the bounded output cell count",
         )
     return sizes
 

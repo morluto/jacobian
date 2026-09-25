@@ -14,13 +14,14 @@ from jacobian.math.topology.simplicial_sets._models import (
 from jacobian.math.topology.simplicial_sets.coproduct_models import (
     SimplicialSetCoproductRequest,
     SimplicialSetCoproductResult,
+    TaggedSimplex,
 )
 from jacobian.math.topology.simplicial_sets.maps import TruncatedSimplicialMap
 from jacobian.math.topology.simplicial_sets.operations import from_tables
 
 MAX_COPRODUCT_MAP_ROWS = 50_000
 MAX_COPRODUCT_IDENTITY_WORK = 100_000
-MAX_COPRODUCT_OUTPUT_BYTES = 1_000_000
+MAX_COPRODUCT_OUTPUT_CELLS = 1_000_000
 
 
 def _identity_work(max_degree: int, sizes: tuple[int, ...]) -> int:
@@ -111,14 +112,14 @@ def simplicial_set_coproduct(
             ),
         )
     # Includes tagged labels, exact tagged axes, inclusions, and all map rows.
-    output_bytes = total * 96 + map_rows * 12
-    if output_bytes > MAX_COPRODUCT_OUTPUT_BYTES:
+    output_cells = total + 2 * map_rows
+    if output_cells > MAX_COPRODUCT_OUTPUT_CELLS:
         raise OperationResourceAdmissionError(
             location=("left", "right"),
             code="simplicial_set.coproduct_output_budget_exceeded",
             message=(
-                f"estimated coproduct output {output_bytes} bytes exceeds "
-                f"{MAX_COPRODUCT_OUTPUT_BYTES}"
+                f"estimated coproduct output {output_cells} cells exceeds "
+                f"{MAX_COPRODUCT_OUTPUT_CELLS}"
             ),
         )
 
@@ -134,7 +135,7 @@ def simplicial_set_coproduct(
         )
         for degree in range(left.max_degree + 1)
     )
-    axes = tuple(
+    axes: tuple[tuple[TaggedSimplex, ...], ...] = tuple(
         tuple(
             [("left", i) for i in range(len(left.sets[degree]))]
             + [("right", i) for i in range(len(right.sets[degree]))]

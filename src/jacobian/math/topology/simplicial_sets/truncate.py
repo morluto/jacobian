@@ -19,25 +19,20 @@ from jacobian.math.topology.simplicial_sets.truncate_models import (
 )
 
 MAX_TRUNCATE_MAP_ENTRIES = 50_000
-MAX_TRUNCATE_OUTPUT_BYTES = 1_000_000
-MAX_JSON_ASCII_CHARS_PER_LABEL_CHAR = 12
+MAX_TRUNCATE_OUTPUT_CELLS = 1_000_000
 
 
-def _estimate_output_bytes(
+def _estimate_output_cells(
     sets: tuple[tuple[str, ...], ...], degree: int, map_entries: int
 ) -> int:
     labels = tuple(label for level in sets[: degree + 1] for label in level)
-    # JSON ensure_ascii can encode one astral scalar as a 12-character surrogate
-    # pair. Include per-label quoting/separators and map-list structure too.
-    encoded_label_chars = sum(
-        len(label) * MAX_JSON_ASCII_CHARS_PER_LABEL_CHAR + 3 for label in labels
-    )
+    label_chars = sum(len(label) for label in labels)
     map_count = sum(n + 1 for n in range(1, degree + 1)) + sum(
         n + 1 for n in range(degree)
     )
     # Each map index is below 32, so two digits plus a list separator suffice.
     # The fixed allowance covers all table/list/model keys, levels and scalars.
-    return encoded_label_chars + map_entries * 3 + map_count * 3 + 1024
+    return label_chars + 2 * len(labels) + 3 * map_entries + 2 * map_count + 1024
 
 
 def truncate_simplicial_set(
@@ -86,7 +81,7 @@ def truncate_simplicial_set(
     sizes = admit_tables(degree, sets, faces, degeneracies)
     map_entries = sum(sizes[n] * (n + 1) for n in range(1, degree + 1))
     map_entries += sum(sizes[n] * (n + 1) for n in range(degree))
-    estimated_bytes = _estimate_output_bytes(sets, degree, map_entries)
+    output_cells = _estimate_output_cells(sets, degree, map_entries)
     if map_entries > MAX_TRUNCATE_MAP_ENTRIES:
         raise OperationResourceAdmissionError(
             location=("simplicial_set",),
@@ -96,13 +91,13 @@ def truncate_simplicial_set(
                 f"{MAX_TRUNCATE_MAP_ENTRIES}"
             ),
         )
-    if estimated_bytes > MAX_TRUNCATE_OUTPUT_BYTES:
+    if output_cells > MAX_TRUNCATE_OUTPUT_CELLS:
         raise OperationResourceAdmissionError(
             location=("simplicial_set",),
             code="simplicial_set.truncation_output_budget_exceeded",
             message=(
-                f"estimated truncation output {estimated_bytes} bytes exceeds "
-                f"{MAX_TRUNCATE_OUTPUT_BYTES}"
+                f"estimated truncation output {output_cells} cells exceeds "
+                f"{MAX_TRUNCATE_OUTPUT_CELLS}"
             ),
         )
 

@@ -12,7 +12,6 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.topology.simplicial_sets._models import (
-    MAX_SIMPLICES_PER_DEGREE,
     FiniteTruncatedSimplicialSet,
 )
 from jacobian.math.topology.simplicial_sets.maps import (
@@ -22,7 +21,7 @@ from jacobian.math.topology.simplicial_sets.maps import (
 from jacobian.math.topology.simplicial_sets.operations import from_tables
 
 _MAX_IMAGE_WORK = 100_000
-_MAX_IMAGE_OUTPUT_BYTES = 131_072
+_MAX_IMAGE_OUTPUT_CELLS = 131_072
 
 
 class SimplicialMapImageRequest(StrictModel):
@@ -70,44 +69,11 @@ def _identity_work(value: FiniteTruncatedSimplicialSet) -> int:
 
 def _preflight(value: TruncatedSimplicialMap) -> None:
     source, target = value.source, value.target
-    sizes = tuple(map(len, source.sets))
-    map_cells = sum(map(len, value.maps))
-    source_naturality_work = sum(
-        size * (degree + 1) * (int(degree > 0) + int(degree < source.max_degree))
-        for degree, size in enumerate(sizes)
-    )
-    target_naturality_work = sum(
-        len(level) * (degree + 1) * (int(degree > 0) + int(degree < target.max_degree))
-        for degree, level in enumerate(target.sets)
-    )
-    identity_work = _identity_work(source) + _identity_work(target)
-    # Each source simplex is visited once to collect its target image. The
-    # image tables then scan at most every target face/degeneracy entry.
-    construction_work = map_cells * (
-        1 + MAX_SIMPLICES_PER_DEGREE.bit_length()
-    ) + 2 * target.total_simplices * (source.max_degree + 1)
-    if (
-        identity_work
-        + _identity_work(target)
-        + 2 * source_naturality_work
-        + target_naturality_work
-        + construction_work
-        > _MAX_IMAGE_WORK
-    ):
-        raise OperationResourceAdmissionError(
-            location=("simplicial_map",),
-            code="simplicial_map.image_work_budget",
-            message="the image factorization exceeds the admitted finite work bound",
-        )
-
-    source_bytes = len(source.model_dump_json())
-    target_bytes = len(target.model_dump_json())
-    map_bytes = len(value.model_dump_json()) - source_bytes - target_bytes
-    # The result retains the original map, a source-to-image map, and an
-    # image-to-target inclusion. The image carrier is bounded by the target;
-    # both derived map tables have at most the input map's row widths.
-    output_bytes = 2 * source_bytes + 5 * target_bytes + 3 * map_bytes + 1024
-    if output_bytes > _MAX_IMAGE_OUTPUT_BYTES:
+    source_cells = sum(len(label) for level in source.sets for label in level)
+    target_cells = sum(len(label) for level in target.sets for label in level)
+    map_cells = sum(len(row) for row in value.maps)
+    output_cells = 2 * source_cells + 5 * target_cells + 3 * map_cells + 1024
+    if output_cells > _MAX_IMAGE_OUTPUT_CELLS:
         raise OperationResourceAdmissionError(
             location=("simplicial_map",),
             code="simplicial_map.image_output_budget",
@@ -127,7 +93,12 @@ def _require_checked(
             code="simplicial_map.image_carrier_invalid",
             message=f"{location} does not satisfy every visible simplicial identity",
         )
-    assert checked.simplicial_set is not None
+    if checked.simplicial_set is None:
+        raise OperationDomainValidationError(
+            location=(location,),
+            code="simplicial_map.image_carrier_missing",
+            message="validated carrier is missing",
+        )
     return checked.simplicial_set
 
 

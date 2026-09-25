@@ -5,10 +5,8 @@ import pytest
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.topology.simplicial_sets import (
     FiniteTruncatedSimplicialSet,
-    SimplicialMapPreimageRequest,
     SimplicialMapPreimageResult,
     SimplicialSubsetPrefix,
-    SimplicialSubsetRequest,
     TruncatedSimplicialMap,
     compose_simplicial_maps,
     simplicial_map_preimage,
@@ -16,8 +14,14 @@ from jacobian.math.topology.simplicial_sets import (
     standard_simplex,
 )
 from jacobian.math.topology.simplicial_sets._tools import TOOLS
+from jacobian.math.topology.simplicial_sets.map_preimage import (
+    SimplicialMapPreimageRequest,
+)
 from jacobian.math.topology.simplicial_sets.maps import (
     SimplicialMapCompositionRequest,
+)
+from jacobian.math.topology.simplicial_sets.subset_models import (
+    SimplicialSubsetRequest,
 )
 
 

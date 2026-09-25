@@ -1,5 +1,3 @@
-import json
-
 import pytest
 
 from jacobian.catalog.models import OperationResourceAdmissionError
@@ -91,7 +89,9 @@ def test_unnormalized_delta_one_uses_every_simplex_and_is_chain_complex():
         1,
         0,
     ]
-    assert type(normalized).model_validate_json(normalized.model_dump_json()) == normalized
+    assert (
+        type(normalized).model_validate_json(normalized.model_dump_json()) == normalized
+    )
 
 
 def test_unnormalized_chain_result_retains_reusable_canonical_value():
@@ -174,28 +174,18 @@ def test_normalized_homology_manifest_example_is_composable():
     )
 
 
-def test_output_admission_counts_serialized_tables_and_repeated_basis(monkeypatch):
+def test_output_admission_counts_domain_cells(monkeypatch):
     source = standard_simplex(1, 3)
     sizes = tuple(len(level) for level in source.sets)
     cells = sum(sizes[n - 1] * sizes[n] for n in range(1, len(sizes)))
-    source_bytes = len(source.model_dump_json().encode("utf-8"))
-    basis_bytes = len(
-        json.dumps(source.sets, ensure_ascii=True, separators=(",", ":")).encode(
-            "utf-8"
-        )
-    )
     expected = (
-        chains_module._CHAIN_RESULT_JSON_OVERHEAD_BOUND
-        + source_bytes
-        + basis_bytes
+        chains_module._CHAIN_RESULT_STRUCTURAL_CELLS
+        + 2 * sum(len(label) for level in source.sets for label in level)
         + 12 * cells
     )
-    assert chains_module._estimate_output_bytes(source, sizes) == expected
-    assert '"face_maps"' in source.model_dump_json()
-    assert '"degeneracy_maps"' in source.model_dump_json()
-
+    assert chains_module._estimate_output_cells(source, sizes) == expected
     monkeypatch.setattr(
-        chains_module, "MAX_UNNORMALIZED_CHAIN_OUTPUT_BYTES", expected - 1
+        chains_module, "MAX_UNNORMALIZED_CHAIN_OUTPUT_CELLS", expected - 1
     )
     with pytest.raises(OperationResourceAdmissionError):
         chains_module._preflight(source)
@@ -210,8 +200,8 @@ def test_normalized_chain_output_is_admitted_before_identity_replay(monkeypatch)
     monkeypatch.setattr(maps_module, "from_tables", reject)
     monkeypatch.setattr(
         maps_module,
-        "MAX_NORMALIZED_CHAIN_OUTPUT_BYTES",
-        maps_module._normalized_output_byte_bound(
+        "MAX_NORMALIZED_CHAIN_OUTPUT_CELLS",
+        maps_module._normalized_output_cells(
             source,
             sum(
                 len(source.sets[degree - 1]) * len(source.sets[degree])

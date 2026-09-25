@@ -11,9 +11,12 @@ from jacobian.math.topology.discrete_morse._models import (
     GradientPathsResult,
     IntegerMorseComplexRequest,
     IntegerMorseComplexResult,
+    MinimumMorseMatchingRequest,
+    MinimumMorseMatchingResult,
     MorseComplexRequest,
     MorseComplexResult,
 )
+from jacobian.math.topology.discrete_morse.extensions import minimum_matching
 from jacobian.math.topology.discrete_morse.extensions_tools import (
     TOOLS as EXTENSION_TOOLS,
 )
@@ -58,6 +61,12 @@ def _run_compute_integer_morse_complex(
     return compute_integer_morse_complex(canonical, request.pairs)
 
 
+def _run_minimum_matching(
+    request: MinimumMorseMatchingRequest,
+) -> MinimumMorseMatchingResult:
+    return minimum_matching(request)
+
+
 _CIRCLE_FACETS = {
     "vertices": ["a", "b", "c"],
     "facets": [["a", "b"], ["b", "c"], ["a", "c"]],
@@ -68,6 +77,11 @@ _INTERVAL_FACETS = {
     "facets": [["a", "b"]],
 }
 
+_TRIANGLE_FACETS = {
+    "vertices": ["a", "b", "c"],
+    "facets": [["a", "b", "c"]],
+}
+
 _CIRCLE_MATCHING_PAIRS = [
     {"face": ["a"], "coface": ["a", "b"]},
     {"face": ["c"], "coface": ["a", "c"]},
@@ -75,6 +89,36 @@ _CIRCLE_MATCHING_PAIRS = [
 
 TOOLS: MathTools = (
     *EXTENSION_TOOLS,
+    MathTool(
+        operation_id="topology.discrete_morse.matching.minimum.compute",
+        title="Compute a minimum-critical-cell acyclic matching",
+        description=(
+            "Exhaustively search the admitted finite face poset for an acyclic "
+            "matching with the minimum total number of critical cells. Ties use "
+            "the first optimum found by canonical lexicographic cover-pair order. "
+            "The operation rejects inputs whose complete search bound exceeds "
+            "its envelope; it never returns a partial incumbent as a minimum."
+        ),
+        request_type=MinimumMorseMatchingRequest,
+        result_type=MinimumMorseMatchingResult,
+        run=_run_minimum_matching,
+        tags=("topology", "discrete-morse", "minimum", "exact", "search"),
+        discovery_terms=(
+            "minimum critical cells",
+            "optimal discrete Morse matching",
+            "exact acyclic matching optimization",
+        ),
+        examples=(
+            OperationExample(
+                name="filled_triangle_minimum_matching",
+                description=(
+                    "Find an acyclic matching of a filled triangle with one "
+                    "critical vertex, the minimum possible total."
+                ),
+                input={"complex": _TRIANGLE_FACETS},
+            ),
+        ),
+    ),
     MathTool(
         operation_id="topology.discrete_morse.matching.construct",
         title="Construct and classify a discrete Morse matching",

@@ -21,8 +21,13 @@ from jacobian.math.topology._request_admission import (
 from jacobian.math.topology.discrete_morse._models import (
     DiscreteMorseMatchingResult,
     MatchingPair,
+    MinimumMorseMatchingRequest,
+    MinimumMorseMatchingResult,
 )
-from jacobian.math.topology.discrete_morse.operations import construct_matching
+from jacobian.math.topology.discrete_morse.operations import (
+    compute_minimum_matching,
+    construct_matching,
+)
 from jacobian.math.topology.operations import canonicalize
 
 MAX_COLLAPSE_SEQUENCE_STEPS = MAX_TOPOLOGY_FACES // 2
@@ -33,6 +38,13 @@ MAX_GREEDY_COLLAPSE_WORK = 60_000_000
 
 class GreedyMatchingRequest(StrictModel):
     complex: SimplicialComplexRequest
+
+
+def minimum_matching(
+    request: MinimumMorseMatchingRequest,
+) -> MinimumMorseMatchingResult:
+    complex_ = canonicalize(request.complex.vertices, request.complex.facets).complex
+    return compute_minimum_matching(complex_)
 
 
 class GreedyCollapseRequest(StrictModel):
@@ -286,7 +298,10 @@ __all__ = [
     "CollapseSequenceResult",
     "GreedyCollapseRequest",
     "GreedyMatchingRequest",
+    "MinimumMorseMatchingRequest",
+    "MinimumMorseMatchingResult",
     "collapse_sequence",
     "greedy_collapse",
     "greedy_matching",
+    "minimum_matching",
 ]

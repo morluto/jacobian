@@ -43,6 +43,7 @@ from jacobian.math.topology.discrete_morse._models import (
     GradientPathStep,
     IntegerMorseComplexResult,
     MatchingPair,
+    MinimumMorseMatchingResult,
     MorseBoundaryEntry,
     MorseComplexResult,
     MorseGradientStepKind,
@@ -53,6 +54,8 @@ from jacobian.math.topology.discrete_morse._models import (
 _WHITE, _GRAY, _BLACK = 0, 1, 2
 _DOWN = MorseGradientStepKind.DOWN
 _UP = MorseGradientStepKind.UP
+MAX_MINIMUM_MORSE_WORK = 20_000_000
+MAX_MINIMUM_MORSE_OUTPUT_BYTES = 8_000_000
 
 
 def _resource(
@@ -297,14 +300,7 @@ def construct_matching(
         for face in group:
             index_of[face] = len(flat)
             flat.append(face)
-    adjacency: list[list[int]] = [[] for _ in flat]
-    for face, coface in covers:
-        if matched.get(face) == coface:
-            adjacency[index_of[face]].append(index_of[coface])
-        else:
-            adjacency[index_of[coface]].append(index_of[face])
-
-    traversal = _iterative_cycle_or_order(cell_count, tuple(adjacency))
+    traversal = _matching_cycle_or_order(cell_count, covers, matched, index_of)
     if isinstance(traversal, _DirectedCycle):
         return DiscreteMorseMatchingResult._from_kernel(
             outcome=MorseMatchingOutcome.CYCLIC_MATCHING,
@@ -329,6 +325,109 @@ def construct_matching(
         fault=None,
         fault_message=None,
         fault_pair_index=None,
+    )
+
+
+def _matching_cycle_or_order(
+    cell_count: int,
+    covers: list[tuple[Simplex, Simplex]],
+    matched: dict[Simplex, Simplex],
+    index_of: dict[Simplex, int],
+) -> _DirectedTraversal:
+    """Classify one matching using the directed-Hasse convention above."""
+
+    adjacency: list[list[int]] = [[] for _ in range(cell_count)]
+    for face, coface in covers:
+        if matched.get(face) == coface:
+            adjacency[index_of[face]].append(index_of[coface])
+        else:
+            adjacency[index_of[coface]].append(index_of[face])
+    return _iterative_cycle_or_order(cell_count, tuple(adjacency))
+
+
+def compute_minimum_matching(
+    complex_: FiniteSimplicialComplex,
+) -> MinimumMorseMatchingResult:
+    """Exhaustively maximize matched pairs under a pre-admitted work bound."""
+
+    cells = _closure_cells(complex_)
+    covers = _cover_relations(cells)
+    cell_count = _admit_envelope(cells, (), covers)
+    # Every matching is a subset of the Hasse cover set. The binary search
+    # tree has fewer than 2**(E + 1) nodes; each node and leaf takes at most
+    # linear work in the source cells and cover edges.
+    state_bound = (1 << (len(covers) + 1)) - 1
+    work_bound = state_bound * (cell_count + len(covers) + 1)
+    if work_bound > MAX_MINIMUM_MORSE_WORK:
+        raise _resource(
+            "minimum_matching.admission.search_work",
+            f"complete minimum-matching search has a conservative work bound "
+            f"of {work_bound}, above the {MAX_MINIMUM_MORSE_WORK}-unit envelope",
+            ("complex",),
+        )
+    output_bytes_bound = (
+        4096
+        + 5 * cell_count * (complex_.dimension + 1) * 40
+        + 5 * cell_count * 64
+        + len(complex_.vertices) * 40
+    )
+    if output_bytes_bound > MAX_MINIMUM_MORSE_OUTPUT_BYTES:
+        raise _resource(
+            "minimum_matching.admission.output_bytes",
+            f"minimum-matching result has a conservative output bound of "
+            f"{output_bytes_bound} bytes, above the "
+            f"{MAX_MINIMUM_MORSE_OUTPUT_BYTES}-byte envelope",
+            ("complex",),
+        )
+
+    flat = tuple(face for group in cells for face in group)
+    index_of = {face: position for position, face in enumerate(flat)}
+    best_pairs: tuple[MatchingPair, ...] = ()
+    best_order = _matching_cycle_or_order(cell_count, covers, {}, index_of)
+    if not isinstance(best_order, _TopologicalOrder):
+        raise RuntimeError("the empty matching must be acyclic")
+    selected: list[MatchingPair] = []
+    used: set[Simplex] = set()
+
+    def search(position: int) -> None:
+        nonlocal best_pairs, best_order
+        if len(selected) + len(covers) - position <= len(best_pairs):
+            return
+        if position == len(covers):
+            matched = {pair.face: pair.coface for pair in selected}
+            traversal = _matching_cycle_or_order(cell_count, covers, matched, index_of)
+            if isinstance(traversal, _TopologicalOrder):
+                best_pairs = tuple(selected)
+                best_order = traversal
+            return
+
+        face, coface = covers[position]
+        if face not in used and coface not in used:
+            selected.append(MatchingPair(face=face, coface=coface))
+            used.update((face, coface))
+            search(position + 1)
+            used.remove(face)
+            used.remove(coface)
+            selected.pop()
+        search(position + 1)
+
+    search(0)
+    best_used = {cell for pair in best_pairs for cell in (pair.face, pair.coface)}
+    matching = DiscreteMorseMatchingResult._from_kernel(
+        outcome=MorseMatchingOutcome.ACYCLIC_MATCHING,
+        complex=complex_,
+        pairs=best_pairs,
+        critical_profile=_critical_profile(complex_, cells, best_used),
+        topological_order=tuple(flat[node] for node in best_order.nodes),
+        hasse_edges=len(covers),
+        closed_v_path=(),
+        fault=None,
+        fault_message=None,
+        fault_pair_index=None,
+    )
+    return MinimumMorseMatchingResult._from_kernel(
+        matching=matching,
+        minimum_critical_cell_count=cell_count - 2 * len(best_pairs),
     )
 
 

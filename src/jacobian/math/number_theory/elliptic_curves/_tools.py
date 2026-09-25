@@ -36,6 +36,8 @@ from jacobian.math.number_theory.elliptic_curves.finite_field import (
     FiniteFieldPointSet,
     FiniteFieldScalarRequest,
     FiniteFieldShortWeierstrassCurve,
+    FiniteFieldZetaFunctionResult,
+    FiniteFieldZetaPolynomialResult,
     finite_field_cardinality,
     finite_field_curve_base_change,
     finite_field_discriminant,
@@ -50,6 +52,8 @@ from jacobian.math.number_theory.elliptic_curves.finite_field import (
     finite_field_point_scalar,
     finite_field_points,
     finite_field_quadratic_twist,
+    finite_field_zeta_function,
+    finite_field_zeta_polynomial,
 )
 from jacobian.math.number_theory.elliptic_curves.operations import (
     add_points,
@@ -356,6 +360,59 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             OperationExample(
                 name="count_five_field",
                 description="Count the points over F5; exhaustive enumeration requires a nonsingular curve over a bounded finite field.",
+                input={"curve": _finite_curve()},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="elliptic_curve.finite_field.zeta.compute",
+        title="Compute the full finite-field elliptic zeta function",
+        description=(
+            "Return the exact rational function Z(E/F_q,T) = "
+            "(1 - a*T + q*T^2)/((1-T)(1-q*T)), with the curve, point count, "
+            "and Frobenius trace retained. The rational-function carrier is "
+            "normalized over QQ[T]."
+        ),
+        request_type=FiniteFieldCurveRequest,
+        result_type=FiniteFieldZetaFunctionResult,
+        run=lambda request: finite_field_zeta_function(request.curve),
+        tags=("elliptic-curve", "finite-field", "zeta", "frobenius", "exact"),
+        discovery_terms=(
+            "elliptic curve zeta function",
+            "full finite-field zeta rational function",
+        ),
+        examples=(
+            OperationExample(
+                name="zeta_function_over_five",
+                description=(
+                    "For y^2 = x^3 + x + 1 over F5, return "
+                    "(1 + 3*T + 5*T^2)/((1-T)(1-5*T))."
+                ),
+                input={"curve": _finite_curve()},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="elliptic_curve.finite_field.zeta_polynomial.compute",
+        title="Compute a finite-field elliptic zeta numerator",
+        description=(
+            "Return the exact numerator 1 - a*T + q*T^2 of the zeta function "
+            "for a nonsingular short-Weierstrass curve over a bounded finite "
+            "field, with a = q + 1 - #E(F_q). Coefficients are serialized in "
+            "descending degree order and the result retains the curve, count, "
+            "and trace."
+        ),
+        request_type=FiniteFieldCurveRequest,
+        result_type=FiniteFieldZetaPolynomialResult,
+        run=lambda request: finite_field_zeta_polynomial(request.curve),
+        tags=("elliptic-curve", "finite-field", "zeta", "frobenius", "exact"),
+        examples=(
+            OperationExample(
+                name="zeta_numerator_over_five",
+                description=(
+                    "For y^2 = x^3 + x + 1 over F5, return "
+                    "1 + 3*T + 5*T^2 in descending coefficient order."
+                ),
                 input={"curve": _finite_curve()},
             ),
         ),

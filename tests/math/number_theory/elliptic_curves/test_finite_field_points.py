@@ -1,5 +1,6 @@
 import json
 import math
+from fractions import Fraction
 
 import pytest
 import rfc8785
@@ -21,6 +22,7 @@ from jacobian.math.number_theory.elliptic_curves import (
 from jacobian.math.number_theory.elliptic_curves.finite_field import (
     FiniteFieldEllipticPoint,
     FiniteFieldShortWeierstrassCurve,
+    FiniteFieldZetaFunctionResult,
     finite_field_cardinality,
     finite_field_curve_base_change,
     finite_field_discriminant,
@@ -35,8 +37,10 @@ from jacobian.math.number_theory.elliptic_curves.finite_field import (
     finite_field_point_scalar,
     finite_field_points,
     finite_field_quadratic_twist,
+    finite_field_zeta_function,
     finite_field_zeta_polynomial,
 )
+from jacobian.math.polynomials.values import require_canonical_rational_function
 
 
 def test_finite_field_group_identities_and_cardinality() -> None:
@@ -775,6 +779,27 @@ def test_zeta_numerator_matches_independent_f5_and_f25_counts() -> None:
     assert f5.trace == -3
     assert f5.numerator.coefficients == (5, 3, 1)
 
+    full_zeta = finite_field_zeta_function(base_curve)
+    assert full_zeta.curve == base_curve
+    assert full_zeta.cardinality == f5_count
+    assert full_zeta.trace == -3
+    assert full_zeta.zeta_function.variables == ("T",)
+    assert {
+        term.exponents[0]: term.coefficient.as_fraction()
+        for term in full_zeta.zeta_function.numerator.terms
+    } == {2: 1, 1: Fraction(3, 5), 0: Fraction(1, 5)}
+    assert {
+        term.exponents[0]: term.coefficient.as_fraction()
+        for term in full_zeta.zeta_function.denominator.terms
+    } == {2: 1, 1: Fraction(-6, 5), 0: Fraction(1, 5)}
+    assert require_canonical_rational_function(full_zeta.zeta_function) == (
+        full_zeta.zeta_function
+    )
+    assert (
+        FiniteFieldZetaFunctionResult.model_validate_json(full_zeta.model_dump_json())
+        == full_zeta
+    )
+
     extension = FiniteFieldPresentation(
         characteristic=5, modulus_coefficients=(2, 0, 1), generator="b"
     )
@@ -814,6 +839,26 @@ def test_zeta_numerator_matches_independent_f5_and_f25_counts() -> None:
     q, linear, _constant = f5.numerator.coefficients
     a = -linear
     assert direct_f25_count == q**2 + 1 - (a**2 - 2 * q)
+
+
+def test_zeta_polynomial_is_publicly_discoverable_and_exact() -> None:
+    tool = Catalog.open().operation(
+        "elliptic_curve.finite_field.zeta_polynomial.compute"
+    )
+    assert tool is not None
+    result = invoke_operation(tool.operation_id, tool.examples[0].input, Catalog.open())
+    assert result.output["cardinality"] == 9
+    assert result.output["trace"] == -3
+    assert result.output["numerator"]["coefficients"] == ["5", "3", "1"]
+
+
+def test_full_zeta_function_is_publicly_discoverable() -> None:
+    tool = Catalog.open().operation("elliptic_curve.finite_field.zeta.compute")
+    assert tool is not None
+    result = invoke_operation(tool.operation_id, tool.examples[0].input, Catalog.open())
+    assert result.output["cardinality"] == 9
+    assert result.output["trace"] == -3
+    assert result.output["zeta_function"]["variables"] == ["T"]
 
 
 def test_curve_and_point_transport_along_explicit_f5_to_f25_embedding() -> None:

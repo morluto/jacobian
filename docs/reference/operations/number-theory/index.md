@@ -2,6 +2,7 @@
 
 - [Finite-field elliptic extension counts](elliptic-curve-extension-counts.md)
 - [Finite-field elliptic zeta numerator](elliptic-curve-zeta-polynomial.md)
+- [Finite-field elliptic zeta function](elliptic-curve-zeta-function.md)
 - [Finite-field elliptic curve base change](elliptic-curve-base-change.md)
 - [Finite-field elliptic model isomorphism](elliptic-curve-isomorphism.md)
 - [Finite-field elliptic isogeny classes](elliptic-curve-isogeny-class.md)

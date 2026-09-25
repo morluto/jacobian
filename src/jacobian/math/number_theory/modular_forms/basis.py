@@ -2460,7 +2460,7 @@ def modular_form_hecke_matrix(
             code="modular_form.hecke_matrix_source_bound",
             message="Hecke matrix requires basis coefficients beyond the admitted source order",
         )
-    plan = _admit_basis(space, source_order)
+    plan = _admit_basis(space, source_order, materialize_pari=False)
     term_count = 2 * isqrt(index) + 1
     work = (
         plan.dimension * precision * index
@@ -2516,6 +2516,8 @@ def modular_form_hecke_matrix(
             message="Hecke matrix exact entries exceed the bounded output envelope",
         )
 
+    if plan.basis_id == PARI_STURM_RREF_BASIS_ID:
+        plan = _materialize_pari_basis(plan)
     basis_vectors = _basis_coefficients(plan)
     columns = []
     for vector in basis_vectors:

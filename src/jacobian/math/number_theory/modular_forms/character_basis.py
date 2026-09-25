@@ -334,6 +334,10 @@ def modular_character_coordinates_equal(
     )
     if left_zero and right_zero:
         return True
+    if left_zero or right_zero:
+        return False
+    if left_admitted[2] == right_admitted[2]:
+        return True
     basis = _character_basis_from_admission(
         left_space, left_admitted[1], left_admitted[3]
     )

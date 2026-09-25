@@ -282,8 +282,18 @@ def cokernel_of_morphism(
         source_map = tuple(tuple(field.parse(x) for x in row) for row in item.entries)
         target_item = target_cover[(item.source, item.target)]
         target_map = tuple(tuple(field.parse(x) for x in row) for row in target_item.entries)
-        left = field.matmul(components[item.target], source_map)
-        right = field.matmul(target_map, components[item.source])
+        left = _mul(
+            [list(row) for row in components[item.target]],
+            [list(row) for row in source_map],
+            field.prime,
+            output_width=len(source_stalks[item.source].basis),
+        )
+        right = _mul(
+            [list(row) for row in target_map],
+            [list(row) for row in components[item.source]],
+            field.prime,
+            output_width=len(source_stalks[item.source].basis),
+        )
         if left != right:
             raise _domain("morphism_not_natural", "cokernel requires a natural morphism")
     checked = SheafMorphismResult(

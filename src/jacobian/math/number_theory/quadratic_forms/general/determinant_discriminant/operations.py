@@ -5,7 +5,12 @@ from __future__ import annotations
 from fractions import Fraction
 from math import gcd, lcm
 
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian._execution import request_checkpoint
+from jacobian.canonical import decimal_digit_width
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.number_theory.quadratic_forms.general.determinant_discriminant._models import (
     MAX_POLAR_DETERMINANT_AXIS,
     MAX_POLAR_DETERMINANT_INTERMEDIATE_DIGITS,
@@ -20,8 +25,9 @@ from jacobian.math.number_theory.quadratic_forms.general.determinant_discriminan
 
 
 def _digits(value: str | int) -> int:
-    text = value if isinstance(value, str) else str(abs(value))
-    return len(text.lstrip("-"))
+    return (
+        len(value.lstrip("-")) if isinstance(value, str) else decimal_digit_width(value)
+    )
 
 
 def _ceil_log10(value: int) -> int:
@@ -41,6 +47,13 @@ def _preflight(
     exact intermediate before the kernel starts.
     """
 
+    if not isinstance(request, DeterminantDiscriminantRequest):
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="quadratic_form.determinant_request_type",
+            message="request must be a DeterminantDiscriminantRequest",
+        )
+    request_checkpoint("before quadratic-form determinant admission")
     form = request.form
     n = len(form.axis)
     support = n + len(form.cross_terms)
@@ -180,7 +193,9 @@ def _bareiss_determinant(matrix: list[list[int]]) -> int:
         return 1
     sign = 1
     previous_pivot = 1
+    request_checkpoint("before Bareiss determinant elimination")
     for pivot_index in range(n - 1):
+        request_checkpoint("during Bareiss determinant elimination")
         pivot_row = next(
             (row for row in range(pivot_index, n) if matrix[row][pivot_index] != 0),
             None,
@@ -215,6 +230,7 @@ def polar_gram_determinant_discriminant(
     """Return ``det(G)`` and ``(-1)^(n(n-1)/2) det(G)`` exactly."""
 
     _preflight(request)
+    request_checkpoint("before polar Gram matrix construction")
     rows = _polar_gram_rows(request)
     if not rows:
         return DeterminantDiscriminantResult._from_kernel(
@@ -229,6 +245,7 @@ def polar_gram_determinant_discriminant(
         for index, row in enumerate(rows)
     ]
     integer_determinant = _bareiss_determinant(integer_matrix)
+    request_checkpoint("before determinant result construction")
     denominator = 1
     for row_denominator in row_denominators:
         denominator *= row_denominator

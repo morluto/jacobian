@@ -129,7 +129,9 @@ def _require_inflation_map(
         source_char.group.modulus != source.level
         or target_char.group.modulus != target.level
     ):
-        _domain("character inflation moduli must bind their exact source and target levels")
+        _domain(
+            "character inflation moduli must bind their exact source and target levels"
+        )
     # Prove the authored map is pullback along residue reduction, on every
     # target unit. This is bounded by the admitted target level (at most 39).
     for residue in range(target.level):
@@ -176,7 +178,9 @@ def _admit_transport(
             or type(form.coordinates[0]) is not RationalCyclotomicElement
             or form.coordinates[0].field != field
         ):
-            _domain("legacy character coordinates are admitted only in the level-13 cusp source")
+            _domain(
+                "legacy character coordinates are admitted only in the level-13 cusp source"
+            )
         for coordinate in form.coordinates:
             cyclotomic._validate_element(coordinate)
     else:
@@ -185,9 +189,14 @@ def _admit_transport(
             or len(form.coordinates) != source_cusp
             or source_space.level == 13
         ):
-            _domain("general character coordinates must match a level-26 or level-39 cusp basis")
+            _domain(
+                "general character coordinates must match a level-26 or level-39 cusp basis"
+            )
         for coordinate in form.coordinates:
-            if type(coordinate) is not RationalCyclotomicElement or coordinate.field != field:
+            if (
+                type(coordinate) is not RationalCyclotomicElement
+                or coordinate.field != field
+            ):
                 _domain("every character coordinate must use the exact declared field")
             cyclotomic._validate_element(coordinate)
 
@@ -220,11 +229,12 @@ def _admit_transport(
     target_expansion_digits = (
         source_expansion_digits
         if same_space
-        else _linear_combination_digit_bound(
-            source_expansion_digits, target_cusp
-        )
+        else _linear_combination_digit_bound(source_expansion_digits, target_cusp)
     )
-    if max(source_expansion_digits, target_expansion_digits) > MAX_CYCLIC_FIELD_ELEMENT_DIGITS:
+    if (
+        max(source_expansion_digits, target_expansion_digits)
+        > MAX_CYCLIC_FIELD_ELEMENT_DIGITS
+    ):
         raise OperationResourceAdmissionError(
             location=("form",),
             code="modular_form.character_transport_height_admission",
@@ -322,9 +332,7 @@ def _coordinates_from_prefix(
 
 
 def _linear_combination_from_coordinates(coordinates, basis):
-    return _expand_coordinate_tuple(
-        coordinates, basis, basis.space.coefficient_domain
-    )
+    return _expand_coordinate_tuple(coordinates, basis, basis.space.coefficient_domain)
 
 
 def _transport_from_bases(
@@ -409,7 +417,9 @@ def modular_character_coordinates_equal_in_common_space(
             message="both forms must land in the identical common target space",
         )
     if left_admitted.field != right_admitted.field:
-        _domain("common-target character equality requires the identical coefficient field")
+        _domain(
+            "common-target character equality requires the identical coefficient field"
+        )
     request_checkpoint("before common character target basis materialization")
     target_basis = _basis(
         target,

@@ -41,7 +41,10 @@ def _validate_raw_shape(
 ) -> tuple[BinaryVoxels3DRequest, int, int, int, int]:
     if type(request) is not BinaryVoxels3DRequest:
         _reject("voxel_grid_request_type", "request must be a BinaryVoxels3DRequest")
-    voxels = request.voxels
+    try:
+        voxels = request.voxels
+    except AttributeError:
+        _reject("voxel_grid_carrier_shape", "request must contain a voxel grid", "voxels")
     if type(voxels) is not tuple or not 1 <= len(voxels) <= MAX_CUBICAL_VOXEL_GRID_SIDE:
         _reject(
             "voxel_grid_depth_bound", "voxel grid depth is outside its bound", "voxels"
@@ -160,7 +163,19 @@ def binary_voxels_to_complex(request: BinaryVoxels3DRequest) -> CubicalComplex:
                 f"limit of {MAX_CUBICAL_VOXEL_FACE_CANDIDATES}"
             ),
         )
-    output_cell_bound = min(candidate_bound, MAX_FACE_CELLS)
+    # Each interval coordinate has at most side+1 vertex positions. A sound
+    # occupancy-independent closure bound is the complete grid's cell count;
+    # intersect it with generated candidates, never the canonical cap itself.
+    output_cell_bound = min(
+        candidate_bound,
+        (2 * width + 1) * (2 * height + 1) * (2 * depth + 1),
+    )
+    if output_cell_bound > MAX_FACE_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("voxels",),
+            code="cubical_complex.voxel_grid_face_bound_exceeded",
+            message="voxel face closure exceeds the canonical complex cell limit",
+        )
     sort_work_bound = output_cell_bound * max(1, ceil(log2(max(2, output_cell_bound))))
     construction_work_bound = (
         voxel_count + candidate_bound + sort_work_bound + 8 * output_cell_bound

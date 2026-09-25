@@ -278,6 +278,14 @@ def theta_selected_coefficients(
             code="quadratic_form.theta_invalid_request",
             message="selected theta coefficients require a selected-coefficients request",
         )
+    try:
+        request = ThetaSelectedCoefficientsRequest.model_validate(request.model_dump())
+    except Exception as error:
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="quadratic_form.theta_invalid_request",
+            message="selected theta coefficients received a structurally invalid request",
+        ) from error
     form = request.form
     if not isinstance(form, RationalQuadraticForm):
         raise OperationDomainValidationError(

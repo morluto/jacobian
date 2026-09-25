@@ -163,6 +163,27 @@ def test_selected_theta_request_requires_canonical_bounded_indices(
         ThetaSelectedCoefficientsRequest(form=_form((1,)), indices=indices)
 
 
+def test_selected_theta_native_boundary_revalidates_nested_form_and_schema() -> None:
+    form = _form((1,))
+    forged_form = form.model_copy(update={
+        "cross_terms": (QuadraticCrossTerm.model_construct(
+            left=0, right=4, coefficient=CanonicalRational(num=1, den=1)
+        ),)
+    })
+    request = ThetaSelectedCoefficientsRequest.model_construct(
+        form=forged_form, indices=(0,)
+    )
+    with pytest.raises(OperationDomainValidationError) as exc_info:
+        theta_selected_coefficients(request)
+    assert exc_info.value.errors()[0]["type"] == "quadratic_form.theta_invalid_request"
+
+    schema = ThetaSelectedCoefficientsRequest.model_json_schema()
+    item = schema["properties"]["indices"]["items"]
+    assert item["type"] == "integer"
+    assert item["minimum"] == 0
+    assert item["maximum"] == 1_000_000_000
+
+
 def test_selected_theta_admission_bounds_proved_search_box() -> None:
     form = _form((1, 1, 1, 1, 1, 1, 1))
     with pytest.raises(

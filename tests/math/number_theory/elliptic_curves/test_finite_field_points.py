@@ -34,6 +34,7 @@ from jacobian.math.number_theory.elliptic_curves.finite_field import (
     finite_field_isomorphism,
     finite_field_point_add,
     finite_field_point_check,
+    finite_field_point_membership_in_generated_subgroup,
     finite_field_point_negate,
     finite_field_point_order,
     finite_field_point_scalar,
@@ -63,6 +64,73 @@ def test_finite_field_group_identities_and_cardinality() -> None:
     result = finite_field_cardinality(curve)
     assert result.cardinality == len(points)
     assert result.trace == 5 + 1 - len(points)
+
+
+def test_generated_subgroup_membership_matches_hand_computed_f5_subgroup() -> None:
+    field = FiniteFieldPresentation(
+        characteristic=5, modulus_coefficients=(0, 1), generator="a"
+    )
+    one = FiniteFieldElement(presentation=field, coordinates=(1,))
+    curve = FiniteFieldShortWeierstrassCurve(
+        field=field, coefficient_a=one, coefficient_b=one
+    )
+
+    def point(x: int, y: int) -> FiniteFieldEllipticPoint:
+        return FiniteFieldEllipticPoint.affine(
+            curve,
+            FiniteFieldElement(presentation=field, coordinates=(x,)),
+            FiniteFieldElement(presentation=field, coordinates=(y,)),
+        )
+
+    # Direct chord-and-tangent arithmetic gives 2(2,1)=(2,4) and
+    # (2,1)+(2,4)=O, so these three points are precisely the subgroup.
+    generator = point(2, 1)
+    member = point(2, 4)
+    outside = point(0, 1)
+    yes = finite_field_point_membership_in_generated_subgroup(
+        curve, (generator,), member
+    )
+    no = finite_field_point_membership_in_generated_subgroup(
+        curve, (generator,), outside
+    )
+    trivial_member = finite_field_point_membership_in_generated_subgroup(
+        curve, (), FiniteFieldEllipticPoint.infinity(curve)
+    )
+    trivial_nonmember = finite_field_point_membership_in_generated_subgroup(
+        curve, (), outside
+    )
+
+    assert yes.belongs is True
+    assert no.belongs is False
+    assert trivial_member.belongs is True
+    assert trivial_nonmember.belongs is False
+    assert yes.generators == (generator,)
+    assert yes.candidate == member
+
+
+def test_subgroup_membership_admits_before_expanding(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    field = FiniteFieldPresentation(
+        characteristic=5003, modulus_coefficients=(0, 1), generator="a"
+    )
+    one = FiniteFieldElement(presentation=field, coordinates=(1,))
+    curve = FiniteFieldShortWeierstrassCurve(
+        field=field, coefficient_a=one, coefficient_b=one
+    )
+    identity = FiniteFieldEllipticPoint.infinity(curve)
+    monkeypatch.setattr(
+        finite_field_module,
+        "_add_points_admitted",
+        lambda *_args: pytest.fail("work admission must precede closure expansion"),
+    )
+
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        finite_field_point_membership_in_generated_subgroup(curve, (), identity)
+
+    assert error.value.errors()[0]["type"] == (
+        "elliptic_curve.finite_field.subgroup_order_bound"
+    )
 
 
 def test_frobenius_data_and_supersingularity_match_direct_f5_oracle() -> None:
@@ -204,6 +272,19 @@ def test_model_isomorphism_public_example_composes_through_dispatch() -> None:
     )
     assert result.output["isomorphic"] is True
     assert result.output["scaling"] is not None
+
+
+def test_generated_subgroup_membership_is_publicly_discoverable() -> None:
+    catalog = Catalog.open()
+    operation = catalog.operation(
+        "elliptic_curve.finite_field.point.membership_in_generated_subgroup.decide"
+    )
+    assert operation is not None
+    result = invoke_operation(
+        operation.operation_id, operation.examples[0].input, catalog
+    )
+    assert result.output["belongs"] is True
+    assert len(result.output["generators"]) == 1
 
 
 def test_model_isomorphism_bounds_complete_search_before_field_arithmetic(

@@ -22,6 +22,8 @@ from jacobian.math.geometry.polytopes._models import (
 )
 from jacobian.math.geometry.polytopes.complexes._models import (
     ComplexPoint,
+    GlobalPolynomialProfileRequest,
+    GlobalPolynomialProfileResult,
     PieceAssignment,
     PieceCompatibilityRow,
     PiecewiseEvaluationResult,
@@ -356,6 +358,56 @@ def piecewise_polynomial_from_maximal_pieces(
         pieces=ordered_pieces,
         compatibility=tuple(rows),
         status="COMPATIBLE",
+    )
+
+
+def piecewise_polynomial_global_profile(
+    request: GlobalPolynomialProfileRequest,
+) -> GlobalPolynomialProfileResult:
+    """Determine whether full-dimensional cell pieces are one ambient polynomial.
+
+    On a full-dimensional polytope, restriction of a rational polynomial is
+    injective. Therefore one piece is the only possible global candidate, and
+    exact canonical coefficient equality on every other full-dimensional cell
+    is both necessary and sufficient. Lower-dimensional maximal cells are
+    rejected because their restrictions do not determine an ambient extension.
+    """
+    if not isinstance(request, GlobalPolynomialProfileRequest):
+        _reject("global_profile_request", "expected a canonical profile request")
+    function = request.function
+    try:
+        payload = function.model_dump(mode="python")
+        function = PiecewisePolynomialResult.model_validate(payload)
+    except Exception:
+        _reject("global_profile_input", "expected a canonical piecewise function")
+    if function.model_dump(mode="python") != payload:
+        _reject("global_profile_input", "piecewise function must be canonical")
+    if function.status != "COMPATIBLE":
+        _reject("global_profile_input", "function must be continuous on its complex")
+
+    # Rebuild geometry and continuity rather than trusting serialized claims.
+    canonical_function = piecewise_polynomial_from_maximal_pieces(
+        function.complex, function.pieces
+    )
+    if canonical_function.status != "COMPATIBLE":
+        _reject("global_profile_input", "function pieces are not continuous")
+    dimension = len(canonical_function.complex.space.axes)
+    if any(
+        cell.dimension != dimension for cell in canonical_function.complex.maximal_cells
+    ):
+        _reject(
+            "global_profile_dimension",
+            "all maximal cells must be full-dimensional to determine an ambient polynomial",
+        )
+
+    candidate = canonical_function.pieces[0].polynomial
+    is_global = all(
+        piece.polynomial == candidate for piece in canonical_function.pieces[1:]
+    )
+    return GlobalPolynomialProfileResult(
+        function=canonical_function,
+        status="GLOBAL_POLYNOMIAL" if is_global else "NOT_GLOBAL_POLYNOMIAL",
+        polynomial=candidate if is_global else None,
     )
 
 

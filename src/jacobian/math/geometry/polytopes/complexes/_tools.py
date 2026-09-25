@@ -6,6 +6,8 @@ from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.geometry.polytopes.complexes._models import (
     CommonRefinementRequest,
     CommonRefinementResult,
+    GlobalPolynomialProfileRequest,
+    GlobalPolynomialProfileResult,
     PiecewiseEvaluationRequest,
     PiecewiseEvaluationResult,
     PiecewisePolynomialAdditionRequest,
@@ -29,6 +31,7 @@ from jacobian.math.geometry.polytopes.complexes.operations import (
     piecewise_polynomial_add,
     piecewise_polynomial_evaluate,
     piecewise_polynomial_from_maximal_pieces,
+    piecewise_polynomial_global_profile,
     piecewise_polynomial_multiply,
     piecewise_polynomial_smoothness,
     polytopal_complex_affine_transform,
@@ -145,6 +148,12 @@ def _run_spline_dimension(
     request: SplineDimensionRequest,
 ) -> SplineDimensionResult:
     return spline_dimension(request)
+
+
+def _run_global_polynomial_profile(
+    request: GlobalPolynomialProfileRequest,
+) -> GlobalPolynomialProfileResult:
+    return piecewise_polynomial_global_profile(request)
 
 
 def _run_common_refinement(request: CommonRefinementRequest) -> CommonRefinementResult:
@@ -505,6 +514,41 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                         "status": "COMPATIBLE",
                     },
                     "point": {"coordinates": [{"num": "1", "den": "2"}]},
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="piecewise_polynomial.global_polynomial_profile.compute",
+        title="Check whether compatible pieces are one ambient polynomial",
+        description=(
+            "For a continuous piecewise-polynomial function on a complex whose "
+            "maximal cells are all full-dimensional, determine whether every "
+            "cell carries the same ambient rational polynomial. Full dimension "
+            "makes restriction injective, so exact coefficient comparison is "
+            "complete. The source function and global polynomial are retained; "
+            "lower-dimensional maximal cells are rejected because they do not "
+            "determine an ambient extension."
+        ),
+        request_type=GlobalPolynomialProfileRequest,
+        result_type=GlobalPolynomialProfileResult,
+        run=_run_global_polynomial_profile,
+        tags=("geometry", "piecewise-polynomial", "global-polynomial"),
+        discovery_terms=(
+            "is a piecewise polynomial globally polynomial",
+            "single ambient polynomial profile",
+        ),
+        examples=(
+            OperationExample(
+                name="constant_segment_is_global",
+                description="The same constant on every full-dimensional cell is one global polynomial.",
+                input={
+                    "function": {
+                        "complex": _COMPLEX,
+                        "pieces": [{"cell_id": "M0", "polynomial": _POLY}],
+                        "compatibility": [],
+                        "status": "COMPATIBLE",
+                    }
                 },
             ),
         ),

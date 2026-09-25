@@ -38,6 +38,16 @@ so its matrix and nullity survive JSON transport with their mathematical
 meaning intact. For an unconstrained one-cell space, the matrix has zero rows
 and retains its full coefficient width.
 
+`piecewise_polynomial.global_polynomial_profile.compute` checks whether a
+continuous piecewise polynomial on full-dimensional maximal cells is the
+restriction of one ambient polynomial. Restriction to any full-dimensional
+cell is injective, so the first cell polynomial is the only possible candidate;
+exact coefficient comparison on all remaining cells proves or refutes the
+profile. The result retains the canonical piecewise function and, when it
+exists, the global polynomial. Lower-dimensional maximal cells are outside
+this operation's domain because their restrictions do not determine a unique
+ambient polynomial.
+
 ## Affine transport
 
 `polytopal_complex.affine_transform.compute` applies `x -> A*x+b` to every

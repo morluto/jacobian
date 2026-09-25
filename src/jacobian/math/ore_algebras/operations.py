@@ -631,7 +631,11 @@ def _preflight_shift_power_stages(operator: ShiftOreOperator, exponent: int) -> 
                 code="ore_algebra.shift_power_term_bound",
                 message="a shift-operator power stage may exceed the sparse term bound",
             )
-        stages = _finish_shift_power_stage(next_stage, stage + 1)
+        stages = _finish_shift_power_stage(
+            next_stage,
+            stage + 1,
+            final=stage == exponent - 1,
+        )
 
 
 def _shift_power_pair_profile(
@@ -667,7 +671,7 @@ def _shift_power_pair_profile(
 
 
 def _finish_shift_power_stage(
-    stage: dict[int, tuple[int, int, int, int]], stage_number: int
+    stage: dict[int, tuple[int, int, int, int]], stage_number: int, *, final: bool
 ) -> dict[int, tuple[int, int, int]]:
     """Check one predicted stage against reusable operator input bounds."""
 
@@ -675,11 +679,10 @@ def _finish_shift_power_stage(
     for exponent, (degree, terms, digits, pair_count) in stage.items():
         digits += len(str(pair_count - 1)) if pair_count > 1 else 0
         terms = min(degree + 1, terms)
-        if (
-            degree > MAX_SHIFT_COEFFICIENT_DEGREE
-            or terms > MAX_SHIFT_COEFFICIENT_TERMS
-            or digits > MAX_SHIFT_COEFFICIENT_DIGITS
-        ):
+        degree_limit = MAX_SHIFT_RESULT_DEGREE if final else MAX_SHIFT_COEFFICIENT_DEGREE
+        term_limit = MAX_SHIFT_TERMS if final else MAX_SHIFT_COEFFICIENT_TERMS
+        digit_limit = MAX_SHIFT_RESULT_DIGITS if final else MAX_SHIFT_COEFFICIENT_DIGITS
+        if degree > degree_limit or terms > term_limit or digits > digit_limit:
             raise OperationResourceAdmissionError(
                 location=("exponent", stage_number),
                 code="ore_algebra.shift_power_intermediate_bound",
@@ -1065,7 +1068,10 @@ def shift_operator_normalize_polynomial_coefficients(
         output_weight += 256
         for value in polynomial.values():
             multiplier = lcm_denominators // value.denominator
-            normalized_digits = _digit_count(value.numerator) + _digit_count(multiplier)
+            normalized_numerator = (
+                value.numerator * multiplier // common_numerator
+            )
+            normalized_digits = _digit_count(normalized_numerator)
             if normalized_digits > MAX_RATIONAL_FUNCTION_COEFFICIENT_DIGITS:
                 raise OperationResourceAdmissionError(
                     location=("operator", "terms"),
@@ -1300,14 +1306,18 @@ def shift_operator_apply_to_sequence_prefix(
     """
     operator_value = _as_operator(operator)
     operator_value = _admit_shift_operator(operator_value, label="operator")
+    if not isinstance(start_index, int) or isinstance(start_index, bool):
+        raise OperationDomainValidationError(
+            location=("start_index",),
+            code="ore_algebra.shift_prefix_start_index",
+            message="start_index must be an integer",
+        )
     try:
         sequence_value = FiniteRationalSequence.model_validate(
             sequence.model_dump()
             if isinstance(sequence, FiniteRationalSequence)
             else sequence
         )
-        if not isinstance(start_index, int) or isinstance(start_index, bool):
-            raise ValueError("start_index must be an integer")
         end_index = start_index + len(sequence_value.values)
     except Exception as exc:
         raise OperationDomainValidationError(
@@ -1916,7 +1926,10 @@ def differential_operator_normalize_polynomial_coefficients(
         output_weight += 256
         for coefficient in polynomial.values():
             multiplier = denominator_lcm // coefficient.denominator
-            digits = _digit_count(coefficient.numerator) + _digit_count(multiplier)
+            normalized_numerator = (
+                coefficient.numerator * multiplier // numerator_gcd
+            )
+            digits = _digit_count(normalized_numerator)
             if digits > MAX_RATIONAL_FUNCTION_COEFFICIENT_DIGITS:
                 raise OperationResourceAdmissionError(
                     location=("operator", "terms"),

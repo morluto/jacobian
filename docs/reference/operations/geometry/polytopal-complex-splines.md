@@ -85,6 +85,18 @@ arithmetic, the operation bounds the union of terms per cell, rational scalar
 growth, and the compatibility-reduction work. It rejects results requiring
 more than 4096 terms in any piece.
 
+## Rational scalar multiplication
+
+`piecewise_polynomial.scalar_multiply.compute` multiplies every cell
+polynomial by one exact rational scalar. It rechecks continuity from the
+polynomial pieces and returns the complete shared-face compatibility profile.
+The zero scalar returns the zero function on the same complex, including its
+full zero compatibility ledger. Together with addition, this supplies the
+`QQ`-vector-space operations on a fixed complex and polynomial degree bound;
+the linearity follows because each face-restriction condition is linear in the
+piece coefficients. Admission bounds every product coefficient and the full
+result before constructing scaled polynomials.
+
 ## Multiplication of compatible functions
 
 `piecewise_polynomial.multiply.compute` takes two `COMPATIBLE` values on the

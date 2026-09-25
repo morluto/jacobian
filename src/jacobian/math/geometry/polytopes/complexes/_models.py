@@ -360,6 +360,13 @@ class PiecewisePolynomialMultiplicationRequest(StrictModel):
     right: PiecewisePolynomialResult
 
 
+class PiecewisePolynomialScalarMultiplicationRequest(StrictModel):
+    """Multiply a compatible piecewise-polynomial function by a rational scalar."""
+
+    function: PiecewisePolynomialResult
+    scalar: CanonicalRational
+
+
 class PiecewiseEvaluationRequest(StrictModel):
     function: PiecewisePolynomialResult
     point: ComplexPoint

@@ -10,7 +10,12 @@ from typing import Any, NoReturn
 import sympy as sp
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
-from jacobian.canonical import decimal_digit_width
+from jacobian.canonical import (
+    CanonicalizationError,
+    CanonicalLimits,
+    decimal_digit_width,
+    encode_strict_json,
+)
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -29,6 +34,7 @@ from jacobian.math.geometry.polytopes.complexes._models import (
     PiecewisePolynomialAdditionRequest,
     PiecewisePolynomialMultiplicationRequest,
     PiecewisePolynomialResult,
+    PiecewisePolynomialScalarMultiplicationRequest,
     PiecewiseSmoothnessRequest,
     PiecewiseSmoothnessResult,
     PolytopalComplexClosureResult,
@@ -554,6 +560,137 @@ def piecewise_polynomial_add(  # noqa: C901
         complex=left_checked.complex,
         pieces=tuple(sum_pieces),
         compatibility=left_checked.compatibility,
+        status="COMPATIBLE",
+    )
+
+
+def piecewise_polynomial_scalar_multiply(  # noqa: C901
+    request: PiecewisePolynomialScalarMultiplicationRequest,
+) -> PiecewisePolynomialResult:
+    """Scale one compatible piecewise polynomial over QQ exactly.
+
+    Compatibility is reconstructed from the supplied cell polynomials, so a
+    serialized caller status or ledger is never treated as a proof.  Rational
+    coefficient heights and the complete output are admitted before products
+    are materialized.
+    """
+    if not isinstance(request, PiecewisePolynomialScalarMultiplicationRequest):
+        _reject(
+            "scalar_multiplication_type", "expected a scalar multiplication request"
+        )
+    try:
+        request_payload = request.model_dump(mode="python")
+        request = PiecewisePolynomialScalarMultiplicationRequest.model_validate(
+            request_payload
+        )
+    except Exception:
+        _reject("scalar_multiplication_input", "request fields must be canonical")
+    if request_payload != request.model_dump(mode="python"):
+        _reject("scalar_multiplication_input", "request fields must be canonical")
+    function = request.function
+    try:
+        payload = function.model_dump(mode="python")
+        function = PiecewisePolynomialResult.model_validate(payload)
+    except Exception:
+        _reject(
+            "scalar_multiplication_input",
+            "expected a canonical piecewise-polynomial value",
+        )
+    if payload != function.model_dump(mode="python"):
+        _reject(
+            "scalar_multiplication_input",
+            "piecewise-polynomial value must be canonical",
+        )
+    if function.status != "COMPATIBLE":
+        _reject(
+            "scalar_multiplication_continuity",
+            "only compatible functions can be scaled",
+        )
+    scalar = request.scalar.as_fraction()
+    scalar_component_digits = max(
+        _decimal_digits_upper(scalar.numerator),
+        _decimal_digits_upper(scalar.denominator),
+    )
+    if scalar_component_digits > MAX_CANONICAL_RATIONAL_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("scalar",),
+            code="polytopal_complex.scalar_multiplication_scalar",
+            message="scalar exceeds the admitted rational digit envelope",
+        )
+    output_digits = 0
+    total_terms = 0
+    if scalar:
+        for piece in function.pieces:
+            terms = piece.polynomial.polynomial.terms
+            total_terms += len(terms)
+            for term in terms:
+                coefficient = term.coefficient.as_fraction()
+                numerator_digits = _decimal_digits_upper(
+                    coefficient.numerator
+                ) + _decimal_digits_upper(scalar.numerator)
+                denominator_digits = _decimal_digits_upper(
+                    coefficient.denominator
+                ) + _decimal_digits_upper(scalar.denominator)
+                if (
+                    max(numerator_digits, denominator_digits)
+                    > MAX_CANONICAL_RATIONAL_DIGITS
+                ):
+                    raise OperationResourceAdmissionError(
+                        location=("scalar",),
+                        code="polytopal_complex.scalar_multiplication_growth",
+                        message="a scaled coefficient may exceed the canonical rational digit envelope",
+                    )
+                output_digits += numerator_digits + denominator_digits
+    try:
+        input_bytes = len(encode_strict_json(function.model_dump(mode="json")))
+    except CanonicalizationError as exc:
+        raise OperationResourceAdmissionError(
+            location=("function",),
+            code="polytopal_complex.scalar_multiplication_output",
+            message="piecewise-polynomial output exceeds the canonical JSON envelope",
+        ) from exc
+    output_bound = output_digits + 64 * total_terms + input_bytes
+    if output_bound > CanonicalLimits().max_output_bytes:
+        raise OperationResourceAdmissionError(
+            location=("function",),
+            code="polytopal_complex.scalar_multiplication_output",
+            message="scaled piecewise-polynomial output exceeds the admitted envelope",
+        )
+    checked = piecewise_polynomial_from_maximal_pieces(
+        function.complex, function.pieces
+    )
+    if checked.status != "COMPATIBLE":
+        _reject(
+            "scalar_multiplication_continuity",
+            "function continuity claims must be exact",
+        )
+    pieces = []
+    for piece in checked.pieces:
+        terms = []
+        for term in piece.polynomial.polynomial.terms:
+            coefficient = term.coefficient.as_fraction() * scalar
+            if coefficient:
+                terms.append(
+                    RationalPolynomialTerm(
+                        coefficient=CanonicalRational.from_fraction(coefficient),
+                        exponents=term.exponents,
+                    )
+                )
+        pieces.append(
+            PieceAssignment(
+                cell_id=piece.cell_id,
+                polynomial=RationalPolynomial(
+                    variables=piece.polynomial.variables,
+                    polynomial=SparseRationalPolynomial(terms=tuple(terms)),
+                ),
+            )
+        )
+    # Scalar multiplication is linear on every shared-face restriction, so
+    # the exact zero compatibility rows remain zero, including for scalar 0.
+    return PiecewisePolynomialResult(
+        complex=checked.complex,
+        pieces=tuple(pieces),
+        compatibility=checked.compatibility,
         status="COMPATIBLE",
     )
 

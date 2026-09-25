@@ -2,15 +2,12 @@ import pytest
 
 import jacobian.math.topology.cubical_complexes._cell_vertices as cell_vertices_module
 from jacobian.canonical import encode_strict_json
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationResourceAdmissionError
-from jacobian.dispatch import invoke_operation
 from jacobian.math.topology.cubical_complexes import (
-    CubicalCellVerticesRequest,
+    CubicalCellVerticesResult,
     cell_vertices,
 )
 from jacobian.math.topology.cubical_complexes._models import CubicalCell
-from jacobian.math.topology.cubical_complexes._tools import TOOLS
 
 
 def _direct_cartesian_vertices(intervals):
@@ -51,25 +48,15 @@ def test_point_cell_has_itself_as_its_single_vertex():
     assert tuple(vertex.intervals for vertex in result.vertices) == (point.intervals,)
 
 
-def test_vertices_operation_catalog_example_round_trips():
-    operation_id = "topology.cubical.cell.vertices.compute"
-    tool = next(tool for tool in TOOLS if tool.operation_id == operation_id)
-    request = tool.request_type.model_validate_json(
-        encode_strict_json(tool.examples[0].input), strict=True
-    )
-    result = tool.run(request)
-    assert len(result.vertices) == 4
-    restored = type(result).model_validate_json(
+def test_native_result_round_trips_through_strict_json():
+    cell = CubicalCell(intervals=((0, 1), (2, 2)))
+    result = cell_vertices(cell)
+
+    restored = CubicalCellVerticesResult.model_validate_json(
         encode_strict_json(result.model_dump(mode="json")), strict=True
     )
-    assert restored == result
 
-    public_result = invoke_operation(
-        operation_id,
-        request.model_dump(mode="json"),
-        Catalog.open(),
-    )
-    assert type(result).model_validate(public_result.output) == result
+    assert restored == result
 
 
 def test_vertex_output_byte_bound_is_checked_before_enumeration(monkeypatch):
@@ -95,6 +82,28 @@ def test_vertex_coordinate_digit_bound_is_checked():
     )
 
 
-def test_public_request_model_is_typed():
-    request = CubicalCellVerticesRequest(cell=CubicalCell(intervals=((0, 1), (2, 2))))
-    assert len(cell_vertices(request.cell).vertices) == 2
+def test_negative_boundary_coordinate_is_admitted():
+    cell = CubicalCell(intervals=((-(10**63), -(10**63) + 1),))
+    result = cell_vertices(cell)
+    assert tuple(vertex.intervals for vertex in result.vertices) == (
+        ((-(10**63), -(10**63)),),
+        ((-(10**63) + 1, -(10**63) + 1),),
+    )
+
+
+def test_huge_native_endpoint_is_rejected_without_string_conversion(monkeypatch):
+    def forbidden_digit_width(*_args, **_kwargs):
+        pytest.fail("oversized native endpoints must be rejected before formatting")
+
+    monkeypatch.setattr(
+        cell_vertices_module, "decimal_digit_width", forbidden_digit_width
+    )
+    huge = 1 << 100_000
+    forged = CubicalCell.model_construct(intervals=((huge, huge + 1),))
+
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        cell_vertices(forged)
+
+    assert error.value.errors()[0]["type"] == (
+        "cubical_complex.cell_vertices_coordinate_digits"
+    )

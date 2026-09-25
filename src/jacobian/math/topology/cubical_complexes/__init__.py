@@ -1,7 +1,6 @@
 """Cubical complex operations."""
 
 from jacobian.math.topology.cubical_complexes._cell_vertices import (
-    CubicalCellVerticesRequest,
     CubicalCellVerticesResult,
     cell_vertices,
 )
@@ -44,7 +43,6 @@ __all__ = [
     "CubicalCellBoundaryRequest",
     "CubicalCellBoundaryResult",
     "CubicalCellBoundaryTerm",
-    "CubicalCellVerticesRequest",
     "CubicalCellVerticesResult",
     "CubicalChainProductRequest",
     "CubicalChainTerm",

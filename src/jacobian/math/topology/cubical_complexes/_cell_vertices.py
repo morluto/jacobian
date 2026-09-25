@@ -7,6 +7,7 @@ from itertools import product
 from pydantic import Field
 
 from jacobian._models import StrictModel
+from jacobian.canonical import decimal_digit_width
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -18,10 +19,17 @@ MAX_CUBICAL_CELL_VERTEX_COUNT = 1 << 10
 MAX_CUBICAL_CELL_VERTICES_RESULT_BYTES = 512 * 1024
 
 
-class CubicalCellVerticesRequest(StrictModel):
-    """One elementary cube whose complete lattice-vertex set is requested."""
+def _coordinate_digit_count(coordinate: int) -> int:
+    """Return the magnitude decimal digit width without a raw string error.
 
-    cell: CubicalCell
+    The bit-length preflight rejects astronomically large native values before
+    any decimal formatting, so the canonical digit-width helper never has to
+    materialize a decimal string beyond Python's configured conversion limit.
+    """
+
+    if abs(coordinate).bit_length() > 4 * MAX_CUBICAL_CELL_VERTEX_COORDINATE_DIGITS:
+        return MAX_CUBICAL_CELL_VERTEX_COORDINATE_DIGITS + 1
+    return decimal_digit_width(coordinate)
 
 
 class CubicalCellVerticesResult(StrictModel):
@@ -40,7 +48,8 @@ def _result_size_bound(cell: CubicalCell, vertex_count: int) -> int:
     # includes pair separators, the interval list, and a generous object/key
     # allowance; it is independent of the number of coordinate combinations.
     one_vertex_bytes = 32 + sum(
-        2 * max(len(str(lower)), len(str(upper))) + 4 for lower, upper in cell.intervals
+        2 * max(_coordinate_digit_count(lower), _coordinate_digit_count(upper)) + 4
+        for lower, upper in cell.intervals
     )
     return source_bytes + vertex_count * one_vertex_bytes + 128
 
@@ -54,9 +63,9 @@ def cell_vertices(cell: CubicalCell) -> CubicalCellVerticesResult:
             message=f"cell ambient dimension exceeds the {MAX_DIM}-axis bound",
         )
     if any(
-        max(len(str(lower)), len(str(upper)))
-        > MAX_CUBICAL_CELL_VERTEX_COORDINATE_DIGITS
-        for lower, upper in cell.intervals
+        _coordinate_digit_count(coordinate) > MAX_CUBICAL_CELL_VERTEX_COORDINATE_DIGITS
+        for interval in cell.intervals
+        for coordinate in interval
     ):
         raise OperationResourceAdmissionError(
             location=("cell",),
@@ -96,7 +105,6 @@ def cell_vertices(cell: CubicalCell) -> CubicalCellVerticesResult:
 
 
 __all__ = [
-    "CubicalCellVerticesRequest",
     "CubicalCellVerticesResult",
     "cell_vertices",
 ]

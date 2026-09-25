@@ -7,11 +7,6 @@ from jacobian.catalog.models import (
     OperationExample,
 )
 from jacobian.math.topology.chain_complexes._filtered_models import MAX_FILTER_LEVELS
-from jacobian.math.topology.cubical_complexes._cell_vertices import (
-    CubicalCellVerticesRequest,
-    CubicalCellVerticesResult,
-    cell_vertices,
-)
 from jacobian.math.topology.cubical_complexes._models import (
     MAX_CUBICAL_CHAIN_CELLS,
     MAX_CUBICAL_CHAIN_PRODUCT_RESULT_BYTES,
@@ -104,10 +99,6 @@ def _top_cell_filtration(
     return from_top_cell_values(request)
 
 
-def _cell_vertices(request: CubicalCellVerticesRequest) -> CubicalCellVerticesResult:
-    return cell_vertices(request.cell)
-
-
 def _one_skeleton(request: CubicalComplexRequest) -> CubicalOneSkeletonResult:
     return one_skeleton(request.cells)
 
@@ -124,33 +115,6 @@ _CELLS = {
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
     *EXTENSION_TOOLS,
-    MathTool(
-        operation_id="topology.cubical.cell.vertices.compute",
-        title="Compute the vertices of an elementary cubical cell",
-        description=(
-            "Return all 2^k lattice vertices of one elementary cubical cell, "
-            "where k is the number of unit intervals. Each vertex is represented "
-            "as a zero-dimensional CubicalCell on the same ordered ambient axes; "
-            "degenerate source intervals retain their coordinate and contribute "
-            "no extra choices. Coordinates are limited to 64 decimal digits, "
-            "and vertex count and encoded output bytes are preflighted."
-        ),
-        request_type=CubicalCellVerticesRequest,
-        result_type=CubicalCellVerticesResult,
-        run=_cell_vertices,
-        tags=("topology", "cubical", "cell", "vertices", "exact"),
-        discovery_terms=("cubical cell vertices", "vertices of a cube"),
-        examples=(
-            OperationExample(
-                name="square_vertices",
-                description=(
-                    "Return the four lattice point cells of a unit square in "
-                    "the source's coordinate-axis order."
-                ),
-                input={"cell": {"intervals": [[0, 1], [0, 1]]}},
-            ),
-        ),
-    ),
     MathTool(
         operation_id="topology.cubical_complex.closed_star.compute",
         title="Compute a cubical cell's closed star",

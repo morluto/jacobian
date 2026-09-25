@@ -10,7 +10,6 @@ belong to combinatorics; their historical page is retained below for that
 mathematical reference.
 
 - [Cubical face posets](cubical-face-posets.md)
-- [Cubical cell vertices](cubical-cell-vertices.md)
 - [Cubical chain external product](cubical-chain-product.md)
 - [Oriented cubical cell boundary](cubical-cell-boundary.md)
 - [Cubical standard triangulation](cubical-triangulation.md)

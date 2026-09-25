@@ -93,12 +93,7 @@ def test_transport_is_bijective_on_complete_f5_point_sets() -> None:
             if coordinates is None
             else _point(source_curve, *coordinates)
         )
-        result = transport_point(
-            FiniteFieldPointTransportRequest(
-                isomorphism=isomorphism,
-                point=source_point,
-            )
-        )
+        result = transport_point(isomorphism, source_point)
         assert result.source_point.curve == source_curve
         assert result.target_point.curve == target_curve
         actual = (
@@ -141,12 +136,7 @@ def test_transport_rechecks_caller_supplied_scaling_relation() -> None:
         }
     )
     with pytest.raises(OperationDomainValidationError) as error:
-        transport_point(
-            FiniteFieldPointTransportRequest(
-                isomorphism=forged,
-                point=_point(_curve(1, 1), 0, 1),
-            )
-        )
+        transport_point(forged, _point(_curve(1, 1), 0, 1))
     assert error.value.errors()[0]["type"] == (
         "elliptic_curve.finite_field.point_transport_invalid_witness"
     )

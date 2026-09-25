@@ -50,7 +50,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
         request_type=FiniteFieldPointTransportRequest,
         result_type=FiniteFieldPointTransportResult,
-        run=transport_point,
+        run=lambda request: transport_point(request.isomorphism, request.point),
         tags=("elliptic-curve", "finite-field", "isomorphism", "exact"),
         discovery_terms=(
             "transport a point between isomorphic short Weierstrass curves over a finite field",

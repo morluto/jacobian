@@ -365,6 +365,22 @@ def finite_group_gauge_basepoint_transport(
             "lattice_gauge.finite_group.basepoint_request_shape",
             "field, based loop, and connector must be typed finite-group values",
         )
+    if not isinstance(field.lattice, GaugeLattice):
+        _reject(
+            "field",
+            "lattice_gauge.finite_group.lattice",
+            "field lattice is malformed",
+        )
+    if (
+        not isinstance(field.lattice.vertices, tuple)
+        or not isinstance(field.lattice.edges, tuple)
+        or not isinstance(field.edge_values, tuple)
+    ):
+        _reject(
+            "field",
+            "lattice_gauge.finite_group.lattice",
+            "field lattice and edge labels are malformed",
+        )
     group = field.group
     table, inverse, identity, order = _admit_group(group)
     vertices, edges, values = _admit_field(field, group, order)

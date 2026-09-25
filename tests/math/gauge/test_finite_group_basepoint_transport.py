@@ -154,6 +154,29 @@ def test_empty_connector_and_empty_loop_keep_identity_cases_exact() -> None:
     assert identity_result.transported_holonomy.index == field.group.identity
 
 
+def test_forged_nested_field_shapes_are_structured_errors() -> None:
+    field, _ = _nonabelian_field()
+    loop = _loop()
+    connector = OrientedGaugePath(steps=(), basepoint="a")
+    for forged in (
+        FiniteGroupGaugeField.model_construct(
+            lattice=None, group=field.group, edge_values=field.edge_values
+        ),
+        FiniteGroupGaugeField.model_construct(
+            lattice=GaugeLattice.model_construct(vertices=None, edges=None),
+            group=field.group,
+            edge_values=field.edge_values,
+        ),
+    ):
+        with pytest.raises(OperationDomainValidationError) as error:
+            finite_group_gauge_basepoint_transport(
+                FiniteGroupGaugeBasepointTransportRequest.model_construct(
+                    field=forged, loop=loop, connector=connector
+                )
+            )
+        assert error.value.errors()[0]["type"] == ("lattice_gauge.finite_group.lattice")
+
+
 def test_open_source_path_is_rejected() -> None:
     field, _ = _nonabelian_field()
     open_path = OrientedGaugePath(

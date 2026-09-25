@@ -6,7 +6,10 @@ from fractions import Fraction
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.topology.cellular_sheaves._models import (
     MAX_SHEAF_MORPHISM_COMPONENT_CELLS,
     MAX_SHEAF_MORPHISM_OUTPUT_CHARS,
@@ -35,10 +38,30 @@ def identity_morphism(sheaf: FiniteCellularSheaf) -> SheafMorphismResult:
     sheaf's cover maps and naturality are checked before an identity value is
     returned. Matrix allocation follows explicit component and output bounds.
     """
-    _readmit_parent_sheaf(sheaf, role="identity source")
+    if not isinstance(sheaf, FiniteCellularSheaf):
+        raise OperationDomainValidationError(
+            location=("sheaf",),
+            code="topology.cellular_sheaf.morphism_identity.parent_type_invalid",
+            message="identity source must be a finite cellular sheaf",
+        )
+    try:
+        _readmit_parent_sheaf(sheaf, role="identity source")
+    except OperationDomainValidationError as error:
+        raise OperationDomainValidationError(
+            location=("sheaf",),
+            code="topology.cellular_sheaf.morphism_identity.parent_diagram_not_admitted",
+            message="identity source restrictions must equal its reconstructed functor diagram",
+        ) from error
     ranks = {stalk.simplex: len(stalk.basis) for stalk in sheaf.stalks}
     component_cells = sum(rank * rank for rank in ranks.values())
-    output_chars = sheaf_scalar_json_bound(component_cells, 34)
+    # Source and target are both retained in the result. Bound the full parent
+    # encoding (including axes, restrictions, and labels), not just components.
+    parent_json_chars = len(sheaf.model_dump_json())
+    output_chars = (
+        2 * parent_json_chars
+        + sheaf_scalar_json_bound(component_cells, 34)
+        + 64 * (len(sheaf.canonical_face_order) + component_cells)
+    )
     if component_cells > MAX_SHEAF_MORPHISM_COMPONENT_CELLS:
         raise OperationResourceAdmissionError(
             location=("sheaf",),

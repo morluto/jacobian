@@ -38,7 +38,15 @@ class RelationalCarrierRelabelingRequest(StrictModel):
     """Relabel the canonical carrier while retaining its relation signature."""
 
     source: FiniteRelationalStructure
-    old_to_new: tuple[StrictInt, ...] = Field(max_length=MAX_RELATIONAL_CARRIER)
+    old_to_new: tuple[StrictInt, ...] = Field(
+        max_length=MAX_RELATIONAL_CARRIER,
+        description=(
+            "One new carrier label per old carrier element, in increasing old "
+            "label order: old_to_new[i] is the new label of old element i. "
+            "The entries must form a full permutation of 0..carrier_size-1, "
+            "so the map is a total bijection on the source carrier."
+        ),
+    )
 
     @model_validator(mode="after")
     def require_bijection(self) -> Self:
@@ -57,8 +65,20 @@ class RelationalCarrierRelabeling(StrictModel):
 
     source: FiniteRelationalStructure
     target: FiniteRelationalStructure
-    old_to_new: tuple[StrictInt, ...] = Field(max_length=MAX_RELATIONAL_CARRIER)
-    new_to_old: tuple[StrictInt, ...] = Field(max_length=MAX_RELATIONAL_CARRIER)
+    old_to_new: tuple[StrictInt, ...] = Field(
+        max_length=MAX_RELATIONAL_CARRIER,
+        description=(
+            "The applied carrier bijection: old_to_new[i] is the new label of "
+            "old element i, in increasing old label order."
+        ),
+    )
+    new_to_old: tuple[StrictInt, ...] = Field(
+        max_length=MAX_RELATIONAL_CARRIER,
+        description=(
+            "The exact inverse of old_to_new: new_to_old[j] is the old label "
+            "mapped to new element j."
+        ),
+    )
 
     @model_validator(mode="after")
     def require_structure_and_maps(self) -> Self:
@@ -82,7 +102,16 @@ class CspTemplateCarrierRelabelingRequest(StrictModel):
     """Relabel a CSP template without changing variables or occurrences."""
 
     instance: FiniteCspInstance
-    old_to_new: tuple[StrictInt, ...] = Field(max_length=MAX_RELATIONAL_CARRIER)
+    old_to_new: tuple[StrictInt, ...] = Field(
+        max_length=MAX_RELATIONAL_CARRIER,
+        description=(
+            "One new template-carrier label per old carrier element, in "
+            "increasing old label order: old_to_new[i] is the new label of old "
+            "template element i. The entries must form a full permutation of "
+            "0..template.carrier_size-1, a total bijection on the template "
+            "carrier."
+        ),
+    )
 
     @model_validator(mode="after")
     def require_bijection(self) -> Self:
@@ -97,8 +126,20 @@ class CspTemplateCarrierRelabeling(StrictModel):
 
     source: FiniteCspInstance
     target: FiniteCspInstance
-    old_to_new: tuple[StrictInt, ...] = Field(max_length=MAX_RELATIONAL_CARRIER)
-    new_to_old: tuple[StrictInt, ...] = Field(max_length=MAX_RELATIONAL_CARRIER)
+    old_to_new: tuple[StrictInt, ...] = Field(
+        max_length=MAX_RELATIONAL_CARRIER,
+        description=(
+            "The applied template-carrier bijection: old_to_new[i] is the new "
+            "label of old template element i, in increasing old label order."
+        ),
+    )
+    new_to_old: tuple[StrictInt, ...] = Field(
+        max_length=MAX_RELATIONAL_CARRIER,
+        description=(
+            "The exact inverse of old_to_new: new_to_old[j] is the old template "
+            "label mapped to new element j."
+        ),
+    )
 
     @model_validator(mode="after")
     def require_instance_and_maps(self) -> Self:

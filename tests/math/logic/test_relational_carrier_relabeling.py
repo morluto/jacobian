@@ -1,5 +1,6 @@
 """Exact carrier-transport checks with independent finite oracles."""
 
+from collections.abc import Iterator
 from itertools import permutations, product
 
 import pytest
@@ -13,11 +14,17 @@ from jacobian.math.logic.relational_structures._models import (
     FiniteCspInstance,
 )
 from jacobian.math.logic.relational_structures.operations import profile_csp_assignment
+from jacobian.math.logic.relational_structures.relabeling._models import (
+    CspTemplateCarrierRelabelingRequest,
+    RelationalCarrierRelabelingRequest,
+)
+from jacobian.math.logic.relational_structures.relabeling._tools import TOOLS
 from jacobian.math.logic.relational_structures.relabeling.operations import (
     relabel_csp_template_carrier,
     relabel_structure_carrier,
 )
 from jacobian.math.logic.relational_structures.values import (
+    MAX_RELATIONAL_TABLE_ROWS,
     FiniteRelationalStructure,
     FiniteRelationSymbol,
 )
@@ -78,9 +85,14 @@ def _oracle_isomorphism(
     return True
 
 
-def _all_subsets(items: tuple[tuple[int, ...], ...]):
-    for selected in range(1 << len(items)):
-        yield tuple(row for index, row in enumerate(items) if selected & (1 << index))
+_Table = tuple[tuple[int, ...], ...]
+
+
+def _all_subsets(items: _Table) -> tuple[_Table, ...]:
+    return tuple(
+        tuple(row for index, row in enumerate(items) if selected & (1 << index))
+        for selected in range(1 << len(items))
+    )
 
 
 def test_exhaustive_small_structures_match_transport_and_isomorphism_oracle() -> None:
@@ -93,13 +105,13 @@ def test_exhaustive_small_structures_match_transport_and_isomorphism_oracle() ->
     )
     for carrier_size in range(3):
         carriers = range(carrier_size)
-        nullary_tables = (((),), ())
-        unary_rows = tuple((element,) for element in carriers)
-        binary_rows = tuple(product(carriers, repeat=2))
-        choices = (
+        nullary_tables: tuple[_Table, ...] = (((),), ())
+        unary_rows: _Table = tuple((element,) for element in carriers)
+        binary_rows: _Table = tuple(product(carriers, repeat=2))
+        choices: tuple[tuple[_Table, ...], ...] = (
             nullary_tables,
-            tuple(_all_subsets(unary_rows)),
-            tuple(_all_subsets(binary_rows)),
+            _all_subsets(unary_rows),
+            _all_subsets(binary_rows),
         )
         for tables in product(*choices):
             source = _structure(carrier_size, signature, tuple(tables))
@@ -184,3 +196,66 @@ def test_preflights_aggregate_tuple_transport_before_expansion() -> None:
     with pytest.raises(OperationResourceAdmissionError) as exc_info:
         relabel_structure_carrier(source, tuple(reversed(range(64))))
     assert exc_info.value.errors()[0]["type"] == "relational.relabeling.tuple_limit"
+
+
+def test_bypassed_structure_is_admitted_before_table_expansion() -> None:
+    """A ``model_construct`` payload cannot force expansion before admission."""
+
+    class _UnexpandableTable(list[tuple[int, ...]]):
+        def __len__(self) -> int:
+            return MAX_RELATIONAL_TABLE_ROWS + 1
+
+        def __iter__(self) -> Iterator[tuple[int, ...]]:
+            raise AssertionError("relation table expanded before admission")
+
+    source = FiniteRelationalStructure.model_construct(
+        carrier_size=2,
+        signature=(FiniteRelationSymbol(symbol_id="E", arity=2),),
+        relation_tables=(_UnexpandableTable(),),
+    )
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
+        relabel_structure_carrier(source, (1, 0))
+    error = exc_info.value.errors()[0]
+    assert error["type"] == "relational.relabeling.table_limit"
+    assert error["loc"] == ("source", "relation_tables")
+
+
+def test_csp_tuple_admission_points_at_the_instance_template() -> None:
+    """CSP template admission reports the nested template path, not ``source``."""
+
+    signature = tuple(
+        FiniteRelationSymbol(symbol_id=f"R{index}", arity=2) for index in range(5)
+    )
+    rows = tuple(product(range(64), repeat=2))[:4096]
+    template = _structure(64, signature, (rows,) * len(signature))
+    instance = FiniteCspInstance(
+        template=template,
+        variable_count=64,
+        constraints=(
+            FiniteCspConstraint(constraint_id="edge", symbol_id="R0", scope=(0, 1)),
+        ),
+    )
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
+        relabel_csp_template_carrier(instance, tuple(reversed(range(64))))
+    error = exc_info.value.errors()[0]
+    assert error["type"] == "relational.relabeling.tuple_limit"
+    assert error["loc"] == ("instance", "template", "relation_tables")
+
+
+def test_request_schemas_publish_the_permutation_contract() -> None:
+    for request_type in (
+        RelationalCarrierRelabelingRequest,
+        CspTemplateCarrierRelabelingRequest,
+    ):
+        description = request_type.model_json_schema()["properties"]["old_to_new"][
+            "description"
+        ]
+        assert "new label of old" in description
+        assert "permutation" in description
+
+
+def test_examples_state_the_permutation_contract() -> None:
+    for tool in TOOLS:
+        for example in tool.examples:
+            assert "old_to_new[i]" in example.description
+            assert "permutation" in example.description

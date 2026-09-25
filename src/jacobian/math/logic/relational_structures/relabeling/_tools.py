@@ -70,7 +70,12 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             OperationExample(
                 name="permute_a_directed_relation",
-                description="Transport every ordered edge through a carrier bijection.",
+                description=(
+                    "Transport every ordered edge through the bijection "
+                    "old_to_new, where old_to_new[i] is the new label of old "
+                    "element i and the entries are a full permutation of "
+                    "the carrier."
+                ),
                 input=STRUCTURE_EXAMPLE,
             ),
         ),
@@ -91,7 +96,11 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             OperationExample(
                 name="relabel_template_with_repeated_scope",
-                description="Retain repeated CSP constraint occurrences and scopes.",
+                description=(
+                    "Retain repeated CSP constraint occurrences and scopes; "
+                    "old_to_new[i] is the new label of old template element i "
+                    "and the entries are a full permutation of the carrier."
+                ),
                 input=CSP_EXAMPLE,
             ),
         ),

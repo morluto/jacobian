@@ -161,7 +161,7 @@ TOOLS: MathTools = (  # noqa: RUF005
         examples=(
             OperationExample(
                 name="lower_matroid_of_two_element_delta",
-                description="Minimum feasible sets are ∅, {a}, and {b}.",
+                description="The unique minimum-cardinality feasible set is ∅.",
                 input={
                     "delta_matroid": {
                         "ground": ["a", "b"],

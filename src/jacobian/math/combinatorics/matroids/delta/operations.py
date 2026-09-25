@@ -255,13 +255,13 @@ def _extremal_matroid(
         )
     label_bytes = 0
     for label in system.ground:
-        if len(label) > MAX_FINITE_BASIS_LABEL_BYTES:
+        encoded_length = len(label.encode("utf-8"))
+        if encoded_length > MAX_FINITE_BASIS_LABEL_BYTES:
             raise OperationResourceAdmissionError(
                 location=("delta_matroid", "ground"),
                 code="finite_basis_matroid.ground_label_bound",
                 message="a ground label exceeds the finite-basis per-label limit",
             )
-        encoded_length = len(label.encode("utf-8"))
         label_bytes += encoded_length
         if label_bytes > MAX_FINITE_BASIS_TOTAL_LABEL_BYTES:
             raise OperationResourceAdmissionError(

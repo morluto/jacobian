@@ -140,6 +140,15 @@ def test_target_ground_over_bound_is_a_resource_refusal() -> None:
     )
 
 
+def test_multibyte_output_label_over_byte_limit_is_resource_refusal() -> None:
+    source = FiniteDeltaMatroid(ground=("😀" * 300,), feasible=((),))
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
+        lower_matroid(source)
+    assert (
+        exc_info.value.errors()[0]["type"] == "finite_basis_matroid.ground_label_bound"
+    )
+
+
 def test_invalid_utf8_source_label_is_a_domain_rejection() -> None:
     source = FiniteDeltaMatroid(ground=("\ud800",), feasible=((),))
     with pytest.raises(OperationDomainValidationError) as exc_info:

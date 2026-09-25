@@ -28,7 +28,6 @@ from jacobian.math.topology.links._extensions_models import (
     MAX_CONWAY_CENTERED_DEGREE,
     MAX_CONWAY_COEFFICIENT_DIGITS,
     MAX_CONWAY_OUTPUT_BYTES,
-    MAX_LINK_DISJOINT_UNION_OUTPUT_BYTES,
     MAX_STATE_CIRCLE_CROSSINGS,
     MAX_STATE_CIRCLE_OUTPUT_BYTES,
     MAX_WIRTINGER_GENERATORS,
@@ -136,17 +135,6 @@ def link_disjoint_union(
             code="link_diagram.disjoint_union_free_loop_bound",
             message="the union may contain at most 64 crossing-free components in total",
         )
-    source_bytes = sum(
-        len(diagram.model_dump_json(warnings=False).encode("utf-8"))
-        for diagram in admitted
-    )
-    if source_bytes * 4 + 16_384 > MAX_LINK_DISJOINT_UNION_OUTPUT_BYTES:
-        raise OperationResourceAdmissionError(
-            location=("diagrams",),
-            code="link_diagram.disjoint_union_output_bound",
-            message="the disjoint union and complete transport exceed the 8 MiB output envelope",
-        )
-
     output_crossings: list[LinkCrossing] = []
     output_arcs: list[OrientedDiagramArc] = []
     crossing_map: list[LinkDisjointUnionCrossingMap] = []

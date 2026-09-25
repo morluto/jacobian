@@ -5,7 +5,9 @@
 `petri_net.reachability.token_profile.compute` reports the minimum and maximum
 token count for each place, plus the minimum and maximum total token count, over
 the markings represented in a `ReachabilityResult`. Each extremum includes the
-first state index attaining it in the source graph's canonical BFS order.
+lowest source-graph state index attaining it. State indices break witness ties;
+the operation does not require them to preserve the producer's BFS discovery
+order.
 
 For a complete graph these extrema describe the entire finite reachable set.
 For a truncated graph they describe only the represented reachable states and

@@ -48,6 +48,10 @@ def reachability_token_profile(
             code="petri_net.reachability_token_profile.work_bound",
             message="token-profile validation exceeds its admitted work bound",
         )
+    # Validate native arc scalars before the shared byte estimator converts
+    # them to decimal strings. An oversized forged int must fail with the
+    # domain error instead of Python's integer-to-string limit.
+    _validate_terminal_scc_net_values(source_graph)
     # The profile embeds the graph so its axes and finite-state context remain
     # available to downstream operations. Reuse the conservative graph-plus-
     # transition-profile bound and add a fixed maximum-place profile allowance.
@@ -58,7 +62,6 @@ def reachability_token_profile(
             code="petri_net.reachability_token_profile.output_bound",
             message="token profile exceeds its serialized output bound",
         )
-    _validate_terminal_scc_net_values(source_graph)
     try:
         graph = ReachabilityResult.model_validate(
             source_graph.model_dump(), strict=True
@@ -87,6 +90,8 @@ def reachability_token_profile(
         indices[tokens] = state.state_index
     _terminal_scc_adjacency(graph, graph.net, indices)
 
+    # Supplied state indices need not preserve the producer's BFS discovery
+    # order. Their canonical order is the stable witness tie-break here.
     first_tokens = graph.states[0].marking.tokens
     minima = list(first_tokens)
     maxima = list(first_tokens)

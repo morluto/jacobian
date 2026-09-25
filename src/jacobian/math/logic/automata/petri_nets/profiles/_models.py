@@ -20,7 +20,7 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
 
 
 class ReachabilityTokenRange(StrictModel):
-    """Extrema for one place, with first BFS-state witnesses."""
+    """Extrema for one place, with lowest-index source-state witnesses."""
 
     place: int = Field(ge=0, lt=MAX_PETRI_PLACES)
     minimum: int = Field(ge=0)

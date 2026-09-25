@@ -2414,12 +2414,9 @@ def dirichlet_character_arithmetic_function_twist(
     sequence = FiniteRationalSequence.model_construct(
         domain="rational", values=function.values
     )
-    sequence_request = DirichletCharacterSequenceTwistRequest.model_construct(
-        sequence=sequence,
-        character=request.character,
-        index_origin=1,
+    return dirichlet_character_sequence_twist(
+        sequence, request.character, index_origin=1
     )
-    return dirichlet_character_sequence_twist(sequence_request)
 
 
 def _compute_generalized_gauss_sum(

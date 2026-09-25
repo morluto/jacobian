@@ -16,7 +16,6 @@ from sympy import QQ, Poly, bernoulli, cyclotomic_poly, factorint, symbols
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import (
     CanonicalLimits,
-    encode_strict_json,
     format_canonical_integer,
     strict_json_object_size,
 )
@@ -394,6 +393,7 @@ def dirichlet_character_orthogonality_over_characters(
             ("exponent", len(str(group.exponent))),
         )
     )
+
     def integer_string_size(value: int) -> int:
         return len(format_canonical_integer(value)) + 2
 

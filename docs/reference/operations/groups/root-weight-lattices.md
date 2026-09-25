@@ -23,6 +23,24 @@ membership and quotient invariant factors are separate operations. This
 representation describes the four lattices attached to a finite Cartan datum;
 it does not choose an arbitrary isogeny or an intermediate character lattice.
 
+`root_system.connection_index.compute` supplies the root-system-specific
+quotient `P/Q`: it returns the nontrivial Smith invariant factors and order of
+the weight lattice modulo the root lattice. In the convention above, column
+`j` of `A` is the simple root `alpha_j` in fundamental-weight coordinates, so
+the quotient is the cokernel of the root-to-weight inclusion matrix `A`.
+The operation reuses the exact bounded matrix Smith-normal-form capability and
+does not enumerate quotient representatives. Rank is limited to 8, the
+admitted Cartan entries are finite type, and the matrix Smith operation applies
+its own exact input/work/output admission.
+
+For example, `P/Q` is cyclic of order `n + 1` for `A_n`, cyclic of order 2 for
+`B_n` and `C_n`, and for `D_n` is cyclic of order 4 when `n` is odd or a direct
+product of two cyclic groups of order 2 when `n` is even. Reducible Cartan data
+are handled by applying Smith form to their full block-diagonal matrix, which
+canonicalizes the product quotient's invariant factors. The Magma
+[Root Data handbook](https://docs.magma-maths.org/LieTheory/RootData/introduction.html)
+describes the fundamental group through the Cartan matrix quotient.
+
 The request rank is at most 8. Input coordinates are bounded to 128 bits and
 mapped coordinates to 133 bits; work and retained output are admitted before
 the matrix-vector product. The basis convention is part of the operation

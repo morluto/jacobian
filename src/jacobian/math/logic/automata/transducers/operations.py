@@ -1112,8 +1112,18 @@ def restrict_rational_input(
     product_states: list[tuple[int, int]] = list(initial_pairs)
     product_index = {pair: index for index, pair in enumerate(product_states)}
     product_edges: list[tuple[int, int, int]] = []
+    explored = 0
     for source_index, (relation_state, dfa_state) in enumerate(product_states):
+        if source_index % 256 == 0:
+            request_checkpoint(
+                "during rational relation input restriction product exploration"
+            )
         for edge_index, edge in outgoing[relation_state]:
+            explored += 1
+            if explored % 256 == 0:
+                request_checkpoint(
+                    "during rational relation input restriction edge exploration"
+                )
             next_dfa_state = dfa_state
             for symbol in edge.input_label:
                 ledger.charge()
@@ -1166,6 +1176,7 @@ def restrict_rational_input(
             message="input-restriction result exceeds its serialized-size bound",
         )
 
+    request_checkpoint("before rational relation input restriction result construction")
     accepting_source = set(transducer.accepting_states)
     accepting_dfa = set(dfa.accepting_states)
     restricted = RationalTransducer(

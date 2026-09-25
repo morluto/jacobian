@@ -17,6 +17,7 @@ from typing import Annotated, Any, Literal, Self
 from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
+from jacobian._exact import ExactInteger
 from jacobian._models import StrictModel
 from jacobian.math.topology._models import (
     MAX_TOPOLOGY_DIMENSION,
@@ -49,7 +50,7 @@ MAX_MORSE_CONTRACTION_FACE_CANDIDATES = 512
 MAX_MORSE_CONTRACTION_PAIRS = 14
 MAX_MORSE_CONTRACTION_COEFFICIENT_DIGITS = 64
 MorseContractionRow = Annotated[
-    tuple[StrictInt, ...], Field(max_length=MAX_MORSE_CONTRACTION_CELLS)
+    tuple[ExactInteger, ...], Field(max_length=MAX_MORSE_CONTRACTION_CELLS)
 ]
 MorseContractionMatrix = Annotated[
     tuple[MorseContractionRow, ...], Field(max_length=MAX_MORSE_CONTRACTION_CELLS)

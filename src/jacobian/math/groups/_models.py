@@ -136,7 +136,7 @@ class GroupConjugacyClassesRequest(StrictModel):
 
 ConjugacyClassElement = Annotated[
     tuple[int, ...],
-    Field(min_length=1, max_length=MAX_GROUP_DEGREE),
+    Field(min_length=0, max_length=MAX_GROUP_DEGREE),
 ]
 
 ConjugacyClass = Annotated[

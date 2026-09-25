@@ -39,6 +39,7 @@ from jacobian.math.groups.characters.operations import (
     _fractions,
     _make_value,
     character_table,
+    _character_table_from_admitted_partition,
 )
 from jacobian.math.groups.operations import group_conjugacy_classes, group_order
 
@@ -273,7 +274,7 @@ def class_function_character_decomposition(
         source,
         tuple(tuple(tuple(element) for element in cls) for cls in raw_classes),
     )
-    table = character_table(partition)
+    table = _character_table_from_admitted_partition(partition)
     input_axis = function.axis
     table_axis = table.axis
     same_class_axis = (

@@ -195,6 +195,9 @@ def test_trivial_group_decomposition_and_round_trip() -> None:
         CharacterRingDecompositionRequest(class_function=degree_zero_function)
     )
     assert degree_zero_result.ring_element.irreducible_multiplicities == (7,)
+    assert type(degree_zero_result).model_validate_json(
+        degree_zero_result.model_dump_json()
+    ) == degree_zero_result
 
     partition = _partition(((0,),))
     constant = _function_on_partition(partition, Fraction(7))

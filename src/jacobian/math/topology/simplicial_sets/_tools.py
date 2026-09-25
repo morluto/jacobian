@@ -18,6 +18,9 @@ from jacobian.math.topology.simplicial_sets.degeneracy_tools import (
 from jacobian.math.topology.simplicial_sets.maps_tools import TOOLS as MAP_TOOLS
 from jacobian.math.topology.simplicial_sets.operations import from_tables
 from jacobian.math.topology.simplicial_sets.product_tools import TOOLS as PRODUCT_TOOLS
+from jacobian.math.topology.simplicial_sets.skeleton_tools import (
+    TOOLS as SKELETON_TOOLS,
+)
 from jacobian.math.topology.simplicial_sets.standard_tools import (
     TOOLS as STANDARD_TOOLS,
 )
@@ -43,6 +46,7 @@ _DELTA_ONE_PREFIX = {
 
 TOOLS = (
     *STANDARD_TOOLS,
+    *SKELETON_TOOLS,
     *CHAIN_TOOLS,
     *COMPLEX_CONVERSION_TOOLS,
     *PRODUCT_TOOLS,

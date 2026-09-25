@@ -21,6 +21,8 @@ from jacobian.math.topology.links._extensions_models import (
     LinkDeterminantResult,
     LinkDisjointUnionRequest,
     LinkDisjointUnionResult,
+    LinkSignatureRequest,
+    LinkSignatureResult,
     LinkStateCirclesRequest,
     LinkStateCirclesResult,
     SeifertCircleRequest,
@@ -41,6 +43,7 @@ from jacobian.math.topology.links.extensions import (
     link_disjoint_union,
     link_goeritz_data,
     link_seifert_circles,
+    link_signature,
     link_state_circles,
     wirtinger_presentation,
 )
@@ -98,6 +101,10 @@ def _disjoint_union(request: LinkDisjointUnionRequest) -> LinkDisjointUnionResul
 
 def _seifert(request: SeifertCircleRequest) -> SeifertCircleResult:
     return link_seifert_circles(request.diagram)
+
+
+def _signature(request: LinkSignatureRequest) -> LinkSignatureResult:
+    return link_signature(request.diagram)
 
 
 def _wirtinger(
@@ -451,6 +458,39 @@ TOOLS: MathTools = (
                         ],
                     }
                 },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="link_diagram.signature.compute",
+        title="Compute an oriented link diagram's signature",
+        description=(
+            "Return the exact Gordon-Litherland link signature from a reduced "
+            "Goeritz matrix and its type-II correction. A crossing is type II "
+            "when its checked oriented crossing sign times the Tait incidence "
+            "(+1 when the shaded corners are the overpassing pair) is -1. "
+            "Exact rational inertia determines the matrix signature. The bounded "
+            "contract accepts crossing-free unlinks and connected crossing "
+            "projections with at most 32 crossings; it does not decide link "
+            "equivalence."
+        ),
+        request_type=LinkSignatureRequest,
+        result_type=LinkSignatureResult,
+        run=_signature,
+        tags=("link-diagram", "signature", "Goeritz", "exact"),
+        discovery_terms=(
+            "oriented link signature",
+            "Gordon-Litherland signature",
+            "signature from Goeritz matrix",
+        ),
+        examples=(
+            OperationExample(
+                name="positive_hopf_link_signature",
+                description=(
+                    "Compute the exact signature of the positive Hopf link; "
+                    "the bounded projection has two crossings."
+                ),
+                input={"diagram": _POSITIVE_HOPF_DIAGRAM},
             ),
         ),
     ),

@@ -55,10 +55,37 @@ connected plane graph.
 and forms its signed Laplacian. It deletes the final shaded-region row and
 column, returning the exact integral reduced matrix and its absolute
 determinant. The matrix operation has a tighter 32-crossing envelope. The
-matrix and determinant are diagram-level values; this operation does not
-compute a signature correction or make a link-equivalence decision.
+matrix and determinant are diagram-level values and do not by themselves give
+the link signature.
 
 For the positive Hopf link, the checkerboard graph has two vertices joined by
 two positive parallel edges. Its Laplacian is
 `[[2, -2], [-2, 2]]`, and deleting one vertex gives the `1 × 1` Goeritz matrix
 `[[2]]`.
+
+## Oriented link signature
+
+`link_diagram.signature.compute` composes the reduced Goeritz matrix with exact
+rational inertia and the Gordon–Litherland correction term. Under this
+module's Tait convention, each crossing incidence is `+1` when the shaded
+corners are the overpassing pair and `-1` otherwise. The oriented crossing
+sign is already checked against the diagram's directed arcs. A crossing is
+type II exactly when the product of that crossing sign and its Tait incidence
+is `-1`; the correction is the sum of incidences over type-II crossings. The
+returned signature is
+
+```text
+number of positive Goeritz directions
+- number of negative Goeritz directions
+- type-II correction.
+```
+
+The operation retains the source diagram, Goeritz matrix when crossings are
+present, exact inertia result, and each crossing's type and correction
+contribution. Crossing-free unlinks return zero using the empty-matrix inertia
+convention. Nonempty projections must be connected and have at most 32
+crossings, matching the Goeritz matrix bound. It does not test link equivalence.
+The defining relation is the Gordon–Litherland formula for an oriented link;
+see [Gordon and Litherland, “On the signature of a link”](https://doi.org/10.1007/BF01609479)
+and the explicit checkerboard sign conventions in Cimasoni and Ferretti,
+[§2.2](https://www.unige.ch/~cimasoni/Kashaev-signature.pdf).

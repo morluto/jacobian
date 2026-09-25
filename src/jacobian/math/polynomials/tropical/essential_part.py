@@ -3,16 +3,22 @@
 from __future__ import annotations
 
 from fractions import Fraction
+from math import comb
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.geometry.polytopes._polyhedral_conversion import (
+    MAX_DD_PAIR_BOUND,
+    MAX_DD_RAY_BOUND,
     HullConversion,
     PolyhedralConversionAdmissionError,
+    dd_work_bound,
     points_to_facets,
     rational_rank,
+    require_dd_height_admissible,
+    require_dd_weighted_work_admissible,
     upper_bound_facets,
 )
 from jacobian.math.polynomials.tropical._models import EssentialPartRequest
@@ -57,7 +63,78 @@ def _affine_dimension(points: tuple[tuple[Fraction, ...], ...], dimension: int) 
     )
 
 
-def _preflight(poly: TropicalPolynomial) -> tuple[int, int, int, int]:
+def _upper_bound_total_faces(vertex_count: int, dimension: int) -> int:
+    """Return the cyclic-polytope upper bound, including the whole polytope."""
+    if dimension == 0:
+        return 1
+    if dimension == 1:
+        return 3 if vertex_count >= 2 else 1
+    half = dimension // 2
+    h = [0] * (dimension + 1)
+    for index in range(half + 1):
+        value = comb(vertex_count - dimension - 1 + index, index)
+        h[index] = value
+        h[dimension - index] = value
+    proper_face_bound = sum(
+        sum(
+            comb(dimension - index, dimension - rank) * h[index]
+            for index in range(rank + 1)
+        )
+        for rank in range(1, dimension + 1)
+    )
+    return proper_face_bound + 1
+
+
+def _lifted_hull_bounds(
+    term_count: int,
+    ambient_dimension: int,
+    affine_dimension: int,
+    component_digits: int,
+) -> tuple[int, int, int, int, int]:
+    """Return sound hull, DD, and face-count bounds before backend expansion."""
+    intrinsic_dimensions = range(1, min(ambient_dimension, term_count - 1) + 1)
+    geometric_facet_bound = (
+        upper_bound_facets(term_count, affine_dimension) if affine_dimension else 0
+    )
+    # points_to_facets currently admits against its ambient-dimension bound;
+    # retain that backend bound while separately using the intrinsic bound for
+    # the actual face-lattice and output estimates.
+    facet_bound = max(
+        geometric_facet_bound, upper_bound_facets(term_count, ambient_dimension)
+    )
+    ambient_rays, ambient_pairs = dd_work_bound(term_count, ambient_dimension + 1)
+    rank_bounds = tuple(
+        dd_work_bound(term_count, rank + 1) for rank in intrinsic_dimensions
+    )
+    ray_bound = max((ambient_rays, *(rays for rays, _pairs in rank_bounds)))
+    pair_bound = max((ambient_pairs, *(pairs for _rays, pairs in rank_bounds)))
+    if ray_bound > MAX_DD_RAY_BOUND or pair_bound > MAX_DD_PAIR_BOUND:
+        raise PolyhedralConversionAdmissionError(
+            "exact lifted hull exceeds the rank-aware double-description work bound "
+            f"(at most {ray_bound} rays and {pair_bound} candidate pairs; "
+            f"limits are {MAX_DD_RAY_BOUND} and {MAX_DD_PAIR_BOUND})"
+        )
+    minor_digits = require_dd_height_admissible(
+        component_digits, ambient_dimension, affine_halfspaces=False
+    )
+    try:
+        require_dd_weighted_work_admissible(
+            term_count,
+            ambient_dimension + 1,
+            minor_digits,
+            candidate_pairs=pair_bound,
+        )
+    except PolyhedralConversionAdmissionError as error:
+        raise PolyhedralConversionAdmissionError(
+            f"rank-aware lifted hull height work exceeds its envelope: {error}"
+        ) from error
+    face_bound = _upper_bound_total_faces(term_count, affine_dimension)
+    return facet_bound, ray_bound, pair_bound, face_bound, geometric_facet_bound
+
+
+def _preflight(
+    poly: TropicalPolynomial,
+) -> tuple[tuple[tuple[Fraction, ...], ...], int, int, int, int, int]:
     _admit_polynomial(poly)
     variable_count, term_count = len(poly.variables), len(poly.terms)
     if variable_count > MAX_TROPICAL_ESSENTIAL_VARIABLES:
@@ -89,9 +166,32 @@ def _preflight(poly: TropicalPolynomial) -> tuple[int, int, int, int]:
             "coefficient heights exceed the exact lifted-hull envelope",
         )
     dimension = variable_count + 1
-    facet_bound = upper_bound_facets(max(term_count, dimension + 1), dimension)
-    work_bound = term_count * max(1, facet_bound) + facet_bound
     component_digits = max(coefficient_digits, len(str(MAX_TROPICAL_EXPONENT)))
+    points = tuple(
+        (
+            *tuple(Fraction(exponent) for exponent in term.exponents),
+            _finite_value(term.coefficient).as_fraction(),
+        )
+        for term in poly.terms
+    )
+    affine_dimension = _affine_dimension(points, dimension)
+    try:
+        (
+            facet_bound,
+            _ray_bound,
+            _pair_bound,
+            face_bound,
+            geometric_facet_bound,
+        ) = _lifted_hull_bounds(
+            term_count, dimension, affine_dimension, component_digits
+        )
+    except PolyhedralConversionAdmissionError as error:
+        _reject(
+            ("polynomial", "terms"),
+            "tropical.essential_part_hull_bound",
+            str(error),
+        )
+    work_bound = face_bound * max(1, geometric_facet_bound)
     output_scalar_digits = (
         (dimension + 1) * component_digits + 8 + len(str(facet_bound))
     )
@@ -101,7 +201,7 @@ def _preflight(poly: TropicalPolynomial) -> tuple[int, int, int, int]:
         + term_count * (len(str(term_count)) + 1)
     )
     output_bound = 4096 + term_count * (512 + variable_count * 64)
-    output_bound += facet_bound * face_row_bytes
+    output_bound += (face_bound + geometric_facet_bound) * face_row_bytes
     if work_bound > MAX_TROPICAL_ESSENTIAL_WORK:
         _reject(
             ("polynomial", "terms"),
@@ -116,7 +216,14 @@ def _preflight(poly: TropicalPolynomial) -> tuple[int, int, int, int]:
         )
     # points_to_facets applies the authoritative ray, candidate-pair, and
     # height-weighted DD admission before expanding the lifted hull.
-    return term_count, dimension, facet_bound, face_row_bytes
+    return (
+        points,
+        term_count,
+        dimension,
+        facet_bound,
+        face_row_bytes,
+        affine_dimension,
+    )
 
 
 def _trivial_result(
@@ -373,13 +480,8 @@ def tropical_polynomial_essential_part(
     lower-dimensional set remains in the result. It is not the unique-region
     functional normal form.
     """
-    _term_count, dimension, facet_bound, face_row_bytes = _preflight(poly)
-    points = tuple(
-        (
-            *tuple(Fraction(exponent) for exponent in term.exponents),
-            _finite_value(term.coefficient).as_fraction(),
-        )
-        for term in poly.terms
+    points, _term_count, dimension, facet_bound, face_row_bytes, hull_dimension = (
+        _preflight(poly)
     )
     trivial = _trivial_result(poly, points)
     if trivial is not None:
@@ -394,7 +496,6 @@ def tropical_polynomial_essential_part(
             f"exact lifted hull exceeds its admitted envelope: {error}",
         )
 
-    hull_dimension = _affine_dimension(points, dimension)
     hull_facets = _source_hull_facets(hull, len(points), hull_dimension)
     equality_rows = tuple(
         tuple(_rational(value) for value in (*normal, offset))

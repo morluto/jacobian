@@ -125,6 +125,17 @@ def _assert_face_incidence(
             assert set(face.source_term_indices).issubset(parent_terms)
 
 
+def _incidence_signature(result: TropicalPolynomialEssentialPart):
+    return tuple(
+        (
+            face.dimension,
+            face.source_term_indices,
+            face.maximal_finite_face_indices,
+        )
+        for face in result.face_incidence
+    )
+
+
 @pytest.mark.parametrize("convention", ["MIN_PLUS", "MAX_PLUS"])
 def test_square_center_tie_is_retained_and_all_face_incidence_is_source_bound(
     convention: str,
@@ -150,6 +161,18 @@ def test_square_center_tie_is_retained_and_all_face_incidence_is_source_bound(
         for face in result.face_incidence
     )
     assert all(len(face.normal) == 3 for face in result.hull_facets)
+    expected = (
+        (0, (0,), (0,)),
+        (0, (1,), (0,)),
+        (0, (3,), (0,)),
+        (0, (4,), (0,)),
+        (1, (0, 1), (0,)),
+        (1, (0, 3), (0,)),
+        (1, (1, 4), (0,)),
+        (1, (3, 4), (0,)),
+        (2, (0, 1, 2, 3, 4), (0,)),
+    )
+    assert _incidence_signature(result) == expected
     _assert_face_incidence(poly, result)
 
 
@@ -178,6 +201,11 @@ def test_rank_deficient_lift_uses_relative_facets_and_exact_inequality_oracle(
     assert result.essential_term_indices == _inequality_oracle(poly) == active
     assert result.inessential_term_indices == (2,)
     assert any(row[-2].as_fraction() == 0 for row in result.affine_equalities)
+    assert _incidence_signature(result) == (
+        (0, (0,), (0,)),
+        (0, (3,), (0,)),
+        (1, (0, 1, 3), (0,)),
+    )
     for face in result.finite_faces:
         assert face.normal[-1].as_fraction() * normal_sign > 0
         assert face.source_term_indices
@@ -212,15 +240,82 @@ def test_fifty_term_rank_one_input_fits_the_exact_dd_pair_envelope() -> None:
     assert len(result.face_incidence) == 3
 
 
-def test_sixty_four_term_lift_rejected_by_shared_candidate_pair_admission() -> None:
+def test_sixty_four_term_lift_rejected_before_hull_by_candidate_pair_admission(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     poly = _polynomial(
         ("x", "y", "z", "w"),
         tuple((index, 0, 0, 0) for index in range(64)),
         (0,) * 64,
     )
 
+    def unexpected_hull(*_args, **_kwargs):
+        pytest.fail("the DD hull backend must not run after preflight rejection")
+
+    monkeypatch.setattr(
+        "jacobian.math.polynomials.tropical.essential_part.points_to_facets",
+        unexpected_hull,
+    )
     with pytest.raises(OperationResourceAdmissionError, match="candidate pairs"):
         tropical_polynomial_essential_part(poly)
+
+
+def test_face_work_is_rejected_before_hull_expansion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    exponents = tuple(
+        sorted(
+            (index, (index * index) % 31, (index * 7) % 31, (index * 11) % 31)
+            for index in range(50)
+        )
+    )
+    poly = _polynomial(("x", "y", "z", "w"), exponents, (0,) * len(exponents))
+
+    def unexpected_hull(*_args, **_kwargs):
+        pytest.fail("the hull backend must not run after face-work rejection")
+
+    monkeypatch.setattr(
+        "jacobian.math.polynomials.tropical.essential_part.points_to_facets",
+        unexpected_hull,
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="face-work"):
+        tropical_polynomial_essential_part(poly)
+
+
+@pytest.mark.parametrize(
+    ("exponents", "expected_facets"),
+    [
+        (
+            tuple((t, t**2, t**3, t**4) for t in range(6)),
+            9,
+        ),
+        (
+            tuple(
+                sorted(
+                    tuple(
+                        2 + (1 if axis == active else 0) * direction
+                        for axis in range(4)
+                    )
+                    for active in range(3)
+                    for direction in (-1, 1)
+                )
+            ),
+            8,
+        ),
+    ],
+    ids=("rank-four-moment-curve", "embedded-octahedron"),
+)
+def test_rank_aware_facet_bound_admits_intrinsic_hull_facets(
+    exponents: tuple[tuple[int, ...], ...], expected_facets: int
+) -> None:
+    poly = _polynomial(("x", "y", "z", "w"), exponents, (0,) * len(exponents))
+
+    result = tropical_polynomial_essential_part(poly)
+
+    assert result.lifted_affine_dimension == (4 if expected_facets == 9 else 3)
+    assert len(result.hull_facets) == expected_facets
+    assert result.essential_term_indices == _inequality_oracle(poly)
+    _assert_face_incidence(poly, result)
 
 
 def test_public_manifest_example_executes_as_a_source_bound_result() -> None:

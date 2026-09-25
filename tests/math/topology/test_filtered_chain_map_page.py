@@ -98,6 +98,55 @@ def test_page_maps_preserve_composition_on_a_late_page() -> None:
     assert direct.maps == ((((6,),), ()), ((), ((6,),)))
 
 
+def test_page_two_map_handles_a_differential_after_zero_d1() -> None:
+    complex_value = _complex()
+    low = FiltrationLevel(
+        subspaces=(
+            FilteredSubspace(vectors=((1,),)),
+            FilteredSubspace(vectors=()),
+        )
+    )
+    filtration = (
+        low,
+        low,
+        FiltrationLevel(
+            subspaces=(
+                FilteredSubspace(vectors=((1,),)),
+                FilteredSubspace(vectors=((1,),)),
+            )
+        ),
+    )
+    chain_map = filtered_map(
+        FilteredChainMapRequest(
+            source=complex_value,
+            source_filtration=filtration,
+            target=complex_value,
+            target_filtration=filtration,
+            maps=(((2,),), ((2,),)),
+        )
+    )
+
+    # E0 has a class x in level 0 and a in level 2. There is no level-1
+    # target, so d1(a)=0; the chain differential d(a)=x gives d2(a)=x.
+    page_one = filtered_chain_map_page(
+        FilteredChainMapPageRequest(map=chain_map, page=1)
+    )
+    assert all(
+        not any(any(entry for entry in row) for row in record.entries)
+        for record in page_one.source_page.differentials
+    )
+    page_two = filtered_chain_map_page(
+        FilteredChainMapPageRequest(map=chain_map, page=2)
+    )
+    d2 = next(
+        record
+        for record in page_two.source_page.differentials
+        if record.source_level == 2 and record.source_degree == 1
+    )
+    assert d2.entries == ((1,),)
+    assert page_two.maps == ((((2,),), ()), ((), ()), ((), ((2,),)))
+
+
 def test_zero_page_map_preserves_empty_page_axes() -> None:
     empty = ChainComplexValue(
         coefficient_ring=CoefficientRing.RATIONAL,

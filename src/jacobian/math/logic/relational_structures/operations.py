@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from itertools import product
 from math import lcm
-from typing import Literal
+from typing import Literal, NoReturn
 
 from jacobian._execution import request_checkpoint
 from jacobian.catalog.models import (
@@ -27,8 +27,8 @@ from jacobian.math.logic.relational_structures._models import (
     MAX_CSP_CONSTRAINTS,
     MAX_CSP_SCOPE_ENTRIES,
     CspAssignmentProfile,
-    CspAssignmentRequest,
     CspConstraintEvaluation,
+    CspSolutions,
     EmbeddingSearchResult,
     FiniteCspConstraint,
     FiniteCspInstance,
@@ -46,7 +46,6 @@ from jacobian.math.logic.relational_structures._models import (
     RelationalPolymorphism,
     RelationalPolymorphismCheckResult,
     RelationalPolymorphismRelationProfile,
-    RelationalPolymorphismRequest,
     RelationalPolymorphismStatus,
     RelationalPolymorphismWitness,
     RelationalProductResult,
@@ -131,7 +130,7 @@ def reduct_structure(
     """Return the selected source relations with an explicit symbol-axis map."""
 
     source = _admit_structure(source, "source")
-    indices, _work, _output_bound = admit_relational_reduct(source, symbol_ids)
+    indices, _work = admit_relational_reduct(source, symbol_ids)
     request_checkpoint("before relational reduct construction")
     reduct = FiniteRelationalStructure(
         carrier_size=source.carrier_size,
@@ -262,7 +261,9 @@ def quotient_structure(
 
 
 def check_polymorphism(
-    request: RelationalPolymorphismRequest,
+    source: FiniteRelationalStructure,
+    arity: int,
+    operation_table: Sequence[int],
 ) -> RelationalPolymorphismCheckResult:
     """Check complete preservation of every finite basic relation by f:A^m→A.
 
@@ -272,33 +273,11 @@ def check_polymorphism(
     before any row combinations or lookup indexes are expanded.
     """
 
-    if not isinstance(request, RelationalPolymorphismRequest):
-        raise OperationDomainValidationError(
-            location=("request",),
-            code="relational.polymorphism.request_type",
-            message="request must be a typed finite relational operation table",
-        )
-    source = _admit_structure(request.source, "source")
-    try:
-        admitted = RelationalPolymorphismRequest.model_validate(
-            {
-                "source": source.model_dump(),
-                "arity": request.arity,
-                "operation_table": request.operation_table,
-            },
-            strict=True,
-        )
-    except Exception as exc:
-        raise OperationDomainValidationError(
-            location=("request",),
-            code="relational.polymorphism.request_shape",
-            message="request must contain a complete source-bound operation table",
-        ) from exc
-    admit_polymorphism_check(source, admitted.arity)
+    source = _admit_structure(source, "source")
+    admit_polymorphism_check(source, arity, operation_table)
+    operation_table = tuple(operation_table)
 
     carrier_size = source.carrier_size
-    arity = admitted.arity
-    operation_table = admitted.operation_table
     relation_profiles: list[RelationalPolymorphismRelationProfile] = []
     witness: RelationalPolymorphismWitness | None = None
     checked_combinations = 0
@@ -463,21 +442,15 @@ def csp_instance_to_source_structure(
     equivalent to preserving every source relation tuple.
     """
 
-    if not isinstance(instance, FiniteCspInstance):
-        raise OperationDomainValidationError(
-            location=("instance",),
-            code="relational.csp.instance_type",
-            message="instance must be a finite CSP instance",
-        )
-    _preflight_csp_instance(instance)
-    try:
-        admitted = FiniteCspInstance.model_validate(instance.model_dump(), strict=True)
-    except Exception as exc:
-        raise OperationDomainValidationError(
-            location=("instance",),
-            code="relational.csp.instance_shape",
-            message="instance must have valid variables, constraints, and template relations",
-        ) from exc
+    admitted = _admit_csp_instance(instance)
+    return _csp_source_from_admitted(admitted)
+
+
+def _csp_source_from_admitted(
+    admitted: FiniteCspInstance,
+) -> FiniteRelationalStructure:
+    """Construct the canonical source after the instance is admitted."""
+
     table_by_symbol: dict[str, set[tuple[int, ...]]] = {
         symbol.symbol_id: set() for symbol in admitted.template.signature
     }
@@ -493,7 +466,30 @@ def csp_instance_to_source_structure(
     )
 
 
-def profile_csp_assignment(request: CspAssignmentRequest) -> CspAssignmentProfile:
+def _admit_csp_instance(instance: FiniteCspInstance) -> FiniteCspInstance:
+    """Preflight and canonicalize an instance once for a CSP operation."""
+
+    if not isinstance(instance, FiniteCspInstance):
+        raise OperationDomainValidationError(
+            location=("instance",),
+            code="relational.csp.instance_type",
+            message="instance must be a finite CSP instance",
+        )
+    _preflight_csp_instance(instance)
+    try:
+        return FiniteCspInstance.model_validate(instance.model_dump(), strict=True)
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("instance",),
+            code="relational.csp.instance_shape",
+            message="instance must have valid variables, constraints, and template relations",
+        ) from exc
+
+
+def profile_csp_assignment(
+    instance: FiniteCspInstance,
+    assignment: Sequence[int],
+) -> CspAssignmentProfile:
     """Evaluate a complete assignment at every named CSP constraint.
 
     This is a one-map check, not an unsatisfiability search. All occurrences
@@ -502,36 +498,42 @@ def profile_csp_assignment(request: CspAssignmentRequest) -> CspAssignmentProfil
     structure is available separately via ``csp.instance.to_source_structure``.
     """
 
-    if not isinstance(request, CspAssignmentRequest):
+    if not isinstance(instance, FiniteCspInstance):
         raise OperationDomainValidationError(
-            location=("request",),
-            code="relational.csp.assignment_request_type",
-            message="request must be a typed CSP assignment profile request",
+            location=("instance",),
+            code="relational.csp.instance_type",
+            message="instance must be a finite CSP instance",
         )
-    _preflight_csp_instance(request.instance)
-    raw_assignment = request.assignment
+    _preflight_csp_instance(instance)
     if (
-        type(raw_assignment) is not tuple
-        or len(raw_assignment) > MAX_RELATIONAL_CARRIER
-        or any(type(value) is not int for value in raw_assignment)
+        not isinstance(assignment, Sequence)
+        or isinstance(assignment, (str, bytes, bytearray))
+        or len(assignment) > MAX_RELATIONAL_CARRIER
+        or any(type(value) is not int for value in assignment)
     ):
         raise OperationDomainValidationError(
             location=("assignment",),
             code="relational.csp.assignment_shape",
             message="assignment must be a bounded tuple of exact integer labels",
         )
+    assignment = tuple(assignment)
     try:
-        instance = FiniteCspInstance.model_validate(
-            request.instance.model_dump(), strict=True
-        )
-        assignment = raw_assignment
-        CspAssignmentRequest(instance=instance, assignment=assignment)
+        admitted = FiniteCspInstance.model_validate(instance.model_dump(), strict=True)
     except Exception as exc:
         raise OperationDomainValidationError(
-            location=("request",),
-            code="relational.csp.assignment_shape",
-            message="request must contain one in-range template value per variable",
+            location=("instance",),
+            code="relational.csp.instance_shape",
+            message="instance must have valid variables, constraints, and template relations",
         ) from exc
+    if len(assignment) != admitted.variable_count or any(
+        not 0 <= value < admitted.template.carrier_size for value in assignment
+    ):
+        raise OperationDomainValidationError(
+            location=("assignment",),
+            code="relational.csp.assignment_shape",
+            message="assignment must contain one in-range template value per variable",
+        )
+    instance = admitted
 
     symbol_index = {
         symbol.symbol_id: index
@@ -563,21 +565,44 @@ def profile_csp_assignment(request: CspAssignmentRequest) -> CspAssignmentProfil
     )
 
 
+def enumerate_csp_solutions(instance: FiniteCspInstance) -> CspSolutions:
+    """Enumerate every satisfying assignment on the instance variable axis.
+
+    The canonical source-structure conversion turns each constraint scope into
+    a relation row. Complete homomorphism enumeration into the instance's
+    template is therefore exactly complete CSP solution enumeration; the
+    returned value retains the original instance and named occurrences.
+    """
+
+    admitted = _admit_csp_instance(instance)
+    source = _csp_source_from_admitted(admitted)
+    family = enumerate_homomorphisms(source, admitted.template)
+    return CspSolutions._from_kernel(
+        instance=admitted,
+        assignments=family.carrier_maps,
+        total_candidates=family.total_candidates,
+    )
+
+
 def _preflight_csp_instance(instance: FiniteCspInstance) -> None:
     """Bound native values before recursively copying them for revalidation."""
 
-    template = instance.template
-    constraints = instance.constraints
-    invalid = (
+    # Validation-bypassed Pydantic instances may omit attributes entirely;
+    # inspect fields defensively so malformed native values use the domain error.
+    try:
+        template = instance.template
+        constraints = instance.constraints
+        variable_count = instance.variable_count
+    except (AttributeError, TypeError):
+        _raise_invalid_csp_instance()
+    if (
         type(template) is not FiniteRelationalStructure
-        or type(instance.variable_count) is not int
-        or not 0 <= instance.variable_count <= MAX_RELATIONAL_CARRIER
+        or type(variable_count) is not int
+        or not 0 <= variable_count <= MAX_RELATIONAL_CARRIER
         or not isinstance(constraints, tuple)
         or len(constraints) > MAX_CSP_CONSTRAINTS
-    )
-    if invalid:
+    ):
         _raise_invalid_csp_instance()
-    assert type(template) is FiniteRelationalStructure
     if (
         type(template.carrier_size) is not int
         or not 0 <= template.carrier_size <= MAX_RELATIONAL_CARRIER
@@ -603,39 +628,50 @@ def _preflight_csp_instance(instance: FiniteCspInstance) -> None:
         template_rows += len(table)
         if template_rows > MAX_RELATIONAL_TRANSPORT_TUPLES:
             _raise_invalid_csp_instance()
-        for row in table:
-            if (
-                not isinstance(row, tuple)
-                or len(row) != symbol.arity
-                or any(
-                    type(value) is not int or not 0 <= value < template.carrier_size
-                    for value in row
-                )
-            ):
-                _raise_invalid_csp_instance()
+        _preflight_relation_rows(table, symbol.arity, template.carrier_size)
     scope_entries = 0
     for constraint in constraints:
+        if type(constraint) is not FiniteCspConstraint:
+            _raise_invalid_csp_instance()
+        try:
+            symbol_id = constraint.symbol_id
+            scope = constraint.scope
+        except (AttributeError, TypeError):
+            _raise_invalid_csp_instance()
         if (
-            type(constraint) is not FiniteCspConstraint
-            or type(constraint.symbol_id) is not str
-            or not isinstance(constraint.scope, tuple)
-            or len(constraint.scope) > MAX_RELATIONAL_ARITY
+            type(symbol_id) is not str
+            or not isinstance(scope, tuple)
+            or len(scope) > MAX_RELATIONAL_ARITY
         ):
             _raise_invalid_csp_instance()
-        arity = symbol_arities.get(constraint.symbol_id)
-        if arity is None or len(constraint.scope) != arity:
+        arity = symbol_arities.get(symbol_id)
+        if arity is None or len(scope) != arity:
             _raise_invalid_csp_instance()
-        scope_entries += len(constraint.scope)
+        scope_entries += len(scope)
         if scope_entries > MAX_CSP_SCOPE_ENTRIES:
             _raise_invalid_csp_instance()
         if any(
-            type(variable) is not int or not 0 <= variable < instance.variable_count
-            for variable in constraint.scope
+            type(variable) is not int or not 0 <= variable < variable_count
+            for variable in scope
         ):
             _raise_invalid_csp_instance()
 
 
-def _raise_invalid_csp_instance() -> None:
+def _preflight_relation_rows(
+    table: tuple[object, ...], arity: int, carrier_size: int
+) -> None:
+    for row in table:
+        if (
+            not isinstance(row, tuple)
+            or len(row) != arity
+            or any(
+                type(value) is not int or not 0 <= value < carrier_size for value in row
+            )
+        ):
+            _raise_invalid_csp_instance()
+
+
+def _raise_invalid_csp_instance() -> NoReturn:
     raise OperationDomainValidationError(
         location=("instance",),
         code="relational.csp.instance_shape",

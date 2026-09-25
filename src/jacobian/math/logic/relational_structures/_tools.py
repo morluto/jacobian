@@ -3,7 +3,7 @@
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.logic.relational_structures._admission import (
     MAX_EMBEDDING_REFLECTION_CELLS,
-    MAX_HOMOMORPHISM_ENUMERATION_OUTPUT_BYTES,
+    MAX_HOMOMORPHISM_ENUMERATION_MAP_LABELS,
     MAX_POLYMORPHISM_COORDINATE_WORK,
     MAX_POLYMORPHISM_RELATION_COMBINATIONS,
     MAX_SEARCH_CANDIDATES,
@@ -12,6 +12,7 @@ from jacobian.math.logic.relational_structures._admission import (
 from jacobian.math.logic.relational_structures._models import (
     CspAssignmentProfile,
     CspAssignmentRequest,
+    CspSolutions,
     EmbeddingSearchRequest,
     EmbeddingSearchResult,
     FiniteCspInstance,
@@ -43,6 +44,7 @@ from jacobian.math.logic.relational_structures.operations import (
     count_homomorphisms,
     csp_instance_to_source_structure,
     direct_product_structure,
+    enumerate_csp_solutions,
     enumerate_homomorphisms,
     induced_substructure,
     profile_csp_assignment,
@@ -119,7 +121,11 @@ def _csp_instance_source(
 def _csp_assignment_profile(
     request: CspAssignmentRequest,
 ) -> CspAssignmentProfile:
-    return profile_csp_assignment(request)
+    return profile_csp_assignment(request.instance, request.assignment)
+
+
+def _csp_solutions(request: FiniteCspInstance) -> CspSolutions:
+    return enumerate_csp_solutions(request)
 
 
 def _induced_substructure(
@@ -143,7 +149,7 @@ def _direct_product(request: RelationalProductRequest) -> RelationalProductResul
 def _polymorphism_check(
     request: RelationalPolymorphismRequest,
 ) -> RelationalPolymorphismCheckResult:
-    return check_polymorphism(request)
+    return check_polymorphism(request.source, request.arity, request.operation_table)
 
 
 _DIRECTED_EDGE = {"symbol_id": "E", "arity": 2}
@@ -196,9 +202,10 @@ TOOLS: MathTools = (
             "ranked signatures. Pair (i,j) receives canonical label "
             "i*|B|+j; each relation contains exactly the coordinatewise "
             "pairs from the two factor relations. The result retains both "
-            "factors and the two projection maps. Carrier, relation-row, "
-            "coordinate-work, and output bounds are checked before Cartesian "
-            "relation expansion."
+            "factors and the two projection maps. Carrier, relation-row, and "
+            "coordinate-work bounds are checked before Cartesian relation "
+            "expansion; the admitted visits bound the product and its "
+            "projections."
         ),
         request_type=RelationalProductRequest,
         result_type=RelationalProductResult,
@@ -232,8 +239,8 @@ TOOLS: MathTools = (
             "return every restricted relation table, the exact source, and "
             "the inclusion map from canonical induced labels to source labels. "
             "The selected order defines the induced carrier axis; nullary "
-            "relations retain their exact truth values. Row transport, output "
-            "bytes, and result shape are admitted before relation expansion."
+            "relations retain their exact truth values. Row transport work "
+            "and result shape are admitted before relation expansion."
         ),
         request_type=InducedSubstructureRequest,
         result_type=InducedSubstructureResult,
@@ -263,8 +270,7 @@ TOOLS: MathTools = (
             "source-signature order, preserving the carrier and selected "
             "complete relation tables. The result includes the exact reduct and the map from "
             "reduct symbol positions to source signature positions. Selected "
-            "row and coordinate work and the output-byte envelope are admitted "
-            "before construction."
+            "row and coordinate work is admitted before construction."
         ),
         request_type=RelationalReductRequest,
         result_type=RelationalReductResult,
@@ -457,6 +463,47 @@ TOOLS: MathTools = (
         ),
     ),
     MathTool(
+        operation_id="csp.solutions.enumerate.compute",
+        title="Enumerate every solution of a finite CSP instance",
+        description=(
+            "Return the complete lexicographically ordered family of satisfying "
+            "assignments on the instance variable axis, retaining the original "
+            "instance and its named constraint occurrences. This is exhaustive: "
+            "the carrier-map space and tuple-replay work are admitted before "
+            "search, and an over-budget request is rejected rather than truncated. "
+            "The assignments agree with homomorphisms from the canonical CSP "
+            "source structure into its template, including repeated-variable "
+            "scopes, duplicate occurrences, nullary relations, and empty axes."
+        ),
+        request_type=FiniteCspInstance,
+        result_type=CspSolutions,
+        run=_csp_solutions,
+        tags=("csp", "solutions", "relational-structures", "exact"),
+        discovery_terms=(
+            "enumerate all CSP solutions",
+            "complete satisfying assignments",
+            "finite constraint satisfaction solution relation",
+            "CSP solutions as homomorphisms",
+        ),
+        examples=(
+            OperationExample(
+                name="two_color_one_edge",
+                description="Enumerate the two assignments satisfying one disequality constraint.",
+                input={
+                    "template": {
+                        "carrier_size": 2,
+                        "signature": [{"symbol_id": "E", "arity": 2}],
+                        "relation_tables": [[[0, 1], [1, 0]]],
+                    },
+                    "variable_count": 2,
+                    "constraints": [
+                        {"constraint_id": "edge", "symbol_id": "E", "scope": [0, 1]}
+                    ],
+                },
+            ),
+        ),
+    ),
+    MathTool(
         operation_id="relational.homomorphism.check",
         title="Check a candidate homomorphism between finite relational structures",
         description=(
@@ -568,8 +615,9 @@ TOOLS: MathTools = (
             "Return the complete lexicographically ordered list of all total "
             "carrier maps preserving every relation between two finite "
             "structures over one shared signature. The entire |B|^|A| search "
-            "and a conservative result-byte bound (at most "
-            f"{MAX_HOMOMORPHISM_ENUMERATION_OUTPUT_BYTES} bytes) are admitted "
+            "and a conservative retained-map envelope (at most "
+            f"{MAX_HOMOMORPHISM_ENUMERATION_MAP_LABELS} carrier map labels) "
+            "are admitted "
             "before map enumeration; larger requests receive a typed "
             "resource refusal."
         ),

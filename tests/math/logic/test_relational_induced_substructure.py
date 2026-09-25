@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from jacobian.canonical import CanonicalLimits
 from jacobian.math.logic.relational_structures import (
     FiniteRelationalStructure,
     FiniteRelationSymbol,
@@ -72,11 +71,7 @@ def test_full_substructure_can_use_and_preserve_identity_axis() -> None:
     assert result.substructure == source
 
 
-def test_admission_bounds_work_and_conservative_serialized_result() -> None:
+def test_admission_bounds_row_and_coordinate_work() -> None:
     source = _cycle()
-    work, output_bound = admit_induced_substructure(source, (2, 0))
+    work = admit_induced_substructure(source, (2, 0))
     assert work == 9  # three binary rows, each charged for its row and coordinates
-    assert output_bound == (
-        2 * len(source.model_dump_json().encode("utf-8")) + 4 * 2 + 256
-    )
-    assert output_bound < CanonicalLimits().max_output_bytes

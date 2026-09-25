@@ -15,9 +15,10 @@ present exactly when it is present in both factors. Empty carriers are also
 supported.
 
 Admission checks the Cartesian carrier size, each product relation's row
-count, the aggregate coordinate work, and a conservative serialized result
-size before expanding any pair of relation rows. A refused request therefore
-does not return a partial structure. This binary operation is also the
+count, and the aggregate coordinate work before expanding any pair of relation
+rows; the admitted visits bound the complete product and both projection
+arrays. A refused request therefore does not return a partial structure. This
+binary operation is also the
 reusable carrier construction needed to represent polymorphisms as
 homomorphisms from relational powers; callers can compose it repeatedly while
 respecting the same bounds at each step.

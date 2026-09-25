@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections.abc import Iterator
 from math import comb
 
-from jacobian.canonical import CanonicalLimits
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -27,7 +26,7 @@ from jacobian.math.groups.root_systems.operations import (
 )
 
 MAX_CHARACTER_WORK = 50_000_000
-MAX_CHARACTER_OUTPUT_BYTES = 64_000
+MAX_CHARACTER_OUTPUT_DIGITS = 64_000
 
 
 def _compositions(total: int, slots: int) -> Iterator[tuple[int, ...]]:
@@ -125,8 +124,7 @@ def highest_weight_character(
         state_bound > MAX_CHARACTER_STATES
         or work_bound > MAX_CHARACTER_WORK
         or intermediate_bits_bound > MAX_CHARACTER_MULTIPLICITY_BITS
-        or output_bound
-        > min(MAX_CHARACTER_OUTPUT_BYTES, CanonicalLimits().max_output_bytes)
+        or output_bound > MAX_CHARACTER_OUTPUT_DIGITS
     ):
         raise OperationResourceAdmissionError(
             location=("highest_weight",),

@@ -11,7 +11,6 @@ from jacobian.math.graphs.decks._models import (
     UnlabelledDeckRequest,
     UnlabelledVertexDeck,
     UnlabelledVertexDeckRequest,
-    VertexDeckDegreeMultisetRequest,
     VertexDeckEdgeCount,
     VertexDeckEdgeCountRequest,
     VertexDeckInducedSubgraphCount,
@@ -25,13 +24,11 @@ from jacobian.math.graphs.decks.operations import (
     edge_deletion_family,
     unlabelled_deck,
     unlabelled_vertex_deck,
-    vertex_deck_degree_multiset,
     vertex_deck_edge_count,
     vertex_deck_induced_subgraph_count,
     vertex_deck_subgraph_count,
     vertex_deletion_family,
 )
-from jacobian.math.graphs.realization._models import DegreeSequence
 
 
 def _run_vertex_deleted(request: VertexDeckRequest) -> VertexDeletionFamily:
@@ -76,12 +73,6 @@ def _run_vertex_deck_edge_count(
     request: VertexDeckEdgeCountRequest,
 ) -> VertexDeckEdgeCount:
     return vertex_deck_edge_count(request.deck)
-
-
-def _run_vertex_deck_degree_multiset(
-    request: VertexDeckDegreeMultisetRequest,
-) -> DegreeSequence:
-    return vertex_deck_degree_multiset(request.deck)
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
@@ -331,79 +322,6 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                                 "representative": {
                                     "vertices": ["b", "c"],
                                     "edges": [["b", "c"]],
-                                },
-                                "multiplicity": 3,
-                                "card_indices": [0, 1, 2],
-                            }
-                        ],
-                        "card_count": 3,
-                    }
-                },
-            ),
-        ),
-    ),
-    MathTool(
-        operation_id="graph.deck.vertex.degree_multiset.compute",
-        title="Reconstruct the vertex degree multiset from a vertex deck",
-        description=(
-            "For a complete source-bound unlabelled vertex deck of order n >= 3, "
-            "derive the source edge count from the card edge-count identity and "
-            "return the descending multiset (m-|E(C)|) over cards C. Uses the "
-            "exact DegreeSequence value and admits/authenticates the bounded "
-            "deck quotient before trusting card multiplicities. It returns no "
-            "source-vertex labels or reconstructed graph."
-        ),
-        request_type=VertexDeckDegreeMultisetRequest,
-        result_type=DegreeSequence,
-        run=_run_vertex_deck_degree_multiset,
-        tags=("graph", "deck", "degree-sequence", "reconstruction", "exact"),
-        discovery_terms=(
-            "degree multiset from vertex deck",
-            "reconstruct graph degree sequence",
-            "Kelly degree sequence",
-        ),
-        examples=(
-            OperationExample(
-                name="empty_graph_on_three_vertices",
-                description=(
-                    "Three empty two-vertex cards recover the zero degree "
-                    "multiset, preserving all three repeated cards."
-                ),
-                input={
-                    "deck": {
-                        "family": {
-                            "source": {"vertices": ["a", "b", "c"], "edges": []},
-                            "cards": [
-                                {
-                                    "deleted_vertex": "a",
-                                    "card": {"vertices": ["b", "c"], "edges": []},
-                                    "retained_vertices": ["b", "c"],
-                                    "retained_edge_count": 0,
-                                    "deleted_edge_count": 0,
-                                },
-                                {
-                                    "deleted_vertex": "b",
-                                    "card": {"vertices": ["a", "c"], "edges": []},
-                                    "retained_vertices": ["a", "c"],
-                                    "retained_edge_count": 0,
-                                    "deleted_edge_count": 0,
-                                },
-                                {
-                                    "deleted_vertex": "c",
-                                    "card": {"vertices": ["a", "b"], "edges": []},
-                                    "retained_vertices": ["a", "b"],
-                                    "retained_edge_count": 0,
-                                    "deleted_edge_count": 0,
-                                },
-                            ],
-                            "edge_appearances": [],
-                            "vertex_appearances": [2, 2, 2],
-                        },
-                        "classes": [
-                            {
-                                "representative": {
-                                    "vertices": ["b", "c"],
-                                    "edges": [],
                                 },
                                 "multiplicity": 3,
                                 "card_indices": [0, 1, 2],

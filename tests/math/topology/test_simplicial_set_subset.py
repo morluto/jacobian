@@ -11,13 +11,15 @@ from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.dispatch import invoke_operation
 from jacobian.math.topology.simplicial_sets import (
-    SimplicialMapCompositionRequest,
     SimplicialSubsetPrefix,
     SimplicialSubsetRequest,
-    compose_simplicial_maps,
-    identity_simplicial_map,
     simplicial_subset,
     standard_simplex,
+)
+from jacobian.math.topology.simplicial_sets.maps import (
+    SimplicialMapCompositionRequest,
+    compose_simplicial_maps,
+    identity_simplicial_map,
 )
 
 

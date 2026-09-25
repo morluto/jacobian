@@ -26,8 +26,7 @@ from jacobian.math.topology.simplicial_sets.subset_models import (
 
 MAX_SUBSET_CHECK_WORK = 100_000
 MAX_SUBSET_CLOSURE_INCIDENCE = 4_096
-MAX_SUBSET_RESULT_BYTES = 256_000
-MAX_JSON_ASCII_CHARS_PER_LABEL_CHAR = 12
+MAX_SUBSET_RESULT_CELLS = 256_000
 
 
 def _invalid(reason: str, message: str, *location: str | int) -> NoReturn:
@@ -55,19 +54,15 @@ def _identity_work(max_degree: int, sizes: tuple[int, ...]) -> int:
     return 2 * identities
 
 
-def _output_byte_bound(
+def _output_cell_bound(
     ambient: FiniteTruncatedSimplicialSet,
     degree_indices: tuple[tuple[int, ...], ...],
     subset_incidence: int,
 ) -> int:
     source_sizes = tuple(map(len, ambient.sets))
-    source_labels = sum(
-        len(label) * MAX_JSON_ASCII_CHARS_PER_LABEL_CHAR + 3
-        for level in ambient.sets
-        for label in level
-    )
+    source_labels = sum(len(label) for level in ambient.sets for label in level)
     subset_labels = sum(
-        len(ambient.sets[degree][index]) * MAX_JSON_ASCII_CHARS_PER_LABEL_CHAR + 3
+        len(ambient.sets[degree][index])
         for degree, indices in enumerate(degree_indices)
         for index in indices
     )
@@ -172,14 +167,14 @@ def _preflight_request(
                 f"incidences, above {MAX_SUBSET_CLOSURE_INCIDENCE}"
             ),
         )
-    output_bytes = _output_byte_bound(ambient, degree_indices, subset_incidence)
-    if output_bytes > MAX_SUBSET_RESULT_BYTES:
+    output_cells = _output_cell_bound(ambient, degree_indices, subset_incidence)
+    if output_cells > MAX_SUBSET_RESULT_CELLS:
         raise OperationResourceAdmissionError(
             location=("degree_indices",),
             code="simplicial_set.subset.output_budget_exceeded",
             message=(
-                f"estimated subobject output {output_bytes} bytes exceeds "
-                f"{MAX_SUBSET_RESULT_BYTES}"
+                f"estimated subobject output {output_cells} cells exceeds "
+                f"{MAX_SUBSET_RESULT_CELLS}"
             ),
         )
     return ambient, degree_indices, sizes
@@ -280,6 +275,6 @@ def simplicial_subset(
 __all__ = [
     "MAX_SUBSET_CHECK_WORK",
     "MAX_SUBSET_CLOSURE_INCIDENCE",
-    "MAX_SUBSET_RESULT_BYTES",
+    "MAX_SUBSET_RESULT_CELLS",
     "simplicial_subset",
 ]

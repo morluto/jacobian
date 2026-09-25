@@ -231,7 +231,6 @@ def transition_liveness_profile(
             code="petri_net.transition_liveness.work_bound",
             message="transition-liveness validation exceeds its graph-admission bound",
         )
-    _validate_terminal_scc_net_values(source_graph)
     output_bound = _output_size(source_graph, transition_count)
     if output_bound > min(
         MAX_TRANSITION_LIVENESS_OUTPUT_BYTES,
@@ -273,6 +272,17 @@ def transition_liveness_profile(
                 message="source graph must contain each marking exactly once",
             )
         state_indices[tokens] = state.state_index
+    if graph.truncated:
+        return TransitionLivenessResult.model_construct(
+            source_graph=graph,
+            transitions=tuple(
+                TransitionLivenessEntry.model_construct(
+                    transition=transition, status="UNKNOWN", witness_state=None
+                )
+                for transition in range(transition_count)
+            ),
+        )
+    _validate_terminal_scc_net_values(graph)
     _, reverse = _terminal_scc_adjacency(graph, graph.net, state_indices)
     return TransitionLivenessResult.model_construct(
         source_graph=graph,

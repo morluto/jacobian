@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from jacobian.catalog.models import MathTool
+from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.logic.automata.petri_nets.liveness._models import (
     TransitionLivenessRequest,
     TransitionLivenessResult,
@@ -37,7 +37,35 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "L4 liveness",
             "transition can fire from every reachable marking",
         ),
-        examples=(),
+        examples=(
+            OperationExample(
+                name="one_state_self_loop",
+                description="A transition that fires at the only reachable marking is live.",
+                input={
+                    "source_graph": {
+                        "net": {
+                            "place_count": 1,
+                            "transition_count": 1,
+                            "pre": [[0]],
+                            "post": [[0]],
+                        },
+                        "initial_marking": {"tokens": [0]},
+                        "max_states": 1,
+                        "states": [
+                            {
+                                "state_index": 0,
+                                "place_axis": [0],
+                                "marking": {"tokens": [0]},
+                            }
+                        ],
+                        "edges": [
+                            {"source_state": 0, "transition": 0, "target_state": 0}
+                        ],
+                        "truncated": False,
+                    }
+                },
+            ),
+        ),
     ),
 )
 

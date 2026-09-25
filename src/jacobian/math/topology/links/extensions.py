@@ -14,7 +14,9 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.math.matrices.values import IntegerMatrix
+from jacobian.math.matrices.analysis._models import InertiaResult
+from jacobian.math.matrices.analysis.operations import compute_inertia
+from jacobian.math.matrices.values import IntegerMatrix, RationalMatrix
 from jacobian.math.polynomials.values import (
     RationalLaurentPolynomial,
     RationalLaurentPolynomialTerm,
@@ -28,6 +30,9 @@ from jacobian.math.topology.links._extensions_models import (
     MAX_CONWAY_CENTERED_DEGREE,
     MAX_CONWAY_COEFFICIENT_DIGITS,
     MAX_CONWAY_OUTPUT_BYTES,
+    MAX_LINK_SIGNATURE_CROSSINGS,
+    MAX_LINK_SIGNATURE_OUTPUT_BYTES,
+    MAX_LINK_SIGNATURE_WORK,
     MAX_STATE_CIRCLE_CROSSINGS,
     MAX_STATE_CIRCLE_OUTPUT_BYTES,
     MAX_WIRTINGER_GENERATORS,
@@ -38,6 +43,7 @@ from jacobian.math.topology.links._extensions_models import (
     BraidWord,
     CheckerboardRegion,
     ConwayPolynomialResult,
+    GoeritzCorrectionContribution,
     GoeritzDataResult,
     LinkBlackboardEdge,
     LinkBlackboardGraph,
@@ -50,6 +56,7 @@ from jacobian.math.topology.links._extensions_models import (
     LinkDisjointUnionDartMap,
     LinkDisjointUnionFreeLoopMap,
     LinkDisjointUnionResult,
+    LinkSignatureResult,
     LinkSmoothedCircle,
     LinkStateCirclesResult,
     SeifertCircle,
@@ -658,6 +665,101 @@ def link_goeritz_data(graph: LinkBlackboardGraph) -> GoeritzDataResult:
         deleted_region_id=shaded_indices[deleted_position],
         reduced_matrix=reduced,
         absolute_determinant=abs(_integer_determinant(reduced_entries)),
+    )
+
+
+def link_signature(diagram: OrientedLinkDiagram) -> LinkSignatureResult:
+    """Return the exact Gordon-Litherland signature for a bounded diagram.
+
+    This uses Jacobian's Tait convention: an edge incidence is +1 when its
+    shaded corners are the overpassing pair. Thus the source Goeritz matrix is
+    the signed Laplacian with those incidences, and a crossing is type II when
+    its oriented crossing sign times its incidence is -1. The link signature
+    is the Goeritz matrix signature minus the sum of type-II incidences.
+    A crossing-free unlink has signature zero and uses the zero-dimensional
+    inertia convention.
+    """
+    admitted = _admit_diagram(diagram)
+    crossing_count = len(admitted.crossings)
+    if crossing_count > MAX_LINK_SIGNATURE_CROSSINGS:
+        raise OperationResourceAdmissionError(
+            location=("diagram",),
+            code="link_diagram.signature_crossing_bound",
+            message="exact link signatures are admitted for at most 32 crossings",
+        )
+
+    # A connected c-crossing plane graph has at most c+2 regions, so its
+    # reduced Goeritz order is at most c. Each entry has magnitude at most c.
+    # For integer entries of at most two digits and denominator 1, the exact
+    # inertia owner's Hadamard/minor estimate is bounded by 10*n+4 digits.
+    dimension = crossing_count
+    minor_digits_bound = 10 * dimension + 4
+    inertia_work_bound = 4 * dimension**3 * minor_digits_bound
+    if inertia_work_bound > MAX_LINK_SIGNATURE_WORK:
+        raise RuntimeError("link signature inertia envelope is inconsistent")
+    diagram_bytes = len(admitted.model_dump_json(warnings=False).encode("utf-8"))
+    output_bound = 4 * diagram_bytes + 1_024 * crossing_count**2 + 4_096
+    if output_bound > MAX_LINK_SIGNATURE_OUTPUT_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("diagram",),
+            code="link_diagram.signature_output_bound",
+            message="link signature result exceeds its conservative output envelope",
+        )
+
+    goeritz_data = _goeritz_data_admitted(admitted) if crossing_count else None
+    integer_matrix = goeritz_data.reduced_matrix if goeritz_data is not None else None
+    rational_matrix = (
+        RationalMatrix(
+            entries=tuple(
+                tuple(CanonicalRational(num=value, den=1) for value in row)
+                for row in integer_matrix.entries
+            ),
+            row_count=integer_matrix.row_count,
+            column_count=integer_matrix.column_count,
+        )
+        if integer_matrix is not None
+        else RationalMatrix(entries=(), row_count=0, column_count=0)
+    )
+    if rational_matrix.row_count == 0:
+        inertia = InertiaResult._from_kernel(
+            matrix=rational_matrix,
+            n_positive=0,
+            n_negative=0,
+            n_zero=0,
+        )
+    else:
+        inertia = compute_inertia(rational_matrix)
+    contributions = (
+        tuple(
+            GoeritzCorrectionContribution(
+                crossing_id=crossing.crossing_id,
+                crossing_sign=crossing.sign,
+                incidence_number=edge.tait_sign,
+                crossing_type=(
+                    "TYPE_I" if crossing.sign * edge.tait_sign == 1 else "TYPE_II"
+                ),
+                correction_contribution=(
+                    edge.tait_sign if crossing.sign * edge.tait_sign == -1 else 0
+                ),
+            )
+            for crossing, edge in zip(
+                goeritz_data.blackboard_graph.diagram.crossings,
+                goeritz_data.blackboard_graph.edges,
+                strict=True,
+            )
+        )
+        if goeritz_data is not None
+        else ()
+    )
+    correction_term = sum(row.correction_contribution for row in contributions)
+    signature = inertia.n_positive - inertia.n_negative - correction_term
+    return LinkSignatureResult(
+        diagram=admitted,
+        goeritz_data=goeritz_data,
+        goeritz_inertia=inertia,
+        correction_contributions=contributions,
+        correction_term=correction_term,
+        signature=signature,
     )
 
 

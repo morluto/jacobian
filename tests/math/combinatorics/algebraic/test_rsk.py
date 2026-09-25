@@ -150,6 +150,12 @@ def test_pair_validation_rejects_invalid_permutations_and_shapes() -> None:
         )
 
 
+def test_native_permutation_rejects_missing_images_as_domain_error() -> None:
+    malformed = FinitePermutation.model_construct()
+    with pytest.raises(OperationDomainValidationError):
+        algebraic_combinatorics.permutation_rsk(malformed)
+
+
 def test_native_permutation_entry_admits_canonical_values_before_insertion() -> None:
     with pytest.raises(OperationDomainValidationError):
         algebraic_combinatorics.permutation_rsk((1, 2, 3))
@@ -168,6 +174,19 @@ def test_inverse_rejects_nonstandard_tableaux_before_reverse_insertion() -> None
     )
     with pytest.raises(OperationDomainValidationError):
         _inverse(malformed)
+
+
+def test_native_inverse_rejects_missing_fields_as_domain_error() -> None:
+    malformed_pair = PermutationRSKPair.model_construct()
+    with pytest.raises(OperationDomainValidationError):
+        algebraic_combinatorics.inverse_permutation_rsk(malformed_pair)
+
+    malformed_tableau = PermutationRSKPair.model_construct(
+        p_tableau=StandardYoungTableau.model_construct(),
+        q_tableau=StandardYoungTableau(rows=((1,),)),
+    )
+    with pytest.raises(OperationDomainValidationError):
+        algebraic_combinatorics.inverse_permutation_rsk(malformed_tableau)
 
 
 def test_native_inverse_admits_tableau_cells_before_reverse_insertion() -> None:

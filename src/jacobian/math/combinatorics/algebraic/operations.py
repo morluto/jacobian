@@ -533,13 +533,14 @@ def permutation_rsk(permutation: object) -> PermutationRSKPair:
             code="algebraic_combinatorics.permutation_carrier_required",
             message="permutation RSK requires a canonical finite permutation",
         )
-    if type(permutation.images) is not tuple:
+    images = getattr(permutation, "images", None)
+    if type(images) is not tuple:
         raise OperationDomainValidationError(
             location=("permutation", "images"),
             code="algebraic_combinatorics.permutation_carrier_invalid",
             message="finite permutation images must be a canonical tuple",
         )
-    size = len(permutation.images)
+    size = len(images)
     if size > MAX_RSK_WORD_LENGTH:
         raise OperationResourceAdmissionError(
             location=("permutation", "images"),
@@ -814,11 +815,10 @@ def inverse_permutation_rsk(pair: object) -> FinitePermutation:
             code="algebraic_combinatorics.permutation_rsk_pair_required",
             message="inverse permutation RSK requires a canonical tableau pair",
         )
-    for field, tableau in (
-        ("p_tableau", pair.p_tableau),
-        ("q_tableau", pair.q_tableau),
-    ):
-        if type(tableau) is not StandardYoungTableau or type(tableau.rows) is not tuple:
+    for field in ("p_tableau", "q_tableau"):
+        tableau = getattr(pair, field, None)
+        rows = getattr(tableau, "rows", None)
+        if type(tableau) is not StandardYoungTableau or type(rows) is not tuple:
             raise OperationDomainValidationError(
                 location=("pair", field),
                 code="algebraic_combinatorics.permutation_rsk_pair_invalid",

@@ -73,6 +73,14 @@ def bilinear_pairing(
             code="quadratic_form.axis_mismatch",
             message="both vectors must use the quadratic-form axis",
         )
+    if len(left.coordinates) != len(form.axis) or len(right.coordinates) != len(
+        form.axis
+    ):
+        raise OperationDomainValidationError(
+            location=("left", "right", "coordinates"),
+            code="quadratic_form.vector_shape",
+            message="both vectors must have one coordinate per form axis label",
+        )
     try:
         require_bilinear_pairing_budget(form, left, right)
     except ValueError as exc:

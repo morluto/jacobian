@@ -161,6 +161,7 @@ def quadratic_form_restrict_coordinates(
         (source,), location=("form",), code_prefix="coordinate_restriction"
     )
     positions = {label: index for index, label in enumerate(source.axis)}
+    selected = tuple(selected)
     selected_positions = tuple(positions[label] for label in selected)
     restricted_index = {
         source_index: index for index, source_index in enumerate(selected_positions)

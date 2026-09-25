@@ -57,10 +57,24 @@ def _raw_coordinate_count(data: object) -> int | None:
     terms = data.get("terms")
     if not isinstance(field, Mapping) or not isinstance(terms, (list, tuple)):
         return None
+    # Nested element declarations determine the actual allocation, even when
+    # their parent later proves inconsistent with the outer polynomial field.
+    coordinates = 0
+    for term in terms:
+        if not isinstance(term, Mapping):
+            continue
+        coefficient = term.get("coefficient")
+        if not isinstance(coefficient, Mapping):
+            continue
+        values = coefficient.get("coefficients_ascending")
+        if isinstance(values, (list, tuple)):
+            coordinates += len(values)
+            if coordinates > MAX_CYCLOTOMIC_POLYNOMIAL_COORDINATES:
+                return coordinates
     order = field.get("order")
     if type(order) is not int or not 1 <= order <= MAX_CYCLIC_PERIOD:
-        return None
-    return len(terms) * _euler_phi(order)
+        return coordinates
+    return max(coordinates, len(terms) * _euler_phi(order))
 
 
 class CyclotomicPolynomialTerm(StrictModel):

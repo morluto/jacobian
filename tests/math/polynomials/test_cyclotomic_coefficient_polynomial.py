@@ -6,7 +6,10 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.matrices.cyclic_linear._models import (
     RationalCyclotomicElement,
     RationalCyclotomicField,
@@ -157,6 +160,34 @@ def test_embedding_admits_coordinate_growth_before_expansion() -> None:
 
     with pytest.raises(OperationResourceAdmissionError, match="coordinates"):
         embed_rational_polynomial(source, field)
+
+
+def test_raw_nested_parent_coordinates_are_admitted_before_model_construction() -> None:
+    raw = {
+        "field": {"order": 1},
+        "variables": ["x"],
+        "terms": [
+            {
+                "coefficient": {
+                    "field": {"order": 128},
+                    "coefficients_ascending": [
+                        {"num": 1, "den": 1}
+                    ] * 65,
+                },
+                "exponents": [0],
+            }
+        ] * 253,
+    }
+    with pytest.raises(ValidationError, match="coefficient coordinates"):
+        CyclotomicPolynomial.model_validate(raw)
+
+
+def test_embedding_native_boundary_rejects_untyped_and_forged_values() -> None:
+    with pytest.raises(OperationDomainValidationError):
+        embed_rational_polynomial(object(), object())  # type: ignore[arg-type]
+    forged = object.__new__(RationalPolynomial)
+    with pytest.raises(OperationDomainValidationError):
+        embed_rational_polynomial(forged, RationalCyclotomicField(order=1))
 
 
 def test_embedding_rejects_coefficients_that_do_not_fit_exact_scalar_carrier() -> None:

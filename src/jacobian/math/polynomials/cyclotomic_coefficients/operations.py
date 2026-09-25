@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from jacobian._exact import CanonicalRational, canonical_rational_component_digits
 from jacobian.catalog.models import (
+    OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
 from jacobian.math.matrices.cyclic_linear._models import (
@@ -55,6 +56,28 @@ def embed_rational_polynomial(
 ) -> CyclotomicPolynomial:
     """Apply the canonical inclusion QQ -> QQ(zeta_n) to every coefficient."""
 
+    if not isinstance(polynomial, RationalPolynomial):
+        raise OperationDomainValidationError(
+            location=("polynomial",),
+            code="polynomial.cyclotomic.source_type",
+            message="polynomial must be a canonical rational polynomial",
+        )
+    if not isinstance(field, RationalCyclotomicField):
+        raise OperationDomainValidationError(
+            location=("field",),
+            code="polynomial.cyclotomic.field_type",
+            message="field must be a canonical rational cyclotomic field",
+        )
+    # Revalidate model instances too: callers may supply forged instances.
+    try:
+        polynomial = RationalPolynomial.model_validate(polynomial.model_dump())
+        field = RationalCyclotomicField.model_validate(field.model_dump())
+    except (AttributeError, TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("polynomial",),
+            code="polynomial.cyclotomic.invalid_carrier",
+            message="polynomial or field is not a valid canonical carrier",
+        ) from exc
     degree, _ = _admit_embedding(polynomial, field)
     zero = CanonicalRational(num=0, den=1)
     terms = tuple(

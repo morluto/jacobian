@@ -5,7 +5,10 @@
 \`polytope.rational.prism.compute\` and \`polytope.rational.join.compute\`
 construct exact rational V-polytopes from bounded, nonempty rational
 V-presentations. Their results retain the vertical coordinate name explicitly
-as \`height_axis\`, as well as source-to-result vertex maps.
+as \`height_axis\`, the source coordinate spaces, and typed ordered axis maps.
+Together, those axis maps and the vertex maps let a consumer reconstruct each
+input V-presentation by selecting the mapped output coordinates for its mapped
+vertices.
 
 For a polytope \(P\) on ordered axes \(A\), the prism operation returns
 \(P \times [0,1]\) on \`(*A, height_axis)\`. Each source vertex \`p\` produces
@@ -22,6 +25,7 @@ their source and result IDs and identify the factor. Its affine dimension is
 The height axis must be fresh. Join factors must also have disjoint axis and
 vertex labels. The current input type admits at most seven axes; each result
 is rejected before construction if its vertex rows exceed the polytope
-envelope. Exact coordinate transport introduces only zero and one, so it
+envelope. Axis-map cardinality is bounded by the already admitted factor
+dimensions. Exact coordinate transport introduces only zero and one, so it
 does not increase coordinate height. The results and maps are ordinary typed
 values that can be serialized and consumed directly.

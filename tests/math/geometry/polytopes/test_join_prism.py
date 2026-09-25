@@ -93,6 +93,20 @@ class TestPrismKnownAnswer:
         }
         assert tuple(result.prism.space.axes) == ("x", "h")
         assert result.height_axis == "h"
+        assert result.source_space.axes == ("x",)
+        assert result.source_axis_map[0].source_axis == "x"
+        assert result.source_axis_map[0].target_axis == "x"
+        output_by_id = _coords(result.prism)
+        recovered = {
+            row.source_vertex_id: tuple(
+                output_by_id[row.prism_vertex_id][
+                    result.prism.space.axes.index(axis_row.target_axis)
+                ]
+                for axis_row in result.source_axis_map
+            )
+            for row in result.bottom_vertex_map
+        }
+        assert recovered == {"left": (Fraction(0),), "right": (Fraction(1),)}
         assert [row.source_vertex_id for row in result.bottom_vertex_map] == [
             "left",
             "right",
@@ -141,6 +155,41 @@ class TestJoinKnownAnswer:
         }
         assert tuple(result.join.space.axes) == ("x", "y", "h")
         assert result.height_axis == "h"
+        assert result.left_space.axes == ("x",)
+        assert result.right_space.axes == ("y",)
+        assert [(row.source_axis, row.target_axis) for row in result.left_axis_map] == [
+            ("x", "x")
+        ]
+        assert [
+            (row.source_axis, row.target_axis) for row in result.right_axis_map
+        ] == [("y", "y")]
+        output_by_id = _coords(result.join)
+        left_recovered = {
+            row.source_vertex_id: tuple(
+                output_by_id[row.join_vertex_id][
+                    result.join.space.axes.index(axis_row.target_axis)
+                ]
+                for axis_row in result.left_axis_map
+            )
+            for row in result.left_vertex_map
+        }
+        right_recovered = {
+            row.source_vertex_id: tuple(
+                output_by_id[row.join_vertex_id][
+                    result.join.space.axes.index(axis_row.target_axis)
+                ]
+                for axis_row in result.right_axis_map
+            )
+            for row in result.right_vertex_map
+        }
+        assert left_recovered == {
+            "left_a": (Fraction(0),),
+            "left_b": (Fraction(1),),
+        }
+        assert right_recovered == {
+            "right_a": (Fraction(0),),
+            "right_b": (Fraction(1),),
+        }
         assert JoinResult.model_validate_json(result.model_dump_json()) == result
 
     def test_named_join_height_axis_is_bound_to_output_axis(self) -> None:
@@ -151,6 +200,17 @@ class TestJoinKnownAnswer:
         )
         payload = result.model_dump(mode="json")
         payload["height_axis"] = "wrong"
+        with pytest.raises(ValidationError):
+            JoinResult.model_validate(payload)
+
+    def test_join_rejects_mismatched_source_axis_decomposition(self) -> None:
+        result = polytope_join(
+            _segment(("left_a", "left_b")),
+            _polytope(("y",), (("right_a", (0,)), ("right_b", (1,)))),
+            "h",
+        )
+        payload = result.model_dump(mode="json")
+        payload["right_axis_map"][0]["target_axis"] = "x"
         with pytest.raises(ValidationError):
             JoinResult.model_validate(payload)
 
@@ -170,6 +230,14 @@ class TestJoinKnownAnswer:
         assert result.right_affine_dimension == 2
         assert result.join_affine_dimension == 4
         assert tuple(result.join.space.axes) == ("x", "y", "z", "h")
+        assert [
+            (row.source_axis, row.target_axis) for row in result.left_axis_map
+        ] == [("x", "x")]
+        assert [
+            (row.source_axis, row.target_axis) for row in result.right_axis_map
+        ] == [("y", "y"), ("z", "z")]
+        assert result.left_space.axes == ("x",)
+        assert result.right_space.axes == ("y", "z")
 
 
 class TestVolumeOracle:

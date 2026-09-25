@@ -700,6 +700,15 @@ def associated_graded(
 ) -> AssociatedGradedResult:
     """Compute Gr_p C with induced differentials for an admitted filtration."""
     admission = _admit_filtered_semantics(complex_value, filtration)
+    return _associated_graded_admitted(complex_value, filtration, admission)
+
+
+def _associated_graded_admitted(
+    complex_value: ChainComplexValue,
+    filtration: tuple[FiltrationLevel, ...],
+    admission: _FilteredAdmission,
+) -> AssociatedGradedResult:
+    """Build Gr C from already admitted filtered semantics."""
     prime = complex_value.prime
     degree_count = len(complex_value.basis_sizes)
     differentials = admission.differentials

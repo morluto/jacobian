@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fractions import Fraction
+from itertools import chain
 from typing import Any, Literal, Self
 
 from pydantic import Field, model_validator
@@ -23,7 +24,9 @@ from jacobian.math.topology.chain_complexes._filtered_models import (
 from jacobian.math.topology.chain_complexes._filtered_operations import (
     _admit_filtered_semantics,
     _admit_filtered_structure,
+    _associated_graded_admitted,
     _coordinates,
+    _fail,
     _in_span,
     _mat_vec,
     _nullspace,
@@ -147,6 +150,66 @@ class FilteredChainMapResult(StrictModel):
     maps: tuple[tuple[tuple[ChainCoefficient, ...], ...], ...]
     filtration_preserving: bool
     chain_map: bool
+
+
+class FilteredChainMapPageZeroResult(StrictModel):
+    """The exact map induced by a filtered chain map on the E^0 page.
+
+    ``maps[p][n]`` is written in the quotient bases chosen by the source and
+    target associated-graded values. Its source and target remain the original
+    filtered chain complexes so the map composes with their page results.
+    """
+
+    source: ChainComplexValue
+    target: ChainComplexValue
+    source_filtration: tuple[FiltrationLevel, ...]
+    target_filtration: tuple[FiltrationLevel, ...]
+    source_dimensions: tuple[tuple[int, ...], ...]
+    target_dimensions: tuple[tuple[int, ...], ...]
+    maps: tuple[tuple[tuple[tuple[ChainCoefficient, ...], ...], ...], ...]
+
+    @model_validator(mode="after")
+    def require_map_axes(self) -> Self:
+        if len(self.source_dimensions) != len(self.source_filtration):
+            raise ValueError("source E0 dimensions must cover every filtration level")
+        if len(self.target_dimensions) != len(self.target_filtration):
+            raise ValueError("target E0 dimensions must cover every filtration level")
+        if len(self.maps) != len(self.source_filtration):
+            raise ValueError("E0 maps must cover every source filtration level")
+        degree_count = len(self.source.basis_sizes)
+        if (
+            len(self.target.basis_sizes) != degree_count
+            or self.source.degree_min != self.target.degree_min
+            or self.source.degree_max != self.target.degree_max
+            or self.source.coefficient_ring != self.target.coefficient_ring
+            or self.source.prime != self.target.prime
+        ):
+            raise ValueError("source and target degree windows must agree")
+        for dimensions, complex_value in (
+            (self.source_dimensions, self.source),
+            (self.target_dimensions, self.target),
+        ):
+            if len(dimensions) != len(self.source_filtration) or any(
+                len(level) != degree_count for level in dimensions
+            ):
+                raise ValueError("E0 dimensions must cover every degree and level")
+            if any(
+                sum(level[degree] for level in dimensions)
+                != complex_value.basis_sizes[degree]
+                for degree in range(degree_count)
+            ):
+                raise ValueError("E0 dimensions must sum to each chain rank")
+        for level, blocks in enumerate(self.maps):
+            if len(blocks) != degree_count:
+                raise ValueError("E0 maps must cover every chain degree")
+            for degree, matrix in enumerate(blocks):
+                if len(matrix) != self.target_dimensions[level][degree] or any(
+                    len(row) != self.source_dimensions[level][degree] for row in matrix
+                ):
+                    raise ValueError(
+                        "E0 map matrix axes do not match its graded spaces"
+                    )
+        return self
 
 
 class SpectralPagesRequest(StrictModel):
@@ -558,7 +621,7 @@ def filtered_homology_filtration(
     )
 
 
-def filtered_map(request: FilteredChainMapRequest) -> FilteredChainMapResult:
+def _check_filtered_chain_map_axes(request: FilteredChainMapRequest) -> None:
     if (
         request.source.coefficient_ring != request.target.coefficient_ring
         or request.source.prime != request.target.prime
@@ -570,8 +633,6 @@ def filtered_map(request: FilteredChainMapRequest) -> FilteredChainMapResult:
             code="filtered_chain_map.parent_mismatch",
             message="source and target complexes must share coefficient and degree parents",
         )
-    admit_filtered(request.source, request.source_filtration)
-    admit_filtered(request.target, request.target_filtration)
     if len(request.source_filtration) != len(request.target_filtration) or len(
         request.maps
     ) != len(request.source.basis_sizes):
@@ -580,17 +641,36 @@ def filtered_map(request: FilteredChainMapRequest) -> FilteredChainMapResult:
             code="filtered_chain_map.axis_mismatch",
             message="map and filtration degree axes must agree",
         )
-    p = request.source.prime
-    parsed = []
     for degree, matrix in enumerate(request.maps):
-        rows = request.target.basis_sizes[degree]
-        cols = request.source.basis_sizes[degree]
-        if len(matrix) != rows or any(len(row) != cols for row in matrix):
+        if len(matrix) != request.target.basis_sizes[degree] or any(
+            len(row) != request.source.basis_sizes[degree] for row in matrix
+        ):
             raise OperationDomainValidationError(
                 location=("maps", degree),
                 code="filtered_chain_map.shape_invalid",
                 message="each map must have target-by-source chain axes",
             )
+
+
+def filtered_map(request: FilteredChainMapRequest) -> FilteredChainMapResult:
+    _check_filtered_chain_map_axes(request)
+    source_admission = _admit_filtered_semantics(
+        request.source, request.source_filtration
+    )
+    target_admission = _admit_filtered_semantics(
+        request.target, request.target_filtration
+    )
+    return _filtered_map_admitted(request, source_admission, target_admission)
+
+
+def _filtered_map_admitted(
+    request: FilteredChainMapRequest,
+    source_admission: Any,
+    target_admission: Any,
+) -> FilteredChainMapResult:
+    p = request.source.prime
+    parsed = []
+    for degree, matrix in enumerate(request.maps):
         try:
             parsed.append([[_parse_entry(v, p) for v in row] for row in matrix])
         except (TypeError, ValueError, ZeroDivisionError) as exc:
@@ -605,33 +685,26 @@ def filtered_map(request: FilteredChainMapRequest) -> FilteredChainMapResult:
         output_width = request.source.basis_sizes[degree + 1]
         left = _mul(
             parsed[degree],
-            [
-                [_parse_entry(v, p) for v in row]
-                for row in request.source.differential_matrices[degree]
-            ],
+            source_admission.differentials[degree],
             p,
             output_width=output_width,
         )
         right = _mul(
-            [
-                [_parse_entry(v, p) for v in row]
-                for row in request.target.differential_matrices[degree]
-            ],
+            target_admission.differentials[degree],
             parsed[degree + 1],
             p,
             output_width=output_width,
         )
         chain_ok = chain_ok and left == right
     preserving = True
-    for _level, (sl, tl) in enumerate(
-        zip(request.source_filtration, request.target_filtration, strict=True)
+    for source_level, target_level in zip(
+        source_admission.bases, target_admission.bases, strict=True
     ):
-        for degree, (ss, ts) in enumerate(zip(sl.subspaces, tl.subspaces, strict=True)):
-            target_basis = [[_parse_entry(v, p) for v in row] for row in ts.vectors]
-            for vector in ss.vectors:
-                image = _mat_vec(
-                    parsed[degree], [_parse_entry(v, p) for v in vector], p
-                )
+        for degree, (source_basis, target_basis) in enumerate(
+            zip(source_level, target_level, strict=True)
+        ):
+            for vector in source_basis:
+                image = _mat_vec(parsed[degree], vector, p)
                 if not _in_span(target_basis, image, p):
                     preserving = False
     canonical_maps = tuple(
@@ -646,6 +719,208 @@ def filtered_map(request: FilteredChainMapRequest) -> FilteredChainMapResult:
         maps=canonical_maps,
         filtration_preserving=preserving,
         chain_map=chain_ok,
+    )
+
+
+def _admit_e0_map_request(request: FilteredChainMapRequest) -> tuple[Any, Any, Any]:
+    _check_filtered_chain_map_axes(request)
+    map_cells = len(request.source_filtration) * sum(
+        source_size * target_size
+        for source_size, target_size in zip(
+            request.source.basis_sizes, request.target.basis_sizes, strict=True
+        )
+    )
+    if map_cells > MAX_FILTERED_HOMOLOGY_RESULT_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("maps",),
+            code="filtered_chain_map.e0_output_cells_exceeded",
+            message=(
+                "the E0 map envelope exceeds the admitted "
+                f"{MAX_FILTERED_HOMOLOGY_RESULT_CELLS} cells"
+            ),
+        )
+    input_chars = 0
+    scalar_count = 0
+    max_scalar_chars = 1
+    for value in chain(
+        (entry for matrix in request.maps for row in matrix for entry in row),
+        *(
+            chain(
+                (
+                    entry
+                    for matrix in complex_value.differential_matrices
+                    for row in matrix
+                    for entry in row
+                ),
+                (
+                    entry
+                    for level in filtration
+                    for subspace in level.subspaces
+                    for vector in subspace.vectors
+                    for entry in vector
+                ),
+            )
+            for complex_value, filtration in (
+                (request.source, request.source_filtration),
+                (request.target, request.target_filtration),
+            )
+        ),
+    ):
+        value_chars = len(str(value))
+        input_chars += value_chars
+        scalar_count += 1
+        max_scalar_chars = max(max_scalar_chars, value_chars)
+    # Determinant expansion bounds the exact numerator and denominator growth
+    # of the at-most-32-dimensional coordinate solves used below.
+    scalar_chars_bound = 96 * max_scalar_chars + 512
+    output_chars = (
+        input_chars
+        + scalar_count * 16
+        + map_cells * scalar_chars_bound
+        + len(request.source_filtration) * len(request.source.basis_sizes) * 128
+    )
+    if output_chars > MAX_FILTERED_HOMOLOGY_RESULT_CHARS:
+        raise OperationResourceAdmissionError(
+            location=("maps",),
+            code="filtered_chain_map.e0_output_chars_exceeded",
+            message=(
+                "the conservative exact E0 map character envelope exceeds "
+                f"{MAX_FILTERED_HOMOLOGY_RESULT_CHARS} characters"
+            ),
+        )
+    source_admission = _admit_filtered_semantics(
+        request.source, request.source_filtration
+    )
+    target_admission = _admit_filtered_semantics(
+        request.target, request.target_filtration
+    )
+    map_value = _filtered_map_admitted(request, source_admission, target_admission)
+    if not map_value.chain_map:
+        raise OperationDomainValidationError(
+            location=("maps",),
+            code="filtered_chain_map.not_chain_map",
+            message="an E0 page map requires a chain map",
+        )
+    if not map_value.filtration_preserving:
+        raise OperationDomainValidationError(
+            location=("maps",),
+            code="filtered_chain_map.not_filtration_preserving",
+            message="an E0 page map requires filtration preservation",
+        )
+    return source_admission, target_admission, map_value
+
+
+def filtered_chain_map_page_zero(
+    request: FilteredChainMapRequest,
+) -> FilteredChainMapPageZeroResult:
+    """Induce the degreewise E0 map of an exact filtered chain map."""
+    source_admission, target_admission, map_value = _admit_e0_map_request(request)
+
+    source_graded = _associated_graded_admitted(
+        request.source, request.source_filtration, source_admission
+    )
+    target_graded = _associated_graded_admitted(
+        request.target, request.target_filtration, target_admission
+    )
+    prime = request.source.prime
+    map_matrices = [
+        [[_parse_entry(entry, prime) for entry in row] for row in degree]
+        for degree in map_value.maps
+    ]
+    source_blocks: list[tuple[tuple[tuple[ChainCoefficient, ...], ...], ...]] = []
+    lower_target: list[list[Vector]] = [[] for _ in request.target.basis_sizes]
+    for level in range(len(request.source_filtration)):
+        level_blocks = []
+        for degree in range(len(request.source.basis_sizes)):
+            source_representatives = source_graded.quotient_representatives[level][
+                degree
+            ]
+            target_representatives = target_graded.quotient_representatives[level][
+                degree
+            ]
+            target_basis = [
+                [_parse_entry(entry, prime) for entry in vector]
+                for vector in (*lower_target[degree], *target_representatives)
+            ]
+            columns = []
+            for vector in source_representatives:
+                image = _mat_vec(
+                    map_matrices[degree],
+                    [_parse_entry(entry, prime) for entry in vector],
+                    prime,
+                )
+                try:
+                    coordinates = _coordinates(target_basis, image, prime)
+                except ValueError as exc:
+                    raise _fail(
+                        ("maps", level, degree),
+                        "filtered_chain_map.e0_image_outside_target",
+                        "a filtration-preserving map must send each E0 representative into the matching target filtration level",
+                    ) from exc
+                columns.append(coordinates[len(lower_target[degree]) :])
+            rows = len(target_representatives)
+            matrix = [
+                [columns[column][row] for column in range(len(columns))]
+                for row in range(rows)
+            ]
+            level_blocks.append(
+                tuple(
+                    tuple(_serialize_scalar(value, prime) for value in row)
+                    for row in matrix
+                )
+            )
+        source_blocks.append(tuple(level_blocks))
+        for degree, representatives in enumerate(
+            target_graded.quotient_representatives[level]
+        ):
+            lower_target[degree].extend(
+                [_parse_entry(entry, prime) for entry in vector]
+                for vector in representatives
+            )
+
+    # The induced degreewise maps must commute with the associated-graded
+    # differentials. This replay is bounded by the already admitted axes.
+    for level, blocks in enumerate(source_blocks):
+        for degree in range(len(request.source.basis_sizes) - 1):
+            left = _mul(
+                [
+                    [_parse_entry(entry, prime) for entry in row]
+                    for row in target_graded.graded_differentials[level][degree]
+                ],
+                [
+                    [_parse_entry(entry, prime) for entry in row]
+                    for row in blocks[degree + 1]
+                ],
+                prime,
+                output_width=source_graded.graded_dimensions[level][degree + 1],
+            )
+            right = _mul(
+                [
+                    [_parse_entry(entry, prime) for entry in row]
+                    for row in blocks[degree]
+                ],
+                [
+                    [_parse_entry(entry, prime) for entry in row]
+                    for row in source_graded.graded_differentials[level][degree]
+                ],
+                prime,
+                output_width=source_graded.graded_dimensions[level][degree + 1],
+            )
+            if left != right:
+                raise _fail(
+                    ("maps", level, degree),
+                    "filtered_chain_map.e0_square_failed",
+                    "the induced E0 maps must commute with the associated-graded differential",
+                )
+
+    return FilteredChainMapPageZeroResult(
+        source=request.source,
+        target=request.target,
+        source_filtration=request.source_filtration,
+        target_filtration=request.target_filtration,
+        source_dimensions=source_graded.graded_dimensions,
+        target_dimensions=target_graded.graded_dimensions,
+        maps=tuple(source_blocks),
     )
 
 
@@ -975,6 +1250,7 @@ def abutment(request: SpectralAbutmentRequest) -> SpectralAbutmentResult:
 
 
 __all__ = [
+    "FilteredChainMapPageZeroResult",
     "FilteredChainMapRequest",
     "FilteredChainMapResult",
     "FilteredHomologyDegree",
@@ -987,6 +1263,7 @@ __all__ = [
     "SpectralPagesRequest",
     "SpectralPagesResult",
     "abutment",
+    "filtered_chain_map_page_zero",
     "filtered_homology_filtration",
     "filtered_map",
     "pages_through",

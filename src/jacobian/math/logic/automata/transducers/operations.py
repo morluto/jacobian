@@ -1084,18 +1084,74 @@ def _validate_rational_fiber_input(
             "transducer",
             "output_alphabet",
         )
-    if (
-        type(input_word) is not tuple
-        or any(
-            type(symbol) is not int or not 0 <= symbol < transducer.input_alphabet_size
-            for symbol in input_word
-        )
+    if type(input_word) is not tuple or any(
+        type(symbol) is not int or not 0 <= symbol < transducer.input_alphabet_size
+        for symbol in input_word
     ):
         _reject(
             "relation_fiber_input_word",
             "input_word must be bounded and use the transducer input alphabet",
             "input_word",
         )
+
+
+def _reachable_fiber_bounds(
+    transducer: RationalTransducer,
+    matching_by_label: dict[tuple[int, ...], bytearray],
+    outgoing: list[list[RationalEdge]],
+) -> tuple[int, int, int, int]:
+    """Measure eligible fiber growth from reachable product states only.
+
+    Returns ``(reachable_pairs, eligible_edge_positions, output_transition_bound,
+    output_intermediate_bound)``. The Cartesian product
+    ``state_count * (word_length + 1)`` is only an upper bound, so a dead
+    relation whose consumed positions never advance stays cheap even when the
+    Cartesian bound alone would exceed the NFA state limit.
+    """
+
+    reachable_pairs = 0
+    eligible_edge_positions = 0
+    output_transition_bound = 0
+    output_intermediate_bound = 0
+    seen_pairs: set[tuple[int, int]] = set()
+    pending: deque[tuple[int, int]] = deque()
+    for initial_state in transducer.initial_states:
+        pair = (initial_state, 0)
+        if pair not in seen_pairs:
+            seen_pairs.add(pair)
+            pending.append(pair)
+    while pending:
+        if reachable_pairs % 4096 == 0:
+            request_checkpoint("during rational relation reachability admission")
+        state, position = pending.popleft()
+        reachable_pairs += 1
+        if reachable_pairs > MAX_NFA_STATES:
+            raise OperationResourceAdmissionError(
+                location=("transducer", "input_word"),
+                code="finite_state_transducer.relation_fiber_bound_exceeded",
+                message=(
+                    "rational relation output fiber exceeds its product, work, "
+                    "intermediate-allocation, or NFA output bound"
+                ),
+            )
+        for edge in outgoing[state]:
+            match_bits = matching_by_label[edge.input_label]
+            if not match_bits[position >> 3] & (1 << (position & 7)):
+                continue
+            eligible_edge_positions += 1
+            output_length = len(edge.output_label)
+            output_transition_bound += max(1, output_length)
+            output_intermediate_bound += max(0, output_length - 1)
+            target = (edge.target, position + len(edge.input_label))
+            if target not in seen_pairs:
+                seen_pairs.add(target)
+                pending.append(target)
+    return (
+        reachable_pairs,
+        eligible_edge_positions,
+        output_transition_bound,
+        output_intermediate_bound,
+    )
 
 
 def _admit_rational_fiber(
@@ -1111,12 +1167,10 @@ def _admit_rational_fiber(
         word_length + 1 if not pattern else max(0, word_length - len(pattern) + 1)
         for pattern in patterns
     )
-    product_state_bound = transducer.state_count * (word_length + 1)
     candidate_edge_bound = len(transducer.edges) * (word_length + 1)
     match_work_bound += match_position_bound * 8
     if (
         match_work_bound + candidate_edge_bound > MAX_RATIONAL_FIBER_WORK
-        or product_state_bound + 1 > MAX_NFA_STATES
         or len(patterns) * 256 > MAX_RATIONAL_FIBER_INTERMEDIATE_BYTES
     ):
         raise OperationResourceAdmissionError(
@@ -1130,25 +1184,18 @@ def _admit_rational_fiber(
         if pattern_index % 64 == 0:
             request_checkpoint("during rational relation input-label matching")
         matching_by_label[pattern] = _matching_positions(input_word, pattern)
-    eligible_counts_list: list[int] = []
-    for edge_index, edge in enumerate(transducer.edges):
-        if edge_index % 256 == 0:
-            request_checkpoint("during rational relation fiber admission")
-        eligible_counts_list.append(
-            sum(byte.bit_count() for byte in matching_by_label[edge.input_label])
-        )
-    eligible_counts = tuple(eligible_counts_list)
-    eligible_edge_positions = sum(eligible_counts)
-    output_transition_bound = 0
-    output_intermediate_bound = 0
-    for edge_index, (eligible, edge) in enumerate(
-        zip(eligible_counts, transducer.edges, strict=True)
-    ):
-        if edge_index % 256 == 0:
-            request_checkpoint("during rational relation fiber admission")
-        output_transition_bound += eligible * max(1, len(edge.output_label))
-        output_intermediate_bound += eligible * max(0, len(edge.output_label) - 1)
-    state_bound = 1 + product_state_bound + output_intermediate_bound
+
+    outgoing: list[list[RationalEdge]] = [[] for _ in range(transducer.state_count)]
+    for edge in transducer.edges:
+        outgoing[edge.source].append(edge)
+
+    (
+        reachable_pairs,
+        eligible_edge_positions,
+        output_transition_bound,
+        output_intermediate_bound,
+    ) = _reachable_fiber_bounds(transducer, matching_by_label, outgoing)
+    state_bound = 1 + reachable_pairs + output_intermediate_bound
     bridge_count = len(transducer.initial_states)
     transition_bound = output_transition_bound + bridge_count
     work_bound = (
@@ -1170,7 +1217,7 @@ def _admit_rational_fiber(
         state_bound * 32 + transition_bound * 128 + alphabet_context_bytes + 1024
     )
     intermediate_bytes_bound = (
-        product_state_bound * 192
+        reachable_pairs * 192
         + candidate_edge_bound * 8
         + len(patterns) * 256
         + output_intermediate_bound * 64

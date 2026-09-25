@@ -13,7 +13,6 @@ from math import factorial, gcd, lcm
 from typing import Any, Literal, cast
 
 from jacobian._exact import CanonicalRational, canonical_rational_component_digits
-from jacobian._execution import request_checkpoint
 from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -1496,17 +1495,6 @@ def _normal_form(
                             code="free_algebra.gs_reduction_budget",
                             message="GS normal-form reduction exceeds its admitted work envelope",
                         )
-                    # Bound the potential union support before subtraction allocates it.
-                    if (
-                        len(current) - 1 + len(reducer.terms)
-                        > MAX_FREE_ALGEBRA_RESULT_TERMS
-                    ):
-                        raise OperationResourceAdmissionError(
-                            location=("degree",),
-                            code="free_algebra.gs_normal_form_support_budget",
-                            message="GS normal-form support exceeds its admitted carrier",
-                        )
-                    request_checkpoint("during GS normal-form reduction")
                     current = _subtract(current, _map(replacement), factor)
                     changed = True
                     break

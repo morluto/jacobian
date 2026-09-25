@@ -274,7 +274,7 @@ class FreeAlgebraWordCompareResult(StrictModel):
     degree_comparison: Literal[-1, 0, 1]
     generator_order_comparison: Literal[-1, 0, 1]
     first_differing_position: int | None = Field(
-        default=None, ge=0, le=MAX_FREE_ALGEBRA_WORD_VALUE_LENGTH
+        default=None, ge=0, le=MAX_FREE_ALGEBRA_WORD_LENGTH
     )
     left_generator_rank: int | None = Field(
         default=None, ge=0, le=MAX_FREE_ALGEBRA_GENERATORS - 1

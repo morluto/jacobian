@@ -10,6 +10,7 @@ from typing import Annotated, NoReturn, Self
 from pydantic import Field, field_validator, model_validator
 from pydantic_core import PydanticCustomError
 
+from jacobian._execution import request_checkpoint
 from jacobian._models import StrictModel
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -413,6 +414,7 @@ def _saturate_choices(
     choices: list[_WitnessChoice | None] = [None] * state_count
     scans = 0
     for _ in range(state_count + 1):
+        request_checkpoint("during tree automaton reachability saturation")
         scans += 1
         next_choices = choices.copy()
         for transition in transitions:

@@ -23,8 +23,10 @@ to trivial character and rational coefficients. Separately, Jacobian has a
 bounded cyclotomic character-space basis slice for even characters of
 conductor 13 and order dividing six, represented at levels 13, 26, and 39
 over `Q(zeta_6)`. It
-covers weight 2, both `M` and `S`, and returns q-Sturm RREF bases through
-precisions 3, 8, and 10, respectively. Its dimension implementation admits
+covers weight 2, both `M` and `S`, and returns q-Sturm RREF bases with minimum
+precisions 3, 8, and 10, respectively. The character-basis request may ask for
+any longer prefix through 128 coefficients; row reduction remains anchored at
+the complete Sturm-determining prefix. Its dimension implementation admits
 even characters of order dividing six, so it also covers the order-three
 characters whose bases can be multidimensional. It computes the
 Cohen--Oesterle character sums and cusp term in exact rational/cyclotomic

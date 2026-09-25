@@ -10,7 +10,10 @@ import pytest
 from pydantic import TypeAdapter, ValidationError
 
 from jacobian.catalog.catalog import Catalog
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.matrices.cyclic_linear._models import (
     RationalCyclotomicElement,
     RationalCyclotomicField,
@@ -271,6 +274,83 @@ def test_conductor_thirteen_order_three_character_basis(
     assert character_basis_module._rref_character_prefix(
         vectors, space.coefficient_domain, precision
     ) == tuple(element.expansion.coefficients for element in basis.elements)
+
+
+def test_character_basis_can_return_longer_prefix_in_the_same_canonical_frame() -> None:
+    space = ModularFormSpace(
+        level=13,
+        weight=2,
+        kind="M",
+        character=dirichlet_character(character_group(13), (4,)),
+        coefficient_domain=RationalCyclotomicField(order=6),
+    )
+    sturm_basis = modular_character_basis_q_expansions(space)
+    request = ModularCharacterBasisRequest(space=space, precision=5)
+    extended_basis = modular_character_basis_q_expansions(
+        request.space, request.precision
+    )
+
+    assert extended_basis.precision == 5
+    assert extended_basis.basis_id == sturm_basis.basis_id
+    assert len(extended_basis.elements) == 2
+    for extended, sturm in zip(
+        extended_basis.elements, sturm_basis.elements, strict=True
+    ):
+        assert extended.expansion.coefficients[:3] == sturm.expansion.coefficients
+        assert extended.expansion.space == space
+    restored = TypeAdapter(ModularCharacterBasis).validate_json(
+        extended_basis.model_dump_json()
+    )
+    assert restored == extended_basis
+
+    operation = Catalog.open().operation("modular_form.character_basis.compute")
+    assert operation is not None
+    public_result = operation.run(request)
+    assert public_result == extended_basis
+
+
+def test_character_basis_prefix_bounds_before_pari(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    space = ModularFormSpace(
+        level=13,
+        weight=2,
+        kind="M",
+        character=dirichlet_character(character_group(13), (4,)),
+        coefficient_domain=RationalCyclotomicField(order=6),
+    )
+
+    def backend_must_not_run(*_args, **_kwargs):
+        raise AssertionError("the PARI basis worker ran before precision admission")
+
+    monkeypatch.setattr(
+        character_basis_module, "pari_character_basis", backend_must_not_run
+    )
+    with pytest.raises(
+        OperationDomainValidationError, match="include every Sturm pivot"
+    ):
+        modular_character_basis_q_expansions(space, 2)
+    with pytest.raises(OperationResourceAdmissionError, match="precision bound"):
+        modular_character_basis_q_expansions(space, 129)
+
+
+def test_extended_character_basis_preserves_zero_dimensional_space() -> None:
+    space = ModularFormSpace(
+        level=13,
+        weight=2,
+        kind="S",
+        character=dirichlet_character(character_group(13), (4,)),
+        coefficient_domain=RationalCyclotomicField(order=6),
+    )
+
+    basis = modular_character_basis_q_expansions(space, 5)
+
+    assert basis.precision == 5
+    assert basis.elements == ()
+    assert (
+        TypeAdapter(ModularCharacterBasis).validate_json(basis.model_dump_json())
+        == basis
+    )
 
 
 @pytest.mark.parametrize("coordinates", [(12,), ("2",)])

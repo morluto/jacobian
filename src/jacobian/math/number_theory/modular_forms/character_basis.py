@@ -19,6 +19,7 @@ from jacobian.math.matrices.cyclic_linear._models import (
 from jacobian.math.number_theory.characters.values import DirichletCharacter
 from jacobian.math.number_theory.modular_forms import cyclotomic
 from jacobian.math.number_theory.modular_forms.character_basis_models import (
+    MAX_CHARACTER_BASIS_PRECISION,
     ModularCharacterBasis,
     ModularCharacterBasisElement,
     ModularCharacterHeckeMatrix,
@@ -148,13 +149,29 @@ def _rref_character_prefix(
     vectors: tuple[tuple[tuple[Fraction, ...], ...], ...],
     field: RationalCyclotomicField,
     precision: int,
+    *,
+    normalization_precision: int | None = None,
 ) -> tuple[tuple[RationalCyclotomicElement, ...], ...]:
     """Canonical row frame of the backend subspace over its declared field."""
+    retain_precision = normalization_precision is not None
+    if (
+        normalization_precision is not None
+        and not 1 <= normalization_precision <= precision
+    ):
+        raise ValueError(
+            "Sturm normalization precision must fit in the retained prefix"
+        )
+    if retain_precision and any(len(vector) < precision for vector in vectors):
+        raise RuntimeError("PARI character basis is shorter than the requested prefix")
     rows = [
-        [_coefficient(field, term) for term in vector[:precision]] for vector in vectors
+        [
+            _coefficient(field, term)
+            for term in (vector if retain_precision else vector[:precision])
+        ]
+        for vector in vectors
     ]
     pivot_row = 0
-    for column in range(precision):
+    for column in range(normalization_precision or precision):
         pivot = next(
             (
                 row
@@ -201,16 +218,21 @@ def _coefficient(
 
 def modular_character_basis_q_expansions(
     space: ModularFormSpace,
+    precision: int | None = None,
 ) -> ModularCharacterBasis:
-    """Construct the exact Sturm-determining q-prefix basis for the admitted space."""
+    """Construct a canonical basis prefix of at least Sturm-determining precision."""
     space, field, character_request = _require_basis_space(space)
-    return _character_basis_from_admission(space, field, character_request)
+    return _character_basis_from_admission(
+        space, field, character_request, requested_precision=precision
+    )
 
 
 def _character_basis_from_admission(
     space: ModularFormSpace,
     field: RationalCyclotomicField,
     character_request: dict[str, object],
+    *,
+    requested_precision: int | None = None,
 ) -> ModularCharacterBasis:
     """Construct the basis after source and character admission has completed."""
     # Quer, Thm. 2.3, gives the exact independent dimension formula for this
@@ -222,7 +244,29 @@ def _character_basis_from_admission(
         space.level, space.weight, character, field
     )
     dimension = cusp_dimension if space.kind == "S" else full_dimension
-    precision = _character_sturm_precision(space)
+    sturm_precision = _character_sturm_precision(space)
+    if requested_precision is None:
+        precision = sturm_precision
+    elif type(requested_precision) is not int:
+        raise OperationDomainValidationError(
+            location=("precision",),
+            code="modular_form.character_basis_precision_type",
+            message="requested precision must be an exact integer",
+        )
+    elif requested_precision < sturm_precision:
+        raise OperationDomainValidationError(
+            location=("precision",),
+            code="modular_form.character_basis_precision_below_sturm",
+            message="the returned basis prefix must include every Sturm pivot",
+        )
+    elif requested_precision > MAX_CHARACTER_BASIS_PRECISION:
+        raise OperationResourceAdmissionError(
+            location=("precision",),
+            code="modular_form.character_basis_precision_bound",
+            message="requested basis prefix exceeds the admitted precision bound",
+        )
+    else:
+        precision = requested_precision
     work = precision * max(1, dimension) ** 2 * field.degree * 16
     if field.degree != 2 or precision > MAX_PARI_BASIS_PRECISION or dimension > 32:
         _domain(
@@ -267,7 +311,12 @@ def _character_basis_from_admission(
     )
     if len(raw_basis) != dimension:
         raise RuntimeError("PARI returned a character basis of the wrong dimension")
-    normalized = _rref_character_prefix(raw_basis, field, precision)
+    normalized = _rref_character_prefix(
+        raw_basis,
+        field,
+        precision,
+        normalization_precision=sturm_precision,
+    )
     basis_id: Literal[
         "gamma0-13-even-order6-character-sturm-v1",
         "gamma0-cyclotomic-character-sturm-rref-v1",

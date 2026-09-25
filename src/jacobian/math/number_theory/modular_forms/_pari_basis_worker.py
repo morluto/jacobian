@@ -16,7 +16,10 @@ from jacobian.canonical import (
 
 _MAX_LEVEL = 10_000
 _MAX_WEIGHT = 120
-_MAX_PRECISION = 128
+# Character-valued global equality needs Gamma1(lcm) Sturm prefixes that may
+# exceed the public Gamma0 basis-prefix envelope. Its caller admits aggregate
+# basis work/output before entering this bounded worker.
+_MAX_PRECISION = 1024
 _MAX_DIMENSION = 32
 _MAX_COEFFICIENT_DIGITS = 512
 _MAX_CHARACTER_COEFFICIENT_DIGITS = 4
@@ -260,6 +263,8 @@ def main() -> int:
     expected_dimension = _int(
         request["expected_dimension"], minimum=0, maximum=_MAX_DIMENSION
     )
+    if expected_dimension * precision > 100_000:
+        raise ValueError("PARI modular-form basis cell count exceeds its bound")
     kind = request["kind"]
     if kind not in ("M", "S"):
         raise ValueError("PARI modular-form worker requires M or S")

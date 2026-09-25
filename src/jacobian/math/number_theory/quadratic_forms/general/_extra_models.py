@@ -9,7 +9,6 @@ from pydantic import Field, model_validator
 from jacobian._exact import (
     CanonicalRational,
     ExactInteger,
-    canonical_rational_component_digits,
     require_bounded_rational,
 )
 from jacobian._models import StrictModel
@@ -21,6 +20,7 @@ from jacobian.math.matrices.cyclic_linear._models import (
 )
 from jacobian.math.matrices.values import RationalMatrix, RationalVectorSpaceBasis
 from jacobian.math.number_theory.quadratic_forms.general.values import (
+    RationalCoordinateVector,
     RationalQuadraticForm,
 )
 
@@ -276,32 +276,7 @@ MAX_THETA_PREFIX_VECTORS = 100_000
 MAX_THETA_PREFIX_WORK = 2_000_000
 MAX_THETA_PREFIX_OUTPUT_DIGITS = 64_000
 MAX_THETA_REPRESENTATION_VECTOR_COUNT = 100_000
-MAX_THETA_REPRESENTATION_OUTPUT_BYTES = 8 * 1024 * 1024
 MAX_THETA_REPRESENTATION_COORDINATE_ABS = 49_999
-
-
-def _theta_representation_output_upper_bytes(
-    form: RationalQuadraticForm,
-    *,
-    row_count: int,
-    vector_count: int,
-    coordinate_abs_bound: int,
-) -> int:
-    """Conservatively bound the serialized source and explicit vector table."""
-    source_bound = 1_024 + 6 * sum(len(label) for label in form.axis)
-    source_bound += 2 * sum(
-        canonical_rational_component_digits(value)
-        for value in (
-            *form.diagonal_coefficients,
-            *(term.coefficient for term in form.cross_terms),
-        )
-    )
-    source_bound += 128 * (len(form.axis) + len(form.cross_terms))
-    row_bound = 256 + row_count * 128
-    coordinate_width = len(str(coordinate_abs_bound)) + 3
-    dimension = len(form.axis)
-    per_vector_bound = 3 + dimension * coordinate_width + max(dimension - 1, 0)
-    return source_bound + row_bound + vector_count * per_vector_bound
 
 
 class ThetaRepresentingVectorsRequest(StrictModel):
@@ -329,7 +304,7 @@ class ThetaRepresentingVectorsRequest(StrictModel):
 
 class ThetaRepresentingVectorsRow(StrictModel):
     index: int = Field(ge=0, le=MAX_THETA_SELECTED_INDEX)
-    vectors: tuple[tuple[ExactInteger, ...], ...] = Field(
+    vectors: tuple[RationalCoordinateVector, ...] = Field(
         max_length=MAX_THETA_REPRESENTATION_VECTOR_COUNT,
         description=(
             "Every integer coordinate tuple in the result form's ordered axis, "
@@ -348,21 +323,19 @@ class ThetaRepresentingVectorsResult(StrictModel):
 
     @model_validator(mode="after")
     def require_complete_canonical_table(self) -> Self:
-        dimension = len(self.form.axis)
         previous_index = -1
         vector_count = 0
-        maximum_coordinate = 0
         for row in self.rows:
             if row.index <= previous_index:
                 raise ValueError("representation rows must have increasing indices")
             previous_index = row.index
             previous_vector: tuple[int, ...] | None = None
             for vector in row.vectors:
-                if len(vector) != dimension:
-                    raise ValueError(
-                        "representation vector length must match form axis"
-                    )
-                coordinates = tuple(vector)
+                if vector.axis != self.form.axis:
+                    raise ValueError("representation vector axis must match form axis")
+                if any(value.den != 1 for value in vector.coordinates):
+                    raise ValueError("representation coordinates must be integers")
+                coordinates = tuple(value.num for value in vector.coordinates)
                 if previous_vector is not None and coordinates <= previous_vector:
                     raise ValueError(
                         "representation vectors must be unique and ordered"
@@ -371,20 +344,9 @@ class ThetaRepresentingVectorsResult(StrictModel):
                 for coordinate in coordinates:
                     if abs(coordinate) > MAX_THETA_REPRESENTATION_COORDINATE_ABS:
                         raise ValueError("representation coordinate exceeds its bound")
-                    maximum_coordinate = max(maximum_coordinate, abs(coordinate))
             vector_count += len(row.vectors)
             if vector_count > MAX_THETA_REPRESENTATION_VECTOR_COUNT:
                 raise ValueError("representation table exceeds its vector-count bound")
-        if (
-            _theta_representation_output_upper_bytes(
-                self.form,
-                row_count=len(self.rows),
-                vector_count=vector_count,
-                coordinate_abs_bound=maximum_coordinate,
-            )
-            > MAX_THETA_REPRESENTATION_OUTPUT_BYTES
-        ):
-            raise ValueError("representation table exceeds its output-byte bound")
         return self
 
 

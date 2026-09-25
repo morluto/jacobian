@@ -31,6 +31,11 @@ from jacobian.math.combinatorics.matroids.delta.operations import (
     twist,
     width,
 )
+from jacobian.math.combinatorics.matroids.delta.relabel import (
+    DeltaMatroidRelabelRequest,
+    DeltaMatroidRelabelling,
+    relabel,
+)
 from jacobian.math.combinatorics.matroids.delta.values import (
     DeltaMatroidAdmissionError,
     FiniteDeltaMatroid,
@@ -135,6 +140,12 @@ def _distance_interlace(
     request: DistanceInterlaceRequest,
 ) -> DistanceInterlaceResult:
     return distance_interlace_polynomial(request.delta_matroid)
+
+
+def _run_relabel(request: DeltaMatroidRelabelRequest) -> DeltaMatroidRelabelling:
+    return relabel(
+        request.delta_matroid, request.target_ground, request.target_to_source
+    )
 
 
 TOOLS: MathTools = (  # noqa: RUF005

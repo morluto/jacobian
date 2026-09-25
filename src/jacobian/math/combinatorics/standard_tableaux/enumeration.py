@@ -4,7 +4,11 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian._execution import request_checkpoint
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.combinatorics.algebraic.operations import (
     standard_young_tableaux_count,
 )
@@ -55,6 +59,21 @@ def enumerate_standard_young_tableaux(
     partition: IntegerPartition,
 ) -> StandardTableauEnumerationResult:
     """Return all standard tableaux after count and output admission."""
+    if not isinstance(partition, IntegerPartition):
+        raise OperationDomainValidationError(
+            location=("partition",),
+            code="standard_tableaux.partition_type",
+            message="partition must be an IntegerPartition",
+        )
+    try:
+        partition = IntegerPartition.model_validate(partition.model_dump())
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("partition",),
+            code="standard_tableaux.invalid_partition",
+            message="partition is not a valid canonical integer partition",
+        ) from exc
+    request_checkpoint("before standard-tableau enumeration")
     size = sum(partition.parts)
     count = standard_young_tableaux_count(partition)
     if count > MAX_STANDARD_TABLEAUX:
@@ -97,8 +116,20 @@ def enumerate_standard_young_tableaux(
             ),
         )
 
-    rows = tuple(sorted(_tableau_rows(partition.parts)))
-    tableaux = tuple(StandardYoungTableau(rows=value) for value in rows)
+    rows_list = []
+    for index, value in enumerate(_tableau_rows(partition.parts)):
+        if index % 128 == 0:
+            request_checkpoint("during standard-tableau enumeration")
+        rows_list.append(value)
+    request_checkpoint("before standard-tableau sorting")
+    rows = tuple(sorted(rows_list))
+    tableaux_list = []
+    for index, value in enumerate(rows):
+        if index % 128 == 0:
+            request_checkpoint("during standard-tableau materialization")
+        tableaux_list.append(StandardYoungTableau(rows=value))
+    request_checkpoint("before standard-tableau result construction")
+    tableaux = tuple(tableaux_list)
     return StandardTableauEnumerationResult(
         partition=partition,
         tableaux=tableaux,

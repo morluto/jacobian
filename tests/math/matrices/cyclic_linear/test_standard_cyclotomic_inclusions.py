@@ -130,6 +130,14 @@ def test_catalog_examples_run_and_results_pass_strict_json_validation() -> None:
             assert validated.model_dump(mode="json") == result.output
 
 
+def test_identity_inclusion_accepts_large_bounded_element() -> None:
+    field = RationalCyclotomicField(order=3)
+    inclusion = cyclotomic_field_inclusion(field, field)
+    element = _element(3, (1, 10**129), (0, 1))
+    mapped = apply_cyclotomic_field_inclusion(inclusion, element)
+    assert mapped == element
+
+
 def test_inclusion_rejects_nondividing_parent() -> None:
     with pytest.raises(OperationDomainValidationError):
         invoke_operation(

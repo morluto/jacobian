@@ -95,7 +95,9 @@ def _standard_inclusion(
     )
 
 
-def _require_standard_inclusion_image(inclusion: CyclotomicFieldInclusion) -> None:
+def _require_standard_inclusion_image(
+    inclusion: CyclotomicFieldInclusion,
+) -> tuple[Fraction, ...]:
     work = inclusion.source.degree * inclusion.target.degree * inclusion.target.degree
     if work > MAX_CYCLIC_FIELD_WORK:
         raise CyclicRankKernelAdmissionError(
@@ -108,6 +110,7 @@ def _require_standard_inclusion_image(inclusion: CyclotomicFieldInclusion) -> No
             "inclusion_image",
             "the supplied generator image is not the standard inclusion image",
         )
+    return expected
 
 
 def cyclotomic_field_inclusion(
@@ -150,8 +153,7 @@ def apply_cyclotomic_field_inclusion(
             "field_work_bound",
             "cyclotomic element mapping exceeds the field-work envelope",
         )
-    _require_standard_inclusion_image(inclusion)
-    expected = _inclusion_poly(inclusion.source.order, inclusion.target.order)
+    expected = _require_standard_inclusion_image(inclusion)
     coordinates = tuple(value.as_fraction() for value in element.coefficients_ascending)
     from sympy import Poly, cyclotomic_poly, symbols
 
@@ -174,7 +176,12 @@ def apply_cyclotomic_field_inclusion(
     # rational height before expanding the caller's element.
     max_num_digits = max(len(str(abs(value.numerator))) for value in coordinates)
     max_den_digits = max(len(str(value.denominator)) for value in coordinates)
-    denominator_digits = source_degree * max_den_digits
+    denominator = 1
+    for value in coordinates:
+        denominator = (
+            denominator * value.denominator // gcd(denominator, value.denominator)
+        )
+    denominator_digits = len(str(denominator))
     numerator_digits = (
         max_num_digits
         + (source_degree - 1) * max_den_digits

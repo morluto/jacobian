@@ -9,6 +9,7 @@ from __future__ import annotations
 from fractions import Fraction
 from functools import lru_cache
 from math import gcd
+from typing import NoReturn
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import (
@@ -28,13 +29,13 @@ from jacobian.math.number_theory.modular_forms.values import (
 _MAX_WORK = 1_000_000
 
 
-def _fail_domain(code: str, message: str) -> None:
+def _fail_domain(code: str, message: str) -> NoReturn:
     raise OperationDomainValidationError(
         location=("elements",), code=code, message=message
     )
 
 
-def _fail_resource(code: str, message: str) -> None:
+def _fail_resource(code: str, message: str) -> NoReturn:
     raise OperationResourceAdmissionError(
         location=("elements",), code=code, message=message
     )
@@ -234,7 +235,8 @@ def add(
     left: RationalCyclotomicElement, right: RationalCyclotomicElement
 ) -> RationalCyclotomicElement:
     field, a, b = _admit(left, right, cost=MAX_MODULAR_FORM_COEFFICIENT_FIELD_DEGREE)
-    assert b is not None
+    if b is None:
+        raise ArithmeticError("cyclotomic admission returned no right coordinates")
     return _canonical(field, tuple(x + y for x, y in zip(a, b, strict=True)))
 
 
@@ -242,7 +244,8 @@ def subtract(
     left: RationalCyclotomicElement, right: RationalCyclotomicElement
 ) -> RationalCyclotomicElement:
     field, a, b = _admit(left, right, cost=MAX_MODULAR_FORM_COEFFICIENT_FIELD_DEGREE)
-    assert b is not None
+    if b is None:
+        raise ArithmeticError("cyclotomic admission returned no right coordinates")
     return _canonical(field, tuple(x - y for x, y in zip(a, b, strict=True)))
 
 
@@ -254,7 +257,8 @@ def multiply(
         right,
         cost=MAX_MODULAR_FORM_COEFFICIENT_FIELD_DEGREE**2 * 3,
     )
-    assert b is not None
+    if b is None:
+        raise ArithmeticError("cyclotomic admission returned no right coordinates")
     return _multiply_coordinates(field, a, b)
 
 
@@ -347,7 +351,8 @@ def divide(
         inverse_operand=right,
         include_left_in_inverse_bound=True,
     )
-    assert right_values is not None
+    if right_values is None:
+        raise ArithmeticError("cyclotomic admission returned no right coordinates")
     return _solve_coordinates(field, right_values, left_values)
 
 

@@ -102,7 +102,7 @@ def test_formal_prefix_requests_enforce_prime_variable_and_source_envelope() -> 
     )
 
 
-def test_selected_coefficient_digits_and_aggregate_output_bytes_are_admitted(
+def test_selected_coefficient_digits_and_aggregate_allocation_are_admitted(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import jacobian.math.number_theory.modular_forms.transforms as transforms
@@ -119,10 +119,10 @@ def test_selected_coefficient_digits_and_aggregate_output_bytes_are_admitted(
         == "formal_q_series.source_coefficient_bound"
     )
 
-    monkeypatch.setattr(transforms, "MAX_FORMAL_Q_SERIES_OPERATOR_OUTPUT_BYTES", 1)
-    with pytest.raises(OperationResourceAdmissionError) as bytes_error:
+    monkeypatch.setattr(transforms, "MAX_FORMAL_Q_SERIES_OPERATOR_ALLOCATION_BYTES", 1)
+    with pytest.raises(OperationResourceAdmissionError) as allocation_error:
         formal_q_series_u_operator(_series((1, 2, 3)), 2, 2)
-    assert bytes_error.value.errors()[0]["type"] == "formal_q_series.output_bytes_bound"
+    assert allocation_error.value.errors()[0]["type"] == "formal_q_series.output_bound"
 
 
 def test_formal_results_roundtrip_and_compose_with_series_arithmetic() -> None:

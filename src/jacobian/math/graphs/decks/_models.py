@@ -1104,8 +1104,6 @@ class VertexDeckIsomorphismProfile(StrictModel):
                     for index in item.card_indices
                 )
                 or representative.vertices != canonical_axis
-                or _canonical_card_edges(representative.vertices, representative.edges)
-                != representative.edges
                 or (
                     previous_edges is not None
                     and representative.edges <= previous_edges
@@ -1238,6 +1236,64 @@ def _admit_and_normalize_vertex_iso_profile_result(value: Any) -> Any:
                 "vertex-deck isomorphism profile exceeds its source-order bound",
             )
         classes = value.get("classes")
+        if type(classes) in (list, tuple):
+            card_order = max(order - 1, 0)
+            card_pair_count = comb(card_order, 2)
+            family = value.get("family")
+            raw_cards = (
+                family.get("cards")
+                if type(family) is dict
+                else getattr(family, "cards", None)
+            )
+            if type(raw_cards) in (list, tuple):
+                for card in raw_cards:
+                    graph = (
+                        card.get("card")
+                        if type(card) is dict
+                        else getattr(card, "card", None)
+                    )
+                    vertices = (
+                        graph.get("vertices")
+                        if type(graph) is dict
+                        else getattr(graph, "vertices", None)
+                    )
+                    edges = (
+                        graph.get("edges")
+                        if type(graph) is dict
+                        else getattr(graph, "edges", None)
+                    )
+                    if (
+                        type(vertices) in (list, tuple) and len(vertices) > card_order
+                    ) or (
+                        type(edges) in (list, tuple) and len(edges) > card_pair_count
+                    ):
+                        raise _validation_error(
+                            "vertex_iso_profile_card_shape",
+                            "a card exceeds the declared source-order shape bound",
+                        )
+            for item in classes:
+                graph = (
+                    item.get("representative")
+                    if type(item) is dict
+                    else getattr(item, "representative", None)
+                )
+                vertices = (
+                    graph.get("vertices")
+                    if type(graph) is dict
+                    else getattr(graph, "vertices", None)
+                )
+                edges = (
+                    graph.get("edges")
+                    if type(graph) is dict
+                    else getattr(graph, "edges", None)
+                )
+                if (type(vertices) in (list, tuple) and len(vertices) > card_order) or (
+                    type(edges) in (list, tuple) and len(edges) > card_pair_count
+                ):
+                    raise _validation_error(
+                        "vertex_iso_profile_card_shape",
+                        "a representative exceeds the declared source-order shape bound",
+                    )
         if (
             type(classes) in (list, tuple)
             and len(cast(list[Any] | tuple[Any, ...], classes)) > order

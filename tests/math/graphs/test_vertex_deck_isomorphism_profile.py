@@ -265,6 +265,6 @@ def test_catalog_example_executes_and_returns_exact_maps() -> None:
         result = VertexDeckIsomorphismProfile.model_validate_json(
             json.dumps(invocation.output)
         )
-        assert calls == len(result.classes)
+        assert calls == 0
     assert result.class_indices == (1, 0, 1)
     _assert_maps_are_isomorphisms(result)

@@ -28,7 +28,6 @@ from jacobian.math.combinatorics.algebraic._models import (
     PartitionDominanceResult,
     PlacticEquivalenceResult,
     PlacticNormalFormResult,
-    RSKResult,
     SemistandardTableauCheckResult,
     SemistandardYoungTableauCountResult,
     SkewLittlewoodRichardsonCheckResult,
@@ -40,6 +39,9 @@ from jacobian.math.combinatorics.algebraic._rsk import (
     word_payload_scalars,
 )
 from jacobian.math.combinatorics.algebraic._rsk import (
+    inverse_permutation_rsk as _inverse_permutation_rsk,
+)
+from jacobian.math.combinatorics.algebraic._rsk import (
     inverse_row_insertion_rsk as _inverse_row_insertion_rsk,
 )
 from jacobian.math.combinatorics.algebraic._rsk import (
@@ -49,6 +51,8 @@ from jacobian.math.combinatorics.algebraic.values import (
     MAX_RSK_ALPHABET_RANK_DIGITS,
     MAX_RSK_WORD_LENGTH,
     MAX_RSK_WORD_PAYLOAD_SCALARS,
+    FinitePermutation,
+    PermutationRSKPair,
     RSKTableauPair,
 )
 from jacobian.math.combinatorics.symmetric_functions.values import (
@@ -85,9 +89,11 @@ __all__ = [
     "check_standard_tableau",
     "conjugate_partition",
     "hook_lengths",
+    "inverse_permutation_rsk",
     "inverse_row_insertion_rsk",
     "knuth_moves",
     "partition_dominance",
+    "permutation_rsk",
     "plactic_equivalence",
     "plactic_normal_form",
     "row_insertion_rsk",
@@ -95,7 +101,6 @@ __all__ = [
     "standard_young_tableaux_count",
     "tableau_row_reading_word",
     "verify_knuth_moves",
-    "verify_rsk",
     "verify_skew_littlewood_richardson",
 ]
 
@@ -519,13 +524,55 @@ def inverse_row_insertion_rsk(pair: RSKTableauPair) -> FiniteWord:
     return _inverse_row_insertion_rsk(pair)
 
 
-def _rsk_permutation(
-    permutation: tuple[int, ...],
-) -> tuple[tuple[tuple[int, ...], ...], tuple[tuple[int, ...], ...]]:
-    """Validate and insert one strict permutation through the native kernel."""
-    if sorted(permutation) != list(range(1, len(permutation) + 1)):
-        raise ValueError("permutation must be a permutation of 1..n")
-    return _row_insert(permutation)
+def permutation_rsk(permutation: object) -> PermutationRSKPair:
+    """Compute the canonical standard-tableau image of a finite permutation."""
+
+    if type(permutation) is not FinitePermutation:
+        raise OperationDomainValidationError(
+            location=("permutation",),
+            code="algebraic_combinatorics.permutation_carrier_required",
+            message="permutation RSK requires a canonical finite permutation",
+        )
+    if type(permutation.images) is not tuple:
+        raise OperationDomainValidationError(
+            location=("permutation", "images"),
+            code="algebraic_combinatorics.permutation_carrier_invalid",
+            message="finite permutation images must be a canonical tuple",
+        )
+    size = len(permutation.images)
+    if size > MAX_RSK_WORD_LENGTH:
+        raise OperationResourceAdmissionError(
+            location=("permutation", "images"),
+            code="algebraic_combinatorics.permutation_rsk_size",
+            message="permutation RSK is bounded by the standard-tableau cell limit",
+        )
+    try:
+        canonical = FinitePermutation.model_validate(
+            permutation.model_dump(mode="python"), strict=True
+        )
+    except (AttributeError, TypeError, ValueError, ValidationError) as exc:
+        raise OperationDomainValidationError(
+            location=("permutation",),
+            code="algebraic_combinatorics.permutation_invalid",
+            message="permutation RSK requires a bijection of 1 through n",
+        ) from exc
+
+    comparisons = size * (size - 1) // 2 * max(1, size.bit_length())
+    maximum_comparisons = (
+        MAX_RSK_WORD_LENGTH
+        * (MAX_RSK_WORD_LENGTH - 1)
+        // 2
+        * MAX_RSK_WORD_LENGTH.bit_length()
+    )
+    if comparisons > maximum_comparisons:
+        raise OperationResourceAdmissionError(
+            location=("permutation",),
+            code="algebraic_combinatorics.permutation_rsk_work",
+            message="permutation row insertion exceeds its admitted work bound",
+        )
+    request_checkpoint("before permutation row insertion")
+    insertion_rows, recording_rows = _row_insert(canonical.images)
+    return PermutationRSKPair._from_kernel(insertion_rows, recording_rows)
 
 
 def knuth_moves(word: FiniteWord) -> tuple[KnuthNeighbor, ...]:
@@ -758,24 +805,72 @@ def verify_knuth_moves(claim: KnuthMovesResult) -> bool:
         return False
 
 
-def verify_rsk(claim: RSKResult) -> bool:
-    """Check bounded permutation admission, RSK correspondence, and LIS/LDS.
+def inverse_permutation_rsk(pair: object) -> FinitePermutation:
+    """Invert a bounded canonical standard-tableau permutation-RSK pair."""
 
-    The retained source has at most 500 entries. Row insertion has the same
-    quadratic search-count bound as the producing operation.
-    """
+    if type(pair) is not PermutationRSKPair:
+        raise OperationDomainValidationError(
+            location=("pair",),
+            code="algebraic_combinatorics.permutation_rsk_pair_required",
+            message="inverse permutation RSK requires a canonical tableau pair",
+        )
+    for field, tableau in (
+        ("p_tableau", pair.p_tableau),
+        ("q_tableau", pair.q_tableau),
+    ):
+        if type(tableau) is not StandardYoungTableau or type(tableau.rows) is not tuple:
+            raise OperationDomainValidationError(
+                location=("pair", field),
+                code="algebraic_combinatorics.permutation_rsk_pair_invalid",
+                message="permutation RSK requires standard tableau carriers",
+            )
+        if len(tableau.rows) > MAX_RSK_WORD_LENGTH:
+            raise OperationResourceAdmissionError(
+                location=("pair", field),
+                code="algebraic_combinatorics.permutation_rsk_size",
+                message="permutation RSK pair exceeds the tableau cell envelope",
+            )
+        if any(type(row) is not tuple for row in tableau.rows):
+            raise OperationDomainValidationError(
+                location=("pair", field),
+                code="algebraic_combinatorics.permutation_rsk_pair_invalid",
+                message="tableau rows must be canonical tuples",
+            )
+        if sum(len(row) for row in tableau.rows) > MAX_RSK_WORD_LENGTH:
+            raise OperationResourceAdmissionError(
+                location=("pair", field),
+                code="algebraic_combinatorics.permutation_rsk_size",
+                message="permutation RSK pair exceeds the tableau cell envelope",
+            )
     try:
-        require_semistandard(claim.p_tableau)
-        require_standard(claim.q_tableau)
-        insertion, recording = _rsk_permutation(claim.permutation)
-    except (TypeError, ValueError):
-        return False
-    return (
-        insertion == claim.p_tableau.rows
-        and recording == claim.q_tableau.rows
-        and claim.lis_length == (len(insertion[0]) if insertion else 0)
-        and claim.lds_length == len(insertion)
-    )
+        canonical = PermutationRSKPair.model_validate(
+            pair.model_dump(mode="python"), strict=True
+        )
+    except (AttributeError, TypeError, ValueError, ValidationError) as exc:
+        raise OperationDomainValidationError(
+            location=("pair",),
+            code="algebraic_combinatorics.permutation_rsk_pair_invalid",
+            message="inverse permutation RSK requires a valid same-shape standard pair",
+        ) from exc
+
+    cell_count = sum(canonical.shape.parts)
+    row_searches = cell_count * (cell_count - 1) // 2
+    comparisons = row_searches * max(1, cell_count.bit_length())
+    # The canonical pair limit is 500 cells, implying at most 1,122,750
+    # binary-search comparisons and at most 124,750 reverse-bump visits.
+    if cell_count > MAX_RSK_WORD_LENGTH or comparisons > (
+        MAX_RSK_WORD_LENGTH
+        * (MAX_RSK_WORD_LENGTH - 1)
+        // 2
+        * MAX_RSK_WORD_LENGTH.bit_length()
+    ):
+        raise OperationResourceAdmissionError(
+            location=("pair",),
+            code="algebraic_combinatorics.permutation_rsk_work",
+            message="reverse permutation insertion exceeds its admitted work bound",
+        )
+    request_checkpoint("before permutation reverse insertion")
+    return _inverse_permutation_rsk(canonical)
 
 
 def _require_canonical_partition(partition: object) -> IntegerPartition:

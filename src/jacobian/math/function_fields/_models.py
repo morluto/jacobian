@@ -639,10 +639,11 @@ class FunctionFieldRiemannRochSpace(StrictModel):
 class FunctionFieldRiemannRochSpaceRequest(StrictModel):
     divisor: FunctionFieldDivisor = Field(
         description=(
-            "A finite divisor over GF(p)(x), with at most 256 terms and "
-            "multiplicities of at most 4096 bits. Positive-dimensional outputs "
-            "are admitted only when their exact canonical basis fits the "
-            "degree-12 rational-function coefficient envelope."
+            "A finite divisor over GF(p)(x), or m times the unique infinity "
+            "place of an odd-degree squarefree hyperelliptic model y^2=f(x). "
+            "Support is limited to 256 terms and multiplicities to 4096 bits. "
+            "Positive-dimensional outputs are admitted only when their exact "
+            "canonical basis fits the degree-12 coefficient envelope."
         )
     )
 

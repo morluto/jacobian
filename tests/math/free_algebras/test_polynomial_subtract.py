@@ -116,6 +116,19 @@ def test_zero_empty_alphabet_and_exact_cancellation_keep_the_parent() -> None:
     }
 
 
+def test_same_sign_64_digit_collision_cancels_within_admission() -> None:
+    value = _polynomial(("x",), {("x",): 10**63})
+    assert subtract(value, value).is_zero
+
+
+def test_overlapping_support_is_bounded_by_distinct_words() -> None:
+    support = _words(("x", "y"), 65)
+    value = _polynomial(("x", "y"), dict.fromkeys(support, Fraction(2, 3)))
+    result = subtract(value, value)
+    assert result.is_zero
+    assert result.alphabet == value.alphabet
+
+
 def test_identical_ordered_alphabet_is_required() -> None:
     left = _polynomial(("x", "y"), {("x",): 1})
     right = _polynomial(("y", "x"), {("x",): 1})

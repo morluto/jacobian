@@ -175,7 +175,8 @@ def _subtraction_collision_digits(
     left_den = _decimal_digits(left.den)
     right_den = _decimal_digits(right.den)
     if left.den == right.den:
-        numerator_digits = max(left_num, right_num) + 1
+        grows = (left.num < 0) != (right.num < 0)
+        numerator_digits = max(left_num, right_num) + int(grows)
         denominator_digits = left_den
     else:
         numerator_digits = max(left_num + right_den, right_num + left_den) + 1
@@ -265,7 +266,7 @@ def subtract(
             "predicted difference coefficient growth exceeds its digit bound",
         )
 
-    result_term_bound = len(left.terms) + len(right.terms)
+    result_term_bound = len(left_coefficients.keys() | right_coefficients.keys())
     if result_term_bound > MAX_FREE_ALGEBRA_ADDITION_TERMS:
         _resource(
             "subtraction_result_term_budget",

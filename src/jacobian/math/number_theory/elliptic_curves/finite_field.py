@@ -730,6 +730,32 @@ class FiniteFieldGroupStructureResult(StrictModel):
         return self
 
 
+class FiniteFieldQuadraticTwistRelation(StrictModel):
+    """A canonical nonsquare parameter and its source-bound twist model.
+
+    The producer establishes that ``parameter`` is a nonsquare and that the
+    target coefficients are ``d^2*A`` and ``d^3*B``. This carrier preserves
+    those exact inputs for consumers that need to use the twist relation; its
+    structural validation intentionally does not replay field arithmetic.
+    """
+
+    source_curve: FiniteFieldShortWeierstrassCurve
+    twisted_curve: FiniteFieldShortWeierstrassCurve
+    parameter: FiniteFieldElement
+
+    @model_validator(mode="after")
+    def require_one_field_presentation(self) -> Self:
+        if (
+            self.source_curve.field != self.twisted_curve.field
+            or self.parameter.presentation != self.source_curve.field
+        ):
+            raise _validation_error(
+                "twist_relation_field_mismatch",
+                "twist relation curves and parameter must share one field presentation",
+            )
+        return self
+
+
 MAX_FROBENIUS_EXTENSION_DEGREE = 64
 MAX_FROBENIUS_EXTENSION_INTEGER_DIGITS = 4096
 MAX_FROBENIUS_CHARACTER_SUM_WORK = 4_000_000
@@ -1322,15 +1348,16 @@ def _curve_admit(
     return curve
 
 
-def finite_field_quadratic_twist(
+def _finite_field_quadratic_twist_components(
     curve: FiniteFieldShortWeierstrassCurve,
-) -> FiniteFieldShortWeierstrassCurve:
-    """Return the canonical nontrivial quadratic twist over the same field.
-
-    The twisting parameter is the first nonsquare in the field's canonical
-    base-p coordinate order. For that nonsquare ``d``, the twist is
-    ``y^2 = x^3 + d^2 A x + d^3 B``.
-    """
+    *,
+    include_relation: bool,
+) -> tuple[
+    FiniteFieldShortWeierstrassCurve,
+    FiniteFieldShortWeierstrassCurve,
+    FiniteFieldElement,
+]:
+    """Compute shared twist components after operation-specific admission."""
 
     if not isinstance(curve, FiniteFieldShortWeierstrassCurve):
         raise OperationDomainValidationError(
@@ -1368,19 +1395,23 @@ def finite_field_quadratic_twist(
             code="elliptic_curve.finite_field.twist_work_bound",
             message="canonical quadratic twist search exceeds its exact work envelope",
         )
-    source_shape = admitted.model_dump(mode="json")
-    source_bytes = len(rfc8785.dumps(source_shape))
-    source_coordinate_digits = sum(
-        len(str(value))
-        for coefficient in (coefficient_a, coefficient_b)
-        for value in coefficient.coordinates
+    max_element = _element(field, (field.characteristic - 1,) * field.degree)
+    max_curve = FiniteFieldShortWeierstrassCurve(
+        field=field, coefficient_a=max_element, coefficient_b=max_element
     )
-    output_bound = (
-        source_bytes
-        - source_coordinate_digits
-        + 2 * field.degree * len(str(field.characteristic - 1))
-        + 64
-    )
+    if include_relation:
+        maximum_result = FiniteFieldQuadraticTwistRelation.model_construct(
+            source_curve=admitted,
+            twisted_curve=max_curve,
+            parameter=max_element,
+        )
+    else:
+        maximum_result = max_curve
+    output_bound = len(rfc8785.dumps(maximum_result.model_dump(mode="json")))
+    if not include_relation:
+        # Retain the original curve-only admission margin for transport
+        # overhead; the relation operation admits its complete exact shape.
+        output_bound += 64
     if output_bound > CanonicalLimits().max_output_bytes:
         raise OperationResourceAdmissionError(
             location=("curve",),
@@ -1415,11 +1446,41 @@ def finite_field_quadratic_twist(
     cube = _multiply(field, square, nonsquare)
     twisted_a = _multiply(field, square, a)
     twisted_b = _multiply(field, cube, b)
-    return FiniteFieldShortWeierstrassCurve(
+    twisted_curve = FiniteFieldShortWeierstrassCurve(
         field=field,
         coefficient_a=_element(field, twisted_a),
         coefficient_b=_element(field, twisted_b),
     )
+    return admitted, twisted_curve, _element(field, nonsquare)
+
+
+def finite_field_quadratic_twist_relation(
+    curve: FiniteFieldShortWeierstrassCurve,
+) -> FiniteFieldQuadraticTwistRelation:
+    """Return the canonical twist model together with its nonsquare parameter.
+
+    The twisting parameter is the first nonsquare in the field's canonical
+    base-p coordinate order. For that nonsquare ``d``, the twist is
+    ``y^2 = x^3 + d^2 A x + d^3 B``.
+    """
+    admitted, twisted_curve, parameter = _finite_field_quadratic_twist_components(
+        curve, include_relation=True
+    )
+    return FiniteFieldQuadraticTwistRelation(
+        source_curve=admitted,
+        twisted_curve=twisted_curve,
+        parameter=parameter,
+    )
+
+
+def finite_field_quadratic_twist(
+    curve: FiniteFieldShortWeierstrassCurve,
+) -> FiniteFieldShortWeierstrassCurve:
+    """Return the canonical nontrivial quadratic twist model."""
+    _, twisted_curve, _ = _finite_field_quadratic_twist_components(
+        curve, include_relation=False
+    )
+    return twisted_curve
 
 
 def _canonical_point(
@@ -2071,6 +2132,7 @@ __all__ = [
     "FiniteFieldPointRequest",
     "FiniteFieldPointResult",
     "FiniteFieldPointSet",
+    "FiniteFieldQuadraticTwistRelation",
     "FiniteFieldScalarRequest",
     "FiniteFieldShortWeierstrassCurve",
     "FiniteFieldZetaFunctionResult",
@@ -2090,6 +2152,7 @@ __all__ = [
     "finite_field_point_scalar",
     "finite_field_points",
     "finite_field_quadratic_twist",
+    "finite_field_quadratic_twist_relation",
     "finite_field_zeta_function",
     "finite_field_zeta_polynomial",
     "require_discriminant_admission",

@@ -21,6 +21,7 @@ from jacobian.math.number_theory.elliptic_curves import (
 )
 from jacobian.math.number_theory.elliptic_curves.finite_field import (
     FiniteFieldEllipticPoint,
+    FiniteFieldQuadraticTwistRelation,
     FiniteFieldShortWeierstrassCurve,
     FiniteFieldZetaFunctionResult,
     finite_field_cardinality,
@@ -38,6 +39,7 @@ from jacobian.math.number_theory.elliptic_curves.finite_field import (
     finite_field_point_scalar,
     finite_field_points,
     finite_field_quadratic_twist,
+    finite_field_quadratic_twist_relation,
     finite_field_zeta_function,
     finite_field_zeta_polynomial,
 )
@@ -270,6 +272,63 @@ def test_quadratic_twist_composes_with_extension_count_consumer() -> None:
     twist_count = finite_field_cardinality(twist)
     assert source_count.trace + twist_count.trace == 0
     assert source_count.cardinality + twist_count.cardinality == 2 * (25 + 1)
+
+
+def test_quadratic_twist_relation_retains_parameter_and_composes() -> None:
+    field = FiniteFieldPresentation(
+        characteristic=5, modulus_coefficients=(0, 1), generator="a"
+    )
+    one = FiniteFieldElement(presentation=field, coordinates=(1,))
+    curve = FiniteFieldShortWeierstrassCurve(
+        field=field, coefficient_a=one, coefficient_b=one
+    )
+    relation = finite_field_quadratic_twist_relation(curve)
+
+    assert relation.source_curve == curve
+    assert relation.parameter.coordinates == (2,)
+    d = relation.parameter.coordinates[0]
+    assert pow(d, (5 - 1) // 2, 5) == 4  # Euler criterion: d is nonsquare.
+    assert relation.twisted_curve.coefficient_a.coordinates == ((d * d) % 5,)
+    assert relation.twisted_curve.coefficient_b.coordinates == ((d * d * d) % 5,)
+    assert finite_field_quadratic_twist(curve) == relation.twisted_curve
+
+    restored = FiniteFieldQuadraticTwistRelation.model_validate_json(
+        relation.model_dump_json()
+    )
+    assert restored == relation
+
+    def direct_count(a: int, b: int) -> int:
+        return 1 + sum(
+            (y * y - x * x * x - a * x - b) % 5 == 0 for x in range(5) for y in range(5)
+        )
+
+    source_count = direct_count(1, 1)
+    twist_count = direct_count(
+        relation.twisted_curve.coefficient_a.coordinates[0],
+        relation.twisted_curve.coefficient_b.coordinates[0],
+    )
+    assert (source_count, twist_count) == (9, 3)
+    assert source_count + twist_count == 2 * (5 + 1)
+
+    source_frobenius = finite_field_frobenius(curve)
+    twist_frobenius = finite_field_frobenius(relation.twisted_curve)
+    assert source_frobenius.trace == 5 + 1 - source_count
+    assert twist_frobenius.trace == 5 + 1 - twist_count
+    assert source_frobenius.trace + twist_frobenius.trace == 0
+
+
+def test_quadratic_twist_relation_public_example_dispatches() -> None:
+    catalog = Catalog.open()
+    operation = catalog.operation(
+        "elliptic_curve.finite_field.quadratic_twist_relation.compute"
+    )
+    assert operation is not None
+    result = invoke_operation(
+        operation.operation_id, operation.examples[0].input, catalog
+    )
+    assert result.output["parameter"]["coordinates"] == ["2"]
+    assert result.output["source_curve"]["coefficient_a"]["coordinates"] == ["1"]
+    assert result.output["twisted_curve"]["coefficient_a"]["coordinates"] == ["4"]
 
 
 def test_quadratic_twist_rejects_field_order_before_search(monkeypatch) -> None:

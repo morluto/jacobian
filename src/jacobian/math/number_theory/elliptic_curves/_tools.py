@@ -34,6 +34,7 @@ from jacobian.math.number_theory.elliptic_curves.finite_field import (
     FiniteFieldPointRequest,
     FiniteFieldPointResult,
     FiniteFieldPointSet,
+    FiniteFieldQuadraticTwistRelation,
     FiniteFieldScalarRequest,
     FiniteFieldShortWeierstrassCurve,
     FiniteFieldZetaFunctionResult,
@@ -52,6 +53,7 @@ from jacobian.math.number_theory.elliptic_curves.finite_field import (
     finite_field_point_scalar,
     finite_field_points,
     finite_field_quadratic_twist,
+    finite_field_quadratic_twist_relation,
     finite_field_zeta_function,
     finite_field_zeta_polynomial,
 )
@@ -456,6 +458,33 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             OperationExample(
                 name="nontrivial_twist_over_five",
                 description="Return the canonical nontrivial twist over F5.",
+                input={"curve": _finite_curve()},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="elliptic_curve.finite_field.quadratic_twist_relation.compute",
+        title="Construct a source-bound finite-field quadratic-twist relation",
+        description=(
+            "Return the canonical nontrivial quadratic-twist model together "
+            "with its exact source curve and nonsquare parameter d, where "
+            "the new coefficients are d^2*A and d^3*B."
+        ),
+        request_type=FiniteFieldCurveRequest,
+        result_type=FiniteFieldQuadraticTwistRelation,
+        run=lambda request: finite_field_quadratic_twist_relation(request.curve),
+        tags=("elliptic-curve", "finite-field", "quadratic-twist", "exact"),
+        discovery_terms=(
+            "finite-field quadratic twist parameter and model",
+            "elliptic curve twist relation over finite fields",
+        ),
+        examples=(
+            OperationExample(
+                name="twist_relation_over_five",
+                description=(
+                    "Return the source, canonical nonsquare parameter, and "
+                    "twisted model for y^2=x^3+x+1 over F5."
+                ),
                 input={"curve": _finite_curve()},
             ),
         ),

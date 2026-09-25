@@ -25,3 +25,6 @@ The implementation admits fields of order at most 4,096. It bounds the
 worst-case scan and exponentiation work, and the maximum serialized curve
 shape, before searching for the nonsquare. Characteristics two and three,
 singular cubics, and larger fields are outside this operation's contract.
+
+To retain the chosen nonsquare and source model alongside the twist, use the
+[source-bound twist relation operation](elliptic-curve-quadratic-twist-relation.md).

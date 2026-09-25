@@ -10,6 +10,7 @@
 - [Finite-field elliptic point orders](elliptic-curve-point-order.md)
 - [Finite-field elliptic group structures](elliptic-curve-group-structure.md)
 - [Finite-field elliptic quadratic twists](elliptic-curve-finite-field-twists.md)
+- [Finite-field elliptic quadratic-twist relation](elliptic-curve-quadratic-twist-relation.md)
 - [Level-one named modular-form q-expansions](modular-forms-level-one-q-expansions.md)
 
 [Documentation home](../../../index.md) · [Tool surface](../../tools.md)

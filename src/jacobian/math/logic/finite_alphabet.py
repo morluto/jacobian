@@ -42,7 +42,7 @@ class FiniteAlphabet(StrictModel):
             Field(min_length=1, max_length=MAX_FINITE_ALPHABET_SYMBOL_LENGTH),
         ],
         ...,
-    ] = Field(min_length=1, max_length=MAX_FINITE_ALPHABET_SIZE)
+    ] = Field(max_length=MAX_FINITE_ALPHABET_SIZE)
 
     @model_validator(mode="after")
     def require_unique_symbols(self) -> Self:

@@ -167,8 +167,8 @@ class SubsequentialTransducer(StrictModel):
     is defined along the path and the final state has a final output.
     """
 
-    input_alphabet_size: int = Field(ge=1, le=MAX_FST_ALPHABET)
-    output_alphabet_size: int = Field(ge=1, le=MAX_FST_ALPHABET)
+    input_alphabet_size: int = Field(ge=0, le=MAX_FST_ALPHABET)
+    output_alphabet_size: int = Field(ge=0, le=MAX_FST_ALPHABET)
     input_alphabet_id: str | None = Field(
         default=None, max_length=MAX_FST_ALPHABET_ID_LENGTH
     )
@@ -279,8 +279,8 @@ class RationalTransducer(StrictModel):
     has finite input and output label words; ``(u, v)`` both empty is forbidden.
     """
 
-    input_alphabet_size: int = Field(ge=1, le=MAX_FST_ALPHABET)
-    output_alphabet_size: int = Field(ge=1, le=MAX_FST_ALPHABET)
+    input_alphabet_size: int = Field(ge=0, le=MAX_FST_ALPHABET)
+    output_alphabet_size: int = Field(ge=0, le=MAX_FST_ALPHABET)
     input_alphabet_id: str | None = Field(default=None)
     output_alphabet_id: str | None = Field(default=None)
     input_alphabet: FiniteAlphabet | None = None

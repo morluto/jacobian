@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated, Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import BeforeValidator, Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
@@ -18,6 +18,7 @@ from jacobian.math.logic.automata.transducers.values import (
     SubsequentialTransducer,
     alphabet_parent_mismatch,
 )
+from jacobian.math.logic.finite_alphabet import _reject_lone_surrogate_symbol
 from jacobian.math.logic.languages.words.values import WordMorphism
 
 
@@ -42,7 +43,11 @@ class SubseqIdentityRequest(StrictModel):
     """Construct the identity function on one exact ordered alphabet."""
 
     alphabet: FiniteAlphabet
-    alphabet_id: str | None = Field(default=None, max_length=MAX_FST_ALPHABET_ID_LENGTH)
+    alphabet_id: Annotated[
+        str | None,
+        BeforeValidator(_reject_lone_surrogate_symbol),
+        Field(max_length=MAX_FST_ALPHABET_ID_LENGTH),
+    ] = None
 
 
 class WordMorphismToSubseqRequest(StrictModel):

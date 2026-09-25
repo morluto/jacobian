@@ -145,6 +145,7 @@ def test_relabel_requires_a_bijection_and_distinct_bounded_labels() -> None:
     accepted = relabel(source, admitted_labels, (0, 1))
     assert accepted.relabelled.ground == admitted_labels
     from jacobian.catalog.models import OperationResourceAdmissionError
+
     with pytest.raises(OperationResourceAdmissionError, match="UTF-8 byte bound"):
         relabel(source, ("A" * 2048, "B"), (0, 1))
 

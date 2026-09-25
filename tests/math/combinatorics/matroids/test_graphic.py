@@ -161,7 +161,8 @@ def test_retained_axis_at_the_codepoint_boundary_is_admitted() -> None:
         MAX_GROUND_AXIS_CODEPOINTS,
     )
 
-    long_vertex = "y" * (MAX_GROUND_AXIS_CODEPOINTS - 1)
+    # JSON pair syntax contributes eight codepoints beyond the label text.
+    long_vertex = "y" * (MAX_GROUND_AXIS_CODEPOINTS - 8)
     graph = _graph(("a", long_vertex), (("a", long_vertex),))
     matroid = graphic_matroid(GraphicMatroidRequest(graph=graph))
     assert matroid.ground_size == 1

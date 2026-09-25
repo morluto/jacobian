@@ -1,9 +1,26 @@
-# ruff: noqa: F403,F405
 from typing import Any
 
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.topology._models import canonical_complex
-from jacobian.math.topology.edge_paths.presentation_maps import *
+from jacobian.math.topology.edge_paths._models import (
+    FundamentalGroupBasepointChangeRequest,
+    FundamentalGroupMapRequest,
+    FundamentalGroupMapResult,
+    PresentationMapCompositionRequest,
+    PresentationMapCompositionResult,
+)
+from jacobian.math.topology.edge_paths.presentation_maps import (
+    DirectRelatorMatchRequest,
+    DirectRelatorMatchResult,
+    change_fundamental_group_basepoint,
+    compose_fundamental_group_maps,
+    direct_relator_match,
+    induced_fundamental_group_map,
+)
+
+
+def _run_basepoint_change(request: FundamentalGroupBasepointChangeRequest) -> Any:
+    return change_fundamental_group_basepoint(request)
 
 
 def _run(r: Any) -> Any:
@@ -102,6 +119,28 @@ TOOLS = (
                 },
             ),
         ),
+    ),
+    MathTool(
+        operation_id="topology.simplicial.fundamental_group.basepoint_change.compute",
+        title="Transport a fundamental-group presentation along an edge path",
+        description=(
+            "Given one finite simplicial complex and an explicit edge path p "
+            "from basepoint b0 to b1, return the based isomorphism sending each "
+            "loop a at b0 to p^-1 a p at b1. The result retains the path, exact "
+            "source and target presentations, generator words, target-relator "
+            "conjugacy witnesses, and the induced integer abelianization map. "
+            "The typed morphism composes with other based presentation maps."
+        ),
+        request_type=FundamentalGroupBasepointChangeRequest,
+        result_type=FundamentalGroupMapResult,
+        run=_run_basepoint_change,
+        tags=("topology", "fundamental-group", "basepoint-change", "exact"),
+        discovery_terms=(
+            "fundamental group change of basepoint path",
+            "basepoint transport isomorphism on pi1",
+            "conjugate loop under a basepoint path",
+        ),
+        examples=(),
     ),
 )
 __all__ = ["TOOLS"]

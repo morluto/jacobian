@@ -326,6 +326,58 @@ class FundamentalGroupMapRequest(StrictModel):
     target_base_vertex: VertexLabel
 
 
+class PresentationBasepointChangePath(StrictModel):
+    """An explicit edge path inducing change of basepoint in one complex."""
+
+    complex: FiniteSimplicialComplex
+    source_base_vertex: VertexLabel
+    target_base_vertex: VertexLabel
+    path_vertices: tuple[VertexLabel, ...] = Field(min_length=1, max_length=MAX_WORD + 1)
+
+    @model_validator(mode="after")
+    def require_edge_path(self) -> Self:
+        vertices = set(self.complex.vertices)
+        if (
+            self.source_base_vertex not in vertices
+            or self.target_base_vertex not in vertices
+        ):
+            raise _validation_error(
+                "fundamental_group_map.basepoint_missing",
+                "both base vertices must belong to the path complex",
+            )
+        if (
+            self.path_vertices[0] != self.source_base_vertex
+            or self.path_vertices[-1] != self.target_base_vertex
+        ):
+            raise _validation_error(
+                "fundamental_group_map.basepoint_path_endpoints",
+                "the edge path must run from the source base vertex to the target base vertex",
+            )
+        edges = {
+            (face[0], face[1])
+            for dimension in self.complex.faces_by_dimension
+            if dimension.dimension == 1
+            for face in dimension.faces
+        }
+        if any(vertex not in vertices for vertex in self.path_vertices) or any(
+            tuple(sorted((left, right))) not in edges
+            for left, right in zip(
+                self.path_vertices, self.path_vertices[1:], strict=False
+            )
+        ):
+            raise _validation_error(
+                "fundamental_group_map.basepoint_path_edge",
+                "each consecutive path pair must be an edge in the exact complex",
+            )
+        return self
+
+
+class FundamentalGroupBasepointChangeRequest(StrictModel):
+    """Transport a based fundamental group along one explicit edge path."""
+
+    path: PresentationBasepointChangePath
+
+
 class PresentationRelatorImage(StrictModel):
     """A triangle relation's target relator-conjugacy witness."""
 
@@ -349,7 +401,7 @@ class PresentationRelatorImage(StrictModel):
 class FundamentalGroupMapResult(StrictModel):
     """Exact generator words and triangle-relation witnesses for a map."""
 
-    map: SimplicialMap
+    map: SimplicialMap | PresentationBasepointChangePath
     source_presentation: FundamentalGroupPresentationResult
     target_presentation: FundamentalGroupPresentationResult
     generator_images: tuple[FiniteGroupWord, ...] = Field(
@@ -362,19 +414,29 @@ class FundamentalGroupMapResult(StrictModel):
 
     @model_validator(mode="after")
     def require_structural_binding(self) -> Self:
+        if isinstance(self.map, SimplicialMap):
+            source_complex = self.map.source
+            target_complex = self.map.target
+            source_base_image = dict(
+                zip(self.map.source.vertices, self.map.vertex_map, strict=True)
+            ).get(self.source_presentation.base_vertex)
+            bases_match = source_base_image == self.target_presentation.base_vertex
+        else:
+            source_complex = target_complex = self.map.complex
+            bases_match = (
+                self.map.source_base_vertex == self.source_presentation.base_vertex
+                and self.map.target_base_vertex == self.target_presentation.base_vertex
+            )
         if (
-            self.source_presentation.complex != self.map.source
-            or self.target_presentation.complex != self.map.target
+            self.source_presentation.complex != source_complex
+            or self.target_presentation.complex != target_complex
         ):
             raise _validation_error(
                 "fundamental_group_map.presentation_binding",
-                "presentations must bind the exact simplicial-map carriers",
+                "presentations must bind the exact morphism source and target carriers",
             )
-        source_base_image = dict(
-            zip(self.map.source.vertices, self.map.vertex_map, strict=True)
-        ).get(self.source_presentation.base_vertex)
         if (
-            source_base_image != self.target_presentation.base_vertex
+            not bases_match
             or len(self.generator_images)
             != len(self.source_presentation.presentation.generators)
             or len(self.relator_images)

@@ -6,14 +6,21 @@ from pydantic import ConfigDict, Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
-from jacobian.math.combinatorics.matroids.delta.values import FiniteDeltaMatroid
+from jacobian.math.combinatorics.matroids.delta.values import (
+    MAX_DELTA_EXCHANGE_CANDIDATE_CHECKS,
+    MAX_DELTA_MEMBERSHIPS,
+    FiniteDeltaMatroid,
+)
 from jacobian.math.polynomials._models import IntegerPolynomial
 
 MAX_BINARY_GROUND = 8
 MAX_BINARY_LABEL_BYTES = 2_048
 MAX_TWIST_POLYNOMIAL_STATES = 4_096
 MAX_TWIST_POLYNOMIAL_WORK = 262_144
-MAX_TWIST_POLYNOMIAL_OUTPUT_BYTES = 65_536
+MAX_TWIST_POLYNOMIAL_GROUND = MAX_TWIST_POLYNOMIAL_STATES.bit_length() - 1
+MAX_TWIST_POLYNOMIAL_HISTOGRAM_ENTRIES = MAX_TWIST_POLYNOMIAL_GROUND + 1
+MAX_TWIST_POLYNOMIAL_SOURCE_ROWS = MAX_DELTA_MEMBERSHIPS + 1
+MAX_TWIST_POLYNOMIAL_COEFFICIENT_DIGITS = len(str(MAX_TWIST_POLYNOMIAL_STATES))
 
 
 class DeltaMatroidDualRequest(StrictModel):
@@ -127,14 +134,23 @@ class DeltaMatroidTwistPolynomialRequest(StrictModel):
                 "Return coefficients indexed by width for the exact polynomial "
                 "sum over all A subset E of z^width(D*A), plus the complete "
                 "width histogram. The polynomial uses descending-degree "
-                "IntegerPolynomial coefficients. Admission permits at "
-                f"most {MAX_TWIST_POLYNOMIAL_STATES} twist masks and "
-                f"{MAX_TWIST_POLYNOMIAL_WORK} mask-feasible-set evaluations."
+                "IntegerPolynomial coefficients. Admission permits at most "
+                f"{MAX_TWIST_POLYNOMIAL_GROUND} ground elements, "
+                f"{MAX_TWIST_POLYNOMIAL_STATES} twist masks, and "
+                f"{MAX_TWIST_POLYNOMIAL_WORK} mask-feasible-set evaluations. "
+                f"The result has at most {MAX_TWIST_POLYNOMIAL_HISTOGRAM_ENTRIES} "
+                "histogram entries and coefficients with at most "
+                f"{MAX_TWIST_POLYNOMIAL_COEFFICIENT_DIGITS} decimal digits."
             ),
             "admission_limits": {
+                "max_ground_elements": MAX_TWIST_POLYNOMIAL_GROUND,
                 "max_twist_masks": MAX_TWIST_POLYNOMIAL_STATES,
                 "max_mask_feasible_set_evaluations": MAX_TWIST_POLYNOMIAL_WORK,
-                "max_encoded_output_bytes": MAX_TWIST_POLYNOMIAL_OUTPUT_BYTES,
+                "max_histogram_entries": MAX_TWIST_POLYNOMIAL_HISTOGRAM_ENTRIES,
+                "max_polynomial_coefficient_digits": MAX_TWIST_POLYNOMIAL_COEFFICIENT_DIGITS,
+                "max_source_memberships": MAX_DELTA_MEMBERSHIPS,
+                "max_source_feasible_rows": MAX_TWIST_POLYNOMIAL_SOURCE_ROWS,
+                "max_source_exchange_candidates": MAX_DELTA_EXCHANGE_CANDIDATE_CHECKS,
             },
         }
     )
@@ -142,7 +158,8 @@ class DeltaMatroidTwistPolynomialRequest(StrictModel):
     delta_matroid: FiniteDeltaMatroid = Field(
         description=(
             "Complete canonical finite delta-matroid; every twist subset is "
-            "included exactly once after state, work, and result-size admission."
+            "included exactly once after subset-state, mask/feasible evaluation, "
+            "source membership, and symmetric-exchange admission."
         )
     )
 
@@ -189,7 +206,10 @@ class DeltaMatroidTwistPolynomialResult(StrictModel):
 __all__ = [
     "MAX_BINARY_GROUND",
     "MAX_BINARY_LABEL_BYTES",
-    "MAX_TWIST_POLYNOMIAL_OUTPUT_BYTES",
+    "MAX_TWIST_POLYNOMIAL_COEFFICIENT_DIGITS",
+    "MAX_TWIST_POLYNOMIAL_GROUND",
+    "MAX_TWIST_POLYNOMIAL_HISTOGRAM_ENTRIES",
+    "MAX_TWIST_POLYNOMIAL_SOURCE_ROWS",
     "MAX_TWIST_POLYNOMIAL_STATES",
     "MAX_TWIST_POLYNOMIAL_WORK",
     "BinaryMatrixRequest",

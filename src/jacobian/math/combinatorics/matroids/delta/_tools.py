@@ -15,6 +15,11 @@ from jacobian.math.combinatorics.matroids.delta._models import (
     DeltaMatroidWidthResult,
 )
 from jacobian.math.combinatorics.matroids.delta.extra import (
+    MAX_TWIST_POLYNOMIAL_COEFFICIENT_DIGITS,
+    MAX_TWIST_POLYNOMIAL_GROUND,
+    MAX_TWIST_POLYNOMIAL_HISTOGRAM_ENTRIES,
+    MAX_TWIST_POLYNOMIAL_STATES,
+    MAX_TWIST_POLYNOMIAL_WORK,
     BinaryMatrixRequest,
     BinaryMatrixResult,
     DeltaMatroidDualRequest,
@@ -285,9 +290,12 @@ TOOLS: MathTools = (  # noqa: RUF005
         description=(
             "Return Tw_D(z) = sum over every A subset E of z^width(D*A), with "
             "the complete width histogram and canonical integer polynomial. "
-            "Admission allows "
-            "at most 4,096 twist masks, 262,144 mask-feasible-set evaluations, "
-            "and 65,536 encoded result bytes."
+            f"Admission allows at most {MAX_TWIST_POLYNOMIAL_GROUND} ground "
+            f"elements, {MAX_TWIST_POLYNOMIAL_STATES} twist masks, and "
+            f"{MAX_TWIST_POLYNOMIAL_WORK} mask-feasible-set evaluations. The "
+            f"result has at most {MAX_TWIST_POLYNOMIAL_HISTOGRAM_ENTRIES} "
+            f"histogram entries and {MAX_TWIST_POLYNOMIAL_COEFFICIENT_DIGITS}-digit "
+            "coefficients."
         ),
         request_type=DeltaMatroidTwistPolynomialRequest,
         result_type=DeltaMatroidTwistPolynomialResult,

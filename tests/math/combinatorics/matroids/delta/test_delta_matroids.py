@@ -559,6 +559,12 @@ def test_twist_polynomial_empty_axis_binary_composition_and_json_roundtrip() -> 
     schema = DeltaMatroidTwistPolynomialRequest.model_json_schema()
     assert schema["admission_limits"]["max_twist_masks"] == 4_096
     assert schema["admission_limits"]["max_mask_feasible_set_evaluations"] == 262_144
+    assert schema["admission_limits"]["max_ground_elements"] == 12
+    assert schema["admission_limits"]["max_histogram_entries"] == 13
+    assert schema["admission_limits"]["max_polynomial_coefficient_digits"] == 4
+    assert schema["admission_limits"]["max_source_memberships"] == 16_384
+    assert schema["admission_limits"]["max_source_feasible_rows"] == 16_385
+    assert "max_encoded_output_bytes" not in schema["admission_limits"]
 
     tool = next(
         item
@@ -584,6 +590,15 @@ def test_twist_polynomial_rejects_before_expanding_too_many_masks(
     monkeypatch.setattr(extra_ops, "_admit_delta", fail_if_source_validation_runs)
     with pytest.raises(OperationResourceAdmissionError):
         twist_polynomial(too_wide)
+
+
+def test_twist_polynomial_accepts_ground_and_state_cardinality_boundary() -> None:
+    source = FiniteDeltaMatroid(
+        ground=tuple(f"e{i}" for i in range(12)), feasible=((),)
+    )
+    result = twist_polynomial(source)
+    assert result.coefficients_by_width == (4_096, *(0 for _ in range(12)))
+    assert result.polynomial.coefficients == (4_096,)
 
 
 def test_twist_polynomial_result_rejects_inconsistent_wire_claims() -> None:

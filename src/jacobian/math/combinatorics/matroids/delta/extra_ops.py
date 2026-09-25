@@ -8,7 +8,7 @@ from jacobian.catalog.models import (
 from jacobian.math.combinatorics.greedoids.values import FiniteFeasibleSetSystem
 from jacobian.math.combinatorics.matroids.delta.extra import (
     MAX_BINARY_GROUND,
-    MAX_TWIST_POLYNOMIAL_OUTPUT_BYTES,
+    MAX_TWIST_POLYNOMIAL_GROUND,
     MAX_TWIST_POLYNOMIAL_STATES,
     MAX_TWIST_POLYNOMIAL_WORK,
     BinaryMatrixResult,
@@ -32,10 +32,7 @@ def _reject_oversized_twist_polynomial_axis(value: object) -> None:
     if type(value) is not FiniteDeltaMatroid:
         return
     ground = getattr(value, "ground", None)
-    if (
-        type(ground) is tuple
-        and len(ground) > MAX_TWIST_POLYNOMIAL_STATES.bit_length() - 1
-    ):
+    if type(ground) is tuple and len(ground) > MAX_TWIST_POLYNOMIAL_GROUND:
         raise OperationResourceAdmissionError(
             location=("delta_matroid", "ground"),
             code="delta_matroid.twist_polynomial_work",
@@ -186,34 +183,25 @@ def twist_polynomial(d: FiniteDeltaMatroid) -> DeltaMatroidTwistPolynomialResult
     _reject_oversized_twist_polynomial_axis(d)
     d = _admit_delta(d)
     n = len(d.ground)
+    if n > MAX_TWIST_POLYNOMIAL_GROUND:
+        raise OperationResourceAdmissionError(
+            location=("delta_matroid", "ground"),
+            code="delta_matroid.twist_polynomial_work",
+            message="complete twist polynomial exceeds its subset-state envelope",
+        )
     state_count = 1 << n
     work = state_count * len(d.feasible)
-    try:
-        label_bytes = sum(len(label.encode("utf-8")) for label in d.ground)
-    except UnicodeEncodeError:
-        raise OperationDomainValidationError(
-            location=("delta_matroid", "ground"),
-            code="delta_matroid.labels_not_utf8",
-            message="delta-matroid ground labels must be UTF-8-representable",
-        ) from None
-    # Every histogram count is at most state_count; account for JSON escaping
-    # of arbitrary Unicode labels in the retained ambient ground axis.
-    output_bound = 6 * label_bytes + (n + 1) * (len(str(state_count)) + 4) + 512
-    if (
-        state_count > MAX_TWIST_POLYNOMIAL_STATES
-        or work > MAX_TWIST_POLYNOMIAL_WORK
-        or output_bound > MAX_TWIST_POLYNOMIAL_OUTPUT_BYTES
-    ):
+    if state_count > MAX_TWIST_POLYNOMIAL_STATES or work > MAX_TWIST_POLYNOMIAL_WORK:
         raise OperationResourceAdmissionError(
             location=("delta_matroid",),
             code="delta_matroid.twist_polynomial_work",
-            message=(
-                "complete twist polynomial exceeds its subset, evaluation, "
-                "or encoded-output envelope"
-            ),
+            message="complete twist polynomial exceeds its subset or evaluation envelope",
         )
     _check(d)
 
+    # Source admission bounds memberships and therefore rows to at most one
+    # empty set plus one row per admitted membership. The state ceiling bounds
+    # the 13-entry histogram and every exact coefficient to at most 4,096.
     feasible_masks = tuple(sum(1 << element for element in row) for row in d.feasible)
     coefficients = [0] * (n + 1)
     evaluations = 0

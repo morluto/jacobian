@@ -45,6 +45,10 @@ are also returned as Jacobian's canonical descending-degree `IntegerPolynomial`
 in the formal variable `z`; the complete histogram retains trailing zero
 widths and the labelled ground axis. The coefficient sum is exactly
 `2**|E|` because every ground subset supplies one twist. The operation admits
-at most 4,096 twist subsets, 262,144 twist-subset/feasible-set evaluations,
-and 65,536 encoded result bytes before it replays source exchange and computes
-the complete histogram.
+at most 12 ground elements, 4,096 twist subsets, and 262,144
+twist-subset/feasible-set evaluations before it replays source exchange and
+computes the complete histogram. These bounds also limit the result to 13
+histogram entries, with each coefficient at most 4,096 (four decimal digits).
+The kernel holds at most one bit mask per admitted feasible row; source
+admission limits memberships to 16,384, so at most 16,385 rows (including the
+unique empty row) are materialized as masks.

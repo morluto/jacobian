@@ -4,8 +4,13 @@ from typing import Any
 
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.combinatorics.semistandard_tableaux._models import (
+    FixedContentCountRequest,
+    FixedContentCountResult,
     SemistandardTableauEnumerationRequest,
     SemistandardTableauEnumerationResult,
+)
+from jacobian.math.combinatorics.semistandard_tableaux.content_count import (
+    fixed_content_count,
 )
 from jacobian.math.combinatorics.semistandard_tableaux.enumeration import (
     enumerate_semistandard_young_tableaux,
@@ -38,6 +43,46 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                     "with entries from {1,2}."
                 ),
                 input={"partition": {"parts": [2, 1]}, "max_entry": 2},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="combinatorics.semistandard_young_tableaux.fixed_content_count",
+        title="Count semistandard tableaux of fixed content",
+        description=(
+            "Return the exact number of semistandard Young tableaux of a "
+            "straight partition shape with a specified sparse entry-to-"
+            "multiplicity map. This is a fixed-content Kostka count, distinct "
+            "from counting all entries in an alphabet 1..m. Entries are exact "
+            "labels and missing labels have multiplicity zero. Admission bounds "
+            "the complete multiset-prefix search before construction; one-row "
+            "and standard-content cases use direct exact reductions."
+        ),
+        request_type=FixedContentCountRequest,
+        result_type=FixedContentCountResult,
+        run=fixed_content_count,
+        tags=("combinatorics", "young-tableaux", "kostka", "exact"),
+        discovery_terms=(
+            "Kostka number for shape and content",
+            "count semistandard tableaux with fixed content",
+            "fixed weight semistandard Young tableau count",
+        ),
+        examples=(
+            OperationExample(
+                name="kostka_shape_21_content_122",
+                description=(
+                    "Count semistandard tableaux of shape (2,1) with one 1 and "
+                    "two 2s. The sparse content terms retain their entry labels."
+                ),
+                input={
+                    "partition": {"parts": [2, 1]},
+                    "content": {
+                        "terms": [
+                            {"entry": 1, "multiplicity": 1},
+                            {"entry": 2, "multiplicity": 2},
+                        ]
+                    },
+                },
             ),
         ),
     ),

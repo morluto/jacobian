@@ -66,14 +66,16 @@ def _linear_combination_digit_bound(
 ) -> int:
     """Bound a cyclotomic linear combination with integral, one-digit basis rows.
 
-    In Q(zeta_6), multiplication by an integral basis coefficient combines
-    at most three rational products. Their common denominator is bounded by
-    the product of the ``terms`` coordinate denominators and ``terms`` basis
-    denominators; the numerator adds at most ``3 * terms`` such products.
+    In Q(zeta_6), multiplication combines at most three rational products.
+    The common denominator must account for both coordinate components and
+    both basis components in every term; the numerator adds at most ``3 *
+    terms`` such products.
     This covers the integral one-digit bases at levels 13, 26, and 39.
     """
     return (
-        terms * (coordinate_digits + basis_coefficient_digits) + len(str(3 * terms)) + 2
+        terms * (2 * coordinate_digits + 2 * basis_coefficient_digits)
+        + len(str(3 * terms))
+        + 2
     )
 
 

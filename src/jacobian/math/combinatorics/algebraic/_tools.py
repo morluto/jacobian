@@ -389,10 +389,10 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 description="Recover a repeated-letter word with all reverse bumps.",
                 input={
                     "pair": {
-                        "alphabet": ["a", "b", "c"],
-                        "insertion_tableau": {"rows": [[1, 3], [2]]},
-                        "recording_tableau": {"rows": [[1, 2], [3]]},
-                        "shape": {"parts": [2, 1]},
+                        "alphabet": ["a", "b", "c", "d"],
+                        "insertion_tableau": {"rows": [[1, 3, 4], [2], [3]]},
+                        "recording_tableau": {"rows": [[1, 2, 4], [3], [5]]},
+                        "shape": {"parts": [3, 1, 1]},
                         "source_kind": "WORD",
                         "convention": "ROW_INSERTION_RSK_V1",
                     },

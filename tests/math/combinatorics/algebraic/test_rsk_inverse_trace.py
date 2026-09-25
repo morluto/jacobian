@@ -7,6 +7,7 @@ from itertools import product
 import pytest
 from pydantic import ValidationError
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.algebraic import (
     RSKWordInverseTraceResult,
     inverse_row_insertion_rsk_trace,
@@ -154,6 +155,18 @@ def test_inverse_trace_tool_uses_canonical_inverse_request() -> None:
     request = RSKInverseWordRequest.model_validate(tool.examples[0].input)
     result = tool.run(request)
     assert result.word.letters == _linear_reverse_oracle(request.pair)[0]
+
+
+def test_inverse_trace_revalidates_forged_pair_shape_before_indexing() -> None:
+    pair = row_insertion_rsk(FiniteWord(alphabet=("a",), letters=("a",))).model_copy(
+        update={"shape": row_insertion_rsk(FiniteWord(alphabet=(), letters=())).shape}
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        inverse_row_insertion_rsk_trace(pair)
+    assert (
+        error.value.errors()[0]["type"]
+        == "algebraic_combinatorics.rsk_inverse_trace_pair"
+    )
 
 
 def test_inverse_trace_deserialization_rejects_missing_event() -> None:

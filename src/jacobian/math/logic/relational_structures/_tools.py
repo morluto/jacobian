@@ -158,7 +158,7 @@ def _polymorphism_check(
 def _polymorphism_enumeration(
     request: RelationalPolymorphismEnumerationRequest,
 ) -> RelationalPolymorphismFamily:
-    return enumerate_polymorphisms(request)
+    return enumerate_polymorphisms(request.source, request.arity)
 
 
 def _pp_formula_evaluation(request: PPFormulaEvaluationRequest) -> PPDefinedRelation:

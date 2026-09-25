@@ -11,7 +11,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
-from jacobian.canonical import CanonicalLimits
+from jacobian.canonical import CanonicalLimits, decimal_digit_width
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -38,7 +38,13 @@ def _error(reason: str, message: str) -> PydanticCustomError:
 
 
 class SmoothBranchFirstJetRequest(StrictModel):
-    """Lift a supplied simple rational root through first order in the parameter."""
+    """Lift a supplied simple rational root through first order in the parameter.
+
+    Admits finite-place polynomials of y-degree at most 16, at most 17 rows
+    and 512 series slots, with input precision at least two; coefficient
+    scalars are limited to 256 decimal digits and the supplied root to 64.
+    Poles, infinity-place inputs, and intermediates above 4096 digits are rejected.
+    """
 
     polynomial: LocalPolynomialInSeries
     initial_root: CanonicalRational
@@ -107,7 +113,9 @@ def _coefficient(series: TruncatedLaurentWindow, exponent: int) -> Fraction:
 
 
 def _fraction_digits(value: Fraction) -> int:
-    return max(len(str(abs(value.numerator))), len(str(value.denominator)))
+    return max(
+        decimal_digit_width(value.numerator), decimal_digit_width(value.denominator)
+    )
 
 
 def _horner_pair(
@@ -232,14 +240,7 @@ def _admit_request(request: SmoothBranchFirstJetRequest) -> _SmoothBranchPlan:
             message="request must supply a local polynomial and rational simple root",
         )
     source = request.polynomial
-    if not isinstance(source, LocalPolynomialInSeries) or any(
-        not isinstance(row, LocalPolynomialCoefficient)
-        or (
-            row.series is not None
-            and not isinstance(row.series, TruncatedLaurentWindow)
-        )
-        for row in source.coefficients
-    ):
+    if not isinstance(source, LocalPolynomialInSeries):
         raise OperationDomainValidationError(
             location=("polynomial",),
             code="local_series.smooth_branch.polynomial_type",
@@ -250,6 +251,19 @@ def _admit_request(request: SmoothBranchFirstJetRequest) -> _SmoothBranchPlan:
             location=("initial_root",),
             code="local_series.smooth_branch.root_type",
             message="initial_root must be an exact rational value",
+        )
+    if not isinstance(source.coefficients, tuple) or any(
+        not isinstance(row, LocalPolynomialCoefficient)
+        or (
+            row.series is not None
+            and not isinstance(row.series, TruncatedLaurentWindow)
+        )
+        for row in source.coefficients
+    ):
+        raise OperationDomainValidationError(
+            location=("polynomial", "coefficients"),
+            code="local_series.smooth_branch.polynomial_shape",
+            message="polynomial rows and nested series must have canonical shapes",
         )
     max_degree, rows = _admit_source(source)
     root = request.initial_root.as_fraction()

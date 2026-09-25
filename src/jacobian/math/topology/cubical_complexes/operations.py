@@ -584,7 +584,9 @@ def one_skeleton(cells: tuple[CubicalCell, ...]) -> CubicalOneSkeletonResult:
         high[varying_axis] = (right_endpoint, right_endpoint)
         left_vertex = vertex_index[CubicalCell(intervals=tuple(low))]
         right_vertex = vertex_index[CubicalCell(intervals=tuple(high))]
-        graph_edges.add(tuple(sorted((left_vertex, right_vertex))))
+        graph_edges.add(
+            (min(left_vertex, right_vertex), max(left_vertex, right_vertex))
+        )
     if len(vertex_cells) > MAX_INDEXED_SIMPLE_GRAPH_VERTICES:
         raise OperationResourceAdmissionError(
             location=("cells",),

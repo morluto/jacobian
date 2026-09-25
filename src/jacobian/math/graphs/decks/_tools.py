@@ -8,6 +8,8 @@ from jacobian.math.graphs.decks._models import (
     AnonymousCardDegreeProfile,
     AnonymousCardDegreeProfileRequest,
     AnonymousGraphCardMultiset,
+    AnonymousGraphCardMultisetEqualityRequest,
+    AnonymousGraphCardMultisetEqualityResult,
     AnonymousGraphCardMultisetRequest,
     EdgeDeckIsomorphismProfile,
     EdgeDeckIsomorphismProfileRequest,
@@ -32,6 +34,7 @@ from jacobian.math.graphs.decks._models import (
     VertexDeletionFamily,
 )
 from jacobian.math.graphs.decks.operations import (
+    _anonymous_graph_card_multiset_equal_from_admitted,
     _edge_deck_isomorphism_profile_from_admitted,
     _profile_from_admitted_multiset,
     _vertex_deck_isomorphism_profile_from_admitted,
@@ -103,6 +106,15 @@ def _run_anonymous_card_degree_profile(
     return _profile_from_admitted_multiset(request.multiset)
 
 
+def _run_anonymous_card_multiset_equal(
+    request: AnonymousGraphCardMultisetEqualityRequest,
+) -> AnonymousGraphCardMultisetEqualityResult:
+    # The request carrier has already admitted and validated both operands.
+    return _anonymous_graph_card_multiset_equal_from_admitted(
+        request.left, request.right
+    )
+
+
 def _run_vertex_deck_induced_pattern_count(
     request: VertexDeckInducedSubgraphCountRequest,
 ) -> VertexDeckInducedSubgraphCount:
@@ -128,6 +140,57 @@ def _run_vertex_deck_degree_multiset(
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
+    MathTool(
+        operation_id="graph.deck.anonymous_multiset.equal.check",
+        title="Compare anonymous graph card multisets",
+        description=(
+            "Decide exact equality of two canonical anonymous graph-card "
+            "multisets. Equality requires the same declared card order and the "
+            "same graph-isomorphism classes with the same exact multiplicities; "
+            "card labels and input row order are absent from this value. This "
+            "compares supplied multisets and does not decide realizability or "
+            "reconstruct a source graph. Both operands share one bounded "
+            "canonical-validation work budget."
+        ),
+        request_type=AnonymousGraphCardMultisetEqualityRequest,
+        result_type=AnonymousGraphCardMultisetEqualityResult,
+        run=_run_anonymous_card_multiset_equal,
+        tags=("graph", "deck", "anonymous", "multiset", "equality", "exact"),
+        discovery_terms=(
+            "compare anonymous graph decks",
+            "test equality of graph card multisets",
+            "same graph deck multiset",
+        ),
+        examples=(
+            OperationExample(
+                name="different_card_multiplicity",
+                description=(
+                    "The one-vertex empty graph card has multiplicity one in the "
+                    "left value and two in the right value, so the multisets differ."
+                ),
+                input={
+                    "left": {
+                        "card_order": 1,
+                        "classes": [
+                            {
+                                "representative": {"vertices": ["v00"], "edges": []},
+                                "multiplicity": "1",
+                            }
+                        ],
+                    },
+                    "right": {
+                        "card_order": 1,
+                        "classes": [
+                            {
+                                "representative": {"vertices": ["v00"], "edges": []},
+                                "multiplicity": "2",
+                            }
+                        ],
+                    },
+                },
+            ),
+        ),
+    ),
     MathTool(
         operation_id="graph.deck.card_invariant_profile.compute",
         title="Profile anonymous graph cards by degree multiset",

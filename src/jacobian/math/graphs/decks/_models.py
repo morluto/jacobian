@@ -32,6 +32,7 @@ MAX_ANONYMOUS_CARD_CLASSES = MAX_ANONYMOUS_CARD_RESULT_BYTES // 64
 MAX_ANONYMOUS_CARD_PROFILE_WORK = 2_000_000
 MAX_ANONYMOUS_CARD_PROFILE_CELLS = 200_000
 MAX_ANONYMOUS_CARD_PROFILE_RESULT_BYTES = 1_000_000
+MAX_ANONYMOUS_CARD_EQUALITY_WORK = 2_000_000
 """Admission cap on aggregate card edges across the whole family."""
 MAX_VERTEX_DECK_SOURCE_EDGES = comb(MAX_UNLABELLED_DECK_VERTICES, 2)
 MAX_VERTEX_DECK_CARD_EDGE_TOTAL = MAX_UNLABELLED_DECK_VERTICES * comb(
@@ -238,6 +239,57 @@ class AnonymousGraphCardMultiset(StrictModel):
         cls, card_order: int, classes: tuple[AnonymousGraphCardClass, ...]
     ) -> Self:
         return cls.model_construct(card_order=card_order, classes=classes)
+
+
+class AnonymousGraphCardMultisetEqualityRequest(StrictModel):
+    """Compare two bounded anonymous multisets of graph isomorphism classes."""
+
+    left: AnonymousGraphCardMultiset
+    right: AnonymousGraphCardMultiset
+
+    @model_validator(mode="before")
+    @classmethod
+    def admit_both_carriers_before_nested_validation(cls, value: Any) -> Any:
+        if type(value) is not dict:
+            return value
+        total_work = 0
+        for side in ("left", "right"):
+            multiset = value.get(side)
+            if type(multiset) is not dict:
+                continue
+            order = multiset.get("card_order")
+            classes = multiset.get("classes")
+            if (
+                type(order) is not int
+                or not 0 <= order <= MAX_UNLABELLED_DECK_VERTICES
+                or type(classes) not in (list, tuple)
+            ):
+                continue
+            if len(classes) > MAX_ANONYMOUS_CARD_CLASSES:
+                raise _validation_error(
+                    "anonymous_equality_class_bound",
+                    "equality input has too many card classes",
+                )
+            total_work += _anonymous_canonicalization_work(order, len(classes))
+        if total_work > MAX_ANONYMOUS_CARD_EQUALITY_WORK:
+            raise _validation_error(
+                "anonymous_equality_work_bound",
+                "combined canonical validation exceeds the equality work bound",
+            )
+        normalized = dict(value)
+        for side in ("left", "right"):
+            multiset = value.get(side)
+            if type(multiset) is dict:
+                normalized[side] = _normalize_anonymous_profile_json_tuples(
+                    {"multiset": multiset}
+                )["multiset"]
+        return normalized
+
+
+class AnonymousGraphCardMultisetEqualityResult(StrictModel):
+    """Exact equality of card order, isomorphism classes, and multiplicities."""
+
+    equal: bool
 
 
 class AnonymousCardDegreeFrequency(StrictModel):

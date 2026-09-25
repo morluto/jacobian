@@ -770,8 +770,8 @@ class CharacterCenter(StrictModel):
     """The subgroup on which a retained character acts by scalars.
 
     ``scalar_class_indices`` and ``scalar_values`` are parallel selections
-    from the retained character table. Each selected value divided by the
-    character degree is a root of unity.
+    from the retained character table. Each ``scalar_value`` is already
+    normalized by the character degree and is a scalar root of unity.
     """
 
     character: CharacterRingElement

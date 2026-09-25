@@ -526,6 +526,14 @@ def nondeterministic_run_counts_work_bound(
     if type(max_size) is not int or not 1 <= max_size <= 100:
         _reject_tree("run-count maximum size must be in 1..100", resource=False)
 
+    # No finite ground tree exists without a nullary symbol. Likewise, an
+    # empty final-state set makes every accepting-run count zero. Avoid charging
+    # polynomial work for these constant-answer profiles.
+    if not automaton.final_states or not any(
+        not transition.child_states for transition in automaton.transitions
+    ):
+        return 0
+
     # An ordered tree shape has at most 4**n possibilities, each node has at
     # most 32 symbols and 64 assigned states: at most 8192**n runs. This also
     # bounds every nonnegative intermediate coefficient. Reserve one digit

@@ -130,8 +130,8 @@ def test_result_model_preserves_zero_entries_and_source_automaton():
     assert result.estimated_work_bound >= 0
 
 
-def test_run_count_work_is_admitted_before_dynamic_programming():
-    automaton = BottomUpTreeAutomaton(
+def test_zero_run_profiles_bypass_irrelevant_convolution_admission():
+    no_nullary = BottomUpTreeAutomaton(
         state_count=1,
         arity=(16,),
         transitions=(
@@ -139,9 +139,18 @@ def test_run_count_work_is_admitted_before_dynamic_programming():
         ),
         final_states=(0,),
     )
+    assert nondeterministic_run_counts(no_nullary, 100) == (0,) * 100
 
-    with pytest.raises(OperationResourceAdmissionError, match="work bound"):
-        nondeterministic_run_counts(automaton, 100)
+    no_finals = BottomUpTreeAutomaton(
+        state_count=1,
+        arity=(16, 0),
+        transitions=(
+            TreeAutomatonTransition(symbol=0, child_states=(0,) * 16, target_state=0),
+            TreeAutomatonTransition(symbol=1, child_states=(), target_state=0),
+        ),
+        final_states=(),
+    )
+    assert nondeterministic_run_counts(no_finals, 100) == (0,) * 100
 
 
 def test_run_count_catalog_example_executes_and_serializes():

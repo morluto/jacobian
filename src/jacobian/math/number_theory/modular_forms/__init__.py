@@ -35,6 +35,7 @@ from jacobian.math.number_theory.modular_forms.character_basis_models import (
 )
 from jacobian.math.number_theory.modular_forms.coordinate_arithmetic import (
     modular_form_coordinates_add,
+    modular_form_coordinates_scalar_multiply,
 )
 from jacobian.math.number_theory.modular_forms.field_coordinates import (
     modular_form_coordinates_extend_field,
@@ -99,6 +100,7 @@ __all__ = [
     "modular_form_coordinates_hecke",
     "modular_form_coordinates_product",
     "modular_form_coordinates_q_expansion",
+    "modular_form_coordinates_scalar_multiply",
     "modular_form_coordinates_to_frame",
     "modular_form_coordinates_transport",
     "modular_form_coordinates_u2",

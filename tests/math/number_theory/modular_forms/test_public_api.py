@@ -38,6 +38,7 @@ def test_exact_public_api_symbols() -> None:
         "modular_form_coordinates_hecke",
         "modular_form_coordinates_product",
         "modular_form_coordinates_q_expansion",
+        "modular_form_coordinates_scalar_multiply",
         "modular_form_coordinates_to_frame",
         "modular_form_coordinates_transport",
         "modular_form_coordinates_u2",

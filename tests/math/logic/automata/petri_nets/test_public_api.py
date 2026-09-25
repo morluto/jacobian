@@ -27,6 +27,7 @@ def test_exact_public_api_symbols() -> None:
         "reachability_graph",
         "reachability_terminal_scc_profile",
         "reachable_dead_markings",
+        "relabel_petri_net",
         "replay_firing_sequence",
         "reverse_petri_net",
         "siphon_trap_family",

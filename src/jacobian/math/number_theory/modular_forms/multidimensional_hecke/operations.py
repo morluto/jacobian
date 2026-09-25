@@ -228,26 +228,6 @@ def _canonical_basis(
         context.dimension,
         character_request=admission.character_request,
     )
-    character_order = lcm(
-        *(
-            order // gcd(coordinate, order)
-            for coordinate, order in zip(
-                admission.character.coordinates,
-                admission.character.group.generator_orders,
-                strict=True,
-            )
-        )
-    )
-    if character_order == 3:
-        # PARI uses t^2+t+1 for the order-three character field, whereas the
-        # declared coefficient field uses x^2-x+1. The embedding is t=x-1.
-        raw = tuple(
-            tuple(
-                (coefficient[0] - coefficient[1], coefficient[1])
-                for coefficient in vector
-            )
-            for vector in raw
-        )
     basis = _rref_character_prefix(
         raw,
         admission.field,

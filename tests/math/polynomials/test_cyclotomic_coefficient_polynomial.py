@@ -14,7 +14,6 @@ from jacobian.math.matrices.cyclic_linear._models import (
 from jacobian.math.polynomials.cyclotomic_coefficients._models import (
     CyclotomicPolynomial,
     CyclotomicPolynomialTerm,
-    RationalPolynomialCyclotomicEmbeddingRequest,
 )
 from jacobian.math.polynomials.cyclotomic_coefficients._tools import TOOLS
 from jacobian.math.polynomials.cyclotomic_coefficients.operations import (
@@ -49,9 +48,7 @@ def test_embedding_preserves_sparse_polynomial_context_and_exact_coefficients() 
     )
     field = RationalCyclotomicField(order=5)
 
-    result = embed_rational_polynomial(
-        RationalPolynomialCyclotomicEmbeddingRequest(polynomial=source, field=field)
-    )
+    result = embed_rational_polynomial(source, field)
 
     assert result.domain == "QQ_CYCLOTOMIC_POLYNOMIAL"
     assert result.field == field
@@ -83,9 +80,7 @@ def test_zero_polynomial_retains_axes_and_field(field_order: int) -> None:
     )
     field = RationalCyclotomicField(order=field_order)
 
-    result = embed_rational_polynomial(
-        RationalPolynomialCyclotomicEmbeddingRequest(polynomial=source, field=field)
-    )
+    result = embed_rational_polynomial(source, field)
 
     assert result.terms == ()
     assert result.variables == ("x", "y")
@@ -97,11 +92,7 @@ def test_constant_polynomial_and_order_one_field() -> None:
         variables=(), polynomial=SparseRationalPolynomial(terms=(rational_term(7),))
     )
 
-    result = embed_rational_polynomial(
-        RationalPolynomialCyclotomicEmbeddingRequest(
-            polynomial=source, field=RationalCyclotomicField(order=1)
-        )
-    )
+    result = embed_rational_polynomial(source, RationalCyclotomicField(order=1))
 
     assert result.terms[0].exponents == ()
     assert result.terms[0].coefficient.coefficients_ascending == (
@@ -154,9 +145,7 @@ def test_embedding_admits_coordinate_growth_before_expansion() -> None:
         variables=("x",),
         polynomial=SparseRationalPolynomial(terms=maximum_terms),
     )
-    accepted = embed_rational_polynomial(
-        RationalPolynomialCyclotomicEmbeddingRequest(polynomial=at_bound, field=field)
-    )
+    accepted = embed_rational_polynomial(at_bound, field)
     assert len(accepted.terms) * field.degree == 16_384
 
     source = RationalPolynomial(
@@ -167,9 +156,7 @@ def test_embedding_admits_coordinate_growth_before_expansion() -> None:
     )
 
     with pytest.raises(OperationResourceAdmissionError, match="coordinates"):
-        embed_rational_polynomial(
-            RationalPolynomialCyclotomicEmbeddingRequest(polynomial=source, field=field)
-        )
+        embed_rational_polynomial(source, field)
 
 
 def test_embedding_rejects_coefficients_that_do_not_fit_exact_scalar_carrier() -> None:
@@ -186,8 +173,4 @@ def test_embedding_rejects_coefficients_that_do_not_fit_exact_scalar_carrier() -
     )
 
     with pytest.raises(OperationResourceAdmissionError, match="height"):
-        embed_rational_polynomial(
-            RationalPolynomialCyclotomicEmbeddingRequest(
-                polynomial=source, field=RationalCyclotomicField(order=5)
-            )
-        )
+        embed_rational_polynomial(source, RationalCyclotomicField(order=5))

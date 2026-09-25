@@ -9,6 +9,7 @@ from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel, canonicalize_json_containers
+from jacobian.canonical import format_canonical_integer
 from jacobian.math.matrices.cyclic_linear._models import (
     MAX_CYCLIC_FIELD_ELEMENT_DIGITS,
     MAX_CYCLIC_PERIOD,
@@ -148,7 +149,8 @@ class CyclotomicPolynomial(StrictModel):
                 "polynomial coefficient coordinates exceed the shared representation bound",
             )
         total_digits = sum(
-            len(str(abs(value.num))) + len(str(value.den))
+            len(format_canonical_integer(abs(value.num)))
+            + len(format_canonical_integer(value.den))
             for term in self.terms
             for value in term.coefficient.coefficients_ascending
         )

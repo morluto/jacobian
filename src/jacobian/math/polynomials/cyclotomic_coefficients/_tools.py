@@ -27,6 +27,12 @@ def _example_request() -> dict[str, Any]:
     }
 
 
+def _embed_rational_polynomial(
+    request: RationalPolynomialCyclotomicEmbeddingRequest,
+) -> CyclotomicPolynomial:
+    return embed_rational_polynomial(request.polynomial, request.field)
+
+
 TOOLS: tuple[MathTool[Any, Any], ...] = (
     MathTool(
         operation_id="polynomial.cyclotomic_coefficient.embed.compute",
@@ -38,13 +44,13 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "RationalCyclotomicField and RationalCyclotomicElement carriers. The "
             "field order is at most 128, each scalar coordinate at most 256 "
             "decimal digits, and the complete output is bounded by 16,384 "
-            "coefficient coordinates and 10 MiB. This is an exact coefficient "
+            "coefficient coordinates. This is an exact coefficient "
             "map; it makes no claim that the polynomial has a particular source "
             "or satisfies an additional identity."
         ),
         request_type=RationalPolynomialCyclotomicEmbeddingRequest,
         result_type=CyclotomicPolynomial,
-        run=embed_rational_polynomial,
+        run=_embed_rational_polynomial,
         tags=("polynomial", "cyclotomic", "coefficient-ring", "exact"),
         discovery_terms=(
             "polynomial over a cyclotomic field",

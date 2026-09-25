@@ -18,6 +18,7 @@ from jacobian.math.combinatorics.matroids.delta.extra import (
     MAX_TWIST_POLYNOMIAL_COEFFICIENT_DIGITS,
     MAX_TWIST_POLYNOMIAL_GROUND,
     MAX_TWIST_POLYNOMIAL_HISTOGRAM_ENTRIES,
+    MAX_TWIST_POLYNOMIAL_OUTPUT_BYTES,
     MAX_TWIST_POLYNOMIAL_STATES,
     MAX_TWIST_POLYNOMIAL_WORK,
     BinaryMatrixRequest,
@@ -294,8 +295,11 @@ TOOLS: MathTools = (  # noqa: RUF005
             f"elements, {MAX_TWIST_POLYNOMIAL_STATES} twist masks, and "
             f"{MAX_TWIST_POLYNOMIAL_WORK} mask-feasible-set evaluations. The "
             f"result has at most {MAX_TWIST_POLYNOMIAL_HISTOGRAM_ENTRIES} "
-            f"histogram entries and {MAX_TWIST_POLYNOMIAL_COEFFICIENT_DIGITS}-digit "
-            "coefficients."
+            f"histogram entries, {MAX_TWIST_POLYNOMIAL_COEFFICIENT_DIGITS}-digit "
+            "coefficients, and "
+            f"{MAX_TWIST_POLYNOMIAL_OUTPUT_BYTES} encoded output bytes; the "
+            "retained ground labels are bounded by that encoded-output "
+            "envelope rather than the recognition operation's label cap."
         ),
         request_type=DeltaMatroidTwistPolynomialRequest,
         result_type=DeltaMatroidTwistPolynomialResult,

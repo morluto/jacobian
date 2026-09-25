@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import NoReturn
+
 from jacobian._execution import request_checkpoint
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -9,6 +11,7 @@ from jacobian.math.combinatorics.greedoids.values import FiniteFeasibleSetSystem
 from jacobian.math.combinatorics.matroids.delta.extra import (
     MAX_BINARY_GROUND,
     MAX_TWIST_POLYNOMIAL_GROUND,
+    MAX_TWIST_POLYNOMIAL_OUTPUT_BYTES,
     MAX_TWIST_POLYNOMIAL_STATES,
     MAX_TWIST_POLYNOMIAL_WORK,
     BinaryMatrixResult,
@@ -20,6 +23,8 @@ from jacobian.math.combinatorics.matroids.delta.values import (
     FiniteDeltaMatroid,
     first_symmetric_exchange_obstruction,
     require_delta_matroid_admission,
+    require_delta_matroid_exchange_work,
+    require_delta_matroid_source_size,
 )
 from jacobian.math.polynomials._models import IntegerPolynomial
 
@@ -57,6 +62,26 @@ def _admit_delta(value: object) -> FiniteDeltaMatroid:
         ) from exc
 
 
+def _admission_error(exc: DeltaMatroidAdmissionError) -> NoReturn:
+    """Project a native admission failure onto the public typed error."""
+
+    if exc.reason in {
+        "memberships_exceeded",
+        "label_bytes_exceeded",
+        "candidate_work_exceeded",
+    }:
+        raise OperationResourceAdmissionError(
+            location=("delta_matroid",),
+            code=f"delta_matroid.{exc.reason}",
+            message=str(exc),
+        ) from exc
+    raise OperationDomainValidationError(
+        location=("delta_matroid",),
+        code=f"delta_matroid.{exc.reason}",
+        message=str(exc),
+    ) from exc
+
+
 def _check(d: FiniteDeltaMatroid) -> FiniteFeasibleSetSystem:
     try:
         s = FiniteFeasibleSetSystem(ground=d.ground, feasible=d.feasible)
@@ -69,21 +94,7 @@ def _check(d: FiniteDeltaMatroid) -> FiniteFeasibleSetSystem:
     try:
         require_delta_matroid_admission(s)
     except DeltaMatroidAdmissionError as exc:
-        if exc.reason in {
-            "memberships_exceeded",
-            "label_bytes_exceeded",
-            "candidate_work_exceeded",
-        }:
-            raise OperationResourceAdmissionError(
-                location=("delta_matroid",),
-                code=f"delta_matroid.{exc.reason}",
-                message=str(exc),
-            ) from exc
-        raise OperationDomainValidationError(
-            location=("delta_matroid",),
-            code=f"delta_matroid.{exc.reason}",
-            message=str(exc),
-        ) from exc
+        _admission_error(exc)
     if first_symmetric_exchange_obstruction(s) is not None:
         raise OperationDomainValidationError(
             location=("delta_matroid",),
@@ -117,6 +128,53 @@ def _validate_minor_axes(
             location=("minor",),
             code="delta_matroid.minor_axis",
             message="minor indices must be sorted, disjoint, and in range",
+        )
+
+
+def _check_twist_polynomial_source(d: FiniteDeltaMatroid, *, state_count: int) -> None:
+    """Validate a twist-polynomial source without the recognition label cap.
+
+    Labels never enter the mask sweep, so the recognition operation's
+    2,048-byte label envelope does not describe this operation's kernel. This
+    check instead bounds the source memberships and exchange work and the
+    retained labelled ground axis by the operation's own encoded-output
+    envelope, so a valid source with a longer label is admitted while exact
+    output remains bounded.
+    """
+
+    try:
+        s = FiniteFeasibleSetSystem(ground=d.ground, feasible=d.feasible)
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("delta_matroid",),
+            code="delta_matroid.source_not_valid",
+            message="source feasible family is malformed",
+        ) from exc
+    try:
+        label_bytes = require_delta_matroid_source_size(s)
+    except DeltaMatroidAdmissionError as exc:
+        _admission_error(exc)
+    try:
+        require_delta_matroid_exchange_work(s)
+    except DeltaMatroidAdmissionError as exc:
+        _admission_error(exc)
+    # Every histogram count and coefficient is at most ``state_count``; the
+    # six-fold factor bounds JSON escaping of arbitrary Unicode labels in the
+    # retained ambient ground axis.
+    output_bound = (
+        6 * label_bytes + (len(d.ground) + 1) * (len(str(state_count)) + 4) + 512
+    )
+    if output_bound > MAX_TWIST_POLYNOMIAL_OUTPUT_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("delta_matroid", "ground"),
+            code="delta_matroid.twist_polynomial_output",
+            message="complete twist polynomial exceeds its encoded-output envelope",
+        )
+    if first_symmetric_exchange_obstruction(s) is not None:
+        raise OperationDomainValidationError(
+            location=("delta_matroid",),
+            code="delta_matroid.source_not_delta",
+            message="source is not a delta-matroid",
         )
 
 
@@ -176,8 +234,10 @@ def twist_polynomial(d: FiniteDeltaMatroid) -> DeltaMatroidTwistPolynomialResult
 
     Width is computed directly from feasible-set bit masks. This is equivalent
     to materializing each twisted family, while keeping the active state and
-    result compact. The complete subset count, mask/feasible work, output bytes,
-    and source exchange replay are all admitted before the twist sweep.
+    result compact. The complete subset count, mask-feasible work, source
+    exchange replay, and exact encoded output are all admitted before the
+    twist sweep. Source labels are ambient context and are bounded only by the
+    operation's output envelope, not by the recognition operation's byte cap.
     """
 
     _reject_oversized_twist_polynomial_axis(d)
@@ -197,7 +257,7 @@ def twist_polynomial(d: FiniteDeltaMatroid) -> DeltaMatroidTwistPolynomialResult
             code="delta_matroid.twist_polynomial_work",
             message="complete twist polynomial exceeds its subset or evaluation envelope",
         )
-    _check(d)
+    _check_twist_polynomial_source(d, state_count=state_count)
 
     # Source admission bounds memberships and therefore rows to at most one
     # empty set plus one row per admitted membership. The state ceiling bounds

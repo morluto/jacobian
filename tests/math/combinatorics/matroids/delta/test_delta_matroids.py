@@ -564,7 +564,7 @@ def test_twist_polynomial_empty_axis_binary_composition_and_json_roundtrip() -> 
     assert schema["admission_limits"]["max_polynomial_coefficient_digits"] == 4
     assert schema["admission_limits"]["max_source_memberships"] == 16_384
     assert schema["admission_limits"]["max_source_feasible_rows"] == 16_385
-    assert "max_encoded_output_bytes" not in schema["admission_limits"]
+    assert schema["admission_limits"]["max_encoded_output_bytes"] == 65_536
 
     tool = next(
         item
@@ -599,6 +599,45 @@ def test_twist_polynomial_accepts_ground_and_state_cardinality_boundary() -> Non
     result = twist_polynomial(source)
     assert result.coefficients_by_width == (4_096, *(0 for _ in range(12)))
     assert result.polynomial.coefficients == (4_096,)
+
+
+def test_twist_polynomial_ignores_recognition_label_envelope() -> None:
+    # Labels do not enter the mask sweep, so the recognition operation's
+    # 2,048-byte cap must not narrow this operation's advertised domain. A
+    # 2,049-byte label still fits the operation's own encoded-output envelope.
+    label = "a" * 2_049
+    source = FiniteDeltaMatroid(ground=(label,), feasible=((),))
+
+    result = twist_polynomial(source)
+
+    assert result.ground == (label,)
+    assert result.coefficients_by_width == (2, 0)
+    assert result.polynomial.coefficients == (2,)
+
+
+def test_twist_polynomial_bounds_its_own_encoded_output() -> None:
+    # A label large enough to leave the operation's encoded-output envelope is
+    # still a typed resource refusal, not a recognition-limit rejection.
+    source = FiniteDeltaMatroid(ground=("a" * 11_000,), feasible=((),))
+
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        twist_polynomial(source)
+
+    assert error.value.errors()[0]["type"] == "delta_matroid.twist_polynomial_output"
+
+
+def test_twist_polynomial_result_rejects_duplicate_ground_labels() -> None:
+    import json
+
+    from pydantic import ValidationError
+
+    source = FiniteDeltaMatroid(ground=("a", "b"), feasible=((), (0,), (0, 1), (1,)))
+    result = twist_polynomial(source)
+    payload = result.model_dump(mode="json")
+    payload["ground"] = ["a", "a"]
+
+    with pytest.raises(ValidationError, match="ground labels must be unique"):
+        type(result).model_validate_json(json.dumps(payload))
 
 
 def test_twist_polynomial_result_rejects_inconsistent_wire_claims() -> None:

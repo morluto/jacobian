@@ -1,3 +1,4 @@
+import json
 from fractions import Fraction
 
 import pytest
@@ -196,7 +197,6 @@ def test_request_rejects_generators_on_another_basis_axis() -> None:
 
 
 def test_catalog_declares_generated_ideal_value() -> None:
-    from jacobian.dispatch import parse_operation_input
     from jacobian.math.lie_algebras._tools import TOOLS
 
     operation = next(
@@ -205,7 +205,9 @@ def test_catalog_declares_generated_ideal_value() -> None:
         if tool.operation_id == "lie_algebra.ideal.generated.compute"
     )
     assert operation.result_type is LieIdeal
-    request = parse_operation_input(operation.request_type, operation.examples[0].input)
+    request = operation.request_type.model_validate_json(
+        json.dumps(operation.examples[0].input)
+    )
     ideal = operation.run(request)
     assert _rows(ideal) == (
         (Fraction(1), Fraction(0), Fraction(0)),

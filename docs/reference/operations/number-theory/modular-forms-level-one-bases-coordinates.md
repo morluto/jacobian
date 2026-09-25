@@ -19,27 +19,12 @@ combination in that basis. `ModularFormCoordinates` retains the space, basis
 version, and exact rational coordinate vector, so it defines a global form,
 not only a finite q-prefix.
 
-`modular_form.equal.check` admits both coordinate values against their shared
-canonical basis and compares their exact rational tuples. Since a
-`ModularFormCoordinates` value represents a complete form in a deterministic
-basis, this decides global equality within one exact rational space without
-relying on a finite q-prefix. For equal-weight rational trivial-character
-forms in different spaces, the operation takes a common-space path: both forms
-embed into `M_k(Gamma0(lcm(N_1,N_2)))`, and their exact q-expansions through
-that space's Sturm bound are compared; Sturm's theorem decides global equality
-there, and cusp forms embed in the ambient holomorphic space. Cross-character
-or differing-weight comparisons still need an explicit transport into a common
-space. An unconsumed, unvalidated coordinate payload does not by itself
-establish membership in that space. For q-prefixes,
-`modular_form.space.sturm_bound.compute` returns the exact Sturm integer; the
-caller can compare coefficients through that bound after establishing that
-both prefixes come from forms in the declared space. The Sturm bound is `B`,
-so a determining q-prefix contains `B + 1` coefficients, from index zero
-through index `B`.
-Inside one exact rational space the operation compares canonical
-coordinates, not a finite prefix; prefix comparison remains a separate
-caller-level use of Sturm's theorem, and the common-space path above is the
-operation's own use of it.
+The basis and coordinate expansion operations return exact finite q-prefixes,
+while `modular_form.space.sturm_bound.compute`
+returns the exact Sturm integer. Callers can compose these values and compare
+the required coefficients themselves; Jacobian publishes no global equality
+checker. For a Sturm bound `B`, the determining prefix contains `B + 1`
+coefficients, from index zero through index `B`.
 
 These rational basis and coordinate operations support level one, holomorphic
 trivial-character spaces at Gamma0(2) and Gamma0(3), even-weight
@@ -59,11 +44,11 @@ field-valued exception is now supported for even order-6 characters modulo 13:
 `S_2(Gamma0(13), chi)` over `Q(zeta_6)`, normalized through q^0..q^2.
 `ModularFormCoordinates` represents one exact scalar multiple of that
 basis element; `modular_form.character_coordinates.q_expansion.compute`
-returns its exact field-valued Sturm prefix. The operation
-`modular_form.equal.check` compares two such forms only when their space and
-basis identifiers are identical, using the common q^0..q^2 prefix.
-For this space the index is 14 and the weight-2 Sturm bound is 2, so that
-prefix decides global equality. `modular_form.character_coordinates.hecke.apply`
+returns its exact field-valued Sturm prefix. For this space the index is 14
+and the weight-2 Sturm bound is 2, so the
+returned q^0..q^2 prefix is the determining finite projection. Callers perform
+coefficient comparisons on returned values themselves.
+`modular_form.character_coordinates.hecke.apply`
 supports `T_n` for `1 <= n <= 32` with `gcd(n,13)=1`; it extends the private
 PARI basis prefix through `q^(2n)`, applies the exact character-valued Hecke
 coefficient formula, and reconstructs the image in the same exact coordinate

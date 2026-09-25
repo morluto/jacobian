@@ -14,13 +14,9 @@ from jacobian.math.matrices.cyclic_linear._models import (
     RationalCyclotomicField,
 )
 from jacobian.math.number_theory.modular_forms._tools import TOOLS
-from jacobian.math.number_theory.modular_forms.basis import (
-    BASIS_ID,
-    modular_form_coordinates_equal,
-)
+from jacobian.math.number_theory.modular_forms.basis import BASIS_ID
 from jacobian.math.number_theory.modular_forms.field_coordinates import (
     modular_form_coordinates_extend_field,
-    modular_form_field_coordinates_equal,
     modular_form_field_coordinates_q_expansion,
 )
 from jacobian.math.number_theory.modular_forms.values import (
@@ -64,14 +60,12 @@ def test_scalar_extension_and_q_expansion_preserve_exact_parent() -> None:
         == extended
     )
     restored = ModularFormCoordinates.model_validate_json(extended.model_dump_json())
-    assert modular_form_coordinates_equal(extended, restored)
+    assert restored == extended
     malformed = ModularFormCoordinates.model_construct(
         space=extended.space,
         basis_id=extended.basis_id,
         coordinates=None,
     )
-    with pytest.raises(OperationDomainValidationError, match="basis and shape"):
-        modular_form_coordinates_equal(malformed, extended)
     with pytest.raises(OperationDomainValidationError, match="basis and shape"):
         modular_form_field_coordinates_q_expansion(malformed, 3)
 
@@ -127,7 +121,7 @@ def test_field_operations_on_pari_backed_spaces_use_the_sturm_precision() -> Non
     assert extended.space.coefficient_domain == field
 
     restored = ModularFormCoordinates.model_validate_json(extended.model_dump_json())
-    assert modular_form_field_coordinates_equal(extended, restored)
+    assert restored == extended
 
     expansion = modular_form_field_coordinates_q_expansion(extended, 3)
     assert [_field_coordinates(value) for value in expansion.coefficients] == [

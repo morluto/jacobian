@@ -19,13 +19,9 @@ from jacobian.math.number_theory.characters.operations import (
 from jacobian.math.number_theory.modular_forms import (
     character_basis as character_basis_module,
 )
-from jacobian.math.number_theory.modular_forms.basis import (
-    modular_form_coordinates_equal,
-)
 from jacobian.math.number_theory.modular_forms.character_basis import (
     CHARACTER_BASIS_ID,
     modular_character_basis_q_expansions,
-    modular_character_coordinates_equal,
     modular_character_coordinates_hecke,
     modular_character_coordinates_product,
     modular_character_coordinates_q_expansion,
@@ -208,22 +204,6 @@ def test_character_coordinates_realize_exact_sturm_prefix(
         _character_tool("modular_form.character_coordinates.q_expansion.compute")
         is not None
     )
-
-
-def test_character_global_equality_uses_sturm_prefix_and_exact_parent() -> None:
-    assert modular_character_coordinates_equal(_form(1), _form(1))
-    assert modular_character_coordinates_equal(_form(0), _form(0))
-    assert not modular_character_coordinates_equal(_form(1), _form(2))
-    assert modular_form_coordinates_equal(_form(1), _form(1))
-    assert not modular_form_coordinates_equal(_form(1), _form(2))
-    operation = _character_tool("modular_form.equal.check")
-    assert operation is not None
-    request = operation.request_type(left=_form(1), right=_form(1))
-    assert operation.run(request).equal
-    with pytest.raises(
-        OperationDomainValidationError, match="identical space and basis"
-    ):
-        modular_character_coordinates_equal(_form(1), _form(1, coordinate=10))
 
 
 @pytest.mark.parametrize(
@@ -418,7 +398,6 @@ def test_zero_character_form_avoids_backend(monkeypatch: pytest.MonkeyPatch) -> 
         not any(coefficient.num for coefficient in value.coefficients_ascending)
         for value in expansion.coefficients
     )
-    assert modular_character_coordinates_equal(_form(0), _form(0))
 
 
 def test_character_coordinate_operation_rejects_forged_scalar_before_pari(

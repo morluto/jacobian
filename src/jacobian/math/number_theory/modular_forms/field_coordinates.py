@@ -225,58 +225,7 @@ def modular_form_field_coordinates_q_expansion(
     )
 
 
-def modular_form_field_coordinates_equal(
-    left: ModularFormCoordinates, right: ModularFormCoordinates
-) -> bool:
-    """Compare exact field coordinates in one admitted trivial-character basis."""
-    if not isinstance(left, ModularFormCoordinates) or not isinstance(
-        right, ModularFormCoordinates
-    ):
-        raise OperationDomainValidationError(
-            location=(),
-            code="modular_form.coordinates_type",
-            message="both operands must be exact modular-form coordinate values",
-        )
-    if left.space != right.space or left.basis_id != right.basis_id:
-        raise OperationDomainValidationError(
-            location=("right", "space"),
-            code="modular_form.field_equality_parent",
-            message="field coordinate equality requires the identical space and basis",
-        )
-    rational_space = _rational_space(left.space)
-    plan_precision = (
-        sturm_bound(rational_space).bound + 1 if rational_space.level > 4 else 1
-    )
-    plan = _admit_basis(rational_space, plan_precision, materialize_pari=False)
-    if (
-        left.basis_id != plan.basis_id
-        or type(left.coordinates) is not tuple
-        or type(right.coordinates) is not tuple
-        or len(left.coordinates) != plan.dimension
-        or len(right.coordinates) != plan.dimension
-    ):
-        raise OperationDomainValidationError(
-            location=("left", "basis_id"),
-            code="modular_form.field_equality_basis",
-            message="field coordinate basis and shape must match the admitted space basis",
-        )
-    field = left.space.coefficient_domain
-    elements: list[RationalCyclotomicElement] = []
-    for value in (*left.coordinates, *right.coordinates):
-        if not isinstance(value, RationalCyclotomicElement) or value.field != field:
-            raise OperationDomainValidationError(
-                location=("left", "coordinates"),
-                code="modular_form.field_equality_scalar",
-                message="every field coordinate must belong to the exact space coefficient field",
-            )
-        elements.append(value)
-    for value in elements:
-        cyclotomic._validate_element(value)
-    return left.coordinates == right.coordinates
-
-
 __all__ = [
     "modular_form_coordinates_extend_field",
-    "modular_form_field_coordinates_equal",
     "modular_form_field_coordinates_q_expansion",
 ]

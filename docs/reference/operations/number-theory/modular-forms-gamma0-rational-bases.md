@@ -23,7 +23,7 @@ to trivial character and rational coefficients. Separately, Jacobian has a
 bounded character-valued basis and coordinate slice for the even order-6
 characters modulo 13 in `S_2(Gamma0(13), chi)` over `Q(zeta_6)`; see
 [level-one bases and coordinates](modular-forms-level-one-bases-coordinates.md)
-for its exact q-prefix and same-space global equality contract. Other
+for its exact q-prefix and Sturm-bound contract. Other
 character spaces and general field-valued Gamma0 bases remain unsupported.
 
 For this represented character slice,

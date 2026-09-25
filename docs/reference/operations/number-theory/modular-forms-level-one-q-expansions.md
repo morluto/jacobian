@@ -14,13 +14,7 @@ exact divisor-sum definitions, and `DELTA` is constructed as
 This constructor is limited to its three named level-one forms. Separate
 operations compute supported space dimensions and Sturm bounds, and construct
 level-one bases and exact rational coordinate forms. Coordinate values retain
-their exact space and basis and are compared directly by callers.
-`modular_form.equal.check` compares complete coordinate-defined forms exactly:
-within one space it compares canonical coordinates, and across supported
-rational trivial-character spaces of equal weight it compares through the
-Sturm bound for `Gamma0(lcm(N_1,N_2))`. This includes cusp forms viewed in the
-ambient holomorphic space. The comparison admits both bases, their combined
-work and output, and exact coefficient growth before backend materialization.
+their exact space and basis identity for caller composition.
 Exact basis and coordinate values are available for holomorphic `M_k(Gamma0(2))` with trivial character over `QQ`,
 using the graded-ring generators `A2=2E2(2tau)-E2(tau)` and `E4`. The
 Gamma0(2) slice supports weights through 120 and exact q-prefixes through
@@ -35,5 +29,6 @@ return only `TruncatedSeries` values and make no modularity claim. The supported
 modular operator actions accept canonical basis coordinates, whose q-expansions
 and space membership are defined by the basis construction. Exact character-bound dimensions, Sturm bound, and bases
 also support M_1 and M_3 on Gamma0(4) with chi_-4; the two-dimensional
-weight-three basis is documented separately. Cross-space equality for these
-character-valued spaces is not currently supported.
+weight-three basis is documented separately. These operations return basis
+coordinates, Sturm integers, and finite q-prefixes; callers can compose those
+values with ordinary exact coefficient comparisons.

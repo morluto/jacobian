@@ -442,9 +442,7 @@ def _admit_contraction_work(
         (1 << len(facet)) - 1 for facet in complex_.maximal_simplices
     )
     base_work = (
-        closure_candidates
-        + 16 * total_cells**3
-        + 16 * len(pairs) * total_cells**2
+        closure_candidates + 16 * total_cells**3 + 16 * len(pairs) * total_cells**2
     )
     if base_work > MAX_MORSE_CONTRACTION_WORK:
         raise _admission(

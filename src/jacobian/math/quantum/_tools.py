@@ -26,6 +26,8 @@ from jacobian.math.quantum._models import (
     PauliProductResult,
     PauliToLabelsRequest,
     PauliToLabelsResult,
+    StabilizerCodeRequest,
+    StabilizerCodeValue,
     StabilizerDistanceResult,
     StabilizerErrorEquivalenceRequest,
     StabilizerErrorEquivalenceResult,
@@ -43,6 +45,7 @@ from jacobian.math.quantum.operations import (
     pauli_multiply,
     pauli_pairing,
     pauli_to_labels,
+    stabilizer_code_compute,
     stabilizer_error_equivalence,
     stabilizer_exact_distance,
     stabilizer_group_from_generators,
@@ -130,6 +133,60 @@ def _run_exact_stabilizer_group(
 
 
 TOOLS = (
+    MathTool(
+        operation_id="quantum.stabilizer.code.compute",
+        title="Select a canonical stabilizer code eigenspace",
+        description=(
+            "Bind an exact commuting Hermitian Pauli group to a character given "
+            "by one +1 or -1 eigenvalue per independent generator. Return the "
+            "selected joint eigenspace as a canonical RREF group whose generators "
+            "all have eigenvalue +1 on that code. With n physical qubits and "
+            "rank r, it encodes n-r logical qubits and has Hilbert-space "
+            "dimension 2^(n-r); no dense state or projector is formed."
+        ),
+        request_type=StabilizerCodeRequest,
+        result_type=StabilizerCodeValue,
+        run=stabilizer_code_compute,
+        tags=("quantum", "stabilizer", "code-space", "character", "exact"),
+        discovery_terms=(
+            "stabilizer code eigenspace",
+            "stabilizer eigenvalue character",
+            "joint Pauli eigenspace",
+        ),
+        examples=(
+            OperationExample(
+                name="bell_state_code_space",
+                description=(
+                    "Select the Bell state stabilized by XX and ZZ; both exact "
+                    "group generators must be independent commuting Hermitian Paulis."
+                ),
+                input={
+                    "group": {
+                        "register": {"qubit_ids": ["q0", "q1"]},
+                        "generators": [
+                            {
+                                "phase_free": {
+                                    "register": {"qubit_ids": ["q0", "q1"]},
+                                    "x_bits": [1, 1],
+                                    "z_bits": [0, 0],
+                                },
+                                "phase": 0,
+                            },
+                            {
+                                "phase_free": {
+                                    "register": {"qubit_ids": ["q0", "q1"]},
+                                    "x_bits": [0, 0],
+                                    "z_bits": [1, 1],
+                                },
+                                "phase": 0,
+                            },
+                        ],
+                    },
+                    "generator_eigenvalues": [1, 1],
+                },
+            ),
+        ),
+    ),
     MathTool(
         operation_id="quantum.stabilizer.exact_group.from_generators.compute",
         title="Construct an exact qubit stabilizer group",

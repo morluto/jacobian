@@ -1,3 +1,4 @@
+from collections.abc import Iterable
 from fractions import Fraction
 from math import factorial
 
@@ -21,7 +22,9 @@ from jacobian.math.polynomials.values import (
 )
 
 
-def polynomial(terms):
+def polynomial(
+    terms: Iterable[tuple[tuple[int, int], int]],
+) -> RationalPolynomial:
     return RationalPolynomial(
         variables=("n", "k"),
         polynomial=SparseRationalPolynomial(
@@ -36,7 +39,7 @@ def polynomial(terms):
     )
 
 
-def _binomial_term():
+def _binomial_term() -> ProperHypergeometricTerm:
     return ProperHypergeometricTerm(
         polynomial=polynomial([((0, 0), 1)]),
         factorial_factors=(
@@ -52,13 +55,15 @@ def _binomial_term():
 
 
 def _eval_rf(value: RationalFunction, n: int, k: int) -> Fraction:
-    def eval_poly(poly):
-        return sum(
-            term.coefficient.as_fraction()
-            * n ** term.exponents[0]
-            * k ** term.exponents[1]
-            for term in poly.terms
-        )
+    def eval_poly(poly: SparseRationalPolynomial) -> Fraction:
+        total = Fraction(0)
+        for term in poly.terms:
+            total += (
+                term.coefficient.as_fraction()
+                * n ** term.exponents[0]
+                * k ** term.exponents[1]
+            )
+        return total
 
     return eval_poly(value.numerator) / eval_poly(value.denominator)
 
@@ -82,7 +87,7 @@ def _direct(term: ProperHypergeometricTerm, n: int, k: int) -> Fraction:
     return total
 
 
-def test_binomial_quotients_match_exact_formula_and_direct_terms():
+def test_binomial_quotients_match_exact_formula_and_direct_terms() -> None:
     term = _binomial_term()
     result = proper_hypergeometric_shift_quotients(term)
     for n, k in ((5, 2), (8, 3), (12, 7)):
@@ -94,7 +99,7 @@ def test_binomial_quotients_match_exact_formula_and_direct_terms():
     assert _eval_rf(result.k_ratio, 5, 2) == 1
 
 
-def test_shifted_factorial_and_polynomial_prefactor_match_direct_evaluation():
+def test_shifted_factorial_and_polynomial_prefactor_match_direct_evaluation() -> None:
     term = ProperHypergeometricTerm(
         polynomial=polynomial([((1, 0), 1), ((0, 1), 2), ((0, 0), 1)]),
         factorial_factors=(
@@ -113,13 +118,13 @@ def test_shifted_factorial_and_polynomial_prefactor_match_direct_evaluation():
     assert _eval_rf(result.k_ratio, n, k) == _direct(term, n, k + 1) / source
 
 
-def test_zero_term_has_no_generic_shift_quotients():
+def test_zero_term_has_no_generic_shift_quotients() -> None:
     term = ProperHypergeometricTerm(polynomial=polynomial([]))
     with pytest.raises(OperationDomainValidationError, match="zero term"):
         proper_hypergeometric_shift_quotients(term)
 
 
-def test_factorial_growth_is_rejected_before_expansion():
+def test_factorial_growth_is_rejected_before_expansion() -> None:
     term = ProperHypergeometricTerm(
         polynomial=polynomial([((0, 0), 1)]),
         factorial_factors=(
@@ -132,7 +137,7 @@ def test_factorial_growth_is_rejected_before_expansion():
         proper_hypergeometric_shift_quotients(term)
 
 
-def test_distinct_denominators_are_bounded_before_expansion():
+def test_distinct_denominators_are_bounded_before_expansion() -> None:
     """Charge common-denominator growth across every prefactor coefficient.
 
     Sixteen distinct 10-digit prime denominators keep the largest individual
@@ -167,7 +172,7 @@ def test_distinct_denominators_are_bounded_before_expansion():
 
 
 @pytest.mark.parametrize("component", ("prefactor", "n_base", "k_base"))
-def test_oversized_exact_components_raise_admission_error(component):
+def test_oversized_exact_components_raise_admission_error(component: str) -> None:
     """Count digit widths without Python's integer-to-string conversion guard.
 
     ``CanonicalRational`` admits components well beyond the built-in 4,300-digit
@@ -195,7 +200,7 @@ def test_oversized_exact_components_raise_admission_error(component):
         proper_hypergeometric_shift_quotients(term)
 
 
-def test_unbounded_affine_offset_is_charged_before_expansion():
+def test_unbounded_affine_offset_is_charged_before_expansion() -> None:
     """Charge an uncapped affine offset against the output digit envelope.
 
     ``IntegerAffineFactorial.offset`` accepts arbitrary-size integers, so a

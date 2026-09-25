@@ -46,6 +46,7 @@ from jacobian.math.number_theory.modular_forms.field_coordinates import (
 )
 from jacobian.math.number_theory.modular_forms.operations import (
     level_one_named_q_expansion,
+    modular_form_character_space_inclusion,
     named_q_expansion,
     space_dimension,
     sturm_bound,
@@ -56,6 +57,7 @@ from jacobian.math.number_theory.modular_forms.transforms import (
 )
 from jacobian.math.number_theory.modular_forms.values import (
     LevelOneModularQExpansion,
+    ModularCharacterSpaceInclusion,
     ModularFormBasis,
     ModularFormChangeOfBasisFrame,
     ModularFormCoordinates,
@@ -81,6 +83,7 @@ __all__ = [
     "ModularCharacterHeckeMatrixRequest",
     "ModularCharacterHeckeRequest",
     "ModularCharacterQExpansion",
+    "ModularCharacterSpaceInclusion",
     "ModularFormBasis",
     "ModularFormChangeOfBasisFrame",
     "ModularFormCoordinates",
@@ -104,6 +107,7 @@ __all__ = [
     "modular_character_hecke_matrix",
     "modular_form_basis_frame",
     "modular_form_basis_q_expansions",
+    "modular_form_character_space_inclusion",
     "modular_form_coordinates_atkin_lehner",
     "modular_form_coordinates_equal",
     "modular_form_coordinates_extend_field",

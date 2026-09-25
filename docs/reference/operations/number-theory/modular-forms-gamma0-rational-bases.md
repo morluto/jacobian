@@ -97,3 +97,13 @@ Current limits remain those of the bases: level at most 10,000, weight at most
 120, dimension at most 32 and Sturm precision at most 128. Cyclotomic basis
 transport and nontrivial-character transport are unsupported; a representable
 space value does not imply its basis or coordinate carrier supports that field.
+
+`modular_form.character_space.inclusion.compute` represents the same structural
+map for exact Dirichlet-character spaces. It accepts source and target spaces
+with nested levels, equal weight and space kind, and the identical coefficient
+parent; on every target unit it checks that the target character equals the
+source character evaluated after reduction to the source level. This establishes
+the character-space inclusion itself. It does not transport coordinates or
+assert that a basis, Hecke action, or global equality operation is available for
+those parents. The unit-group levels are bounded by 2,048, and the exact map
+comparison is admitted before its residue scan.

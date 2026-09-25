@@ -4,6 +4,7 @@ from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.number_theory.modular_forms import operations as native
 from jacobian.math.number_theory.modular_forms._models import (
     LevelOneNamedQExpansionRequest,
+    ModularCharacterSpaceInclusionRequest,
     ModularFormBasisFrameRequest,
     ModularFormBasisRequest,
     ModularFormCanonicalToFramedRequest,
@@ -61,6 +62,7 @@ from jacobian.math.number_theory.modular_forms.transform_tools import (
 )
 from jacobian.math.number_theory.modular_forms.values import (
     LevelOneModularQExpansion,
+    ModularCharacterSpaceInclusion,
     ModularFormBasis,
     ModularFormChangeOfBasisFrame,
     ModularFormCoordinates,
@@ -110,6 +112,14 @@ def compute_modular_form_space_inclusion(
     request: ModularFormSpaceInclusionRequest,
 ) -> ModularFormSpaceInclusion:
     return modular_form_space_inclusion(request.source_space, request.target_space)
+
+
+def compute_modular_character_space_inclusion(
+    request: ModularCharacterSpaceInclusionRequest,
+) -> ModularCharacterSpaceInclusion:
+    return native.modular_form_character_space_inclusion(
+        request.source_space, request.target_space
+    )
 
 
 def decide_coordinate_equality(
@@ -207,6 +217,79 @@ def compute_operator_image_prefix(
 
 
 TOOLS: MathTools = (
+    MathTool(
+        operation_id="modular_form.character_space.inclusion.compute",
+        title="Construct a character-valued modular-space inclusion",
+        description=(
+            "Construct the same-weight inclusion from a Gamma0(M) space to a "
+            "Gamma0(N) space when M divides N, the space kinds and exact "
+            "coefficient parents agree, and the target Dirichlet character is "
+            "the source character pulled back along reduction modulo M. The "
+            "operation checks the relation on every target unit. This map "
+            "establishes space inclusion only; it does not transport coordinates "
+            "or construct a target basis. Levels are bounded by 2,048."
+        ),
+        request_type=ModularCharacterSpaceInclusionRequest,
+        result_type=ModularCharacterSpaceInclusion,
+        run=compute_modular_character_space_inclusion,
+        tags=("modular-forms", "characters", "spaces", "inclusion", "exact"),
+        examples=(
+            OperationExample(
+                name="quadratic_character_level_inclusion",
+                description=(
+                    "Include S2(Gamma0(3), chi) into S2(Gamma0(15), chi') "
+                    "when chi' is the exact inflation of the quadratic chi."
+                ),
+                input={
+                    "source_space": {
+                        "level": 3,
+                        "weight": 2,
+                        "kind": "S",
+                        "character": {
+                            "group": {
+                                "modulus": 3,
+                                "unit_residues": [1, 2],
+                                "character_count": 2,
+                                "invariant_factors": [2],
+                                "generators": [2],
+                                "generator_orders": [2],
+                                "unit_coordinates": [[0], [1]],
+                                "exponent": 2,
+                            },
+                            "coordinates": [1],
+                        },
+                    },
+                    "target_space": {
+                        "level": 15,
+                        "weight": 2,
+                        "kind": "S",
+                        "character": {
+                            "group": {
+                                "modulus": 15,
+                                "unit_residues": [1, 2, 4, 7, 8, 11, 13, 14],
+                                "character_count": 8,
+                                "invariant_factors": [2, 4],
+                                "generators": [11, 7],
+                                "generator_orders": [2, 4],
+                                "unit_coordinates": [
+                                    [0, 0],
+                                    [1, 1],
+                                    [0, 2],
+                                    [0, 1],
+                                    [1, 3],
+                                    [1, 0],
+                                    [0, 3],
+                                    [1, 2],
+                                ],
+                                "exponent": 4,
+                            },
+                            "coordinates": [1, 0],
+                        },
+                    },
+                },
+            ),
+        ),
+    ),
     MathTool(
         operation_id="modular_form.space.inclusion.compute",
         title="Construct a natural inclusion of modular-form spaces",

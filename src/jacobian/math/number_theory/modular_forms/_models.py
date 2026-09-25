@@ -125,6 +125,13 @@ class ModularFormSpaceInclusionRequest(StrictModel):
     target_space: ModularFormSpace
 
 
+class ModularCharacterSpaceInclusionRequest(StrictModel):
+    """Construct a same-weight inclusion along exact character inflation."""
+
+    source_space: ModularFormSpace
+    target_space: ModularFormSpace
+
+
 class ModularFormEqualityRequest(StrictModel):
     """Compare coordinate-defined forms through a common Sturm bound."""
 
@@ -344,6 +351,7 @@ class SpaceDimensionResult(StrictModel):
 __all__ = [
     "Gamma0DimensionSpaceInput",
     "LevelOneNamedQExpansionRequest",
+    "ModularCharacterSpaceInclusionRequest",
     "ModularFormBasisRequest",
     "ModularFormCoordinatesHeckeRequest",
     "ModularFormCoordinatesQExpansionRequest",

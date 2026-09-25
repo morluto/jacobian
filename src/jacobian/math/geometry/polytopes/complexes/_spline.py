@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from fractions import Fraction
-from itertools import combinations
+from itertools import combinations, pairwise
 from math import comb
 from typing import Any, NoReturn
 
@@ -42,6 +42,8 @@ from jacobian.math.geometry.polytopes.complexes._models import (
     SplineCellRefinementLineage,
     SplineCoordinatesRequest,
     SplineCoordinatesResult,
+    SplineDimensionProfileRequest,
+    SplineDimensionProfileResult,
     SplineDimensionRequest,
     SplineDimensionResult,
     SplineEvaluationRequest,
@@ -1856,6 +1858,79 @@ def spline_dimension(request: SplineDimensionRequest) -> SplineDimensionResult:
         compatibility_matrix=matrix,
         rank=rank,
         nullity=nullity,
+    )
+
+
+def spline_dimension_profile(
+    request: SplineDimensionProfileRequest,
+) -> SplineDimensionProfileResult:
+    """Compute an admitted finite prefix of exact spline dimensions.
+
+    The finite differences describe only the supplied prefix; no eventual
+    Hilbert polynomial or extrapolation is inferred.
+    """
+    if not isinstance(request, SplineDimensionProfileRequest):
+        _reject("spline_profile_type", "expected a canonical spline profile request")
+    if type(request.max_degree) is not int or not 0 <= request.max_degree <= 12:
+        _reject("spline_profile_degree", "maximum degree must be in [0, 12]")
+    # Admit the complete requested workload before constructing any degree
+    # matrix. These are conservative source-derived matrix and rank bounds.
+    complex_value = _admit_complex(request.complex)
+    total_cells = 0
+    total_rank_work = 0
+    for degree in range(request.max_degree + 1):
+        _, width, row_bound, rank_work = _admit_spline_dimension(
+            complex_value, degree, request.smoothness
+        )
+        total_cells += row_bound * width
+        total_rank_work += rank_work
+    if total_cells > MAX_SPLINE_DIMENSION_CONSTRAINT_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("max_degree",),
+            code="polytopal_complex.spline_profile_matrix",
+            message="finite spline profile matrices exceed the aggregate cell envelope",
+        )
+    if total_rank_work > MAX_SPLINE_DIMENSION_RANK_WORK:
+        raise OperationResourceAdmissionError(
+            location=("max_degree",),
+            code="polytopal_complex.spline_profile_work",
+            message="finite spline profile ranks exceed the aggregate work envelope",
+        )
+    # The profile omits the degree-specific matrices. Bound its canonical
+    # output from the source and fixed maximum integer widths before computing.
+    try:
+        source_size = len(encode_strict_json(complex_value.model_dump(mode="json")))
+    except CanonicalizationError as exc:
+        raise OperationResourceAdmissionError(
+            location=("complex",),
+            code="polytopal_complex.spline_profile_output",
+            message="spline profile source exceeds its output envelope",
+        ) from exc
+    output_bound = source_size + 1024 + (request.max_degree + 1) * 24
+    if output_bound > MAX_SPLINE_DIMENSION_OUTPUT_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("max_degree",),
+            code="polytopal_complex.spline_profile_output",
+            message="finite spline profile exceeds its output envelope",
+        )
+    dimensions = tuple(
+        spline_dimension(
+            SplineDimensionRequest(
+                complex=complex_value, degree=degree, smoothness=request.smoothness
+            )
+        ).nullity
+        for degree in range(request.max_degree + 1)
+    )
+    differences = [dimensions]
+    while len(differences[-1]) > 1:
+        previous = differences[-1]
+        differences.append(tuple(b - a for a, b in pairwise(previous)))
+    return SplineDimensionProfileResult(
+        complex=complex_value,
+        max_degree=request.max_degree,
+        smoothness=request.smoothness,
+        dimensions=dimensions,
+        forward_differences=tuple(differences),
     )
 
 

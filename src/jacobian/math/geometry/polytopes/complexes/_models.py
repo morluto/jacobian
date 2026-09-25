@@ -19,6 +19,7 @@ Conventions fixed by this owner:
 
 from __future__ import annotations
 
+from itertools import pairwise
 from math import comb
 from typing import Literal, Self
 
@@ -653,6 +654,40 @@ class SplineDimensionResult(StrictModel):
             raise _validation_error(
                 "spline_dimension_nullity",
                 "nullity must equal coefficient width minus matrix rank",
+            )
+        return self
+
+
+class SplineDimensionProfileRequest(StrictModel):
+    """Compute exact spline dimensions over a supplied finite degree prefix."""
+
+    complex: PolytopalComplexClosureResult
+    max_degree: int = Field(ge=0, le=12)
+    smoothness: int = Field(ge=-1, le=4)
+
+
+class SplineDimensionProfileResult(StrictModel):
+    """Exact dimensions and forward differences on degrees zero through max_degree."""
+
+    complex: PolytopalComplexClosureResult
+    max_degree: int = Field(ge=0, le=12)
+    smoothness: int = Field(ge=-1, le=4)
+    dimensions: tuple[int, ...] = Field(min_length=1, max_length=13)
+    forward_differences: tuple[tuple[int, ...], ...] = Field(min_length=1, max_length=13)
+
+    @model_validator(mode="after")
+    def require_finite_difference_profile(self) -> Self:
+        if len(self.dimensions) != self.max_degree + 1:
+            raise _validation_error(
+                "spline_profile_length", "dimensions must cover degrees zero through max_degree"
+            )
+        expected = [self.dimensions]
+        while len(expected[-1]) > 1:
+            row = expected[-1]
+            expected.append(tuple(right - left for left, right in pairwise(row)))
+        if self.forward_differences != tuple(expected):
+            raise _validation_error(
+                "spline_profile_differences", "forward differences must be derived from the finite dimension prefix"
             )
         return self
 

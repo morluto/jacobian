@@ -3,8 +3,10 @@
 import pytest
 from pydantic import ValidationError
 
-from jacobian.catalog.models import OperationDomainValidationError, OperationResourceAdmissionError
-
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.topology.cubical_complexes._models import (
     CubicalCell,
     CubicalSkeletonRequest,

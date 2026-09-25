@@ -646,7 +646,10 @@ def skeleton(
             code="cubical_complex.skeleton_invalid_cell",
             message="generators must satisfy the canonical cubical-cell contract",
         ) from exc
-    if any(len(cell.intervals) != len(validated_cells[0].intervals) for cell in validated_cells):
+    if any(
+        len(cell.intervals) != len(validated_cells[0].intervals)
+        for cell in validated_cells
+    ):
         raise OperationDomainValidationError(
             location=("cells",),
             code="cubical_complex.skeleton_ambient_axis",
@@ -660,8 +663,16 @@ def skeleton(
     )
     face_bound = sum(3**cell.dimension for cell in set(validated_cells))
     encoded_cell_bound = len(set(validated_cells)) + face_bound
-    estimated_bytes = encoded_cell_bound * len(validated_cells[0].intervals) * (2 * coordinate_digits + 8) + 512
-    if face_bound > MAX_FACE_CELLS or estimated_bytes > MAX_CUBICAL_SKELETON_RESULT_BYTES:
+    estimated_bytes = (
+        encoded_cell_bound
+        * len(validated_cells[0].intervals)
+        * (2 * coordinate_digits + 8)
+        + 512
+    )
+    if (
+        face_bound > MAX_FACE_CELLS
+        or estimated_bytes > MAX_CUBICAL_SKELETON_RESULT_BYTES
+    ):
         raise OperationResourceAdmissionError(
             location=("cells",),
             code="cubical_complex.skeleton_result_size",

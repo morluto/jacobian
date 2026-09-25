@@ -1,9 +1,9 @@
 # Classical matrix groups
 
 Additional classical matrix group families remain deferred. The existing
-bounded `GL(n,q)` and `SL(n,q)` operations have exact matrix representations
-and natural actions; they do not imply that every classical family or
-quotient has a shared contract.
+bounded prime-field `GL(n,q)` and `SL(n,q)` operations have exact matrix
+representations and natural actions; they do not imply that every classical
+family or quotient has a shared contract.
 
 Symplectic groups require an exact nondegenerate alternating form, orthogonal
 groups require quadratic-form semantics (especially in characteristic two),

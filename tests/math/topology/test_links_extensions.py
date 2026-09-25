@@ -205,6 +205,73 @@ class TestDisjointUnion:
             == result
         )
 
+    def test_json_roundtrip_rejects_missing_or_duplicate_source_transport(self) -> None:
+        hopf = braid_closure(_two_braid(1, 1)).diagram
+        payload = link_disjoint_union((hopf, hopf)).model_dump(mode="json")
+
+        missing_crossing = json.loads(json.dumps(payload))
+        missing_crossing["crossing_map"].pop()
+        with pytest.raises(ValidationError, match="crossing transport must cover"):
+            LinkDisjointUnionResult.model_validate_json(json.dumps(missing_crossing))
+
+        changed_target_label = json.loads(json.dumps(payload))
+        changed_target_label["crossing_map"][0]["target_crossing_id"] = "foreign_id"
+        with pytest.raises(ValidationError, match="crossing transport must cover"):
+            LinkDisjointUnionResult.model_validate_json(
+                json.dumps(changed_target_label)
+            )
+
+        duplicate_crossing = json.loads(json.dumps(payload))
+        duplicate_crossing["crossing_map"][1] = duplicate_crossing["crossing_map"][0]
+        with pytest.raises(ValidationError, match="transport keys must each be unique"):
+            LinkDisjointUnionResult.model_validate_json(json.dumps(duplicate_crossing))
+
+        duplicate_dart_target = json.loads(json.dumps(payload))
+        duplicate_dart_target["dart_map"][1]["target_dart_id"] = duplicate_dart_target[
+            "dart_map"
+        ][0]["target_dart_id"]
+        with pytest.raises(ValidationError, match="transport keys must each be unique"):
+            LinkDisjointUnionResult.model_validate_json(
+                json.dumps(duplicate_dart_target)
+            )
+
+        wrong_dart_source = json.loads(json.dumps(payload))
+        wrong_dart_source["dart_map"][0]["source_index"] = 2
+        with pytest.raises(ValidationError, match="dart transport must cover"):
+            LinkDisjointUnionResult.model_validate_json(json.dumps(wrong_dart_source))
+
+    def test_json_roundtrip_rejects_changed_crossing_metadata(self) -> None:
+        hopf = braid_closure(_two_braid(1, 1)).diagram
+        payload = link_disjoint_union((hopf,)).model_dump(mode="json")
+        crossing = payload["diagram"]["crossings"][0]
+        crossing["over_pair"], crossing["under_pair"] = (
+            crossing["under_pair"],
+            crossing["over_pair"],
+        )
+        crossing["sign"] = -crossing["sign"]
+
+        with pytest.raises(ValidationError, match="target crossings must preserve"):
+            LinkDisjointUnionResult.model_validate_json(json.dumps(payload))
+
+    def test_json_roundtrip_rejects_reversed_arc_map_and_bad_loop_offset(self) -> None:
+        hopf = braid_closure(_two_braid(1, 1)).diagram
+        payload = link_disjoint_union((hopf,)).model_dump(mode="json")
+        payload["arc_map"][0]["target_tail"], payload["arc_map"][0]["target_head"] = (
+            payload["arc_map"][0]["target_head"],
+            payload["arc_map"][0]["target_tail"],
+        )
+
+        with pytest.raises(ValidationError, match="preserve every directed source arc"):
+            LinkDisjointUnionResult.model_validate_json(json.dumps(payload))
+
+        unlink = link_disjoint_union(
+            (OrientedLinkDiagram(free_loops=1), OrientedLinkDiagram(free_loops=1))
+        ).model_dump(mode="json")
+        unlink["free_loop_map"][0]["target_loop_index"] = 1
+        unlink["free_loop_map"][1]["target_loop_index"] = 0
+        with pytest.raises(ValidationError, match="cumulative offset"):
+            LinkDisjointUnionResult.model_validate_json(json.dumps(unlink))
+
     def test_union_admits_aggregate_crossing_bound_before_output(self) -> None:
         full = braid_closure(_two_braid(*([1] * 64))).diagram
         one = braid_closure(_two_braid(1)).diagram

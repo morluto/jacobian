@@ -23,7 +23,7 @@ from jacobian.math.topology.simplicial_sets.subset_models import (
 )
 
 _MAX_PREIMAGE_WORK = 100_000
-_MAX_PREIMAGE_OUTPUT_BYTES = 256_000
+_MAX_PREIMAGE_OUTPUT_CELLS = 262_144
 
 
 class SimplicialMapPreimageRequest(StrictModel):
@@ -75,6 +75,15 @@ def _carrier_admission_work(value: FiniteTruncatedSimplicialSet) -> int:
         (degree + 1) * sizes[degree] for degree in range(1, value.max_degree + 1)
     ) + sum((degree + 1) * sizes[degree] for degree in range(value.max_degree))
     return table_entries + sum(len(label) for level in value.sets for label in level)
+
+
+def _carrier_cells(value: FiniteTruncatedSimplicialSet) -> int:
+    sizes = tuple(map(len, value.sets))
+    table_entries = sum(
+        (degree + 1) * sizes[degree] for degree in range(1, value.max_degree + 1)
+    ) + sum((degree + 1) * sizes[degree] for degree in range(value.max_degree))
+    labels = sum(len(label) for level in value.sets for label in level)
+    return sum(sizes) + table_entries + labels
 
 
 def _naturality_work(value: TruncatedSimplicialMap) -> int:
@@ -146,21 +155,27 @@ def _preflight(request: SimplicialMapPreimageRequest) -> None:
             message="the pullback and its input relation checks exceed the work bound",
         )
 
-    source_bytes = len(source.model_dump_json().encode("utf-8"))
-    target_bytes = len(target.model_dump_json().encode("utf-8"))
-    subset_bytes = len(request.target_subset.model_dump_json().encode("utf-8"))
-    map_bytes = len(value.model_dump_json().encode("utf-8"))
-    # The result retains both input relations, the source and target ambient
-    # carriers in their inclusions, and two induced maps. Index rows cannot be
-    # wider than the already-admitted source, target, or subset axes.
-    output_bytes = (
-        4 * source_bytes + 4 * target_bytes + 2 * subset_bytes + 2 * map_bytes + 4_096
+    source_cells = _carrier_cells(source)
+    target_cells = _carrier_cells(target)
+    subset_cells = _carrier_cells(selected_target)
+    input_map_cells = sum(map(len, value.maps)) + sum(map(len, target_inclusion.maps))
+    # The result retains the source and target ambient carriers twice, the
+    # selected subset twice, and the two input maps plus the induced preimage
+    # and restriction rows. Index rows cannot be wider than the already-admitted
+    # source, target, or subset axes.
+    output_cells = (
+        4 * source_cells
+        + 4 * target_cells
+        + 2 * subset_cells
+        + 2 * input_map_cells
+        + 2 * (sum(sizes) + sum(subset_sizes))
+        + 4_096
     )
-    if output_bytes > _MAX_PREIMAGE_OUTPUT_BYTES:
+    if output_cells > _MAX_PREIMAGE_OUTPUT_CELLS:
         raise OperationResourceAdmissionError(
             location=("simplicial_map",),
             code="simplicial_map.preimage_output_budget",
-            message="the simplicial-map preimage result exceeds the JSON output bound",
+            message="the simplicial-map preimage result exceeds the admitted cell bound",
         )
 
 

@@ -694,7 +694,9 @@ class MinimizeResult(MinimizeRequest):
 
     def _require_sample_agreement(self) -> None:
         alphabet = self.transducer.input_alphabet_size
-        if alphabet <= 1:
+        if alphabet == 0:
+            expected_words = 1  # Only the empty word exists over the empty alphabet.
+        elif alphabet == 1:
             expected_words = self.sample_max_length + 1
         else:
             expected_words = sum(

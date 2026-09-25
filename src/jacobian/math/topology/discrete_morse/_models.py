@@ -632,9 +632,15 @@ class IntegerMorseComplexResult(StrictModel):
                 "integer_morse_degree_axes",
                 "integer Morse chain degrees must match critical-cell dimensions",
             )
-        if self.chain_complex.basis_sizes != tuple(
+        axis_counts = tuple(
             len(basis.cells) for basis in self.critical_cells_by_dimension
-        ):
+        )
+        if self.critical_profile.counts_by_dimension != axis_counts:
+            raise _validation_error(
+                "integer_morse_profile_counts",
+                "critical profile counts must match the labeled critical-cell axes",
+            )
+        if self.chain_complex.basis_sizes != axis_counts:
             raise _validation_error(
                 "integer_morse_basis_sizes",
                 "integer Morse chain ranks must match the labeled critical-cell axes",

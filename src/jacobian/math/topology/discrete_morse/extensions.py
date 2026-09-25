@@ -15,6 +15,9 @@ from jacobian.math.topology._models import (
     SimplicialComplexRequest,
     canonical_complex,
 )
+from jacobian.math.topology._request_admission import (
+    require_canonical_complex_admission,
+)
 from jacobian.math.topology.discrete_morse._models import (
     DiscreteMorseMatchingResult,
     MatchingPair,
@@ -75,20 +78,17 @@ def _first_free_pair(
     facets: set[tuple[str, ...]],
 ) -> tuple[tuple[str, ...], tuple[str, ...]] | None:
     """Return the lexicographically first free face/facet pair."""
-    owners: dict[tuple[str, ...], list[tuple[str, ...]]] = {}
-    for coface in facets:
-        for position in range(len(coface)):
-            face = coface[:position] + coface[position + 1 :]
-            if face:
-                owners.setdefault(face, []).append(coface)
-    return min(
-        (
-            (face, containing[0])
-            for face, containing in owners.items()
-            if len(containing) == 1
-        ),
-        default=None,
+    candidates = sorted(
+        face
+        for coface in facets
+        for position in range(len(coface))
+        if (face := coface[:position] + coface[position + 1 :])
     )
+    for face in candidates:
+        containing = [facet for facet in facets if set(face).issubset(facet)]
+        if len(containing) == 1 and len(containing[0]) == len(face) + 1:
+            return face, containing[0]
+    return None
 
 
 def _remove_free_pair(
@@ -110,13 +110,14 @@ def _remove_free_pair(
             facets.add(ridge)
 
 
-def greedy_collapse(request: GreedyCollapseRequest) -> CollapseSequenceResult:
+def greedy_collapse(complex_: FiniteSimplicialComplex) -> CollapseSequenceResult:
     """Return a canonical lexicographic sequence until no free pair remains.
 
     This is a deterministic maximal collapse, not a minimum-size result or a
     claim of noncollapsibility, contractibility, or any other homotopy theorem.
     """
-    source = canonicalize(request.complex.vertices, request.complex.facets).complex
+    require_canonical_complex_admission(complex_)
+    source = complex_
     max_steps = min(MAX_COLLAPSE_SEQUENCE_STEPS, source.closure_size // 2)
     # Per step: at most eight ridge-owner inserts, eight candidate reads, and
     # eight exposed-ridge containment scans over at most source.closure_size

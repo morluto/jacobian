@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
+from typing import Literal
+
 import pytest
 
 from jacobian.catalog.models import OperationDomainValidationError
@@ -60,7 +63,7 @@ def _matmul(left: Matrix, right: Matrix) -> Matrix:
     )
 
 
-def tuple_sum(values) -> Gaussian:
+def tuple_sum(values: Iterable[Gaussian]) -> Gaussian:
     result = ZERO
     for value in values:
         result = _gadd(result, value)
@@ -140,15 +143,15 @@ def _pauli(
     ),
 )
 def test_group_transport_matches_independent_dense_matrix_conjugation(
-    gate, axes, normalization
-):
+    gate: Literal["H", "S", "CNOT"], axes: tuple[str, ...], normalization: int
+) -> None:
     register = QubitRegister(qubit_ids=("q0", "q1"))
     # Independent Z(q0), X(q1) checks span a commuting exact group.
     source_generators = (
         _pauli(register, (0, 0), (1, 0)),
         _pauli(register, (0, 1), (0, 0)),
     )
-    group = ExactStabilizerGroup(qubit_register=register, generators=source_generators)
+    group = ExactStabilizerGroup(register=register, generators=source_generators)
     result = conjugate_stabilizer_group(
         StabilizerCliffordTransportRequest(group=group, gate=gate, qubits=axes)
     )
@@ -159,9 +162,9 @@ def test_group_transport_matches_independent_dense_matrix_conjugation(
         assert _scale(_pauli_matrix(transformed), (normalization, 0)) == expected
 
 
-def test_empty_group_transports_as_trivial_group_and_roundtrips():
+def test_empty_group_transports_as_trivial_group_and_roundtrips() -> None:
     register = QubitRegister(qubit_ids=("q0",))
-    group = ExactStabilizerGroup(qubit_register=register, generators=())
+    group = ExactStabilizerGroup(register=register, generators=())
     result = conjugate_stabilizer_group(
         StabilizerCliffordTransportRequest(group=group, gate="H", qubits=("q0",))
     )
@@ -169,37 +172,125 @@ def test_empty_group_transports_as_trivial_group_and_roundtrips():
     assert ExactStabilizerGroup.model_validate_json(result.model_dump_json()) == result
 
 
-def test_owner_local_manifest_publishes_the_transport_operation():
+def test_owner_local_manifest_publishes_the_transport_operation() -> None:
     assert tuple(tool.operation_id for tool in TOOLS) == (
         "quantum.stabilizer.clifford_gate.conjugate.compute",
     )
 
 
-def test_redundant_source_family_is_canonicalized_before_transport():
+def test_redundant_source_family_is_reduced_before_transport() -> None:
     register = QubitRegister(qubit_ids=("q0",))
     z = _pauli(register, (0,), (1,))
-    group = ExactStabilizerGroup(qubit_register=register, generators=(z, z))
+    group = ExactStabilizerGroup(register=register, generators=(z, z))
     result = conjugate_stabilizer_group(
         StabilizerCliffordTransportRequest(group=group, gate="H", qubits=("q0",))
     )
     assert result.generators == (_pauli(register, (1,), (0,)),)
 
 
-def test_dependent_generators_with_minus_identity_are_rejected():
+def test_independent_family_order_follows_the_source_presentation() -> None:
+    register = QubitRegister(qubit_ids=("q0", "q1"))
+    z0 = _pauli(register, (0, 0), (1, 0))
+    z1 = _pauli(register, (0, 0), (0, 1))
+    first = conjugate_stabilizer_group(
+        StabilizerCliffordTransportRequest(
+            group=ExactStabilizerGroup(register=register, generators=(z0, z1)),
+            gate="H",
+            qubits=("q0",),
+        )
+    )
+    second = conjugate_stabilizer_group(
+        StabilizerCliffordTransportRequest(
+            group=ExactStabilizerGroup(register=register, generators=(z1, z0)),
+            gate="H",
+            qubits=("q0",),
+        )
+    )
+    # H Z(q0) H† = X(q0) while Z(q1) is untouched. Both results present the
+    # same subgroup, but the retained family is not canonicalized, so the
+    # serialization follows the source order instead of acting as identity.
+    assert first.generators == (_pauli(register, (1, 0), (0, 0)), z1)
+    assert second.generators == (z1, _pauli(register, (1, 0), (0, 0)))
+    assert first.generators != second.generators
+
+
+def test_request_schema_publishes_admission_limits() -> None:
+    limits = StabilizerCliffordTransportRequest.model_json_schema()["admission_limits"]
+    assert limits == {
+        "max_qubits": 32,
+        "max_source_generators": 64,
+        "max_gate_count": 1,
+        "max_work_units": 1_000_000,
+        "max_result_compact_json_bytes": 65_536,
+    }
+
+
+def test_forged_group_register_is_rejected_before_native_dereference() -> None:
+    forged = ExactStabilizerGroup.model_construct(generators=())
+    request = StabilizerCliffordTransportRequest.model_construct(
+        group=forged, gate="H", qubits=("q0",)
+    )
+    with pytest.raises(OperationDomainValidationError) as raised:
+        conjugate_stabilizer_group(request)
+    assert raised.value.errors()[0]["type"] == (
+        "quantum.stabilizer_clifford.invalid_register"
+    )
+
+
+def test_forged_generator_fields_are_rejected_before_native_dereference() -> None:
+    register = QubitRegister(qubit_ids=("q0",))
+    forged = ExactQubitPauli.model_construct(
+        phase_free=PhaseFreeQubitPauli.model_construct(qubit_register=register),
+        phase=0,
+    )
+    group = ExactStabilizerGroup.model_construct(
+        qubit_register=register, generators=(forged,)
+    )
+    request = StabilizerCliffordTransportRequest.model_construct(
+        group=group, gate="H", qubits=("q0",)
+    )
+    with pytest.raises(OperationDomainValidationError) as raised:
+        conjugate_stabilizer_group(request)
+    assert raised.value.errors()[0]["type"] == (
+        "quantum.stabilizer_clifford.invalid_group"
+    )
+
+
+def test_forged_request_axes_are_rejected_before_native_dereference() -> None:
+    register = QubitRegister(qubit_ids=("q0",))
+    z = _pauli(register, (0,), (1,))
+    group = ExactStabilizerGroup(register=register, generators=(z,))
+    request = StabilizerCliffordTransportRequest.model_construct(group=group)
+    with pytest.raises(OperationDomainValidationError) as raised:
+        conjugate_stabilizer_group(request)
+    assert raised.value.errors()[0]["type"] == (
+        "quantum.stabilizer_clifford.invalid_gate"
+    )
+    request = StabilizerCliffordTransportRequest.model_construct(
+        group=group, gate="H", qubits=["q0"]
+    )
+    with pytest.raises(OperationDomainValidationError) as raised:
+        conjugate_stabilizer_group(request)
+    assert raised.value.errors()[0]["type"] == (
+        "quantum.stabilizer_clifford.invalid_axes"
+    )
+
+
+def test_dependent_generators_with_minus_identity_are_rejected() -> None:
     register = QubitRegister(qubit_ids=("q0",))
     z = _pauli(register, (0,), (1,))
     minus_z = _pauli(register, (0,), (1,), phase=2)
-    group = ExactStabilizerGroup(qubit_register=register, generators=(z, minus_z))
+    group = ExactStabilizerGroup(register=register, generators=(z, minus_z))
     with pytest.raises(OperationDomainValidationError):
         conjugate_stabilizer_group(
             StabilizerCliffordTransportRequest(group=group, gate="H", qubits=("q0",))
         )
 
 
-def test_cnot_axis_roles_are_directional():
+def test_cnot_axis_roles_are_directional() -> None:
     register = QubitRegister(qubit_ids=("control", "target"))
     source = _pauli(register, (1, 0), (0, 0))
-    group = ExactStabilizerGroup(qubit_register=register, generators=(source,))
+    group = ExactStabilizerGroup(register=register, generators=(source,))
     result = conjugate_stabilizer_group(
         StabilizerCliffordTransportRequest(
             group=group, gate="CNOT", qubits=("control", "target")

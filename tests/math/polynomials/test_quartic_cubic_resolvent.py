@@ -232,3 +232,21 @@ def test_galois_group_consequences_match_classical_criteria() -> None:
             _evaluate([c.as_fraction() for c in split.resolvent.coefficients], root)
             == 0
         )
+
+
+def test_maximally_admitted_coefficient_digits_fit_preflight() -> None:
+    from jacobian.math.polynomials._quartic_resolvent import (
+        MAX_QUARTIC_RESOLVENT_INPUT_DIGITS,
+        MAX_QUARTIC_RESOLVENT_OUTPUT_DIGITS,
+        MAX_QUARTIC_RESOLVENT_WORK,
+    )
+
+    digits = MAX_QUARTIC_RESOLVENT_INPUT_DIGITS
+    assert digits == 306
+    assert 32 * digits * digits <= MAX_QUARTIC_RESOLVENT_WORK
+    assert 8 * digits + 32 <= MAX_QUARTIC_RESOLVENT_OUTPUT_DIGITS
+    # 257-digit components, previously rejected despite fitting both bounds.
+    value = 10**256
+    compute_quartic_cubic_resolvent(
+        _monic((Fraction(value), Fraction(0), Fraction(0), Fraction(0), Fraction(1)))
+    )

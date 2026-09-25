@@ -21,9 +21,13 @@ from jacobian.math.polynomials.values import (
     monic_polynomial_from_coefficients,
 )
 
-MAX_QUARTIC_RESOLVENT_INPUT_DIGITS = 256
 MAX_QUARTIC_RESOLVENT_OUTPUT_DIGITS = 4_096
 MAX_QUARTIC_RESOLVENT_WORK = 3_000_000
+# Derive the request ceiling from the kernel admission envelope.
+MAX_QUARTIC_RESOLVENT_INPUT_DIGITS = min(
+    MAX_QUARTIC_RESOLVENT_OUTPUT_DIGITS,
+    int((MAX_QUARTIC_RESOLVENT_WORK // 32) ** 0.5),
+)
 
 
 def _digits(value: int) -> int:
@@ -61,7 +65,7 @@ class QuarticCubicResolventRequest(StrictModel):
         ):
             raise PydanticCustomError(
                 "polynomial.quartic_resolvent.input_digits",
-                "quartic coefficient components exceed the 256-digit input bound",
+                "quartic coefficient components exceed the admitted input-digit bound",
             )
         return self
 
@@ -110,7 +114,7 @@ def _preflight(
         ) from exc
     coefficients = parsed.coefficients
     # Four fixed-degree products and two additions: charge conservatively before
-    # constructing any products. At 256 input digits the largest unreduced
+    # constructing any products. At the admitted input-digit ceiling the largest unreduced
     # numerator/denominator envelope is below 2,100 digits.
     digits = max(_coefficient_digits(value) for value in coefficients)
     work_bound = 32 * digits * digits

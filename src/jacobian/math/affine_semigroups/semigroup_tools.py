@@ -9,6 +9,11 @@ from jacobian.math.affine_semigroups.atoms import (
     AffineMinimalGeneratorsRequest,
     minimal_generators,
 )
+from jacobian.math.affine_semigroups.fundamental_holes import (
+    AffineSemigroupFundamentalHoles,
+    AffineSemigroupFundamentalHolesRequest,
+    fundamental_holes,
+)
 from jacobian.math.affine_semigroups.group_lattice import (
     AffineGroupLattice,
     compute_group_lattice,
@@ -47,6 +52,21 @@ from jacobian.math.affine_semigroups.semigroup_models import (
 
 def _group_lattice(r: AffineGroupLatticeRequest) -> AffineGroupLattice:
     return compute_group_lattice(r.configuration)
+
+
+def _fundamental_holes(
+    request: AffineSemigroupFundamentalHolesRequest,
+) -> AffineSemigroupFundamentalHoles:
+    try:
+        return fundamental_holes(request.semigroup)
+    except (OperationResourceAdmissionError, OperationDomainValidationError):
+        raise
+    except (TypeError, ValueError, IndexError, OverflowError) as exc:
+        raise OperationDomainValidationError(
+            location=("semigroup",),
+            code="affine_semigroup.fundamental_holes",
+            message=str(exc),
+        ) from exc
 
 
 def _minimal_generators(
@@ -187,7 +207,56 @@ _MINIMAL_GENERATOR_TOOL = MathTool(
     ),
 )
 
+_FUNDAMENTAL_HOLES_TOOL = MathTool(
+    operation_id="affine_semigroup.fundamental_holes.compute",
+    title="Compute fundamental holes of a positive affine semigroup",
+    description=(
+        "Return the Q-minimal holes h in cone(S) intersect gp(S): those for "
+        "which no nonzero s in S has h-s in cone(S) intersect gp(S). Every "
+        "hole is a fundamental hole plus a semigroup element. This implementation "
+        "admits full-rank pointed cones in two ambient dimensions and bounds the "
+        "containing half-open parallelogram before lattice-point enumeration."
+    ),
+    request_type=AffineSemigroupFundamentalHolesRequest,
+    result_type=AffineSemigroupFundamentalHoles,
+    run=_fundamental_holes,
+    tags=("affine-semigroup", "fundamental-holes", "normalization", "exact"),
+    discovery_terms=(
+        "fundamental holes of an affine semigroup",
+        "minimal generators of the normalization difference",
+        "finite Q-minimal saturation holes",
+        "holes that generate all semigroup holes by translation",
+    ),
+    examples=(
+        OperationExample(
+            name="fundamental_hole_parity_semigroup",
+            description=(
+                "For generators (2,0), (0,2), (1,1), (1,0), the only "
+                "fundamental hole is (0,1); every other hole is obtained "
+                "by adding (0,2)."
+            ),
+            input={
+                "semigroup": {
+                    "configuration": {
+                        "row_labels": ["x", "y"],
+                        "generator_labels": ["g0", "g1", "g2", "g3"],
+                        "entries": [
+                            ["2", "0", "1", "1"],
+                            ["0", "2", "1", "0"],
+                        ],
+                    },
+                    "grading": [
+                        {"num": "1", "den": "1"},
+                        {"num": "1", "den": "1"},
+                    ],
+                }
+            },
+        ),
+    ),
+)
+
 TOOLS = (
+    _FUNDAMENTAL_HOLES_TOOL,
     _MINIMAL_GENERATOR_TOOL,
     MathTool(
         operation_id="affine_semigroup.holes_through_degree.compute",

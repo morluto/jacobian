@@ -39,6 +39,11 @@ from jacobian.math.gauge.finite_group import (
 from jacobian.math.gauge.finite_group_complex import (
     construct_finite_group_gauge_complex,
 )
+from jacobian.math.gauge.finite_group_observables import (
+    FiniteGroupConjugacyProfile,
+    FiniteGroupConjugacyProfileRequest,
+    finite_group_holonomy_conjugacy_profile,
+)
 from jacobian.math.gauge.observables import permutation_wilson_trace
 from jacobian.math.gauge.operations import (
     gauge_transform,
@@ -93,6 +98,12 @@ def _run_finite_group_holonomy(
     request: FiniteGroupGaugeHolonomyRequest,
 ) -> FiniteGroupGaugeHolonomyResult:
     return finite_group_gauge_holonomy(request)
+
+
+def _run_finite_group_conjugacy_profile(
+    request: FiniteGroupConjugacyProfileRequest,
+) -> FiniteGroupConjugacyProfile:
+    return finite_group_holonomy_conjugacy_profile(request)
 
 
 def _run_finite_group_basepoint_transport(
@@ -455,6 +466,25 @@ TOOLS = (
         discovery_terms=(
             "finite group lattice gauge holonomy",
             "table group edge transport",
+        ),
+    ),
+    MathTool(
+        operation_id="lattice_gauge.holonomy.conjugacy_profile.compute",
+        title="Compute a finite-group loop holonomy conjugacy class",
+        description=(
+            "For a source-bound closed loop over a finite multiplication-table "
+            "group, return the complete exact conjugacy class of its holonomy. "
+            "Conjugates are canonical element indices in the retained group "
+            "parent; the least index is the class representative."
+        ),
+        request_type=FiniteGroupConjugacyProfileRequest,
+        result_type=FiniteGroupConjugacyProfile,
+        run=_run_finite_group_conjugacy_profile,
+        tags=("lattice-gauge", "finite-group", "holonomy", "conjugacy", "exact"),
+        discovery_terms=(
+            "finite-group Wilson conjugacy profile",
+            "conjugacy class of lattice loop holonomy",
+            "gauge-invariant finite-group loop observable",
         ),
     ),
     MathTool(

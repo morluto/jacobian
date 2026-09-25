@@ -53,6 +53,11 @@ from jacobian.math.gauge.finite_group import (
 from jacobian.math.gauge.finite_group_complex import (
     construct_finite_group_gauge_complex,
 )
+from jacobian.math.gauge.finite_group_observables import (
+    FiniteGroupConjugacyProfile,
+    FiniteGroupConjugacyProfileRequest,
+    finite_group_holonomy_conjugacy_profile,
+)
 from jacobian.math.gauge.observables import permutation_wilson_trace
 from jacobian.math.gauge.operations import (
     gauge_transform,
@@ -67,6 +72,8 @@ from jacobian.math.gauge.su2 import (
 )
 
 __all__ = [
+    "FiniteGroupConjugacyProfile",
+    "FiniteGroupConjugacyProfileRequest",
     "FiniteGroupGaugeBasepointTransportRequest",
     "FiniteGroupGaugeBasepointTransportResult",
     "FiniteGroupGaugeComplex",
@@ -112,6 +119,7 @@ __all__ = [
     "finite_group_gauge_curvature",
     "finite_group_gauge_holonomy",
     "finite_group_gauge_transform",
+    "finite_group_holonomy_conjugacy_profile",
     "gauge_transform",
     "loop_family_holonomies",
     "path_holonomy",

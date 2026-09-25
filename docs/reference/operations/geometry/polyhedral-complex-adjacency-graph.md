@@ -3,7 +3,8 @@
 `polyhedral_complex.adjacency_graph.compute` takes a finite family of bounded
 rational maximal cells and returns their exact facet-adjacency graph. It first
 uses the canonical face-closure operation, so the cells must share one labelled
-ambient coordinate space and meet face-to-face.
+ambient coordinate space, be full-dimensional there (a pure complex), and meet
+face-to-face. A lower-dimensional cell presentation is rejected by closure.
 
 The result contains a reusable `SimpleUndirectedGraph`, exact vertex-to-cell
 geometry, and one exact shared-face record per edge. Two cells are adjacent

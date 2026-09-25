@@ -8,7 +8,10 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.geometry.polytopes._models import (
     RationalCoordinateSpace,
     RationalPolytopeVertex,
@@ -34,6 +37,23 @@ def _cell(points: tuple[tuple[int, int], ...]) -> RationalVPolytope:
                 ),
             )
             for label, point in zip(("a", "b", "c"), points, strict=True)
+        ),
+    )
+
+
+def _segment() -> RationalVPolytope:
+    return RationalVPolytope(
+        space=RationalCoordinateSpace(axes=("x", "y")),
+        vertices=tuple(
+            RationalPolytopeVertex(
+                vertex_id=label,
+                coordinates=tuple(
+                    CanonicalRational.from_fraction(Fraction(value)) for value in point
+                ),
+            )
+            for label, point in zip(
+                ("a", "b", "c"), ((3, 3), (4, 3), (5, 3)), strict=True
+            )
         ),
     )
 
@@ -82,6 +102,11 @@ def test_adjacency_admits_only_bounded_cell_families() -> None:
         OperationResourceAdmissionError, match="16-cell adjacency envelope"
     ):
         polytopal_complex_adjacency_graph(cells)
+
+
+def test_adjacency_requires_the_pure_full_dimensional_closure_contract() -> None:
+    with pytest.raises(OperationDomainValidationError, match="full-dimensional"):
+        polytopal_complex_adjacency_graph((_cell(((0, 0), (1, 0), (0, 1))), _segment()))
 
 
 def test_multi_digit_cell_ids_keep_numeric_vertices_and_lexical_graph_edges() -> None:

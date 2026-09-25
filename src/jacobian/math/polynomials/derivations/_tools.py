@@ -16,10 +16,13 @@ from jacobian.math.polynomials.derivations._models import (
     PolynomialGaAction,
 )
 from jacobian.math.polynomials.derivations._stable_models import (
+    PolynomialGaFixedSubspace,
+    PolynomialGaFixedSubspaceRequest,
     PolynomialGaStableSubrepresentation,
     PolynomialGaStableSubrepresentationRequest,
 )
 from jacobian.math.polynomials.derivations._stable_operations import (
+    ga_fixed_subspace,
     ga_stable_subrepresentation,
 )
 from jacobian.math.polynomials.derivations._weight_models import (
@@ -219,6 +222,63 @@ _TOOLS += (
 )
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
+    MathTool(
+        operation_id="algebraic_group.ga.fixed_subspace.compute",
+        title="Compute fixed polynomials in a finite Ga-subrepresentation",
+        description=(
+            "Given a serialized finite-dimensional Ga-stable polynomial span, "
+            "recheck its action matrix and return a deterministic exact basis "
+            "for the fixed subspace, with coordinates in the supplied basis. "
+            "Over QQ this is the kernel of the coefficient of t in the action "
+            "matrix. The supplied representation dimension is at most 32; "
+            "polynomial matrix reconstruction uses the stable-subrepresentation "
+            "operation's bounded admission."
+        ),
+        request_type=PolynomialGaFixedSubspaceRequest,
+        result_type=PolynomialGaFixedSubspace,
+        run=lambda request: ga_fixed_subspace(request.subrepresentation),
+        tags=("algebraic-group", "ga", "fixed-subspace", "invariants", "exact"),
+        discovery_terms=(
+            "Ga fixed polynomials",
+            "additive group invariants in a finite subrepresentation",
+            "kernel of infinitesimal representation",
+        ),
+        examples=(
+            OperationExample(
+                name="translation_fixes_constants",
+                description=(
+                    "For the translation action x -> x+t on the span (1,x), "
+                    "the fixed subspace is the constants, represented by "
+                    "coordinate vector (1,0)."
+                ),
+                input={
+                    "subrepresentation": {
+                        "action": {
+                            "source_variables": ["x"],
+                            "parameter": "t",
+                            "generator_images": [
+                                _poly(["x", "t"], [(1, [1, 0]), (1, [0, 1])])
+                            ],
+                        },
+                        "basis": [
+                            _poly(["x"], [(1, [0])]),
+                            _poly(["x"], [(1, [1])]),
+                        ],
+                        "action_matrix": [
+                            [
+                                _poly(["t"], [(1, [0])]),
+                                _poly(["t"], [(1, [1])]),
+                            ],
+                            [
+                                _poly(["t"], []),
+                                _poly(["t"], [(1, [0])]),
+                            ],
+                        ],
+                    }
+                },
+            ),
+        ),
+    ),
     *_TOOLS,
     MathTool(
         operation_id="algebraic_group.ga.stable_subrepresentation.compute",

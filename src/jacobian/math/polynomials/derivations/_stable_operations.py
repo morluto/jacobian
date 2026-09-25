@@ -8,6 +8,7 @@ from math import comb, lcm, prod
 
 from pydantic_core import PydanticCustomError
 
+from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -21,6 +22,7 @@ from jacobian.math.polynomials.derivations._models import (
 )
 from jacobian.math.polynomials.derivations._stable_models import (
     MAX_GA_SUBREPRESENTATION_DIMENSION,
+    PolynomialGaFixedSubspace,
     PolynomialGaStableSubrepresentation,
     PolynomialGaStableSubrepresentationRequest,
 )
@@ -38,6 +40,8 @@ MAX_GA_SUBREPRESENTATION_SOURCE_TERMS = 128
 MAX_GA_SUBREPRESENTATION_EXPANSION_WORK = 1_000_000
 MAX_GA_SUBREPRESENTATION_COORDINATE_WORK = 5_000_000
 MAX_GA_SUBREPRESENTATION_COMPOSITION_WORK = 25_000
+MAX_GA_FIXED_KERNEL_WORK = MAX_GA_SUBREPRESENTATION_DIMENSION**3
+MAX_GA_FIXED_COORDINATE_DIGITS = MAX_DERIVATION_COEFFICIENT_DIGITS
 
 _Terms = dict[tuple[int, ...], Fraction]
 
@@ -693,4 +697,213 @@ def ga_stable_subrepresentation(
     )
 
 
-__all__ = ["ga_stable_subrepresentation"]
+def _infinitesimal_matrix(
+    representation: PolynomialGaStableSubrepresentation,
+) -> list[list[Fraction]]:
+    size = len(representation.basis)
+    matrix = [[Fraction(0) for _ in range(size)] for _ in range(size)]
+    for row in range(size):
+        for column in range(size):
+            for term in representation.action_matrix[row][column].polynomial.terms:
+                if term.exponents == (1,):
+                    matrix[row][column] = term.coefficient.as_fraction()
+                    break
+    return matrix
+
+
+def _rational_kernel_basis(matrix: list[list[Fraction]]) -> list[tuple[Fraction, ...]]:
+    """Return a deterministic nullspace basis by exact reduced row elimination."""
+    size = len(matrix)
+    pivot_columns: list[int] = []
+    pivot_row = 0
+    for column in range(size):
+        selected = next(
+            (row for row in range(pivot_row, size) if matrix[row][column]), None
+        )
+        if selected is None:
+            continue
+        matrix[pivot_row], matrix[selected] = matrix[selected], matrix[pivot_row]
+        pivot = matrix[pivot_row][column]
+        matrix[pivot_row] = [value / pivot for value in matrix[pivot_row]]
+        for row in range(size):
+            if row != pivot_row and matrix[row][column]:
+                factor = matrix[row][column]
+                matrix[row] = [
+                    value - factor * pivot_value
+                    for value, pivot_value in zip(
+                        matrix[row], matrix[pivot_row], strict=True
+                    )
+                ]
+        pivot_columns.append(column)
+        pivot_row += 1
+        if pivot_row == size:
+            break
+    pivot_rows = {column: row for row, column in enumerate(pivot_columns)}
+    free_columns = [column for column in range(size) if column not in pivot_rows]
+    basis = []
+    for free in free_columns:
+        vector = [Fraction(0) for _ in range(size)]
+        vector[free] = Fraction(1)
+        for pivot_column, row in pivot_rows.items():
+            vector[pivot_column] = -matrix[row][free]
+        basis.append(tuple(vector))
+    return basis
+
+
+def _fixed_polynomial_basis(
+    representation: PolynomialGaStableSubrepresentation,
+    coordinates: list[tuple[Fraction, ...]],
+) -> tuple[RationalPolynomial, ...]:
+    from math import gcd
+
+    from jacobian.math.polynomials.values import (
+        RationalPolynomialTerm,
+        SparseRationalPolynomial,
+    )
+
+    supports = [
+        {
+            term.exponents
+            for coefficient, polynomial in zip(
+                vector, representation.basis, strict=True
+            )
+            if coefficient
+            for term in polynomial.polynomial.terms
+        }
+        for vector in coordinates
+    ]
+    if sum(map(len, supports)) > 4_096:
+        raise OperationResourceAdmissionError(
+            location=("subrepresentation",),
+            code="polynomial_ga_fixed_subspace.output_terms",
+            message="fixed polynomial representatives exceed the 4096-term envelope",
+        )
+
+    output = []
+    for vector in coordinates:
+        grouped: dict[tuple[int, ...], list[Fraction]] = {}
+        for coordinate, polynomial in zip(vector, representation.basis, strict=True):
+            for term in polynomial.polynomial.terms:
+                if coordinate:
+                    grouped.setdefault(term.exponents, []).append(
+                        coordinate * term.coefficient.as_fraction()
+                    )
+        terms = []
+        for exponents, contributions in grouped.items():
+            denominator = 1
+            for value in contributions:
+                denominator = (
+                    denominator
+                    * value.denominator
+                    // gcd(denominator, value.denominator)
+                )
+            if len(str(denominator)) > 512:
+                raise OperationResourceAdmissionError(
+                    location=("subrepresentation",),
+                    code="polynomial_ga_fixed_subspace.coefficient_growth",
+                    message="fixed polynomial coefficient denominator exceeds 512 digits",
+                )
+            numerator_bound = max(
+                len(str(abs(value.numerator)))
+                + len(str(denominator // value.denominator))
+                for value in contributions
+            ) + len(str(len(contributions)))
+            if numerator_bound > 512:
+                raise OperationResourceAdmissionError(
+                    location=("subrepresentation",),
+                    code="polynomial_ga_fixed_subspace.coefficient_growth",
+                    message="fixed polynomial coefficient numerator exceeds 512 digits",
+                )
+            coefficient = sum(contributions, Fraction(0))
+            if coefficient:
+                terms.append(
+                    RationalPolynomialTerm(
+                        coefficient=CanonicalRational.from_fraction(coefficient),
+                        exponents=exponents,
+                    )
+                )
+        output.append(
+            RationalPolynomial(
+                variables=representation.action.source_variables,
+                polynomial=SparseRationalPolynomial(
+                    terms=tuple(
+                        sorted(terms, key=lambda term: term.exponents, reverse=True)
+                    )
+                ),
+            )
+        )
+    return tuple(output)
+
+
+def ga_fixed_subspace(
+    subrepresentation: PolynomialGaStableSubrepresentation | Mapping[str, object],
+) -> PolynomialGaFixedSubspace:
+    """Compute the exact fixed subspace of a checked finite Ga-representation.
+
+    In characteristic zero, the fixed vectors are the kernel of the coefficient
+    of ``t`` in the representation matrix: differentiating the group law gives
+    ``M'(t)=M(t)M'(0)``, so this kernel is fixed for every parameter value.
+    """
+    from jacobian.math.polynomials.derivations._stable_models import (
+        PolynomialGaStableSubrepresentation,
+    )
+
+    try:
+        claim = (
+            subrepresentation
+            if isinstance(subrepresentation, PolynomialGaStableSubrepresentation)
+            else PolynomialGaStableSubrepresentation.model_validate(subrepresentation)
+        )
+    except (TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("subrepresentation",),
+            code="polynomial_ga_fixed_subspace.request_shape",
+            message="the request must contain a canonical finite Ga-subrepresentation",
+        ) from exc
+
+    # A consumer may rely on the claimed matrix only after checking its defining
+    # relation against the action and basis. The producer has operation-specific
+    # admission for this exact reconstruction.
+    checked = ga_stable_subrepresentation(claim.action, claim.basis)
+    if checked.action_matrix != claim.action_matrix:
+        raise OperationDomainValidationError(
+            location=("subrepresentation", "action_matrix"),
+            code="polynomial_ga_fixed_subspace.unverified_subrepresentation",
+            message="the supplied matrix is not the action matrix of the supplied basis",
+        )
+
+    size = len(checked.basis)
+    if size**3 > MAX_GA_FIXED_KERNEL_WORK:
+        raise OperationResourceAdmissionError(
+            location=("subrepresentation",),
+            code="polynomial_ga_fixed_subspace.kernel_work",
+            message="exact fixed-space elimination exceeds its admitted work budget",
+        )
+    coordinate_vectors = _rational_kernel_basis(_infinitesimal_matrix(checked))
+    if any(
+        max(len(str(abs(value.numerator))), len(str(value.denominator)))
+        > MAX_GA_FIXED_COORDINATE_DIGITS
+        for vector in coordinate_vectors
+        for value in vector
+    ):
+        raise OperationResourceAdmissionError(
+            location=("subrepresentation",),
+            code="polynomial_ga_fixed_subspace.coordinate_growth",
+            message=(
+                "fixed-space coordinates exceed the "
+                f"{MAX_GA_FIXED_COORDINATE_DIGITS}-digit envelope"
+            ),
+        )
+    fixed_basis = _fixed_polynomial_basis(checked, coordinate_vectors)
+
+    return PolynomialGaFixedSubspace.model_construct(
+        subrepresentation=checked,
+        coordinates=tuple(
+            tuple(CanonicalRational.from_fraction(value) for value in vector)
+            for vector in coordinate_vectors
+        ),
+        basis=tuple(fixed_basis),
+    )
+
+
+__all__ = ["ga_fixed_subspace", "ga_stable_subrepresentation"]

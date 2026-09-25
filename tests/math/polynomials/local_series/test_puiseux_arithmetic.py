@@ -83,14 +83,14 @@ def test_puiseux_residue_returns_zero_only_when_minus_one_is_known_absent() -> N
     assert residue_puiseux(source).residue.as_fraction() == 0
 
 
-@pytest.mark.parametrize(
-    ("lower", "precision"),
-    [(Fraction(0), Fraction(2)), (Fraction(-2), Fraction(-1))],
-)
-def test_puiseux_residue_rejects_windows_that_do_not_determine_minus_one(
-    lower: Fraction, precision: Fraction
-) -> None:
-    source = window((), lower=lower, precision=precision)
+def test_puiseux_residue_returns_zero_below_the_known_lower_bound() -> None:
+    source = window(((Fraction(1, 2), 1),), lower=Fraction(0), precision=Fraction(2))
+
+    assert residue_puiseux(source).residue.as_fraction() == 0
+
+
+def test_puiseux_residue_rejects_windows_that_do_not_determine_minus_one() -> None:
+    source = window((), lower=Fraction(-2), precision=Fraction(-1))
 
     with pytest.raises(
         OperationDomainValidationError, match="must contain exponent -1"
@@ -344,7 +344,34 @@ def test_product_rejects_pair_work_before_convolution() -> None:
         multiply_puiseux(left, left)
 
 
-def test_add_result_byte_preflight_accepts_at_boundary_and_rejects_above() -> None:
+def _scaled_window(count: int, factor: int, precision: int) -> TruncatedPuiseuxWindow:
+    return window(
+        tuple((Fraction(i), factor + 2 * i + 1) for i in range(count)),
+        precision=Fraction(precision),
+    )
+
+
+def test_product_result_envelope_is_capped_at_the_transport_ceiling() -> None:
+    # A one-term factor times a 4,000-term factor of ~1,500-digit
+    # coefficients passes every representation bound (work, support, and the
+    # 4,096-digit component bound) and yields 4,000 results with ~3,000-digit
+    # numerators: about 12 MB of canonical decimal output, above the 10 MiB
+    # encoded-result envelope these operations promise. Admission must reject
+    # it before constructing the result instead of failing serialization.
+    left = _scaled_window(1, 10**1_499, 4_000)
+    right = _scaled_window(4_000, 10**1_499, 4_000)
+
+    with pytest.raises(OperationResourceAdmissionError, match="digit envelope"):
+        multiply_puiseux(left, right)
+
+    # The same shape one envelope-step below the ceiling stays admitted.
+    admitted = multiply_puiseux(left, _scaled_window(3_000, 10**1_499, 4_000))
+    assert len(admitted.terms) == 3_000
+
+
+def test_add_result_envelope_accepts_sparse_terms_and_rejects_above_term_bound() -> (
+    None
+):
     left_at_boundary = window(
         tuple((Fraction(2 * i), 1) for i in range(619)),
         precision=Fraction(2_000),
@@ -355,15 +382,25 @@ def test_add_result_byte_preflight_accepts_at_boundary_and_rejects_above() -> No
     )
     assert len(add_puiseux(left_at_boundary, right_at_boundary).terms) == 1_238
 
+    # Small coefficients use their actual widths, so a sparse sum below the
+    # retained-term bound is admitted even though a worst-case digit estimate
+    # would reject it.
     left_over = window(
         tuple((Fraction(2 * i), 1) for i in range(620)),
         precision=Fraction(2_000),
     )
-    right_over = right_at_boundary
-    with pytest.raises(
-        OperationResourceAdmissionError, match="serialized-size envelope"
-    ):
-        add_puiseux(left_over, right_over)
+    assert len(add_puiseux(left_over, right_at_boundary).terms) == 1_239
+
+    left_huge = window(
+        tuple((Fraction(2 * i), 1) for i in range(2_500)),
+        precision=Fraction(6_000),
+    )
+    right_huge = window(
+        tuple((Fraction(2 * i + 1), 1) for i in range(2_500)),
+        precision=Fraction(6_000),
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="retained-term bound"):
+        add_puiseux(left_huge, right_huge)
 
 
 def test_single_near_limit_rational_is_copied_by_add_and_product_by_one() -> None:

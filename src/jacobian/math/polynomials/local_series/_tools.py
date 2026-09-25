@@ -3,6 +3,7 @@
 from collections.abc import Callable
 from typing import Any
 
+from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.polynomials.series._models import TruncatedSeries
 
@@ -88,13 +89,13 @@ def _example_series() -> dict[str, object]:
 def _example_puiseux(coefficient: int = 1) -> dict[str, object]:
     return TruncatedPuiseuxWindow(
         variable="t",
-        valuation_lower={"num": 0, "den": 1},
-        precision={"num": 2, "den": 1},
+        valuation_lower=CanonicalRational(num=0, den=1),
+        precision=CanonicalRational(num=2, den=1),
         ramification_index=2,
         terms=(
             PuiseuxTerm(
-                exponent={"num": 1, "den": 2},
-                coefficient={"num": coefficient, "den": 1},
+                exponent=CanonicalRational(num=1, den=2),
+                coefficient=CanonicalRational(num=coefficient, den=1),
             ),
         ),
     ).model_dump(mode="json")
@@ -715,13 +716,13 @@ TOOLS: MathTools = (
                 input={
                     "series": TruncatedPuiseuxWindow(
                         variable="t",
-                        valuation_lower={"num": -2, "den": 1},
-                        precision={"num": 1, "den": 1},
+                        valuation_lower=CanonicalRational(num=-2, den=1),
+                        precision=CanonicalRational(num=1, den=1),
                         ramification_index=1,
                         terms=(
                             PuiseuxTerm(
-                                exponent={"num": -1, "den": 1},
-                                coefficient={"num": 3, "den": 2},
+                                exponent=CanonicalRational(num=-1, den=1),
+                                coefficient=CanonicalRational(num=3, den=2),
                             ),
                         ),
                     ).model_dump(mode="json")

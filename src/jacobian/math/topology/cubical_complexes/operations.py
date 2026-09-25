@@ -58,7 +58,7 @@ from jacobian.math.topology.cubical_complexes._models import (
     MAX_CUBICAL_GRAPH_VERTICES,
     MAX_CUBICAL_GRAPH_WORK,
     MAX_CUBICAL_PRODUCT_RESULT_BYTES,
-    MAX_CUBICAL_SKELETON_RESULT_BYTES,
+    MAX_CUBICAL_SKELETON_COORDINATE_DIGITS,
     MAX_DIM,
     MAX_FACE_CELLS,
     MAX_LOWER_STAR_CELLS,
@@ -664,21 +664,20 @@ def skeleton(
         for coordinate in interval
     )
     face_bound = sum(3**cell.dimension for cell in set(validated_cells))
-    encoded_cell_bound = len(set(validated_cells)) + face_bound
-    estimated_bytes = (
-        encoded_cell_bound
-        * len(validated_cells[0].intervals)
-        * (2 * coordinate_digits + 8)
-        + 512
-    )
-    if (
-        face_bound > MAX_FACE_CELLS
-        or estimated_bytes > MAX_CUBICAL_SKELETON_RESULT_BYTES
-    ):
+    if coordinate_digits > MAX_CUBICAL_SKELETON_COORDINATE_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("cells",),
+            code="cubical_complex.skeleton_coordinate_digit_budget",
+            message=(
+                "coordinates exceed the "
+                f"{MAX_CUBICAL_SKELETON_COORDINATE_DIGITS}-digit result limit"
+            ),
+        )
+    if face_bound > MAX_FACE_CELLS:
         raise OperationResourceAdmissionError(
             location=("cells",),
             code="cubical_complex.skeleton_result_size",
-            message="skeleton closure and duplicated result exceed the admitted output bound",
+            message="skeleton closure exceeds the admitted output bound",
         )
     complex_, _source_cells = _canonical_complex(validated_cells)
     retained = tuple(

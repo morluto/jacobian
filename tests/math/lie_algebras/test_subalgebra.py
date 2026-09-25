@@ -57,6 +57,45 @@ def test_subspace_that_is_not_closed_is_rejected() -> None:
         lie_subalgebra(SL2, _subspace([[1, 0, 0], [0, 1, 0]]), ["e", "f"])
 
 
+def test_induced_bracket_transports_under_an_invertible_rational_basis_change() -> None:
+    # New ambient basis u=e+h, v=f, w=h. Exact transport gives
+    # [u,v]=w-2v, [u,w]=-2u+2w, [v,w]=2v.
+    changed = FiniteDimensionalLieAlgebra.model_validate(
+        {
+            "basis": ["u", "v", "w"],
+            "structure_constants": [
+                {"i": 0, "j": 1, "k": 1, "coefficient": {"num": -2, "den": 1}},
+                {"i": 0, "j": 1, "k": 2, "coefficient": {"num": 1, "den": 1}},
+                {"i": 0, "j": 2, "k": 0, "coefficient": {"num": -2, "den": 1}},
+                {"i": 0, "j": 2, "k": 2, "coefficient": {"num": 2, "den": 1}},
+                {"i": 1, "j": 2, "k": 1, "coefficient": {"num": 2, "den": 1}},
+            ],
+        }
+    )
+    candidate = LieSubspace.model_validate(
+        {
+            "basis": changed.basis,
+            "generators": {
+                "domain": "QQ",
+                "row_count": 2,
+                "column_count": 3,
+                "entries": [
+                    [{"num": 1, "den": 1}, {"num": 0, "den": 1}, {"num": 0, "den": 1}],
+                    [{"num": 0, "den": 1}, {"num": 0, "den": 1}, {"num": 1, "den": 1}],
+                ],
+            },
+        }
+    )
+
+    result = lie_subalgebra(changed, candidate, ["u", "w"])
+
+    assert [
+        (constant.i, constant.j, constant.k, constant.coefficient.as_fraction())
+        for constant in result.induced.structure_constants
+    ] == [(0, 1, 0, Fraction(-2)), (0, 1, 1, Fraction(2))]
+    # This is the coordinate transform of [e,h]=-2e under e=u-w and h=w.
+
+
 def test_wrong_number_of_induced_basis_labels_is_rejected() -> None:
     with pytest.raises(OperationDomainValidationError, match="one unique basis label"):
         lie_subalgebra(SL2, _subspace([[1, 0, 0], [0, 0, 1]]), ["e"])

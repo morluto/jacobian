@@ -234,3 +234,151 @@ def test_aggregate_polynomial_support_is_admitted_before_expansion(monkeypatch) 
     )
     with pytest.raises(OperationResourceAdmissionError, match="aggregate support"):
         ga_fixed_subspace(stable)
+
+
+def test_malformed_typed_subrepresentation_is_revalidated() -> None:
+    stable = ga_stable_subrepresentation(
+        _translation_action(), (_poly(("x",), ((0,),)), _poly(("x",), ((1,),)))
+    )
+    # model_construct skips validation; the malformed matrix entry would raise
+    # AttributeError from the term loop if the typed instance were trusted.
+    malformed = stable.model_construct(
+        action=stable.action,
+        basis=stable.basis,
+        action_matrix=((("not a polynomial",),), ()),
+    )
+    with pytest.raises(OperationDomainValidationError, match="canonical finite"):
+        ga_fixed_subspace(malformed)
+
+
+def test_oversized_claimed_matrix_is_rejected_before_reconstruction(
+    monkeypatch,
+) -> None:
+    stable = ga_stable_subrepresentation(
+        _translation_action(), (_poly(("x",), ((0,),)), _poly(("x",), ((1,),)))
+    )
+    wide = RationalPolynomial.model_validate(
+        {
+            "variables": ["t"],
+            "polynomial": {
+                "terms": [{"coefficient": {"num": 10**200, "den": 1}, "exponents": [0]}]
+            },
+        }
+    )
+    forged = stable.model_copy(
+        update={
+            "action_matrix": (
+                (wide, stable.action_matrix[0][1]),
+                stable.action_matrix[1],
+            )
+        }
+    )
+
+    def reconstruction_must_not_start(*_args, **_kwargs):
+        raise AssertionError("reconstruction ran before matrix width admission")
+
+    monkeypatch.setattr(
+        _stable_operations, "ga_stable_subrepresentation", reconstruction_must_not_start
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="input envelope"):
+        ga_fixed_subspace(forged)
+
+
+def test_oversized_claimed_matrix_degree_is_rejected_before_reconstruction(
+    monkeypatch,
+) -> None:
+    stable = ga_stable_subrepresentation(
+        _translation_action(), (_poly(("x",), ((0,),)), _poly(("x",), ((1,),)))
+    )
+    high_degree = RationalPolynomial.model_validate(
+        {
+            "variables": ["t"],
+            "polynomial": {
+                "terms": [{"coefficient": {"num": 1, "den": 1}, "exponents": [1_000]}]
+            },
+        }
+    )
+    forged = stable.model_copy(
+        update={
+            "action_matrix": (
+                (high_degree, stable.action_matrix[0][1]),
+                stable.action_matrix[1],
+            )
+        }
+    )
+
+    def reconstruction_must_not_start(*_args, **_kwargs):
+        raise AssertionError("reconstruction ran before matrix degree admission")
+
+    monkeypatch.setattr(
+        _stable_operations, "ga_stable_subrepresentation", reconstruction_must_not_start
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="action envelope"):
+        ga_fixed_subspace(forged)
+
+
+def test_result_byte_admission_charges_admitted_component_widths(monkeypatch) -> None:
+    stable = ga_stable_subrepresentation(
+        _translation_action(), (_poly(("x",), ((0,),)), _poly(("x",), ((1,),)))
+    )
+    monkeypatch.setattr(_stable_operations, "MAX_GA_ACTION_OUTPUT_BYTES", 10**9)
+    narrow = [(Fraction(1), Fraction(0))]
+    wide_component = 10**_stable_operations.MAX_GA_FIXED_COORDINATE_DIGITS - 1
+    wide = [(Fraction(wide_component), Fraction(1))]
+
+    narrow_bytes = _stable_operations._admit_fixed_result_bytes(stable, narrow, 1)
+    wide_bytes = _stable_operations._admit_fixed_result_bytes(stable, wide, 1)
+    assert wide_bytes > narrow_bytes
+    # The wide coordinate adds an admitted 128-digit numerator to one cell.
+    assert (
+        wide_bytes - narrow_bytes
+        == _stable_operations.MAX_GA_FIXED_COORDINATE_DIGITS - 1
+    )
+
+    without_fixed = _stable_operations._admit_fixed_result_bytes(stable, narrow, 0)
+    assert narrow_bytes - without_fixed == _stable_operations.MAX_GA_FIXED_TERM_BYTES
+    # Every fixed term is charged its full admitted 512-digit numerator and
+    # denominator instead of a 384-byte placeholder.
+    assert _stable_operations.MAX_GA_FIXED_TERM_BYTES >= 2 * 512
+
+
+def test_result_byte_envelope_rejects_before_construction(monkeypatch) -> None:
+    stable = ga_stable_subrepresentation(
+        _translation_action(), (_poly(("x",), ((0,),)), _poly(("x",), ((1,),)))
+    )
+    coordinates = [(Fraction(1), Fraction(0))]
+    monkeypatch.setattr(_stable_operations, "MAX_GA_ACTION_OUTPUT_BYTES", 10**9)
+    estimate = _stable_operations._admit_fixed_result_bytes(stable, coordinates, 1)
+
+    monkeypatch.setattr(_stable_operations, "MAX_GA_ACTION_OUTPUT_BYTES", estimate - 1)
+    with pytest.raises(OperationResourceAdmissionError, match="output-byte envelope"):
+        ga_fixed_subspace(stable)
+
+    monkeypatch.setattr(_stable_operations, "MAX_GA_ACTION_OUTPUT_BYTES", estimate)
+    assert ga_fixed_subspace(stable).basis == (_poly(("x",), ((0,),)),)
+
+
+def test_parameter_degree_bound_follows_the_action_chain() -> None:
+    names = ("x", "y", "z")
+    x = _poly(names, ((1, 0, 0),))
+    y = _poly(names, ((0, 1, 0),))
+    z = _poly(names, ((0, 0, 1),))
+    zero = _poly(names, ())
+    action = ga_action_from_derivation(
+        PolynomialDerivation(variables=names, images=(y, z, zero)),
+        ((x, y, z, zero), (y, z, zero), (z, zero)),
+    )
+    stable = ga_stable_subrepresentation(action, (x, y, z))
+    # exp(tD)(x) = x + t y + t^2 z / 2, so the action matrix reaches
+    # parameter degree 2. The claimed-matrix degree envelope must follow the
+    # action (2) rather than the 64-degree source envelope.
+    assert (
+        max(
+            term.exponents[-1]
+            for row in stable.action_matrix
+            for entry in row
+            for term in entry.polynomial.terms
+        )
+        == 2
+    )
+    assert ga_fixed_subspace(stable).basis == (z,)

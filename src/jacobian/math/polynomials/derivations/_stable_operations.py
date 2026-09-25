@@ -51,6 +51,12 @@ MAX_GA_FIXED_INTERMEDIATE_DIGITS = 3 * MAX_GA_FIXED_MINOR_DIGITS + 2
 MAX_GA_FIXED_MATRIX_TERMS = MAX_GA_ACTION_OUTPUT_BYTES // 384
 MAX_GA_FIXED_SUPPORT_TERMS = 4_096
 MAX_GA_FIXED_OUTPUT_COEFFICIENT_DIGITS = 512
+# A retained action-matrix or basis term carries an admitted 128-digit
+# coefficient, while a fixed representative may use the full 512-digit
+# numerator and denominator budgets. Charge the admitted widths rather than a
+# 128-digit placeholder so the estimate cannot understate the serialized size.
+MAX_GA_FIXED_RETAINED_TERM_BYTES = 384
+MAX_GA_FIXED_TERM_BYTES = 2 * MAX_GA_FIXED_OUTPUT_COEFFICIENT_DIGITS + 256
 
 
 def _integer_digits(value: int) -> int:
@@ -841,6 +847,77 @@ def _rational_kernel_basis(matrix: list[list[Fraction]]) -> list[tuple[Fraction,
     return basis
 
 
+def _admit_claimed_action_matrix(
+    representation: PolynomialGaStableSubrepresentation,
+) -> None:
+    """Bound a caller-supplied matrix before reconstruction and comparison.
+
+    The shared wire carrier admits 32,768-digit rational components and
+    exponents, so a term-count check alone would let a mismatched claim drive
+    a full stable-representation reconstruction and an equality comparison
+    over hundreds of millions of digits. Every claimed term must fit the
+    operation's admitted input widths, and the aggregate encoded size must
+    fit the output envelope.
+    """
+    max_image_parameter_degree = max(
+        (
+            term.exponents[-1]
+            for image in representation.action.generator_images
+            for term in image.polynomial.terms
+        ),
+        default=0,
+    )
+    max_basis_degree = max(
+        (
+            sum(term.exponents)
+            for value in representation.basis
+            for term in value.polynomial.terms
+        ),
+        default=0,
+    )
+    degree_bound = max_image_parameter_degree * max_basis_degree
+    term_count = 0
+    encoded_bytes = 0
+    for row in representation.action_matrix:
+        for entry in row:
+            for term in entry.polynomial.terms:
+                numerator_digits = len(str(abs(term.coefficient.num)))
+                denominator_digits = len(str(term.coefficient.den))
+                if (
+                    numerator_digits > MAX_DERIVATION_COEFFICIENT_DIGITS
+                    or denominator_digits > MAX_DERIVATION_COEFFICIENT_DIGITS
+                ):
+                    raise OperationResourceAdmissionError(
+                        location=("subrepresentation", "action_matrix"),
+                        code="polynomial_ga_fixed_subspace.matrix_coefficient_growth",
+                        message=(
+                            "supplied action matrix coefficients exceed the "
+                            f"{MAX_DERIVATION_COEFFICIENT_DIGITS}-digit input "
+                            "envelope"
+                        ),
+                    )
+                if any(exponent > degree_bound for exponent in term.exponents):
+                    raise OperationResourceAdmissionError(
+                        location=("subrepresentation", "action_matrix"),
+                        code="polynomial_ga_fixed_subspace.matrix_degree_growth",
+                        message=(
+                            "supplied action matrix exponents exceed the "
+                            f"{degree_bound}-degree action envelope"
+                        ),
+                    )
+                term_count += 1
+                encoded_bytes += numerator_digits + denominator_digits + 128
+    if (
+        term_count > MAX_GA_FIXED_MATRIX_TERMS
+        or encoded_bytes > MAX_GA_ACTION_OUTPUT_BYTES
+    ):
+        raise OperationResourceAdmissionError(
+            location=("subrepresentation", "action_matrix"),
+            code="polynomial_ga_fixed_subspace.matrix_terms",
+            message="the supplied action matrix exceeds the bounded term envelope",
+        )
+
+
 def _admit_fixed_output_support(
     representation: PolynomialGaStableSubrepresentation,
     coordinates: list[tuple[Fraction, ...]],
@@ -861,6 +938,52 @@ def _admit_fixed_output_support(
             ),
         )
     return candidate_terms
+
+
+def _admit_fixed_result_bytes(
+    representation: PolynomialGaStableSubrepresentation,
+    coordinates: list[tuple[Fraction, ...]],
+    fixed_support_terms: int,
+) -> int:
+    """Bound the serialized result before representatives are constructed.
+
+    Retained representation terms carry admitted 128-digit coefficients, while
+    a fixed representative may use the full admitted 512-digit numerator and
+    denominator budgets. Coordinate cells are charged their actual admitted
+    component widths rather than a placeholder, so a result near any of these
+    ceilings cannot slip past the advertised output-byte envelope.
+    """
+    retained_terms = (
+        sum(
+            len(image.polynomial.terms)
+            for image in representation.action.generator_images
+        )
+        + sum(len(value.polynomial.terms) for value in representation.basis)
+        + sum(
+            len(entry.polynomial.terms)
+            for row in representation.action_matrix
+            for entry in row
+        )
+    )
+    coordinate_bytes = sum(
+        _integer_digits(value.numerator) + _integer_digits(value.denominator) + 128
+        for vector in coordinates
+        for value in vector
+    )
+    estimated_result_bytes = retained_terms * MAX_GA_FIXED_RETAINED_TERM_BYTES
+    estimated_result_bytes += fixed_support_terms * MAX_GA_FIXED_TERM_BYTES
+    estimated_result_bytes += coordinate_bytes
+    estimated_result_bytes += len(representation.basis) ** 2 * 256 + 1_024
+    if estimated_result_bytes > MAX_GA_ACTION_OUTPUT_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("subrepresentation",),
+            code="polynomial_ga_fixed_subspace.output_bytes",
+            message=(
+                "the fixed basis and retained representation exceed the "
+                "output-byte envelope"
+            ),
+        )
+    return estimated_result_bytes
 
 
 def _fixed_polynomial_basis(
@@ -950,10 +1073,13 @@ def ga_fixed_subspace(
     )
 
     try:
-        claim = (
-            subrepresentation
+        # Native callers can bypass validation through model_construct or
+        # model_copy(update=...), so serialize and revalidate typed instances
+        # here as the stable-subrepresentation boundary does.
+        claim = PolynomialGaStableSubrepresentation.model_validate(
+            subrepresentation.model_dump(warnings=False)
             if isinstance(subrepresentation, PolynomialGaStableSubrepresentation)
-            else PolynomialGaStableSubrepresentation.model_validate(subrepresentation)
+            else subrepresentation
         )
     except (TypeError, ValueError) as exc:
         raise OperationDomainValidationError(
@@ -962,15 +1088,7 @@ def ga_fixed_subspace(
             message="the request must contain a canonical finite Ga-subrepresentation",
         ) from exc
 
-    supplied_matrix_terms = sum(
-        len(entry.polynomial.terms) for row in claim.action_matrix for entry in row
-    )
-    if supplied_matrix_terms > MAX_GA_FIXED_MATRIX_TERMS:
-        raise OperationResourceAdmissionError(
-            location=("subrepresentation", "action_matrix"),
-            code="polynomial_ga_fixed_subspace.matrix_terms",
-            message="the supplied action matrix exceeds the bounded term envelope",
-        )
+    _admit_claimed_action_matrix(claim)
 
     # A consumer may rely on the claimed matrix only after checking its defining
     # relation against the action and basis. The producer has operation-specific
@@ -1000,25 +1118,7 @@ def ga_fixed_subspace(
             ),
         )
     fixed_candidate_terms = _admit_fixed_output_support(checked, coordinate_vectors)
-    retained_terms = (
-        sum(len(image.polynomial.terms) for image in checked.action.generator_images)
-        + sum(len(value.polynomial.terms) for value in checked.basis)
-        + sum(
-            len(entry.polynomial.terms)
-            for row in checked.action_matrix
-            for entry in row
-        )
-        + fixed_candidate_terms
-    )
-    coordinate_cells = len(coordinate_vectors) * len(checked.basis)
-    estimated_result_bytes = retained_terms * 384 + coordinate_cells * 128
-    estimated_result_bytes += len(checked.basis) ** 2 * 256 + 1_024
-    if estimated_result_bytes > MAX_GA_ACTION_OUTPUT_BYTES:
-        raise OperationResourceAdmissionError(
-            location=("subrepresentation",),
-            code="polynomial_ga_fixed_subspace.output_bytes",
-            message="the fixed basis and retained representation exceed the output-byte envelope",
-        )
+    _admit_fixed_result_bytes(checked, coordinate_vectors, fixed_candidate_terms)
     fixed_basis = _fixed_polynomial_basis(checked, coordinate_vectors)
 
     return PolynomialGaFixedSubspace.model_construct(

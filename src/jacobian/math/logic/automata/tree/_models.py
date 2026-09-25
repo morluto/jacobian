@@ -605,7 +605,7 @@ class TreeDeterminizeResult(TreeDeterminizeRequest):
 
     status: Literal["COMPLETE", "TRUNCATED"]
     truncation_reason: Literal["NONE", "STATE_BUDGET", "WORK_BUDGET"]
-    deterministic: BottomUpTreeAutomaton
+    deterministic: DeterministicBottomUpTreeAutomaton
     subset_map: tuple[tuple[int, ...], ...]
     equivalence_claim: bool
     closure_rows_checked: int = Field(ge=0)

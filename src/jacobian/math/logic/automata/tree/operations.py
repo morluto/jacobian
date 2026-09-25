@@ -1379,14 +1379,16 @@ def _canonical_dfa(
     automaton: BottomUpTreeAutomaton,
     subsets: list[tuple[int, ...]],
     rows: dict[tuple[int, tuple[int, ...]], int],
-) -> tuple[BottomUpTreeAutomaton, tuple[tuple[int, ...], ...]]:
+) -> tuple[DeterministicBottomUpTreeAutomaton, tuple[tuple[int, ...], ...]]:
     """Order subsets lexicographically and build the deterministic machine."""
 
     order = sorted(range(len(subsets)), key=lambda index: subsets[index])
     renumber = {old: new for new, old in enumerate(order)}
     canonical = tuple(subsets[old] for old in order)
     source_finals = set(automaton.final_states)
-    deterministic = BottomUpTreeAutomaton(
+    # Subset construction rows are keyed by one (symbol, child-state) tuple,
+    # so the carrier records the established determinism.
+    deterministic = DeterministicBottomUpTreeAutomaton(
         state_count=max(1, len(canonical)),
         arity=automaton.arity,
         transitions=tuple(
@@ -1551,7 +1553,7 @@ def determinize_tree_automaton(
             sample_agreement=False,
         )
     if not subsets:
-        deterministic = BottomUpTreeAutomaton(
+        deterministic = DeterministicBottomUpTreeAutomaton(
             state_count=1, arity=automaton.arity, transitions=(), final_states=()
         )
         return TreeDeterminizeResult._from_kernel(

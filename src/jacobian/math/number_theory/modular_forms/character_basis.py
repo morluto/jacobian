@@ -402,6 +402,17 @@ def modular_character_coordinates_product(
             code="modular_form.character_product_admission",
             message="character product exceeds its exact work, height, or output envelope",
         )
+    if left_space == right_space and left_scalar == right_scalar:
+        request_checkpoint("before character coordinate equality")
+        basis = _character_basis_from_admission(left_space, field, left_request)
+        coefficients = _character_form_prefix(left, left_admitted, basis).coefficients
+        return ModularFormFieldQExpansion(
+            space=target_space,
+            coefficients=tuple(
+                _coefficient(field, cyclotomic._validate_element(value)[1])
+                for value in coefficients
+            ),
+        )
     if not any(value.num for value in left_scalar.coefficients_ascending) or not any(
         value.num for value in right_scalar.coefficients_ascending
     ):

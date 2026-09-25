@@ -2314,6 +2314,7 @@ def modular_form_hecke_matrix(
             message="Hecke matrix exact entries exceed the bounded output envelope",
         )
 
+    request_checkpoint("before Hecke matrix basis materialization")
     if plan.basis_id == PARI_STURM_RREF_BASIS_ID:
         plan = _materialize_pari_basis(plan)
     basis_vectors = _basis_coefficients(plan)
@@ -2403,7 +2404,8 @@ def modular_form_hecke_matrix_in_frame(
     zero = (Fraction(0),) * dimension
     _admit_change_of_basis_arithmetic(dimension, change, zero)
     inverse = _invert_frame_matrix(change)
-
+    # The framed path must admit the canonical matrix before frame basis
+    # materialization. Its own operation performs aggregate Hecke admission.
     canonical = modular_form_hecke_matrix(frame.space, index)
     if (
         canonical.space != frame.space

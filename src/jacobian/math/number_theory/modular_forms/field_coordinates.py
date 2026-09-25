@@ -170,7 +170,7 @@ def modular_form_field_coordinates_q_expansion(
             code="modular_form.field_coordinates_basis_parent",
             message="field coordinate basis and shape must match the exact rational space basis",
         )
-    if not isinstance(field, RationalCyclotomicField):
+    if type(field) is not RationalCyclotomicField or field != _FIELD:
         raise OperationDomainValidationError(
             location=("form", "space"),
             code="modular_form.field_coordinates_field_parent",

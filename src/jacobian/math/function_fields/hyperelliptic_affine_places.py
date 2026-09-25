@@ -6,9 +6,7 @@ from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
 from jacobian.catalog.models import (
-    MathTool,
     OperationDomainValidationError,
-    OperationExample,
     OperationResourceAdmissionError,
 )
 from jacobian.math.finite_fields.values import FiniteFieldPresentation
@@ -18,6 +16,7 @@ from jacobian.math.function_fields._models import (
 )
 from jacobian.math.function_fields.operations import (
     _admit_field,
+    _canonical_field,
     _hyperelliptic_branch_polynomial,
     _validated_field,
 )
@@ -71,7 +70,7 @@ def enumerate_hyperelliptic_affine_places(
     non-prime residue field require other carriers.
     """
 
-    field = _validated_field(field)
+    field = _canonical_field(_validated_field(field))
     if field.characteristic == 2:
         raise OperationDomainValidationError(
             location=("field", "characteristic"),
@@ -159,58 +158,3 @@ def enumerate_hyperelliptic_affine_places(
 
 def _run(request: HyperellipticAffinePlacesRequest) -> HyperellipticAffinePlacesResult:
     return enumerate_hyperelliptic_affine_places(request.field)
-
-
-HYPERELLIPTIC_AFFINE_PLACES_TOOL = MathTool(
-    operation_id="function_field.hyperelliptic_affine_places.enumerate",
-    title="Enumerate rational affine hyperelliptic places",
-    description=(
-        "Enumerate all GF(p)-rational affine points on an admitted odd-"
-        "characteristic squarefree model y^2=f(x), returning the existing "
-        "source-bound affine place values in lexicographic (x,y) order. This "
-        "does not enumerate points at infinity or places with larger residue fields."
-    ),
-    request_type=HyperellipticAffinePlacesRequest,
-    result_type=HyperellipticAffinePlacesResult,
-    run=_run,
-    tags=("function-field", "hyperelliptic", "affine-place", "enumeration", "exact"),
-    examples=(
-        OperationExample(
-            name="elliptic_model_over_gf5",
-            description="Enumerate the rational affine places on y^2=x^3-x over GF(5).",
-            input={
-                "field": {
-                    "characteristic": 5,
-                    "variable": "x",
-                    "generator": "y",
-                    "defining_polynomial": [
-                        {
-                            "numerator": {
-                                "characteristic": 5,
-                                "coefficients": [0, 1, 0, 4],
-                            },
-                            "denominator": {
-                                "characteristic": 5,
-                                "coefficients": [1],
-                            },
-                        },
-                        {
-                            "numerator": {"characteristic": 5, "coefficients": [0]},
-                            "denominator": {
-                                "characteristic": 5,
-                                "coefficients": [1],
-                            },
-                        },
-                        {
-                            "numerator": {"characteristic": 5, "coefficients": [1]},
-                            "denominator": {
-                                "characteristic": 5,
-                                "coefficients": [1],
-                            },
-                        },
-                    ],
-                }
-            },
-        ),
-    ),
-)

@@ -37,7 +37,9 @@ from jacobian.math.function_fields._models import (
     HyperellipticAffinePlaceValuationResult,
 )
 from jacobian.math.function_fields.hyperelliptic_affine_places import (
-    HYPERELLIPTIC_AFFINE_PLACES_TOOL,
+    HyperellipticAffinePlacesRequest,
+    HyperellipticAffinePlacesResult,
+    enumerate_hyperelliptic_affine_places,
 )
 from jacobian.math.function_fields.operations import (
     function_field_base_embedding,
@@ -777,7 +779,32 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    HYPERELLIPTIC_AFFINE_PLACES_TOOL,
+    MathTool(
+        operation_id="function_field.hyperelliptic_affine_places.enumerate",
+        title="Enumerate rational affine hyperelliptic places",
+        description=(
+            "Enumerate all GF(p)-rational affine points on an admitted odd-characteristic "
+            "squarefree model y^2=f(x), in lexicographic (x,y) order. Does not include "
+            "points at infinity or places with larger residue fields."
+        ),
+        request_type=HyperellipticAffinePlacesRequest,
+        result_type=HyperellipticAffinePlacesResult,
+        run=lambda request: enumerate_hyperelliptic_affine_places(request.field),
+        tags=(
+            "function-field",
+            "hyperelliptic",
+            "affine-place",
+            "enumeration",
+            "exact",
+        ),
+        examples=(
+            OperationExample(
+                name="elliptic_model_over_gf5",
+                description="Enumerate rational affine places on y^2=x^3-x over GF(5).",
+                input={"field": _GF5_HYPERELLIPTIC_FIELD},
+            ),
+        ),
+    ),
 )
 
 __all__ = ["TOOLS"]

@@ -5,6 +5,7 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
+from jacobian.canonical import encode_strict_json
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -232,6 +233,19 @@ def test_native_product_rejects_forged_complete_carrier() -> None:
         boolean_product_tree_automata(forged, _machine(()), "intersection")
 
     assert raised.value.errors()[0]["type"] == "tree_automata.product_automaton_shape"
+
+
+def test_boolean_product_example_states_the_completeness_precondition() -> None:
+    operation = Catalog.open().operation("tree_automaton.boolean_product.compute")
+    example = operation.examples[0]
+
+    assert "partial" not in example.name
+    assert "complete" in example.description.lower()
+    request = operation.request_type.model_validate_json(
+        encode_strict_json(example.input), strict=True
+    )
+    result = operation.run(request)
+    assert result.product.state_count == 1
 
 
 def test_catalog_discovery_surfaces_tree_language_products() -> None:

@@ -261,6 +261,13 @@ TOOLS: MathTools = (
             "compute Klein bottle or torus chain complex from exact side pairings",
             "crystallographic polygon face orbits with group-labelled boundaries",
         ),
+        examples=(
+            OperationExample(
+                name="unit_square_torus_quotient_chains",
+                description="Construct the integral quotient chains of the unit-square torus.",
+                input=_UNIT_SQUARE_PAIRING_RESULT,
+            ),
+        ),
     ),
     MathTool(
         operation_id="crystallographic.extension.fundamental_domain.check",

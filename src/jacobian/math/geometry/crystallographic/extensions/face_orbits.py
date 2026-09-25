@@ -40,9 +40,7 @@ MAX_FACE_ORBIT_RESULT_BYTES = 20_000_000
 _Element = tuple[tuple[int, ...], int]
 
 
-def _domain(
-    reason: str, message: str, location: tuple[str | int, ...]
-) -> NoReturn:
+def _domain(reason: str, message: str, location: tuple[str | int, ...]) -> NoReturn:
     raise OperationDomainValidationError(
         location=location,
         code=f"crystallographic.face_orbits.{reason}",
@@ -58,7 +56,9 @@ def _resource(reason: str, message: str) -> NoReturn:
     )
 
 
-def _multiply(source: FiniteLatticeExtension, left: _Element, right: _Element) -> _Element:
+def _multiply(
+    source: FiniteLatticeExtension, left: _Element, right: _Element
+) -> _Element:
     return _extension_product(source, left, right)
 
 
@@ -187,7 +187,9 @@ def _group_labels_to_vertex_representatives(
                     continue
                 # current_to_neighbor maps current -> neighbor. Compose with
                 # current_to_root (neighbor -> root) on the left.
-                neighbor_to_root = _multiply(source, current_to_root, _inverse(source, current_to_neighbor))
+                neighbor_to_root = _multiply(
+                    source, current_to_root, _inverse(source, current_to_neighbor)
+                )
                 orbit_ids[neighbor] = orbit_id
                 to_root[neighbor] = neighbor_to_root
                 queue.append(neighbor)
@@ -282,8 +284,7 @@ def _require_group_ring_boundary_zero(
     realization: CrystallographicAffineRealization,
 ) -> None:
     d1_by_endpoint = {
-        (entry.source_cell_index, entry.incidence_index): entry
-        for entry in d1_entries
+        (entry.source_cell_index, entry.incidence_index): entry for entry in d1_entries
     }
     terms: dict[tuple[int, _Element], int] = {}
     for entry in d2_entries:
@@ -301,7 +302,8 @@ def _require_group_ring_boundary_zero(
             )
             endpoint = d1_by_endpoint[(entry.target_cell_index, representative_vertex)]
             endpoint_element = (
-                tuple(endpoint.lattice_translation), endpoint.holonomy_element
+                tuple(endpoint.lattice_translation),
+                endpoint.holonomy_element,
             )
             composed = _multiply(source, endpoint_element, edge_element)
             key = (endpoint.target_cell_index, composed)
@@ -340,16 +342,29 @@ def quotient_face_orbit_complex(
     vertex_count = len(pairing_result.facet_profile.vertices)
     facet_count = len(pairing_result.facet_profile.facets)
     if rank != 2:
-        _resource("dimension_bound", "quotient face-orbit chains currently support dimension two")
-    if vertex_count > MAX_FACE_ORBIT_POLYGON_VERTICES or facet_count > MAX_FACE_ORBIT_POLYGON_FACETS:
-        _resource("polygon_size_bound", "polygon exceeds the 32-vertex/facet exact face-orbit envelope")
+        _resource(
+            "dimension_bound",
+            "quotient face-orbit chains currently support dimension two",
+        )
+    if (
+        vertex_count > MAX_FACE_ORBIT_POLYGON_VERTICES
+        or facet_count > MAX_FACE_ORBIT_POLYGON_FACETS
+    ):
+        _resource(
+            "polygon_size_bound",
+            "polygon exceeds the 32-vertex/facet exact face-orbit envelope",
+        )
     source_bytes = len(checked.model_dump_json().encode("utf-8"))
     predicted_bytes = source_bytes + 256 * vertex_count + 512 * facet_count + 64_000
     if predicted_bytes > MAX_FACE_ORBIT_RESULT_BYTES:
         _resource("result_bound", "face-orbit complex exceeds its result byte envelope")
     recomputed = check_crystallographic_fundamental_domain(pairing_result)
     if not recomputed.is_fundamental_domain or recomputed != checked:
-        _domain("source_not_fundamental", "source must be a freshly checked fundamental polygon", ("source",))
+        _domain(
+            "source_not_fundamental",
+            "source must be a freshly checked fundamental polygon",
+            ("source",),
+        )
     torsion = decide_extension_torsion(pairing_result.affine_realization.source)
     if not torsion.torsion_free:
         _domain(
@@ -383,7 +398,9 @@ def quotient_face_orbit_complex(
     for pairing in pairing_result.pairings:
         source_facet = pairing_result.facet_profile.facets[pairing.source_facet_index]
         target_vertices = set(
-            pairing_result.facet_profile.facets[pairing.target_facet_index].source_vertex_indices
+            pairing_result.facet_profile.facets[
+                pairing.target_facet_index
+            ].source_vertex_indices
         )
         for source_vertex in source_facet.source_vertex_indices:
             image = _apply_element(
@@ -395,7 +412,11 @@ def quotient_face_orbit_complex(
                 (idx for idx in target_vertices if coordinates[idx] == image), None
             )
             if target_vertex is None:
-                _domain("endpoint_map", "side-pairing affine map misses an endpoint", ("source", "pairings", pairing.source_facet_index))
+                _domain(
+                    "endpoint_map",
+                    "side-pairing affine map misses an endpoint",
+                    ("source", "pairings", pairing.source_facet_index),
+                )
             maps.append(
                 BieberbachFaceOrbitMap(
                     source_facet_index=pairing.source_facet_index,
@@ -418,7 +439,7 @@ def quotient_face_orbit_complex(
 
     edge_orbits: list[int] = []
     for facet_index, pairing in enumerate(pairing_result.pairings):
-        if facet_index < pairing.target_facet_index:
+        if facet_index <= pairing.target_facet_index:
             edge_orbits.append(facet_index)
     edge_orbits.sort()
     edge_row = {facet: row for row, facet in enumerate(edge_orbits)}

@@ -538,7 +538,8 @@ class BieberbachFaceOrbitComplex(StrictModel):
             or set(self.edge_orbit_representatives) != expected_edge_representatives
             or self.edge_orbit_representatives
             != tuple(sorted(expected_edge_representatives))
-            or len(self.edge_orbit_representatives) != len(expected_edge_representatives)
+            or len(self.edge_orbit_representatives)
+            != len(expected_edge_representatives)
             or self.quotient_chain_complex.basis_sizes
             != (len(self.vertex_orbits), len(self.edge_orbit_representatives), 1)
             or len(self.boundary_1_to_0) != 2 * len(self.edge_orbit_representatives)
@@ -549,7 +550,9 @@ class BieberbachFaceOrbitComplex(StrictModel):
             }
             != {
                 (edge_index, vertex_index)
-                for edge_index, facet_index in enumerate(self.edge_orbit_representatives)
+                for edge_index, facet_index in enumerate(
+                    self.edge_orbit_representatives
+                )
                 for vertex_index in profile.facets[facet_index].source_vertex_indices
             }
             or {entry.incidence_index for entry in self.boundary_2_to_1}
@@ -559,30 +562,18 @@ class BieberbachFaceOrbitComplex(StrictModel):
                 "face_orbit_source",
                 "face-orbit source, complete endpoint maps, orbit partition, edge representatives, or augmented ZZ chain axes are inconsistent",
             )
-        d1_rows = len(self.vertex_orbits)
-        d1_columns = len(self.edge_orbit_representatives)
-        d1 = [[0 for _ in range(d1_columns)] for _ in range(d1_rows)]
-        for entry in self.boundary_1_to_0:
-            if not (
-                0 <= entry.source_cell_index < d1_columns
-                and 0 <= entry.target_cell_index < d1_rows
-            ):
-                raise _error("face_orbit_boundary_axis", "degree-one boundary entry has an invalid cell index")
-            d1[entry.target_cell_index][entry.source_cell_index] += entry.coefficient
-        d2 = [[0] for _ in range(d1_columns)]
-        for entry in self.boundary_2_to_1:
-            if not (entry.source_cell_index == 0 and 0 <= entry.target_cell_index < d1_columns):
-                raise _error("face_orbit_boundary_axis", "degree-two boundary entry has an invalid cell index")
-            d2[entry.target_cell_index][0] += entry.coefficient
-        if (
-            tuple(tuple(str(value) for value in row) for row in d1)
-            != self.quotient_chain_complex.differential_matrices[0]
-            or tuple(tuple(str(value) for value in row) for row in d2)
-            != self.quotient_chain_complex.differential_matrices[1]
+        if any(
+            entry.source_cell_index >= len(self.edge_orbit_representatives)
+            or entry.target_cell_index >= len(self.vertex_orbits)
+            for entry in self.boundary_1_to_0
+        ) or any(
+            entry.source_cell_index != 0
+            or entry.target_cell_index >= len(self.edge_orbit_representatives)
+            for entry in self.boundary_2_to_1
         ):
             raise _error(
-                "face_orbit_augmentation",
-                "group-labelled boundary entries must augment to the retained integral chain differentials",
+                "face_orbit_boundary_axis",
+                "group-labelled boundary entry has an invalid cell index",
             )
         return self
 

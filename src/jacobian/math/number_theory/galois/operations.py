@@ -20,6 +20,13 @@ from jacobian.math.number_theory.galois._factor_process import factor_mod_prime
 if TYPE_CHECKING:
     from sympy.combinatorics.perm_groups import PermutationGroup
 
+from jacobian.math.combinatorics.posets.core._models import (
+    FinitePoset,
+    PresentationPair,
+    ReflexivePairPolicy,
+    RelationInterpretation,
+)
+from jacobian.math.combinatorics.posets.core.operations import materialize_finite_poset
 from jacobian.math.number_theory.galois._models import (
     MAX_FACTOR_DEGREE,
     MAX_FIELD_ORDER,
@@ -31,6 +38,8 @@ from jacobian.math.number_theory.galois._models import (
     FinitePermutationGroup,
     FrobeniusCycleResult,
     GaloisAutomorphismSubgroup,
+    GaloisCorrespondencePair,
+    GaloisCorrespondenceResult,
     GaloisFactorResult,
     GaloisFixedFieldRequest,
     GaloisFixedFieldResult,
@@ -64,6 +73,8 @@ from jacobian.math.polynomials.values import RationalPolynomial
 
 MAX_ELEMENT_ORBIT_POLYNOMIAL_DIGITS = 1100
 MAX_ELEMENT_ORBIT_OUTPUT_BYTES = 32_768
+MAX_GALOIS_CORRESPONDENCE_WORK = 512
+MAX_GALOIS_CORRESPONDENCE_ALLOCATION_UNITS = 32
 
 
 def _admit(operation: Callable[[], None], *, location: tuple[str | int, ...]) -> None:
@@ -870,6 +881,13 @@ def galois_fixed_field(
             message="fixed-field request must contain one typed automorphism subgroup",
         ) from exc
     subgroup = _canonical_automorphism_subgroup(canonical_request.subgroup)
+    return _fixed_field_for_canonical_subgroup(subgroup)
+
+
+def _fixed_field_for_canonical_subgroup(
+    subgroup: GaloisAutomorphismSubgroup,
+) -> GaloisFixedFieldResult:
+    """Compute the fixed field once its exact parent subgroup is admitted."""
     extension = subgroup.field.extension
     if len(subgroup.elements) == 1:
         # The trivial subgroup fixes all of L. Its canonical primitive element
@@ -893,6 +911,122 @@ def galois_fixed_field(
     return GaloisFixedFieldResult(
         subgroup=subgroup, fixed_field=fixed, inclusion=inclusion
     )
+
+
+def _correspondence_poset(
+    elements: tuple[str, ...], relations: tuple[tuple[str, str], ...]
+) -> FinitePoset:
+    return materialize_finite_poset(
+        elements,
+        tuple(PresentationPair(lower=lower, upper=upper) for lower, upper in relations),
+        RelationInterpretation.COMPARABLE_PAIRS,
+        ReflexivePairPolicy.FORBIDDEN,
+    )
+
+
+def galois_correspondence(
+    field: QQSplittingField,
+) -> GaloisCorrespondenceResult:
+    """Materialize the full subgroup/fixed-field correspondence for degree <= 2."""
+    field = _canonical_splitting_field(field, location=("field",))
+
+    # A degree-one or separable quadratic extension has respectively one or
+    # two subgroups. Bound both posets, every embedded field, and repeated
+    # field/automorphism data before constructing the complete output.
+    node_count = field.degree
+    estimated_work = 64 * node_count**2
+    subgroup_size_sum = node_count + int(node_count == 2)
+    estimated_allocation_units = (
+        2 * subgroup_size_sum
+        + 2 * node_count
+        + 2 * node_count * (node_count - 1)
+        + node_count**2
+        + node_count
+        + 1
+    )
+    if estimated_work > MAX_GALOIS_CORRESPONDENCE_WORK:
+        raise OperationResourceAdmissionError(
+            location=("field",),
+            code="galois_theory.correspondence_work_bound",
+            message="complete subgroup and intermediate-field lattices exceed the admitted work envelope",
+        )
+    if estimated_allocation_units > MAX_GALOIS_CORRESPONDENCE_ALLOCATION_UNITS:
+        raise OperationResourceAdmissionError(
+            location=("field",),
+            code="galois_theory.correspondence_allocation_bound",
+            message="complete subgroup/fixed-field correspondence exceeds its admitted exact-value allocation envelope",
+        )
+
+    automorphism_family = _automorphisms_of_canonical_field(field).automorphisms
+    if len(automorphism_family) != field.degree:
+        raise ArithmeticError(
+            "the supported splitting-field automorphisms must have order equal to the field degree"
+        )
+    identity_permutation = tuple(range(len(field.root_values)))
+    identity = next(
+        automorphism
+        for automorphism in automorphism_family
+        if automorphism.root_permutation == identity_permutation
+    )
+    subgroup_families = (
+        (automorphism_family, (identity,))
+        if field.degree == 2
+        else (automorphism_family,)
+    )
+
+    pairs: list[GaloisCorrespondencePair] = []
+    for index, elements in enumerate(subgroup_families):
+        subgroup = GaloisAutomorphismSubgroup(field=field, elements=elements)
+        fixed = _fixed_field_for_canonical_subgroup(subgroup)
+        stabilizer = tuple(
+            automorphism
+            for automorphism in automorphism_family
+            if _map_element(automorphism, fixed.inclusion.generator_image)
+            == fixed.inclusion.generator_image
+        )
+        if tuple(auto.root_permutation for auto in stabilizer) != tuple(
+            auto.root_permutation for auto in subgroup.elements
+        ):
+            raise ArithmeticError(
+                "fixed-field and pointwise-stabilizer maps do not compose to the identity"
+            )
+        stabilizer_subgroup = GaloisAutomorphismSubgroup(
+            field=field, elements=stabilizer
+        )
+        subgroup_order = len(subgroup.elements)
+        fixed_field_degree = fixed.fixed_field.degree
+        subgroup_index = field.degree // subgroup_order
+        pairs.append(
+            GaloisCorrespondencePair(
+                subgroup_label=f"H{index}",
+                field_label=f"F{index}",
+                subgroup=subgroup,
+                inclusion=fixed.inclusion,
+                stabilizer=stabilizer_subgroup,
+                subgroup_order=subgroup_order,
+                subgroup_index=subgroup_index,
+                fixed_field_degree=fixed_field_degree,
+                relative_field_degree=field.degree // fixed_field_degree,
+                normal=True,
+            )
+        )
+
+    subgroup_labels = tuple(pair.subgroup_label for pair in pairs)
+    field_labels = tuple(pair.field_label for pair in pairs)
+    subgroup_relations = (("H1", "H0"),) if field.degree == 2 else ()
+    field_relations = (("F0", "F1"),) if field.degree == 2 else ()
+    result = GaloisCorrespondenceResult(
+        field=field,
+        pairs=tuple(pairs),
+        subgroup_inclusion_poset=_correspondence_poset(
+            subgroup_labels, subgroup_relations
+        ),
+        intermediate_field_inclusion_poset=_correspondence_poset(
+            field_labels, field_relations
+        ),
+        normal_subgroup_labels=subgroup_labels,
+    )
+    return result
 
 
 def intermediate_field_stabilizer(

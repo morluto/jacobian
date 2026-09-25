@@ -10,6 +10,9 @@ from pydantic_core import PydanticCustomError
 from jacobian._exact import ExactInteger
 from jacobian._models import StrictModel
 from jacobian.canonical import format_canonical_integer
+from jacobian.math.number_theory.number_fields._field_embedding import (
+    SimpleNumberFieldEmbedding,
+)
 from jacobian.math.number_theory.number_fields.values import (
     SimpleNumberFieldElement,
     SimpleNumberFieldPresentation,
@@ -508,6 +511,42 @@ class SplittingFieldResult(StrictModel):
         return self
 
 
+class GaloisCompositumRequest(StrictModel):
+    """Two source-bound degree-at-most-two splitting fields over QQ."""
+
+    left: QQSplittingField
+    right: QQSplittingField
+
+
+class GaloisCompositumResult(StrictModel):
+    """A simple field with exact inclusions of both source splitting fields."""
+
+    left: QQSplittingField
+    right: QQSplittingField
+    compositum: SimpleNumberFieldPresentation
+    left_embedding: SimpleNumberFieldEmbedding
+    right_embedding: SimpleNumberFieldEmbedding
+
+    @model_validator(mode="after")
+    def require_bound_embeddings(self) -> Self:
+        if self.compositum.degree > 4:
+            raise _validation_error(
+                "compositum_degree_bound",
+                "a compositum of the supported inputs has degree at most four",
+            )
+        if (
+            self.left_embedding.source != self.left.extension
+            or self.right_embedding.source != self.right.extension
+            or self.left_embedding.target != self.compositum
+            or self.right_embedding.target != self.compositum
+        ):
+            raise _validation_error(
+                "compositum_embedding_parent",
+                "compositum inclusions must bind both exact source fields and the result field",
+            )
+        return self
+
+
 class AutomorphismRequest(StrictModel):
     field: QQSplittingField
 
@@ -675,6 +714,8 @@ __all__ = [
     "FinitePermutationGroup",
     "FrobeniusCycleRequest",
     "FrobeniusCycleResult",
+    "GaloisCompositumRequest",
+    "GaloisCompositumResult",
     "GaloisFactorRequest",
     "GaloisFactorResult",
     "GaloisGroupRequest",

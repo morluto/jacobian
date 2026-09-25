@@ -1,5 +1,6 @@
 """Galois theory operations."""
 
+from jacobian.math.number_theory.galois._compositum import galois_compositum
 from jacobian.math.number_theory.galois.operations import (
     apply_automorphism,
     apply_automorphism_to_element,
@@ -22,6 +23,7 @@ __all__ = [
     "automorphisms",
     "compose_automorphisms",
     "frobenius_cycle",
+    "galois_compositum",
     "galois_factor",
     "galois_group",
     "inverse_automorphism",

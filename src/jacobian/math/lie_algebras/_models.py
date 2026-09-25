@@ -469,6 +469,33 @@ class LieKillingRadicalResult(StrictModel):
         return cls.model_construct(killing_result=killing_result, radical=radical)
 
 
+class LieSemisimplicityProfileResult(StrictModel):
+    """Cartan's characteristic-zero semisimplicity profile.
+
+    The source algebra is semisimple exactly when the radical of its Killing
+    form is the zero subspace. The exact form and canonical radical remain
+    available for inspection and composition; no classification beyond this
+    Cartan criterion is implied.
+    """
+
+    killing_radical: LieKillingRadicalResult
+    is_semisimple: StrictBool
+
+    @model_validator(mode="after")
+    def require_cartan_status_matches_radical(self) -> Self:
+        zero_radical = self.killing_radical.radical.generators.row_count == 0
+        if self.is_semisimple != zero_radical:
+            raise _validation_error(
+                "semisimplicity_profile_status",
+                "semisimplicity status must agree with Killing-form radical dimension",
+            )
+        return self
+
+    @property
+    def algebra(self) -> FiniteDimensionalLieAlgebra:
+        return self.killing_radical.killing_result.algebra
+
+
 class LieAdjointRepresentationResult(StrictModel):
     """Adjoint matrices in the exact order of the retained source basis."""
 

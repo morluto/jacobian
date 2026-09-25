@@ -48,6 +48,7 @@ from jacobian.math.lie_algebras._models import (
     LieKillingResult,
     LieLowerCentralSeriesResult,
     LieQuotientResult,
+    LieSemisimplicityProfileResult,
     LieSubalgebra,
     LieSubalgebraCheckResult,
     LieSubalgebraViolationWitness,
@@ -533,6 +534,24 @@ def lie_killing_form_radical(
     )
     radical = LieSubspace(basis=killing.algebra.basis, generators=generators)
     return LieKillingRadicalResult._from_kernel(killing, radical)
+
+
+def lie_semisimplicity_profile(
+    algebra: FiniteDimensionalLieAlgebra | Mapping[str, Any],
+) -> LieSemisimplicityProfileResult:
+    """Return the exact Cartan profile over QQ from the Killing-form radical.
+
+    For a finite-dimensional Lie algebra over a characteristic-zero field,
+    Cartan's criterion says it is semisimple exactly when its Killing form is
+    nondegenerate. The existing radical computation admits the input, computes
+    the form and its exact nullspace, and retains both in the result.
+    """
+
+    killing_radical = lie_killing_form_radical(algebra)
+    return LieSemisimplicityProfileResult(
+        killing_radical=killing_radical,
+        is_semisimple=killing_radical.radical.generators.row_count == 0,
+    )
 
 
 def lie_center(
@@ -1801,7 +1820,9 @@ __all__ = [
     "lie_derived_series",
     "lie_direct_sum",
     "lie_killing_form",
+    "lie_killing_form_radical",
     "lie_lower_central_series",
     "lie_quotient",
+    "lie_semisimplicity_profile",
     "lie_upper_central_series",
 ]

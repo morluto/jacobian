@@ -26,6 +26,7 @@ from jacobian.math.lie_algebras._models import (
     LieLowerCentralSeriesResult,
     LieQuotientRequest,
     LieQuotientResult,
+    LieSemisimplicityProfileResult,
     LieSubalgebra,
     LieSubalgebraCheckResult,
     LieSubalgebraRequest,
@@ -47,6 +48,7 @@ from jacobian.math.lie_algebras.operations import (
     lie_killing_form_radical,
     lie_lower_central_series,
     lie_quotient,
+    lie_semisimplicity_profile,
     lie_subalgebra_centralizer,
     lie_upper_central_series,
 )
@@ -64,6 +66,12 @@ def _run_lie_killing_form_radical(
     request: LieAlgebraRequest,
 ) -> LieKillingRadicalResult:
     return lie_killing_form_radical(request.algebra)
+
+
+def _run_lie_semisimplicity_profile(
+    request: LieAlgebraRequest,
+) -> LieSemisimplicityProfileResult:
+    return lie_semisimplicity_profile(request.algebra)
 
 
 def _run_lie_adjoint_representation(
@@ -347,6 +355,39 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                         ],
                     }
                 },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="lie_algebra.semisimplicity.profile.compute",
+        title="Compute the Cartan semisimplicity profile of a Lie algebra",
+        description=(
+            "For a finite-dimensional Lie algebra over QQ, return its exact "
+            "Killing form and canonical Killing-form radical; the profile's "
+            "is_semisimple property is true exactly when that radical is zero, "
+            "by Cartan's criterion in characteristic zero. This reports only "
+            "semisimplicity and does not classify simple factors or compute the "
+            "solvable radical. Admission bounds and validates the algebra before "
+            "the exact form and nullspace are expanded."
+        ),
+        request_type=LieAlgebraRequest,
+        result_type=LieSemisimplicityProfileResult,
+        run=_run_lie_semisimplicity_profile,
+        tags=("lie-algebra", "semisimplicity", "cartan-criterion", "exact", "rational"),
+        discovery_terms=(
+            "Cartan semisimplicity criterion",
+            "is a Lie algebra semisimple",
+            "Killing form nondegenerate",
+            "Lie algebra semisimplicity profile",
+        ),
+        examples=(
+            OperationExample(
+                name="sl2_is_semisimple",
+                description=(
+                    "The Killing form of sl2(QQ) is nondegenerate, so Cartan's "
+                    "criterion gives a zero radical and a semisimple profile."
+                ),
+                input={"algebra": _SL2_ALGEBRA},
             ),
         ),
     ),

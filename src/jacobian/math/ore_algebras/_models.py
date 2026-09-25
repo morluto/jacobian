@@ -25,13 +25,13 @@ MAX_DIFFERENTIAL_ORDER = 16
 MAX_DIFFERENTIAL_TERMS = 32
 MAX_DIFFERENTIAL_VARIABLE = "x"
 MAX_DIFFERENTIAL_ADDITIVE_WORK_CELLS = 100_000_000
-MAX_DIFFERENTIAL_ADDITIVE_OUTPUT_BYTES = 2 * 1024 * 1024
+MAX_DIFFERENTIAL_ADDITIVE_OUTPUT_WEIGHT = 2 * 1024 * 1024
 MAX_SHIFT_PREFIX_INDEX = 100_000
 MAX_SHIFT_PREFIX_EVALUATION_CELLS = 2_000_000
 MAX_SHIFT_PREFIX_WORK_UNITS = 100_000_000
-MAX_SHIFT_PREFIX_OUTPUT_BYTES = 8 * 1024 * 1024
+MAX_SHIFT_PREFIX_OUTPUT_WEIGHT = 8 * 1024 * 1024
 MAX_SHIFT_ADDITIVE_WORK_CELLS = 4_096
-MAX_SHIFT_ADDITIVE_OUTPUT_BYTES = 2 * 1024 * 1024
+MAX_SHIFT_ADDITIVE_OUTPUT_WEIGHT = 2 * 1024 * 1024
 MAX_SHIFT_POWER_EXPONENT = 16
 MAX_SHIFT_POWER_WORK_CELLS = 4_096
 MAX_RECURRENCE_PREFIX_STEPS = 512
@@ -476,7 +476,7 @@ class PolynomialRecurrencePrefixRequest(StrictModel):
                 "initial_value_count",
                 "initial_values must contain exactly order(operator) consecutive values",
             )
-        if abs(self.start_index + self.steps + order) > MAX_RECURRENCE_PREFIX_INDEX:
+        if abs(self.start_index + self.steps + order - 1) > MAX_RECURRENCE_PREFIX_INDEX:
             raise _validation_error(
                 "index_range",
                 "the generated recurrence interval exceeds its index envelope",

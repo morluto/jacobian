@@ -202,14 +202,23 @@ def test_start_index_is_explicit_and_bounded() -> None:
         )
 
 
+def test_prefix_edge_admits_last_stored_index() -> None:
+    result = shift_operator_apply_to_sequence_prefix(
+        _operator(()), 100_000, FiniteRationalSequence(values=(1,))
+    )
+
+    assert [row.index for row in result.residuals] == [100_000]
+    assert result.right_boundary_indices == ()
+
+
 def test_output_admission_precedes_coefficient_evaluation(monkeypatch) -> None:
-    monkeypatch.setattr(operations, "MAX_SHIFT_PREFIX_OUTPUT_BYTES", 0)
+    monkeypatch.setattr(operations, "MAX_SHIFT_PREFIX_OUTPUT_WEIGHT", 0)
 
     def fail(*args, **kwargs):
         raise AssertionError("coefficient evaluation must follow output admission")
 
     monkeypatch.setattr(operations, "_evaluate_rational_polynomial_at", fail)
-    with pytest.raises(OperationResourceAdmissionError, match="byte budget"):
+    with pytest.raises(OperationResourceAdmissionError, match="weight budget"):
         shift_operator_apply_to_sequence_prefix(
             _operator(((0, _rf(((1, 0),))),)),
             0,

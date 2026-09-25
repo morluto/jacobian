@@ -12,11 +12,12 @@ obstruction, never as an operational failure.
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Any, Literal, Self
+from typing import Annotated, Any, Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
+from jacobian._exact import ExactInteger
 from jacobian._models import StrictModel
 from jacobian.math.topology._models import (
     MAX_TOPOLOGY_DIMENSION,
@@ -44,6 +45,20 @@ MAX_MORSE_GRADIENT_PATHS = 4096
 MAX_MORSE_GRADIENT_STATES = 200_000
 MAX_MORSE_BOUNDARY_ENTRIES = 8192
 MAX_MORSE_PATH_STEPS = MAX_MORSE_CELLS
+MAX_MORSE_CONTRACTION_CELLS = 32
+MAX_MORSE_CONTRACTION_FACE_CANDIDATES = 512
+MAX_MORSE_CONTRACTION_PAIRS = 14
+MAX_MORSE_CONTRACTION_COEFFICIENT_DIGITS = 64
+MorseContractionRow = Annotated[
+    tuple[ExactInteger, ...], Field(max_length=MAX_MORSE_CONTRACTION_CELLS)
+]
+MorseContractionMatrix = Annotated[
+    tuple[MorseContractionRow, ...], Field(max_length=MAX_MORSE_CONTRACTION_CELLS)
+]
+MorseContractionFamily = Annotated[
+    tuple[MorseContractionMatrix, ...],
+    Field(min_length=1, max_length=MAX_TOPOLOGY_DIMENSION + 1),
+]
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -672,6 +687,175 @@ class IntegerMorseComplexResult(StrictModel):
         return cls.model_construct(**values)
 
 
+class MorseChainContractionRequest(StrictModel):
+    """A bounded finite complex and a supplied acyclic matching."""
+
+    complex: SimplicialComplexRequest
+    pairs: tuple[MatchingPair, ...] = Field(
+        default=(), max_length=MAX_MORSE_CONTRACTION_PAIRS
+    )
+
+
+class MorseChainContractionResult(StrictModel):
+    """An integral strong deformation retraction onto the Morse chain complex.
+
+    Inclusion and projection are degree-zero chain maps. The degree-raising
+    homotopy uses ``id - inclusion * projection = d * H + H * d``.
+    Matrices use the canonical simplex axes carried by the source and critical
+    cell bases.
+    """
+
+    complex: FiniteSimplicialComplex
+    pairs: tuple[MatchingPair, ...] = Field(
+        default=(), max_length=MAX_MORSE_CONTRACTION_PAIRS
+    )
+    source_chain_complex: ChainComplexValue
+    critical_cells_by_dimension: tuple[CriticalCellBasis, ...] = Field(
+        min_length=1, max_length=MAX_TOPOLOGY_DIMENSION + 1
+    )
+    morse_chain_complex: ChainComplexValue
+    inclusion_matrices: MorseContractionFamily
+    projection_matrices: MorseContractionFamily
+    homotopy_matrices: MorseContractionFamily
+
+    @model_validator(mode="after")
+    def require_canonical_contraction_axes(self) -> Self:
+        source = self.source_chain_complex
+        target = self.morse_chain_complex
+        if (
+            source.coefficient_ring is not CoefficientRing.INTEGER
+            or target.coefficient_ring is not CoefficientRing.INTEGER
+            or source.prime is not None
+            or target.prime is not None
+            or source.degree_min != 0
+            or target.degree_min != 0
+            or source.degree_max != self.complex.dimension
+            or target.degree_max != self.complex.dimension
+            or len(source.basis_sizes) != len(target.basis_sizes)
+            or source.basis_sizes != self.complex.f_vector
+            or sum(source.basis_sizes) > MAX_MORSE_CONTRACTION_CELLS
+            or len(self.pairs) > MAX_MORSE_CONTRACTION_PAIRS
+            or tuple(basis.dimension for basis in self.critical_cells_by_dimension)
+            != tuple(range(len(target.basis_sizes)))
+            or tuple(len(basis.cells) for basis in self.critical_cells_by_dimension)
+            != target.basis_sizes
+        ):
+            raise _validation_error(
+                "chain_contraction_axes",
+                "contraction endpoints must be ZZ complexes with canonical matching dimensions",
+            )
+        source_cells = set(_canonical_cell_order(self.complex))
+        matched_cells: set[Simplex] = set()
+        for pair in self.pairs:
+            if (
+                pair.face not in source_cells
+                or pair.coface not in source_cells
+                or len(pair.coface) != len(pair.face) + 1
+                or not set(pair.face).issubset(pair.coface)
+                or pair.face in matched_cells
+                or pair.coface in matched_cells
+            ):
+                raise _validation_error(
+                    "chain_contraction_matching_binding",
+                    "matching pairs must be distinct source cover cells",
+                )
+            matched_cells.update((pair.face, pair.coface))
+        critical_cells = tuple(
+            cell for basis in self.critical_cells_by_dimension for cell in basis.cells
+        )
+        if (
+            len(set(critical_cells)) != len(critical_cells)
+            or not set(critical_cells).issubset(source_cells)
+            or set(critical_cells) != source_cells - matched_cells
+        ):
+            raise _validation_error(
+                "chain_contraction_critical_binding",
+                "critical bases must partition exactly the unmatched source cells",
+            )
+        dimensions = len(source.basis_sizes)
+        if any(
+            len(matrices) != dimensions
+            for matrices in (
+                self.inclusion_matrices,
+                self.projection_matrices,
+                self.homotopy_matrices,
+            )
+        ):
+            raise _validation_error(
+                "chain_contraction_degree_count",
+                "inclusion, projection, and homotopy must carry every degree",
+            )
+        map_entry_count = sum(
+            len(row)
+            for matrices in (
+                self.inclusion_matrices,
+                self.projection_matrices,
+                self.homotopy_matrices,
+            )
+            for matrix in matrices
+            for row in matrix
+        )
+        if map_entry_count > 3 * MAX_MORSE_CONTRACTION_CELLS**2:
+            raise _validation_error(
+                "chain_contraction_output_bound",
+                "chain-contraction maps exceed their admitted matrix-entry bound",
+            )
+        map_entries = (
+            entry
+            for matrices in (
+                self.inclusion_matrices,
+                self.projection_matrices,
+                self.homotopy_matrices,
+            )
+            for matrix in matrices
+            for row in matrix
+            for entry in row
+        )
+        if any(
+            len(str(abs(entry))) > MAX_MORSE_CONTRACTION_COEFFICIENT_DIGITS
+            for entry in map_entries
+        ):
+            raise _validation_error(
+                "chain_contraction_coefficient_bound",
+                "chain-contraction map coefficients exceed the 64-digit bound",
+            )
+        for degree, (source_rank, target_rank) in enumerate(
+            zip(source.basis_sizes, target.basis_sizes, strict=True)
+        ):
+            inclusion = self.inclusion_matrices[degree]
+            projection = self.projection_matrices[degree]
+            homotopy = self.homotopy_matrices[degree]
+            if len(inclusion) != source_rank or any(
+                len(row) != target_rank for row in inclusion
+            ):
+                raise _validation_error(
+                    "chain_contraction_inclusion_shape",
+                    "inclusion matrix axes must be source-by-critical in each degree",
+                )
+            if len(projection) != target_rank or any(
+                len(row) != source_rank for row in projection
+            ):
+                raise _validation_error(
+                    "chain_contraction_projection_shape",
+                    "projection matrix axes must be critical-by-source in each degree",
+                )
+            next_rank = source.basis_sizes[degree + 1] if degree + 1 < dimensions else 0
+            if len(homotopy) != next_rank or any(
+                len(row) != source_rank for row in homotopy
+            ):
+                raise _validation_error(
+                    "chain_contraction_homotopy_shape",
+                    "homotopy matrix axes must map source degree n to source degree n+1",
+                )
+        return self
+
+    @classmethod
+    def _from_kernel(cls, **values: Any) -> Self:
+        """Build after exact contraction identities have been checked once."""
+
+        return cls.model_construct(**values)
+
+
 def _canonical_cell_order(complex_: FiniteSimplicialComplex) -> tuple[Simplex, ...]:
     return tuple(face for group in complex_.faces_by_dimension for face in group.faces)
 
@@ -679,6 +863,10 @@ def _canonical_cell_order(complex_: FiniteSimplicialComplex) -> tuple[Simplex, .
 __all__ = [
     "MAX_MORSE_BOUNDARY_ENTRIES",
     "MAX_MORSE_CELLS",
+    "MAX_MORSE_CONTRACTION_CELLS",
+    "MAX_MORSE_CONTRACTION_COEFFICIENT_DIGITS",
+    "MAX_MORSE_CONTRACTION_FACE_CANDIDATES",
+    "MAX_MORSE_CONTRACTION_PAIRS",
     "MAX_MORSE_CRITICAL_CELLS",
     "MAX_MORSE_GRADIENT_PATHS",
     "MAX_MORSE_GRADIENT_STATES",

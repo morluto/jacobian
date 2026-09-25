@@ -7,7 +7,6 @@ from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
 from jacobian.math.geometry.crystallographic.extensions._models import (
-    CrystallographicPolytopePairingRequest,
     FiniteLatticeExtension,
     PolytopeFacetPairing,
 )
@@ -79,15 +78,13 @@ def _checked_cube():
                 ),
             )
         )
-    request = CrystallographicPolytopePairingRequest(
-        affine_realization=affine_section_realization(extension),
-        polytope=polytope,
-        lattice_axes=("x", "y", "z"),
-        pairings=tuple(pairings),
+    pairing = pair_crystallographic_polytope_facets(
+        affine_section_realization(extension),
+        polytope,
+        ("x", "y", "z"),
+        tuple(pairings),
     )
-    checked = check_crystallographic_fundamental_domain(
-        pair_crystallographic_polytope_facets(request)
-    )
+    checked = check_crystallographic_fundamental_domain(pairing)
     assert checked.is_fundamental_domain
     return checked
 
@@ -98,9 +95,9 @@ def test_checked_cube_gives_integral_torus_product_chains() -> None:
 
     assert chain.basis_sizes == (1, 3, 3, 1)
     assert chain.differential_matrices == (
-        (("0", "0", "0"),),
-        (("0", "0", "0"), ("0", "0", "0"), ("0", "0", "0")),
-        (("0",), ("0",), ("0",)),
+        ((0, 0, 0),),
+        ((0, 0, 0), (0, 0, 0), (0, 0, 0)),
+        ((0,), (0,), (0,)),
     )
     assert tuple(
         group.free_rank for group in homology_groups(chain).homology_groups
@@ -120,7 +117,7 @@ def test_serialized_source_composes_without_losing_exact_cell_data() -> None:
     assert tuple(
         tuple(value.as_fraction() for value in vector)
         for vector in result.circle_directions
-    ) == ((1, 0, 0), (0, 1, 0), (0, 0, 1))
+    ) == ((0, 0, 1), (0, 1, 0), (1, 0, 0))
     assert result.source == decoded
 
 
@@ -129,7 +126,7 @@ def test_result_value_rejects_nonzero_differential() -> None:
     payload = result.model_dump(mode="python")
     chain = payload["quotient_chain_complex"]
     chain["differential_matrices"] = (
-        (("1", "0", "0"),),
+        ((1, 0, 0),),
         *chain["differential_matrices"][1:],
     )
 

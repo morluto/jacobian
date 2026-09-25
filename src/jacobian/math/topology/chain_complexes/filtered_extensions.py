@@ -7,7 +7,6 @@ from typing import Any
 from pydantic import Field
 
 from jacobian._models import StrictModel
-from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.topology.chain_complexes._filtered_models import (
     MAX_SPECTRAL_PAGE,
@@ -18,10 +17,14 @@ from jacobian.math.topology.chain_complexes._filtered_operations import (
     _in_span,
     _mat_vec,
     _parse_entry,
+    _serialize_scalar,
     admit_filtered,
     spectral_page,
 )
-from jacobian.math.topology.chain_complexes.values import ChainComplexValue
+from jacobian.math.topology.chain_complexes.values import (
+    ChainCoefficient,
+    ChainComplexValue,
+)
 
 
 class FilteredChainMapRequest(StrictModel):
@@ -29,7 +32,7 @@ class FilteredChainMapRequest(StrictModel):
     source_filtration: tuple[FiltrationLevel, ...] = Field(min_length=1)
     target: ChainComplexValue
     target_filtration: tuple[FiltrationLevel, ...] = Field(min_length=1)
-    maps: tuple[tuple[tuple[str, ...], ...], ...]
+    maps: tuple[tuple[tuple[ChainCoefficient, ...], ...], ...]
 
 
 class FilteredChainMapResult(StrictModel):
@@ -37,7 +40,7 @@ class FilteredChainMapResult(StrictModel):
     target: ChainComplexValue
     source_filtration: tuple[FiltrationLevel, ...]
     target_filtration: tuple[FiltrationLevel, ...]
-    maps: tuple[tuple[tuple[str, ...], ...], ...]
+    maps: tuple[tuple[tuple[ChainCoefficient, ...], ...], ...]
     filtration_preserving: bool
     chain_map: bool
 
@@ -145,7 +148,7 @@ def filtered_map(request: FilteredChainMapRequest) -> FilteredChainMapResult:
                 if not _in_span(target_basis, image, p):
                     preserving = False
     canonical_maps = tuple(
-        tuple(tuple(_serialize_entry(value, p) for value in row) for row in matrix)
+        tuple(tuple(_serialize_scalar(value, p) for value in row) for row in matrix)
         for matrix in parsed
     )
     return FilteredChainMapResult(
@@ -157,17 +160,6 @@ def filtered_map(request: FilteredChainMapRequest) -> FilteredChainMapResult:
         filtration_preserving=preserving,
         chain_map=chain_ok,
     )
-
-
-def _serialize_entry(value: Any, prime: int | None) -> str:
-    if prime is not None:
-        return format_canonical_integer(int(value) % prime)
-    if hasattr(value, "denominator") and value.denominator != 1:
-        return (
-            f"{format_canonical_integer(int(value.numerator))}/"
-            f"{format_canonical_integer(int(value.denominator))}"
-        )
-    return format_canonical_integer(int(value))
 
 
 def _mul(left: Any, right: Any, prime: int | None, *, output_width: int) -> Any:

@@ -6,7 +6,6 @@ from fractions import Fraction
 from typing import NoReturn
 
 from jacobian._exact import CanonicalRational
-from jacobian.canonical import CanonicalLimits
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -14,12 +13,10 @@ from jacobian.catalog.models import (
 from jacobian.math.geometry.polytopes._polyhedral_conversion import (
     MAX_DD_WEIGHTED_HEIGHT_WORK,
     PolyhedralConversionAdmissionError,
+    PolyhedralConversionError,
     _admit_halfspaces_to_generators,
     _HalfspaceConversionAdmission,
     _halfspaces_to_generators_from_admission,
-)
-from jacobian.math.geometry.polytopes._rational_geometry import (
-    PolyhedralConversionError,
 )
 from jacobian.math.geometry.polytopes.values import (
     MAX_RATIONAL_POLYHEDRON_GENERATORS,
@@ -30,8 +27,8 @@ from jacobian.math.geometry.polytopes.values import (
     RationalPolyhedronVPresentation,
 )
 
-MAX_POLYHEDRON_V_RESULT_BYTES = CanonicalLimits().max_output_bytes
-"""Canonical JSON transport egress ceiling used for conservative preflight."""
+MAX_POLYHEDRON_V_RESULT_DIGITS = 10 * 1024 * 1024
+"""Decimal digits summed over stored rationals admitted for one V-presentation."""
 
 MAX_POLYHEDRON_INPUT_COMPONENT_DIGITS = 1_024
 """Per-numerator/denominator input ceiling for practical exact DD work."""
@@ -108,6 +105,13 @@ def _collect_rows(
             )
         coefficients = [component.as_fraction() for component in inequality.normal]
         bound = inequality.bound.as_fraction()
+        if all(coefficient == 0 for coefficient in coefficients):
+            # A constant row never enters double-description expansion, so
+            # classify it before the height envelope applies to its bound.
+            has_inconsistent_constant |= bound < 0
+            if has_inconsistent_constant:
+                return [], True
+            continue
         for component in (*inequality.normal, inequality.bound):
             component_digits = max(
                 component_digits,
@@ -119,9 +123,6 @@ def _collect_rows(
                     "polyhedron.h_to_v.coefficient_height",
                     "input coefficient exceeds the admitted 1,024-digit envelope",
                 )
-        if all(coefficient == 0 for coefficient in coefficients):
-            has_inconsistent_constant |= bound < 0
-            continue
         rows.append((coefficients, bound))
     return rows, has_inconsistent_constant
 
@@ -140,19 +141,18 @@ def _admit_expansion(
         minor_digits = admission.minor_digits
         maximum_rays = admission.maximum_rays
         # The kernel's generator count is bounded by the section's facet bound;
-        # lineality adds at most d vectors. Each rational coordinate has a
-        # numerator and denominator of at most minor_digits decimal digits.
+        # lineality adds at most d vectors. Every stored coordinate keeps a
+        # reduced numerator and denominator of at most minor_digits decimal
+        # digits; axes and IDs are structural cardinalities admitted by the
+        # generator-count envelope below.
         total_vectors = maximum_rays + dimension
-        per_component_bytes = 2 * minor_digits + 32
-        estimated_bytes = (
-            total_vectors * max(1, dimension) * per_component_bytes
-            + total_vectors * (dimension + 2)
-            + 4_096
-        )
-        if estimated_bytes > MAX_POLYHEDRON_V_RESULT_BYTES:
+        estimated_digits = 2 * total_vectors * max(1, dimension) * minor_digits
+        if estimated_digits > MAX_POLYHEDRON_V_RESULT_DIGITS:
             _refuse(
-                "polyhedron.h_to_v.result_bytes",
-                f"conservative V-result bound {estimated_bytes} exceeds {MAX_POLYHEDRON_V_RESULT_BYTES} bytes",
+                "polyhedron.h_to_v.result_output",
+                "conservative V-result bound "
+                f"{estimated_digits} exceeds "
+                f"{MAX_POLYHEDRON_V_RESULT_DIGITS} stored digits",
             )
         if maximum_rays > MAX_RATIONAL_POLYHEDRON_GENERATORS:
             _refuse(
@@ -234,4 +234,4 @@ def halfspaces_to_v_presentation(
     )
 
 
-__all__ = ["MAX_POLYHEDRON_V_RESULT_BYTES", "halfspaces_to_v_presentation"]
+__all__ = ["MAX_POLYHEDRON_V_RESULT_DIGITS", "halfspaces_to_v_presentation"]

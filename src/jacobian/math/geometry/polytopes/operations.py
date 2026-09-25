@@ -34,13 +34,22 @@ from jacobian.math.geometry.polytopes._models import (
     MAX_FACET_COORDINATE_DIGITS,
     MAX_FACET_DIMENSION,
     MAX_FACET_INCIDENCES,
+    MAX_POLYTOPE_FACE_LATTICE_COVERS,
+    MAX_POLYTOPE_FACE_LATTICE_DIMENSION,
+    MAX_POLYTOPE_FACE_LATTICE_FACES,
+    MAX_POLYTOPE_FACE_LATTICE_RESULT_DIGITS,
+    MAX_POLYTOPE_FACE_LATTICE_WORK,
     MAX_VERTICES,
     EdgeProfileResult,
     FacetIncidenceResult,
     JoinResult,
     JoinVertexMap,
     PolytopeAdmissionError,
+    PolytopeAxisTransport,
     PolytopeEdge,
+    PolytopeFace,
+    PolytopeFaceCover,
+    PolytopeFaceLatticeResult,
     PolytopeSupportResult,
     PolytopeVolumeResult,
     PrimitiveFacet,
@@ -1227,8 +1236,15 @@ def polytope_prism(polytope: RationalVPolytope, height_axis: str) -> PrismResult
         )
         for vertex in ordered_sources
     )
+    source_axis_map = tuple(
+        PolytopeAxisTransport(source_axis=axis, target_axis=axis)
+        for axis in polytope.space.axes
+    )
     return PrismResult._from_kernel(
         prism=prism,
+        height_axis=height_axis,
+        source_space=polytope.space,
+        source_axis_map=source_axis_map,
         bottom_vertex_map=bottom_map,
         top_vertex_map=top_map,
         source_affine_dimension=source_dim,
@@ -1425,8 +1441,21 @@ def polytope_join(
         )
         for vertex in sorted(right.vertices, key=lambda v: v.vertex_id)
     )
+    left_axis_map = tuple(
+        PolytopeAxisTransport(source_axis=axis, target_axis=axis)
+        for axis in left.space.axes
+    )
+    right_axis_map = tuple(
+        PolytopeAxisTransport(source_axis=axis, target_axis=axis)
+        for axis in right.space.axes
+    )
     return JoinResult._from_kernel(
         join=join,
+        height_axis=height_axis,
+        left_space=left.space,
+        right_space=right.space,
+        left_axis_map=left_axis_map,
+        right_axis_map=right_axis_map,
         left_vertex_map=left_map,
         right_vertex_map=right_map,
         left_affine_dimension=left_dim,
@@ -1646,6 +1675,349 @@ def _compute_edge_data(
     return tuple(pairs), source_dimension
 
 
+def _face_lattice_work_bound(vertex_count: int) -> int:
+    """Bound all rank-three face and Hasse-cover postprocessing scans."""
+
+    maximum_facets = min(MAX_COMPUTED_FACETS, 2 * vertex_count - 4)
+    maximum_edges = 3 * vertex_count - 6
+    maximum_faces = 6 * vertex_count - 8
+    maximum_covers = 15 * vertex_count - 28
+    return (
+        math.comb(maximum_facets, 2) * vertex_count
+        + 2 * maximum_edges * maximum_facets
+        + maximum_faces * vertex_count
+        + 4 * maximum_covers
+        + 64 * vertex_count
+    )
+
+
+def _preflight_face_lattice_source(polytope_value: RationalVPolytope) -> int:
+    """Bound raw same-class fields before any recursive model serialization."""
+
+    if not isinstance(polytope_value, RationalVPolytope):
+        raise OperationDomainValidationError(
+            location=("polytope",),
+            code="polytope.face_lattice.source_not_a_v_polytope",
+            message="face-lattice source must be a labelled rational V-polytope",
+        )
+
+    space = getattr(polytope_value, "space", None)
+    axes = getattr(space, "axes", None)
+    if (
+        not isinstance(space, RationalCoordinateSpace)
+        or not isinstance(axes, tuple)
+        or len(axes) != 3
+        or any(
+            not isinstance(axis, str) or len(axis) > MAX_COORDINATE_LABEL_LENGTH
+            for axis in axes
+        )
+    ):
+        raise OperationDomainValidationError(
+            location=("polytope", "space", "axes"),
+            code="polytope.face_lattice.dimension_not_three",
+            message="face-lattice construction requires three bounded coordinate axes",
+        )
+    vertices = getattr(polytope_value, "vertices", None)
+    if not isinstance(vertices, tuple) or len(vertices) > MAX_VERTICES:
+        raise OperationResourceAdmissionError(
+            location=("polytope", "vertices"),
+            code="polytope.face_lattice.vertex_bound_exceeded",
+            message=f"face-lattice input exceeds {MAX_VERTICES} source vertices",
+        )
+    if len(vertices) < 4:
+        raise OperationDomainValidationError(
+            location=("polytope", "vertices"),
+            code="polytope.face_lattice.extreme_vertices_invalid",
+            message="a full-dimensional 3-polytope must have at least four source vertices",
+        )
+    source_chars_bound = 256 + 6 * sum(len(axis) for axis in axes)
+    for vertex in vertices:
+        if not isinstance(vertex, RationalPolytopeVertex):
+            raise OperationDomainValidationError(
+                location=("polytope", "vertices"),
+                code="polytope.face_lattice.source_structure_invalid",
+                message="every source row must be a canonical labelled polytope vertex",
+            )
+        vertex_id = getattr(vertex, "vertex_id", None)
+        coordinates = getattr(vertex, "coordinates", None)
+        if (
+            not isinstance(vertex_id, str)
+            or not 0 < len(vertex_id) <= MAX_COORDINATE_LABEL_LENGTH
+            or not isinstance(coordinates, tuple)
+            or len(coordinates) != 3
+        ):
+            raise OperationDomainValidationError(
+                location=("polytope", "vertices"),
+                code="polytope.face_lattice.source_structure_invalid",
+                message="source row labels and coordinates must fit the rank-three contract",
+            )
+        source_chars_bound += 6 * len(vertex_id) + 64
+        for coordinate in coordinates:
+            if (
+                not isinstance(coordinate, CanonicalRational)
+                or type(coordinate.num) is not int
+                or type(coordinate.den) is not int
+                or coordinate.den <= 0
+            ):
+                raise OperationDomainValidationError(
+                    location=("polytope", "vertices"),
+                    code="polytope.face_lattice.source_structure_invalid",
+                    message="source coordinates must be canonical rational values",
+                )
+            try:
+                require_bounded_rational(
+                    coordinate,
+                    max_digits=MAX_FACET_COORDINATE_DIGITS,
+                    label="face-lattice source coordinate",
+                )
+            except ValueError as exc:
+                raise OperationResourceAdmissionError(
+                    location=("polytope", "vertices"),
+                    code="polytope.face_lattice.coordinate_height_exceeded",
+                    message=str(exc),
+                ) from exc
+            source_chars_bound += 2 * MAX_FACET_COORDINATE_DIGITS + 24
+    return source_chars_bound
+
+
+def _admit_face_lattice_source(polytope_value: RationalVPolytope) -> RationalVPolytope:
+    """Revalidate and admit a bounded canonical source before facet enumeration."""
+
+    source_chars_bound = _preflight_face_lattice_source(polytope_value)
+    try:
+        polytope = RationalVPolytope.model_validate(
+            polytope_value.model_dump(mode="python", warnings=False), strict=True
+        )
+    except (AttributeError, TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("polytope",),
+            code="polytope.face_lattice.source_structure_invalid",
+            message="face-lattice source must satisfy the canonical V-polytope contract",
+        ) from exc
+
+    if len(polytope.space.axes) != MAX_POLYTOPE_FACE_LATTICE_DIMENSION:
+        raise OperationDomainValidationError(
+            location=("polytope", "space", "axes"),
+            code="polytope.face_lattice.dimension_not_three",
+            message="polytope face-lattice construction currently supports dimension three",
+        )
+    vertex_count = len(polytope.vertices)
+    if vertex_count > MAX_VERTICES:
+        raise OperationResourceAdmissionError(
+            location=("polytope", "vertices"),
+            code="polytope.face_lattice.vertex_bound_exceeded",
+            message=f"face-lattice input exceeds {MAX_VERTICES} source vertices",
+        )
+    for vertex in polytope.vertices:
+        for coordinate in vertex.coordinates:
+            try:
+                require_bounded_rational(
+                    coordinate,
+                    max_digits=MAX_FACET_COORDINATE_DIGITS,
+                    label="face-lattice source coordinate",
+                )
+            except ValueError as exc:
+                raise OperationResourceAdmissionError(
+                    location=("polytope", "vertices"),
+                    code="polytope.face_lattice.coordinate_height_exceeded",
+                    message=str(exc),
+                ) from exc
+
+    maximum_faces = 6 * vertex_count - 8
+    maximum_covers = 15 * vertex_count - 28
+    if (
+        maximum_faces > MAX_POLYTOPE_FACE_LATTICE_FACES
+        or maximum_covers > MAX_POLYTOPE_FACE_LATTICE_COVERS
+    ):
+        raise OperationResourceAdmissionError(
+            location=("polytope",),
+            code="polytope.face_lattice.output_bound_exceeded",
+            message="the derived rank-three face-lattice output exceeds its published bound",
+        )
+    estimated_work = _face_lattice_work_bound(vertex_count)
+    if estimated_work > MAX_POLYTOPE_FACE_LATTICE_WORK:
+        raise OperationResourceAdmissionError(
+            location=("polytope",),
+            code="polytope.face_lattice.work_budget_exceeded",
+            message=(
+                f"face-lattice postprocessing is estimated at {estimated_work} units; "
+                f"limit is {MAX_POLYTOPE_FACE_LATTICE_WORK}"
+            ),
+        )
+    output_digits_bound = (
+        source_chars_bound
+        + MAX_POLYTOPE_FACE_LATTICE_FACES * 256
+        + MAX_POLYTOPE_FACE_LATTICE_COVERS * 64
+        + 64_000
+    )
+    if output_digits_bound > MAX_POLYTOPE_FACE_LATTICE_RESULT_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("result",),
+            code="polytope.face_lattice.result_size_exceeded",
+            message=(
+                f"face-lattice output may require {output_digits_bound} digits; "
+                f"limit is {MAX_POLYTOPE_FACE_LATTICE_RESULT_DIGITS}"
+            ),
+        )
+
+    return polytope
+
+
+def _compute_face_lattice_incidence(
+    polytope: RationalVPolytope,
+) -> tuple[tuple[int, ...], tuple[tuple[int, ...], ...], tuple[tuple[int, int], ...]]:
+    """Derive extremes, facets, and edges from internally computed incidence."""
+
+    vertex_count = len(polytope.vertices)
+    bare_vertices = _canonical_v_polytope_vertices(polytope)
+    try:
+        facets = _computed_facets_from_vertices(
+            bare_vertices, MAX_POLYTOPE_FACE_LATTICE_DIMENSION
+        )
+    except PolyhedralConversionAdmissionError as exc:
+        raise OperationResourceAdmissionError(
+            location=("polytope",),
+            code="polytope.face_lattice.facet_enumeration_exceeded",
+            message=str(exc),
+        ) from exc
+    except ValueError as exc:
+        raise OperationDomainValidationError(
+            location=("polytope",),
+            code="polytope.face_lattice.facet_profile_invalid",
+            message=str(exc),
+        ) from exc
+
+    extreme = tuple(_extreme_positions_from_facets(facets, vertex_count, 3))
+    if len(extreme) < 4:
+        raise OperationDomainValidationError(
+            location=("polytope", "vertices"),
+            code="polytope.face_lattice.extreme_vertices_invalid",
+            message="a full-dimensional 3-polytope must have at least four extreme vertices",
+        )
+    extreme_set = set(extreme)
+    facet_vertices = tuple(
+        tuple(index for index in facet.source_vertex_indices if index in extreme_set)
+        for facet in facets
+    )
+    if any(len(face_vertices) < 3 for face_vertices in facet_vertices):
+        raise OperationDomainValidationError(
+            location=("polytope",),
+            code="polytope.face_lattice.facet_extremes_invalid",
+            message="each supporting facet must contain at least three extreme vertices",
+        )
+
+    facet_sets = tuple(set(vertices) for vertices in facet_vertices)
+    edge_occurrences: dict[tuple[int, int], int] = {}
+    for left, right in combinations(range(len(facets)), 2):
+        common = tuple(
+            index
+            for index in extreme
+            if index in facet_sets[left] and index in facet_sets[right]
+        )
+        if len(common) == 2:
+            edge = (common[0], common[1])
+            edge_occurrences[edge] = edge_occurrences.get(edge, 0) + 1
+    if any(count != 1 for count in edge_occurrences.values()):
+        raise OperationDomainValidationError(
+            location=("polytope",),
+            code="polytope.face_lattice.edge_incidence_invalid",
+            message="each polytope edge must be the intersection of exactly two facets",
+        )
+    edges = tuple(sorted(edge_occurrences))
+    expected_edge_count = len(extreme) + len(facets) - 2
+    if len(edges) != expected_edge_count:
+        raise OperationDomainValidationError(
+            location=("polytope",),
+            code="polytope.face_lattice.euler_identity_failed",
+            message="the derived vertices, edges, and facets do not satisfy Euler's identity",
+        )
+
+    return extreme, facet_vertices, edges
+
+
+def _assemble_face_lattice(
+    polytope: RationalVPolytope,
+    extreme: tuple[int, ...],
+    facet_vertices: tuple[tuple[int, ...], ...],
+    edges: tuple[tuple[int, int], ...],
+) -> PolytopeFaceLatticeResult:
+    """Build canonical face labels and Hasse covers from exact incidences."""
+
+    face_specs: list[tuple[int, tuple[int, ...]]] = [(-1, ())]
+    face_specs.extend((0, (index,)) for index in extreme)
+    face_specs.extend((1, edge) for edge in edges)
+    face_specs.extend((2, vertices) for vertices in facet_vertices)
+    face_specs.append((3, extreme))
+    face_specs.sort()
+    faces = tuple(
+        PolytopeFace(dimension=dimension, source_vertex_indices=indices)
+        for dimension, indices in face_specs
+    )
+    face_indices = {
+        (face.dimension, face.source_vertex_indices): index
+        for index, face in enumerate(faces)
+    }
+    bottom = face_indices[(-1, ())]
+    top = face_indices[(3, extreme)]
+    cover_pairs: set[tuple[int, int]] = {
+        (bottom, face_indices[(0, (vertex,))]) for vertex in extreme
+    }
+    for edge in edges:
+        edge_index = face_indices[(1, edge)]
+        cover_pairs.update(
+            (face_indices[(0, (vertex,))], edge_index) for vertex in edge
+        )
+    for facet_index, vertices in enumerate(facet_vertices):
+        facet_key = (2, vertices)
+        face_index = face_indices[facet_key]
+        for edge in edges:
+            if edge[0] in vertices and edge[1] in vertices:
+                cover_pairs.add((face_indices[(1, edge)], face_index))
+        if not any(
+            (face_indices[(1, edge)], face_index) in cover_pairs for edge in edges
+        ):
+            raise OperationDomainValidationError(
+                location=("polytope", "facets", facet_index),
+                code="polytope.face_lattice.facet_boundary_missing",
+                message="every facet must contain at least one derived boundary edge",
+            )
+        cover_pairs.add((face_index, top))
+
+    covers = tuple(
+        PolytopeFaceCover(lower_face_index=lower, upper_face_index=upper)
+        for lower, upper in sorted(cover_pairs)
+    )
+    if (
+        len(faces) > MAX_POLYTOPE_FACE_LATTICE_FACES
+        or len(covers) > MAX_POLYTOPE_FACE_LATTICE_COVERS
+    ):
+        raise OperationResourceAdmissionError(
+            location=("result",),
+            code="polytope.face_lattice.output_bound_exceeded",
+            message="the exact face-lattice result exceeds its published face or cover bound",
+        )
+    return PolytopeFaceLatticeResult._from_kernel(
+        polytope=polytope,
+        extreme_vertex_indices=extreme,
+        faces=faces,
+        covers=covers,
+    )
+
+
+def polytope_face_lattice(
+    polytope_value: RationalVPolytope,
+) -> PolytopeFaceLatticeResult:
+    """Compute the complete face lattice of an exact three-dimensional hull.
+
+    Facets are recomputed from the retained V-representation; caller-supplied
+    incidence claims are never treated as geometry.
+    """
+
+    polytope = _admit_face_lattice_source(polytope_value)
+    extreme, facet_vertices, edges = _compute_face_lattice_incidence(polytope)
+    return _assemble_face_lattice(polytope, extreme, facet_vertices, edges)
+
+
 def polytope_edge_profile(
     polytope: RationalVPolytope, dimension_bound: int = MAX_FACET_DIMENSION
 ) -> EdgeProfileResult:
@@ -1832,6 +2204,7 @@ __all__ = [
     "convex_hull_volume",
     "facet_incidence",
     "polytope_edge_profile",
+    "polytope_face_lattice",
     "polytope_join",
     "polytope_prism",
     "polytope_pyramid",

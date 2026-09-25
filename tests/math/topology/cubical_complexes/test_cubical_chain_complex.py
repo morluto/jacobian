@@ -47,7 +47,7 @@ class TestKnownAnswers:
     def test_single_edge(self) -> None:
         result = chain_complex(_EDGE)
         assert result.value.basis_sizes == (2, 1)
-        assert result.value.differential_matrices == ((("-1",), ("1",)),)
+        assert result.value.differential_matrices == (((-1,), (1,)),)
         assert [basis.dimension for basis in result.cell_bases] == [0, 1]
         assert result.differential_squared_zero[0].product_rows == 0
         assert result.differential_squared_zero[0].product_columns == 1
@@ -56,16 +56,16 @@ class TestKnownAnswers:
         result = chain_complex(_SQUARE)
         assert result.value.basis_sizes == (4, 4, 1)
         assert result.value.differential_matrices[0] == (
-            ("-1", "-1", "0", "0"),
-            ("1", "0", "-1", "0"),
-            ("0", "1", "0", "-1"),
-            ("0", "0", "1", "1"),
+            (-1, -1, 0, 0),
+            (1, 0, -1, 0),
+            (0, 1, 0, -1),
+            (0, 0, 1, 1),
         )
         assert result.value.differential_matrices[1] == (
-            ("-1",),
-            ("1",),
-            ("-1",),
-            ("1",),
+            (-1,),
+            (1,),
+            (-1,),
+            (1,),
         )
 
     def test_single_cube_f_vector(self) -> None:
@@ -81,10 +81,10 @@ class TestKnownAnswers:
         assert result.value.coefficient_ring is CoefficientRing.PRIME_FIELD
         assert result.value.prime == 3
         assert result.value.differential_matrices[1] == (
-            ("2",),
-            ("1",),
-            ("2",),
-            ("1",),
+            (2,),
+            (1,),
+            (2,),
+            (1,),
         )
 
     def test_degenerate_vertex_retains_ambient_axis(self) -> None:

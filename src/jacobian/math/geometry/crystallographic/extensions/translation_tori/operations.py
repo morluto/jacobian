@@ -244,9 +244,9 @@ def translation_torus_quotient_chains(
         degree_max=3,
         basis_sizes=(1, 3, 3, 1),
         differential_matrices=(
-            (("0", "0", "0"),),
-            (("0", "0", "0"), ("0", "0", "0"), ("0", "0", "0")),
-            (("0",), ("0",), ("0",)),
+            ((0, 0, 0),),
+            ((0, 0, 0), (0, 0, 0), (0, 0, 0)),
+            ((0,), (0,), (0,)),
         ),
     )
     result = BieberbachTranslationTorusChains(

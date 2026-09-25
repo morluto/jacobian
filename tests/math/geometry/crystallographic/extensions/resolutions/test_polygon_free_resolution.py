@@ -9,7 +9,6 @@ from jacobian._exact import CanonicalRational
 from jacobian.dispatch import parse_operation_input
 from jacobian.math.geometry.crystallographic.extensions._models import (
     BieberbachFaceOrbitComplex,
-    CrystallographicPolytopePairingRequest,
     FiniteLatticeExtension,
     PolytopeFacetPairing,
 )
@@ -114,12 +113,10 @@ def _face_orbits(*, klein: bool) -> BieberbachFaceOrbitComplex:
         ),
     )
     pairing = pair_crystallographic_polytope_facets(
-        CrystallographicPolytopePairingRequest(
-            affine_realization=affine_section_realization(extension),
-            polytope=polytope,
-            lattice_axes=("x", "y"),
-            pairings=pairings,
-        )
+        affine_section_realization(extension),
+        polytope,
+        ("x", "y"),
+        pairings,
     )
     domain = check_crystallographic_fundamental_domain(pairing)
     assert domain.is_fundamental_domain

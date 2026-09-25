@@ -28,7 +28,12 @@ def _decide(request: FiniteLatticeExtension) -> CrystallographicExtensionTorsion
 def _pair_polytope(
     request: CrystallographicPolytopePairingRequest,
 ) -> CrystallographicPolytopePairingResult:
-    return pair_crystallographic_polytope_facets(request)
+    return pair_crystallographic_polytope_facets(
+        request.affine_realization,
+        request.polytope,
+        request.lattice_axes,
+        request.pairings,
+    )
 
 
 def _check_fundamental_domain(
@@ -265,7 +270,14 @@ TOOLS: MathTools = (
             OperationExample(
                 name="unit_square_torus_quotient_chains",
                 description="Construct the integral quotient chains of the unit-square torus.",
-                input=_UNIT_SQUARE_PAIRING_RESULT,
+                input={
+                    "source": _UNIT_SQUARE_PAIRING_RESULT,
+                    "is_fundamental_domain": True,
+                    "polytope_volume": {"num": "1", "den": "1"},
+                    "quotient_covolume": {"num": "1", "den": "1"},
+                    "overlap_translation": None,
+                    "overlap_holonomy_element": None,
+                },
             ),
         ),
     ),

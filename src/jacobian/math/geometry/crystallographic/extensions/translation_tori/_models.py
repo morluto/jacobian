@@ -44,9 +44,9 @@ class BieberbachTranslationTorusChains(StrictModel):
             or chain.basis_sizes != (1, 3, 3, 1)
             or chain.differential_matrices
             != (
-                (("0", "0", "0"),),
-                (("0", "0", "0"), ("0", "0", "0"), ("0", "0", "0")),
-                (("0",), ("0",), ("0",)),
+                ((0, 0, 0),),
+                ((0, 0, 0), (0, 0, 0), (0, 0, 0)),
+                ((0,), (0,), (0,)),
             )
         ):
             raise PydanticCustomError(

@@ -167,9 +167,9 @@ def _admit_box_and_output(
     request_location = (
         ("cutoff",) if isinstance(request, ThetaSeriesPrefixRequest) else ("indices",)
     )
+    cutoff = request.cutoff
     radii = tuple(
-        isqrt((2 * request.cutoff * cofactor) // determinant)
-        for cofactor in diagonal_cofactors
+        isqrt((2 * cutoff * cofactor) // determinant) for cofactor in diagonal_cofactors
     )
     vector_count = 1
     for radius in radii:
@@ -272,7 +272,34 @@ def theta_selected_coefficients(
     request: ThetaSelectedCoefficientsRequest,
 ) -> ThetaSelectedCoefficientsResult:
     """Return only requested r_Q(n), without constructing intervening terms."""
+    if not isinstance(request, ThetaSelectedCoefficientsRequest):
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="quadratic_form.theta_invalid_request",
+            message="selected theta coefficients require a selected-coefficients request",
+        )
     form = request.form
+    if not isinstance(form, RationalQuadraticForm):
+        raise OperationDomainValidationError(
+            location=("form",),
+            code="quadratic_form.theta_invalid_form",
+            message="selected theta coefficients require a rational quadratic form",
+        )
+    indices = request.indices
+    if (
+        type(indices) is not tuple
+        or not 1 <= len(indices) <= 128
+        or any(
+            type(index) is not int or not 0 <= index <= 1_000_000_000
+            for index in indices
+        )
+        or tuple(sorted(set(indices))) != indices
+    ):
+        raise OperationDomainValidationError(
+            location=("indices",),
+            code="quadratic_form.theta_invalid_selected_indices",
+            message="selected theta indices must be bounded and strictly increasing",
+        )
     dimension, support, determinant_work, cofactor_work = _require_input_envelope(form)
     _, determinant, diagonal_cofactors = _positive_definite_matrix(form, dimension)
     radii = _admit_box_and_output(
@@ -284,8 +311,8 @@ def theta_selected_coefficients(
         diagonal_cofactors,
     )
 
-    wanted = set(request.indices)
-    counts = dict.fromkeys(request.indices, 0)
+    wanted = set(indices)
+    counts = dict.fromkeys(indices, 0)
     diagonal = tuple(value.num for value in form.diagonal_coefficients)
     crosses = tuple(
         (term.left, term.right, term.coefficient.num) for term in form.cross_terms
@@ -306,7 +333,7 @@ def theta_selected_coefficients(
         form=form,
         coefficients=tuple(
             ThetaSelectedCoefficient(index=index, coefficient=counts[index])
-            for index in request.indices
+            for index in indices
         ),
     )
 

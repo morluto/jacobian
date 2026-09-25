@@ -41,7 +41,11 @@ def _decimal_digits(value: int) -> int:
     if magnitude == 0:
         return 1
     # 30103/100000 is a strict upper approximation to log10(2).
-    return (magnitude.bit_length() * 30103 + 99999) // 100000
+    digits = (magnitude.bit_length() * 30103 + 99999) // 100000
+    # The approximation is an upper bound; correct its one-digit overestimate.
+    while digits > 1 and magnitude < 10 ** (digits - 1):
+        digits -= 1
+    return digits
 
 
 def _domain_error(code: str, message: str) -> OperationDomainValidationError:

@@ -32,6 +32,7 @@ from jacobian.math.number_theory.squarefree_affine_forms._local_factor import (
     SquarefreeLocalFactorResult,
 )
 from jacobian.math.number_theory.squarefree_affine_forms._models import (
+    _decimal_digits,
     admit_euler_product,
     admit_infinite_product,
     admit_local_factor,
@@ -40,6 +41,7 @@ from jacobian.math.number_theory.squarefree_affine_forms.values import (
     MAX_SQUAREFREE_COMPONENT_DIGITS,
     MAX_SQUAREFREE_FORMS,
     SquarefreeAffineFamily,
+    SquarefreeAffineForm,
 )
 
 
@@ -53,6 +55,8 @@ def verify_squarefree_affine_family(family: object) -> bool:
         pairs = set()
         identifiers = set()
         for form in forms:
+            if not isinstance(form, SquarefreeAffineForm):
+                return False
             coefficient = form.coefficient
             constant = form.constant
             identifiers.add(form.form_id)
@@ -62,9 +66,14 @@ def verify_squarefree_affine_family(family: object) -> bool:
             if coefficient == 0 and constant == 0:
                 return False
             if (
-                len(str(abs(coefficient))) > MAX_SQUAREFREE_COMPONENT_DIGITS
-                or len(str(abs(constant))) > MAX_SQUAREFREE_COMPONENT_DIGITS
+                type(coefficient) is not int
+                or type(constant) is not int
+                or _decimal_digits(coefficient) >= MAX_SQUAREFREE_COMPONENT_DIGITS
+                or _decimal_digits(constant) >= MAX_SQUAREFREE_COMPONENT_DIGITS
             ):
+                return False
+            form_id = form.form_id
+            if type(form_id) is not str or not form_id.isascii() or not form_id:
                 return False
         if len(identifiers) != len(forms):
             return False

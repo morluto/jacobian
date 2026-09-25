@@ -31,6 +31,11 @@ from .arithmetic_models import (
     RationalFunctionExpansionResult,
     RationalFunctionInfinityExpansionRequest,
 )
+from .contact_profile import (
+    PuiseuxContactProfile,
+    PuiseuxContactRequest,
+    puiseux_contact_profile,
+)
 from .newton_polygon import (
     LocalPolynomialInSeries,
     LocalPolynomialNewtonPolygonResult,
@@ -988,6 +993,35 @@ TOOLS: MathTools = (
                         ),
                     ).model_dump(mode="json")
                 },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="local_series.puiseux.contact_profile.compute",
+        title="Profile pairwise contact of Puiseux prefixes",
+        description=(
+            "Return the first differing rational exponent for each pair of "
+            "Puiseux prefixes on a shared known window, or mark agreement "
+            "through the finite cutoff unresolved. This compares formal values; "
+            "it does not assert branch validity or family completeness."
+        ),
+        request_type=PuiseuxContactRequest,
+        result_type=PuiseuxContactProfile,
+        run=puiseux_contact_profile,
+        tags=("local-series", "puiseux", "contact-order", "exact"),
+        discovery_terms=(
+            "compare Puiseux branch prefixes",
+            "contact order of truncated Puiseux series",
+            "first exponent where two local expansions differ",
+        ),
+        examples=(
+            OperationExample(
+                name="fractional_contact_order",
+                description=(
+                    "The prefixes t^(1/2)+O(t^2) and 2t^(1/2)+O(t^2) "
+                    "first differ at exponent 1/2."
+                ),
+                input={"prefixes": [_example_puiseux(1), _example_puiseux(2)]},
             ),
         ),
     ),

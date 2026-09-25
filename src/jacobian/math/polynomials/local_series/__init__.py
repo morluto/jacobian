@@ -9,6 +9,12 @@ from jacobian.math.polynomials.local_series.arithmetic_models import (
     PuiseuxResidueResult,
     RationalFunctionExpansionResult,
 )
+from jacobian.math.polynomials.local_series.contact_profile import (
+    PuiseuxContactPair,
+    PuiseuxContactProfile,
+    PuiseuxContactRequest,
+    puiseux_contact_profile,
+)
 from jacobian.math.polynomials.local_series.newton_polygon import (
     LocalPolynomialCoefficient,
     LocalPolynomialInSeries,
@@ -78,6 +84,9 @@ __all__ = [
     "NewtonPolygonEdge",
     "NewtonPolygonPoint",
     "NonzeroValuation",
+    "PuiseuxContactPair",
+    "PuiseuxContactProfile",
+    "PuiseuxContactRequest",
     "PuiseuxResidueResult",
     "PuiseuxTerm",
     "RationalFunctionExpansionResult",
@@ -108,6 +117,7 @@ __all__ = [
     "newton_edge_characteristic_roots",
     "power",
     "principal_part",
+    "puiseux_contact_profile",
     "ramify",
     "rational_function_at_infinity",
     "rational_function_at_point",

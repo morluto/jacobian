@@ -44,6 +44,7 @@ from jacobian.math.topology.chain_complexes.values import (
     ChainCoefficient,
     ChainComplexValue,
     CoefficientRing,
+    _require_coefficient_scalar,
 )
 
 MAX_FILTERED_HOMOLOGY_PRIME = 2**31 - 1
@@ -156,7 +157,11 @@ class FilteredChainMapPageZeroResult(StrictModel):
     """The exact map induced by a filtered chain map on the E^0 page.
 
     ``maps[p][n]`` is written in the quotient bases chosen by the source and
-    target associated-graded values. Its source and target remain the original
+    target associated-graded values. ``source_representatives`` and
+    ``target_representatives`` retain those ambient bases as the explicit row
+    and column axes of every returned matrix, so the value can be interpreted
+    and composed after serialization without replaying the private
+    basis-selection algorithm. Its source and target remain the original
     filtered chain complexes so the map composes with their page results.
     """
 
@@ -166,10 +171,12 @@ class FilteredChainMapPageZeroResult(StrictModel):
     target_filtration: tuple[FiltrationLevel, ...]
     source_dimensions: tuple[tuple[int, ...], ...]
     target_dimensions: tuple[tuple[int, ...], ...]
+    source_representatives: tuple[tuple[tuple[Vector, ...], ...], ...]
+    target_representatives: tuple[tuple[tuple[Vector, ...], ...], ...]
     maps: tuple[tuple[tuple[tuple[ChainCoefficient, ...], ...], ...], ...]
 
     @model_validator(mode="after")
-    def require_map_axes(self) -> Self:
+    def require_map_axes(self) -> Self:  # noqa: C901
         if len(self.source_dimensions) != len(self.source_filtration):
             raise ValueError("source E0 dimensions must cover every filtration level")
         if len(self.target_dimensions) != len(self.target_filtration):
@@ -185,14 +192,34 @@ class FilteredChainMapPageZeroResult(StrictModel):
             or self.source.prime != self.target.prime
         ):
             raise ValueError("source and target degree windows must agree")
-        for dimensions, complex_value in (
-            (self.source_dimensions, self.source),
-            (self.target_dimensions, self.target),
+        for dimensions, representatives, complex_value in (
+            (self.source_dimensions, self.source_representatives, self.source),
+            (self.target_dimensions, self.target_representatives, self.target),
         ):
-            if len(dimensions) != len(self.source_filtration) or any(
-                len(level) != degree_count for level in dimensions
+            if (
+                len(dimensions) != len(self.source_filtration)
+                or any(len(level) != degree_count for level in dimensions)
+                or len(representatives) != len(self.source_filtration)
+                or any(len(level) != degree_count for level in representatives)
             ):
-                raise ValueError("E0 dimensions must cover every degree and level")
+                raise ValueError(
+                    "E0 dimensions and quotient representatives must cover "
+                    "every degree and level"
+                )
+            for level_index, level in enumerate(dimensions):
+                for degree, dimension in enumerate(level):
+                    if dimension < 0 or dimension > complex_value.basis_sizes[degree]:
+                        raise ValueError(
+                            "E0 dimensions must lie between zero and each chain rank"
+                        )
+                    vectors = representatives[level_index][degree]
+                    if len(vectors) != dimension or any(
+                        len(vector) != complex_value.basis_sizes[degree]
+                        for vector in vectors
+                    ):
+                        raise ValueError(
+                            "E0 quotient representatives must match their graded axes"
+                        )
             if any(
                 sum(level[degree] for level in dimensions)
                 != complex_value.basis_sizes[degree]
@@ -652,8 +679,34 @@ def _check_filtered_chain_map_axes(request: FilteredChainMapRequest) -> None:
             )
 
 
+def _require_canonical_map_entries(request: FilteredChainMapRequest) -> None:
+    """Reject map scalars that do not fit the retained coefficient ring.
+
+    The generic ``ChainCoefficient`` grammar admits rationals for every ring,
+    so a finite-field request can carry a syntactically valid ``"1/2"``. The
+    kernel parser must not turn that into an internal ``RuntimeError``.
+    """
+    ring = request.source.coefficient_ring
+    prime = request.source.prime
+    for degree, matrix in enumerate(request.maps):
+        for row in matrix:
+            for value in row:
+                try:
+                    _require_coefficient_scalar(ring, value, prime=prime)
+                except (AttributeError, TypeError, ValueError) as exc:
+                    raise OperationDomainValidationError(
+                        location=("maps", degree),
+                        code="filtered_chain_map.entry_invalid",
+                        message=(
+                            "map entries must use the retained canonical "
+                            "coefficient grammar"
+                        ),
+                    ) from exc
+
+
 def filtered_map(request: FilteredChainMapRequest) -> FilteredChainMapResult:
     _check_filtered_chain_map_axes(request)
+    _require_canonical_map_entries(request)
     source_admission = _admit_filtered_semantics(
         request.source, request.source_filtration
     )
@@ -669,11 +722,12 @@ def _filtered_map_admitted(
     target_admission: Any,
 ) -> FilteredChainMapResult:
     p = request.source.prime
+    _require_canonical_map_entries(request)
     parsed = []
     for degree, matrix in enumerate(request.maps):
         try:
             parsed.append([[_parse_entry(v, p) for v in row] for row in matrix])
-        except (TypeError, ValueError, ZeroDivisionError) as exc:
+        except (TypeError, ValueError, ZeroDivisionError, RuntimeError) as exc:
             raise OperationDomainValidationError(
                 location=("maps", degree),
                 code="filtered_chain_map.entry_invalid",
@@ -722,35 +776,8 @@ def _filtered_map_admitted(
     )
 
 
-def _admit_e0_map_request(request: FilteredChainMapRequest) -> tuple[Any, Any, Any]:
-    _check_filtered_chain_map_axes(request)
-    source_admission = _admit_filtered_semantics(
-        request.source, request.source_filtration
-    )
-    target_admission = _admit_filtered_semantics(
-        request.target, request.target_filtration
-    )
-    map_cells = sum(
-        (
-            len(source_admission.bases[level][degree])
-            - (len(source_admission.bases[level - 1][degree]) if level else 0)
-        )
-        * (
-            len(target_admission.bases[level][degree])
-            - (len(target_admission.bases[level - 1][degree]) if level else 0)
-        )
-        for level in range(len(request.source_filtration))
-        for degree in range(len(request.source.basis_sizes))
-    )
-    if map_cells > MAX_FILTERED_HOMOLOGY_RESULT_CELLS:
-        raise OperationResourceAdmissionError(
-            location=("maps",),
-            code="filtered_chain_map.e0_output_cells_exceeded",
-            message=(
-                "the E0 map envelope exceeds the admitted "
-                f"{MAX_FILTERED_HOMOLOGY_RESULT_CELLS} cells"
-            ),
-        )
+def _e0_map_input_stats(request: FilteredChainMapRequest) -> tuple[int, int, int]:
+    """Count input scalars cheaply, before any exact elimination."""
     input_chars = 0
     scalar_count = 0
     max_scalar_chars = 1
@@ -782,14 +809,183 @@ def _admit_e0_map_request(request: FilteredChainMapRequest) -> tuple[Any, Any, A
         input_chars += value_chars
         scalar_count += 1
         max_scalar_chars = max(max_scalar_chars, value_chars)
-    # Determinant expansion bounds the exact numerator and denominator growth
-    # of the at-most-32-dimensional coordinate solves used below.
-    scalar_chars_bound = 96 * max_scalar_chars + 512
+    return input_chars, scalar_count, max_scalar_chars
+
+
+def _filtered_semantic_work_bound(
+    complex_value: ChainComplexValue,
+    filtration: tuple[FiltrationLevel, ...],
+) -> int:
+    """Conservative shape-only work estimate for one semantic admission."""
+    sizes = complex_value.basis_sizes
+    work = sum(
+        sizes[index - 1] * sizes[index] * sizes[index + 1]
+        for index in range(1, len(sizes) - 1)
+    )
+    for level_index, level in enumerate(filtration):
+        for degree, subspace in enumerate(level.subspaces):
+            dimension = max(1, sizes[degree])
+            vectors = len(subspace.vectors)
+            work += (vectors + 1) * dimension**2
+            if level_index:
+                work += (
+                    len(filtration[level_index - 1].subspaces[degree].vectors)
+                    * dimension**3
+                )
+            if degree:
+                work += vectors * max(dimension, sizes[degree - 1]) ** 3
+    return work
+
+
+def _e0_map_work_bound(request: FilteredChainMapRequest) -> int:
+    """Shape-only work estimate for both admissions and every map application."""
+    work = _filtered_semantic_work_bound(
+        request.source, request.source_filtration
+    ) + _filtered_semantic_work_bound(request.target, request.target_filtration)
+    for level_index in range(len(request.source_filtration)):
+        for degree, source_size in enumerate(request.source.basis_sizes):
+            target_size = max(1, request.target.basis_sizes[degree])
+            source_upper = min(
+                len(request.source_filtration[level_index].subspaces[degree].vectors),
+                source_size,
+            )
+            work += source_upper * target_size**2
+    return work
+
+
+def _e0_scalar_chars_bound(max_scalar_chars: int) -> int:
+    """Per-cell character bound for the exact elimination results below.
+
+    Determinant expansion bounds the numerator and denominator growth of the
+    at-most-32-dimensional coordinate solves that produce both the graded
+    representatives and the E0 map entries.
+    """
+    return 96 * max_scalar_chars + 512
+
+
+def _preflight_e0_map(
+    request: FilteredChainMapRequest,
+    input_chars: int,
+    scalar_count: int,
+    max_scalar_chars: int,
+) -> None:
+    """Reject unattainable envelopes before exact filtered expansion.
+
+    The graded dimensions are only known after semantic admission, so this
+    uses the spanning-vector counts to bound the eventually admitted block
+    cells. The precise per-level calculation still runs after admission.
+    """
+    degree_count = len(request.source.basis_sizes)
+    level_count = len(request.source_filtration)
+    for level_index in range(level_count):
+        if (
+            len(request.source_filtration[level_index].subspaces) != degree_count
+            or len(request.target_filtration[level_index].subspaces) != degree_count
+        ):
+            # The canonical structural admission owns this diagnostic.
+            return
+    scalar_chars_bound = _e0_scalar_chars_bound(max_scalar_chars)
+    # The graded dimensions at a fixed degree telescope to the ambient rank,
+    # so the retained quotient axes have exactly ``rank**2`` cells per degree.
+    representative_cells = sum(
+        size * size for size in request.source.basis_sizes
+    ) + sum(size * size for size in request.target.basis_sizes)
+    map_cells_upper = 0
+    for level_index in range(level_count):
+        for degree in range(degree_count):
+            source_size = request.source.basis_sizes[degree]
+            target_size = request.target.basis_sizes[degree]
+            source_upper = min(
+                len(request.source_filtration[level_index].subspaces[degree].vectors),
+                source_size,
+            )
+            target_upper = min(
+                len(request.target_filtration[level_index].subspaces[degree].vectors),
+                target_size,
+            )
+            map_cells_upper += source_upper * target_upper
     output_chars = (
         input_chars
         + scalar_count * 16
-        + map_cells * scalar_chars_bound
-        + len(request.source_filtration) * len(request.source.basis_sizes) * 128
+        + (map_cells_upper + representative_cells) * scalar_chars_bound
+        + level_count * degree_count * 128
+    )
+    if output_chars > MAX_FILTERED_HOMOLOGY_RESULT_CHARS:
+        raise OperationResourceAdmissionError(
+            location=("maps",),
+            code="filtered_chain_map.e0_output_chars_exceeded",
+            message=(
+                "the conservative exact E0 map character envelope exceeds "
+                f"{MAX_FILTERED_HOMOLOGY_RESULT_CHARS} characters"
+            ),
+        )
+    estimated_work = _e0_map_work_bound(request) + input_chars + scalar_count
+    if estimated_work > MAX_FILTERED_HOMOLOGY_WORK:
+        raise OperationResourceAdmissionError(
+            location=("maps",),
+            code="filtered_chain_map.e0_work_exceeded",
+            message=(
+                "the filtered E0 map admission is estimated at "
+                f"{estimated_work} units; limit is {MAX_FILTERED_HOMOLOGY_WORK}"
+            ),
+        )
+
+
+def _e0_graded_dimensions(
+    admission: Any, level_count: int, degree_count: int
+) -> tuple[tuple[int, ...], ...]:
+    return tuple(
+        tuple(
+            len(admission.bases[level][degree])
+            - (len(admission.bases[level - 1][degree]) if level else 0)
+            for degree in range(degree_count)
+        )
+        for level in range(level_count)
+    )
+
+
+def _admit_e0_map_request(request: FilteredChainMapRequest) -> tuple[Any, Any, Any]:
+    _check_filtered_chain_map_axes(request)
+    _require_canonical_map_entries(request)
+    input_chars, scalar_count, max_scalar_chars = _e0_map_input_stats(request)
+    _preflight_e0_map(request, input_chars, scalar_count, max_scalar_chars)
+    source_admission = _admit_filtered_semantics(
+        request.source, request.source_filtration
+    )
+    target_admission = _admit_filtered_semantics(
+        request.target, request.target_filtration
+    )
+    level_count = len(request.source_filtration)
+    degree_count = len(request.source.basis_sizes)
+    source_dims = _e0_graded_dimensions(source_admission, level_count, degree_count)
+    target_dims = _e0_graded_dimensions(target_admission, level_count, degree_count)
+    map_cells = sum(
+        source_dims[level][degree] * target_dims[level][degree]
+        for level in range(level_count)
+        for degree in range(degree_count)
+    )
+    representative_cells = sum(
+        source_dims[level][degree] * request.source.basis_sizes[degree]
+        + target_dims[level][degree] * request.target.basis_sizes[degree]
+        for level in range(level_count)
+        for degree in range(degree_count)
+    )
+    output_cells = map_cells + representative_cells
+    if output_cells > MAX_FILTERED_HOMOLOGY_RESULT_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("maps",),
+            code="filtered_chain_map.e0_output_cells_exceeded",
+            message=(
+                "the E0 map and quotient-axis envelope exceeds the admitted "
+                f"{MAX_FILTERED_HOMOLOGY_RESULT_CELLS} cells"
+            ),
+        )
+    scalar_chars_bound = _e0_scalar_chars_bound(max_scalar_chars)
+    output_chars = (
+        input_chars
+        + scalar_count * 16
+        + output_cells * scalar_chars_bound
+        + level_count * degree_count * 128
     )
     if output_chars > MAX_FILTERED_HOMOLOGY_RESULT_CHARS:
         raise OperationResourceAdmissionError(
@@ -926,6 +1122,8 @@ def filtered_chain_map_page_zero(
         target_filtration=request.target_filtration,
         source_dimensions=source_graded.graded_dimensions,
         target_dimensions=target_graded.graded_dimensions,
+        source_representatives=source_graded.quotient_representatives,
+        target_representatives=target_graded.quotient_representatives,
         maps=tuple(source_blocks),
     )
 

@@ -12,6 +12,10 @@ from jacobian.math.affine_semigroups.graver_models import (
     IntegerConfigurationGraverBasis,
     IntegerConfigurationMarkovBasis,
 )
+from jacobian.math.affine_semigroups.group_lattice import (
+    AffineGroupLattice,
+    compute_group_lattice,
+)
 from jacobian.math.affine_semigroups.operations import (
     integer_configuration_circuits,
     relation_lattice,
@@ -36,6 +40,7 @@ __all__ = [
     "AffineConfiguration",
     "AffineFiber",
     "AffineFiberGraph",
+    "AffineGroupLattice",
     "AffineHilbertBasis",
     "AffineMembershipResult",
     "IntegerConfigurationCircuitsResult",
@@ -43,6 +48,7 @@ __all__ = [
     "IntegerConfigurationMarkovBasis",
     "PositiveAffineSemigroup",
     "PositiveGradingResult",
+    "compute_group_lattice",
     "construct",
     "fiber",
     "fiber_graph",

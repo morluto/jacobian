@@ -50,7 +50,9 @@ def test_all_small_equal_size_families_match_independent_basis_axiom() -> None:
                     assert value.ground == ground
                 else:
                     with pytest.raises(Exception, match="basis exchange"):
-                        FiniteBasisMatroid(ground=ground, bases=bases).require_basis_exchange()
+                        FiniteBasisMatroid(
+                            ground=ground, bases=bases
+                        ).require_basis_exchange()
 
 
 @pytest.mark.parametrize(

@@ -98,8 +98,11 @@ def _preflight_extremal_source(delta_matroid: object) -> FiniteDeltaMatroid:
     """Validate native source shape and size before any structural copy."""
     if not isinstance(delta_matroid, FiniteDeltaMatroid):
         raise ValueError("source must be a FiniteDeltaMatroid value")
-    ground = delta_matroid.ground
-    feasible = delta_matroid.feasible
+    try:
+        ground = delta_matroid.ground
+        feasible = delta_matroid.feasible
+    except AttributeError as exc:
+        raise ValueError("source is missing ground or feasible fields") from exc
     if not isinstance(ground, tuple) or not isinstance(feasible, tuple):
         raise ValueError("source ground and feasible family must be immutable tuples")
     if len(ground) > MAX_DELTA_MEMBERSHIPS + 1:

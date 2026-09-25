@@ -180,6 +180,13 @@ def test_request_preflight_rejects_long_label_before_encoding() -> None:
         DeltaMatroidLowerMatroidRequest.model_validate(raw)
 
 
+def test_native_forged_missing_ground_is_domain_rejection() -> None:
+    source = FiniteDeltaMatroid.model_construct(feasible=((),))
+    with pytest.raises(OperationDomainValidationError) as exc_info:
+        lower_matroid(source)
+    assert exc_info.value.errors()[0]["type"] == "delta_matroid.source_not_valid"
+
+
 def test_native_forged_oversize_source_is_admitted_before_system_copy(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

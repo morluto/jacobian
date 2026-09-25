@@ -52,6 +52,28 @@ The returned value can be independently replayed with
 greedy result against the retained matrix and weights; a feasible but
 suboptimal subset does not verify.
 
+## Maximum-cardinality intersection
+
+`matroid.intersection.compute` returns one exact maximum-cardinality common
+independent set `I` of two represented matroids on the same labelled ground,
+with an Edmonds min-max witness
+`r₁(A) + r₂(E \\ A) = |I|`. The result retains the exact ranks of `I` in
+both sources as `rank_first_common` and `rank_second_common`; each must equal
+`cardinality`. These rank fields extend the serialized result schema while the
+existing operation ID and `{first, second}` request schema remain unchanged.
+
+Deserializing a result checks its shape and the equality of those rank fields
+with the cardinality without replaying matrix computations. Consumers that rely
+on the retained rank claims can call `replay_intersection_result`, which
+recomputes both common-set ranks and both min-max witness ranks against the
+retained matrices. The returned common set and matching min-max upper bound
+establish global maximality independently of the augmenting-path search.
+
+The request admits at most 256 ground elements and a derived 50,000,000-unit
+work envelope covering source ranks, exchange probes, common-set and witness
+rank checks, and result materialization. Requests outside this envelope fail
+admission; they do not establish a smaller maximum.
+
 ## Common basis of two matroids
 
 `matroid.intersection.common_basis.compute` returns the exact maximum common

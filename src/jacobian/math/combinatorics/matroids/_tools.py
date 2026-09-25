@@ -271,7 +271,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
 )
 TOOLS = TOOLS + (  # noqa: RUF005
     MathTool(
-        operation_id="matroid.intersection.maximum.compute",
+        operation_id="matroid.intersection.compute",
         title="Compute a maximum common independent set",
         description=(
             "Compute an exact maximum-cardinality common independent set of "

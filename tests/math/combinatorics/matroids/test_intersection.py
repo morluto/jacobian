@@ -13,6 +13,7 @@ from jacobian.math.combinatorics.matroids._models import (
     MatroidIntersectionRequest,
     MatroidIntersectionResult,
 )
+from jacobian.math.combinatorics.matroids._tools import TOOLS
 from jacobian.math.combinatorics.matroids.intersection import (
     matroid_intersection,
     replay_intersection_result,
@@ -181,6 +182,17 @@ def test_intersection_schema_discloses_derived_work_envelope() -> None:
     description = schema["description"]
     assert "256" in description
     assert "50,000,000" in description
+
+
+def test_catalog_keeps_the_existing_maximum_intersection_operation_id() -> None:
+    intersection_tools = tuple(
+        tool for tool in TOOLS if tool.operation_id.startswith("matroid.intersection.")
+    )
+    operation_ids = {tool.operation_id for tool in intersection_tools}
+
+    assert "matroid.intersection.compute" in operation_ids
+    assert "matroid.intersection.maximum.compute" not in operation_ids
+    assert "matroid.intersection.common_basis.compute" in operation_ids
 
 
 def _small_matroids() -> tuple[LinearMatroid, LinearMatroid]:

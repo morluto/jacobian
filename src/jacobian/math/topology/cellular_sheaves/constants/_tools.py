@@ -53,8 +53,9 @@ TOOLS: MathTools = (
             OperationExample(
                 name="rank_one_constant_sheaf_on_interval",
                 description=(
-                    "Put the rational line on each vertex and edge of an "
-                    "interval, with identity restrictions."
+                    "For an unchanged canonical finite simplicial complex "
+                    "presented as JSON, put the rational line on each vertex "
+                    "and edge of an interval, with identity restrictions."
                 ),
                 input={
                     "complex": _INTERVAL,

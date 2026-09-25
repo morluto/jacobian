@@ -103,6 +103,8 @@ def _admit(
 ) -> tuple[_ExactField, tuple[Simplex, ...], tuple[Pair, ...], tuple[Pair, ...], int]:
     if not isinstance(request, ConstantSheafRequest):
         _domain("request_type", "request must be a constant-sheaf request", ())
+    if "complex" not in request.model_fields_set:
+        _domain("request_invalid", "request must include a complex", ("complex",))
     if not isinstance(request.complex, FiniteSimplicialComplex):
         _domain(
             "complex_type",

@@ -201,6 +201,14 @@ def test_constant_sheaf_revalidates_untrusted_native_complex_updates() -> None:
         constant_sheaf(request)
 
 
+def test_constant_sheaf_rejects_missing_untrusted_complex_as_domain_error() -> None:
+    from jacobian.catalog.models import OperationDomainValidationError
+
+    request = ConstantSheafRequest.model_construct(basis=("e",))
+    with pytest.raises(OperationDomainValidationError):
+        constant_sheaf(request)
+
+
 def test_constant_sheaf_classifies_untrusted_non_tuple_basis_as_domain_error() -> None:
     from jacobian.catalog.models import OperationDomainValidationError
 

@@ -5,10 +5,9 @@ from __future__ import annotations
 from typing import Self
 
 from pydantic import Field, StrictInt, model_validator
-
-from jacobian._exact import ExactInteger
 from pydantic_core import PydanticCustomError
 
+from jacobian._exact import ExactInteger
 from jacobian._models import StrictModel
 from jacobian.math.groups.root_systems._cartan import cartan_type_matrix
 from jacobian.math.groups.root_systems._models import (
@@ -48,7 +47,10 @@ class WeightMultiplicity(StrictModel):
     @model_validator(mode="after")
     def require_bounded_coordinates_and_multiplicity(self) -> Self:
         if (
-            any(value.bit_length() > MAX_CHARACTER_STATES.bit_length() for value in self.weight)
+            any(
+                value.bit_length() > MAX_CHARACTER_STATES.bit_length()
+                for value in self.weight
+            )
             or self.multiplicity.bit_length() > MAX_CHARACTER_MULTIPLICITY_BITS
         ):
             raise PydanticCustomError(
@@ -74,8 +76,7 @@ class IrreducibleWeightCharacter(StrictModel):
         weights = tuple(term.weight for term in self.terms)
         if (
             self.matrix.entries != cartan_type_matrix("A", rank)
-            or
-            self.weight_axis != tuple(range(rank))
+            or self.weight_axis != tuple(range(rank))
             or len(self.highest_weight) != rank
             or any(value < 0 for value in self.highest_weight)
             or any(
@@ -90,7 +91,7 @@ class IrreducibleWeightCharacter(StrictModel):
             raise _validation_error(
                 "character_shape",
                 "character terms must be unique and sorted on the Cartan weight axis, "
-                "with highest weight of multiplicity one"
+                "with highest weight of multiplicity one",
             )
         return self
 

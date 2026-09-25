@@ -1199,8 +1199,16 @@ def _terminal_scc_adjacency(
                 success, tokens = _fire_tokens_admitted(
                     net, state.marking.tokens, transition
                 )
-                target = state_indices.get(tokens) if success else None
-                if target is None or (source, transition, target) not in edges:
+                successor_index = state_indices.get(tokens) if success else None
+                if (
+                    successor_index is None
+                    or (
+                        source,
+                        transition,
+                        successor_index,
+                    )
+                    not in edges
+                ):
                     raise OperationDomainValidationError(
                         location=("source_graph", "edges"),
                         code="petri_net.terminal_scc.incomplete_graph",
@@ -1474,14 +1482,18 @@ def marking_reachability(
     # Each entry stores (parent state index, transition fired).
     predecessor: list[tuple[int, int] | None] = [None]
     queue: deque[int] = deque([0])
-    incomplete_reasons: set[str] = set()
+    incomplete_reasons: set[
+        Literal["MARKING_LIMIT", "SEQUENCE_LIMIT", "STATE_LIMIT"]
+    ] = set()
 
     def witness(state: int) -> tuple[int, ...]:
         transitions: list[int] = []
-        while predecessor[state] is not None:
-            parent, transition = predecessor[state]
+        entry = predecessor[state]
+        while entry is not None:
+            parent, transition = entry
             transitions.append(transition)
             state = parent
+            entry = predecessor[state]
         transitions.reverse()
         return tuple(transitions)
 

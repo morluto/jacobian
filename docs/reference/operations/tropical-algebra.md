@@ -86,6 +86,25 @@ eight-row bound admits at most `8!` candidate permutations before enumeration.
 If every permutation uses at least one infinite entry, the optimum is the
 semiring additive identity and every permutation is returned as tied.
 
+## Tropical minor assignment profiles
+
+`tropical.matrix.minor_assignment_profiles.compute` takes selected minor sizes
+from one rectangular matrix and returns the profile of every row and column
+subset of each requested size. A profile stores row and column indices into the
+source matrix, the minimum or maximum tropical assignment value, and every
+tied optimal bijection. The source matrix retains the labelled axes. Its value
+is the tropical determinant convention based on an extremal assignment; no
+ordinary determinant signs or cancellation are implied. For the usual
+min-plus convention, a square minor is tropically nonsingular exactly when its
+minimum assignment is unique ([Maclagan and Sturmfels, *Introduction to
+Tropical Geometry*, Chapter 5](https://janos.cs.technion.ac.il/COURSES/238900-13/Tropical/MaclaganSturmfels.pdf)).
+Permutation entries are positions in that profile's selected column indices.
+
+Each requested size is between one and eight. The operation admits no more
+than 256 minors, 25,000 candidate assignments, and the canonical 10 MiB output
+limit before enumeration. It reports profiles only; it does not compute a
+tropical rank or compare alternate rank notions.
+
 ## Univariate polynomial roots
 
 `tropical.polynomial.univariate_roots.compute` accepts exactly one variable.

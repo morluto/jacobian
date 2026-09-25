@@ -12,10 +12,15 @@ from jacobian.catalog.models import (
 from jacobian.math.polynomials.tropical._models import (
     MatrixAssignmentRequest,
     MatrixFinitePowerSumRequest,
+    MatrixMinorAssignmentsRequest,
 )
-from jacobian.math.polynomials.tropical._tools import compute_finite_power_sum
+from jacobian.math.polynomials.tropical._tools import (
+    TOOLS,
+    compute_finite_power_sum,
+)
 from jacobian.math.polynomials.tropical.operations import (
     tropical_assignment_profile,
+    tropical_matrix_minor_assignment_profiles,
     tropical_matrix_power,
     tropical_polynomial_add,
     tropical_polynomial_evaluate,
@@ -199,6 +204,89 @@ def test_assignment_profile_matches_distinct_row_and_column_axes(
     assert assignments == tuple(
         permutation for permutation, score in scored.items() if score == expected
     )
+
+
+@pytest.mark.parametrize("convention", ["MIN_PLUS", "MAX_PLUS"])
+def test_minor_assignment_profiles_match_independent_subset_oracle(
+    convention: str,
+) -> None:
+    semiring = TropicalSemiring(convention=convention, base="ZZ")  # type: ignore[arg-type]
+    values = ((0, 0), (0, 0), (6, 4))
+    matrix = TropicalMatrix(
+        semiring=semiring,
+        row_axis=("r0", "r1", "r2"),
+        column_axis=("c0", "c1"),
+        entries=tuple(
+            tuple(_scalar_for(semiring, value) for value in row) for row in values
+        ),
+    )
+
+    request = MatrixMinorAssignmentsRequest(matrix=matrix, sizes=(1, 2))
+    operation = next(
+        tool
+        for tool in TOOLS
+        if tool.operation_id == "tropical.matrix.minor_assignment_profiles.compute"
+    )
+    result = operation.run(request)
+    assert result.matrix == matrix
+    assert result.sizes == (1, 2)
+    assert len(result.minors) == 9
+    for profile in result.minors:
+        size = len(profile.row_indices)
+        scores = {
+            permutation: sum(
+                values[profile.row_indices[row]][profile.column_indices[column]]
+                for row, column in enumerate(permutation)
+            )
+            for permutation in permutations(range(size))
+        }
+        expected = (
+            min(scores.values()) if convention == "MIN_PLUS" else max(scores.values())
+        )
+        assert profile.value.value == CanonicalRational.from_integer_ratio(expected, 1)
+        assert profile.permutations == tuple(
+            permutation for permutation, score in scores.items() if score == expected
+        )
+
+    restored = type(result).model_validate_json(result.model_dump_json())
+    assert restored == result
+
+
+def _scalar_for(semiring: TropicalSemiring, value: int) -> TropicalScalar:
+    return TropicalScalar(
+        semiring=semiring,
+        kind="FINITE",
+        value=CanonicalRational.from_integer_ratio(value, 1),
+    )
+
+
+def test_minor_assignment_profiles_preserve_all_infinite_ties() -> None:
+    semiring = _semiring()
+    infinity = TropicalScalar(semiring=semiring, kind="POSITIVE_INFINITY", value=None)
+    matrix = TropicalMatrix(
+        semiring=semiring,
+        row_axis=("r0", "r1"),
+        column_axis=("c0", "c1"),
+        entries=((infinity, infinity), (infinity, infinity)),
+    )
+    (profile,) = tropical_matrix_minor_assignment_profiles(matrix, (2,))
+    assert profile.value.kind == "POSITIVE_INFINITY"
+    assert profile.permutations == ((0, 1), (1, 0))
+
+
+def test_minor_assignment_profiles_admit_factorial_work_before_enumeration() -> None:
+    matrix = TropicalMatrix(
+        semiring=_semiring(),
+        row_axis=tuple(f"r{i}" for i in range(8)),
+        column_axis=tuple(f"c{i}" for i in range(8)),
+        entries=tuple(
+            tuple(_scalar(CanonicalRational.from_integer_ratio(0, 1)) for _ in range(8))
+            for _ in range(8)
+        ),
+    )
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        tropical_matrix_minor_assignment_profiles(matrix, (4,))
+    assert error.value.errors()[0]["type"] == "tropical.minor_assignment_work"
 
 
 def test_matrix_power_rejects_native_non_integer_exponents() -> None:

@@ -1,12 +1,15 @@
 """Exact tropical semiring scalars and idempotent addition."""
 
 from jacobian.math.polynomials.tropical._models import (
+    MatrixMinorAssignmentsRequest,
+    MatrixMinorAssignmentsResult,
     PolynomialActiveTermsRequest,
     PolynomialActiveTermsResult,
     PolynomialSubstituteRequest,
     ScalarAddResult,
     ScalarDualResult,
     TropicalActiveTerm,
+    TropicalMinorAssignment,
 )
 from jacobian.math.polynomials.tropical.hypersurface import (
     tropical_bivariate_hypersurface,
@@ -14,6 +17,7 @@ from jacobian.math.polynomials.tropical.hypersurface import (
 from jacobian.math.polynomials.tropical.operations import (
     tropical_assignment_profile,
     tropical_matrix_finite_power_sum,
+    tropical_matrix_minor_assignment_profiles,
     tropical_matrix_multiply,
     tropical_matrix_power,
     tropical_polynomial_active_terms,
@@ -55,6 +59,8 @@ from jacobian.math.polynomials.tropical.values import (
 )
 
 __all__ = [
+    "MatrixMinorAssignmentsRequest",
+    "MatrixMinorAssignmentsResult",
     "PolynomialActiveTermsRequest",
     "PolynomialActiveTermsResult",
     "PolynomialSubstituteRequest",
@@ -65,6 +71,7 @@ __all__ = [
     "TropicalHypersurfaceCell",
     "TropicalLiftedSubdivisionFace",
     "TropicalMatrix",
+    "TropicalMinorAssignment",
     "TropicalNewtonPolygonEdge",
     "TropicalNewtonPolygonProfile",
     "TropicalNewtonPolygonVertex",
@@ -81,6 +88,7 @@ __all__ = [
     "tropical_bivariate_hypersurface",
     "tropical_bivariate_regular_subdivision",
     "tropical_matrix_finite_power_sum",
+    "tropical_matrix_minor_assignment_profiles",
     "tropical_matrix_multiply",
     "tropical_matrix_power",
     "tropical_polynomial_active_terms",

@@ -584,6 +584,32 @@ class MatrixAssignmentRequest(StrictModel):
         return self
 
 
+class MatrixMinorAssignmentsRequest(StrictModel):
+    """Compute every square minor for each selected order."""
+
+    matrix: TropicalMatrix
+    sizes: tuple[StrictInt, ...] = Field(min_length=1, max_length=8)
+
+    @model_validator(mode="after")
+    def require_admissible_sizes(self) -> Self:
+        if len(set(self.sizes)) != len(self.sizes):
+            raise _validation_error(
+                "minor_sizes_unique", "minor sizes must be distinct"
+            )
+        if any(size < 1 or size > 8 for size in self.sizes):
+            raise _validation_error(
+                "minor_size_bound", "minor sizes must be between one and eight"
+            )
+        if any(
+            size > min(len(self.matrix.row_axis), len(self.matrix.column_axis))
+            for size in self.sizes
+        ):
+            raise _validation_error(
+                "minor_size_dimension", "minor size exceeds a matrix dimension"
+            )
+        return self
+
+
 class MatrixResult(StrictModel):
     result: TropicalMatrix
 
@@ -653,6 +679,33 @@ class AssignmentResult(StrictModel):
         )
 
 
+class TropicalMinorAssignment(StrictModel):
+    """Profile one submatrix; permutation entries index its selected columns."""
+
+    row_indices: tuple[int, ...]
+    column_indices: tuple[int, ...]
+    value: TropicalScalar
+    permutations: tuple[tuple[int, ...], ...]
+
+
+class MatrixMinorAssignmentsResult(StrictModel):
+    """All selected minor profiles, indexed against the source matrix axes."""
+
+    matrix: TropicalMatrix
+    sizes: tuple[int, ...]
+    minors: tuple[TropicalMinorAssignment, ...] = Field(max_length=256)
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        matrix: TropicalMatrix,
+        sizes: tuple[int, ...],
+        minors: tuple[TropicalMinorAssignment, ...],
+    ) -> Self:
+        return cls.model_construct(matrix=matrix, sizes=sizes, minors=minors)
+
+
 __all__ = [
     "AddBranch",
     "AssignmentResult",
@@ -662,6 +715,8 @@ __all__ = [
     "InfinityCase",
     "MatrixAssignmentRequest",
     "MatrixFinitePowerSumRequest",
+    "MatrixMinorAssignmentsRequest",
+    "MatrixMinorAssignmentsResult",
     "MatrixMultiplyRequest",
     "MatrixPowerRequest",
     "MatrixResult",
@@ -681,6 +736,7 @@ __all__ = [
     "ScalarPowerRequest",
     "ScalarResult",
     "TropicalActiveTerm",
+    "TropicalMinorAssignment",
     "UnivariateNewtonPolygonRequest",
     "UnivariateNewtonPolygonResult",
     "UnivariateRootsRequest",

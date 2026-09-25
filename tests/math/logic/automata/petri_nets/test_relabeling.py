@@ -3,11 +3,9 @@
 from __future__ import annotations
 
 import pytest
-from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.logic.automata.petri_nets._models import (
-    PetriNetRelabelingRequest,
     PetriNetRelabelingResult,
 )
 from jacobian.math.logic.automata.petri_nets.operations import relabel_petri_net
@@ -46,13 +44,7 @@ def test_weighted_relabeling_preserves_arcs_ids_and_firing() -> None:
     )
     place_map = (1, 0)
     transition_map = (1, 0)
-    result = relabel_petri_net(
-        PetriNetRelabelingRequest(
-            net=net,
-            place_source_to_target=place_map,
-            transition_source_to_target=transition_map,
-        )
-    )
+    result = relabel_petri_net(net, place_map, transition_map)
 
     assert result.target_net.place_ids == ("output", "buffer")
     assert result.target_net.transition_ids == ("unload", "load")
@@ -72,11 +64,7 @@ def test_weighted_relabeling_preserves_arcs_ids_and_firing() -> None:
 
 def test_relabeling_supports_empty_axes() -> None:
     result = relabel_petri_net(
-        PetriNetRelabelingRequest(
-            net=PetriNet(place_count=0, transition_count=0, pre=(), post=()),
-            place_source_to_target=(),
-            transition_source_to_target=(),
-        )
+        PetriNet(place_count=0, transition_count=0, pre=(), post=()), (), ()
     )
     assert result.target_net == result.source_net
     assert result.place_source_to_target == result.transition_source_to_target == ()
@@ -99,37 +87,7 @@ def test_relabeling_requires_complete_axis_bijections(
         pre=((0, 0), (0, 0)),
         post=((0, 0), (0, 0)),
     )
-    payload = {
-        "net": net,
-        "place_source_to_target": (0, 1),
-        "transition_source_to_target": (0, 1),
-        field: value,
-    }
-    request = PetriNetRelabelingRequest.model_validate(payload)
+    place_map = value if field == "place_source_to_target" else (0, 1)
+    transition_map = value if field == "transition_source_to_target" else (0, 1)
     with pytest.raises(OperationDomainValidationError):
-        relabel_petri_net(request)
-
-
-def test_relabeling_result_rejects_an_unrelated_target_net() -> None:
-    source = PetriNet(
-        place_count=1,
-        transition_count=1,
-        pre=((1,),),
-        post=((0,),),
-    )
-    result = relabel_petri_net(
-        PetriNetRelabelingRequest(
-            net=source,
-            place_source_to_target=(0,),
-            transition_source_to_target=(0,),
-        )
-    )
-    payload = result.model_dump()
-    payload["target_net"] = PetriNet(
-        place_count=1,
-        transition_count=1,
-        pre=((0,),),
-        post=((1,),),
-    ).model_dump()
-    with pytest.raises(ValidationError):
-        PetriNetRelabelingResult.model_validate(payload)
+        relabel_petri_net(net, place_map, transition_map)

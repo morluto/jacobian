@@ -35,7 +35,6 @@ from jacobian.math.logic.automata.petri_nets._models import (
     MarkingReachabilityResult,
     PetriInvariantsResult,
     PetriMarkingState,
-    PetriNetRelabelingRequest,
     PetriNetRelabelingResult,
     PetriPlaceSubset,
     PetriReachabilityEdge,
@@ -205,18 +204,14 @@ def reverse_petri_net(net: PetriNet) -> PetriNet:
 
 
 def relabel_petri_net(
-    request: PetriNetRelabelingRequest,
+    net: PetriNet,
+    place_source_to_target: tuple[int, ...],
+    transition_source_to_target: tuple[int, ...],
 ) -> PetriNetRelabelingResult:
     """Reindex place and transition axes through explicit bijections."""
-    if not isinstance(request, PetriNetRelabelingRequest):
-        raise OperationDomainValidationError(
-            location=(),
-            code="petri_net.relabel.request_type",
-            message="request must be a PetriNetRelabelingRequest value",
-        )
-    net = _admit_net(request.net)
-    place_map = request.place_source_to_target
-    transition_map = request.transition_source_to_target
+    net = _admit_net(net)
+    place_map = place_source_to_target
+    transition_map = transition_source_to_target
     for axis_name, mapping, size in (
         ("place", place_map, net.place_count),
         ("transition", transition_map, net.transition_count),

@@ -80,7 +80,11 @@ def compute_enabled_transitions(
 def compute_petri_net_relabeling(
     request: PetriNetRelabelingRequest,
 ) -> PetriNetRelabelingResult:
-    return relabel_petri_net(request)
+    return relabel_petri_net(
+        request.net,
+        request.place_source_to_target,
+        request.transition_source_to_target,
+    )
 
 
 def compute_marking_conflict_profile(

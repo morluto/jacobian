@@ -647,6 +647,79 @@ class LieSubalgebraRequest(StrictModel):
         return self
 
 
+class LieSubalgebraConstructionRequest(StrictModel):
+    """One source algebra, closed subspace, and ordered induced basis labels."""
+
+    algebra: FiniteDimensionalLieAlgebra
+    candidate: LieIdeal | LieSubalgebra | LieSubspace
+    subalgebra_basis: tuple[LieBasisLabel, ...] = Field(
+        min_length=1,
+        max_length=MAX_LIE_DIMENSION,
+        description="Labels for candidate RREF rows in their existing order.",
+    )
+
+    @model_validator(mode="after")
+    def require_candidate_binding_and_dimension(self) -> Self:
+        if self.candidate.basis != self.algebra.basis or (
+            isinstance(self.candidate, (LieIdeal, LieSubalgebra))
+            and self.candidate.algebra != self.algebra
+        ):
+            raise _validation_error(
+                "subalgebra_binding",
+                "the candidate must use the source algebra's ordered basis",
+            )
+        if len(self.subalgebra_basis) != self.candidate.generators.row_count:
+            raise _validation_error(
+                "subalgebra_dimension",
+                "the induced basis labels must match the candidate dimension",
+            )
+        if len(set(self.subalgebra_basis)) != len(self.subalgebra_basis):
+            raise _validation_error(
+                "subalgebra_labels", "induced basis labels must be unique"
+            )
+        return self
+
+
+class LieSubalgebraResult(StrictModel):
+    """An induced structure-constant algebra and its inclusion coordinates."""
+
+    algebra: FiniteDimensionalLieAlgebra
+    subspace: LieSubalgebra
+    induced: FiniteDimensionalLieAlgebra
+    inclusion: RationalMatrix
+
+    @model_validator(mode="after")
+    def require_induced_shape(self) -> Self:
+        dimension = self.subspace.generators.row_count
+        if (
+            self.subspace.algebra != self.algebra
+            or len(self.induced.basis) != dimension
+            or self.inclusion.row_count != dimension
+            or self.inclusion.column_count != len(self.algebra.basis)
+            or self.inclusion.entries != self.subspace.generators.entries
+        ):
+            raise _validation_error(
+                "subalgebra_result_shape",
+                "the induced algebra and inclusion must retain the exact source subspace basis",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        algebra: FiniteDimensionalLieAlgebra,
+        subspace: LieSubalgebra,
+        induced: FiniteDimensionalLieAlgebra,
+        inclusion: RationalMatrix,
+    ) -> Self:
+        return cls.model_construct(
+            algebra=algebra,
+            subspace=subspace,
+            induced=induced,
+            inclusion=inclusion,
+        )
+
+
 class IdealViolationWitness(StrictModel):
     """The first basis bracket escaping the candidate subspace."""
 

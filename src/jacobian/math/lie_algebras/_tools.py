@@ -29,7 +29,9 @@ from jacobian.math.lie_algebras._models import (
     LieSemisimplicityResult,
     LieSubalgebra,
     LieSubalgebraCheckResult,
+    LieSubalgebraConstructionRequest,
     LieSubalgebraRequest,
+    LieSubalgebraResult,
     LieUpperCentralSeriesResult,
 )
 from jacobian.math.lie_algebras.operations import (
@@ -49,6 +51,7 @@ from jacobian.math.lie_algebras.operations import (
     lie_killing_form_radical,
     lie_lower_central_series,
     lie_quotient,
+    lie_subalgebra,
     lie_subalgebra_centralizer,
     lie_upper_central_series,
 )
@@ -120,6 +123,12 @@ def _run_lie_subalgebra_check(
     request: LieSubalgebraRequest,
 ) -> LieSubalgebraCheckResult:
     return check_subalgebra(request.algebra, request.candidate)
+
+
+def _run_lie_subalgebra_construction(
+    request: LieSubalgebraConstructionRequest,
+) -> LieSubalgebraResult:
+    return lie_subalgebra(request.algebra, request.candidate, request.subalgebra_basis)
 
 
 def _run_lie_generated_subalgebra(
@@ -738,6 +747,53 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                             ],
                         },
                     },
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="lie_algebra.subalgebra.compute",
+        title="Construct the induced Lie algebra on a closed subspace",
+        description=(
+            "Given a finite-dimensional Lie algebra over QQ and an RREF "
+            "subspace on its exact ordered basis, verify bracket closure and "
+            "return the induced structure-constant algebra in the candidate "
+            "row basis, together with the row-coordinate inclusion into the "
+            "source. The induced basis labels are supplied in candidate row "
+            "order. Exact Jacobi, dimensions, rational heights, closure work, "
+            "and output are bounded before result construction."
+        ),
+        request_type=LieSubalgebraConstructionRequest,
+        result_type=LieSubalgebraResult,
+        run=_run_lie_subalgebra_construction,
+        tags=("lie-algebra", "subalgebra", "structure-constants", "exact", "rational"),
+        discovery_terms=(
+            "induced Lie algebra on a subalgebra",
+            "structure constants of a Lie subalgebra",
+            "restrict a Lie bracket to a closed subspace",
+        ),
+        examples=(
+            OperationExample(
+                name="sl2_positive_borel_induced_bracket",
+                description=(
+                    "The subalgebra spanned by e and h inherits [h,e]=2e "
+                    "in its own two-dimensional basis."
+                ),
+                input={
+                    "algebra": _SL2_ALGEBRA,
+                    "candidate": {
+                        "basis": ["e", "f", "h"],
+                        "generators": {
+                            "domain": "QQ",
+                            "row_count": 2,
+                            "column_count": 3,
+                            "entries": [
+                                [_rational(1), _rational(0), _rational(0)],
+                                [_rational(0), _rational(0), _rational(1)],
+                            ],
+                        },
+                    },
+                    "subalgebra_basis": ["e", "h"],
                 },
             ),
         ),

@@ -38,6 +38,12 @@ def test_native_nerve_rejects_non_integer_degrees() -> None:
             nerve_prefix(_interval(), degree)  # type: ignore[arg-type]
 
 
+def test_native_nerve_rejects_non_category_before_dereferencing() -> None:
+    with pytest.raises(OperationDomainValidationError) as error:
+        nerve_prefix({"objects": []}, 0)  # type: ignore[arg-type]
+    assert error.value.errors()[0]["type"] == "finite_category.nerve_category_type"
+
+
 def test_interval_nerve_is_a_reusable_prefix_with_canonical_transport() -> None:
     nerve = nerve_prefix(_interval(), 2)
     simplicial_set = nerve.simplicial_set

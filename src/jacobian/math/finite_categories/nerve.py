@@ -24,10 +24,7 @@ from jacobian.math.topology.simplicial_sets._models import (
 from jacobian.math.topology.simplicial_sets.operations import from_tables
 
 NERVE_IDENTITY_WORK_BOUND = 100_000
-NERVE_IDENTIFIER_CELL_BOUND = 96 * 11 * MAX_CATEGORY_IDENTIFIER_CHARACTERS
-# Derived cell envelope: at most 96 simplices, each transports at most 5
-# morphism/6 object identifiers; identifiers are bounded to 4096 characters.
-NERVE_IDENTIFIER_CELL_BOUND = 96 * 11 * 4_096
+NERVE_TRANSPORT_BYTE_BOUND = 10 * 1024 * 1024
 
 
 def _category_tables(
@@ -51,6 +48,12 @@ def _category_tables(
 
 
 def _admit(category: FiniteCategory, degree: int) -> None:
+    if not isinstance(category, FiniteCategory):
+        raise OperationDomainValidationError(
+            location=("category",),
+            code="finite_category.nerve_category_type",
+            message="category must be a FiniteCategory",
+        )
     if not isinstance(degree, int) or isinstance(degree, bool):
         raise OperationDomainValidationError(
             location=("max_degree",),
@@ -117,27 +120,23 @@ def _admit(category: FiniteCategory, degree: int) -> None:
         sizes[n] * ((n + 1) * (n + 2) // 2) for n in range(max(0, degree - 1))
     )
     identity_work += sum(sizes[n] * ((n + 1) * (n + 2)) for n in range(degree))
-    # Bound retained identifier payload by domain cells, not serialized bytes.
-    # Every identifier occurrence is at most MAX_CATEGORY_IDENTIFIER_CHARACTERS.
-    identifier_cells = sum(sizes) * (2 * degree + 3)
-    if (
-        identifier_cells * MAX_CATEGORY_IDENTIFIER_CHARACTERS
-        > NERVE_IDENTIFIER_CELL_BOUND
-    ):
+    # Bound the echoed category and retained simplex paths together before
+    # constructing levels. JSON string escaping can expand a character to six
+    # bytes (\\uXXXX); include structural JSON overhead conservatively.
+    identifier_chars = sum(len(value) for value in category.objects)
+    identifier_chars += sum(
+        len(m.morphism_id) + len(m.source) + len(m.target)
+        for m in category.morphisms
+    )
+    identifier_chars += sum(len(obj) + len(identity) for obj, identity in category.identities)
+    identifier_chars += sum(sum(map(len, row)) for row in category.composition)
+    identifier_occurrences = sum(sizes) * (2 * degree + 3)
+    identifier_chars += identifier_occurrences * MAX_CATEGORY_IDENTIFIER_CHARACTERS
+    if identifier_chars * 6 + 1024 * (len(category.objects) + len(category.morphisms) + sum(sizes)) > NERVE_TRANSPORT_BYTE_BOUND:
         raise OperationResourceAdmissionError(
             location=("max_degree",),
             code="finite_category.nerve_identifier_budget",
-            message="nerve transport exceeds the admitted identifier-cell bound",
-        )
-    identifier_cells = sum(sizes) * (2 * degree + 3)
-    if (
-        identifier_cells * MAX_CATEGORY_IDENTIFIER_CHARACTERS
-        > NERVE_IDENTIFIER_CELL_BOUND
-    ):
-        raise OperationResourceAdmissionError(
-            location=("max_degree",),
-            code="finite_category.nerve_identifier_budget",
-            message="nerve transport exceeds the admitted identifier-cell bound",
+            message="nerve transport exceeds the canonical output byte bound",
         )
     if identity_work > NERVE_IDENTITY_WORK_BOUND:
         raise OperationResourceAdmissionError(

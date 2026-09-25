@@ -361,7 +361,11 @@ def _basis_terms_for_space(
 
 
 def _admit_basis(
-    space: object, precision: object, *, materialize_pari: bool = True
+    space: object,
+    precision: object,
+    *,
+    materialize_pari: bool = True,
+    at_least_sturm: bool = False,
 ) -> _BasisPlan:
     if not isinstance(space, ModularFormSpace):
         raise OperationDomainValidationError(
@@ -398,7 +402,12 @@ def _admit_basis(
             ),
         )
     if space.level > 4:
-        return _admit_pari_basis(space, precision, materialize=materialize_pari)
+        return _admit_pari_basis(
+            space,
+            precision,
+            materialize=materialize_pari,
+            at_least_sturm=at_least_sturm,
+        )
     if space.level == 3 and precision > MAX_GAMMA0_THREE_BASIS_PRECISION:
         raise OperationResourceAdmissionError(
             location=("precision",),
@@ -484,7 +493,11 @@ def _admit_basis(
 
 
 def _admit_pari_basis(
-    space: ModularFormSpace, precision: int, *, materialize: bool
+    space: ModularFormSpace,
+    precision: int,
+    *,
+    materialize: bool,
+    at_least_sturm: bool = False,
 ) -> _BasisPlan:
     """Preflight a PARI basis through at least the Sturm determining prefix."""
 
@@ -523,14 +536,19 @@ def _admit_pari_basis(
             message="Sturm determining precision exceeds the PARI basis envelope",
         )
     if precision < sturm_precision:
-        raise OperationDomainValidationError(
-            location=("precision",),
-            code="modular_form.pari_basis_requires_sturm_precision",
-            message=(
-                "PARI basis precision must include coefficients through the "
-                f"Sturm bound (at least {sturm_precision} terms)"
-            ),
-        )
+        if not at_least_sturm:
+            raise OperationDomainValidationError(
+                location=("precision",),
+                code="modular_form.pari_basis_requires_sturm_precision",
+                message=(
+                    "PARI basis precision must include coefficients through the "
+                    f"Sturm bound (at least {sturm_precision} terms)"
+                ),
+            )
+        # A coordinate-defined form is already globally identified, so a
+        # requested prefix shorter than the determining bound is evaluated
+        # from the internal Sturm-determining basis and truncated.
+        precision = sturm_precision
     if precision > MAX_PARI_BASIS_PRECISION:
         raise OperationResourceAdmissionError(
             location=("precision",),
@@ -918,7 +936,7 @@ def _frame_admission(
             message="frame must be a typed modular-form change-of-basis value",
         )
     frame_precision = sturm_bound(frame.space).bound + 1
-    plan = _admit_basis(frame.space, frame_precision)
+    plan = _admit_basis(frame.space, frame_precision, materialize_pari=False)
     if (
         type(frame.source_labels) is not tuple
         or type(frame.labels) is not tuple
@@ -934,8 +952,9 @@ def _frame_admission(
             code="modular_form.frame_shape",
             message="frame axes and matrix rows must be immutable tuples with valid labels",
         )
-    if frame.source_basis_id != plan.basis_id or frame.source_labels != _basis_labels(
-        plan
+    if frame.source_basis_id != plan.basis_id or (
+        plan.basis_id != PARI_STURM_RREF_BASIS_ID
+        and frame.source_labels != _basis_labels(plan)
     ):
         raise OperationDomainValidationError(
             location=("frame", "source_labels"),
@@ -999,6 +1018,20 @@ def _frame_admission(
             max_digits = max(max_digits, digits)
             values.append(rational)
         matrix.append(tuple(values))
+    if plan.basis_id == PARI_STURM_RREF_BASIS_ID:
+        # Complete every request admission that does not depend on backend
+        # output before launching the PARI worker for the canonical basis.
+        frame_matrix = tuple(matrix)
+        zero = tuple(Fraction(0) for _ in range(n))
+        _admit_change_of_basis_arithmetic(n, frame_matrix, zero)
+        _solve_frame_matrix(frame_matrix, zero)
+        plan = _materialize_pari_basis(plan)
+        if frame.source_labels != _basis_labels(plan):
+            raise OperationDomainValidationError(
+                location=("frame", "source_labels"),
+                code="modular_form.frame_source_basis",
+                message="frame source labels and basis identifier must match the exact canonical basis",
+            )
     return plan, tuple(matrix)
 
 
@@ -1224,6 +1257,7 @@ def _admit_coordinates(
     admitted_plan: _BasisPlan | None = None,
     materialize_pari: bool = True,
     check_expansion_growth: bool = True,
+    allow_short_prefix: bool = False,
 ) -> tuple[_BasisPlan, tuple[Fraction, ...]]:
     if not isinstance(form, ModularFormCoordinates):
         raise OperationDomainValidationError(
@@ -1246,7 +1280,12 @@ def _admit_coordinates(
             message="form coordinates use an unsupported basis convention",
         )
     plan = (
-        _admit_basis(form.space, precision, materialize_pari=False)
+        _admit_basis(
+            form.space,
+            precision,
+            materialize_pari=False,
+            at_least_sturm=allow_short_prefix,
+        )
         if admitted_plan is None
         else admitted_plan
     )
@@ -1707,7 +1746,10 @@ def modular_form_coordinates_q_expansion(
 ) -> ModularQExpansion:
     """Expand an exact form represented in one supported canonical basis."""
 
-    plan, coordinates = _admit_coordinates(form, precision)
+    # The coordinate value already identifies one global form, so a prefix
+    # shorter than the Sturm-determining bound is admitted at the internal
+    # determining precision and truncated to the requested order.
+    plan, coordinates = _admit_coordinates(form, precision, allow_short_prefix=True)
     basis_vectors = _basis_coefficients(plan)
     output = []
     for coefficient_index in range(precision):
@@ -3120,6 +3162,10 @@ def modular_form_coordinates_v_degeneracy(
         materialize_pari=False,
         check_expansion_growth=False,
     )
+    if d == 1:
+        # V_1 is the identity operator on Gamma0(N): the validated form
+        # already carries its exact coordinates in the unchanged basis.
+        return form
     work = (
         source_plan.work
         + target_plan.work

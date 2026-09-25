@@ -20,7 +20,9 @@ from jacobian.math.number_theory.modular_forms._models import (
 )
 from jacobian.math.number_theory.modular_forms._tools import TOOLS
 from jacobian.math.number_theory.modular_forms.values import (
+    ModularFormChangeOfBasisFrame,
     ModularFormCoordinates,
+    ModularFormFramedCoordinates,
     ModularFormSpace,
 )
 
@@ -286,3 +288,115 @@ def test_identity_frame_at_pari_space_uses_the_sturm_determining_precision() -> 
         Fraction(-1),
         Fraction(2),
     )
+
+
+def _counting_pari_basis(monkeypatch: pytest.MonkeyPatch) -> list[object]:
+    import jacobian.math.number_theory.modular_forms.basis as basis_module
+
+    calls: list[object] = []
+    real = basis_module.pari_gamma0_rational_basis
+
+    def counting(*args: object, **kwargs: object) -> object:
+        calls.append(args)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(basis_module, "pari_gamma0_rational_basis", counting)
+    return calls
+
+
+def test_coordinate_operations_admit_short_pari_prefixes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian.math.matrices.cyclic_linear._models import (
+        RationalCyclotomicField,
+    )
+    from jacobian.math.number_theory.modular_forms.field_coordinates import (
+        modular_form_coordinates_extend_field,
+        modular_form_field_coordinates_q_expansion,
+    )
+
+    calls = _counting_pari_basis(monkeypatch)
+    space = _space("M")
+    reference = basis.modular_form_basis_q_expansions(space, 3)
+    form = ModularFormCoordinates(
+        space=space,
+        basis_id=PARI_BASIS_ID,
+        coordinates=(_rat(1), _rat(0), _rat(0)),
+    )
+
+    prefix = basis.modular_form_coordinates_q_expansion(form, 1)
+    assert (
+        tuple(value.as_fraction() for value in prefix.q_expansion.coefficients)
+        == (_coefficients(reference.elements[0].expansion.q_expansion.coefficients)[:1])
+    )
+
+    field = RationalCyclotomicField(order=6)
+    extended = modular_form_coordinates_extend_field(form, field)
+    short = modular_form_field_coordinates_q_expansion(extended, 1)
+    long = modular_form_field_coordinates_q_expansion(extended, 3)
+    assert short.coefficients == long.coefficients[:1]
+    assert calls  # the Sturm-determining basis was still materialized once per use
+
+
+def test_frame_admission_validates_the_request_before_pari_materialization(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = _counting_pari_basis(monkeypatch)
+    space = _space("M")
+    singular = ModularFormChangeOfBasisFrame(
+        space=space,
+        source_basis_id=PARI_BASIS_ID,
+        source_labels=("q^0", "q^1", "q^2"),
+        labels=("g0", "g1", "g2"),
+        entries=((_rat(0), _rat(0), _rat(0)),) * 3,
+    )
+    with pytest.raises(OperationDomainValidationError, match="invertible"):
+        basis.modular_form_coordinates_from_frame(
+            ModularFormFramedCoordinates(
+                frame=singular,
+                coordinates=(_rat(1), _rat(0), _rat(0)),
+            )
+        )
+    assert calls == []
+
+    with pytest.raises(OperationDomainValidationError, match="frame matrix"):
+        basis.modular_form_basis_frame(
+            ModularFormBasisFrameRequest(
+                space=space,
+                source_basis_id=PARI_BASIS_ID,
+                source_labels=("q^0", "q^1"),
+                labels=("g0", "g1"),
+                entries=((_rat(1), _rat(0)), (_rat(0), _rat(1))),
+            )
+        )
+    assert calls == []
+
+    frame = basis.modular_form_basis_frame(
+        ModularFormBasisFrameRequest(
+            space=space,
+            source_basis_id=PARI_BASIS_ID,
+            source_labels=("q^0", "q^1", "q^2"),
+            labels=("f0", "f1", "f2"),
+            entries=(
+                (_rat(1), _rat(0), _rat(0)),
+                (_rat(0), _rat(1), _rat(0)),
+                (_rat(0), _rat(0), _rat(1)),
+            ),
+        )
+    )
+    assert frame.space == space
+    assert len(calls) == 1
+
+
+def test_v_degeneracy_identity_returns_the_validated_form_without_pari(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = _counting_pari_basis(monkeypatch)
+    form = ModularFormCoordinates(
+        space=_space("M"),
+        basis_id=PARI_BASIS_ID,
+        coordinates=(_rat(1), _rat(2), _rat(3)),
+    )
+    result = basis.modular_form_coordinates_v_degeneracy(form, 1)
+    assert result == form
+    assert calls == []

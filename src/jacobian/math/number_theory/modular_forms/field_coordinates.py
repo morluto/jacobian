@@ -153,7 +153,12 @@ def modular_form_field_coordinates_q_expansion(
             ),
         )
     rational_space = _rational_space(form.space)
-    plan = _admit_basis(rational_space, precision, materialize_pari=False)
+    # Field coordinates identify one global form, so a prefix shorter than
+    # the Sturm-determining bound is evaluated from the internal determining
+    # basis and truncated to the requested order.
+    plan = _admit_basis(
+        rational_space, precision, materialize_pari=False, at_least_sturm=True
+    )
     field = form.space.coefficient_domain
     if (
         form.basis_id != plan.basis_id

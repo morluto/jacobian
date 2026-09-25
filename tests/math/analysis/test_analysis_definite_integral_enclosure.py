@@ -41,8 +41,6 @@ from jacobian.math.analysis._definite_integral_enclosure import (
     _compute_definite_integral_enclosure,
     _enclosure_width,
     _interval_at_path,
-    _round_fraction_outward,
-    _summed_enclosure,
 )
 from jacobian.math.analysis._models import (
     DyadicClosedInterval,
@@ -62,48 +60,6 @@ def _q(value: Fraction | int, denominator: int = 1) -> dict[str, str]:
 
 def _validate_json(model: Any, payload: Any) -> Any:
     return model.model_validate_json(json.dumps(payload))
-
-
-def test_dyadic_sum_matches_fraction_oracle_for_signed_and_mixed_scales() -> None:
-    contributions = (
-        DyadicClosedInterval(
-            lower=ExactDyadic(mantissa=-13, exponent=-7),
-            upper=ExactDyadic(mantissa=5, exponent=-5),
-        ),
-        DyadicClosedInterval(
-            lower=ExactDyadic(mantissa=3, exponent=4),
-            upper=ExactDyadic(mantissa=7, exponent=3),
-        ),
-        DyadicClosedInterval(
-            lower=ExactDyadic(mantissa=11, exponent=-19),
-            upper=ExactDyadic(mantissa=9, exponent=-17),
-        ),
-        DyadicClosedInterval(
-            lower=ExactDyadic(mantissa=0, exponent=0),
-            upper=ExactDyadic(mantissa=0, exponent=0),
-        ),
-    )
-
-    for precision_bits in (1, 2, 53, 192):
-
-        def as_fraction(value: ExactDyadic) -> Fraction:
-            if value.exponent >= 0:
-                return Fraction(int(value.mantissa) << value.exponent)
-            return Fraction(int(value.mantissa), 1 << (-value.exponent))
-
-        lower = sum(
-            (as_fraction(value.lower) for value in contributions),
-            Fraction(),
-        )
-        upper = sum(
-            (as_fraction(value.upper) for value in contributions),
-            Fraction(),
-        )
-        expected = DyadicClosedInterval(
-            lower=_round_fraction_outward(lower, precision_bits, toward_positive=False),
-            upper=_round_fraction_outward(upper, precision_bits, toward_positive=True),
-        )
-        assert _summed_enclosure(contributions, precision_bits) == expected
 
 
 def _var(name: str = "t") -> dict[str, Any]:

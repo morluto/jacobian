@@ -2175,13 +2175,6 @@ class PyramidResult(StrictModel):
         )
 
 
-class PolytopeAxisTransport(StrictModel):
-    """One source-coordinate axis mapped into an output polytope space."""
-
-    source_axis: CoordinateAxis
-    target_axis: CoordinateAxis
-
-
 class PrismVertexMap(StrictModel):
     """One exact source-to-prism vertex transport row."""
 
@@ -2231,22 +2224,6 @@ class PrismResult(StrictModel):
             "bottom vertices carry last coordinate 0 and top vertices carry 1."
         )
     )
-    height_axis: CoordinateAxis = Field(
-        description=(
-            "Named vertical axis in the returned prism space; it is the final "
-            "axis and carries bottom height 0 and top height 1."
-        )
-    )
-    source_space: RationalCoordinateSpace = Field(
-        description="Axis context of the prism base, retained for reconstruction."
-    )
-    source_axis_map: tuple[PolytopeAxisTransport, ...] = Field(
-        max_length=MAX_RATIONAL_POLYTOPE_DIMENSION,
-        description=(
-            "Ordered injection of the source axes into the prism coordinates; "
-            "together with a bottom vertex map it reconstructs the source V-value."
-        ),
-    )
     bottom_vertex_map: tuple[PrismVertexMap, ...] = Field(
         min_length=1,
         max_length=MAX_VERTICES,
@@ -2266,22 +2243,6 @@ class PrismResult(StrictModel):
 
     @model_validator(mode="after")
     def require_prism_transport_shape(self) -> Self:
-        if self.prism.space.axes[-1] != self.height_axis:
-            raise _validation_error(
-                "prism_height_axis_binding",
-                "the named prism height axis must be the final output axis",
-            )
-        if (
-            tuple(row.source_axis for row in self.source_axis_map)
-            != (self.source_space.axes)
-            or tuple(row.target_axis for row in self.source_axis_map)
-            != (self.prism.space.axes[:-1])
-        ):
-            raise _validation_error(
-                "prism_axis_transport",
-                "prism axis transport must map each ordered source axis to the "
-                "matching output axis before height",
-            )
         for row in (*self.bottom_vertex_map, *self.top_vertex_map):
             if row.side not in ("bottom", "top"):
                 raise _validation_error(
@@ -2346,9 +2307,6 @@ class PrismResult(StrictModel):
         cls,
         *,
         prism: RationalVPolytope,
-        height_axis: str,
-        source_space: RationalCoordinateSpace,
-        source_axis_map: tuple[PolytopeAxisTransport, ...],
         bottom_vertex_map: tuple[PrismVertexMap, ...],
         top_vertex_map: tuple[PrismVertexMap, ...],
         source_affine_dimension: int,
@@ -2358,9 +2316,6 @@ class PrismResult(StrictModel):
 
         return cls.model_construct(
             prism=prism,
-            height_axis=height_axis,
-            source_space=source_space,
-            source_axis_map=source_axis_map,
             bottom_vertex_map=bottom_vertex_map,
             top_vertex_map=top_vertex_map,
             source_affine_dimension=source_affine_dimension,
@@ -2422,26 +2377,6 @@ class JoinResult(StrictModel):
             "carry left-block 0 and height 1."
         )
     )
-    height_axis: CoordinateAxis = Field(
-        description=(
-            "Named vertical axis in the returned join space; it is the final "
-            "axis and carries left height 0 and right height 1."
-        )
-    )
-    left_space: RationalCoordinateSpace = Field(
-        description="Axis context of the left factor, retained for reconstruction."
-    )
-    right_space: RationalCoordinateSpace = Field(
-        description="Axis context of the right factor, retained for reconstruction."
-    )
-    left_axis_map: tuple[PolytopeAxisTransport, ...] = Field(
-        max_length=MAX_RATIONAL_POLYTOPE_DIMENSION,
-        description="Ordered injection of left-factor axes into join coordinates.",
-    )
-    right_axis_map: tuple[PolytopeAxisTransport, ...] = Field(
-        max_length=MAX_RATIONAL_POLYTOPE_DIMENSION,
-        description="Ordered injection of right-factor axes into join coordinates.",
-    )
     left_vertex_map: tuple[JoinVertexMap, ...] = Field(
         min_length=1,
         max_length=MAX_VERTICES,
@@ -2458,27 +2393,6 @@ class JoinResult(StrictModel):
 
     @model_validator(mode="after")
     def require_join_transport_shape(self) -> Self:
-        if self.join.space.axes[-1] != self.height_axis:
-            raise _validation_error(
-                "join_height_axis_binding",
-                "the named join height axis must be the final output axis",
-            )
-        left_width = len(self.left_space.axes)
-        right_width = len(self.right_space.axes)
-        if len(self.join.space.axes) != left_width + right_width + 1 or (
-            tuple(row.source_axis for row in self.left_axis_map) != self.left_space.axes
-            or tuple(row.target_axis for row in self.left_axis_map)
-            != self.join.space.axes[:left_width]
-            or tuple(row.source_axis for row in self.right_axis_map)
-            != self.right_space.axes
-            or tuple(row.target_axis for row in self.right_axis_map)
-            != self.join.space.axes[left_width : left_width + right_width]
-        ):
-            raise _validation_error(
-                "join_axis_transport",
-                "join axis transports must preserve each factor's ordered axes "
-                "in its output coordinate block",
-            )
         if any(row.side != "left" for row in self.left_vertex_map):
             raise _validation_error(
                 "join_side", "left transport rows must all carry side 'left'"
@@ -2530,11 +2444,6 @@ class JoinResult(StrictModel):
         cls,
         *,
         join: RationalVPolytope,
-        height_axis: str,
-        left_space: RationalCoordinateSpace,
-        right_space: RationalCoordinateSpace,
-        left_axis_map: tuple[PolytopeAxisTransport, ...],
-        right_axis_map: tuple[PolytopeAxisTransport, ...],
         left_vertex_map: tuple[JoinVertexMap, ...],
         right_vertex_map: tuple[JoinVertexMap, ...],
         left_affine_dimension: int,
@@ -2545,11 +2454,6 @@ class JoinResult(StrictModel):
 
         return cls.model_construct(
             join=join,
-            height_axis=height_axis,
-            left_space=left_space,
-            right_space=right_space,
-            left_axis_map=left_axis_map,
-            right_axis_map=right_axis_map,
             left_vertex_map=left_vertex_map,
             right_vertex_map=right_vertex_map,
             left_affine_dimension=left_affine_dimension,

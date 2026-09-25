@@ -135,9 +135,9 @@ def cartan_type_matrix(cartan_type: str, rank: int) -> tuple[tuple[int, ...], ..
 
     - ``A_n``: the linear chain on ``n`` nodes.
     - ``B_n``: the chain with the last node short, so
-      ``a[n-2][n-1] = -1`` and ``a[n-1][n-2] = -2``.
-    - ``C_n``: the chain with the last node long, so
       ``a[n-2][n-1] = -2`` and ``a[n-1][n-2] = -1``.
+    - ``C_n``: the chain with the last node long, so
+      ``a[n-2][n-1] = -1`` and ``a[n-1][n-2] = -2``.
     - ``D_n``: the chain ``0 - ... - (n-3)`` with two leaves
       ``n-2`` and ``n-1`` both attached to node ``n-3``.
     - ``E_6``, ``E_7``, ``E_8``: the chain ``0 - ...`` on the first
@@ -163,11 +163,11 @@ def cartan_type_matrix(cartan_type: str, rank: int) -> tuple[tuple[int, ...], ..
             for row in range(rank)
         ]
         if cartan_type == "B":
-            rows[rank - 2][rank - 1] = -1
-            rows[rank - 1][rank - 2] = -2
-        else:
             rows[rank - 2][rank - 1] = -2
             rows[rank - 1][rank - 2] = -1
+        else:
+            rows[rank - 2][rank - 1] = -1
+            rows[rank - 1][rank - 2] = -2
         return tuple(tuple(row) for row in rows)
     if cartan_type == "D":
         rows = [[0] * rank for _ in range(rank)]

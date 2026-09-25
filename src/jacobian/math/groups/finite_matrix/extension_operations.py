@@ -6,9 +6,11 @@ from itertools import product
 from math import ceil
 from typing import Any, NoReturn
 
+import rfc8785
 from pydantic import ValidationError
 
 from jacobian._execution import request_checkpoint
+from jacobian.canonical import CanonicalLimits
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -35,6 +37,7 @@ from jacobian.math.groups.finite_matrix._models import (
 )
 
 _MAX_PRIMITIVE_SEARCH_WORK = 10_000_000
+_MAX_GROUP_OUTPUT_BYTES = CanonicalLimits().max_output_bytes
 
 
 def _domain_error(
@@ -131,6 +134,119 @@ def _matrix(
             for row in entries
         ),
     )
+
+
+def _quoted_text_bytes_upper_bound(value: str) -> int:
+    return len(rfc8785.dumps(value))
+
+
+def _presentation_bytes_upper_bound(presentation: FiniteFieldPresentation) -> int:
+    return (
+        256
+        + _quoted_text_bytes_upper_bound(presentation.generator)
+        + 16 * len(presentation.modulus_coefficients)
+    )
+
+
+def _axis_bytes_upper_bound(axis: Axis) -> int:
+    return (
+        256
+        + _quoted_text_bytes_upper_bound(axis.name)
+        + sum(_quoted_text_bytes_upper_bound(label) for label in axis.labels)
+        + 2 * len(axis.labels)
+    )
+
+
+def _check_group_output_size(
+    presentation: FiniteFieldPresentation,
+    axis: Axis,
+    generator_count: int,
+    order_digit_bound: int,
+) -> None:
+    dimension = len(axis.labels)
+    presentation_bytes = _presentation_bytes_upper_bound(presentation)
+    axis_bytes = _axis_bytes_upper_bound(axis)
+    # Each field element serializes its complete presentation, and each matrix
+    # repeats both labelled axes. This deliberately bounds the actual carrier
+    # JSON shape rather than only counting matrix cells.
+    element_bytes = presentation_bytes + 16 * presentation.degree + 96
+    matrix_bytes = (
+        presentation_bytes
+        + 2 * axis_bytes
+        + dimension * dimension * element_bytes
+        + 512
+    )
+    total = (
+        presentation_bytes
+        + axis_bytes
+        + order_digit_bound
+        + generator_count * matrix_bytes
+        + 1024
+        # Reserve for SL's ambient order and determinant-index fields. GL may
+        # use less, but both constructors share this admission path.
+        + 2 * order_digit_bound
+    )
+    if total > _MAX_GROUP_OUTPUT_BYTES:
+        _resource_error(
+            "serialized_group_output_bound",
+            "the complete group value exceeds the 10 MiB canonical output envelope",
+            ("vector_axis",),
+        )
+
+
+def _check_projective_action_output_size(
+    group: ExtensionFieldGeneralLinearGroup | ExtensionFieldSpecialLinearGroup,
+    point_count: int,
+) -> None:
+    presentation = group.presentation
+    axis = group.vector_axis
+    dimension = len(axis.labels)
+    presentation_bytes = _presentation_bytes_upper_bound(presentation)
+    axis_bytes = _axis_bytes_upper_bound(axis)
+    element_bytes = presentation_bytes + 16 * presentation.degree + 96
+    group_bytes = _group_value_bytes_upper_bound(group)
+    point_bytes = presentation_bytes + axis_bytes + dimension * element_bytes + 512
+    # The point labels encode every coordinate as at most five decimal digits;
+    # permutation entries are indices into an axis of at most 50 points.
+    label_bytes = 16 + dimension * presentation.degree * 6
+    action_bytes = (
+        point_count * (point_bytes + label_bytes)
+        + len(group.generators) * point_count * 4
+        + 1024
+    )
+    if group_bytes + action_bytes > _MAX_GROUP_OUTPUT_BYTES:
+        _resource_error(
+            "serialized_projective_action_output_bound",
+            "the complete projective action value exceeds the 10 MiB canonical output envelope",
+            ("group", "vector_axis"),
+        )
+
+
+def _group_value_bytes_upper_bound(
+    group: ExtensionFieldGeneralLinearGroup | ExtensionFieldSpecialLinearGroup,
+) -> int:
+    dimension = len(group.vector_axis.labels)
+    presentation_bytes = _presentation_bytes_upper_bound(group.presentation)
+    axis_bytes = _axis_bytes_upper_bound(group.vector_axis)
+    element_bytes = presentation_bytes + 16 * group.presentation.degree + 96
+    matrix_bytes = (
+        presentation_bytes
+        + 2 * axis_bytes
+        + dimension * dimension * element_bytes
+        + 512
+    )
+    total = (
+        presentation_bytes
+        + axis_bytes
+        + len(str(group.order))
+        + len(group.generators) * matrix_bytes
+        + 2048
+    )
+    if isinstance(group, ExtensionFieldSpecialLinearGroup):
+        total += len(str(group.ambient_general_linear_order)) + len(
+            str(group.determinant_index)
+        )
+    return total
 
 
 def _identity(context: Any, dimension: int) -> tuple[tuple[Any, ...], ...]:
@@ -254,6 +370,12 @@ def _admit_group_parameters(
             "the exact group order exceeds its canonical digit budget",
             ("vector_axis",),
         )
+    _check_group_output_size(
+        presentation,
+        axis,
+        generator_count,
+        order_digit_bound,
+    )
     order = _linear_group_order(q, dimension)
     return presentation, axis, _field_context(presentation), q, order
 
@@ -393,6 +515,7 @@ def _projective_action(
             "the complete projective-point axis exceeds the 50-point output envelope",
             ("group",),
         )
+    _check_projective_action_output_size(group, points_bound)
     context = _field_context(group.presentation)
     points = _projective_points(context, group.presentation, group.vector_axis)
     point_keys = tuple(

@@ -8,6 +8,7 @@ from itertools import product
 import pytest
 from pydantic import ValidationError
 
+import jacobian.math.groups.finite_matrix.extension_operations as extension_operations
 from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -236,6 +237,47 @@ def test_extension_projective_action_bound_is_checked_before_enumeration() -> No
         construct_extension_general_linear_group(GF4, too_many_generators)
     assert generator_error.value.errors()[0]["type"] == (
         "finite_matrix_group.generator_output_bound"
+    )
+
+
+def test_long_axis_labels_bound_serialized_group_before_generators(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    axis = Axis(
+        name="V",
+        labels=tuple(f"{index}-" + "x" * 15_000 for index in range(10)),
+    )
+
+    def generators_must_not_be_built(*_args: object) -> object:
+        raise AssertionError("the generator family was materialized before admission")
+
+    monkeypatch.setattr(
+        extension_operations, "_general_generators", generators_must_not_be_built
+    )
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        construct_extension_general_linear_group(GF4, axis)
+    assert error.value.errors()[0]["type"] == (
+        "finite_matrix_group.serialized_group_output_bound"
+    )
+
+
+def test_long_axis_labels_bound_projective_result_before_point_expansion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    prefix = "x" * 400_000
+    axis = Axis(name="V", labels=(prefix + "a", prefix + "b"))
+    group = construct_extension_general_linear_group(GF4, axis)
+
+    def points_must_not_be_built(*_args: object) -> object:
+        raise AssertionError("projective points were expanded before admission")
+
+    monkeypatch.setattr(
+        extension_operations, "_projective_points", points_must_not_be_built
+    )
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        extension_general_linear_projective_action(group)
+    assert error.value.errors()[0]["type"] == (
+        "finite_matrix_group.serialized_projective_action_output_bound"
     )
 
 

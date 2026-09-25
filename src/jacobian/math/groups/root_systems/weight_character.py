@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from math import comb
 
 from jacobian.canonical import CanonicalLimits
@@ -29,7 +30,7 @@ MAX_CHARACTER_WORK = 50_000_000
 MAX_CHARACTER_OUTPUT_BYTES = 64_000
 
 
-def _compositions(total: int, slots: int):
+def _compositions(total: int, slots: int) -> Iterator[tuple[int, ...]]:
     """Yield weak compositions in lexicographic order."""
     if slots == 1:
         yield (total,)

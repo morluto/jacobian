@@ -9,14 +9,16 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.groups.root_systems import (
-    HighestWeightCharacterRequest,
-    IrreducibleWeightCharacter,
-    WeightMultiplicity,
     highest_weight_character,
     weyl_dimension,
     weyl_weight_orbit,
 )
 from jacobian.math.groups.root_systems._tools import TOOLS
+from jacobian.math.groups.root_systems._weight_character_models import (
+    HighestWeightCharacterRequest,
+    IrreducibleWeightCharacter,
+    WeightMultiplicity,
+)
 
 A1 = ((2,),)
 A2 = ((2, -1), (-1, 2))
@@ -92,6 +94,15 @@ def test_character_is_a_canonical_round_tripping_value() -> None:
     revived = IrreducibleWeightCharacter.model_validate_json(value.model_dump_json())
     assert revived == value
     assert isinstance(value.terms[0], WeightMultiplicity)
+
+
+def test_large_multiplicity_uses_exact_integer_wire_encoding() -> None:
+    multiplicity = 1 << 60
+    term = WeightMultiplicity(weight=(0,), multiplicity=multiplicity)
+    payload = json.loads(term.model_dump_json())
+    assert payload["multiplicity"] == str(multiplicity)
+    revived = WeightMultiplicity.model_validate_json(term.model_dump_json())
+    assert revived == term
 
 
 def test_character_value_retains_its_supported_type() -> None:

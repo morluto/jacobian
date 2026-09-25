@@ -20,6 +20,10 @@ has no semistandard tableaux. See [Stanley's hook-content formula](https://math.
 
 The public envelope admits alphabet size at most 4096, at most 4096 tableaux,
 100000 aggregate cells, 25000000 construction steps, and a two-megabyte result
-estimate. The result contains the canonical partition and typed tableau values.
+estimate. Enumeration removes the largest used label as a horizontal strip;
+each predecessor has height at most one less than that label, so every emitted
+search branch has a completion. The work estimate accounts for predecessor
+shape choices, copying, and output ordering before enumeration. The result
+contains the canonical partition and typed tableau values.
 
 [Combinatorics operations](index.md)

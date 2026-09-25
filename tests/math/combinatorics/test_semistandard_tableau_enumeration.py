@@ -90,6 +90,15 @@ def test_exact_maximum_cell_shape_is_accepted_with_one_tableau() -> None:
     assert result.tableaux[0].rows == ((1,) * 500,)
 
 
+def test_max_height_column_has_one_tableau_without_dead_prefix_search() -> None:
+    result = enumerate_semistandard_young_tableaux(
+        IntegerPartition(parts=(1,) * 500), max_entry=500
+    )
+
+    assert len(result.tableaux) == 1
+    assert result.tableaux[0].rows == tuple((entry,) for entry in range(1, 501))
+
+
 def test_catalog_request_keeps_alphabet_bound() -> None:
     request = SemistandardTableauEnumerationRequest(
         partition=IntegerPartition(parts=(1,)), max_entry=4_096

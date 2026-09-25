@@ -673,6 +673,10 @@ def test_constructed_malformed_sources_reject_stably() -> None:
         ),
         SquarefreeAffineFamily.model_construct(forms=(object(),)),
         SquarefreeAffineFamily.model_construct(forms=object()),
+        SquarefreeAffineFamily.model_construct(),
+        SquarefreeAffineFamily.model_construct(
+            forms=(SquarefreeAffineForm.model_construct(coefficient=1, constant=0),)
+        ),
     )
     boundary_codes = {
         "number_theory.squarefree_affine.family_source",

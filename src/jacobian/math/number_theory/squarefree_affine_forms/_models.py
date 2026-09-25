@@ -51,12 +51,16 @@ def admit_family(source: SquarefreeAffineFamily) -> None:
         raise _domain_error(
             "family_source", "family must be a square-free affine family"
         )
-    if not isinstance(source.forms, tuple) or any(
+    forms = getattr(source, "forms", None)
+    if not isinstance(forms, tuple) or any(
         not isinstance(form, SquarefreeAffineForm)
+        or not hasattr(form, "form_id")
+        or not hasattr(form, "coefficient")
+        or not hasattr(form, "constant")
         or type(form.form_id) is not str
         or type(form.coefficient) is not int
         or type(form.constant) is not int
-        for form in source.forms
+        for form in forms
     ):
         raise _domain_error(
             "family_form_source",

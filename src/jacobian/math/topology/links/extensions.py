@@ -491,16 +491,30 @@ def link_blackboard_graph(diagram: OrientedLinkDiagram) -> LinkBlackboardGraph:
     return _construct_blackboard_graph(_admit_diagram(diagram))
 
 
-def link_goeritz_data(diagram: OrientedLinkDiagram) -> GoeritzDataResult:
-    """Construct the reduced Goeritz matrix from the canonical Tait graph."""
-    admitted = _admit_diagram(diagram)
-    if len(admitted.crossings) > 32:
+def link_goeritz_data(graph: LinkBlackboardGraph) -> GoeritzDataResult:
+    """Construct the reduced Goeritz matrix from an admitted Tait graph."""
+    if not isinstance(graph, LinkBlackboardGraph):
+        _domain_error(
+            ("blackboard_graph",),
+            "goeritz_graph_type",
+            "graph must be a LinkBlackboardGraph",
+        )
+    try:
+        graph = LinkBlackboardGraph.model_validate_json(
+            graph.model_dump_json(warnings=False)
+        )
+    except (AttributeError, TypeError, ValidationError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("blackboard_graph",),
+            code="link_diagram.goeritz_graph_shape",
+            message="graph must satisfy the bounded checkerboard graph contract",
+        ) from exc
+    if len(graph.diagram.crossings) > 32:
         raise OperationResourceAdmissionError(
             location=("diagram",),
             code="link_diagram.goeritz_matrix_bound",
             message="Goeritz matrices are admitted for at most 32 crossings",
         )
-    graph = _construct_blackboard_graph(admitted)
     shaded_indices = graph.shaded_region_ids
     shaded_positions = {
         region: position for position, region in enumerate(shaded_indices)

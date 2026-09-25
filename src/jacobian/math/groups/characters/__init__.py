@@ -26,12 +26,15 @@ from jacobian.math.groups.characters._models import (
     ClassFunctionRestrictionRequest,
     ClassFunctionRestrictionResult,
     ClassFunctionScaleRequest,
+    ClassMultiplicationConstantsRequest,
+    ClassMultiplicationConstantsResult,
     ConjugacyClassPartition,
     CyclotomicValue,
     FiniteClassFunction,
     FrobeniusSchurIndicatorRequest,
     FrobeniusSchurIndicatorResult,
 )
+from jacobian.math.groups.characters.class_algebra import class_multiplication_constants
 from jacobian.math.groups.characters.operations import (
     character_table,
     character_tensor_decomposition,
@@ -79,6 +82,8 @@ __all__ = [
     "ClassFunctionRestrictionRequest",
     "ClassFunctionRestrictionResult",
     "ClassFunctionScaleRequest",
+    "ClassMultiplicationConstantsRequest",
+    "ClassMultiplicationConstantsResult",
     "ConjugacyClassPartition",
     "CyclotomicValue",
     "FiniteClassFunction",
@@ -99,5 +104,6 @@ __all__ = [
     "class_function_pointwise_product",
     "class_function_restrict_to_subgroup",
     "class_function_scale",
+    "class_multiplication_constants",
     "frobenius_schur_indicator",
 ]

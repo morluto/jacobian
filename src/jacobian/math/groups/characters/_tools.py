@@ -28,6 +28,8 @@ from jacobian.math.groups.characters._models import (
     ClassFunctionRestrictionRequest,
     ClassFunctionRestrictionResult,
     ClassFunctionScaleRequest,
+    ClassMultiplicationConstantsRequest,
+    ClassMultiplicationConstantsResult,
     ClassPowerMapRequest,
     ClassPowerMapResult,
     CyclicCharacterRestrictionRequest,
@@ -36,6 +38,7 @@ from jacobian.math.groups.characters._models import (
     FrobeniusSchurIndicatorRequest,
     FrobeniusSchurIndicatorResult,
 )
+from jacobian.math.groups.characters.class_algebra import class_multiplication_constants
 from jacobian.math.groups.characters.operations import (
     character_table,
     character_tensor_decomposition,
@@ -342,6 +345,35 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 name="s3_square_power_map",
                 description="Square each conjugacy class of S3 and return its image class.",
                 input={"partition": _S3_PARTITION, "exponent": 2},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="group.class_multiplication_constants.compute",
+        title="Compute finite-group class multiplication constants",
+        description=(
+            "Multiply every pair of integral conjugacy-class sums and return the "
+            "complete nonnegative integer structure-constant tensor. The source "
+            "partition is checked against its concrete permutation group. This "
+            "operation admits groups of order at most 256 and at most 64 classes, "
+            "with explicit work and output-cell bounds."
+        ),
+        request_type=ClassMultiplicationConstantsRequest,
+        result_type=ClassMultiplicationConstantsResult,
+        run=class_multiplication_constants,
+        tags=("group", "character", "conjugacy", "class-algebra", "exact"),
+        discovery_terms=(
+            "finite group class multiplication constants",
+            "conjugacy class algebra structure constants",
+            "multiply class sums",
+        ),
+        examples=(
+            OperationExample(
+                name="s3_class_algebra",
+                description=(
+                    "Return the exact class-sum multiplication tensor for S3."
+                ),
+                input={"partition": _S3_PARTITION},
             ),
         ),
     ),

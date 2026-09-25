@@ -2,6 +2,26 @@
 
 [Finite mathematics operations](index.md) · [Tool surface](../../tools.md)
 
+## Conjugacy-class algebra
+
+`group.class_multiplication_constants.compute` returns the full integer tensor
+for products of conjugacy-class sums. Its entry `N[i][j][k]` is the coefficient
+of class sum `k` in the product of class sums `i` and `j`. The implementation
+counts ordered pairs of group elements and divides each target-class count by
+the target class size; conjugation invariance makes that quotient the
+coefficient for every element in that class. It recomputes the source
+conjugacy partition from the supplied concrete permutation group before using
+the partition. This follows GAP's documented convention for
+[`ClassMultiplicationCoefficient`](https://gap-system.github.io/gap/doc/ref/chap71_mj.html#X85EB1F307F863E46): it counts factorizations of one fixed target element and gives the coefficient of that target class sum in the product.
+
+Admission bounds group order by 256, class count by 64, the permutation work
+and the complete cubic result tensor, with separate coefficient-byte and
+operation-work limits applied before class multiplication. For S3, ordering
+classes as identity, transpositions, and 3-cycles, the constants for
+`T*T` are `(3, 0, 3)`, for `T*C` are `(0, 2, 0)`, and for `C*C` are
+`(2, 0, 1)`. The trivial class is the unit. These are structure constants of
+the integral center of the group algebra, not character decomposition data.
+
 ## Decomposing an S3 tensor product
 
 `finite_group.character.tensor_product.decompose.compute` takes two row

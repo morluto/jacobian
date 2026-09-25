@@ -282,6 +282,35 @@ def test_face_work_is_rejected_before_hull_expansion(
         tropical_polynomial_essential_part(poly)
 
 
+def test_face_incidence_records_a_face_shared_by_two_maximal_finite_faces() -> None:
+    poly = _polynomial(
+        ("x", "y"),
+        ((0, 0), (0, 1), (1, 1), (2, 1), (3, 2)),
+        (-3, 1, 3, 2, -1),
+    )
+
+    result = tropical_polynomial_essential_part(poly)
+
+    assert result.essential_term_indices == _inequality_oracle(poly) == (0, 1, 3, 4)
+    assert tuple(
+        (face.dimension, face.source_term_indices, face.maximal_finite_face_indices)
+        for face in result.face_incidence
+    ) == (
+        (0, (0,), (0, 1)),
+        (0, (1,), (1,)),
+        (0, (3,), (0,)),
+        (0, (4,), (0, 1)),
+        (1, (0, 1), (1,)),
+        (1, (0, 3), (0,)),
+        (1, (0, 4), (0, 1)),
+        (1, (1, 4), (1,)),
+        (1, (3, 4), (0,)),
+        (2, (0, 1, 4), (1,)),
+        (2, (0, 3, 4), (0,)),
+    )
+    _assert_face_incidence(poly, result)
+
+
 @pytest.mark.parametrize(
     ("exponents", "expected_facets"),
     [

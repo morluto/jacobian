@@ -25,7 +25,17 @@ from jacobian.math.polynomials.local_series.values import (
 )
 from jacobian.math.polynomials.values import (
     PolynomialVariable,
+    RationalPolynomial,
+    RationalPolynomialTerm,
+    SparseRationalPolynomial,
 )
+from jacobian.math.number_theory.algebraic_numbers.complex import (
+    MAX_COMPLEX_ALGEBRAIC_COEFFICIENT_DIGITS, ComplexAlgebraicValue,
+)
+from jacobian.math.number_theory.algebraic_numbers.real import (
+    MAX_REAL_ALGEBRAIC_COEFFICIENT_DIGITS, RealAlgebraicValue,
+)
+from math import gcd, isqrt, lcm
 
 MAX_LOCAL_POLYNOMIAL_ROWS = 256
 MAX_LOCAL_POLYNOMIAL_SERIES_SLOTS = 8192
@@ -101,6 +111,239 @@ class LocalPolynomialNewtonPolygonResult(StrictModel):
     points: tuple[NewtonPolygonPoint, ...]
     vertices: tuple[NewtonPolygonPoint, ...]
     edges: tuple[NewtonPolygonEdge, ...]
+
+
+class NewtonEdgeCharacteristicRequest(StrictModel):
+    """Select a lower edge of a local polynomial Newton polygon."""
+
+    polynomial: LocalPolynomialInSeries
+    edge_index: StrictInt = Field(ge=0)
+
+
+class NewtonEdgeCharacteristicTerm(StrictModel):
+    """Transport a source coefficient's leading term to the edge polynomial."""
+
+    y_degree: StrictInt = Field(ge=0)
+    characteristic_exponent: StrictInt = Field(ge=0)
+    leading_coefficient: CanonicalRational
+
+
+class NewtonEdgeCharacteristicResult(StrictModel):
+    """Exact rational edge polynomial, with its source coefficients retained."""
+
+    source: LocalPolynomialInSeries
+    edge_index: StrictInt = Field(ge=0)
+    edge: NewtonPolygonEdge
+    terms: tuple[NewtonEdgeCharacteristicTerm, ...]
+    characteristic_polynomial: RationalPolynomial
+
+
+class NewtonEdgeCharacteristicRoot(StrictModel):
+    """One exact root of a supported Newton edge characteristic polynomial."""
+
+    value: CanonicalRational | RealAlgebraicValue | ComplexAlgebraicValue
+    multiplicity: StrictInt = Field(ge=1, le=2)
+
+
+class NewtonEdgeCharacteristicRootsResult(StrictModel):
+    """Exact roots of a degree-at-most-two edge polynomial over QQ.
+
+    Algebraic roots use Jacobian's canonical indexed-root values; rational roots
+    remain rationals. This is an exact leading-coefficient slice and carries no
+    assertion that a later Newton-Puiseux lift exists or has been computed.
+    """
+
+    characteristic: NewtonEdgeCharacteristicResult
+    roots: tuple[NewtonEdgeCharacteristicRoot, ...] = Field(max_length=2)
+
+    @model_validator(mode="after")
+    def require_root_multiplicities(self) -> NewtonEdgeCharacteristicRootsResult:
+        degree = max(
+            (
+                term.exponents[0]
+                for term in self.characteristic.characteristic_polynomial.polynomial.terms
+            ),
+            default=0,
+        )
+        if sum(root.multiplicity for root in self.roots) != degree:
+            raise ValueError("root multiplicities must reconstruct the edge polynomial degree")
+        return self
+
+
+def newton_edge_characteristic_polynomial(
+    request: NewtonEdgeCharacteristicRequest,
+) -> NewtonEdgeCharacteristicResult:
+    """Return the edge polynomial in the leading coefficient variable ``c``.
+
+    Its terms are ``lc(a_j) * c**(j-j_left)`` for source coefficients whose
+    valuation points lie on the selected lower edge. Roots describe possible
+    nonzero leading coefficients after the edge's valuation substitution; this
+    operation does not select or lift roots.
+    """
+    if not isinstance(request, NewtonEdgeCharacteristicRequest):
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="local_series.newton_characteristic_request_type",
+            message="request must select an edge of a local polynomial",
+        )
+    polygon = local_polynomial_newton_polygon(request.polynomial)
+    if request.edge_index >= len(polygon.edges):
+        raise OperationDomainValidationError(
+            location=("edge_index",),
+            code="local_series.newton_edge_index",
+            message="edge_index must select an edge in the exact lower Newton polygon",
+        )
+    edge = polygon.edges[request.edge_index]
+    left_degree = edge.left.y_degree
+    source_rows = {row.y_degree: row for row in request.polynomial.coefficients}
+    valuations = dict(polygon.coefficient_valuations)
+    transported = []
+    polynomial_terms = []
+    for degree in edge.source_y_degrees:
+        row = source_rows.get(degree)
+        valuation = valuations.get(degree)
+        if row is None or row.series is None or valuation is None:
+            raise OperationDomainValidationError(
+                location=("polynomial", "coefficients"),
+                code="local_series.newton_source_transport",
+                message="the selected edge could not be transported to its source coefficients",
+            )
+        offset = valuation - row.series.valuation_lower
+        coefficient = row.series.coefficients[offset]
+        exponent = degree - left_degree
+        transported.append(
+            NewtonEdgeCharacteristicTerm.model_construct(
+                y_degree=degree,
+                characteristic_exponent=exponent,
+                leading_coefficient=coefficient,
+            )
+        )
+        polynomial_terms.append(
+            RationalPolynomialTerm.model_construct(
+                coefficient=coefficient,
+                exponents=(exponent,),
+            )
+        )
+    characteristic = RationalPolynomial.model_construct(
+        domain="QQ",
+        variables=("c",),
+        polynomial=SparseRationalPolynomial.model_construct(
+            terms=tuple(
+                sorted(polynomial_terms, key=lambda term: term.exponents, reverse=True)
+            )
+        ),
+    )
+    return NewtonEdgeCharacteristicResult.model_construct(
+        source=request.polynomial,
+        edge_index=request.edge_index,
+        edge=edge,
+        terms=tuple(transported),
+        characteristic_polynomial=characteristic,
+    )
+
+
+def newton_edge_characteristic_roots(
+    request: NewtonEdgeCharacteristicRequest,
+) -> NewtonEdgeCharacteristicRootsResult:
+    """Solve the Newton edge equation exactly when its degree is at most two.
+
+    The quadratic formula is performed over QQ after clearing denominators and
+    primitive normalization. Irrational real and nonreal roots are represented
+    by the existing canonical algebraic-root carriers. Higher-degree edges are
+    rejected before root computation; no numerical root selection is used.
+    """
+    characteristic = newton_edge_characteristic_polynomial(request)
+    terms = characteristic.characteristic_polynomial.polynomial.terms
+    degree = max((term.exponents[0] for term in terms), default=0)
+    if degree > 2:
+        raise OperationResourceAdmissionError(
+            location=("characteristic_polynomial",),
+            code="local_series.newton_edge_root_degree_bound",
+            message="exact edge-root extraction currently admits degree at most two",
+        )
+    coefficient_by_degree = {
+        term.exponents[0]: term.coefficient.as_fraction() for term in terms
+    }
+    denominator = 1
+    for coefficient in coefficient_by_degree.values():
+        denominator = lcm(denominator, coefficient.denominator)
+    integers = [
+        coefficient_by_degree.get(exponent, Fraction(0)) * denominator
+        for exponent in range(degree, -1, -1)
+    ]
+    integer_coefficients = [int(value) for value in integers]
+    content = 0
+    for coefficient in integer_coefficients:
+        content = gcd(content, abs(coefficient))
+    integer_coefficients = [coefficient // content for coefficient in integer_coefficients]
+    if integer_coefficients[0] < 0:
+        integer_coefficients = [-coefficient for coefficient in integer_coefficients]
+    coefficient_digit_bound = min(
+        MAX_REAL_ALGEBRAIC_COEFFICIENT_DIGITS,
+        MAX_COMPLEX_ALGEBRAIC_COEFFICIENT_DIGITS,
+    )
+    if any(
+        len(str(abs(coefficient))) > coefficient_digit_bound
+        for coefficient in integer_coefficients
+    ):
+        raise OperationResourceAdmissionError(
+            location=("characteristic_polynomial",),
+            code="local_series.newton_edge_root_coefficient_bound",
+            message=(
+                "primitive edge-root polynomial exceeds the "
+                f"{coefficient_digit_bound}-digit algebraic-root carrier bound"
+            ),
+        )
+    if degree == 0:
+        roots: tuple[NewtonEdgeCharacteristicRoot, ...] = ()
+    elif degree == 1:
+        a, b = integer_coefficients
+        roots = (
+            NewtonEdgeCharacteristicRoot(
+                value=CanonicalRational.from_fraction(Fraction(-b, a)),
+                multiplicity=1,
+            ),
+        )
+    else:
+        a, b, c = integer_coefficients
+        discriminant = b * b - 4 * a * c
+        if discriminant >= 0 and isqrt(discriminant) ** 2 == discriminant:
+            square_root = isqrt(discriminant)
+            values = sorted(
+                {Fraction(-b - square_root, 2 * a), Fraction(-b + square_root, 2 * a)}
+            )
+            roots = tuple(
+                NewtonEdgeCharacteristicRoot(
+                    value=CanonicalRational.from_fraction(value),
+                    multiplicity=2 if discriminant == 0 else 1,
+                )
+                for value in values
+            )
+        elif discriminant > 0:
+            roots = tuple(
+                NewtonEdgeCharacteristicRoot(
+                    value=RealAlgebraicValue._from_admitted_polynomial(
+                        polynomial=tuple(integer_coefficients), real_root_index=index
+                    ),
+                    multiplicity=1,
+                )
+                for index in range(2)
+            )
+        else:
+            roots = tuple(
+                NewtonEdgeCharacteristicRoot(
+                    value=ComplexAlgebraicValue._from_admitted_polynomial(
+                        polynomial=tuple(integer_coefficients), root_index=index
+                    ),
+                    multiplicity=1,
+                )
+                for index in range(2)
+            )
+    return NewtonEdgeCharacteristicRootsResult(
+        characteristic=characteristic,
+        roots=roots,
+    )
+
 
 
 def _admit_parent(source: LocalPolynomialInSeries) -> None:
@@ -373,7 +616,14 @@ __all__ = [
     "LocalPolynomialCoefficient",
     "LocalPolynomialInSeries",
     "LocalPolynomialNewtonPolygonResult",
+    "NewtonEdgeCharacteristicRequest",
+    "NewtonEdgeCharacteristicResult",
+    "NewtonEdgeCharacteristicRoot",
+    "NewtonEdgeCharacteristicRootsResult",
+    "NewtonEdgeCharacteristicTerm",
     "NewtonPolygonEdge",
     "NewtonPolygonPoint",
     "local_polynomial_newton_polygon",
+    "newton_edge_characteristic_polynomial",
+    "newton_edge_characteristic_roots",
 ]

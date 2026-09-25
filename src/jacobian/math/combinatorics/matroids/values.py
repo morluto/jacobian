@@ -218,10 +218,9 @@ class FiniteBasisMatroid(StrictModel):
                 "exchange_work_bound",
                 "worst-case complete basis-exchange work exceeds the admitted bound",
             )
-        self._require_basis_exchange()
         return self
 
-    def _require_basis_exchange(self) -> None:
+    def require_basis_exchange(self) -> None:
         basis_family = set(self.bases)
         basis_sets = tuple(frozenset(basis) for basis in self.bases)
         checks = 0

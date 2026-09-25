@@ -49,8 +49,8 @@ def test_all_small_equal_size_families_match_independent_basis_axiom() -> None:
                     assert value.rank == rank
                     assert value.ground == ground
                 else:
-                    with pytest.raises(ValidationError, match="basis_exchange"):
-                        FiniteBasisMatroid(ground=ground, bases=bases)
+                    with pytest.raises(Exception, match="basis exchange"):
+                        FiniteBasisMatroid(ground=ground, bases=bases).require_basis_exchange()
 
 
 @pytest.mark.parametrize(
@@ -68,8 +68,13 @@ def test_all_small_equal_size_families_match_independent_basis_axiom() -> None:
 def test_rejects_noncanonical_or_nonmatroid_basis_families(
     ground: tuple[str, ...], bases: tuple[tuple[int, ...], ...], error: str
 ) -> None:
-    with pytest.raises(ValidationError, match=error):
-        FiniteBasisMatroid(ground=ground, bases=bases)
+    if error == "basis_exchange":
+        value = FiniteBasisMatroid(ground=ground, bases=bases)
+        with pytest.raises(Exception, match="basis exchange"):
+            value.require_basis_exchange()
+    else:
+        with pytest.raises(ValidationError, match=error):
+            FiniteBasisMatroid(ground=ground, bases=bases)
 
 
 def test_empty_ground_rank_zero_and_full_rank_preserve_the_ground_axis() -> None:
@@ -86,7 +91,7 @@ def test_empty_ground_rank_zero_and_full_rank_preserve_the_ground_axis() -> None
     assert full_rank.rank == 3
 
 
-def test_json_round_trip_replays_complete_basis_exchange() -> None:
+def test_json_round_trip_is_structural_and_exchange_check_is_explicit() -> None:
     value = FiniteBasisMatroid(
         ground=("a", "b", "c", "d"),
         bases=tuple(itertools.combinations(range(4), 2)),
@@ -96,6 +101,7 @@ def test_json_round_trip_replays_complete_basis_exchange() -> None:
 
     assert decoded == value
     assert decoded.rank == 2
+    decoded.require_basis_exchange()
 
 
 def test_schema_and_raw_envelope_publish_and_enforce_exact_limits() -> None:

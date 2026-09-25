@@ -1,0 +1,124 @@
+"""Exact graded projections of sparse noncommutative polynomials."""
+
+import json
+from collections import Counter
+from itertools import islice, product
+
+import pytest
+
+from jacobian.catalog.catalog import Catalog
+from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.dispatch import invoke_operation
+from jacobian.math.free_algebras._models import FreeAlgebraPolynomial
+from jacobian.math.free_algebras.homogeneous_component._models import (
+    FreeAlgebraHomogeneousComponent,
+    FreeAlgebraHomogeneousComponentRequest,
+)
+from jacobian.math.free_algebras.homogeneous_component.operations import (
+    homogeneous_component,
+)
+
+
+def _term(word: list[str], coefficient: int = 1) -> dict[str, object]:
+    return {
+        "coefficient": {"num": coefficient, "den": 1},
+        "word": word,
+    }
+
+
+def _polynomial() -> FreeAlgebraPolynomial:
+    return FreeAlgebraPolynomial.model_validate(
+        {
+            "alphabet": ["x", "y"],
+            "terms": [
+                _term(["x", "y"], 3),
+                _term(["y"], 2),
+                _term(["x"], 1),
+                _term([], 5),
+            ],
+        }
+    )
+
+
+def test_projection_preserves_exact_terms_parent_and_degree_after_round_trip() -> None:
+    result = homogeneous_component(
+        FreeAlgebraHomogeneousComponentRequest(polynomial=_polynomial(), degree=1)
+    )
+    restored = FreeAlgebraHomogeneousComponent.model_validate(result.model_dump())
+    assert restored.degree == 1
+    assert restored.polynomial.alphabet == ("x", "y")
+    assert [term.word for term in restored.polynomial.terms] == [("y",), ("x",)]
+    assert [term.coefficient.num for term in restored.polynomial.terms] == [2, 1]
+
+
+def test_degree_family_reconstructs_source_and_preserves_zero_parent() -> None:
+    source = _polynomial()
+    components = [
+        homogeneous_component(
+            FreeAlgebraHomogeneousComponentRequest(polynomial=source, degree=degree)
+        )
+        for degree in range(4)
+    ]
+    projected = Counter(
+        (term.word, term.coefficient.num, term.coefficient.den)
+        for component in components
+        for term in component.polynomial.terms
+    )
+    original = Counter(
+        (term.word, term.coefficient.num, term.coefficient.den) for term in source.terms
+    )
+    assert projected == original
+
+    missing = homogeneous_component(
+        FreeAlgebraHomogeneousComponentRequest(polynomial=source, degree=3)
+    )
+    assert missing.degree == 3
+    assert missing.polynomial.is_zero
+    assert missing.polynomial.alphabet == source.alphabet
+
+
+def test_published_projection_composes_with_polynomial_multiplication() -> None:
+    catalog = Catalog.open()
+    invocation = invoke_operation(
+        "free_algebra.polynomial.homogeneous_component.compute",
+        {"polynomial": _polynomial().model_dump(mode="json"), "degree": 1},
+        catalog,
+    )
+    component = FreeAlgebraHomogeneousComponent.model_validate_json(
+        json.dumps(invocation.output)
+    )
+    product_result = invoke_operation(
+        "free_algebra.polynomial.multiply.compute",
+        {
+            "left": component.polynomial.model_dump(mode="json"),
+            "right": {
+                "alphabet": ["x", "y"],
+                "terms": [
+                    {
+                        "coefficient": {"num": "1", "den": "1"},
+                        "word": ["x"],
+                    }
+                ],
+            },
+        },
+        catalog,
+    )
+    words = [term["word"] for term in product_result.output["product"]["terms"]]
+    assert words == [["y", "x"], ["x", "x"]]
+
+
+def test_output_admission_rejects_large_selected_support_before_result_build() -> None:
+    alphabet = tuple(chr(ord("A") + index) * 64 for index in range(26))
+    words = list(islice(product(alphabet, repeat=8), 4096))
+    polynomial = FreeAlgebraPolynomial.model_validate(
+        {
+            "alphabet": alphabet,
+            "terms": [_term(list(word)) for word in reversed(words)],
+        }
+    )
+    request = FreeAlgebraHomogeneousComponentRequest(
+        polynomial=polynomial,
+        degree=8,
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="output allocation"):
+        homogeneous_component(request)

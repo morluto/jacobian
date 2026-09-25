@@ -639,12 +639,6 @@ def construct_locally_nilpotent_certificate(
                 message="each generator chain must yield its declared nonempty length",
             )
         canonical_chain = tuple(canonical_values)
-        if not canonical_chain:
-            raise OperationDomainValidationError(
-                location=("chains", index),
-                code="polynomial_derivation.certificate_shape",
-                message="each generator chain must be nonempty",
-            )
         if canonical_chain[0] != generator:
             raise OperationDomainValidationError(
                 location=("chains", index, 0),

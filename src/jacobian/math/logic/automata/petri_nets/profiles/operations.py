@@ -1,5 +1,6 @@
 """Kernels for exact finite Petri-net reachability token profiles."""
 
+from jacobian.canonical import strict_json_object_size
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -19,6 +20,46 @@ from jacobian.math.logic.automata.petri_nets.profiles._models import (
     ReachabilityTokenProfileResult,
     ReachabilityTokenRange,
 )
+from jacobian.math.logic.automata.petri_nets.values import MAX_PETRI_MARKING
+
+
+def _token_profile_output_bound(
+    graph: ReachabilityResult, transition_count: int, place_count: int
+) -> int:
+    """Bound the encoded source graph plus every returned profile field.
+
+    The liveness estimator covers the identical retained source graph. The
+    separate profile term accounts for ``completeness``, ``place_ranges``, and
+    both total extrema with their witness indices, which the source bound alone
+    does not contain.
+    """
+    source_bound = _liveness_output_size(graph, transition_count)
+    state_digits = max(1, len(str(len(graph.states) - 1)))
+    token_digits = len(str(MAX_PETRI_MARKING))
+    place_digits = max(1, len(str(place_count - 1))) if place_count else 1
+    range_size = strict_json_object_size(
+        (
+            ("place", place_digits),
+            ("minimum", token_digits),
+            ("minimum_state", state_digits),
+            ("maximum", token_digits),
+            ("maximum_state", state_digits),
+        )
+    )
+    place_ranges_size = 2 + max(0, place_count - 1) + place_count * range_size
+    total_digits = len(str(place_count * MAX_PETRI_MARKING))
+    # "OBSERVED_PREFIX" is the longer of the two completeness literals.
+    profile_size = strict_json_object_size(
+        (
+            ("completeness", 2 + len("OBSERVED_PREFIX")),
+            ("place_ranges", place_ranges_size),
+            ("total_maximum", total_digits),
+            ("total_maximum_state", state_digits),
+            ("total_minimum", total_digits),
+            ("total_minimum_state", state_digits),
+        )
+    )
+    return source_bound + profile_size
 
 
 def reachability_token_profile(
@@ -29,8 +70,8 @@ def reachability_token_profile(
     Extrema describe the full reachable marking set only when ``source_graph``
     is closed. For a truncated graph they describe its represented prefix only.
     """
-    places, transitions, _, parented_markings = _preflight_terminal_scc_graph_shape(
-        source_graph
+    places, transitions, label_characters, parented_markings = (
+        _preflight_terminal_scc_graph_shape(source_graph)
     )
     states = len(source_graph.states)
     edges = len(source_graph.edges)
@@ -41,6 +82,7 @@ def reachability_token_profile(
         + states
         + edges
         + parented_markings * places * transitions
+        + label_characters
     )
     if work > MAX_REACHABILITY_TOKEN_PROFILE_WORK:
         raise OperationResourceAdmissionError(
@@ -53,9 +95,9 @@ def reachability_token_profile(
     # domain error instead of Python's integer-to-string limit.
     _validate_terminal_scc_net_values(source_graph)
     # The profile embeds the graph so its axes and finite-state context remain
-    # available to downstream operations. Reuse the conservative graph-plus-
-    # transition-profile bound and add a fixed maximum-place profile allowance.
-    output_bound = _liveness_output_size(source_graph, transitions) + places * 128
+    # available to downstream operations. Bound the actual result shape: the
+    # retained graph plus complete, and total-extremum fields.
+    output_bound = _token_profile_output_bound(source_graph, transitions, places)
     if output_bound > MAX_REACHABILITY_TOKEN_PROFILE_OUTPUT_BYTES:
         raise OperationResourceAdmissionError(
             location=("source_graph",),

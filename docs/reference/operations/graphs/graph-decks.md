@@ -22,11 +22,8 @@ irrelevant while preserving repeated-card counts. The empty multiset retains
 its declared order. Deserialization checks the fixed axis, graph-edge structure,
 row ordering, and multiplicity bounds; it does not prove that each supplied row
 is a permutation-minimal representative or that different rows are
-nonisomorphic. `graph.deck.anonymous_multiset.equal.check` canonicalizes both
-operands once under a combined work bound, merges isomorphic rows, and compares
-their declared orders and exact multiplicities. It does not check deck
-realizability or identify a source graph. The degree invariant profile uses
-only graph degrees, so it does not require permutation canonicalization.
+nonisomorphic. The degree invariant profile uses only graph degrees, so it does
+not require permutation canonicalization.
 
 `graph.deck.vertex.induced_subgraph_count.compute` reconstructs the number of
 induced copies of a caller-supplied pattern `H` when `|V(H)| < n`, where `n` is

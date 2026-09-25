@@ -6,7 +6,7 @@ from itertools import combinations, permutations
 from math import comb, factorial
 from typing import Annotated, Any, Self, cast
 
-from pydantic import Field, PrivateAttr, model_validator
+from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import DecimalIntegerEncoding
@@ -32,7 +32,6 @@ MAX_ANONYMOUS_CARD_CLASSES = MAX_ANONYMOUS_CARD_RESULT_BYTES // 64
 MAX_ANONYMOUS_CARD_PROFILE_WORK = 2_000_000
 MAX_ANONYMOUS_CARD_PROFILE_CELLS = 200_000
 MAX_ANONYMOUS_CARD_PROFILE_RESULT_BYTES = 1_000_000
-MAX_ANONYMOUS_CARD_EQUALITY_WORK = 2_000_000
 """Admission cap on aggregate card edges across the whole family."""
 MAX_VERTEX_DECK_SOURCE_EDGES = comb(MAX_UNLABELLED_DECK_VERTICES, 2)
 MAX_VERTEX_DECK_CARD_EDGE_TOTAL = MAX_UNLABELLED_DECK_VERTICES * comb(
@@ -227,113 +226,6 @@ class AnonymousGraphCardMultiset(StrictModel):
         cls, card_order: int, classes: tuple[AnonymousGraphCardClass, ...]
     ) -> Self:
         return cls.model_construct(card_order=card_order, classes=classes)
-
-
-class AnonymousGraphCardMultisetEqualityRequest(StrictModel):
-    """Compare two bounded anonymous multisets of graph isomorphism classes."""
-
-    left: AnonymousGraphCardMultiset
-    right: AnonymousGraphCardMultiset
-    _admitted_operands: (
-        tuple[AnonymousGraphCardMultiset, AnonymousGraphCardMultiset] | None
-    ) = PrivateAttr(default=None)
-
-    @model_validator(mode="before")
-    @classmethod
-    def admit_both_carriers_before_nested_validation(cls, value: Any) -> Any:
-        if type(value) is not dict:
-            return value
-        total_work = 0
-        for side in ("left", "right"):
-            multiset = value.get(side)
-            if type(multiset) is dict:
-                order = multiset.get("card_order")
-                classes = multiset.get("classes")
-            elif type(multiset) is AnonymousGraphCardMultiset:
-                # Revalidate typed inputs once after pair admission. Check the
-                # shape needed to bound model_dump before materializing it.
-                order = multiset.card_order
-                classes = multiset.classes
-                if (
-                    type(order) is not int
-                    or not 0 <= order <= MAX_UNLABELLED_DECK_VERTICES
-                    or type(classes) is not tuple
-                    or len(classes) > MAX_ANONYMOUS_CARD_CLASSES
-                ):
-                    raise _validation_error(
-                        "anonymous_equality_typed_shape",
-                        "typed operand shape exceeds its preflight bound",
-                    )
-                expected_vertices = tuple(f"v{i:02d}" for i in range(order))
-                pair_count = comb(order, 2)
-                for item in classes:
-                    graph = getattr(item, "representative", None)
-                    if (
-                        type(item) is not AnonymousGraphCardClass
-                        or type(getattr(item, "multiplicity", None)) is not int
-                        or not 1 <= item.multiplicity < 10**12
-                        or type(graph) is not SimpleUndirectedGraph
-                        or type(graph.vertices) is not tuple
-                        or graph.vertices != expected_vertices
-                        or type(graph.edges) is not tuple
-                        or len(graph.edges) > pair_count
-                        or any(
-                            type(edge) is not tuple
-                            or len(edge) != 2
-                            or any(type(label) is not str for label in edge)
-                            or len(edge[0]) > MAX_GRAPH_LABEL_BYTES
-                            or len(edge[1]) > MAX_GRAPH_LABEL_BYTES
-                            or edge[0] >= edge[1]
-                            or edge[0] not in expected_vertices
-                            or edge[1] not in expected_vertices
-                            for edge in graph.edges
-                        )
-                    ):
-                        raise _validation_error(
-                            "anonymous_equality_typed_shape",
-                            "typed operand shape exceeds its preflight bound",
-                        )
-            else:
-                continue
-            if (
-                type(order) is not int
-                or not 0 <= order <= MAX_UNLABELLED_DECK_VERTICES
-                or type(classes) not in (list, tuple)
-            ):
-                continue
-            classes = cast(list[Any] | tuple[Any, ...], classes)
-            if len(classes) > MAX_ANONYMOUS_CARD_CLASSES:
-                raise _validation_error(
-                    "anonymous_equality_class_bound",
-                    "equality input has too many card classes",
-                )
-            total_work += _anonymous_canonicalization_work(order, len(classes))
-        if total_work > MAX_ANONYMOUS_CARD_EQUALITY_WORK:
-            raise _validation_error(
-                "anonymous_equality_work_bound",
-                "combined canonicalization exceeds the equality work bound",
-            )
-        normalized = dict(value)
-        for side in ("left", "right"):
-            multiset = value.get(side)
-            if type(multiset) is dict:
-                normalized[side] = _normalize_anonymous_profile_json_tuples(
-                    {"multiset": multiset}
-                )["multiset"]
-            elif type(multiset) is AnonymousGraphCardMultiset:
-                normalized[side] = multiset.model_dump(mode="python")
-        return normalized
-
-    @model_validator(mode="after")
-    def record_admitted_operands(self) -> Self:
-        object.__setattr__(self, "_admitted_operands", (self.left, self.right))
-        return self
-
-
-class AnonymousGraphCardMultisetEqualityResult(StrictModel):
-    """Exact equality of card order, isomorphism classes, and multiplicities."""
-
-    equal: bool
 
 
 class AnonymousCardDegreeFrequency(StrictModel):

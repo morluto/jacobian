@@ -37,8 +37,6 @@ from jacobian.math.graphs.decks._models import (
     AnonymousCardDegreeProfileRequest,
     AnonymousGraphCardClass,
     AnonymousGraphCardMultiset,
-    AnonymousGraphCardMultisetEqualityRequest,
-    AnonymousGraphCardMultisetEqualityResult,
     AnonymousGraphCardMultisetRequest,
     EdgeDeckIsomorphismClass,
     EdgeDeckIsomorphismProfile,
@@ -78,7 +76,6 @@ from jacobian.math.graphs.values import MAX_GRAPH_LABEL_BYTES, SimpleUndirectedG
 __all__ = [
     "anonymous_card_degree_profile",
     "anonymous_graph_card_multiset",
-    "anonymous_graph_card_multiset_equal",
     "edge_deck_isomorphism_profile",
     "edge_deletion_family",
     "edge_unlabelled_deck",
@@ -93,56 +90,6 @@ __all__ = [
     "vertex_deck_subgraph_count",
     "vertex_deletion_family",
 ]
-
-
-def anonymous_graph_card_multiset_equal(
-    request: AnonymousGraphCardMultisetEqualityRequest,
-) -> AnonymousGraphCardMultisetEqualityResult:
-    """Compare the two operands after request validation and shared admission."""
-    if type(request) is not AnonymousGraphCardMultisetEqualityRequest:
-        raise OperationDomainValidationError(
-            location=("request",),
-            code="graph_deck.anonymous_equality_request_carrier",
-            message="request must be an AnonymousGraphCardMultisetEqualityRequest",
-        )
-    return _anonymous_graph_card_multiset_equal_from_admitted(request)
-
-
-def _anonymous_graph_card_multiset_equal_from_admitted(
-    request: AnonymousGraphCardMultisetEqualityRequest,
-) -> AnonymousGraphCardMultisetEqualityResult:
-    """Normalize both pre-admitted operands once, then compare multiplicities."""
-    if (
-        type(request) is not AnonymousGraphCardMultisetEqualityRequest
-        or request._admitted_operands is None
-        or request._admitted_operands[0] is not request.left
-        or request._admitted_operands[1] is not request.right
-        or type(request.left) is not AnonymousGraphCardMultiset
-        or type(request.right) is not AnonymousGraphCardMultiset
-    ):
-        raise OperationDomainValidationError(
-            location=("request",),
-            code="graph_deck.anonymous_equality_not_admitted",
-            message="equality request must pass its combined admission and validation",
-        )
-    left, right = request.left, request.right
-    left_classes = _normalize_anonymous_multiset_classes(left)
-    right_classes = _normalize_anonymous_multiset_classes(right)
-    equal = left.card_order == right.card_order and left_classes == right_classes
-    return AnonymousGraphCardMultisetEqualityResult(equal=equal)
-
-
-def _normalize_anonymous_multiset_classes(
-    multiset: AnonymousGraphCardMultiset,
-) -> dict[tuple[tuple[str, str], ...], int]:
-    """Canonicalize supplied rows and merge isomorphic classes for equality."""
-    counts: dict[tuple[tuple[str, str], ...], int] = {}
-    for item in multiset.classes:
-        key = _canonical_card_edges(
-            item.representative.vertices, item.representative.edges
-        )
-        counts[key] = counts.get(key, 0) + item.multiplicity
-    return counts
 
 
 def _admit_anonymous_card_request(

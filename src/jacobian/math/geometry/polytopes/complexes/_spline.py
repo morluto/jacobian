@@ -1161,6 +1161,7 @@ MAX_SPLINE_DIMENSION_CONSTRAINT_CELLS = 1_048_576
 MAX_SPLINE_DIMENSION_RANK_WORK = 32_000_000
 MAX_SPLINE_DIMENSION_INTERMEDIATE_DIGITS = 32_768
 MAX_SPLINE_DIMENSION_OUTPUT_BYTES = CanonicalLimits().max_output_bytes
+MAX_SPLINE_PROFILE_OUTPUT_BYTES = 2 * 1024 * 1024 * 1024
 MAX_SPLINE_DIMENSION_INTERMEDIATE_BYTES = 512 * 1024 * 1024
 MAX_SPLINE_COORDINATE_OUTPUT_BYTES = CanonicalLimits().max_output_bytes
 MAX_SPLINE_REFINEMENT_MAP_WORK = 32_000_000
@@ -1651,9 +1652,12 @@ def _admit_spline_dimension(
     complex_value: PolytopalComplexClosureResult,
     degree: int,
     smoothness: int,
+    *,
+    validate_complex: bool = True,
 ) -> tuple[PolytopalComplexClosureResult, int, int, int]:
     """Preflight compact matrix construction and exact rank work."""
-    complex_value = _admit_complex(complex_value)
+    if validate_complex:
+        complex_value = _admit_complex(complex_value)
     if type(degree) is not int or type(smoothness) is not int:
         _reject("spline_type", "spline degree and smoothness must be exact integers")
     if degree < 0 or degree > 12 or smoothness < -1 or smoothness > 4:
@@ -1880,7 +1884,7 @@ def spline_dimension_profile(
     total_rank_work = 0
     for degree in range(request.max_degree + 1):
         _, width, row_bound, rank_work = _admit_spline_dimension(
-            complex_value, degree, request.smoothness
+            complex_value, degree, request.smoothness, validate_complex=False
         )
         total_cells += row_bound * width
         total_rank_work += rank_work
@@ -1907,11 +1911,11 @@ def spline_dimension_profile(
             message="spline profile source exceeds its output envelope",
         ) from exc
     output_bound = source_size + 1024 + (request.max_degree + 1) * 24
-    if output_bound > MAX_SPLINE_DIMENSION_OUTPUT_BYTES:
+    if output_bound > MAX_SPLINE_PROFILE_OUTPUT_BYTES:
         raise OperationResourceAdmissionError(
             location=("max_degree",),
             code="polytopal_complex.spline_profile_output",
-            message="finite spline profile exceeds its output envelope",
+            message="finite spline profile exceeds its intrinsic output envelope",
         )
     dimensions = tuple(
         spline_dimension(

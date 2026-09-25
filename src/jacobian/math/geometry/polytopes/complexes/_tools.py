@@ -622,7 +622,11 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         result_type=SplineDimensionProfileResult,
         run=_run_spline_dimension_profile,
         tags=("geometry", "spline", "dimension", "hilbert-function", "exact-rational"),
-        discovery_terms=("spline Hilbert function", "spline dimension profile", "finite spline dimensions"),
+        discovery_terms=(
+            "spline Hilbert function",
+            "spline dimension profile",
+            "finite spline dimensions",
+        ),
         examples=(
             OperationExample(
                 name="two_interval_continuity_profile",

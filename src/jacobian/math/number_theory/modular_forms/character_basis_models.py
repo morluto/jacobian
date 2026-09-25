@@ -70,7 +70,7 @@ class ModularCharacterCoordinatesRequest(StrictModel):
 
 
 class ModularCharacterHeckeRequest(StrictModel):
-    """Apply one admitted Hecke index to a character-valued form."""
+    """Apply one Hecke index, retaining the exact source space as target."""
 
     form: ModularFormCoordinates
     index: StrictInt = Field(ge=1, le=32)

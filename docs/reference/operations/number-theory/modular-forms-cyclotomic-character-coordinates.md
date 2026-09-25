@@ -23,6 +23,17 @@ The basis identifier and first Sturm-determining coefficients are therefore
 stable across requests. These longer exact prefixes support finite operator
 reconstruction while retaining the same space and coefficient-field parent.
 
+`modular_form.character_coordinates.hecke.apply` also accepts a
+one-dimensional character space in this q-Sturm RREF basis. It applies `T_n`
+for `1 <= n <= 32` coprime to the represented level and returns coordinates
+with the identical space and basis identifier: this Hecke action is an
+endomorphism, so it does not create an inflated target space. Before basis
+expansion, the operation admits the required source precision
+`n * (B - 1) + 1`, where `B` is the target Sturm prefix length, along with
+work, coefficient growth, and output size. The transformed form is checked
+through the full target Sturm prefix. Multidimensional q-Sturm RREF character
+spaces remain unsupported by this Hecke operation.
+
 The existing `modular_form.equal.check` operation compares two character
 coordinate vectors when they have the identical exact space and canonical
 basis identifier. Equality of vectors is equivalent to equality of the
@@ -38,7 +49,8 @@ This equality slice admits levels at most 39, character unit tables of at most
 256 decimal digits, and exact comparison work at most 1,000,000 units. It
 compares coordinates in the same parent only. Cross-level or cross-character
 transport, nonidentity coefficient-field maps, Hecke actions on these generic
-vectors, and equality of unrelated space presentations remain unsupported.
+vectors outside the one-dimensional slice above, and equality of unrelated
+space presentations remain unsupported.
 
 [Gamma0 basis construction](modular-forms-gamma0-rational-bases.md) ·
 [Number-theory operations](index.md)

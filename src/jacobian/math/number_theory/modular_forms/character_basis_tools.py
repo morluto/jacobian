@@ -157,10 +157,13 @@ TOOLS: MathTools = (
         operation_id="modular_form.character_coordinates.hecke.apply",
         title="Apply a Hecke operator to a character-valued modular form",
         description=(
-            "Apply T_n for bounded indices coprime to 13 to either admitted "
-            "one-dimensional S2(Gamma0(13), chi) space over Q(zeta_6). The "
-            "PARI basis prefix is extended as required; the action is checked "
-            "through the exact Sturm bound and returned in the same space."
+            "Apply T_n, for n at most 32 and coprime to the represented level, "
+            "to either legacy one-dimensional S2(Gamma0(13), chi) coordinates "
+            "or a one-dimensional canonical q-Sturm RREF character space at "
+            "levels 13, 26, or 39 over Q(zeta_6). The action is reconstructed "
+            "through the space's exact Sturm prefix and returned with the same "
+            "space and basis identifier. Multidimensional character Hecke "
+            "actions are not yet admitted."
         ),
         request_type=ModularCharacterHeckeRequest,
         result_type=ModularFormCoordinates,

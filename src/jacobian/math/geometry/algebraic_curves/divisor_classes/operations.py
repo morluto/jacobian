@@ -296,6 +296,7 @@ def plane_curve_strict_transform_class(
             blowup_point.point.coordinates[variable_index[variable]]
             for variable in request.polynomial.variables
         )
+        assert len(ordered_coordinates) == 3
         multiplicities.append(
             _multiplicity_at_point(request.polynomial, ordered_coordinates, degree)
         )

@@ -77,8 +77,11 @@ def test_dispatch_rejects_a_profile_beyond_the_facet_cap_as_invalid_request() ->
     with pytest.raises(OperationDomainValidationError) as exc_info:
         invoke_operation("polytope.facets.compute", payload, Catalog.open())
 
+    # Assert the stable domain-error code, not the human-readable message text.
+    # The contract is a typed admission rejection; the wording (and which internal
+    # bound trips first) may change without changing that contract.
     assert (
-        f"{MAX_COMPUTED_FACETS}-facet result bound" in exc_info.value.errors()[0]["msg"]
+        exc_info.value.errors()[0]["type"] == "polytope.facet_profile_not_admitted"
     )
 
 

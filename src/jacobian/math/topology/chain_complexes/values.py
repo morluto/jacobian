@@ -123,11 +123,9 @@ class _ChainCoefficientEncoding:
 
         def require_native(value: int | Fraction) -> int | Fraction:
             if type(value) is int:
-                components: tuple[int, ...] = (
-                    _bounded_integer_digits(value, self.max_digits),
-                )
+                digits = _bounded_integer_digits(value, self.max_digits)
             elif type(value) is Fraction:
-                components = (
+                digits = max(
                     _bounded_integer_digits(value.numerator, self.max_digits),
                     _bounded_integer_digits(value.denominator, self.max_digits),
                 )
@@ -136,7 +134,7 @@ class _ChainCoefficientEncoding:
                     "chain_complex.entry_type",
                     "chain coefficients must be native integers or Fractions",
                 )
-            if max(components, default=1) > self.max_digits:
+            if digits > self.max_digits:
                 raise PydanticCustomError(
                     "chain_complex.entry_digit_bound_exceeded",
                     "chain coefficient exceeds the decimal digit bound",
@@ -167,8 +165,11 @@ def _format_chain_coefficient(value: int | Fraction) -> str:
         return str(value)
     if type(value) is Fraction:
         if value.denominator == 1:
-            return str(value.numerator)
-        return f"{value.numerator}/{value.denominator}"
+            return format_canonical_integer(value.numerator)
+        return (
+            f"{format_canonical_integer(value.numerator)}/"
+            f"{format_canonical_integer(value.denominator)}"
+        )
     raise TypeError("unsupported chain coefficient")
 
 
@@ -315,9 +316,10 @@ def _require_coefficient_scalar(
     prime: int | None = None,
 ) -> None:
     """Check scalar type, coefficient-ring fit, and exact digit bounds."""
+    value: int | Fraction
     if type(entry) is int:
         digits = _bounded_integer_digits(entry, MAX_CHAIN_COMPLEX_COEFFICIENT_DIGITS)
-        canonical_value: int | Fraction = entry
+        value = entry
     elif type(entry) is Fraction:
         if coefficient_ring is not CoefficientRing.RATIONAL:
             raise _validation_error(
@@ -332,7 +334,7 @@ def _require_coefficient_scalar(
                 entry.denominator, MAX_CHAIN_COMPLEX_COEFFICIENT_DIGITS
             ),
         )
-        canonical_value = Fraction(entry)
+        value = entry
     else:
         raise _validation_error(
             "entry_type", "chain coefficients must be native integers or Fractions"
@@ -342,9 +344,7 @@ def _require_coefficient_scalar(
             "entry_digit_bound_exceeded", "differential entry exceeds digit bound"
         )
     if coefficient_ring is CoefficientRing.PRIME_FIELD and (
-        type(canonical_value) is not int
-        or canonical_value < 0
-        or (prime is not None and canonical_value >= prime)
+        type(value) is not int or value < 0 or (prime is not None and value >= prime)
     ):
         raise _validation_error(
             "prime_field_residue_invalid",

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import deque
-from typing import Any
+from typing import Any, Literal, cast
 
 from pydantic import Field
 
@@ -133,7 +133,7 @@ def _tree_paths(
     for neighbours in adjacency.values():
         neighbours.sort()
 
-    paths = {base_vertex: ()}
+    paths: dict[str, tuple[tuple[str, str], ...]] = {base_vertex: ()}
     pending: deque[str] = deque((base_vertex,))
     while pending:
         vertex = pending.popleft()
@@ -189,13 +189,18 @@ def _edge_path_to_base_loop(
     return _map_edge_path(path, vertex_map, target_edge_words)
 
 
-def _permutation_sign(values: tuple[str, str, str]) -> int:
+def _permutation_sign(values: tuple[str, ...]) -> int:
     inversions = sum(
         values[left] > values[right]
         for left in range(3)
         for right in range(left + 1, 3)
     )
     return -1 if inversions % 2 else 1
+
+
+def _validate_simplicial_map(value: SimplicialMap) -> None:
+    """Run model-level simplicial validation under topology admission."""
+    value.__class__.model_validate(value.model_dump())
 
 
 def induced_fundamental_group_map(
@@ -210,8 +215,7 @@ def induced_fundamental_group_map(
     """
     simplicial_map: SimplicialMap = request.map
     run_topology_admission(
-        simplicial_map.require_simplicial_map,
-        location=("map",),
+        lambda: _validate_simplicial_map(simplicial_map), location=("map",)
     )
     source_vertices = simplicial_map.source.vertices
     target_vertices = simplicial_map.target.vertices
@@ -302,7 +306,9 @@ def induced_fundamental_group_map(
             )
             continue
         target_simplex = tuple(sorted(mapped_triangle))
-        target_index = target_relator_for_simplex.get(target_simplex)
+        target_index = target_relator_for_simplex.get(
+            (target_simplex[0], target_simplex[1], target_simplex[2])
+        )
         if target_index is None:
             raise OperationDomainValidationError(
                 location=("map", "vertex_map"),
@@ -313,7 +319,9 @@ def induced_fundamental_group_map(
             PresentationRelatorImage(
                 source_relator_index=index,
                 target_relator_index=target_index,
-                target_orientation=_permutation_sign(mapped_triangle),
+                target_orientation=cast(
+                    Literal[-1, 1], _permutation_sign(mapped_triangle)
+                ),
                 conjugator=conjugator,
             )
         )

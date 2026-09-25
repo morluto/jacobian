@@ -111,15 +111,18 @@ def _converted_chain_complex(
     )
     if cells > MAX_MATRIX_CELLS:
         return None
-    matrices: list[tuple[tuple[str, ...], ...]] = []
+    matrices: list[tuple[tuple[int | Fraction, ...], ...]] = []
     for matrix in differentials:
-        dense = [["0"] * matrix.column_count for _ in range(matrix.row_count)]
+        dense: list[list[int | Fraction]] = [
+            [0] * matrix.column_count for _ in range(matrix.row_count)
+        ]
         for entry in matrix.entries:
-            dense[entry.row][entry.column] = _scalar_spelling(
-                {
-                    term.exponents: Fraction(term.coefficient.num, term.coefficient.den)
+            dense[entry.row][entry.column] = sum(
+                (
+                    Fraction(term.coefficient.num, term.coefficient.den)
                     for term in entry.polynomial.polynomial.terms
-                }
+                ),
+                Fraction(0),
             )
         matrices.append(tuple(tuple(row) for row in dense))
     return construct_chain_complex(

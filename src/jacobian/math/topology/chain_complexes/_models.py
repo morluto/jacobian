@@ -186,13 +186,9 @@ def _preflight_raw_differentials(
                     "homology differential cells exceed the raw "
                     f"{maximum_cells}-cell envelope",
                 )
-            canonical_entries: list[object] = []
+            canonical_entries: list[ChainCoefficient] = []
             for entry in row:
-                if not (
-                    isinstance(entry, str)
-                    or type(entry) is int
-                    or type(entry) is Fraction
-                ):
+                if not (type(entry) is int or type(entry) is Fraction):
                     raise _validation_error(
                         "homology_raw_coefficient_invalid",
                         "each raw homology coefficient must be an exact scalar",

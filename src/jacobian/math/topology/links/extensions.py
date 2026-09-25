@@ -26,6 +26,7 @@ from jacobian.math.topology.edge_paths._models import (
 from jacobian.math.topology.links._extensions_models import (
     MAX_WIRTINGER_GENERATORS,
     AlexanderPolynomialResult,
+    BraidArtinActionResult,
     BraidClosureResult,
     BraidLetter,
     BraidPermutationResult,
@@ -126,6 +127,84 @@ def braid_permutation(word: BraidWord) -> BraidPermutationResult:
         cycles=cycles,
         closure_component_count=len(cycles),
         exponent_sum=sum(letter.exponent for letter in admitted.letters),
+    )
+
+
+def _reduce_free_word(letters: Iterable[WordLetter]) -> tuple[WordLetter, ...]:
+    reduced: list[WordLetter] = []
+    for letter in letters:
+        if (
+            reduced
+            and reduced[-1].generator == letter.generator
+            and reduced[-1].exponent == -letter.exponent
+        ):
+            reduced.pop()
+        else:
+            reduced.append(letter)
+    return tuple(reduced)
+
+
+def braid_artin_action(word: BraidWord) -> BraidArtinActionResult:
+    """Apply the standard Artin action to the free group on braid strands.
+
+    A braid letter acts on the current images from left to right. Its positive
+    generator sends ``x_i`` to ``x_i*x_(i+1)*x_i^-1`` and ``x_(i+1)`` to
+    ``x_i``; the negative generator uses the inverse automorphism. The output
+    is an exact free-group automorphism presentation, not a braid-equivalence
+    or word-problem decision procedure.
+    """
+
+    admitted = _admit_braid(word)
+    # Bound the unexpanded word substitution using lengths alone. Cancellation
+    # can only reduce these lengths, so this is a sound preflight estimate.
+    lengths = [1] * admitted.strand_count
+    total_work = admitted.strand_count
+    for letter in admitted.letters:
+        i = letter.generator - 1
+        next_lengths = lengths.copy()
+        if letter.exponent == 1:
+            next_lengths[i] = 2 * lengths[i] + lengths[i + 1]
+            next_lengths[i + 1] = lengths[i]
+        else:
+            next_lengths[i] = lengths[i + 1]
+            next_lengths[i + 1] = lengths[i] + 2 * lengths[i + 1]
+        lengths = next_lengths
+        total_work += sum(lengths)
+        if max(lengths) > 128 or total_work > 100_000:
+            raise OperationResourceAdmissionError(
+                location=("word", "letters"),
+                code="link_diagram.artin_action_expansion_bound",
+                message=(
+                    "the admitted braid action exceeds the 128-letter per-image "
+                    "or 100000-letter cumulative substitution envelope"
+                ),
+            )
+
+    images: list[tuple[WordLetter, ...]] = [
+        (WordLetter(generator=index, exponent=1),)
+        for index in range(admitted.strand_count)
+    ]
+    for letter in admitted.letters:
+        i = letter.generator - 1
+        first, second = images[i], images[i + 1]
+        if letter.exponent == 1:
+            inverse_first = tuple(
+                WordLetter(generator=item.generator, exponent=-item.exponent)
+                for item in reversed(first)
+            )
+            images[i] = _reduce_free_word(first + second + inverse_first)
+            images[i + 1] = first
+        else:
+            inverse_second = tuple(
+                WordLetter(generator=item.generator, exponent=-item.exponent)
+                for item in reversed(second)
+            )
+            images[i] = second
+            images[i + 1] = _reduce_free_word(inverse_second + first + second)
+
+    return BraidArtinActionResult(
+        word=admitted,
+        generator_images=tuple(FiniteGroupWord(letters=image) for image in images),
     )
 
 

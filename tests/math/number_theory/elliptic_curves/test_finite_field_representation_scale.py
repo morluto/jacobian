@@ -25,5 +25,6 @@ def test_point_addition_over_next_admitted_prime_field() -> None:
     result = finite_field_point_add(curve, point, point)
 
     assert result.point.curve == curve
+    assert result.point.x is not None and result.point.y is not None
     assert result.point.x.coordinates == (49_153,)
     assert result.point.y.coordinates == (8_191,)

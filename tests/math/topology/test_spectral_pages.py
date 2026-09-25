@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from fractions import Fraction
 
 import pytest
@@ -34,7 +35,7 @@ def _tool():
     return next(tool for tool in TOOLS if tool.operation_id == OPERATION_ID)
 
 
-def _level(*degree_vectors: tuple[tuple[str, ...], ...]) -> FiltrationLevel:
+def _level(*degree_vectors: tuple[tuple[int | Fraction, ...], ...]) -> FiltrationLevel:
     return FiltrationLevel(
         subspaces=tuple(
             FilteredSubspace(vectors=tuple(vectors)) for vectors in degree_vectors
@@ -49,14 +50,14 @@ def _two_step_complex() -> ChainComplexValue:
         degree_min=0,
         degree_max=1,
         basis_sizes=(1, 1),
-        differential_matrices=((("1",),),),
+        differential_matrices=(((1,),),),
     )
 
 
 def _two_step_filtration() -> tuple[FiltrationLevel, ...]:
     return (
-        _level((("1",),), ()),
-        _level((("1",),), (("1",),)),
+        _level(((1,),), ()),
+        _level(((1,),), ((1,),)),
     )
 
 
@@ -67,16 +68,33 @@ def _three_step_complex() -> ChainComplexValue:
         degree_min=0,
         degree_max=2,
         basis_sizes=(1, 1, 1),
-        differential_matrices=((("1",),), (("0",),)),
+        differential_matrices=(((1,),), ((0,),)),
     )
 
 
 def _three_step_filtration() -> tuple[FiltrationLevel, ...]:
     return (
-        _level((("1",),), (), ()),
-        _level((("1",),), (("1",),), ()),
-        _level((("1",),), (("1",),), (("1",),)),
+        _level(((1,),), (), ()),
+        _level(((1,),), ((1,),), ()),
+        _level(((1,),), ((1,),), ((1,),)),
     )
+
+
+def _late_differential_complex() -> ChainComplexValue:
+    """A two-term complex whose only boundary lowers filtration by two."""
+    return ChainComplexValue(
+        coefficient_ring=CoefficientRing.RATIONAL,
+        prime=None,
+        degree_min=0,
+        degree_max=1,
+        basis_sizes=(1, 1),
+        differential_matrices=(((1,),),),
+    )
+
+
+def _late_differential_filtration() -> tuple[FiltrationLevel, ...]:
+    low = _level(((1,),), ())
+    return (low, low, _level(((1,),), ((1,),)))
 
 
 def _native(
@@ -89,7 +107,7 @@ def _native(
 
 def _differentials_by_source(
     result: SpectralPageResult,
-) -> dict[tuple[int, int], tuple[tuple[str, ...], ...]]:
+) -> dict[tuple[int, int], tuple[tuple[int | Fraction, ...], ...]]:
     return {
         (record.source_level, record.source_degree): record.entries
         for record in result.differentials
@@ -97,7 +115,8 @@ def _differentials_by_source(
 
 
 def _mat_mul_fractions(
-    left: tuple[tuple[str, ...], ...], right: tuple[tuple[str, ...], ...]
+    left: tuple[tuple[int | Fraction, ...], ...],
+    right: tuple[tuple[int | Fraction, ...], ...],
 ) -> list[list[Fraction]]:
     left_parsed = [[Fraction(entry) for entry in row] for row in left]
     right_parsed = [[Fraction(entry) for entry in row] for row in right]
@@ -123,7 +142,7 @@ class TestKnownAnswer:
     def test_two_step_page_one_carries_the_connecting_differential(self) -> None:
         page = _native(_two_step_complex(), _two_step_filtration(), 1)
         assert page.page_dimensions == ((1, 0), (0, 1))
-        assert _differentials_by_source(page) == {(1, 1): (("1",),)}
+        assert _differentials_by_source(page) == {(1, 1): ((1,),)}
         assert page.next_page_dimensions == ((0, 0), (0, 0))
         assert page.page_status is SpectralPageStatus.ACTIVE
 
@@ -136,8 +155,8 @@ class TestKnownAnswer:
     def test_three_step_page_two_stabilizes_on_the_surviving_class(self) -> None:
         first = _native(_three_step_complex(), _three_step_filtration(), 1)
         assert first.page_dimensions == ((1, 0, 0), (0, 1, 0), (0, 0, 1))
-        assert _differentials_by_source(first)[(1, 1)] == (("1",),)
-        assert _differentials_by_source(first)[(2, 2)] == (("0",),)
+        assert _differentials_by_source(first)[(1, 1)] == ((1,),)
+        assert _differentials_by_source(first)[(2, 2)] == ((0,),)
         assert first.next_page_dimensions == ((0, 0, 0), (0, 0, 0), (0, 0, 1))
         second = _native(_three_step_complex(), _three_step_filtration(), 2)
         assert second.page_dimensions == ((0, 0, 0), (0, 0, 0), (0, 0, 1))
@@ -192,9 +211,9 @@ class TestDefiningInvariant:
             degree_min=0,
             degree_max=1,
             basis_sizes=(1, 1),
-            differential_matrices=((("0",),),),
+            differential_matrices=(((0,),),),
         )
-        filtration = (_level((("1",),), (("1",),)),)
+        filtration = (_level(((1,),), ((1,),)),)
         page = _native(complex_value, filtration, 0)
         assert page.page_dimensions == ((1, 1),)
         assert page.page_status is SpectralPageStatus.STABILIZED
@@ -208,11 +227,11 @@ class TestBoundaryDegenerate:
             degree_min=0,
             degree_max=1,
             basis_sizes=(1, 1),
-            differential_matrices=((("0",),),),
+            differential_matrices=(((0,),),),
         )
         page = _native(complex_value, _two_step_filtration(), 1)
         assert page.page_dimensions == ((1, 0), (0, 1))
-        assert _differentials_by_source(page) == {(1, 1): (("0",),)}
+        assert _differentials_by_source(page) == {(1, 1): ((0,),)}
         assert page.page_status is SpectralPageStatus.STABILIZED
         assert page.next_page_dimensions == page.page_dimensions
 
@@ -223,11 +242,11 @@ class TestBoundaryDegenerate:
             degree_min=0,
             degree_max=1,
             basis_sizes=(1, 1),
-            differential_matrices=((("0",),),),
+            differential_matrices=(((0,),),),
         )
         filtration = (
             *(_level((), ()) for _ in range(5)),
-            _level((("1",),), (("1",),)),
+            _level(((1,),), ((1,),)),
         )
         page = _native(complex_value, filtration, MAX_SPECTRAL_PAGE)
         assert page.page_status is SpectralPageStatus.TRUNCATED
@@ -241,11 +260,11 @@ class TestBoundaryDegenerate:
             degree_min=0,
             degree_max=1,
             basis_sizes=(1, 1),
-            differential_matrices=((("1",),),),
+            differential_matrices=(((1,),),),
         )
         page = _native(complex_value, _two_step_filtration(), 1)
         assert page.page_dimensions == ((1, 0), (0, 1))
-        assert _differentials_by_source(page) == {(1, 1): (("1",),)}
+        assert _differentials_by_source(page) == {(1, 1): ((1,),)}
 
 
 class TestAdversarial:
@@ -275,8 +294,8 @@ class TestAdversarial:
         # but the top-level representative below breaks preservation: F_0 C_1
         # is spanned by the C_1 generator while F_0 C_0 is zero.
         filtration = (
-            _level((), (("1",),)),
-            _level((("1",),), (("1",),)),
+            _level((), ((1,),)),
+            _level(((1,),), ((1,),)),
         )
         with pytest.raises(OperationDomainValidationError):
             _native(complex_value, filtration, 1)
@@ -290,18 +309,18 @@ class TestAdversarial:
             degree_min=0,
             degree_max=2,
             basis_sizes=(1, 1, 1),
-            differential_matrices=((("1",),), (("1",),)),
+            differential_matrices=(((1,),), ((1,),)),
         )
         filtration = (
             _level((), (), ()),
-            _level((("1",),), (("1",),), (("1",),)),
+            _level(((1,),), ((1,),), ((1,),)),
         )
         with pytest.raises(OperationDomainValidationError):
             _native(complex_value, filtration, 1)
 
     def test_over_rank_ambient_is_refused(self) -> None:
         size = 33
-        zeros = tuple(("0",) * size for _ in range(size))
+        zeros = tuple((0,) * size for _ in range(size))
         complex_value = ChainComplexValue(
             coefficient_ring=CoefficientRing.RATIONAL,
             prime=None,
@@ -311,7 +330,7 @@ class TestAdversarial:
             differential_matrices=(zeros,),
         )
         identity = tuple(
-            tuple("1" if i == j else "0" for j in range(size)) for i in range(size)
+            tuple(1 if i == j else 0 for j in range(size)) for i in range(size)
         )
         filtration = (
             _level(tuple(() for _ in range(size)), tuple(() for _ in range(size))),
@@ -336,7 +355,7 @@ class TestNativeCatalogParity:
     def test_published_examples_execute(self) -> None:
         tool = _tool()
         for example in tool.examples:
-            request = SpectralPageRequest.model_validate(example.input)
+            request = SpectralPageRequest.model_validate_json(json.dumps(example.input))
             result = tool.run(request)
             assert isinstance(result, SpectralPageResult)
 

@@ -10,6 +10,7 @@ from jacobian.catalog.models import (
 )
 from jacobian.math.gauge._models import (
     FiniteGroupGaugeContribution,
+    FiniteGroupGaugeEdgeLabel,
     FiniteGroupGaugeField,
     FiniteGroupGaugeHolonomyRequest,
     FiniteGroupGaugeHolonomyResult,
@@ -40,7 +41,9 @@ def _is_gauge_label(value: object) -> bool:
 def _admit_group(
     group: FiniteGroupTable,
 ) -> tuple[tuple[tuple[int, ...], ...], tuple[int, ...], int, int]:
-    table, inverse, identity = group.multiplication, group.inverse, group.identity
+    table = getattr(group, "multiplication", None)
+    inverse = getattr(group, "inverse", None)
+    identity = getattr(group, "identity", None)
     order = len(table) if isinstance(table, tuple) else 0
     if not 1 <= order <= 24 or not isinstance(inverse, tuple) or len(inverse) != order:
         _reject(
@@ -160,8 +163,7 @@ def _admit_field(
     value_by_id = {}
     for item in values:
         if (
-            not hasattr(item, "edge_id")
-            or not hasattr(item, "value")
+            not isinstance(item, FiniteGroupGaugeEdgeLabel)
             or not isinstance(item.value, FiniteGroupTableElement)
         ):
             _reject(
@@ -244,6 +246,12 @@ def _resolve_path(
                 "oriented path steps must chain head-to-tail",
             )
         if start is None:
+            if path.basepoint is not None and path.basepoint != tail:
+                _reject(
+                    "path",
+                    "lattice_gauge.finite_group.path_basepoint",
+                    "a supplied path basepoint must equal its first oriented vertex",
+                )
             start = tail
         cursor = head
         index = values[step.edge_id]

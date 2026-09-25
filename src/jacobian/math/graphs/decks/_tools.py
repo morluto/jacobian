@@ -110,9 +110,7 @@ def _run_anonymous_card_multiset_equal(
     request: AnonymousGraphCardMultisetEqualityRequest,
 ) -> AnonymousGraphCardMultisetEqualityResult:
     # The request carrier has already admitted and validated both operands.
-    return _anonymous_graph_card_multiset_equal_from_admitted(
-        request.left, request.right
-    )
+    return _anonymous_graph_card_multiset_equal_from_admitted(request)
 
 
 def _run_vertex_deck_induced_pattern_count(

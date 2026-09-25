@@ -12,9 +12,7 @@ from jacobian.math.combinatorics.matroids._models import (
     LinearMatroid,
     MatroidRankMultiplier,
     MatroidWeightedIntersectionCertificateRequest,
-    MatroidWeightedIntersectionOptimizationRequest,
     MatroidWeightedIntersectionOptimizationResult,
-    MatroidWeightedIntersectionRankCertificateRequest,
     MatroidWeightFunction,
 )
 from jacobian.math.combinatorics.matroids.intersection import (
@@ -83,13 +81,11 @@ def _rank_for_test(matroid: LinearMatroid, subset: tuple[int, ...]) -> int:
 
 def _request(
     first: LinearMatroid, second: LinearMatroid, weights: tuple[int, ...]
-) -> MatroidWeightedIntersectionOptimizationRequest:
-    return MatroidWeightedIntersectionOptimizationRequest(
-        first=first,
-        second=second,
-        weight_function=MatroidWeightFunction(
-            ground_axis=first.ground_axis, values=weights
-        ),
+) -> tuple[LinearMatroid, LinearMatroid, MatroidWeightFunction]:
+    return (
+        first,
+        second,
+        MatroidWeightFunction(ground_axis=first.ground_axis, values=weights),
     )
 
 
@@ -124,7 +120,7 @@ def test_weighted_intersection_matches_exhaustive_gf2_instances() -> None:
                     ),
                 )
                 result = maximum_weight_matroid_intersection(
-                    _request(first, second, weights)
+                    *_request(first, second, weights)
                 )
                 assert result.common_independent == expected
                 assert result.total_weight == sum(weights[index] for index in expected)
@@ -138,7 +134,7 @@ def test_finite_unit_slack_reweights_before_stopping() -> None:
     first = _matroid(((1,), (1,)), labels)
     second = _matroid(((0,), (1,)), labels)
 
-    result = maximum_weight_matroid_intersection(_request(first, second, (2, 1)))
+    result = maximum_weight_matroid_intersection(*_request(first, second, (2, 1)))
 
     assert result.common_independent == (1,)
     assert result.total_weight == 1
@@ -157,7 +153,7 @@ def test_loop_counterexample_has_rank_dual_even_when_terminal_split_does_not() -
         values=(1, 1),
     )
     optimum = maximum_weight_matroid_intersection(
-        _request(first, second, weight_function.values)
+        *_request(first, second, weight_function.values)
     )
     with pytest.raises(OperationDomainValidationError) as split_error:
         weighted_intersection_certificate(
@@ -171,14 +167,12 @@ def test_loop_counterexample_has_rank_dual_even_when_terminal_split_does_not() -
             )
         )
     certificate = weighted_intersection_rank_certificate(
-        MatroidWeightedIntersectionRankCertificateRequest(
-            first=first,
-            second=second,
-            weight_function=weight_function,
-            common_independent=optimum.common_independent,
-            first_rank_terms=(MatroidRankMultiplier(subset=(1,), multiplier=1),),
-            second_rank_terms=(MatroidRankMultiplier(subset=(0,), multiplier=1),),
-        )
+        first,
+        second,
+        weight_function,
+        optimum.common_independent,
+        (MatroidRankMultiplier(subset=(1,), multiplier=1),),
+        (MatroidRankMultiplier(subset=(0,), multiplier=1),),
     )
 
     assert optimum.common_independent == ()
@@ -202,7 +196,7 @@ def test_optimizer_validates_shared_prime_once(monkeypatch: pytest.MonkeyPatch) 
         calls += 1
 
     monkeypatch.setattr(intersection, "_admit_prime", count_prime_checks)
-    maximum_weight_matroid_intersection(_request(first, second, (3, 2, 1)))
+    maximum_weight_matroid_intersection(*_request(first, second, (3, 2, 1)))
 
     assert calls == 1
 
@@ -270,23 +264,19 @@ def test_every_two_element_gf2_optimum_has_an_exhaustively_found_rank_dual() -> 
         for second in represented.values():
             for weights in objectives:
                 optimum = maximum_weight_matroid_intersection(
-                    _request(first, second, weights)
+                    *_request(first, second, weights)
                 )
                 matching_terms = _find_tiny_rank_dual(
                     first, second, weights, optimum.total_weight, chains
                 )
                 assert matching_terms is not None
                 certificate = weighted_intersection_rank_certificate(
-                    MatroidWeightedIntersectionRankCertificateRequest(
-                        first=first,
-                        second=second,
-                        weight_function=MatroidWeightFunction(
-                            ground_axis=labels, values=weights
-                        ),
-                        common_independent=optimum.common_independent,
-                        first_rank_terms=matching_terms[0],
-                        second_rank_terms=matching_terms[1],
-                    )
+                    first,
+                    second,
+                    MatroidWeightFunction(ground_axis=labels, values=weights),
+                    optimum.common_independent,
+                    matching_terms[0],
+                    matching_terms[1],
                 )
                 assert certificate.total_weight == optimum.total_weight
                 assert verify_weighted_intersection_rank_certificate(certificate)
@@ -297,7 +287,7 @@ def test_empty_common_set_wins_when_all_common_weights_are_nonpositive() -> None
     first = _matroid(((1,), (1,)), labels)
     second = _matroid(((1,), (1,)), labels)
 
-    result = maximum_weight_matroid_intersection(_request(first, second, (-4, 0)))
+    result = maximum_weight_matroid_intersection(*_request(first, second, (-4, 0)))
 
     assert result.common_independent == ()
     assert result.total_weight == 0
@@ -309,7 +299,7 @@ def test_exact_near_work_boundary_is_accepted() -> None:
     rank_one = _matroid(tuple((1,) for _ in labels), labels)
     weights = (99_999_999_999,) * n
 
-    result = maximum_weight_matroid_intersection(_request(rank_one, rank_one, weights))
+    result = maximum_weight_matroid_intersection(*_request(rank_one, rank_one, weights))
 
     assert result.common_independent == (0,)
     assert result.total_weight == weights[0]
@@ -325,14 +315,14 @@ def test_resource_admission_precedes_any_rank_kernel_call(
     dense = _matroid(
         tuple(tuple(int(i == j) for i in range(n)) for j in range(n)), labels
     )
-    request = _request(dense, dense, (99_999_999_999,) * n)
+    arguments = _request(dense, dense, (99_999_999_999,) * n)
 
     def unexpected_rank(*args: object, **kwargs: object) -> int:
         raise AssertionError("rank backend was called before weighted admission")
 
     monkeypatch.setattr(intersection, "pf_rank", unexpected_rank)
     with pytest.raises(OperationResourceAdmissionError) as error:
-        maximum_weight_matroid_intersection(request)
+        maximum_weight_matroid_intersection(*arguments)
 
     assert error.value.errors()[0]["type"] == (
         "matroid.weighted_intersection.optimize.work_bound"

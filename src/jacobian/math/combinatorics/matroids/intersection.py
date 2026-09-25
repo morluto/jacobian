@@ -9,6 +9,7 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.combinatorics.matroids._models import (
+    MAX_INDEPENDENT_SET_OUTPUT_UNITS,
     MAX_WEIGHTED_INTERSECTION_OPT_DUAL_DIGITS,
     LinearMatroid,
     MatroidCommonBasisResult,
@@ -30,6 +31,7 @@ from jacobian.math.combinatorics.matroids.operations import (
     _prepare_maximum_weight_independent_set,
     _rank_work,
     _selected_columns_matrix,
+    require_bounded_retained_axis,
 )
 from jacobian.math.matrices.finite_fields.linear_algebra import (
     _admit_prime,
@@ -42,14 +44,19 @@ from jacobian.math.matrices.finite_fields.linear_algebra import (
 )
 
 MAX_INTERSECTION_GROUND = 256
-# The oracle kernel has O(n^3) exchange probes.  A rank probe is charged for
-# the larger representation row count; witness ranks and the result carrier
-# are charged separately.  This is deliberately an admission bound, not a
-# timeout: every admitted request has a finite exact completion envelope.
+# Admission precomputes both source ranks, then charges the reachable search
+# regime: for r = min(r1, r2) there are at most r + 2 breadth-first searches,
+# each expanding at most 2 * n * (r + 2) cached independence probes on matrices
+# with at most r + 1 columns, plus the four witness and feasibility ranks.  A
+# rank-zero source is presolved exactly, so it stops at the two precomputed
+# ranks.  This is deliberately an admission bound, not a timeout: every
+# admitted request has a finite exact completion envelope.
 MAX_INTERSECTION_WORK = 50_000_000
-MAX_INTERSECTION_OUTPUT_BYTES = 8 * 1024 * 1024
 MAX_WEIGHTED_INTERSECTION_WORK = 50_000_000
-MAX_WEIGHTED_INTERSECTION_OUTPUT_BYTES = 8 * 1024 * 1024
+# One bounded primality check per weighted-intersection operation. The
+# characteristic is validated once after canonicalization and every later
+# rank routes through the already-admitted kernel entry point.
+_WEIGHTED_INTERSECTION_PRIME_VALIDATION_WORK = 1024
 
 
 def _weighted_intersection_optimization_admission(
@@ -89,7 +96,7 @@ def _weighted_intersection_optimization_admission(
     # The rank estimate dominates each selected-column copy and residue
     # validation (rows*n*min(rows,n) >= rows*k for every k <= n). Prime
     # validation is performed once per operation and charged separately.
-    prime_validation_work = 1024
+    prime_validation_work = _WEIGHTED_INTERSECTION_PRIME_VALIDATION_WORK
 
     update_rounds = n * (n + 1)
     scan_visits = 16 * n * n * update_rounds + 4 * n * n * (n + 1) + 2 * n * n
@@ -114,26 +121,23 @@ def _weighted_intersection_optimization_admission(
     # at the maximum possible integer width; this bounds Python big-int
     # comparisons, additions, and subtractions independently of wall time.
     arithmetic_work = scan_visits * max(1, ceil(dual_digits / 9))
-
-    output_bytes = (
-        _intersection_output_bound_bytes(first, second)
-        + sum(12 * len(label) + 3 for label in first.ground_axis)
-        + sum(len(str(abs(value))) + 3 for value in objective)
-        + 8 * n
-        + 512
+    require_bounded_retained_axis(
+        first,
+        second,
+        location=("first", "second", "weight_function"),
+        code="matroid.weighted_intersection.optimize.work_bound",
     )
     if (
         rank_work + arithmetic_work + prime_validation_work
         > MAX_WEIGHTED_INTERSECTION_WORK
-        or output_bytes > MAX_WEIGHTED_INTERSECTION_OUTPUT_BYTES
     ):
         raise OperationResourceAdmissionError(
             location=("first", "second", "weight_function"),
             code="matroid.weighted_intersection.optimize.work_bound",
             message=(
                 "weighted intersection rank work, exact integer arithmetic, "
-                f"or result output exceeds the {MAX_WEIGHTED_INTERSECTION_WORK}-unit "
-                f"work or {MAX_WEIGHTED_INTERSECTION_OUTPUT_BYTES}-byte output envelope"
+                f"or retained axis allocation exceeds the "
+                f"{MAX_WEIGHTED_INTERSECTION_WORK}-unit work envelope"
             ),
         )
 
@@ -160,61 +164,50 @@ def _admit_matroid(value: object, location: tuple[str, ...]) -> LinearMatroid:
 def _admit_work(
     first: LinearMatroid,
     second: LinearMatroid,
-    *,
-    source_rank_calls: int = 0,
-) -> None:
+) -> tuple[int, int]:
+    """Admit the reachable exchange regime and presolve both source ranks.
+
+    Returns the exact source ranks so callers reuse them instead of replaying
+    the full representations. A rank-zero source makes the empty common set
+    optimal, so the exchange-search charge disappears entirely and only the
+    six full-rank eliminations (two presolved sources plus the four
+    result-carrier ranks replayed by consumers) remain.
+    """
+
     n = first.ground_size
+    require_bounded_retained_axis(
+        first,
+        second,
+        location=("first", "second"),
+        code="matroid.intersection.work_bound",
+    )
     rows = max(len(first.matrix.entries), len(second.matrix.entries), 1)
-    # A rank of any queried subset costs at most rows*n*min(rows,n): the
-    # selected matrix has at most n columns and rank's dense elimination
-    # backend scales cubically in the smaller matrix axis. A breadth-first
-    # search probes at most n outgoing edges from each of n vertices; there
-    # are at most n augmentations and one final search. Charge every possible
-    # probe at the larger operand's rank cost, even though the oracle cache
-    # usually makes the actual count much smaller.
-    rank_cost = rows * n * min(rows, n)
-    exchange_rank_work = (n + 1) ** 3 * rank_cost
-    # Four ranks produce the min-max witness and check both common-set
-    # feasibility claims. Common-basis requests add both full-source ranks.
-    final_rank_work = (4 + source_rank_calls) * rank_cost
-    output_bytes = _intersection_output_bound_bytes(first, second)
-    if (
-        exchange_rank_work + final_rank_work > MAX_INTERSECTION_WORK
-        or output_bytes > MAX_INTERSECTION_OUTPUT_BYTES
-    ):
+    # A rank of any queried subset costs at most rows*k*min(rows,k) for k
+    # queried columns: rank's dense elimination backend scales cubically in
+    # the smaller matrix axis. Each breadth-first search expands every vertex
+    # at most once: n probes at the source, at most n searches' worth of
+    # (r + 1)-probe non-chosen vertices, and n probes at each of the at most
+    # r chosen vertices, so 2*n*(r + 2) probes per search and r + 2 searches.
+    rank_cost = _rank_work(rows, n)
+    rank_first = pf_rank(first.matrix)
+    rank_second = pf_rank(second.matrix)
+    # Two precomputed source ranks plus the four witness and common-set
+    # feasibility ranks the result carrier must establish or replay.
+    work = 6 * rank_cost
+    reachable = min(rank_first, rank_second)
+    if reachable > 0:
+        probe_cost = _rank_work(rows, reachable + 1)
+        work += (reachable + 2) * (2 * n * (reachable + 2)) * probe_cost
+    if work > MAX_INTERSECTION_WORK:
         raise OperationResourceAdmissionError(
             location=("first", "second"),
             code="matroid.intersection.work_bound",
             message=(
-                "intersection rank work or retained result output exceeds the "
-                f"{MAX_INTERSECTION_WORK}-unit work or "
-                f"{MAX_INTERSECTION_OUTPUT_BYTES}-byte output envelope"
+                "intersection rank work exceeds the "
+                f"{MAX_INTERSECTION_WORK}-unit work envelope"
             ),
         )
-
-
-def _intersection_output_bound_bytes(
-    first: LinearMatroid, second: LinearMatroid
-) -> int:
-    """Conservatively bound the JSON size of source-bound intersection output."""
-
-    def source_bytes(matroid: LinearMatroid) -> int:
-        rows = len(matroid.matrix.entries)
-        columns = matroid.ground_size
-        # Residues have at most ten decimal digits. The extra per cell covers
-        # separators; row/field/container syntax is covered by the fixed slack.
-        matrix_bytes = rows * columns * 11 + rows * 4 + 256
-        labels = matroid.ground_axis
-        # JSON may escape controls as six characters and non-BMP scalars as
-        # UTF-16 surrogate pairs. Charge the larger twelve-byte bound per
-        # Python code point, plus quotes and separators.
-        axis_bytes = sum(12 * len(label) + 3 for label in labels)
-        return matrix_bytes + axis_bytes
-
-    n = first.ground_size
-    # Both retained source matrices/axes, two O(n) index tuples and scalar
-    # fields. Indexes need at most three decimal digits at the admitted axis.
-    return source_bytes(first) + source_bytes(second) + 24 * n + 1024
+    return rank_first, rank_second
 
 
 def _independent(m: LinearMatroid, subset: Sequence[int]) -> bool:
@@ -223,47 +216,6 @@ def _independent(m: LinearMatroid, subset: Sequence[int]) -> bool:
 
 def _rank(m: LinearMatroid, indices: Sequence[int]) -> int:
     return pf_rank(_selected_columns_matrix(m, list(indices))) if indices else 0
-
-
-def _weighted_intersection_output_bound_bytes(
-    first: LinearMatroid,
-    second: LinearMatroid,
-    objective: Sequence[int],
-    first_split: Sequence[int],
-    second_split: Sequence[int],
-    candidate_size: int,
-) -> int:
-    """Conservative JSON-size bound for the retained source-bound result."""
-
-    def axis_bound(matroid: LinearMatroid) -> int:
-        # json escapes at most six ASCII characters per control character and
-        # twelve for a non-BMP scalar represented as a UTF-16 surrogate pair.
-        return sum(12 * len(label) + 3 for label in matroid.ground_axis)
-
-    def source_bound(matroid: LinearMatroid) -> int:
-        rows = len(matroid.matrix.entries)
-        columns = matroid.ground_size
-        # Each residue has at most 10 decimal digits; 16 also covers commas.
-        return 16 * rows * columns + 4 * rows + 256 + axis_bound(matroid)
-
-    def weights_bound(matroid: LinearMatroid, values: Sequence[int]) -> int:
-        return (
-            axis_bound(matroid)
-            + sum(len(str(abs(value))) + 1 for value in values)
-            + 128
-        )
-
-    def maximum_result_bound(matroid: LinearMatroid, values: Sequence[int]) -> int:
-        n = matroid.ground_size
-        return source_bound(matroid) + weights_bound(matroid, values) + 10 * n + 256
-
-    return (
-        maximum_result_bound(first, first_split)
-        + maximum_result_bound(second, second_split)
-        + weights_bound(first, objective)
-        + 4 * candidate_size
-        + 512
-    )
 
 
 def replay_intersection_result(result: MatroidIntersectionResult) -> None:
@@ -301,10 +253,40 @@ def replay_intersection_result(result: MatroidIntersectionResult) -> None:
 
 
 def _matroid_intersection_admitted(  # noqa: C901
-    first: LinearMatroid, second: LinearMatroid
+    first: LinearMatroid,
+    second: LinearMatroid,
+    rank_first: int,
+    rank_second: int,
 ) -> MatroidIntersectionResult:
-    """Exact augmenting-path kernel; caller owns source and work admission."""
+    """Exact augmenting-path kernel; caller owns source and work admission.
+
+    ``rank_first`` and ``rank_second`` are the precomputed source ranks used
+    by the exact rank-zero presolve; every other rank is recomputed by the
+    shared kernel.
+    """
+
     n = first.ground_size
+    if rank_first == 0 or rank_second == 0:
+        # Every nonempty set is dependent in a rank-zero source, so the empty
+        # common set is maximum. An empty-side witness partition proves it:
+        # subset = E when r1 = 0 and subset = empty when r2 = 0 give witness
+        # ranks r1 + r2(E \ subset) = 0 = cardinality from precomputed data.
+        subset = tuple(range(n)) if rank_first == 0 else ()
+        witness = MatroidIntersectionWitness(
+            subset=subset,
+            rank_first=0,
+            rank_second_complement=0,
+            equality=0,
+        )
+        return MatroidIntersectionResult._from_kernel(
+            first=first,
+            second=second,
+            common_independent=(),
+            cardinality=0,
+            rank_first_common=0,
+            rank_second_common=0,
+            witness=witness,
+        )
     # Edmonds' augmenting-path algorithm with linear-matroid independence
     # oracles.  Caching makes the charged O(n^3) oracle envelope meaningful
     # even when several exchange paths inspect the same subset.
@@ -428,8 +410,8 @@ def matroid_intersection(
 ) -> MatroidIntersectionResult:
     """Compute one maximum common independent set and Edmonds witness."""
     first, second = _admit_pair(first, second)
-    _admit_work(first, second)
-    return _matroid_intersection_admitted(first, second)
+    rank_first, rank_second = _admit_work(first, second)
+    return _matroid_intersection_admitted(first, second, rank_first, rank_second)
 
 
 def matroid_common_basis(
@@ -437,14 +419,14 @@ def matroid_common_basis(
 ) -> MatroidCommonBasisResult:
     """Return a closed common-basis decision with the exact max-intersection proof."""
     first, second = _admit_pair(first, second)
-    # The one operation admission includes exchange, witness, feasibility, and
-    # the two added source-rank computations before any exact expansion.
-    _admit_work(first, second, source_rank_calls=2)
-    maximum = _matroid_intersection_admitted(first, second)
+    # The one operation admission includes the two source ranks, exchange,
+    # witness, and feasibility charges before any exact expansion.
+    rank_first, rank_second = _admit_work(first, second)
+    maximum = _matroid_intersection_admitted(first, second, rank_first, rank_second)
     return MatroidCommonBasisResult._from_kernel(
         intersection=maximum,
-        rank_first=_rank(first, tuple(range(first.ground_size))),
-        rank_second=_rank(second, tuple(range(second.ground_size))),
+        rank_first=rank_first,
+        rank_second=rank_second,
     )
 
 
@@ -681,7 +663,9 @@ def _weighted_exchange_slacks(
 
 
 def maximum_weight_matroid_intersection(
-    request: MatroidWeightedIntersectionOptimizationRequest,
+    first: LinearMatroid,
+    second: LinearMatroid,
+    weight_function: MatroidWeightFunction,
 ) -> MatroidWeightedIntersectionOptimizationResult:
     """Compute one maximum-weight common independent set exactly.
 
@@ -689,27 +673,8 @@ def maximum_weight_matroid_intersection(
     The independently published supplied-certificate operations remain
     available to check authored split or rank-dual witnesses.
     """
-    if type(request) is not MatroidWeightedIntersectionOptimizationRequest:
-        raise OperationDomainValidationError(
-            location=("request",),
-            code="matroid.weighted_intersection.optimize.request",
-            message="request must be a canonical weighted-intersection optimization request",
-        )
-    try:
-        request = MatroidWeightedIntersectionOptimizationRequest.model_validate(
-            request.model_dump(mode="python")
-        )
-    except Exception as exc:
-        raise OperationDomainValidationError(
-            location=("request",),
-            code="matroid.weighted_intersection.optimize.request",
-            message="weighted-intersection optimization request is not canonical",
-        ) from exc
-
-    first, second = _admit_pair(request.first, request.second)
-    weights, canonical_function = _canonical_weight_function(
-        first, request.weight_function
-    )
+    first, second = _admit_pair(first, second)
+    weights, canonical_function = _canonical_weight_function(first, weight_function)
     _weighted_intersection_optimization_admission(first, second, weights)
     _admit_prime(first.matrix.prime)
     selected = _weighted_matroid_intersection_admitted(first, second, weights)
@@ -737,7 +702,7 @@ def maximum_weight_matroid_intersection(
 def replay_common_basis_result(result: MatroidCommonBasisResult) -> None:
     """Check a serialized common-basis outcome and all retained source ranks."""
     first, second = _admit_pair(result.first, result.second)
-    _admit_work(first, second, source_rank_calls=2)
+    rank_first, rank_second = _admit_work(first, second)
     common = result.common_independent
     witness_subset = result.witness.subset
     if (
@@ -753,13 +718,15 @@ def replay_common_basis_result(result: MatroidCommonBasisResult) -> None:
     complement = tuple(
         i for i in range(first.ground_size) if i not in set(witness_subset)
     )
+    # The two full-source ranks are the exact ranks presolved during
+    # admission; the remaining four replay the claimed subset restrictions.
     replayed = (
         _rank(first, common),
         _rank(second, common),
         _rank(first, witness_subset),
         _rank(second, complement),
-        _rank(first, tuple(range(first.ground_size))),
-        _rank(second, tuple(range(second.ground_size))),
+        rank_first,
+        rank_second,
     )
     claimed = (
         result.rank_first_common,
@@ -859,6 +826,12 @@ def weighted_intersection_certificate(
             message="integral dual weights must sum coordinatewise to the objective",
         )
 
+    require_bounded_retained_axis(
+        first,
+        second,
+        location=("first", "second", "weights"),
+        code="matroid.weighted_intersection.work_bound",
+    )
     candidate = request.common_independent
     candidate_size = len(candidate)
     candidate_weight = sum(objective[index] for index in candidate)
@@ -871,21 +844,12 @@ def weighted_intersection_certificate(
         _prepare_maximum_weight_independent_set(second, second_split_function)
     )
     total_work = first_work + second_work + first_rank_work + second_rank_work
-    output_bytes = _weighted_intersection_output_bound_bytes(
-        first,
-        second,
-        objective,
-        first_split,
-        second_split,
-        candidate_size,
-    )
     if (
         first_work > MAX_CLOSURE_RANK_WORK
         or second_work > MAX_CLOSURE_RANK_WORK
-        or first_output > 16 * 256
-        or second_output > 16 * 256
+        or first_output > MAX_INDEPENDENT_SET_OUTPUT_UNITS
+        or second_output > MAX_INDEPENDENT_SET_OUTPUT_UNITS
         or total_work > MAX_WEIGHTED_INTERSECTION_WORK
-        or output_bytes > MAX_WEIGHTED_INTERSECTION_OUTPUT_BYTES
     ):
         raise OperationResourceAdmissionError(
             location=("first", "second", "weights"),
@@ -893,7 +857,8 @@ def weighted_intersection_certificate(
             message=(
                 "weighted-intersection certificate rank work or result output "
                 f"exceeds the {MAX_WEIGHTED_INTERSECTION_WORK}-unit work or "
-                f"{MAX_WEIGHTED_INTERSECTION_OUTPUT_BYTES}-byte output envelope"
+                f"{MAX_INDEPENDENT_SET_OUTPUT_UNITS}-unit result output "
+                "envelope"
             ),
         )
     # Both split phases and feasibility probes are admitted together before
@@ -969,7 +934,7 @@ def _weighted_rank_dual_ranks(
     """Recompute listed ranks and enforce their coefficient bounds."""
     ranks_by_side: list[tuple[int, ...]] = []
     for source, family in zip(sources, families, strict=True):
-        ranks = tuple(_rank(source, term.subset) for term in family)
+        ranks = tuple(_weighted_rank(source, term.subset) for term in family)
         for term, rank in zip(family, ranks, strict=True):
             bound = maximum_positive_weight
             if rank > 0:
@@ -1008,7 +973,12 @@ def _weighted_rank_dual_values_and_cover(
 
 
 def weighted_intersection_rank_certificate(
-    request: MatroidWeightedIntersectionRankCertificateRequest,
+    first: LinearMatroid,
+    second: LinearMatroid,
+    weight_function: MatroidWeightFunction,
+    common_independent: tuple[int, ...],
+    first_rank_terms: tuple[MatroidRankMultiplier, ...],
+    second_rank_terms: tuple[MatroidRankMultiplier, ...],
 ) -> MatroidWeightedIntersectionRankCertificateResult:
     """Check a sparse rank-inequality dual for a common independent set.
 
@@ -1018,21 +988,23 @@ def weighted_intersection_rank_certificate(
     positive objective weights, and can be passed to the existing supplied
     weight-splitting checker.
     """
-    if type(request) is not MatroidWeightedIntersectionRankCertificateRequest:
-        raise OperationDomainValidationError(
-            location=("request",),
-            code="matroid.weighted_intersection.rank_dual.request",
-            message="request must be a canonical weighted-intersection rank certificate",
-        )
     try:
+        canonical_request = MatroidWeightedIntersectionRankCertificateRequest(
+            first=first,
+            second=second,
+            weight_function=weight_function,
+            common_independent=common_independent,
+            first_rank_terms=first_rank_terms,
+            second_rank_terms=second_rank_terms,
+        ).model_dump(mode="python")
         request = MatroidWeightedIntersectionRankCertificateRequest.model_validate(
-            request.model_dump(mode="python")
+            canonical_request
         )
     except Exception as exc:
         raise OperationDomainValidationError(
             location=("request",),
             code="matroid.weighted_intersection.rank_dual.request",
-            message="weighted-intersection rank certificate request is not canonical",
+            message="weighted-intersection rank certificate arguments are not canonical",
         ) from exc
 
     first, second = _admit_pair(request.first, request.second)
@@ -1072,38 +1044,30 @@ def weighted_intersection_rank_certificate(
         ground_axis=second.ground_axis,
         values=tuple(split_values_second),
     )
-    output_bytes = (
-        _weighted_intersection_output_bound_bytes(
-            first,
-            second,
-            objective,
-            split_values_first,
-            split_values_second,
-            len(candidate),
-        )
-        + 8 * sum(len(term.subset) for family in terms for term in family)
-        + 64 * sum(len(family) for family in terms)
+    require_bounded_retained_axis(
+        first,
+        second,
+        location=("first", "second", "rank_terms"),
+        code="matroid.weighted_intersection.rank_dual.work_bound",
     )
-    total_work = rank_work + cover_work
+    total_work = rank_work + cover_work + _WEIGHTED_INTERSECTION_PRIME_VALIDATION_WORK
     if (
         rank_work > MAX_WEIGHTED_INTERSECTION_WORK
         or total_work > MAX_WEIGHTED_INTERSECTION_WORK
-        or output_bytes > MAX_WEIGHTED_INTERSECTION_OUTPUT_BYTES
     ):
         raise OperationResourceAdmissionError(
             location=("first", "second", "rank_terms"),
             code="matroid.weighted_intersection.rank_dual.work_bound",
             message=(
-                "rank-dual certificate rank work or result output exceeds the "
-                f"{MAX_WEIGHTED_INTERSECTION_WORK}-unit work or "
-                f"{MAX_WEIGHTED_INTERSECTION_OUTPUT_BYTES}-byte output envelope"
+                "rank-dual certificate rank work or retained axis allocation "
+                f"exceeds the {MAX_WEIGHTED_INTERSECTION_WORK}-unit work envelope"
             ),
         )
 
     ranks_by_side = _weighted_rank_dual_ranks(sources, terms, n, w_plus)
 
-    first_candidate_rank = _rank(first, candidate)
-    second_candidate_rank = _rank(second, candidate)
+    first_candidate_rank = _weighted_rank(first, candidate)
+    second_candidate_rank = _weighted_rank(second, candidate)
     if first_candidate_rank != len(candidate) or second_candidate_rank != len(
         candidate
     ):
@@ -1149,7 +1113,17 @@ def verify_weighted_intersection_rank_certificate(
             first_rank_terms=result.first_rank_terms,
             second_rank_terms=result.second_rank_terms,
         )
-        return weighted_intersection_rank_certificate(request) == result
+        return (
+            weighted_intersection_rank_certificate(
+                request.first,
+                request.second,
+                request.weight_function,
+                request.common_independent,
+                request.first_rank_terms,
+                request.second_rank_terms,
+            )
+            == result
+        )
     except (
         OperationDomainValidationError,
         OperationResourceAdmissionError,

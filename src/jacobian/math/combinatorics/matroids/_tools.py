@@ -71,13 +71,24 @@ def _run_weighted_intersection_certificate(
 def _run_weighted_intersection_rank_certificate(
     request: MatroidWeightedIntersectionRankCertificateRequest,
 ) -> MatroidWeightedIntersectionRankCertificateResult:
-    return weighted_intersection_rank_certificate(request)
+    return weighted_intersection_rank_certificate(
+        request.first,
+        request.second,
+        request.weight_function,
+        request.common_independent,
+        request.first_rank_terms,
+        request.second_rank_terms,
+    )
 
 
 def _run_weighted_intersection_optimization(
     request: MatroidWeightedIntersectionOptimizationRequest,
 ) -> MatroidWeightedIntersectionOptimizationResult:
-    return maximum_weight_matroid_intersection(request)
+    return maximum_weight_matroid_intersection(
+        request.first,
+        request.second,
+        request.weight_function,
+    )
 
 
 _CLOSURE_EXAMPLE: dict[str, Any] = {
@@ -342,14 +353,16 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
 )
 TOOLS = TOOLS + (  # noqa: RUF005
     MathTool(
-        operation_id="matroid.intersection.maximum.compute",
+        operation_id="matroid.intersection.compute",
         title="Compute a maximum common independent set",
         description=(
             "Compute an exact maximum-cardinality common independent set of "
             "two represented matroids on one labelled ground. Return both "
             "source ranks of the selected set and an Edmonds min-max rank "
-            "witness; serialized claims replay all four ranks against their "
-            "retained source matroids."
+            "witness. Deserialization checks structure and scalar consistency "
+            "only; call replay_intersection_result when relying on "
+            "caller-authored rank claims to check them against the retained "
+            "source matroids."
         ),
         request_type=MatroidIntersectionRequest,
         result_type=MatroidIntersectionResult,

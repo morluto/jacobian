@@ -316,7 +316,9 @@ def test_output_size_rejects_long_repeated_axis_labels_before_rank_expansion(
     monkeypatch.setattr(
         intersection, "_maximum_weight_independent_set_admitted", unexpected
     )
-    with pytest.raises(OperationResourceAdmissionError, match="output envelope"):
+    with pytest.raises(
+        OperationResourceAdmissionError, match="codepoint allocation bound"
+    ):
         weighted_intersection_certificate(
             MatroidWeightedIntersectionCertificateRequest(
                 first=matroid,

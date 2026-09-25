@@ -54,20 +54,23 @@ rejected, never returned as a partial profile.
 `delta_matroid.feasible_size_profile.compute` returns the exact histogram
 `(c_0, ..., c_|E|)`, where `c_k` counts feasible sets with cardinality `k`.
 The result retains the labelled ground axis. Admission bounds the complete
-output to 4,096 entries and 32,768 encoded bytes before validating the source
-exchange axiom.
+output to 4,096 entries and 32,768 retained allocation units (one per entry
+index position, per decimal digit of each count, and per ground label
+codepoint) before validating the source exchange axiom.
 
 `delta_matroid.direct_sum.compute` combines two values whose labelled grounds
 are disjoint. Its ground axis concatenates the left and right grounds, with the
 corresponding index injections returned explicitly. Each output feasible set
 is the union of one left feasible set and one right feasible set. Admission
-checks the combined ground size, feasible-pair count, feasible memberships,
-symmetric-exchange work ceiling, and a conservative encoded-result size before
-constructing any pairwise unions. The operation accepts at most 2,048 ground
-labels, 250,000 feasible-set pairs, and 2,000,000 estimated result bytes, while
-the result must also fit the carrier's 16,384 memberships and 250,000 exchange
-candidate checks. Input ground labels must be disjoint; overlapping names are
-rejected rather than silently tagged.
+revalidates both native operands as canonical carriers, then checks the
+combined ground size, feasible-pair count, and result feasible memberships
+before constructing any pairwise unions. The operation accepts at most 2,048
+ground labels and 250,000 feasible-set pairs, while each source and the result
+must fit the carrier's 16,384-entry membership and 2,048-label-byte envelopes.
+The product family satisfies symmetric exchange by the direct-sum theorem, so
+admission does not charge a recognition replay this operation never performs.
+Input ground labels must be disjoint; overlapping names are rejected rather
+than silently tagged.
 
 Graph conversions, lower/upper matroids, subset-distance profiles, other
 direct-sum variants, relabelling, parity/size distributions, and interlace

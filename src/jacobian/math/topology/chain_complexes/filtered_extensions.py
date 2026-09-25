@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from fractions import Fraction
 from typing import Any, Literal, Self
 
 from pydantic import Field, model_validator
@@ -45,7 +44,7 @@ from jacobian.math.topology.chain_complexes.values import (
 
 MAX_FILTERED_HOMOLOGY_PRIME = 2**31 - 1
 MAX_FILTERED_HOMOLOGY_RESULT_CELLS = 250_000
-MAX_FILTERED_HOMOLOGY_RESULT_CHARS = 20_000_000
+MAX_FILTERED_HOMOLOGY_RESULT_CELLS = 20_000_000
 MAX_FILTERED_HOMOLOGY_WORK = 50_000_000
 
 
@@ -275,15 +274,15 @@ def _admit_homology_filtration(
     input_vectors = sum(
         len(subspace.vectors) for level in filtration for subspace in level.subspaces
     )
-    output_chars = 17 * (input_cells + result_cells) + 4 * input_vectors + 100_000
-    if output_chars > MAX_FILTERED_HOMOLOGY_RESULT_CHARS:
+    output_cells = input_cells + result_cells + input_vectors
+    if output_cells > MAX_FILTERED_HOMOLOGY_RESULT_CELLS:
         raise OperationResourceAdmissionError(
             location=("filtration",),
-            code="filtered_homology.result_bytes_bound",
+            code="filtered_homology.result_cells_bound",
             message=(
                 f"the retained source and homology witnesses need an estimated "
-                f"{output_chars} characters, above the "
-                f"{MAX_FILTERED_HOMOLOGY_RESULT_CHARS}-character envelope"
+                f"{output_cells} cells, above the "
+                f"{MAX_FILTERED_HOMOLOGY_RESULT_CELLS}-cell envelope"
             ),
         )
     work = sum(
@@ -450,7 +449,7 @@ def _homology_image_subspace(
                 code="filtered_homology.boundary_witness_invalid",
                 message="the returned chain does not replay its homology-class boundary relation",
             )
-        preimages.append(preimage)
+        preimages.append(preimage or [])
     return selected_coordinates, selected_representatives, preimages
 
 
@@ -514,7 +513,12 @@ def filtered_homology_filtration(
     admitted = _admit_filtered_semantics(request.complex, request.filtration)
     complex_value = request.complex
     prime = complex_value.prime
-    assert prime is not None
+    if prime is None:
+        raise OperationDomainValidationError(
+            location=("complex", "prime"),
+            code="filtered_homology.prime_required",
+            message="filtered homology requires a prime-field complex",
+        )
     sizes = complex_value.basis_sizes
     differentials = admitted.differentials
     cycles, boundaries, homology = _homology_bases(sizes, differentials, prime)
@@ -734,7 +738,7 @@ def _exact_filtered_homology_coordinates(
                 filtered_cycles.append(vector)
             filtered_cycles = _row_basis(filtered_cycles, prime)
             full_cycle_basis = [*boundaries, *homology_basis]
-            image_coordinates = []
+            image_coordinates: list[list[Any]] = []
             for vector in filtered_cycles:
                 if any(_mat_vec(outgoing, vector, prime)):
                     raise OperationDomainValidationError(
@@ -861,52 +865,14 @@ def abutment(request: SpectralAbutmentRequest) -> SpectralAbutmentResult:
             ),
         )
     _admit_filtered_structure(request.complex, request.filtration)
-    input_scalars = [
-        entry
-        for matrix in request.complex.differential_matrices
-        for row in matrix
-        for entry in row
-    ] + [
-        entry
-        for level in request.filtration
-        for subspace in level.subspaces
-        for vector in subspace.vectors
-        for entry in vector
-    ]
-    if request.complex.prime is not None:
-        coefficient_digits = len(str(request.complex.prime))
-    else:
-        coefficient_digits = (
-            max(
-                (
-                    max(
-                        len(str(abs(entry.numerator))),
-                        len(str(entry.denominator)),
-                    )
-                    if isinstance(entry, Fraction)
-                    else len(str(abs(entry)))
-                )
-                for entry in input_scalars
-            )
-            if input_scalars
-            else 1
-        )
-    maximum_dimension = max(sizes, default=0)
-    result_scalar_chars = (
-        coefficient_digits
-        if request.complex.prime is not None
-        else 2
-        * maximum_dimension
-        * (coefficient_digits + max(1, len(str(maximum_dimension))))
-    )
-    output_chars = comparison_cells * (result_scalar_chars + 4) + 100_000
-    if output_chars > MAX_FILTERED_HOMOLOGY_RESULT_CHARS:
+    output_cells = comparison_cells
+    if output_cells > MAX_FILTERED_HOMOLOGY_RESULT_CELLS:
         raise OperationResourceAdmissionError(
             location=("filtration",),
             code="spectral_sequence.abutment_output_bound",
             message=(
-                f"the exact abutment comparison is estimated at {output_chars} "
-                f"characters, above {MAX_FILTERED_HOMOLOGY_RESULT_CHARS}"
+                f"the exact abutment comparison needs {output_cells} cells, "
+                f"above {MAX_FILTERED_HOMOLOGY_RESULT_CELLS}"
             ),
         )
     admitted = _admit_filtered_semantics(request.complex, request.filtration)

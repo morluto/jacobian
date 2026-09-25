@@ -186,7 +186,7 @@ def _preflight_raw_differentials(
                     "homology differential cells exceed the raw "
                     f"{maximum_cells}-cell envelope",
                 )
-            canonical_entries: list[object] = []
+            canonical_entries: list[int | Fraction] = []
             for entry in row:
                 if not (
                     isinstance(entry, str)
@@ -203,7 +203,15 @@ def _preflight_raw_differentials(
                         "a homology coefficient exceeds the raw "
                         f"{maximum_digits}-digit envelope",
                     )
-                canonical_entries.append(entry)
+                if isinstance(entry, str):
+                    coefficient: int | Fraction = (
+                        int(entry) if "/" not in entry else Fraction(entry)
+                    )
+                elif type(entry) is int:
+                    coefficient = int(entry)
+                else:
+                    coefficient = entry
+                canonical_entries.append(coefficient)
             canonical_rows.append(tuple(canonical_entries))
         canonical_matrices.append(tuple(canonical_rows))
     return tuple(canonical_matrices)

@@ -3,7 +3,7 @@ from fractions import Fraction
 import pytest
 
 from jacobian._exact import CanonicalRational
-from jacobian.canonical import CanonicalLimits, encode_strict_json
+from jacobian.canonical import decimal_digit_width, encode_strict_json
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.dispatch import invoke_operation
@@ -147,7 +147,7 @@ def test_one_cell_zero_row_dimension_roundtrips_and_catalog_invokes():
     assert invoked.output["nullity"] == 1 and invoked.output["rank"] == 0
 
 
-def test_dimension_output_estimate_is_conservative_at_its_boundary(monkeypatch):
+def test_dimension_output_bound_is_conservative_at_its_boundary(monkeypatch):
     complex_value = polytopal_complex_closure(
         (_interval(0, 1, "a"), _interval(1, 2, "b"))
     )
@@ -157,25 +157,32 @@ def test_dimension_output_estimate_is_conservative_at_its_boundary(monkeypatch):
         tuple(entry.as_fraction() for entry in row)
         for row in result.compatibility_matrix.entries
     )
-    estimate = spline_kernel._spline_dimension_output_upper_bound(
-        result.complex,
-        result.degree,
-        result.smoothness,
-        result.coefficient_axis,
-        rows,
-        result.compatibility_matrix.column_count,
+    max_entry_digits = max(
+        (
+            max(
+                decimal_digit_width(value.numerator),
+                decimal_digit_width(value.denominator),
+            )
+            for row in rows
+            for value in row
+        ),
+        default=1,
     )
-    actual = len(encode_strict_json(result.model_dump(mode="json")))
+    estimate = spline_kernel._spline_dimension_output_digit_bound(
+        rows, result.compatibility_matrix.column_count, max_entry_digits
+    )
+    stored_digits = sum(
+        decimal_digit_width(value.numerator) + decimal_digit_width(value.denominator)
+        for row in rows
+        for value in row
+    )
 
-    assert (
-        CanonicalLimits().max_output_bytes
-        == spline_kernel.MAX_SPLINE_DIMENSION_OUTPUT_BYTES
-    )
-    assert estimate >= actual
-    monkeypatch.setattr(spline_kernel, "MAX_SPLINE_DIMENSION_OUTPUT_BYTES", estimate)
+    assert rows and stored_digits > 0
+    assert estimate >= stored_digits
+    monkeypatch.setattr(spline_kernel, "MAX_SPLINE_DIMENSION_OUTPUT_DIGITS", estimate)
     assert spline_dimension(request).nullity == result.nullity
     monkeypatch.setattr(
-        spline_kernel, "MAX_SPLINE_DIMENSION_OUTPUT_BYTES", estimate - 1
+        spline_kernel, "MAX_SPLINE_DIMENSION_OUTPUT_DIGITS", estimate - 1
     )
     with pytest.raises(OperationResourceAdmissionError, match="output envelope"):
         spline_dimension(request)

@@ -116,6 +116,22 @@ def test_v_presentation_round_trips_through_its_canonical_json() -> None:
     assert restored == value
 
 
+def test_huge_constant_rows_are_classified_before_the_input_height_envelope() -> None:
+    huge = 10**1_024
+    # A true constant row never enters double-description expansion, so it is
+    # discarded even when its bound exceeds the DD input height envelope.
+    value = _convert(("x",), _halfspace((0,), huge), _halfspace((-1,), 0))
+    assert value.empty is False
+    assert value.points == ((_q(0),),)
+    assert value.rays == ((_q(1),),)
+    # A false constant row is a direct exact contradiction and returns the
+    # empty presentation rather than refusing the oversized bound.
+    contradictory = _convert(("x",), _halfspace((0,), -huge), _halfspace((-1,), 0))
+    assert contradictory.empty is True
+    assert contradictory.points == contradictory.rays == ()
+    assert contradictory.affine_dimension == -1
+
+
 def test_coefficient_growth_is_admitted_before_kernel_expansion(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

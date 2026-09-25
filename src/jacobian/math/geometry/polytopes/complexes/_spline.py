@@ -35,6 +35,7 @@ from jacobian.math.geometry.polytopes.complexes._models import (
     PiecewisePolynomialAdditionRequest,
     PiecewisePolynomialMultiplicationRequest,
     PiecewisePolynomialResult,
+    PiecewisePolynomialScalarMultiplicationRequest,
     PiecewiseSmoothnessRequest,
     PiecewiseSmoothnessResult,
     PolytopalComplexClosureResult,
@@ -218,6 +219,8 @@ def _affine_ideal(face: Any, symbols: tuple[Any, ...]) -> list[Any]:
 MAX_PIECE_COMPATIBILITY_WORK = 50_000_000
 MAX_PIECE_RESULT_DIGITS = 64 * 1024 * 1024
 MAX_PIECE_MULTIPLICATION_WORK = 1_000_000
+MAX_PIECE_MULTIPLICATION_OUTPUT_DIGITS = 10 * 1024 * 1024
+"""Decimal-digit ceiling summed over all stored rational components of a product."""
 MAX_RATIONAL_SCALAR_DIGITS = 2 * 32_768
 
 
@@ -447,27 +450,29 @@ def piecewise_polynomial_add(  # noqa: C901
         output_term_count += len(exponents)
         for exponent in exponents:
             maximum_degree = max(maximum_degree, sum(exponent))
-            a = first_by_exponent.get(exponent)
-            b = second_by_exponent.get(exponent)
-            if a is None:
-                output_digit_bound += _decimal_digits_upper(
-                    b.num
-                ) + _decimal_digits_upper(b.den)  # type: ignore[union-attr]
-            elif b is None:
-                output_digit_bound += _decimal_digits_upper(
-                    a.num
-                ) + _decimal_digits_upper(a.den)
-            else:
+            left_coefficient = first_by_exponent.get(exponent)
+            right_coefficient = second_by_exponent.get(exponent)
+            if left_coefficient is not None and right_coefficient is not None:
+                if (
+                    left_coefficient.num == -right_coefficient.num
+                    and left_coefficient.den == right_coefficient.den
+                ):
+                    # Canonical reduced form makes exact cancellation an
+                    # equality test on the components.  The zero sum never
+                    # enters the output, so the growth bound does not apply.
+                    continue
                 numerator_digits = (
                     max(
-                        _decimal_digits_upper(a.num) + _decimal_digits_upper(b.den),
-                        _decimal_digits_upper(b.num) + _decimal_digits_upper(a.den),
+                        _decimal_digits_upper(left_coefficient.num)
+                        + _decimal_digits_upper(right_coefficient.den),
+                        _decimal_digits_upper(right_coefficient.num)
+                        + _decimal_digits_upper(left_coefficient.den),
                     )
                     + 1
                 )
                 denominator_digits = _decimal_digits_upper(
-                    a.den
-                ) + _decimal_digits_upper(b.den)
+                    left_coefficient.den
+                ) + _decimal_digits_upper(right_coefficient.den)
                 if (
                     max(numerator_digits, denominator_digits)
                     > MAX_CANONICAL_RATIONAL_DIGITS
@@ -478,6 +483,16 @@ def piecewise_polynomial_add(  # noqa: C901
                         message="a sum coefficient may exceed the canonical rational digit envelope",
                     )
                 output_digit_bound += numerator_digits + denominator_digits
+            elif left_coefficient is not None:
+                output_digit_bound += _decimal_digits_upper(
+                    left_coefficient.num
+                ) + _decimal_digits_upper(left_coefficient.den)
+            elif right_coefficient is not None:
+                output_digit_bound += _decimal_digits_upper(
+                    right_coefficient.num
+                ) + _decimal_digits_upper(right_coefficient.den)
+            else:
+                raise ArithmeticError("sum support disagrees with its operand union")
     if output_digit_bound > MAX_PIECE_RESULT_DIGITS:
         raise OperationResourceAdmissionError(
             location=("pieces",),
@@ -525,19 +540,21 @@ def piecewise_polynomial_add(  # noqa: C901
 
     sum_pieces = []
     for cell_id in sorted(left_by_id):
-        first = {
+        first_coefficients = {
             term.exponents: term.coefficient.as_fraction()
             for term in left_by_id[cell_id].polynomial.terms
         }
-        second = {
+        second_coefficients = {
             term.exponents: term.coefficient.as_fraction()
             for term in right_by_id[cell_id].polynomial.terms
         }
         terms = []
-        for exponent in sorted(first.keys() | second.keys(), reverse=True):
-            coefficient = first.get(exponent, Fraction(0)) + second.get(
+        for exponent in sorted(
+            first_coefficients.keys() | second_coefficients.keys(), reverse=True
+        ):
+            coefficient = first_coefficients.get(
                 exponent, Fraction(0)
-            )
+            ) + second_coefficients.get(exponent, Fraction(0))
             if coefficient:
                 terms.append(
                     RationalPolynomialTerm(
@@ -560,6 +577,135 @@ def piecewise_polynomial_add(  # noqa: C901
         complex=left_checked.complex,
         pieces=tuple(sum_pieces),
         compatibility=left_checked.compatibility,
+        status="COMPATIBLE",
+    )
+
+
+def piecewise_polynomial_scalar_multiply(  # noqa: C901
+    request: PiecewisePolynomialScalarMultiplicationRequest,
+) -> PiecewisePolynomialResult:
+    """Scale one compatible piecewise polynomial over QQ exactly.
+
+    Compatibility is reconstructed from the supplied cell polynomials, so a
+    serialized caller status or ledger is never treated as a proof.  Rational
+    coefficient heights and the complete output are admitted before products
+    are materialized.
+    """
+    if not isinstance(request, PiecewisePolynomialScalarMultiplicationRequest):
+        _reject(
+            "scalar_multiplication_type", "expected a scalar multiplication request"
+        )
+    try:
+        request_payload = request.model_dump(mode="python")
+        request = PiecewisePolynomialScalarMultiplicationRequest.model_validate(
+            request_payload
+        )
+    except Exception:
+        _reject("scalar_multiplication_input", "request fields must be canonical")
+    if request_payload != request.model_dump(mode="python"):
+        _reject("scalar_multiplication_input", "request fields must be canonical")
+    function = request.function
+    try:
+        payload = function.model_dump(mode="python")
+        function = PiecewisePolynomialResult.model_validate(payload)
+    except Exception:
+        _reject(
+            "scalar_multiplication_input",
+            "expected a canonical piecewise-polynomial value",
+        )
+    if payload != function.model_dump(mode="python"):
+        _reject(
+            "scalar_multiplication_input",
+            "piecewise-polynomial value must be canonical",
+        )
+    if function.status != "COMPATIBLE":
+        _reject(
+            "scalar_multiplication_continuity",
+            "only compatible functions can be scaled",
+        )
+    scalar = request.scalar.as_fraction()
+    scalar_digits = _decimal_digits_upper(scalar.numerator) + _decimal_digits_upper(
+        scalar.denominator
+    )
+    if scalar_digits > MAX_CANONICAL_RATIONAL_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("scalar",),
+            code="polytopal_complex.scalar_multiplication_scalar",
+            message="scalar exceeds the admitted rational digit envelope",
+        )
+    output_digits = 0
+    total_terms = 0
+    for piece in function.pieces:
+        terms = piece.polynomial.polynomial.terms
+        total_terms += len(terms)
+        for term in terms:
+            coefficient = term.coefficient.as_fraction()
+            numerator_digits = _decimal_digits_upper(
+                coefficient.numerator
+            ) + _decimal_digits_upper(scalar.numerator)
+            denominator_digits = _decimal_digits_upper(
+                coefficient.denominator
+            ) + _decimal_digits_upper(scalar.denominator)
+            if (
+                max(numerator_digits, denominator_digits)
+                > MAX_CANONICAL_RATIONAL_DIGITS
+            ):
+                raise OperationResourceAdmissionError(
+                    location=("scalar",),
+                    code="polytopal_complex.scalar_multiplication_growth",
+                    message="a scaled coefficient may exceed the canonical rational digit envelope",
+                )
+            output_digits += numerator_digits + denominator_digits
+    try:
+        input_bytes = len(encode_strict_json(function.model_dump(mode="json")))
+    except CanonicalizationError as exc:
+        raise OperationResourceAdmissionError(
+            location=("function",),
+            code="polytopal_complex.scalar_multiplication_output",
+            message="piecewise-polynomial output exceeds the canonical JSON envelope",
+        ) from exc
+    output_bound = output_digits + 64 * total_terms + input_bytes
+    if output_bound > CanonicalLimits().max_output_bytes:
+        raise OperationResourceAdmissionError(
+            location=("function",),
+            code="polytopal_complex.scalar_multiplication_output",
+            message="scaled piecewise-polynomial output exceeds the admitted envelope",
+        )
+    checked = piecewise_polynomial_from_maximal_pieces(
+        function.complex, function.pieces
+    )
+    if checked.status != "COMPATIBLE":
+        _reject(
+            "scalar_multiplication_continuity",
+            "function continuity claims must be exact",
+        )
+    pieces = []
+    for piece in checked.pieces:
+        terms = []
+        for term in piece.polynomial.polynomial.terms:
+            coefficient = term.coefficient.as_fraction() * scalar
+            if coefficient:
+                terms.append(
+                    RationalPolynomialTerm(
+                        coefficient=CanonicalRational.from_fraction(coefficient),
+                        exponents=term.exponents,
+                    )
+                )
+        pieces.append(
+            PieceAssignment(
+                cell_id=piece.cell_id,
+                polynomial=RationalPolynomial(
+                    variables=piece.polynomial.variables,
+                    polynomial=SparseRationalPolynomial(terms=tuple(terms)),
+                ),
+            )
+        )
+    # Scalar multiplication is linear on every shared-face restriction, so
+    # the exact zero compatibility rows remain zero, including for scalar 0.
+    return PiecewisePolynomialResult(
+        complex=checked.complex,
+        pieces=tuple(pieces),
+        compatibility=checked.compatibility,
         status="COMPATIBLE",
     )
 
@@ -714,28 +860,21 @@ def piecewise_polynomial_multiply(  # noqa: C901
             message="product compatibility validation exceeds the admitted work envelope",
         )
 
+    # The product ledger stores two reduced rational components per retained
+    # term coefficient and at most max_exponent_digits decimal digits per
+    # exponent. The zero compatibility ledger, cell IDs, and transported
+    # complex are fixed-cardinality structural data admitted by the complex
+    # and work envelopes above; transport byte policy is enforced downstream.
     max_exponent_digits = 5
-    polynomial_bytes_bound = len(left_by_id) * (
-        256
-        + max((len(cell_id) * 4 for cell_id in left_by_id), default=0)
-        + maximum_dimension * 256
-        + maximum_result_terms
-        * (
-            128
-            + 2 * maximum_coefficient_digits
-            + 8 * maximum_dimension * max_exponent_digits
-        )
+    result_term_count = len(left_by_id) * maximum_result_terms
+    product_output_digit_bound = result_term_count * (
+        2 * maximum_coefficient_digits + maximum_dimension * max_exponent_digits
     )
-    compatibility_bytes_bound = pair_count * (1024 + maximum_dimension * 256)
-    complex_bytes = len(encode_strict_json(left.complex.model_dump(mode="json")))
-    output_bytes_bound = (
-        complex_bytes + polynomial_bytes_bound + compatibility_bytes_bound + 512
-    )
-    if output_bytes_bound > CanonicalLimits().max_output_bytes:
+    if product_output_digit_bound > MAX_PIECE_MULTIPLICATION_OUTPUT_DIGITS:
         raise OperationResourceAdmissionError(
             location=("pieces",),
             code="polytopal_complex.multiplication_output",
-            message="piecewise polynomial product may exceed the canonical output limit",
+            message="piecewise polynomial product may exceed the admitted digit envelope",
         )
 
     left_checked = piecewise_polynomial_from_maximal_pieces(left.complex, left.pieces)
@@ -1024,7 +1163,8 @@ MAX_SPLINE_SCALAR_DIGITS = 2 * 32_768
 MAX_SPLINE_DIMENSION_CONSTRAINT_CELLS = 1_048_576
 MAX_SPLINE_DIMENSION_RANK_WORK = 32_000_000
 MAX_SPLINE_DIMENSION_INTERMEDIATE_DIGITS = 32_768
-MAX_SPLINE_DIMENSION_OUTPUT_BYTES = CanonicalLimits().max_output_bytes
+MAX_SPLINE_DIMENSION_OUTPUT_DIGITS = 10 * 1024 * 1024
+"""Decimal-digit ceiling summed over stored rational cells of the matrix."""
 MAX_SPLINE_DIMENSION_INTERMEDIATE_BYTES = 512 * 1024 * 1024
 MAX_SPLINE_COORDINATE_OUTPUT_BYTES = CanonicalLimits().max_output_bytes
 
@@ -1543,78 +1683,19 @@ def _admit_spline_dimension(
     return complex_value, width, row_bound, rank_work
 
 
-def _spline_dimension_output_upper_bound(
-    complex_value: PolytopalComplexClosureResult,
-    degree: int,
-    smoothness: int,
-    coefficient_axis: tuple[tuple[str, tuple[int, ...]], ...],
+def _spline_dimension_output_digit_bound(
     rows: tuple[tuple[Fraction, ...], ...],
     width: int,
+    max_entry_digits: int,
 ) -> int:
-    """Conservatively size the exact canonical JSON result before elimination."""
-    limits = CanonicalLimits(max_output_bytes=MAX_SPLINE_DIMENSION_OUTPUT_BYTES)
-    try:
-        complex_bytes = len(
-            encode_strict_json(complex_value.model_dump(mode="json"), limits=limits)
-        )
-        axis_bytes = len(
-            encode_strict_json(
-                [[cell_id, list(exponents)] for cell_id, exponents in coefficient_axis],
-                limits=limits,
-            )
-        )
-        matrix_header_bytes = len(
-            encode_strict_json(
-                {
-                    "domain": "QQ",
-                    "row_count": len(rows),
-                    "column_count": width,
-                    "entries": None,
-                },
-                limits=limits,
-            )
-        ) - len("null")
-        result_header_bytes = len(
-            encode_strict_json(
-                {
-                    "complex": None,
-                    "degree": degree,
-                    "smoothness": smoothness,
-                    "coefficient_axis": None,
-                    "compatibility_matrix": None,
-                    "rank": width,
-                    "nullity": width,
-                },
-                limits=limits,
-            )
-        ) - 3 * len("null")
-    except CanonicalizationError as exc:
-        raise OperationResourceAdmissionError(
-            location=("complex",),
-            code="polytopal_complex.spline_dimension_output",
-            message="spline dimension canonical JSON exceeds its output envelope",
-        ) from exc
+    """Bound the stored rational height of the exact compatibility matrix.
 
-    cell_count = len(rows) * width
-    scalar_bytes = sum(
-        decimal_digit_width(value.numerator)
-        + int(value.numerator < 0)
-        + decimal_digit_width(value.denominator)
-        + 19
-        for row in rows
-        for value in row
-    )
-    # Nineteen bytes account for the fixed canonical rational JSON keys and
-    # punctuation; add row, cell, and matrix-array separators explicitly.
-    matrix_array_bytes = (
-        2
-        + 2 * len(rows)
-        + max(0, cell_count - len(rows))
-        + max(0, len(rows) - 1)
-        + scalar_bytes
-    )
-    matrix_bytes = matrix_header_bytes + matrix_array_bytes
-    return result_header_bytes + complex_bytes + axis_bytes + matrix_bytes
+    The complex and coefficient axis are fixed-cardinality structural data
+    already admitted by the input and width envelopes; the matrix is the only
+    component that can grow, and every stored cell is a reduced rational with
+    numerator and denominator within the measured entry-height bound.
+    """
+    return len(rows) * width * 2 * max_entry_digits
 
 
 def spline_dimension(request: SplineDimensionRequest) -> SplineDimensionResult:
@@ -1651,10 +1732,8 @@ def spline_dimension(request: SplineDimensionRequest) -> SplineDimensionResult:
         ),
         default=1,
     )
-    output_bytes = _spline_dimension_output_upper_bound(
-        complex_value, request.degree, request.smoothness, axis, rows, width
-    )
-    if output_bytes > MAX_SPLINE_DIMENSION_OUTPUT_BYTES:
+    output_digits = _spline_dimension_output_digit_bound(rows, width, max_entry_digits)
+    if output_digits > MAX_SPLINE_DIMENSION_OUTPUT_DIGITS:
         raise OperationResourceAdmissionError(
             location=("degree",),
             code="polytopal_complex.spline_dimension_output",

@@ -69,8 +69,8 @@ MAX_AFFINE_TRANSFORM_WORK = 2_000_000
 MAX_AFFINE_TRANSFORM_COMPONENT_DIGITS = 512
 """Maximum conservative decimal-height bound for transformed coordinates."""
 
-MAX_AFFINE_TRANSFORM_OUTPUT_BYTES = 10 * 1024 * 1024
-"""Maximum estimated serialized source, target, and transport output size."""
+MAX_AFFINE_TRANSFORM_OUTPUT_DIGITS = 10 * 1024 * 1024
+"""Maximum decimal digits summed over source, target, and transport rationals."""
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -358,6 +358,13 @@ class PiecewisePolynomialMultiplicationRequest(StrictModel):
 
     left: PiecewisePolynomialResult
     right: PiecewisePolynomialResult
+
+
+class PiecewisePolynomialScalarMultiplicationRequest(StrictModel):
+    """Multiply a compatible piecewise-polynomial function by a rational scalar."""
+
+    function: PiecewisePolynomialResult
+    scalar: CanonicalRational
 
 
 class PiecewiseEvaluationRequest(StrictModel):
@@ -752,13 +759,11 @@ class PolytopalComplexAffineTransformResult(StrictModel):
         def pair_profile(
             value: PolytopalComplexClosureResult,
         ) -> dict[tuple[str, str], tuple[str, str | None]]:
-            return {
-                tuple(sorted((row.first_cell_id, row.second_cell_id))): (
-                    row.status,
-                    row.intersection_face_id,
-                )
-                for row in value.pairwise_intersections
-            }
+            profile: dict[tuple[str, str], tuple[str, str | None]] = {}
+            for row in value.pairwise_intersections:
+                first, second = sorted((row.first_cell_id, row.second_cell_id))
+                profile[(first, second)] = (row.status, row.intersection_face_id)
+            return profile
 
         source_pairs = pair_profile(self.source)
         target_pairs = pair_profile(self.target)
@@ -779,7 +784,7 @@ class PolytopalComplexAffineTransformResult(StrictModel):
 
 __all__ = [
     "MAX_AFFINE_TRANSFORM_COMPONENT_DIGITS",
-    "MAX_AFFINE_TRANSFORM_OUTPUT_BYTES",
+    "MAX_AFFINE_TRANSFORM_OUTPUT_DIGITS",
     "MAX_AFFINE_TRANSFORM_WORK",
     "MAX_COMPLEX_CELLS",
     "MAX_COMPLEX_COORDINATE_DIGITS",

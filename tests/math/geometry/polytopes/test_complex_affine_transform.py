@@ -17,9 +17,6 @@ from jacobian.math.geometry.polytopes._models import (
 from jacobian.math.geometry.polytopes.complexes import (
     polytopal_complex_affine_transform as exported_affine_transform,
 )
-from jacobian.math.geometry.polytopes.complexes._models import (
-    PolytopalComplexAffineTransformRequest,
-)
 from jacobian.math.geometry.polytopes.complexes.operations import (
     polytopal_complex_affine_transform,
     polytopal_complex_closure,
@@ -47,14 +44,13 @@ def _fraction_point(point) -> tuple[Fraction, ...]:
     )
 
 
-def _request(complex_value, matrix, translation):
-    return PolytopalComplexAffineTransformRequest(
-        complex=complex_value,
-        matrix=tuple(
+def _bound_map(matrix, translation):
+    return (
+        tuple(
             tuple(CanonicalRational(num=value, den=1) for value in row)
             for row in matrix
         ),
-        translation=tuple(CanonicalRational(num=value, den=1) for value in translation),
+        tuple(CanonicalRational(num=value, den=1) for value in translation),
     )
 
 
@@ -66,7 +62,7 @@ def test_unimodular_shear_transports_square_triangulation_and_incidence():
         )
     )
     result = polytopal_complex_affine_transform(
-        _request(source, ((1, 1), (0, 1)), (2, -1))
+        source, *_bound_map(((1, 1), (0, 1)), (2, -1))
     )
 
     assert result.target.f_vector == source.f_vector == (1, 4, 5, 2)
@@ -122,16 +118,19 @@ def test_unimodular_shear_transports_square_triangulation_and_incidence():
 def test_affine_transform_requires_nonsingular_matrix():
     source = polytopal_complex_closure((_poly(((0, 0), (1, 0), (0, 1)), "t"),))
     with pytest.raises(OperationDomainValidationError, match="invertible matrix"):
-        polytopal_complex_affine_transform(_request(source, ((1, 2), (2, 4)), (0, 0)))
+        polytopal_complex_affine_transform(
+            source, *_bound_map(((1, 2), (2, 4)), (0, 0))
+        )
 
 
 def test_affine_transform_admits_matrix_height_before_geometry_work():
     source = polytopal_complex_closure((_poly(((0, 0), (1, 0), (0, 1)), "t"),))
-    request = _request(source, ((10**32, 0), (0, 1)), (0, 0))
     with pytest.raises(
         OperationResourceAdmissionError, match="32-digit input envelope"
     ):
-        polytopal_complex_affine_transform(request)
+        polytopal_complex_affine_transform(
+            source, *_bound_map(((10**32, 0), (0, 1)), (0, 0))
+        )
 
 
 def test_affine_transform_admits_result_coordinate_growth_before_target_closure():
@@ -139,11 +138,12 @@ def test_affine_transform_admits_result_coordinate_growth_before_target_closure(
     source = polytopal_complex_closure(
         (_poly(((base, 0), (base + 1, 0), (base, 1)), "large"),)
     )
-    request = _request(source, ((base, 0), (0, 1)), (0, 0))
     with pytest.raises(
         OperationResourceAdmissionError, match="transformed coordinate exceeds"
     ):
-        polytopal_complex_affine_transform(request)
+        polytopal_complex_affine_transform(
+            source, *_bound_map(((base, 0), (0, 1)), (0, 0))
+        )
 
 
 def test_affine_transform_catalog_example_roundtrips():

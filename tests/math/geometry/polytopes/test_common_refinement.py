@@ -12,7 +12,6 @@ from jacobian.math.geometry.polytopes._models import (
     RationalVPolytope,
 )
 from jacobian.math.geometry.polytopes.complexes._models import (
-    CommonRefinementRequest,
     ComplexPoint,
     MaximalCellRecord,
 )
@@ -87,9 +86,7 @@ def test_common_refinement_produces_face_closed_overlay_and_pair_provenance():
     )
     right = complex_of(poly(((0, 0), (1, 0), (1, 1), (0, 1)), "r0"))
 
-    result = polytopal_complex_common_refinement(
-        CommonRefinementRequest(left=left, right=right)
-    )
+    result = polytopal_complex_common_refinement(left, right)
 
     areas = sorted(_shoelace(cell.vertices) for cell in result.refinement.maximal_cells)
     assert areas == [Fraction(1, 2), Fraction(1, 2)]
@@ -115,9 +112,7 @@ def test_common_refinement_independent_oracle_for_diagonal_and_vertical_splits()
         poly(((0, 0), (1, 0), (1, 1), (0, 1)), "e"),
         poly(((1, 0), (2, 0), (2, 1), (1, 1)), "f"),
     )
-    result = polytopal_complex_common_refinement(
-        CommonRefinementRequest(left=left, right=right)
-    )
+    result = polytopal_complex_common_refinement(left, right)
 
     assert len(result.refinement.maximal_cells) == 4
     assert sorted(
@@ -133,9 +128,7 @@ def test_common_refinement_rejects_different_supports():
     right = complex_of(poly(((0, 0), (2, 0), (2, 1), (0, 1)), "b"))
 
     with pytest.raises(OperationDomainValidationError, match="exactly equal support"):
-        polytopal_complex_common_refinement(
-            CommonRefinementRequest(left=left, right=right)
-        )
+        polytopal_complex_common_refinement(left, right)
 
 
 def test_common_refinement_rejects_unmeasured_lower_dimensional_components():
@@ -164,9 +157,7 @@ def test_common_refinement_rejects_unmeasured_lower_dimensional_components():
         OperationDomainValidationError,
         match="every maximal cell must have the full ambient dimension",
     ):
-        polytopal_complex_common_refinement(
-            CommonRefinementRequest(left=left, right=right)
-        )
+        polytopal_complex_common_refinement(left, right)
 
 
 def test_common_refinement_rejects_vertex_coordinates_with_wrong_ambient_width():
@@ -190,9 +181,7 @@ def test_common_refinement_rejects_vertex_coordinates_with_wrong_ambient_width()
         OperationDomainValidationError,
         match="complex ambient coordinate axes",
     ):
-        polytopal_complex_common_refinement(
-            CommonRefinementRequest(left=malformed_square, right=right)
-        )
+        polytopal_complex_common_refinement(malformed_square, right)
 
 
 def test_common_refinement_catalog_example_is_composable():

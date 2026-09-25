@@ -12,6 +12,7 @@ from jacobian.math.geometry.polytopes.complexes._models import (
     PiecewisePolynomialMultiplicationRequest,
     PiecewisePolynomialRequest,
     PiecewisePolynomialResult,
+    PiecewisePolynomialScalarMultiplicationRequest,
     PiecewiseSmoothnessRequest,
     PiecewiseSmoothnessResult,
     PolytopalComplexAffineTransformRequest,
@@ -32,6 +33,7 @@ from jacobian.math.geometry.polytopes.complexes.operations import (
     piecewise_polynomial_evaluate,
     piecewise_polynomial_from_maximal_pieces,
     piecewise_polynomial_multiply,
+    piecewise_polynomial_scalar_multiply,
     piecewise_polynomial_smoothness,
     polytopal_complex_affine_transform,
     polytopal_complex_closure,
@@ -128,6 +130,12 @@ def _run_piecewise_multiply(
     return piecewise_polynomial_multiply(request)
 
 
+def _run_piecewise_scalar_multiply(
+    request: PiecewisePolynomialScalarMultiplicationRequest,
+) -> PiecewisePolynomialResult:
+    return piecewise_polynomial_scalar_multiply(request)
+
+
 def _run_eval(request: Any) -> Any:
     return piecewise_polynomial_evaluate(request.function, request.point)
 
@@ -157,13 +165,15 @@ def _run_spline_coordinates(
 
 
 def _run_common_refinement(request: CommonRefinementRequest) -> CommonRefinementResult:
-    return polytopal_complex_common_refinement(request)
+    return polytopal_complex_common_refinement(request.left, request.right)
 
 
 def _run_affine_transform(
     request: PolytopalComplexAffineTransformRequest,
 ) -> PolytopalComplexAffineTransformResult:
-    return polytopal_complex_affine_transform(request)
+    return polytopal_complex_affine_transform(
+        request.complex, request.matrix, request.translation
+    )
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
@@ -467,6 +477,45 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                         "compatibility": [],
                         "status": "COMPATIBLE",
                     },
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="piecewise_polynomial.scalar_multiply.compute",
+        title="Scale a compatible piecewise-polynomial function exactly",
+        description=(
+            "Multiply every cell polynomial of one compatible scalar QQ-valued "
+            "piecewise-polynomial function by an exact rational scalar. The "
+            "operation reconstructs the complete shared-face compatibility "
+            "profile and admits coefficient growth and result size before "
+            "materializing products."
+        ),
+        request_type=PiecewisePolynomialScalarMultiplicationRequest,
+        result_type=PiecewisePolynomialResult,
+        run=_run_piecewise_scalar_multiply,
+        tags=(
+            "geometry",
+            "piecewise-polynomial",
+            "scalar-multiplication",
+            "exact-rational",
+        ),
+        discovery_terms=(
+            "scalar multiply piecewise-polynomial function",
+            "rational scalar multiple of a spline",
+        ),
+        examples=(
+            OperationExample(
+                name="scale_constant_segment_piece",
+                description="Scale the constant function on one exact segment by two.",
+                input={
+                    "function": {
+                        "complex": _COMPLEX,
+                        "pieces": [{"cell_id": "M0", "polynomial": _POLY}],
+                        "compatibility": [],
+                        "status": "COMPATIBLE",
+                    },
+                    "scalar": {"num": "2", "den": "1"},
                 },
             ),
         ),

@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from fractions import Fraction
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import CanonicalRational, canonical_rational_component_digits
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -20,8 +20,8 @@ from jacobian.math.geometry.polytopes.complexes._models import (
     MAX_COMPLEX_DIMENSION,
     MAX_COMPLEX_INTERSECTION_WORK,
     CommonRefinementCellPair,
-    CommonRefinementRequest,
     CommonRefinementResult,
+    MaximalCellRecord,
     PolytopalComplexClosureResult,
 )
 from jacobian.math.geometry.polytopes.complexes.operations import (
@@ -44,7 +44,7 @@ def _reject(code: str, message: str, *, location: tuple[str, ...] = ()) -> None:
 
 
 def _validate_source_coordinates(
-    side: str, complex_value: object, dimension: int
+    side: str, complex_value: PolytopalComplexClosureResult, dimension: int
 ) -> None:
     for index, cell in enumerate(complex_value.maximal_cells):
         if any(len(vertex.coordinates) != dimension for vertex in cell.vertices):
@@ -62,7 +62,7 @@ def _validate_source_coordinates(
         for vertex in cell.vertices:
             for coordinate in vertex.coordinates:
                 if (
-                    max(len(str(abs(coordinate.num))), len(str(coordinate.den)))
+                    canonical_rational_component_digits(coordinate)
                     > MAX_COMPLEX_COORDINATE_DIGITS
                 ):
                     raise OperationResourceAdmissionError(
@@ -72,8 +72,9 @@ def _validate_source_coordinates(
                     )
 
 
-def _admit(request: CommonRefinementRequest) -> int:
-    left, right = request.left, request.right
+def _admit(
+    left: PolytopalComplexClosureResult, right: PolytopalComplexClosureResult
+) -> int:
     if left.space != right.space:
         _reject(
             "polytopal_complex.refinement_mixed_spaces",
@@ -140,7 +141,7 @@ def _admit(request: CommonRefinementRequest) -> int:
 
 
 def _polytope_from_cell(
-    space: RationalCoordinateSpace, cell: object, prefix: str
+    space: RationalCoordinateSpace, cell: MaximalCellRecord, prefix: str
 ) -> RationalVPolytope:
     vertices = tuple(
         RationalPolytopeVertex(
@@ -164,7 +165,9 @@ def _canonical_source(
     return canonical
 
 
-def common_refinement(request: CommonRefinementRequest) -> CommonRefinementResult:
+def common_refinement(
+    left: PolytopalComplexClosureResult, right: PolytopalComplexClosureResult
+) -> CommonRefinementResult:
     """Overlay two exact complexes with an independently checkable cell map.
 
     The supports must be equal. The construction intersects every pair of
@@ -174,9 +177,16 @@ def common_refinement(request: CommonRefinementRequest) -> CommonRefinementResul
     owner.
     """
 
-    dimension = _admit(request)
-    left = _canonical_source(request.left, "L")
-    right = _canonical_source(request.right, "R")
+    if not isinstance(left, PolytopalComplexClosureResult) or not isinstance(
+        right, PolytopalComplexClosureResult
+    ):
+        _reject(
+            "polytopal_complex.refinement_type",
+            "both inputs must be canonical polytopal complexes",
+        )
+    dimension = _admit(left, right)
+    left = _canonical_source(left, "L")
+    right = _canonical_source(right, "R")
     left_facets = []
     right_facets = []
     for cell in left.maximal_cells:

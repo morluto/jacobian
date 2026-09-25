@@ -207,7 +207,7 @@ def markov_basis(configuration: IntegerMatrix) -> IntegerConfigurationMarkovBasi
     """
     graver = graver_basis(configuration)
     return IntegerConfigurationMarkovBasis(
-        configuration=configuration,
+        configuration=graver.configuration,
         moves=graver.vectors,
     )
 

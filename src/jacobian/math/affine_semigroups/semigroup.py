@@ -847,15 +847,6 @@ def fiber_graph(
                 f"{MAX_AFFINE_GRAPH_EDGE_CHECKS}-check envelope"
             ),
         )
-    if candidate_count * len(ordered_moves) > MAX_AFFINE_GRAPH_EDGES:
-        raise OperationResourceAdmissionError(
-            location=("target",),
-            code="affine_semigroup.graph_output",
-            message=(
-                "worst-case fiber graph exceeds the "
-                f"{MAX_AFFINE_GRAPH_EDGES}-edge output envelope"
-            ),
-        )
     vertices = _enumerate_fiber(semigroup, target, grades, target_grade, maxima)
     positions = {vertex: index for index, vertex in enumerate(vertices)}
     edges: set[tuple[int, int]] = set()

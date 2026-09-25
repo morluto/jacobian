@@ -142,9 +142,10 @@ def simplicial_map_image(
     through it.
     """
     value = request.simplicial_map
-    _preflight(value)
     source = _require_checked(value.source, location="source")
     target = _require_checked(value.target, location="target")
+    value = TruncatedSimplicialMap(source=source, target=target, maps=value.maps)
+    _preflight(value)
     checked_map = TruncatedSimplicialMap(source=source, target=target, maps=value.maps)
     _require_naturality(checked_map, location="simplicial_map")
 

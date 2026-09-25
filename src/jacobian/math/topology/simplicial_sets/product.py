@@ -12,6 +12,7 @@ from jacobian.math.topology.simplicial_sets._models import (
     FiniteTruncatedSimplicialSet,
 )
 from jacobian.math.topology.simplicial_sets.maps import TruncatedSimplicialMap
+from jacobian.math.topology.simplicial_sets.operations import from_tables
 from jacobian.math.topology.simplicial_sets.product_models import (
     SimplicialSetProductRequest,
     SimplicialSetProductResult,
@@ -27,6 +28,8 @@ def simplicial_set_product(
 ) -> SimplicialSetProductResult:
     """Construct X x Y with the canonical left-major index-pair axes."""
     left, right = request.left, request.right
+    _require_factor(left, "left")
+    _require_factor(right, "right")
     if left.max_degree != right.max_degree:
         raise OperationDomainValidationError(
             location=("right", "max_degree"),
@@ -155,3 +158,15 @@ def simplicial_set_product(
 
 
 __all__ = ["simplicial_set_product"]
+
+
+def _require_factor(factor: FiniteTruncatedSimplicialSet, location: str) -> None:
+    checked = from_tables(
+        factor.max_degree, factor.sets, factor.face_maps, factor.degeneracy_maps
+    )
+    if checked.simplicial_set is None:
+        raise OperationDomainValidationError(
+            location=(location,),
+            code="simplicial_set.product_factor_invalid",
+            message=f"{location} factor fails a simplicial identity",
+        )

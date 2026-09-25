@@ -66,6 +66,9 @@ def simplicial_set_coproduct(
             message="coproduct factors must have the same retained maximum degree",
         )
 
+    _require_simplicial_factor(left, location="left")
+    _require_simplicial_factor(right, location="right")
+
     factor_work = _identity_work(left.max_degree, tuple(map(len, left.sets))) + (
         _identity_work(right.max_degree, tuple(map(len, right.sets)))
     )

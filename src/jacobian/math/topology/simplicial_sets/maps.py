@@ -128,6 +128,18 @@ def _require_naturality(map_value: TruncatedSimplicialMap, *, location: str) -> 
                     )
 
 
+def _require_carrier(value: FiniteTruncatedSimplicialSet, location: str) -> None:
+    checked = from_tables(
+        value.max_degree, value.sets, value.face_maps, value.degeneracy_maps
+    )
+    if checked.simplicial_set is None:
+        raise OperationDomainValidationError(
+            location=(location,),
+            code="simplicial_map.carrier_invalid",
+            message=f"{location} fails a simplicial identity",
+        )
+
+
 def compose_simplicial_maps(
     request: SimplicialMapCompositionRequest,
 ) -> TruncatedSimplicialMap:
@@ -139,6 +151,10 @@ def compose_simplicial_maps(
             code="simplicial_map.composition_carrier_mismatch",
             message="the first map target must equal the second map source",
         )
+    _require_carrier(first.source, "first.source")
+    _require_carrier(first.target, "first.target")
+    _require_carrier(second.source, "second.source")
+    _require_carrier(second.target, "second.target")
     _require_naturality(first, location="first")
     _require_naturality(second, location="second")
     maps = tuple(
@@ -158,6 +174,7 @@ def identity_simplicial_map(
     simplicial_set: FiniteTruncatedSimplicialSet,
 ) -> TruncatedSimplicialMap:
     """Return the identity map on every degree of a finite prefix."""
+    _require_carrier(simplicial_set, "source")
     maps = tuple(tuple(range(len(level))) for level in simplicial_set.sets)
     return TruncatedSimplicialMap(
         source=simplicial_set, target=simplicial_set, maps=maps

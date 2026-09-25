@@ -23,8 +23,8 @@ quotient labels are `q0`, `q1`, and so on. The source prefix is checked against
 its face and degeneracy tables before the relation is used. Work for identity
 replay, congruence scans, and induced table construction is bounded by the
 source degree sizes and map rows (at most 11,000 admitted table steps); the
-serialized quotient and projection are preflighted against the 40,000-byte
-result limit. Incompatible class rows
+retained quotient and projection cardinality is preflighted against the
+40,000-cell result bound. Incompatible class rows
 return the first visible face or degeneracy that fails to descend.
 
 For example, identifying the two vertices of `Delta[1]` and making the

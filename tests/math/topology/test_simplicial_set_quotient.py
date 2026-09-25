@@ -181,47 +181,35 @@ def test_class_labels_use_the_lossless_json_transport_envelope() -> None:
     )
 
 
-def test_malformed_native_source_is_rejected_before_serialization(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    import jacobian.math.topology.simplicial_sets.quotient as quotient_module
-
-    class _NoSerialization:
-        def dumps(self, *_args: object, **_kwargs: object) -> str:
-            raise AssertionError(
-                "source must be structurally admitted before serialization"
-            )
-
-    monkeypatch.setattr(quotient_module, "json", _NoSerialization())
-
+def test_malformed_native_source_is_structurally_rejected() -> None:
     oversized_label = "x" * (MAX_SIMPLEX_LABEL_LENGTH + 1)
     cases = (
         (
-            {
-                "max_degree": 1,
-                "sets": ((oversized_label, "b"), ("ab", "ba", "bb")),
-                "face_maps": (((0, 1, 1), (0, 0, 1)),),
-                "degeneracy_maps": (((0, 2),),),
-                "total_simplices": 5,
-                "checked_identities": 0,
-            },
+            FiniteTruncatedSimplicialSet.model_construct(
+                max_degree=1,
+                sets=((oversized_label, "b"), ("ab", "ba", "bb")),
+                face_maps=(((0, 1, 1), (0, 0, 1)),),
+                degeneracy_maps=(((0, 2),),),
+                total_simplices=5,
+                checked_identities=0,
+            ),
             "simplicial_set.degree_set_invalid",
         ),
         (
-            {
-                "max_degree": 1,
-                "sets": (("a", "b"), ("ab", "ba", "bb")),
-                "face_maps": (((0, 1, 1), (0, 0, 1, 0)),),
-                "degeneracy_maps": (((0, 2),),),
-                "total_simplices": 5,
-                "checked_identities": 0,
-            },
+            FiniteTruncatedSimplicialSet.model_construct(
+                max_degree=1,
+                sets=(("a", "b"), ("ab", "ba", "bb")),
+                face_maps=(((0, 1, 1), (0, 0, 1, 0)),),
+                degeneracy_maps=(((0, 2),),),
+                total_simplices=5,
+                checked_identities=0,
+            ),
             "simplicial_set.face_map_axis_invalid",
         ),
     )
-    for values, expected_code in cases:
+    for source, expected_code in cases:
         request = SimplicialSetQuotientRequest.model_construct(
-            simplicial_set=FiniteTruncatedSimplicialSet.model_construct(**values),
+            simplicial_set=source,
             degree_class_ids=((0, 0), (0, 0, 0)),
         )
         with pytest.raises(OperationDomainValidationError) as error:

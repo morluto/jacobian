@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from typing import NoReturn
 
 from jacobian._execution import request_checkpoint
@@ -26,8 +25,8 @@ from jacobian.math.topology.simplicial_sets.quotient_models import (
 )
 
 MAX_QUOTIENT_CHECK_WORK = 11_000
-MAX_QUOTIENT_RESULT_BYTES = 40_000
-_QUOTIENT_OUTPUT_OVERHEAD = 4_096
+MAX_QUOTIENT_OUTPUT_CELLS = 40_000
+_QUOTIENT_OUTPUT_STRUCTURE = 4_096
 
 
 def _invalid(reason: str, message: str, *location: str | int) -> NoReturn:
@@ -87,10 +86,10 @@ def _preflight(
         _invalid("source_degree", "source degree is outside the finite prefix bound")
     if type(checked_identities) is not int or checked_identities < 0:
         _invalid("source_invalid", "source identity count is malformed")
-    # Structural admission runs before any serialization walk so a native
-    # caller cannot make json.dumps traverse an unbounded label or map row that
-    # the shared label/axis path would reject. This is cheaper than the identity
-    # replay and owns every structural check, including label length bounds.
+    # Structural admission owns every label and map-axis check before the
+    # cardinality budgets below consume the admitted sizes. This is cheaper
+    # than the identity replay and rejects malformed native constructs without
+    # traversing an unbounded label or map row.
     sizes = admit_tables(max_degree, sets, face_maps, degeneracy_maps)
     if type(total_simplices) is not int or total_simplices != sum(sizes):
         _invalid("source_axes", "source total does not match its degree sizes")
@@ -128,30 +127,25 @@ def _preflight(
             ),
         )
 
-    try:
-        source_bytes = len(
-            json.dumps(
-                source.model_dump(mode="json"),
-                ensure_ascii=True,
-                separators=(",", ":"),
-            ).encode("utf-8")
-        )
-    except (TypeError, ValueError, AttributeError) as exc:
-        _invalid("source_invalid", f"source fields cannot be serialized: {exc}")
-    max_target_labels = 6 * sum(sizes)
-    target_map_rows = sum(degree + 1 for degree in range(1, max_degree + 1)) + sum(
-        degree + 1 for degree in range(max_degree)
+    # Bound the retained result cardinality, not a transport encoding: the
+    # quotient keeps the source and target labels, both complete map tables,
+    # and the projection rows.
+    label_chars = sum(len(label) for level in sets for label in level)
+    output_cells = (
+        _QUOTIENT_OUTPUT_STRUCTURE
+        + 2 * label_chars
+        + 3 * sum(sizes)
+        + 2 * map_cells
+        + sum(sizes)
+        + (max_degree + 1)
     )
-    target_tables = max_target_labels + 3 * map_cells + 2 * target_map_rows
-    projection = 3 * sum(sizes) + 2 * (max_degree + 1)
-    output_bytes = source_bytes + target_tables + projection + _QUOTIENT_OUTPUT_OVERHEAD
-    if output_bytes > MAX_QUOTIENT_RESULT_BYTES:
+    if output_cells > MAX_QUOTIENT_OUTPUT_CELLS:
         raise OperationResourceAdmissionError(
             location=("simplicial_set",),
             code="simplicial_set.quotient.output_budget_exceeded",
             message=(
-                f"estimated quotient output {output_bytes} bytes exceeds "
-                f"{MAX_QUOTIENT_RESULT_BYTES}"
+                f"estimated quotient output {output_cells} cells exceeds "
+                f"the {MAX_QUOTIENT_OUTPUT_CELLS}-cell output bound"
             ),
         )
     return source
@@ -266,6 +260,6 @@ def simplicial_set_quotient(
 
 __all__ = [
     "MAX_QUOTIENT_CHECK_WORK",
-    "MAX_QUOTIENT_RESULT_BYTES",
+    "MAX_QUOTIENT_OUTPUT_CELLS",
     "simplicial_set_quotient",
 ]

@@ -7,8 +7,11 @@ short-Weierstrass curve over the admitted finite field. It also classifies the
 curve as ordinary or supersingular.
 
 The input domain is the existing exact short-Weierstrass model in
-characteristic `p > 3`; the exact quadratic-character count is bounded by the
-finite-field work envelope. Supersingularity uses the finite-field criterion
+characteristic `p > 3`. It admits fields of order `q ≤ 4096` and requires the
+quadratic-character work estimate
+`q · d² · (8 + 2·bit_length(q)) ≤ 4,000,000`, where `d` is the extension
+degree of the field presentation. These checks happen before the character
+sum. Supersingularity uses the finite-field criterion
 that an elliptic curve over a field of characteristic `p` is supersingular
 exactly when `p` divides the Frobenius trace. See [MIT 18.783, Lecture 14,
 §14.1](https://math.mit.edu/classes/18.783/2015/LectureNotes14.pdf).

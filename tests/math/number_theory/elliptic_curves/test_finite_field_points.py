@@ -99,6 +99,30 @@ def test_frobenius_data_and_supersingularity_match_direct_f5_oracle() -> None:
         )
 
 
+def test_frobenius_field_order_is_rejected_before_character_sum(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    field = FiniteFieldPresentation(
+        characteristic=5003, modulus_coefficients=(0, 1), generator="a"
+    )
+    one = FiniteFieldElement(presentation=field, coordinates=(1,))
+    curve = FiniteFieldShortWeierstrassCurve(
+        field=field, coefficient_a=one, coefficient_b=one
+    )
+
+    def forbidden_sum(*args: object, **kwargs: object) -> object:
+        raise AssertionError("Frobenius trace work ran before field-order rejection")
+
+    monkeypatch.setattr(
+        finite_field_module, "_cardinality_from_character_sum", forbidden_sum
+    )
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        finite_field_frobenius(curve)
+    assert error.value.errors()[0]["type"] == (
+        "elliptic_curve.finite_field.frobenius_field_order_bound"
+    )
+
+
 def test_frobenius_public_example_dispatch_and_json_round_trip() -> None:
     catalog = Catalog.open()
     operation = catalog.operation("elliptic_curve.finite_field.frobenius.compute")

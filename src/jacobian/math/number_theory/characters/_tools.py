@@ -29,8 +29,6 @@ from jacobian.math.number_theory.characters._models import (
     DirichletCharacterLValueNonpositiveResult,
     DirichletCharacterOrderRequest,
     DirichletCharacterOrderResult,
-    DirichletCharacterOrthogonalityOverCharactersRequest,
-    DirichletCharacterOrthogonalityOverCharactersResult,
     DirichletCharacterOrthogonalityRequest,
     DirichletCharacterOrthogonalityResult,
     DirichletCharacterParityRequest,
@@ -246,14 +244,6 @@ def _compute_orthogonality(
     request: DirichletCharacterOrthogonalityRequest,
 ) -> DirichletCharacterOrthogonalityResult:
     return native.dirichlet_character_orthogonality(request.left, request.right)
-
-
-def _compute_orthogonality_over_characters(
-    request: DirichletCharacterOrthogonalityOverCharactersRequest,
-) -> DirichletCharacterOrthogonalityOverCharactersResult:
-    return native.dirichlet_character_orthogonality_over_characters(
-        request.group, int(request.left_integer), int(request.right_integer)
-    )
 
 
 def _compute_sequence_twist(
@@ -928,42 +918,6 @@ TOOLS: MathTools = (
                 input={
                     "left": {"group": _GROUP_MOD3, "coordinates": [1]},
                     "right": {"group": _GROUP_MOD3, "coordinates": [1]},
-                },
-            ),
-        ),
-    ),
-    MathTool(
-        operation_id="dirichlet_character.orthogonality_over_characters.compute",
-        title="Sum Dirichlet characters over a residue pair",
-        description=(
-            "Return the exact sum over every character modulo N of "
-            "chi(a) conjugate(chi(b)), with characters extended by zero on "
-            "nonunits. The result is phi(N) exactly when a and b are the same "
-            "unit residue, and zero otherwise. The complete supplied unit-group "
-            "parent, original integers, and canonical residue classes are kept "
-            "in the result. The finite dual-group identity avoids constructing "
-            "a character table or cyclotomic sum."
-        ),
-        request_type=DirichletCharacterOrthogonalityOverCharactersRequest,
-        result_type=native.DirichletCharacterOrthogonalityOverCharactersResult,
-        run=_compute_orthogonality_over_characters,
-        tags=("number-theory", "dirichlet-character", "orthogonality", "exact"),
-        discovery_terms=(
-            "orthogonality over all Dirichlet characters",
-            "sum characters at two residue classes",
-            "dual finite group orthogonality",
-        ),
-        examples=(
-            OperationExample(
-                name="same_unit_residue_mod5",
-                description=(
-                    "The sum over all characters modulo 5 at residues 2 and 7 "
-                    "is phi(5)=4 because they define the same unit class."
-                ),
-                input={
-                    "group": _GROUP_MOD5,
-                    "left_integer": "2",
-                    "right_integer": "7",
                 },
             ),
         ),

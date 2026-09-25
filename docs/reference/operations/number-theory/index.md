@@ -5,7 +5,6 @@
 - [Exact Dirichlet-character Fourier matrix](dirichlet-character-fourier-matrix.md)
 - [Dirichlet-character residue-class indicator expansion](dirichlet-character-residue-indicator.md)
 - [Exact Dirichlet-character orthogonality sum](dirichlet-character-orthogonality.md)
-- [Dirichlet-character orthogonality over the full dual group](dirichlet-character-orthogonality-over-characters.md)
 - [Exact generalized Bernoulli numbers for Dirichlet characters](dirichlet-character-generalized-bernoulli.md)
 - [Exact Dirichlet-character L-values at nonpositive integers](dirichlet-character-l-values.md)
 - [Inflating a Dirichlet character to a multiple modulus](dirichlet-character-inflation.md)

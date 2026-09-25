@@ -1329,7 +1329,7 @@ def _normalize_vertex_iso_profile_result(value: Any) -> Any:
                 tuple(row) if field == "vertex_maps" and type(row) is list else row
                 for row in rows
             )
-        return normalized
+    return normalized
 
 
 def _admit_and_normalize_vertex_iso_profile_result(value: Any) -> Any:

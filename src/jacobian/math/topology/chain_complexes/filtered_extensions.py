@@ -14,6 +14,7 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.topology.chain_complexes._filtered_models import (
+    MAX_FILTER_AMBIENT_DIMENSION,
     MAX_FILTER_VECTORS_PER_GROUP,
     MAX_SPECTRAL_PAGE,
     FilteredChainComplexRequest,
@@ -41,6 +42,9 @@ from jacobian.math.topology.chain_complexes._filtered_operations import (
     spectral_page,
 )
 from jacobian.math.topology.chain_complexes.values import (
+    MAX_CHAIN_COMPLEX_COEFFICIENT_DIGITS,
+    MAX_CHAIN_MAP_CELLS,
+    MAX_CHAIN_MAP_ENTRY_CHARS,
     ChainCoefficient,
     ChainComplexValue,
     CoefficientRing,
@@ -50,6 +54,10 @@ MAX_FILTERED_HOMOLOGY_PRIME = 2**31 - 1
 MAX_FILTERED_HOMOLOGY_RESULT_CELLS = 250_000
 MAX_FILTERED_HOMOLOGY_RESULT_CHARS = 20_000_000
 MAX_FILTERED_HOMOLOGY_WORK = 50_000_000
+# Every output cell contracts at most one admitted 32-dimensional chain group.
+MAX_FILTERED_CHAIN_MAP_COMPOSITION_WORK = (
+    MAX_CHAIN_MAP_CELLS * MAX_FILTER_AMBIENT_DIMENSION
+)
 
 
 class FilteredHomologyDegree(StrictModel):
@@ -150,6 +158,13 @@ class FilteredChainMapResult(StrictModel):
     maps: tuple[tuple[tuple[ChainCoefficient, ...], ...], ...]
     filtration_preserving: bool
     chain_map: bool
+
+
+class FilteredChainMapCompositionRequest(StrictModel):
+    """Two composable filtered chain maps, in application order."""
+
+    first: FilteredChainMapResult
+    second: FilteredChainMapResult
 
 
 class FilteredChainMapPageZeroResult(StrictModel):
@@ -660,7 +675,10 @@ def filtered_map(request: FilteredChainMapRequest) -> FilteredChainMapResult:
     target_admission = _admit_filtered_semantics(
         request.target, request.target_filtration
     )
-    return _filtered_map_admitted(request, source_admission, target_admission)
+    parsed, chain_ok, preserving = _filtered_map_status_admitted(
+        request, source_admission, target_admission
+    )
+    return _filtered_map_result(request, parsed, chain_ok, preserving)
 
 
 def _filtered_map_admitted(
@@ -668,17 +686,30 @@ def _filtered_map_admitted(
     source_admission: Any,
     target_admission: Any,
 ) -> FilteredChainMapResult:
+    parsed, chain_ok, preserving = _filtered_map_status_admitted(
+        request, source_admission, target_admission
+    )
+    return _filtered_map_result(request, parsed, chain_ok, preserving)
+
+
+def _filtered_map_status_admitted(
+    request: FilteredChainMapRequest,
+    source_admission: Any,
+    target_admission: Any,
+    parsed: list[list[list[int | Fraction]]] | None = None,
+) -> tuple[list[list[list[int | Fraction]]], bool, bool]:
     p = request.source.prime
-    parsed = []
-    for degree, matrix in enumerate(request.maps):
-        try:
-            parsed.append([[_parse_entry(v, p) for v in row] for row in matrix])
-        except (TypeError, ValueError, ZeroDivisionError) as exc:
-            raise OperationDomainValidationError(
-                location=("maps", degree),
-                code="filtered_chain_map.entry_invalid",
-                message="map entries must use the retained canonical coefficient grammar",
-            ) from exc
+    if parsed is None:
+        parsed = []
+        for degree, matrix in enumerate(request.maps):
+            try:
+                parsed.append([[_parse_entry(v, p) for v in row] for row in matrix])
+            except (TypeError, ValueError, ZeroDivisionError) as exc:
+                raise OperationDomainValidationError(
+                    location=("maps", degree),
+                    code="filtered_chain_map.entry_invalid",
+                    message="map entries must use the retained canonical coefficient grammar",
+                ) from exc
     # f d = d f, with matrix convention d rows lower x upper
     chain_ok = True
     for degree in range(len(parsed) - 1):
@@ -707,6 +738,16 @@ def _filtered_map_admitted(
                 image = _mat_vec(parsed[degree], vector, p)
                 if not _in_span(target_basis, image, p):
                     preserving = False
+    return parsed, chain_ok, preserving
+
+
+def _filtered_map_result(
+    request: FilteredChainMapRequest,
+    parsed: list[list[list[int | Fraction]]],
+    chain_ok: bool,
+    preserving: bool,
+) -> FilteredChainMapResult:
+    p = request.source.prime
     canonical_maps = tuple(
         tuple(tuple(_serialize_scalar(value, p) for value in row) for row in matrix)
         for matrix in parsed
@@ -944,6 +985,271 @@ def _mul(left: Any, right: Any, prime: int | None, *, output_width: int) -> Any:
             output.append(value % prime if prime is not None else value)
         result.append(output)
     return result
+
+
+def _coefficient_size(value: int | Fraction) -> tuple[int, int]:
+    """Return decimal numerator and denominator digit counts without expansion."""
+    fraction = value if isinstance(value, Fraction) else Fraction(value)
+    return len(str(abs(fraction.numerator))), len(str(fraction.denominator))
+
+
+def _parse_bounded_map(
+    request: FilteredChainMapRequest, label: str, prime: int | None
+) -> list[list[list[int | Fraction]]]:
+    if len(request.maps) != len(request.source.basis_sizes):
+        raise _fail(
+            (label, "maps"),
+            "filtered_chain_map.shape_invalid",
+            "each map must carry one matrix per chain degree",
+        )
+    cells = 0
+    chars = 0
+    parsed: list[list[list[int | Fraction]]] = []
+    for degree, matrix in enumerate(request.maps):
+        rows = request.target.basis_sizes[degree]
+        columns = request.source.basis_sizes[degree]
+        if len(matrix) != rows or any(len(row) != columns for row in matrix):
+            raise _fail(
+                (label, "maps", degree),
+                "filtered_chain_map.shape_invalid",
+                "each map must have target-by-source chain axes",
+            )
+        cells += rows * columns
+        parsed_matrix = []
+        for row in matrix:
+            parsed_row = []
+            for value in row:
+                numerator_digits, denominator_digits = _coefficient_size(value)
+                if (
+                    numerator_digits > MAX_CHAIN_COMPLEX_COEFFICIENT_DIGITS
+                    or denominator_digits > MAX_CHAIN_COMPLEX_COEFFICIENT_DIGITS
+                ):
+                    raise OperationResourceAdmissionError(
+                        location=(label, "maps", degree),
+                        code="filtered_chain_map.coefficient_exceeded",
+                        message="an input map coefficient exceeds the exact "
+                        "chain-map coefficient digit limit",
+                    )
+                chars += numerator_digits + denominator_digits + 1
+                parsed_row.append(_parse_entry(value, prime))
+            parsed_matrix.append(parsed_row)
+        parsed.append(parsed_matrix)
+    if cells > MAX_CHAIN_MAP_CELLS or chars > MAX_CHAIN_MAP_ENTRY_CHARS:
+        raise OperationResourceAdmissionError(
+            location=(label, "maps"),
+            code="filtered_chain_map.input_envelope_exceeded",
+            message="the degreewise map exceeds its admitted cell or "
+            "coefficient-character envelope",
+        )
+    return parsed
+
+
+def _coefficient_sum_bound(terms: list[tuple[int | Fraction, int | Fraction]]) -> int:
+    """Bound decimal numerator and denominator sizes of a rational sum."""
+    term_sizes = []
+    for left, right in terms:
+        left_numerator, left_denominator = _coefficient_size(left)
+        right_numerator, right_denominator = _coefficient_size(right)
+        denominator_is_one = (
+            Fraction(left).denominator == 1 and Fraction(right).denominator == 1
+        )
+        term_sizes.append(
+            (
+                left_numerator + right_numerator,
+                1 if denominator_is_one else left_denominator + right_denominator,
+                denominator_is_one,
+            )
+        )
+    denominator_digits = (
+        1
+        if all(size[2] for size in term_sizes)
+        else sum(size[1] for size in term_sizes)
+    )
+    numerator_digits = max(
+        numerator + denominator_digits - term_denominator
+        for numerator, term_denominator, _denominator_is_one in term_sizes
+    ) + len(str(len(terms)))
+    if (
+        numerator_digits > MAX_CHAIN_COMPLEX_COEFFICIENT_DIGITS
+        or denominator_digits > MAX_CHAIN_COMPLEX_COEFFICIENT_DIGITS
+    ):
+        raise OperationResourceAdmissionError(
+            location=("maps",),
+            code="filtered_chain_map.composition_coefficient_exceeded",
+            message="a composed coefficient may exceed the exact chain-map "
+            "coefficient digit limit",
+        )
+    return numerator_digits + denominator_digits + 1
+
+
+def _composition_preflight(
+    first: FilteredChainMapRequest, second: FilteredChainMapRequest
+) -> tuple[
+    int | None,
+    list[list[list[int | Fraction]]],
+    list[list[list[int | Fraction]]],
+]:
+    """Bound map products and coefficient growth before multiplying matrices."""
+    if first.target != second.source:
+        raise _fail(
+            ("second",),
+            "filtered_chain_map.composition_middle_mismatch",
+            "the target complex of the first map must equal the source complex "
+            "of the second map",
+        )
+    if (
+        first.source.coefficient_ring != second.target.coefficient_ring
+        or first.source.prime != second.target.prime
+    ):
+        raise _fail(
+            ("second",),
+            "filtered_chain_map.composition_coefficient_mismatch",
+            "the composite must retain one exact coefficient field",
+        )
+
+    prime = first.source.prime
+    parsed_first = _parse_bounded_map(first, "first", prime)
+    parsed_second = _parse_bounded_map(second, "second", prime)
+
+    output_cells = sum(
+        rows * columns
+        for rows, columns in zip(
+            second.target.basis_sizes, first.source.basis_sizes, strict=True
+        )
+    )
+    work = sum(
+        rows * columns * middle
+        for rows, columns, middle in zip(
+            second.target.basis_sizes,
+            first.source.basis_sizes,
+            first.target.basis_sizes,
+            strict=True,
+        )
+    )
+    if (
+        output_cells > MAX_CHAIN_MAP_CELLS
+        or work > MAX_FILTERED_CHAIN_MAP_COMPOSITION_WORK
+    ):
+        raise OperationResourceAdmissionError(
+            location=("maps",),
+            code="filtered_chain_map.composition_work_exceeded",
+            message="the composed map exceeds its admitted cell or exact "
+            "multiplication-work envelope",
+        )
+
+    output_chars = 0
+    for left, right in zip(parsed_second, parsed_first, strict=True):
+        for row in left:
+            for column in zip(*right, strict=False):
+                terms = [
+                    (a, b)
+                    for a, b in zip(row, column, strict=True)
+                    if a != 0 and b != 0
+                ]
+                if not terms:
+                    output_chars += 1
+                    continue
+                if prime is not None:
+                    output_chars += len(str(prime - 1))
+                    continue
+                output_chars += _coefficient_sum_bound(terms)
+    if output_chars > MAX_CHAIN_MAP_ENTRY_CHARS:
+        raise OperationResourceAdmissionError(
+            location=("maps",),
+            code="filtered_chain_map.composition_output_exceeded",
+            message="the composed map exceeds the aggregate exact output "
+            "coefficient-character limit",
+        )
+    return prime, parsed_first, parsed_second
+
+
+def filtered_chain_map_compose(
+    request: FilteredChainMapCompositionRequest,
+) -> FilteredChainMapResult:
+    """Compose exact filtration-preserving chain maps in application order."""
+    first_request = FilteredChainMapRequest(
+        source=request.first.source,
+        source_filtration=request.first.source_filtration,
+        target=request.first.target,
+        target_filtration=request.first.target_filtration,
+        maps=request.first.maps,
+    )
+    second_request = FilteredChainMapRequest(
+        source=request.second.source,
+        source_filtration=request.second.source_filtration,
+        target=request.second.target,
+        target_filtration=request.second.target_filtration,
+        maps=request.second.maps,
+    )
+    prime, parsed_first, parsed_second = _composition_preflight(
+        first_request, second_request
+    )
+    _check_filtered_chain_map_axes(first_request)
+    _check_filtered_chain_map_axes(second_request)
+    first_source = _admit_filtered_semantics(
+        first_request.source, first_request.source_filtration
+    )
+    middle_first = _admit_filtered_semantics(
+        first_request.target, first_request.target_filtration
+    )
+    if first_request.target_filtration == second_request.source_filtration:
+        middle_second = middle_first
+    else:
+        middle_second = _admit_filtered_semantics(
+            second_request.source, second_request.source_filtration
+        )
+        if middle_first.bases != middle_second.bases:
+            raise _fail(
+                ("second", "source_filtration"),
+                "filtered_chain_map.composition_middle_filtration_mismatch",
+                "the two middle filtrations must define the same subspaces",
+            )
+    last_target = _admit_filtered_semantics(
+        second_request.target, second_request.target_filtration
+    )
+    _, first_chain_map, first_preserving = _filtered_map_status_admitted(
+        first_request, first_source, middle_first, parsed_first
+    )
+    _, second_chain_map, second_preserving = _filtered_map_status_admitted(
+        second_request, middle_second, last_target, parsed_second
+    )
+    for label, chain_map, preserving in (
+        ("first", first_chain_map, first_preserving),
+        ("second", second_chain_map, second_preserving),
+    ):
+        if not chain_map:
+            raise _fail(
+                (label, "maps"),
+                "filtered_chain_map.composition_input_not_chain_map",
+                "both inputs must commute with their chain differentials",
+            )
+        if not preserving:
+            raise _fail(
+                (label, "maps"),
+                "filtered_chain_map.composition_input_not_filtered",
+                "both inputs must preserve their supplied filtrations",
+            )
+    maps = tuple(
+        tuple(
+            tuple(_serialize_scalar(value, prime) for value in row)
+            for row in _mul(
+                parsed_second[degree],
+                parsed_first[degree],
+                prime,
+                output_width=first_request.source.basis_sizes[degree],
+            )
+        )
+        for degree in range(len(parsed_first))
+    )
+    return FilteredChainMapResult(
+        source=first_request.source,
+        target=second_request.target,
+        source_filtration=first_request.source_filtration,
+        target_filtration=second_request.target_filtration,
+        maps=maps,
+        filtration_preserving=True,
+        chain_map=True,
+    )
 
 
 def pages_through(request: SpectralPagesRequest) -> SpectralPagesResult:
@@ -1256,6 +1562,7 @@ def abutment(request: SpectralAbutmentRequest) -> SpectralAbutmentResult:
 
 
 __all__ = [
+    "FilteredChainMapCompositionRequest",
     "FilteredChainMapPageZeroResult",
     "FilteredChainMapRequest",
     "FilteredChainMapResult",
@@ -1269,6 +1576,7 @@ __all__ = [
     "SpectralPagesRequest",
     "SpectralPagesResult",
     "abutment",
+    "filtered_chain_map_compose",
     "filtered_chain_map_page_zero",
     "filtered_homology_filtration",
     "filtered_map",

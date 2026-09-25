@@ -15,11 +15,13 @@ from jacobian.math.topology.chain_complexes.filtered_direct_sum import (
     filtered_direct_sum,
 )
 from jacobian.math.topology.chain_complexes.filtered_extensions import (
+    FilteredChainMapCompositionRequest,
     FilteredChainMapPageZeroResult,
     FilteredHomologyDegree,
     FilteredHomologyLevel,
     FilteredHomologyResult,
     HomologyFiltrationImage,
+    filtered_chain_map_compose,
     filtered_chain_map_page_zero,
     filtered_homology_filtration,
 )
@@ -51,6 +53,7 @@ __all__ = [
     "ChainComplexValue",
     "CoefficientRing",
     "FilteredChainComplexRequest",
+    "FilteredChainMapCompositionRequest",
     "FilteredChainMapPageZeroResult",
     "FilteredDirectSumResult",
     "FilteredHomologyDegree",
@@ -71,6 +74,7 @@ __all__ = [
     "chain_map_commutes",
     "construct_chain_complex",
     "differential_squares_to_zero",
+    "filtered_chain_map_compose",
     "filtered_chain_map_page_zero",
     "filtered_direct_sum",
     "filtered_homology_filtration",

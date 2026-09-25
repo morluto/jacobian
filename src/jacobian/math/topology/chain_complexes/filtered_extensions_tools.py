@@ -16,6 +16,10 @@ def _page_zero_map(r: Any) -> Any:
     return filtered_chain_map_page_zero(r)
 
 
+def _compose_map(r: Any) -> Any:
+    return filtered_chain_map_compose(r)
+
+
 def _pages(r: Any) -> Any:
     return pages_through(r)
 
@@ -124,6 +128,72 @@ TOOLS = (
                     "source_filtration": _F,
                     "target_filtration": _F,
                     "maps": [[["1"]], [["1"]]],
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="homological.filtered_chain_map.compose.compute",
+        title="Compose two filtered chain maps",
+        description=(
+            "Compose two exact filtration-preserving chain maps whose middle "
+            "complex and filtration agree. The result is a degreewise matrix "
+            "map from the first source to the second target."
+        ),
+        request_type=FilteredChainMapCompositionRequest,
+        result_type=FilteredChainMapResult,
+        run=_compose_map,
+        tags=("homological", "filtered", "chain-map", "composition", "exact"),
+        examples=(
+            OperationExample(
+                name="compose_two_scalar_maps",
+                description=(
+                    "Compose multiplication by two and three on a one-term "
+                    "complex with its degenerate one-level filtration."
+                ),
+                input={
+                    "first": {
+                        "source": {
+                            "coefficient_ring": "QQ",
+                            "degree_min": 0,
+                            "degree_max": 0,
+                            "basis_sizes": [1],
+                            "differential_matrices": [],
+                        },
+                        "source_filtration": [{"subspaces": [{"vectors": [["1"]]}]}],
+                        "target": {
+                            "coefficient_ring": "QQ",
+                            "degree_min": 0,
+                            "degree_max": 0,
+                            "basis_sizes": [1],
+                            "differential_matrices": [],
+                        },
+                        "target_filtration": [{"subspaces": [{"vectors": [["1"]]}]}],
+                        "maps": [[["2"]]],
+                        "filtration_preserving": True,
+                        "chain_map": True,
+                    },
+                    "second": {
+                        "source": {
+                            "coefficient_ring": "QQ",
+                            "degree_min": 0,
+                            "degree_max": 0,
+                            "basis_sizes": [1],
+                            "differential_matrices": [],
+                        },
+                        "source_filtration": [{"subspaces": [{"vectors": [["1"]]}]}],
+                        "target": {
+                            "coefficient_ring": "QQ",
+                            "degree_min": 0,
+                            "degree_max": 0,
+                            "basis_sizes": [1],
+                            "differential_matrices": [],
+                        },
+                        "target_filtration": [{"subspaces": [{"vectors": [["1"]]}]}],
+                        "maps": [[["3"]]],
+                        "filtration_preserving": True,
+                        "chain_map": True,
+                    },
                 },
             ),
         ),

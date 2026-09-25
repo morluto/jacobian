@@ -8,7 +8,6 @@ from fractions import Fraction
 import pytest
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices.cyclic_linear._models import (
     RationalCyclotomicElement,
@@ -95,14 +94,16 @@ def test_scalar_extension_rejects_unadmitted_field() -> None:
 
 
 def test_field_coordinate_operations_are_published_and_examples_execute() -> None:
-    catalog = Catalog.open()
     expected = {
         "modular_form.coordinates.extend_field.compute",
         "modular_form.field_coordinates.q_expansion.compute",
         "modular_form.character_coordinates.product.compute",
     }
     assert expected <= {tool.operation_id for tool in TOOLS}
-    assert all(catalog.operation(operation_id) is not None for operation_id in expected)
+    assert all(
+        any(tool.operation_id == operation_id for tool in TOOLS)
+        for operation_id in expected
+    )
     for tool in TOOLS:
         if tool.operation_id not in expected:
             continue

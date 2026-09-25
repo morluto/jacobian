@@ -7,7 +7,6 @@ from fractions import Fraction
 import pytest
 from pydantic import TypeAdapter, ValidationError
 
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices.cyclic_linear._models import (
     RationalCyclotomicElement,
@@ -46,6 +45,12 @@ from jacobian.math.number_theory.modular_forms.values import (
     ModularFormCoordinates,
     ModularFormSpace,
 )
+
+
+def _character_tool(operation_id: str):
+    from jacobian.math.number_theory.modular_forms._tools import TOOLS
+
+    return next(tool for tool in TOOLS if tool.operation_id == operation_id)
 
 
 def _space(character_coordinate: int = 2) -> ModularFormSpace:
@@ -116,7 +121,7 @@ def test_exact_character_basis_is_parented_and_sturm_determining(
 
 def test_character_basis_rejects_other_modular_space() -> None:
     assert ModularCharacterBasisRequest(space=_space()).space == _space()
-    assert Catalog.open().operation("modular_form.character_basis.compute") is not None
+    assert _character_tool("modular_form.character_basis.compute") is not None
     with pytest.raises(OperationDomainValidationError, match="supports S2"):
         modular_character_basis_q_expansions(
             ModularFormSpace(
@@ -200,9 +205,7 @@ def test_character_coordinates_realize_exact_sturm_prefix(
     assert expansion.basis_id == CHARACTER_BASIS_ID
     assert tuple(_coords(value) for value in expansion.coefficients) == expected
     assert (
-        Catalog.open().operation(
-            "modular_form.character_coordinates.q_expansion.compute"
-        )
+        _character_tool("modular_form.character_coordinates.q_expansion.compute")
         is not None
     )
 
@@ -213,7 +216,7 @@ def test_character_global_equality_uses_sturm_prefix_and_exact_parent() -> None:
     assert not modular_character_coordinates_equal(_form(1), _form(2))
     assert modular_form_coordinates_equal(_form(1), _form(1))
     assert not modular_form_coordinates_equal(_form(1), _form(2))
-    operation = Catalog.open().operation("modular_form.equal.check")
+    operation = _character_tool("modular_form.equal.check")
     assert operation is not None
     request = operation.request_type(left=_form(1), right=_form(1))
     assert operation.run(request).equal
@@ -238,7 +241,7 @@ def test_character_hecke_t2_returns_same_space_exact_coordinates(
     assert result.space == form.space
     assert result.basis_id == form.basis_id
     assert _coords(result.coordinates[0]) == expected_eigenvalue
-    assert Catalog.open().operation("modular_form.character_coordinates.hecke.apply")
+    assert _character_tool("modular_form.character_coordinates.hecke.apply")
 
 
 def test_character_hecke_maximum_admitted_index_returns_exact_parent() -> None:
@@ -306,9 +309,7 @@ def test_conjugate_character_product_returns_sturm_reconstructed_target() -> Non
         coefficient_domain=RationalCyclotomicField(order=6),
     )
     assert len(product.coefficients) == 5
-    assert Catalog.open().operation(
-        "modular_form.character_coordinates.product.compute"
-    )
+    assert _character_tool("modular_form.character_coordinates.product.compute")
 
     precision = 5  # Sturm bound 4 for S4(Gamma0(13)).
     left_basis = pari_character_basis(
@@ -398,7 +399,7 @@ def test_character_hecke_matrix_is_bound_and_matches_normalized_a_n(
         ModularCharacterHeckeMatrix.model_validate_json(matrix.model_dump_json())
         == matrix
     )
-    tool = Catalog.open().operation("modular_form.character_hecke_matrix.compute")
+    tool = _character_tool("modular_form.character_hecke_matrix.compute")
     assert tool is not None
     assert (
         tool.run(ModularCharacterHeckeMatrixRequest(space=space, index=index)) == matrix

@@ -91,6 +91,14 @@ def _complete_deterministic_rows(
     return table
 
 
+_TREE_BOOLEAN_CONNECTIVES: tuple[str, ...] = (
+    "intersection",
+    "union",
+    "difference",
+    "symmetric_difference",
+)
+
+
 def _boolean_final(connective: str, left_final: bool, right_final: bool) -> bool:
     if connective == "intersection":
         return left_final and right_final
@@ -263,6 +271,36 @@ def boolean_product_tree_automata(
     Completeness makes every product state pair total, so each Boolean language
     connective is represented by the corresponding final-state predicate.
     """
+    if connective not in _TREE_BOOLEAN_CONNECTIVES:
+        raise OperationDomainValidationError(
+            location=("connective",),
+            code="tree_automata.product_connective",
+            message=(
+                "connective must be one of " + ", ".join(_TREE_BOOLEAN_CONNECTIVES)
+            ),
+        )
+    admitted: dict[str, CompleteDeterministicBottomUpTreeAutomaton] = {}
+    for side, machine in (("left", left), ("right", right)):
+        if not isinstance(machine, CompleteDeterministicBottomUpTreeAutomaton):
+            raise OperationDomainValidationError(
+                location=(side,),
+                code="tree_automata.product_automaton_type",
+                message=(
+                    "Boolean products require complete deterministic input automata"
+                ),
+            )
+        try:
+            admitted[side] = CompleteDeterministicBottomUpTreeAutomaton.model_validate(
+                machine.model_dump(), strict=True
+            )
+        except Exception as exc:
+            raise OperationDomainValidationError(
+                location=(side,),
+                code="tree_automata.product_automaton_shape",
+                message="inputs must satisfy the complete deterministic carrier shape",
+            ) from exc
+    left, right = admitted["left"], admitted["right"]
+
     if left.arity != right.arity:
         raise OperationDomainValidationError(
             location=("right", "arity"),

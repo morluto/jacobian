@@ -1,5 +1,7 @@
 """Independent language oracle for bounded tree-automaton Boolean products."""
 
+from typing import Any
+
 import pytest
 from pydantic import ValidationError
 
@@ -185,6 +187,51 @@ def test_invalid_connective_rejected_by_typed_request() -> None:
                 "connective": "xor-ish",
             }
         )
+
+
+@pytest.mark.parametrize("connective", ["xor-ish", "xor", "INTERSECTION", None, 0])
+def test_native_product_rejects_unknown_connective_instead_of_guessing(
+    connective: Any,
+) -> None:
+    left, right = _machine((0,)), _machine((1,))
+
+    with pytest.raises(OperationDomainValidationError) as raised:
+        boolean_product_tree_automata(left, right, connective)
+
+    assert raised.value.errors()[0]["type"] == "tree_automata.product_connective"
+
+
+@pytest.mark.parametrize("junk", [None, 7, "machine"])
+def test_native_product_rejects_non_carrier_operands(junk: Any) -> None:
+    left = _machine((0,))
+
+    with pytest.raises(OperationDomainValidationError) as raised:
+        boolean_product_tree_automata(junk, left, "intersection")
+    assert raised.value.errors()[0]["type"] == "tree_automata.product_automaton_type"
+    with pytest.raises(OperationDomainValidationError):
+        boolean_product_tree_automata(left, junk, "intersection")
+    partial = DeterministicBottomUpTreeAutomaton(
+        state_count=1, arity=(0,), transitions=(), final_states=()
+    )
+    with pytest.raises(OperationDomainValidationError):
+        boolean_product_tree_automata(partial, left, "intersection")
+
+
+def test_native_product_rejects_forged_complete_carrier() -> None:
+    forged = CompleteDeterministicBottomUpTreeAutomaton.model_construct(
+        state_count=1,
+        arity=(0, 1),
+        transitions=(
+            TreeAutomatonTransition(symbol=0, child_states=(), target_state=0),
+            TreeAutomatonTransition(symbol=1, child_states=(5,), target_state=0),
+        ),
+        final_states=(),
+    )
+
+    with pytest.raises(OperationDomainValidationError) as raised:
+        boolean_product_tree_automata(forged, _machine(()), "intersection")
+
+    assert raised.value.errors()[0]["type"] == "tree_automata.product_automaton_shape"
 
 
 def test_catalog_discovery_surfaces_tree_language_products() -> None:

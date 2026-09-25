@@ -15,7 +15,7 @@ from jacobian.math.combinatorics.algebraic.operations import (
 from jacobian.math.combinatorics.standard_tableaux._models import (
     MAX_CONSTRUCTION_WORK_CELLS,
     MAX_ENUMERATED_CELLS,
-    MAX_RESULT_BYTES,
+    MAX_RESULT_CELLS,
     MAX_STANDARD_TABLEAUX,
     StandardTableauEnumerationResult,
 )
@@ -105,14 +105,14 @@ def enumerate_standard_young_tableaux(
                 "corner-construction work envelope"
             ),
         )
-    estimated_bytes = count * (10 * size + 64) + 128
-    if estimated_bytes > MAX_RESULT_BYTES:
+    result_cells = count * (size + 1) + size
+    if result_cells > MAX_RESULT_CELLS:
         raise OperationResourceAdmissionError(
             location=("partition",),
             code="standard_tableaux.output_bound",
             message=(
                 "the complete standard-tableau family exceeds the admitted "
-                f"result size of {MAX_RESULT_BYTES} bytes"
+                f"result cell count of {MAX_RESULT_CELLS}"
             ),
         )
 

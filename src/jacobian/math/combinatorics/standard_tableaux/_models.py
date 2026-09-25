@@ -13,7 +13,7 @@ from jacobian.math.combinatorics.symmetric_functions.values import (
 MAX_STANDARD_TABLEAUX = 4_096
 MAX_ENUMERATED_CELLS = 100_000
 MAX_CONSTRUCTION_WORK_CELLS = 25_000_000
-MAX_RESULT_BYTES = 2_000_000
+MAX_RESULT_CELLS = 200_000
 
 
 class StandardTableauEnumerationRequest(StrictModel):
@@ -32,7 +32,7 @@ class StandardTableauEnumerationResult(StrictModel):
 __all__ = [
     "MAX_CONSTRUCTION_WORK_CELLS",
     "MAX_ENUMERATED_CELLS",
-    "MAX_RESULT_BYTES",
+    "MAX_RESULT_CELLS",
     "MAX_STANDARD_TABLEAUX",
     "StandardTableauEnumerationRequest",
     "StandardTableauEnumerationResult",

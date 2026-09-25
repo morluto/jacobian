@@ -36,9 +36,16 @@ def maximum_cardinality_weighted_matroid_intersection(
                 "request must be a canonical weighted-intersection optimization request"
             ),
         )
-    request = MatroidWeightedIntersectionOptimizationRequest.model_validate(
-        request.model_dump(mode="python")
-    )
+    try:
+        request = MatroidWeightedIntersectionOptimizationRequest.model_validate(
+            request.model_dump(mode="python")
+        )
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="matroid.cardinality_weighted_intersection.request",
+            message="request must satisfy the weighted-intersection request schema",
+        ) from exc
     n = request.first.ground_size
     weights, original_function = _canonical_weight_function(
         request.first, request.weight_function

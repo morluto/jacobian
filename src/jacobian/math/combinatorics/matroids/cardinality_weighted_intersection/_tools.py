@@ -45,16 +45,16 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 ),
                 input={
                     "first": {
-                        "matrix": {"prime": 2, "entries": [[1, 0]], "columns": 2},
-                        "ground_labels": ["a", "b"],
+                        "matrix": {"prime": 2, "entries": [[1, 0, 0]], "columns": 3},
+                        "ground_labels": ["a", "b", "c"],
                     },
                     "second": {
-                        "matrix": {"prime": 2, "entries": [[0, 1]], "columns": 2},
-                        "ground_labels": ["a", "b"],
+                        "matrix": {"prime": 2, "entries": [[0, 1, 1]], "columns": 3},
+                        "ground_labels": ["a", "b", "c"],
                     },
                     "weight_function": {
-                        "ground_axis": ["a", "b"],
-                        "values": [-5, 1],
+                        "ground_axis": ["a", "b", "c"],
+                        "values": [-5, 1, 0],
                     },
                 },
             ),

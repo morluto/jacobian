@@ -2,6 +2,10 @@ from __future__ import annotations
 
 from itertools import combinations, product
 
+import pytest
+
+from jacobian.catalog.models import OperationDomainValidationError
+
 from jacobian.math.combinatorics.matroids._models import (
     LinearMatroid,
     MatroidWeightedIntersectionOptimizationRequest,
@@ -95,6 +99,16 @@ def test_lexicographic_optimum_matches_exhaustive_subset_oracle() -> None:
         assert (result.cardinality, result.total_weight) == _oracle(
             first, second, weights
         )
+
+
+def test_malformed_constructed_request_raises_domain_error() -> None:
+    request = MatroidWeightedIntersectionOptimizationRequest.model_construct(
+        first=None,
+        second=None,
+        weight_function=None,
+    )
+    with pytest.raises(OperationDomainValidationError):
+        maximum_cardinality_weighted_matroid_intersection(request)
 
 
 def test_negative_weight_cannot_reduce_cardinality_and_result_round_trips() -> None:

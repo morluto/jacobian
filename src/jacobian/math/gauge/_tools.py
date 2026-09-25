@@ -431,7 +431,8 @@ TOOLS = (
         description=(
             "Multiply the edge values along every oriented face attaching walk "
             "in its exact finite group table. Reversed steps use inverses, and "
-            "flatness means every represented face product is the identity."
+            "flatness means every represented face product is the identity. The "
+            "complex and field must share exactly the same lattice and group table."
         ),
         request_type=FiniteGroupGaugeCurvatureRequest,
         result_type=FiniteGroupGaugeCurvatureResult,

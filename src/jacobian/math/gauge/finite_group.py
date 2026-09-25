@@ -18,6 +18,7 @@ from jacobian.math.gauge._models import (
     FiniteGroupGaugeHolonomyRequest,
     FiniteGroupGaugeHolonomyResult,
     GaugeEdge,
+    GaugeLattice,
     GaugePathStep,
     OrientedGaugePath,
 )
@@ -362,7 +363,9 @@ def finite_group_gauge_curvature(
         )
     group = complex_value.group
     if (
-        not isinstance(group, FiniteGroupTable)
+        not isinstance(complex_value.lattice, GaugeLattice)
+        or not isinstance(field.lattice, GaugeLattice)
+        or not isinstance(group, FiniteGroupTable)
         or complex_value.lattice != field.lattice
         or group != field.group
     ):

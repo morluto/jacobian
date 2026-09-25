@@ -15,6 +15,7 @@ from pydantic import Field, ValidationError, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
+from jacobian._execution import request_checkpoint
 from jacobian._models import StrictModel
 from jacobian.canonical import CanonicalLimits
 from jacobian.catalog.models import (
@@ -2188,7 +2189,7 @@ def finite_field_point_membership_in_generated_subgroup(
         curve=admitted_curve,
         generators=(maximum_point,) * len(generators),
         candidate=maximum_point,
-        belongs=True,
+        belongs=False,
     )
     if (
         len(rfc8785.dumps(maximum_result.model_dump(mode="json")))
@@ -2211,6 +2212,8 @@ def finite_field_point_membership_in_generated_subgroup(
     belongs = candidate_key in seen
     cursor = 0
     while cursor < len(frontier) and not belongs:
+        if cursor % 64 == 0:
+            request_checkpoint("during finite-field subgroup closure")
         current = frontier[cursor]
         cursor += 1
         for generator in admitted_generators:

@@ -22,6 +22,8 @@ from jacobian.math.koszul.module_models import (
     ModuleKoszulHomologyRequest,
     ModuleKoszulMapRequest,
     ModuleKoszulRequest,
+    ModuleKoszulSequenceLinearChange,
+    ModuleKoszulSequenceLinearChangeRequest,
     ModuleKoszulSequencePermutation,
     ModuleKoszulSequencePermutationRequest,
     ModuleKoszulTopHomology,
@@ -41,6 +43,7 @@ from jacobian.math.koszul.module_operations import (
     module_koszul_homology,
     module_koszul_map,
     module_koszul_quotient,
+    module_koszul_sequence_linear_change,
     module_koszul_sequence_permute,
     module_koszul_top_homology,
     module_koszul_unit_contract,
@@ -289,9 +292,10 @@ TOOLS: MathTools = (
             f"sparse QQ polynomials on that axis (at most "
             f"{MAX_KOSZUL_VARIABLES} variables, {MAX_KOSZUL_TERMS} terms, and "
             f"degree {MAX_KOSZUL_DEGREE} per variable); the empty sequence "
-            "returns the identity complex R in degree 0. Based modules, "
-            "DG-algebra structure, homology profiles, and sequence transforms "
-            "are deferred."
+            "returns the identity complex R in degree 0. This polynomial-ring "
+            "operation does not include module coefficients or polynomial-ring "
+            "homology; sequence changes on the separate finite-dimensional "
+            "module owner use homological.koszul.sequence_linear_change.compute."
         ),
         request_type=KoszulComplexRequest,
         result_type=KoszulComplexValue,
@@ -427,6 +431,67 @@ TOOLS: MathTools = (
                         ],
                     },
                     "new_to_old": [1, 0],
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="homological.koszul.sequence_linear_change.compute",
+        title="Change a finite-module Koszul sequence by an invertible rational matrix",
+        description=(
+            "For target entry g_j = sum_i C[j,i] f_i, construct K(g) and return "
+            "the induced exterior-power chain isomorphisms K(f) <-> K(g). "
+            "The input is an exact square rational matrix; singular changes and "
+            "requests exceeding scalar, work, or output admission are rejected. "
+            "The source differential is checked against its retained algebra, "
+            "module action, and sequence before transport."
+        ),
+        request_type=ModuleKoszulSequenceLinearChangeRequest,
+        result_type=ModuleKoszulSequenceLinearChange,
+        run=module_koszul_sequence_linear_change,
+        tags=("koszul", "sequence", "linear-change", "chain-isomorphism", "exact"),
+        discovery_terms=(
+            "Koszul sequence recombination",
+            "invertible change of Koszul generators",
+            "Koszul complex isomorphism",
+        ),
+        examples=(
+            OperationExample(
+                name="shear_two_generators",
+                description="Apply a rational shear to the sequence (1, 0) over QQ.",
+                input={
+                    "complex": {
+                        "algebra": _MODULE_EXAMPLE["algebra"],
+                        "module": _MODULE_EXAMPLE["module"],
+                        "sequence": [
+                            [{"num": "1", "den": "1"}],
+                            [{"num": "0", "den": "1"}],
+                        ],
+                        "basis_sizes": [1, 2, 1],
+                        "differentials": [
+                            {
+                                "row_count": 1,
+                                "column_count": 2,
+                                "entries": [[0, 0, {"num": "1", "den": "1"}]],
+                            },
+                            {
+                                "row_count": 2,
+                                "column_count": 1,
+                                "entries": [[1, 0, {"num": "1", "den": "1"}]],
+                            },
+                        ],
+                        "square_zero": True,
+                    },
+                    "change_matrix": [
+                        [
+                            {"num": "1", "den": "1"},
+                            {"num": "1", "den": "1"},
+                        ],
+                        [
+                            {"num": "0", "den": "1"},
+                            {"num": "1", "den": "1"},
+                        ],
+                    ],
                 },
             ),
         ),

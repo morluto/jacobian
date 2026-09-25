@@ -2,17 +2,16 @@
 
 import pytest
 
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.dispatch import invoke_operation
 from jacobian.math.finite_categories import (
     FiniteCategory,
     MorphismSpec,
     nerve_prefix,
 )
+from jacobian.math.finite_categories._tools import TOOLS
 
 
 def _interval() -> FiniteCategory:
@@ -184,29 +183,31 @@ def test_degree_zero_nerve_admits_the_per_degree_simplex_bound() -> None:
     assert tuple(map(len, admitted.simplicial_set.sets)) == (32,)
 
 
-def test_published_nerve_example_runs_through_the_catalog() -> None:
-    catalog = Catalog.open()
-    result = invoke_operation(
-        "category.finite.nerve_prefix.compute",
-        {
-            "category": {
-                "objects": ["A", "B"],
-                "morphisms": [
-                    {"morphism_id": "id_A", "source": "A", "target": "A"},
-                    {"morphism_id": "id_B", "source": "B", "target": "B"},
-                    {"morphism_id": "f", "source": "A", "target": "B"},
-                ],
-                "identities": [["A", "id_A"], ["B", "id_B"]],
-                "composition": [
-                    ["id_A", "id_A", "id_A"],
-                    ["f", "id_A", "f"],
-                    ["id_B", "id_B", "id_B"],
-                    ["id_B", "f", "f"],
-                ],
-            },
-            "max_degree": 2,
-        },
-        catalog,
+def test_published_nerve_example_runs_through_the_owner_tool() -> None:
+    tool = next(
+        t for t in TOOLS if t.operation_id == "category.finite.nerve_prefix.compute"
     )
-    assert result.output["simplicial_set"]["sets"][0] == ["0:0", "0:1"]
-    assert ["f"] in result.output["simplex_morphisms"][1]
+    result = tool.run(
+        tool.request_type.model_validate(
+            {
+                "category": {
+                    "objects": ["A", "B"],
+                    "morphisms": [
+                        {"morphism_id": "id_A", "source": "A", "target": "A"},
+                        {"morphism_id": "id_B", "source": "B", "target": "B"},
+                        {"morphism_id": "f", "source": "A", "target": "B"},
+                    ],
+                    "identities": [["A", "id_A"], ["B", "id_B"]],
+                    "composition": [
+                        ["id_A", "id_A", "id_A"],
+                        ["f", "id_A", "f"],
+                        ["id_B", "id_B", "id_B"],
+                        ["id_B", "f", "f"],
+                    ],
+                },
+                "max_degree": 2,
+            }
+        )
+    )
+    assert result.simplicial_set.sets[0] == ("0:0", "0:1")
+    assert ("f",) in result.simplex_morphisms[1]

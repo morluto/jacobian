@@ -1,9 +1,6 @@
 """Exact bounded finite-category values and constructions."""
 
-from jacobian.math.finite_categories._models import (
-    CategoryNerveRequest,
-    FiniteCategoryNerve,
-)
+from jacobian.math.finite_categories._models import FiniteCategoryNerve
 from jacobian.math.finite_categories.nerve import nerve_prefix
 from jacobian.math.finite_categories.operations import (
     category_profile,
@@ -22,7 +19,6 @@ from jacobian.math.finite_categories.values import (
 
 __all__ = [
     "CategoryIdentifier",
-    "CategoryNerveRequest",
     "FiniteCategory",
     "FiniteCategoryNerve",
     "FiniteCategoryProduct",

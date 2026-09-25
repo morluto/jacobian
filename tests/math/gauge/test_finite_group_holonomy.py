@@ -3,11 +3,13 @@ from itertools import permutations
 import pytest
 from pydantic import ValidationError
 
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.gauge import (
     FiniteGroupGaugeEdgeLabel,
     FiniteGroupGaugeField,
-    FiniteGroupGaugeHolonomyRequest,
     GaugeEdge,
     GaugeLattice,
     GaugePathStep,
@@ -15,6 +17,7 @@ from jacobian.math.gauge import (
     finite_group_gauge_holonomy,
 )
 from jacobian.math.gauge import finite_group as finite_group_kernel
+from jacobian.math.gauge._models import FiniteGroupGaugeHolonomyRequest
 from jacobian.math.groups._table_models import (
     FiniteGroupTableElement,
     FiniteGroupTableRequest,
@@ -157,10 +160,79 @@ def test_malformed_constructed_group_is_rejected_structurally():
     request = FiniteGroupGaugeHolonomyRequest.model_construct(
         field=malformed_field, path=OrientedGaugePath(steps=(), basepoint="a")
     )
-    from jacobian.catalog.models import OperationDomainValidationError
-
     with pytest.raises(OperationDomainValidationError):
         finite_group_gauge_holonomy(request)
+
+
+def test_bypass_constructed_nested_carriers_are_rejected_structurally():
+    group, index = _s3()
+    field = _field(group, index)
+    path = OrientedGaugePath(steps=(), basepoint="a")
+    malformed_edges = GaugeLattice.model_construct(
+        vertices=("a", "b", "c"),
+        edges=(
+            GaugeEdge.model_construct(edge_id="e1", tail="a"),
+            GaugeEdge(edge_id="e2", tail="b", head="c"),
+        ),
+    )
+    malformed_fields = (
+        # The reported defect: a lattice that is not a typed gauge lattice must
+        # be rejected instead of leaking ``AttributeError`` from ``.vertices``.
+        FiniteGroupGaugeField.model_construct(
+            lattice=object(), group=group, edge_values=field.edge_values
+        ),
+        # A typed lattice built with ``model_construct`` can still be missing
+        # its nested vertices or edge fields.
+        FiniteGroupGaugeField.model_construct(
+            lattice=GaugeLattice.model_construct(),
+            group=group,
+            edge_values=field.edge_values,
+        ),
+        FiniteGroupGaugeField.model_construct(
+            lattice=malformed_edges, group=group, edge_values=field.edge_values
+        ),
+        FiniteGroupGaugeField.model_construct(lattice=field.lattice, group=group),
+        FiniteGroupGaugeField.model_construct(
+            lattice=field.lattice, edge_values=field.edge_values
+        ),
+    )
+    for malformed_field in malformed_fields:
+        with pytest.raises(OperationDomainValidationError):
+            finite_group_gauge_holonomy(
+                FiniteGroupGaugeHolonomyRequest.model_construct(
+                    field=malformed_field, path=path
+                )
+            )
+
+    # A bypass-constructed edge value missing its table element must be
+    # rejected rather than dereferenced.
+    malformed_value = FiniteGroupGaugeEdgeLabel.model_construct(edge_id="e1")
+    with pytest.raises(OperationDomainValidationError):
+        finite_group_gauge_holonomy(
+            FiniteGroupGaugeHolonomyRequest.model_construct(
+                field=FiniteGroupGaugeField.model_construct(
+                    lattice=field.lattice,
+                    group=group,
+                    edge_values=(malformed_value, *field.edge_values[1:]),
+                ),
+                path=path,
+            )
+        )
+
+
+def test_bypass_constructed_path_steps_are_rejected_structurally():
+    group, index = _s3()
+    field = _field(group, index)
+    malformed_path = OrientedGaugePath.model_construct(
+        steps=(GaugePathStep.model_construct(edge_id="e1"),),
+        basepoint=None,
+    )
+    with pytest.raises(OperationDomainValidationError):
+        finite_group_gauge_holonomy(
+            FiniteGroupGaugeHolonomyRequest.model_construct(
+                field=field, path=malformed_path
+            )
+        )
 
 
 def test_noncanonical_edge_label_is_rejected():
@@ -190,7 +262,9 @@ def test_mismatched_nonempty_path_basepoint_is_rejected():
     from jacobian.catalog.models import OperationDomainValidationError
 
     with pytest.raises(OperationDomainValidationError, match="basepoint"):
-        finite_group_gauge_holonomy(FiniteGroupGaugeHolonomyRequest(field=field, path=path))
+        finite_group_gauge_holonomy(
+            FiniteGroupGaugeHolonomyRequest(field=field, path=path)
+        )
 
 
 def test_edge_parent_substitution_is_rejected():

@@ -69,7 +69,7 @@ from jacobian.math.number_theory.number_fields.values import (
     SimpleNumberFieldElement,
     SimpleNumberFieldPresentation,
 )
-from jacobian.math.polynomials.values import RationalPolynomial
+from jacobian.math.polynomials.values import MonicPolynomial, RationalPolynomial
 
 MAX_ELEMENT_ORBIT_POLYNOMIAL_DIGITS = 1100
 MAX_ELEMENT_ORBIT_OUTPUT_BYTES = 32_768
@@ -1174,19 +1174,25 @@ def _admit_element_image(
     scalar, alpha = element_coords
     image_scalar, image_alpha = _coords(automorphism.basis_images[1])
 
-    def product_digit_pair(left: Fraction, right: Fraction) -> tuple[int, int]:
+    def product_digit_pair(left: Fraction, right: Fraction) -> tuple[int, int] | None:
+        # A zero factor contributes no numerator or denominator growth. Returning
+        # ``None`` keeps that exact cancellation out of the downstream sum instead
+        # of fabricating a 1/1 factor whose denominator inflates the bound.
         if left == 0 or right == 0:
-            return (1, 1)
+            return None
         return (
             len(str(abs(left.numerator))) + len(str(abs(right.numerator))),
             len(str(left.denominator)) + len(str(right.denominator)),
         )
 
     def sum_digit_bound(
-        left: Fraction, right_digits: tuple[int, int]
+        left: Fraction, right_digits: tuple[int, int] | None
     ) -> tuple[int, int]:
         left_numerator = len(str(abs(left.numerator)))
         left_denominator = len(str(left.denominator))
+        if right_digits is None:
+            # The addend is exactly zero, so the sum is ``left`` unchanged.
+            return left_numerator, left_denominator
         product_numerator, product_denominator = right_digits
         return max(
             left_numerator + product_denominator,
@@ -1196,7 +1202,7 @@ def _admit_element_image(
     scalar_sum_bounds = sum_digit_bound(scalar, product_digit_pair(alpha, image_scalar))
     alpha_bounds = product_digit_pair(alpha, image_alpha)
     scalar_bound = max(scalar_sum_bounds)
-    alpha_bound = max(alpha_bounds)
+    alpha_bound = 1 if alpha_bounds is None else max(alpha_bounds)
     if max(scalar_bound, alpha_bound) > MAX_SIMPLE_NUMBER_FIELD_ELEMENT_DIGITS:
         raise OperationDomainValidationError(
             location=("element",),
@@ -1314,7 +1320,7 @@ def element_embedding_orbit(
         # A quadratic element fixed by its complete QQ automorphism group is rational.
         polynomial_coefficients = (-coordinates[0], Fraction(1))
 
-    polynomial = RationalPolynomial.model_validate(
+    polynomial = MonicPolynomial.model_validate(
         {
             "variables": ["x"],
             "polynomial": {

@@ -1,6 +1,7 @@
 from fractions import Fraction
 
 import pytest
+from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
@@ -14,7 +15,7 @@ from jacobian.math.number_theory.galois.operations import (
     splitting_field,
 )
 from jacobian.math.number_theory.number_fields.values import SimpleNumberFieldElement
-from jacobian.math.polynomials.values import RationalPolynomial
+from jacobian.math.polynomials.values import MonicPolynomial, RationalPolynomial
 
 
 def _poly(coefficients: tuple[int, ...]) -> RationalPolynomial:
@@ -134,6 +135,48 @@ def test_orbit_accepts_wide_coordinates_when_zero_products_preserve_them() -> No
         (Fraction(1, denominator), Fraction(1, denominator)),
         (Fraction(1, denominator), Fraction(-1, denominator)),
     }
+
+
+def test_orbit_accepts_rational_carrier_boundary_without_a_zero_addend() -> None:
+    field = splitting_field(SplittingFieldRequest(polynomial=_poly((-2, 0, 1)))).field
+    denominator = 10**255 + 1
+    element = SimpleNumberFieldElement(
+        presentation=field.extension,
+        coefficients_ascending=(
+            CanonicalRational.from_fraction(Fraction(1, denominator)),
+            CanonicalRational.from_fraction(Fraction(0)),
+        ),
+    )
+
+    result = element_embedding_orbit(
+        ElementEmbeddingOrbitRequest(field=field, element=element)
+    )
+
+    assert result.orbit == (element,)
+    assert result.orbit_size == 1
+    assert len(result.stabilizer.elements) == 2
+    assert _polynomial_coefficients(result.minimal_polynomial) == (
+        Fraction(-1, denominator),
+        Fraction(1),
+    )
+    assert type(result).model_validate(result.model_dump()) == result
+
+
+def test_orbit_minimal_polynomial_uses_monic_carrier() -> None:
+    field = splitting_field(SplittingFieldRequest(polynomial=_poly((-2, 0, 1)))).field
+    result = element_embedding_orbit(
+        ElementEmbeddingOrbitRequest(field=field, element=_element(field, 0, 1))
+    )
+
+    assert isinstance(result.minimal_polynomial, MonicPolynomial)
+
+    tampered = result.model_dump()
+    tampered["minimal_polynomial"]["polynomial"]["terms"][0]["coefficient"] = {
+        "num": 2,
+        "den": 1,
+    }
+    with pytest.raises(ValidationError):
+        type(result).model_validate(tampered)
 
 
 def test_orbit_rejects_element_from_isomorphic_but_distinct_parent() -> None:

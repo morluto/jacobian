@@ -18,7 +18,7 @@ from jacobian.math.number_theory.number_fields.values import (
     SimpleNumberFieldElement,
     SimpleNumberFieldPresentation,
 )
-from jacobian.math.polynomials.values import RationalPolynomial
+from jacobian.math.polynomials.values import MonicPolynomial, RationalPolynomial
 
 MAX_FACTOR_DEGREE = 128
 MAX_GALOIS_GROUP_DEGREE = 6
@@ -600,7 +600,7 @@ class ElementEmbeddingOrbitResult(StrictModel):
     orbit: tuple[SimpleNumberFieldElement, ...] = Field(min_length=1, max_length=2)
     stabilizer: GaloisAutomorphismSubgroup
     orbit_size: StrictInt = Field(ge=1, le=2)
-    minimal_polynomial: RationalPolynomial
+    minimal_polynomial: MonicPolynomial
 
     @model_validator(mode="after")
     def require_complete_bound_result(self) -> Self:

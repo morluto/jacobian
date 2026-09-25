@@ -119,7 +119,11 @@ def test_profile_rejects_inconsistent_histogram_and_coerced_integers() -> None:
         PublicDeltaMatroidDistanceProfile.model_validate(payload)
 
     for invalid in (False, 0.0, "0"):
-        malformed = {**payload, "distance_by_mask": [invalid, 1], "distance_histogram": [1, 1]}
+        malformed = {
+            **payload,
+            "distance_by_mask": [invalid, 1],
+            "distance_histogram": [1, 1],
+        }
         with pytest.raises(ValueError):
             PublicDeltaMatroidDistanceProfile.model_validate(malformed)
 

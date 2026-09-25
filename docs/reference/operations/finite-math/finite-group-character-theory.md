@@ -34,7 +34,8 @@ partition before its values are used.
 
 Admission currently allows source order at most 256 and subgroup order at most
 128, along with bounded permutation degree, class count, exact coefficient
-size, partition work, and serialized output. The smaller target order cap
+size, partition work, and the output's class-cell count and coefficient digit
+width. The smaller target order cap
 ensures its complete class axis fits the shared class-function carrier. The
 operation acts on class functions; when its input is an irreducible character,
 the same output is its character restriction.
@@ -58,9 +59,9 @@ The result retains the subgroup and parent conjugacy partitions, the map from
 subgroup classes to parent classes, and the induced values on the parent
 class axis. It uses the same cyclotomic field as the source class function.
 Admission bounds subgroup order by 128, parent order by 256, class count,
-exact coefficient growth, arithmetic work, and serialized output before
-conjugacy expansion. The serialized result is bounded by the canonical 10 MB
-output limit.
+exact coefficient growth, arithmetic work, and the exact output's retained
+cells and digit widths before conjugacy expansion. The canonical transport
+boundary separately bounds the serialized result at 10 MB.
 
 Inducing the trivial class function from a transposition subgroup `C2` to `S3`
 gives values `(3, 1, 0)` on `(identity, transposition, 3-cycle)`. Their inner

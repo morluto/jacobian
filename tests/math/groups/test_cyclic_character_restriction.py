@@ -27,11 +27,7 @@ def _partition(order: int, degree: int | None = None) -> GroupConjugacyClassesRe
 
 
 def _restrict(order: int, row: int, subgroup_order: int):
-    return restrict_cyclic_character(
-        CyclicCharacterRestrictionRequest(
-            partition=_partition(order), row_index=row, subgroup_order=subgroup_order
-        )
-    )
+    return restrict_cyclic_character(_partition(order), row, subgroup_order)
 
 
 def test_c4_irreducible_restrictions_to_unique_c2_keep_embedding_and_values() -> None:
@@ -105,11 +101,7 @@ def test_restriction_does_not_generalize_to_noncyclic_table_families() -> None:
         source, tuple(tuple(tuple(member) for member in row) for row in classes)
     )
     with pytest.raises(OperationDomainValidationError):
-        restrict_cyclic_character(
-            CyclicCharacterRestrictionRequest(
-                partition=partition, row_index=0, subgroup_order=3
-            )
-        )
+        restrict_cyclic_character(partition, 0, 3)
 
 
 def test_degree_aware_maximum_work_is_admitted_and_just_over_is_rejected(
@@ -118,19 +110,25 @@ def test_degree_aware_maximum_work_is_admitted_and_just_over_is_rejected(
     partition = _partition(60, degree=64)
     work = character_operations._cyclic_restriction_work(60, 64, 60)
     assert work <= character_operations.MAX_CYCLIC_RESTRICTION_WORK
-    request = CyclicCharacterRestrictionRequest(
-        partition=partition, row_index=59, subgroup_order=60
-    )
 
     monkeypatch.setattr(character_operations, "MAX_CYCLIC_RESTRICTION_WORK", work - 1)
     with pytest.raises(OperationResourceAdmissionError) as raised:
-        restrict_cyclic_character(request)
+        restrict_cyclic_character(partition, 59, 60)
     assert raised.value.errors()[0]["type"] == (
         "groups.characters.restriction_work_exceeds_envelope"
     )
 
     monkeypatch.setattr(character_operations, "MAX_CYCLIC_RESTRICTION_WORK", work)
-    result = restrict_cyclic_character(request)
+    result = restrict_cyclic_character(partition, 59, 60)
     assert len(result.target_partition.classes) == 60
     assert len(result.source_class_indices) == 60
     assert len(result.restricted_character.values) == 60
+
+
+def test_native_restriction_rejects_malformed_scalars_without_pydantic_leak() -> None:
+    with pytest.raises(OperationDomainValidationError):
+        restrict_cyclic_character(_partition(4), True, 2)
+    with pytest.raises(OperationDomainValidationError):
+        restrict_cyclic_character(_partition(4), 1, "2")
+    with pytest.raises(OperationDomainValidationError):
+        restrict_cyclic_character(_partition(4), 1, 0)

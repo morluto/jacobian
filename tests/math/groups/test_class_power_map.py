@@ -33,9 +33,7 @@ def test_class_power_map_matches_elementwise_oracle(
     partition = compute_group_conjugacy_classes(
         GroupConjugacyClassesRequest(degree=degree, generators=generators)
     )
-    result = class_power_map(
-        ClassPowerMapRequest(partition=partition, exponent=exponent)
-    )
+    result = class_power_map(partition, exponent)
 
     element_to_class = {
         tuple(element): index
@@ -59,9 +57,23 @@ def test_class_power_map_reestablishes_input_partition() -> None:
     partition = compute_group_conjugacy_classes(request)
     altered = partition.model_copy(update={"classes": partition.classes[:-1]})
     with pytest.raises(Exception, match="partition"):
-        class_power_map(ClassPowerMapRequest(partition=altered, exponent=2))
+        class_power_map(altered, 2)
 
 
 def test_power_exponent_is_bounded_before_execution() -> None:
     with pytest.raises(ValidationError):
         ClassPowerMapRequest.model_validate({"partition": {}, "exponent": 1_000_001})
+
+
+def test_native_power_map_rejects_malformed_inputs_without_pydantic_leak() -> None:
+    from jacobian.catalog.models import OperationDomainValidationError
+
+    partition = compute_group_conjugacy_classes(
+        GroupConjugacyClassesRequest(degree=3, generators=((1, 2, 0), (1, 0, 2)))
+    )
+    with pytest.raises(OperationDomainValidationError, match="exponent"):
+        class_power_map(partition, 0)
+    with pytest.raises(OperationDomainValidationError, match="exponent"):
+        class_power_map(partition, 1_000_001)
+    with pytest.raises(OperationDomainValidationError, match="partition"):
+        class_power_map({"degree": 3}, 2)

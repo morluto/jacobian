@@ -26,6 +26,15 @@ def finite_abelian_character_table(
 ) -> FiniteAbelianCharacterTableResult:
     """Return the complete exact Fourier table of an admitted product group."""
     group = request.group
+    moduli = group.moduli
+    # Every modulus is at least two, so seven coordinates already exceed the
+    # public order envelope. Check before multiplying potentially huge ranks.
+    if len(moduli) > MAX_ABELIAN_CHARACTER_TABLE_ORDER.bit_length():
+        raise OperationResourceAdmissionError(
+            location=("group", "moduli"),
+            code="groups.characters.abelian.group_order_exceeds_envelope",
+            message=f"complete Abelian character tables admit order at most {MAX_ABELIAN_CHARACTER_TABLE_ORDER}",
+        )
     order = group.order
     exponent = lcm(*group.moduli)
     if order > MAX_ABELIAN_CHARACTER_TABLE_ORDER:
@@ -49,7 +58,6 @@ def finite_abelian_character_table(
             message="complete Abelian character table exceeds its exact output envelope",
         )
 
-    moduli = group.moduli
     elements = tuple(product(*(range(modulus) for modulus in moduli)))
     if not moduli:
         elements = ((),)

@@ -73,7 +73,33 @@ def _run_add(request: ClassFunctionAddRequest) -> FiniteClassFunction:
 def _run_cyclic_character_restriction(
     request: CyclicCharacterRestrictionRequest,
 ) -> CyclicCharacterRestrictionResult:
-    return restrict_cyclic_character(request)
+    return restrict_cyclic_character(
+        request.partition, request.row_index, request.subgroup_order
+    )
+
+
+def _run_class_power_map(request: ClassPowerMapRequest) -> ClassPowerMapResult:
+    return class_power_map(request.partition, request.exponent)
+
+
+def _run_frobenius_schur_indicator(
+    request: FrobeniusSchurIndicatorRequest,
+) -> FrobeniusSchurIndicatorResult:
+    return frobenius_schur_indicator(request.table, request.row_index)
+
+
+def _run_restriction(
+    request: ClassFunctionRestrictionRequest,
+) -> ClassFunctionRestrictionResult:
+    return class_function_restrict_to_subgroup(request.class_function, request.subgroup)
+
+
+def _run_induction(
+    request: ClassFunctionInductionRequest,
+) -> ClassFunctionInductionResult:
+    return class_function_induce_from_subgroup(
+        request.class_function, request.parent_group
+    )
 
 
 def _run_conjugate(
@@ -275,7 +301,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
         request_type=ClassPowerMapRequest,
         result_type=ClassPowerMapResult,
-        run=class_power_map,
+        run=_run_class_power_map,
         tags=("group", "character", "conjugacy", "power-map", "exact"),
         discovery_terms=("class power map", "conjugacy class k-th powers"),
         examples=(
@@ -300,7 +326,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
         request_type=FrobeniusSchurIndicatorRequest,
         result_type=FrobeniusSchurIndicatorResult,
-        run=frobenius_schur_indicator,
+        run=_run_frobenius_schur_indicator,
         tags=("group", "character", "frobenius-schur", "exact"),
         discovery_terms=(
             "second Frobenius Schur indicator",
@@ -351,7 +377,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "Add exact cyclotomic values coordinatewise on an identical class "
             "axis. The output retains that axis and accepts arbitrary class "
             "functions. Input size, arithmetic work, coefficient growth, and "
-            "serialized output are bounded before exact addition."
+            "exact output digits are bounded before exact addition."
         ),
         request_type=ClassFunctionAddRequest,
         result_type=FiniteClassFunction,
@@ -436,8 +462,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "Multiply every value of an exact class function by one scalar in "
             "the cyclotomic field named by its class axis. The axis is retained; "
             "the result is an ordinary class function, with no character claim. "
-            "Cyclotomic work, coefficient growth, and output bytes use the "
-            "bounded pointwise-product admission before arithmetic."
+            "Cyclotomic work, coefficient growth, and exact output digits use "
+            "the bounded pointwise-product admission before arithmetic."
         ),
         request_type=ClassFunctionScaleRequest,
         result_type=FiniteClassFunction,
@@ -567,7 +593,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
         request_type=ClassFunctionRestrictionRequest,
         result_type=ClassFunctionRestrictionResult,
-        run=class_function_restrict_to_subgroup,
+        run=_run_restriction,
         tags=("group", "character", "class-function", "restriction", "exact"),
         examples=(
             OperationExample(
@@ -595,11 +621,12 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "retains both canonical class partitions, the subgroup-class to "
             "parent-class map, and exact cyclotomic values. Subgroup order is "
             "at most 128, parent order at most 256, and work, coefficient "
-            "height, and output bytes are admitted before conjugacy expansion."
+            "height, and exact output digits are admitted before conjugacy "
+            "expansion."
         ),
         request_type=ClassFunctionInductionRequest,
         result_type=ClassFunctionInductionResult,
-        run=class_function_induce_from_subgroup,
+        run=_run_induction,
         tags=("group", "character", "class-function", "induction", "exact"),
         discovery_terms=(
             "induce finite group character from subgroup",

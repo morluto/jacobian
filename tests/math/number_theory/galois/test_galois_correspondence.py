@@ -6,7 +6,6 @@ from jacobian.math.number_theory.galois._models import (
     GaloisFixedFieldRequest,
     GaloisSubgroupRequest,
     IntermediateFieldStabilizerRequest,
-    SplittingFieldRequest,
 )
 from jacobian.math.number_theory.galois.operations import (
     automorphisms,
@@ -44,7 +43,7 @@ def _polynomial(coefficients: tuple[int, ...]) -> RationalPolynomial:
 
 
 def _split(coefficients: tuple[int, ...]):
-    return splitting_field(SplittingFieldRequest(polynomial=_polynomial(coefficients)))
+    return splitting_field(_polynomial(coefficients))
 
 
 def _subgroup(field, maps):

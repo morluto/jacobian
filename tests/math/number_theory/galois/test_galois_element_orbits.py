@@ -5,10 +5,7 @@ from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.number_theory.galois._models import (
-    ElementEmbeddingOrbitRequest,
-    SplittingFieldRequest,
-)
+from jacobian.math.number_theory.galois._models import ElementEmbeddingOrbitRequest
 from jacobian.math.number_theory.galois._tools import TOOLS
 from jacobian.math.number_theory.galois.operations import (
     element_embedding_orbit,
@@ -54,7 +51,7 @@ def _polynomial_coefficients(polynomial: RationalPolynomial) -> tuple[Fraction, 
 
 
 def test_element_orbit_retains_exact_maps_stabilizer_and_minimal_polynomial() -> None:
-    field = splitting_field(SplittingFieldRequest(polynomial=_poly((-2, 0, 1)))).field
+    field = splitting_field(_poly((-2, 0, 1))).field
     alpha = _element(field, 0, 1)
 
     result = element_embedding_orbit(
@@ -74,13 +71,15 @@ def test_element_orbit_retains_exact_maps_stabilizer_and_minimal_polynomial() ->
     assert result.orbit_size == 2
     assert len(result.stabilizer.elements) == 1
     assert _polynomial_coefficients(result.minimal_polynomial) == (
-        Fraction(-2), Fraction(0), Fraction(1)
+        Fraction(-2),
+        Fraction(0),
+        Fraction(1),
     )
     assert type(result).model_validate(result.model_dump()) == result
 
 
 def test_rational_element_has_singleton_orbit_and_full_stabilizer() -> None:
-    field = splitting_field(SplittingFieldRequest(polynomial=_poly((-2, 0, 1)))).field
+    field = splitting_field(_poly((-2, 0, 1))).field
     three = _element(field, 3, 0)
 
     result = element_embedding_orbit(
@@ -91,12 +90,13 @@ def test_rational_element_has_singleton_orbit_and_full_stabilizer() -> None:
     assert result.orbit_size == 1
     assert len(result.stabilizer.elements) == 2
     assert _polynomial_coefficients(result.minimal_polynomial) == (
-        Fraction(-3), Fraction(1)
+        Fraction(-3),
+        Fraction(1),
     )
 
 
 def test_degree_one_qq_field_has_identity_orbit_and_stabilizer() -> None:
-    field = splitting_field(SplittingFieldRequest(polynomial=_poly((-1, 1)))).field
+    field = splitting_field(_poly((-1, 1))).field
     five = _element(field, 5)
 
     result = element_embedding_orbit(
@@ -111,12 +111,14 @@ def test_degree_one_qq_field_has_identity_orbit_and_stabilizer() -> None:
     assert result.action[0].image == five
     assert result.stabilizer.elements == (result.action[0].automorphism,)
     assert _polynomial_coefficients(result.minimal_polynomial) == (
-        Fraction(-5), Fraction(1)
+        Fraction(-5),
+        Fraction(1),
     )
     assert type(result).model_validate(result.model_dump()) == result
 
+
 def test_orbit_accepts_wide_coordinates_when_zero_products_preserve_them() -> None:
-    field = splitting_field(SplittingFieldRequest(polynomial=_poly((-2, 0, 1)))).field
+    field = splitting_field(_poly((-2, 0, 1))).field
     denominator = 10**127 + 1
     element = SimpleNumberFieldElement(
         presentation=field.extension,
@@ -131,14 +133,17 @@ def test_orbit_accepts_wide_coordinates_when_zero_products_preserve_them() -> No
     )
 
     assert len(result.orbit) == 2
-    assert {tuple(c.as_fraction() for c in value.coefficients_ascending) for value in result.orbit} == {
+    assert {
+        tuple(c.as_fraction() for c in value.coefficients_ascending)
+        for value in result.orbit
+    } == {
         (Fraction(1, denominator), Fraction(1, denominator)),
         (Fraction(1, denominator), Fraction(-1, denominator)),
     }
 
 
 def test_orbit_accepts_rational_carrier_boundary_without_a_zero_addend() -> None:
-    field = splitting_field(SplittingFieldRequest(polynomial=_poly((-2, 0, 1)))).field
+    field = splitting_field(_poly((-2, 0, 1))).field
     denominator = 10**255 + 1
     element = SimpleNumberFieldElement(
         presentation=field.extension,
@@ -163,7 +168,7 @@ def test_orbit_accepts_rational_carrier_boundary_without_a_zero_addend() -> None
 
 
 def test_orbit_minimal_polynomial_uses_monic_carrier() -> None:
-    field = splitting_field(SplittingFieldRequest(polynomial=_poly((-2, 0, 1)))).field
+    field = splitting_field(_poly((-2, 0, 1))).field
     result = element_embedding_orbit(
         ElementEmbeddingOrbitRequest(field=field, element=_element(field, 0, 1))
     )
@@ -180,8 +185,8 @@ def test_orbit_minimal_polynomial_uses_monic_carrier() -> None:
 
 
 def test_orbit_rejects_element_from_isomorphic_but_distinct_parent() -> None:
-    first = splitting_field(SplittingFieldRequest(polynomial=_poly((-2, 0, 1)))).field
-    second = splitting_field(SplittingFieldRequest(polynomial=_poly((-8, 0, 1)))).field
+    first = splitting_field(_poly((-2, 0, 1))).field
+    second = splitting_field(_poly((-8, 0, 1))).field
 
     with pytest.raises(ValueError, match="element must belong"):
         ElementEmbeddingOrbitRequest(field=first, element=_element(second, 0, 1))

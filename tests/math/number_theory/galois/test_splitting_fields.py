@@ -43,7 +43,7 @@ def _polynomial(coefficients: tuple[int, ...]) -> RationalPolynomial:
 
 
 def _split(coefficients: tuple[int, ...]) -> SplittingFieldResult:
-    return splitting_field(SplittingFieldRequest(polynomial=_polynomial(coefficients)))
+    return splitting_field(_polynomial(coefficients))
 
 
 def _coordinates(element) -> tuple[Fraction, ...]:
@@ -270,14 +270,35 @@ def test_nonmonic_quadratic_retains_exact_extension_and_reconstruction() -> None
 def test_cubic_is_rejected_before_exact_extension_construction(monkeypatch) -> None:
     from jacobian.math.number_theory.galois import operations
 
+    def forbidden(*args, **kwargs):
+        raise AssertionError("unsupported cubic reached field construction")
+
+    monkeypatch.setattr(operations, "_construct_splitting_field", forbidden)
+    with pytest.raises(OperationDomainValidationError) as error:
+        splitting_field(_polynomial((0, 0, 0, 1)))
+    assert (
+        error.value.errors()[0]["type"] == "galois_theory.splitting_field_degree_bound"
+    )
+
+
+def test_model_constructed_request_cannot_reach_field_construction(
+    monkeypatch,
+) -> None:
+    from jacobian.math.number_theory.galois import operations
+
     forged = SplittingFieldRequest.model_construct(polynomial=_polynomial((0, 0, 0, 1)))
 
     def forbidden(*args, **kwargs):
         raise AssertionError("unsupported cubic reached field construction")
 
     monkeypatch.setattr(operations, "_construct_splitting_field", forbidden)
+    operation = next(
+        tool
+        for tool in TOOLS
+        if tool.operation_id == "number_field.polynomial.splitting_field.compute"
+    )
     with pytest.raises(OperationDomainValidationError) as error:
-        splitting_field(forged)
+        operation.run(forged)
     assert (
         error.value.errors()[0]["type"] == "galois_theory.splitting_field_degree_bound"
     )

@@ -7,7 +7,6 @@ from jacobian.catalog.models import MathTool
 from jacobian.math.number_theory.galois._models import (
     GaloisCorrespondenceRequest,
     GaloisCorrespondenceResult,
-    SplittingFieldRequest,
 )
 from jacobian.math.number_theory.galois._tools import TOOLS
 from jacobian.math.number_theory.galois.operations import (
@@ -39,9 +38,7 @@ def _polynomial(coefficients: tuple[int, ...]) -> RationalPolynomial:
 
 
 def _field(coefficients: tuple[int, ...]):
-    return splitting_field(
-        SplittingFieldRequest(polynomial=_polynomial(coefficients))
-    ).field
+    return splitting_field(_polynomial(coefficients)).field
 
 
 def _quadratic_subgroup_oracle() -> tuple[frozenset[int], ...]:

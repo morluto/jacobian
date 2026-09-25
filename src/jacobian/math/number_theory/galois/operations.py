@@ -48,16 +48,16 @@ from jacobian.math.number_theory.galois._models import (
     GaloisSubgroupRequest,
     IntermediateFieldStabilizerRequest,
     IntermediateFieldStabilizerResult,
-    PolynomialDiscriminantRequest,
     PolynomialDiscriminantResult,
     QQFieldAutomorphism,
     QQRoot,
     QQSplittingField,
     SolvableResult,
-    SplittingFieldRequest,
     SplittingFieldResult,
+    _discriminant_coefficients,
     _require_prime,
     _supported_galois_polynomial,
+    _supported_splitting_field_polynomial,
 )
 from jacobian.math.number_theory.number_fields._field_embedding import (
     SimpleNumberFieldEmbedding,
@@ -77,13 +77,19 @@ MAX_GALOIS_CORRESPONDENCE_WORK = 512
 MAX_GALOIS_CORRESPONDENCE_ALLOCATION_UNITS = 32
 
 
-def _admit(operation: Callable[[], None], *, location: tuple[str | int, ...]) -> None:
+def _admit_value[AdmittedT](
+    operation: Callable[[], AdmittedT], *, location: tuple[str | int, ...]
+) -> AdmittedT:
     try:
-        operation()
+        return operation()
     except PydanticCustomError as exc:
         raise OperationDomainValidationError(
             location=location, code=exc.type, message=exc.message()
         ) from exc
+
+
+def _admit(operation: Callable[[], None], *, location: tuple[str | int, ...]) -> None:
+    _admit_value(operation, location=location)
 
 
 def polynomial_discriminant(
@@ -94,7 +100,6 @@ def polynomial_discriminant(
         canonical_polynomial = RationalPolynomial.model_validate(
             polynomial.model_dump()
         )
-        request = PolynomialDiscriminantRequest(polynomial=canonical_polynomial)
     except ValidationError as exc:
         details = exc.errors(include_url=False, include_context=False)[0]
         raise OperationDomainValidationError(
@@ -102,7 +107,10 @@ def polynomial_discriminant(
             code=str(details["type"]),
             message=str(details["msg"]),
         ) from exc
-    coefficients = request.coefficients
+    coefficients = _admit_value(
+        lambda: _discriminant_coefficients(canonical_polynomial),
+        location=("polynomial",),
+    )
     # A Sylvester determinant for f and f' has size at most 11. Hadamard's
     # bound with entry magnitude <= degree * 10^12 proves the discriminant
     # has fewer than 160 decimal digits throughout the admitted domain.
@@ -332,7 +340,10 @@ def solvable(coefficients: tuple[int, ...]) -> SolvableResult:
     )
 
 
-def _field_element(presentation, coefficients: tuple[Fraction, ...]):
+def _field_element(
+    presentation: SimpleNumberFieldPresentation,
+    coefficients: tuple[Fraction, ...],
+) -> SimpleNumberFieldElement:
     from jacobian.math.number_theory.number_fields.values import (
         SimpleNumberFieldElement,
     )
@@ -347,22 +358,24 @@ def _field_element(presentation, coefficients: tuple[Fraction, ...]):
     )
 
 
-def _coords(element) -> tuple[Fraction, ...]:
+def _coords(element: SimpleNumberFieldElement) -> tuple[Fraction, ...]:
     return tuple(value.as_fraction() for value in element.coefficients_ascending)
 
 
-def _zero(presentation):
+def _zero(presentation: SimpleNumberFieldPresentation) -> SimpleNumberFieldElement:
     return _field_element(presentation, (Fraction(0),) * presentation.degree)
 
 
-def _one(presentation):
+def _one(presentation: SimpleNumberFieldPresentation) -> SimpleNumberFieldElement:
     return _field_element(
         presentation,
         (Fraction(1),) + (Fraction(0),) * (presentation.degree - 1),
     )
 
 
-def _add_elements(left, right):
+def _add_elements(
+    left: SimpleNumberFieldElement, right: SimpleNumberFieldElement
+) -> SimpleNumberFieldElement:
     if left.presentation != right.presentation:
         raise ValueError("number-field element parents must agree")
     return _field_element(
@@ -371,13 +384,17 @@ def _add_elements(left, right):
     )
 
 
-def _scale_element(element, scalar: Fraction):
+def _scale_element(
+    element: SimpleNumberFieldElement, scalar: Fraction
+) -> SimpleNumberFieldElement:
     return _field_element(
         element.presentation, tuple(scalar * c for c in _coords(element))
     )
 
 
-def _multiply_elements(left, right):
+def _multiply_elements(
+    left: SimpleNumberFieldElement, right: SimpleNumberFieldElement
+) -> SimpleNumberFieldElement:
     presentation = left.presentation
     if right.presentation != presentation:
         raise ValueError("number-field element parents must agree")
@@ -410,7 +427,9 @@ def _source_coefficients(polynomial: RationalPolynomial) -> tuple[int, ...]:
     return tuple(values)
 
 
-def _linear_factor_coefficients(field: QQSplittingField):
+def _linear_factor_coefficients(
+    field: QQSplittingField,
+) -> tuple[SimpleNumberFieldElement, ...]:
     presentation = field.extension
     coefficients = [_one(presentation)]
     for root, multiplicity in zip(
@@ -451,31 +470,32 @@ def _construct_splitting_field(source: RationalPolynomial) -> SplittingFieldResu
     if degree == 1:
         extension = SimpleNumberFieldPresentation(coefficients_descending=(1, 0))
         root = _field_element(extension, (Fraction(-coefficients[0], coefficients[1]),))
-        root_values = (root,)
-        multiplicities = (1,)
+        root_values: tuple[SimpleNumberFieldElement, ...] = (root,)
+        multiplicities: tuple[int, ...] = (1,)
     else:
         c, b, a = coefficients
         discriminant = b * b - 4 * a * c
         square_root = isqrt(discriminant) if discriminant >= 0 else -1
         if discriminant >= 0 and square_root * square_root == discriminant:
             extension = SimpleNumberFieldPresentation(coefficients_descending=(1, 0))
-            roots = sorted(
-                (
+            rational_roots = sorted(
+                {
                     Fraction(-b - square_root, 2 * a),
                     Fraction(-b + square_root, 2 * a),
-                )
+                }
             )
             root_values = tuple(
-                _field_element(extension, (root,)) for root in sorted(set(roots))
+                _field_element(extension, (rational_root,))
+                for rational_root in rational_roots
             )
             multiplicities = (2,) if square_root == 0 else (1, 1)
         else:
             content = gcd(gcd(abs(a), abs(b)), abs(c))
-            normalized = (a // content, b // content, c // content)
+            normalized = [a // content, b // content, c // content]
             if normalized[0] < 0:
-                normalized = tuple(-value for value in normalized)
+                normalized = [-value for value in normalized]
             extension = SimpleNumberFieldPresentation(
-                coefficients_descending=normalized
+                coefficients_descending=tuple(normalized)
             )
             alpha = _field_element(extension, (Fraction(0), Fraction(1)))
             conjugate = _field_element(
@@ -579,7 +599,9 @@ def _canonical_automorphism(
     return canonical, field
 
 
-def _map_element(automorphism: QQFieldAutomorphism, element):
+def _map_element(
+    automorphism: QQFieldAutomorphism, element: SimpleNumberFieldElement
+) -> SimpleNumberFieldElement:
     presentation = automorphism.field.extension
     coords = _coords(element)
     value = _zero(presentation)
@@ -593,7 +615,7 @@ def _map_element(automorphism: QQFieldAutomorphism, element):
 
 
 def _automorphism_for_generator_image(
-    field: QQSplittingField, generator_image
+    field: QQSplittingField, generator_image: SimpleNumberFieldElement
 ) -> QQFieldAutomorphism:
     presentation = field.extension
     basis_images = (
@@ -667,10 +689,12 @@ def _require_automorphism(
             )
 
 
-def splitting_field(request: SplittingFieldRequest) -> SplittingFieldResult:
+def splitting_field(polynomial: RationalPolynomial) -> SplittingFieldResult:
     """Build the exact splitting field for every rational polynomial of degree <=2."""
     try:
-        canonical_request = SplittingFieldRequest.model_validate(request.model_dump())
+        canonical_polynomial = RationalPolynomial.model_validate(
+            polynomial.model_dump()
+        )
     except (ValidationError, AttributeError, TypeError, ValueError) as exc:
         details = (
             exc.errors(include_url=False, include_context=False)[0]
@@ -686,7 +710,11 @@ def splitting_field(request: SplittingFieldRequest) -> SplittingFieldResult:
             if details
             else "invalid splitting-field request",
         ) from exc
-    return _construct_splitting_field(canonical_request.polynomial)
+    _admit(
+        lambda: _supported_splitting_field_polynomial(canonical_polynomial),
+        location=("polynomial",),
+    )
+    return _construct_splitting_field(canonical_polynomial)
 
 
 def _automorphisms_of_canonical_field(
@@ -857,7 +885,13 @@ def galois_subgroup(request: GaloisSubgroupRequest) -> GaloisAutomorphismSubgrou
         canonical_request = GaloisSubgroupRequest.model_validate(request.model_dump())
         field = _canonical_splitting_field(canonical_request.field, location=("field",))
         candidate = GaloisAutomorphismSubgroup(
-            field=field, elements=canonical_request.elements
+            field=field,
+            elements=tuple(
+                sorted(
+                    canonical_request.elements,
+                    key=lambda element: element.root_permutation,
+                )
+            ),
         )
     except (ValidationError, AttributeError, KeyError, TypeError, ValueError) as exc:
         raise OperationDomainValidationError(
@@ -1138,7 +1172,9 @@ def apply_automorphism(automorphism: QQFieldAutomorphism, root: QQRoot) -> QQRoo
     )
 
 
-def apply_automorphism_to_element(automorphism: QQFieldAutomorphism, element):
+def apply_automorphism_to_element(
+    automorphism: QQFieldAutomorphism, element: SimpleNumberFieldElement
+) -> SimpleNumberFieldElement:
     """Apply an exact field automorphism to any element in its source field."""
     canonical_automorphism, field = _canonical_automorphism(automorphism)
     try:

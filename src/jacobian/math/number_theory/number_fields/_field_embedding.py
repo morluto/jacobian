@@ -10,10 +10,10 @@ from __future__ import annotations
 from fractions import Fraction
 from typing import Self
 
-from pydantic import model_validator
+from pydantic import ValidationError, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import CanonicalRational, canonical_rational_component_digits
 from jacobian._models import StrictModel
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -24,7 +24,11 @@ from jacobian.math.number_theory.number_fields.values import (
     SimpleNumberFieldPresentation,
 )
 
-MAX_FIELD_MAP_DEGREE = 8
+# The coordinate-growth estimate below admits the identity map only up to
+# source degree six (1 + 6*6*6 = 217 digits); degrees seven and eight would be
+# advertised but unusable, so the admitted contract stays aligned with the
+# estimate.
+MAX_FIELD_MAP_DEGREE = 6
 MAX_FIELD_MAP_INPUT_DIGITS = 32
 
 
@@ -179,7 +183,7 @@ def _admit(request: SimpleNumberFieldEmbeddingRequest) -> None:
         *request.element.coefficients_ascending,
     )
     if any(
-        max(len(str(abs(value.num))), len(str(value.den))) > MAX_FIELD_MAP_INPUT_DIGITS
+        canonical_rational_component_digits(value) > MAX_FIELD_MAP_INPUT_DIGITS
         for value in rationals
     ):
         raise OperationResourceAdmissionError(
@@ -192,7 +196,7 @@ def _admit(request: SimpleNumberFieldEmbeddingRequest) -> None:
     input_digits = max(
         1,
         *(len(str(abs(value))) for value in values),
-        *(max(len(str(abs(value.num))), len(str(value.den))) for value in rationals),
+        *(canonical_rational_component_digits(value) for value in rationals),
     )
     growth = input_digits + request.source.degree * request.target.degree * (
         3 * input_digits + 3
@@ -217,10 +221,25 @@ def _admit(request: SimpleNumberFieldEmbeddingRequest) -> None:
             )
 
 
+def _canonical_request(
+    request: SimpleNumberFieldEmbeddingRequest,
+) -> SimpleNumberFieldEmbeddingRequest:
+    """Revalidate the full request so model-constructed bindings cannot bypass them."""
+    try:
+        return SimpleNumberFieldEmbeddingRequest.model_validate(request.model_dump())
+    except (ValidationError, AttributeError, KeyError, TypeError, ValueError) as exc:
+        raise _error(
+            "invalid_request",
+            "embedding request must be a canonical validated field-map specification",
+            location=("request",),
+        ) from exc
+
+
 def apply_simple_number_field_embedding(
     request: SimpleNumberFieldEmbeddingRequest,
 ) -> SimpleNumberFieldEmbeddingResult:
     """Validate a proposed exact field map and transport one source element."""
+    request = _canonical_request(request)
     _admit(request)
     target = request.target
     image_coordinates = _fractions(request.generator_image)

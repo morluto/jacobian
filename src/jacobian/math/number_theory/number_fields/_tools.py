@@ -482,7 +482,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         operation_id="number_field.embedding.apply_exact.compute",
         title="Apply an exact simple number-field embedding",
         description=(
-            "Apply a proposed QQ-embedding between simple number fields of degree at most eight. "
+            "Apply a proposed QQ-embedding between simple number fields of degree at most six. "
             "The source and target presentations must be irreducible, and the supplied target-field image "
             "of the source generator must satisfy its defining polynomial exactly. Returns the reusable "
             "embedding value and the exact image of one source element. Polynomial and coordinate inputs "

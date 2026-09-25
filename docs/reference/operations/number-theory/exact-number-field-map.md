@@ -19,9 +19,11 @@ quotient and returns both that exact element and a reusable
 `SimpleNumberFieldEmbedding` value.
 
 This is a supplied-map operation: it does not search for roots or choose an
-embedding. Its scope is absolute fields over `QQ`, degrees at most eight, and
+embedding. Its scope is absolute fields over `QQ`, degrees at most six, and
 polynomial and coordinate components at most 32 decimal digits. A conservative
-coordinate-growth estimate is checked before field arithmetic. The result
+coordinate-growth estimate is checked before field arithmetic; the bound admits
+the identity embedding up to degree six, so degree seven and eight presentations
+are rejected by the degree admission rather than by an unusable estimate. The result
 retains the exact source and target parents, so the target coordinates can be
 composed with the existing `SimpleNumberFieldElement` and relative
 trace/norm operations.

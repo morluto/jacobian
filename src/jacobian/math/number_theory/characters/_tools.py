@@ -223,7 +223,7 @@ def _compute_gauss_sum(
 def _compute_primitive_gauss_norm(
     request: DirichletCharacterPrimitiveGaussNormRequest,
 ) -> DirichletCharacterPrimitiveGaussNormResult:
-    return native.dirichlet_character_primitive_gauss_norm(request.character)
+    return native.dirichlet_character_primitive_gauss_norm(request.primitive_character)
 
 
 def _compute_generalized_gauss_sum(
@@ -773,10 +773,10 @@ TOOLS: MathTools = (
         operation_id="dirichlet_character.primitive_gauss_norm.compute",
         title="Compute the exact squared norm of a primitive character Gauss sum",
         description=(
-            "Derive the character conductor from its unit-group data, require it "
-            "to equal the source modulus, then compute tau(chi) times its exact "
+            "Validate the typed primitive-character claim against its exact "
+            "conductor, then compute tau(chi) times its exact "
             "cyclotomic conjugate. The returned cyclotomic value is |tau(chi)|^2 "
-            "and equals the modulus. Caller-supplied primitive labels are not used."
+            "and equals the claimed conductor; false claims are rejected."
         ),
         request_type=DirichletCharacterPrimitiveGaussNormRequest,
         result_type=DirichletCharacterPrimitiveGaussNormResult,
@@ -786,7 +786,12 @@ TOOLS: MathTools = (
             OperationExample(
                 name="quadratic_character_mod5_norm",
                 description="Compute the exact squared norm, 5, of its primitive Gauss sum.",
-                input={"character": {"group": _GROUP_MOD5, "coordinates": [2]}},
+                input={
+                    "primitive_character": {
+                        "character": {"group": _GROUP_MOD5, "coordinates": [2]},
+                        "conductor": 5,
+                    }
+                },
             ),
         ),
     ),

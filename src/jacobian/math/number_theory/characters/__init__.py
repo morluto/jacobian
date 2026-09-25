@@ -39,6 +39,7 @@ from jacobian.math.number_theory.characters.values import (
     DirichletCharacterKernel,
     DirichletCharacterRestrictionObstruction,
     DirichletCharacterRestrictionResult,
+    PrimitiveDirichletCharacter,
     PrincipalDirichletCharacter,
 )
 
@@ -52,6 +53,7 @@ __all__ = [
     "DirichletCharacterPrimitiveGaussNormResult",
     "DirichletCharacterRestrictionObstruction",
     "DirichletCharacterRestrictionResult",
+    "PrimitiveDirichletCharacter",
     "PrincipalDirichletCharacter",
     "character_group",
     "dirichlet_character_conductor",

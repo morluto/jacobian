@@ -11,7 +11,6 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.math.number_theory.characters import operations as native_operations
 from jacobian.math.number_theory.characters.operations import (
     character_group,
     dirichlet_character_orthogonality_over_characters,
@@ -97,18 +96,8 @@ def test_rejects_forged_group_and_integer_outside_the_input_envelope() -> None:
         dirichlet_character_orthogonality_over_characters(group, 10**256, 1)
 
 
-def test_output_bound_precedes_residue_class_lookup(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_native_result_is_independent_of_transport_byte_limits() -> None:
     group = character_group(5)
-
-    class TinyOutputLimit:
-        max_output_bytes = 1
-
-    def unexpected_lookup(*_args: object, **_kwargs: object) -> None:
-        pytest.fail("residue lookup ran before output admission")
-
-    monkeypatch.setattr(native_operations, "CanonicalLimits", TinyOutputLimit)
-    monkeypatch.setattr(native_operations, "bisect_left", unexpected_lookup)
-    with pytest.raises(OperationResourceAdmissionError, match="output bound"):
-        dirichlet_character_orthogonality_over_characters(group, 1, 1)
+    result = dirichlet_character_orthogonality_over_characters(group, 1, 1)
+    assert result.value == 4
+    assert result.group == group

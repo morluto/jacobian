@@ -14,11 +14,7 @@ from pydantic_core import PydanticCustomError
 from sympy import QQ, Poly, bernoulli, cyclotomic_poly, factorint, symbols
 
 from jacobian._exact import CanonicalRational
-from jacobian.canonical import (
-    CanonicalLimits,
-    format_canonical_integer,
-    strict_json_object_size,
-)
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -375,44 +371,6 @@ def dirichlet_character_orthogonality_over_characters(
 
     def integer_array_size(values: tuple[int, ...]) -> int:
         return array_size(tuple(len(str(value)) for value in values))
-
-    group_output_bytes = strict_json_object_size(
-        (
-            ("modulus", len(str(group.modulus))),
-            ("unit_residues", integer_array_size(group.unit_residues)),
-            ("character_count", len(str(group.character_count))),
-            ("invariant_factors", integer_array_size(group.invariant_factors)),
-            ("generators", integer_array_size(group.generators)),
-            ("generator_orders", integer_array_size(group.generator_orders)),
-            (
-                "unit_coordinates",
-                array_size(
-                    tuple(integer_array_size(row) for row in group.unit_coordinates)
-                ),
-            ),
-            ("exponent", len(str(group.exponent))),
-        )
-    )
-
-    def integer_string_size(value: int) -> int:
-        return len(format_canonical_integer(value)) + 2
-
-    output_bytes_bound = strict_json_object_size(
-        (
-            ("group", group_output_bytes),
-            ("left_integer", integer_string_size(left_integer)),
-            ("right_integer", integer_string_size(right_integer)),
-            ("left_residue", len(str(group.modulus - 1))),
-            ("right_residue", len(str(group.modulus - 1))),
-            ("value", len(str(group.character_count))),
-        )
-    )
-    if output_bytes_bound > CanonicalLimits().max_output_bytes:
-        raise OperationResourceAdmissionError(
-            location=("group",),
-            code="dirichlet_character.dual_orthogonality.output_bound",
-            message="dual-group orthogonality result exceeds the canonical output bound",
-        )
 
     modulus = group.modulus
     left_residue = left_integer % modulus

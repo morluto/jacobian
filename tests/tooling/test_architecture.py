@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import ast
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -602,3 +604,81 @@ def test_report_is_sorted_and_assertion_raises(tmp_path: Path) -> None:
     assert "subprocess-confined" in report.render()
     with pytest.raises(ArchitecturePolicyError):
         assert_architecture(tmp_path)
+
+
+def test_file_rules_share_one_module_walk_without_changing_report(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _write(
+        tmp_path,
+        "src/jacobian/math/example.py",
+        "import subprocess\n"
+        "import os\n"
+        "import shutil\n"
+        "from jacobian.process import run_bounded_process\n"
+        "from sympy import sympify as parse\n"
+        "\n"
+        "def compute(value):\n"
+        "    assert value > 0\n"
+        "    environment = dict(os.environ)\n"
+        "    shutil.which('solver')\n"
+        "    parsed = parse(value)\n"
+        "    run_bounded_process(['solver'])\n"
+        "    return str(value.num)\n",
+    )
+
+    original_walk = ast.walk
+    module_walks = 0
+
+    def count_module_walks(node: ast.AST) -> Iterator[ast.AST]:
+        nonlocal module_walks
+        if isinstance(node, ast.Module):
+            module_walks += 1
+        yield from original_walk(node)
+
+    monkeypatch.setattr(ast, "walk", count_module_walks)
+    report = check_architecture(tmp_path)
+
+    assert module_walks == 1
+    assert [(item.code, item.line, item.message) for item in report.violations] == [
+        (
+            "subprocess-confined",
+            1,
+            "direct subprocess use belongs in jacobian.process",
+        ),
+        (
+            "bounded-process-gateway",
+            4,
+            "run_bounded_process requires a concrete external-tool owner",
+        ),
+        (
+            "semantic-production-assert",
+            8,
+            "production code must use an explicit stable failure, not assert",
+        ),
+        (
+            "environ-spreading",
+            9,
+            "copy only explicitly allowed environment variables",
+        ),
+        (
+            "shutil-which-resolver",
+            10,
+            "external executable discovery requires a concrete tool owner",
+        ),
+        (
+            "evaluator-capable-parser",
+            11,
+            "parse is forbidden in public mathematical input flows",
+        ),
+        (
+            "bounded-process-gateway",
+            12,
+            "run_bounded_process requires a concrete external-tool owner",
+        ),
+        (
+            "unsafe-canonical-conversion",
+            13,
+            "use the canonical conversion API for rational wire components",
+        ),
+    ]

@@ -1395,6 +1395,17 @@ def _decimal_digits_upper(value: int) -> int:
     return (abs(value).bit_length() * 30_103) // 100_000 + 1
 
 
+def _containing_cell_ids(
+    complex_value: PolytopalComplexClosureResult, point: ComplexPoint
+) -> frozenset[str]:
+    coordinates = tuple(value.as_fraction() for value in point.coordinates)
+    return frozenset(
+        cell.cell_id
+        for cell in complex_value.maximal_cells
+        if _contains(cell, coordinates)
+    )
+
+
 def _admit_spline_evaluation_growth(
     spline: SplineSpaceResult,
     coefficients: tuple[CanonicalRational, ...],
@@ -1409,7 +1420,10 @@ def _admit_spline_evaluation_growth(
         )
         if not scalar.num:
             continue
-        for column, (_, exponents) in enumerate(spline.coefficient_axis):
+        containing_ids = _containing_cell_ids(spline.complex, point)
+        for column, (cell_id, exponents) in enumerate(spline.coefficient_axis):
+            if cell_id not in containing_ids:
+                continue
             basis_scalar = spline.nullspace_basis.entries[basis_index][column]
             if not basis_scalar.num:
                 continue

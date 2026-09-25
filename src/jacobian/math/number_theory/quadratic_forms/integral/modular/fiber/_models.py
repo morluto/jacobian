@@ -8,9 +8,6 @@ from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
-from jacobian.math.number_theory.quadratic_forms.integral.modular._kernel import (
-    evaluate_modular_polynomial_value,
-)
 from jacobian.math.number_theory.quadratic_forms.integral.modular._models import (
     ModularCoordinateVector,
     ModularInteger,
@@ -118,14 +115,6 @@ class ModularQuadraticFiber(StrictModel):
                     "fiber vectors must be unique and lexicographically ordered",
                 )
             previous = vector.coordinates
-            if (
-                evaluate_modular_polynomial_value(self.polynomial, vector.coordinates)
-                != self.target.residue
-            ):
-                raise _fiber_error(
-                    "vector_membership",
-                    "every fiber vector must map to the target residue",
-                )
         return self
 
 

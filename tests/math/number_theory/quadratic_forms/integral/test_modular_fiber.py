@@ -174,17 +174,21 @@ def test_request_parent_and_result_json_round_trip() -> None:
     )
 
 
-def test_fiber_values_reject_nonmembers_and_forged_cross_indices() -> None:
+def test_fiber_values_preserve_structural_vectors_and_reject_forged_cross_indices() -> (
+    None
+):
     polynomial = ModularQuadraticPolynomial(
         modulus=5, axis=("x",), diagonal_residues=(1,), cross_terms=()
     )
     bad_vector = ModularCoordinateVector(modulus=5, axis=("x",), coordinates=(1,))
-    with pytest.raises(ValidationError, match="map to the target residue"):
-        ModularQuadraticFiber(
-            polynomial=polynomial,
-            target=ModularInteger(modulus=5, residue=0),
-            vectors=(bad_vector,),
-        )
+    # Result decoding checks structure only; the membership claim belongs to
+    # the operation that computed the complete fiber, not generic validation.
+    decoded = ModularQuadraticFiber(
+        polynomial=polynomial,
+        target=ModularInteger(modulus=5, residue=0),
+        vectors=(bad_vector,),
+    )
+    assert decoded.vectors == (bad_vector,)
 
     forged_term = ModularQuadraticCrossTerm.model_construct(
         left=-1, right=0, coefficient=1

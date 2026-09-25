@@ -220,9 +220,13 @@ def image_of_morphism(value: SheafMorphismResult) -> SheafMorphismImageResult:
         components[cell] = matrix
         canonical_components.append((cell, field.render(matrix)))
 
-    restrictions = {
+    target_restrictions = {
         (item.source, item.target): item
         for item in (*target.cover_restrictions, *target.derived_restrictions)
+    }
+    restrictions = {
+        (item.source, item.target): item
+        for item in (*source.cover_restrictions, *source.derived_restrictions)
     }
     # A uniform conservative bound covers local RREF plus every induced map solve.
     work = morphism_work
@@ -338,9 +342,11 @@ def image_of_morphism(value: SheafMorphismResult) -> SheafMorphismImageResult:
         factor_matrix = _solve_matrix(field, basis, matrix)
         factors.append((cell, field.render(factor_matrix)))
 
-    def induced(item: SheafRestriction) -> SheafRestriction:
+    def induced(
+        item: SheafRestriction, target_item: SheafRestriction
+    ) -> SheafRestriction:
         target_matrix = tuple(
-            tuple(field.parse(x) for x in row) for row in item.entries
+            tuple(field.parse(x) for x in row) for row in target_item.entries
         )
         source_basis = bases[item.source]
         image = _mul(
@@ -368,9 +374,13 @@ def image_of_morphism(value: SheafMorphismResult) -> SheafMorphismImageResult:
         coefficient_field=source.coefficient_field,
         prime=source.prime,
         stalks=tuple(image_stalks),
-        cover_restrictions=tuple(induced(item) for item in source.cover_restrictions),
+        cover_restrictions=tuple(
+            induced(item, target_restrictions[(item.source, item.target)])
+            for item in source.cover_restrictions
+        ),
         derived_restrictions=tuple(
-            induced(item) for item in source.derived_restrictions
+            induced(item, target_restrictions[(item.source, item.target)])
+            for item in source.derived_restrictions
         ),
         diamonds=source.diamonds,
         comparable_pairs=source.comparable_pairs,

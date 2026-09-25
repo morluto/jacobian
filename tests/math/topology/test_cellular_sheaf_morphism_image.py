@@ -142,6 +142,49 @@ def test_image_factorization_reconstructs_non_surjective_map() -> None:
     assert tool.run(SheafMorphismImageRequest(morphism=original)) == result
 
 
+def test_image_restrictions_are_induced_from_target_sheaf() -> None:
+    complex_ = canonical_complex(("a", "b"), (("a", "b"),))
+    faces = tuple(face for group in complex_.faces_by_dimension for face in group.faces)
+    covers = tuple(
+        (face, coface)
+        for coface in faces
+        for face in faces
+        if len(coface) == len(face) + 1 and set(face) < set(coface)
+    )
+
+    def rank_one_sheaf(edge_restriction: int):
+        result = from_cover_maps(
+            complex_,
+            SheafField.RATIONAL,
+            None,
+            tuple(SheafStalk(simplex=face, basis=("x",)) for face in faces),
+            tuple(
+                CoverRestrictionMatrix(
+                    source=face,
+                    target=coface,
+                    entries=((_q(1 if len(coface) == 1 else edge_restriction),),),
+                )
+                for face, coface in covers
+            ),
+        )
+        assert result.sheaf is not None
+        return result.sheaf
+
+    source = rank_one_sheaf(2)
+    target = rank_one_sheaf(3)
+    morphism_components = tuple(
+        (cell, ((_q(2 if len(cell) == 1 else 3),),))
+        for cell in faces
+    )
+    original = morphism(source, target, morphism_components)
+    result = image_of_morphism(original)
+
+    assert all(item.entries == ((_q(3),),) for item in target.cover_restrictions)
+    assert all(item.entries == ((_q(2),),) for item in result.image.cover_restrictions)
+    assert result.inclusion.natural
+    assert result.factor.natural
+
+
 def test_zero_map_has_zero_image_on_every_face() -> None:
     source, target = _sheaf(rank=1), _sheaf(rank=1)
     original = morphism(

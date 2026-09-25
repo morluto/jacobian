@@ -142,8 +142,8 @@ def test_canonicalization_bound_is_checked_before_source_family_replay() -> None
         vertex_deck_anonymous_multiset(request)
 
 
-def test_raw_request_preflights_work_before_parsing_nested_cards() -> None:
-    with pytest.raises(ValidationError, match="anonymous_source_work_bound"):
+def test_raw_request_keeps_semantic_admission_in_operation_path() -> None:
+    with pytest.raises(ValidationError, match="cards"):
         VertexDeckAnonymousMultisetRequest.model_validate(
             {
                 "family": {

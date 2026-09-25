@@ -13,6 +13,7 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
+from jacobian.math.graphs.decks.anonymous_equality.operations import MAX_ANONYMOUS_DECK_EQUALITY_WORK
 from jacobian.math.graphs.decks._models import (
     MAX_ANONYMOUS_CARD_CANONICALIZATION_WORK,
     MAX_ANONYMOUS_CARD_RESULT_BYTES,
@@ -273,12 +274,15 @@ def vertex_deck_anonymous_multiset(
     card_order = max(source_order - 1, 0)
     card_count = source_order
     work = _anonymous_canonicalization_work(card_order, card_count)
+    # Equality canonicalizes both operands, so ensure even self-comparison is
+    # admitted for every producer result, including the maximal class count.
+    equality_work = 2 * _anonymous_canonicalization_work(card_order, card_count)
     output_bytes = card_count * (64 + 16 * comb(card_order, 2))
-    if work > MAX_ANONYMOUS_CARD_CANONICALIZATION_WORK:
+    if work > MAX_ANONYMOUS_CARD_CANONICALIZATION_WORK or equality_work > MAX_ANONYMOUS_DECK_EQUALITY_WORK:
         raise OperationResourceAdmissionError(
             location=("family",),
             code="graph_deck.anonymous_source_work_bound",
-            message="anonymous vertex-deck canonicalization exceeds its exact work bound",
+            message="anonymous vertex-deck result cannot be compared within the exact work bound",
         )
     if output_bytes > MAX_ANONYMOUS_CARD_RESULT_BYTES:
         raise OperationResourceAdmissionError(

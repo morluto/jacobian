@@ -228,6 +228,45 @@ def _normalize_batch(
     return {"fractions": results}
 
 
+def _gradient_admission(
+    payload: dict[str, Any], variable_count: int, generators: tuple[Any, ...]
+) -> dict[str, Any]:
+    """Check authored source coprimality and return active denominator GCDs."""
+
+    if set(payload) != {
+        "task",
+        "variable_count",
+        "axes",
+        "numerator",
+        "denominator",
+    }:
+        raise ValueError("malformed kernel request")
+    axes = payload["axes"]
+    numerator_records = payload["numerator"]
+    denominator_records = payload["denominator"]
+    if (
+        not isinstance(axes, list)
+        or any(
+            type(axis) is not int or not 0 <= axis < variable_count for axis in axes
+        )
+        or len(set(axes)) != len(axes)
+        or not isinstance(numerator_records, list)
+        or not isinstance(denominator_records, list)
+    ):
+        raise ValueError("malformed kernel request")
+    numerator = _polynomial(numerator_records, variable_count, generators)
+    denominator = _polynomial(denominator_records, variable_count, generators)
+    if not numerator.gcd(denominator).is_one:
+        return {"coprime": False, "factors": []}
+    return {
+        "coprime": True,
+        "factors": [
+            _factor_payload(denominator.gcd(denominator.diff(axis)), variable_count)
+            for axis in axes
+        ],
+    }
+
+
 def _run(payload: dict[str, Any]) -> dict[str, Any]:
     from sympy import symbols
 
@@ -274,6 +313,8 @@ def _run(payload: dict[str, Any]) -> dict[str, Any]:
         numerator = _polynomial(numerator_records, variable_count, generators)
         denominator = _polynomial(denominator_records, variable_count, generators)
         return {"coprime": bool(numerator.gcd(denominator).is_one)}
+    if task == "gradient_admission":
+        return _gradient_admission(payload, variable_count, generators)
     if task == "normalize":
         if set(payload) != {
             "task",

@@ -116,12 +116,17 @@ def polytopal_complex_adjacency_graph(
         )
 
     facet_edges = tuple(
-        PolytopalFacetAdjacency(
-            left_cell_id=record.first_cell_id,
-            right_cell_id=record.second_cell_id,
-            facet=face,
+        sorted(
+            (
+                PolytopalFacetAdjacency(
+                    left_cell_id=min(record.first_cell_id, record.second_cell_id),
+                    right_cell_id=max(record.first_cell_id, record.second_cell_id),
+                    facet=face,
+                )
+                for record, face in adjacent_rows
+            ),
+            key=lambda edge: (edge.left_cell_id, edge.right_cell_id),
         )
-        for record, face in adjacent_rows
     )
     result_cells = tuple(
         PolytopalAdjacencyCell(cell_id=cell.cell_id, vertices=cell.vertices)

@@ -1,9 +1,11 @@
 """Exact maximal-cell facet adjacency projections."""
 
+import json
 from fractions import Fraction
 from itertools import combinations
 
 import pytest
+from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationResourceAdmissionError
@@ -11,6 +13,9 @@ from jacobian.math.geometry.polytopes._models import (
     RationalCoordinateSpace,
     RationalPolytopeVertex,
     RationalVPolytope,
+)
+from jacobian.math.geometry.polytopes.complexes.adjacency._models import (
+    PolytopalComplexAdjacencyGraph,
 )
 from jacobian.math.geometry.polytopes.complexes.adjacency.operations import (
     polytopal_complex_adjacency_graph,
@@ -77,3 +82,38 @@ def test_adjacency_admits_only_bounded_cell_families() -> None:
         OperationResourceAdmissionError, match="16-cell adjacency envelope"
     ):
         polytopal_complex_adjacency_graph(cells)
+
+
+def test_multi_digit_cell_ids_keep_numeric_vertices_and_lexical_graph_edges() -> None:
+    cells = (
+        *(
+            _cell(((3 * index, 0), (3 * index + 1, 0), (3 * index, 1)))
+            for index in range(10)
+        ),
+        _cell(((28, 0), (28, 1), (27, 1))),
+    )
+    result = polytopal_complex_adjacency_graph(cells)
+
+    assert result.graph.vertices == tuple(f"M{index}" for index in range(11))
+    assert result.graph.edges == (("M10", "M9"),)
+    assert len(result.facet_edges) == 1
+    assert result.facet_edges[0].facet.maximal_cell_ids == ("M10", "M9")
+    assert (
+        PolytopalComplexAdjacencyGraph.model_validate_json(result.model_dump_json())
+        == result
+    )
+
+
+def test_result_json_rejects_forged_nonfacet_with_correct_declared_dimension() -> None:
+    result = polytopal_complex_adjacency_graph(
+        (
+            _cell(((0, 0), (1, 0), (0, 1))),
+            _cell(((1, 0), (1, 1), (0, 1))),
+        )
+    )
+    payload = json.loads(result.model_dump_json())
+    facet = payload["facet_edges"][0]["facet"]
+    facet["vertices"] = [facet["vertices"][0]]
+
+    with pytest.raises(ValidationError, match="exactly the common cell vertices"):
+        PolytopalComplexAdjacencyGraph.model_validate_json(json.dumps(payload))

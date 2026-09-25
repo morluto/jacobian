@@ -6,7 +6,9 @@ from typing import Self
 
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
+from sympy import Matrix, Rational
 
+from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
 from jacobian.math.geometry.polytopes._models import RationalCoordinateSpace
 from jacobian.math.geometry.polytopes.complexes._models import (
@@ -15,6 +17,48 @@ from jacobian.math.geometry.polytopes.complexes._models import (
     ComplexPoint,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
+
+
+def _facet_support_sides(
+    facet_points: set[tuple[CanonicalRational, ...]],
+    cell_points: set[tuple[CanonicalRational, ...]],
+    dimension: int,
+) -> set[int] | None:
+    """Return exact nonzero sides of the facet plane on one cell hull."""
+
+    ordered_points = tuple(
+        sorted(
+            facet_points,
+            key=lambda point: tuple((value.num, value.den) for value in point),
+        )
+    )
+    if not ordered_points or any(len(point) != dimension for point in ordered_points):
+        return None
+    rational_points = [
+        [Rational(value.num, value.den) for value in point] for point in ordered_points
+    ]
+    rows = [[*point, 1] for point in rational_points]
+    plane_space = Matrix(rows).nullspace()
+    if len(plane_space) != 1:
+        return None
+    coefficients = plane_space[0]
+    sides: set[int] = set()
+    for point in cell_points:
+        rational = [Rational(value.num, value.den) for value in point]
+        evaluation = (
+            sum(
+                coefficient * coordinate
+                for coefficient, coordinate in zip(
+                    coefficients[:-1], rational, strict=True
+                )
+            )
+            + coefficients[-1]
+        )
+        if evaluation > 0:
+            sides.add(1)
+        elif evaluation < 0:
+            sides.add(-1)
+    return sides
 
 
 class PolytopalAdjacencyCell(StrictModel):
@@ -71,17 +115,17 @@ class PolytopalComplexAdjacencyGraph(StrictModel):
                 "ambient coordinate count must equal the complex dimension",
             )
         cell_ids = tuple(cell.cell_id for cell in self.cells)
-        if cell_ids != tuple(sorted(set(cell_ids))):
+        if cell_ids != tuple(f"M{index}" for index in range(len(cell_ids))):
             raise PydanticCustomError(
                 "polytopal_complex.adjacency_cell_order",
-                "adjacency cells must be unique and ordered by canonical ID",
+                "adjacency cells must follow the complex's canonical numeric ID order",
             )
         if self.graph.vertices != cell_ids:
             raise PydanticCustomError(
                 "polytopal_complex.adjacency_vertex_binding",
                 "graph vertices must be exactly the canonical maximal-cell IDs",
             )
-        point_maps: dict[str, set[tuple[object, ...]]] = {}
+        point_maps: dict[str, set[tuple[CanonicalRational, ...]]] = {}
         for cell in self.cells:
             points = tuple(point.coordinates for point in cell.vertices)
             if len(set(points)) != len(points) or any(
@@ -126,12 +170,28 @@ class PolytopalComplexAdjacencyGraph(StrictModel):
                     "each graph edge must carry a codimension-one face",
                 )
             facet_points = {point.coordinates for point in edge.facet.vertices}
-            if not facet_points.issubset(point_maps[edge.left_cell_id]) or not (
-                facet_points.issubset(point_maps[edge.right_cell_id])
-            ):
+            left_points = point_maps[edge.left_cell_id]
+            right_points = point_maps[edge.right_cell_id]
+            common_points = left_points & right_points
+            if facet_points != common_points:
                 raise PydanticCustomError(
                     "polytopal_complex.adjacency_facet_vertices",
-                    "shared facet vertices must belong to both adjacent cells",
+                    "shared facet vertices must be exactly the common cell vertices",
+                )
+            left_sides = _facet_support_sides(facet_points, left_points, self.dimension)
+            right_sides = _facet_support_sides(
+                facet_points, right_points, self.dimension
+            )
+            if (
+                left_sides is None
+                or right_sides is None
+                or len(left_sides) != 1
+                or len(right_sides) != 1
+                or left_sides == right_sides
+            ):
+                raise PydanticCustomError(
+                    "polytopal_complex.adjacency_facet_support",
+                    "shared vertices must span a supporting facet on opposite sides of both cell hulls",
                 )
         return self
 

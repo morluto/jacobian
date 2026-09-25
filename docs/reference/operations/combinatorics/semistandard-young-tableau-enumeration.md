@@ -23,7 +23,8 @@ The public envelope admits alphabet size at most 4096, at most 4096 tableaux,
 estimate. Enumeration removes the largest used label as a horizontal strip;
 each predecessor has height at most one less than that label, so every emitted
 search branch has a completion. The work estimate accounts for predecessor
-shape choices, copying, and output ordering before enumeration. The result
-contains the canonical partition and typed tableau values.
+shape choices, copying, and final output ordering before enumeration; only the
+complete root family is sorted. The result contains the canonical partition
+and typed tableau values.
 
 [Combinatorics operations](index.md)

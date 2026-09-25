@@ -225,6 +225,18 @@ documentation according to the reader's task:
 The installed catalog is the operation reference. Add prose only when an
 external boundary needs context that a generated schema cannot express.
 
+Keep each normative rule in one authority: architecture owns responsibility
+boundaries and organization; the value contract owns codecs and trust; the
+operation and backend references own implementation contracts; the tool
+reference owns MCP behavior; the testing strategy owns evidence and lanes.
+`AGENTS.md` is a concise working map, not a second specification. Link to the
+authority from other pages rather than repeat a slightly different rule.
+When adding or changing a rule, explain its purpose, owner, and a representative
+example. Distinguish supported behavior, architectural intent, and limitations
+of static enforcement. Update contradictory summaries and check code-backed
+claims against the actual boundary; a documentation edit does not relax a
+runtime contract or disable a checker.
+
 Keep product intent (product model / architecture) separate from supported
 release behavior.
 For hosted MCP changes, update and validate

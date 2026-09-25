@@ -96,7 +96,7 @@ def test_mathematical_contracts_cannot_own_output_byte_limits(
         tmp_path,
         "src/jacobian/math/example/_process_channel.py",
         "from jacobian.process import run_bounded_process\n"
-        "worker_stdout_bytes = 1024\n",
+        "worker_stdout_bytes = envelope.max_output_bytes\n",
     )
 
     assert _violations(tmp_path, "mathematical-transport-limit") == [

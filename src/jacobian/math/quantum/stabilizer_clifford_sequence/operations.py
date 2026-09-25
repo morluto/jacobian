@@ -264,7 +264,7 @@ def apply_stabilizer_clifford_sequence(
             "quantum.stabilizer_clifford_sequence.invalid_request",
             "request must contain an exact group and typed finite sequence",
         )
-    group, generator_count, source_validation = _admit_group(request.group)
+    group, _generator_count, source_validation = _admit_group(request.group)
     register = group.register
     sequence, gate_count = _admit_sequence_shape(request.sequence, "sequence", register)
     width = len(register.qubit_ids)
@@ -275,17 +275,9 @@ def apply_stabilizer_clifford_sequence(
     axis_resolution_work = (
         gate_count * (4 * width + 4 * register_bytes) + gate_axis_bytes
     )
-    transformation_work = generator_count * (3 * width + 8 * gate_count)
-    output_bound = (
-        (generator_count + 1) * register_bytes
-        + generator_count * (24 * width + 128)
-        + 256
-    )
     if (
         source_validation > 1_000_000
-        or source_validation + axis_resolution_work + transformation_work
-        > MAX_SEQUENCE_WORK
-        or output_bound > MAX_SEQUENCE_RESULT_BYTES
+        or source_validation + axis_resolution_work > MAX_SEQUENCE_WORK
     ):
         raise OperationResourceAdmissionError(
             location=("sequence",),
@@ -301,6 +293,23 @@ def apply_stabilizer_clifford_sequence(
             generators=group.generators,
         )
     )
+    canonical_count = len(canonical.generators)
+    transformation_work = canonical_count * (3 * width + 8 * gate_count)
+    output_bound = (
+        (canonical_count + 1) * register_bytes
+        + canonical_count * (24 * width + 128)
+        + 256
+    )
+    if (
+        source_validation + axis_resolution_work + transformation_work
+        > MAX_SEQUENCE_WORK
+        or output_bound > MAX_SEQUENCE_RESULT_BYTES
+    ):
+        raise OperationResourceAdmissionError(
+            location=("sequence",),
+            code="quantum.stabilizer_clifford_sequence.over_envelope",
+            message="group validation, sequence action, or result exceeds its envelope",
+        )
     result_generators = []
     for generator in canonical.generators:
         x, z, phase = _conjugate_bits(

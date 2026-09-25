@@ -265,6 +265,22 @@ def test_composed_action_matches_sequential_group_action():
     ) == (_generated_group(tuple(_pauli_matrix(row) for row in after_both.generators)))
 
 
+def test_redundant_rows_are_canonicalized_before_result_size_admission():
+    register = QubitRegister(
+        qubit_ids=tuple("q" * 62 + f"{index:02}" for index in range(32))
+    )
+    generator = _pauli(register, (1,) + (0,) * 31, (0,) * 32)
+    group = ExactStabilizerGroup(qubit_register=register, generators=(generator,) * 4)
+    sequence = StabilizerCliffordSequence(register=register, gates=())
+
+    result = apply_stabilizer_clifford_sequence(
+        StabilizerCliffordSequenceApplyRequest(group=group, sequence=sequence)
+    )
+
+    assert result.generators == (generator,)
+    assert ExactStabilizerGroup.model_validate_json(result.model_dump_json()) == result
+
+
 def test_empty_sequence_is_identity_on_a_stabilizer_group():
     register = QubitRegister(qubit_ids=("q0", "q1"))
     group = ExactStabilizerGroup(

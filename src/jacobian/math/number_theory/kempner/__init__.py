@@ -1,6 +1,7 @@
 """Exact Kempner reciprocal-series enclosures."""
 
 from jacobian.math.number_theory.kempner._models import (
+    KempnerDecimalEnclosure,
     KempnerSeriesEnclosure,
 )
 from jacobian.math.number_theory.kempner.operations import (
@@ -9,6 +10,7 @@ from jacobian.math.number_theory.kempner.operations import (
 )
 
 __all__ = [
+    "KempnerDecimalEnclosure",
     "KempnerSeriesEnclosure",
     "enclose_kempner_series",
     "require_series_admission",

@@ -78,7 +78,8 @@ the finite roots and their slope-jump multiplicities. It preserves the
 induced piecewise-linear function, including when the source has inessential
 terms, but does not claim formal polynomial equality. An integer-coefficient
 input is promoted to `QQ` when its split coefficients require rational values.
-The operation admits consecutive support before root computation, checks
-exact scalar growth before each coefficient sum, and bounds serialized output
-before constructing the result. This is the univariate split form described
-in the [combinatorial introduction to tropical geometry](https://math.berkeley.edu/~bernd/tropical/sec1.pdf).
+The operation admits consecutive support before root computation and checks
+exact scalar growth before each coefficient sum. The output retains at most
+512 terms, with each coefficient bounded by the shared 8,192-digit scalar
+envelope. This is the univariate split form described in the [combinatorial
+introduction to tropical geometry](https://math.berkeley.edu/~bernd/tropical/sec1.pdf).

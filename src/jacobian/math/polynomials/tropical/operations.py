@@ -1113,33 +1113,6 @@ def tropical_polynomial_univariate_split_form(
     rational_coefficients = tuple(
         CanonicalRational.from_fraction(value) for value in coefficients
     )
-    payload = {
-        "semiring": {
-            "convention": result_semiring.convention,
-            "base": result_semiring.base,
-        },
-        "variables": list(poly.variables),
-        "terms": [
-            {
-                "exponents": [first_exponent + index],
-                "coefficient": {
-                    "semiring": {
-                        "convention": result_semiring.convention,
-                        "base": result_semiring.base,
-                    },
-                    "kind": "FINITE",
-                    "value": value.model_dump(mode="json"),
-                },
-            }
-            for index, value in enumerate(rational_coefficients)
-        ],
-    }
-    if len(encode_strict_json(payload)) > CanonicalLimits().max_output_bytes:
-        raise OperationResourceAdmissionError(
-            location=("polynomial",),
-            code="tropical.split_form_output",
-            message="the exact split polynomial exceeds the output byte envelope",
-        )
     return TropicalPolynomial(
         semiring=result_semiring,
         variables=poly.variables,

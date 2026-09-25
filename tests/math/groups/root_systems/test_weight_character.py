@@ -89,7 +89,9 @@ def test_character_has_weyl_symmetry_and_dimension(cartan, highest) -> None:
 
 def test_character_is_a_canonical_round_tripping_value() -> None:
     value = highest_weight_character(A2, (1, 1))
-    revived = IrreducibleWeightCharacter.model_validate_json(value.model_dump_json())
+    revived = IrreducibleWeightCharacter.model_validate_json(
+        value.model_dump_json()
+    )
     assert revived == value
     assert isinstance(value.terms[0], WeightMultiplicity)
 
@@ -157,9 +159,7 @@ def _small_semistandard_tableau_character(
     """Brute-force small tableaux independently as a Kostka-number oracle."""
     n = len(highest) + 1
     shape = (*(sum(highest[index:]) for index in range(len(highest))), 0)
-    cells = tuple(
-        (row, column) for row, width in enumerate(shape) for column in range(width)
-    )
+    cells = tuple((row, column) for row, width in enumerate(shape) for column in range(width))
     contents: dict[tuple[int, ...], int] = {}
     filling: dict[tuple[int, int], int] = {}
 
@@ -169,9 +169,7 @@ def _small_semistandard_tableau_character(
                 sum(value == letter for value in filling.values())
                 for letter in range(n)
             )
-            weight = tuple(
-                content[index] - content[index + 1] for index in range(n - 1)
-            )
+            weight = tuple(content[index] - content[index + 1] for index in range(n - 1))
             contents[weight] = contents.get(weight, 0) + 1
             return
         row, column = cells[position]

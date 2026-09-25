@@ -41,13 +41,12 @@ def _compositions(total: int, slots: int):
 
 def _partition_dominates(left: tuple[int, ...], right: tuple[int, ...]) -> bool:
     return all(
-        sum(left[:index]) >= sum(right[:index]) for index in range(1, len(left) + 1)
+        sum(left[:index]) >= sum(right[:index])
+        for index in range(1, len(left) + 1)
     )
 
 
-def _type_a_candidates(
-    partition: tuple[int, ...], total: int
-) -> tuple[tuple[int, ...], ...]:
+def _type_a_candidates(partition: tuple[int, ...], total: int) -> tuple[tuple[int, ...], ...]:
     """Enumerate the complete type-A weight set using the Kostka criterion.
 
     For type A_(n-1), a weight is the content of a semistandard tableau of
@@ -86,10 +85,7 @@ def highest_weight_character(
             message="highest weight must be nonnegative and match the Cartan rank",
         )
     highest = tuple(highest_weight)
-    if (
-        max((value.bit_length() for value in highest), default=0)
-        > MAX_HIGHEST_WEIGHT_BITS
-    ):
+    if max((value.bit_length() for value in highest), default=0) > MAX_HIGHEST_WEIGHT_BITS:
         raise OperationResourceAdmissionError(
             location=("highest_weight",),
             code="root_system.character_bounds",
@@ -114,9 +110,9 @@ def highest_weight_character(
     root_count = rank * n // 2
     work_bound = state_bound * root_count * max(total, 1) * 2
     dimension_bits_bound = root_count * (total + n).bit_length() + 2
-    intermediate_bits_bound = (
-        dimension_bits_bound + (4 * root_count * max(total, 1) ** 2 + 1).bit_length()
-    )
+    intermediate_bits_bound = dimension_bits_bound + (
+        4 * root_count * max(total, 1) ** 2 + 1
+    ).bit_length()
     output_bound = state_bound * (
         128 + rank * ((total + 1).bit_length() + 2) + intermediate_bits_bound // 3 + 4
     )
@@ -124,8 +120,7 @@ def highest_weight_character(
         state_bound > MAX_CHARACTER_STATES
         or work_bound > MAX_CHARACTER_WORK
         or intermediate_bits_bound > MAX_CHARACTER_MULTIPLICITY_BITS
-        or output_bound
-        > min(MAX_CHARACTER_OUTPUT_BYTES, CanonicalLimits().max_output_bytes)
+        or output_bound > min(MAX_CHARACTER_OUTPUT_BYTES, CanonicalLimits().max_output_bytes)
     ):
         raise OperationResourceAdmissionError(
             location=("highest_weight",),
@@ -145,9 +140,7 @@ def highest_weight_character(
 
     contents = _type_a_candidates(partition, total)
     if len(contents) > state_bound:
-        raise RuntimeError(
-            "type-A content enumeration exceeded its admitted state bound"
-        )
+        raise RuntimeError("type-A content enumeration exceeded its admitted state bound")
     content_set = set(contents)
     # Convert GL_n content to the simple-coroot pairings, i.e. fundamental
     # weight coordinates. Fixed total makes this map injective.
@@ -155,7 +148,6 @@ def highest_weight_character(
         content: tuple(content[index] - content[index + 1] for index in range(rank))
         for content in contents
     }
-
     # Increasing root height puts all higher weights before the weight whose
     # recurrence consumes them. In type A, alpha_(p,q)=e_p-e_q.
     def height(content: tuple[int, ...]) -> int:
@@ -168,7 +160,8 @@ def highest_weight_character(
     multiplicities: dict[tuple[int, ...], int] = {}
     rho_twice = tuple(n - 1 - 2 * index for index in range(n))
     highest_norm_shift = sum(
-        (partition[index] ** 2) + partition[index] * rho_twice[index]
+        (partition[index] ** 2)
+        + partition[index] * rho_twice[index]
         for index in range(n)
     )
     positive_roots = tuple((p, q) for p in range(n) for q in range(p + 1, n))
@@ -182,9 +175,7 @@ def highest_weight_character(
             for index in range(n)
         )
         if denominator <= 0:
-            raise RuntimeError(
-                "Freudenthal denominator was not positive below the top weight"
-            )
+            raise RuntimeError("Freudenthal denominator was not positive below the top weight")
         numerator = 0
         for p, q in positive_roots:
             for step in range(1, content[q] + 1):
@@ -198,9 +189,7 @@ def highest_weight_character(
                 numerator += 2 * pairing * multiplicities[raised_content]
         quotient, remainder = divmod(numerator, denominator)
         if remainder or quotient < 1:
-            raise RuntimeError(
-                "Freudenthal recursion did not yield a positive integer multiplicity"
-            )
+            raise RuntimeError("Freudenthal recursion did not yield a positive integer multiplicity")
         multiplicities[content] = quotient
 
     terms = tuple(

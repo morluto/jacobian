@@ -111,6 +111,20 @@ class RestrictRationalOutputResult(StrictModel):
                 "edge_transport_order",
                 "edge transports must follow restricted edge order",
             )
+        for row in self.product_states:
+            if (
+                row.transducer_state >= self.source.state_count
+                or row.language_state >= self.output_language.state_count
+            ):
+                raise _error(
+                    "product_state_transport_out_of_range",
+                    "product-state transport leaves an embedded source axis",
+                )
+        if any(row.source_edge >= len(self.source.edges) for row in self.edge_sources):
+            raise _error(
+                "edge_transport_out_of_range",
+                "edge transport leaves the embedded source relation",
+            )
         if self.restricted.input_alphabet_size != self.source.input_alphabet_size:
             raise _error(
                 "input_axis_mismatch", "the input alphabet axis must be retained"
@@ -118,6 +132,15 @@ class RestrictRationalOutputResult(StrictModel):
         if self.restricted.output_alphabet_size != self.source.output_alphabet_size:
             raise _error(
                 "output_axis_mismatch", "the output alphabet axis must be retained"
+            )
+        if (
+            self.restricted.input_alphabet != self.source.input_alphabet
+            or self.restricted.input_alphabet_id != self.source.input_alphabet_id
+            or self.restricted.output_alphabet_id != self.source.output_alphabet_id
+        ):
+            raise _error(
+                "alphabet_parent_mismatch",
+                "restricted relation must retain both source alphabet parents",
             )
         if self.restricted.output_alphabet != self.output_alphabet:
             raise _error(

@@ -123,9 +123,14 @@ def _validate_alphabet_contexts(
                 "alphabet_context_invalid",
                 "alphabet contexts must be finite alphabet values",
             )
-        if len(context.symbols) > MAX_FST_ALPHABET or any(
-            not isinstance(symbol, str) or _utf8_length(symbol) > 256
-            for symbol in context.symbols
+        if (
+            not context.symbols
+            or len(set(context.symbols)) != len(context.symbols)
+            or len(context.symbols) > MAX_FST_ALPHABET
+            or any(
+                not isinstance(symbol, str) or _utf8_length(symbol) > 256
+                for symbol in context.symbols
+            )
         ):
             _fail(
                 "alphabet_symbol_too_long",
@@ -179,11 +184,16 @@ def _validate_dfa(language: DFA, output_size: int) -> dict[tuple[int, int], int]
             "dfa_accepting_states_invalid",
             "DFA accepting states must be a bounded tuple",
         )
-    accepting = set(language.accepting_states)
-    if len(accepting) != len(language.accepting_states) or any(
+    if any(
         type(state) is not int or not 0 <= state < language.state_count
-        for state in accepting
+        for state in language.accepting_states
     ):
+        _fail(
+            "dfa_accepting_states_invalid",
+            "DFA accepting states must be distinct and declared",
+        )
+    accepting = set(language.accepting_states)
+    if len(accepting) != len(language.accepting_states):
         _fail(
             "dfa_accepting_states_invalid",
             "DFA accepting states must be distinct and declared",
@@ -332,8 +342,6 @@ def restrict_rational_output(
     delta, outgoing, labels = _validate_inputs(relation, language, output_alphabet)
     edge_inputs, edge_outputs = labels
 
-    product_state_bound = relation.state_count * language.state_count
-    max_output_label = max((len(label) for label in edge_outputs), default=0)
     work_bound = (
         len(relation.edges)
         + len(language.transitions)
@@ -341,7 +349,7 @@ def restrict_rational_output(
             len(edge_input) + len(edge_output)
             for edge_input, edge_output in zip(edge_inputs, edge_outputs, strict=True)
         )
-        + product_state_bound * max(1, len(relation.edges)) * max(1, max_output_label)
+        + language.state_count * sum(len(label) for label in edge_outputs)
     )
     if work_bound > MAX_RESTRICT_OUTPUT_WORK:
         _fail(

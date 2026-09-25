@@ -1,12 +1,16 @@
 """Cubical complex operations."""
 
 from jacobian.math.topology.cubical_complexes.extensions import (
+    CubicalCellBoundaryRequest,
+    CubicalCellBoundaryResult,
+    CubicalCellBoundaryTerm,
     CubicalTriangulationCellMap,
     CubicalTriangulationRequest,
     CubicalTriangulationResult,
     CubicalVertexMap,
     bitmap_to_complex,
     boundary,
+    cell_boundary,
     relative_homology,
     triangulate,
 )
@@ -26,12 +30,16 @@ from jacobian.math.topology.cubical_complexes.operations import (
 )
 
 __all__ = [
+    "CubicalCellBoundaryRequest",
+    "CubicalCellBoundaryResult",
+    "CubicalCellBoundaryTerm",
     "CubicalTriangulationCellMap",
     "CubicalTriangulationRequest",
     "CubicalTriangulationResult",
     "CubicalVertexMap",
     "bitmap_to_complex",
     "boundary",
+    "cell_boundary",
     "chain_complex",
     "closed_star",
     "f_vector",

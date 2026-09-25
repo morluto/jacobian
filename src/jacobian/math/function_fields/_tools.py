@@ -40,9 +40,6 @@ from jacobian.math.function_fields._models import (
     HyperellipticInfinityPlaceValuationRequest,
     HyperellipticInfinityPlaceValuationResult,
 )
-from jacobian.math.function_fields.hyperelliptic_infinity_riemann_roch import (
-    HYPERELLIPTIC_INFINITY_RIEMANN_ROCH_TOOL,
-)
 from jacobian.math.function_fields.operations import (
     function_field_base_embedding,
     function_field_base_embedding_apply,
@@ -256,7 +253,6 @@ _GF2_Y = {
 }
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
-    HYPERELLIPTIC_INFINITY_RIEMANN_ROCH_TOOL,
     MathTool(
         operation_id="function_field.base_embedding.apply",
         title="Apply the rational base-field inclusion",
@@ -460,18 +456,25 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     ),
     MathTool(
         operation_id="function_field.riemann_roch_space.compute",
-        title="Compute a rational function-field Riemann-Roch space",
+        title="Compute a function-field Riemann-Roch space",
         description=(
             "Return the exact basis and dimension of L(D) for a divisor over "
-            "GF(p)(x). The field must use the rational defining polynomial 1. "
-            "Support is limited to 256 places and multiplicities to 4096 bits; "
+            "GF(p)(x), or of L(m P_infinity) for the unique infinity place "
+            "of an odd-degree squarefree hyperelliptic model y^2=f(x). "
+            "Rational-field divisors use the rational defining polynomial 1; "
+            "the hyperelliptic slice accepts only its infinity place. Support "
+            "is limited to 256 places and multiplicities to 4096 bits; "
             "positive-dimensional outputs require at most 13 basis elements "
-            "and degree-12 canonical rational-function coefficients."
+            "and degree-12 canonical coefficients."
         ),
         request_type=FunctionFieldRiemannRochSpaceRequest,
         result_type=FunctionFieldRiemannRochSpace,
         run=lambda request: function_field_riemann_roch_space(request.divisor),
         tags=("function-field", "riemann-roch", "exact", "basis"),
+        discovery_terms=(
+            "Riemann-Roch space of a multiple of the hyperelliptic infinity place",
+            "basis of L(m infinity) for y squared equals f(x)",
+        ),
         examples=(
             OperationExample(
                 name="basis_for_twice_infinity_on_projective_line",

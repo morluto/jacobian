@@ -114,7 +114,9 @@ def test_rational_riemann_roch_basis_has_exact_dimension_and_membership() -> Non
     )
     for element in space.basis:
         for place, multiplicity in ((x_plus_one, 2), (x_place, -1), (infinity, 1)):
-            assert function_field_place_valuation(place, element) + multiplicity >= 0
+            valuation = function_field_place_valuation(place, element)
+            assert valuation is not None
+            assert valuation + multiplicity >= 0
     # The only denominator is (x+1)^2, supported where D has coefficient 2;
     # each numerator is x^(i+1), so there are no further finite poles.
 
@@ -324,7 +326,7 @@ def test_riemann_roch_multiplicity_bound_is_checked_before_place_admission() -> 
     )
 
 
-def test_riemann_roch_rejects_algebraic_extension_fields() -> None:
+def test_riemann_roch_rejects_unsupported_extension_fields() -> None:
     def rf(numerator: tuple[int, ...]) -> PrimeFieldRationalFunction:
         return PrimeFieldRationalFunction(
             numerator=PrimeFieldPolynomial(characteristic=2, coefficients=numerator),
@@ -342,5 +344,5 @@ def test_riemann_roch_rejects_algebraic_extension_fields() -> None:
         )
 
     assert error.value.errors()[0]["type"] == (
-        "function_field.riemann_roch_requires_rational_field"
+        "function_field.riemann_roch_requires_supported_model"
     )

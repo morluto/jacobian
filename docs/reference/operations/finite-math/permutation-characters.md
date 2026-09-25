@@ -19,7 +19,8 @@ For the natural action of `S3` on three points, the canonical class values are
 `(3, 1, 0)` on the identity, transpositions, and 3-cycles. A trivial group
 acting on three points has the one-value character `(3)`.
 
-Decoded `FiniteCharacter` values recheck that the retained partition is the
-complete class partition of the action group and that every value matches the
-fixed-point count. The same checks apply to direct construction and updated
-model copies.
+Deserialization performs structural checks on the retained action, class
+rows, and values; it does not re-enumerate the generated group or replay the
+fixed-point computation. Completeness is established by this operation's
+producer. A consumer relying on a caller-authored character or class-partition
+claim must check the relevant defining relation within its admitted work.

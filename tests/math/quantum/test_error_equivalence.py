@@ -64,3 +64,17 @@ def test_rejects_nonisotropic_checks_and_foreign_register() -> None:
         stabilizer_error_equivalence(
             CheckSpaceValue(register=register, basis=(z,)), x, foreign
         )
+
+
+def test_error_equivalence_rejects_model_constructed_check_spaces() -> None:
+    register = QubitRegister(qubit_ids=("q",))
+    x = _pauli(register, (1, 0))
+    forged_values = (
+        CheckSpaceValue.model_construct(),
+        CheckSpaceValue.model_construct(qubit_register=register),
+        CheckSpaceValue.model_construct(qubit_register=register, basis="ab"),
+        CheckSpaceValue.model_construct(qubit_register=register, basis=(None, "x") * 4),
+    )
+    for forged in forged_values:
+        with pytest.raises(OperationDomainValidationError):
+            stabilizer_error_equivalence(forged, x, x)

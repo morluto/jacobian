@@ -974,6 +974,7 @@ def class_power_map(
                 f"{MAX_CLASS_POWER_MAP_EXPONENT:,}"
             ),
         )
+    _admit_partition_source(partition.source)
     source_order = group_order(partition.source)
     if source_order > 256:
         raise OperationResourceAdmissionError(

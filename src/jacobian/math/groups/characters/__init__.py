@@ -14,7 +14,11 @@ from jacobian.math.groups.characters._models import (
     ClassFunctionRestrictionRequest,
     ClassFunctionRestrictionResult,
     ClassFunctionScaleRequest,
+    ClassPowerMapRequest,
+    ClassPowerMapResult,
     ConjugacyClassPartition,
+    CyclicCharacterRestrictionRequest,
+    CyclicCharacterRestrictionResult,
     CyclotomicValue,
     FiniteClassFunction,
     FrobeniusSchurIndicatorRequest,
@@ -29,7 +33,9 @@ from jacobian.math.groups.characters.operations import (
     class_function_pointwise_product,
     class_function_restrict_to_subgroup,
     class_function_scale,
+    class_power_map,
     frobenius_schur_indicator,
+    restrict_cyclic_character,
 )
 
 __all__ = [
@@ -46,7 +52,11 @@ __all__ = [
     "ClassFunctionRestrictionRequest",
     "ClassFunctionRestrictionResult",
     "ClassFunctionScaleRequest",
+    "ClassPowerMapRequest",
+    "ClassPowerMapResult",
     "ConjugacyClassPartition",
+    "CyclicCharacterRestrictionRequest",
+    "CyclicCharacterRestrictionResult",
     "CyclotomicValue",
     "FiniteClassFunction",
     "FrobeniusSchurIndicatorRequest",
@@ -59,5 +69,7 @@ __all__ = [
     "class_function_pointwise_product",
     "class_function_restrict_to_subgroup",
     "class_function_scale",
+    "class_power_map",
     "frobenius_schur_indicator",
+    "restrict_cyclic_character",
 ]

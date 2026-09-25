@@ -499,6 +499,7 @@ class LinkBlackboardGraph(StrictModel):
 
     @model_validator(mode="after")
     def require_source_axes(self) -> Self:
+        """Validate the graph's own axes and authored incidence structurally."""
         if (
             not self.diagram.crossings
             or self.diagram.free_loops
@@ -519,7 +520,6 @@ class LinkBlackboardGraph(StrictModel):
             raise _validation_error(
                 "blackboard_region_ids", "region IDs must be unique"
             )
-        boundaries = tuple(region.boundary_darts for region in self.regions)
         darts = tuple(
             dart for crossing in self.diagram.crossings for dart in crossing.half_edges
         )
@@ -530,35 +530,6 @@ class LinkBlackboardGraph(StrictModel):
             raise _validation_error(
                 "blackboard_region_darts",
                 "region boundaries must partition source darts",
-            )
-        rotation_successor = {
-            dart: crossing.half_edges[(index + 1) % 4]
-            for crossing in self.diagram.crossings
-            for index, dart in enumerate(crossing.half_edges)
-        }
-        arc_partner = {
-            dart: partner
-            for arc in self.diagram.arcs
-            for dart, partner in ((arc.tail, arc.head), (arc.head, arc.tail))
-        }
-        face_successor = {dart: rotation_successor[arc_partner[dart]] for dart in darts}
-        if any(
-            boundary[0] != min(boundary)
-            or any(
-                face_successor[left] != right
-                for left, right in zip(
-                    boundary, boundary[1:] + boundary[:1], strict=True
-                )
-            )
-            for boundary in boundaries
-        ):
-            raise _validation_error(
-                "blackboard_region_face_cycles",
-                "each boundary must be the canonical face cycle of the source diagram",
-            )
-        if boundaries != tuple(sorted(boundaries)):
-            raise _validation_error(
-                "blackboard_region_order", "regions must use canonical face order"
             )
         expected_shaded = tuple(
             region.region_id for region in self.regions if region.shaded
@@ -579,21 +550,11 @@ class LinkBlackboardGraph(StrictModel):
                 "blackboard_crossing_axis", "edges must cover crossings in source order"
             )
         shaded = set(self.shaded_region_ids)
-        shaded_by_region = {region.region_id: region.shaded for region in self.regions}
         region_of_dart = {
             dart: region.region_id
             for region in self.regions
             for dart in region.boundary_darts
         }
-        for arc in self.diagram.arcs:
-            if (
-                shaded_by_region[region_of_dart[arc.tail]]
-                == shaded_by_region[region_of_dart[arc.head]]
-            ):
-                raise _validation_error(
-                    "blackboard_checkerboard_adjacency",
-                    "every source projection arc must separate opposite checkerboard colors",
-                )
         for edge, crossing in zip(self.edges, self.diagram.crossings, strict=True):
             corner_regions = tuple(region_of_dart[dart] for dart in crossing.half_edges)
             shaded_corners = tuple(
@@ -615,13 +576,6 @@ class LinkBlackboardGraph(StrictModel):
                     "blackboard_edge_endpoints",
                     "crossing edge endpoints must match its opposite shaded source corners",
                 )
-            expected_tait_sign = (
-                1 if set(shaded_corners) == set(crossing.over_pair) else -1
-            )
-            if edge.tait_sign != expected_tait_sign:
-                raise _validation_error(
-                    "blackboard_edge_sign", "Tait sign must match the source crossing"
-                )
         return self
 
 
@@ -636,7 +590,7 @@ class BlackboardGraphRequest(StrictModel):
 
 
 class GoeritzDataRequest(StrictModel):
-    diagram: OrientedLinkDiagram
+    blackboard_graph: LinkBlackboardGraph
 
 
 class GoeritzDataResult(StrictModel):

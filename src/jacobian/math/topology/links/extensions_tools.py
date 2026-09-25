@@ -81,7 +81,7 @@ def _state_circles(request: LinkStateCirclesRequest) -> LinkStateCirclesResult:
 
 
 def _goeritz(request: GoeritzDataRequest) -> GoeritzDataResult:
-    return link_goeritz_data(request.diagram)
+    return link_goeritz_data(request.blackboard_graph)
 
 
 def _blackboard_graph(request: BlackboardGraphRequest) -> LinkBlackboardGraph:

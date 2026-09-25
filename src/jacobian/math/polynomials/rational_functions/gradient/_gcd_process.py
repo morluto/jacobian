@@ -274,6 +274,64 @@ def forced_denominator_derivative_gcds(
     return tuple(result)
 
 
+def recognize_and_forced_denominator_derivative_gcds(
+    function: RationalFunction,
+    *,
+    axes: tuple[int, ...],
+) -> tuple[bool, tuple[DerivativeGcdFactor, ...]]:
+    """Recognize one source and compute its active denominator GCDs together.
+
+    These exact tasks consume the same source polynomials and share the same
+    killable worker lifetime. The returned coprimality fact is checked before
+    the caller proceeds to derivative construction; factor bounds remain
+    available for the caller's post-GCD output admission.
+    """
+
+    variable_count = len(function.variables)
+    if (
+        variable_count == 0
+        or any(axis < 0 or axis >= variable_count for axis in axes)
+        or len(set(axes)) != len(axes)
+    ):
+        raise RuntimeError(
+            "bounded rational-gradient admission worker received invalid axes"
+        )
+    response = _run_kernel_worker(
+        {
+            "task": "gradient_admission",
+            "variable_count": variable_count,
+            "axes": list(axes),
+            "numerator": _polynomial_payload(function.numerator),
+            "denominator": _polynomial_payload(function.denominator),
+        },
+        stage="gradient source and denominator admission",
+    )
+    if set(response) != {"coprime", "factors"} or type(response["coprime"]) is not bool:
+        raise RuntimeError(
+            "bounded rational-gradient admission worker returned malformed output"
+        )
+    factor_payloads = response["factors"]
+    if not isinstance(factor_payloads, list):
+        raise RuntimeError(
+            "bounded rational-gradient admission worker returned malformed output"
+        )
+    if not response["coprime"]:
+        if factor_payloads:
+            raise RuntimeError(
+                "bounded rational-gradient admission worker returned malformed output"
+            )
+        return False, ()
+    if len(factor_payloads) != len(axes):
+        raise RuntimeError(
+            "bounded rational-gradient admission worker returned malformed output"
+        )
+    unit = DerivativeGcdFactor(bound=_one_polynomial(variable_count), records=())
+    factors = [unit] * variable_count
+    for axis, payload in zip(axes, factor_payloads, strict=True):
+        factors[axis] = _bound_from_payload(payload, variable_count)
+    return True, tuple(factors)
+
+
 def source_is_coprime(function: RationalFunction) -> bool:
     """Recognize coprimality of one non-monomial source under the deadline."""
 
@@ -471,5 +529,6 @@ __all__ = [
     "forced_denominator_derivative_gcds",
     "normalize_admitted_fraction",
     "normalize_admitted_fractions",
+    "recognize_and_forced_denominator_derivative_gcds",
     "source_is_coprime",
 ]

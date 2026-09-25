@@ -314,7 +314,11 @@ TOOLS: MathTools = (
         examples=(
             OperationExample(
                 name="trefoil_braid_word_product",
-                description="Concatenate sigma_1 squared and sigma_1 in B_2.",
+                description=(
+                    "Concatenate sigma_1 squared and sigma_1 in B_2. The inputs "
+                    "must have the same strand count, and their combined word "
+                    "length must be at most 64 letters."
+                ),
                 input={
                     "left": {
                         "strand_count": 2,

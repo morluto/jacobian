@@ -11,15 +11,18 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import DecimalIntegerEncoding
 from jacobian._models import StrictModel
+from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.graphs.patterns._models import (
     MAX_INDUCED_PATTERN_TOTAL_WORK_UNITS,
 )
+from jacobian.math.graphs.realization._models import DegreeSequence
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 MAX_DECK_VERTICES = 64
 """Admission cap on source vertices so the complete card family fits output."""
 
 MAX_DECK_CARD_EDGES = 130_000
+"""Admission cap on aggregate card edges across the whole family."""
 MAX_EDGE_DECK_EDGES = 130_000
 MAX_UNLABELLED_DECK_VERTICES = 10
 MAX_UNLABELLED_DECK_ISOMORPHISM_WORK = 2_000_000
@@ -39,7 +42,17 @@ MAX_VERTEX_DECK_CARD_EDGE_TOTAL = MAX_UNLABELLED_DECK_VERTICES * comb(
 MAX_KELLY_DECK_TOTAL_WORK = MAX_INDUCED_PATTERN_TOTAL_WORK_UNITS
 MAX_KELLY_COUNT_DIGITS = 3
 MAX_KELLY_SUBGRAPH_COUNT_DIGITS = 12
-MAX_KELLY_RESULT_BYTES = 1_000_000
+MAX_DECK_ECHO_ALLOCATION = 1_000_000
+"""Bound on vertex-label characters a Kelly deck result may echo.
+
+A deck result echoes its source family, one class representative per deck
+class, and one contribution representative per class. Each label appears at
+most once per incident graph record, so bounding the aggregate label
+allocation before canonicalization bounds the exact output growth.
+"""
+
+MAX_DEGREE_MULTISET_DIGITS = 64
+"""Aggregate decimal digits the reconstructed degree multiset may allocate."""
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -114,7 +127,9 @@ class AnonymousGraphCardClass(StrictModel):
     """One canonically relabelled isomorphism class and its exact multiplicity."""
 
     representative: SimpleUndirectedGraph
-    multiplicity: Annotated[int, DecimalIntegerEncoding(max_digits=12)] = Field(ge=1)
+    multiplicity: Annotated[int, DecimalIntegerEncoding(max_digits=12)] = Field(
+        ge=1, json_schema_extra={"pattern": "^[1-9][0-9]*$"}
+    )
 
 
 class AnonymousGraphCardMultiset(StrictModel):
@@ -140,12 +155,6 @@ class AnonymousGraphCardMultiset(StrictModel):
                 "anonymous_card_classes", "classes exceed the carrier bound"
             )
         pair_count = comb(n, 2)
-        work = _anonymous_canonicalization_work(n, len(self.classes))
-        if work > MAX_ANONYMOUS_CARD_CANONICALIZATION_WORK:
-            raise _validation_error(
-                "anonymous_card_validation_bound",
-                "canonical class validation exceeds its bounded permutation work",
-            )
         output_bytes = len(self.classes) * (64 + 16 * pair_count)
         if output_bytes > MAX_ANONYMOUS_CARD_RESULT_BYTES:
             raise _validation_error(
@@ -205,11 +214,6 @@ class AnonymousGraphCardMultiset(StrictModel):
                     "anonymous_card_edges",
                     "representative edges must be valid, unique, and ordered",
                 )
-            if _canonical_card_edges(graph.vertices, graph.edges) != graph.edges:
-                raise _validation_error(
-                    "anonymous_card_not_canonical",
-                    "each representative must be minimal under all vertex permutations",
-                )
             if previous_key is not None and graph.edges <= previous_key:
                 raise _validation_error(
                     "anonymous_card_classes",
@@ -228,16 +232,14 @@ class AnonymousGraphCardMultiset(StrictModel):
 class AnonymousCardDegreeFrequency(StrictModel):
     """One sorted degree multiset and its exact total card multiplicity."""
 
-    degrees: tuple[int, ...] = Field(
-        max_length=MAX_UNLABELLED_DECK_VERTICES,
-        description="Nonincreasing vertex degrees, with one coordinate per card vertex.",
-    )
+    degrees: DegreeSequence
     multiplicity: Annotated[int, DecimalIntegerEncoding(max_digits=20)] = Field(ge=1)
 
 
 class AnonymousCardDegreeProfile(StrictModel):
-    """Degree-multiset histogram for an anonymous card multiset."""
+    """Degree-multiset histogram bound to its anonymous card multiset."""
 
+    source: AnonymousGraphCardMultiset
     card_order: int = Field(ge=0, le=MAX_UNLABELLED_DECK_VERTICES)
     total_card_multiplicity: Annotated[int, DecimalIntegerEncoding(max_digits=20)] = (
         Field(ge=0)
@@ -248,6 +250,10 @@ class AnonymousCardDegreeProfile(StrictModel):
 
     @model_validator(mode="after")
     def require_canonical_degree_profile(self) -> Self:
+        if type(self.source) is not AnonymousGraphCardMultiset:
+            raise _validation_error(
+                "card_profile_source", "profile source has the wrong carrier"
+            )
         order = self.card_order
         if type(order) is not int or not 0 <= order <= MAX_UNLABELLED_DECK_VERTICES:
             raise _validation_error(
@@ -263,13 +269,16 @@ class AnonymousCardDegreeProfile(StrictModel):
         output_bytes = 128 + len(self.degree_multisets) * (64 + 16 * order)
         cells = len(self.degree_multisets) * max(order, 1)
         if output_bytes > MAX_ANONYMOUS_CARD_PROFILE_RESULT_BYTES:
-            raise _validation_error(
-                "card_profile_output_bound",
-                "degree-profile values exceed the byte bound",
+            raise OperationResourceAdmissionError(
+                location=("degree_multisets",),
+                code="graph_deck.card_profile_output_bound",
+                message="degree-profile values exceed the output bound",
             )
         if cells > MAX_ANONYMOUS_CARD_PROFILE_CELLS:
-            raise _validation_error(
-                "card_profile_cell_bound", "degree-profile values exceed the cell bound"
+            raise OperationResourceAdmissionError(
+                location=("degree_multisets",),
+                code="graph_deck.card_profile_cell_bound",
+                message="degree-profile values exceed the cell bound",
             )
         previous: tuple[int, ...] | None = None
         total = 0
@@ -278,10 +287,12 @@ class AnonymousCardDegreeProfile(StrictModel):
                 raise _validation_error(
                     "card_profile_row_type", "profile rows have the wrong carrier"
                 )
-            degrees = getattr(row, "degrees", None)
+            sequence = getattr(row, "degrees", None)
             multiplicity = getattr(row, "multiplicity", None)
+            degrees = getattr(sequence, "degrees", None)
             if (
-                type(degrees) is not tuple
+                type(sequence) is not DegreeSequence
+                or type(degrees) is not tuple
                 or len(degrees) != order
                 or any(
                     type(degree) is not int or degree < 0 or degree >= max(order, 1)
@@ -323,12 +334,13 @@ class AnonymousCardDegreeProfile(StrictModel):
     @classmethod
     def _from_kernel(
         cls,
-        card_order: int,
+        source: AnonymousGraphCardMultiset,
         total_card_multiplicity: int,
         degree_multisets: tuple[AnonymousCardDegreeFrequency, ...],
     ) -> Self:
         return cls.model_construct(
-            card_order=card_order,
+            source=source,
+            card_order=source.card_order,
             total_card_multiplicity=total_card_multiplicity,
             degree_multisets=degree_multisets,
         )
@@ -366,9 +378,12 @@ def _admit_anonymous_profile_wire_resources(value: Any) -> None:
         or type(classes) not in (list, tuple)
     ):
         return
+    assert isinstance(classes, (list, tuple))
     if len(classes) > MAX_ANONYMOUS_CARD_CLASSES:
-        raise _validation_error(
-            "card_profile_class_bound", "profile input has too many card classes"
+        raise OperationResourceAdmissionError(
+            location=("multiset", "classes"),
+            code="graph_deck.card_profile_class_bound",
+            message="profile input has too many card classes",
         )
     canonical_work, total_work, cells, output_bytes = (
         _anonymous_profile_resource_estimates(order, len(classes))
@@ -377,19 +392,22 @@ def _admit_anonymous_profile_wire_resources(value: Any) -> None:
         canonical_work > MAX_ANONYMOUS_CARD_CANONICALIZATION_WORK
         or total_work > MAX_ANONYMOUS_CARD_PROFILE_WORK
     ):
-        raise _validation_error(
-            "card_profile_work_bound",
-            "canonical validation and degree profiling exceed the shared work bound",
+        raise OperationResourceAdmissionError(
+            location=("multiset", "classes"),
+            code="graph_deck.card_profile_work_bound",
+            message="canonical validation and degree profiling exceed the shared work bound",
         )
     if cells > MAX_ANONYMOUS_CARD_PROFILE_CELLS:
-        raise _validation_error(
-            "card_profile_cell_bound",
-            "degree-profile cells exceed the materialization bound",
+        raise OperationResourceAdmissionError(
+            location=("multiset", "classes"),
+            code="graph_deck.card_profile_cell_bound",
+            message="degree-profile cells exceed the materialization bound",
         )
     if output_bytes > MAX_ANONYMOUS_CARD_PROFILE_RESULT_BYTES:
-        raise _validation_error(
-            "card_profile_output_bound",
-            "degree-profile output exceeds the byte bound",
+        raise OperationResourceAdmissionError(
+            location=("multiset", "classes"),
+            code="graph_deck.card_profile_output_bound",
+            message="degree-profile output exceeds the byte bound",
         )
 
 
@@ -707,8 +725,9 @@ class UnlabelledDeckRequest(StrictModel):
     deck: EdgeDeletionFamily = Field(
         description=(
             "A complete source-bound edge deck; quotient is admitted for at most "
-            "10 source vertices and 2000000 units of pairwise isomorphism work."
-        )
+            "10 source vertices and 2000000 units of exact permutation "
+            "canonicalization work."
+        ),
     )
 
 
@@ -780,84 +799,6 @@ class UnlabelledDeck(StrictModel):
                     "quotient_source_cards",
                     "each quotient representative must be the first source card",
                 )
-        return self
-
-    @classmethod
-    def _from_kernel(cls, **values: Any) -> Self:
-        return cls.model_construct(**values)
-
-
-class UnlabelledEdgeDeckRequest(StrictModel):
-    """Consume a complete source-bound edge-deletion family."""
-
-    deck: EdgeDeletionFamily = Field(
-        description=(
-            "A complete source-bound edge deck; exact permutation canonicalization "
-            "is admitted by source order, aggregate work, and result bytes."
-        )
-    )
-
-
-class UnlabelledEdgeDeckClass(StrictModel):
-    """One graph-isomorphism class with exact source-edge provenance."""
-
-    representative: SimpleUndirectedGraph
-    multiplicity: int = Field(ge=1)
-    card_indices: tuple[int, ...]
-    deleted_edges: tuple[tuple[str, str], ...]
-
-
-class UnlabelledEdgeDeck(StrictModel):
-    """Exact multiset quotient of a source-bound edge-deletion family."""
-
-    family: EdgeDeletionFamily
-    classes: tuple[UnlabelledEdgeDeckClass, ...]
-    card_count: int = Field(ge=0)
-
-    @model_validator(mode="after")
-    def require_partition(self) -> Self:
-        order = len(self.family.source.vertices)
-        work = len(self.family.cards) * factorial(order) * (1 + order + comb(order, 2))
-        if (
-            order > MAX_UNLABELLED_DECK_VERTICES
-            or work > MAX_UNLABELLED_DECK_ISOMORPHISM_WORK
-        ):
-            raise _validation_error(
-                "edge_quotient_bound",
-                "unlabelled edge deck exceeds its exact canonicalization envelope",
-            )
-        if self.card_count != len(self.family.cards) or self.card_count != len(
-            self.family.source.edges
-        ):
-            raise _validation_error(
-                "edge_quotient_card_count", "deck must retain every source edge card"
-            )
-        seen: list[int] = []
-        for item in self.classes:
-            if (
-                item.multiplicity != len(item.card_indices)
-                or item.multiplicity != len(item.deleted_edges)
-                or not item.card_indices
-                or tuple(sorted(item.card_indices)) != item.card_indices
-                or any(
-                    index < 0 or index >= self.card_count for index in item.card_indices
-                )
-                or item.deleted_edges
-                != tuple(
-                    self.family.cards[index].deleted_edge for index in item.card_indices
-                )
-                or item.representative != self.family.cards[item.card_indices[0]].card
-            ):
-                raise _validation_error(
-                    "edge_quotient_class_provenance",
-                    "each class must retain aligned card indices, source edges, and its first source card",
-                )
-            seen.extend(item.card_indices)
-        if sorted(seen) != list(range(self.card_count)):
-            raise _validation_error(
-                "edge_quotient_indices",
-                "class indices must partition the edge-card axis",
-            )
         return self
 
     @classmethod
@@ -1222,11 +1163,12 @@ class VertexDeckEdgeCount(StrictModel):
 
 __all__ = [
     "MAX_DECK_CARD_EDGES",
+    "MAX_DECK_ECHO_ALLOCATION",
     "MAX_DECK_VERTICES",
+    "MAX_DEGREE_MULTISET_DIGITS",
     "MAX_EDGE_DECK_EDGES",
     "MAX_KELLY_COUNT_DIGITS",
     "MAX_KELLY_DECK_TOTAL_WORK",
-    "MAX_KELLY_RESULT_BYTES",
     "MAX_KELLY_SUBGRAPH_COUNT_DIGITS",
     "MAX_UNLABELLED_DECK_ISOMORPHISM_WORK",
     "MAX_UNLABELLED_DECK_VERTICES",

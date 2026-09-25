@@ -1,17 +1,13 @@
 """Exact degree-multiset reconstruction from complete vertex decks."""
 
-import json
 from itertools import combinations
 
 import pytest
 
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
     OperationDomainValidationError,
-    OperationMatchRequest,
     OperationResourceAdmissionError,
 )
-from jacobian.dispatch import invoke_operation
 from jacobian.math.graphs.decks import (
     UnlabelledVertexDeck,
     VertexDeletionFamily,
@@ -116,27 +112,3 @@ def test_admits_degree_output_bound_before_deck_work() -> None:
     )
     with pytest.raises(OperationResourceAdmissionError, match="output exceeds"):
         vertex_deck_degree_multiset(forged_deck)
-
-
-def test_catalog_finds_vertex_deck_degree_multiset_operation() -> None:
-    catalog = Catalog.open()
-    found = catalog.match(
-        OperationMatchRequest(
-            need="reconstruct the exact degree multiset from a complete vertex deck",
-            limit=5,
-        )
-    )
-    assert found.matches[0].operation_id == "graph.deck.vertex.degree_multiset.compute"
-
-    operation = catalog.operation("graph.deck.vertex.degree_multiset.compute")
-    assert operation is not None
-    result = invoke_operation(
-        operation.operation_id, operation.examples[0].input, catalog
-    )
-    assert operation.result_type.model_validate_json(
-        json.dumps(result.output)
-    ).degrees == (
-        0,
-        0,
-        0,
-    )

@@ -13,8 +13,6 @@ from jacobian.math.graphs.decks._models import (
     EdgeDeletionFamily,
     UnlabelledDeck,
     UnlabelledDeckRequest,
-    UnlabelledEdgeDeck,
-    UnlabelledEdgeDeckRequest,
     UnlabelledVertexDeck,
     UnlabelledVertexDeckRequest,
     VertexDeckDegreeMultisetRequest,
@@ -28,10 +26,9 @@ from jacobian.math.graphs.decks._models import (
     VertexDeletionFamily,
 )
 from jacobian.math.graphs.decks.operations import (
-    _profile_from_admitted_multiset,
+    anonymous_card_degree_profile,
     anonymous_graph_card_multiset,
     edge_deletion_family,
-    edge_unlabelled_deck,
     unlabelled_deck,
     unlabelled_vertex_deck,
     vertex_deck_degree_multiset,
@@ -63,10 +60,6 @@ def _run_unlabelled(request: UnlabelledDeckRequest) -> UnlabelledDeck:
     return unlabelled_deck(request.deck)
 
 
-def _run_edge_unlabelled(request: UnlabelledEdgeDeckRequest) -> UnlabelledEdgeDeck:
-    return edge_unlabelled_deck(request.deck)
-
-
 def _run_unlabelled_vertex(
     request: UnlabelledVertexDeckRequest,
 ) -> UnlabelledVertexDeck:
@@ -78,7 +71,7 @@ def _run_anonymous_card_degree_profile(
 ) -> AnonymousCardDegreeProfile:
     # The request's before-validator admits the combined envelope before nested
     # card parsing; that parser then establishes canonical form exactly once.
-    return _profile_from_admitted_multiset(request.multiset)
+    return anonymous_card_degree_profile(request.multiset)
 
 
 def _run_vertex_deck_induced_pattern_count(
@@ -173,7 +166,11 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         result_type=AnonymousGraphCardMultiset,
         run=lambda request: anonymous_graph_card_multiset(request),
         tags=("graph", "deck", "anonymous", "multiset", "isomorphism", "exact"),
-        discovery_terms=("anonymous graph card multiset", "unlabelled graph cards", "deck realizability input"),
+        discovery_terms=(
+            "anonymous graph card multiset",
+            "unlabelled graph cards",
+            "deck realizability input",
+        ),
         examples=(
             OperationExample(
                 name="anonymous_two_vertex_cards",
@@ -253,16 +250,32 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         operation_id="graph.deck.unlabelled.compute",
         title="Compute the unlabelled multiset quotient of an edge deck",
         description=(
-            "Group source edge-deletion cards by exact graph isomorphism and retain "
-            "each representative with its positive multiplicity and source card "
-            "indices; quotient work admits at most 10 source vertices and "
-            "2000000 comparison units."
+            "Group source edge-deletion cards by exact graph isomorphism, "
+            "canonicalizing each card to the least adjacency encoding across all "
+            "vertex permutations, and retain each representative with its "
+            "positive multiplicity and source card indices; deleted source edges "
+            "are recovered from the card indices on the source edge axis. Quotient "
+            "work admits at most 10 source vertices and 2000000 exact "
+            "permutation-canonicalization work units."
         ),
         request_type=UnlabelledDeckRequest,
         result_type=UnlabelledDeck,
         run=_run_unlabelled,
-        tags=("graph", "deck", "isomorphism", "multiset", "exact"),
-        discovery_terms=("unlabelled deck", "deck quotient", "deck multiplicities"),
+        tags=(
+            "graph",
+            "deck",
+            "edge-deletion",
+            "isomorphism",
+            "multiset",
+            "exact",
+        ),
+        discovery_terms=(
+            "unlabelled deck",
+            "unlabelled edge deck",
+            "deck quotient",
+            "deck multiplicities",
+            "edge deck multiplicities",
+        ),
         examples=(
             OperationExample(
                 name="path_edge_quotient",
@@ -291,72 +304,6 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                                 },
                                 "retained_vertices": ["a", "b", "c"],
                                 "retained_edge_count": 1,
-                            },
-                        ],
-                    }
-                },
-            ),
-        ),
-    ),
-    MathTool(
-        operation_id="graph.deck.edge.unlabelled.compute",
-        title="Compute the exact unlabelled edge-deck multiset",
-        description=(
-            "Canonicalize each complete source-bound edge-deleted card by the "
-            "least adjacency encoding across all vertex permutations. The result "
-            "preserves every class multiplicity and aligns card indices with "
-            "deleted source edges. Admission bounds source order, aggregate "
-            "permutation work, and the serialized result size."
-        ),
-        request_type=UnlabelledEdgeDeckRequest,
-        result_type=UnlabelledEdgeDeck,
-        run=_run_edge_unlabelled,
-        tags=("graph", "deck", "edge-deletion", "isomorphism", "multiset", "exact"),
-        discovery_terms=(
-            "unlabelled edge deck",
-            "edge-deck isomorphism classes",
-            "edge deck multiplicities",
-        ),
-        examples=(
-            OperationExample(
-                name="triangle_unlabelled_edge_deck",
-                description=(
-                    "All three triangle edge cards are isomorphic; the one class "
-                    "retains all three deleted source edge keys and indices."
-                ),
-                input={
-                    "deck": {
-                        "source": {
-                            "vertices": ["a", "b", "c"],
-                            "edges": [["a", "b"], ["a", "c"], ["b", "c"]],
-                        },
-                        "cards": [
-                            {
-                                "deleted_edge": ["a", "b"],
-                                "card": {
-                                    "vertices": ["a", "b", "c"],
-                                    "edges": [["a", "c"], ["b", "c"]],
-                                },
-                                "retained_vertices": ["a", "b", "c"],
-                                "retained_edge_count": 2,
-                            },
-                            {
-                                "deleted_edge": ["a", "c"],
-                                "card": {
-                                    "vertices": ["a", "b", "c"],
-                                    "edges": [["a", "b"], ["b", "c"]],
-                                },
-                                "retained_vertices": ["a", "b", "c"],
-                                "retained_edge_count": 2,
-                            },
-                            {
-                                "deleted_edge": ["b", "c"],
-                                "card": {
-                                    "vertices": ["a", "b", "c"],
-                                    "edges": [["a", "b"], ["a", "c"]],
-                                },
-                                "retained_vertices": ["a", "b", "c"],
-                                "retained_edge_count": 2,
                             },
                         ],
                     }
@@ -582,7 +529,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "uses graph.induced_vertex_subset_pattern.count semantics (subsets, "
             "not labelled embeddings). Requires a complete exact vertex deck; "
             "preflights deck validation, canonicalization, all card-count work, "
-            f"and a {MAX_KELLY_DECK_TOTAL_WORK:,}-unit aggregate bound."
+            f"the result's label echo allocation, and a "
+            f"{MAX_KELLY_DECK_TOTAL_WORK:,}-unit aggregate bound."
         ),
         request_type=VertexDeckInducedSubgraphCountRequest,
         result_type=VertexDeckInducedSubgraphCount,
@@ -672,7 +620,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "not an induced subset count and not an injective embedding count. "
             "Kelly's identity sums exact per-card copy counts with deck-class "
             "multiplicity and divides by n-h. Exact assignment, canonicalization, "
-            f"family, and output work must fit {MAX_KELLY_DECK_TOTAL_WORK:,} units."
+            "family, and result echo allocation work are admitted first, within "
+            f"{MAX_KELLY_DECK_TOTAL_WORK:,} units."
         ),
         request_type=VertexDeckSubgraphCountRequest,
         result_type=VertexDeckSubgraphCount,

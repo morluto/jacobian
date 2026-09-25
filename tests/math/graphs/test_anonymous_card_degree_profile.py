@@ -59,9 +59,7 @@ def _profile(cards: tuple[SimpleUndirectedGraph, ...], order: int):
     multiset = anonymous_graph_card_multiset(
         AnonymousGraphCardMultisetRequest(card_order=order, cards=cards)
     )
-    return multiset, anonymous_card_degree_profile(
-        AnonymousCardDegreeProfileRequest(multiset=multiset)
-    )
+    return multiset, anonymous_card_degree_profile(multiset)
 
 
 def test_cycles_paths_and_nonisomorphic_regular_cards_share_only_their_degree_invariant() -> (
@@ -85,7 +83,7 @@ def test_cycles_paths_and_nonisomorphic_regular_cards_share_only_their_degree_in
     assert len(profile.degree_multisets) == 2
     assert profile.card_order == 6
     assert profile.total_card_multiplicity == 9
-    assert tuple(row.degrees for row in profile.degree_multisets) == (
+    assert tuple(row.degrees.degrees for row in profile.degree_multisets) == (
         (2, 2, 2, 2, 1, 1),
         (2, 2, 2, 2, 2, 2),
     )
@@ -106,9 +104,7 @@ def test_empty_profile_retains_card_order_and_round_trips() -> None:
     multiset = anonymous_graph_card_multiset(
         AnonymousGraphCardMultisetRequest(card_order=7, cards=())
     )
-    result = anonymous_card_degree_profile(
-        AnonymousCardDegreeProfileRequest(multiset=multiset)
-    )
+    result = anonymous_card_degree_profile(multiset)
     assert result.card_order == 7
     assert result.total_card_multiplicity == 0
     assert result.degree_multisets == ()
@@ -130,7 +126,7 @@ def test_native_operation_rejects_model_construct_noncanonical_card() -> None:
     )
     request = AnonymousCardDegreeProfileRequest.model_construct(multiset=multiset)
     with pytest.raises(OperationDomainValidationError, match="permutation-minimal"):
-        anonymous_card_degree_profile(request)
+        anonymous_card_degree_profile(request.multiset)
 
 
 def test_native_admission_charges_one_canonicalization_per_card_class(
@@ -148,7 +144,7 @@ def test_native_admission_charges_one_canonicalization_per_card_class(
         return original(vertices, edges)
 
     monkeypatch.setattr(deck_operations, "_canonical_card_edges", counted)
-    result = anonymous_card_degree_profile(request)
+    result = anonymous_card_degree_profile(request.multiset)
     assert result == valid_profile
     assert calls == len(multiset.classes)
 
@@ -172,31 +168,31 @@ def test_profile_work_cells_and_output_are_admitted_at_exact_boundaries(
     profile_work = 4 * 4 + 3 * 4 + 4 * comb(4, 2) + 4 + 4
     exact_work = canonical_work + profile_work
     monkeypatch.setattr(deck_operations, "MAX_ANONYMOUS_CARD_PROFILE_WORK", exact_work)
-    assert anonymous_card_degree_profile(request).degree_multisets
+    assert anonymous_card_degree_profile(request.multiset).degree_multisets
     monkeypatch.setattr(
         deck_operations, "MAX_ANONYMOUS_CARD_PROFILE_WORK", exact_work - 1
     )
     with pytest.raises(OperationResourceAdmissionError, match="shared work bound"):
-        anonymous_card_degree_profile(request)
+        anonymous_card_degree_profile(request.multiset)
 
     monkeypatch.setattr(deck_operations, "MAX_ANONYMOUS_CARD_PROFILE_WORK", 2_000_000)
     monkeypatch.setattr(deck_operations, "MAX_ANONYMOUS_CARD_PROFILE_CELLS", 4)
-    assert anonymous_card_degree_profile(request).degree_multisets
+    assert anonymous_card_degree_profile(request.multiset).degree_multisets
     monkeypatch.setattr(deck_operations, "MAX_ANONYMOUS_CARD_PROFILE_CELLS", 3)
     with pytest.raises(OperationResourceAdmissionError, match="cells"):
-        anonymous_card_degree_profile(request)
+        anonymous_card_degree_profile(request.multiset)
 
     monkeypatch.setattr(deck_operations, "MAX_ANONYMOUS_CARD_PROFILE_CELLS", 200_000)
     output_bound = 128 + 64 + 16 * 4
     monkeypatch.setattr(
         deck_operations, "MAX_ANONYMOUS_CARD_PROFILE_RESULT_BYTES", output_bound
     )
-    assert anonymous_card_degree_profile(request).degree_multisets
+    assert anonymous_card_degree_profile(request.multiset).degree_multisets
     monkeypatch.setattr(
         deck_operations, "MAX_ANONYMOUS_CARD_PROFILE_RESULT_BYTES", output_bound - 1
     )
     with pytest.raises(OperationResourceAdmissionError, match="byte bound"):
-        anonymous_card_degree_profile(request)
+        anonymous_card_degree_profile(request.multiset)
 
 
 def test_catalog_round_trip_canonicalizes_nested_multiset_only_once(

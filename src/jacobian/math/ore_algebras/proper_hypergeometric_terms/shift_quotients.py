@@ -5,6 +5,7 @@ from __future__ import annotations
 from math import comb
 from typing import Any
 
+from jacobian.canonical import decimal_digit_width
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -39,8 +40,7 @@ def _term_degree(term: ProperHypergeometricTerm) -> int:
 
 def _shifted_polynomial_term_bound(term: ProperHypergeometricTerm, axis: int) -> int:
     return sum(
-        monomial.exponents[axis] + 1
-        for monomial in term.polynomial.polynomial.terms
+        monomial.exponents[axis] + 1 for monomial in term.polynomial.polynomial.terms
     )
 
 
@@ -89,15 +89,18 @@ def _admit_quotient(term: ProperHypergeometricTerm, axis: int) -> None:
         )
     coefficient_digits = sum(
         max(
-            len(str(abs(numerator))),
-            len(str(denominator)),
+            decimal_digit_width(numerator),
+            decimal_digit_width(denominator),
         )
         for monomial in polynomial.terms
         for numerator, denominator in (monomial.coefficient.as_integer_ratio(),)
     )
     base = term.n_base if axis == 0 else term.k_base
     base_numerator, base_denominator = base.as_integer_ratio()
-    base_digits = max(len(str(abs(base_numerator))), len(str(base_denominator)))
+    base_digits = max(
+        decimal_digit_width(base_numerator),
+        decimal_digit_width(base_denominator),
+    )
     conservative_digits = (
         2 * coefficient_digits
         + 2 * base_digits
@@ -169,8 +172,8 @@ def _quotient(term: ProperHypergeometricTerm, axis: int) -> RationalFunction:
     )
     if any(
         max(
-            len(str(abs(coefficient.as_fraction().numerator))),
-            len(str(coefficient.as_fraction().denominator)),
+            decimal_digit_width(coefficient.as_fraction().numerator),
+            decimal_digit_width(coefficient.as_fraction().denominator),
         )
         > _MAX_OUTPUT_DIGITS
         for polynomial_part in (result.numerator, result.denominator)

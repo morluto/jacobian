@@ -130,3 +130,66 @@ def test_factorial_growth_is_rejected_before_expansion():
     )
     with pytest.raises(OperationResourceAdmissionError):
         proper_hypergeometric_shift_quotients(term)
+
+
+def test_distinct_denominators_are_bounded_before_expansion():
+    """Charge common-denominator growth across every prefactor coefficient.
+
+    Sixteen distinct 10-digit prime denominators keep the largest individual
+    width at 10 digits but grow the normalized quotient's common denominator to
+    about 150 digits, so the request must be refused by admission rather than
+    by the ``RationalFunction`` coefficient validator.
+    """
+
+    from sympy import nextprime
+
+    primes: list[int] = []
+    candidate = 10**9
+    for _ in range(16):
+        candidate = int(nextprime(candidate))
+        primes.append(candidate)
+        candidate += 1
+    terms = tuple(
+        RationalPolynomialTerm(
+            coefficient=CanonicalRational(num=1, den=primes[degree]),
+            exponents=(0, degree),
+        )
+        for degree in range(15, -1, -1)
+    )
+    term = ProperHypergeometricTerm(
+        polynomial=RationalPolynomial(
+            variables=("n", "k"),
+            polynomial=SparseRationalPolynomial(terms=terms),
+        )
+    )
+    with pytest.raises(OperationResourceAdmissionError):
+        proper_hypergeometric_shift_quotients(term)
+
+
+@pytest.mark.parametrize("component", ("prefactor", "n_base", "k_base"))
+def test_oversized_exact_components_raise_admission_error(component):
+    """Count digit widths without Python's integer-to-string conversion guard.
+
+    ``CanonicalRational`` admits components well beyond the built-in 4,300-digit
+    string limit, so admission must measure such widths without formatting the
+    integer and reject the request through the shared resource envelope.
+    """
+
+    oversized = 10**5000 + 12345
+    kwargs = {}
+    terms = [((0, 0), 1)]
+    if component == "prefactor":
+        terms = [((0, 0), oversized)]
+    elif component == "n_base":
+        kwargs["n_base"] = CanonicalRational(num=oversized, den=1)
+    else:
+        kwargs["k_base"] = CanonicalRational(num=1, den=oversized)
+    term = ProperHypergeometricTerm(
+        polynomial=polynomial(terms),
+        factorial_factors=(
+            IntegerAffineFactorial(n_coefficient=1, k_coefficient=0, offset=0, power=1),
+        ),
+        **kwargs,
+    )
+    with pytest.raises(OperationResourceAdmissionError):
+        proper_hypergeometric_shift_quotients(term)

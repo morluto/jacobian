@@ -147,7 +147,6 @@ def _preflight_raw_differentials(
     maximum_axis: int,
     maximum_cells: int,
     maximum_digits: int,
-    integral: bool,
 ) -> tuple[tuple[tuple[object, ...], ...], ...] | None:
     if not isinstance(differentials, (list, tuple)):
         return None
@@ -206,19 +205,11 @@ def _preflight_raw_differentials(
                         "a homology coefficient exceeds the raw "
                         f"{maximum_digits}-digit envelope",
                     )
-                if isinstance(entry, str):
-                    coefficient: int | Fraction = (
-                        int(entry) if "/" not in entry else Fraction(entry)
-                    )
-                elif type(entry) is int:
-                    coefficient = int(entry)
-                else:
-                    coefficient = entry
-                canonical_entries.append(
-                    str(coefficient)
-                    if integral and type(coefficient) is int
-                    else coefficient
-                )
+                # Preserve the caller's scalar representation. JSON supplies
+                # canonical decimal strings; native calls supply int/Fraction.
+                # The ChainCoefficient leaf codec decodes each in its own
+                # validation mode, so converting here would break the other mode.
+                canonical_entries.append(entry)
             canonical_rows.append(tuple(canonical_entries))
         canonical_matrices.append(tuple(canonical_rows))
     return tuple(canonical_matrices)
@@ -270,7 +261,6 @@ def _preflight_raw_homology_complex(data: object) -> object:
         maximum_axis=maximum_axis,
         maximum_cells=maximum_cells,
         maximum_digits=maximum_digits,
-        integral=integral,
     )
     canonical_complex = dict(raw_complex)
     if isinstance(basis_sizes, (list, tuple)):

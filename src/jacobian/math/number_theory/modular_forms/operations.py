@@ -9,6 +9,7 @@ from typing import Literal, cast
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.characters.operations import (
+    dirichlet_character_conjugate,
     require_complete_character_group,
 )
 from jacobian.math.number_theory.characters.values import DirichletCharacter
@@ -24,6 +25,7 @@ from jacobian.math.number_theory.modular_forms.values import (
     MAX_GAMMA0_OPERATION_LEVEL,
     MAX_MODULAR_FORM_WEIGHT,
     LevelOneModularQExpansion,
+    ModularFormAtkinLehnerTarget,
     ModularFormSpace,
 )
 from jacobian.math.polynomials.series._models import TruncatedSeries
@@ -74,6 +76,42 @@ def level_one_named_q_expansion(
         space_kind=space_kind,
         normalization=normalization,
         q_expansion=q_expansion,
+    )
+
+
+def modular_form_atkin_lehner_target(
+    space: ModularFormSpace,
+) -> ModularFormAtkinLehnerTarget:
+    """Return the codomain parent of the full Fricke action ``W_N``.
+
+    For integral weight, ``W_N`` preserves the Gamma0 level and changes the
+    Nebentypus to its inverse. This reports only the typed parent correspondence;
+    the normalized coefficient action is not represented here.
+    """
+
+    if not isinstance(space, ModularFormSpace):
+        raise OperationDomainValidationError(
+            location=("space",),
+            code="modular_form.atkin_lehner_target_space_type",
+            message="space must be an exact modular-form space value",
+        )
+    target_character = (
+        "TRIVIAL"
+        if space.character == "TRIVIAL"
+        else dirichlet_character_conjugate(space.character)
+    )
+    target_space = ModularFormSpace(
+        group=space.group,
+        level=space.level,
+        weight=space.weight,
+        kind=space.kind,
+        character=target_character,
+        coefficient_domain=space.coefficient_domain,
+    )
+    return ModularFormAtkinLehnerTarget(
+        source_space=space,
+        target_space=target_space,
+        divisor=space.level,
     )
 
 

@@ -4,6 +4,7 @@ from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.number_theory.modular_forms import operations as native
 from jacobian.math.number_theory.modular_forms._models import (
     LevelOneNamedQExpansionRequest,
+    ModularFormAtkinLehnerTargetRequest,
     ModularFormBasisFrameRequest,
     ModularFormBasisRequest,
     ModularFormCanonicalToFramedRequest,
@@ -56,6 +57,7 @@ from jacobian.math.number_theory.modular_forms.transform_tools import (
 )
 from jacobian.math.number_theory.modular_forms.values import (
     LevelOneModularQExpansion,
+    ModularFormAtkinLehnerTarget,
     ModularFormBasis,
     ModularFormChangeOfBasisFrame,
     ModularFormCoordinates,
@@ -128,6 +130,12 @@ def apply_coordinate_atkin_lehner(
     request: ModularFormCoordinatesAtkinLehnerRequest,
 ) -> ModularFormCoordinates:
     return modular_form_coordinates_atkin_lehner(request.form, request.divisor)
+
+
+def compute_atkin_lehner_target(
+    request: ModularFormAtkinLehnerTargetRequest,
+) -> ModularFormAtkinLehnerTarget:
+    return native.modular_form_atkin_lehner_target(request.space)
 
 
 def compute_hecke_matrix(
@@ -729,6 +737,56 @@ TOOLS: MathTools = (
                         ],
                     },
                     "divisor": 2,
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="modular_form.atkin_lehner.target_space.compute",
+        title="Compute the target space of the full Fricke correspondence",
+        description=(
+            "Return a typed source-to-target parent for W_N on an integral-weight "
+            "Gamma0(N) space. The level, weight, space kind, and exact coefficient "
+            "field stay fixed; the target Nebentypus is the inverse character. "
+            "This reports the codomain parent only. It does not compute the normalized "
+            "slash action or transformed q-coefficients; those require exact Gauss-sum "
+            "normalization and a supported target basis."
+        ),
+        request_type=ModularFormAtkinLehnerTargetRequest,
+        result_type=ModularFormAtkinLehnerTarget,
+        run=compute_atkin_lehner_target,
+        tags=("modular-forms", "atkin-lehner", "target-space", "exact"),
+        examples=(
+            OperationExample(
+                name="fricke_inverts_order_four_nebentypus",
+                description=(
+                    "The full Fricke target of the order-four character modulo 5 "
+                    "has its inverse character, represented by coordinate 3."
+                ),
+                input={
+                    "space": {
+                        "group": "GAMMA0",
+                        "level": 5,
+                        "weight": 4,
+                        "kind": "S",
+                        "character": {
+                            "group": {
+                                "modulus": 5,
+                                "unit_residues": [1, 2, 3, 4],
+                                "character_count": 4,
+                                "invariant_factors": [4],
+                                "generators": [2],
+                                "generator_orders": [4],
+                                "unit_coordinates": [[0], [1], [3], [2]],
+                                "exponent": 4,
+                            },
+                            "coordinates": [1],
+                        },
+                        "coefficient_domain": {
+                            "domain": "QQ_CYCLOTOMIC",
+                            "order": 4,
+                        },
+                    }
                 },
             ),
         ),

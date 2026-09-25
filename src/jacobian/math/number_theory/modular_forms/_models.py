@@ -131,6 +131,12 @@ class ModularFormCoordinatesAtkinLehnerRequest(StrictModel):
     divisor: StrictInt = Field(ge=1, le=MAX_GAMMA0_OPERATION_LEVEL)
 
 
+class ModularFormAtkinLehnerTargetRequest(StrictModel):
+    """Identify a full Fricke target parent, without applying the slash action."""
+
+    space: ModularFormSpace
+
+
 class ModularFormHeckeMatrixRequest(StrictModel):
     """Compute the exact matrix of T_n in a canonical represented basis."""
 

@@ -260,6 +260,40 @@ class ModularFormSpace(StrictModel):
         return self
 
 
+class ModularFormAtkinLehnerTarget(StrictModel):
+    """The exact target parent of the full Fricke action ``W_N``.
+
+    This value records only the source-to-target space correspondence. It does
+    not contain the normalized slash action or transformed q-expansion.
+    """
+
+    source_space: ModularFormSpace
+    target_space: ModularFormSpace
+    divisor: StrictInt = Field(ge=1, le=MAX_MODULAR_FORM_LEVEL)
+
+    @model_validator(mode="after")
+    def require_full_fricke_target(self) -> Self:
+        source = self.source_space
+        target = self.target_space
+        if self.divisor != source.level:
+            raise _validation_error(
+                "atkin_lehner_target_divisor",
+                "this target-space value represents only the full Fricke divisor N",
+            )
+        if (
+            source.group != target.group
+            or source.level != target.level
+            or source.weight != target.weight
+            or source.kind != target.kind
+            or source.coefficient_domain != target.coefficient_domain
+        ):
+            raise _validation_error(
+                "atkin_lehner_target_parent",
+                "the Fricke target preserves subgroup, level, weight, kind, and coefficient field",
+            )
+        return self
+
+
 class ModularFormBasisElement(StrictModel):
     """One named vector of a deterministic exact modular-form basis."""
 

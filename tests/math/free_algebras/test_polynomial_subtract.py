@@ -137,6 +137,25 @@ def test_identical_ordered_alphabet_is_required() -> None:
     assert error.value.errors()[0]["type"] == "free_algebra.alphabet_mismatch"
 
 
+def test_common_denominator_factor_is_accounted_for_exactly() -> None:
+    scale = 10**62
+    left = _polynomial(("x",), {("x",): Fraction(1, 2 * scale)})
+    right = _polynomial(("x",), {("x",): Fraction(1, 5 * scale)})
+
+    result = subtract(left, right)
+
+    assert _coefficient_map(result) == {("x",): Fraction(3, 10 * scale)}
+    assert len(str(result.terms[0].coefficient.den)) == 64
+
+
+def test_output_cell_estimate_sums_actual_word_lengths() -> None:
+    long_word = ("x",) * 64
+    words = (long_word,) + _words(("x", "y"), 35)
+    value = _polynomial(("x", "y"), dict.fromkeys(words, 1))
+
+    assert subtract(value, _polynomial(("x", "y"), {})) == value
+
+
 def test_full_128_term_support_is_accepted_and_exact() -> None:
     support = _words(("x", "y"), MAX_FREE_ALGEBRA_ADDITION_TERMS)
     left = _polynomial(("x", "y"), dict.fromkeys(support[:64], Fraction(2, 3)))

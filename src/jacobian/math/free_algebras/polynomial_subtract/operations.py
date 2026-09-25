@@ -179,8 +179,13 @@ def _subtraction_collision_digits(
         numerator_digits = max(left_num, right_num) + int(grows)
         denominator_digits = left_den
     else:
-        numerator_digits = max(left_num + right_den, right_num + left_den) + 1
-        denominator_digits = left_den + right_den
+        common = gcd(left.den, right.den)
+        left_scale = right.den // common
+        right_scale = left.den // common
+        numerator = left.num * left_scale - right.num * right_scale
+        denominator = left.den * left_scale
+        numerator_digits = _decimal_digits(numerator)
+        denominator_digits = _decimal_digits(denominator)
     return max(numerator_digits, denominator_digits)
 
 
@@ -272,14 +277,16 @@ def subtract(
             "subtraction_result_term_budget",
             "difference support exceeds the admitted result term count",
         )
+    word_scalars_by_word = {
+        term.word: sum(map(len, term.word))
+        for term in (*left.terms, *right.terms)
+    }
     predicted_output_cells = (
         left_alphabet_scalars
         + 64
-        + result_term_bound
-        * (
-            64
-            + max(max_word_scalars, right_word_scalars)
-            + 2 * (predicted_coefficient_digits + 1)
+        + sum(
+            64 + word_scalars_by_word[word] + 2 * (predicted_coefficient_digits + 1)
+            for word in left_coefficients.keys() | right_coefficients.keys()
         )
     )
     if predicted_output_cells > MAX_FREE_ALGEBRA_ADDITION_OUTPUT_CELLS:

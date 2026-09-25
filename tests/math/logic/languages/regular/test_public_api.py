@@ -27,6 +27,7 @@ def test_exact_public_api_symbols() -> None:
         "dfa_subsequential_preimage",
         "dfa_transition_carrier",
         "nfa_membership",
+        "nfa_subsequential_image",
         "symbol_parikh_profile",
         "transition_parikh_profile",
         "verify_accepted_word_count",

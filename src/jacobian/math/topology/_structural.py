@@ -128,8 +128,10 @@ def _maximal_faces(faces: Iterable[Simplex]) -> tuple[tuple[str, ...], ...]:
 def join_maximal_facets(
     facets_a: tuple[Simplex, ...], facets_b: tuple[Simplex, ...]
 ) -> tuple[tuple[str, ...], ...]:
+    # The carrier stores only nonempty facets; an empty facet axis represents
+    # the complex {∅}, whose join identity is the implicit singleton facet.
     if not facets_a:
-        return facets_b
+        return facets_b or ((),)
     if not facets_b:
         return facets_a
     return _maximal_faces(
@@ -883,8 +885,12 @@ def compute_g_vector(request: FVectorRequest) -> GVectorResult:
 
 def _minimal_nonface_work(vertex_count: int, facets: tuple[Simplex, ...]) -> int:
     candidate_count = 1 << vertex_count
-    candidate_mask_work = 0 if vertex_count == 0 else vertex_count * (1 << (vertex_count - 1))
-    immediate_subface_checks = 0 if vertex_count == 0 else vertex_count * (1 << (vertex_count - 1))
+    candidate_mask_work = (
+        0 if vertex_count == 0 else vertex_count * (1 << (vertex_count - 1))
+    )
+    immediate_subface_checks = (
+        0 if vertex_count == 0 else vertex_count * (1 << (vertex_count - 1))
+    )
     face_candidate_work = sum((1 << len(facet)) - 1 for facet in facets)
     facet_validation_work = (
         len(facets) * (len(facets) - 1) // 2 * (MAX_TOPOLOGY_DIMENSION + 1)
@@ -1142,6 +1148,14 @@ def compute_stanley_reisner_ideal(
         )
     )
     one = CanonicalRational(num=1, den=1)
+    if vertex_count == 0:
+        # The empty polynomial ring has the zero ideal; its zero polynomial is
+        # represented with the existing rational-function ambient-value carrier.
+        raise OperationDomainValidationError(
+            location=("complex",),
+            code="topology.stanley_reisner.empty_axis",
+            message="the polynomial ideal carrier requires at least one vertex variable",
+        )
     if exponents:
         generators = tuple(
             RationalPolynomial(
@@ -1349,9 +1363,9 @@ def compute_join(request: JoinRequest) -> JoinResult:
         complex_a=request.complex_a,
         complex_b=request.complex_b,
         join_vertices=vertices,
-        join_facets=facets,
+        join_facets=facets if vertices else (),
         join_dimension=dimension,
-        join_complex=canonical_complex(vertices, facets),
+        join_complex=canonical_complex(vertices, facets if vertices else ()),
     )
 
 

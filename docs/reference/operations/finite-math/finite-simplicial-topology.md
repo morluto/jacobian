@@ -65,18 +65,18 @@ chain construction to any admitted `FinitePoset`, retaining the exact element
 labels on the output vertex axis. See the [order-complex contract](../topology/order-complex.md)
 for its exact face, dimension, maximal-chain, work, and output bounds.
 
-`induced_subcomplex.compute` selects a subset (possibly empty) of the canonical
+`induced_subcomplex.compute` selects any subset (possibly empty) of the canonical
 vertex axis and returns the full subcomplex whose faces are exactly the source
 faces contained in that subset. Its face-image table maps retained faces to
-the same vertex tuple and marks every removed source face with `null`. An empty
-selection returns the canonical zero-vertex complex `{∅}`.
+the same vertex tuple and marks every removed source face with `null`. The
+empty selection returns the canonical zero-vertex complex `{∅}`, represented
+by empty nonempty-face axes and dimension `-1`.
 
 The `link` and `star` operations accept the implicit empty face as well as
 nonempty faces. Its link and closed star are both the source complex. The
 result carries the exact canonical target complex; in particular, the link of
-a maximal face is the zero-vertex complex `{∅}`, represented by empty
-nonempty-face axes and dimension `-1`. `link_is_empty` identifies that
-canonical value; Jacobian's finite-complex carrier does not represent the
+a maximal face is the zero-vertex complex `{∅}`. `link_is_empty` identifies
+that canonical value; Jacobian's finite-complex carrier does not represent the
 void complex.
 
 ## Minimal nonfaces

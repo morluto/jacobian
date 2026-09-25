@@ -1866,7 +1866,9 @@ def _normalize_edge_iso_profile_result(value: dict[str, Any]) -> dict[str, Any]:
             for field in ("card_indices", "deleted_edges"):
                 if type(row.get(field)) is list:
                     row[field] = tuple(
-                        tuple(entry) if field == "deleted_edges" else entry
+                        tuple(entry)
+                        if field == "deleted_edges" and type(entry) is list
+                        else entry
                         for entry in row[field]
                     )
             representative = row.get("representative")

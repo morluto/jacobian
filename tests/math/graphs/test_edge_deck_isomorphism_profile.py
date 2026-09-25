@@ -282,3 +282,15 @@ def test_native_operation_rejects_boolean_retained_edge_count() -> None:
     request = EdgeDeckIsomorphismProfileRequest.model_construct(deck=forged)
     with pytest.raises(OperationDomainValidationError, match="canonical graph axes"):
         edge_deck_isomorphism_profile(request)
+
+
+def test_wire_profile_rejects_scalar_deleted_edge_entry() -> None:
+    source = SimpleUndirectedGraph(vertices=("a", "b", "c"), edges=(("a", "b"),))
+    profile = edge_deck_isomorphism_profile(
+        EdgeDeckIsomorphismProfileRequest(deck=edge_deletion_family(source))
+    )
+    forged = profile.model_dump(mode="python")
+    first = forged["classes"][0]
+    forged["classes"] = ({**first, "deleted_edges": ["ab"]}, *forged["classes"][1:])
+    with pytest.raises(ValidationError):
+        EdgeDeckIsomorphismProfile.model_validate(forged)

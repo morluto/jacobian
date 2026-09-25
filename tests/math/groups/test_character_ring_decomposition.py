@@ -184,6 +184,18 @@ def test_maximum_supported_cyclic_group_decomposes_exactly() -> None:
 
 
 def test_trivial_group_decomposition_and_round_trip() -> None:
+    degree_zero_group = PermutationGroup(degree=0, generators=((),))
+    degree_zero_classes = group_conjugacy_classes(0, [[]])
+    degree_zero_partition = GroupConjugacyClassesResult._from_kernel(
+        degree_zero_group,
+        tuple(tuple(tuple(element) for element in cls) for cls in degree_zero_classes),
+    )
+    degree_zero_function = _function_on_partition(degree_zero_partition, Fraction(7))
+    degree_zero_result = class_function_character_decomposition(
+        CharacterRingDecompositionRequest(class_function=degree_zero_function)
+    )
+    assert degree_zero_result.ring_element.irreducible_multiplicities == (7,)
+
     partition = _partition(((0,),))
     constant = _function_on_partition(partition, Fraction(7))
     result = class_function_character_decomposition(

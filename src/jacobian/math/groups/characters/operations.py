@@ -425,7 +425,7 @@ def _admit_partition_source(source: object) -> tuple[int, tuple[tuple[int, ...],
         )
     degree = getattr(source, "degree", None)
     generators = getattr(source, "generators", None)
-    if type(degree) is not int or not 1 <= degree <= MAX_GROUP_DEGREE:
+    if type(degree) is not int or not 0 <= degree <= MAX_GROUP_DEGREE:
         raise OperationDomainValidationError(
             location=("partition", "source"),
             code="groups.characters.partition_source",

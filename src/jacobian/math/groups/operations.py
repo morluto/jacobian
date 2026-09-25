@@ -127,11 +127,11 @@ def group_conjugacy_classes(
     """
     from sympy.combinatorics import Permutation, PermutationGroup
 
-    if not 1 <= degree <= MAX_GROUP_DEGREE:
+    if not 0 <= degree <= MAX_GROUP_DEGREE:
         raise OperationDomainValidationError(
             location=("degree",),
             code="group.degree_out_of_range",
-            message=f"group degree must be between 1 and {MAX_GROUP_DEGREE}",
+            message=f"group degree must be between 0 and {MAX_GROUP_DEGREE}",
         )
     if not generators:
         raise OperationDomainValidationError(

@@ -277,8 +277,8 @@ TOOLS = TOOLS + (  # noqa: RUF005
             "Compute an exact maximum-cardinality common independent set of "
             "two represented matroids on one labelled ground. Return both "
             "source ranks of the selected set and an Edmonds min-max rank "
-            "witness; serialized claims replay all four ranks against their "
-            "retained source matroids."
+            "witness. Call replay_intersection_result to recompute all four "
+            "rank claims against the retained source matroids."
         ),
         request_type=MatroidIntersectionRequest,
         result_type=MatroidIntersectionResult,

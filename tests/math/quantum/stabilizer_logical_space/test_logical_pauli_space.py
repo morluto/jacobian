@@ -239,3 +239,41 @@ def test_structural_roundtrip_rejects_a_foreign_register_claim() -> None:
     payload["normalizer_embedding"]["target_axis"]["labels"][0] = "X:other"
     with pytest.raises(ValidationError, match="source-bound binary coordinate axes"):
         LogicalPauliSpace.model_validate_json(json.dumps(payload))
+
+
+@pytest.mark.parametrize(
+    ("corruption", "message"),
+    [
+        ("inclusion", "embedded stabilizer inclusion"),
+        ("embedding", "orthogonal to every check"),
+        ("kernel", "stabilizer inclusion must lie in the quotient projection kernel"),
+        ("section", "projection composed with its section must be identity"),
+        ("form", "induced quotient form must equal ambient Pauli pairings"),
+        ("degenerate_form", "induced quotient symplectic form must be nondegenerate"),
+    ],
+)
+def test_consumer_validation_rejects_forged_semantic_relations(
+    corruption: str, message: str
+) -> None:
+    register = QubitRegister(qubit_ids=("q0", "q1"))
+    source = CheckSpaceValue(register=register, basis=(_pauli(register, 0b0100),))
+    payload = logical_pauli_space(source).model_dump(mode="json")
+
+    if corruption == "inclusion":
+        payload["stabilizer_inclusion"]["matrix"]["entries"][0][0] = 1
+    elif corruption == "embedding":
+        # The selector rows stay intact; add X0 to an existing normalizer column.
+        payload["normalizer_embedding"]["matrix"]["entries"][0][0] = 1
+    elif corruption == "kernel":
+        payload["quotient_projection"]["matrix"]["entries"][0][1] = 1
+    elif corruption == "section":
+        payload["quotient_lift"]["matrix"]["entries"][0][0] = 0
+    elif corruption == "form":
+        payload["induced_symplectic_form"]["entries"][0][0]["coordinates"] = ["1"]
+    else:
+        for row in payload["induced_symplectic_form"]["entries"]:
+            for entry in row:
+                entry["coordinates"] = ["0"]
+
+    with pytest.raises(ValidationError, match=message):
+        LogicalPauliSpace.model_validate_json(json.dumps(payload))

@@ -32,13 +32,6 @@ def _polymorphism_validation_error(reason: str, message: str) -> PydanticCustomE
     return PydanticCustomError(f"relational.polymorphism.{reason}", message)
 
 
-def _operation_table_index(inputs: tuple[int, ...], carrier_size: int) -> int:
-    index = 0
-    for value in inputs:
-        index = index * carrier_size + value
-    return index
-
-
 class HomomorphismStatus(StrEnum):
     """Closed outcome of one exhaustive preservation replay."""
 
@@ -1351,7 +1344,16 @@ class RelationalPolymorphismRelationProfile(StrictModel):
 
 
 class RelationalPolymorphismCheckResult(StrictModel):
-    """Complete preservation profile for one caller-supplied operation table."""
+    """Complete preservation profile for one caller-supplied operation table.
+
+    Validation is structural: the witness must reference the named source
+    relation and its rows, with carrier-valued coordinates, and the relation
+    profiles must agree with the source signature and counts. The admitted
+    ``relational.polymorphism.check`` kernel performs the exhaustive
+    coordinatewise image replay; re-checking an externally authored claim
+    means running that operation again on its admitted source, arity, and
+    operation table, not replaying it inside deserialization.
+    """
 
     source: FiniteRelationalStructure
     arity: StrictInt = Field(ge=1, le=MAX_RELATIONAL_POLYMORPHISM_ARITY)
@@ -1441,33 +1443,27 @@ class RelationalPolymorphismCheckResult(StrictModel):
                     "witness symbol must belong to the exact source signature",
                 ) from exc
             symbol = self.source.signature[symbol_index]
-            table = set(self.source.relation_tables[symbol_index])
+            relation = self.source.relation_tables[symbol_index]
             if symbol.arity != witness.relation_arity or any(
-                row not in table for row in witness.input_rows
+                row not in relation for row in witness.input_rows
             ):
                 raise _polymorphism_validation_error(
                     "polymorphism.witness_source",
                     "witness inputs must be rows of the named source relation",
                 )
-            carrier_size = self.source.carrier_size
-            expected_output = tuple(
-                self.operation_table[
-                    _operation_table_index(
-                        tuple(row[column] for row in witness.input_rows),
-                        carrier_size,
-                    )
-                ]
-                for column in range(symbol.arity)
-            )
-            if (
-                witness.output_row != expected_output
-                or witness.output_row in table
-                or self.relation_profiles[symbol_index].preserved_combinations
-                >= self.relation_profiles[symbol_index].input_combinations
+            if any(
+                not 0 <= value < self.source.carrier_size
+                for value in witness.output_row
             ):
                 raise _polymorphism_validation_error(
                     "polymorphism.witness_output",
-                    "witness output must be the table image and absent from its relation",
+                    "witness output coordinates must be source carrier labels",
+                )
+            profile = self.relation_profiles[symbol_index]
+            if profile.preserved_combinations >= profile.input_combinations:
+                raise _polymorphism_validation_error(
+                    "polymorphism.witness_profile",
+                    "the witnessed relation must record a non-preserved combination",
                 )
         return self
 

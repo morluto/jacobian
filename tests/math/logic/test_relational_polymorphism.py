@@ -7,11 +7,15 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.catalog.builtins import BUILTIN_TOOLS
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.logic.relational_structures import (
     FiniteRelationalStructure,
     FiniteRelationSymbol,
     RelationalPolymorphism,
+    RelationalPolymorphismCheckResult,
     RelationalPolymorphismRequest,
     RelationalPolymorphismStatus,
     check_polymorphism,
@@ -61,13 +65,7 @@ def test_exhaustive_all_binary_relations_and_binary_operations_match_oracle():
         domain, _ = next(_candidate_tables(2, 2))
         for _domain, values in _candidate_tables(2, 2):
             expected = _oracle_preserves(structure, 2, domain, values)
-            result = check_polymorphism(
-                RelationalPolymorphismRequest(
-                    source=structure,
-                    arity=2,
-                    operation_table=values,
-                )
-            )
+            result = check_polymorphism(structure, 2, values)
             assert (
                 result.status is RelationalPolymorphismStatus.POLYMORPHISM
             ) is expected
@@ -94,11 +92,7 @@ def test_projection_preserves_relations_and_nullary_truth_is_exact():
         signature=(FiniteRelationSymbol(symbol_id="E", arity=2),),
         relation_tables=(((0, 1),),),
     )
-    projection = check_polymorphism(
-        RelationalPolymorphismRequest(
-            source=binary_edge, arity=2, operation_table=(0, 0, 1, 1)
-        )
-    )
+    projection = check_polymorphism(binary_edge, 2, (0, 0, 1, 1))
     assert projection.status is RelationalPolymorphismStatus.POLYMORPHISM
     assert projection.relation_profiles[0].input_combinations == 1
 
@@ -113,24 +107,17 @@ def test_projection_preserves_relations_and_nullary_truth_is_exact():
         relation_tables=(((),),),
     )
 
-    def request(source):
-        return RelationalPolymorphismRequest(
-            source=source, arity=2, operation_table=(0,)
-        )
-
-    assert check_polymorphism(request(false_nullary)).status is (
+    assert check_polymorphism(false_nullary, 2, (0,)).status is (
         RelationalPolymorphismStatus.POLYMORPHISM
     )
-    assert check_polymorphism(request(true_nullary)).status is (
+    assert check_polymorphism(true_nullary, 2, (0,)).status is (
         RelationalPolymorphismStatus.POLYMORPHISM
     )
 
 
 def test_empty_carrier_has_the_unique_empty_operation_table():
     source = FiniteRelationalStructure(carrier_size=0)
-    result = check_polymorphism(
-        RelationalPolymorphismRequest(source=source, arity=3, operation_table=())
-    )
+    result = check_polymorphism(source, 3, ())
     assert result.status is RelationalPolymorphismStatus.POLYMORPHISM
     assert result.polymorphism is not None
     assert result.polymorphism.operation_table == ()
@@ -174,16 +161,13 @@ def test_relation_product_bound_is_checked_before_tuple_expansion(monkeypatch):
         signature=(FiniteRelationSymbol(symbol_id="R", arity=2),),
         relation_tables=(tuple(product(range(2), repeat=2)),),
     )
-    request = RelationalPolymorphismRequest(
-        source=source, arity=8, operation_table=(0,) * (2**8)
-    )
 
     def expansion_must_not_start(*_args, **_kwargs):
         raise AssertionError("relation products expanded before admission")
 
     monkeypatch.setattr(operations, "product", expansion_must_not_start)
     with pytest.raises(OperationResourceAdmissionError) as exc_info:
-        check_polymorphism(request)
+        check_polymorphism(source, 8, (0,) * (2**8))
     assert exc_info.value.errors()[0]["type"] == (
         "relational.polymorphism.coordinate_work_bound"
     )
@@ -198,16 +182,89 @@ def test_full_relation_product_bound_rejects_before_expansion(monkeypatch):
         ),
         relation_tables=(tuple(product(range(2), repeat=2)),) * 2,
     )
-    request = RelationalPolymorphismRequest(
-        source=source, arity=8, operation_table=(0,) * (2**8)
-    )
 
     def expansion_must_not_start(*_args, **_kwargs):
         raise AssertionError("relation products expanded before admission")
 
     monkeypatch.setattr(operations, "product", expansion_must_not_start)
     with pytest.raises(OperationResourceAdmissionError) as exc_info:
-        check_polymorphism(request)
+        check_polymorphism(source, 8, (0,) * (2**8))
     assert exc_info.value.errors()[0]["type"] == (
         "relational.polymorphism.relation_product_bound"
+    )
+
+
+def test_native_kernel_rejects_malformed_operation_tables() -> None:
+    source = FiniteRelationalStructure(
+        carrier_size=2,
+        signature=(FiniteRelationSymbol(symbol_id="E", arity=2),),
+        relation_tables=(((0, 1),),),
+    )
+    with pytest.raises(OperationDomainValidationError) as axis:
+        check_polymorphism(source, 2, (0, 1))
+    assert axis.value.errors()[0]["type"] == "relational.polymorphism.table_axis"
+    with pytest.raises(OperationDomainValidationError) as value:
+        check_polymorphism(source, 1, (0, 2))
+    assert value.value.errors()[0]["type"] == "relational.polymorphism.table_value"
+    with pytest.raises(OperationDomainValidationError) as shape:
+        check_polymorphism(source, 1, 0)
+    assert shape.value.errors()[0]["type"] == "relational.polymorphism.table_shape"
+    with pytest.raises(OperationDomainValidationError) as arity:
+        check_polymorphism(source, True, (0, 1))
+    assert arity.value.errors()[0]["type"] == "relational.polymorphism.arity"
+
+
+def _witnessed_failure():
+    source = FiniteRelationalStructure(
+        carrier_size=2,
+        signature=(FiniteRelationSymbol(symbol_id="E", arity=2),),
+        relation_tables=(((0, 1),),),
+    )
+    # f(0,0)=1 and 0 elsewhere: the single pair from R images to (1,0), not in R.
+    result = check_polymorphism(source, 2, (1, 0, 0, 0))
+    assert result.status is RelationalPolymorphismStatus.NOT_POLYMORPHISM
+    assert result.witness is not None
+    assert result.witness.input_rows == ((0, 1), (0, 1))
+    assert result.witness.output_row == (1, 0)
+    return result
+
+
+def test_result_validation_is_structural_and_never_replays_the_kernel() -> None:
+    result = _witnessed_failure()
+    payload = json.loads(result.model_dump_json())
+
+    restored = RelationalPolymorphismCheckResult.model_validate_json(
+        json.dumps(payload)
+    )
+    assert restored == result
+
+    # An authored witness whose output row is a well-shaped carrier tuple but
+    # is not the coordinatewise table image stays structurally valid: replay
+    # of the image belongs to the admitted check_polymorphism kernel only.
+    payload["witness"]["output_row"] = [0, 0]
+    non_image = RelationalPolymorphismCheckResult.model_validate_json(
+        json.dumps(payload), strict=True
+    )
+    assert non_image.witness is not None
+    assert non_image.witness.output_row == (0, 0)
+
+    payload["witness"]["output_row"] = [2, 0]
+    with pytest.raises(ValidationError) as carrier:
+        RelationalPolymorphismCheckResult.model_validate_json(
+            json.dumps(payload), strict=True
+        )
+    assert (
+        carrier.value.errors()[0]["type"]
+        == "relational.polymorphism.polymorphism.witness_output"
+    )
+
+    payload["witness"]["output_row"] = [0, 0]
+    payload["relation_profiles"][0]["preserved_combinations"] = 1
+    with pytest.raises(ValidationError) as profile:
+        RelationalPolymorphismCheckResult.model_validate_json(
+            json.dumps(payload), strict=True
+        )
+    assert (
+        profile.value.errors()[0]["type"]
+        == "relational.polymorphism.polymorphism.witness_profile"
     )

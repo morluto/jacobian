@@ -3,7 +3,7 @@
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.logic.relational_structures._admission import (
     MAX_EMBEDDING_REFLECTION_CELLS,
-    MAX_HOMOMORPHISM_ENUMERATION_OUTPUT_BYTES,
+    MAX_HOMOMORPHISM_ENUMERATION_MAP_LABELS,
     MAX_POLYMORPHISM_COORDINATE_WORK,
     MAX_POLYMORPHISM_RELATION_COMBINATIONS,
     MAX_SEARCH_CANDIDATES,
@@ -116,7 +116,7 @@ def _csp_instance_source(
 def _csp_assignment_profile(
     request: CspAssignmentRequest,
 ) -> CspAssignmentProfile:
-    return profile_csp_assignment(request)
+    return profile_csp_assignment(request.instance, request.assignment)
 
 
 def _induced_substructure(
@@ -136,7 +136,7 @@ def _quotient(request: RelationalQuotientRequest) -> RelationalQuotient:
 def _polymorphism_check(
     request: RelationalPolymorphismRequest,
 ) -> RelationalPolymorphismCheckResult:
-    return check_polymorphism(request)
+    return check_polymorphism(request.source, request.arity, request.operation_table)
 
 
 _DIRECTED_EDGE = {"symbol_id": "E", "arity": 2}
@@ -189,8 +189,8 @@ TOOLS: MathTools = (
             "return every restricted relation table, the exact source, and "
             "the inclusion map from canonical induced labels to source labels. "
             "The selected order defines the induced carrier axis; nullary "
-            "relations retain their exact truth values. Row transport, output "
-            "bytes, and result shape are admitted before relation expansion."
+            "relations retain their exact truth values. Row transport work "
+            "and result shape are admitted before relation expansion."
         ),
         request_type=InducedSubstructureRequest,
         result_type=InducedSubstructureResult,
@@ -220,8 +220,7 @@ TOOLS: MathTools = (
             "source-signature order, preserving the carrier and selected "
             "complete relation tables. The result includes the exact reduct and the map from "
             "reduct symbol positions to source signature positions. Selected "
-            "row and coordinate work and the output-byte envelope are admitted "
-            "before construction."
+            "row and coordinate work is admitted before construction."
         ),
         request_type=RelationalReductRequest,
         result_type=RelationalReductResult,
@@ -525,8 +524,9 @@ TOOLS: MathTools = (
             "Return the complete lexicographically ordered list of all total "
             "carrier maps preserving every relation between two finite "
             "structures over one shared signature. The entire |B|^|A| search "
-            "and a conservative result-byte bound (at most "
-            f"{MAX_HOMOMORPHISM_ENUMERATION_OUTPUT_BYTES} bytes) are admitted "
+            "and a conservative retained-map envelope (at most "
+            f"{MAX_HOMOMORPHISM_ENUMERATION_MAP_LABELS} carrier map labels) "
+            "are admitted "
             "before map enumeration; larger requests receive a typed "
             "resource refusal."
         ),

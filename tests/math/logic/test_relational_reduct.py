@@ -82,33 +82,11 @@ def test_result_serialization_keeps_symbol_transport() -> None:
 
 
 def test_reduct_admission_prices_rows_and_coordinates_before_construction() -> None:
-    indices, work, output_bound = admit_relational_reduct(_source(), ("E", "P"))
+    indices, work = admit_relational_reduct(_source(), ("E", "P"))
 
     assert indices == (0, 1)
     assert work == (1 + 2 * 3) + (1 + 2 * 2)
-    source_bytes = len(_source().model_dump_json().encode("utf-8"))
-    assert output_bound == 2 * source_bytes + 256 + 12 * len(indices)
     assert work <= MAX_RELATIONAL_REDUCT_WORK
-
-
-def test_complete_result_size_bound_is_enforced_at_threshold(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from jacobian.math.logic.relational_structures import _admission
-
-    source = _source()
-    _, _, bound = admit_relational_reduct(source, ("P",))
-
-    class Limits:
-        max_output_bytes = bound
-
-    monkeypatch.setattr(_admission, "CanonicalLimits", Limits)
-    assert admit_relational_reduct(source, ("P",))[2] == bound
-
-    Limits.max_output_bytes = bound - 1
-    with pytest.raises(OperationResourceAdmissionError) as exc_info:
-        admit_relational_reduct(source, ("P",))
-    assert exc_info.value.errors()[0]["type"] == "relational.reduct.output_bound"
 
 
 def test_reduct_rejects_unknown_or_repeated_symbols() -> None:

@@ -10,16 +10,13 @@ from jacobian._models import StrictModel
 from jacobian.math.topology.simplicial_sets._models import (
     MAX_SIMPLICES_PER_DEGREE,
     MAX_SIMPLICIAL_SET_DEGREE,
-    MAX_TOTAL_SIMPLICES,
     FiniteTruncatedSimplicialSet,
 )
 from jacobian.math.topology.simplicial_sets.maps import TruncatedSimplicialMap
 
 ClassId = Annotated[
     StrictInt,
-    Field(
-        ge=0, le=MAX_TOTAL_SIMPLICES, description="A source-local equivalence class ID."
-    ),
+    Field(ge=0, description="A source-local equivalence class ID."),
 ]
 DegreeClassIds = Annotated[
     tuple[ClassId, ...], Field(max_length=MAX_SIMPLICES_PER_DEGREE)

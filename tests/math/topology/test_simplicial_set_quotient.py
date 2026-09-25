@@ -108,6 +108,16 @@ def test_full_carrier_boundary_remains_admitted() -> None:
     assert result.quotient_map.maps == (identity, identity, identity)
 
 
+def test_class_labels_are_unbounded_and_native_construct_is_admitted() -> None:
+    request = _request([[97, 97], [101, 102, 101], [103, 104, 105, 103]])
+    result = simplicial_set_quotient(request)
+    assert result.quotient_map.maps[0] == (0, 0)
+
+    malformed = SimplicialSetQuotientRequest.model_construct()
+    with pytest.raises(OperationDomainValidationError):
+        simplicial_set_quotient(malformed)
+
+
 def test_published_tool_example_dispatches_and_serializes() -> None:
     operation_id = "topology.simplicial_set.quotient_by_congruence.compute"
     assert any(tool.operation_id == operation_id for tool in ALL_TOOLS)

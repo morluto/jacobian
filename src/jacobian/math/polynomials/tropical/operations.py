@@ -1266,7 +1266,7 @@ def tropical_assignment_profile(
     matrix: TropicalMatrix,
 ) -> tuple[TropicalScalar, tuple[tuple[int, ...], ...]]:
     _admit_matrix(matrix)
-    if matrix.row_axis != matrix.column_axis:
+    if len(matrix.row_axis) != len(matrix.column_axis):
         raise OperationDomainValidationError(
             location=("matrix",),
             code="tropical.assignment_square",

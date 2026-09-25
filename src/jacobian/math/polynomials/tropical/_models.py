@@ -506,7 +506,9 @@ class MatrixAssignmentRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_square(self) -> Self:
-        if self.matrix.row_axis != self.matrix.column_axis:
+        # Assignment matches rows to columns. Their label sets are distinct
+        # axes, so only cardinality (not label identity) is required.
+        if len(self.matrix.row_axis) != len(self.matrix.column_axis):
             raise _validation_error(
                 "matrix_square", "assignment requires a square matrix"
             )

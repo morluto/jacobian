@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from itertools import permutations
+
 import pytest
 
 from jacobian._exact import CanonicalRational
@@ -7,7 +9,10 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.math.polynomials.tropical._models import MatrixFinitePowerSumRequest
+from jacobian.math.polynomials.tropical._models import (
+    MatrixAssignmentRequest,
+    MatrixFinitePowerSumRequest,
+)
 from jacobian.math.polynomials.tropical._tools import compute_finite_power_sum
 from jacobian.math.polynomials.tropical.operations import (
     tropical_assignment_profile,
@@ -153,6 +158,47 @@ def test_assignment_profile_keeps_all_ties_at_infinity() -> None:
         (2, 0, 1),
         (2, 1, 0),
     }
+
+
+@pytest.mark.parametrize("convention", ["MIN_PLUS", "MAX_PLUS"])
+def test_assignment_profile_matches_distinct_row_and_column_axes(
+    convention: str,
+) -> None:
+    semiring = TropicalSemiring(convention=convention, base="ZZ")  # type: ignore[arg-type]
+    values = ((1, 4, 8), (7, 2, 6), (5, 9, 3))
+    matrix = TropicalMatrix(
+        semiring=semiring,
+        row_axis=("worker-a", "worker-b", "worker-c"),
+        column_axis=("task-x", "task-y", "task-z"),
+        entries=tuple(
+            tuple(
+                TropicalScalar(
+                    semiring=semiring,
+                    kind="FINITE",
+                    value=CanonicalRational.from_integer_ratio(value, 1),
+                )
+                for value in row
+            )
+            for row in values
+        ),
+    )
+
+    request = MatrixAssignmentRequest(matrix=matrix)
+    assert request.matrix == matrix
+
+    optimum, assignments = tropical_assignment_profile(matrix)
+
+    scored = {
+        permutation: sum(values[row][column] for row, column in enumerate(permutation))
+        for permutation in permutations(range(3))
+    }
+    expected = (
+        min(scored.values()) if convention == "MIN_PLUS" else max(scored.values())
+    )
+    assert optimum.value == CanonicalRational.from_integer_ratio(expected, 1)
+    assert assignments == tuple(
+        permutation for permutation, score in scored.items() if score == expected
+    )
 
 
 def test_matrix_power_rejects_native_non_integer_exponents() -> None:

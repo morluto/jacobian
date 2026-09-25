@@ -564,7 +564,7 @@ TOOLS: MathTools = (
     MathTool(
         operation_id="tropical.matrix.assignment_profile.compute",
         title="Compute a tropical assignment profile",
-        description="Return the extremal assignment value and every tied optimum under a strict finite permutation bound.",
+        description="Return the minimum or maximum assignment value and every tied column-index permutation for a square matrix; row and column labels may differ.",
         request_type=MatrixAssignmentRequest,
         result_type=AssignmentResult,
         run=compute_assignment,
@@ -572,7 +572,7 @@ TOOLS: MathTools = (
         examples=(
             OperationExample(
                 name="assignment",
-                description="Compute the minimum assignment of a 2 by 2 MIN_PLUS matrix; the matrix must be square.",
+                description="Compute the minimum (MIN_PLUS) or maximum (MAX_PLUS) assignment value and all tied permutations for a square matrix; row and column labels may differ.",
                 input={
                     "matrix": _matrix(
                         ((0, 4), (3, 1)),

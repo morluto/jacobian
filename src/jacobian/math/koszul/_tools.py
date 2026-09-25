@@ -124,8 +124,9 @@ TOOLS: MathTools = (
             "Revalidate a typed module-induced Koszul chain map and compute its "
             "exact matrices on every homology group in the returned canonical "
             "homology bases. Combined chain-basis size and rational coefficient "
-            "growth use a deliberately small finite envelope; output includes "
-            "the source and target homology bases for interpreting coordinates."
+            "growth, exact quotient-coordinate work, and aggregate output use a "
+            "deliberately small finite envelope; output includes the source and "
+            "target homology bases for interpreting coordinates."
         ),
         request_type=ModuleKoszulHomologyMapRequest,
         result_type=ModuleKoszulHomologyMap,

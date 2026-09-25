@@ -24,6 +24,7 @@ from jacobian.math.koszul.module_operations import (
 MAX_KOSZUL_HOMOLOGY_MAP_BASIS_CELLS = 8
 MAX_KOSZUL_HOMOLOGY_MAP_COEFFICIENT_DIGITS = 8
 MAX_KOSZUL_HOMOLOGY_MAP_OUTPUT_BYTES = 8 * 1024 * 1024
+MAX_KOSZUL_HOMOLOGY_MAP_WORK = 1 << 40
 
 
 def _fraction(value: CanonicalRational) -> Fraction:
@@ -104,79 +105,6 @@ def koszul_homology_map(
             else ModuleKoszulHomologyMapRequest.model_validate(request)
         )
         supplied = value.chain_map
-        if (
-            sum(supplied.source_complex.basis_sizes)
-            + sum(supplied.target_complex.basis_sizes)
-            > MAX_KOSZUL_HOMOLOGY_MAP_BASIS_CELLS
-        ):
-            raise OperationResourceAdmissionError(
-                location=("chain_map",),
-                code="koszul.module.homology_map_basis_budget",
-                message="combined chain bases exceed the induced homology-map envelope",
-            )
-        coefficients = [
-            coefficient
-            for complex_value in (
-                supplied.source_complex,
-                supplied.target_complex,
-            )
-            for differential in complex_value.differentials
-            for _, _, coefficient in differential.entries
-        ]
-        coefficients.extend(
-            coefficient
-            for degree_map in supplied.degree_maps
-            for _, _, coefficient in degree_map.entries
-        )
-        maximum_input_digits = max(
-            (
-                canonical_rational_component_digits(coefficient)
-                for coefficient in coefficients
-            ),
-            default=1,
-        )
-        if any(
-            canonical_rational_component_digits(coefficient)
-            > MAX_KOSZUL_HOMOLOGY_MAP_COEFFICIENT_DIGITS
-            for coefficient in coefficients
-        ):
-            raise OperationResourceAdmissionError(
-                location=("chain_map",),
-                code="koszul.module.homology_map_coefficient_budget",
-                message="chain-map coefficients exceed the induced homology-map envelope",
-            )
-        max_degree_size = max(
-            (
-                *supplied.source_complex.basis_sizes,
-                *supplied.target_complex.basis_sizes,
-            ),
-            default=0,
-        )
-        homology_component_digits = (
-            4 * max_degree_size * (maximum_input_digits + 4) + 32
-        )
-        # Homology representatives are ratios of minors. The induced coordinate
-        # solve uses at most max_degree_size such rational entries in each minor;
-        # this deliberately generous estimate is checked before exact expansion.
-        induced_component_digits = max_degree_size * (
-            2 * homology_component_digits + maximum_input_digits + 8
-        )
-        degree_map_cells = sum(
-            source_size * target_size
-            for source_size, target_size in zip(
-                supplied.source_complex.basis_sizes,
-                supplied.target_complex.basis_sizes,
-                strict=True,
-            )
-        )
-        if degree_map_cells * (2 * induced_component_digits + 64) > (
-            MAX_KOSZUL_HOMOLOGY_MAP_OUTPUT_BYTES
-        ):
-            raise OperationResourceAdmissionError(
-                location=("degree_maps",),
-                code="koszul.module.homology_map_output_budget",
-                message="induced homology-map output exceeds its preflight byte bound",
-            )
     except OperationResourceAdmissionError:
         raise
     except Exception as exc:
@@ -197,6 +125,114 @@ def koszul_homology_map(
             map_matrix=supplied.module_map,
         )
     )
+    if (
+        sum(verified.source_complex.basis_sizes)
+        + sum(verified.target_complex.basis_sizes)
+        > MAX_KOSZUL_HOMOLOGY_MAP_BASIS_CELLS
+    ):
+        raise OperationResourceAdmissionError(
+            location=("chain_map",),
+            code="koszul.module.homology_map_basis_budget",
+            message="combined chain bases exceed the induced homology-map envelope",
+        )
+    coefficients = [
+        coefficient
+        for complex_value in (
+            verified.source_complex,
+            verified.target_complex,
+        )
+        for differential in complex_value.differentials
+        for _, _, coefficient in differential.entries
+    ]
+    coefficients.extend(
+        coefficient
+        for degree_map in verified.degree_maps
+        for _, _, coefficient in degree_map.entries
+    )
+    maximum_input_digits = max(
+        (
+            canonical_rational_component_digits(coefficient)
+            for coefficient in coefficients
+        ),
+        default=1,
+    )
+    if any(
+        canonical_rational_component_digits(coefficient)
+        > MAX_KOSZUL_HOMOLOGY_MAP_COEFFICIENT_DIGITS
+        for coefficient in coefficients
+    ):
+        raise OperationResourceAdmissionError(
+            location=("chain_map",),
+            code="koszul.module.homology_map_coefficient_budget",
+            message="chain-map coefficients exceed the induced homology-map envelope",
+        )
+    max_degree_size = max(
+        (
+            *verified.source_complex.basis_sizes,
+            *verified.target_complex.basis_sizes,
+        ),
+        default=0,
+    )
+    homology_component_digits = 4 * max_degree_size * (maximum_input_digits + 4) + 32
+    # Homology representatives are ratios of minors. The induced coordinate
+    # solve uses at most max_degree_size such rational entries in each minor;
+    # this deliberately generous estimate is checked before exact expansion.
+    induced_component_digits = max_degree_size * (
+        2 * homology_component_digits + maximum_input_digits + 8
+    )
+    degree_map_cells = sum(
+        source_size * target_size
+        for source_size, target_size in zip(
+            verified.source_complex.basis_sizes,
+            verified.target_complex.basis_sizes,
+            strict=True,
+        )
+    )
+    if degree_map_cells * (2 * induced_component_digits + 64) > (
+        MAX_KOSZUL_HOMOLOGY_MAP_OUTPUT_BYTES
+    ):
+        raise OperationResourceAdmissionError(
+            location=("degree_maps",),
+            code="koszul.module.homology_map_output_budget",
+            message="induced homology-map output exceeds its preflight byte bound",
+        )
+    coordinate_steps = sum(
+        source_size * target_size**3
+        for source_size, target_size in zip(
+            verified.source_complex.basis_sizes,
+            verified.target_complex.basis_sizes,
+            strict=True,
+        )
+    )
+    # The solve uses exact RREF on at most target_size rows and columns for
+    # every source homology generator. Cramer's/Hadamard bounds on the already
+    # admitted homology basis entries bound every transient fraction component.
+    coordinate_transient_bits = 16 * induced_component_digits
+    coordinate_work = coordinate_steps * coordinate_transient_bits**2 * 16
+    if coordinate_work > MAX_KOSZUL_HOMOLOGY_MAP_WORK:
+        raise OperationResourceAdmissionError(
+            location=("degree_maps",),
+            code="koszul.module.homology_map_work_budget",
+            message="exact homology-coordinate elimination exceeds its work bound",
+        )
+    combined_chain_cells = sum(verified.source_complex.basis_sizes) + sum(
+        verified.target_complex.basis_sizes
+    )
+    homology_output_bytes = (
+        6 * combined_chain_cells**2 * (2 * homology_component_digits + 64)
+    )
+    if (
+        degree_map_cells * (2 * induced_component_digits + 64)
+        + homology_output_bytes
+        + 4096
+        > MAX_KOSZUL_HOMOLOGY_MAP_OUTPUT_BYTES
+    ):
+        raise OperationResourceAdmissionError(
+            location=("result",),
+            code="koszul.module.homology_map_output_budget",
+            message="retained homology bases and induced maps exceed the output bound",
+        )
+
     source_homology = module_koszul_homology(verified.source_complex)
     target_homology = module_koszul_homology(verified.target_complex)
     induced: list[tuple[tuple[CanonicalRational, ...], ...]] = []

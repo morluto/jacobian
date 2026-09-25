@@ -162,10 +162,13 @@ functorial map `ker(d)/im(d) -> ker(d')/im(d')` induced by a chain map; see the
 [Stacks Project definition and functoriality of homology](https://stacks.math.columbia.edu/tag/010V).
 
 The initial induced-map envelope caps the combined source and target chain-basis
-count at 8, each supplied rational component at 8 decimal digits, and returned
-matrices at 8 MiB. It rejects before exact homology or coordinate expansion.
-This smaller bound reflects the additional exact quotient-coordinate solve;
-standalone construction and homology keep their larger envelopes. As with the
-other decoded Koszul values, shape checks alone do not authenticate producer
-history: this operation explicitly checks the module and chain-map relations it
-uses.
+count at 8, each reconstructed differential or degree-map rational component at
+8 decimal digits, the exact quotient-coordinate work estimate at `2^40`, and
+the aggregate retained homology and induced-map output at 8 MiB. These estimates
+are computed from the complexes rebuilt from the retained modules and sequence,
+after the supplied chain map is reconstructed and checked, and before either
+homology elimination or quotient-coordinate expansion. This smaller bound
+reflects the additional exact quotient-coordinate solve; standalone
+construction and homology keep their larger envelopes. As with the other
+decoded Koszul values, shape checks alone do not authenticate producer history:
+this operation explicitly checks the module and chain-map relations it uses.

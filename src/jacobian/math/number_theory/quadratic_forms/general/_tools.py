@@ -35,6 +35,13 @@ from jacobian.math.number_theory.quadratic_forms.general.operations import (
     coefficient_matrix,
     evaluate_rational_quadratic_form,
 )
+from jacobian.math.number_theory.quadratic_forms.general.scaling_models import (
+    QuadraticFormScaleRequest,
+    QuadraticFormScaleResult,
+)
+from jacobian.math.number_theory.quadratic_forms.general.scaling_operations import (
+    scale_rational_quadratic_form,
+)
 from jacobian.math.number_theory.quadratic_forms.general.theta_operations import (
     theta_representing_vectors,
     theta_selected_coefficients,
@@ -130,6 +137,12 @@ def compute_coordinate_restriction(
     request: QuadraticFormRestrictionRequest,
 ) -> QuadraticFormRestrictionResult:
     return quadratic_form_restrict_coordinates(request)
+
+
+def compute_scale(
+    request: QuadraticFormScaleRequest,
+) -> QuadraticFormScaleResult:
+    return scale_rational_quadratic_form(request)
 
 
 def compute_finite_box_profile(
@@ -532,6 +545,45 @@ TOOLS = (
                 input={
                     "form": _form_example(),
                     "selected_axis": ["y", "x"],
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="quadratic_form.scale.compute",
+        title="Scale a rational quadratic form",
+        description=(
+            "Multiply every polynomial coefficient by an exact rational scalar, "
+            "preserving the ordered coordinate axis. Integral output remains "
+            "usable as an integral rational form by theta operations."
+        ),
+        request_type=QuadraticFormScaleRequest,
+        result_type=QuadraticFormScaleResult,
+        run=compute_scale,
+        tags=("quadratic-form", "scaling", "exact"),
+        examples=(
+            OperationExample(
+                name="rational-scale",
+                description=(
+                    "Scale x^2+2xy+3y^2 by 3/2; all resulting coefficients "
+                    "remain exact rationals on the source axis."
+                ),
+                input={
+                    "form": {
+                        "axis": ["x", "y"],
+                        "diagonal_coefficients": [
+                            {"num": 1, "den": 1},
+                            {"num": 3, "den": 1},
+                        ],
+                        "cross_terms": [
+                            {
+                                "left": 0,
+                                "right": 1,
+                                "coefficient": {"num": 2, "den": 1},
+                            }
+                        ],
+                    },
+                    "factor": {"num": 3, "den": 2},
                 },
             ),
         ),

@@ -3,6 +3,8 @@
 import pytest
 from pydantic import ValidationError
 
+from jacobian.catalog.models import OperationDomainValidationError, OperationResourceAdmissionError
+
 from jacobian.math.topology.cubical_complexes._models import (
     CubicalCell,
     CubicalSkeletonRequest,
@@ -65,3 +67,16 @@ def test_request_bounds_dimension_before_operation() -> None:
         tool.operation_id == "topology.cubical_complex.skeleton.compute"
         for tool in TOOLS
     )
+
+
+def test_native_skeleton_rejects_invalid_dimension_before_closure() -> None:
+    source = (CubicalCell(intervals=((0, 1),)),)
+    for invalid in (-1, 1.5, True):
+        with pytest.raises(OperationDomainValidationError):
+            skeleton(source, invalid)  # type: ignore[arg-type]
+
+
+def test_skeleton_preflights_duplicate_complex_output_with_large_coordinates() -> None:
+    source = (CubicalCell(intervals=((10**100, 10**100 + 1),) * 10),)
+    with pytest.raises(OperationResourceAdmissionError):
+        skeleton(source, 10)

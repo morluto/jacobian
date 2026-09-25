@@ -58,6 +58,7 @@ from jacobian.math.topology.cubical_complexes._models import (
     MAX_CUBICAL_GRAPH_VERTICES,
     MAX_CUBICAL_GRAPH_WORK,
     MAX_CUBICAL_PRODUCT_RESULT_BYTES,
+    MAX_CUBICAL_SKELETON_RESULT_BYTES,
     MAX_DIM,
     MAX_FACE_CELLS,
     MAX_LOWER_STAR_CELLS,
@@ -613,7 +614,60 @@ def skeleton(
     complex. Since every face of a cell of dimension at most k also has
     dimension at most k, filtering that canonical closure produces a subcomplex.
     """
-    complex_, _source_cells = _canonical_complex(cells)
+    if type(dimension_bound) is not int or not 0 <= dimension_bound <= MAX_DIM:
+        raise OperationDomainValidationError(
+            location=("dimension_bound",),
+            code="cubical_complex.skeleton_dimension_bound",
+            message=f"dimension_bound must be an integer in [0, {MAX_DIM}]",
+        )
+    if type(cells) is not tuple or not cells:
+        raise OperationDomainValidationError(
+            location=("cells",),
+            code="cubical_complex.skeleton_cells_shape",
+            message="at least one cubical generator is required",
+        )
+    if len(cells) > MAX_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("cells",),
+            code="cubical_complex.skeleton_source_cell_budget",
+            message=f"source exceeds the {MAX_CELLS}-cell input limit",
+        )
+    try:
+        validated_cells = tuple(
+            CubicalCell.model_validate(cell.model_dump(mode="python"))
+            for cell in cells
+            if isinstance(cell, CubicalCell)
+        )
+        if len(validated_cells) != len(cells):
+            raise TypeError("every generator must be a cubical cell")
+    except (AttributeError, TypeError, ValueError, ValidationError) as exc:
+        raise OperationDomainValidationError(
+            location=("cells",),
+            code="cubical_complex.skeleton_invalid_cell",
+            message="generators must satisfy the canonical cubical-cell contract",
+        ) from exc
+    if any(len(cell.intervals) != len(validated_cells[0].intervals) for cell in validated_cells):
+        raise OperationDomainValidationError(
+            location=("cells",),
+            code="cubical_complex.skeleton_ambient_axis",
+            message="all generators must use one ambient coordinate axis",
+        )
+    coordinate_digits = max(
+        _coordinate_digit_count(coordinate)
+        for cell in validated_cells
+        for interval in cell.intervals
+        for coordinate in interval
+    )
+    face_bound = sum(3**cell.dimension for cell in set(validated_cells))
+    encoded_cell_bound = len(set(validated_cells)) + face_bound
+    estimated_bytes = encoded_cell_bound * len(validated_cells[0].intervals) * (2 * coordinate_digits + 8) + 512
+    if face_bound > MAX_FACE_CELLS or estimated_bytes > MAX_CUBICAL_SKELETON_RESULT_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("cells",),
+            code="cubical_complex.skeleton_result_size",
+            message="skeleton closure and duplicated result exceed the admitted output bound",
+        )
+    complex_, _source_cells = _canonical_complex(validated_cells)
     retained = tuple(
         cell for cell in complex_.cells if cell.dimension <= dimension_bound
     )

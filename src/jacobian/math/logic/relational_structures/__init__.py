@@ -38,6 +38,11 @@ from jacobian.math.logic.relational_structures._models import (
     RelationalReductResult,
     SymbolTransportProfile,
 )
+from jacobian.math.logic.relational_structures.consistency import (
+    CspDomainConsistency,
+    CspDomainRequest,
+    generalized_arc_consistency,
+)
 from jacobian.math.logic.relational_structures.operations import (
     check_homomorphism,
     check_polymorphism,
@@ -72,6 +77,8 @@ __all__ = [
     "CspAssignmentProfile",
     "CspAssignmentRequest",
     "CspConstraintEvaluation",
+    "CspDomainConsistency",
+    "CspDomainRequest",
     "EmbeddingSearchResult",
     "FiniteCspConstraint",
     "FiniteCspInstance",
@@ -121,6 +128,7 @@ __all__ = [
     "enumerate_homomorphisms",
     "enumerate_polymorphisms",
     "evaluate_pp_formula",
+    "generalized_arc_consistency",
     "induced_substructure",
     "profile_csp_assignment",
     "quotient_structure",

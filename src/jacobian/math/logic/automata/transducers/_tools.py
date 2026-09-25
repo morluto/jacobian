@@ -496,7 +496,10 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             OperationExample(
                 name="finite_output_fiber",
-                description="The accepted input word (0) has the sole output (1).",
+                description=(
+                    "With an explicit output alphabet, the accepted input word "
+                    "(0) has the sole output (1)."
+                ),
                 input={
                     "input_word": [0],
                     "transducer": {

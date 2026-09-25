@@ -18,7 +18,7 @@ from typing import Self
 from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import CanonicalRational, ExactInteger
 from jacobian._models import StrictModel
 from jacobian.math.polynomials.values import RationalPolynomial
 
@@ -44,9 +44,14 @@ class IntegerAffineFactorial(StrictModel):
         le=MAX_PROPER_HYPERGEOMETRIC_AFFINE_COEFFICIENT,
     )
     # Offsets change the affine argument's location, not carrier/work size.
-    # Keep their wire representation intrinsically bounded without a numeric cap.
-    offset: StrictInt = Field(
-        description="Arbitrary-size integer offset of the affine factorial argument."
+    # Keep their wire representation intrinsically bounded without a numeric cap:
+    # the shared exact-integer codec carries an arbitrary-size offset losslessly
+    # as a canonical decimal string when it exceeds the interoperable JSON range.
+    offset: ExactInteger = Field(
+        description=(
+            "Exact arbitrary-size integer offset of the affine factorial argument; "
+            "a native Python int and a canonical decimal string in JSON."
+        )
     )
     power: StrictInt = Field(
         ge=-MAX_PROPER_HYPERGEOMETRIC_FACTOR_POWER,

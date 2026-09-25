@@ -1,7 +1,9 @@
+import json
+
 import pytest
 from pydantic import ValidationError
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import MAX_CANONICAL_INTEGER_DIGITS, CanonicalRational
 from jacobian.math.ore_algebras.proper_hypergeometric_terms import (
     IntegerAffineFactorial,
     ProperHypergeometricTerm,
@@ -99,3 +101,27 @@ def test_large_offset_is_accepted_without_increasing_carrier_size():
     )
     assert factor.offset == 129
     assert factor.model_dump()["offset"] == 129
+
+
+def test_affine_offset_uses_the_exact_integer_wire_codec():
+    # Offsets past the interoperable JSON integer range must not be emitted as
+    # bare JSON numbers, which JavaScript consumers would round.
+    offset = (1 << 53) + 1
+    factor = IntegerAffineFactorial(
+        n_coefficient=1, k_coefficient=0, offset=offset, power=1
+    )
+    wire = json.loads(factor.model_dump_json())
+    assert wire["offset"] == str(offset)
+    assert (
+        IntegerAffineFactorial.model_validate_json(factor.model_dump_json()) == factor
+    )
+
+
+def test_affine_offset_digit_bound_is_enforced():
+    bound = 10**MAX_CANONICAL_INTEGER_DIGITS
+    with pytest.raises(ValidationError, match=r"exact_integer\.digit_bound"):
+        IntegerAffineFactorial(n_coefficient=1, k_coefficient=0, offset=bound, power=1)
+    admitted = IntegerAffineFactorial(
+        n_coefficient=1, k_coefficient=0, offset=bound - 1, power=1
+    )
+    assert admitted.offset == bound - 1

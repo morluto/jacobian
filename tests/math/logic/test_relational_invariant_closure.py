@@ -174,7 +174,21 @@ def test_empty_and_nullary_relations_keep_exact_power_semantics() -> None:
     assert nullary.tuples == ((),)
 
 
-def test_admission_refuses_large_power_before_product_expansion(
+def test_empty_closure_admits_large_ambient_power() -> None:
+    source = FiniteRelationalStructure(carrier_size=64)
+    unary = _operation(source, 1, (0,) * 64)
+    request = RelationalInvariantClosureRequest(
+        source=source,
+        relation_arity=3,
+        generator_tuples=(),
+        polymorphisms=(unary,),
+    )
+    result = close_relation_under_polymorphisms(request)
+    assert result.tuples == ()
+    assert result.source == source
+
+
+def test_admission_refuses_large_nonempty_power_before_expansion(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     source = FiniteRelationalStructure(carrier_size=64)
@@ -182,7 +196,7 @@ def test_admission_refuses_large_power_before_product_expansion(
     request = RelationalInvariantClosureRequest(
         source=source,
         relation_arity=3,
-        generator_tuples=(),
+        generator_tuples=((0, 0, 0),),
         polymorphisms=(unary,),
     )
 

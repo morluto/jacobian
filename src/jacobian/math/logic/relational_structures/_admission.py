@@ -82,7 +82,12 @@ def admit_invariant_relation_closure(
             code="relational.invariant_closure.arity",
             message="the generated relation arity must be between 0 and 4",
         )
-    state_count = source.carrier_size**relation_arity
+    empty_closure = not generator_tuples
+    state_count = (
+        0
+        if empty_closure and relation_arity > 0
+        else source.carrier_size**relation_arity
+    )
     if state_count > MAX_RELATIONAL_INVARIANT_CLOSURE_TUPLES:
         raise OperationResourceAdmissionError(
             location=("relation_arity",),
@@ -92,10 +97,6 @@ def admit_invariant_relation_closure(
                 f"the {MAX_RELATIONAL_INVARIANT_CLOSURE_TUPLES}-tuple envelope"
             ),
         )
-
-    # With no seeds, positive-arity operations cannot produce a tuple, so the
-    # closure kernel returns immediately without scanning the ambient power.
-    empty_closure = not generator_tuples
 
     # The queue sorts the current tuple set once per discovered row. The
     # factor eight covers up to log2(4096) comparisons for every row reference.

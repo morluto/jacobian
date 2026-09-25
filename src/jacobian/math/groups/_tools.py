@@ -25,6 +25,12 @@ from jacobian.math.groups._models import (
     GroupSubgroupLatticeResult,
     PermutationGroup,
 )
+from jacobian.math.groups._table_models import (
+    FiniteGroupTable,
+    FiniteGroupTableElement,
+    FiniteGroupTableRequest,
+    FiniteGroupTableResult,
+)
 from jacobian.math.groups.finite_abelian import (
     FiniteAbelianCharacterSumIntervalProfileRequest,
     FiniteAbelianCharacterSumIntervalProfileResult,
@@ -79,6 +85,93 @@ def compute_finite_abelian_character_sum_interval_profile(
 def compute_group_order(request: PermutationGroup) -> GroupOrderResult:
     order = native.group_order(request)
     return GroupOrderResult(source=request, order=order)
+
+
+def construct_finite_group_table(
+    request: FiniteGroupTableRequest,
+) -> FiniteGroupTableResult:
+    """Publish one validated indexed group table as a parent-bound value."""
+    if not isinstance(request, FiniteGroupTableRequest):
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="finite_group.table.invalid_request",
+            message="request must be a finite-group table request value",
+        )
+    try:
+        request = FiniteGroupTableRequest.model_validate(request.model_dump())
+    except (ValidationError, AttributeError, TypeError, ValueError) as error:
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="finite_group.table.invalid_request",
+            message="request must satisfy the finite-group table request bounds",
+        ) from error
+    table = request.multiplication
+    identity = request.identity
+    order = len(table)
+    if any(len(row) != order for row in table):
+        raise OperationDomainValidationError(
+            location=("multiplication",),
+            code="finite_group.table.table_shape",
+            message="multiplication table must be square",
+        )
+    if any(value >= order for row in table for value in row):
+        raise OperationDomainValidationError(
+            location=("multiplication",),
+            code="finite_group.table.entry_range",
+            message="every table entry must index a group element",
+        )
+    if identity >= order:
+        raise OperationDomainValidationError(
+            location=("identity",),
+            code="finite_group.table.identity_range",
+            message="identity index must name a table element",
+        )
+    if any(table[identity][i] != i or table[i][identity] != i for i in range(order)):
+        raise OperationDomainValidationError(
+            location=("identity",),
+            code="finite_group.table.identity_law",
+            message="the proposed identity must be two-sided",
+        )
+    inverse_indices: list[int] = []
+    for i in range(order):
+        inverse_index = next(
+            (
+                j
+                for j in range(order)
+                if table[i][j] == identity and table[j][i] == identity
+            ),
+            None,
+        )
+        if inverse_index is None:
+            raise OperationDomainValidationError(
+                location=("multiplication",),
+                code="finite_group.table.inverse_law",
+                message="every element must have a two-sided inverse",
+            )
+        inverse_indices.append(inverse_index)
+    inverses = tuple(inverse_indices)
+    for a in range(order):
+        for b in range(order):
+            ab = table[a][b]
+            for c in range(order):
+                if table[ab][c] != table[a][table[b][c]]:
+                    raise OperationDomainValidationError(
+                        location=("multiplication",),
+                        code="finite_group.table.associativity",
+                        message="multiplication table must be associative",
+                    )
+    # This producer has checked the group laws already. Keep the canonical
+    # output construction structural; decoding a downstream caller's table
+    # requires that consumer to re-admit the laws it relies on.
+    group = FiniteGroupTable.model_construct(
+        multiplication=table,
+        identity=identity,
+        inverse=inverses,
+    )
+    return FiniteGroupTableResult(
+        group=group,
+        identity_element=FiniteGroupTableElement(group=group, index=identity),
+    )
 
 
 def compute_element_order(request: GroupElementOrderRequest) -> GroupElementOrderResult:
@@ -140,6 +233,41 @@ S3_STABILIZER_POINT_0 = {
 }
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
+    MathTool(
+        operation_id="finite_group.table.construct.compute",
+        title="Construct a bounded exact finite group from its multiplication table",
+        description=(
+            "Validate a complete indexed multiplication table (order at most 24) "
+            "against the identity, two-sided inverse, and associativity laws. "
+            "Return a finite-group value with its inverse map and parent-bound "
+            "identity element. This table carrier is not yet accepted by the "
+            "permutation-specific lattice-gauge operations."
+        ),
+        request_type=FiniteGroupTableRequest,
+        result_type=FiniteGroupTableResult,
+        run=construct_finite_group_table,
+        tags=("finite-group", "multiplication-table", "exact"),
+        examples=(
+            OperationExample(
+                name="s3_multiplication_table",
+                description=(
+                    "Construct S3 from its six-element Cayley table; indices "
+                    "encode the permutations e, (01), (02), (12), (012), (021)."
+                ),
+                input={
+                    "identity": 0,
+                    "multiplication": [
+                        [0, 1, 2, 3, 4, 5],
+                        [1, 0, 4, 5, 2, 3],
+                        [2, 5, 0, 4, 3, 1],
+                        [3, 4, 5, 0, 1, 2],
+                        [4, 3, 1, 2, 5, 0],
+                        [5, 2, 3, 1, 0, 4],
+                    ],
+                },
+            ),
+        ),
+    ),
     MathTool(
         operation_id="finite_abelian_group.exact_factorization.compute",
         title="Exact finite abelian group factorization",

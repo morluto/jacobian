@@ -20,6 +20,7 @@ from jacobian.math.polynomials.tropical._models import (
     AddBranch,
     InfinityCase,
     PolynomialActiveTermsResult,
+    ScalarDualResult,
     TropicalActiveTerm,
 )
 from jacobian.math.polynomials.tropical.values import (
@@ -364,6 +365,52 @@ def tropical_scalar_power(scalar: TropicalScalar, exponent: int) -> TropicalScal
         semiring=scalar.semiring,
         kind="FINITE",
         value=CanonicalRational.from_fraction(value.as_fraction() * exponent),
+    )
+
+
+def tropical_scalar_dual(scalar: TropicalScalar) -> ScalarDualResult:
+    """Map a scalar between min-plus and max-plus by exact negation.
+
+    Negation sends the licensed additive identity to the opposite licensed
+    infinity and preserves the multiplicative identity. The result binds both
+    semiring identities so callers cannot lose the change of parent.
+    """
+    if not isinstance(scalar, TropicalScalar):
+        raise OperationDomainValidationError(
+            location=("scalar",),
+            code="tropical.scalar_type",
+            message="expected a tropical scalar",
+        )
+    _admit_scalar(scalar, scalar.semiring)
+    target_convention = (
+        "MAX_PLUS" if scalar.semiring.convention == "MIN_PLUS" else "MIN_PLUS"
+    )
+    target_semiring = TropicalSemiring(
+        convention=target_convention,
+        base=scalar.semiring.base,
+    )
+    if scalar.kind == "FINITE":
+        value = _finite_value(scalar)
+        result = TropicalScalar._from_kernel(
+            semiring=target_semiring,
+            kind="FINITE",
+            value=CanonicalRational.from_integer_ratio(-value.num, value.den),
+        )
+    else:
+        kind = (
+            "NEGATIVE_INFINITY"
+            if scalar.kind == "POSITIVE_INFINITY"
+            else "POSITIVE_INFINITY"
+        )
+        result = TropicalScalar._from_kernel(
+            semiring=target_semiring,
+            kind=kind,
+            value=None,
+        )
+    return ScalarDualResult._from_kernel(
+        source=scalar,
+        target_semiring=target_semiring,
+        result=result,
     )
 
 
@@ -1423,6 +1470,7 @@ __all__ = [
     "tropical_polynomial_univariate_roots",
     "tropical_polynomial_univariate_split_form",
     "tropical_scalar_add",
+    "tropical_scalar_dual",
     "tropical_scalar_multiply",
     "tropical_scalar_power",
     "tropical_vector_add",

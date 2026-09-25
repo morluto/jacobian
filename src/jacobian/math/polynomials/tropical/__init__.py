@@ -4,6 +4,7 @@ from jacobian.math.polynomials.tropical._models import (
     PolynomialActiveTermsRequest,
     PolynomialActiveTermsResult,
     ScalarAddResult,
+    ScalarDualResult,
     TropicalActiveTerm,
 )
 from jacobian.math.polynomials.tropical.hypersurface import (
@@ -22,6 +23,7 @@ from jacobian.math.polynomials.tropical.operations import (
     tropical_polynomial_univariate_newton_polygon,
     tropical_polynomial_univariate_roots,
     tropical_scalar_add,
+    tropical_scalar_dual,
     tropical_scalar_multiply,
     tropical_scalar_power,
     tropical_vector_add,
@@ -54,6 +56,7 @@ __all__ = [
     "PolynomialActiveTermsRequest",
     "PolynomialActiveTermsResult",
     "ScalarAddResult",
+    "ScalarDualResult",
     "TropicalActiveTerm",
     "TropicalHypersurface",
     "TropicalHypersurfaceCell",
@@ -85,6 +88,7 @@ __all__ = [
     "tropical_polynomial_univariate_newton_polygon",
     "tropical_polynomial_univariate_roots",
     "tropical_scalar_add",
+    "tropical_scalar_dual",
     "tropical_scalar_multiply",
     "tropical_scalar_power",
     "tropical_vector_add",

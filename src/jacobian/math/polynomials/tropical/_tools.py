@@ -67,6 +67,10 @@ def compute_scalar_power(request: ScalarPowerRequest) -> ScalarResult:
     )
 
 
+def compute_scalar_dual(request: ScalarDualRequest) -> ScalarDualResult:
+    return tropical_scalar_dual(request.scalar)
+
+
 def compute_vector_add(request: VectorBinaryRequest) -> VectorResult:
     return VectorResult._from_kernel(tropical_vector_add(request.left, request.right))
 
@@ -223,6 +227,26 @@ TOOLS: MathTools = (
                 name="power",
                 description="Compute 3 to tropical power 2 as 6; exponent must be nonnegative.",
                 input={"scalar": _finite(3), "exponent": 2},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="tropical.scalar.dual.compute",
+        title="Dualize a tropical scalar",
+        description=(
+            "Map a min-plus scalar to max-plus or max-plus to min-plus by exact "
+            "negation, swapping the licensed infinity and retaining explicit "
+            "source and target semirings."
+        ),
+        request_type=ScalarDualRequest,
+        result_type=ScalarDualResult,
+        run=compute_scalar_dual,
+        tags=("tropical", "semiring", "exact", "duality"),
+        examples=(
+            OperationExample(
+                name="dual_finite",
+                description="Map MIN_PLUS value 3 to MAX_PLUS value -3.",
+                input={"scalar": _finite(3)},
             ),
         ),
     ),

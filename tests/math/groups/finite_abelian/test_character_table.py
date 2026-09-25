@@ -66,7 +66,7 @@ def test_finite_abelian_character_table_is_exact_and_row_orthogonal(
     ("moduli", "message"),
     [
         ((3, 3, 3, 3, 3, 3), "admit order"),
-        ((2, 2, 2, 2, 2, 2, 2), "rank"),
+        ((2, 2, 2, 2, 2, 2, 2), "order"),
         ((61,), "exponent"),
     ],
 )
@@ -76,6 +76,14 @@ def test_finite_abelian_character_table_admits_before_materializing(
     group = FiniteAbelianProductGroup(moduli=moduli)
     with pytest.raises(OperationResourceAdmissionError, match=message):
         finite_abelian_character_table(FiniteAbelianCharacterTableRequest(group=group))
+
+
+def test_table_admits_seven_coordinates_when_output_fits() -> None:
+    group = FiniteAbelianProductGroup(moduli=(2,) * 7)
+    result = finite_abelian_character_table(
+        FiniteAbelianCharacterTableRequest(group=group)
+    )
+    assert len(result.elements) == len(result.rows) == 128
 
 
 def test_catalog_manifest_publishes_executable_character_table() -> None:

@@ -28,7 +28,7 @@ class FiniteAbelianCharacterTableRequest(StrictModel):
 class FiniteAbelianCharacterRow(StrictModel):
     """One linear character, identified by its dual product coordinates."""
 
-    frequency: tuple[int, ...] = Field(min_length=0, max_length=6)
+    frequency: tuple[int, ...] = Field(min_length=0)
     values: tuple[CyclotomicValue, ...] = Field(
         min_length=1, max_length=MAX_ABELIAN_CHARACTER_TABLE_ORDER
     )
@@ -60,15 +60,31 @@ class FiniteAbelianCharacterTableResult(StrictModel):
                 "table_shape",
                 "table must contain every group element and dual character",
             )
-        if any(len(element) != len(self.group.moduli) for element in self.elements):
-            raise _error("element_rank", "each table element must match the group rank")
-        if any(
-            len(row.frequency) != len(self.group.moduli) or len(row.values) != count
-            for row in self.rows
-        ):
+        from itertools import product
+        from math import lcm
+
+        expected_elements = tuple(product(*(range(m) for m in self.group.moduli)))
+        if not self.group.moduli:
+            expected_elements = ((),)
+        if self.elements != expected_elements:
+            raise _error(
+                "element_axis",
+                "table elements must be the canonical lexicographic group axis",
+            )
+        if self.cyclotomic_order != lcm(*self.group.moduli):
+            raise _error(
+                "cyclotomic_axis", "cyclotomic order must equal the group exponent"
+            )
+        if any(len(row.values) != count for row in self.rows):
             raise _error(
                 "row_shape",
                 "each row must carry a dual coordinate and one value per element",
+            )
+        expected_frequencies = expected_elements
+        if tuple(row.frequency for row in self.rows) != expected_frequencies:
+            raise _error(
+                "frequency_axis",
+                "table frequencies must be the canonical lexicographic dual axis",
             )
         if any(
             value.order != self.cyclotomic_order

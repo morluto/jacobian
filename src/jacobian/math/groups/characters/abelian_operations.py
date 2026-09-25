@@ -26,12 +26,6 @@ def finite_abelian_character_table(
 ) -> FiniteAbelianCharacterTableResult:
     """Return the complete exact Fourier table of an admitted product group."""
     group = request.group
-    if len(group.moduli) > 6:
-        raise OperationResourceAdmissionError(
-            location=("group", "moduli"),
-            code="groups.characters.abelian.rank_exceeds_envelope",
-            message="complete Abelian character tables admit rank at most 6",
-        )
     order = group.order
     exponent = lcm(*group.moduli)
     if order > MAX_ABELIAN_CHARACTER_TABLE_ORDER:

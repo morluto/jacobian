@@ -154,6 +154,23 @@ def test_maximum_sequence_length_accepts_the_identity_change():
     assert result.target_complex.sequence == source.sequence
 
 
+def test_large_denominator_is_admitted_without_decimal_string_conversion(monkeypatch):
+    source = _source(((q(1),),))
+    huge_denominator = 10**5000 + 1
+    change = ((CanonicalRational(num=1, den=huge_denominator),),)
+
+    def fail_if_inverted(_matrix):
+        raise AssertionError("oversized coefficient reached matrix inversion")
+
+    monkeypatch.setattr(operations, "_inverse_matrix", fail_if_inverted)
+    with pytest.raises(OperationResourceAdmissionError):
+        module_koszul_sequence_linear_change(
+            ModuleKoszulSequenceLinearChangeRequest(
+                complex=source, change_matrix=change
+            )
+        )
+
+
 def test_resource_bound_is_checked_before_matrix_inversion(monkeypatch):
     source = _source(((q(1),), (q(0),)))
 

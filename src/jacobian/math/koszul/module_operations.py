@@ -1521,7 +1521,7 @@ def _admit_sequence_linear_change(
     denominator_digits = (
         1
         + sum(
-            max(0, len(str(coefficient.den)) - 1)
+            max(0, canonical_rational_component_digits(coefficient) - 1)
             for row in value.change_matrix
             for coefficient in row
         )

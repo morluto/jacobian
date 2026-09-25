@@ -666,10 +666,16 @@ class FreeAlgebraPolynomialHomomorphismCompositionRequest(StrictModel):
     """Maps ``f:A→B`` and ``g:B→C`` in the order used by ``g ∘ f``."""
 
     f: FreeAlgebraPolynomialHomomorphism = Field(
-        description="The first map f:A→B, applied before g."
+        description=(
+            "The first map f:A→B, applied before g. Each generator image is "
+            "limited at execution to 64 terms and words of at most 32 letters."
+        )
     )
     g: FreeAlgebraPolynomialHomomorphism = Field(
-        description="The second map g:B→C, applied after f."
+        description=(
+            "The second map g:B→C, applied after f. Each generator image is "
+            "limited at execution to 64 terms and words of at most 32 letters."
+        )
     )
 
     @model_validator(mode="after")

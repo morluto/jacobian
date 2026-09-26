@@ -25,6 +25,12 @@ from jacobian.math.combinatorics.symmetric_functions.values import (
 
 def semistandard_tableaux_count(partition: IntegerPartition, max_entry: int) -> int:
     """Compute the exact hook-content count for entries in ``1..max_entry``."""
+    if type(partition) is not IntegerPartition:
+        raise OperationDomainValidationError(
+            location=("partition",),
+            code="semistandard_tableaux.invalid_partition",
+            message="partition must be a canonical IntegerPartition value",
+        )
     try:
         request = SemistandardTableauEnumerationRequest(
             partition=partition, max_entry=max_entry
@@ -125,6 +131,12 @@ def enumerate_semistandard_young_tableaux(
     partition: IntegerPartition, max_entry: int
 ) -> SemistandardTableauEnumerationResult:
     """Return the complete lexicographically ordered bounded family."""
+    if type(partition) is not IntegerPartition:
+        raise OperationDomainValidationError(
+            location=("partition",),
+            code="semistandard_tableaux.invalid_partition",
+            message="partition must be a canonical IntegerPartition value",
+        )
     try:
         request = SemistandardTableauEnumerationRequest(
             partition=partition, max_entry=max_entry

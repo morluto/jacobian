@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from typing import TypeVar
 
 from pydantic import BaseModel, ValidationError
 
@@ -28,18 +27,15 @@ from jacobian.math.combinatorics.symmetric_functions.values import (
     TableauCandidate,
 )
 
-_RequestT = TypeVar("_RequestT", bound=BaseModel)
 
-
-def _admit_native_request(
-    model: type[_RequestT], values: dict[str, object]
-) -> _RequestT:
+def _admit_native_request[RequestT: BaseModel](
+    model: type[RequestT], values: dict[str, object]
+) -> RequestT:
     try:
+        if any(type(value) is not IntegerPartition for value in values.values()):
+            raise TypeError("native LR arguments must be IntegerPartition values")
         native_values = {
-            key: value.model_dump(mode="python")
-            if isinstance(value, IntegerPartition)
-            else value
-            for key, value in values.items()
+            key: value.model_dump(mode="python") for key, value in values.items()
         }
         return model.model_validate(native_values)
     except (ValidationError, AttributeError, TypeError, ValueError) as exc:
@@ -66,9 +62,9 @@ def littlewood_richardson_coefficient(
     request = _admit_native_request(
         LittlewoodRichardsonCoefficientRequest,
         {
-            "outer": outer.model_dump(mode="python"),
-            "inner": inner.model_dump(mode="python"),
-            "content": content.model_dump(mode="python"),
+            "outer": outer,
+            "inner": inner,
+            "content": content,
         },
     )
     return _compute_validated_lr(request)

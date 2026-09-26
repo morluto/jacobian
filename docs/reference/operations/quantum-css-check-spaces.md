@@ -6,8 +6,13 @@ GF(2) and checks every cross inner product. If `H_X H_Z^T = 0`, it returns a
 successful `CSSCheckSpaceValue` retaining the two canonical, role-labelled
 families and their combined canonical `CheckSpaceValue`. The combined value
 composes directly with stabilizer syndrome, normalizer, and error-equivalence
-operations. Otherwise the result contains an exact input-row pair and row
-vectors whose inner product is one.
+operations. Otherwise the result carries a `CSSNonOrthogonalWitness` with the
+offending input-row indices, their exact binary row vectors, and the ordered
+qubit register they were requested on, so persisted coordinates map back to
+qubit IDs. The kernel computes the odd inner product once while selecting the
+obstruction; witness validation and transport stay structural, so a consumer
+that relies on the nonorthogonality recomputes it from the retained rows and
+register.
 
 `quantum.stabilizer.css_logical_frame.compute` consumes that typed CSS value
 and returns `k = n - rank(H_X) - rank(H_Z)` paired logical X/Z representatives.

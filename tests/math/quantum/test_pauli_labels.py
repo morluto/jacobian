@@ -10,7 +10,6 @@ from pydantic import ValidationError
 from jacobian.math.quantum import (
     ExactQubitPauli,
     PauliFromLabelsRequest,
-    PauliToLabelsRequest,
     PhaseFreeQubitPauli,
     QubitRegister,
     pauli_from_labels,
@@ -66,19 +65,16 @@ def test_label_round_trips_match_independent_dense_operator(width: int) -> None:
     register = QubitRegister(qubit_ids=tuple(f"q{i}" for i in range(width)))
     for labels in product(("I", "X", "Y", "Z"), repeat=width):
         for scalar_phase in range(4):
-            request = PauliFromLabelsRequest(
-                register=register, labels=labels, phase=scalar_phase
-            )
-            converted = pauli_from_labels(request)
+            converted = pauli_from_labels(register, labels, scalar_phase)
             y_count = labels.count("Y")
             expected_x = tuple(int(label in ("X", "Y")) for label in labels)
             expected_z = tuple(int(label in ("Z", "Y")) for label in labels)
-            assert converted.pauli.phase_free.x_bits == expected_x
-            assert converted.pauli.phase_free.z_bits == expected_z
-            assert converted.pauli.phase == (scalar_phase + y_count) % 4
-            assert _stored_operator(converted.pauli) == _operator(labels, scalar_phase)
+            assert converted.phase_free.x_bits == expected_x
+            assert converted.phase_free.z_bits == expected_z
+            assert converted.phase == (scalar_phase + y_count) % 4
+            assert _stored_operator(converted) == _operator(labels, scalar_phase)
 
-            decoded = pauli_to_labels(PauliToLabelsRequest(pauli=converted.pauli))
+            decoded = pauli_to_labels(converted)
             assert decoded.labels == labels
             assert decoded.phase == scalar_phase
             assert _operator(decoded.labels, decoded.phase) == _operator(
@@ -107,11 +103,17 @@ def test_label_conversion_catalog_round_trip_preserves_y_scalar() -> None:
 
 
 def test_labels_must_cover_register_and_use_named_pauli_symbols() -> None:
+    from jacobian.catalog.models import OperationDomainValidationError
+
     register = QubitRegister(qubit_ids=("q0", "q1"))
     with pytest.raises(ValidationError):
         PauliFromLabelsRequest(register=register, labels=("X",))
     with pytest.raises(ValidationError):
         PauliFromLabelsRequest(register=register, labels=("X", "A"))
+    with pytest.raises(OperationDomainValidationError):
+        pauli_from_labels(register, ("X",), 0)
+    with pytest.raises(OperationDomainValidationError):
+        pauli_from_labels(register, ("X", "A"), 0)  # type: ignore[arg-type]
 
 
 def test_scalar_phase_encoding_is_not_reinterpreted_as_y_phase() -> None:
@@ -120,7 +122,7 @@ def test_scalar_phase_encoding_is_not_reinterpreted_as_y_phase() -> None:
         phase_free=PhaseFreeQubitPauli(register=register, x_bits=(1,), z_bits=(1,)),
         phase=3,
     )
-    decoded = pauli_to_labels(PauliToLabelsRequest(pauli=pauli))
+    decoded = pauli_to_labels(pauli)
     assert decoded.labels == ("Y",)
     assert decoded.phase == 2
     assert decoded.phase == (pauli.phase - 1) % 4

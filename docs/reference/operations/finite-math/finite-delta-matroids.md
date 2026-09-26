@@ -74,9 +74,21 @@ twist cells and at most 4,096 aggregate ground-label bytes across its matrix
 and delta-matroid axes. These are mathematical allocation bounds; they are not
 a deployment wire-byte ceiling.
 
+`delta_matroid.relabel.compute` renames and reorders the ground axis through a
+bijective `target_to_source` map. Each feasible subset is transported by the
+inverse `source_to_target` map, with its indices sorted in the target axis; the
+result retains both source and target delta-matroids and both maps. The empty
+ground set and the identity permutation are valid. The operation admits at most
+2,049 ground positions, 16,384 source feasible-set memberships, 2,048 UTF-8
+bytes of target labels, 329,784 units of axis-check and row-transport work,
+73,740 materialized result cells (retained labels, rows, memberships, and axis
+maps), and 903,524 total reserved work units, including two 250,000-candidate
+source-exchange passes for admission and recognition. Source exchange checks and
+relabelling work are admitted before target feasible rows are materialized. Relabelling preserves the symmetric-exchange axiom because
+a bijection preserves symmetric difference and membership.
+
 `delta_matroid.distance_interlace_polynomial.compute` returns the exact
-distance histogram and the polynomial
-`Q_D(x) = sum_{X subset E} (x - 1)^{d_D(X)}`, where
+distance histogram and `Q_D(x) = sum_{X subset E} (x - 1)^{d_D(X)}`, where
 `d_D(X) = min_{F feasible} |X symmetric_difference F|`. Coefficients are
 integers in descending-degree order, using the shared `IntegerPolynomial`
 value. This is the distance specialization in [Brijder and Hoogeboom's

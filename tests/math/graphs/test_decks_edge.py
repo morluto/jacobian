@@ -213,7 +213,9 @@ def test_edge_deck_quotient_has_exactly_one_published_operation() -> None:
         for tool in BUILTIN_TOOLS
         if tool.request_type.model_fields.get("deck") is not None
         and tool.request_type.model_fields["deck"].annotation is EdgeDeletionFamily
+
         and tool.result_type is UnlabelledDeck
+
     )
     assert quotients == ["graph.deck.unlabelled.compute"]
 

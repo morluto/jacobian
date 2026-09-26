@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+
 from itertools import combinations, permutations
 from math import comb, factorial
 from typing import Annotated, Any, Self, cast
+
 
 from pydantic import Field, PrivateAttr, model_validator
 from pydantic_core import PydanticCustomError
@@ -14,15 +16,19 @@ from jacobian._models import StrictModel
 from jacobian.math.graphs.patterns._models import (
     MAX_INDUCED_PATTERN_TOTAL_WORK_UNITS,
 )
+
 from jacobian.math.graphs.values import MAX_GRAPH_LABEL_BYTES, SimpleUndirectedGraph
+
 
 MAX_DECK_VERTICES = 64
 """Admission cap on source vertices so the complete card family fits output."""
 
 MAX_DECK_CARD_EDGES = 130_000
+"""Admission cap on aggregate card edges across the whole family."""
 MAX_EDGE_DECK_EDGES = 130_000
 MAX_UNLABELLED_DECK_VERTICES = 10
 MAX_UNLABELLED_DECK_ISOMORPHISM_WORK = 2_000_000
+
 MAX_UNLABELLED_EDGE_DECK_RESULT_BYTES = 1_000_000
 MAX_VERTEX_DECK_ISOMORPHISM_PROFILE_RESULT_BYTES = 1_000_000
 MAX_EDGE_DECK_ISOMORPHISM_PROFILE_RESULT_BYTES = 1_000_000
@@ -34,6 +40,7 @@ MAX_ANONYMOUS_CARD_PROFILE_CELLS = 200_000
 MAX_ANONYMOUS_CARD_PROFILE_RESULT_BYTES = 1_000_000
 MAX_ANONYMOUS_CARD_EQUALITY_WORK = 2_000_000
 """Admission cap on aggregate card edges across the whole family."""
+
 MAX_VERTEX_DECK_SOURCE_EDGES = comb(MAX_UNLABELLED_DECK_VERTICES, 2)
 MAX_VERTEX_DECK_CARD_EDGE_TOTAL = MAX_UNLABELLED_DECK_VERTICES * comb(
     MAX_UNLABELLED_DECK_VERTICES - 1, 2
@@ -42,7 +49,13 @@ MAX_VERTEX_DECK_CARD_EDGE_TOTAL = MAX_UNLABELLED_DECK_VERTICES * comb(
 MAX_KELLY_DECK_TOTAL_WORK = MAX_INDUCED_PATTERN_TOTAL_WORK_UNITS
 MAX_KELLY_COUNT_DIGITS = 3
 MAX_KELLY_SUBGRAPH_COUNT_DIGITS = 12
+MAX_DECK_ECHO_ALLOCATION = 1_000_000
+"""Bound vertex-label characters echoed by a Kelly deck result."""
+MAX_DEGREE_MULTISET_DIGITS = 64
+"""Aggregate decimal digits admitted in a reconstructed degree multiset."""
+
 MAX_KELLY_RESULT_BYTES = 1_000_000
+
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -829,8 +842,9 @@ class UnlabelledDeckRequest(StrictModel):
     deck: EdgeDeletionFamily = Field(
         description=(
             "A complete source-bound edge deck; quotient is admitted for at most "
-            "10 source vertices and 2000000 units of pairwise isomorphism work."
-        )
+            "10 source vertices and 2000000 units of exact permutation "
+            "canonicalization work."
+        ),
     )
 
 
@@ -907,6 +921,7 @@ class UnlabelledDeck(StrictModel):
     @classmethod
     def _from_kernel(cls, **values: Any) -> Self:
         return cls.model_construct(**values)
+
 
 
 class UnlabelledEdgeDeckRequest(StrictModel):
@@ -987,6 +1002,7 @@ class UnlabelledEdgeDeck(StrictModel):
         return cls.model_construct(**values)
 
 
+
 class UnlabelledVertexDeckRequest(StrictModel):
     """Consume a complete source-bound vertex-deletion family."""
 
@@ -1061,6 +1077,7 @@ class UnlabelledVertexDeck(StrictModel):
     @classmethod
     def _from_kernel(cls, **values: Any) -> Self:
         return cls.model_construct(**values)
+
 
 
 class VertexDeckIsomorphismProfileRequest(StrictModel):
@@ -2009,6 +2026,7 @@ def _normalize_edge_family_json(value: dict[str, Any]) -> dict[str, Any]:
     return normalized
 
 
+
 class VertexDeckInducedSubgraphCountRequest(StrictModel):
     """Count an induced pattern from a complete vertex deck."""
 
@@ -2290,11 +2308,15 @@ class VertexDeckEdgeCount(StrictModel):
 
 __all__ = [
     "MAX_DECK_CARD_EDGES",
+    "MAX_DECK_ECHO_ALLOCATION",
     "MAX_DECK_VERTICES",
+    "MAX_DEGREE_MULTISET_DIGITS",
     "MAX_EDGE_DECK_EDGES",
     "MAX_KELLY_COUNT_DIGITS",
     "MAX_KELLY_DECK_TOTAL_WORK",
+
     "MAX_KELLY_RESULT_BYTES",
+
     "MAX_KELLY_SUBGRAPH_COUNT_DIGITS",
     "MAX_UNLABELLED_DECK_ISOMORPHISM_WORK",
     "MAX_UNLABELLED_DECK_VERTICES",

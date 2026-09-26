@@ -21,7 +21,6 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs import (
     FiniteHypergraph,
     independence_number,
 )
-from jacobian.math.combinatorics.finite_structures.hypergraphs._models import MAX_EDGES
 from jacobian.math.combinatorics.finite_structures.hypergraphs.colorings import (
     HyperedgeColorAssignment,
     IndexedHyperedgeColoring,
@@ -275,8 +274,10 @@ def test_complete_provenance_bound_rejects() -> None:
 
 def test_distinct_union_carrier_bound_rejects() -> None:
     vertices = tuple(f"v{i}" for i in range(160))
-    with pytest.raises(OperationResourceAdmissionError, match=f"{MAX_EDGES}-edge"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         construct(coloring(vertices, [(v,) for v in vertices], [0] * 160))
+
+    assert exc_info.value.errors()[0]["type"] == "same_color_conflicts.resource_bound"
 
 
 def test_union_incidence_bound_rejects() -> None:

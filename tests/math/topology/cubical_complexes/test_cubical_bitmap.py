@@ -6,10 +6,12 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.catalog.models import (
-    OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.math.topology.cubical_complexes._models import CubicalBitmapRequest
+from jacobian.math.topology.cubical_complexes._models import (
+    CubicalBitmapRequest,
+    CubicalBitmapResult,
+)
 from jacobian.math.topology.cubical_complexes._tools import TOOLS
 from jacobian.math.topology.cubical_complexes.extensions import bitmap_to_complex
 from jacobian.math.topology.cubical_complexes.operations import f_vector
@@ -43,15 +45,6 @@ def test_every_tiny_bitmap_matches_independent_face_enumeration(shape) -> None:
     for bits in range(1 << (rows * columns)):
         pixels = _mask(rows, columns, bits)
         request = CubicalBitmapRequest(pixels=pixels)
-        if bits == 0:
-            with pytest.raises(OperationDomainValidationError) as error:
-                bitmap_to_complex(request)
-            assert (
-                error.value.errors()[0]["type"]
-                == "cubical_complex.bitmap_empty_foreground"
-            )
-            continue
-
         result = bitmap_to_complex(request)
         assert tuple(
             cell.intervals for cell in result.complex.cells
@@ -65,6 +58,12 @@ def test_every_tiny_bitmap_matches_independent_face_enumeration(shape) -> None:
             for column, foreground in enumerate(values)
             if foreground
         )
+        if bits == 0:
+            assert result.complex.cells == ()
+            assert result.complex.ambient_dimension == 2
+            assert CubicalBitmapResult.model_validate_json(
+                result.model_dump_json()
+            ) == result
 
 
 def test_pixel_axes_closure_and_shared_faces_are_exact() -> None:

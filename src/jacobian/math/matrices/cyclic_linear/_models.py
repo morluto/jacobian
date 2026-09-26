@@ -245,6 +245,73 @@ class RationalCyclotomicField(StrictModel):
         return _euler_phi(self.order)
 
 
+class CyclotomicFieldInclusion(StrictModel):
+    """The standard inclusion ``QQ(zeta_n) -> QQ(zeta_m)`` for ``n | m``.
+
+    ``generator_image`` is the reduced target power-basis representation of
+    ``zeta_m ** (m // n)``. This type describes that standard map only; it is
+    not a carrier for arbitrary embeddings.
+    """
+
+    source: RationalCyclotomicField
+    target: RationalCyclotomicField
+    generator_image: tuple[CyclotomicCoordinate, ...] = Field(
+        min_length=1,
+        max_length=MAX_CYCLIC_PERIOD,
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def require_raw_generator_image_bound(cls, data: Any) -> Any:
+        if isinstance(data, Mapping):
+            _require_raw_coordinate_bound(
+                data.get("generator_image"), label="cyclotomic inclusion image"
+            )
+        return canonicalize_json_containers(data)
+
+    @model_validator(mode="after")
+    def require_parent_and_coordinate_shape(self) -> Self:
+        if self.target.order % self.source.order:
+            raise _validation_error(
+                "inclusion_parent",
+                "the source cyclotomic order must divide the target order",
+            )
+        if len(self.generator_image) != self.target.degree:
+            raise _validation_error(
+                "cyclotomic_coordinate_count",
+                "an inclusion generator image needs exactly phi(target order) coordinates",
+            )
+        for value in self.generator_image:
+            # Native callers can construct CanonicalRational directly, so the
+            # raw JSON string-length guard above is not sufficient here.
+            # Reject huge integers from bit length before decimal conversion.
+            if (
+                abs(value.num).bit_length() > MAX_CYCLIC_FIELD_ELEMENT_DIGITS * 4
+                or value.den.bit_length() > MAX_CYCLIC_FIELD_ELEMENT_DIGITS * 4
+                or max(
+                    len(format_canonical_integer(abs(value.num))),
+                    len(format_canonical_integer(value.den)),
+                )
+                > MAX_CYCLIC_FIELD_ELEMENT_DIGITS
+            ):
+                raise _validation_error(
+                    "cyclotomic_coordinate_digits",
+                    "cyclotomic inclusion image coordinates exceed the "
+                    f"{MAX_CYCLIC_FIELD_ELEMENT_DIGITS}-digit bound",
+                )
+        return self
+
+
+class CyclotomicFieldInclusionRequest(StrictModel):
+    source: RationalCyclotomicField
+    target: RationalCyclotomicField
+
+
+class CyclotomicFieldInclusionCompositionRequest(StrictModel):
+    first: CyclotomicFieldInclusion
+    second: CyclotomicFieldInclusion
+
+
 def _require_raw_coordinate_bound(
     coordinates: object,
     *,
@@ -346,6 +413,11 @@ class RationalCyclotomicElement(StrictModel):
             ),
             coefficients_ascending=self.coefficients_ascending,
         )
+
+
+class CyclotomicElementMapRequest(StrictModel):
+    inclusion: CyclotomicFieldInclusion
+    element: RationalCyclotomicElement
 
 
 class RationalCyclotomicMatrix(StrictModel):
@@ -727,6 +799,10 @@ __all__ = [
     "CyclicRationalCoefficient",
     "CyclicRationalRankKernelProfile",
     "CyclicRationalRankKernelProfileRequest",
+    "CyclotomicElementMapRequest",
+    "CyclotomicFieldInclusion",
+    "CyclotomicFieldInclusionCompositionRequest",
+    "CyclotomicFieldInclusionRequest",
     "CyclotomicNonzeroMinor",
     "CyclotomicRankKernelComponent",
     "RationalCyclotomicElement",

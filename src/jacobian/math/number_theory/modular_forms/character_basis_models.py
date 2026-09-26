@@ -9,6 +9,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math.matrices.cyclic_linear._models import (
+    CyclotomicFieldInclusion,
     RationalCyclotomicElement,
     RationalCyclotomicField,
 )
@@ -148,20 +149,13 @@ class CyclotomicCharacterMap(StrictModel):
     target: DirichletCharacter
 
 
-class CyclotomicIdentityFieldMap(StrictModel):
-    """The explicit identity embedding between identical cyclotomic parents."""
-
-    source: RationalCyclotomicField
-    target: RationalCyclotomicField
-
-
 class ModularCharacterSpaceInclusion(StrictModel):
     """A represented nested-level inclusion with its character and field maps."""
 
     source_space: ModularFormSpace
     target_space: ModularFormSpace
     character_map: CyclotomicCharacterMap
-    coefficient_field_map: CyclotomicIdentityFieldMap
+    coefficient_field_map: CyclotomicFieldInclusion
 
     @model_validator(mode="after")
     def require_structural_compatibility(self) -> Self:
@@ -177,7 +171,8 @@ class ModularCharacterSpaceInclusion(StrictModel):
             or target.kind != "S"
             or source.level <= 0
             or target.level % source.level
-            or source.coefficient_domain != target.coefficient_domain
+            or self.coefficient_field_map.source != source.coefficient_domain
+            or self.coefficient_field_map.target != target.coefficient_domain
             or self.character_map.source.group.modulus != source.level
             or self.character_map.target.group.modulus != target.level
         ):
@@ -291,7 +286,6 @@ class ModularCharacterEqualityResult(StrictModel):
 
 __all__ = [
     "CyclotomicCharacterMap",
-    "CyclotomicIdentityFieldMap",
     "ModularCharacterBasis",
     "ModularCharacterBasisElement",
     "ModularCharacterBasisRequest",

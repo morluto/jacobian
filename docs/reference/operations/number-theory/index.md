@@ -4,6 +4,7 @@
 - [Modular-form spaces, bases, and coordinates](modular-forms-level-one-bases-coordinates.md)
 - [Rational Gamma0 modular-form bases](modular-forms-gamma0-rational-bases.md)
 - [Formal q-series U and V prefix maps](modular-form-formal-q-series-operators.md)
+- [Standard cyclotomic field inclusions](cyclotomic-field-inclusions.md)
 
 [Documentation home](../../../index.md) · [Tool surface](../../tools.md)
 

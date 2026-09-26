@@ -155,6 +155,16 @@ def test_raw_json_oversized_nested_family_fails_before_model_construction() -> N
         FiniteBasisMatroid.model_validate_json(raw_json)
 
 
+def test_raw_envelope_stops_at_first_unknown_field() -> None:
+    class UnknownFirst(dict[str, object]):
+        def __iter__(self):
+            yield "unexpected"
+            raise AssertionError("raw envelope scan continued past unknown field")
+
+    with pytest.raises(ValidationError, match="unknown_field"):
+        FiniteBasisMatroid.model_validate(UnknownFirst())
+
+
 def test_utf8_label_limits_apply_per_label_and_in_aggregate() -> None:
     per_label_limit = "🦊" * (MAX_FINITE_BASIS_LABEL_BYTES // 4)
     accepted_single = FiniteBasisMatroid(ground=(per_label_limit,), bases=((),))

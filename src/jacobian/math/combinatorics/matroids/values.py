@@ -114,11 +114,11 @@ def _preflight_raw_envelope(data: object) -> None:
 
     if not isinstance(data, Mapping):
         return
-    unknown = set(data) - {"ground", "bases"}
-    if unknown:
-        raise _validation_error(
-            "unknown_field", "matroid input contains an unknown field"
-        )
+    for key in data:
+        if key not in {"ground", "bases"}:
+            raise _validation_error(
+                "unknown_field", "matroid input contains an unknown field"
+            )
     ground = data.get("ground")
     bases = data.get("bases")
     if not isinstance(ground, (list, tuple)):

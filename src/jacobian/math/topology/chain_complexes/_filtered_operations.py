@@ -7,7 +7,6 @@ from fractions import Fraction
 
 from pydantic import ValidationError
 
-from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -24,6 +23,7 @@ from jacobian.math.topology.chain_complexes._filtered_models import (
     SpectralPageResult,
     SpectralPageStatus,
     SpectralSquareLedgerEntry,
+    Vector,
 )
 from jacobian.math.topology.chain_complexes.values import (
     ChainComplexValue,
@@ -77,7 +77,7 @@ def _admit_filtered_structure(
             f"filtration must carry between 1 and {MAX_FILTER_LEVELS} levels",
         )
     from jacobian.math.topology.chain_complexes.values import (
-        _require_rational_entry_grammar,
+        _require_coefficient_scalar,
     )
 
     sizes = complex_value.basis_sizes
@@ -103,11 +103,7 @@ def _admit_filtered_structure(
                     message="a filtration subspace exceeds the admitted vector count",
                 )
             for vector in subspace.vectors:
-                if (
-                    not isinstance(vector, tuple)
-                    or len(vector) != sizes[degree_index]
-                    or any(not isinstance(entry, str) for entry in vector)
-                ):
+                if not isinstance(vector, tuple) or len(vector) != sizes[degree_index]:
                     raise _fail(
                         ("filtration", level_index, degree_index),
                         "filtered_chain_complex.vector_axis_invalid",
@@ -115,7 +111,7 @@ def _admit_filtered_structure(
                     )
                 for entry in vector:
                     try:
-                        _require_rational_entry_grammar(
+                        _require_coefficient_scalar(
                             complex_value.coefficient_ring,
                             entry,
                             prime=complex_value.prime,
@@ -214,13 +210,12 @@ def admit_filtered(
     _admit_filtered_semantics(complex_value, filtration)
 
 
-def _parse_entry(entry: str, prime: int | None) -> Scalar:
+def _parse_entry(entry: int | Fraction, prime: int | None) -> Scalar:
     if prime is not None:
-        return int(entry) % prime
-    if "/" in entry:
-        numerator, _, denominator = entry.partition("/")
-        return Fraction(int(numerator), int(denominator))
-    return Fraction(int(entry))
+        if type(entry) is not int:
+            raise RuntimeError("finite-field chain coefficients must be integers")
+        return entry % prime
+    return entry if type(entry) is Fraction else Fraction(entry)
 
 
 def _modular_scalar(value: Scalar) -> int:
@@ -235,16 +230,10 @@ def _rational_scalar(value: Scalar) -> Fraction:
     return value
 
 
-def _serialize_scalar(value: Scalar, prime: int | None) -> str:
+def _serialize_scalar(value: Scalar, prime: int | None) -> Scalar:
     if prime is not None:
-        return str(_modular_scalar(value) % prime)
-    rational = _rational_scalar(value)
-    if rational.denominator == 1:
-        return format_canonical_integer(rational.numerator)
-    return (
-        f"{format_canonical_integer(rational.numerator)}/"
-        f"{format_canonical_integer(rational.denominator)}"
-    )
+        return _modular_scalar(value) % prime
+    return _rational_scalar(value)
 
 
 def _add(left: Scalar, right: Scalar, prime: int | None) -> Scalar:
@@ -321,7 +310,7 @@ def _solve(system: Matrix, target: VectorList, prime: int | None) -> VectorList 
     for row in reduced:
         if all(_is_zero(value) for value in row[:width]) and not _is_zero(row[width]):
             return None
-    solution: VectorList = [_parse_entry("0", prime) for _ in range(width)]
+    solution: VectorList = [_parse_entry(0, prime) for _ in range(width)]
     # Reduced echelon form keeps pivot rows first, so pivot ``i`` owns
     # ``reduced[i]`` even when dependent rows leave trailing zero rows.
     for row_index, pivot in enumerate(pivots):
@@ -359,7 +348,7 @@ def _coordinates(basis: Matrix, vector: VectorList, prime: int | None) -> Vector
 def _mat_vec(matrix: Matrix, vector: VectorList, prime: int | None) -> VectorList:
     result: VectorList = []
     for row in matrix:
-        total: Scalar = _parse_entry("0", prime)
+        total: Scalar = _parse_entry(0, prime)
         for left, right in zip(row, vector, strict=True):
             total = _add(total, _mul(left, right, prime), prime)
         result.append(total)
@@ -367,7 +356,7 @@ def _mat_vec(matrix: Matrix, vector: VectorList, prime: int | None) -> VectorLis
 
 
 def _dot(left: VectorList, right: VectorList, prime: int | None) -> Scalar:
-    total: Scalar = _parse_entry("0", prime)
+    total: Scalar = _parse_entry(0, prime)
     for left_value, right_value in zip(left, right, strict=True):
         total = _add(total, _mul(left_value, right_value, prime), prime)
     return total
@@ -404,7 +393,7 @@ def admit_spectral_page(page: int) -> None:
 
 
 def _zero_vector(width: int, prime: int | None) -> VectorList:
-    return [_parse_entry("0", prime) for _ in range(width)]
+    return [_parse_entry(0, prime) for _ in range(width)]
 
 
 def _rank_of(rows: Matrix, prime: int | None) -> int:
@@ -417,9 +406,9 @@ def _rank_of(rows: Matrix, prime: int | None) -> int:
 def _nullspace(rows: Matrix, width: int, prime: int | None) -> Matrix:
     """Basis of ``{x in F^width : rows @ x == 0}`` in ambient coordinates."""
     if not rows:
-        one = _parse_entry("1", prime)
+        one = _parse_entry(1, prime)
         return [
-            [_parse_entry("0", prime) if i != j else one for i in range(width)]
+            [_parse_entry(0, prime) if i != j else one for i in range(width)]
             for j in range(width)
         ]
     reduced, pivots = _rref(rows, prime)
@@ -428,7 +417,7 @@ def _nullspace(rows: Matrix, width: int, prime: int | None) -> Matrix:
     basis: Matrix = []
     for column in free:
         vector = _zero_vector(width, prime)
-        vector[column] = _parse_entry("1", prime)
+        vector[column] = _parse_entry(1, prime)
         for row_index, pivot in enumerate(pivots):
             vector[pivot] = _neg(reduced[row_index][column], prime)
         basis.append(vector)
@@ -555,7 +544,7 @@ def _spectral_bidegree_page(  # noqa: C901
     dimensions: list[list[int]] = [
         [0 for _ in range(degree_count)] for _ in range(level_count)
     ]
-    representatives: list[list[list[tuple[str, ...]]]] = [
+    representatives: list[list[list[Vector]]] = [
         [[] for _ in range(degree_count)] for _ in range(level_count)
     ]
     for level in range(level_count):
@@ -717,8 +706,8 @@ def associated_graded(
     bases = admission.bases
 
     graded_dimensions: list[tuple[int, ...]] = []
-    representatives: list[list[list[tuple[str, ...]]]] = []
-    graded_differentials: list[list[tuple[tuple[str, ...], ...]]] = []
+    representatives: list[list[list[Vector]]] = []
+    graded_differentials: list[list[tuple[Vector, ...]]] = []
     ledger: list[GradedSquareLedgerEntry] = []
     previous: list[Matrix] = [[] for _ in range(degree_count)]
     for level_index in range(len(filtration)):
@@ -728,7 +717,7 @@ def associated_graded(
             len(upper[degree]) - len(lower[degree]) for degree in range(degree_count)
         )
         graded_dimensions.append(dims)
-        level_reps: list[list[tuple[str, ...]]] = []
+        level_reps: list[list[Vector]] = []
         rep_rows: list[Matrix] = []
         for degree in range(degree_count):
             chosen: Matrix = []
@@ -743,13 +732,13 @@ def associated_graded(
                 ]
             )
         representatives.append(level_reps)
-        level_diffs: list[tuple[tuple[str, ...], ...]] = []
+        level_diffs: list[tuple[Vector, ...]] = []
         scalar_diffs: list[Matrix] = []
         for index in range(degree_count - 1):
             rows = dims[index]
             columns = dims[index + 1]
             block: Matrix = [
-                [_parse_entry("0", prime) for _ in range(columns)] for _ in range(rows)
+                [_parse_entry(0, prime) for _ in range(columns)] for _ in range(rows)
             ]
             for column, rep in enumerate(rep_rows[index + 1]):
                 image = _mat_vec(differentials[index], rep, prime)

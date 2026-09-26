@@ -9,6 +9,7 @@ from jacobian.math.topology._models import canonical_complex
 from jacobian.math.topology.cohomology.operations._models import SimplicialMap
 from jacobian.math.topology.edge_paths._models import (
     FiniteGroupWord,
+    FundamentalGroupBasepointChangeRequest,
     FundamentalGroupMapRequest,
     FundamentalGroupMapResult,
     PresentationMapCompositionRequest,
@@ -176,6 +177,41 @@ def test_threefold_composition_is_associative_on_both_associations():
     _replay(left)
     _replay(right)
     assert identity.relator_images[0].target_orientation == 1
+
+
+def test_composition_rejects_paths_forged_away_from_enclosing_presentations():
+    from jacobian.math.topology.edge_paths._models import (
+        PresentationBasepointChangePath,
+    )
+    from jacobian.math.topology.edge_paths.presentation_maps import (
+        change_fundamental_group_basepoint,
+    )
+
+    circle = _circle()
+    valid = change_fundamental_group_basepoint(
+        FundamentalGroupBasepointChangeRequest(
+            path=PresentationBasepointChangePath(
+                complex=circle,
+                source_base_vertex="a",
+                target_base_vertex="a",
+                path_vertices=("a",),
+            )
+        )
+    )
+    unrelated = canonical_complex(("x", "y", "z"), (("x", "y"), ("x", "z"), ("y", "z")))
+    forged = valid.model_copy(
+        update={
+            "map": PresentationBasepointChangePath(
+                complex=unrelated,
+                source_base_vertex="x",
+                target_base_vertex="x",
+                path_vertices=("x",),
+            )
+        }
+    )
+    request = PresentationMapCompositionRequest.model_construct(first=forged, second=forged)
+    with pytest.raises(OperationDomainValidationError, match="enclosing source and target"):
+        compose_fundamental_group_maps(request)
 
 
 def test_out_of_axis_generator_word_is_a_structured_rejection():

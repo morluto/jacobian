@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections import deque
 from typing import Any, Literal, cast
 
-from pydantic import Field
+from pydantic import Field, ValidationError
 
 from jacobian._models import StrictModel
 from jacobian.catalog.models import (
@@ -23,8 +23,11 @@ from jacobian.math.topology.edge_paths._models import (
     EdgeWordEntry,
     FiniteGroupPresentation,
     FiniteGroupWord,
+    FundamentalGroupBasepointChangeRequest,
     FundamentalGroupMapRequest,
     FundamentalGroupMapResult,
+    FundamentalGroupPresentationResult,
+    PresentationBasepointChangePath,
     PresentationMapCompositionRequest,
     PresentationRelatorImage,
     WordLetter,
@@ -191,18 +194,13 @@ def _edge_path_to_base_loop(
     return _map_edge_path(path, vertex_map, target_edge_words)
 
 
-def _permutation_sign(values: tuple[str, ...]) -> int:
+def _permutation_sign(values: tuple[str, str, str]) -> Literal[-1, 1]:
     inversions = sum(
         values[left] > values[right]
         for left in range(3)
         for right in range(left + 1, 3)
     )
     return -1 if inversions % 2 else 1
-
-
-def _validate_simplicial_map(value: SimplicialMap) -> None:
-    """Run model-level simplicial validation under topology admission."""
-    value.__class__.model_validate(value.model_dump())
 
 
 def induced_fundamental_group_map(
@@ -215,10 +213,16 @@ def induced_fundamental_group_map(
     vertex must map to the target base vertex; an unbased change-of-basepoint
     path is deliberately not inferred.
     """
-    simplicial_map: SimplicialMap = request.map
-    run_topology_admission(
-        lambda: _validate_simplicial_map(simplicial_map), location=("map",)
-    )
+    try:
+        simplicial_map: SimplicialMap = SimplicialMap.model_validate(
+            request.map.model_dump(mode="python")
+        )
+    except ValidationError as error:
+        raise OperationDomainValidationError(
+            location=("map",),
+            code="fundamental_group_map.simplicial_map_invalid",
+            message="the supplied map must be simplicial on its exact complexes",
+        ) from error
     source_vertices = simplicial_map.source.vertices
     target_vertices = simplicial_map.target.vertices
     vertex_map = dict(zip(source_vertices, simplicial_map.vertex_map, strict=True))
@@ -287,8 +291,10 @@ def induced_fundamental_group_map(
     }
     relator_images: list[PresentationRelatorImage] = []
     for index, source_triangle in enumerate(source.triangle_relators):
-        mapped_triangle = tuple(
-            vertex_map[vertex] for vertex in source_triangle.simplex
+        mapped_triangle = (
+            vertex_map[source_triangle.simplex[0]],
+            vertex_map[source_triangle.simplex[1]],
+            vertex_map[source_triangle.simplex[2]],
         )
         conjugator = FiniteGroupWord(
             letters=_map_edge_path(
@@ -307,10 +313,8 @@ def induced_fundamental_group_map(
                 )
             )
             continue
-        target_simplex = tuple(sorted(mapped_triangle))
-        target_index = target_relator_for_simplex.get(
-            (target_simplex[0], target_simplex[1], target_simplex[2])
-        )
+        target_simplex = cast("tuple[str, str, str]", tuple(sorted(mapped_triangle)))
+        target_index = target_relator_for_simplex.get(target_simplex)
         if target_index is None:
             raise OperationDomainValidationError(
                 location=("map", "vertex_map"),
@@ -321,9 +325,7 @@ def induced_fundamental_group_map(
             PresentationRelatorImage(
                 source_relator_index=index,
                 target_relator_index=target_index,
-                target_orientation=cast(
-                    Literal[-1, 1], _permutation_sign(mapped_triangle)
-                ),
+                target_orientation=_permutation_sign(mapped_triangle),
                 conjugator=conjugator,
             )
         )
@@ -386,6 +388,196 @@ def induced_fundamental_group_map(
         generator_images=generator_images,
         abelianization_map=abelianization_map,
         relator_images=tuple(relator_images),
+    )
+
+
+MAX_BASEPOINT_TRANSPORT_WORK = 131_072
+
+
+def change_fundamental_group_basepoint(
+    request: FundamentalGroupBasepointChangeRequest,
+) -> FundamentalGroupMapResult:
+    """Transport generator words along an explicit path between basepoints.
+
+    If ``p`` runs from source to target, each source loop ``a`` is sent to
+    ``p^-1 a p``. The returned path-bound morphism is accepted by the existing
+    exact presentation-map composition operation.
+    """
+
+    if type(request) is not FundamentalGroupBasepointChangeRequest or type(
+        request.path
+    ) is not PresentationBasepointChangePath:
+        raise OperationDomainValidationError(
+            location=("path",),
+            code="fundamental_group_map.basepoint_path_type",
+            message="request must contain a canonical based edge path",
+        )
+    try:
+        path_value = PresentationBasepointChangePath.model_validate(
+            request.path.model_dump(mode="python")
+        )
+    except ValidationError as error:
+        raise OperationDomainValidationError(
+            location=("path",),
+            code="fundamental_group_map.basepoint_path_invalid",
+            message="the supplied path must be a valid edge path on one exact complex",
+        ) from error
+    source = fundamental_group_presentation(
+        path_value.complex, path_value.source_base_vertex
+    )
+    target = fundamental_group_presentation(
+        path_value.complex, path_value.target_base_vertex
+    )
+    source_paths = _tree_paths(
+        source.component_vertices, source.spanning_tree_edges, source.base_vertex
+    )
+    target_paths = _tree_paths(
+        target.component_vertices, target.spanning_tree_edges, target.base_vertex
+    )
+    target_edge_words = {entry.edge: entry for entry in target.edge_words}
+    identity_vertex_map = {vertex: vertex for vertex in path_value.complex.vertices}
+    path_edges = tuple(
+        zip(path_value.path_vertices, path_value.path_vertices[1:], strict=False)
+    )
+    inverse_path = tuple((right, left) for left, right in reversed(path_edges))
+
+    generator_path_work = sum(
+        len(source_paths[left]) + 1 + len(source_paths[right]) + 2 * len(path_edges)
+        for left, right in source.non_tree_edges
+    )
+    conjugator_paths = tuple(
+        len(path_edges)
+        + len(source_paths[triangle.simplex[0]])
+        + len(target_paths[triangle.simplex[0]])
+        for triangle in source.triangle_relators
+    )
+    estimate = (
+        generator_path_work
+        + 2 * sum(conjugator_paths)
+        + MAX_PRESENTATION_RELATOR_LETTERS * MAX_WORD
+        + 3 * len(source.triangle_relators)
+    )
+    if estimate > MAX_BASEPOINT_TRANSPORT_WORK:
+        raise OperationResourceAdmissionError(
+            location=("path",),
+            code="fundamental_group_map.basepoint_transport_work",
+            message="basepoint transport and relation replay exceed the admitted work bound",
+        )
+
+    generator_images_list: list[FiniteGroupWord] = []
+    for left, right in source.non_tree_edges:
+        based_loop = source_paths[left] + ((left, right),) + tuple(
+            (end, start) for start, end in reversed(source_paths[right])
+        )
+        transported = _map_edge_path(
+            inverse_path + based_loop + path_edges,
+            identity_vertex_map,
+            target_edge_words,
+        )
+        if len(transported) > MAX_WORD:
+            raise OperationResourceAdmissionError(
+                location=("path",),
+                code="fundamental_group_map.basepoint_word_output",
+                message="a transported generator image exceeds the word output bound",
+            )
+        generator_images_list.append(FiniteGroupWord(letters=transported))
+    generator_images = tuple(generator_images_list)
+
+    target_relat_order = {
+        triangle.simplex: index
+        for index, triangle in enumerate(target.triangle_relators)
+    }
+    relator_images: list[PresentationRelatorImage] = []
+    for index, triangle in enumerate(source.triangle_relators):
+        vertex = triangle.simplex[0]
+        conjugator_path = (
+            inverse_path
+            + source_paths[vertex]
+            + tuple((end, start) for start, end in reversed(target_paths[vertex]))
+        )
+        conjugator_letters = _map_edge_path(
+            conjugator_path, identity_vertex_map, target_edge_words
+        )
+        if len(conjugator_letters) > MAX_WORD:
+            raise OperationResourceAdmissionError(
+                location=("path",),
+                code="fundamental_group_map.basepoint_conjugator_output",
+                message="a relation conjugator exceeds the word output bound",
+            )
+        target_index = target_relat_order[triangle.simplex]
+        relator_images.append(
+            PresentationRelatorImage(
+                source_relator_index=index,
+                target_relator_index=target_index,
+                target_orientation=1,
+                conjugator=FiniteGroupWord(letters=conjugator_letters),
+            )
+        )
+
+    _replay_generator_relation_images(
+        source, target, generator_images, tuple(relator_images)
+    )
+    abelianization_map = _generator_word_matrix(generator_images, len(target.presentation.generators))
+    return FundamentalGroupMapResult._from_kernel(
+        map=path_value,
+        source_presentation=source,
+        target_presentation=target,
+        generator_images=generator_images,
+        abelianization_map=abelianization_map,
+        relator_images=tuple(relator_images),
+    )
+
+
+def _replay_generator_relation_images(
+    source: FundamentalGroupPresentationResult,
+    target: FundamentalGroupPresentationResult,
+    generator_images: tuple[FiniteGroupWord, ...],
+    relator_images: tuple[PresentationRelatorImage, ...],
+) -> None:
+    for relator, witness in zip(
+        source.presentation.relators, relator_images, strict=True
+    ):
+        substituted: list[WordLetter] = []
+        for letter in relator.letters:
+            image = generator_images[letter.generator]
+            substituted.extend(
+                image.letters if letter.exponent == 1 else _inverse(image)
+            )
+        target_index = witness.target_relator_index
+        assert target_index is not None
+        target_relator = target.presentation.relators[target_index]
+        expected = _reduce(
+            [
+                *witness.conjugator.letters,
+                *target_relator.letters,
+                *_inverse(witness.conjugator),
+            ]
+        )
+        if _reduce(substituted) != expected:
+            raise OperationDomainValidationError(
+                location=("path",),
+                code="fundamental_group_map.basepoint_relation_replay",
+                message="transported source relator disagrees with its target conjugacy witness",
+            )
+
+
+def _generator_word_matrix(
+    generator_images: tuple[FiniteGroupWord, ...], target_generator_count: int
+) -> IntegerMatrix:
+    return IntegerMatrix(
+        row_count=target_generator_count,
+        column_count=len(generator_images),
+        entries=tuple(
+            tuple(
+                sum(
+                    letter.exponent
+                    for letter in image.letters
+                    if letter.generator == target_generator
+                )
+                for image in generator_images
+            )
+            for target_generator in range(target_generator_count)
+        ),
     )
 
 
@@ -695,8 +887,68 @@ def _compose_relator_images(
 def _compose_simplicial_map(
     first: FundamentalGroupMapResult,
     second: FundamentalGroupMapResult,
-) -> SimplicialMap:
-    """Compose the two validated vertex maps into the canonical carrier map."""
+) -> SimplicialMap | PresentationBasepointChangePath:
+    """Compose two compatible presentation-map carriers."""
+
+    if isinstance(first.map, PresentationBasepointChangePath) or isinstance(
+        second.map, PresentationBasepointChangePath
+    ):
+        if not (
+            isinstance(first.map, PresentationBasepointChangePath)
+            and isinstance(second.map, PresentationBasepointChangePath)
+        ):
+            raise OperationDomainValidationError(
+                location=("second", "map"),
+                code="fundamental_group_map.composition_carrier_kind",
+                message=(
+                    "composition requires two simplicial maps or two basepoint paths"
+                ),
+            )
+        first_path, second_path = first.map, second.map
+        for operand, path, location in (
+            (first, first_path, ("first", "map")),
+            (second, second_path, ("second", "map")),
+        ):
+            if (
+                path.complex != operand.source_presentation.complex
+                or path.complex != operand.target_presentation.complex
+                or path.source_base_vertex != operand.source_presentation.base_vertex
+                or path.target_base_vertex != operand.target_presentation.base_vertex
+            ):
+                raise OperationDomainValidationError(
+                    location=location,
+                    code="fundamental_group_map.composition_path_carrier",
+                    message="each basepoint path must match its enclosing source and target presentations",
+                )
+        if (
+            first_path.complex != second_path.complex
+            or first_path.target_base_vertex != second_path.source_base_vertex
+        ):
+            raise OperationDomainValidationError(
+                location=("second", "map"),
+                code="fundamental_group_map.composition_path",
+                message=(
+                    "basepoint paths must use the same complex and matching intermediate vertex"
+                ),
+            )
+        combined_length = (
+            len(first_path.path_vertices) + len(second_path.path_vertices) - 1
+        )
+        if combined_length > MAX_WORD + 1:
+            raise OperationResourceAdmissionError(
+                location=("second", "map", "path_vertices"),
+                code="fundamental_group_map.composition_path_output",
+                message="the composed basepoint path exceeds the admitted word bound",
+            )
+        return PresentationBasepointChangePath(
+            complex=first_path.complex,
+            source_base_vertex=first_path.source_base_vertex,
+            target_base_vertex=second_path.target_base_vertex,
+            path_vertices=(
+                *first_path.path_vertices,
+                *second_path.path_vertices[1:],
+            ),
+        )
 
     run_topology_admission(first.map.require_simplicial_map, location=("first", "map"))
     run_topology_admission(
@@ -862,6 +1114,7 @@ __all__ = [
     "FundamentalGroupMapResult",
     "PresentationMapCompositionRequest",
     "PresentationRelatorImage",
+    "change_fundamental_group_basepoint",
     "compose_fundamental_group_maps",
     "direct_relator_match",
     "induced_fundamental_group_map",

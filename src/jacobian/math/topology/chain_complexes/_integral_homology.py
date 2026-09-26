@@ -940,12 +940,7 @@ def _require_height(bound: SmithHeightBound, *, label: str) -> None:
 
 
 def _require_integer_coefficient(value: ChainCoefficient) -> int:
-    """Project one canonical coefficient onto the integral kernel's scalar role.
-
-    The canonical value admits only native integers for ``ZZ`` coefficients;
-    this total projection keeps the Smith kernel's integer ``Matrix`` role
-    explicit instead of assuming it.
-    """
+    """Project one canonical coefficient onto the integral kernel's scalar role."""
     if type(value) is int:
         return value
     raise _domain_error(
@@ -957,9 +952,7 @@ def _require_integer_coefficient(value: ChainCoefficient) -> int:
 def _copy_integer_differentials(source: ChainComplexValue) -> tuple[Matrix, ...]:
     parsed: list[Matrix] = []
     for matrix in source.differential_matrices:
-        parsed.append(
-            [[_require_integer_coefficient(v) for v in row] for row in matrix]
-        )
+        parsed.append([[_require_integer_coefficient(v) for v in row] for row in matrix])
     return tuple(parsed)
 
 

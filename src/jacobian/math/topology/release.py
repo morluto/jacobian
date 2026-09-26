@@ -430,7 +430,15 @@ def order_complex(request: OrderComplexRequest) -> OrderComplexResult:
             code="topology.order_complex.invalid_request",
             message="order-complex input must be an OrderComplexRequest",
         )
-    poset = request.poset
+    try:
+        validated_request = OrderComplexRequest.model_validate(request.model_dump())
+    except (ValidationError, TypeError, ValueError) as error:
+        raise OperationDomainValidationError(
+            location=(),
+            code="topology.order_complex.invalid_request",
+            message="order-complex request fields are invalid",
+        ) from error
+    poset = validated_request.poset
     if not verify_finite_poset(poset):
         raise OperationDomainValidationError(
             location=("poset",),

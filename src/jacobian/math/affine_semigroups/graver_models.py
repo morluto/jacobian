@@ -21,7 +21,19 @@ def _graver_configuration_json_schema() -> JsonSchemaValue:
     properties = schema["properties"]
     properties["row_count"].update(minimum=1, maximum=12)
     properties["column_count"].update(minimum=1, maximum=12)
-    schema["description"] = "Integer matrix with both axes in 1..12."
+    entries = properties["entries"]
+    entries.update(minItems=1, maxItems=12)
+    row = entries["items"]
+    row.update(minItems=1, maxItems=12)
+    scalar = row["items"]
+    scalar.update(
+        maxLength=9,
+        pattern=r"^(?:0|-?[1-9][0-9]{0,7})(?![\s\S])",
+    )
+    schema["description"] = (
+        "Integer matrix with both axes in 1..12 and entries in the "
+        "eight-digit absolute-value envelope."
+    )
     return schema
 
 

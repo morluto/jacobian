@@ -906,7 +906,7 @@ def _hilbert_rays(
     for x, y in vectors:
         divisor = gcd(abs(x), abs(y))
         if divisor == 0:
-            raise ValueError("zero generators do not define a pointed cone")
+            continue
         primitive.add((x // divisor, y // divisor))
 
     rays = tuple(sorted(primitive))
@@ -1003,8 +1003,20 @@ def hilbert_basis(configuration: AffineConfiguration) -> AffineHilbertBasis:
     """Compute the complete Hilbert basis of a bounded pointed 2D cone."""
     configuration = _admit_configuration(configuration)
     if configuration.rows != 2:
-        raise ValueError("Hilbert bases require a two-row configuration")
-    return _hilbert_basis_admitted(configuration, _hilbert_rays(configuration))
+        raise OperationDomainValidationError(
+            location=("configuration", "row_labels"),
+            code="affine_semigroup.hilbert_rows",
+            message="Hilbert bases require a two-row configuration",
+        )
+    try:
+        rays = _hilbert_rays(configuration)
+    except ValueError as exc:
+        raise OperationDomainValidationError(
+            location=("configuration",),
+            code="affine_semigroup.hilbert_cone",
+            message=str(exc),
+        ) from exc
+    return _hilbert_basis_admitted(configuration, rays)
 
 
 def normalization(semigroup: PositiveAffineSemigroup) -> AffineSemigroupNormalization:
@@ -1245,15 +1257,6 @@ def fiber_graph(
                 f"{MAX_AFFINE_GRAPH_EDGE_CHECKS}-check envelope"
             ),
         )
-    if candidate_count * len(ordered_moves) > MAX_AFFINE_GRAPH_EDGES:
-        raise OperationResourceAdmissionError(
-            location=("target",),
-            code="affine_semigroup.graph_output",
-            message=(
-                "worst-case fiber graph exceeds the "
-                f"{MAX_AFFINE_GRAPH_EDGES}-edge output envelope"
-            ),
-        )
     vertices = _enumerate_fiber(semigroup, target, grades, target_grade, maxima)
     positions = {vertex: index for index, vertex in enumerate(vertices)}
     edges: set[tuple[int, int]] = set()
@@ -1263,6 +1266,15 @@ def fiber_graph(
             neighbour_index = positions.get(neighbour)
             if neighbour_index is not None and source_index < neighbour_index:
                 edges.add((source_index, neighbour_index))
+                if len(edges) > MAX_AFFINE_GRAPH_EDGES:
+                    raise OperationResourceAdmissionError(
+                        location=("target",),
+                        code="affine_semigroup.graph_output",
+                        message=(
+                            "fiber graph exceeds the "
+                            f"{MAX_AFFINE_GRAPH_EDGES}-edge output envelope"
+                        ),
+                    )
     return AffineFiberGraph(
         semigroup=semigroup,
         target=target,

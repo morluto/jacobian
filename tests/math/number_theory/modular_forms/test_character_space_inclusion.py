@@ -150,6 +150,51 @@ def test_character_space_inclusion_contract_and_structural_bound() -> None:
     assert isinstance(result, ModularCharacterSpaceInclusion)
 
 
+def test_character_inclusion_rejects_constructed_structurally_invalid_map() -> None:
+    source_character = _character(character_group(3), (0,))
+    target_character = _character(character_group(3), (0,))
+    forged = ModularCharacterSpaceInclusion.model_construct(
+        map_kind="gamma0_character_inflation",
+        source_space=_space(3, source_character),
+        target_space=ModularFormSpace(
+            level=3,
+            weight=4,
+            kind="S",
+            character=target_character,
+            coefficient_domain="QQ",
+        ),
+    )
+
+    with pytest.raises(OperationDomainValidationError):
+        require_modular_character_space_inclusion(forged)
+
+
+def test_character_inclusion_rejects_incomplete_authored_group() -> None:
+    canonical_group = character_group(3)
+    incomplete_group = type(canonical_group).model_construct(
+        **{
+            **canonical_group.model_dump(),
+            "unit_residues": (1,),
+            "unit_coordinates": ((0,),),
+            "character_count": 1,
+        }
+    )
+    fabricated = DirichletCharacter.model_construct(
+        group=incomplete_group, coordinates=(0,)
+    )
+    forged_space = ModularFormSpace.model_construct(
+        group="GAMMA0",
+        level=3,
+        weight=2,
+        kind="S",
+        character=fabricated,
+        coefficient_domain="QQ",
+    )
+
+    with pytest.raises(OperationDomainValidationError):
+        modular_form_character_space_inclusion(forged_space, forged_space)
+
+
 def test_character_inclusion_accepts_maximum_admitted_level() -> None:
     level = MAX_MODULAR_CHARACTER_INCLUSION_LEVEL
     group = character_group(level)

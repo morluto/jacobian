@@ -11,6 +11,9 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
+from jacobian.math.number_theory.characters.operations import (
+    require_complete_character_group,
+)
 from jacobian.math.number_theory.characters.values import DirichletCharacter
 from jacobian.math.number_theory.modular_forms.values import (
     MAX_MODULAR_CHARACTER_INCLUSION_LEVEL,
@@ -62,9 +65,10 @@ def require_modular_character_space_inclusion(
     # Values that cross serialization are revalidated here. Native canonical
     # values have already passed their owner models; rebuilding them would replay
     # the exhaustive finite-unit group verification before work admission.
-    if type(inclusion.source_space) is not ModularFormSpace or type(
-        inclusion.target_space
-    ) is not ModularFormSpace:
+    if (
+        type(inclusion.source_space) is not ModularFormSpace
+        or type(inclusion.target_space) is not ModularFormSpace
+    ):
         try:
             canonical = ModularCharacterSpaceInclusion.model_validate(
                 inclusion.model_dump()
@@ -80,6 +84,16 @@ def require_modular_character_space_inclusion(
 
     source = canonical.source_space
     target = canonical.target_space
+    # model_construct (or another trusted-kernel bypass) can construct a value
+    # whose nested structural claims were never checked.
+    try:
+        inclusion.require_structural_inclusion()
+    except (ValidationError, AttributeError, TypeError, ValueError) as error:
+        raise OperationDomainValidationError(
+            location=("inclusion",),
+            code="modular_form.character_inclusion_invalid",
+            message="the modular-character space inclusion is structurally invalid",
+        ) from error
     if (
         type(source) is not ModularFormSpace
         or type(target) is not ModularFormSpace
@@ -106,8 +120,8 @@ def require_modular_character_space_inclusion(
 
     source_character = cast(DirichletCharacter, source.character)
     target_character = cast(DirichletCharacter, target.character)
-    # ModularFormSpace canonicalization validates each supplied finite-unit
-    # presentation. This check is the sole additional character-map pass.
+    # Admit before proving authored finite-unit presentations. The level terms
+    # cover the complete-unit checks; the table/rank terms cover the relation.
     target_units = target_character.group.unit_residues
     source_units = source_character.group.unit_residues
     source_rank = len(source_character.group.generator_orders)
@@ -125,6 +139,9 @@ def require_modular_character_space_inclusion(
             code="modular_form.character_inclusion_work_bound",
             message="exact character-inclusion comparison exceeds its admitted work bound",
         )
+
+    require_complete_character_group(source_character.group)
+    require_complete_character_group(target_character.group)
 
     # Index rows by canonical residue after admission. This makes each exact
     # character lookup constant-time, including at the maximum admitted level.

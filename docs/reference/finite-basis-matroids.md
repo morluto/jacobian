@@ -25,8 +25,11 @@ The ground axis remains explicit when some elements are loops. The empty
 ground matroid and a rank-zero matroid on a nonempty ground both have the one
 basis `()`. The rank is the common basis cardinality.
 
-Construction checks the complete basis axiom after admitting the input under
-all of these limits:
+Construction checks canonical structure and admits the input under all of
+these limits; it does not establish the matroid claim. Call
+`require_basis_exchange()` before relying on the value as a matroid. That
+explicit check applies the work bound below and raises a domain error when
+basis exchange fails:
 
 | Quantity | Bound |
 | --- | ---: |

@@ -48,8 +48,10 @@ def _preflight_ground_axis(ground: object) -> None:
         )
     label_bytes = 0
     for label in ground:
-        if not isinstance(label, str):
-            continue
+        if type(label) is not str:
+            raise _validation_error(
+                "ground_label_type", "ground labels must be strict strings"
+            )
         if len(label) > MAX_FINITE_BASIS_LABEL_BYTES:
             raise _validation_error(
                 "ground_label_bound",
@@ -92,6 +94,10 @@ def _preflight_basis_family(bases: object) -> None:
                 "a basis has more entries than the maximum ground size",
             )
         memberships += len(row)
+        if any(type(index) is not int or index < 0 for index in row):
+            raise _validation_error(
+                "basis_index", "basis indices must be nonnegative strict integers"
+            )
         if memberships > MAX_FINITE_BASIS_MEMBERSHIPS:
             raise _validation_error(
                 "membership_bound",

@@ -17,6 +17,7 @@ from jacobian.math.logic.relational_structures.values import (
     MAX_RELATIONAL_POLYMORPHISM_ARITY,
     MAX_RELATIONAL_SYMBOLS,
     FiniteRelationalStructure,
+    PrimitivePositiveFormula,
     RelationSymbolId,
 )
 
@@ -24,6 +25,13 @@ MAX_CSP_CONSTRAINTS = 4_096
 MAX_CSP_SCOPE_ENTRIES = 16_384
 MAX_CSP_SOLUTION_ASSIGNMENTS = 65_536
 MAX_CSP_SOLUTION_LABELS = 1_048_576
+
+
+class PPFormulaEvaluationRequest(StrictModel):
+    """Evaluate a finite pp formula on one finite relational structure."""
+
+    structure: FiniteRelationalStructure
+    formula: PrimitivePositiveFormula
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:

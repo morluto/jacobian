@@ -13,18 +13,26 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
+from jacobian.canonical import CanonicalLimits, encode_strict_json
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
 from jacobian.math.logic.relational_structures.values import (
+    MAX_PP_DEFINED_TUPLES,
+    MAX_PP_EVALUATION_ASSIGNMENTS,
+    MAX_PP_EVALUATION_ATOM_CHECKS,
+    MAX_PP_EVALUATION_COORDINATE_WORK,
     MAX_RELATIONAL_CARRIER,
     MAX_RELATIONAL_OPERATION_TABLE_CELLS,
     MAX_RELATIONAL_POLYMORPHISM_ARITY,
+    MAX_RELATIONAL_POLYMORPHISM_FAMILY_SIZE,
     MAX_RELATIONAL_SYMBOLS,
     MAX_RELATIONAL_TABLE_ROWS,
     MAX_RELATIONAL_TRANSPORT_TUPLES,
     FiniteRelationalStructure,
+    PPRelationAtom,
+    PrimitivePositiveFormula,
 )
 
 # Exhaustive homomorphism search work: every candidate carrier map is
@@ -33,10 +41,7 @@ from jacobian.math.logic.relational_structures.values import (
 # work cap bounds tuple replays, the dominant cost.
 MAX_SEARCH_CANDIDATES = 65_536
 MAX_SEARCH_TUPLE_REPLAYS = 1_048_576
-# Complete enumeration retains at most one carrier map per candidate, each
-# with exactly |A| integer labels; this cardinality cap bounds the result's
-# map-list size before any map is enumerated.
-MAX_HOMOMORPHISM_ENUMERATION_MAP_LABELS = 1_048_576
+MAX_HOMOMORPHISM_ENUMERATION_OUTPUT_BYTES = 8 * 1_048_576
 # An induced embedding must decide membership for every tuple in every
 # Cartesian relation domain, not only the sparse positive rows.
 MAX_EMBEDDING_REFLECTION_CELLS = 1_048_576
@@ -45,9 +50,117 @@ MAX_EMBEDDING_REFLECTION_CELLS = 1_048_576
 # coordinate operations needed to build each output tuple.
 MAX_POLYMORPHISM_RELATION_COMBINATIONS = 65_536
 MAX_POLYMORPHISM_COORDINATE_WORK = 1_000_000
+# Complete fixed-arity family enumeration charges candidate table generation,
+# all worst-case relation-product checks, and coordinatewise table work.
+MAX_POLYMORPHISM_FAMILY_WORK = 8_388_608
+MAX_POLYMORPHISM_FAMILY_OUTPUT_BYTES = 8 * 1_048_576
 MAX_INDUCED_SUBSTRUCTURE_WORK = 81_920
 MAX_RELATIONAL_REDUCT_WORK = 81_920
 MAX_RELATIONAL_PRODUCT_WORK = 1_048_576
+
+
+def admit_pp_evaluation(
+    structure: FiniteRelationalStructure, formula: PrimitivePositiveFormula
+) -> None:
+    """Admit exhaustive pp assignment replay and output materialization."""
+
+    symbol_arities = {symbol.symbol_id: symbol.arity for symbol in structure.signature}
+    for index, atom in enumerate(formula.atoms):
+        if isinstance(atom, PPRelationAtom):
+            arity = symbol_arities.get(atom.symbol_id)
+            if arity is None:
+                raise OperationDomainValidationError(
+                    location=("formula", "atoms", index, "symbol_id"),
+                    code="relational.pp.unknown_symbol",
+                    message="every relation atom must name a symbol of the structure",
+                )
+            if len(atom.variables) != arity:
+                raise OperationDomainValidationError(
+                    location=("formula", "atoms", index, "variables"),
+                    code="relational.pp.atom_arity",
+                    message="relation atom variables must match the symbol arity",
+                )
+
+    size = structure.carrier_size
+    assignments = 1 if formula.variable_count == 0 else size**formula.variable_count
+    output_tuples = (
+        1 if len(formula.free_variables) == 0 else size ** len(formula.free_variables)
+    )
+    # Every satisfying assignment must satisfy each atom. Relation atoms bound
+    # their participating coordinates by the table cardinality; unconstrained
+    # coordinates remain free. This is a sound upper bound on distinct output
+    # tuples, since projection cannot increase satisfying assignments.
+    satisfying_bound = assignments
+    for atom in formula.atoms:
+        if isinstance(atom, PPRelationAtom):
+            table_size = len(
+                structure.relation_tables[
+                    next(
+                        i
+                        for i, symbol in enumerate(structure.signature)
+                        if symbol.symbol_id == atom.symbol_id
+                    )
+                ]
+            )
+            constrained = len(set(atom.variables))
+            satisfying_bound = min(
+                satisfying_bound,
+                table_size * (size ** (formula.variable_count - constrained)),
+            )
+        else:
+            if atom.left != atom.right:
+                # Equality identifies two coordinates; it removes one free
+                # choice rather than imposing inequality.
+                satisfying_bound = min(
+                    satisfying_bound,
+                    size ** (formula.variable_count - 1),
+                )
+    output_tuples = min(output_tuples, satisfying_bound)
+    atom_checks = assignments * len(formula.atoms)
+    coordinate_work = assignments * formula.variable_count
+    coordinate_work += assignments * sum(
+        len(atom.variables) if isinstance(atom, PPRelationAtom) else 2
+        for atom in formula.atoms
+    )
+    # The kernel projects every satisfying full assignment before set
+    # deduplication, so charge the worst-case projection on all assignments.
+    coordinate_work += assignments * len(formula.free_variables)
+    if assignments > MAX_PP_EVALUATION_ASSIGNMENTS:
+        raise OperationResourceAdmissionError(
+            location=("formula", "variable_count"),
+            code="relational.pp.assignment_bound",
+            message=(
+                f"complete formula evaluation has {assignments} assignments, "
+                f"exceeding the {MAX_PP_EVALUATION_ASSIGNMENTS}-assignment envelope"
+            ),
+        )
+    if atom_checks > MAX_PP_EVALUATION_ATOM_CHECKS:
+        raise OperationResourceAdmissionError(
+            location=("formula", "atoms"),
+            code="relational.pp.atom_check_bound",
+            message=(
+                f"complete formula evaluation has {atom_checks} atom checks, "
+                f"exceeding the {MAX_PP_EVALUATION_ATOM_CHECKS}-check envelope"
+            ),
+        )
+    if coordinate_work > MAX_PP_EVALUATION_COORDINATE_WORK:
+        raise OperationResourceAdmissionError(
+            location=("formula",),
+            code="relational.pp.coordinate_work_bound",
+            message=(
+                f"complete formula evaluation has {coordinate_work} coordinate "
+                f"steps, exceeding the {MAX_PP_EVALUATION_COORDINATE_WORK}-step envelope"
+            ),
+        )
+    if output_tuples > MAX_PP_DEFINED_TUPLES:
+        raise OperationResourceAdmissionError(
+            location=("formula", "free_variables"),
+            code="relational.pp.output_bound",
+            message=(
+                f"the defined relation has at most {output_tuples} tuples, "
+                f"exceeding the {MAX_PP_DEFINED_TUPLES}-tuple envelope"
+            ),
+        )
 
 
 def candidate_space(source_size: int, target_size: int) -> int:
@@ -65,51 +178,23 @@ def candidate_space(source_size: int, target_size: int) -> int:
 
 
 def admit_polymorphism_check(
-    source: FiniteRelationalStructure,
-    arity: object,
-    operation_table: object,
+    source: FiniteRelationalStructure, arity: int
 ) -> tuple[int, int]:
-    """Preflight one operation table and complete relation-power work.
+    """Preflight complete operation-table size and relation-power work.
 
-    Returns (operation table cells, coordinate work). The arity and the
-    table's totality and source binding are typed domain rejections; no
-    relation product or membership index is constructed before the size
-    estimates below succeed.
+    Returns (operation table cells, coordinate work). No relation product or
+    membership index is constructed before this estimate succeeds.
     """
 
-    if (
-        isinstance(arity, bool)
-        or not isinstance(arity, int)
-        or not 1 <= arity <= MAX_RELATIONAL_POLYMORPHISM_ARITY
-    ):
+    if not 1 <= arity <= MAX_RELATIONAL_POLYMORPHISM_ARITY:
         raise OperationDomainValidationError(
             location=("arity",),
             code="relational.polymorphism.arity",
             message=(
-                f"polymorphism arity must be an exact integer in "
-                f"1..{MAX_RELATIONAL_POLYMORPHISM_ARITY}"
-            ),
-        )
-    if not isinstance(operation_table, Sequence) or isinstance(
-        operation_table, (str, bytes, bytearray)
-    ):
-        raise OperationDomainValidationError(
-            location=("operation_table",),
-            code="relational.polymorphism.table_shape",
-            message=(
-                "operation table must be an ordered finite sequence of carrier labels"
+                f"polymorphism arity must lie in 1..{MAX_RELATIONAL_POLYMORPHISM_ARITY}"
             ),
         )
     table_cells = source.carrier_size**arity
-    if len(operation_table) != table_cells:
-        raise OperationDomainValidationError(
-            location=("operation_table",),
-            code="relational.polymorphism.table_axis",
-            message=(
-                "operation_table must contain one value for every tuple in "
-                f"A^{arity} (expected {table_cells} entries)"
-            ),
-        )
     if table_cells > MAX_RELATIONAL_OPERATION_TABLE_CELLS:
         raise OperationResourceAdmissionError(
             location=("operation_table",),
@@ -119,22 +204,6 @@ def admit_polymorphism_check(
                 f"the {MAX_RELATIONAL_OPERATION_TABLE_CELLS}-cell envelope"
             ),
         )
-    for position, value in enumerate(operation_table):
-        if isinstance(value, bool) or not isinstance(value, int):
-            raise OperationDomainValidationError(
-                location=("operation_table", position),
-                code="relational.polymorphism.table_value",
-                message="every operation table value must be an exact integer",
-            )
-        if not 0 <= value < source.carrier_size:
-            raise OperationDomainValidationError(
-                location=("operation_table", position),
-                code="relational.polymorphism.table_value",
-                message=(
-                    "every operation table value must lie in the exact source "
-                    f"carrier 0..{source.carrier_size - 1}"
-                ),
-            )
     combinations = 0
     coordinate_work = 0
     for symbol, table in zip(source.signature, source.relation_tables, strict=True):
@@ -160,6 +229,115 @@ def admit_polymorphism_check(
             ),
         )
     return table_cells, coordinate_work
+
+
+def admit_polymorphism_family(
+    source: FiniteRelationalStructure, arity: int
+) -> tuple[int, int, int, int]:
+    """Preflight the complete function family, preservation replay, and output.
+
+    Returns table cells per operation, total candidate tables, aggregate work,
+    and a conservative serialized-output bound. No function table or relation
+    membership index is constructed before this succeeds.
+    """
+
+    if not 1 <= arity <= MAX_RELATIONAL_POLYMORPHISM_ARITY:
+        raise OperationDomainValidationError(
+            location=("arity",),
+            code="relational.polymorphism.arity",
+            message=(
+                f"polymorphism arity must lie in 1..{MAX_RELATIONAL_POLYMORPHISM_ARITY}"
+            ),
+        )
+    carrier_size = source.carrier_size
+    table_cells = carrier_size**arity
+    if table_cells > MAX_RELATIONAL_OPERATION_TABLE_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("operation_table",),
+            code="relational.polymorphism.table_bound",
+            message=(
+                f"each complete operation table has {table_cells} cells, exceeding "
+                f"the {MAX_RELATIONAL_OPERATION_TABLE_CELLS}-cell envelope"
+            ),
+        )
+
+    # A positive-arity operation on the empty carrier is the unique empty
+    # function. For other carriers, stop multiplying as soon as the family cap
+    # is crossed so rejection never formats or retains an enormous n^(n^m).
+    candidate_tables = (
+        1
+        if carrier_size == 0
+        else _capped_power(
+            carrier_size, table_cells, MAX_RELATIONAL_POLYMORPHISM_FAMILY_SIZE
+        )
+    )
+    if candidate_tables > MAX_RELATIONAL_POLYMORPHISM_FAMILY_SIZE:
+        raise OperationResourceAdmissionError(
+            location=("arity",),
+            code="relational.polymorphism.family_candidate_bound",
+            message=(
+                "the complete function space exceeds the "
+                f"{MAX_RELATIONAL_POLYMORPHISM_FAMILY_SIZE}-candidate envelope"
+            ),
+        )
+
+    work_per_candidate = table_cells + carrier_size + 1 + len(source.signature)
+    for symbol, relation in zip(source.signature, source.relation_tables, strict=True):
+        combinations = len(relation) ** arity
+        # itertools.product copies one relation pool and initializes its
+        # arity-sized odometer for each candidate. The loop then materializes
+        # each m-row input tuple. Charge both before admitting enumeration.
+        work_per_candidate += len(relation) + arity
+        search_depth = len(relation).bit_length()
+        per_combination_work = (
+            arity
+            + 1
+            + symbol.arity * (3 * arity + 2)
+            + search_depth * 4 * (symbol.arity + 1)
+        )
+        work_per_candidate += combinations * per_combination_work
+    work = candidate_tables * work_per_candidate
+    if work > MAX_POLYMORPHISM_FAMILY_WORK:
+        raise OperationResourceAdmissionError(
+            location=("source", "relation_tables"),
+            code="relational.polymorphism.family_work_bound",
+            message=(
+                f"complete family enumeration requires at most {work} table-generation, "
+                f"relation-check, and coordinate steps, exceeding the "
+                f"{MAX_POLYMORPHISM_FAMILY_WORK}-step envelope"
+            ),
+        )
+
+    source_bytes = len(source.model_dump_json().encode("utf-8"))
+    coordinate_digits = len(str(carrier_size - 1)) if carrier_size else 1
+    per_table_bytes = 2 + table_cells * (coordinate_digits + 1)
+    output_bound = (
+        source_bytes
+        + 256
+        + candidate_tables * per_table_bytes
+        + max(candidate_tables - 1, 0)
+    )
+    if output_bound > MAX_POLYMORPHISM_FAMILY_OUTPUT_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("operation_tables",),
+            code="relational.polymorphism.family_output_bound",
+            message=(
+                f"the complete family has a conservative {output_bound}-byte output "
+                f"bound, exceeding the {MAX_POLYMORPHISM_FAMILY_OUTPUT_BYTES}-byte envelope"
+            ),
+        )
+    return table_cells, candidate_tables, work, output_bound
+
+
+def _capped_power(base: int, exponent: int, cap: int) -> int:
+    """Return ``base**exponent`` exactly through cap, else ``cap + 1``."""
+
+    result = 1
+    for _ in range(exponent):
+        result *= base
+        if result > cap:
+            return cap + 1
+    return result
 
 
 def core_search_work(source_size: int, transport_tuples: int) -> int:
@@ -252,13 +430,14 @@ def embedding_reflection_cells(source: FiniteRelationalStructure) -> int:
 
 def admit_induced_substructure(
     source: FiniteRelationalStructure, inclusion: Sequence[int]
-) -> int:
-    """Preflight induced-table restriction work for one carrier selection.
+) -> tuple[int, int]:
+    """Preflight induced-table restriction and a conservative JSON result bound.
 
     The ordered inclusion is the new-carrier-to-source map. Every source row
-    and each of its coordinates are charged; the induced tables are strictly
-    smaller than the source they are restricted from, so the admitted
-    row/coordinate visits bound the result before any row is transported.
+    and each of its coordinates are charged. The
+    result repeats the source and returns a substructure no larger than it;
+    therefore twice the canonical source JSON size, plus the inclusion and
+    fixed framing, is a conservative serialized-output estimate.
     """
 
     if not isinstance(inclusion, Sequence) or isinstance(
@@ -311,18 +490,30 @@ def admit_induced_substructure(
             ),
         )
 
-    return work
+    source_json_bytes = len(source.model_dump_json().encode("utf-8"))
+    output_bound = 2 * source_json_bytes + 4 * len(inclusion) + 256
+    max_output_bytes = CanonicalLimits().max_output_bytes
+    if output_bound > max_output_bytes:
+        raise OperationResourceAdmissionError(
+            location=("source",),
+            code="relational.induced_substructure.output_bound",
+            message=(
+                f"the conservative induced-substructure JSON bound is "
+                f"{output_bound} bytes, exceeding the {max_output_bytes}-byte "
+                "canonical output limit"
+            ),
+        )
+    return work, output_bound
 
 
 def admit_relational_reduct(
     source: FiniteRelationalStructure, symbol_ids: Sequence[str]
-) -> tuple[tuple[int, ...], int]:
+) -> tuple[tuple[int, ...], int, int]:
     """Preflight selected relation-table copying for one reduct.
 
-    Returns source signature indices in canonical source order and total row
-    and coordinate-copy work. The reduct copies a sub-signature of the
-    already-admitted source, so the admitted copy work bounds the complete
-    result before any table is transported.
+    Returns source signature indices in canonical source order, total row and
+    coordinate-copy work, and a conservative bound for the complete result.
+    The result contains both the original source and the copied reduct.
     """
 
     if not isinstance(symbol_ids, Sequence) or isinstance(
@@ -378,18 +569,27 @@ def admit_relational_reduct(
             ),
         )
 
-    return indices, work
+    source_bytes = len(source.model_dump_json().encode("utf-8"))
+    # The result serializes the source once and a reduct no larger than that
+    # source, plus object keys and at most eight small integer map entries.
+    output_bound = 2 * source_bytes + 256 + 12 * len(indices)
+    max_output_bytes = CanonicalLimits().max_output_bytes
+    if output_bound > max_output_bytes:
+        raise OperationResourceAdmissionError(
+            location=("source",),
+            code="relational.reduct.output_bound",
+            message=(
+                f"the reduct output may need {output_bound} bytes, exceeding "
+                f"the {max_output_bytes}-byte canonical output limit"
+            ),
+        )
+    return indices, work, output_bound
 
 
 def admit_relational_product(
     left: FiniteRelationalStructure, right: FiniteRelationalStructure
-) -> int:
-    """Preflight pairwise relation rows and coordinate work for a product.
-
-    The admitted row and coordinate visits bound the complete product result:
-    every product table entry and both projection arrays are written exactly
-    once from the already-admitted factors before any pair is expanded.
-    """
+) -> tuple[int, int]:
+    """Preflight pairwise relation rows, coordinate work, and result bytes."""
     if left.signature != right.signature:
         raise OperationDomainValidationError(
             location=("right", "signature"),
@@ -428,7 +628,24 @@ def admit_relational_product(
             code="relational.product.work_bound",
             message=f"direct product needs {work} row/coordinate visits, exceeding {MAX_RELATIONAL_PRODUCT_WORK}",
         )
-    return work
+    product_bytes = 512 + len(left.signature) * 64
+    label_width = len(str(max(0, carrier_size - 1)))
+    for rows, symbol in zip(row_pairs, left.signature, strict=True):
+        product_bytes += rows * (symbol.arity * (label_width + 1) + 3) + 8
+    output_bound = (
+        len(left.model_dump_json().encode("utf-8"))
+        + len(right.model_dump_json().encode("utf-8"))
+        + product_bytes
+        + carrier_size * 12
+    )
+    maximum = CanonicalLimits().max_output_bytes
+    if output_bound > maximum:
+        raise OperationResourceAdmissionError(
+            location=("product",),
+            code="relational.product.output_bound",
+            message=f"direct product result needs at most {output_bound} bytes, exceeding {maximum}",
+        )
+    return work, output_bound
 
 
 def admit_embedding_search(
@@ -548,19 +765,29 @@ def admit_homomorphism_enumeration(
     source: FiniteRelationalStructure,
     target: FiniteRelationalStructure,
 ) -> tuple[int, int]:
-    """Admit complete homomorphism enumeration including a retained-map bound."""
+    """Admit complete homomorphism enumeration including a conservative output bound."""
     space, transport_tuples = admit_homomorphism_search(source, target)
-    # Every one of the admitted candidates may be retained, each carrying
-    # exactly one carrier label per source element.
-    map_labels = space * source.carrier_size
-    if map_labels > MAX_HOMOMORPHISM_ENUMERATION_MAP_LABELS:
+    # The result echoes both structures, so charge their exact canonical JSON
+    # size as well as a conservative integer/list bound for every map.
+    retained_sources = len(
+        encode_strict_json(
+            {
+                "source": source.model_dump(mode="json"),
+                "target": target.model_dump(mode="json"),
+            }
+        )
+    )
+    # The factor intentionally exceeds the largest canonical carrier label,
+    # including commas, nested list framing, and map tuple framing.
+    output_bound = retained_sources + space * (4 + 8 * source.carrier_size) + 128
+    if output_bound > MAX_HOMOMORPHISM_ENUMERATION_OUTPUT_BYTES:
         raise OperationResourceAdmissionError(
             location=("source",),
             code="relational.homomorphism.enumeration_output",
             message=(
-                f"the complete map list retains up to {map_labels} carrier map "
-                f"labels, exceeding the "
-                f"{MAX_HOMOMORPHISM_ENUMERATION_MAP_LABELS}-label envelope"
+                f"the complete map list has a conservative {output_bound}-byte "
+                f"output bound, exceeding the "
+                f"{MAX_HOMOMORPHISM_ENUMERATION_OUTPUT_BYTES}-byte envelope"
             ),
         )
     return space, transport_tuples
@@ -591,7 +818,6 @@ def admit_core_computation(source: FiniteRelationalStructure) -> int:
 
 __all__ = [
     "MAX_EMBEDDING_REFLECTION_CELLS",
-    "MAX_HOMOMORPHISM_ENUMERATION_MAP_LABELS",
     "MAX_INDUCED_SUBSTRUCTURE_WORK",
     "MAX_POLYMORPHISM_COORDINATE_WORK",
     "MAX_POLYMORPHISM_RELATION_COMBINATIONS",

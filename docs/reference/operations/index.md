@@ -12,6 +12,8 @@ that need more context than an operation card:
 
 - [Combinatorics on words](words/index.md)
 - [Finite relational direct products](relational-direct-product.md)
+- [Primitive positive formula evaluation](pp-formula-evaluation.md)
+- [Finite relational polymorphism families](relational-polymorphism-families.md)
 - [Set systems and sunflower hypergraphs](combinatorics/index.md)
 - [Geometry](geometry/index.md)
 - [Regular languages](regular-languages.md)
@@ -21,4 +23,3 @@ that need more context than an operation card:
 - [Homogeneous monomial systems on algebraic tori](algebraic-torus-monomial-systems.md)
 - [Exact trigonometric-rational normalization](trigonometric-rational.md)
 - [Prime-field homogeneous fixed subspaces](prime-field-homogeneous-fixed-subspaces.md)
-- [Complete finite CSP solution enumeration](csp-solution-enumeration.md)

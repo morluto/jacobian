@@ -13,7 +13,7 @@ partial/weighted relations are out of scope.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Annotated, Self
+from typing import Annotated, Literal, Self
 
 from pydantic import Field, StrictInt, StringConstraints, model_validator
 from pydantic_core import PydanticCustomError
@@ -34,6 +34,16 @@ MAX_RELATIONAL_TRANSPORT_TUPLES = 16_384
 # the larger carrier envelope.
 MAX_RELATIONAL_POLYMORPHISM_ARITY = 8
 MAX_RELATIONAL_OPERATION_TABLE_CELLS = 16_384
+MAX_RELATIONAL_POLYMORPHISM_FAMILY_SIZE = 65_536
+# Primitive-positive formula evaluation is exhaustive over assignments. These
+# independent ceilings bound candidate assignments, atom replays, and the
+# materialized defined relation before any Cartesian expansion.
+MAX_PP_VARIABLES = 8
+MAX_PP_ATOMS = 64
+MAX_PP_EVALUATION_ASSIGNMENTS = 1_048_576
+MAX_PP_EVALUATION_ATOM_CHECKS = 8_388_608
+MAX_PP_EVALUATION_COORDINATE_WORK = 16_777_216
+MAX_PP_DEFINED_TUPLES = 65_536
 
 RelationSymbolId = Annotated[
     str,
@@ -179,15 +189,231 @@ class FiniteRelationalStructure(StrictModel):
         return self
 
 
+class PPRelationAtom(StrictModel):
+    """A relation-symbol application to variables of a pp formula."""
+
+    kind: Literal["relation"]
+    symbol_id: RelationSymbolId
+    variables: tuple[StrictInt, ...] = Field(max_length=MAX_RELATIONAL_ARITY)
+
+
+class PPEqualityAtom(StrictModel):
+    """Logical equality between two formula variables."""
+
+    kind: Literal["equality"]
+    left: StrictInt
+    right: StrictInt
+
+
+PPAtom = PPRelationAtom | PPEqualityAtom
+
+
+class PrimitivePositiveFormula(StrictModel):
+    """A finite single-sorted pp formula in explicit variable coordinates.
+
+    The formula is a conjunction of relation and equality atoms. Variables in
+    ``free_variables`` are ordered result axes; every other declared variable
+    is existentially quantified. An empty conjunction is true, which also
+    allows a sentence to express existence of isolated quantified variables.
+    The atom tuple is a canonical conjunction presentation: equality endpoints
+    are ordered, duplicate atoms are removed, and atoms are sorted. This does
+    not reorder variable axes or terms of relation atoms.
+    """
+
+    variable_count: StrictInt = Field(ge=0, le=MAX_PP_VARIABLES)
+    free_variables: tuple[StrictInt, ...] = Field(
+        max_length=MAX_PP_VARIABLES,
+        description=(
+            "Distinct declared variables in result-axis order; all other "
+            "declared variables are existentially quantified."
+        ),
+    )
+    atoms: tuple[PPAtom, ...] = Field(
+        max_length=MAX_PP_ATOMS,
+        description=(
+            "Conjunctive relation/equality atoms. Construction sorts and "
+            "deduplicates atoms and orders equality endpoints; relation "
+            "argument and free-variable axis order are preserved."
+        ),
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def canonicalize_conjunction(cls, data: object) -> object:
+        """Normalize only a bounded, fully well-shaped raw atom sequence.
+
+        Overlong or malformed syntax is left untouched for the typed field
+        validators to reject; in particular, no sorting or deduplication runs
+        before the input atom-count ceiling has been checked.
+        """
+
+        if not isinstance(data, Mapping) or "atoms" not in data:
+            return data
+        atoms = data["atoms"]
+        if not isinstance(atoms, (list, tuple)) or len(atoms) > MAX_PP_ATOMS:
+            return data
+
+        keyed_atoms: list[tuple[tuple[object, ...], object]] = []
+        for atom in atoms:
+            if isinstance(atom, PPRelationAtom):
+                symbol_id = atom.symbol_id
+                variables = atom.variables
+                if type(symbol_id) is not str or any(
+                    type(v) is not int for v in variables
+                ):
+                    return data
+                key = ("relation", symbol_id, tuple(variables), 0, 0)
+                value: object = {
+                    "kind": "relation",
+                    "symbol_id": symbol_id,
+                    "variables": tuple(variables),
+                }
+            elif isinstance(atom, PPEqualityAtom):
+                left, right = sorted((atom.left, atom.right))
+                key = ("equality", "", (), left, right)
+                value = {"kind": "equality", "left": left, "right": right}
+            elif isinstance(atom, Mapping):
+                if len(atom) > 3:
+                    return data
+                kind = atom.get("kind")
+                if kind == "relation" and set(atom) == {
+                    "kind",
+                    "symbol_id",
+                    "variables",
+                }:
+                    symbol_id = atom["symbol_id"]
+                    variables = atom["variables"]
+                    if (
+                        type(symbol_id) is not str
+                        or not isinstance(variables, (list, tuple))
+                        or len(variables) > MAX_RELATIONAL_ARITY
+                        or any(type(variable) is not int for variable in variables)
+                    ):
+                        return data
+                    variables = tuple(variables)
+                    key = ("relation", symbol_id, variables, 0, 0)
+                    value = {
+                        "kind": "relation",
+                        "symbol_id": symbol_id,
+                        "variables": variables,
+                    }
+                elif kind == "equality" and set(atom) == {
+                    "kind",
+                    "left",
+                    "right",
+                }:
+                    left, right = atom["left"], atom["right"]
+                    if type(left) is not int or type(right) is not int:
+                        return data
+                    left, right = sorted((left, right))
+                    key = ("equality", "", (), left, right)
+                    value = {"kind": "equality", "left": left, "right": right}
+                else:
+                    return data
+            else:
+                return data
+            keyed_atoms.append((key, value))
+
+        normalized = tuple(
+            value
+            for _, value in sorted(dict(keyed_atoms).items(), key=lambda item: item[0])
+        )
+        canonical = dict(data)
+        free_variables = canonical.get("free_variables")
+        if isinstance(free_variables, list) and len(free_variables) <= MAX_PP_VARIABLES:
+            canonical["free_variables"] = tuple(free_variables)
+        canonical["atoms"] = normalized
+        return canonical
+
+    @model_validator(mode="after")
+    def require_valid_variable_axes(self) -> Self:
+        if len(set(self.free_variables)) != len(self.free_variables):
+            raise _validation_error(
+                "pp.free_variables", "free-variable axes must be distinct"
+            )
+        if any(
+            not 0 <= variable < self.variable_count for variable in self.free_variables
+        ):
+            raise _validation_error(
+                "pp.free_variable_range", "free variables must name declared variables"
+            )
+        for atom in self.atoms:
+            if isinstance(atom, PPRelationAtom):
+                variables = atom.variables
+            else:
+                variables = (atom.left, atom.right)
+            if any(not 0 <= variable < self.variable_count for variable in variables):
+                raise _validation_error(
+                    "pp.atom_variable_range", "every atom variable must be declared"
+                )
+        return self
+
+
+class PPDefinedRelation(StrictModel):
+    """The exact relation defined by a formula on one retained structure.
+
+    Tuple position ``i`` denotes formula variable ``free_variables[i]``.
+    Rows are sorted and unique; structure, formula, and axis remain attached
+    so the finite relation is interpretable after serialization.
+    """
+
+    structure: FiniteRelationalStructure
+    formula: PrimitivePositiveFormula
+    tuples: tuple[tuple[StrictInt, ...], ...] = Field(max_length=MAX_PP_DEFINED_TUPLES)
+
+    @model_validator(mode="after")
+    def require_exact_relation_shape(self) -> Self:
+        symbol_arities = {
+            symbol.symbol_id: symbol.arity for symbol in self.structure.signature
+        }
+        for index, atom in enumerate(self.formula.atoms):
+            if isinstance(atom, PPRelationAtom):
+                arity = symbol_arities.get(atom.symbol_id)
+                if arity is None:
+                    raise _validation_error(
+                        "pp.unknown_symbol",
+                        f"formula atom {index} names no symbol in the retained structure",
+                    )
+                if len(atom.variables) != arity:
+                    raise _validation_error(
+                        "pp.atom_arity",
+                        f"formula atom {index} has the wrong relation arity",
+                    )
+        axis_width = len(self.formula.free_variables)
+        if self.tuples != tuple(sorted(set(self.tuples))):
+            raise _validation_error(
+                "pp.result_canonical", "defined tuples must be sorted and unique"
+            )
+        for row in self.tuples:
+            if len(row) != axis_width or any(
+                not 0 <= value < self.structure.carrier_size for value in row
+            ):
+                raise _validation_error(
+                    "pp.result_tuple", "each defined tuple must lie on the free axes"
+                )
+        return self
+
+
 __all__ = [
+    "MAX_PP_ATOMS",
+    "MAX_PP_DEFINED_TUPLES",
+    "MAX_PP_EVALUATION_ASSIGNMENTS",
+    "MAX_PP_EVALUATION_ATOM_CHECKS",
+    "MAX_PP_EVALUATION_COORDINATE_WORK",
+    "MAX_PP_VARIABLES",
     "MAX_RELATIONAL_ARITY",
     "MAX_RELATIONAL_CARRIER",
     "MAX_RELATIONAL_OPERATION_TABLE_CELLS",
     "MAX_RELATIONAL_POLYMORPHISM_ARITY",
+    "MAX_RELATIONAL_POLYMORPHISM_FAMILY_SIZE",
     "MAX_RELATIONAL_SYMBOLS",
     "MAX_RELATIONAL_TABLE_ROWS",
     "MAX_RELATIONAL_TRANSPORT_TUPLES",
     "FiniteRelationSymbol",
     "FiniteRelationalStructure",
+    "PPDefinedRelation",
+    "PPEqualityAtom",
+    "PPRelationAtom",
+    "PrimitivePositiveFormula",
     "RelationSymbolId",
 ]

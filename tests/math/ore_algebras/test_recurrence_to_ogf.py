@@ -143,6 +143,34 @@ def test_boundary_forcing_growth_is_rejected_before_encoding() -> None:
         )
 
 
+def test_annihilated_initial_value_does_not_consume_output_growth_budget() -> None:
+    # q(-1)=0, so the 1,000-digit initial value contributes nothing: xF'=0.
+    result = polynomial_recurrence_to_ogf_equation(
+        _recurrence((1, [(0, 1), (1, 1)])),
+        {"values": [10**999]},
+    )
+    assert [
+        (term.order, _polynomial(term.coefficient))
+        for term in result.differential_operator.terms
+    ] == [(1, {1: Fraction(1)})]
+    assert result.forcing.numerator.terms == ()
+
+
+def test_sparse_high_shift_with_unit_coefficients_is_admitted() -> None:
+    # The equation has no coefficient growth: F=1+x+...+x^63.
+    result = polynomial_recurrence_to_ogf_equation(
+        _recurrence((64, [(0, 1)])),
+        {"values": [1] * 64},
+    )
+    assert [term.order for term in result.differential_operator.terms] == [0]
+    assert _polynomial(result.differential_operator.terms[0].coefficient) == {
+        0: Fraction(1)
+    }
+    assert _polynomial(result.forcing) == {degree: Fraction(1) for degree in range(64)}
+    assert result.recurrence.order == 64
+    assert len(result.initial_coefficients.values) == 64
+
+
 def test_initial_coefficient_width_is_described_in_request_schema() -> None:
     schema = __import__(
         "jacobian.math.ore_algebras.recurrence_to_ogf._models",

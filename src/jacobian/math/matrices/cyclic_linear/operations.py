@@ -18,6 +18,7 @@ from jacobian._execution import (
     request_checkpoint,
     request_execution,
 )
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices.cyclic_linear._models import (
     MAX_CYCLIC_FIELD_ELEMENT_DIGITS,
     MAX_CYCLIC_FIELD_WORK,
@@ -114,18 +115,52 @@ def _require_standard_inclusion_image(
 
 
 def cyclotomic_field_inclusion(
-    source: RationalCyclotomicField,
-    target: RationalCyclotomicField,
+    source: RationalCyclotomicField | Any,
+    target: RationalCyclotomicField | None = None,
 ) -> CyclotomicFieldInclusion:
     """Construct the canonical standard inclusion for orders source | target."""
+    if not isinstance(source, RationalCyclotomicField) or not isinstance(
+        target, RationalCyclotomicField
+    ):
+        raise OperationDomainValidationError(
+            location=("source",) if not isinstance(source, RationalCyclotomicField) else ("target",),
+            code="matrix.cyclic.inclusion_parent_type",
+            message="source and target must be cyclotomic field values",
+        )
+    try:
+        source = RationalCyclotomicField.model_validate(source.model_dump())
+        target = RationalCyclotomicField.model_validate(target.model_dump())
+    except (AttributeError, TypeError, ValueError) as error:
+        raise OperationDomainValidationError(
+            location=("source", "target"),
+            code="matrix.cyclic.inclusion_parent_invalid",
+            message="source and target must satisfy their canonical field contracts",
+        ) from error
     return _standard_inclusion(source, target)
 
 
 def compose_cyclotomic_field_inclusions(
-    first: CyclotomicFieldInclusion,
-    second: CyclotomicFieldInclusion,
+    first: CyclotomicFieldInclusion | Any,
+    second: CyclotomicFieldInclusion | None = None,
 ) -> CyclotomicFieldInclusion:
     """Compose two standard inclusions with matching intermediate parents."""
+    if not isinstance(first, CyclotomicFieldInclusion) or not isinstance(
+        second, CyclotomicFieldInclusion
+    ):
+        raise OperationDomainValidationError(
+            location=("first",) if not isinstance(first, CyclotomicFieldInclusion) else ("second",),
+            code="matrix.cyclic.inclusion_type",
+            message="both values must be cyclotomic field inclusions",
+        )
+    try:
+        first = CyclotomicFieldInclusion.model_validate(first.model_dump())
+        second = CyclotomicFieldInclusion.model_validate(second.model_dump())
+    except (AttributeError, TypeError, ValueError) as error:
+        raise OperationDomainValidationError(
+            location=("first", "second"),
+            code="matrix.cyclic.inclusion_invalid",
+            message="inclusions must satisfy their canonical value contracts",
+        ) from error
     if first.target != second.source:
         raise CyclicRankKernelAdmissionError(
             "inclusion_parent", "the first target must equal the second source field"
@@ -136,10 +171,27 @@ def compose_cyclotomic_field_inclusions(
 
 
 def apply_cyclotomic_field_inclusion(
-    inclusion: CyclotomicFieldInclusion,
-    element: RationalCyclotomicElement,
+    inclusion: CyclotomicFieldInclusion | Any,
+    element: RationalCyclotomicElement | None = None,
 ) -> RationalCyclotomicElement:
     """Map an exact element along its canonical standard cyclotomic inclusion."""
+    if not isinstance(inclusion, CyclotomicFieldInclusion) or not isinstance(
+        element, RationalCyclotomicElement
+    ):
+        raise OperationDomainValidationError(
+            location=("inclusion",) if not isinstance(inclusion, CyclotomicFieldInclusion) else ("element",),
+            code="matrix.cyclic.element_map_type",
+            message="mapping requires a cyclotomic inclusion and element",
+        )
+    try:
+        inclusion = CyclotomicFieldInclusion.model_validate(inclusion.model_dump())
+        element = RationalCyclotomicElement.model_validate(element.model_dump())
+    except (AttributeError, TypeError, ValueError) as error:
+        raise OperationDomainValidationError(
+            location=("inclusion", "element"),
+            code="matrix.cyclic.element_map_invalid",
+            message="inclusion and element must satisfy their canonical contracts",
+        ) from error
     if element.field != inclusion.source:
         raise CyclicRankKernelAdmissionError(
             "inclusion_parent",
@@ -155,6 +207,8 @@ def apply_cyclotomic_field_inclusion(
         )
     expected = _require_standard_inclusion_image(inclusion)
     coordinates = tuple(value.as_fraction() for value in element.coefficients_ascending)
+    if inclusion.source == inclusion.target:
+        return element
     from sympy import Poly, cyclotomic_poly, symbols
 
     variable = symbols("x")
@@ -174,16 +228,18 @@ def apply_cyclotomic_field_inclusion(
     )
     # One common-denominator and basis-image norm bound controls exact
     # rational height before expanding the caller's element.
-    max_num_digits = max(len(str(abs(value.numerator))) for value in coordinates)
     denominator = 1
     for value in coordinates:
         denominator = (
             denominator * value.denominator // gcd(denominator, value.denominator)
         )
-    denominator_digits = len(str(denominator))
-    numerator_digits = (
-        max_num_digits + denominator_digits + len(str(source_degree * row_norm))
+    denominator_digits = _decimal_digits(denominator)
+    scaled_numerator = max(
+        (abs(value.numerator) * (denominator // value.denominator) for value in coordinates),
+        default=0,
     )
+    numerator_bound = Fraction(scaled_numerator) * source_degree * row_norm
+    numerator_digits = _decimal_digits(numerator_bound.numerator)
     if max(denominator_digits, numerator_digits) > MAX_CYCLIC_FIELD_ELEMENT_DIGITS:
         raise CyclicRankKernelAdmissionError(
             "element_height_bound",

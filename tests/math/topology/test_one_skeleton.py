@@ -1,4 +1,5 @@
 from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
+from jacobian.math.topology import canonicalize
 from jacobian.math.topology.release import (
     OneSkeletonRequest,
     OneSkeletonResult,
@@ -40,6 +41,13 @@ def test_one_skeleton_matches_independent_face_oracle_and_retains_isolates() -> 
         for edge in result.graph.edges
     )
     assert OneSkeletonResult.model_validate_json(result.model_dump_json()) == result
+
+
+def test_one_skeleton_accepts_public_canonical_complex_value() -> None:
+    source = canonicalize(("b", "a"), (("a", "b"),)).complex
+    result = one_skeleton(source)
+    assert result.source == source
+    assert result.edge_faces == (("a", "b"),)
 
 
 def test_one_skeleton_revalidates_forged_nested_request() -> None:
@@ -145,18 +153,22 @@ def test_one_skeleton_provenance_check_rejects_oversized_facets_before_pairs() -
 
 
 def test_one_skeleton_provenance_check_caps_forged_facet_count_before_pairs() -> None:
-    result = one_skeleton(
-        OneSkeletonRequest.model_validate(
-            {"complex": {"vertices": ["a"], "facets": [["a"]]}}
-        )
-    )
-    forged_source = result.source.model_copy(
-        update={"maximal_simplices": (("a",),) * 2049}
+    forged_source = canonicalize(
+        tuple(f"v{i}" for i in range(20)),
+        tuple((f"v{i}",) for i in range(20)),
+    ).complex.model_copy(
+        update={
+            "maximal_simplices": tuple(
+                (f"v{i}", f"v{j}")
+                for i in range(20)
+                for j in range(i + 1, 20)
+            )[:129]
+        }
     )
     forged_result = OneSkeletonResult.model_construct(
         source=forged_source,
-        graph=IndexedSimpleUndirectedGraph(vertex_count=1, edges=()),
-        vertex_labels=("a",),
+        graph=IndexedSimpleUndirectedGraph(vertex_count=20, edges=()),
+        vertex_labels=tuple(sorted(f"v{i}" for i in range(20))),
         edge_faces=(),
     )
 

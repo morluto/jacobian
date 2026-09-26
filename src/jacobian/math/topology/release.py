@@ -311,7 +311,7 @@ class OneSkeletonResult(StrictModel):
         facets = self.source.maximal_simplices
         if (
             not isinstance(facets, tuple)
-            or len(facets) > MAX_TOPOLOGY_FACES
+            or len(facets) > MAX_TOPOLOGY_FACETS
             or any(
                 not isinstance(facet, tuple)
                 or not 1 <= len(facet) <= MAX_TOPOLOGY_DIMENSION + 1
@@ -376,8 +376,21 @@ def _canonical(request: SimplicialComplexRequest) -> FiniteSimplicialComplex:
     return canonicalize(request.vertices, request.facets).complex
 
 
-def one_skeleton(request: OneSkeletonRequest) -> OneSkeletonResult:
-    """Return the graph on the canonical vertex axis and map edges to faces."""
+def one_skeleton(
+    request: OneSkeletonRequest | FiniteSimplicialComplex,
+) -> OneSkeletonResult:
+    """Return the graph on a canonical complex's vertex axis and map edges to faces.
+
+    Native callers may pass the public canonical value directly. Catalog callers
+    continue to use the bounded request model.
+    """
+    if isinstance(request, FiniteSimplicialComplex):
+        request = OneSkeletonRequest(
+            complex=SimplicialComplexRequest(
+                vertices=request.vertices,
+                facets=request.maximal_simplices,
+            )
+        )
     if not isinstance(request, OneSkeletonRequest):
         raise OperationDomainValidationError(
             location=(),

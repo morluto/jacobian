@@ -154,10 +154,91 @@ def modular_form_coordinates_add(
     )
 
 
+def modular_form_coordinates_scalar_multiply(
+    form: ModularFormCoordinates, scalar: CanonicalRational
+) -> ModularFormCoordinates:
+    """Scale rational coordinates in their existing exact space and basis."""
+    if not isinstance(form, ModularFormCoordinates):
+        raise OperationDomainValidationError(
+            location=("form",),
+            code="modular_form.coordinate_scalar_input_type",
+            message="form must be an exact modular-form coordinate value",
+        )
+    if not isinstance(scalar, CanonicalRational):
+        raise OperationDomainValidationError(
+            location=("scalar",),
+            code="modular_form.coordinate_scalar_type",
+            message="scalar must be a canonical rational",
+        )
+    try:
+        form = ModularFormCoordinates.model_validate(form.model_dump(mode="python"))
+        scalar = CanonicalRational.model_validate(scalar.model_dump(mode="python"))
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("form", "scalar"),
+            code="modular_form.coordinate_scalar_input_invalid",
+            message="form and scalar must satisfy their canonical value contracts",
+        ) from exc
+    if form.space.coefficient_domain != "QQ":
+        raise OperationDomainValidationError(
+            location=("form", "space", "coefficient_domain"),
+            code="modular_form.coordinate_scalar_coefficient_domain",
+            message="coordinate scalar multiplication currently supports QQ coefficients",
+        )
+    plan, values = _admit_coordinates(
+        form,
+        1,
+        materialize_pari=False,
+        check_expansion_growth=False,
+        allow_short_prefix=True,
+    )
+    scalar_value = scalar.as_fraction()
+    dimension = plan.dimension
+    work = 3 * dimension
+    if dimension > MAX_COORDINATE_ADDITION_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("form", "coordinates"),
+            code="modular_form.coordinate_scalar_cell_bound",
+            message="coordinate scalar output exceeds the admitted cell bound",
+        )
+    if work > MAX_COORDINATE_ADDITION_WORK:
+        raise OperationResourceAdmissionError(
+            location=("form", "coordinates"),
+            code="modular_form.coordinate_scalar_work_bound",
+            message="coordinate scalar multiplication exceeds the admitted work bound",
+        )
+    projected = tuple(value * scalar_value for value in values)
+    projected_digits = max(
+        (_digits(part) for value in projected for part in (value.numerator, value.denominator)),
+        default=1,
+    )
+    if projected_digits > MAX_COORDINATE_ADDITION_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("form", "coordinates"),
+            code="modular_form.coordinate_scalar_digit_bound",
+            message="predicted rational coordinate growth exceeds the scalar envelope",
+        )
+    parent_bytes = len(encode_strict_json(form.space.model_dump(mode="json")))
+    basis_bytes = len(encode_strict_json(form.basis_id))
+    output_bytes = 256 + parent_bytes + basis_bytes + dimension * (2 * projected_digits + 80)
+    if output_bytes > MAX_COORDINATE_ADDITION_OUTPUT_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("form", "coordinates"),
+            code="modular_form.coordinate_scalar_output_bound",
+            message="predicted coordinate result exceeds the canonical output limit",
+        )
+    return ModularFormCoordinates(
+        space=form.space,
+        basis_id=form.basis_id,
+        coordinates=tuple(CanonicalRational.from_fraction(value) for value in projected),
+    )
+
+
 __all__ = [
     "MAX_COORDINATE_ADDITION_CELLS",
     "MAX_COORDINATE_ADDITION_DIGITS",
     "MAX_COORDINATE_ADDITION_OUTPUT_BYTES",
     "MAX_COORDINATE_ADDITION_WORK",
     "modular_form_coordinates_add",
+    "modular_form_coordinates_scalar_multiply",
 ]

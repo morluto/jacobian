@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from typing import NoReturn
+
+from jacobian._execution import request_checkpoint
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -7,15 +10,94 @@ from jacobian.catalog.models import (
 from jacobian.math.combinatorics.greedoids.values import FiniteFeasibleSetSystem
 from jacobian.math.combinatorics.matroids.delta.extra import (
     MAX_BINARY_GROUND,
+    MAX_TWIST_POLYNOMIAL_GROUND,
+    MAX_TWIST_POLYNOMIAL_LABEL_CODEPOINTS,
+    MAX_TWIST_POLYNOMIAL_STATES,
+    MAX_TWIST_POLYNOMIAL_WORK,
     BinaryMatrixResult,
     BinarySymmetricMatrix,
+    DeltaMatroidTwistPolynomialResult,
 )
 from jacobian.math.combinatorics.matroids.delta.values import (
+    MAX_DELTA_MEMBERSHIPS,
     DeltaMatroidAdmissionError,
     FiniteDeltaMatroid,
     first_symmetric_exchange_obstruction,
     require_delta_matroid_admission,
+    require_delta_matroid_exchange_work,
+    require_delta_matroid_source_size,
 )
+from jacobian.math.polynomials._models import IntegerPolynomial
+
+_TWIST_POLYNOMIAL_CHECKPOINT_STRIDE = 4_096
+
+
+def _reject_oversized_twist_polynomial_source(value: object) -> None:
+    """Bound raw axis and feasible family before copying a native carrier."""
+
+    if type(value) is not FiniteDeltaMatroid:
+        return
+    ground = getattr(value, "ground", None)
+    if type(ground) is not tuple:
+        raise OperationDomainValidationError(
+            location=("delta_matroid", "ground"),
+            code="delta_matroid.carrier",
+            message="source ground axis must be a canonical tuple",
+        )
+    if len(ground) > MAX_TWIST_POLYNOMIAL_GROUND:
+        raise OperationResourceAdmissionError(
+            location=("delta_matroid", "ground"),
+            code="delta_matroid.twist_polynomial_work",
+            message="complete twist polynomial exceeds its subset-state envelope",
+        )
+    # Check cheap string lengths before model_dump, native revalidation, or
+    # UTF-8 encoding can copy an arbitrarily large retained ground axis.
+    if any(type(label) is not str for label in ground):
+        raise OperationDomainValidationError(
+            location=("delta_matroid", "ground"),
+            code="delta_matroid.carrier",
+            message="source ground labels must be canonical strings",
+        )
+    if sum(map(len, ground)) > MAX_TWIST_POLYNOMIAL_LABEL_CODEPOINTS:
+        raise OperationResourceAdmissionError(
+            location=("delta_matroid", "ground"),
+            code="delta_matroid.twist_polynomial_labels",
+            message="ground labels exceed the admitted native codepoint budget",
+        )
+    feasible = getattr(value, "feasible", None)
+    if type(feasible) is not tuple:
+        raise OperationDomainValidationError(
+            location=("delta_matroid", "feasible"),
+            code="delta_matroid.carrier",
+            message="source feasible family must be a bounded sequence",
+        )
+    if len(feasible) > MAX_DELTA_MEMBERSHIPS + 1:
+        raise OperationResourceAdmissionError(
+            location=("delta_matroid", "feasible"),
+            code="delta_matroid.memberships_exceeded",
+            message="source feasible family exceeds its admitted row envelope",
+        )
+    remaining = MAX_DELTA_MEMBERSHIPS
+    for row in feasible:
+        if type(row) is not tuple:
+            raise OperationDomainValidationError(
+                location=("delta_matroid", "feasible"),
+                code="delta_matroid.carrier",
+                message="source feasible rows must be bounded sequences",
+            )
+        remaining -= len(row)
+        if remaining < 0:
+            raise OperationResourceAdmissionError(
+                location=("delta_matroid", "feasible"),
+                code="delta_matroid.memberships_exceeded",
+                message="source feasible family exceeds its admitted membership envelope",
+            )
+        if any(type(index) is not int for index in row):
+            raise OperationDomainValidationError(
+                location=("delta_matroid", "feasible"),
+                code="delta_matroid.carrier",
+                message="source feasible rows must contain exact integer indices",
+            )
 
 
 def _admit_delta(value: object) -> FiniteDeltaMatroid:
@@ -35,6 +117,26 @@ def _admit_delta(value: object) -> FiniteDeltaMatroid:
         ) from exc
 
 
+def _admission_error(exc: DeltaMatroidAdmissionError) -> NoReturn:
+    """Project a native admission failure onto the public typed error."""
+
+    if exc.reason in {
+        "memberships_exceeded",
+        "label_bytes_exceeded",
+        "candidate_work_exceeded",
+    }:
+        raise OperationResourceAdmissionError(
+            location=("delta_matroid",),
+            code=f"delta_matroid.{exc.reason}",
+            message=str(exc),
+        ) from exc
+    raise OperationDomainValidationError(
+        location=("delta_matroid",),
+        code=f"delta_matroid.{exc.reason}",
+        message=str(exc),
+    ) from exc
+
+
 def _check(d: FiniteDeltaMatroid) -> FiniteFeasibleSetSystem:
     try:
         s = FiniteFeasibleSetSystem(ground=d.ground, feasible=d.feasible)
@@ -47,21 +149,7 @@ def _check(d: FiniteDeltaMatroid) -> FiniteFeasibleSetSystem:
     try:
         require_delta_matroid_admission(s)
     except DeltaMatroidAdmissionError as exc:
-        if exc.reason in {
-            "memberships_exceeded",
-            "label_bytes_exceeded",
-            "candidate_work_exceeded",
-        }:
-            raise OperationResourceAdmissionError(
-                location=("delta_matroid",),
-                code=f"delta_matroid.{exc.reason}",
-                message=str(exc),
-            ) from exc
-        raise OperationDomainValidationError(
-            location=("delta_matroid",),
-            code=f"delta_matroid.{exc.reason}",
-            message=str(exc),
-        ) from exc
+        _admission_error(exc)
     if first_symmetric_exchange_obstruction(s) is not None:
         raise OperationDomainValidationError(
             location=("delta_matroid",),
@@ -95,6 +183,40 @@ def _validate_minor_axes(
             location=("minor",),
             code="delta_matroid.minor_axis",
             message="minor indices must be sorted, disjoint, and in range",
+        )
+
+
+def _check_twist_polynomial_source(d: FiniteDeltaMatroid) -> None:
+    """Validate a twist-polynomial source without the recognition label cap.
+
+    Labels never enter the mask sweep, so the recognition operation's
+    2,048-byte label envelope does not describe this operation's kernel. This
+    check instead bounds source memberships and exchange work. The native
+    preflight bounds label copying independently of recognition, so the source
+    can be checked for UTF-8 representability without an unbounded allocation.
+    """
+
+    try:
+        s = FiniteFeasibleSetSystem(ground=d.ground, feasible=d.feasible)
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("delta_matroid",),
+            code="delta_matroid.source_not_valid",
+            message="source feasible family is malformed",
+        ) from exc
+    try:
+        require_delta_matroid_source_size(s)
+    except DeltaMatroidAdmissionError as exc:
+        _admission_error(exc)
+    try:
+        require_delta_matroid_exchange_work(s)
+    except DeltaMatroidAdmissionError as exc:
+        _admission_error(exc)
+    if first_symmetric_exchange_obstruction(s) is not None:
+        raise OperationDomainValidationError(
+            location=("delta_matroid",),
+            code="delta_matroid.source_not_delta",
+            message="source is not a delta-matroid",
         )
 
 
@@ -147,6 +269,65 @@ def minor(
     if not rows:
         raise DeltaMatroidAdmissionError("empty_minor", "minor has no feasible set")
     return FiniteDeltaMatroid(ground=tuple(labels), feasible=rows)
+
+
+def twist_polynomial(d: FiniteDeltaMatroid) -> DeltaMatroidTwistPolynomialResult:
+    """Return ``sum_A z**width(D*A)`` as a complete width histogram.
+
+    Width is computed directly from feasible-set bit masks. This is equivalent
+    to materializing each twisted family, while keeping the active state and
+    result compact. The complete subset count, mask-feasible work, and source
+    exchange replay are all admitted before the twist sweep. Source labels are
+    ambient context: they are required to be UTF-8-representable but are not
+    bounded by the recognition operation's byte cap.
+    """
+
+    _reject_oversized_twist_polynomial_source(d)
+    d = _admit_delta(d)
+    n = len(d.ground)
+    if n > MAX_TWIST_POLYNOMIAL_GROUND:
+        raise OperationResourceAdmissionError(
+            location=("delta_matroid", "ground"),
+            code="delta_matroid.twist_polynomial_work",
+            message="complete twist polynomial exceeds its subset-state envelope",
+        )
+    state_count = 1 << n
+    work = state_count * len(d.feasible)
+    if state_count > MAX_TWIST_POLYNOMIAL_STATES or work > MAX_TWIST_POLYNOMIAL_WORK:
+        raise OperationResourceAdmissionError(
+            location=("delta_matroid",),
+            code="delta_matroid.twist_polynomial_work",
+            message="complete twist polynomial exceeds its subset or evaluation envelope",
+        )
+    _check_twist_polynomial_source(d)
+
+    # Source admission bounds memberships and therefore rows to at most one
+    # empty set plus one row per admitted membership. The state ceiling bounds
+    # the 13-entry histogram and every exact coefficient to at most 4,096.
+    feasible_masks = tuple(sum(1 << element for element in row) for row in d.feasible)
+    coefficients = [0] * (n + 1)
+    evaluations = 0
+    for twist_mask in range(state_count):
+        minimum = n + 1
+        maximum = -1
+        for feasible_mask in feasible_masks:
+            evaluations += 1
+            if evaluations % _TWIST_POLYNOMIAL_CHECKPOINT_STRIDE == 0:
+                request_checkpoint("during delta-matroid twist-polynomial evaluation")
+            size = (feasible_mask ^ twist_mask).bit_count()
+            minimum = min(minimum, size)
+            maximum = max(maximum, size)
+        coefficients[maximum - minimum] += 1
+
+    ascending = tuple(coefficients)
+    descending = tuple(reversed(ascending))
+    while len(descending) > 1 and descending[0] == 0:
+        descending = descending[1:]
+    return DeltaMatroidTwistPolynomialResult(
+        ground=d.ground,
+        coefficients_by_width=ascending,
+        polynomial=IntegerPolynomial(coefficients=descending),
+    )
 
 
 def _det2(a: list[list[int]]) -> int:
@@ -211,4 +392,4 @@ def binary(matrix: BinarySymmetricMatrix) -> BinaryMatrixResult:
     )
 
 
-__all__ = ["binary", "dual", "minor"]
+__all__ = ["binary", "dual", "minor", "twist_polynomial"]

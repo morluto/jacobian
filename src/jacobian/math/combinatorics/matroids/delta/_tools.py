@@ -15,12 +15,24 @@ from jacobian.math.combinatorics.matroids.delta._models import (
     DeltaMatroidWidthResult,
 )
 from jacobian.math.combinatorics.matroids.delta.extra import (
+    MAX_TWIST_POLYNOMIAL_COEFFICIENT_DIGITS,
+    MAX_TWIST_POLYNOMIAL_GROUND,
+    MAX_TWIST_POLYNOMIAL_HISTOGRAM_ENTRIES,
+    MAX_TWIST_POLYNOMIAL_STATES,
+    MAX_TWIST_POLYNOMIAL_WORK,
     BinaryMatrixRequest,
     BinaryMatrixResult,
     DeltaMatroidDualRequest,
     DeltaMatroidMinorRequest,
+    DeltaMatroidTwistPolynomialRequest,
+    DeltaMatroidTwistPolynomialResult,
 )
-from jacobian.math.combinatorics.matroids.delta.extra_ops import binary, dual, minor
+from jacobian.math.combinatorics.matroids.delta.extra_ops import (
+    binary,
+    dual,
+    minor,
+    twist_polynomial,
+)
 from jacobian.math.combinatorics.matroids.delta.interlace import (
     DistanceInterlaceRequest,
     DistanceInterlaceResult,
@@ -280,6 +292,40 @@ TOOLS: MathTools = (  # noqa: RUF005
                 name="binary_zero",
                 description="Reconstruct the principal-minor delta-matroid of the zero 2-by-2 symmetric matrix.",
                 input={"matrix": {"ground": ["a", "b"], "entries": [[0, 0], [0, 0]]}},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="delta_matroid.twist_polynomial.compute",
+        title="Compute the width-generating polynomial of all delta-matroid twists",
+        description=(
+            "Return Tw_D(z) = sum over every A subset E of z^width(D*A), with "
+            "the complete width histogram and canonical integer polynomial. "
+            f"Admission allows at most {MAX_TWIST_POLYNOMIAL_GROUND} ground "
+            f"elements, {MAX_TWIST_POLYNOMIAL_STATES} twist masks, and "
+            f"{MAX_TWIST_POLYNOMIAL_WORK} mask-feasible-set evaluations. The "
+            f"result has at most {MAX_TWIST_POLYNOMIAL_HISTOGRAM_ENTRIES} "
+            f"histogram entries and {MAX_TWIST_POLYNOMIAL_COEFFICIENT_DIGITS}-digit "
+            "coefficients; labels do not affect the mask sweep, so the "
+            "recognition operation's label cap does not apply."
+        ),
+        request_type=DeltaMatroidTwistPolynomialRequest,
+        result_type=DeltaMatroidTwistPolynomialResult,
+        run=lambda request: twist_polynomial(request.delta_matroid),
+        tags=("delta-matroid", "twist", "width", "polynomial", "exact"),
+        examples=(
+            OperationExample(
+                name="two_element_twist_width_polynomial",
+                description=(
+                    "Count widths across all four twists; the feasible family "
+                    "must satisfy symmetric exchange."
+                ),
+                input={
+                    "delta_matroid": {
+                        "ground": ["a", "b"],
+                        "feasible": [[], [0], [0, 1], [1]],
+                    }
+                },
             ),
         ),
     ),

@@ -31,15 +31,32 @@ result-binding obstruction check. The aggregate worst case is therefore
 1,000,000 candidate checks per accepted call, which is part of this operation's
 advertised envelope rather than a universal result-construction rule.
 
-This initial operation deliberately does not construct twists, minors, binary
-matrix presentations, graph conversions, or interlace polynomials. Those are
-separate mathematical postconditions rather than fields of the recognition
-result.
-
 `delta_matroid.twist.compute` returns the canonical twisted `FiniteDeltaMatroid`.
 Width `max(|F|)-min(|F|)` is a native projection of the feasible family and is
 not a catalog operation. It scans every retained feasible-row length of the
 canonical value and has no extra row ceiling.
+
+`delta_matroid.twist_polynomial.compute` returns the exact twist polynomial
+\[
+  \mathrm{Tw}_D(z)=\sum_{A\subseteq E}z^{\mathrm{width}(D*A)},
+\]
+with a coefficient for every width from zero through `|E|`. The coefficients
+are also returned as Jacobian's canonical descending-degree `IntegerPolynomial`
+in the formal variable `z`; the complete histogram retains trailing zero
+widths and the labelled ground axis. The coefficient sum is exactly
+`2**|E|` because every ground subset supplies one twist. The operation admits
+at most 12 ground elements, 4,096 twist subsets, and 262,144
+twist-subset/feasible-set evaluations before it replays source exchange and
+computes the complete histogram. These bounds also limit the result to 13
+histogram entries, with each coefficient at most 4,096 (four decimal digits).
+The kernel holds at most one bit mask per admitted feasible row; source
+admission limits memberships to 16,384, so at most 16,385 rows (including the
+unique empty row) are materialized as masks. Labels never enter the mask sweep,
+so the recognition operation's 2,048-byte label envelope does not apply here.
+Native source revalidation and UTF-8 checks copy retained labels, however, so
+this operation admits at most 1,000,000 aggregate ground-label codepoints
+before copying them. Labels must remain unique and UTF-8-representable;
+wire-byte limits belong to the delivery boundary.
 
 `delta_matroid.distance_interlace_polynomial.compute` returns the exact
 distance histogram and the polynomial

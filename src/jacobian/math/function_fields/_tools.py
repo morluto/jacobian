@@ -31,10 +31,14 @@ from jacobian.math.function_fields._models import (
     FunctionFieldPrincipalDivisorResult,
     FunctionFieldResidueRequest,
     FunctionFieldResidueResult,
+    FunctionFieldRiemannRochMembership,
+    FunctionFieldRiemannRochMembershipRequest,
     FunctionFieldRiemannRochSpace,
     FunctionFieldRiemannRochSpaceRequest,
     HyperellipticAffinePlaceValuationRequest,
     HyperellipticAffinePlaceValuationResult,
+    HyperellipticInfinityPlaceValuationRequest,
+    HyperellipticInfinityPlaceValuationResult,
 )
 from jacobian.math.function_fields.operations import (
     function_field_base_embedding,
@@ -49,10 +53,12 @@ from jacobian.math.function_fields.operations import (
     function_field_element_multiply,
     function_field_genus,
     function_field_hyperelliptic_affine_valuation,
+    function_field_hyperelliptic_infinity_valuation,
     function_field_place_residue,
     function_field_place_valuation,
     function_field_principal_divisor,
     function_field_rational_places_degree_bounded,
+    function_field_riemann_roch_membership,
     function_field_riemann_roch_space,
 )
 
@@ -166,6 +172,13 @@ _RATIONAL_X = {
         }
     ],
 }
+_GF5_HYPERELLIPTIC_Y = {
+    "field": _GF5_HYPERELLIPTIC_FIELD,
+    "coordinates": [
+        _rational_function([0], [1], characteristic=5),
+        _rational_function([1], [1], characteristic=5),
+    ],
+}
 _X_DIVISOR = {
     "field": _RATIONAL_FIELD,
     "terms": [
@@ -200,7 +213,13 @@ def _run_place_valuation(
 def _run_hyperelliptic_affine_valuation(
     request: HyperellipticAffinePlaceValuationRequest,
 ) -> HyperellipticAffinePlaceValuationResult:
-    return function_field_hyperelliptic_affine_valuation(
+    return function_field_hyperelliptic_affine_valuation(request.place, request.element)
+
+
+def _run_hyperelliptic_infinity_valuation(
+    request: HyperellipticInfinityPlaceValuationRequest,
+) -> HyperellipticInfinityPlaceValuationResult:
+    return function_field_hyperelliptic_infinity_valuation(
         request.place, request.element
     )
 
@@ -374,19 +393,88 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
     ),
     MathTool(
+        operation_id="function_field.riemann_roch.membership.compute",
+        title="Check exact membership in a rational function-field Riemann-Roch space",
+        description=(
+            "Decide whether a function belongs to L(D) over GF(p)(x), returning "
+            "the complete exact valuation inequalities on the union of the "
+            "function's principal-divisor support and D's support. The zero "
+            "function is always included through a structural empty-profile branch. "
+            "The operation admits at most 256 divisor places, 281 profile places, "
+            "and a 4 MiB conservative output envelope."
+        ),
+        request_type=FunctionFieldRiemannRochMembershipRequest,
+        result_type=FunctionFieldRiemannRochMembership,
+        run=lambda request: function_field_riemann_roch_membership(
+            request.element, request.divisor
+        ),
+        tags=("function-field", "riemann-roch", "membership", "exact"),
+        discovery_terms=(
+            "function-field Riemann-Roch membership",
+            "test a function in L of a divisor",
+            "valuation inequalities for a rational function",
+        ),
+        examples=(
+            OperationExample(
+                name="x_squared_in_twice_infinity_space",
+                description=(
+                    "Check x^2 in L(2[∞]) over GF(5)(x); its infinity "
+                    "valuation plus divisor multiplicity is zero."
+                ),
+                input={
+                    "element": {
+                        "field": _RATIONAL_FIELD,
+                        "coordinates": [
+                            {
+                                "numerator": {
+                                    "characteristic": 5,
+                                    "coefficients": [0, 0, 1],
+                                },
+                                "denominator": {
+                                    "characteristic": 5,
+                                    "coefficients": [1],
+                                },
+                            }
+                        ],
+                    },
+                    "divisor": {
+                        "field": _RATIONAL_FIELD,
+                        "terms": [
+                            {
+                                "place": {
+                                    "field": _RATIONAL_FIELD,
+                                    "kind": "INFINITE",
+                                    "degree": 1,
+                                },
+                                "multiplicity": "2",
+                            }
+                        ],
+                    },
+                },
+            ),
+        ),
+    ),
+    MathTool(
         operation_id="function_field.riemann_roch_space.compute",
-        title="Compute a rational function-field Riemann-Roch space",
+        title="Compute a function-field Riemann-Roch space",
         description=(
             "Return the exact basis and dimension of L(D) for a divisor over "
-            "GF(p)(x). The field must use the rational defining polynomial 1. "
-            "Support is limited to 256 places and multiplicities to 4096 bits; "
+            "GF(p)(x), or of L(m P_infinity) for the unique infinity place "
+            "of an odd-degree squarefree hyperelliptic model y^2=f(x). "
+            "Rational-field divisors use the rational defining polynomial 1; "
+            "the hyperelliptic slice accepts only its infinity place. Support "
+            "is limited to 256 places and multiplicities to 4096 bits; "
             "positive-dimensional outputs require at most 13 basis elements "
-            "and degree-12 canonical rational-function coefficients."
+            "and degree-12 canonical coefficients."
         ),
         request_type=FunctionFieldRiemannRochSpaceRequest,
         result_type=FunctionFieldRiemannRochSpace,
         run=lambda request: function_field_riemann_roch_space(request.divisor),
         tags=("function-field", "riemann-roch", "exact", "basis"),
+        discovery_terms=(
+            "Riemann-Roch space of a multiple of the hyperelliptic infinity place",
+            "basis of L(m infinity) for y squared equals f(x)",
+        ),
         examples=(
             OperationExample(
                 name="basis_for_twice_infinity_on_projective_line",
@@ -516,6 +604,47 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                             _rational_function([1], [1], characteristic=5),
                         ],
                     },
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="function_field.hyperelliptic_infinity_place.valuation.compute",
+        title="Compute a hyperelliptic valuation at infinity",
+        description=(
+            "Compute an exact valuation at the unique GF(p)-rational point at "
+            "infinity of an odd-characteristic squarefree model y^2=f(x) with "
+            "odd deg(f). The place retains the exact curve and GF(p) residue "
+            "parent; finite values include zero and the zero element returns "
+            "the structural POSITIVE_INFINITY branch."
+        ),
+        request_type=HyperellipticInfinityPlaceValuationRequest,
+        result_type=HyperellipticInfinityPlaceValuationResult,
+        run=_run_hyperelliptic_infinity_valuation,
+        tags=(
+            "function-field",
+            "hyperelliptic",
+            "infinite-place",
+            "valuation",
+            "exact",
+        ),
+        examples=(
+            OperationExample(
+                name="valuation_of_y_at_odd_degree_infinity",
+                description=(
+                    "For y^2=x^3-x over GF(5), the unique point at infinity has "
+                    "v(x)=-2 and v(y)=-3."
+                ),
+                input={
+                    "place": {
+                        "field": _GF5_HYPERELLIPTIC_FIELD,
+                        "residue_field": {
+                            "characteristic": "5",
+                            "modulus_coefficients": ["0", "1"],
+                            "generator": "z",
+                        },
+                    },
+                    "element": _GF5_HYPERELLIPTIC_Y,
                 },
             ),
         ),

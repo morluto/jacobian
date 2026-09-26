@@ -1772,7 +1772,7 @@ def _apply_coordinate_operator(
 ) -> ModularFormCoordinates:
     """Apply one supported operator and recover its exact basis coordinates."""
 
-    plan, coordinates = _admit_coordinates(form, 1)
+    plan, coordinates = _admit_coordinates(form, 1, materialize_pari=False)
     chi_minus4 = _is_gamma0_four_chi4(form.space)
     if operator == "hecke":
         supported = (

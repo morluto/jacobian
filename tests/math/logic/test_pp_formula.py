@@ -90,9 +90,10 @@ def test_formula_atoms_normalize_but_free_variable_axis_order_is_preserved() -> 
     assert first.atoms[0].left == 1
     assert first.atoms[0].right == 2
     assert first.free_variables == (2, 0)
-    assert evaluate_pp_formula(structure, first).tuples == evaluate_pp_formula(
-        structure, equivalent
-    ).tuples
+    assert (
+        evaluate_pp_formula(structure, first).tuples
+        == evaluate_pp_formula(structure, equivalent).tuples
+    )
 
 
 def test_equality_nullary_atoms_and_empty_carrier_semantics() -> None:
@@ -142,7 +143,9 @@ def test_pp_evaluator_matches_independent_assignment_oracle() -> None:
     )
     relation = {
         symbol.symbol_id: set(table)
-        for symbol, table in zip(structure.signature, structure.relation_tables, strict=True)
+        for symbol, table in zip(
+            structure.signature, structure.relation_tables, strict=True
+        )
     }
     for formula in formulas:
         expected = set()
@@ -152,9 +155,10 @@ def test_pp_evaluator_matches_independent_assignment_oracle() -> None:
             satisfies = True
             for atom in formula.atoms:
                 if atom.kind == "relation":
-                    satisfies &= tuple(assignment[i] for i in atom.variables) in relation[
-                        atom.symbol_id
-                    ]
+                    satisfies &= (
+                        tuple(assignment[i] for i in atom.variables)
+                        in relation[atom.symbol_id]
+                    )
                 else:
                     satisfies &= assignment[atom.left] == assignment[atom.right]
             if satisfies:
@@ -189,11 +193,15 @@ def test_closed_pp_sentence_matches_canonical_structure_homomorphism() -> None:
     )
 
     has_solution = evaluate_pp_formula(target, sentence).tuples == ((),)
-    has_homomorphism = search_homomorphism(canonical_structure, target).status.value == "FOUND"
+    has_homomorphism = (
+        search_homomorphism(canonical_structure, target).status.value == "FOUND"
+    )
     assert has_solution is has_homomorphism is True
 
 
-def test_evaluation_rejects_signature_mismatch_and_admits_output_before_expansion() -> None:
+def test_evaluation_rejects_signature_mismatch_and_admits_output_before_expansion() -> (
+    None
+):
     structure = FiniteRelationalStructure(carrier_size=64)
     unknown = PrimitivePositiveFormula(
         variable_count=1,
@@ -208,6 +216,28 @@ def test_evaluation_rejects_signature_mismatch_and_admits_output_before_expansio
     )
     with pytest.raises(OperationResourceAdmissionError, match="defined relation"):
         evaluate_pp_formula(structure, broad_relation)
+
+
+def test_equality_output_bound_uses_identified_coordinate_count() -> None:
+    structure = FiniteRelationalStructure(carrier_size=64)
+    formula = PrimitivePositiveFormula(
+        variable_count=3,
+        free_variables=(0, 1, 2),
+        atoms=({"kind": "equality", "left": 0, "right": 1},),
+    )
+    result = evaluate_pp_formula(structure, formula)
+    assert len(result.tuples) == 64**2
+
+
+def test_defined_value_rejects_formula_incompatible_with_retained_structure() -> None:
+    structure = FiniteRelationalStructure(carrier_size=2)
+    formula = PrimitivePositiveFormula(
+        variable_count=1,
+        free_variables=(0,),
+        atoms=({"kind": "relation", "symbol_id": "R", "variables": (0,)},),
+    )
+    with pytest.raises(ValueError, match="names no symbol"):
+        PPDefinedRelation(structure=structure, formula=formula, tuples=((0,),))
 
 
 def test_evaluation_admits_coordinate_work_separately_from_atom_checks() -> None:

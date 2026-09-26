@@ -80,8 +80,8 @@ def test_union_tables_follow_component_membership_and_exclude_mixed_rows() -> No
 
     assert union.carrier_size == 4
     assert union.signature == _SIGNATURE
-    assert result.left_inclusion == (0, 1)
-    assert result.right_inclusion == (2, 3)
+    assert result.left_inclusion.mapping == (0, 1)
+    assert result.right_inclusion.mapping == (2, 3)
     assert union.relation_tables == (((0, 1), (2, 2)), ((1,),), ((),))
 
     edge_rows = set(union.relation_tables[0])
@@ -114,8 +114,8 @@ def test_inclusions_and_relation_transport_survive_serialization() -> None:
 
     assert restored == result
     for component, inclusion in (
-        (restored.left, restored.left_inclusion),
-        (restored.right, restored.right_inclusion),
+        (restored.left, restored.left_inclusion.mapping),
+        (restored.right, restored.right_inclusion.mapping),
     ):
         checked = check_homomorphism(component, restored.disjoint_union, inclusion)
         assert checked.status is HomomorphismStatus.HOMOMORPHISM
@@ -147,8 +147,8 @@ def test_homomorphisms_from_union_are_pairs_of_component_homomorphisms() -> None
     )
     actual_pairs = {
         (
-            tuple(carrier_map[label] for label in result.left_inclusion),
-            tuple(carrier_map[label] for label in result.right_inclusion),
+            tuple(carrier_map[label] for label in result.left_inclusion.mapping),
+            tuple(carrier_map[label] for label in result.right_inclusion.mapping),
         )
         for carrier_map in _homomorphisms(result.disjoint_union, target)
     }
@@ -165,7 +165,7 @@ def test_empty_carriers_relations_and_nullary_truth_obey_sum_semantics() -> None
 
     assert both_false.disjoint_union.carrier_size == 0
     assert both_false.disjoint_union.relation_tables == ((), (), ())
-    assert both_false.left_inclusion == both_false.right_inclusion == ()
+    assert both_false.left_inclusion.mapping == both_false.right_inclusion.mapping == ()
     assert one_true.disjoint_union.carrier_size == 0
     assert one_true.disjoint_union.relation_tables == ((), (), ((),))
 
@@ -174,8 +174,8 @@ def test_empty_carriers_relations_and_nullary_truth_obey_sum_semantics() -> None
     bare_union = disjoint_union_structure(bare_empty, bare_two)
     assert bare_union.disjoint_union.signature == ()
     assert bare_union.disjoint_union.carrier_size == 2
-    assert bare_union.left_inclusion == ()
-    assert bare_union.right_inclusion == (0, 1)
+    assert bare_union.left_inclusion.mapping == ()
+    assert bare_union.right_inclusion.mapping == (0, 1)
 
 
 def test_catalog_example_and_request_are_wired() -> None:

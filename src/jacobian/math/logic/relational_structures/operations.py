@@ -233,8 +233,12 @@ def disjoint_union_structure(
         left=left,
         right=right,
         disjoint_union=union_value,
-        left_inclusion=left_inclusion,
-        right_inclusion=right_inclusion,
+        left_inclusion=RelationalHomomorphism._from_kernel(
+            source=left, target=union_value, mapping=left_inclusion
+        ),
+        right_inclusion=RelationalHomomorphism._from_kernel(
+            source=right, target=union_value, mapping=right_inclusion
+        ),
     )
 
 

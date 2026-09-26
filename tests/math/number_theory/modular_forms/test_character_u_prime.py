@@ -187,7 +187,7 @@ def test_u_prime_rejects_a_prime_outside_the_exact_level_action() -> None:
         modular_character_coordinates_u_prime(_coordinates(space, 0), 3)
 
 
-@pytest.mark.parametrize("digits", [43, 255])
+@pytest.mark.parametrize("digits", [42, 43, 255])
 def test_u_prime_output_bound_is_admitted_before_backend_expansion(
     monkeypatch, digits: int
 ) -> None:

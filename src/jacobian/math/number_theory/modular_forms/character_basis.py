@@ -997,8 +997,13 @@ def modular_character_coordinates_u_prime(
     product_digits = (
         product_operand_digits * (2 * degree + 2) + len(str(degree)) + 2
     )
+    # Each product is accumulated with cyclotomic.add, which applies the same
+    # height admission to the larger of the product and partial sum. Admit that
+    # second kernel boundary too, before the backend basis expansion.
+    addition_digits = product_digits * (2 * degree + 2) + len(str(degree)) + 2
     if (
         product_digits > MAX_CYCLIC_FIELD_ELEMENT_DIGITS
+        or addition_digits > MAX_CYCLIC_FIELD_ELEMENT_DIGITS
         or linear_digits > MAX_CYCLIC_FIELD_ELEMENT_DIGITS
         or intermediate_digits > MAX_CYCLIC_FIELD_ELEMENT_DIGITS
         or closure_digits > MAX_CYCLIC_FIELD_ELEMENT_DIGITS

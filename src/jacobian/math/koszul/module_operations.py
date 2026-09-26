@@ -5,13 +5,14 @@ from __future__ import annotations
 from collections.abc import Iterator, Mapping
 from fractions import Fraction
 from itertools import combinations
-from math import comb
+from math import comb, factorial, log10
 from typing import Any
 
 from jacobian._exact import (
     MAX_CANONICAL_RATIONAL_DIGITS,
     CanonicalRational,
     canonical_rational_component_digits,
+    format_canonical_integer,
 )
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -34,6 +35,8 @@ from jacobian.math.koszul.module_models import (
     ModuleKoszulHomologyRequest,
     ModuleKoszulMapRequest,
     ModuleKoszulRequest,
+    ModuleKoszulSequenceLinearChange,
+    ModuleKoszulSequenceLinearChangeRequest,
     ModuleKoszulSequencePermutation,
     ModuleKoszulSequencePermutationRequest,
     ModuleKoszulTopHomology,
@@ -50,6 +53,7 @@ MAX_KOSZUL_HOMOLOGY_WORK = 1 << 40
 MAX_KOSZUL_HOMOLOGY_OUTPUT_BYTES = 8 * 1024 * 1024
 MAX_KOSZUL_SEQUENCE_TRANSFORM_WORK = 2_000_000
 MAX_KOSZUL_SEQUENCE_TRANSFORM_OUTPUT_BYTES = 8 * 1024 * 1024
+MAX_KOSZUL_SEQUENCE_LINEAR_CHANGE_WORK = 1 << 30
 MAX_KOSZUL_UNIT_CONTRACTION_WORK = 2_000_000
 MAX_KOSZUL_UNIT_CONTRACTION_OUTPUT_BYTES = 8 * 1024 * 1024
 MAX_KOSZUL_ZERO_EXTENSION_WORK = 2_000_000
@@ -1283,7 +1287,8 @@ def module_koszul_sequence_permute(
             algebra=source.algebra,
             module=source.module,
             sequence=source.sequence,
-        )
+        ),
+        check_square=False,
     )
     if canonical_source.differentials != source.differentials:
         raise OperationDomainValidationError(
@@ -1297,7 +1302,8 @@ def module_koszul_sequence_permute(
             algebra=source.algebra,
             module=source.module,
             sequence=target_sequence,
-        )
+        ),
+        check_square=False,
     )
     inverse_permutation = tuple(
         value.new_to_old.index(index) for index in range(len(value.new_to_old))
@@ -1313,6 +1319,435 @@ def module_koszul_sequence_permute(
         source_complex=source,
         target_complex=target,
         new_to_old=value.new_to_old,
+        source_to_target=forward,
+        target_to_source=backward,
+    )
+
+
+def _determinant(matrix: tuple[tuple[Fraction, ...], ...]) -> Fraction:
+    """Compute a determinant by exact elimination (rank at most six)."""
+    size = len(matrix)
+    if size == 0:
+        return Fraction(1)
+    reduced = [list(row) for row in matrix]
+    determinant = Fraction(1)
+    sign = 1
+    for column in range(size):
+        pivot = next((row for row in range(column, size) if reduced[row][column]), None)
+        if pivot is None:
+            return Fraction(0)
+        if pivot != column:
+            reduced[column], reduced[pivot] = reduced[pivot], reduced[column]
+            sign = -sign
+        pivot_value = reduced[column][column]
+        determinant *= pivot_value
+        for row in range(column + 1, size):
+            if not reduced[row][column]:
+                continue
+            factor = reduced[row][column] / pivot_value
+            for target_column in range(column + 1, size):
+                reduced[row][target_column] -= factor * reduced[column][target_column]
+    return determinant * sign
+
+
+def _inverse_matrix(
+    matrix: tuple[tuple[Fraction, ...], ...],
+) -> tuple[tuple[Fraction, ...], ...]:
+    size = len(matrix)
+    if size == 0:
+        return ()
+    determinant = _determinant(matrix)
+    if not determinant:
+        raise OperationDomainValidationError(
+            location=("change_matrix",),
+            code="koszul.module.sequence_change_singular",
+            message="the sequence change matrix must be invertible over QQ",
+        )
+    rows: list[tuple[Fraction, ...]] = []
+    for row in range(size):
+        entries: list[Fraction] = []
+        for column in range(size):
+            minor = tuple(
+                tuple(matrix[i][j] for j in range(size) if j != row)
+                for i in range(size)
+                if i != column
+            )
+            entries.append(((-1) ** (row + column)) * _determinant(minor) / determinant)
+        rows.append(tuple(entries))
+    return tuple(rows)
+
+
+def _exterior_change_map(
+    basis_sizes: tuple[int, ...],
+    module_dimension: int,
+    sequence_matrix: tuple[tuple[Fraction, ...], ...],
+) -> tuple[ModuleDifferential, ...]:
+    """Extend a basis change to every exterior degree, tensor the module identity."""
+    length = len(sequence_matrix)
+    maps: list[ModuleDifferential] = []
+    for degree in range(length + 1):
+        source_wedges = tuple(combinations(range(length), degree))
+        target_wedges = source_wedges
+        entries: list[tuple[int, int, CanonicalRational]] = []
+        for source_index, source_wedge in enumerate(source_wedges):
+            for target_index, target_wedge in enumerate(target_wedges):
+                minor = tuple(
+                    tuple(sequence_matrix[source][target] for target in target_wedge)
+                    for source in source_wedge
+                )
+                coefficient = _determinant(minor)
+                if not coefficient:
+                    continue
+                canonical = CanonicalRational.from_fraction(coefficient)
+                for module_index in range(module_dimension):
+                    entries.append(
+                        (
+                            target_index * module_dimension + module_index,
+                            source_index * module_dimension + module_index,
+                            canonical,
+                        )
+                    )
+        maps.append(
+            ModuleDifferential(
+                row_count=basis_sizes[degree],
+                column_count=basis_sizes[degree],
+                entries=tuple(sorted(entries, key=lambda entry: (entry[0], entry[1]))),
+            )
+        )
+    return tuple(maps)
+
+
+def _verify_sequence_change_maps(
+    source: ModuleKoszulComplex,
+    target: ModuleKoszulComplex,
+    forward: tuple[ModuleDifferential, ...],
+    backward: tuple[ModuleDifferential, ...],
+) -> None:
+    for from_complex, to_complex, maps in (
+        (source, target, forward),
+        (target, source, backward),
+    ):
+        for degree, (source_d, target_d) in enumerate(
+            zip(from_complex.differentials, to_complex.differentials, strict=True),
+            start=1,
+        ):
+            source_columns = _sparse_columns(source_d)
+            target_columns = _sparse_columns(target_d)
+            map_lower = _sparse_columns(maps[degree - 1])
+            map_upper = _sparse_columns(maps[degree])
+            for column in range(source_d.column_count):
+                basis_vector = {column: Fraction(1)}
+                left = _apply_sparse_columns(
+                    map_lower,
+                    _apply_sparse_columns(source_columns, basis_vector),
+                )
+                right = _apply_sparse_columns(
+                    target_columns,
+                    _apply_sparse_columns(map_upper, basis_vector),
+                )
+                if left != right:
+                    raise OperationDomainValidationError(
+                        location=("change_matrix", "chain_map"),
+                        code="koszul.module.sequence_change_chain_map",
+                        message="the induced exterior map does not commute with the Koszul differential",
+                    )
+    for forward_map, backward_map in zip(forward, backward, strict=True):
+        forward_columns = _sparse_columns(forward_map)
+        backward_columns = _sparse_columns(backward_map)
+        for column in range(forward_map.column_count):
+            basis_vector = {column: Fraction(1)}
+            if (
+                _apply_sparse_columns(
+                    backward_columns,
+                    _apply_sparse_columns(forward_columns, basis_vector),
+                )
+                != basis_vector
+            ):
+                raise OperationDomainValidationError(
+                    location=("change_matrix", "inverse"),
+                    code="koszul.module.sequence_change_inverse",
+                    message="the returned degreewise maps are not mutual inverses",
+                )
+
+
+def _admit_sequence_linear_change(
+    value: ModuleKoszulSequenceLinearChangeRequest,
+) -> tuple[ModuleKoszulComplex, tuple[tuple[Fraction, ...], ...]]:
+    source = value.complex
+    length = len(source.sequence)
+    algebra_dimension = len(source.algebra.basis)
+    module_dimension = len(source.module.basis)
+    if any(len(element) != algebra_dimension for element in source.sequence):
+        raise OperationDomainValidationError(
+            location=("complex", "sequence"),
+            code="koszul.module.sequence_shape",
+            message="sequence coordinates must use the retained algebra basis",
+        )
+    expected_sizes = tuple(
+        module_dimension * comb(length, degree) for degree in range(length + 1)
+    )
+    if source.basis_sizes != expected_sizes:
+        raise OperationDomainValidationError(
+            location=("complex", "basis_sizes"),
+            code="koszul.module.result_shape",
+            message="complex basis sizes must be the canonical Koszul dimensions",
+        )
+    matrix = tuple(
+        tuple(_f(coefficient) for coefficient in row) for row in value.change_matrix
+    )
+    rational_digits = max(
+        (
+            canonical_rational_component_digits(x)
+            for row in value.change_matrix
+            for x in row
+        ),
+        default=1,
+    )
+    sequence_digits = max(
+        (
+            canonical_rational_component_digits(x)
+            for item in source.sequence
+            for x in item
+        ),
+        default=1,
+    )
+    algebra_digits = max(
+        (
+            canonical_rational_component_digits(coefficient)
+            for row in source.algebra.multiplication
+            for cell in row
+            for coefficient in cell
+        ),
+        default=1,
+    )
+    action_digits = max(
+        (
+            canonical_rational_component_digits(coefficient)
+            for action in source.module.action
+            for row in action
+            for coefficient in row
+        ),
+        default=1,
+    )
+    source_differential_digits = max(
+        (
+            canonical_rational_component_digits(coefficient)
+            for differential in source.differentials
+            for _, _, coefficient in differential.entries
+        ),
+        default=1,
+    )
+    source_differential_entries = sum(
+        len(differential.entries) for differential in source.differentials
+    )
+    denominator_digits = (
+        1
+        + sum(
+            max(0, len(format_canonical_integer(coefficient.den)) - 1)
+            for row in value.change_matrix
+            for coefficient in row
+        )
+        if length
+        else 1
+    )
+    integer_entry_digits = rational_digits + denominator_digits - 1
+    determinant_digits = (
+        length * integer_entry_digits
+        + (int(log10(factorial(length))) + 1 if length > 1 else 0)
+        if length
+        else 1
+    )
+    cofactor_digits = (
+        max(1, length - 1) * integer_entry_digits
+        + (int(log10(factorial(length - 1))) + 1 if length > 2 else 0)
+        if length
+        else 1
+    )
+    inverse_numerator_digits = denominator_digits + cofactor_digits
+    exterior_component_digits = max(
+        (
+            max(
+                degree * inverse_numerator_digits
+                + (int(log10(factorial(degree))) + 1 if degree > 1 else 0),
+                degree * determinant_digits,
+            )
+            + (int(log10(factorial(degree))) + 1 if degree > 1 else 0)
+            for degree in range(length + 1)
+        ),
+        default=1,
+    )
+    target_sequence_digits = (
+        length * 2 * rational_digits
+        + length * 2 * sequence_digits
+        + (int(log10(factorial(length))) + 1 if length > 1 else 0)
+        if length
+        else 1
+    )
+    differential_digits = (
+        algebra_dimension * (action_digits + target_sequence_digits)
+        + len(str(algebra_dimension))
+        + 4
+        if length
+        else 1
+    )
+    if (
+        max(exterior_component_digits, target_sequence_digits, differential_digits)
+        > MAX_CANONICAL_RATIONAL_DIGITS
+    ):
+        raise OperationResourceAdmissionError(
+            location=("change_matrix",),
+            code="koszul.module.sequence_change_coefficient_budget",
+            message="linear-change coefficients may exceed the exact scalar limit",
+        )
+    wedge_entry_count = module_dimension * sum(
+        comb(length, degree) ** 2 for degree in range(length + 1)
+    )
+    determinant_work = 2 * length**4 + 2 * sum(
+        comb(length, degree) ** 2 * degree**3 for degree in range(length + 1)
+    )
+    differential_entry_bound = (
+        length * module_dimension**2 * (1 << (length - 1)) if length else 0
+    )
+    chain_map_work = 2 * sum(
+        source.basis_sizes[degree - 1] ** 2 * source.basis_sizes[degree]
+        + source.basis_sizes[degree - 1] * source.basis_sizes[degree] ** 2
+        for degree in range(1, length + 1)
+    ) + 2 * sum(size**3 for size in source.basis_sizes)
+    differential_build_work = (
+        length * (1 << max(length - 1, 0)) * algebra_dimension * module_dimension**2
+        + differential_entry_bound
+    )
+    semantic_work = (
+        3 * algebra_dimension**5
+        + algebra_dimension**4
+        + algebra_dimension**3
+        + algebra_dimension**2 * module_dimension**3
+        + algebra_dimension**3 * module_dimension**2
+    ) * max(algebra_digits, action_digits, sequence_digits) ** 2
+    work_bound = (
+        determinant_work
+        + differential_build_work
+        + source_differential_entries
+        + chain_map_work
+    ) * max(
+        1,
+        exterior_component_digits**2,
+        source_differential_digits**2,
+        differential_digits**2,
+    ) + semantic_work
+    base_rational_items = (
+        2 * (algebra_dimension**3 + algebra_dimension)
+        + algebra_dimension * module_dimension**2
+        + length * algebra_dimension
+    )
+    map_entry_bound = 2 * wedge_entry_count
+    rational_items = (
+        2 * base_rational_items
+        + source_differential_entries
+        + differential_entry_bound
+        + map_entry_bound
+    )
+    maximum_digits = max(
+        algebra_digits,
+        action_digits,
+        rational_digits,
+        sequence_digits,
+        source_differential_digits,
+        target_sequence_digits,
+        differential_digits,
+        exterior_component_digits,
+    )
+    labels = (*source.algebra.basis, *source.module.algebra.basis, *source.module.basis)
+    label_bytes = sum(12 * len(label) for label in labels) * 2
+    output_bound = (
+        rational_items * (2 * maximum_digits + 48)
+        + (source_differential_entries + differential_entry_bound) * 48
+        + map_entry_bound * 48
+        + label_bytes
+        + 8192
+    )
+    if (
+        work_bound > MAX_KOSZUL_SEQUENCE_LINEAR_CHANGE_WORK
+        or output_bound > MAX_KOSZUL_SEQUENCE_TRANSFORM_OUTPUT_BYTES
+    ):
+        raise OperationResourceAdmissionError(
+            location=("change_matrix",),
+            code="koszul.module.sequence_change_budget",
+            message="the exact sequence change maps or result exceed the admitted envelope",
+        )
+    _admit(source.module, source.sequence)
+    return source, matrix
+
+
+def module_koszul_sequence_linear_change(
+    request: ModuleKoszulSequenceLinearChangeRequest | Mapping[str, Any],
+) -> ModuleKoszulSequenceLinearChange:
+    """Apply an invertible rational change to a finite-module Koszul sequence.
+
+    Matrix rows express target sequence entries in the source sequence. The
+    returned degreewise maps are the induced exterior powers of the inverse
+    matrix and its inverse, tensored with the identity on the module.
+    """
+    try:
+        payload = (
+            request.model_dump()
+            if isinstance(request, ModuleKoszulSequenceLinearChangeRequest)
+            else request
+        )
+        value = ModuleKoszulSequenceLinearChangeRequest.model_validate(payload)
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="koszul.module.sequence_change_request_shape",
+            message="the Koszul sequence linear-change request is not canonical",
+        ) from exc
+    source, matrix = _admit_sequence_linear_change(value)
+    canonical_source = _build_module_koszul_complex(
+        ModuleKoszulRequest(
+            algebra=source.algebra, module=source.module, sequence=source.sequence
+        ),
+        check_square=False,
+    )
+    if canonical_source.differentials != source.differentials:
+        raise OperationDomainValidationError(
+            location=("complex", "differentials"),
+            code="koszul.module.source_complex_mismatch",
+            message="source differentials must be induced by the retained sequence and action",
+        )
+    inverse = _inverse_matrix(matrix)
+    algebra_dimension = len(source.algebra.basis)
+    target_sequence = tuple(
+        tuple(
+            CanonicalRational.from_fraction(
+                sum(
+                    (
+                        matrix[target][old] * _f(source.sequence[old][coordinate])
+                        for old in range(len(source.sequence))
+                    ),
+                    Fraction(0),
+                )
+            )
+            for coordinate in range(algebra_dimension)
+        )
+        for target in range(len(source.sequence))
+    )
+    target = _build_module_koszul_complex(
+        ModuleKoszulRequest(
+            algebra=source.algebra, module=source.module, sequence=target_sequence
+        ),
+        check_square=False,
+    )
+    forward = _exterior_change_map(
+        source.basis_sizes, len(source.module.basis), inverse
+    )
+    backward = _exterior_change_map(
+        source.basis_sizes, len(source.module.basis), matrix
+    )
+    _verify_sequence_change_maps(source, target, forward, backward)
+    return ModuleKoszulSequenceLinearChange.model_construct(
+        source_complex=source,
+        target_complex=target,
+        change_matrix=value.change_matrix,
         source_to_target=forward,
         target_to_source=backward,
     )

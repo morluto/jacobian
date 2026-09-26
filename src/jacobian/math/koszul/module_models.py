@@ -343,6 +343,70 @@ class ModuleKoszulSequencePermutation(StrictModel):
         return self
 
 
+class ModuleKoszulSequenceLinearChangeRequest(StrictModel):
+    """Replace a rational sequence by an invertible rational linear change."""
+
+    complex: ModuleKoszulComplex
+    # target_sequence[j] = sum_i change_matrix[j][i] * source_sequence[i]
+    change_matrix: tuple[tuple[CanonicalRational, ...], ...]
+
+    @model_validator(mode="after")
+    def matrix_axes(self) -> Self:
+        length = len(self.complex.sequence)
+        if len(self.change_matrix) != length or any(
+            len(row) != length for row in self.change_matrix
+        ):
+            raise _err(
+                "sequence_change_shape",
+                "the sequence change matrix must be square on the sequence axis",
+            )
+        return self
+
+
+class ModuleKoszulSequenceLinearChange(StrictModel):
+    """Two Koszul complexes and inverse maps for a linear sequence change."""
+
+    source_complex: ModuleKoszulComplex
+    target_complex: ModuleKoszulComplex
+    change_matrix: tuple[tuple[CanonicalRational, ...], ...]
+    source_to_target: tuple[ModuleDifferential, ...]
+    target_to_source: tuple[ModuleDifferential, ...]
+
+    @model_validator(mode="after")
+    def isomorphism_axes(self) -> Self:
+        length = len(self.source_complex.sequence)
+        if (
+            self.target_complex.algebra != self.source_complex.algebra
+            or self.target_complex.module != self.source_complex.module
+            or self.target_complex.basis_sizes != self.source_complex.basis_sizes
+            or len(self.target_complex.sequence) != length
+            or len(self.change_matrix) != length
+            or any(len(row) != length for row in self.change_matrix)
+            or len(self.source_to_target) != length + 1
+            or len(self.target_to_source) != length + 1
+            or any(
+                (forward.row_count, forward.column_count)
+                != (
+                    self.target_complex.basis_sizes[degree],
+                    self.source_complex.basis_sizes[degree],
+                )
+                or (backward.row_count, backward.column_count)
+                != (
+                    self.source_complex.basis_sizes[degree],
+                    self.target_complex.basis_sizes[degree],
+                )
+                for degree, (forward, backward) in enumerate(
+                    zip(self.source_to_target, self.target_to_source, strict=True)
+                )
+            )
+        ):
+            raise _err(
+                "sequence_change_result_axes",
+                "linear-change complexes and maps must use the retained sequence axes",
+            )
+        return self
+
+
 class ModuleKoszulUnitContractionRequest(StrictModel):
     """Contract a finite-module Koszul complex at a unit sequence entry."""
 

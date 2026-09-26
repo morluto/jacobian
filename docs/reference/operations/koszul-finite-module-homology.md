@@ -124,6 +124,16 @@ doubled complexes and map tables before reconstruction. In particular,
 transposing two sequence entries acts by `-1` on the top exterior power; equal
 sequence elements are still separate ordered generators.
 
+`homological.koszul.sequence_linear_change.compute` accepts an exact rational
+matrix `C` and defines target entries by `g_j = sum_i C[j,i] f_i`. It requires
+`C` to be invertible over `QQ`, then returns both complexes and degreewise
+inverse chain maps. The source-to-target map is the exterior power of
+`C^{-1}`; the reverse map is the exterior power of `C`, and both act as the
+identity on the module factor. Admission bounds determinant and exterior-map
+coefficient growth, exact work, and retained map size before constructing the
+maps. This is the finite-module form of the change-of-generators isomorphism
+for Koszul complexes ([Stacks Project, Lemma 15.29.4](https://stacks.math.columbia.edu/tag/0621)).
+
 `homological.koszul.unit_contraction.compute` accepts a selected sequence
 entry only when it is a unit in the retained finite algebra. It returns that
 entry's exact inverse and the degree-raising maps induced by inserting its

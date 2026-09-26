@@ -19,6 +19,8 @@ from jacobian.math.koszul.module_models import (
     ModuleKoszulHomologyMap,
     ModuleKoszulHomologyMapRequest,
     ModuleKoszulMapRequest,
+    ModuleKoszulSequenceLinearChange,
+    ModuleKoszulSequenceLinearChangeRequest,
     ModuleKoszulSequencePermutation,
     ModuleKoszulSequencePermutationRequest,
     ModuleKoszulUnitContraction,
@@ -35,6 +37,7 @@ from jacobian.math.koszul.module_operations import (
     module_koszul_homology,
     module_koszul_map,
     module_koszul_quotient,
+    module_koszul_sequence_linear_change,
     module_koszul_sequence_permute,
     module_koszul_unit_contract,
 )
@@ -68,6 +71,8 @@ __all__ = [
     "ModuleKoszulHomologyMap",
     "ModuleKoszulHomologyMapRequest",
     "ModuleKoszulMapRequest",
+    "ModuleKoszulSequenceLinearChange",
+    "ModuleKoszulSequenceLinearChangeRequest",
     "ModuleKoszulSequencePermutation",
     "ModuleKoszulSequencePermutationRequest",
     "ModuleKoszulUnitContraction",
@@ -85,6 +90,7 @@ __all__ = [
     "module_koszul_homology",
     "module_koszul_map",
     "module_koszul_quotient",
+    "module_koszul_sequence_linear_change",
     "module_koszul_sequence_permute",
     "module_koszul_unit_contract",
 ]

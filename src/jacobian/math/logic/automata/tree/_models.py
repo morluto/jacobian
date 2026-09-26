@@ -22,6 +22,7 @@ from jacobian.math.logic.automata.tree.values import (
     CompleteDeterministicBottomUpTreeAutomaton,
     DeterministicBottomUpTreeAutomaton,
     RankedTree,
+    RegularTreeGrammar,
     TreeStateChartEntry,
     TreeStateWitness,
 )
@@ -319,6 +320,26 @@ class TreeAutomatonTrimResult(StrictModel):
     @classmethod
     def _from_kernel(cls, **values: Any) -> Self:
         return cls.model_construct(**values)
+
+
+class RegularTreeGrammarToAutomatonRequest(StrictModel):
+    """Convert a unit-free regular tree grammar to its bottom-up automaton."""
+
+    grammar: RegularTreeGrammar
+
+
+class RegularTreeGrammarToAutomatonResult(StrictModel):
+    """The source grammar and the equivalent bottom-up tree automaton."""
+
+    grammar: RegularTreeGrammar
+    automaton: BottomUpTreeAutomaton
+
+    @classmethod
+    def _from_kernel(
+        cls, *, grammar: RegularTreeGrammar, automaton: BottomUpTreeAutomaton
+    ) -> Self:
+        """Construct the source-bound result emitted by the trusted converter."""
+        return cls.model_construct(grammar=grammar, automaton=automaton)
 
 
 class TreeAutomatonComplementRequest(StrictModel):
@@ -748,6 +769,8 @@ class TreeDeterminizeResult(TreeDeterminizeRequest):
 __all__ = [
     "AcceptedTreeCountRequest",
     "AcceptedTreeCountResult",
+    "RegularTreeGrammarToAutomatonRequest",
+    "RegularTreeGrammarToAutomatonResult",
     "TreeAutomatonBooleanProductRequest",
     "TreeAutomatonBooleanProductResult",
     "TreeAutomatonComplementRequest",

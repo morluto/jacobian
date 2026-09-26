@@ -1,6 +1,11 @@
 """Supported native API for exact finite delta-matroids."""
 
-from jacobian.math.combinatorics.matroids.delta.extra_ops import binary, dual, minor
+from jacobian.math.combinatorics.matroids.delta.extra_ops import (
+    binary,
+    binary_matrix_twist,
+    dual,
+    minor,
+)
 from jacobian.math.combinatorics.matroids.delta.interlace import (
     DistanceInterlaceResult,
     distance_interlace_polynomial,
@@ -20,11 +25,12 @@ from jacobian.math.combinatorics.matroids.delta.values import (
 
 __all__ = [
     "DeltaMatroidDistanceProfile",
-    "DistanceInterlaceResult",
     "FiniteDeltaMatroid",
     "binary",
-    "distance_interlace_polynomial",
+    "binary_matrix_twist",
     "distance_profile",
+    "DistanceInterlaceResult",
+    "distance_interlace_polynomial",
     "dual",
     "from_feasible_sets",
     "minor",

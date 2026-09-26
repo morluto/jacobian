@@ -187,7 +187,6 @@ MAX_GAUGE_FACES = 128
 MAX_GAUGE_TOTAL_FACE_STEPS = 4096
 """Maximum aggregate attaching-walk steps in one gauge complex."""
 
-MAX_FINITE_GROUP_GAUGE_COMPLEX_OUTPUT_BYTES = 1_900_000
 """Maximum conservative serialized size of one finite gauge complex."""
 
 MAX_GAUGE_LABEL_LENGTH = 64
@@ -455,26 +454,6 @@ class FiniteGroupGaugeComplex(StrictModel):
                 raise _validation_error(
                     "complex_face_closed", "each oriented face boundary must be closed"
                 )
-        output_bytes = 2048 + len(self.group.multiplication) ** 2 * 4
-        output_bytes += len(self.group.multiplication) * 12
-        output_bytes += sum(6 * len(vertex) + 32 for vertex in self.lattice.vertices)
-        output_bytes += sum(
-            6 * (len(edge.edge_id) + len(edge.tail) + len(edge.head)) + 80
-            for edge in self.lattice.edges
-        )
-        for face in self.faces:
-            output_bytes += 6 * len(face.face_id) + 64
-            if face.boundary.steps:
-                output_bytes += sum(
-                    6 * len(step.edge_id) + 48 for step in face.boundary.steps
-                )
-            else:
-                output_bytes += 6 * len(face.boundary.basepoint or "") + 16
-        if output_bytes > MAX_FINITE_GROUP_GAUGE_COMPLEX_OUTPUT_BYTES:
-            raise _validation_error(
-                "complex_output_bound",
-                "source-bound complex exceeds the conservative two-megabyte output envelope",
-            )
         return self
 
 
@@ -763,7 +742,6 @@ class HolonomyResult(StrictModel):
 
 
 __all__ = [
-    "MAX_FINITE_GROUP_GAUGE_COMPLEX_OUTPUT_BYTES",
     "MAX_GAUGE_DEGREE",
     "MAX_GAUGE_EDGES",
     "MAX_GAUGE_FACES",

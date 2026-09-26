@@ -3,7 +3,6 @@ from pydantic import ValidationError
 
 from jacobian.catalog.models import (
     OperationDomainValidationError,
-    OperationResourceAdmissionError,
 )
 from jacobian.math.gauge import (
     FiniteGroupGaugeComplex,
@@ -200,7 +199,7 @@ def test_exact_aggregate_face_step_bound_is_accepted():
     assert len(construct_finite_group_gauge_complex(request).faces) == 16
 
 
-def test_result_size_is_admitted_before_complex_result_construction():
+def test_full_cardinality_boundary_round_trips_without_transport_byte_cap():
     vertices = tuple(f"v{i:02}" + "x" * 61 for i in range(64))
     edges = tuple(
         GaugeEdge(
@@ -224,5 +223,9 @@ def test_result_size_is_admitted_before_complex_result_construction():
             for i in range(16)
         ),
     )
-    with pytest.raises(OperationResourceAdmissionError, match="two-megabyte"):
-        construct_finite_group_gauge_complex(request)
+    result = construct_finite_group_gauge_complex(request)
+    decoded = FiniteGroupGaugeComplex.model_validate(result.model_dump(mode="json"))
+    assert decoded == result
+    assert len(decoded.lattice.vertices) == 64
+    assert len(decoded.lattice.edges) == 128
+    assert len(decoded.faces) == 16

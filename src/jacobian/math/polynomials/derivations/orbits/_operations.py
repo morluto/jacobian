@@ -231,7 +231,7 @@ def _preflight(request: GaPolynomialOrbitRequest) -> _OrbitPlan:
     # Distinct source denominators can combine whenever substituted supports
     # overlap, even when their bounding-box maxima differ.  A global set is a
     # conservative collision group and avoids charging repeated denominators.
-    source_denominators: set[int] = set()
+    denominator_multiplicity: dict[int, int] = {}
     maximum_contribution_numerator_digits = 1
     target_axis_count = len(action.source_variables) + 1
     for term_index, term in enumerate(source.polynomial.terms):
@@ -255,12 +255,21 @@ def _preflight(request: GaPolynomialOrbitRequest) -> _OrbitPlan:
         maximum_partial_support = max(
             maximum_partial_support, term_plan.maximum_partial_support
         )
-        source_denominators.add(term.coefficient.den)
+        # Include every repeated factor: a denominator appearing in an image
+        # raised to exponent k can contribute k times to an output coefficient.
+        factors: dict[int, int] = {}
+        if term.coefficient.den > 1:
+            factors[term.coefficient.den] = 1
         for exponent, image in zip(term.exponents, images, strict=True):
-            if exponent:
-                source_denominators.update(
-                    coefficient.denominator for _, coefficient in image
-                )
+            for _, coefficient in image:
+                if coefficient.denominator > 1:
+                    factors[coefficient.denominator] = (
+                        factors.get(coefficient.denominator, 0) + exponent
+                    )
+        for denominator, multiplicity in factors.items():
+            denominator_multiplicity[denominator] = max(
+                denominator_multiplicity.get(denominator, 0), multiplicity
+            )
         maximum_contribution_numerator_digits = max(
             maximum_contribution_numerator_digits, term_plan.numerator_digits
         )
@@ -281,7 +290,8 @@ def _preflight(request: GaPolynomialOrbitRequest) -> _OrbitPlan:
         )
 
     maximum_collision_denominator_digits = sum(
-        len(str(denominator)) for denominator in source_denominators if denominator > 1
+        len(str(denominator)) * multiplicity
+        for denominator, multiplicity in denominator_multiplicity.items()
     )
     coefficient_digits_bound = (
         maximum_contribution_numerator_digits

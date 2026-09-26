@@ -134,6 +134,25 @@ def test_invariant_many_terms_bound_denominators_per_output_collision() -> None:
     )
 
 
+def test_orbit_bounds_repeated_image_denominator_before_expansion() -> None:
+    q = 10**49 + 1
+    action = PolynomialGaAction(
+        source_variables=("x", "y"),
+        parameter="t",
+        generator_images=(
+            _polynomial(
+                ("x", "y", "t"),
+                {(1, 0, 0): 1, (0, 1, 1): Fraction(1, q)},
+            ),
+            _polynomial(("x", "y", "t"), {(0, 1, 0): 1}),
+        ),
+    )
+    source = _polynomial(("x", "y"), {(12, 0): 1})
+
+    with pytest.raises(OperationResourceAdmissionError, match="coefficient growth"):
+        ga_polynomial_orbit(action, source)
+
+
 def test_orbit_rejects_expansion_before_substitution(monkeypatch) -> None:
     import jacobian.math.polynomials.derivations.orbits._operations as operations
 

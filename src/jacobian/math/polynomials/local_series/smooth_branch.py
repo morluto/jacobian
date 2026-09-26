@@ -11,7 +11,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
-from jacobian.canonical import CanonicalLimits, decimal_digit_width
+from jacobian.canonical import decimal_digit_width
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -20,7 +20,6 @@ from jacobian.math.polynomials.local_series.newton_polygon import (
     LocalPolynomialInSeries,
 )
 from jacobian.math.polynomials.local_series.values import (
-    MAX_LOCAL_SERIES_COEFFICIENT_DIGITS,
     TruncatedLaurentWindow,
 )
 
@@ -297,7 +296,10 @@ def _admit_source(source: LocalPolynomialInSeries) -> tuple[int, int]:
                 f"{MAX_SMOOTH_BRANCH_SERIES_SLOTS} source series coefficients"
             ),
         )
-    max_degree = max((row.y_degree for row in source.coefficients), default=0)
+    max_degree = max(
+        (row.y_degree for row in source.coefficients if row.series is not None),
+        default=0,
+    )
     if max_degree > MAX_SMOOTH_BRANCH_DEGREE:
         raise OperationResourceAdmissionError(
             location=("polynomial", "coefficients"),
@@ -325,22 +327,6 @@ def _admit_source(source: LocalPolynomialInSeries) -> tuple[int, int]:
             location=("polynomial",),
             code="local_series.smooth_branch.work_budget",
             message="first-jet input scan and exact Horner work exceeds its admitted bound",
-        )
-    center_digits = _fraction_digits(source.center.as_fraction())
-    output_bytes = (
-        512
-        + len(source.coefficients) * 192
-        + slots * (2 * MAX_SMOOTH_BRANCH_INPUT_DIGITS + 96)
-        + 2 * (len(source.coefficients) + 1) * center_digits
-        + 4 * MAX_LOCAL_SERIES_COEFFICIENT_DIGITS
-        + 512
-        + len(source.variable)
-    )
-    if output_bytes > CanonicalLimits().max_output_bytes:
-        raise OperationResourceAdmissionError(
-            location=("polynomial",),
-            code="local_series.smooth_branch.output_budget",
-            message="source-bound first-jet output exceeds the canonical byte limit",
         )
     return max_degree, max(1, len(source.coefficients))
 
